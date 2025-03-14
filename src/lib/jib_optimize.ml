@@ -47,6 +47,7 @@
 open Ast_util
 open Jib
 open Jib_compile
+open Jib_visitor
 open Jib_util
 
 let optimize_unit instrs =
@@ -76,27 +77,84 @@ let flat_id () =
   incr flat_counter;
   name id
 
-let rec flatten_instrs = function
-  | I_aux (I_decl (ctyp, decl_id), aux) :: instrs ->
-      let fid = flat_id () in
-      I_aux (I_decl (ctyp, fid), aux) :: flatten_instrs (instrs_rename decl_id fid instrs)
-  | I_aux (I_init (ctyp, decl_id, cval), aux) :: instrs ->
-      let fid = flat_id () in
-      I_aux (I_init (ctyp, fid, cval), aux) :: flatten_instrs (instrs_rename decl_id fid instrs)
-  | I_aux ((I_block block | I_try_block block), _) :: instrs -> flatten_instrs block @ flatten_instrs instrs
-  | I_aux (I_if (cval, then_instrs, else_instrs), (_, l)) :: instrs ->
-      let then_label = label "then_" in
-      let endif_label = label "endif_" in
-      [ijump l cval then_label]
-      @ flatten_instrs else_instrs
-      @ [igoto endif_label]
-      @ [ilabel then_label]
-      @ flatten_instrs then_instrs
-      @ [ilabel endif_label]
-      @ flatten_instrs instrs
-  | I_aux (I_comment _, _) :: instrs -> flatten_instrs instrs
-  | instr :: instrs -> instr :: flatten_instrs instrs
-  | [] -> []
+class flat_rename_visitor renames : jib_visitor =
+  object
+    inherit empty_jib_visitor
+
+    method! vctyp _ = SkipChildren
+
+    method! vname name =
+      let top, rest = !renames in
+      let rec search = function
+        | [] -> None
+        | top :: rest -> (
+            match NameMap.find_opt name top with Some name -> Some name | None -> search rest
+          )
+      in
+      search (top :: rest)
+  end
+
+let flatten_instrs instrs =
+  let flat = Queue.create () in
+  let renames = ref (NameMap.empty, []) in
+
+  let add_rename id1 id2 (top, rest) = (NameMap.add id1 id2 top, rest) in
+
+  let push_renames () =
+    let top, rest = !renames in
+    renames := (NameMap.empty, top :: rest)
+  in
+
+  let pop_renames () =
+    let _, rest = !renames in
+    renames := (List.hd rest, List.tl rest)
+  in
+
+  let renamer = new flat_rename_visitor renames in
+
+  let rec go = function
+    | I_aux (I_decl (ctyp, decl_id), aux) :: instrs ->
+        let fid = flat_id () in
+        renames := add_rename decl_id fid !renames;
+        Queue.add (I_aux (I_decl (ctyp, fid), aux)) flat;
+        go instrs
+    | I_aux (I_init (ctyp, decl_id, init), aux) :: instrs ->
+        let init = visit_init renamer init in
+        let fid = flat_id () in
+        renames := add_rename decl_id fid !renames;
+        Queue.add (I_aux (I_init (ctyp, fid, init), aux)) flat;
+        go instrs
+    | I_aux (I_if (cval, then_instrs, else_instrs), (_, l)) :: instrs ->
+        let cval = visit_cval renamer cval in
+        let then_label = label "then_" in
+        let endif_label = label "endif_" in
+        Queue.add (ijump l cval then_label) flat;
+        push_renames ();
+        go else_instrs;
+        pop_renames ();
+        Queue.add (igoto endif_label) flat;
+        Queue.add (ilabel then_label) flat;
+        push_renames ();
+        go then_instrs;
+        pop_renames ();
+        Queue.add (ilabel endif_label) flat;
+        go instrs
+    | I_aux ((I_block block | I_try_block block), _) :: instrs ->
+        push_renames ();
+        go block;
+        pop_renames ();
+        go instrs
+    | I_aux (I_comment _, _) :: instrs -> go instrs
+    | instr :: instrs ->
+        let instr = visit_instr renamer instr in
+        Queue.add instr flat;
+        go instrs
+    | [] -> ()
+  in
+
+  go instrs;
+
+  Queue.to_seq flat |> List.of_seq
 
 let flatten_cdef_aux = function
   | CDEF_fundef (function_id, heap_return, args, body) ->

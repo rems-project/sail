@@ -756,45 +756,76 @@ let remove_alias =
     {v
        create x : t;
        create y : t;
-       // modifications to y, no changes to x
+       // modifications to y, no references to x
        x = y;
+       // no changes to y
        kill y;
     v}
 
     If found we can replace y by x *)
 module Combine_variables = struct
-  let pattern ctyp id =
-    let combine = ref None in
-    let rec scan id n instrs =
-      match (n, !combine, instrs) with
-      | 0, None, I_aux (I_block block, _) :: instrs -> begin
-          match scan id 0 block with Some combine -> Some combine | None -> scan id 0 instrs
-        end
-      | 0, None, I_aux (I_decl (ctyp', id'), _) :: instrs when ctyp_equal ctyp ctyp' ->
-          combine := Some id';
-          scan id 1 instrs
-      | 1, Some c, I_aux (I_copy (CL_id (id', ctyp'), V_id (c', ctyp'')), _) :: instrs
-        when Name.compare c c' = 0 && Name.compare id id' = 0 && ctyp_equal ctyp ctyp' && ctyp_equal ctyp' ctyp'' ->
-          scan id 2 instrs
-      (* Ignore seemingly early clears of x, as this can happen along exception paths *)
-      | 1, Some _, I_aux (I_clear (_, id'), _) :: instrs when Name.compare id id' = 0 -> scan id 1 instrs
-      | 1, Some _, instr :: instrs -> if NameSet.mem id (instr_ids instr) then None else scan id 1 instrs
-      | 2, Some c, I_aux (I_clear (ctyp', c'), _) :: _ when Name.compare c c' = 0 && ctyp_equal ctyp ctyp' -> !combine
-      | 2, Some c, instr :: instrs -> if NameSet.mem c (instr_ids instr) then None else scan id 2 instrs
-      | 2, Some _, [] -> !combine
-      | n, _, _ :: instrs -> scan id n instrs
-      | _, _, [] -> None
+  type state = Find of int | Modify of int * name | Kill of int * name
+
+  let pattern ctyp x =
+    let rec scan state instrs =
+      match state with
+      | Find depth -> (
+          match instrs with
+          | I_aux (I_block block, _) :: instrs -> (
+              match scan (Find (depth + 1)) block with None -> scan (Find depth) instrs | result -> result
+            )
+          | I_aux (I_decl (ctyp', y), _) :: instrs when ctyp_equal ctyp ctyp' -> scan (Modify (depth, y)) instrs
+          | _ :: instrs -> scan (Find depth) instrs
+          | [] -> None
+        )
+      | Modify (depth, y) -> (
+          match instrs with
+          | I_aux (I_copy (CL_id (x', ctyp'), V_id (y', ctyp'')), _) :: instrs
+            when Name.compare y y' = 0 && Name.compare x x' = 0 && ctyp_equal ctyp ctyp' && ctyp_equal ctyp' ctyp'' ->
+              scan (Kill (depth, y)) instrs
+          | I_aux ((I_block _ | I_try_block _ | I_if _), _) :: _ -> None
+          (* Ignore seemingly early clears of x, as this can happen along exception paths *)
+          | I_aux (I_clear (_, x'), _) :: instrs when Name.compare x x' = 0 -> scan (Modify (depth, y)) instrs
+          | instr :: instrs -> if NameSet.mem x (instr_ids instr) then None else scan (Modify (depth, y)) instrs
+          | [] -> None
+        )
+      | Kill (depth, y) -> (
+          match instrs with
+          | [] -> Some (depth, y)
+          | I_aux (I_clear (ctyp', y'), _) :: _ when Name.compare y y' = 0 && ctyp_equal ctyp ctyp' -> Some (depth, y)
+          | instr :: instrs -> if NameSet.mem y (instr_ids instr) then None else scan (Kill (depth, y)) instrs
+        )
     in
-    scan id 0
+    scan (Find 0)
 
-  let remove_variable id = function
-    | I_aux (I_decl (_, id'), _) when Name.compare id id' = 0 -> removed
-    | I_aux (I_clear (_, id'), _) when Name.compare id id' = 0 -> removed
-    | instr -> instr
-
-  let is_not_self_assignment = function
-    | I_aux (I_copy (CL_id (id, _), V_id (id', _)), _) when Name.compare id id' = 0 -> false
-    | _ -> true
+  let modify depth ctyp x y =
+    let rec traverse state instrs =
+      match state with
+      | Find depth -> (
+          match instrs with
+          | I_aux (I_decl (ctyp', y), _) :: instrs when ctyp_equal ctyp ctyp' -> traverse (Modify (0, y)) instrs
+          | I_aux (I_block block, aux) :: instrs when depth > 0 ->
+              let block = traverse (Find (depth - 1)) block in
+              I_aux (I_block block, aux) :: instrs
+          | instr :: instrs -> instr :: traverse (Find depth) instrs
+          | [] -> []
+        )
+      | Modify (_, y) -> (
+          match instrs with
+          | I_aux (I_copy (CL_id (x', ctyp'), V_id (y', ctyp'')), _) :: instrs
+            when Name.compare y y' = 0 && Name.compare x x' = 0 && ctyp_equal ctyp ctyp' && ctyp_equal ctyp' ctyp'' ->
+              traverse (Kill (depth, y)) instrs
+          | instr :: instrs -> instr_rename y x instr :: traverse (Modify (0, y)) instrs
+          | [] -> []
+        )
+      | Kill (_, y) -> (
+          match instrs with
+          | I_aux (I_clear (ctyp', y'), _) :: instrs when Name.compare y y' = 0 && ctyp_equal ctyp ctyp' -> instrs
+          | instr :: instrs -> instr :: traverse (Kill (0, y)) instrs
+          | [] -> []
+        )
+    in
+    traverse (Find depth)
 
   class visitor : jib_visitor =
     object
@@ -802,16 +833,11 @@ module Combine_variables = struct
 
       method! vinstrs =
         function
-        | (I_aux (I_decl (ctyp, id), _) as instr) :: instrs -> begin
-            match pattern ctyp id instrs with
+        | (I_aux (I_decl (ctyp, x), _) as instr) :: instrs -> begin
+            match pattern ctyp x instrs with
             | None -> DoChildren
-            | Some combine ->
-                let instrs = map_no_copy (map_instr (remove_variable combine)) instrs in
-                let instrs =
-                  filter_instrs
-                    (fun i -> is_not_removed i && is_not_self_assignment i)
-                    (map_no_copy (instr_rename combine id) instrs)
-                in
+            | Some (depth, y) ->
+                let instrs = modify depth ctyp x y instrs in
                 change_do_children (instr :: instrs)
           end
         | _ -> DoChildren
