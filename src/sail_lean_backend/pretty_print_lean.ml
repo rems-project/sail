@@ -65,6 +65,7 @@ let leftarrowdo = string "← do"
 let rec fix_id name =
   match name with
   (* Lean keywords to avoid, to expand as needed *)
+  | "_lean_wildcard" -> "_"
   | "rec" -> name ^ "'"
   | "def" -> name ^ "'"
   | "main" ->
@@ -266,7 +267,15 @@ and doc_typ ctx (Typ_aux (t, _) as typ) =
       parens (separate space [string "Result"; doc_typ ctx typ1; doc_typ ctx typ2])
   | Typ_var kid -> doc_kid ctx kid
   | Typ_app (id, args) -> parens (doc_id_ctor id ^^ space ^^ separate_map space (doc_typ_arg ctx `Only_relevant) args)
-  | Typ_exist (_, _, typ) -> doc_typ ctx typ
+  | Typ_exist (kids, _, typ) ->
+      let ctx =
+        List.fold_left
+          (fun ctx (KOpt_aux (KOpt_kind (_, kid), annot)) ->
+            add_single_kid_id_rename ctx (Id_aux (Id "_lean_wildcard", annot)) kid
+          )
+          ctx kids
+      in
+      doc_typ ctx typ
   | _ -> failwith ("Type " ^ string_of_typ_con typ ^ " " ^ string_of_typ typ ^ " not translatable yet.")
 
 and doc_typ_app ctx (A_aux (t, _) as typ) =
