@@ -34,9 +34,6 @@
   (%{workspace_root}/lib/concurrency_interface.sail
    as
    lib/concurrency_interface.sail)
-  (%{workspace_root}/lib/concurrency_interface/v1.sail
-   as
-   lib/concurrency_interface/v1.sail)
   (%{workspace_root}/lib/concurrency_interface/emulator_memory.sail
    as
    lib/concurrency_interface/emulator_memory.sail)
