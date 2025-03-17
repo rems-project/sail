@@ -1,0 +1,4 @@
+read memory (no tag read) = 0xABCD1234FFFF5678
+read memory (true tag) = 0xABCD1234FFFF5678
+c = 1
+0xFFFF

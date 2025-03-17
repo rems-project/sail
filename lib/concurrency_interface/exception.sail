@@ -51,7 +51,7 @@ $define _CONCURRENCY_INTERFACE_ERET
 
 $include <concurrency_interface/common.sail>
 
-$ifdef CONCURRENCY_INTERFACE_V3
+$ifdef CONCURRENCY_INTERFACE_V2
 // This should be called to announce any exception:
 // - page fault (and other MMU faults)
 // - supervisor/hypevisor calls
@@ -67,7 +67,7 @@ outcome sail_return_exception : unit -> unit = {
     impl emulator(_) = ()
 }
 
-$else // Concurrency Interface v2
+$else // Concurrency Interface v1
 
 outcome sail_take_exception : 'fault -> unit
     with 'fault : Type

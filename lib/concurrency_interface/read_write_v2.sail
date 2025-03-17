@@ -51,80 +51,48 @@ $define _CONCURRENCY_INTERFACE_READ_WRITE_V2
 
 $include <concurrency_interface/common.sail>
 
+/* This file present the Sail interface for reading and writing memory. This
+   interface can instanciated either at the user-mode level when Sail is used to
+   reason about user-mode program, in which case the addresses used are the
+   program addresses: virtual addresses.
 
-$option -lem_extern_type Access_variety
-$option -coq_extern_type Access_variety
-$option -lean_extern_type Access_variety
-enum Access_variety = {
-  AV_plain,
-  AV_exclusive,
-  AV_atomic_rmw
-}
+   It can also be instanciated at the system level if address translation is
+   implemented in Sail, in which case the addresses will be physical addresses.
 
-$option -lem_extern_type Access_strength
-$option -coq_extern_type Access_strength
-$option -lean_extern_type Access_strength
-enum Access_strength = {
-  AS_normal,
-  AS_rel_or_acq, // Release or acquire
-  AS_acq_rcpc // Release-consistency with processor consistency
-}
+   This interface depends on a few parameters:
+   - addr_size : Int, The size of addresses to be used.
+   - addr_space : Type, An extra tag on the address to identify it's address
+     space. For Arm this is Secure/Non-Secure, for all other architecture this
+     should probably be unit.
+   - mem_acc : Type, An architecture specific description of the access kind.
+     This may also contain arbitrary architecture specific metadata about the
+     access.
+   - abort : Type, The type of memory aborts/access failure: To be
+     returned when the access has failed. In system-level instantiations, this is
+     expected to be for physcial memory abort (e.g. SError in Arm)
+   - CHERI : Bool, Whether CHERI is active on this architecture, which means the
+     memory has capability tags
+   - cap_size : Int, If CHERI is on, the size of capabilities in bytes,
 
-$option -lem_extern_type Explicit_access_kind
-$option -coq_extern_type Explicit_access_kind
-$option -lean_extern_type Explicit_access_kind
-struct Explicit_access_kind = {
-  variety : Access_variety,
-  strength : Access_strength
-}
+   Arm-MTE-like tags are not supported by this API, but can be added separately
+   as an extension
+*/
 
-$option -lem_extern_type Access_kind
-$option -coq_extern_type Access_kind
-$option -lean_extern_type Access_kind
-union Access_kind('arch_ak : Type) = {
-  AK_explicit: Explicit_access_kind,
-  AK_ifetch : unit, // Instruction fetch
-  AK_ttw : unit, // Translation table walk
-  AK_arch : 'arch_ak // Architecture specific type of access
-}
 
+/* This type represent a Request to read a section of memory. It requests
+   reading 'n bytes of data and 'nt capabilities tags (if CHERI is off, 'nt must
+   be 0) The actual footprint read is max('n, 'cap_size * 'nt). If 'n is smaller
+   than this value, the extra bytes are discarded. */
 $option -lem_extern_type Mem_read_request
 $option -coq_extern_type Mem_read_request
 $option -lean_extern_type Mem_read_request
-struct Mem_read_request('n : Int, 'vasize : Int, 'pa : Type, 'ts : Type,
-                        'arch_ak : Type), 'n > 0 & 'vasize >= 0 = {
-  access_kind : Access_kind('arch_ak),
-  // There may not always be a virtual address, e.g. when translation is off.
-  // Additionally, translate reads don't have a (VA, PA) pair in the
-  // translation relation anyway.
-  va : option(bits('vasize)),
-  pa : 'pa,
-  translation : 'ts,
+struct Mem_read_request('n : Int, 'nt : Int, 'addr_size : Int, 'addr_space : Type,
+    'mem_acc : Type), 'n >= 0 & 'nt >= 0 & 'addr_size > 0 = {
+  access_kind : 'mem_acc,
+  address : bits('addr_size),
+  address_space : 'addr_space,
   size : int('n),
-  tag : bool
-}
-
-val mem_read_request_is_exclusive : forall 'n 'vasize ('pa 'translation_summary 'arch_ak : Type), 'n > 0 & 'vasize > 0.
-  Mem_read_request('n, 'vasize, 'pa, 'translation_summary, 'arch_ak) -> bool
-
-function mem_read_request_is_exclusive(request) = {
-    match request.access_kind {
-        AK_explicit(eak) => match eak.variety {
-            AV_exclusive => true,
-            _ => false,
-        },
-        _ => false,
-    }
-}
-
-val mem_read_request_is_ifetch : forall 'n 'vasize ('pa 'translation_summary 'arch_ak : Type), 'n > 0 & 'vasize > 0.
-  Mem_read_request('n, 'vasize, 'pa, 'translation_summary, 'arch_ak) -> bool
-
-function mem_read_request_is_ifetch(request) = {
-    match request.access_kind {
-        AK_ifetch() => true,
-        _ => false,
-    }
+  num_tag : int('nt), // This is CHERI tags, MTE-like tags are not supported
 }
 
 $ifdef SYMBOLIC
@@ -139,119 +107,171 @@ let __monomorphize_writes: bool = false
 
 $endif
 
-outcome sail_mem_read : forall 'n 'vasize, 'n > 0 & 'vasize > 0.
-  Mem_read_request('n, 'vasize, 'pa, 'translation_summary, 'arch_ak)
-      -> result((bits(8 * 'n), option(bool)), 'abort)
+/* Requests a memory read. Return 'n bytes and 'nt tags */
+outcome sail_mem_read : forall 'n 'nt 'addr_size, 'n >= 0 & 'nt >= 0 & 'addr_size > 0.
+  Mem_read_request('n, 'nt, 'addr_size, 'addr_space, 'mem_acc)
+      -> result((vector('n, bits(8)), vector('nt, bool)), 'abort)
 with
-  'pa : Type,
-  'translation_summary : Type,
-  'arch_ak : Type,
+  'addr_space : Type,
+  'mem_acc : Type,
   'abort : Type
 = {
-    val pa_bits : 'pa -> {'pasize, 'pasize in {32, 64}. bits('pasize)}
+    // Generic classifiers for mem_acc to enable some level of architechture generic programming
+
+    // Is the access an explicit data access. That means it must respect basic
+    // coherency rule and in particular behave sequentially if used by a single
+    // thread without need for cache invalidation (if the backend memory is regular RAM)
+    val mem_acc_is_explicit : 'mem_acc -> bool
+
+    // Is the access an instruction fetch access
+    val mem_acc_is_ifetch : 'mem_acc -> bool
+
+    // Is the access a page-table walk access (from the MMU)
+    val mem_acc_is_ttw : 'mem_acc -> bool
+
+    // The remaining classifiers are only for explicit accesses,
+    // They should all imply mem_acc_is_explicit.
+
+    // Those 3 function classify the release/acquire strength
+    val mem_acc_is_relaxed : 'mem_acc -> bool
+    val mem_acc_is_rel_acq_rcpc : 'mem_acc -> bool
+    val mem_acc_is_rel_acq_rcsc : 'mem_acc -> bool
+
+    // Those 3 function classify whether a call is part of atomic/exclusive
+    // sequence or not
+    val mem_acc_is_standalone : 'mem_acc -> bool
+    val mem_acc_is_exclusive : 'mem_acc -> bool
+    val mem_acc_is_atomic_rmw : 'mem_acc -> bool
+
+    // TODO make that type_level values
+    val CHERI : unit -> bool
+    val cap_size : unit -> int
 
     impl emulator_or_isla(request) = {
-        let pa = pa_bits(request.pa);
+        let address : {'as, 'as in {32, 64}. bits('as)} =
+            if length(request.address) <= 32
+            then sail_zero_extend(request.address, 32)
+            else if length(request.address) <= 64
+            then sail_zero_extend(request.address, 64)
+            // TODO throw an error
+            else {assert(false);sail_zeros(64)};
+
         // In Isla, the address of an instruction fetch must be concrete
-        let pa = if mem_read_request_is_ifetch(request) | __monomorphize_reads then __monomorphize(pa) else pa;
-        let tag: option(bool) = if request.tag then {
-            if length(pa) == 32 then {
-                Some(read_tag#(32, pa))
+        let address =
+            if mem_acc_is_ifetch(request.access_kind) | __monomorphize_reads
+            then __monomorphize(address)
+            else address;
+        var tags: vector('nt, bool) = vector_init(request.num_tag, false);
+        foreach(i from 0 to (request.num_tag - 1)) {
+            if length(address) == 32 then {
+                tags[i] = read_tag#(32, address + i * cap_size())
             } else {
-                Some(read_tag#(64, pa))
+                tags[i] = read_tag#(64, address + i * cap_size())
             }
-        } else {
-            None()
         };
-        if mem_read_request_is_exclusive(request) then {
-            if length(pa) == 32 then {
-                Ok((read_mem_exclusive#(request, 32, pa, request.size), tag))
+        let value = if request.size > 0 then {
+            let valuebv = if mem_acc_is_exclusive(request.access_kind) then {
+                if length(address) == 32 then {
+                    read_mem_exclusive#(request, 32, address, request.size)
+                } else {
+                    read_mem_exclusive#(request, 64, address, request.size)
+                }
+            } else if mem_acc_is_ifetch(request.access_kind) then {
+                if length(address) == 32 then {
+                    read_mem_ifetch#(request, 32, address, request.size)
+                } else {
+                    read_mem_ifetch#(request, 64, address, request.size)
+                }
             } else {
-                Ok((read_mem_exclusive#(request, 64, pa, request.size), tag))
-            }
-        } else if mem_read_request_is_ifetch(request) then {
-            if length(pa) == 32 then {
-                Ok((read_mem_ifetch#(request, 32, pa, request.size), tag))
-            } else {
-                Ok((read_mem_ifetch#(request, 64, pa, request.size), tag))
-            }
+                if length(address) == 32 then {
+                    read_mem#(request, 32, address, request.size)
+                } else {
+                    read_mem#(request, 64, address, request.size)
+                }
+            };
+            to_bytes_le(request.size, valuebv)
         } else {
-            if length(pa) == 32 then {
-                Ok((read_mem#(request, 32, pa, request.size), tag))
-            } else {
-                Ok((read_mem#(request, 64, pa, request.size), tag))
-            }
-        }
+            vector_init(0, sail_zeros(8))
+        };
+        Ok(value, tags)
     }
 }
 
+/* This type represent a request to write a range of memory. It requests
+   writing 'n bytes of data and 'nt capabilities tags (if CHERI is off, 'nt must
+   be 0). 'n can be 0 to write only CHERI tags */
 $option -lem_extern_type Mem_write_request
 $option -coq_extern_type Mem_write_request
 $option -lean_extern_type Mem_write_request
-struct Mem_write_request('n : Int, 'vasize : Int, 'pa : Type, 'ts : Type,
-                         'arch_ak : Type), 'n > 0 & 'vasize >= 0 = {
-  access_kind : Access_kind('arch_ak),
-  va : option(bits('vasize)),
-  pa : 'pa,
-  translation : 'ts,
+struct Mem_write_request('n : Int, 'nt : Int, 'addr_size : Int, 'addr_space : Type,
+    'mem_acc : Type), 'n >= 0 & 'nt >= 0 & 'addr_size > 0 = {
+  access_kind : 'mem_acc,
+  address : bits('addr_size),
+  address_space : 'addr_space,
   size : int('n),
-  value : option(bits(8 * 'n)),
-  tag : option(bool),
+  num_tag : int('nt),
+  value : vector('n, bits(8)),
+  tags : vector('nt, bool),
 }
 
-val mem_write_request_is_exclusive : forall 'n 'vasize ('pa 'translation_summary 'arch_ak : Type), 'n > 0 & 'vasize > 0.
-  Mem_write_request('n, 'vasize, 'pa, 'translation_summary, 'arch_ak) -> bool
-
-function mem_write_request_is_exclusive(request) = {
-    match request.access_kind {
-        AK_explicit(eak) => match eak.variety {
-            AV_exclusive => true,
-            _ => false,
-        },
-        _ => false,
-    }
-}
-
-// the bool in the result is for the success/failure of a write-exclusive or a CAS, i.e.
-outcome sail_mem_write : forall 'n 'vasize, 'n > 0 & 'vasize > 0.
-  Mem_write_request('n, 'vasize, 'pa, 'translation_summary, 'arch_ak)
-      -> result(option(bool), 'abort)
+/* Requests a memory write. If the write cannot happen due to
+   atomicity/exclusive constraints, then the execution path is discarded as
+   impossible (size-0 non deterministic choice). Is the responsability of the
+   Sail model to do the proper non-determinitic choices beforehand */
+outcome sail_mem_write : forall 'n 'nt 'addr_size, 'n >= 0 & 'nt >= 0 & 'addr_size > 0.
+  Mem_write_request('n, 'nt, 'addr_size, 'addr_space, 'mem_acc)
+      -> result(unit, 'abort)
 with
-  'pa : Type,
-  'translation_summary : Type,
-  'arch_ak : Type,
+  'addr_space : Type,
+  'mem_acc : Type,
   'abort : Type
 = {
-    val pa_bits : 'pa -> {'pasize, 'pasize in {32, 64}. bits('pasize)}
+    // See sail_mem_read for documentation
+    val mem_acc_is_explicit : 'mem_acc -> bool
+    val mem_acc_is_ifetch : 'mem_acc -> bool
+    val mem_acc_is_ttw : 'mem_acc -> bool
+    val mem_acc_is_relaxed : 'mem_acc -> bool
+    val mem_acc_is_rel_acq_rcpc : 'mem_acc -> bool
+    val mem_acc_is_rel_acq_rcsc : 'mem_acc -> bool
+    val mem_acc_is_standalone : 'mem_acc -> bool
+    val mem_acc_is_exclusive : 'mem_acc -> bool
+    val mem_acc_is_atomic_rmw : 'mem_acc -> bool
+    val CHERI : unit -> bool
+    val cap_size : unit -> int
 
     impl emulator_or_isla(request) = {
-        let pa = pa_bits(request.pa);
-        let pa = if __monomorphize_writes then __monomorphize(pa) else pa;
-        let b: bool = match request.value {
-            Some(value) => if mem_write_request_is_exclusive(request) then {
-                if length(pa) == 32 then {
-                    write_mem_exclusive#(request, 32, pa, request.size, value)
+        let address : {'as, 'as in {32, 64}. bits('as)} =
+            if length(request.address) <= 32
+            then sail_zero_extend(request.address, 32)
+            else if length(request.address) <= 64
+            then sail_zero_extend(request.address, 64)
+            else {assert(false); sail_zeros(64)};
+
+        let address = if __monomorphize_writes then __monomorphize(address) else address;
+        foreach(i from 0 to (request.num_tag - 1)) {
+            if length(address) == 32 then {
+                write_tag#(32, address + i * cap_size(), request.tags[i])
+            } else {
+                write_tag#(64, address + i * cap_size(), request.tags[i])
+            }
+        };
+        if request.size > 0 then {
+            let value = from_bytes_le(request.size, request.value);
+            if mem_acc_is_exclusive(request.access_kind) then {
+                if length(address) == 32 then {
+                    let _ = write_mem_exclusive#(request, 32, address, request.size, value)
                 } else {
-                    write_mem_exclusive#(request, 64, pa, request.size, value)
+                    let _ = write_mem_exclusive#(request, 64, address, request.size, value)
                 }
             } else {
-                if length(pa) == 32 then {
-                    write_mem#(request, 32, pa, request.size, value)
+                if length(address) == 32 then {
+                    let _ = write_mem#(request, 32, address, request.size, value)
                 } else {
-                    write_mem#(request, 64, pa, request.size, value)
+                    let _ = write_mem#(request, 64, address, request.size, value);
                 }
-            },
-            None() => true
+            }
         };
-        match request.tag {
-            Some(tag) => if length(pa) == 32 then {
-                write_tag#(32, pa, tag)
-            } else {
-                write_tag#(64, pa, tag)
-            },
-            None() => ()
-        };
-        Ok(Some(b))
+        Ok(())
     }
 }
 

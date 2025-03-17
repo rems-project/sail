@@ -49,10 +49,10 @@ $sail_internal
 $ifndef _CONCURRENCY_INTERFACE_READ_WRITE
 $define _CONCURRENCY_INTERFACE_READ_WRITE
 
-$ifdef CONCURRENCY_INTERFACE_V3
-$include <concurrency_interface/read_write_v3.sail>
-$else
+$ifdef CONCURRENCY_INTERFACE_V2
 $include <concurrency_interface/read_write_v2.sail>
+$else
+$include <concurrency_interface/read_write_v1.sail>
 $endif
 
 $endif

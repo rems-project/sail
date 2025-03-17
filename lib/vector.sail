@@ -382,28 +382,47 @@ val sail_ones : forall 'n, 'n >= 0. int('n) -> bits('n)
 function sail_ones(n) = not_vec(sail_zeros(n))
 
 
-// TODO make that work for increasing vector indexing
-val to_bytes : forall 'n, 'n > 0. (implicit('n), bits (8 * 'n)) -> vector('n, bits(8))
+// Little endian bytes conversion
+val to_bytes_le : forall 'n, 'n > 0. (implicit('n), bits (8 * 'n)) -> vector('n, bits(8))
 
-function to_bytes(n, b) = {
+$ifdef _DEFAULT_DEC
+function to_bytes_le(n, b) = {
     var res = vector_init(n, sail_zeros(8));
     foreach (i from 0 to (n - 1)) {
-        // TODO fix for increasing order
-        res[i] = b[(8*i + 7) .. (8*i)]
+        res[i] = b[(8 * (n - 1 - i) + 7) .. (8 * (n - 1 - i))]
     };
     res
 }
+$else
+function to_bytes_le(n, b) = {
+    var res = vector_init(n, sail_zeros(8));
+    foreach (i from 0 to (n - 1)) {
+        res[i] = b[(8 * (n - 1 - i)) .. (8 * (n - 1 - i) + 7)]
+    };
+    res
+}
+$endif
 
-val from_bytes : forall 'n, 'n > 0. (implicit('n), vector('n, bits(8))) -> bits(8 * 'n)
+val from_bytes_le : forall 'n, 'n > 0. (implicit('n), vector('n, bits(8))) -> bits(8 * 'n)
 
-function from_bytes(n, v) = {
+$ifdef _DEFAULT_DEC
+function from_bytes_le(n, v) = {
     var res = sail_zeros(8 * n);
     foreach (i from 0 to (n - 1)) {
-        // TODO fix for increasing order
-        res[(8*i + 7) .. (8*i)] = v[i]
+        res[(8 * (n - 1 - i) + 7) .. (8 * (n - 1 - i))] = v[i]
     };
     res
 }
+$else
+function from_bytes_le(n, v) = {
+    var res = sail_zeros(8 * n);
+    foreach (i from 0 to (n - 1)) {
+        res[(8 * (n - 1 - i)) .. (8 * (n - 1 - i) + 7)] = v[i]
+    };
+    res
+}
+$endif
+
 
 // Some ARM specific builtins
 
