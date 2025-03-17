@@ -16,7 +16,7 @@ abbrev bits k_n := (BitVec k_n)
 inductive option (k_a : Type) where
   | Some (_ : k_a)
   | None (_ : Unit)
-  deriving BEq
+  deriving Inhabited, BEq
 
 abbrev MAIRType := (BitVec 64)
 
@@ -38,7 +38,7 @@ structure MPAMinfo where
   mpam_sp : PARTIDspaceType
   partid : PARTIDtype
   pmg : PMGtype
-  deriving BEq
+  deriving Inhabited, BEq
 
 inductive AccessType where | AccessType_IFETCH | AccessType_GPR | AccessType_ASIMD | AccessType_SVE | AccessType_SME | AccessType_IC | AccessType_DC | AccessType_DCZero | AccessType_AT | AccessType_NV2 | AccessType_SPE | AccessType_GCS | AccessType_GPTW | AccessType_TTW
   deriving Inhabited, BEq
@@ -95,7 +95,7 @@ structure AccessDescriptor where
   tagchecked : Bool
   tagaccess : Bool
   mpam : MPAMinfo
-  deriving BEq
+  deriving Inhabited, BEq
 
 inductive MemType where | MemType_Normal | MemType_Device
   deriving Inhabited, BEq
@@ -107,7 +107,7 @@ structure MemAttrHints where
   attrs : (BitVec 2)
   hints : (BitVec 2)
   transient : Bool
-  deriving BEq
+  deriving Inhabited, BEq
 
 inductive Shareability where | Shareability_NSH | Shareability_ISH | Shareability_OSH
   deriving Inhabited, BEq
@@ -124,7 +124,7 @@ structure MemoryAttributes where
   tags : MemTagType
   notagaccess : Bool
   xs : (BitVec 1)
-  deriving BEq
+  deriving Inhabited, BEq
 
 inductive PASpace where | PAS_NonSecure | PAS_Secure | PAS_Root | PAS_Realm
   deriving Inhabited, BEq
@@ -132,7 +132,7 @@ inductive PASpace where | PAS_NonSecure | PAS_Secure | PAS_Root | PAS_Realm
 structure FullAddress where
   paspace : PASpace
   address : (BitVec 56)
-  deriving BEq
+  deriving Inhabited, BEq
 
 inductive GPCF where | GPCF_None | GPCF_AddressSize | GPCF_Walk | GPCF_EABT | GPCF_Fail
   deriving Inhabited, BEq
@@ -140,7 +140,7 @@ inductive GPCF where | GPCF_None | GPCF_AddressSize | GPCF_Walk | GPCF_EABT | GP
 structure GPCFRecord where
   gpf : GPCF
   level : Int
-  deriving BEq
+  deriving Inhabited, BEq
 
 inductive Fault where | Fault_None | Fault_AccessFlag | Fault_Alignment | Fault_Background | Fault_Domain | Fault_Permission | Fault_Translation | Fault_AddressSize | Fault_SyncExternal | Fault_SyncExternalOnWalk | Fault_SyncParity | Fault_SyncParityOnWalk | Fault_GPCFOnWalk | Fault_GPCFOnOutput | Fault_AsyncParity | Fault_AsyncExternal | Fault_TagCheck | Fault_Debug | Fault_TLBConflict | Fault_BranchTarget | Fault_HWUpdateAccessFlag | Fault_Lockdown | Fault_Exclusive | Fault_ICacheMaint
   deriving Inhabited, BEq
@@ -169,7 +169,7 @@ structure FaultRecord where
   domain : (BitVec 4)
   merrorstate : ErrorState
   debugmoe : (BitVec 4)
-  deriving BEq
+  deriving Inhabited, BEq
 
 inductive MBReqDomain where | MBReqDomain_Nonshareable | MBReqDomain_InnerShareable | MBReqDomain_OuterShareable | MBReqDomain_FullSystem
   deriving Inhabited, BEq
@@ -196,7 +196,7 @@ structure CacheRecord where
   asid : (BitVec 16)
   security : SecurityState
   cpas : CachePASpace
-  deriving BEq
+  deriving Inhabited, BEq
 
 inductive Regime where | Regime_EL3 | Regime_EL30 | Regime_EL2 | Regime_EL20 | Regime_EL10
   deriving Inhabited, BEq
@@ -245,7 +245,7 @@ structure S1TTWParams where
   dc : (BitVec 1)
   sif : (BitVec 1)
   mair : MAIRType
-  deriving BEq
+  deriving Inhabited, BEq
 
 structure S2TTWParams where
   ha : (BitVec 1)
@@ -279,7 +279,7 @@ structure S2TTWParams where
   ee : (BitVec 1)
   ptw : (BitVec 1)
   vm : (BitVec 1)
-  deriving BEq
+  deriving Inhabited, BEq
 
 structure TranslationInfo where
   regime : Regime
@@ -291,7 +291,7 @@ structure TranslationInfo where
   s1params : (Option S1TTWParams)
   s2params : (Option S2TTWParams)
   memattrs : MemoryAttributes
-  deriving BEq
+  deriving Inhabited, BEq
 
 inductive TLBILevel where | TLBILevel_Any | TLBILevel_Last
   deriving Inhabited, BEq
@@ -318,7 +318,7 @@ structure TLBIRecord where
   d128 : Bool
   ttl : (BitVec 4)
   tg : (BitVec 2)
-  deriving BEq
+  deriving Inhabited, BEq
 
 inductive arm_acc_type where
   | SAcc_ASIMD (_ : Bool)
@@ -332,18 +332,18 @@ inductive arm_acc_type where
   | SAcc_SPE (_ : Unit)
   | SAcc_GCS (_ : Unit)
   | SAcc_GPTW (_ : Unit)
-  deriving BEq
+  deriving Inhabited, BEq
 
 structure TLBIInfo where
   rec' : TLBIRecord
   shareability : Shareability
-  deriving BEq
+  deriving Inhabited, BEq
 
 structure DxB where
   domain : MBReqDomain
   types : MBReqTypes
   nXS : Bool
-  deriving BEq
+  deriving Inhabited, BEq
 
 inductive Barrier where
   | Barrier_DSB (_ : DxB)
@@ -352,7 +352,7 @@ inductive Barrier where
   | Barrier_SSBB (_ : Unit)
   | Barrier_PSSBB (_ : Unit)
   | Barrier_SB (_ : Unit)
-  deriving BEq
+  deriving Inhabited, BEq
 
 abbrev boolean := (BitVec 1)
 
@@ -368,7 +368,7 @@ inductive ast where
   | ExclusiveOr (_ : (reg_index × reg_index × reg_index))
   | DataMemoryBarrier (_ : Unit)
   | CompareAndBranch (_ : (reg_index × (BitVec 64)))
-  deriving BEq
+  deriving Inhabited, BEq
 
 inductive Register : Type where
   | R0

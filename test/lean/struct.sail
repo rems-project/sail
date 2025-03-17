@@ -42,8 +42,8 @@ function match_struct(value : My_struct) -> int = {
     }
 }
 
-struct Mem_write_request('n : Int, 'vasize : Int, 'pa : Type, 'ts : Type,
-                         'arch_ak : Type), 'n > 0 & 'vasize >= 0 = {
+struct My_mem_write_request('n : Int, 'vasize : Int, 'pa : Type, 'ts : Type,
+                           'arch_ak : Type), 'n > 0 & 'vasize >= 0 = {
   va : option(bits('vasize)),
   pa : 'pa,
   translation : 'ts,

@@ -16,11 +16,11 @@ abbrev bits k_n := (BitVec k_n)
 inductive option (k_a : Type) where
   | Some (_ : k_a)
   | None (_ : Unit)
-  deriving BEq
+  deriving Inhabited, BEq
 
 inductive virtaddr where
   | virtaddr (_ : (BitVec 32))
-  deriving BEq
+  deriving Inhabited, BEq
 
 abbrev Register := PEmpty
 abbrev RegisterType : Register -> Type := PEmpty.elim
