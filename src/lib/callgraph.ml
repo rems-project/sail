@@ -317,6 +317,16 @@ let add_def_to_graph graph (DEF_aux (def, def_annot)) =
       (fun id -> if Env.is_mapping id def_annot.env then Some id else None)
   in
 
+  let scan_fundef fdef =
+    let id = id_of_fundef fdef in
+    graph := G.add_edges (Function id) [] !graph;
+    (* When we have a function defining a mapping, add edges back to the mapping so that it ends up
+           in the same component as the val_spec *)
+    Option.iter (fun mapping -> graph := G.add_edges (Mapping mapping) [Function id] !graph) (is_mapping_fn id);
+    scan_fundef_tannot (Function id) fdef;
+    ignore (rewrite_fun (rewriters (Function id)) fdef)
+  in
+
   begin
     match def with
     | DEF_val (VS_aux (VS_val_spec (TypSchm_aux (TypSchm_ts (typq, (Typ_aux (Typ_bidir _, _) as typ)), _), id, _), _))
@@ -336,14 +346,7 @@ let add_def_to_graph graph (DEF_aux (def, def_annot)) =
         graph := G.add_edges (Function id) [] !graph;
         scan_typquant (Function id) typq;
         IdSet.iter (fun typ_id -> graph := G.add_edge (Function id) (Type typ_id) !graph) (typ_ids typ)
-    | DEF_fundef fdef ->
-        let id = id_of_fundef fdef in
-        graph := G.add_edges (Function id) [] !graph;
-        (* When we have a function defining a mapping, add edges back to the mapping so that it ends up
-           in the same component as the val_spec *)
-        Option.iter (fun mapping -> graph := G.add_edges (Mapping mapping) [Function id] !graph) (is_mapping_fn id);
-        scan_fundef_tannot (Function id) fdef;
-        ignore (rewrite_fun (rewriters (Function id)) fdef)
+    | DEF_fundef fdef -> scan_fundef fdef
     | DEF_mapdef mdef ->
         let id = id_of_mapdef mdef in
         graph := G.add_edges (Mapping id) [] !graph;
@@ -396,6 +399,7 @@ let add_def_to_graph graph (DEF_aux (def, def_annot)) =
             graph := G.add_edge (Overload id) n !graph
           )
           ids
+    | DEF_internal_mutrec fundefs -> List.iter scan_fundef fundefs
     | _ -> ()
   end;
   !graph
