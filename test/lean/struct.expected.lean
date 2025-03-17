@@ -16,16 +16,16 @@ abbrev bits k_n := (BitVec k_n)
 inductive option (k_a : Type) where
   | Some (_ : k_a)
   | None (_ : Unit)
-  deriving BEq
+  deriving Inhabited, BEq
 
 structure My_struct where
   field1 : Int
   field2 : (BitVec 1)
-  deriving BEq
+  deriving Inhabited, BEq
 
 /-- Type quantifiers: k_n : Int, k_vasize : Int, k_pa : Type, k_ts : Type, k_arch_ak : Type, k_n > 0
   ∧ k_vasize ≥ 0 -/
-structure Mem_write_request
+structure My_mem_write_request
   (k_n : Nat) (k_vasize : Nat) (k_pa : Type) (k_ts : Type) (k_arch_ak : Type) where
   va : (Option (BitVec k_vasize))
   pa : k_pa
@@ -33,7 +33,7 @@ structure Mem_write_request
   size : Int
   value : (Option (BitVec (8 * k_n)))
   tag : (Option Bool)
-  deriving BEq
+  deriving Inhabited, BEq
 
 abbrev Register := PEmpty
 abbrev RegisterType : Register -> Type := PEmpty.elim

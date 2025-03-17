@@ -13,22 +13,22 @@ open Sail
 structure rectangle where
   width : Int
   height : Int
-  deriving BEq
+  deriving Inhabited, BEq
 
 structure circle where
   radius : Int
-  deriving BEq
+  deriving Inhabited, BEq
 
 inductive shape where
   | Rectangle (_ : rectangle)
   | Circle (_ : circle)
-  deriving BEq
+  deriving Inhabited, BEq
 
 /-- Type quantifiers: k_a : Type -/
 inductive my_option (k_a : Type) where
   | MySome (_ : k_a)
   | MyNone (_ : Unit)
-  deriving BEq
+  deriving Inhabited, BEq
 
 abbrev Register := PEmpty
 abbrev RegisterType : Register -> Type := PEmpty.elim

@@ -1062,7 +1062,7 @@ let doc_typdef ctx (TD_aux (td, tannot) as full_typdef) =
       doc_typ_quant_in_comment ctx tq
       ^^ nest 2
            (flow (break 1) (remove_empties [string "structure"; doc_id_ctor id; rectyp; string "where"])
-           ^^ hardline ^^ fields_doc ^^ hardline ^^ string "deriving BEq"
+           ^^ hardline ^^ fields_doc ^^ hardline ^^ string "deriving Inhabited, BEq"
            )
   | TD_abbrev (id, tq, A_aux (A_typ (Typ_aux (Typ_app (Id_aux (Id "range", _), _), _) as t), _)) ->
       let vars = doc_typ_quant_relevant ctx tq in
@@ -1084,10 +1084,11 @@ let doc_typdef ctx (TD_aux (td, tannot) as full_typdef) =
       let rectyp = List.map (fun d -> parens d) rectyp |> separate space in
       let _ = opens := IdSet.add id !opens in
       let id = doc_id_ctor id in
+      let derivers = if List.length ar == 0 then [string "BEq"] else [string "Inhabited"; string "BEq"] in
       doc_typ_quant_in_comment ctx tq
       ^^ nest 2
            (nest 2 (flow space (remove_empties [string "inductive"; id; rectyp; string "where"]))
-           ^^ pp_tus ^^ hardline ^^ string "deriving BEq"
+           ^^ pp_tus ^^ hardline ^^ string "deriving" ^^ space ^^ separate comma_sp derivers
            )
   | _ -> failwith ("Type definition " ^ string_of_type_def_con full_typdef ^ " not translatable yet.")
 
