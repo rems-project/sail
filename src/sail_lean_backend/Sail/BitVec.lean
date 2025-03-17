@@ -17,13 +17,14 @@ Leonardo de Moura. -/
 declare_syntax_cat bvpat_comp
 syntax num (":" num)? : bvpat_comp
 syntax ident (":" num)? : bvpat_comp
-syntax "_" ":" num : bvpat_comp
+syntax "_" (":" num)? : bvpat_comp
 
 /--
 Bitvector pattern syntax category.
 Example: [sf:1,0011010000,Rm:5,000000,Rn:5,Rd:5]
 -/
 declare_syntax_cat bvpat
+syntax num : bvpat
 syntax "[" bvpat_comp,* "]" ("if" term)? : bvpat
 
 open Lean
@@ -37,12 +38,10 @@ def BVPatComp.length (c : BVPatComp) : Nat := Id.run do
   | `(bvpat_comp| $n:num $[: $_]?) =>
     let some str := n.raw.isLit? `num | pure 0
     return str.length
-  | `(bvpat_comp| $_:ident : $n:num) =>
+  | `(bvpat_comp| $_:ident : $n:num) | `(bvpat_comp| _ : $n:num) =>
     return n.raw.toNat
-  | `(bvpat_comp| $_:ident ) =>
+  | `(bvpat_comp| $_:ident ) | `(bvpat_comp| _) =>
     return 1
-  | `(bvpat_comp| _ : $n:num) =>
-    return n.raw.toNat
   | _ =>
     return 0
 
@@ -78,17 +77,20 @@ def BVPatComp.toBVVar? (c : BVPatComp) : MacroM (Option (TSyntax `ident)) := do
     return some x
   | _ => return none
 
-def BVPat.getComponents (p : BVPat) : (Array BVPatComp) × Option Term :=
+def BVPat.getComponents (p : BVPat) : MacroM ((Array BVPatComp) × Option Term) :=
   match p with
-  | `(bvpat| [$comp,*] $[if $t]?) => (comp.getElems.reverse,t)
-  | _ => (#[],none)
+  | `(bvpat|$n:num) => do
+    let n ← `(bvpat_comp|$n:num)
+    return (#[n],none)
+  | `(bvpat| [$comp,*] $[if $t]?) => return (comp.getElems.reverse,t)
+  | _ => return (#[],none)
 
 /--
 Return the number of bits in a bit-vector pattern.
 -/
-def BVPat.length (p : BVPat) : Nat := Id.run do
+def BVPat.length (p : BVPat) : MacroM Nat := do
   let mut sz := 0
-  for c in p.getComponents.1 do
+  for c in (← p.getComponents).1 do
     sz := sz + c.length
   return sz
 
@@ -107,7 +109,7 @@ def declBVPatVars (vars : Array Term) (pats : Array BVPat) (rhs : Term) : MacroM
   let mut result := rhs
   for (pat, var) in pats.zip vars do
     let mut shift  := 0
-    for c in pat.getComponents.1 do
+    for c in (← pat.getComponents).1 do
       let len := c.length
       if let some y ← c.toBVVar? then
         let rhs ← `(extractLsb $(quote (shift + (len - 1))) $(quote shift) $var)
@@ -126,7 +128,7 @@ def genBVPatMatchTest (vars : Array Term) (pats : Array BVPat): MacroM Term := d
 
   for (pat, var) in pats.zip vars do
     let mut shift := 0
-    let (cs,if') := pat.getComponents
+    let (cs,if') ← pat.getComponents
     for c in cs do
       let len := c.length
       if let some bv ← c.toBVLit? then
@@ -156,7 +158,7 @@ def checkBVPatLengths (lens : Array (Option Nat)) (pss : Array (Array BVPat)) : 
         unless ps.size == lens.size do
           throwError "Expected {lens.size} patterns, found {ps.size}"
         let p := ps[i]!
-        let pLen := p.length
+        let pLen ← liftMacroM p.length
 
         -- compare the length to that of the type of the discriminant
         if let some pLen' := len then
@@ -213,7 +215,7 @@ def elabMatchBv : TermElab := fun stx typ? =>
 
     for ps in pss.reverse, rhs in rhss.reverse do
       let test ← liftMacroM <| genBVPatMatchTest xs ps
-      let rhs ← liftMacroM <| declBVPatVars xs ps rhs
+      let rhs  ← liftMacroM <| declBVPatVars xs ps rhs
       result ← `(dite_gather $test (Function.const _ $rhs) $result)
     let res ← liftMacroM <| `($result True.intro)
     elabTerm res typ?
@@ -221,6 +223,14 @@ def elabMatchBv : TermElab := fun stx typ? =>
 
 
 ----------- TESTS -----------
+
+-- def test (merge_var : (BitVec 8)) : IO Unit := do
+  -- match_bv merge_var with
+  -- | [00,1111,00] => return ()
+  -- | [0,_:5,1,0]  => return ()
+  -- | [0,_:5,1,_]  => return ()
+  -- | [0,_:5,1,1]  => return ()
+  -- | _ =>            return ()
 
 -- def test_1 (x : BitVec 32) : BitVec 16 :=
 --    match_bv x with
