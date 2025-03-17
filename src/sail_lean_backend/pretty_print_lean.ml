@@ -459,7 +459,7 @@ let rec update_ctx_pat (ctx : context) (P_aux (p, (l, annot)) as pat) =
       List.fold_left update_ctx_pat ctx pats
   | _ -> ctx
 
-let rec doc_pat ?(need_parens = false) ?(in_match = false) ?(in_vector = false) (P_aux (p, (l, annot)) as pat) =
+let rec doc_pat ?(need_parens = false) ?(in_vector = false) (P_aux (p, (l, annot)) as pat) =
   let opt_parens doc = if need_parens then parens doc else doc in
   match p with
   | P_wild -> underscore
@@ -469,13 +469,12 @@ let rec doc_pat ?(need_parens = false) ?(in_match = false) ?(in_vector = false) 
   | P_typ (Typ_aux (Typ_app (Id_aux (Id id, _), [A_aux (A_nexp (Nexp_aux (Nexp_constant i, _)), _)]), _), p)
     when in_vector && (id = "bits" || id = "bitvector") ->
       doc_pat p ^^ string ":" ^^ doc_big_int i
-  | P_typ (ptyp, p) ->
-      let wrap x = if in_match then parens x else x in
-      wrap (doc_pat p)
+  | P_typ (ptyp, p) -> doc_pat p
   | P_id id -> fixup_match_id id |> doc_id_ctor
   | P_tuple pats -> separate (string ", ") (List.map doc_pat pats) |> parens
   | P_list pats -> separate (string ", ") (List.map doc_pat pats) |> brackets
   | P_vector pats -> concat (List.map (doc_pat ~in_vector:true) pats)
+  | P_vector_concat pats when in_vector -> separate (string ",") (List.map (doc_pat ~in_vector:true) pats) 
   | P_vector_concat pats -> separate (string ",") (List.map (doc_pat ~in_vector:true) pats) |> brackets
   | P_app (Id_aux (Id "None", _), p) -> string "none"
   | P_app (cons, pats) ->
