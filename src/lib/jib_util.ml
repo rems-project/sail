@@ -679,13 +679,19 @@ let creturn_deps = function
 
 let init_deps = function Init_cval cval -> cval_deps cval | Init_static _ | Init_json_key _ -> NameSet.empty
 
-(* Return the direct, read/write dependencies of a single instruction *)
-let instr_deps = function
+let rec instr_deps ~direct = function
   | I_decl (_, id) -> (NameSet.empty, NameSet.singleton id)
   | I_reset (_, id) -> (NameSet.empty, NameSet.singleton id)
   | I_init (_, id, init) -> (init_deps init, NameSet.singleton id)
   | I_reinit (_, id, cval) -> (cval_deps cval, NameSet.singleton id)
-  | I_if (cval, _, _) -> (cval_deps cval, NameSet.empty)
+  | I_if (cval, then_instrs, else_instrs) ->
+      let cond_reads = cval_deps cval in
+      if direct then (cond_reads, NameSet.empty)
+      else (
+        let then_reads, then_writes = instrs_deps ~direct:false then_instrs in
+        let else_reads, else_writes = instrs_deps ~direct:false else_instrs in
+        (NameSet.union cond_reads (NameSet.union then_reads else_reads), NameSet.union then_writes else_writes)
+      )
   | I_jump (cval, _) -> (cval_deps cval, NameSet.empty)
   | I_funcall (creturn, _, _, cvals) ->
       let reads, writes = creturn_deps creturn in
@@ -695,13 +701,63 @@ let instr_deps = function
       (NameSet.union reads (cval_deps cval), writes)
   | I_clear (_, id) -> (NameSet.singleton id, NameSet.empty)
   | I_throw cval | I_return cval -> (cval_deps cval, NameSet.empty)
-  | I_block _ | I_try_block _ -> (NameSet.empty, NameSet.empty)
-  | I_comment _ | I_raw _ -> (NameSet.empty, NameSet.empty)
-  | I_label label -> (NameSet.empty, NameSet.empty)
-  | I_goto label -> (NameSet.empty, NameSet.empty)
-  | I_undefined _ -> (NameSet.empty, NameSet.empty)
-  | I_exit _ -> (NameSet.empty, NameSet.empty)
+  | I_block instrs | I_try_block instrs ->
+      if direct then (NameSet.empty, NameSet.empty) else instrs_deps ~direct:false instrs
+  | I_comment _ | I_raw _ | I_label _ | I_goto _ | I_undefined _ | I_exit _ -> (NameSet.empty, NameSet.empty)
   | I_end id -> (NameSet.singleton id, NameSet.empty)
+
+and instrs_deps ~direct instrs =
+  List.fold_left
+    (fun (reads, writes) (I_aux (instr, _)) ->
+      let reads', writes' = instr_deps ~direct:false instr in
+      (NameSet.union reads reads', NameSet.union writes writes')
+    )
+    (NameSet.empty, NameSet.empty) instrs
+
+let is_reference_to id = function Some id' -> Name.compare id id' = 0 | None -> false
+
+let rec cval_references read = function
+  | V_id (id, _) -> is_reference_to id read
+  | V_lit _ | V_member _ -> false
+  | V_field (cval, _, _) | V_tuple_member (cval, _, _) | V_ctor_kind (cval, _) | V_ctor_unwrap (cval, _, _) ->
+      cval_references read cval
+  | V_call (_, cvals) | V_tuple cvals -> List.exists (cval_references read) cvals
+  | V_struct (fields, _) -> List.exists (fun (_, cval) -> cval_references read cval) fields
+
+let init_references read = function
+  | Init_cval cval -> cval_references read cval
+  | Init_json_key _ | Init_static _ -> false
+
+let rec clexp_references ?read ?write = function
+  | CL_id (id, _) -> is_reference_to id write
+  | CL_rmw (read', write', _) -> is_reference_to read' read || is_reference_to write' write
+  | CL_field (clexp, _, _) | CL_tuple (clexp, _) | CL_addr clexp -> clexp_references ?read ?write clexp
+  | CL_void _ -> false
+
+let creturn_references ?read ?write = function
+  | CR_one clexp -> clexp_references ?read ?write clexp
+  | CR_multi clexps -> List.exists (clexp_references ?read ?write) clexps
+
+let rec instr_references ?read ?write ~direct (I_aux (instr, _)) =
+  match instr with
+  | I_decl (_, id) | I_reset (_, id) | I_clear (_, id) -> is_reference_to id write
+  | I_init (_, id, init) -> is_reference_to id write || init_references read init
+  | I_reinit (_, id, cval) -> is_reference_to id write || cval_references read cval
+  | I_if (cval, then_instrs, else_instrs) ->
+      if direct then cval_references read cval
+      else
+        cval_references read cval
+        || instrs_references ?read ?write ~direct:false then_instrs
+        || instrs_references ?read ?write ~direct:false else_instrs
+  | I_jump (cval, _) | I_throw cval | I_return cval -> cval_references read cval
+  | I_funcall (creturn, _, _, cvals) ->
+      creturn_references ?read ?write creturn || List.exists (cval_references read) cvals
+  | I_copy (clexp, cval) -> clexp_references ?read ?write clexp || cval_references read cval
+  | I_block instrs | I_try_block instrs -> if direct then false else instrs_references ?read ?write ~direct:false instrs
+  | I_comment _ | I_raw _ | I_label _ | I_goto _ | I_undefined _ | I_exit _ -> false
+  | I_end id -> is_reference_to id read
+
+and instrs_references ?read ?write ~direct instrs = List.exists (instr_references ?read ?write ~direct) instrs
 
 module NameCT = struct
   type t = name * ctyp
@@ -922,13 +978,13 @@ let rec map_instrs f (I_aux (instr, aux)) =
 
 let map_instr_list f instrs = List.map (map_instr f) instrs
 
-let instr_ids (I_aux (instr, _)) =
-  let reads, writes = instr_deps instr in
+let instr_ids ~direct (I_aux (instr, _)) =
+  let reads, writes = instr_deps ~direct instr in
   NameSet.union reads writes
 
-let instr_reads (I_aux (instr, _)) = fst (instr_deps instr)
+let instr_reads ~direct (I_aux (instr, _)) = fst (instr_deps ~direct instr)
 
-let instr_writes (I_aux (instr, _)) = snd (instr_deps instr)
+let instr_writes ~direct (I_aux (instr, _)) = snd (instr_deps ~direct instr)
 
 let rec filter_instrs f instrs =
   let filter_instrs' instr =

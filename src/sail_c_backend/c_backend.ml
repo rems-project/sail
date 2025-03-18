@@ -708,10 +708,12 @@ let remove_alias =
       | 1, Some a, I_aux (I_copy (CL_id (a', ctyp'), V_id (id', ctyp'')), _) :: instrs
         when Name.compare a a' = 0 && Name.compare id id' = 0 && ctyp_equal ctyp ctyp' && ctyp_equal ctyp' ctyp'' ->
           scan ctyp id 2 instrs
-      | 1, Some a, instr :: instrs -> if NameSet.mem a (instr_ids instr) then None else scan ctyp id 1 instrs
+      | 1, Some a, instr :: instrs ->
+          if NameSet.mem a (instr_ids ~direct:true instr) then None else scan ctyp id 1 instrs
       | 2, Some _, I_aux (I_clear (ctyp', id'), _) :: instrs when Name.compare id id' = 0 && ctyp_equal ctyp ctyp' ->
           scan ctyp id 2 instrs
-      | 2, Some _, instr :: instrs -> if NameSet.mem id (instr_ids instr) then None else scan ctyp id 2 instrs
+      | 2, Some _, instr :: instrs ->
+          if NameSet.mem id (instr_ids ~direct:true instr) then None else scan ctyp id 2 instrs
       | 2, Some _, [] -> !alias
       | n, _, _ :: instrs when n = 0 || n > 2 -> scan ctyp id n instrs
       | _, _, I_aux (_, (_, l)) :: _ -> Reporting.unreachable l __POS__ "optimize_alias"
@@ -755,6 +757,8 @@ let remove_alias =
 
     {v
        create x : t;
+       ... // some instructions
+       { { { ... // and nested in any number of blocks
        create y : t;
        // modifications to y, no references to x
        x = y;
@@ -764,89 +768,126 @@ let remove_alias =
 
     If found we can replace y by x *)
 module Combine_variables = struct
-  type state = Find of int | Modify of int * name | Kill of int * name
+  type block_offset = int * int list
+
+  let no_offset = (0, [])
+
+  let deeper (n, blks) = (0, n :: blks)
+
+  let next (n, blks) = (n + 1, blks)
+
+  let reverse (x, xs) =
+    let ys = List.rev (x :: xs) in
+    (List.hd ys, List.tl ys)
+
+  type state = Find of block_offset | Modify of block_offset * name | Kill of block_offset * name
 
   let pattern ctyp x =
     let rec scan state instrs =
       match state with
-      | Find depth -> (
+      | Find offset -> (
           match instrs with
           | I_aux (I_block block, _) :: instrs -> (
-              match scan (Find (depth + 1)) block with None -> scan (Find depth) instrs | result -> result
+              match scan (Find (deeper offset)) block with None -> scan (Find (next offset)) instrs | result -> result
             )
-          | I_aux (I_decl (ctyp', y), _) :: instrs when ctyp_equal ctyp ctyp' -> scan (Modify (depth, y)) instrs
-          | _ :: instrs -> scan (Find depth) instrs
+          | I_aux (I_decl (ctyp', y), _) :: instrs when ctyp_equal ctyp ctyp' -> scan (Modify (offset, y)) instrs
+          | _ :: instrs -> scan (Find offset) instrs
           | [] -> None
         )
-      | Modify (depth, y) -> (
+      | Modify (offset, y) -> (
           match instrs with
           | I_aux (I_copy (CL_id (x', ctyp'), V_id (y', ctyp'')), _) :: instrs
             when Name.compare y y' = 0 && Name.compare x x' = 0 && ctyp_equal ctyp ctyp' && ctyp_equal ctyp' ctyp'' ->
-              scan (Kill (depth, y)) instrs
-          | I_aux ((I_block _ | I_try_block _ | I_if _), _) :: _ -> None
+              scan (Kill (offset, y)) instrs
           (* Ignore seemingly early clears of x, as this can happen along exception paths *)
-          | I_aux (I_clear (_, x'), _) :: instrs when Name.compare x x' = 0 -> scan (Modify (depth, y)) instrs
-          | instr :: instrs -> if NameSet.mem x (instr_ids instr) then None else scan (Modify (depth, y)) instrs
+          | I_aux (I_clear (_, x'), _) :: instrs when Name.compare x x' = 0 -> scan (Modify (offset, y)) instrs
+          | instr :: instrs ->
+              if instr_references ~read:x ~write:x ~direct:false instr then None else scan (Modify (offset, y)) instrs
           | [] -> None
         )
-      | Kill (depth, y) -> (
+      | Kill (offset, y) -> (
           match instrs with
-          | [] -> Some (depth, y)
-          | I_aux (I_clear (ctyp', y'), _) :: _ when Name.compare y y' = 0 && ctyp_equal ctyp ctyp' -> Some (depth, y)
-          | instr :: instrs -> if NameSet.mem y (instr_ids instr) then None else scan (Kill (depth, y)) instrs
+          | [] -> Some (offset, y)
+          | I_aux (I_clear (ctyp', y'), _) :: _ when Name.compare y y' = 0 && ctyp_equal ctyp ctyp' -> Some (offset, y)
+          | instr :: instrs ->
+              if instr_references ~read:y ~write:y ~direct:false instr then None else scan (Kill (offset, y)) instrs
         )
     in
-    scan (Find 0)
+    scan (Find (0, []))
 
-  let modify depth ctyp x y =
+  let modify_error l = Reporting.unreachable l __POS__ "Combine variables optimisation failed"
+
+  let modify l (skipped, nesting) ctyp x y =
     let rec traverse state instrs =
       match state with
-      | Find depth -> (
+      | Find (skipped, (child :: grandchildren as nesting)) -> (
           match instrs with
-          | I_aux (I_decl (ctyp', y), _) :: instrs when ctyp_equal ctyp ctyp' -> traverse (Modify (0, y)) instrs
-          | I_aux (I_block block, aux) :: instrs when depth > 0 ->
-              let block = traverse (Find (depth - 1)) block in
+          | I_aux (I_block block, aux) :: instrs when skipped > 0 ->
+              I_aux (I_block block, aux) :: traverse (Find (skipped - 1, nesting)) instrs
+          | I_aux (I_block block, aux) :: instrs ->
+              let block = traverse (Find (child, grandchildren)) block in
               I_aux (I_block block, aux) :: instrs
-          | instr :: instrs -> instr :: traverse (Find depth) instrs
-          | [] -> []
+          | instr :: instrs -> instr :: traverse (Find (skipped, nesting)) instrs
+          | [] -> modify_error l
+        )
+      | Find (skipped, []) -> (
+          match instrs with
+          | I_aux (I_decl (ctyp', y), _) :: instrs when ctyp_equal ctyp ctyp' -> traverse (Modify (no_offset, y)) instrs
+          | I_aux (I_block block, aux) :: instrs when skipped > 0 ->
+              I_aux (I_block block, aux) :: traverse (Find (skipped - 1, [])) instrs
+          | instr :: instrs -> instr :: traverse (Find (skipped, [])) instrs
+          | [] -> modify_error l
         )
       | Modify (_, y) -> (
           match instrs with
           | I_aux (I_copy (CL_id (x', ctyp'), V_id (y', ctyp'')), _) :: instrs
             when Name.compare y y' = 0 && Name.compare x x' = 0 && ctyp_equal ctyp ctyp' && ctyp_equal ctyp' ctyp'' ->
-              traverse (Kill (depth, y)) instrs
-          | instr :: instrs -> instr_rename y x instr :: traverse (Modify (0, y)) instrs
-          | [] -> []
+              traverse (Kill (no_offset, y)) instrs
+          | instr :: instrs -> instr_rename y x instr :: traverse (Modify (no_offset, y)) instrs
+          | [] -> modify_error l
         )
       | Kill (_, y) -> (
           match instrs with
           | I_aux (I_clear (ctyp', y'), _) :: instrs when Name.compare y y' = 0 && ctyp_equal ctyp ctyp' -> instrs
-          | instr :: instrs -> instr :: traverse (Kill (0, y)) instrs
+          | instr :: instrs -> instr :: traverse (Kill (no_offset, y)) instrs
           | [] -> []
         )
     in
-    traverse (Find depth)
+    traverse (Find (skipped, nesting))
 
-  class visitor : jib_visitor =
+  let rec repeat_pattern l ctyp x instr instrs =
+    match pattern ctyp x instrs with
+    | None -> instrs
+    | Some (offset, y) ->
+        let instrs = modify l (reverse offset) ctyp x y instrs in
+        repeat_pattern l ctyp x instr instrs
+
+  class visitor ctyp_pred : jib_visitor =
     object
       inherit empty_jib_visitor
 
+      method! vctyp _ = SkipChildren
+      method! vclexp _ = SkipChildren
+      method! vcval _ = SkipChildren
+
       method! vinstrs =
         function
-        | (I_aux (I_decl (ctyp, x), _) as instr) :: instrs -> begin
+        | (I_aux (I_decl (ctyp, x), (_, l)) as instr) :: instrs when ctyp_pred ctyp -> (
             match pattern ctyp x instrs with
             | None -> DoChildren
-            | Some (depth, y) ->
-                let instrs = modify depth ctyp x y instrs in
+            | Some (offset, y) ->
+                let instrs = modify l (reverse offset) ctyp x y instrs in
+                let instrs = repeat_pattern l ctyp x instr instrs in
                 change_do_children (instr :: instrs)
-          end
+          )
         | _ -> DoChildren
 
       method! vcdef = function CDEF_aux (CDEF_fundef _, _) -> DoChildren | _ -> SkipChildren
     end
 end
 
-let combine_variables = visit_cdefs (new Combine_variables.visitor)
+let combine_variables ctx cdefs =
+  visit_cdefs (new Combine_variables.visitor (fun ctyp -> not (is_stack_ctyp ctx ctyp))) cdefs
 
 module Remove_stack_clears = struct
   let is_stack_clear ctx = function I_aux (I_clear (ctyp, _), _) -> is_stack_ctyp ctx ctyp | _ -> false
@@ -870,7 +911,7 @@ let optimize ~have_rts ctx recursive_functions cdefs =
   let nothing cdefs = cdefs in
   cdefs
   |> (if !optimize_alias then concatMap remove_alias else nothing)
-  |> (if !optimize_alias then combine_variables else nothing)
+  |> (if !optimize_alias then combine_variables ctx else nothing)
   (* We need the runtime to initialize hoisted allocations *)
   |> (if !optimize_hoist_allocations && have_rts then concatMap (hoist_allocations recursive_functions) else nothing)
   |> remove_stack_clears ctx

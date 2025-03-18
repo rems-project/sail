@@ -1773,7 +1773,7 @@ module Make (Config : CONFIG) = struct
                       match acc with
                       | None ->
                           let writes =
-                            instr_writes instr
+                            instr_writes ~direct:true instr
                             |> NameSet.filter (fun w ->
                                    let w', _ = unssa_name w in
                                    Name.compare name w' = 0
