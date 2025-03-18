@@ -1,10 +1,10 @@
 /-
 Copyright (c) 2023 Amazon.com, Inc. or its affiliates. All Rights Reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
-Author(s): Shilpi Goel, Siddharth Bhat
+Author(s): Shilpi Goel, Siddharth Bhat, Arthur Adjedj
 -/
 
--- Taken from https://github.com/leanprover/LNSym/blob/main/Arm/BitVec.lean
+-- inspired from https://github.com/leanprover/LNSym/blob/main/Arm/BitVec.lean
 
 import Lean.Elab.Term
 import Lean.Meta.Reduce
