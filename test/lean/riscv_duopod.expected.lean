@@ -16,7 +16,7 @@ abbrev bits k_n := (BitVec k_n)
 inductive option (k_a : Type) where
   | Some (_ : k_a)
   | None (_ : Unit)
-  deriving BEq
+  deriving Inhabited, BEq
 
 abbrev xlen : Int := 64
 
@@ -32,7 +32,7 @@ inductive iop where | RISCV_ADDI | RISCV_SLTI | RISCV_SLTIU | RISCV_XORI | RISCV
 inductive ast where
   | ITYPE (_ : ((BitVec 12) × regbits × regbits × iop))
   | LOAD (_ : ((BitVec 12) × regbits × regbits))
-  deriving BEq
+  deriving Inhabited, BEq
 
 inductive Register : Type where
   | Xs
