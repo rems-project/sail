@@ -52,9 +52,8 @@ open Jib
 
 (** {1 Instruction construction functions, and Jib names} *)
 
-(** Create a generator that produces fresh names, paired with a function that resets the generator (allowing it to
-    regenerate the same name). *)
-val symbol_generator : string -> (unit -> id) * (unit -> unit)
+(** Create a generator that produces fresh names. *)
+val symbol_generator : unit -> unit -> name
 
 val idecl : l -> ctyp -> name -> instr
 val istatic : l -> ctyp -> Value2.vl -> name * instr
@@ -69,7 +68,7 @@ val icopy : l -> clexp -> cval -> instr
 val iclear : ?loc:l -> ctyp -> name -> instr
 val ireturn : ?loc:l -> cval -> instr
 val iend : l -> instr
-val iend_id : l -> id -> instr
+val iend_name : l -> name -> instr
 val iblock : ?loc:l -> instr list -> instr
 val itry_block : l -> instr list -> instr
 val ithrow : l -> cval -> instr

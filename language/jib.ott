@@ -77,6 +77,7 @@ chan :: 'Chan_' ::=
   | stderr :: :: stderr
 
 name :: '' ::=
+  | nat0 nat1 nat2        :: :: gen
   | id nat                :: :: name
   | have_exception nat    :: :: have_exception
   | current_exception nat :: :: current_exception
@@ -84,6 +85,10 @@ name :: '' ::=
   | channel chan nat      :: :: channel
   | memory_writes nat     :: :: memory_writes
   | return nat            :: :: return
+
+return_name :: '' ::=
+  | name :: :: return_via
+  |      :: :: return_plain
 
 op :: '' ::=
   | not               :: :: bnot
@@ -284,7 +289,7 @@ def_annot :: '' ::=
 
 cdef :: 'CDEF_' ::=
   {{ aux _ def_annot }}
-  | register id : ctyp = {
+  | register name : ctyp = {
       instr0 ; ... ; instrn
     } :: :: register
   | ctype_def :: :: type
@@ -300,7 +305,7 @@ cdef :: 'CDEF_' ::=
 % return type and passes a pointer to it as an extra argument id for
 % the function to fill in. This is only done via Jib->Jib rewrites
 % used when compiling to C.
-  | function id mid ( id0 , ... , idn ) {
+  | function id return_name ( name0 , ... , namen ) {
       instr0 ; ... ; instrm
     } :: :: fundef
 

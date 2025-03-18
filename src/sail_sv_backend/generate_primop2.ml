@@ -128,7 +128,7 @@ module Make
           {
             function_name = SVN_string name;
             return_type = Some (CT_fvector (len, elem_ctyp));
-            params = [(mk_id "arr", arr_ctyp); (mk_id "i", CT_fbits ix_width); (mk_id "x", elem_ctyp)];
+            params = [(arr, arr_ctyp); (i, CT_fbits ix_width); (x, elem_ctyp)];
             body =
               mk_statement
                 (SVS_block
@@ -315,7 +315,7 @@ module Make
           {
             function_name = SVN_string function_name;
             return_type = Some CT_string;
-            params = [(mk_id "b", CT_fbits width)];
+            params = [(b, CT_fbits width)];
             body = mk_statement (SVS_block (List.map mk_statement (vars @ body)));
           }
     )
@@ -352,7 +352,7 @@ module Make
           {
             function_name = SVN_string name;
             return_type = Some CT_string;
-            params = [(mk_id "i", ctyp)];
+            params = [(i, ctyp)];
             body =
               mk_statement
                 (SVS_block
@@ -382,7 +382,7 @@ module Make
           {
             function_name = SVN_string name;
             return_type = Some CT_string;
-            params = [(mk_id "i", ctyp)];
+            params = [(i, ctyp)];
             body =
               mk_statement
                 (SVS_block
@@ -411,7 +411,7 @@ module Make
           {
             function_name = SVN_string name;
             return_type = Some CT_string;
-            params = [(mk_id "i", ctyp)];
+            params = [(i, ctyp)];
             body =
               mk_statement
                 (SVS_block
@@ -431,7 +431,7 @@ module Make
           {
             function_name = SVN_string name;
             return_type = Some CT_bool;
-            params = [(mk_id "xs", CT_list ctyp)];
+            params = [(xs, CT_list ctyp)];
             body =
               mk_statement
                 (SVS_block
@@ -455,7 +455,7 @@ module Make
           {
             function_name = SVN_string name;
             return_type = Some ctyp;
-            params = [(mk_id "xs", CT_list ctyp)];
+            params = [(xs, CT_list ctyp)];
             body =
               mk_statement
                 (SVS_block
@@ -475,7 +475,7 @@ module Make
           {
             function_name = SVN_string name;
             return_type = Some (CT_list ctyp);
-            params = [(mk_id "xs", CT_list ctyp)];
+            params = [(xs, CT_list ctyp)];
             body =
               mk_statement
                 (SVS_block
@@ -530,7 +530,7 @@ module Make
              {
                function_name = SVN_string name;
                return_type = Some CT_bool;
-               params = [(mk_id "xs", CT_list ctyp1); (mk_id "ys", CT_list ctyp2)];
+               params = [(xs, CT_list ctyp1); (ys, CT_list ctyp2)];
                body =
                  mk_statement
                    (SVS_block
