@@ -20,6 +20,7 @@ val unit_zero : unit -> int
 function unit_zero () = 0
 
 instantiation sail_mem_read with
+  'addr_size = 64,
   'addr_space = unit,
   'mem_acc = unit,
   mem_acc_is_explicit = unit_true,
@@ -32,12 +33,13 @@ instantiation sail_mem_read with
   mem_acc_is_exclusive = unit_false,
   mem_acc_is_atomic_rmw = unit_false,
   'abort = bits(8),
-  CHERI = unit_false,
-  cap_size = unit_zero
+  'CHERI = true,
+  'cap_size = 8
 
 
 
 instantiation sail_mem_write with
+  'addr_size = 64,
   'addr_space = unit,
   'mem_acc = unit,
   mem_acc_is_explicit = unit_true,
@@ -50,8 +52,8 @@ instantiation sail_mem_write with
   mem_acc_is_exclusive = unit_false,
   mem_acc_is_atomic_rmw = unit_false,
   'abort = bits(8),
-  CHERI = unit_false,
-  cap_size = unit_zero
+  'CHERI = true,
+  'cap_size = 8
 
 enum my_barrier = Barrier1 | Barrier2
 

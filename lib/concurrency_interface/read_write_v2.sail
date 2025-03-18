@@ -108,13 +108,17 @@ let __monomorphize_writes: bool = false
 $endif
 
 /* Requests a memory read. Return 'n bytes and 'nt tags */
-outcome sail_mem_read : forall 'n 'nt 'addr_size, 'n >= 0 & 'nt >= 0 & 'addr_size > 0.
+outcome sail_mem_read : forall 'n 'nt, 'n >= 0 & (if 'CHERI then 'nt >= 0 else 'nt == 0).
   Mem_read_request('n, 'nt, 'addr_size, 'addr_space, 'mem_acc)
       -> result((vector('n, bits(8)), vector('nt, bool)), 'abort)
 with
+  'addr_size : Nat,
   'addr_space : Type,
   'mem_acc : Type,
-  'abort : Type
+  'abort : Type,
+  'CHERI : Bool,
+  'cap_size : Nat
+constraint 'addr_size > 0 & 'cap_size > 0
 = {
     // Generic classifiers for mem_acc to enable some level of architechture generic programming
 
@@ -143,10 +147,6 @@ with
     val mem_acc_is_exclusive : 'mem_acc -> bool
     val mem_acc_is_atomic_rmw : 'mem_acc -> bool
 
-    // TODO make that type_level values
-    val CHERI : unit -> bool
-    val cap_size : unit -> int
-
     impl emulator_or_isla(request) = {
         let address : {'as, 'as in {32, 64}. bits('as)} =
             if length(request.address) <= 32
@@ -164,9 +164,9 @@ with
         var tags: vector('nt, bool) = vector_init(request.num_tag, false);
         foreach(i from 0 to (request.num_tag - 1)) {
             if length(address) == 32 then {
-                tags[i] = read_tag#(32, address + i * cap_size())
+                tags[i] = read_tag#(32, address + i * 'cap_size)
             } else {
-                tags[i] = read_tag#(64, address + i * cap_size())
+                tags[i] = read_tag#(64, address + i * 'cap_size)
             }
         };
         let value = if request.size > 0 then {
@@ -218,13 +218,17 @@ struct Mem_write_request('n : Int, 'nt : Int, 'addr_size : Int, 'addr_space : Ty
    atomicity/exclusive constraints, then the execution path is discarded as
    impossible (size-0 non deterministic choice). Is the responsability of the
    Sail model to do the proper non-determinitic choices beforehand */
-outcome sail_mem_write : forall 'n 'nt 'addr_size, 'n >= 0 & 'nt >= 0 & 'addr_size > 0.
+outcome sail_mem_write : forall 'n 'nt, 'n >= 0 & (if 'CHERI then 'nt >= 0 else 'nt == 0).
   Mem_write_request('n, 'nt, 'addr_size, 'addr_space, 'mem_acc)
       -> result(unit, 'abort)
 with
+  'addr_size : Nat,
   'addr_space : Type,
   'mem_acc : Type,
-  'abort : Type
+  'abort : Type,
+  'CHERI : Bool,
+  'cap_size : Nat
+constraint 'addr_size > 0 & 'cap_size > 0
 = {
     // See sail_mem_read for documentation
     val mem_acc_is_explicit : 'mem_acc -> bool
@@ -236,8 +240,6 @@ with
     val mem_acc_is_standalone : 'mem_acc -> bool
     val mem_acc_is_exclusive : 'mem_acc -> bool
     val mem_acc_is_atomic_rmw : 'mem_acc -> bool
-    val CHERI : unit -> bool
-    val cap_size : unit -> int
 
     impl emulator_or_isla(request) = {
         let address : {'as, 'as in {32, 64}. bits('as)} =
@@ -250,9 +252,9 @@ with
         let address = if __monomorphize_writes then __monomorphize(address) else address;
         foreach(i from 0 to (request.num_tag - 1)) {
             if length(address) == 32 then {
-                write_tag#(32, address + i * cap_size(), request.tags[i])
+                write_tag#(32, address + i * 'cap_size, request.tags[i])
             } else {
-                write_tag#(64, address + i * cap_size(), request.tags[i])
+                write_tag#(64, address + i * 'cap_size, request.tags[i])
             }
         };
         if request.size > 0 then {
