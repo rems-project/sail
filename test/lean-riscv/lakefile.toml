@@ -11,5 +11,6 @@ root = "Main"
 
 [[require]]
 name = "ELFSage"
-scope = "draperlaboratory"
-rev = "8f3d6e7"
+git = "https://github.com/ineol/ELFSage.git"
+rev = "f9b66dc2f1d3beb409d8982b3452e60edfae5d99"
+
