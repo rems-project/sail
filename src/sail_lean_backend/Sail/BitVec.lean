@@ -15,9 +15,8 @@ open BitVec
 /- Bitvector pattern component syntax category, originally written by
 Leonardo de Moura. -/
 declare_syntax_cat bvpat_comp
-syntax num (":" num)? : bvpat_comp
-syntax ident (":" num)? : bvpat_comp
-syntax "_" (":" num)? : bvpat_comp
+syntax num (":" (num <|> term))? : bvpat_comp
+syntax (ident <|> "_") (":" (num <|> term))? : bvpat_comp
 
 /--
 Bitvector pattern syntax category.
@@ -32,28 +31,42 @@ open Lean
 abbrev BVPatComp := TSyntax `bvpat_comp
 abbrev BVPat := TSyntax `bvpat
 
+open Lean Elab Term
+
 /-- Return the number of bits in a bit-vector component pattern. -/
-def BVPatComp.length (c : BVPatComp) : Nat := Id.run do
+def BVPatComp.length (c : BVPatComp) :TermElabM Nat := do
   match c with
   | `(bvpat_comp| $n:num $[: $_]?) =>
     let some str := n.raw.isLit? `num | pure 0
     return str.length
-  | `(bvpat_comp| $_:ident : $n:num) | `(bvpat_comp| _ : $n:num) =>
+  | `(bvpat_comp| $_:ident : $n:num)
+  | `(bvpat_comp| _ : $n:num) =>
     return n.raw.toNat
+  | `(bvpat_comp| $_:ident : $t:term)
+  | `(bvpat_comp| _ : $t:term) =>(do
+    let t ← elabTerm t none
+    let t ← Meta.whnf t
+    match_expr t with
+      | BitVec n =>
+        let n ← Meta.whnf n
+        let some n := n.rawNatLit? | unreachable!
+        return n
+      | _ => throwError "something bad happened here: {t}"
+    )
+
   | `(bvpat_comp| $_:ident ) | `(bvpat_comp| _) =>
     return 1
-  | _ =>
-    return 0
+  | _ => throwError "Unexpected syntax: {c}"
 
 /--
 If the pattern component is a bitvector literal, convert it into a bit-vector term
 denoting it.
 -/
-def BVPatComp.toBVLit? (c : BVPatComp) : MacroM (Option Term) := do
+def BVPatComp.toBVLit? (c : BVPatComp) : TermElabM (Option Term) := do
   match c with
   | `(bvpat_comp| $n:num $[: $_]?) =>
-    let len := c.length
-    let some str := n.raw.isLit? `num | Macro.throwErrorAt c "invalid bit-vector literal"
+    let len ← c.length
+    let some str := n.raw.isLit? `num | throwErrorAt c "invalid bit-vector literal"
     let bs := str.toList
     let mut val := 0
     for b in bs do
@@ -62,7 +75,7 @@ def BVPatComp.toBVLit? (c : BVPatComp) : MacroM (Option Term) := do
       else if b = '0' then
         val := 2*val
       else
-        Macro.throwErrorAt c "invalid bit-vector literal, '0'/'1's expected"
+        throwErrorAt c "invalid bit-vector literal, '0'/'1's expected"
     let r ← `(BitVec.ofNat $(quote len) $(quote val))
     return some r
   | _ => return none
@@ -73,7 +86,7 @@ If the pattern component is a pattern variable of the form `<id>:<size>` return
 -/
 def BVPatComp.toBVVar? (c : BVPatComp) : MacroM (Option (TSyntax `ident)) := do
   match c with
-  | `(bvpat_comp| $x:ident $[: $_:num]?) =>
+  | `(bvpat_comp| $x:ident $[: $_]?) =>
     return some x
   | _ => return none
 
@@ -88,10 +101,10 @@ def BVPat.getComponents (p : BVPat) : MacroM ((Array BVPatComp) × Option Term) 
 /--
 Return the number of bits in a bit-vector pattern.
 -/
-def BVPat.length (p : BVPat) : MacroM Nat := do
+def BVPat.length (p : BVPat) : TermElabM Nat := do
   let mut sz := 0
-  for c in (← p.getComponents).1 do
-    sz := sz + c.length
+  for c in (← liftMacroM <| p.getComponents).1 do
+    sz := sz + (← c.length)
   return sz
 
 /--
@@ -105,13 +118,13 @@ rhs
 ```
 where `yᵢ`s are the pattern variables in `pat`.
 -/
-def declBVPatVars (vars : Array Term) (pats : Array BVPat) (rhs : Term) : MacroM Term := do
+def declBVPatVars (vars : Array Term) (pats : Array BVPat) (rhs : Term) : TermElabM Term := do
   let mut result := rhs
   for (pat, var) in pats.zip vars do
     let mut shift  := 0
-    for c in (← pat.getComponents).1 do
-      let len := c.length
-      if let some y ← c.toBVVar? then
+    for c in (← liftMacroM <| pat.getComponents).1 do
+      let len ← c.length
+      if let some y ← liftMacroM <| c.toBVVar? then
         let rhs ← `(extractLsb $(quote (shift + (len - 1))) $(quote shift) $var)
         result ← `(let $y := $rhs; $result)
       shift := shift + len
@@ -121,16 +134,16 @@ def declBVPatVars (vars : Array Term) (pats : Array BVPat) (rhs : Term) : MacroM
 /--
 Return a term that evaluates to `true` if `var` is an instance of the pattern `pat`.
 -/
-def genBVPatMatchTest (vars : Array Term) (pats : Array BVPat): MacroM Term := do
+def genBVPatMatchTest (vars : Array Term) (pats : Array BVPat): TermElabM Term := do
   if vars.size != pats.size then
-    Macro.throwError "incorrect number of patterns"
+    throwError "incorrect number of patterns"
   let mut result ← `(true)
 
   for (pat, var) in pats.zip vars do
     let mut shift := 0
-    let (cs,if') ← pat.getComponents
+    let (cs,if') ← liftMacroM <| pat.getComponents
     for c in cs do
-      let len := c.length
+      let len ← c.length
       if let some bv ← c.toBVLit? then
         let test ← `(extractLsb $(quote (shift + (len - 1))) $(quote shift) $var == $bv)
         result ← `($result && $test)
@@ -147,10 +160,6 @@ the patterns are exhaustive or not.
 -/
 syntax (name := matchBv) "match_bv " term,+ "with" (atomic("| " bvpat,+) " => " term)* ("| " "_ " " => " term)? : term
 
-open Lean
-open Elab
-open Term
-
 def checkBVPatLengths (lens : Array (Option Nat)) (pss : Array (Array BVPat)) : TermElabM Unit := do
     for (len, i) in lens.zipIdx do
       let mut patLen := none
@@ -158,7 +167,7 @@ def checkBVPatLengths (lens : Array (Option Nat)) (pss : Array (Array BVPat)) : 
         unless ps.size == lens.size do
           throwError "Expected {lens.size} patterns, found {ps.size}"
         let p := ps[i]!
-        let pLen ← liftMacroM p.length
+        let pLen ← p.length
 
         -- compare the length to that of the type of the discriminant
         if let some pLen' := len then
@@ -214,8 +223,8 @@ def elabMatchBv : TermElab := fun stx typ? =>
           `(fun _ => by bv_decide)
 
     for ps in pss.reverse, rhs in rhss.reverse do
-      let test ← liftMacroM <| genBVPatMatchTest xs ps
-      let rhs  ← liftMacroM <| declBVPatVars xs ps rhs
+      let test ← genBVPatMatchTest xs ps
+      let rhs  ← declBVPatVars xs ps rhs
       result ← `(dite_gather $test (Function.const _ $rhs) $result)
     let res ← liftMacroM <| `($result True.intro)
     elabTerm res typ?
