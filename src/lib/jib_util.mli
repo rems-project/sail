@@ -178,9 +178,18 @@ val ctype_def_to_ctyp : ctype_def -> ctyp
 
 (** {1 Functions for mapping over and extracting information from instructions, values, and definitions} *)
 
-val instr_ids : instr -> NameSet.t
-val instr_reads : instr -> NameSet.t
-val instr_writes : instr -> NameSet.t
+(** Return the read/write dependencies of a single instruction.
+
+    If direct is true, only returns the dependencies of that specific instruction and will not recurse into any
+    sub-instructions in if-then-else or block instructions. *)
+val instr_ids : direct:bool -> instr -> NameSet.t
+
+val instr_reads : direct:bool -> instr -> NameSet.t
+val instr_writes : direct:bool -> instr -> NameSet.t
+
+(** [instr_references ~read:id ~direct:true instr] is equivalent to [NameSet.mem id (instr_reads ~direct:true instr)],
+    but much more efficient as it does not construct an intermediate set. *)
+val instr_references : ?read:name -> ?write:name -> direct:bool -> instr -> bool
 
 val instr_typed_writes : instr -> NameCTSet.t
 
