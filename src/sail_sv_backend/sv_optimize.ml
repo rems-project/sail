@@ -411,7 +411,7 @@ module RemoveUnusedVariables = struct
             let frame =
               match aux with
               | SVD_fundef f ->
-                  let paramset = List.fold_left (fun set (id, _) -> NameSet.add (name id) set) NameSet.empty f.params in
+                  let paramset = List.fold_left (fun set (id, _) -> NameSet.add id set) NameSet.empty f.params in
                   Function paramset
               | SVD_module m ->
                   let portset =
@@ -618,7 +618,7 @@ module RemoveUnusedVariables = struct
     match aux with
     | SVD_type _ | SVD_null | SVD_dpi_function _ -> ()
     | SVD_fundef { params; body; _ } ->
-        let paramset = List.fold_left (fun set (id, _) -> NameSet.add (name id) set) NameSet.empty params in
+        let paramset = List.fold_left (fun set (id, _) -> NameSet.add id set) NameSet.empty params in
         push (Function paramset) stack;
         statement_uses stack uses body;
         pop stack

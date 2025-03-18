@@ -61,8 +61,7 @@ let opt_memo_cache = ref false
 
 let optimize_aarch64_fast_struct = ref false
 
-let gensym, _ = symbol_generator "gs"
-let ngensym () = name (gensym ())
+let ngensym = symbol_generator ()
 
 (**************************************************************************)
 (* 4. Conversion to low-level AST                                         *)
@@ -116,10 +115,10 @@ type ctx = {
   local_env : Env.t;
   tc_env : Env.t;
   effect_info : Effects.side_effect_info;
-  locals : (mut * ctyp) Bindings.t;
+  locals : (mut * ctyp) NameMap.t;
   registers : ctyp Bindings.t;
   letbinds : int list;
-  letbind_ids : IdSet.t;
+  letbind_ids : NameSet.t;
   no_raw : bool;
   no_static : bool;
   coverage_override : bool;
@@ -178,10 +177,10 @@ let initial_ctx ?for_target env effect_info =
     local_env = env;
     tc_env = env;
     effect_info;
-    locals = Bindings.empty;
+    locals = NameMap.empty;
     registers = Bindings.empty;
     letbinds = [];
-    letbind_ids = IdSet.empty;
+    letbind_ids = NameSet.empty;
     no_raw = false;
     no_static = false;
     coverage_override = true;
@@ -389,10 +388,14 @@ module Make (C : CONFIG) = struct
   let unit_cval = V_lit (VL_unit, CT_unit)
 
   let get_variable_ctyp id ctx =
-    match Bindings.find_opt id ctx.locals with
+    match NameMap.find_opt id ctx.locals with
     | Some binding -> Some binding
     | None -> (
-        match Bindings.find_opt id ctx.registers with Some ctyp -> Some (Mutable, ctyp) | None -> None
+        match id with
+        | Name (id, _) -> (
+            match Bindings.find_opt id ctx.registers with Some ctyp -> Some (Mutable, ctyp) | None -> None
+          )
+        | _ -> None
       )
 
   let rec compile_aval l ctx = function
@@ -404,11 +407,11 @@ module Make (C : CONFIG) = struct
           ([iinit l ctyp' gs cval], V_id (gs, ctyp'), [iclear ctyp' gs])
         )
         else ([], cval, [])
-    | AV_id (id, Enum typ) -> ([], V_member (id, ctyp_of_typ ctx typ), [])
+    | AV_id (Name (id, _), Enum typ) -> ([], V_member (id, ctyp_of_typ ctx typ), [])
     | AV_id (id, typ) -> begin
         match get_variable_ctyp id ctx with
-        | Some (_, ctyp) -> ([], V_id (name id, ctyp), [])
-        | None -> ([], V_id (name id, ctyp_of_typ ctx (lvar_typ typ)), [])
+        | Some (_, ctyp) -> ([], V_id (id, ctyp), [])
+        | None -> ([], V_id (id, ctyp_of_typ ctx (lvar_typ typ)), [])
       end
     | AV_abstract (id, typ) -> ([], V_call (Get_abstract, [V_id (name id, ctyp_of_typ ctx typ)]), [])
     | AV_ref (id, typ) -> ([], V_lit (VL_ref (string_of_id id), CT_ref (ctyp_of_typ ctx (lvar_typ typ))), [])
@@ -1047,24 +1050,20 @@ module Make (C : CONFIG) = struct
     | AP_global (pid, typ) ->
         let global_ctyp = ctyp_of_typ ctx typ in
         ([], [icopy l (CL_id (name pid, global_ctyp)) cval], [], ctx)
-    | AP_id (pid, _) when is_ct_enum ctyp -> begin
+    | AP_id (Name (pid, _), _) when is_ct_enum ctyp -> begin
         match Env.lookup_id pid ctx.tc_env with
         | Unbound _ -> ([], [idecl l ctyp (name pid); icopy l (CL_id (name pid, ctyp)) cval], [], ctx)
         | _ -> ([on_failure l (V_call (Neq, [V_member (pid, ctyp); cval]))], [], [], ctx)
       end
     | AP_id (pid, typ) ->
         let id_ctyp = ctyp_of_typ ctx typ in
-        let ctx = { ctx with locals = Bindings.add pid (Immutable, id_ctyp) ctx.locals } in
-        ([], [idecl l id_ctyp (name pid); icopy l (CL_id (name pid, id_ctyp)) cval], [iclear id_ctyp (name pid)], ctx)
+        let ctx = { ctx with locals = NameMap.add pid (Immutable, id_ctyp) ctx.locals } in
+        ([], [idecl l id_ctyp pid; icopy l (CL_id (pid, id_ctyp)) cval], [iclear id_ctyp pid], ctx)
     | AP_as (apat, id, typ) ->
         let id_ctyp = ctyp_of_typ ctx typ in
         let pre, instrs, cleanup, ctx = compile_match ctx apat cval on_failure in
-        let ctx = { ctx with locals = Bindings.add id (Immutable, id_ctyp) ctx.locals } in
-        ( pre,
-          instrs @ [idecl l id_ctyp (name id); icopy l (CL_id (name id, id_ctyp)) cval],
-          iclear id_ctyp (name id) :: cleanup,
-          ctx
-        )
+        let ctx = { ctx with locals = NameMap.add id (Immutable, id_ctyp) ctx.locals } in
+        (pre, instrs @ [idecl l id_ctyp id; icopy l (CL_id (id, id_ctyp)) cval], iclear id_ctyp id :: cleanup, ctx)
     | AP_struct (afpats, _) ->
         let _, field_ctyp = struct_fields l ctx ctyp in
         let fold (pre, instrs, cleanup, ctx) (field, apat) =
@@ -1139,10 +1138,10 @@ module Make (C : CONFIG) = struct
     match alexp with
     | AL_id (id, typ) ->
         let ctyp = match get_variable_ctyp id ctx with Some (_, ctyp) -> ctyp | None -> ctyp_of_typ ctx typ in
-        CL_id (name id, ctyp)
+        CL_id (id, ctyp)
     | AL_addr (id, typ) ->
         let ctyp = match get_variable_ctyp id ctx with Some (_, ctyp) -> ctyp | None -> ctyp_of_typ ctx typ in
-        CL_addr (CL_id (name id, ctyp))
+        CL_addr (CL_id (id, ctyp))
     | AL_field (alexp, field_id) ->
         let clexp = compile_alexp ctx alexp in
         let _, field_ctyp = struct_fields (id_loc field_id) ctx (clexp_ctyp clexp) in
@@ -1176,11 +1175,11 @@ module Make (C : CONFIG) = struct
         let binding_ctyp = ctyp_of_typ { ctx with local_env = body_env } binding_typ in
         let setup, call, cleanup = compile_aexp ctx binding in
         let letb_setup, letb_cleanup =
-          ( [idecl l binding_ctyp (name id); iblock1 (setup @ [call (CL_id (name id, binding_ctyp))] @ cleanup)],
-            [iclear binding_ctyp (name id)]
+          ( [idecl l binding_ctyp id; iblock1 (setup @ [call (CL_id (id, binding_ctyp))] @ cleanup)],
+            [iclear binding_ctyp id]
           )
         in
-        let ctx = { ctx with locals = Bindings.add id (mut, binding_ctyp) ctx.locals } in
+        let ctx = { ctx with locals = NameMap.add id (mut, binding_ctyp) ctx.locals } in
         let setup, call, cleanup = compile_aexp ctx body in
         (letb_setup @ setup, call, cleanup @ letb_cleanup)
     | AE_app (Sail_function id, vs, _) ->
@@ -1500,12 +1499,12 @@ module Make (C : CONFIG) = struct
     (* This is a faster assignment rule for updating fields of a
        struct. *)
     | AE_assign (AL_id (id, assign_typ), AE_aux (AE_struct_update (AV_id (rid, _), fields, typ), _))
-      when Id.compare id rid = 0 ->
+      when Name.compare id rid = 0 ->
         let ctyp = ctyp_of_typ ctx typ in
         let _, field_ctyp = struct_fields l ctx ctyp in
         let compile_fields (field_id, aval) =
           let field_setup, cval, field_cleanup = compile_aval l ctx aval in
-          field_setup @ [icopy l (CL_field (CL_id (name id, ctyp), field_id, field_ctyp field_id)) cval] @ field_cleanup
+          field_setup @ [icopy l (CL_field (CL_id (id, ctyp), field_id, field_ctyp field_id)) cval] @ field_cleanup
         in
         (List.concat (List.map compile_fields (Bindings.bindings fields)), (fun clexp -> icopy l clexp unit_cval), [])
     | AE_assign (alexp, aexp) ->
@@ -1604,11 +1603,10 @@ module Make (C : CONFIG) = struct
           body
         )
       when Option.is_some C.unroll_loops ->
-        let ctx = { ctx with locals = Bindings.add loop_var (Immutable, CT_fint 64) ctx.locals } in
+        let ctx = { ctx with locals = NameMap.add loop_var (Immutable, CT_fint 64) ctx.locals } in
 
         let is_inc = match ord with Ord_inc -> true | Ord_dec -> false in
 
-        let loop_var = name loop_var in
         let body_setup, body_call, body_cleanup = compile_aexp ctx body in
         let body_gs = ngensym () in
 
@@ -1634,7 +1632,7 @@ module Make (C : CONFIG) = struct
         )
     | AE_for (loop_var, loop_from, loop_to, loop_step, Ord_aux (ord, _), body) ->
         (* We assume that all loop indices are safe to put in a CT_fint. *)
-        let ctx = { ctx with locals = Bindings.add loop_var (Immutable, CT_fint 64) ctx.locals } in
+        let ctx = { ctx with locals = NameMap.add loop_var (Immutable, CT_fint 64) ctx.locals } in
 
         let is_inc = match ord with Ord_inc -> true | Ord_dec -> false in
 
@@ -1653,8 +1651,6 @@ module Make (C : CONFIG) = struct
         let loop_end_label = label "for_end_" in
         let body_setup, body_call, body_cleanup = compile_aexp ctx body in
         let body_gs = ngensym () in
-
-        let loop_var = name loop_var in
 
         let loop_body prefix continue =
           prefix
@@ -1878,19 +1874,19 @@ module Make (C : CONFIG) = struct
 
   let rec compile_arg_pat ctx label (P_aux (p_aux, (l, _)) as pat) ctyp =
     match p_aux with
-    | P_id id -> (id, ([], []))
+    | P_id id -> (name id, ([], []))
     | P_wild ->
-        let gs = gensym () in
+        let gs = ngensym () in
         (gs, ([], []))
     | P_tuple [] | P_lit (L_aux (L_unit, _)) ->
-        let gs = gensym () in
+        let gs = ngensym () in
         (gs, ([], []))
     | P_var (pat, _) -> compile_arg_pat ctx label pat ctyp
     | P_typ (_, pat) -> compile_arg_pat ctx label pat ctyp
     | _ ->
         let apat = anf_pat pat in
-        let gs = gensym () in
-        let pre_destructure, destructure, cleanup, _ = compile_match ctx apat (V_id (name gs, ctyp)) label in
+        let gs = ngensym () in
+        let pre_destructure, destructure, cleanup, _ = compile_match ctx apat (V_id (gs, ctyp)) label in
         (gs, (pre_destructure @ destructure, cleanup))
 
   let rec compile_arg_pats ctx label (P_aux (p_aux, (l, _)) as pat) ctyps =
@@ -1901,14 +1897,14 @@ module Make (C : CONFIG) = struct
     | _ when List.length ctyps = 1 -> ([], [compile_arg_pat ctx label pat (List.nth ctyps 0)], [])
     | _ ->
         let arg_id, (destructure, cleanup) = compile_arg_pat ctx label pat (CT_tup ctyps) in
-        let new_ids = List.map (fun ctyp -> (gensym (), ctyp)) ctyps in
+        let new_ids = List.map (fun ctyp -> (ngensym (), ctyp)) ctyps in
         ( destructure
-          @ [idecl l (CT_tup ctyps) (name arg_id)]
+          @ [idecl l (CT_tup ctyps) arg_id]
           @ List.mapi
-              (fun i (id, ctyp) -> icopy l (CL_tuple (CL_id (name arg_id, CT_tup ctyps), i)) (V_id (name id, ctyp)))
+              (fun i (id, ctyp) -> icopy l (CL_tuple (CL_id (arg_id, CT_tup ctyps), i)) (V_id (id, ctyp)))
               new_ids,
           List.map (fun (id, _) -> (id, ([], []))) new_ids,
-          [iclear (CT_tup ctyps) (name arg_id)] @ cleanup
+          [iclear (CT_tup ctyps) arg_id] @ cleanup
         )
 
   let combine_destructure_cleanup xs = (List.concat (List.map fst xs), List.concat (List.rev (List.map snd xs)))
@@ -2038,12 +2034,12 @@ module Make (C : CONFIG) = struct
     let ctx =
       (* We need the primop analyzer to be aware of the function argument types, so put them in ctx *)
       List.fold_left2
-        (fun ctx (id, _) ctyp -> { ctx with locals = Bindings.add id (Immutable, ctyp) ctx.locals })
+        (fun ctx (id, _) ctyp -> { ctx with locals = NameMap.add id (Immutable, ctyp) ctx.locals })
         ctx compiled_args arg_ctyps
     in
 
-    let known_ids = IdSet.union ctx.letbind_ids (pat_ids pat) in
-    let guard_bindings = ref IdSet.empty in
+    let known_ids = IdSet.fold (fun id -> NameSet.add (name id)) (pat_ids pat) ctx.letbind_ids in
+    let guard_bindings = ref NameSet.empty in
     let guard_instrs =
       match guard with
       | Some guard ->
@@ -2066,7 +2062,7 @@ module Make (C : CONFIG) = struct
     in
 
     (* Optimize and compile the expression to ANF. *)
-    let aexp = C.optimize_anf ctx (no_shadow (IdSet.union known_ids !guard_bindings) (anf exp)) in
+    let aexp = C.optimize_anf ctx (no_shadow (NameSet.union known_ids !guard_bindings) (anf exp)) in
 
     if Option.is_some debug_attr then (
       prerr_endline Util.("ANF for " ^ string_of_id id ^ ":" |> yellow |> bold |> clear);
@@ -2109,14 +2105,14 @@ module Make (C : CONFIG) = struct
           let id = append_id id "_infallible" in
           ( [
               CDEF_aux (CDEF_val (id, params, arg_ctyps, ret_ctyp, None), def_annot);
-              CDEF_aux (CDEF_fundef (id, None, compiled_args, instrs), def_annot);
+              CDEF_aux (CDEF_fundef (id, Return_plain, compiled_args, instrs), def_annot);
             ],
             { orig_ctx with valspecs = Bindings.add id (None, arg_ctyps, ret_ctyp, empty_uannot) orig_ctx.valspecs }
           )
       | None -> ([], orig_ctx)
     in
 
-    ([CDEF_aux (CDEF_fundef (id, None, compiled_args, instrs), def_annot)] @ mapping_infallible, return_ctx)
+    ([CDEF_aux (CDEF_fundef (id, Return_plain, compiled_args, instrs), def_annot)] @ mapping_infallible, return_ctx)
 
   (** Compile a Sail toplevel definition into an IR definition **)
   let rec compile_def n total ctx (DEF_aux (aux, _) as def) =
@@ -2160,7 +2156,7 @@ module Make (C : CONFIG) = struct
     match aux with
     | DEF_register (DEC_aux (DEC_reg (typ, id, None), _)) ->
         let ctyp = ctyp_of_typ ctx typ in
-        ( [CDEF_aux (CDEF_register (id, ctyp, []), def_annot)],
+        ( [CDEF_aux (CDEF_register (name id, ctyp, []), def_annot)],
           { ctx with registers = Bindings.add id ctyp ctx.registers }
         )
     | DEF_register (DEC_aux (DEC_reg (typ, id, Some exp), _)) ->
@@ -2169,7 +2165,7 @@ module Make (C : CONFIG) = struct
         let setup, call, cleanup = compile_aexp ctx aexp in
         let instrs = setup @ [call (CL_id (name id, ctyp))] @ cleanup in
         let instrs = unique_names instrs in
-        ( [CDEF_aux (CDEF_register (id, ctyp, instrs), def_annot)],
+        ( [CDEF_aux (CDEF_register (name id, ctyp, instrs), def_annot)],
           { ctx with registers = Bindings.add id ctyp ctx.registers }
         )
     | DEF_val (VS_aux (VS_val_spec (_, id, ext), _)) ->
@@ -2226,7 +2222,11 @@ module Make (C : CONFIG) = struct
         in
         let instrs = unique_names instrs in
         ( [CDEF_aux (CDEF_let (n, bindings, instrs), def_annot)],
-          { ctx with letbinds = n :: ctx.letbinds; letbind_ids = IdSet.union (pat_ids pat) ctx.letbind_ids }
+          {
+            ctx with
+            letbinds = n :: ctx.letbinds;
+            letbind_ids = IdSet.fold (fun id -> NameSet.add (name id)) (pat_ids pat) ctx.letbind_ids;
+          }
         )
     (* Only DEF_default that matters is default Order, but all order
        polymorphism is specialised by this point. *)
@@ -2762,12 +2762,12 @@ module Make (C : CONFIG) = struct
 
       method! vinstr =
         function
-        | I_aux (I_init (ctyp, Name (id, _), Init_static VL_undefined), (_, l)) ->
+        | I_aux (I_init (ctyp, id, Init_static VL_undefined), (_, l)) ->
             statics := (l, ctyp, id, None) :: !statics;
-            ChangeTo (Printf.ksprintf icomment "lifted %s" (string_of_id id))
-        | I_aux (I_init (ctyp, Name (id, _), Init_static vl), (_, l)) ->
+            ChangeTo (Printf.ksprintf icomment "lifted %s" (string_of_name id))
+        | I_aux (I_init (ctyp, id, Init_static vl), (_, l)) ->
             statics := (l, ctyp, id, Some vl) :: !statics;
-            ChangeTo (Printf.ksprintf icomment "lifted %s" (string_of_id id))
+            ChangeTo (Printf.ksprintf icomment "lifted %s" (string_of_name id))
         | _ -> DoChildren
     end
 
@@ -2781,7 +2781,7 @@ module Make (C : CONFIG) = struct
             let annot = mk_def_annot l () |> add_def_attribute l "early_init" None in
             match vl_opt with
             | None -> CDEF_aux (CDEF_register (id, ctyp, []), annot)
-            | Some vl -> CDEF_aux (CDEF_register (id, ctyp, [icopy l (CL_id (name id, ctyp)) (V_lit (vl, ctyp))]), annot)
+            | Some vl -> CDEF_aux (CDEF_register (id, ctyp, [icopy l (CL_id (id, ctyp)) (V_lit (vl, ctyp))]), annot)
           )
           !statics
         @ [cdef]

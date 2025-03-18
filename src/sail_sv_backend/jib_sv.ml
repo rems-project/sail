@@ -63,8 +63,7 @@ open Sv_ir
 module IntSet = Util.IntSet
 module IntMap = Util.IntMap
 
-let gensym, _ = symbol_generator "sv"
-let ngensym () = name (gensym ())
+let ngensym = symbol_generator ()
 
 let sv_type_of_string = Initial_check.parse_from_string (Sv_type_parser.sv_type Sv_type_lexer.token)
 
@@ -223,8 +222,8 @@ let check_attribute name attr_object f =
    transitive function calls. It is constructed by the footprint
    visitor below as it scans the body of the function. *)
 type direct_footprint = {
-  mutable reads : IdSet.t;
-  mutable writes : IdSet.t;
+  mutable reads : NameSet.t;
+  mutable writes : NameSet.t;
   mutable throws : bool;
   mutable stdout : bool;
   mutable stderr : bool;
@@ -237,8 +236,8 @@ type direct_footprint = {
 
 let empty_direct_footprint () : direct_footprint =
   {
-    reads = IdSet.empty;
-    writes = IdSet.empty;
+    reads = NameSet.empty;
+    writes = NameSet.empty;
     throws = false;
     stdout = false;
     stderr = false;
@@ -257,12 +256,12 @@ class footprint_visitor ctx registers (footprint : direct_footprint) : jib_visit
 
     method! vcval =
       function
-      | V_id (Name (id, _), local_ctyp) ->
+      | V_id (id, local_ctyp) ->
           begin
-            match Bindings.find_opt id registers with
+            match NameMap.find_opt id registers with
             | Some ctyp ->
                 assert (ctyp_equal local_ctyp ctyp);
-                footprint.reads <- IdSet.add id footprint.reads
+                footprint.reads <- NameSet.add id footprint.reads
             | None -> ()
           end;
           SkipChildren
@@ -313,12 +312,12 @@ class footprint_visitor ctx registers (footprint : direct_footprint) : jib_visit
       | CL_id (Have_exception _, _) ->
           footprint.throws <- true;
           SkipChildren
-      | CL_id (Name (id, _), local_ctyp) ->
+      | CL_id (id, local_ctyp) ->
           begin
-            match Bindings.find_opt id registers with
+            match NameMap.find_opt id registers with
             | Some ctyp ->
                 assert (ctyp_equal local_ctyp ctyp);
-                footprint.writes <- IdSet.add id footprint.writes
+                footprint.writes <- NameSet.add id footprint.writes
             | None -> ()
           end;
           SkipChildren
@@ -326,11 +325,11 @@ class footprint_visitor ctx registers (footprint : direct_footprint) : jib_visit
   end
 
 type footprint = {
-  direct_reads : IdSet.t;
-  direct_writes : IdSet.t;
+  direct_reads : NameSet.t;
+  direct_writes : NameSet.t;
   direct_throws : bool;
-  all_reads : IdSet.t;
-  all_writes : IdSet.t;
+  all_reads : NameSet.t;
+  all_writes : NameSet.t;
   throws : bool;
   need_stdout : bool;
   need_stderr : bool;
@@ -342,11 +341,11 @@ type footprint = {
 
 let pure_footprint =
   {
-    direct_reads = IdSet.empty;
-    direct_writes = IdSet.empty;
+    direct_reads = NameSet.empty;
+    direct_writes = NameSet.empty;
     direct_throws = false;
-    all_reads = IdSet.empty;
-    all_writes = IdSet.empty;
+    all_reads = NameSet.empty;
+    all_writes = NameSet.empty;
     throws = false;
     need_stdout = false;
     need_stderr = false;
@@ -358,11 +357,11 @@ let pure_footprint =
 
 type spec_info = {
   (* A map from register types to all the registers with that type *)
-  register_ctyp_map : IdSet.t CTMap.t;
+  register_ctyp_map : NameSet.t CTMap.t;
   (* A map from register names to types *)
-  registers : ctyp Bindings.t;
+  registers : ctyp NameMap.t;
   (* A list of registers with initial values *)
-  initialized_registers : Ast.id list;
+  initialized_registers : name list;
   (* A list of constructor functions *)
   constructors : IdSet.t;
   (* Global letbindings *)
@@ -385,14 +384,14 @@ let collect_spec_info ctx cdefs =
         | CDEF_aux (CDEF_register (id, ctyp, setup), _) ->
             let setup_id = match setup with [] -> [] | _ -> [id] in
             ( CTMap.update ctyp
-                (function Some ids -> Some (IdSet.add id ids) | None -> Some (IdSet.singleton id))
+                (function Some ids -> Some (NameSet.add id ids) | None -> Some (NameSet.singleton id))
                 ctyp_map,
-              Bindings.add id ctyp regs,
+              NameMap.add id ctyp regs,
               setup_id @ inits
             )
         | _ -> (ctyp_map, regs, inits)
       )
-      (CTMap.empty, Bindings.empty, []) cdefs
+      (CTMap.empty, NameMap.empty, []) cdefs
   in
   let initialized_registers = List.rev initialized_registers in
   let constructors =
@@ -426,9 +425,9 @@ let collect_spec_info ctx cdefs =
             let _ = visit_cdef (new footprint_visitor ctx registers direct_footprint) cdef in
             CTSet.iter
               (fun ctyp ->
-                IdSet.iter
-                  (fun reg -> direct_footprint.writes <- IdSet.add reg direct_footprint.writes)
-                  (Option.value ~default:IdSet.empty (CTMap.find_opt ctyp register_ctyp_map))
+                NameSet.iter
+                  (fun reg -> direct_footprint.writes <- NameSet.add reg direct_footprint.writes)
+                  (Option.value ~default:NameSet.empty (CTMap.find_opt ctyp register_ctyp_map))
               )
               direct_footprint.references;
             Bindings.add f
@@ -436,8 +435,8 @@ let collect_spec_info ctx cdefs =
                 direct_reads = direct_footprint.reads;
                 direct_writes = direct_footprint.writes;
                 direct_throws = direct_footprint.throws;
-                all_reads = IdSet.empty;
-                all_writes = IdSet.empty;
+                all_reads = NameSet.empty;
+                all_writes = NameSet.empty;
                 throws = false;
                 need_stdout = direct_footprint.stdout;
                 need_stderr = direct_footprint.stderr;
@@ -473,8 +472,8 @@ let collect_spec_info ctx cdefs =
                      ) callee ->
                   match Bindings.find_opt callee footprints with
                   | Some footprint ->
-                      ( IdSet.union all_reads footprint.direct_reads,
-                        IdSet.union all_writes footprint.direct_writes,
+                      ( NameSet.union all_reads footprint.direct_reads,
+                        NameSet.union all_writes footprint.direct_writes,
                         throws || footprint.direct_throws,
                         need_stdout || footprint.need_stdout,
                         need_stderr || footprint.need_stderr,
@@ -549,6 +548,25 @@ let collect_spec_info ctx cdefs =
     callgraph = cfg;
     exception_ctyp;
   }
+
+let natural_name_compare variable_locations n1 n2 =
+  let open Lexing in
+  let name_compare id1 id2 ssa_num1 ssa_num2 =
+    let c = natural_id_compare id1 id2 in
+    if c <> 0 then c else Int.compare ssa_num1 ssa_num2
+  in
+  match (n1, n2) with
+  | Name (id1, ssa_num1), Name (id2, ssa_num2) -> (
+      let get_pos id = Option.bind (Bindings.find_opt id variable_locations) Reporting.simp_loc in
+      match (get_pos id1, get_pos id2) with
+      | Some (p1, _), Some (p2, _) ->
+          let c = Int.compare p1.pos_cnum p2.pos_cnum in
+          if c <> 0 then c else name_compare id1 id2 ssa_num1 ssa_num2
+      | _ -> name_compare id1 id2 ssa_num1 ssa_num2
+    )
+  | _ -> Name.compare n1 n2
+
+let natural_sort_names names = List.stable_sort (natural_name_compare Bindings.empty) names
 
 module type CONFIG = sig
   val max_unknown_integer_width : int
@@ -740,17 +758,20 @@ module Make (Config : CONFIG) = struct
   let mapM = Smt_gen.mapM
   let fmap = Smt_gen.fmap
 
-  let pp_name =
-    let ssa_num n = if n = -1 then empty else string ("_" ^ string_of_int n) in
+  let pp_name_string =
+    let ssa_num n = if n = -1 then "" else "_" ^ string_of_int n in
     function
-    | Name (id, n) -> pp_id id ^^ ssa_num n
-    | Have_exception n -> string "sail_have_exception" ^^ ssa_num n
-    | Current_exception n -> string "sail_current_exception" ^^ ssa_num n
-    | Throw_location n -> string "sail_throw_location" ^^ ssa_num n
-    | Channel (Chan_stdout, n) -> string "sail_stdout" ^^ ssa_num n
-    | Channel (Chan_stderr, n) -> string "sail_stderr" ^^ ssa_num n
-    | Memory_writes n -> string "sail_writes" ^^ ssa_num n
-    | Return n -> string "sail_return" ^^ ssa_num n
+    | Gen (v1, v2, n) -> pp_id_string (mk_id (sprintf "%d.%d" v1 v2)) ^ ssa_num n
+    | Name (id, n) -> pp_id_string id ^ ssa_num n
+    | Have_exception n -> "sail_have_exception" ^ ssa_num n
+    | Current_exception n -> "sail_current_exception" ^ ssa_num n
+    | Throw_location n -> "sail_throw_location" ^ ssa_num n
+    | Channel (Chan_stdout, n) -> "sail_stdout" ^ ssa_num n
+    | Channel (Chan_stderr, n) -> "sail_stderr" ^ ssa_num n
+    | Memory_writes n -> "sail_writes" ^ ssa_num n
+    | Return n -> "sail_return" ^ ssa_num n
+
+  let pp_name name = string (pp_name_string name)
 
   let wrap_type ctyp doc =
     match sv_ctyp ctyp with
@@ -1585,13 +1606,11 @@ module Make (Config : CONFIG) = struct
       method! vinstr (I_aux (aux, iannot) as no_change) =
         match aux with
         | I_copy (CL_addr (CL_id (id, CT_ref reg_ctyp)), cval) -> begin
-            let regs = Option.value ~default:IdSet.empty (CTMap.find_opt reg_ctyp spec_info.register_ctyp_map) in
+            let regs = Option.value ~default:NameSet.empty (CTMap.find_opt reg_ctyp spec_info.register_ctyp_map) in
 
             let encoded = "sail_reg_assign_" ^ Util.zencode_string (string_of_ctyp reg_ctyp) in
-            let reads = List.map (fun id -> V_id (Name (id, -1), reg_ctyp)) (natural_sort_ids (IdSet.elements regs)) in
-            let writes =
-              List.map (fun id -> CL_id (Name (id, -1), reg_ctyp)) (natural_sort_ids (IdSet.elements regs))
-            in
+            let reads = List.map (fun id -> V_id (id, reg_ctyp)) (natural_sort_names (NameSet.elements regs)) in
+            let writes = List.map (fun id -> CL_id (id, reg_ctyp)) (natural_sort_names (NameSet.elements regs)) in
             ChangeTo
               (I_aux
                  ( I_funcall (CR_multi writes, true, (mk_id encoded, []), V_id (id, CT_ref reg_ctyp) :: cval :: reads),
@@ -1604,13 +1623,13 @@ module Make (Config : CONFIG) = struct
             | Some footprint ->
                 let reads =
                   List.map
-                    (fun id -> V_id (Name (id, -1), Bindings.find id spec_info.registers))
-                    (natural_sort_ids (IdSet.elements (IdSet.union footprint.all_writes footprint.all_reads)))
+                    (fun id -> V_id (id, NameMap.find id spec_info.registers))
+                    (natural_sort_names (NameSet.elements (NameSet.union footprint.all_writes footprint.all_reads)))
                 in
                 let writes =
                   List.map
-                    (fun id -> CL_id (Name (id, -1), Bindings.find id spec_info.registers))
-                    (natural_sort_ids (IdSet.elements footprint.all_writes))
+                    (fun id -> CL_id (id, NameMap.find id spec_info.registers))
+                    (natural_sort_names (NameSet.elements footprint.all_writes))
                 in
                 let throws =
                   if footprint.throws || footprint.exits then
@@ -1679,13 +1698,11 @@ module Make (Config : CONFIG) = struct
                         match cval_ctyp cval with
                         | CT_ref reg_ctyp ->
                             let regs =
-                              Option.value ~default:IdSet.empty (CTMap.find_opt reg_ctyp spec_info.register_ctyp_map)
+                              Option.value ~default:NameSet.empty (CTMap.find_opt reg_ctyp spec_info.register_ctyp_map)
                             in
                             let encoded = "sail_reg_deref_" ^ Util.zencode_string (string_of_ctyp reg_ctyp) in
                             let reads =
-                              List.map
-                                (fun id -> V_id (Name (id, -1), reg_ctyp))
-                                (natural_sort_ids (IdSet.elements regs))
+                              List.map (fun id -> V_id (id, reg_ctyp)) (natural_sort_names (NameSet.elements regs))
                             in
                             ChangeTo (I_aux (I_funcall (CR_one clexp, true, (mk_id encoded, []), cval :: reads), iannot))
                         | _ -> Reporting.unreachable (snd iannot) __POS__ "Invalid type for reg_deref argument"
@@ -1713,9 +1730,7 @@ module Make (Config : CONFIG) = struct
       method! vstatement (SVS_aux (aux, l) as no_change) =
         match aux with
         | SVS_var (name, ctyp, exp_opt) ->
-            begin
-              match name with Name (id, _) -> decls := Bindings.add id ctyp !decls | _ -> ()
-            end;
+            decls := NameMap.add (fst (Jib_ssa.unssa_name name)) ctyp !decls;
             begin
               match exp_opt with
               | Some exp -> ChangeTo (SVS_aux (SVS_assign (SVP_id name, exp), l))
@@ -1851,23 +1866,6 @@ module Make (Config : CONFIG) = struct
       (fun pred -> match get_vertex cfg pred with Some ((_, CF_block (_, T_exit _)), _, _) -> true | _ -> false)
       preds
 
-  let natural_name_compare variable_locations n1 n2 =
-    let open Lexing in
-    let name_compare id1 id2 ssa_num1 ssa_num2 =
-      let c = natural_id_compare id1 id2 in
-      if c <> 0 then c else Int.compare ssa_num1 ssa_num2
-    in
-    match (n1, n2) with
-    | Name (id1, ssa_num1), Name (id2, ssa_num2) -> (
-        let get_pos id = Option.bind (Bindings.find_opt id variable_locations) Reporting.simp_loc in
-        match (get_pos id1, get_pos id2) with
-        | Some (p1, _), Some (p2, _) ->
-            let c = Int.compare p1.pos_cnum p2.pos_cnum in
-            if c <> 0 then c else name_compare id1 id2 ssa_num1 ssa_num2
-        | _ -> name_compare id1 id2 ssa_num1 ssa_num2
-      )
-    | _ -> Name.compare n1 n2
-
   let svir_module ?debug_attr ?(footprint = pure_footprint) ?(return_vars = [Jib_util.return]) spec_info ctx name params
       param_ctyps ret_ctyps body =
     let footprint, is_recursive =
@@ -1884,7 +1882,7 @@ module Make (Config : CONFIG) = struct
     in
 
     let always_comb = Queue.create () in
-    let declvars = ref Bindings.empty in
+    let declvars = ref NameMap.empty in
     let ssa_vars = ref NameMap.empty in
 
     (* Add a statement to the always_comb block *)
@@ -1896,7 +1894,7 @@ module Make (Config : CONFIG) = struct
     let open Jib_ssa in
     let _, end_node, cfg =
       ssa
-        ~globals:(NameSet.diff spec_info.global_lets (NameSet.of_list (List.map Jib_util.name params)))
+        ~globals:(NameSet.diff spec_info.global_lets (NameSet.of_list params))
         ?debug_prefix:(Option.map (fun _ -> string_of_sv_name name) debug_attr)
         (visit_instrs (new thread_registers ctx spec_info) body)
     in
@@ -2037,16 +2035,19 @@ module Make (Config : CONFIG) = struct
 
     (* Create the input and output ports *)
     let input_ports : sv_module_port list =
-      List.map2 (fun id ctyp -> { name = Name (id, 0); external_name = string_of_id id; typ = ctyp }) params param_ctyps
+      List.map2
+        (fun name ctyp -> { name = Jib_ssa.ssa_name 0 name; external_name = string_of_name name; typ = ctyp })
+        params param_ctyps
       @ List.map
           (fun id ->
             {
-              name = Name (id, 0);
-              external_name = string_of_id (prepend_id "in_" id);
-              typ = Bindings.find id spec_info.registers;
+              name = Jib_ssa.ssa_name 0 id;
+              external_name =
+                (match id with Name (id, _) -> string_of_id (prepend_id "in_" id) | _ -> string_of_name id);
+              typ = NameMap.find id spec_info.registers;
             }
           )
-          (natural_sort_ids (IdSet.elements (IdSet.union footprint.all_writes footprint.all_reads)))
+          (natural_sort_names (NameSet.elements (NameSet.union footprint.all_writes footprint.all_reads)))
       @ ( if footprint.need_stdout then
             [{ name = Channel (Chan_stdout, 0); external_name = "in_stdout"; typ = CT_string }]
           else []
@@ -2084,12 +2085,13 @@ module Make (Config : CONFIG) = struct
       @ List.map
           (fun id ->
             {
-              name = output_register (Name (id, -1));
-              external_name = string_of_id (prepend_id "out_" id);
-              typ = Bindings.find id spec_info.registers;
+              name = output_register id;
+              external_name =
+                (match id with Name (id, _) -> string_of_id (prepend_id "out_" id) | _ -> string_of_name id);
+              typ = NameMap.find id spec_info.registers;
             }
           )
-          (natural_sort_ids (IdSet.elements footprint.all_writes))
+          (natural_sort_names (NameSet.elements footprint.all_writes))
       @ ( if footprint.throws || footprint.exits then
             [
               { name = get_final_name (Have_exception (-1)); external_name = "have_exception"; typ = CT_bool };
@@ -2129,24 +2131,22 @@ module Make (Config : CONFIG) = struct
       (fun name nums ->
         let get_ctyp = function
           | Return _ -> Some (List.hd ret_ctyps)
-          | Name (id, _) -> begin
-              match Bindings.find_opt id spec_info.registers with
-              | Some ctyp -> Some ctyp
-              | None -> (
-                  match Bindings.find_opt id !declvars with
-                  | Some ctyp -> Some ctyp
-                  | None -> (
-                      match Util.list_index (fun p -> Id.compare p id = 0) params with
-                      | Some i -> Some (List.nth param_ctyps i)
-                      | None -> None
-                    )
-                )
-            end
           | Channel _ -> Some CT_string
           | Memory_writes _ -> Some CT_memory_writes
           | Have_exception _ -> Some CT_bool
           | Throw_location _ -> Some CT_string
           | Current_exception _ -> Some spec_info.exception_ctyp
+          | name -> (
+              match NameMap.find_opt name !declvars with
+              | Some ctyp -> Some ctyp
+              | None -> (
+                  match Util.list_index (fun p -> Name.compare p name = 0) params with
+                  | Some i -> Some (List.nth param_ctyps i)
+                  | None -> (
+                      match NameMap.find_opt name spec_info.registers with Some ctyp -> Some ctyp | None -> None
+                    )
+                )
+            )
         in
         match get_ctyp name with
         | Some ctyp ->
@@ -2175,6 +2175,8 @@ module Make (Config : CONFIG) = struct
     in
     { name; recursive = is_recursive; input_ports; output_ports; defs = List.map mk_def defs }
 
+  type register_info = { name : name; reset : name; inp : name; out : name; ctyp : ctyp }
+
   let toplevel_module spec_info ctx id fn_ctyps =
     if not (Bindings.mem id fn_ctyps && Bindings.mem id spec_info.footprints) then
       raise
@@ -2198,19 +2200,43 @@ module Make (Config : CONFIG) = struct
     let prefix = Attr.get_string ~default:"SAIL START\\n" "prefix" attr in
     let suffix = Attr.get_string ~default:"SAIL END\\n" "suffix" attr in
 
+    let register_ports =
+      List.rev_map
+        (fun (reg, ctyp) ->
+          match reg with
+          | Name (id, -1) ->
+              {
+                name = reg;
+                reset = Name (prepend_id "reset_" id, -1);
+                inp = Name (prepend_id "in_" id, -1);
+                out = Name (prepend_id "out_" id, -1);
+                ctyp;
+              }
+          | _ -> { name = reg; reset = ngensym (); inp = ngensym (); out = ngensym (); ctyp }
+        )
+        (NameMap.bindings spec_info.registers)
+    in
+
+    let sorted_register_ports =
+      List.stable_sort (fun r1 r2 -> natural_name_compare Bindings.empty r1.name r2.name) register_ports
+    in
+
+    let find_register_port reg = List.find (fun reg_info -> Name.compare reg_info.name reg = 0) register_ports in
+
     let register_resets, register_inputs, register_outputs =
-      Bindings.fold
-        (fun reg ctyp (resets, ins, outs) ->
-          ( mk_port (Name (prepend_id "reset_" reg, -1)) ctyp :: resets,
-            SVD_var (Name (prepend_id "in_" reg, -1), ctyp) :: ins,
-            SVD_var (Name (prepend_id "out_" reg, -1), ctyp) :: outs
+      List.fold_left
+        (fun (resets, ins, outs) reg_info ->
+          ( mk_port reg_info.reset reg_info.ctyp :: resets,
+            SVD_var (reg_info.inp, reg_info.ctyp) :: ins,
+            SVD_var (reg_info.out, reg_info.ctyp) :: outs
           )
         )
-        spec_info.registers ([], [], [])
+        ([], [], []) register_ports
     in
+
     let exposed_registers =
-      Bindings.fold
-        (fun reg ctyp ports -> if StringSet.mem (string_of_id reg) exposed then (reg, ctyp) :: ports else ports)
+      NameMap.fold
+        (fun reg ctyp ports -> if StringSet.mem (string_of_name reg) exposed then (reg, ctyp) :: ports else ports)
         spec_info.registers []
     in
     let memory_writes =
@@ -2235,15 +2261,18 @@ module Make (Config : CONFIG) = struct
     in
     let arg_ports = List.mapi (fun n ctyp -> mk_port (arg_name n) ctyp) arg_ctyps in
     let instantiate_main =
+      let reads_or_writes = NameSet.union footprint.all_writes footprint.all_reads in
       SVD_instantiate
         {
           module_name = SVN_id id;
           instance_name = string_of_id (prepend_id "inst_" id);
           input_connections =
             (args
-            @ List.map
-                (fun reg -> Var (Name (prepend_id "in_" reg, -1)))
-                (natural_sort_ids (IdSet.elements (IdSet.union footprint.all_writes footprint.all_reads)))
+            @ Util.option_these
+                (List.map
+                   (fun reg -> if NameSet.mem reg.name reads_or_writes then Some (Var reg.inp) else None)
+                   sorted_register_ports
+                )
             @ (if footprint.need_stdout then [String_lit ""] else [])
             @ (if footprint.need_stderr then [String_lit ""] else [])
             @ (if footprint.writes_mem then [Var (Name (mk_id "empty_memory_writes", -1))] else [])
@@ -2251,9 +2280,11 @@ module Make (Config : CONFIG) = struct
             );
           output_connections =
             ([SVP_id Jib_util.return]
-            @ List.map
-                (fun reg -> SVP_id (Name (prepend_id "out_" reg, -1)))
-                (natural_sort_ids (IdSet.elements footprint.all_writes))
+            @ Util.option_these
+                (List.map
+                   (fun reg -> if NameSet.mem reg.name footprint.all_writes then Some (SVP_id reg.out) else None)
+                   sorted_register_ports
+                )
             @ ( if footprint.throws || footprint.exits then
                   [SVP_id (Have_exception (-1)); SVP_id (Current_exception (-1))]
                 else []
@@ -2295,27 +2326,32 @@ module Make (Config : CONFIG) = struct
             else []
           )
         @ List.map
-            (fun (reg, _) ->
-              mk_statement (SVS_continuous_assign (SVP_id (Name (reg, -1)), Var (Name (prepend_id "out_" reg, -1))))
-            )
+            (function
+              | Name (reg, _), _ ->
+                  mk_statement (SVS_continuous_assign (SVP_id (Name (reg, -1)), Var (Name (prepend_id "out_" reg, -1))))
+              | _ -> assert false
+              )
             exposed_registers
         @ [mk_statement (svs_raw "sail_flush_writes(out_memory_writes)" ~inputs:[Name (mk_id "out_memory_writes", -1)])]
       in
       if clk then (
         let reset_regs, inout_regs =
-          Bindings.fold
+          NameMap.fold
             (fun reg ctyp (resets, inouts) ->
-              ( mk_statement
-                  (SVS_continuous_assign
-                     (SVP_id (Name (prepend_id "in_" reg, -1)), Var (Name (prepend_id "reset_" reg, -1)))
+              match reg with
+              | Name (reg, _) ->
+                  ( mk_statement
+                      (SVS_continuous_assign
+                         (SVP_id (Name (prepend_id "in_" reg, -1)), Var (Name (prepend_id "reset_" reg, -1)))
+                      )
+                    :: resets,
+                    mk_statement
+                      (SVS_continuous_assign
+                         (SVP_id (Name (prepend_id "in_" reg, -1)), Var (Name (prepend_id "out_" reg, -1)))
+                      )
+                    :: inouts
                   )
-                :: resets,
-                mk_statement
-                  (SVS_continuous_assign
-                     (SVP_id (Name (prepend_id "in_" reg, -1)), Var (Name (prepend_id "out_" reg, -1)))
-                  )
-                :: inouts
-              )
+              | _ -> assert false
             )
             spec_info.registers ([], [])
         in
@@ -2326,13 +2362,16 @@ module Make (Config : CONFIG) = struct
       )
       else (
         let unchanged_registers =
-          Bindings.fold
+          NameMap.fold
             (fun reg _ unchanged ->
-              if not (IdSet.mem reg footprint.all_writes) then
-                mk_statement
-                  (SVS_assign (SVP_id (Name (prepend_id "out_" reg, -1)), Var (Name (prepend_id "in_" reg, -1))))
-                :: unchanged
-              else unchanged
+              match reg with
+              | Name (id, _) ->
+                  if not (NameSet.mem reg footprint.all_writes) then
+                    mk_statement
+                      (SVS_assign (SVP_id (Name (prepend_id "out_" id, -1)), Var (Name (prepend_id "in_" id, -1))))
+                    :: unchanged
+                  else unchanged
+              | _ -> assert false
             )
             spec_info.registers []
         in
@@ -2341,16 +2380,16 @@ module Make (Config : CONFIG) = struct
       )
     in
     let initialize_registers =
-      let reset_target reg = prepend_id (if clk then "reset_" else "in_") reg in
       List.mapi
         (fun i reg ->
-          let name = sprintf "sail_setup_reg_%s" (pp_id_string reg) in
+          let reg_info = find_register_port reg in
+          let name = sprintf "sail_setup_reg_%s" (pp_name_string reg) in
           SVD_instantiate
             {
               module_name = SVN_string name;
               instance_name = sprintf "reg_init_%d" i;
               input_connections = [];
-              output_connections = [SVP_id (Name (reset_target reg, -1))];
+              output_connections = [SVP_id (if clk then reg_info.reset else reg_info.inp)];
             }
         )
         spec_info.initialized_registers
@@ -2372,7 +2411,11 @@ module Make (Config : CONFIG) = struct
             [mk_port (name (mk_id "clk")) CT_bit; mk_port (name (mk_id "reset")) CT_bit] @ arg_ports @ register_resets
           else arg_ports
         );
-      output_ports = output_ports @ List.map (fun (reg, ctyp) -> mk_port (Name (reg, -1)) ctyp) exposed_registers;
+      output_ports =
+        output_ports
+        @ List.map
+            (fun (reg, ctyp) -> match reg with Name (reg, _) -> mk_port (Name (reg, -1)) ctyp | _ -> assert false)
+            exposed_registers;
       defs = List.map mk_def defs;
     }
 
@@ -2420,7 +2463,7 @@ module Make (Config : CONFIG) = struct
           end
       | None -> (string "void", empty)
     in
-    let param_docs = List.map (fun (param, ctyp) -> wrap_type ctyp (pp_id param)) f.params in
+    let param_docs = List.map (fun (param, ctyp) -> wrap_type ctyp (pp_name param)) f.params in
     let block_terminator last = if last then semi else semi ^^ hardline in
     let pp_body = function
       | SVS_aux (SVS_block statements, _) ->
@@ -2568,12 +2611,12 @@ module Make (Config : CONFIG) = struct
 
   let sv_register_references spec_info =
     let rmap = spec_info.register_ctyp_map in
-    let reg_ref id = "SAIL_REG_" ^ Util.zencode_upper_string (string_of_id id) in
+    let reg_ref id = "SAIL_REG_" ^ Util.zencode_upper_string (pp_name_string id) in
     let check reg = parens (separate space [char 'r'; string "=="; string (reg_ref reg)]) in
     let reg_ref_enums =
       List.map
         (fun (ctyp, regs) ->
-          let regs = natural_sort_ids (IdSet.elements regs) in
+          let regs = natural_sort_names (NameSet.elements regs) in
           separate space [string "typedef"; string "enum"; lbrace]
           ^^ nest 4 (hardline ^^ separate_map (comma ^^ hardline) (fun r -> string (reg_ref r)) regs)
           ^^ hardline ^^ rbrace ^^ space
@@ -2586,7 +2629,7 @@ module Make (Config : CONFIG) = struct
     let reg_ref_functions =
       List.map
         (fun (ctyp, regs) ->
-          let regs = natural_sort_ids (IdSet.elements regs) in
+          let regs = natural_sort_names (NameSet.elements regs) in
           let encoded = Util.zencode_string (string_of_ctyp ctyp) in
           let sv_ty, index_ty = sv_ctyp ctyp in
           let sv_ty, typedef =
@@ -2597,27 +2640,27 @@ module Make (Config : CONFIG) = struct
             | None -> (string sv_ty, empty)
           in
           let port ~input ty v = separate space [string (if input then "input" else "output"); ty; v] in
+          let reg_ports =
+            List.map
+              (function
+                | Name (id, -1) -> (Name (id, -1), pp_id (prepend_id "in_" id), pp_id (prepend_id "out_" id))
+                | reg ->
+                    let inp = ngensym () in
+                    let out = ngensym () in
+                    (reg, pp_name inp, pp_name out)
+                )
+              regs
+          in
           let assign_module =
             let ports =
               port ~input:true (string ("sail_reg_" ^ encoded)) (char 'r')
               :: port ~input:true sv_ty (char 'v')
-              :: List.map (fun r -> port ~input:true sv_ty (pp_id (prepend_id "in_" r))) regs
-              @ List.map (fun r -> port ~input:false sv_ty (pp_id (prepend_id "out_" r))) regs
+              :: List.map (fun (_, i, _) -> port ~input:true sv_ty i) reg_ports
+              @ List.map (fun (_, _, o) -> port ~input:false sv_ty o) reg_ports
             in
-            let assignment reg =
-              separate space
-                [
-                  pp_id (prepend_id "out_" reg);
-                  equals;
-                  check reg;
-                  char '?';
-                  char 'v';
-                  colon;
-                  pp_id (prepend_id "in_" reg);
-                ]
-            in
+            let assignment (reg, inp, out) = separate space [out; equals; check reg; char '?'; char 'v'; colon; inp] in
             let comb =
-              nest 4 (string "begin" ^^ hardline ^^ separate_map (semi ^^ hardline) assignment regs ^^ semi)
+              nest 4 (string "begin" ^^ hardline ^^ separate_map (semi ^^ hardline) assignment reg_ports ^^ semi)
               ^^ hardline ^^ string "end" ^^ semi
             in
             string "module" ^^ space
@@ -2630,16 +2673,16 @@ module Make (Config : CONFIG) = struct
           let deref_module =
             let ports =
               port ~input:true (string ("sail_reg_" ^ encoded)) (char 'r')
-              :: List.map (fun r -> port ~input:true sv_ty (pp_id (prepend_id "in_" r))) regs
+              :: List.map (fun (_, i, _) -> port ~input:true sv_ty i) reg_ports
               @ [port ~input:false sv_ty (char 'v')]
             in
             let cases =
               List.map
-                (fun reg ->
-                  let assign = separate space [char 'v'; equals; pp_id (prepend_id "in_" reg)] in
+                (fun (reg, i, _) ->
+                  let assign = separate space [char 'v'; equals; i] in
                   (check reg, assign)
                 )
-                regs
+                reg_ports
             in
             let ifstmt =
               match cases with
@@ -2763,9 +2806,9 @@ module Make (Config : CONFIG) = struct
             in
             let setup_module =
               svir_setup_module spec_info ctx
-                (SVN_string (sprintf "sail_setup_reg_%s" (pp_id_string id)))
-                (name id) ctyp
-                (setup @ [iend_id def_annot.loc id])
+                (SVN_string (sprintf "sail_setup_reg_%s" (pp_name_string id)))
+                id ctyp
+                (setup @ [iend_name def_annot.loc id])
             in
             ([SVD_aux (SVD_module setup_module, def_annot.loc)], fn_ctyps)
       end
@@ -2774,8 +2817,8 @@ module Make (Config : CONFIG) = struct
   let sv_cdef spec_info ctx fn_ctyps setup_calls (CDEF_aux (aux, _)) =
     match aux with
     | CDEF_register (id, ctyp, setup) ->
-        let binding_doc = wrap_type ctyp (pp_id id) ^^ semi ^^ twice hardline in
-        let name = sprintf "sail_setup_reg_%s" (pp_id_string id) in
+        let binding_doc = wrap_type ctyp (pp_name id) ^^ semi ^^ twice hardline in
+        let name = sprintf "sail_setup_reg_%s" (pp_name_string id) in
         ( {
             empty_cdef_doc with
             inside_module_prefix = binding_doc;
@@ -2830,7 +2873,7 @@ module Make (Config : CONFIG) = struct
         | Some (param_ctyps, ret_ctyp) -> begin
             let main_args =
               List.map2
-                (fun param param_ctyp -> match param_ctyp with CT_unit -> string "SAIL_UNIT" | _ -> pp_id param)
+                (fun param param_ctyp -> match param_ctyp with CT_unit -> string "SAIL_UNIT" | _ -> pp_name param)
                 params param_ctyps
             in
             let non_unit =
@@ -2843,7 +2886,7 @@ module Make (Config : CONFIG) = struct
             in
             let module_main_in =
               List.map
-                (fun (param, param_ctyp) -> string "input" ^^ space ^^ wrap_type param_ctyp (pp_id param))
+                (fun (param, param_ctyp) -> string "input" ^^ space ^^ wrap_type param_ctyp (pp_name param))
                 non_unit
             in
             match ret_ctyp with

@@ -4291,18 +4291,17 @@ let opt_unroll_loops = ref false
 let opt_unroll_loops_max_iter = ref 0
 
 (** The loop unrolling pass replaces :
-    {[
+    {v
        foreach k in 0 to 3 by 1 increasing:
          f(k, foo, bar) + k
-    ]}
-   with
-    {[
+    v}
+    with
+    {v
        f(0, foo, bar) + 0;
        f(1, foo, bar) + 1;
        f(2, foo, bar) + 2;
        f(3, foo, bar) + 3;
-    }]
-*)
+    v} *)
 let rewrite_unroll_constant_loops _type_env defs =
   (* This pass replaces expressions like
          f(k, foo, bar) + k

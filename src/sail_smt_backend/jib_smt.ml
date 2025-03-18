@@ -84,13 +84,14 @@ module Make_optimizer (S : Sequence) = struct
     type t = Jib.name
     let equal x y = Name.compare x y = 0
     let hash = function
-      | Name (Id_aux (aux, _), n) -> Hashtbl.hash (0, (aux, n))
-      | Have_exception n -> Hashtbl.hash (1, n)
-      | Current_exception n -> Hashtbl.hash (2, n)
-      | Throw_location n -> Hashtbl.hash (3, n)
-      | Return n -> Hashtbl.hash (4, n)
-      | Channel (chan, n) -> Hashtbl.hash (5, (chan, n))
-      | Memory_writes n -> Hashtbl.hash (6, n)
+      | Gen (v1, v2, n) -> Hashtbl.hash (0, (v1, v2, n))
+      | Name (Id_aux (aux, _), n) -> Hashtbl.hash (1, (aux, n))
+      | Have_exception n -> Hashtbl.hash (2, n)
+      | Current_exception n -> Hashtbl.hash (3, n)
+      | Throw_location n -> Hashtbl.hash (4, n)
+      | Return n -> Hashtbl.hash (5, n)
+      | Channel (chan, n) -> Hashtbl.hash (6, (chan, n))
+      | Memory_writes n -> Hashtbl.hash (7, n)
   end
 
   module NameHashtbl = Hashtbl.Make (NameHash)
@@ -203,7 +204,7 @@ module type CONFIG = sig
   val max_unknown_integer_width : int
   val max_unknown_bitvector_width : int
   val max_unknown_generic_vector_length : int
-  val register_map : id list CTMap.t
+  val register_map : name list CTMap.t
   val ignore_overflow : bool
 end
 
@@ -221,14 +222,14 @@ module Make (Config : CONFIG) = struct
         let max_unknown_generic_vector_length = Config.max_unknown_generic_vector_length
         let union_ctyp_classify _ _ = true
         let register_ref reg_name =
-          let id = mk_id reg_name in
+          let id = name (mk_id reg_name) in
           let rmap =
-            CTMap.filter (fun ctyp regs -> List.exists (fun reg -> Id.compare reg id = 0) regs) Config.register_map
+            CTMap.filter (fun ctyp regs -> List.exists (fun reg -> Name.compare reg id = 0) regs) Config.register_map
           in
           assert (CTMap.cardinal rmap = 1);
           match CTMap.min_binding_opt rmap with
           | Some (ctyp, regs) -> begin
-              match Util.list_index (fun reg -> Id.compare reg id = 0) regs with
+              match Util.list_index (fun reg -> Name.compare reg id = 0) regs with
               | Some i -> Smt_gen.bvint (required_width (Big_int.of_int (List.length regs))) (Big_int.of_int i)
               | None -> assert false
             end
@@ -622,9 +623,9 @@ module Make (Config : CONFIG) = struct
 
   let generate_reg_decs inits cdefs =
     let rec go acc = function
-      | CDEF_aux (CDEF_register (id, ctyp, _), _) :: cdefs when not (NameMap.mem (Name (id, 0)) inits) ->
+      | CDEF_aux (CDEF_register (id, ctyp, _), _) :: cdefs when not (NameMap.mem (Jib_ssa.ssa_name 0 id) inits) ->
           let* smt_typ = smt_ctyp ctyp in
-          go (Declare_const (Name (id, 0), smt_typ) :: acc) cdefs
+          go (Declare_const (Jib_ssa.ssa_name 0 id, smt_typ) :: acc) cdefs
       | _ :: cdefs -> go acc cdefs
       | [] -> return (List.rev acc)
     in
@@ -840,16 +841,16 @@ module Make (Config : CONFIG) = struct
     loc : Ast.l;
     file_name : string;
     function_id : id;
-    args : id list;
+    args : name list;
     arg_ctyps : ctyp list;
-    arg_smt_names : (id * string option) list;
+    arg_smt_names : (name * string option) list;
   }
 
   let smt_cdef props lets name_file ctx all_cdefs smt_includes (CDEF_aux (aux, def_annot)) =
     match aux with
     | CDEF_val (function_id, _, arg_ctyps, ret_ctyp, _) when Bindings.mem function_id props -> begin
         match find_function [] function_id all_cdefs with
-        | intervening_lets, Some (None, args, instrs, function_def_annot) ->
+        | intervening_lets, Some (Return_plain, args, instrs, function_def_annot) ->
             let function_id_string = string_of_id function_id in
             let debug_attr = get_def_attribute "jib_debug" function_def_annot in
             let prop_type, prop_args, pragma_l, vs = Bindings.find function_id props in
@@ -862,7 +863,7 @@ module Make (Config : CONFIG) = struct
               List.map2
                 (fun id ctyp ->
                   let l = unique pragma_l in
-                  idecl l ctyp (name id)
+                  idecl l ctyp id
                 )
                 args arg_ctyps
             in
@@ -924,7 +925,7 @@ module Make (Config : CONFIG) = struct
             let arg_smt_names =
               List.map
                 (function
-                  | I_aux (I_decl (_, Name (id, _)), (_, Unique (n, _))) -> (id, List.assoc_opt n arg_names)
+                  | I_aux (I_decl (_, name), (_, Unique (n, _))) -> (name, List.assoc_opt n arg_names)
                   | _ -> assert false
                   )
                 arg_decls
@@ -972,8 +973,10 @@ module Make (Config : CONFIG) = struct
                     let try_reg r =
                       let next_label = label "next_reg_write_" in
                       [
-                        ijump l (V_call (Neq, [V_lit (VL_ref (string_of_id r), reg_ctyp); V_id (id, ctyp)])) next_label;
-                        ifuncall l (CL_id (name r, reg_ctyp)) function_id args;
+                        ijump l
+                          (V_call (Neq, [V_lit (VL_ref (string_of_name ~zencode:false r), reg_ctyp); V_id (id, ctyp)]))
+                          next_label;
+                        ifuncall l (CL_id (r, reg_ctyp)) function_id args;
                         igoto end_label;
                         ilabel next_label;
                       ]
@@ -1003,8 +1006,10 @@ module Make (Config : CONFIG) = struct
                           let try_reg r =
                             let next_label = label "next_reg_deref_" in
                             [
-                              ijump l (V_call (Neq, [V_lit (VL_ref (string_of_id r), reg_ctyp); reg_ref])) next_label;
-                              icopy l clexp (V_id (name r, reg_ctyp));
+                              ijump l
+                                (V_call (Neq, [V_lit (VL_ref (string_of_name ~zencode:false r), reg_ctyp); reg_ref]))
+                                next_label;
+                              icopy l clexp (V_id (r, reg_ctyp));
                               igoto end_label;
                               ilabel next_label;
                             ]
@@ -1031,8 +1036,10 @@ module Make (Config : CONFIG) = struct
                     let try_reg r =
                       let next_label = label "next_reg_write_" in
                       [
-                        ijump l (V_call (Neq, [V_lit (VL_ref (string_of_id r), reg_ctyp); V_id (id, ctyp)])) next_label;
-                        icopy l (CL_id (name r, reg_ctyp)) cval;
+                        ijump l
+                          (V_call (Neq, [V_lit (VL_ref (string_of_name ~zencode:false r), reg_ctyp); V_id (id, ctyp)]))
+                          next_label;
+                        icopy l (CL_id (r, reg_ctyp)) cval;
                         igoto end_label;
                         ilabel next_label;
                       ]
@@ -1235,7 +1242,7 @@ end) : Jib_compile.CONFIG = struct
           let aexp1 = analyze ctx aexp1 in
           (* Use aexp2's environment because it will contain constraints for id *)
           let ctyp1 = convert_typ { ctx with local_env = env2 } typ1 in
-          let ctx = { ctx with locals = Bindings.add id (mut, ctyp1) ctx.locals } in
+          let ctx = { ctx with locals = NameMap.add id (mut, ctyp1) ctx.locals } in
           (AE_let (mut, id, typ1, aexp1, analyze ctx aexp2, typ2), annot)
       | AE_block (aexps, aexp, typ) -> (AE_block (List.map (analyze ctx) aexps, analyze ctx aexp, typ), annot)
       | AE_if (aval, aexp1, aexp2, typ) ->
@@ -1253,16 +1260,16 @@ end) : Jib_compile.CONFIG = struct
           let aexp2 = analyze ctx aexp2 in
           let aexp3 = analyze ctx aexp3 in
           (* Currently we assume that loop indexes are always safe to put into an int64 *)
-          let ctx = { ctx with locals = Bindings.add id (Immutable, CT_fint 64) ctx.locals } in
+          let ctx = { ctx with locals = NameMap.add id (Immutable, CT_fint 64) ctx.locals } in
           let aexp4 = analyze ctx aexp4 in
           (AE_for (id, aexp1, aexp2, aexp3, order, aexp4), annot)
       | AE_match (aval, cases, typ) ->
           let analyze_case ((AP_aux (_, { env; _ }) as pat), aexp1, aexp2, uannot) =
-            let pat_bindings = Bindings.bindings (apat_types pat) in
+            let pat_bindings = NameMap.bindings (apat_types pat) in
             let ctx = { ctx with local_env = env } in
             let ctx =
               List.fold_left
-                (fun ctx (id, typ) -> { ctx with locals = Bindings.add id (Immutable, convert_typ ctx typ) ctx.locals })
+                (fun ctx (id, typ) -> { ctx with locals = NameMap.add id (Immutable, convert_typ ctx typ) ctx.locals })
                 ctx pat_bindings
             in
             let uannot =
