@@ -82,5 +82,3 @@ def sail_model_init (x_0 : Unit) : Unit :=
   (initialize_registers ())
 
 end Functions
-open Functions
-
