@@ -469,13 +469,13 @@ let rec doc_pat ?(need_parens = false) ?(in_vector = false) ctx (P_aux (p, (l, a
   | P_typ (Typ_aux (Typ_app (Id_aux (Id id, _), [A_aux (A_nexp (Nexp_aux (Nexp_constant i, _)), _)]), _), p)
     when in_vector && (id = "bits" || id = "bitvector") ->
       doc_pat ctx p ^^ string ":" ^^ doc_big_int i
-  | P_typ (ptyp, p) when in_vector -> doc_pat ctx p ^^ string ":"^^ doc_typ ctx ptyp
+  | P_typ (ptyp, p) when in_vector -> doc_pat ctx p ^^ string ":" ^^ doc_typ ctx ptyp
   | P_typ (ptyp, p) -> doc_pat ctx p
   | P_id id -> fixup_match_id id |> doc_id_ctor
   | P_tuple pats -> separate (string ", ") (List.map (doc_pat ctx) pats) |> parens
   | P_list pats -> separate (string ", ") (List.map (doc_pat ctx) pats) |> brackets
   | P_vector pats -> concat (List.map (doc_pat ~in_vector:true ctx) pats)
-  | P_vector_concat pats when in_vector -> separate (string ",") (List.map (doc_pat ~in_vector:true ctx) pats) 
+  | P_vector_concat pats when in_vector -> separate (string ",") (List.map (doc_pat ~in_vector:true ctx) pats)
   | P_vector_concat pats -> separate (string ",") (List.map (doc_pat ~in_vector:true ctx) pats) |> brackets
   | P_app (Id_aux (Id "None", _), p) -> string "none"
   | P_app (cons, pats) ->

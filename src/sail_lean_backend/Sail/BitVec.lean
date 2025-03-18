@@ -51,9 +51,8 @@ def BVPatComp.length (c : BVPatComp) :TermElabM Nat := do
         let n ← Meta.whnf n
         let some n := n.rawNatLit? | unreachable!
         return n
-      | _ => throwError "something bad happened here: {t}"
+      | _ => throwError "Unexpected type: {indentExpr t}, expected a bitvector"
     )
-
   | `(bvpat_comp| $_:ident ) | `(bvpat_comp| _) =>
     return 1
   | _ => throwError "Unexpected syntax: {c}"
@@ -177,7 +176,7 @@ def checkBVPatLengths (lens : Array (Option Nat)) (pss : Array (Array BVPat)) : 
         -- compare the lengths of the patterns
         if let some pLen' := patLen then
           unless pLen == pLen' do
-            throwErrorAt  p "patterns have differrent lengths"
+            throwErrorAt  p "Patterns have differrent lengths"
         else
           patLen := some pLen
 
