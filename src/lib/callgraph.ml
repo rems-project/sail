@@ -512,13 +512,14 @@ let top_sort_defs ast =
     {
       ast with
       defs =
-        List.concat_map
+        List.map
           (function
             | DEF_aux (DEF_internal_mutrec fds, def_annot) ->
                 List.map (fun fd -> DEF_aux (DEF_fundef fd, def_annot)) fds
             | d -> [d]
             )
-          ast.defs;
+          ast.defs
+        |> List.concat;
     }
   in
   (* Build callgraph, and collect definitions per node, so that we can efficiently reorder later *)
