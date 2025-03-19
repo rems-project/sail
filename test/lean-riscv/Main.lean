@@ -9,10 +9,7 @@ def main (args : List String) : IO UInt32 := do
     -- Parse input elf file.
     let elfF <- readElf32 args[1]!
 
-    -- TODO:
     -- Run program
-    runElf32 elfF
-
-
+    -- runElf32 elfF
     
     pure 0
