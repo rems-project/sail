@@ -2906,9 +2906,11 @@ let rec rewrite_var_updates (E_aux (expaux, ((l, _) as annot)) as exp) =
         | Same_vars exp' -> Same_vars (E_aux (E_typ (typ, exp'), annot))
       end
     | _ ->
-        (* after rewrite_ast_letbind_effects this expression is pure and updates
+        if updates_vars full_exp then Same_vars (rewrite_var_updates full_exp)
+        else
+          (* after rewrite_ast_letbind_effects this expression is pure and updates
            no variables: check n_exp_term and where it's used. *)
-        Same_vars (E_aux (expaux, annot))
+          Same_vars (E_aux (expaux, annot))
   in
 
   match expaux with
@@ -2939,7 +2941,11 @@ let rec rewrite_var_updates (E_aux (expaux, ((l, _) as annot)) as exp) =
       let lb = annot_letbind (paux, v) l env typ in
       let exp = annot_exp (E_let (lb, body)) l env (typ_of body) in
       rewrite_var_updates exp
-  | E_for _ | E_loop _ | E_if _ | E_match _ | E_assign _ ->
+  | E_for _ | E_loop _ | E_assign _ ->
+      let lb = LB_aux (LB_val (P_aux (P_wild, annot), exp), annot) in
+      let exp' = E_aux (E_let (lb, E_aux (E_lit (mk_lit ~loc:l L_unit), annot)), annot) in
+      rewrite_var_updates exp'
+  | E_if _ | E_match _ ->
       let var_id = fresh_id "u__" l in
       let lb = LB_aux (LB_val (P_aux (P_id var_id, annot), exp), annot) in
       let exp' = E_aux (E_let (lb, E_aux (E_id var_id, annot)), annot) in
@@ -2951,9 +2957,66 @@ let rec rewrite_var_updates (E_aux (expaux, ((l, _) as annot)) as exp) =
   | E_internal_assume (nc, exp) ->
       let exp' = rewrite_var_updates exp in
       E_aux (E_internal_assume (nc, exp'), annot)
-  (* There are no other expressions that have effects or variable updates in
-     "tail-position": check the definition nexp_term and where it is used. *)
-  | _ -> exp
+  | E_tuple exps ->
+      (* We may need to sequence side effects in a tuple, such as:
+
+         {v
+            (i = 3, i) : (unit, int)
+         v}
+
+         To handle this, rewrite it to:
+
+         {v
+            let _ = (i = 3) in ((), i)
+         v}
+
+         If i = 3 was instead a side-effecting expression with a non-unit type
+         we would introduce a new variable rather than using a wildcard and unit literal
+      *)
+      let is_trivial = function E_aux ((E_id _ | E_lit _), _) -> true | _ -> false in
+      if List.for_all is_trivial exps then exp
+      else (
+        let tuple_typ = typ_of exp in
+        let typs =
+          match tuple_typ with
+          | Typ_aux (Typ_tuple typs, _) -> typs
+          | _ -> Reporting.unreachable l __POS__ "Found tuple without tuple type"
+        in
+        let bindings = List.map2 (fun typ exp -> (fresh_id "t__" l, typ, exp)) typs exps in
+        let trivial_tuple =
+          E_aux
+            ( E_tuple
+                (List.map
+                   (fun (id, typ, exp) ->
+                     if is_trivial exp then exp
+                     else if is_unit_typ typ then E_aux (E_lit (L_aux (L_unit, l)), swaptyp unit_typ annot)
+                     else E_aux (E_id id, swaptyp typ annot)
+                   )
+                   bindings
+                ),
+              annot
+            )
+        in
+        let exp =
+          List.fold_right
+            (fun (id, typ, exp) tup ->
+              if is_trivial exp then tup
+              else (
+                let lb =
+                  if is_unit_typ typ then LB_aux (LB_val (P_aux (P_wild, swaptyp typ annot), exp), annot)
+                  else LB_aux (LB_val (P_aux (P_id id, swaptyp typ annot), exp), annot)
+                in
+                E_aux (E_let (lb, tup), annot)
+              )
+            )
+            bindings trivial_tuple
+        in
+        rewrite_var_updates exp
+      )
+  | _ ->
+      (* There are no other expressions that have effects or variable updates in
+       "tail-position": check the definition n_exp_term and where it is used. *)
+      exp
 
 let replace_memwrite_e_assign exp =
   let e_aux (expaux, annot) =

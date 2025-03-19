@@ -167,6 +167,7 @@ val add_constraint : ?global:bool -> ?reason:Ast.l * string -> n_constraint -> t
 val add_typquant : l -> typquant -> t -> t
 
 val get_typ_var : kid -> t -> kind_aux
+val get_typ_var_opt : kid -> t -> (Ast.l * kind_aux) option
 val get_typ_var_loc_opt : kid -> t -> Ast.l option
 val get_typ_vars : t -> kind_aux KBindings.t
 val get_typ_var_locs : t -> Ast.l KBindings.t

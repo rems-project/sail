@@ -319,6 +319,8 @@ let add_typ_var_shadow l (KOpt_aux (KOpt_kind (K_aux (k, _), v), _)) env =
 
 let add_typ_var l kopt env = fst (add_typ_var_shadow l kopt env)
 
+let get_typ_var_opt kid env = KBindings.find_opt kid env.typ_vars
+
 let get_typ_var_loc_opt kid env = match KBindings.find_opt kid env.typ_vars with Some (l, _) -> Some l | None -> None
 
 let get_typ_var kid env =

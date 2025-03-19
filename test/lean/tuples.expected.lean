@@ -36,21 +36,24 @@ open Sail
 
 namespace Functions
 
-def let0 := (20, 300000000000000000000000)
+def let5 := (20, 300000000000000000000000)
 
 def y :=
-  let (y, z) := let0
+  let (y, z) := let5
   y
 
 def z :=
-  let (y, z) := let0
+  let (y, z) := let5
   z
 
 def tuple1 (_ : Unit) : (Int × Int × ((BitVec 2) × Unit)) :=
-  (3, 5, ((0b10 : (BitVec 2)), ()))
+  let t__4 := ((0b10 : (BitVec 2)), ())
+  (3, 5, t__4)
 
 def tuple2 (_ : Unit) : SailM (Int × Int) := do
-  (pure ((← (undefined_int ())), (← (undefined_int ()))))
+  let t__0 ← do (undefined_int ())
+  let t__1 ← do (undefined_int ())
+  (pure (t__0, t__1))
 
 def initialize_registers (_ : Unit) : Unit :=
   ()
