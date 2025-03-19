@@ -108,10 +108,10 @@ set_option match.ignoreUnusedAlts true
 
 open Sail
 
+namespace Out.Functions
+
 open option
 open Register
-
-namespace Functions
 
 def GPRs : (Vector (RegisterRef (BitVec 64)) 31) :=
   #v[.Reg R0, .Reg R1, .Reg R2, .Reg R3, .Reg R4, .Reg R5, .Reg R6, .Reg R7, .Reg R8, .Reg R9, .Reg R10, .Reg R11, .Reg R12, .Reg R13, .Reg R14, .Reg R15, .Reg R16, .Reg R17, .Reg R18, .Reg R19, .Reg R20, .Reg R21, .Reg R22, .Reg R23, .Reg R24, .Reg R25, .Reg R26, .Reg R27, .Reg R28, .Reg R29, .Reg R30]
@@ -180,4 +180,5 @@ def initialize_registers (_ : Unit) : SailM Unit := do
 def sail_model_init (x_0 : Unit) : SailM Unit := do
   (initialize_registers ())
 
-end Functions
+
+end Out.Functions

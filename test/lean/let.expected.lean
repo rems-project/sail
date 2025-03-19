@@ -37,9 +37,9 @@ set_option match.ignoreUnusedAlts true
 
 open Sail
 
-open option
+namespace Out.Functions
 
-namespace Functions
+open option
 
 def foo (_ : Unit) : (BitVec 16) :=
   let z := ((0xFFFF : (BitVec 16)) ||| (0xABCD : (BitVec 16)))
@@ -59,4 +59,5 @@ def initialize_registers (_ : Unit) : Unit :=
 def sail_model_init (x_0 : Unit) : Unit :=
   (initialize_registers ())
 
-end Functions
+
+end Out.Functions

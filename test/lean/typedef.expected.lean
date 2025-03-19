@@ -45,9 +45,9 @@ set_option match.ignoreUnusedAlts true
 
 open Sail
 
-open option
+namespace Out.Functions
 
-namespace Functions
+open option
 
 def xlen := 64
 
@@ -68,4 +68,5 @@ def initialize_registers (_ : Unit) : Unit :=
 def sail_model_init (x_0 : Unit) : Unit :=
   (initialize_registers ())
 
-end Functions
+
+end Out.Functions

@@ -37,9 +37,9 @@ set_option match.ignoreUnusedAlts true
 
 open Sail
 
-open option
+namespace Out.Functions
 
-namespace Functions
+open option
 
 def extern_const (_ : Unit) : (BitVec 64) :=
   (0xFFFF000012340000 : (BitVec 64))
@@ -62,4 +62,5 @@ def initialize_registers (_ : Unit) : Unit :=
 def sail_model_init (x_0 : Unit) : Unit :=
   (initialize_registers ())
 
-end Functions
+
+end Out.Functions

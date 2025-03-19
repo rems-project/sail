@@ -1137,7 +1137,6 @@ let rec doc_defs_rec ctx defs types (former_funcs : document list) (docdefs : do
   | DEF_aux (DEF_type tdef, _) :: defs' ->
       doc_defs_rec ctx defs' (types ^^ group (doc_typdef ctx tdef) ^/^ hardline) former_funcs docdefs
   | DEF_aux (DEF_let (LB_aux (LB_val (pat, exp), _)), _) :: defs' ->
-      print_string "print in namespace \n";
       doc_defs_rec ctx defs' types former_funcs (docdefs ^^ group (doc_val ctx pat exp) ^/^ hardline)
   | DEF_aux (DEF_pragma ("include_start", Pragma_line (file, _)), _) :: defs'
   | DEF_aux (DEF_pragma ("include_end", Pragma_line (file, _)), _) :: defs' ->
@@ -1299,8 +1298,8 @@ let rec take n xs = match (n, xs) with 0, _ -> [] | n, x :: xs -> x :: take (n -
 let rec last xs =
   match xs with [] -> failwith "cannot take last element of empty list" | [x] -> x | x :: xs -> last xs
 
-let pp_ast_lean (env : Type_check.env) effect_info ({ defs; _ } as ast : Libsail.Type_check.typed_ast) types_file
-    imp_funcs_files funcs_file =
+let pp_ast_lean (env : Type_check.env) effect_info ({ defs; _ } as ast : Libsail.Type_check.typed_ast) out_name_camel
+    types_file imp_funcs_files funcs_file =
   let regs = State.find_registers defs in
   let fun_args = populate_fun_args defs in
   let global = { effect_info; fun_args } in
@@ -1315,11 +1314,11 @@ let pp_ast_lean (env : Type_check.env) effect_info ({ defs; _ } as ast : Libsail
   let types, all_fundefss = doc_defs ctx defs in
   let imp_fundefss = take (List.length all_fundefss - 1) all_fundefss in
   let main_fundefs = last all_fundefss in
-  let main_fundefs = string "namespace Functions\n\n" ^^ main_fundefs ^^ string "end Functions\n" in
+  let main_fundefs = main_fundefs ^^ hardline ^^ string ("end " ^ out_name_camel ^ ".Functions") ^^ hardline in
   let main_function =
     if !the_main_function_has_been_seen then (
       let stub = main_function_stub effect_info has_registers in
-      [string "open Functions\n\n" ^^ stub]
+      [string ("open " ^ out_name_camel ^ ".Functions\n\n") ^^ stub]
     )
     else []
   in

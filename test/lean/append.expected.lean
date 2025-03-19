@@ -37,9 +37,9 @@ set_option match.ignoreUnusedAlts true
 
 open Sail
 
-open option
+namespace Out.Functions
 
-namespace Functions
+open option
 
 def unif_bitvec_append (x : (BitVec 13)) (y : (BitVec 3)) : (BitVec (4 * 4)) :=
   (x ++ y)
@@ -60,4 +60,5 @@ def initialize_registers (_ : Unit) : Unit :=
 def sail_model_init (x_0 : Unit) : Unit :=
   (initialize_registers ())
 
-end Functions
+
+end Out.Functions

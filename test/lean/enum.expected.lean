@@ -40,10 +40,10 @@ set_option match.ignoreUnusedAlts true
 
 open Sail
 
+namespace Out.Functions
+
 open option
 open E
-
-namespace Functions
 
 def undefined_E (_ : Unit) : SailM E := do
   (internal_pick [A, B, C])
@@ -67,4 +67,5 @@ def initialize_registers (_ : Unit) : Unit :=
 def sail_model_init (x_0 : Unit) : Unit :=
   (initialize_registers ())
 
-end Functions
+
+end Out.Functions

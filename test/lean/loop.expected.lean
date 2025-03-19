@@ -44,10 +44,10 @@ set_option match.ignoreUnusedAlts true
 
 open Sail
 
+namespace Out.Functions
+
 open option
 open Register
-
-namespace Functions
 
 /-- Type quantifiers: n : Nat, m : Nat, 0 ≤ m, 0 ≤ n -/
 def foreach_loop (m : Nat) (n : Nat) : Nat := Id.run do
@@ -178,4 +178,5 @@ def initialize_registers (_ : Unit) : SailM Unit := do
 def sail_model_init (x_0 : Unit) : SailM Unit := do
   (initialize_registers ())
 
-end Functions
+
+end Out.Functions

@@ -41,10 +41,10 @@ set_option match.ignoreUnusedAlts true
 
 open Sail
 
+namespace Out.Functions
+
 open virtaddr
 open option
-
-namespace Functions
 
 /-- Type quantifiers: n : Nat, n > 0 -/
 def foo (n : Nat) : (BitVec 4) :=
@@ -121,4 +121,5 @@ def initialize_registers (_ : Unit) : Unit :=
 def sail_model_init (x_0 : Unit) : Unit :=
   (initialize_registers ())
 
-end Functions
+
+end Out.Functions

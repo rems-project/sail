@@ -40,10 +40,10 @@ set_option match.ignoreUnusedAlts true
 
 open Sail
 
+namespace Out.Functions
+
 open word_width
 open option
-
-namespace Functions
 
 def undefined_word_width (_ : Unit) : SailM word_width := do
   (internal_pick [BYTE, HALF, WORD, DOUBLE])
@@ -192,4 +192,5 @@ def initialize_registers (_ : Unit) : Unit :=
 def sail_model_init (x_0 : Unit) : Unit :=
   (initialize_registers ())
 
-end Functions
+
+end Out.Functions

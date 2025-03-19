@@ -220,6 +220,7 @@ let print_function_file_prelude file out_name_camel (prev_file : string option) 
     | Some n -> output_string file ("import " ^ out_name_camel ^ "." ^ n ^ "\n")
   in
   output_string file ("\n" ^ file_prelude);
+  output_string file ("namespace " ^ out_name_camel ^ ".Functions\n\n");
   if !opt_lean_noncomputable then output_string file "noncomputable section\n\n"
 
 let start_lean_output (out_name : string) (import_names : string list) default_sail_dir =
@@ -311,10 +312,11 @@ let output (out_name : string) env effect_info ({ defs; _ } as ast : Libsail.Typ
   (* Discard the last import file, as we will use the main file instead *)
   let imports = Pretty_print_lean.take (List.length imports - 1) imports in
   let imports = dedup_files imports [] in
-  print_string (String.concat ", " imports ^ "\n");
   let ctx = start_lean_output out_name imports default_sail_dir in
-  (* Pretty_print_sail.output_ast stdout (Type_check.strip_ast ast); *)
-  let executable = Pretty_print_lean.pp_ast_lean env effect_info ast ctx.types_file ctx.import_files ctx.funcs_file in
+  let out_name_camel = Libsail.Util.to_upper_camel_case out_name in
+  let executable =
+    Pretty_print_lean.pp_ast_lean env effect_info ast out_name_camel ctx.types_file ctx.import_files ctx.funcs_file
+  in
   create_lake_project ctx executable
 (* Uncomment for debug output of the Sail code after the rewrite passes *)
 (* Pretty_print_sail.output_ast stdout (Type_check.strip_ast ast) *)

@@ -54,9 +54,9 @@ set_option match.ignoreUnusedAlts true
 
 open Sail
 
-open option
+namespace Out.Functions
 
-namespace Functions
+open option
 
 def undefined_My_struct (_ : Unit) : SailM My_struct := do
   (pure { field1 := (← (undefined_int ()))
@@ -94,4 +94,5 @@ def initialize_registers (_ : Unit) : Unit :=
 def sail_model_init (x_0 : Unit) : Unit :=
   (initialize_registers ())
 
-end Functions
+
+end Out.Functions

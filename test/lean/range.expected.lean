@@ -37,9 +37,9 @@ set_option match.ignoreUnusedAlts true
 
 open Sail
 
-open option
+namespace Out.Functions
 
-namespace Functions
+open option
 
 /-- Type quantifiers: x : Nat, 0 ≤ x ∧ x ≤ 31 -/
 def f_int (x : Nat) : Int :=
@@ -67,4 +67,5 @@ def initialize_registers (_ : Unit) : Unit :=
 def sail_model_init (x_0 : Unit) : Unit :=
   (initialize_registers ())
 
-end Functions
+
+end Out.Functions

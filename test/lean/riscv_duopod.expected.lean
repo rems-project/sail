@@ -66,12 +66,12 @@ set_option match.ignoreUnusedAlts true
 
 open Sail
 
+namespace Out.Functions
+
 open option
 open iop
 open ast
 open Register
-
-namespace Functions
 
 /-- Type quantifiers: k_n : Int, m : Int, m ≥ k_n -/
 def EXTS {m : _} (v : (BitVec k_n)) : (BitVec m) :=
@@ -170,4 +170,5 @@ def initialize_registers (_ : Unit) : SailM Unit := do
 def sail_model_init (x_0 : Unit) : SailM Unit := do
   (initialize_registers ())
 
-end Functions
+
+end Out.Functions

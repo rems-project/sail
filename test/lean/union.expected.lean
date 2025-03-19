@@ -53,10 +53,10 @@ set_option match.ignoreUnusedAlts true
 
 open Sail
 
+namespace Out.Functions
+
 open shape
 open my_option
-
-namespace Functions
 
 def undefined_rectangle (_ : Unit) : SailM rectangle := do
   (pure { width := (← (undefined_int ()))
@@ -81,4 +81,5 @@ def initialize_registers (_ : Unit) : Unit :=
 def sail_model_init (x_0 : Unit) : Unit :=
   (initialize_registers ())
 
-end Functions
+
+end Out.Functions

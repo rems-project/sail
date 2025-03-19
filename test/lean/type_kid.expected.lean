@@ -33,8 +33,8 @@ set_option match.ignoreUnusedAlts true
 
 open Sail
 
+namespace Out.Functions
 
-namespace Functions
 
 /-- Type quantifiers: k_a : Type -/
 def foo (x : k_a) : (k_a × k_a) :=
@@ -46,4 +46,5 @@ def initialize_registers (_ : Unit) : Unit :=
 def sail_model_init (x_0 : Unit) : Unit :=
   (initialize_registers ())
 
-end Functions
+
+end Out.Functions

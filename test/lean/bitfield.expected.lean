@@ -46,10 +46,10 @@ set_option match.ignoreUnusedAlts true
 
 open Sail
 
+namespace Out.Functions
+
 open option
 open Register
-
-namespace Functions
 
 def undefined_cr_type (_ : Unit) : SailM (BitVec 8) := do
   (undefined_bitvector 8)
@@ -123,4 +123,5 @@ def initialize_registers (_ : Unit) : SailM Unit := do
 def sail_model_init (x_0 : Unit) : SailM Unit := do
   (initialize_registers ())
 
-end Functions
+
+end Out.Functions
