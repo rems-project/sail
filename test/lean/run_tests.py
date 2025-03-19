@@ -22,8 +22,6 @@ sail = get_sail()
 # that you can run to exercise the language and the extracted output.
 # Not all self-tests are supported.
 skip_selftests = {
-    'encdec',
-    'encdec_subrange',
     'list_rec_functions2',
     'pow2_var',
     'exn_hello_world',
