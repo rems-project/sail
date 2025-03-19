@@ -14,3 +14,9 @@ name = "ELFSage"
 git = "https://github.com/ineol/ELFSage.git"
 rev = "f9b66dc2f1d3beb409d8982b3452e60edfae5d99"
 
+[[require]]
+name = "Lean_RV64D_LEAN"
+git = "https://github.com/ineol/sail-riscv.git"
+rev = "e730c409acf5cf1b6935e9c79b576ab0b7ab1bf6"
+subDir = "build/model/Lean_RV64D_LEAN"
+
