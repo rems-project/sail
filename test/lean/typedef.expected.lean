@@ -36,7 +36,7 @@ abbrev SailM := PreSailM RegisterType trivialChoiceSource exception
 
 XXXXXXXXX
 
-import Out.String
+import Out.Typedef
 
 set_option maxHeartbeats 1_000_000_000
 set_option maxRecDepth 10_000
@@ -48,19 +48,6 @@ open Sail
 namespace Out.Functions
 
 open option
-
-def xlen := 64
-
-/-- Type quantifiers: k_n : Int, m : Int, m ≥ k_n -/
-def EXTZ {m : _} (v : (BitVec k_n)) : (BitVec m) :=
-  (Sail.BitVec.zeroExtend v m)
-
-/-- Type quantifiers: k_n : Int, m : Int, m ≥ k_n -/
-def EXTS {m : _} (v : (BitVec k_n)) : (BitVec m) :=
-  (Sail.BitVec.signExtend v m)
-
-def uses_xlen_term (_ : Unit) : Int :=
-  xlen
 
 def initialize_registers (_ : Unit) : Unit :=
   ()

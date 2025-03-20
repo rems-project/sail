@@ -461,7 +461,7 @@ instance : Arch where
 
 XXXXXXXXX
 
-import Out.ReadWrite
+import Out.SailTinyArm0
 
 set_option maxHeartbeats 1_000_000_000
 set_option maxRecDepth 10_000
@@ -501,9 +501,6 @@ open CacheOpScope
 open CacheOp
 open Barrier
 open AccessType
-
-def pa_bits (bv : (BitVec 56)) : (BitVec 64) :=
-  (Sail.BitVec.zeroExtend bv 64)
 
 def initialize_registers (_ : Unit) : SailM Unit := do
   writeReg _PC (← (undefined_bitvector 64))

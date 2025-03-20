@@ -37,7 +37,7 @@ abbrev SailM := PreSailM RegisterType trivialChoiceSource exception
 
 XXXXXXXXX
 
-import Out.String
+import Out.Bitfield
 
 set_option maxHeartbeats 1_000_000_000
 set_option maxRecDepth 10_000
@@ -50,72 +50,6 @@ namespace Out.Functions
 
 open option
 open Register
-
-def undefined_cr_type (_ : Unit) : SailM (BitVec 8) := do
-  (undefined_bitvector 8)
-
-def Mk_cr_type (v : (BitVec 8)) : (BitVec 8) :=
-  v
-
-def _get_cr_type_bits (v : (BitVec 8)) : (BitVec 8) :=
-  (Sail.BitVec.extractLsb v (8 -i 1) 0)
-
-def _update_cr_type_bits (v : (BitVec 8)) (x : (BitVec 8)) : (BitVec 8) :=
-  (Sail.BitVec.updateSubrange v (8 -i 1) 0 x)
-
-def _set_cr_type_bits (r_ref : (RegisterRef (BitVec 8))) (v : (BitVec 8)) : SailM Unit := do
-  let r ← do (reg_deref r_ref)
-  writeRegRef r_ref (_update_cr_type_bits r v)
-
-def _get_cr_type_CR0 (v : (BitVec 8)) : (BitVec 4) :=
-  (Sail.BitVec.extractLsb v 7 4)
-
-def _update_cr_type_CR0 (v : (BitVec 8)) (x : (BitVec 4)) : (BitVec 8) :=
-  (Sail.BitVec.updateSubrange v 7 4 x)
-
-def _set_cr_type_CR0 (r_ref : (RegisterRef (BitVec 8))) (v : (BitVec 4)) : SailM Unit := do
-  let r ← do (reg_deref r_ref)
-  writeRegRef r_ref (_update_cr_type_CR0 r v)
-
-def _get_cr_type_CR1 (v : (BitVec 8)) : (BitVec 2) :=
-  (Sail.BitVec.extractLsb v 3 2)
-
-def _update_cr_type_CR1 (v : (BitVec 8)) (x : (BitVec 2)) : (BitVec 8) :=
-  (Sail.BitVec.updateSubrange v 3 2 x)
-
-def _set_cr_type_CR1 (r_ref : (RegisterRef (BitVec 8))) (v : (BitVec 2)) : SailM Unit := do
-  let r ← do (reg_deref r_ref)
-  writeRegRef r_ref (_update_cr_type_CR1 r v)
-
-def _get_cr_type_CR3 (v : (BitVec 8)) : (BitVec 2) :=
-  (Sail.BitVec.extractLsb v 1 0)
-
-def _update_cr_type_CR3 (v : (BitVec 8)) (x : (BitVec 2)) : (BitVec 8) :=
-  (Sail.BitVec.updateSubrange v 1 0 x)
-
-def _set_cr_type_CR3 (r_ref : (RegisterRef (BitVec 8))) (v : (BitVec 2)) : SailM Unit := do
-  let r ← do (reg_deref r_ref)
-  writeRegRef r_ref (_update_cr_type_CR3 r v)
-
-def _get_cr_type_GT (v : (BitVec 8)) : (BitVec 1) :=
-  (Sail.BitVec.extractLsb v 6 6)
-
-def _update_cr_type_GT (v : (BitVec 8)) (x : (BitVec 1)) : (BitVec 8) :=
-  (Sail.BitVec.updateSubrange v 6 6 x)
-
-def _set_cr_type_GT (r_ref : (RegisterRef (BitVec 8))) (v : (BitVec 1)) : SailM Unit := do
-  let r ← do (reg_deref r_ref)
-  writeRegRef r_ref (_update_cr_type_GT r v)
-
-def _get_cr_type_LT (v : (BitVec 8)) : (BitVec 1) :=
-  (Sail.BitVec.extractLsb v 7 7)
-
-def _update_cr_type_LT (v : (BitVec 8)) (x : (BitVec 1)) : (BitVec 8) :=
-  (Sail.BitVec.updateSubrange v 7 7 x)
-
-def _set_cr_type_LT (r_ref : (RegisterRef (BitVec 8))) (v : (BitVec 1)) : SailM Unit := do
-  let r ← do (reg_deref r_ref)
-  writeRegRef r_ref (_update_cr_type_LT r v)
 
 def initialize_registers (_ : Unit) : SailM Unit := do
   writeReg R (← (undefined_cr_type ()))

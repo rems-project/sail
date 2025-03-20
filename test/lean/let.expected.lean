@@ -28,7 +28,7 @@ abbrev SailM := PreSailM RegisterType trivialChoiceSource exception
 
 XXXXXXXXX
 
-import Out.String
+import Out.Let
 
 set_option maxHeartbeats 1_000_000_000
 set_option maxRecDepth 10_000
@@ -40,18 +40,6 @@ open Sail
 namespace Out.Functions
 
 open option
-
-def foo (_ : Unit) : (BitVec 16) :=
-  let z := ((0xFFFF : (BitVec 16)) ||| (0xABCD : (BitVec 16)))
-  ((0x0000 : (BitVec 16)) &&& z)
-
-def bar (_ : Unit) : (BitVec 16) :=
-  let z : (BitVec 16) := ((0xFFFF : (BitVec 16)) ||| (0xABCD : (BitVec 16)))
-  ((0x0000 : (BitVec 16)) &&& z)
-
-def baz (_ : Unit) : SailM (BitVec 16) := do
-  (print_effect "baz")
-  (pure (0x0000 : (BitVec 16)))
 
 def initialize_registers (_ : Unit) : Unit :=
   ()

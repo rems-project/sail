@@ -99,7 +99,7 @@ abbrev SailM := PreSailM RegisterType trivialChoiceSource exception
 
 XXXXXXXXX
 
-import Out.String
+import Out.RegisterVector
 
 set_option maxHeartbeats 1_000_000_000
 set_option maxRecDepth 10_000
@@ -112,36 +112,6 @@ namespace Out.Functions
 
 open option
 open Register
-
-def GPRs : (Vector (RegisterRef (BitVec 64)) 31) :=
-  #v[.Reg R0, .Reg R1, .Reg R2, .Reg R3, .Reg R4, .Reg R5, .Reg R6, .Reg R7, .Reg R8, .Reg R9, .Reg R10, .Reg R11, .Reg R12, .Reg R13, .Reg R14, .Reg R15, .Reg R16, .Reg R17, .Reg R18, .Reg R19, .Reg R20, .Reg R21, .Reg R22, .Reg R23, .Reg R24, .Reg R25, .Reg R26, .Reg R27, .Reg R28, .Reg R29, .Reg R30]
-
-/-- Type quantifiers: n : Nat, 0 ≤ n ∧ n ≤ 31 -/
-def wX (n : Nat) (value : (BitVec 64)) : SailM Unit := do
-  if (bne n 31)
-  then writeRegRef (GetElem?.getElem! GPRs n) value
-  else (pure ())
-
-/-- Type quantifiers: n : Nat, 0 ≤ n ∧ n ≤ 31 -/
-def rX (n : Nat) : SailM (BitVec 64) := do
-  if (bne n 31)
-  then (reg_deref (GetElem?.getElem! GPRs n))
-  else (pure (0x0000000000000000 : (BitVec 64)))
-
-def rPC (_ : Unit) : SailM (BitVec 64) := do
-  readReg _PC
-
-def wPC (pc : (BitVec 64)) : SailM Unit := do
-  writeReg _PC pc
-
-/-- Type quantifiers: r : Nat, 0 ≤ r ∧ r ≤ 31 -/
-def monad_test (r : Nat) : SailM (BitVec 1) := do
-  if (BEq.beq (← (rX r)) (0x0000000000000000 : (BitVec 64)))
-  then (pure 1#1)
-  else
-    if (BEq.beq (← (rX r)) (0x0000000000000001 : (BitVec 64)))
-    then (pure 1#1)
-    else (pure 0#1)
 
 def initialize_registers (_ : Unit) : SailM Unit := do
   writeReg _PC (← (undefined_bitvector 64))

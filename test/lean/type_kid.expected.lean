@@ -20,11 +20,7 @@ abbrev SailM := PreSailM RegisterType trivialChoiceSource exception
 
 XXXXXXXXX
 
-import Out.Sail.Sail
-import Out.Sail.BitVec
-import Out.Sail.IntRange
-import Out.Defs
-import Out.Specialization
+import Out.TypeKid
 
 set_option maxHeartbeats 1_000_000_000
 set_option maxRecDepth 10_000
@@ -35,10 +31,6 @@ open Sail
 
 namespace Out.Functions
 
-
-/-- Type quantifiers: k_a : Type -/
-def foo (x : k_a) : (k_a × k_a) :=
-  (x, x)
 
 def initialize_registers (_ : Unit) : Unit :=
   ()

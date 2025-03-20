@@ -40,11 +40,7 @@ abbrev SailM := PreSailM RegisterType trivialChoiceSource exception
 
 XXXXXXXXX
 
-import Out.Sail.Sail
-import Out.Sail.BitVec
-import Out.Sail.IntRange
-import Out.Defs
-import Out.Specialization
+import Out.Union
 
 set_option maxHeartbeats 1_000_000_000
 set_option maxRecDepth 10_000
@@ -57,23 +53,6 @@ namespace Out.Functions
 
 open shape
 open my_option
-
-def undefined_rectangle (_ : Unit) : SailM rectangle := do
-  (pure { width := (← (undefined_int ()))
-          height := (← (undefined_int ())) })
-
-def undefined_circle (_ : Unit) : SailM circle := do
-  (pure { radius := (← (undefined_int ())) })
-
-/-- Type quantifiers: k_a : Type -/
-def is_none (opt : (my_option k_a)) : Bool :=
-  match opt with
-  | .MySome _ => false
-  | .MyNone () => true
-
-/-- Type quantifiers: k_a : Type -/
-def use_is_none (opt : (my_option k_a)) : Bool :=
-  (is_none opt)
 
 def initialize_registers (_ : Unit) : Unit :=
   ()

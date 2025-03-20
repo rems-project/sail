@@ -28,7 +28,7 @@ abbrev SailM := PreSailM RegisterType trivialChoiceSource exception
 
 XXXXXXXXX
 
-import Out.String
+import Out.Option0
 
 set_option maxHeartbeats 1_000_000_000
 set_option maxRecDepth 10_000
@@ -40,16 +40,6 @@ open Sail
 namespace Out.Functions
 
 open option
-
-def match_option (x : (Option (BitVec 1))) : (BitVec 1) :=
-  match x with
-  | .some x => x
-  | none => 0#1
-
-def option_match (x : (Option Unit)) (y : (BitVec 1)) : (Option (BitVec 1)) :=
-  match x with
-  | .some () => (some y)
-  | none => none
 
 def initialize_registers (_ : Unit) : Unit :=
   ()

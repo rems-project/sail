@@ -35,7 +35,7 @@ abbrev SailM := PreSailM RegisterType trivialChoiceSource exception
 
 XXXXXXXXX
 
-import Out.String
+import Out.Errors
 
 set_option maxHeartbeats 1_000_000_000
 set_option maxRecDepth 10_000
@@ -48,17 +48,6 @@ namespace Out.Functions
 
 open option
 open Register
-
-/-- Type quantifiers: k_ex824# : Bool -/
-def test_exit (b : Bool) : SailM Unit := do
-  if b
-  then throw Error.Exit
-  else (pure ())
-
-/-- Type quantifiers: k_ex826# : Bool -/
-def test_assert (b : Bool) : SailM (BitVec 1) := do
-  assert b "b is false"
-  (pure 1#1)
 
 def initialize_registers (_ : Unit) : SailM Unit := do
   writeReg dummy (← (undefined_bit ()))

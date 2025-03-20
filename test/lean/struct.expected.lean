@@ -45,7 +45,7 @@ abbrev SailM := PreSailM RegisterType trivialChoiceSource exception
 
 XXXXXXXXX
 
-import Out.String
+import Out.Struct
 
 set_option maxHeartbeats 1_000_000_000
 set_option maxRecDepth 10_000
@@ -57,36 +57,6 @@ open Sail
 namespace Out.Functions
 
 open option
-
-def undefined_My_struct (_ : Unit) : SailM My_struct := do
-  (pure { field1 := (← (undefined_int ()))
-          field2 := (← (undefined_bit ())) })
-
-def struct_field2 (s : My_struct) : (BitVec 1) :=
-  s.field2
-
-def struct_update_field2 (s : My_struct) (b : (BitVec 1)) : My_struct :=
-  { s with field2 := b }
-
-/-- Type quantifiers: i : Int -/
-def struct_update_both_fields (s : My_struct) (i : Int) (b : (BitVec 1)) : My_struct :=
-  { s with field1 := i, field2 := b }
-
-/-- Type quantifiers: i : Int -/
-def mk_struct (i : Int) (b : (BitVec 1)) : My_struct :=
-  { field1 := i
-    field2 := b }
-
-def undef_struct (x : (BitVec 1)) : SailM My_struct := do
-  (undefined_My_struct ())
-
-def match_struct (value : My_struct) : SailM Int := do
-  match value with
-  | { field2 := 0#1, field1 := g__0 } => (pure 0)
-  | { field1 := field1, field2 := 1#1 } => (pure field1)
-  | _ =>
-    assert false "Pattern match failure at struct.sail:39.4-42.5"
-    throw Error.Exit
 
 def initialize_registers (_ : Unit) : Unit :=
   ()

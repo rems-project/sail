@@ -39,7 +39,7 @@ abbrev SailM := PreSailM RegisterType trivialChoiceSource exception
 
 XXXXXXXXX
 
-import Out.String
+import Out.Ite
 
 set_option maxHeartbeats 1_000_000_000
 set_option maxRecDepth 10_000
@@ -52,31 +52,6 @@ namespace Out.Functions
 
 open option
 open Register
-
-/-- Type quantifiers: n : Nat, 0 ≤ n -/
-def elif (n : Nat) : (BitVec 1) :=
-  if (BEq.beq n 0)
-  then 1#1
-  else
-    if (BEq.beq n 1)
-    then 1#1
-    else 0#1
-
-/-- Type quantifiers: n : Nat, 0 ≤ n -/
-def monadic_in_out (n : Nat) : SailM Nat := do
-  if (← readReg B)
-  then writeReg R n
-  else (pure ())
-  readReg R
-
-/-- Type quantifiers: n : Nat, 0 ≤ n -/
-def monadic_lines (n : Nat) : SailM Unit := do
-  let b := (BEq.beq n 0)
-  if b
-  then
-    writeReg R n
-    writeReg B b
-  else writeReg B b
 
 def initialize_registers (_ : Unit) : SailM Unit := do
   writeReg R (← (undefined_nat ()))

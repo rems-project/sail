@@ -20,11 +20,7 @@ abbrev SailM := PreSailM RegisterType trivialChoiceSource exception
 
 XXXXXXXXX
 
-import Out.Sail.Sail
-import Out.Sail.BitVec
-import Out.Sail.IntRange
-import Out.Defs
-import Out.Specialization
+import Out.AtomBool
 
 set_option maxHeartbeats 1_000_000_000
 set_option maxRecDepth 10_000
@@ -35,9 +31,6 @@ open Sail
 
 namespace Out.Functions
 
-
-def foo (_ : Unit) : Bool :=
-  true
 
 def initialize_registers (_ : Unit) : Unit :=
   ()

@@ -53,7 +53,7 @@ abbrev SailM := PreSailM RegisterType trivialChoiceSource exception
 
 XXXXXXXXX
 
-import Out.String
+import Out.Registers
 
 set_option maxHeartbeats 1_000_000_000
 set_option maxRecDepth 10_000
@@ -66,10 +66,6 @@ namespace Out.Functions
 
 open option
 open Register
-
-def test (_ : Unit) : SailM Int := do
-  writeReg INT ((← readReg INT) +i 1)
-  readReg INT
 
 def initialize_registers (_ : Unit) : SailM Unit := do
   writeReg R0 (← (undefined_bitvector 64))

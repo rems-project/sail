@@ -1139,7 +1139,10 @@ let rec doc_defs_rec ctx defs types (former_funcs : document list) (docdefs : do
   | DEF_aux (DEF_let (LB_aux (LB_val (pat, exp), _)), _) :: defs' ->
       doc_defs_rec ctx defs' types former_funcs (docdefs ^^ group (doc_val ctx pat exp) ^/^ hardline)
   | DEF_aux (DEF_pragma ("include_start", Pragma_line (file, _)), _) :: defs'
-  | DEF_aux (DEF_pragma ("include_end", Pragma_line (file, _)), _) :: defs' ->
+  | DEF_aux (DEF_pragma ("file_start", Pragma_line (file, _)), _) :: defs'
+  | DEF_aux (DEF_pragma ("include_end", Pragma_line (file, _)), _) :: defs'
+  | DEF_aux (DEF_pragma ("file_end", Pragma_line (file, _)), _) :: defs'
+    when Filename.check_suffix file ".sail" ->
       if docdefs = empty then doc_defs_rec ctx defs' types former_funcs docdefs
       else doc_defs_rec ctx defs' types (former_funcs @ [docdefs]) empty
   | d :: defs' ->
@@ -1273,9 +1276,13 @@ let populate_fun_args defs =
 let rec collect_import_files_aux defs file_stack last_namespace ret =
   match defs with
   | [] -> ret
-  | DEF_aux (DEF_pragma ("include_start", Pragma_line (file, _)), _) :: ds ->
+  | DEF_aux (DEF_pragma ("include_start", Pragma_line (file, _)), _) :: ds
+  | DEF_aux (DEF_pragma ("file_start", Pragma_line (file, _)), _) :: ds
+    when Filename.check_suffix file ".sail" ->
       collect_import_files_aux ds (file :: file_stack) last_namespace ret
-  | DEF_aux (DEF_pragma ("include_end", Pragma_line (_, _)), _) :: ds -> (
+  | DEF_aux (DEF_pragma ("include_end", Pragma_line (file, _)), _) :: ds
+  | DEF_aux (DEF_pragma ("file_end", Pragma_line (file, _)), _) :: ds
+    when Filename.check_suffix file ".sail" -> (
       match file_stack with
       | f :: fs -> collect_import_files_aux ds fs last_namespace ret
       | _ -> failwith "should not be reachable"
