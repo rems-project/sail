@@ -61,7 +61,7 @@ open E
 
 namespace Functions
 
-/-- Type quantifiers: k_ex791# : Bool, k_ex790# : Bool -/
+/-- Type quantifiers: k_ex803# : Bool, k_ex802# : Bool -/
 def neq_bool (x : Bool) (y : Bool) : Bool :=
   (Bool.not (BEq.beq x y))
 
@@ -194,6 +194,11 @@ def match_width (x : (BitVec k_n)) : (BitVec (2 * k_n)) :=
     | 32 => (const32 ())
     | n => ((BitVec.zero n), false)
   (foo ++ foo)
+
+def match_option_bitvec (x : (Option (BitVec 16))) : Int :=
+  match x with
+  | .some 0b1111111111111111 => 1
+  | _ => 0
 
 def initialize_registers (_ : Unit) : SailM Unit := do
   writeReg r_A (← (undefined_E ()))

@@ -459,38 +459,45 @@ let rec update_ctx_pat (ctx : context) (P_aux (p, (l, annot)) as pat) =
       List.fold_left update_ctx_pat ctx pats
   | _ -> ctx
 
-let rec doc_pat ?(need_parens = false) ?(in_vector = false) ctx (P_aux (p, (l, annot)) as pat) =
+let rec doc_pat ?(need_parens = false) ?(in_vector = false) ctx in_match_bv (P_aux (p, (l, annot)) as pat) =
   let opt_parens doc = if need_parens then parens doc else doc in
   match p with
   | P_wild -> underscore
   | P_lit lit when in_vector -> doc_vec_lit lit
   | P_lit lit -> doc_lit lit
-  | P_typ (Typ_aux (Typ_id (Id_aux (Id "bit", _)), _), p) when in_vector -> doc_pat ctx p ^^ string ":1"
+  | P_typ (Typ_aux (Typ_id (Id_aux (Id "bit", _)), _), p) when in_vector -> doc_pat ctx in_match_bv p ^^ string ":1"
   | P_typ (Typ_aux (Typ_app (Id_aux (Id id, _), [A_aux (A_nexp (Nexp_aux (Nexp_constant i, _)), _)]), _), p)
     when in_vector && (id = "bits" || id = "bitvector") ->
-      doc_pat ctx p ^^ string ":" ^^ doc_big_int i
-  | P_typ (ptyp, p) when in_vector -> doc_pat ctx p ^^ string ":" ^^ doc_typ ctx ptyp
-  | P_typ (ptyp, p) -> doc_pat ctx p
+      doc_pat ctx in_match_bv p ^^ string ":" ^^ doc_big_int i
+  | P_typ (ptyp, p) when in_vector -> doc_pat ctx in_match_bv p ^^ string ":" ^^ doc_typ ctx ptyp
+  | P_typ (ptyp, p) -> doc_pat ctx in_match_bv p
   | P_id id -> fixup_match_id id |> doc_id_ctor
-  | P_tuple pats -> separate (string ", ") (List.map (doc_pat ctx) pats) |> parens
-  | P_list pats -> separate (string ", ") (List.map (doc_pat ctx) pats) |> brackets
-  | P_vector pats -> concat (List.map (doc_pat ~in_vector:true ctx) pats)
-  | P_vector_concat pats when in_vector -> separate (string ",") (List.map (doc_pat ~in_vector:true ctx) pats)
-  | P_vector_concat pats -> separate (string ",") (List.map (doc_pat ~in_vector:true ctx) pats) |> brackets
+  | P_tuple pats -> separate (string ", ") (List.map (doc_pat ctx in_match_bv) pats) |> parens
+  | P_list pats -> separate (string ", ") (List.map (doc_pat ctx in_match_bv) pats) |> brackets
+  | P_vector pats
+    when List.for_all (fun p -> match p with P_aux (P_lit _, _) -> true | _ -> false) pats && not in_match_bv ->
+      string "0b" ^^ concat (List.map (doc_pat ~in_vector:true ctx in_match_bv) pats)
+  | P_vector pats -> concat (List.map (doc_pat ~in_vector:true ctx in_match_bv) pats)
+  | P_vector_concat pats when in_vector ->
+      separate (string ",") (List.map (doc_pat ~in_vector:true ctx in_match_bv) pats)
+  | P_vector_concat pats -> separate (string ",") (List.map (doc_pat ~in_vector:true ctx in_match_bv) pats) |> brackets
   | P_app (Id_aux (Id "None", _), p) -> string "none"
   | P_app (cons, pats) ->
       opt_parens
         (string "."
         ^^ doc_id_ctor (fixup_match_id cons)
         ^^ space
-        ^^ separate_map (string ", ") (doc_pat ~need_parens:true ctx) pats
+        ^^ separate_map (string ", ") (doc_pat ~need_parens:true ctx in_match_bv) pats
         )
-  | P_var (p, _) -> doc_pat ctx p
-  | P_as (pat, id) -> doc_pat ctx pat
+  | P_var (p, _) -> doc_pat ctx in_match_bv p
+  | P_as (pat, id) -> doc_pat ctx in_match_bv pat
   | P_struct (pats, _) ->
-      let pats = List.map (fun (id, pat) -> separate space [doc_id_ctor id; coloneq; doc_pat ctx pat]) pats in
+      let pats =
+        List.map (fun (id, pat) -> separate space [doc_id_ctor id; coloneq; doc_pat ctx in_match_bv pat]) pats
+      in
       braces (space ^^ separate (comma ^^ space) pats ^^ space)
-  | P_cons (hd_pat, tl_pat) -> parens (separate space [doc_pat ctx hd_pat; string "::"; doc_pat ctx tl_pat])
+  | P_cons (hd_pat, tl_pat) ->
+      parens (separate space [doc_pat ctx in_match_bv hd_pat; string "::"; doc_pat ctx in_match_bv tl_pat])
   | _ -> failwith ("Doc Pattern " ^ string_of_pat_con pat ^ " " ^ string_of_pat pat ^ " not translatable yet.")
 
 let doc_pat_typ_ascription ctx (P_aux (p, (l, annot)) as pat) =
@@ -638,7 +645,7 @@ let rec doc_match_clause (is_bv : bool) (as_monadic : bool) ctx (Pat_aux (cl, l)
   | Pat_exp (pat, branch) ->
       group
         (nest 2
-           (string "| " ^^ doc_pat ctx pat ^^ string " =>"
+           (string "| " ^^ doc_pat ctx is_bv pat ^^ string " =>"
            ^^ string (if is_bv && as_monadic then " do" else "")
            ^^ break 1 ^^ doc_exp as_monadic ctx branch
            )
@@ -646,7 +653,7 @@ let rec doc_match_clause (is_bv : bool) (as_monadic : bool) ctx (Pat_aux (cl, l)
   | Pat_when (pat, when_, branch) when is_bv ->
       group
         (nest 2
-           (string "| " ^^ doc_pat ctx pat ^^ string " if " ^^ doc_exp false ctx when_ ^^ string " =>"
+           (string "| " ^^ doc_pat ctx is_bv pat ^^ string " if " ^^ doc_exp false ctx when_ ^^ string " =>"
            ^^ string (if is_bv && as_monadic then " do" else "")
            ^^ break 1 ^^ doc_exp as_monadic ctx branch
            )
@@ -831,7 +838,7 @@ and doc_exp (as_monadic : bool) ctx (E_aux (e, (l, annot)) as full_exp) =
   | E_let (LB_aux (LB_val (lpat, lexp), _), e') | E_internal_plet (lpat, lexp, e') ->
       let has_loop = has_loop lexp in
       let is_arrow_do = match e with E_let _ when not has_loop -> false | _ -> true in
-      let id_typ = doc_pat ctx lpat in
+      let id_typ = doc_pat ctx false lpat in
       let typ_ascription = doc_pat_typ_ascription ctx lpat in
       let ctx = update_ctx_pat ctx lpat in
       let pp_let_line_f l = group (nest 2 (flow (break 1) l)) in
