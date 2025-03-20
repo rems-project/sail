@@ -35,7 +35,6 @@ open Sail
 
 namespace Out.Functions
 
-
 /-- Type quantifiers: k_a : Type -/
 def foo (x : k_a) : (k_a × k_a) :=
   (x, x)
@@ -46,3 +45,4 @@ def initialize_registers (_ : Unit) : Unit :=
 def sail_model_init (x_0 : Unit) : Unit :=
   (initialize_registers ())
 
+end Out.Functions

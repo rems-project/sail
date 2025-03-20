@@ -47,6 +47,7 @@
 open Ast_util
 open Jib
 open Jib_compile
+open Jib_visitor
 open Jib_util
 
 let optimize_unit instrs =
@@ -76,27 +77,84 @@ let flat_id () =
   incr flat_counter;
   name id
 
-let rec flatten_instrs = function
-  | I_aux (I_decl (ctyp, decl_id), aux) :: instrs ->
-      let fid = flat_id () in
-      I_aux (I_decl (ctyp, fid), aux) :: flatten_instrs (instrs_rename decl_id fid instrs)
-  | I_aux (I_init (ctyp, decl_id, cval), aux) :: instrs ->
-      let fid = flat_id () in
-      I_aux (I_init (ctyp, fid, cval), aux) :: flatten_instrs (instrs_rename decl_id fid instrs)
-  | I_aux ((I_block block | I_try_block block), _) :: instrs -> flatten_instrs block @ flatten_instrs instrs
-  | I_aux (I_if (cval, then_instrs, else_instrs), (_, l)) :: instrs ->
-      let then_label = label "then_" in
-      let endif_label = label "endif_" in
-      [ijump l cval then_label]
-      @ flatten_instrs else_instrs
-      @ [igoto endif_label]
-      @ [ilabel then_label]
-      @ flatten_instrs then_instrs
-      @ [ilabel endif_label]
-      @ flatten_instrs instrs
-  | I_aux (I_comment _, _) :: instrs -> flatten_instrs instrs
-  | instr :: instrs -> instr :: flatten_instrs instrs
-  | [] -> []
+class flat_rename_visitor renames : jib_visitor =
+  object
+    inherit empty_jib_visitor
+
+    method! vctyp _ = SkipChildren
+
+    method! vname name =
+      let top, rest = !renames in
+      let rec search = function
+        | [] -> None
+        | top :: rest -> (
+            match NameMap.find_opt name top with Some name -> Some name | None -> search rest
+          )
+      in
+      search (top :: rest)
+  end
+
+let flatten_instrs instrs =
+  let flat = Queue.create () in
+  let renames = ref (NameMap.empty, []) in
+
+  let add_rename id1 id2 (top, rest) = (NameMap.add id1 id2 top, rest) in
+
+  let push_renames () =
+    let top, rest = !renames in
+    renames := (NameMap.empty, top :: rest)
+  in
+
+  let pop_renames () =
+    let _, rest = !renames in
+    renames := (List.hd rest, List.tl rest)
+  in
+
+  let renamer = new flat_rename_visitor renames in
+
+  let rec go = function
+    | I_aux (I_decl (ctyp, decl_id), aux) :: instrs ->
+        let fid = flat_id () in
+        renames := add_rename decl_id fid !renames;
+        Queue.add (I_aux (I_decl (ctyp, fid), aux)) flat;
+        go instrs
+    | I_aux (I_init (ctyp, decl_id, init), aux) :: instrs ->
+        let init = visit_init renamer init in
+        let fid = flat_id () in
+        renames := add_rename decl_id fid !renames;
+        Queue.add (I_aux (I_init (ctyp, fid, init), aux)) flat;
+        go instrs
+    | I_aux (I_if (cval, then_instrs, else_instrs), (_, l)) :: instrs ->
+        let cval = visit_cval renamer cval in
+        let then_label = label "then_" in
+        let endif_label = label "endif_" in
+        Queue.add (ijump l cval then_label) flat;
+        push_renames ();
+        go else_instrs;
+        pop_renames ();
+        Queue.add (igoto endif_label) flat;
+        Queue.add (ilabel then_label) flat;
+        push_renames ();
+        go then_instrs;
+        pop_renames ();
+        Queue.add (ilabel endif_label) flat;
+        go instrs
+    | I_aux ((I_block block | I_try_block block), _) :: instrs ->
+        push_renames ();
+        go block;
+        pop_renames ();
+        go instrs
+    | I_aux (I_comment _, _) :: instrs -> go instrs
+    | instr :: instrs ->
+        let instr = visit_instr renamer instr in
+        Queue.add instr flat;
+        go instrs
+    | [] -> ()
+  in
+
+  go instrs;
+
+  Queue.to_seq flat |> List.of_seq
 
 let flatten_cdef_aux = function
   | CDEF_fundef (function_id, heap_return, args, body) ->
@@ -192,7 +250,7 @@ module Remove_undefined = struct
   open Jib_util
   open Jib_visitor
 
-  let gensym, _ = symbol_generator "gz"
+  let gensym = symbol_generator ()
 
   let rec create_value l = function
     | CT_unit -> ([], V_lit (VL_unit, CT_unit))
@@ -210,7 +268,7 @@ module Remove_undefined = struct
         in
         (setup, V_tuple values)
     | ctyp ->
-        let gs = name (gensym ()) in
+        let gs = gensym () in
         ([idecl l ctyp gs], V_id (gs, ctyp))
 
   class visitor : jib_visitor =
@@ -236,7 +294,7 @@ module Remove_functions_to_references = struct
   open Jib_util
   open Jib_visitor
 
-  let gensym, _ = symbol_generator "gref"
+  let gensym = symbol_generator ()
 
   class visitor : jib_visitor =
     object
@@ -248,7 +306,7 @@ module Remove_functions_to_references = struct
       method! vinstr =
         function
         | I_aux (I_funcall (CR_one (CL_addr (CL_id (id, CT_ref reg_ctyp))), ext, f, args), (n, l)) ->
-            let gs = name (gensym ()) in
+            let gs = gensym () in
             ChangeTo
               (iblock
                  [
@@ -321,14 +379,7 @@ let rec find_function fid = function
   | cdef :: cdefs -> find_function fid cdefs
   | [] -> None
 
-let ssa_name i = function
-  | Name (id, _) -> Name (id, i)
-  | Have_exception _ -> Have_exception i
-  | Current_exception _ -> Current_exception i
-  | Throw_location _ -> Throw_location i
-  | Return _ -> Return i
-  | Channel (chan, _) -> Channel (chan, i)
-  | Memory_writes _ -> Memory_writes i
+let ssa_name = Jib_ssa.ssa_name
 
 let inline cdefs should_inline instrs =
   let inlines = ref (-1) in
@@ -374,7 +425,7 @@ let inline cdefs should_inline instrs =
     | I_aux (I_funcall (CR_one clexp, false, function_id, args), aux) as instr when should_inline (fst function_id) ->
       begin
         match find_function (fst function_id) cdefs with
-        | Some (None, ids, body) ->
+        | Some (Return_plain, ids, body) ->
             incr inlines;
             incr label_count;
             let inline_label = label "end_inline_" in
@@ -384,14 +435,14 @@ let inline cdefs should_inline instrs =
                is undone by fix_substs which removes the -2 SSA
                numbers. *)
             let args = List.map (cval_map_id (ssa_name (-2))) args in
-            let body = List.fold_right2 instrs_subst (List.map name ids) args body in
+            let body = List.fold_right2 instrs_subst ids args body in
             let body = List.map (map_instr fix_substs) body in
             let body = List.map (map_instr fix_labels) body in
             let body = List.map (map_instr (replace_end inline_label)) body in
             let body = List.map (map_instr (replace_return clexp)) body in
             I_aux (I_block (body @ [ilabel inline_label]), aux)
-        | Some (Some _, ids, body) ->
-            (* Some _ is only introduced by C backend, so we don't
+        | Some (Return_via _, ids, body) ->
+            (* Return_via _ is only introduced by C backend, so we don't
                expect it at this point. *)
             raise (Reporting.err_general (snd aux) "Unexpected return method in IR")
         | None -> instr
@@ -602,7 +653,7 @@ let remove_tuples cdefs ctx =
         Bindings.map
           (fun (extern, ctyps, ctyp, uannot) -> (extern, List.map fix_tuples ctyps, fix_tuples ctyp, uannot))
           ctx.valspecs;
-      locals = Bindings.map (fun (mut, ctyp) -> (mut, fix_tuples ctyp)) ctx.locals;
+      locals = NameMap.map (fun (mut, ctyp) -> (mut, fix_tuples ctyp)) ctx.locals;
     }
   in
   let to_struct = function

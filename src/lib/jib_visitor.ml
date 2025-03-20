@@ -277,7 +277,7 @@ let visit_cdef vis outer_cdef =
   let aux vis (CDEF_aux (aux, def_annot) as no_change) =
     match aux with
     | CDEF_register (id, ctyp, instrs) ->
-        let id' = visit_id vis id in
+        let id' = visit_name vis id in
         let ctyp' = visit_ctyp vis ctyp in
         let instrs' = visit_instrs vis instrs in
         if id == id' && ctyp == ctyp' && instrs == instrs' then no_change
@@ -298,8 +298,14 @@ let visit_cdef vis outer_cdef =
         else CDEF_aux (CDEF_val (id', tyvars, ctyps', ctyp', extern), def_annot)
     | CDEF_fundef (id, ret_id, params, instrs) ->
         let id' = visit_id vis id in
-        let ret_id' = map_no_copy_opt (visit_id vis) ret_id in
-        let params' = map_no_copy (visit_id vis) params in
+        let ret_id' =
+          match ret_id with
+          | Return_via name ->
+              let name' = visit_name vis name in
+              if name == name' then ret_id else Return_via name'
+          | Return_plain -> ret_id
+        in
+        let params' = map_no_copy (visit_name vis) params in
         let instrs' = visit_instrs vis instrs in
         if id == id' && ret_id == ret_id' && params == params' && instrs == instrs' then no_change
         else CDEF_aux (CDEF_fundef (id', ret_id', params', instrs'), def_annot)

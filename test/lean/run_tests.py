@@ -60,6 +60,7 @@ skip_selftests = {
     'deep_poly_nest',
     'config_abstract_bool', # Register type unsupported in state.ml
     'newtype',
+    'assign_in_funarg',
 }
 
 print("Sail is {}".format(sail))

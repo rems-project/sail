@@ -84,7 +84,7 @@ type sv_module = {
 and sv_function = {
   function_name : sv_name;
   return_type : Jib.ctyp option;
-  params : (Ast.id * Jib.ctyp) list;
+  params : (Jib.name * Jib.ctyp) list;
   body : sv_statement;
 }
 

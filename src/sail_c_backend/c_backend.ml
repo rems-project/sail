@@ -78,8 +78,7 @@ let optimize_alias = ref false
 let optimize_fixed_int = ref false
 let optimize_fixed_bits = ref false
 
-let gensym, _ = symbol_generator "cb"
-let ngensym () = name (gensym ())
+let ngensym = symbol_generator ()
 
 let c_error ?loc:(l = Parse_ast.Unknown) message = raise (Reporting.err_general l ("\nC backend: " ^ message))
 
@@ -333,8 +332,8 @@ end) : CONFIG = struct
             if is_stack_ctyp ctx ctyp && not (never_optimize ctyp) then begin
               try
                 (* We need to check that id's type hasn't changed due to flow typing *)
-                let _, ctyp' = Bindings.find id ctx.locals in
-                if ctyp_equal ctyp ctyp' then AV_cval (V_id (name id, ctyp), typ)
+                let _, ctyp' = NameMap.find id ctx.locals in
+                if ctyp_equal ctyp ctyp' then AV_cval (V_id (id, ctyp), typ)
                 else
                   (* id's type changed due to flow typing, so it's
                      really still heap allocated! *)
@@ -342,12 +341,12 @@ end) : CONFIG = struct
               with
               (* Hack: Assuming global letbindings don't change from flow typing... *)
               | Not_found ->
-                AV_cval (V_id (name id, ctyp), typ)
+                AV_cval (V_id (id, ctyp), typ)
             end
             else v
         | Register typ ->
             let ctyp = convert_typ ctx typ in
-            if is_stack_ctyp ctx ctyp && not (never_optimize ctyp) then AV_cval (V_id (name id, ctyp), typ) else v
+            if is_stack_ctyp ctx ctyp && not (never_optimize ctyp) then AV_cval (V_id (id, ctyp), typ) else v
         | _ -> v
       end
     | AV_vector (v, typ) when is_bitvector v && List.length v <= 64 ->
@@ -369,7 +368,7 @@ end) : CONFIG = struct
           let aexp1 = analyze_functions ctx f aexp1 in
           (* Use aexp2's environment because it will contain constraints for id *)
           let ctyp1 = convert_typ { ctx with local_env = env2 } typ1 in
-          let ctx = { ctx with locals = Bindings.add id (mut, ctyp1) ctx.locals } in
+          let ctx = { ctx with locals = NameMap.add id (mut, ctyp1) ctx.locals } in
           AE_let (mut, id, typ1, aexp1, analyze_functions ctx f aexp2, typ2)
       | AE_block (aexps, aexp, typ) ->
           AE_block (List.map (analyze_functions ctx f) aexps, analyze_functions ctx f aexp, typ)
@@ -382,16 +381,16 @@ end) : CONFIG = struct
           let aexp2 = analyze_functions ctx f aexp2 in
           let aexp3 = analyze_functions ctx f aexp3 in
           (* Currently we assume that loop indexes are always safe to put into an int64 *)
-          let ctx = { ctx with locals = Bindings.add id (Immutable, CT_fint 64) ctx.locals } in
+          let ctx = { ctx with locals = NameMap.add id (Immutable, CT_fint 64) ctx.locals } in
           let aexp4 = analyze_functions ctx f aexp4 in
           AE_for (id, aexp1, aexp2, aexp3, order, aexp4)
       | AE_match (aval, cases, typ) ->
           let analyze_case ((AP_aux (_, { env; _ }) as pat), aexp1, aexp2, uannot) =
-            let pat_bindings = Bindings.bindings (apat_types pat) in
+            let pat_bindings = NameMap.bindings (apat_types pat) in
             let ctx = { ctx with local_env = env } in
             let ctx =
               List.fold_left
-                (fun ctx (id, typ) -> { ctx with locals = Bindings.add id (Immutable, convert_typ ctx typ) ctx.locals })
+                (fun ctx (id, typ) -> { ctx with locals = NameMap.add id (Immutable, convert_typ ctx typ) ctx.locals })
                 ctx pat_bindings
             in
             (pat, analyze_functions ctx f aexp1, analyze_functions ctx f aexp2, uannot)
@@ -593,22 +592,18 @@ let fix_early_stack_return ret ret_ctyp instrs =
 let rec insert_heap_returns ctx ret_ctyps = function
   | (CDEF_aux (CDEF_val (id, _, _, ret_ctyp, _), _) as cdef) :: cdefs ->
       cdef :: insert_heap_returns ctx (Bindings.add id ret_ctyp ret_ctyps) cdefs
-  | CDEF_aux (CDEF_fundef (id, None, args, body), def_annot) :: cdefs ->
-      let gs = gensym () in
+  | CDEF_aux (CDEF_fundef (id, Return_plain, args, body), def_annot) :: cdefs ->
+      let gs = ngensym () in
       begin
         match Bindings.find_opt id ret_ctyps with
         | None -> raise (Reporting.err_general (id_loc id) ("Cannot find return type for function " ^ string_of_id id))
         | Some ret_ctyp when not (is_stack_ctyp ctx ret_ctyp) ->
-            CDEF_aux (CDEF_fundef (id, Some gs, args, fix_early_heap_return (name gs) body), def_annot)
+            CDEF_aux (CDEF_fundef (id, Return_via gs, args, fix_early_heap_return gs body), def_annot)
             :: insert_heap_returns ctx ret_ctyps cdefs
         | Some ret_ctyp ->
             CDEF_aux
               ( CDEF_fundef
-                  ( id,
-                    None,
-                    args,
-                    fix_early_stack_return (name gs) ret_ctyp (idecl (id_loc id) ret_ctyp (name gs) :: body)
-                  ),
+                  (id, Return_plain, args, fix_early_stack_return gs ret_ctyp (idecl (id_loc id) ret_ctyp gs :: body)),
                 def_annot
               )
             :: insert_heap_returns ctx ret_ctyps cdefs
@@ -708,10 +703,12 @@ let remove_alias =
       | 1, Some a, I_aux (I_copy (CL_id (a', ctyp'), V_id (id', ctyp'')), _) :: instrs
         when Name.compare a a' = 0 && Name.compare id id' = 0 && ctyp_equal ctyp ctyp' && ctyp_equal ctyp' ctyp'' ->
           scan ctyp id 2 instrs
-      | 1, Some a, instr :: instrs -> if NameSet.mem a (instr_ids instr) then None else scan ctyp id 1 instrs
+      | 1, Some a, instr :: instrs ->
+          if NameSet.mem a (instr_ids ~direct:true instr) then None else scan ctyp id 1 instrs
       | 2, Some _, I_aux (I_clear (ctyp', id'), _) :: instrs when Name.compare id id' = 0 && ctyp_equal ctyp ctyp' ->
           scan ctyp id 2 instrs
-      | 2, Some _, instr :: instrs -> if NameSet.mem id (instr_ids instr) then None else scan ctyp id 2 instrs
+      | 2, Some _, instr :: instrs ->
+          if NameSet.mem id (instr_ids ~direct:true instr) then None else scan ctyp id 2 instrs
       | 2, Some _, [] -> !alias
       | n, _, _ :: instrs when n = 0 || n > 2 -> scan ctyp id n instrs
       | _, _, I_aux (_, (_, l)) :: _ -> Reporting.unreachable l __POS__ "optimize_alias"
@@ -755,72 +752,137 @@ let remove_alias =
 
     {v
        create x : t;
+       ... // some instructions
+       { { { ... // and nested in any number of blocks
        create y : t;
-       // modifications to y, no changes to x
+       // modifications to y, no references to x
        x = y;
+       // no changes to y
        kill y;
     v}
 
     If found we can replace y by x *)
 module Combine_variables = struct
-  let pattern ctyp id =
-    let combine = ref None in
-    let rec scan id n instrs =
-      match (n, !combine, instrs) with
-      | 0, None, I_aux (I_block block, _) :: instrs -> begin
-          match scan id 0 block with Some combine -> Some combine | None -> scan id 0 instrs
-        end
-      | 0, None, I_aux (I_decl (ctyp', id'), _) :: instrs when ctyp_equal ctyp ctyp' ->
-          combine := Some id';
-          scan id 1 instrs
-      | 1, Some c, I_aux (I_copy (CL_id (id', ctyp'), V_id (c', ctyp'')), _) :: instrs
-        when Name.compare c c' = 0 && Name.compare id id' = 0 && ctyp_equal ctyp ctyp' && ctyp_equal ctyp' ctyp'' ->
-          scan id 2 instrs
-      (* Ignore seemingly early clears of x, as this can happen along exception paths *)
-      | 1, Some _, I_aux (I_clear (_, id'), _) :: instrs when Name.compare id id' = 0 -> scan id 1 instrs
-      | 1, Some _, instr :: instrs -> if NameSet.mem id (instr_ids instr) then None else scan id 1 instrs
-      | 2, Some c, I_aux (I_clear (ctyp', c'), _) :: _ when Name.compare c c' = 0 && ctyp_equal ctyp ctyp' -> !combine
-      | 2, Some c, instr :: instrs -> if NameSet.mem c (instr_ids instr) then None else scan id 2 instrs
-      | 2, Some _, [] -> !combine
-      | n, _, _ :: instrs -> scan id n instrs
-      | _, _, [] -> None
+  type block_offset = int * int list
+
+  let no_offset = (0, [])
+
+  let deeper (n, blks) = (0, n :: blks)
+
+  let next (n, blks) = (n + 1, blks)
+
+  let reverse (x, xs) =
+    let ys = List.rev (x :: xs) in
+    (List.hd ys, List.tl ys)
+
+  type state = Find of block_offset | Modify of block_offset * name | Kill of block_offset * name
+
+  let pattern ctyp x =
+    let rec scan state instrs =
+      match state with
+      | Find offset -> (
+          match instrs with
+          | I_aux (I_block block, _) :: instrs -> (
+              match scan (Find (deeper offset)) block with None -> scan (Find (next offset)) instrs | result -> result
+            )
+          | I_aux (I_decl (ctyp', y), _) :: instrs when ctyp_equal ctyp ctyp' -> scan (Modify (offset, y)) instrs
+          | _ :: instrs -> scan (Find offset) instrs
+          | [] -> None
+        )
+      | Modify (offset, y) -> (
+          match instrs with
+          | I_aux (I_copy (CL_id (x', ctyp'), V_id (y', ctyp'')), _) :: instrs
+            when Name.compare y y' = 0 && Name.compare x x' = 0 && ctyp_equal ctyp ctyp' && ctyp_equal ctyp' ctyp'' ->
+              scan (Kill (offset, y)) instrs
+          (* Ignore seemingly early clears of x, as this can happen along exception paths *)
+          | I_aux (I_clear (_, x'), _) :: instrs when Name.compare x x' = 0 -> scan (Modify (offset, y)) instrs
+          | instr :: instrs ->
+              if instr_references ~read:x ~write:x ~direct:false instr then None else scan (Modify (offset, y)) instrs
+          | [] -> None
+        )
+      | Kill (offset, y) -> (
+          match instrs with
+          | [] -> Some (offset, y)
+          | I_aux (I_clear (ctyp', y'), _) :: _ when Name.compare y y' = 0 && ctyp_equal ctyp ctyp' -> Some (offset, y)
+          | instr :: instrs ->
+              if instr_references ~read:y ~write:y ~direct:false instr then None else scan (Kill (offset, y)) instrs
+        )
     in
-    scan id 0
+    scan (Find (0, []))
 
-  let remove_variable id = function
-    | I_aux (I_decl (_, id'), _) when Name.compare id id' = 0 -> removed
-    | I_aux (I_clear (_, id'), _) when Name.compare id id' = 0 -> removed
-    | instr -> instr
+  let modify_error l = Reporting.unreachable l __POS__ "Combine variables optimisation failed"
 
-  let is_not_self_assignment = function
-    | I_aux (I_copy (CL_id (id, _), V_id (id', _)), _) when Name.compare id id' = 0 -> false
-    | _ -> true
+  let modify l (skipped, nesting) ctyp x y =
+    let rec traverse state instrs =
+      match state with
+      | Find (skipped, (child :: grandchildren as nesting)) -> (
+          match instrs with
+          | I_aux (I_block block, aux) :: instrs when skipped > 0 ->
+              I_aux (I_block block, aux) :: traverse (Find (skipped - 1, nesting)) instrs
+          | I_aux (I_block block, aux) :: instrs ->
+              let block = traverse (Find (child, grandchildren)) block in
+              I_aux (I_block block, aux) :: instrs
+          | instr :: instrs -> instr :: traverse (Find (skipped, nesting)) instrs
+          | [] -> modify_error l
+        )
+      | Find (skipped, []) -> (
+          match instrs with
+          | I_aux (I_decl (ctyp', y), _) :: instrs when ctyp_equal ctyp ctyp' -> traverse (Modify (no_offset, y)) instrs
+          | I_aux (I_block block, aux) :: instrs when skipped > 0 ->
+              I_aux (I_block block, aux) :: traverse (Find (skipped - 1, [])) instrs
+          | instr :: instrs -> instr :: traverse (Find (skipped, [])) instrs
+          | [] -> modify_error l
+        )
+      | Modify (_, y) -> (
+          match instrs with
+          | I_aux (I_copy (CL_id (x', ctyp'), V_id (y', ctyp'')), _) :: instrs
+            when Name.compare y y' = 0 && Name.compare x x' = 0 && ctyp_equal ctyp ctyp' && ctyp_equal ctyp' ctyp'' ->
+              traverse (Kill (no_offset, y)) instrs
+          | instr :: instrs -> instr_rename y x instr :: traverse (Modify (no_offset, y)) instrs
+          | [] -> modify_error l
+        )
+      | Kill (_, y) -> (
+          match instrs with
+          | I_aux (I_clear (ctyp', y'), _) :: instrs when Name.compare y y' = 0 && ctyp_equal ctyp ctyp' -> instrs
+          | instr :: instrs -> instr :: traverse (Kill (no_offset, y)) instrs
+          | [] -> []
+        )
+    in
+    traverse (Find (skipped, nesting))
 
-  class visitor : jib_visitor =
+  let rec repeat_pattern l ctyp x instr instrs =
+    match pattern ctyp x instrs with
+    | None -> instrs
+    | Some (offset, y) ->
+        let instrs = modify l (reverse offset) ctyp x y instrs in
+        repeat_pattern l ctyp x instr instrs
+
+  class visitor ctyp_pred : jib_visitor =
     object
       inherit empty_jib_visitor
 
+      method! vctyp _ = SkipChildren
+      method! vclexp _ = SkipChildren
+      method! vcval _ = SkipChildren
+
       method! vinstrs =
         function
-        | (I_aux (I_decl (ctyp, id), _) as instr) :: instrs -> begin
-            match pattern ctyp id instrs with
+        | (I_aux (I_decl (ctyp, x), (_, l)) as instr) :: instrs when ctyp_pred ctyp -> (
+            match pattern ctyp x instrs with
             | None -> DoChildren
-            | Some combine ->
-                let instrs = map_no_copy (map_instr (remove_variable combine)) instrs in
-                let instrs =
-                  filter_instrs
-                    (fun i -> is_not_removed i && is_not_self_assignment i)
-                    (map_no_copy (instr_rename combine id) instrs)
-                in
+            | Some (offset, y) ->
+                let instrs = modify l (reverse offset) ctyp x y instrs in
+                let instrs = repeat_pattern l ctyp x instr instrs in
                 change_do_children (instr :: instrs)
-          end
+          )
         | _ -> DoChildren
 
       method! vcdef = function CDEF_aux (CDEF_fundef _, _) -> DoChildren | _ -> SkipChildren
     end
 end
 
-let combine_variables = visit_cdefs (new Combine_variables.visitor)
+let combine_variables ctx cdefs =
+  visit_cdefs (new Combine_variables.visitor (fun ctyp -> not (is_stack_ctyp ctx ctyp))) cdefs
 
 module Remove_stack_clears = struct
   let is_stack_clear ctx = function I_aux (I_clear (ctyp, _), _) -> is_stack_ctyp ctx ctyp | _ -> false
@@ -844,7 +906,7 @@ let optimize ~have_rts ctx recursive_functions cdefs =
   let nothing cdefs = cdefs in
   cdefs
   |> (if !optimize_alias then concatMap remove_alias else nothing)
-  |> (if !optimize_alias then combine_variables else nothing)
+  |> (if !optimize_alias then combine_variables ctx else nothing)
   (* We need the runtime to initialize hoisted allocations *)
   |> (if !optimize_hoist_allocations && have_rts then concatMap (hoist_allocations recursive_functions) else nothing)
   |> remove_stack_clears ctx
@@ -932,6 +994,7 @@ module Codegen (Config : CODEGEN_CONFIG) = struct
   let sgen_name =
     let ssa_num n = if n = -1 then "" else "/" ^ string_of_int n in
     function
+    | Gen (v1, v2, n) -> NameGen.to_string () (mk_id (sprintf "%d.%d" v1 v2)) ^ ssa_num n
     | Name (id, n) -> NameGen.to_string () id ^ ssa_num n
     | Have_exception n -> "have_exception" ^ ssa_num n
     | Return n -> "return" ^ ssa_num n
@@ -1187,7 +1250,7 @@ module Codegen (Config : CODEGEN_CONFIG) = struct
     | CL_id (Memory_writes _, _) -> "memory_writes"
     | CL_id (Channel _, _) -> Reporting.unreachable l __POS__ "CL_id Channel should not appear in C backend"
     | CL_id (Return _, _) -> Reporting.unreachable l __POS__ "CL_id Return should have been removed"
-    | CL_id (Name (id, _), _) -> "&" ^ sgen_id id
+    | CL_id (name, _) -> "&" ^ sgen_name name
     | CL_field (clexp, field, _) -> "&((" ^ sgen_clexp l clexp ^ ")->" ^ sgen_id field ^ ")"
     | CL_tuple (clexp, n) -> sprintf "&((%s)->%s)" (sgen_clexp l clexp) (sgen_tuple_id n)
     | CL_addr clexp -> "(*(" ^ sgen_clexp l clexp ^ "))"
@@ -1201,7 +1264,7 @@ module Codegen (Config : CODEGEN_CONFIG) = struct
     | CL_id (Memory_writes _, _) -> "memory_writes"
     | CL_id (Channel _, _) -> Reporting.unreachable l __POS__ "CL_id Channel should not appear in C backend"
     | CL_id (Return _, _) -> Reporting.unreachable l __POS__ "CL_id Return should have been removed"
-    | CL_id (Name (id, _), _) -> sgen_id id
+    | CL_id (name, _) -> sgen_name name
     | CL_field (clexp, field, _) -> sgen_clexp_pure l clexp ^ "." ^ sgen_id field
     | CL_tuple (clexp, n) -> sgen_clexp_pure l clexp ^ "." ^ sgen_tuple_id n
     | CL_addr clexp -> "(*(" ^ sgen_clexp_pure l clexp ^ "))"
@@ -2062,14 +2125,14 @@ module Codegen (Config : CODEGEN_CONFIG) = struct
     | CDEF_register (id, ctyp, _) ->
         [
           HeaderOnly
-            (string (Printf.sprintf "// register %s" (string_of_id id))
+            (string (Printf.sprintf "// register %s" (string_of_name id))
             ^^ hardline
-            ^^ string (Printf.sprintf "extern %s%s %s;" (static ()) (sgen_ctyp ctyp) (sgen_id id))
+            ^^ string (Printf.sprintf "extern %s%s %s;" (static ()) (sgen_ctyp ctyp) (sgen_name id))
             );
           Impl
-            (string (Printf.sprintf "// register %s" (string_of_id id))
+            (string (Printf.sprintf "// register %s" (string_of_name id))
             ^^ hardline
-            ^^ string (Printf.sprintf "%s%s %s;" (static ()) (sgen_ctyp ctyp) (sgen_id id))
+            ^^ string (Printf.sprintf "%s%s %s;" (static ()) (sgen_ctyp ctyp) (sgen_name id))
             );
         ]
     | CDEF_val (id, _, arg_ctyps, ret_ctyp, _) ->
@@ -2105,7 +2168,7 @@ module Codegen (Config : CODEGEN_CONFIG) = struct
         if List.length arg_ctyps <> List.length args then
           c_error ~loc:(id_loc id)
             ("function arguments "
-            ^ Util.string_of_list ", " string_of_id args
+            ^ Util.string_of_list ", " string_of_name args
             ^ " matched against type "
             ^ Util.string_of_list ", " string_of_ctyp arg_ctyps
             )
@@ -2115,23 +2178,23 @@ module Codegen (Config : CODEGEN_CONFIG) = struct
         let args =
           Util.string_of_list ", "
             (fun x -> x)
-            (List.map2 (fun ctyp arg -> sgen_const_ctyp ctyp ^ " " ^ sgen_id arg) arg_ctyps args)
+            (List.map2 (fun ctyp arg -> sgen_const_ctyp ctyp ^ " " ^ sgen_name arg) arg_ctyps args)
         in
         let function_header =
           match ret_arg with
-          | None ->
+          | Return_plain ->
               assert (is_stack_ctyp ctx ret_ctyp);
               (if !opt_static then string "static " else empty)
               ^^ string (sgen_ctyp ret_ctyp)
               ^^ space ^^ codegen_function_id id
               ^^ parens (string (extra_params ()) ^^ string args)
               ^^ hardline
-          | Some gs ->
+          | Return_via gs ->
               assert (not (is_stack_ctyp ctx ret_ctyp));
               (if !opt_static then string "static " else empty)
               ^^ string "void" ^^ space ^^ codegen_function_id id
               ^^ parens
-                   (string (extra_params ()) ^^ string (sgen_ctyp ret_ctyp ^ " *" ^ sgen_id gs ^ ", ") ^^ string args)
+                   (string (extra_params ()) ^^ string (sgen_ctyp ret_ctyp ^ " *" ^ sgen_name gs ^ ", ") ^^ string args)
               ^^ hardline
         in
         [
@@ -2356,9 +2419,9 @@ module Codegen (Config : CODEGEN_CONFIG) = struct
       let register_init_clear (id, ctyp, instrs) =
         if is_stack_ctyp ctx ctyp then (List.map (sgen_instr (mk_id "reg") ctx) instrs, [])
         else
-          ( [Printf.sprintf "  CREATE(%s)(&%s);" (sgen_ctyp_name ctyp) (sgen_id id)]
+          ( [Printf.sprintf "  CREATE(%s)(&%s);" (sgen_ctyp_name ctyp) (sgen_name id)]
             @ List.map (sgen_instr (mk_id "reg") ctx) instrs,
-            [Printf.sprintf "  KILL(%s)(&%s);" (sgen_ctyp_name ctyp) (sgen_id id)]
+            [Printf.sprintf "  KILL(%s)(&%s);" (sgen_ctyp_name ctyp) (sgen_name id)]
           )
       in
 

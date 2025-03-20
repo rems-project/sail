@@ -35,7 +35,6 @@ open Sail
 
 namespace Out.Functions
 
-
 def foo (y : Unit) : Unit :=
   y
 
@@ -45,3 +44,4 @@ def initialize_registers (_ : Unit) : Unit :=
 def sail_model_init (x_0 : Unit) : Unit :=
   (initialize_registers ())
 
+end Out.Functions

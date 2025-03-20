@@ -79,7 +79,7 @@ let opt_lean_noncomputable : bool ref = ref false
 
 let opt_single_file : bool ref = ref false
 
-let lean_version : string = "lean4:nightly-2025-02-05"
+let lean_version : string = "lean4:nightly-2025-03-17"
 
 let lean_options =
   [
