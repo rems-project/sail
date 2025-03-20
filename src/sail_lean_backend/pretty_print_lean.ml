@@ -1319,16 +1319,21 @@ let pp_ast_lean (env : Type_check.env) effect_info ({ defs; _ } as ast : Libsail
   let monad = doc_monad_abbrev defs has_registers in
   let instantiations = doc_instantiations ctx env in
   let types, all_fundefss = doc_defs ctx defs in
-  let imp_fundefss = take (List.length all_fundefss - 1) all_fundefss in
-  let main_fundefs = last all_fundefss in
-  let main_fundefs = main_fundefs ^^ hardline ^^ string ("end " ^ out_name_camel ^ ".Functions") ^^ hardline in
+  let imp_fundefss, main_fundefs = 
+    (
+      if imp_funcs_files = [] then [], concat all_fundefss
+      else
+      let imp_fundefss = take (List.length all_fundefss - 1) all_fundefss in
+      let main_fundefs = last all_fundefss in
+      let main_fundefs = main_fundefs ^^ string ("end " ^ out_name_camel ^ ".Functions") ^^ hardline in
+      imp_fundefss, main_fundefs
+    ) in
   let main_function =
     if !the_main_function_has_been_seen then (
       let stub = main_function_stub effect_info has_registers in
       [string ("open " ^ out_name_camel ^ ".Functions\n\n") ^^ stub]
     )
-    else []
-  in
+    else [] in
   let opens = IdSet.fold (fun id doc -> string "open " ^^ doc_id_ctor id ^^ hardline ^^ doc) !opens empty in
   print types_file (types ^^ register_refs ^^ monad ^^ instantiations);
   let _ = List.map2 (fun file defs -> print file (separate hardline [opens; defs])) imp_funcs_files imp_fundefss in

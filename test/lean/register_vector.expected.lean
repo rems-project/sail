@@ -99,7 +99,11 @@ abbrev SailM := PreSailM RegisterType trivialChoiceSource exception
 
 XXXXXXXXX
 
-import Out.RegisterVector
+import Out.Sail.Sail
+import Out.Sail.BitVec
+import Out.Sail.IntRange
+import Out.Defs
+import Out.Specialization
 
 set_option maxHeartbeats 1_000_000_000
 set_option maxRecDepth 10_000
@@ -112,6 +116,107 @@ namespace Out.Functions
 
 open option
 open Register
+
+/-- Type quantifiers: k_ex2434# : Bool, k_ex2433# : Bool -/
+def neq_bool (x : Bool) (y : Bool) : Bool :=
+  (Bool.not (BEq.beq x y))
+
+/-- Type quantifiers: x : Int -/
+def __id (x : Int) : Int :=
+  x
+
+/-- Type quantifiers: len : Nat, k_v : Nat, len ≥ 0 ∧ k_v ≥ 0 -/
+def sail_mask (len : Nat) (v : (BitVec k_v)) : (BitVec len) :=
+  if (len ≤b (Sail.BitVec.length v))
+  then (Sail.BitVec.truncate v len)
+  else (Sail.BitVec.zeroExtend v len)
+
+/-- Type quantifiers: n : Nat, n ≥ 0 -/
+def sail_ones (n : Nat) : (BitVec n) :=
+  (Complement.complement (BitVec.zero n))
+
+/-- Type quantifiers: l : Int, i : Int, n : Nat, n ≥ 0 -/
+def slice_mask {n : _} (i : Int) (l : Int) : (BitVec n) :=
+  if (l ≥b n)
+  then ((sail_ones n) <<< i)
+  else
+    let one : (BitVec n) := (sail_mask n (0b1 : (BitVec 1)))
+    (((one <<< l) - one) <<< i)
+
+/-- Type quantifiers: n : Int, m : Int -/
+def _shl_int_general (m : Int) (n : Int) : Int :=
+  if (n ≥b 0)
+  then (Int.shiftl m n)
+  else (Int.shiftr m (Neg.neg n))
+
+/-- Type quantifiers: n : Int, m : Int -/
+def _shr_int_general (m : Int) (n : Int) : Int :=
+  if (n ≥b 0)
+  then (Int.shiftr m n)
+  else (Int.shiftl m (Neg.neg n))
+
+/-- Type quantifiers: m : Int, n : Int -/
+def fdiv_int (n : Int) (m : Int) : Int :=
+  if (Bool.and (n <b 0) (m >b 0))
+  then ((Int.tdiv (n +i 1) m) -i 1)
+  else
+    if (Bool.and (n >b 0) (m <b 0))
+    then ((Int.tdiv (n -i 1) m) -i 1)
+    else (Int.tdiv n m)
+
+/-- Type quantifiers: m : Int, n : Int -/
+def fmod_int (n : Int) (m : Int) : Int :=
+  (n -i (m *i (fdiv_int n m)))
+
+/-- Type quantifiers: k_a : Type -/
+def is_none (opt : (Option k_a)) : Bool :=
+  match opt with
+  | .some _ => false
+  | none => true
+
+/-- Type quantifiers: k_a : Type -/
+def is_some (opt : (Option k_a)) : Bool :=
+  match opt with
+  | .some _ => true
+  | none => false
+
+/-- Type quantifiers: k_n : Int -/
+def concat_str_bits (str : String) (x : (BitVec k_n)) : String :=
+  (HAppend.hAppend str (BitVec.toFormatted x))
+
+/-- Type quantifiers: x : Int -/
+def concat_str_dec (str : String) (x : Int) : String :=
+  (HAppend.hAppend str (Int.repr x))
+
+def GPRs : (Vector (RegisterRef (BitVec 64)) 31) :=
+  #v[.Reg R0, .Reg R1, .Reg R2, .Reg R3, .Reg R4, .Reg R5, .Reg R6, .Reg R7, .Reg R8, .Reg R9, .Reg R10, .Reg R11, .Reg R12, .Reg R13, .Reg R14, .Reg R15, .Reg R16, .Reg R17, .Reg R18, .Reg R19, .Reg R20, .Reg R21, .Reg R22, .Reg R23, .Reg R24, .Reg R25, .Reg R26, .Reg R27, .Reg R28, .Reg R29, .Reg R30]
+
+/-- Type quantifiers: n : Nat, 0 ≤ n ∧ n ≤ 31 -/
+def wX (n : Nat) (value : (BitVec 64)) : SailM Unit := do
+  if (bne n 31)
+  then writeRegRef (GetElem?.getElem! GPRs n) value
+  else (pure ())
+
+/-- Type quantifiers: n : Nat, 0 ≤ n ∧ n ≤ 31 -/
+def rX (n : Nat) : SailM (BitVec 64) := do
+  if (bne n 31)
+  then (reg_deref (GetElem?.getElem! GPRs n))
+  else (pure (0x0000000000000000 : (BitVec 64)))
+
+def rPC (_ : Unit) : SailM (BitVec 64) := do
+  readReg _PC
+
+def wPC (pc : (BitVec 64)) : SailM Unit := do
+  writeReg _PC pc
+
+/-- Type quantifiers: r : Nat, 0 ≤ r ∧ r ≤ 31 -/
+def monad_test (r : Nat) : SailM (BitVec 1) := do
+  if (BEq.beq (← (rX r)) (0x0000000000000000 : (BitVec 64)))
+  then (pure 1#1)
+  else
+    if (BEq.beq (← (rX r)) (0x0000000000000001 : (BitVec 64)))
+    then (pure 1#1)
+    else (pure 0#1)
 
 def initialize_registers (_ : Unit) : SailM Unit := do
   writeReg _PC (← (undefined_bitvector 64))
@@ -150,5 +255,3 @@ def initialize_registers (_ : Unit) : SailM Unit := do
 def sail_model_init (x_0 : Unit) : SailM Unit := do
   (initialize_registers ())
 
-
-end Out.Functions

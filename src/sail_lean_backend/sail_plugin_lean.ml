@@ -77,6 +77,8 @@ let opt_lean_import_files : string list ref = ref []
 
 let opt_lean_noncomputable : bool ref = ref false
 
+let opt_single_file : bool ref = ref false
+
 let lean_version : string = "lean4:nightly-2025-02-05"
 
 let lean_options =
@@ -88,6 +90,10 @@ let lean_options =
     ( Flag.create ~prefix:["lean"] "force_output",
       Arg.Unit (fun () -> opt_lean_force_output := true),
       "removes the content of the output directory if it is non-empty"
+    );
+    ( Flag.create ~prefix:["lean"] "single_file",
+      Arg.Unit (fun () -> opt_single_file := true),
+      "puts the entire output in a single .lean file"
     );
     ( Flag.create ~prefix:["lean"] "noncomputable",
       Arg.Unit (fun () -> opt_lean_noncomputable := true),
@@ -305,13 +311,19 @@ let rec dedup_files (files : string list) (acc : string list) =
       | n -> dedup_files fs (acc @ [f ^ Int.to_string (n - 1)])
     )
 
-let output (out_name : string) env effect_info ({ defs; _ } as ast : Libsail.Type_check.typed_ast) default_sail_dir =
-  (* Collect all non-empty slices between include pragmas in the file *)
-  let imports = Pretty_print_lean.collect_import_files defs (out_name ^ ".sail") in
-  let imports = List.map file_to_module imports in
-  (* Discard the last import file, as we will use the main file instead *)
-  let imports = Pretty_print_lean.take (List.length imports - 1) imports in
-  let imports = dedup_files imports [] in
+let output (out_name : string) env effect_info ({ defs; _ } as ast : Libsail.Type_check.typed_ast) default_sail_dir
+    single_file =
+  let imports =
+    if single_file then []
+    else (
+      (* Collect all non-empty slices between include pragmas in the file *)
+      let imports = Pretty_print_lean.collect_import_files defs (out_name ^ ".sail") in
+      let imports = List.map file_to_module imports in
+      (* Discard the last import file, as we will use the main file instead *)
+      let imports = Pretty_print_lean.take (List.length imports - 1) imports in
+      dedup_files imports []
+    )
+  in
   let ctx = start_lean_output out_name imports default_sail_dir in
   let out_name_camel = Libsail.Util.to_upper_camel_case out_name in
   let executable =
@@ -323,6 +335,6 @@ let output (out_name : string) env effect_info ({ defs; _ } as ast : Libsail.Typ
 
 let lean_target out_name { default_sail_dir; ctx; ast; effect_info; env; _ } =
   let out_name = match out_name with Some f -> f | None -> "out" in
-  output out_name env effect_info ast default_sail_dir
+  output out_name env effect_info ast default_sail_dir !opt_single_file
 
 let _ = Target.register ~name:"lean" ~options:lean_options ~rewrites:lean_rewrites ~asserts_termination:true lean_target
