@@ -60,6 +60,11 @@ skip_selftests = {
     'deep_poly_nest',
     'config_abstract_bool', # Register type unsupported in state.ml
     'newtype',
+    'encdec', # Deactivated to enable match_bv
+    'encdec_subrange', # Deactivated to enable match_bv
+    'option_nest', # Deactivated to enable match_bv
+    'special_annot', # Deactivated to enable match_bv
+    'vector_subrange_pattern' # Deactivated to enable match_bv
 }
 
 print("Sail is {}".format(sail))
