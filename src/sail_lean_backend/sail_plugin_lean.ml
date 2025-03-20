@@ -226,8 +226,8 @@ let print_function_file_prelude file out_name_camel (prev_file : string option) 
     | Some n -> output_string file ("import " ^ out_name_camel ^ "." ^ n ^ "\n")
   in
   output_string file ("\n" ^ file_prelude);
-  output_string file ("namespace " ^ out_name_camel ^ ".Functions\n\n");
-  if !opt_lean_noncomputable then output_string file "noncomputable section\n\n"
+  if !opt_lean_noncomputable then output_string file "noncomputable section\n\n";
+  output_string file ("namespace " ^ out_name_camel ^ ".Functions\n\n")
 
 let start_lean_output (out_name : string) (import_names : string list) default_sail_dir =
   let base_dir = match !opt_lean_output_dir with Some dir -> dir | None -> "." in
@@ -312,7 +312,7 @@ let rec dedup_files (files : string list) (acc : string list) =
     )
 
 let output (out_name : string) env effect_info ({ defs; _ } as ast : Libsail.Type_check.typed_ast) default_sail_dir
-    single_file =
+    single_file noncomputable =
   let imports =
     if single_file then []
     else (
@@ -328,6 +328,7 @@ let output (out_name : string) env effect_info ({ defs; _ } as ast : Libsail.Typ
   let out_name_camel = Libsail.Util.to_upper_camel_case out_name in
   let executable =
     Pretty_print_lean.pp_ast_lean env effect_info ast out_name_camel ctx.types_file ctx.import_files ctx.funcs_file
+      noncomputable
   in
   create_lake_project ctx executable
 (* Uncomment for debug output of the Sail code after the rewrite passes *)
@@ -335,6 +336,6 @@ let output (out_name : string) env effect_info ({ defs; _ } as ast : Libsail.Typ
 
 let lean_target out_name { default_sail_dir; ctx; ast; effect_info; env; _ } =
   let out_name = match out_name with Some f -> f | None -> "out" in
-  output out_name env effect_info ast default_sail_dir !opt_single_file
+  output out_name env effect_info ast default_sail_dir !opt_single_file !opt_lean_noncomputable
 
 let _ = Target.register ~name:"lean" ~options:lean_options ~rewrites:lean_rewrites ~asserts_termination:true lean_target

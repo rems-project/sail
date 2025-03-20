@@ -1306,7 +1306,7 @@ let rec last xs =
   match xs with [] -> failwith "cannot take last element of empty list" | [x] -> x | x :: xs -> last xs
 
 let pp_ast_lean (env : Type_check.env) effect_info ({ defs; _ } as ast : Libsail.Type_check.typed_ast) out_name_camel
-    types_file imp_funcs_files funcs_file =
+    types_file imp_funcs_files funcs_file noncomputable =
   let regs = State.find_registers defs in
   let fun_args = populate_fun_args defs in
   let global = { effect_info; fun_args } in
