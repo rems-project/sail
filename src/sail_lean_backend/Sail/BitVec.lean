@@ -24,6 +24,7 @@ Example: [sf:1,0011010000,Rm:5,000000,Rn:5,Rd:5]
 -/
 declare_syntax_cat bvpat
 syntax num : bvpat
+syntax ident : bvpat
 syntax "[" bvpat_comp,* "]" ("if" term)? : bvpat
 
 open Lean
@@ -100,11 +101,13 @@ def BVPat.getComponents (p : BVPat) : MacroM ((Array BVPatComp) × Option Term) 
 /--
 Return the number of bits in a bit-vector pattern.
 -/
-def BVPat.length (p : BVPat) : TermElabM Nat := do
+def BVPat.length (p : BVPat) : TermElabM (Option Nat) := do
+  if let `(bvpat|$_:ident) := p then return none else
   let mut sz := 0
   for c in (← liftMacroM <| p.getComponents).1 do
-    sz := sz + (← c.length)
-  return sz
+    let n ← c.length
+    sz := sz + n
+  return some sz
 
 /--
 Given a variable `var` representing a term that matches the pattern `pat`, and a term `rhs`,
@@ -120,6 +123,9 @@ where `yᵢ`s are the pattern variables in `pat`.
 def declBVPatVars (vars : Array Term) (pats : Array BVPat) (rhs : Term) : TermElabM Term := do
   let mut result := rhs
   for (pat, var) in pats.zip vars do
+    if let `(bvpat|$i:ident) := pat then
+      result ← `(let $i := $var; $result)
+      break
     let mut shift  := 0
     for c in (← liftMacroM <| pat.getComponents).1 do
       let len ← c.length
@@ -166,7 +172,7 @@ def checkBVPatLengths (lens : Array (Option Nat)) (pss : Array (Array BVPat)) : 
         unless ps.size == lens.size do
           throwError "Expected {lens.size} patterns, found {ps.size}"
         let p := ps[i]!
-        let pLen ← p.length
+        let some pLen ← p.length | break
 
         -- compare the length to that of the type of the discriminant
         if let some pLen' := len then
