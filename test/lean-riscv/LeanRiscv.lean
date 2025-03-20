@@ -72,10 +72,6 @@ def initializeMemory (_size: MachineBits) (elf : ELF32File) : Std.HashMap Nat (B
 def initializeRegisters : Std.DHashMap Register RegisterType :=
   Std.DHashMap.insert default sorry sorry -- DEFAULT_RSTVEC
 
-#check @Register
-#check @RegisterType
-
-
 noncomputable def runElf32 (elf : ELF32File) : IO UInt32 :=
   open Sail in
   open Functions in
