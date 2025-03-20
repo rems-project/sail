@@ -1197,7 +1197,7 @@ let doc_instantiations ctx env =
              string "instance : Arch where";
              string "va_size := 64";
              string "pa := " ^^ doc_typ ctx params.pa_type;
-             string "pa_OfNat := fun i => BitVec.instOfNat (n := 64) (i := i)"; (* TODO: Hardcoding this for now.. ^^ doc_typ ctx params.pa_type; *)
+             string "pa_OfNat := BitVec.instOfNat"; (* TODO: Hardcoding this for now.. ^^ doc_typ ctx params.pa_type; *)
              string "abort := " ^^ doc_typ ctx params.abort_type;
              string "translation := " ^^ doc_typ ctx params.translation_summary_type;
              string "fault := " ^^ doc_typ ctx params.fault_type;

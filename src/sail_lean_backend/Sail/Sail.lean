@@ -220,7 +220,7 @@ def trivialChoiceSource : ChoiceSource where
 class Arch where
   va_size : Nat
   pa : Type
-  pa_OfNat : forall n, OfNat pa n
+  pa_OfNat {n : Nat} : OfNat pa n
   arch_ak : Type
   translation : Type
   abort : Type
