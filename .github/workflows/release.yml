@@ -125,7 +125,7 @@ jobs:
     - name: Make release tarball
       run: |
         eval $(opam env)
-        make tarball TARBALL_EXTRA_BIN=$(which z3)
+        make tarball TARBALL_EXTRA_BIN=z3/build/z3
 
     - uses: actions/attest-build-provenance@v1
       with:
