@@ -72,6 +72,7 @@ type ctx = {
   kinds : (kind_aux * P.l) KBindings.t;
   function_type_variables : (kind_aux * P.l) KBindings.t Bindings.t;
   type_constructors : type_constructor Bindings.t;
+  outcome_variables : kind_aux KBindings.t;
   scattereds : (P.typquant * ctx) Bindings.t;
   fixities : (prec * int) Bindings.t;
   internal_files : StringSet.t;
@@ -111,6 +112,10 @@ let merge_ctx l ctx1 ctx2 =
          )
         )
         ctx1.function_type_variables ctx2.function_type_variables;
+    outcome_variables =
+      KBindings.merge
+        (compatible ( = ) (fun v -> "Outcome definitions have different kinds for type variable " ^ string_of_kid v))
+        ctx1.outcome_variables ctx2.outcome_variables;
     type_constructors =
       Bindings.merge
         (compatible ( = ) (fun id -> "Different definitions for type constructor " ^ string_of_id id ^ " found"))
@@ -788,6 +793,12 @@ module KindInference = struct
     in
     return (typq, typ, kind)
 
+  let check_outcome ctx typq (P.ATyp_aux (_, l) as typ) kopts =
+    let* kopts = mapM (fun kopt -> fmap List.hd (add_vars [kopt])) kopts in
+    let* typq = infer_typquant ctx typq in
+    let* typ = check ctx typ (Kind (K_type, l)) in
+    return (typq, typ, kopts)
+
   let initial_env = { sets = []; next_unknown = 0; vars = [] }
 end
 
@@ -1457,19 +1468,51 @@ let to_ast_spec ctx (P.VS_aux (P.VS_val_spec (ts, id, ext), l)) =
   let ctx = { ctx with function_type_variables = Bindings.add id ts_ctx.kinds ctx.function_type_variables } in
   (VS_aux (VS_val_spec (typschm, id, ext), (l, empty_uannot)), ctx)
 
-let to_ast_outcome ctx (ev : P.outcome_spec) : outcome_spec ctx_out =
+let to_ast_outcome ctx (ev : P.outcome_spec) : outcome_spec * ctx * ctx =
   match ev with
-  | P.OV_aux (P.OV_outcome (id, typschm, outcome_args), l) ->
+  | P.OV_aux (P.OV_outcome (id, P.TypSchm_aux (P.TypSchm_ts (typq, typ), ts_l), outcome_args), l) ->
+      let open KindInference in
+      let (typq, typ, outcome_args), kenv = check_outcome ctx typq typ outcome_args initial_env in
       let outcome_args, inner_ctx =
         List.fold_left
           (fun (args, ctx) arg ->
-            let (arg, _, ctx), _ = to_ast_kopts ctx arg in
+            let (arg, _, ctx), _ = ConvertType.to_ast_kopts kenv ctx arg in
             (arg @ args, ctx)
           )
           ([], ctx) outcome_args
       in
-      let typschm, _ = to_ast_typschm inner_ctx typschm in
-      (OV_aux (OV_outcome (to_ast_id ctx id, typschm, List.rev outcome_args), l), inner_ctx)
+      let typq, ts_ctx = ConvertType.to_ast_typquant kenv inner_ctx typq in
+      let typ = ConvertType.to_ast_typ kenv ts_ctx typ in
+      let ctx =
+        List.fold_left
+          (fun ctx kopt ->
+            let v = kopt_kid kopt in
+            let k = unaux_kind (kopt_kind kopt) in
+            {
+              ctx with
+              outcome_variables =
+                KBindings.update v
+                  (function
+                    | None -> Some k
+                    | Some k' when k = k' -> Some k'
+                    | Some k' ->
+                        let v', _ =
+                          List.find (fun (v', _) -> Kid.compare v v' = 0) (KBindings.bindings ctx.outcome_variables)
+                        in
+                        Printf.sprintf "Outcome variable %s has kind %s here, but previously used with kind %s"
+                          (string_of_kid v) (string_of_kind_aux k) (string_of_kind_aux k')
+                        |> Reporting.err_typ (Hint ("previous use here", kid_loc v', kid_loc v))
+                        |> raise
+                    )
+                  ctx.outcome_variables;
+            }
+          )
+          ctx outcome_args
+      in
+      ( OV_aux (OV_outcome (to_ast_id ctx id, TypSchm_aux (TypSchm_ts (typq, typ), ts_l), List.rev outcome_args), l),
+        inner_ctx,
+        ctx
+      )
 
 let rec to_ast_range ctx (P.BF_aux (r, l)) =
   (* TODO add check that ranges are sensible for some definition of sensible *)
@@ -2017,7 +2060,7 @@ let rec to_ast_def doc attrs vis ctx (P.DEF_aux (def, l)) : untyped_def list ctx
       let vs, ctx = to_ast_spec ctx val_spec in
       ([DEF_aux (DEF_val vs, annot)], ctx)
   | P.DEF_outcome (outcome_spec, defs) ->
-      let outcome_spec, inner_ctx = to_ast_outcome ctx outcome_spec in
+      let outcome_spec, inner_ctx, ctx = to_ast_outcome ctx outcome_spec in
       let defs, _ =
         List.fold_left
           (fun (defs, ctx) def ->
@@ -2150,6 +2193,7 @@ let initial_ctx =
           ("float128", ([], P.K_type));
           ("float_rounding_mode", ([], P.K_type));
         ];
+    outcome_variables = KBindings.empty;
     function_type_variables = Bindings.empty;
     kinds = KBindings.empty;
     scattereds = Bindings.empty;
