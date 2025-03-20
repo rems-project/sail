@@ -1,0 +1,9 @@
+To use this binary release of Sail, simply add the included bin
+directory to your $PATH variable, or symlink the included binaries
+from a directory already in your $PATH. By default it should know
+where to find the included Sail libraries and plugins relative to this
+directory.
+
+If you want to move the binaries you will need to set the $SAIL_DIR
+environment variable to the included share/sail folder, and the
+$SAIL_PLUGIN_DIR variable to the share/libsail/plugins folder.

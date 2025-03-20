@@ -16,6 +16,9 @@ install: sail
 tarball: sail
 	dune install --relocatable --prefix=_build/tarball/sail
 	rm -rf _build/tarball/sail/lib
+	cp LICENSE _build/tarball/sail
+	cp THIRD_PARTY_FILES.md _build/tarball/sail
+	cp -a etc/tarball_extra/. _build/tarball/sail
 ifdef TARBALL_EXTRA_BIN
 	cp $(TARBALL_EXTRA_BIN) _build/tarball/sail/bin/
 endif
