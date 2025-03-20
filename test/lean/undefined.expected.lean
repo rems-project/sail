@@ -33,8 +33,7 @@ set_option match.ignoreUnusedAlts true
 
 open Sail
 
-
-namespace Functions
+namespace Out.Functions
 
 /-- Type quantifiers: n : Int -/
 def foo (n : Int) : SailM (Bool × (BitVec 1) × Int × Nat × (BitVec 3)) := do
@@ -55,6 +54,4 @@ def initialize_registers (_ : Unit) : Unit :=
 def sail_model_init (x_0 : Unit) : Unit :=
   (initialize_registers ())
 
-end Functions
-open Functions
-
+end Out.Functions

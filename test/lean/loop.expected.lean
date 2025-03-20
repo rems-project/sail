@@ -48,10 +48,10 @@ set_option match.ignoreUnusedAlts true
 
 open Sail
 
+namespace Out.Functions
+
 open option
 open Register
-
-namespace Functions
 
 /-- Type quantifiers: k_ex1941# : Bool, k_ex1940# : Bool -/
 def neq_bool (x : Bool) (y : Bool) : Bool :=
@@ -253,6 +253,4 @@ def initialize_registers (_ : Unit) : SailM Unit := do
 def sail_model_init (x_0 : Unit) : SailM Unit := do
   (initialize_registers ())
 
-end Functions
-open Functions
-
+end Out.Functions

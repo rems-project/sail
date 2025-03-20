@@ -1116,25 +1116,40 @@ let doc_val ctx pat exp =
   let base_pp = doc_exp false ctx exp in
   nest 2 (group (string "def" ^^ space ^^ idpp ^^ typpp ^^ space ^^ coloneq ^/^ base_pp))
 
-let rec doc_defs_rec ctx defs types docdefs =
+let should_print_function_def def =
+  match def with
+  | DEF_aux (DEF_fundef fdef, dannot) -> not (Env.is_extern (id_of_fundef fdef) dannot.env "lean")
+  | DEF_aux (DEF_let (LB_aux (LB_val (pat, exp), _)), _) -> true
+  | _ -> false
+
+let rec doc_defs_rec ctx defs types (former_funcs : document list) (docdefs : document) =
   match defs with
-  | [] -> (types, docdefs)
+  | [] -> (types, former_funcs @ [docdefs])
   | DEF_aux (DEF_fundef fdef, dannot) :: defs' ->
       let env = dannot.env in
       let pp_f =
         if Env.is_extern (id_of_fundef fdef) env "lean" then docdefs
         else docdefs ^^ group (doc_fundef ctx fdef) ^/^ hardline
       in
-      doc_defs_rec ctx defs' types pp_f
+      doc_defs_rec ctx defs' types former_funcs pp_f
   | DEF_aux (DEF_type tdef, _) :: defs' when List.mem (string_of_id (id_of_type_def tdef)) !opt_extern_types ->
-      doc_defs_rec ctx defs' types docdefs
+      doc_defs_rec ctx defs' types former_funcs docdefs
   | DEF_aux (DEF_type tdef, _) :: defs' ->
-      doc_defs_rec ctx defs' (types ^^ group (doc_typdef ctx tdef) ^/^ hardline) docdefs
+      doc_defs_rec ctx defs' (types ^^ group (doc_typdef ctx tdef) ^/^ hardline) former_funcs docdefs
   | DEF_aux (DEF_let (LB_aux (LB_val (pat, exp), _)), _) :: defs' ->
-      doc_defs_rec ctx defs' types (docdefs ^^ group (doc_val ctx pat exp) ^/^ hardline)
-  | _ :: defs' -> doc_defs_rec ctx defs' types docdefs
+      doc_defs_rec ctx defs' types former_funcs (docdefs ^^ group (doc_val ctx pat exp) ^/^ hardline)
+  | DEF_aux (DEF_pragma ("include_start", Pragma_line (file, _)), _) :: defs'
+  | DEF_aux (DEF_pragma ("file_start", Pragma_line (file, _)), _) :: defs'
+  | DEF_aux (DEF_pragma ("include_end", Pragma_line (file, _)), _) :: defs'
+  | DEF_aux (DEF_pragma ("file_end", Pragma_line (file, _)), _) :: defs'
+    when Filename.check_suffix file ".sail" ->
+      if docdefs = empty then doc_defs_rec ctx defs' types former_funcs docdefs
+      else doc_defs_rec ctx defs' types (former_funcs @ [docdefs]) empty
+  | d :: defs' ->
+      if should_print_function_def d then failwith "this case of doc_defs_rec should be unreachable"
+      else doc_defs_rec ctx defs' types former_funcs docdefs
 
-let doc_defs ctx defs = doc_defs_rec ctx defs empty empty
+let doc_defs ctx defs = doc_defs_rec ctx defs empty [] empty
 
 (* Remove all imports for now, they will be printed in other files. Probably just for testing. *)
 let rec remove_imports (defs : (Libsail.Type_check.tannot, Libsail.Type_check.env) def list) depth =
@@ -1258,8 +1273,40 @@ let populate_fun_args defs =
   in
   List.fold_left (fun args d -> add_args args d) Bindings.empty defs
 
-let pp_ast_lean (env : Type_check.env) effect_info ({ defs; _ } as ast : Libsail.Type_check.typed_ast) types_file
-    funcs_file =
+let rec collect_import_files_aux defs file_stack last_namespace ret =
+  match defs with
+  | [] -> ret
+  | DEF_aux (DEF_pragma ("include_start", Pragma_line (file, _)), _) :: ds
+  | DEF_aux (DEF_pragma ("file_start", Pragma_line (file, _)), _) :: ds
+    when Filename.check_suffix file ".sail" ->
+      collect_import_files_aux ds (file :: file_stack) last_namespace ret
+  | DEF_aux (DEF_pragma ("include_end", Pragma_line (file, _)), _) :: ds
+  | DEF_aux (DEF_pragma ("file_end", Pragma_line (file, _)), _) :: ds
+    when Filename.check_suffix file ".sail" -> (
+      match file_stack with
+      | f :: fs -> collect_import_files_aux ds fs last_namespace ret
+      | _ -> failwith "should not be reachable"
+    )
+  | d :: ds -> (
+      match file_stack with
+      | f :: _ ->
+          if should_print_function_def d && not (last_namespace = Some f) then
+            collect_import_files_aux ds file_stack (Some f) (ret @ [f])
+          else collect_import_files_aux ds file_stack last_namespace ret
+      | _ -> failwith "should not be reachable"
+    )
+
+let collect_import_files defs base =
+  let res = collect_import_files_aux defs [base] None [] in
+  if res = [] then [base] else res
+
+let rec take n xs = match (n, xs) with 0, _ -> [] | n, x :: xs -> x :: take (n - 1) xs | n, xs -> xs
+
+let rec last xs =
+  match xs with [] -> failwith "cannot take last element of empty list" | [x] -> x | x :: xs -> last xs
+
+let pp_ast_lean (env : Type_check.env) effect_info ({ defs; _ } as ast : Libsail.Type_check.typed_ast) out_name_camel
+    types_file imp_funcs_files funcs_file noncomputable =
   let regs = State.find_registers defs in
   let fun_args = populate_fun_args defs in
   let global = { effect_info; fun_args } in
@@ -1271,12 +1318,29 @@ let pp_ast_lean (env : Type_check.env) effect_info ({ defs; _ } as ast : Libsail
   in
   let monad = doc_monad_abbrev defs has_registers in
   let instantiations = doc_instantiations ctx env in
-  let types, fundefs = doc_defs ctx defs in
-  let fundefs = string "namespace Functions\n\n" ^^ fundefs ^^ string "end Functions\n" in
+  let types, all_fundefss = doc_defs ctx defs in
+  let imp_fundefss, main_fundefs =
+    if imp_funcs_files = [] then ([], concat all_fundefss)
+    else (
+      let imp_fundefss = take (List.length all_fundefss - 1) all_fundefss in
+      let main_fundefs = last all_fundefss in
+      (imp_fundefss, main_fundefs)
+    )
+  in
+  let main_fundefs = main_fundefs ^^ string ("end " ^ out_name_camel ^ ".Functions") ^^ hardline in
   let main_function =
-    if !the_main_function_has_been_seen then main_function_stub effect_info has_registers else empty
+    if !the_main_function_has_been_seen then (
+      let stub = main_function_stub effect_info has_registers in
+      [string ("open " ^ out_name_camel ^ ".Functions\n\n") ^^ stub]
+    )
+    else []
   in
   let opens = IdSet.fold (fun id doc -> string "open " ^^ doc_id_ctor id ^^ hardline ^^ doc) !opens empty in
   print types_file (types ^^ register_refs ^^ monad ^^ instantiations);
-  print funcs_file (opens ^^ hardline ^^ fundefs ^^ string "open Functions\n\n" ^^ main_function);
+  let _ =
+    List.map2
+      (fun file defs -> print file (separate hardline (remove_empties [opens; defs])))
+      imp_funcs_files imp_fundefss
+  in
+  print funcs_file (separate hardline (remove_empties ([opens; main_fundefs] @ main_function)));
   !the_main_function_has_been_seen

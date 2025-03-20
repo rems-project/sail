@@ -41,9 +41,9 @@ set_option match.ignoreUnusedAlts true
 
 open Sail
 
-open option
+namespace Out.Functions
 
-namespace Functions
+open option
 
 /-- Type quantifiers: k_ex820# : Bool, k_ex819# : Bool -/
 def neq_bool (x : Bool) (y : Bool) : Bool :=
@@ -185,6 +185,4 @@ def initialize_registers (_ : Unit) : Unit :=
 def sail_model_init (x_0 : Unit) : Unit :=
   (initialize_registers ())
 
-end Functions
-open Functions
-
+end Out.Functions
