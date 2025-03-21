@@ -12,7 +12,13 @@ open Pretty_print_common
 (* Command line options *)
 let opt_extern_types : string list ref = ref []
 
-type global_context = { effect_info : Effects.side_effect_info; fun_args : string list Bindings.t }
+type global_context = {
+  effect_info : Effects.side_effect_info;
+  fun_args : string list Bindings.t;
+  kid_id_renames : id option KBindings.t;
+      (** Associates a kind variable to the corresponding argument of the function, used for implicit arguments. *)
+  kid_id_renames_rev : kid Bindings.t;  (** Inverse of the [kid_id_renames] mapping. *)
+}
 
 let the_main_function_has_been_seen = ref false
 
@@ -39,8 +45,8 @@ let context_init env global =
   {
     global;
     env;
-    kid_id_renames = KBindings.empty;
-    kid_id_renames_rev = Bindings.empty;
+    kid_id_renames = global.kid_id_renames;
+    kid_id_renames_rev = global.kid_id_renames_rev;
     loop_level = 0;
     in_sail_monad = false;
     in_except_monad = false;
@@ -57,6 +63,18 @@ let add_single_kid_id_rename ctx id kid =
     ctx with
     kid_id_renames = KBindings.add kid (Some id) kir;
     kid_id_renames_rev = Bindings.add id kid ctx.kid_id_renames_rev;
+  }
+
+let add_global_kid_id_rename (global : global_context) id kid =
+  let kir =
+    match Bindings.find_opt id global.kid_id_renames_rev with
+    | Some kid -> KBindings.add kid None global.kid_id_renames
+    | None -> global.kid_id_renames
+  in
+  {
+    global with
+    kid_id_renames = KBindings.add kid (Some id) kir;
+    kid_id_renames_rev = Bindings.add id kid global.kid_id_renames_rev;
   }
 
 let implicit_parens x = enclose (string "{") (string "}") x
@@ -1094,27 +1112,32 @@ let doc_typdef ctx (TD_aux (td, tannot) as full_typdef) =
 
 (* Copied from the Coq PP *)
 let doc_val ctx pat exp =
-  let id, pat_typ =
+  let global, id, pat_typ =
     match pat with
-    | P_aux (P_typ (typ, P_aux (P_id id, _)), _) -> (id, Some typ)
-    | P_aux (P_id id, _) -> (id, None)
-    | P_aux (P_var (P_aux (P_id id, _), TP_aux (TP_var kid, _)), _) when Id.compare id (id_of_kid kid) == 0 -> (id, None)
+    | P_aux (P_typ (typ, P_aux (P_id id, _)), _) -> (ctx.global, id, Some typ)
+    | P_aux (P_id id, _) -> (ctx.global, id, None)
+    | P_aux (P_var (P_aux (P_id id, _), TP_aux (TP_var kid, _)), _) when Id.compare id (id_of_kid kid) == 0 ->
+        let global = add_global_kid_id_rename ctx.global id kid in
+        (global, id, None)
     | P_aux (P_typ (typ, P_aux (P_var (P_aux (P_id id, _), TP_aux (TP_var kid, _)), _)), _)
       when Id.compare id (id_of_kid kid) == 0 ->
-        (id, Some typ)
+        let global = add_global_kid_id_rename ctx.global id kid in
+        (global, id, Some typ)
     | P_aux (P_var (P_aux (P_id id, _), TP_aux (TP_app (app_id, [TP_aux (TP_var kid, _)]), _)), _)
       when Id.compare app_id (mk_id "atom") == 0 && Id.compare id (id_of_kid kid) == 0 ->
-        (id, None)
+        let global = add_global_kid_id_rename ctx.global id kid in
+        (global, id, None)
     | P_aux
         (P_typ (typ, P_aux (P_var (P_aux (P_id id, _), TP_aux (TP_app (app_id, [TP_aux (TP_var kid, _)]), _)), _)), _)
       when Id.compare app_id (mk_id "atom") == 0 && Id.compare id (id_of_kid kid) == 0 ->
-        (id, Some typ)
+        let global = add_global_kid_id_rename ctx.global id kid in
+        (global, id, Some typ)
     | _ -> failwith ("Pattern " ^ string_of_pat_con pat ^ " " ^ string_of_pat pat ^ " not translatable yet.")
   in
   let typpp = match pat_typ with None -> empty | Some typ -> space ^^ colon ^^ space ^^ doc_typ ctx typ in
   let idpp = doc_id_ctor id in
   let base_pp = doc_exp false ctx exp in
-  nest 2 (group (string "def" ^^ space ^^ idpp ^^ typpp ^^ space ^^ coloneq ^/^ base_pp))
+  (global, nest 2 (group (string "def" ^^ space ^^ idpp ^^ typpp ^^ space ^^ coloneq ^/^ base_pp)))
 
 let should_print_function_def def =
   match def with
@@ -1137,7 +1160,9 @@ let rec doc_defs_rec ctx defs types (former_funcs : document list) (docdefs : do
   | DEF_aux (DEF_type tdef, _) :: defs' ->
       doc_defs_rec ctx defs' (types ^^ group (doc_typdef ctx tdef) ^/^ hardline) former_funcs docdefs
   | DEF_aux (DEF_let (LB_aux (LB_val (pat, exp), _)), _) :: defs' ->
-      doc_defs_rec ctx defs' types former_funcs (docdefs ^^ group (doc_val ctx pat exp) ^/^ hardline)
+      let global, pp_val = doc_val ctx pat exp in
+      let ctx = { ctx with global } in
+      doc_defs_rec ctx defs' types former_funcs (docdefs ^^ group pp_val ^/^ hardline)
   | DEF_aux (DEF_pragma ("include_start", Pragma_line (file, _)), _) :: defs'
   | DEF_aux (DEF_pragma ("file_start", Pragma_line (file, _)), _) :: defs'
   | DEF_aux (DEF_pragma ("include_end", Pragma_line (file, _)), _) :: defs'
@@ -1309,7 +1334,7 @@ let pp_ast_lean (env : Type_check.env) effect_info ({ defs; _ } as ast : Libsail
     types_file imp_funcs_files funcs_file noncomputable =
   let regs = State.find_registers defs in
   let fun_args = populate_fun_args defs in
-  let global = { effect_info; fun_args } in
+  let global = { effect_info; fun_args; kid_id_renames = KBindings.empty; kid_id_renames_rev = Bindings.empty } in
   let ctx = context_init env global in
   let has_registers = List.length regs > 0 in
   let register_refs =

@@ -47,7 +47,6 @@ skip_selftests = {
     'pc_no_wildcard',
     'type_if_bits',
     'nexp_simp_euclidian',
-    'toplevel_tyvar',
     'concurrency_interface_write',
     'read_write_ram',
     'issue136',
