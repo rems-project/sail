@@ -65,7 +65,7 @@ let rec instantiate_id id = function
 
 let instantiate_typ substs typ =
   List.fold_left
-    (fun typ -> function kid, (_, subst_typ) -> typ_subst kid (mk_typ_arg (A_typ subst_typ)) typ)
+    (fun typ -> function kid, (_, subst_arg) -> typ_subst kid subst_arg typ)
     typ (KBindings.bindings substs)
 
 let instantiate_def target id substs = function

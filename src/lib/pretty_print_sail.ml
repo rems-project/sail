@@ -212,7 +212,7 @@ module Printer (Config : PRINT_CONFIG) = struct
 
   let doc_subst (IS_aux (subst_aux, _)) =
     match subst_aux with
-    | IS_typ (kid, typ) -> doc_kid kid ^^ space ^^ equals ^^ space ^^ doc_typ typ
+    | IS_typ (kid, typ) -> doc_kid kid ^^ space ^^ equals ^^ space ^^ doc_typ_arg typ
     | IS_id (id1, id2) -> doc_id id1 ^^ space ^^ equals ^^ space ^^ doc_id id2
 
   let doc_kind (K_aux (k, _)) = string (match k with K_int -> "Int" | K_type -> "Type" | K_bool -> "Bool")

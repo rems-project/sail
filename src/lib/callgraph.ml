@@ -135,7 +135,7 @@ and typ_arg_ids' (A_aux (aux, _)) =
 let constraint_ids nc = IdSet.diff (constraint_ids' nc) builtins
 
 and typ_ids typ = IdSet.diff (typ_ids' typ) builtins
-let typ_arg_ids nc = IdSet.diff (typ_arg_ids' nc) builtins
+let typ_arg_ids arg = IdSet.diff (typ_arg_ids' arg) builtins
 
 type callgraph = Graph.Make(Node).graph
 
@@ -383,8 +383,8 @@ let add_def_to_graph graph (DEF_aux (def, def_annot)) =
         List.iter
           (function
             | IS_aux (IS_id (_, id_to), _) -> graph := G.add_edges (Function id) [Function id_to] !graph
-            | IS_aux (IS_typ (_, typ), _) ->
-                IdSet.iter (fun typ_id -> graph := G.add_edge (Function id) (Type typ_id) !graph) (typ_ids typ)
+            | IS_aux (IS_typ (_, arg), _) ->
+                IdSet.iter (fun typ_id -> graph := G.add_edge (Function id) (Type typ_id) !graph) (typ_arg_ids arg)
             )
           substs
     | DEF_scattered (SD_aux (sdef, _)) -> begin
@@ -619,12 +619,12 @@ let slice_instantiation_types sail_dir ast =
          | DEF_aux (DEF_instantiation (_, substs), _) ->
              Some
                (List.filter_map
-                  (function IS_aux (IS_typ (_, typ), _) -> Some typ | IS_aux (IS_id _, _) -> None)
+                  (function IS_aux (IS_typ (_, arg), _) -> Some arg | IS_aux (IS_id _, _) -> None)
                   substs
                )
          | _ -> None
          )
-    |> List.concat |> List.map typ_ids |> List.fold_left IdSet.union IdSet.empty |> IdSet.elements
+    |> List.concat |> List.map typ_arg_ids |> List.fold_left IdSet.union IdSet.empty |> IdSet.elements
     |> List.map (fun id -> Type id)
     |> NodeSet.of_list
   in

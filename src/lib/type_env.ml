@@ -102,7 +102,7 @@ type global_env = {
   overloads : id list multiple_env_item Bindings.t;
   outcomes : (typquant * typ * kinded_id list * id list * (typquant * typ) env_item Bindings.t) env_item Bindings.t;
   scattered_ids : ((l * string * Ast.attribute_data option) list, Ast.l) result Bindings.t;
-  outcome_instantiation : (Ast.l * typ) KBindings.t;
+  outcome_instantiation : (Ast.l * typ_arg) KBindings.t;
 }
 
 let empty_global_env =
@@ -1012,6 +1012,17 @@ let wf_typ ~at:at_l env (Typ_aux (_, l) as typ) =
     let extra, l = match l with Parse_ast.Unknown -> (" here", at_l) | _ -> ("", l) in
     typ_raise l (err_because (Err_other ("Well-formedness check failed for type" ^ extra), err_l, err))
 
+let wf_typ_arg ~at:at_l env (A_aux (_, l) as arg) =
+  Well_formedness.wf_debug "typ_arg" string_of_typ_arg arg Well_formedness.no_existential;
+  incr depth;
+  try
+    Well_formedness.wf_typ_arg Well_formedness.no_existential env arg;
+    decr depth
+  with Type_error (err_l, err) ->
+    decr depth;
+    let extra, l = match l with Parse_ast.Unknown -> (" here", at_l) | _ -> ("", l) in
+    typ_raise l (err_because (Err_other ("Well-formedness check failed for type argument" ^ extra), err_l, err))
+
 let wf_constraint ~at:at_l env (NC_aux (_, l) as nc) =
   Well_formedness.wf_debug "constraint" string_of_n_constraint nc Well_formedness.no_existential;
   incr depth;
@@ -1241,9 +1252,9 @@ and add_mapping id (typq, typ1, typ2) env =
 
 let get_outcome_instantiation env = env.global.outcome_instantiation
 
-let add_outcome_variable l kid typ env =
+let add_outcome_variable l kid arg env =
   update_global
-    (fun global -> { global with outcome_instantiation = KBindings.add kid (l, typ) global.outcome_instantiation })
+    (fun global -> { global with outcome_instantiation = KBindings.add kid (l, arg) global.outcome_instantiation })
     env
 
 let set_outcome_typschm ~outcome_loc:l (quant, typ) env =

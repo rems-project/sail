@@ -1,0 +1,8 @@
+[93mType error[0m:
+[96mpass/outcome_int/v1.sail[0m:7.29-33:
+7[96m |[0minstantiation test with 'n = bool
+ [92m |[0m                             [92m^--^[0m [92mInferred kind Int from this[0m
+[96mpass/outcome_int/v1.sail[0m:7.29-33:
+7[96m |[0minstantiation test with 'n = bool
+ [91m |[0m                             [91m^--^[0m
+ [91m |[0m Expected this type to have kind Int but found kind Type
