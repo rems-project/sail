@@ -984,6 +984,13 @@ let alpha_equivalent env typ1 typ2 =
     false
   )
 
+let alpha_equivalent_arg env (A_aux (arg1, _)) (A_aux (arg2, _)) =
+  match (arg1, arg2) with
+  | A_typ typ1, A_typ typ2 -> alpha_equivalent env typ1 typ2
+  | A_nexp n1, A_nexp n2 -> nexp_identical n1 n2
+  | A_bool nc1, A_bool nc2 -> nc_identical nc1 nc2
+  | _, _ -> false
+
 let unifier_constraint env (v, arg) =
   match arg with A_aux (A_nexp nexp, _) -> Env.add_constraint (nc_eq (nvar v) nexp) env | _ -> env
 
@@ -5192,29 +5199,29 @@ and check_outcome_instantiation :
   (* Instantiate the outcome type with these existing parameters *)
   let typ =
     List.fold_left
-      (fun typ (kid, (_, _, existing_typ)) -> typ_subst kid (mk_typ_arg (A_typ existing_typ)) typ)
+      (fun typ (kid, (_, _, existing_arg)) -> typ_subst kid existing_arg typ)
       typ (KBindings.bindings instantiated)
   in
 
   let instantiate_typ substs typ =
     List.fold_left
       (fun (typ, new_instantiated, fns, env) -> function
-        | IS_aux (IS_typ (kid, subst_typ), decl_l) -> begin
+        | IS_aux (IS_typ (kid, subst_arg), decl_l) -> begin
             match KBindings.find_opt kid instantiated with
-            | Some (_, _, existing_typ) when alpha_equivalent env subst_typ existing_typ ->
+            | Some (_, _, existing_arg) when alpha_equivalent_arg env subst_arg existing_arg ->
                 (typ, new_instantiated, fns, env)
-            | Some (prev_l, _, existing_typ) ->
+            | Some (prev_l, _, existing_arg) ->
                 let msg =
                   Printf.sprintf "Cannot instantiate %s with %s, already instantiated as %s" (string_of_kid kid)
-                    (string_of_typ subst_typ) (string_of_typ existing_typ)
+                    (string_of_typ_arg subst_arg) (string_of_typ_arg existing_arg)
                 in
                 typ_raise decl_l (err_because (Err_other msg, prev_l, Err_other "Previously instantiated here"))
             | None ->
-                Env.wf_typ ~at:decl_l env subst_typ;
-                ( typ_subst kid (mk_typ_arg (A_typ subst_typ)) typ,
-                  (kid, subst_typ) :: new_instantiated,
+                Env.wf_typ_arg ~at:decl_l env subst_arg;
+                ( typ_subst kid subst_arg typ,
+                  (kid, subst_arg) :: new_instantiated,
                   fns,
-                  Env.add_outcome_variable decl_l kid subst_typ env
+                  Env.add_outcome_variable decl_l kid subst_arg env
                 )
           end
         | IS_aux (IS_id (id_from, id_to), decl_l) -> (typ, new_instantiated, (id_from, id_to, decl_l) :: fns, env)
@@ -5243,14 +5250,10 @@ and check_outcome_instantiation :
       let from_typq, from_typ = Env.get_val_spec_orig id_from outcome_env in
       typ_debug (lazy (string_of_bind (to_typq, to_typ)));
 
+      let from_typ = List.fold_left (fun typ (v, subst_arg) -> typ_subst v subst_arg typ) from_typ new_instantiated in
       let from_typ =
         List.fold_left
-          (fun typ (v, subst_typ) -> typ_subst v (mk_typ_arg (A_typ subst_typ)) typ)
-          from_typ new_instantiated
-      in
-      let from_typ =
-        List.fold_left
-          (fun typ (v, (_, _, subst_typ)) -> typ_subst v (mk_typ_arg (A_typ subst_typ)) typ)
+          (fun typ (v, (_, _, subst_arg)) -> typ_subst v subst_arg typ)
           from_typ (KBindings.bindings instantiated)
       in
 

@@ -60,7 +60,13 @@ void sail_config_set_file(const char *path)
   fseek(f, 0, SEEK_SET);
 
   char *buffer = (char *)sail_malloc(fsize + 1);
-  fread(buffer, fsize, 1, f);
+
+  size_t ret_size = fread(buffer, fsize, 1, f);
+
+  if (ret_size != 1) {
+    sail_assert(false, "Failed to read configuration");
+  }
+
   buffer[fsize] = 0;
   fclose(f);
 
@@ -112,7 +118,6 @@ sail_config_json sail_config_lookup(const char *dotted_key)
       char *key = (char *)sail_malloc((i - start) + 1);
       strncpy(key, dotted_key + start, i - start);
       key[i - start] = '\0';
-      fprintf(stderr, "'%s'\n", key);
       start = i + 1;
 
       if (cJSON_IsObject(json)) {

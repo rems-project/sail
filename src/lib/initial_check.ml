@@ -2004,7 +2004,12 @@ let to_ast_prec = function P.Infix -> Infix | P.InfixL -> InfixL | P.InfixR -> I
 
 let to_ast_subst ctx = function
   | P.IS_aux (P.IS_id (id_from, id_to), l) -> IS_aux (IS_id (to_ast_id ctx id_from, to_ast_id ctx id_to), l)
-  | P.IS_aux (P.IS_typ (kid, typ), l) -> IS_aux (IS_typ (to_ast_var kid, to_ast_typ ctx typ), l)
+  | P.IS_aux (P.IS_typ (v, arg), l) -> (
+      let v = to_ast_var v in
+      match KBindings.find_opt v ctx.outcome_variables with
+      | Some k -> IS_aux (IS_typ (v, to_ast_typ_arg k ctx arg), l)
+      | None -> raise (Reporting.err_typ l ("Unknown outcome variable " ^ string_of_kid v ^ " in instantiation"))
+    )
 
 (* To avoid awkward dependencies, loop measures don't have any annotations except locations. *)
 let to_ast_loop_measure ctx = function

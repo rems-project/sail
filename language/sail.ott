@@ -693,9 +693,9 @@ letbind :: 'LB_' ::=
 subst :: 'IS_' ::=
   {{ aux _ l }}
   {{ com instantiation substitution }}
-  | kid = typ :: :: typ
+  | kid = typ_arg :: :: typ
     {{ com instantiate a type variable with a type }}
-  | id1 = id2 :: :: id
+  | id1 = id2     :: :: id
     {{ com instantiate an identifier with another identifier }}
 
 outcome_spec :: 'OV_' ::=

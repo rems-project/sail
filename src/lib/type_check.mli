@@ -181,7 +181,7 @@ module Env : sig
 
   val get_toplevel_lets : t -> IdSet.t
 
-  val get_outcome_instantiation : t -> (Ast.l * typ) KBindings.t
+  val get_outcome_instantiation : t -> (Ast.l * typ_arg) KBindings.t
 
   (** Check if id is a constructor, then if it is return a (n, m, id, type_union) triple where the values represent its
       position (n) in the list of (m) constructors, the union name, and the type_union entry itself *)
