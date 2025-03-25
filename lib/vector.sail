@@ -99,8 +99,15 @@ val vector_init = pure {
 
 overload length = {bitvector_length, vector_length}
 
-val count_leading_zeros = pure "count_leading_zeros" : forall 'N , 'N >= 1. bits('N) -> {'n, 0 <= 'n <= 'N . atom('n)}
-val count_trailing_zeros = pure "count_trailing_zeros" : forall 'N , 'N >= 1. bits('N) -> {'n, 0 <= 'n <= 'N . atom('n)}
+val count_leading_zeros = pure {
+  lean: "BitVec.countLeadingZeros",
+  _: "count_leading_zeros"
+} : forall 'N , 'N >= 1. bits('N) -> {'n, 0 <= 'n <= 'N . atom('n)}
+
+val count_trailing_zeros = pure {
+  lean: "BitVec.countTrailingZeros",
+  _: "count_trailing_zeros"
+} : forall 'N , 'N >= 1. bits('N) -> {'n, 0 <= 'n <= 'N . atom('n)}
 
 $ifndef PRINT_EFFECTS
 
