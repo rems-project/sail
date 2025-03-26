@@ -666,9 +666,10 @@ and doc_exp (as_monadic : bool) ctx (E_aux (e, (l, annot)) as full_exp) =
           match arg' with
           | E_typ (_, e) when has_effect e -> ((fun x -> wrap_with_do with_arrow true x), true)
           | E_typ (_, e) when has_early_return e -> (parens, false)
-          | E_let _ | E_internal_plet _ | E_if _ | E_match _ ->
+          | E_let _ | E_internal_plet _ | E_if _ | E_match _ | E_var _ ->
               if has_effect arg then ((fun x -> wrap_with_do with_arrow true x), true) else (parens, false)
-          | _ -> ((fun x -> x), false)
+          | _ when has_loop arg -> ((fun x -> wrap_with_do with_arrow true x), true)
+          | _ -> ((fun x -> x), not with_arrow) (* for [sailTryCatch] the argument should be a computation *)
         )
     in
     wrap (doc_exp arg_monadic ctx arg)
@@ -918,7 +919,7 @@ and doc_exp (as_monadic : bool) ctx (E_aux (e, (l, annot)) as full_exp) =
       let try_catch = if has_early_return e then string "sailTryCatchE " else string "sailTryCatch " in
       nest 2
         (try_catch
-        ^^ parens (d_of_arg ~with_arrow:(not as_monadic) ctx e)
+        ^^ parens (d_of_arg ~with_arrow:false ctx e)
         ^^ space
         ^^ parens (string "fun the_exception => " ^^ hardline ^^ cases)
         )
