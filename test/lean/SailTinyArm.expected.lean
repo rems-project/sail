@@ -516,7 +516,7 @@ def __id (x : Int) : Int :=
 
 /-- Type quantifiers: len : Nat, k_v : Nat, len ≥ 0 ∧ k_v ≥ 0 -/
 def sail_mask (len : Nat) (v : (BitVec k_v)) : (BitVec len) :=
-  if (len ≤b (Sail.BitVec.length v))
+  bif (len ≤b (Sail.BitVec.length v))
   then (Sail.BitVec.truncate v len)
   else (Sail.BitVec.zeroExtend v len)
 
@@ -526,32 +526,32 @@ def sail_ones (n : Nat) : (BitVec n) :=
 
 /-- Type quantifiers: l : Int, i : Int, n : Nat, n ≥ 0 -/
 def slice_mask {n : _} (i : Int) (l : Int) : (BitVec n) :=
-  if (l ≥b n)
+  bif (l ≥b n)
   then ((sail_ones n) <<< i)
   else
-    let one : (BitVec n) := (sail_mask n (0b1 : (BitVec 1)))
-    (((one <<< l) - one) <<< i)
+    (let one : (BitVec n) := (sail_mask n (0b1 : (BitVec 1)))
+    (((one <<< l) - one) <<< i))
 
 /-- Type quantifiers: n : Int, m : Int -/
 def _shl_int_general (m : Int) (n : Int) : Int :=
-  if (n ≥b 0)
+  bif (n ≥b 0)
   then (Int.shiftl m n)
   else (Int.shiftr m (Neg.neg n))
 
 /-- Type quantifiers: n : Int, m : Int -/
 def _shr_int_general (m : Int) (n : Int) : Int :=
-  if (n ≥b 0)
+  bif (n ≥b 0)
   then (Int.shiftr m n)
   else (Int.shiftl m (Neg.neg n))
 
 /-- Type quantifiers: m : Int, n : Int -/
 def fdiv_int (n : Int) (m : Int) : Int :=
-  if (Bool.and (n <b 0) (m >b 0))
+  bif (Bool.and (n <b 0) (m >b 0))
   then ((Int.tdiv (n +i 1) m) -i 1)
   else
-    if (Bool.and (n >b 0) (m <b 0))
+    (bif (Bool.and (n >b 0) (m <b 0))
     then ((Int.tdiv (n -i 1) m) -i 1)
-    else (Int.tdiv n m)
+    else (Int.tdiv n m))
 
 /-- Type quantifiers: m : Int, n : Int -/
 def fmod_int (n : Int) (m : Int) : Int :=
@@ -1790,13 +1790,13 @@ def GPRs : (Vector (RegisterRef (BitVec 64)) 31) :=
 
 /-- Type quantifiers: n : Nat, 0 ≤ n ∧ n ≤ 31 -/
 def wX (n : Nat) (value : (BitVec 64)) : SailM Unit := do
-  if (bne n 31)
+  bif (bne n 31)
   then writeRegRef (GetElem?.getElem! GPRs n) value
   else (pure ())
 
 /-- Type quantifiers: n : Nat, 0 ≤ n ∧ n ≤ 31 -/
 def rX (n : Nat) : SailM (BitVec 64) := do
-  if (bne n 31)
+  bif (bne n 31)
   then (reg_deref (GetElem?.getElem! GPRs n))
   else (pure (0x0000000000000000 : (BitVec 64)))
 
@@ -1810,29 +1810,29 @@ def decodeLoadStoreRegister (opc : (BitVec 2)) (Rm : (BitVec 5)) (option_v : (Bi
   let t : reg_index := (BitVec.toNat Rt)
   let n : reg_index := (BitVec.toNat Rn)
   let m : reg_index := (BitVec.toNat Rm)
-  if (Bool.or (bne option_v (0b011 : (BitVec 3))) (BEq.beq S 1#1))
+  bif (Bool.or (bne option_v (0b011 : (BitVec 3))) (BEq.beq S 1#1))
   then none
   else
-    if (BEq.beq opc (0b00 : (BitVec 2)))
+    (bif (BEq.beq opc (0b00 : (BitVec 2)))
     then (some (LoadRegister (t, n, m)))
     else
-      if (BEq.beq opc (0b01 : (BitVec 2)))
+      (bif (BEq.beq opc (0b01 : (BitVec 2)))
       then (some (StoreRegister (t, n, m)))
-      else none
+      else none))
 
 def decodeExclusiveOr (sf : (BitVec 1)) (shift : (BitVec 2)) (N : (BitVec 1)) (Rm : (BitVec 5)) (imm6 : (BitVec 6)) (Rn : (BitVec 5)) (Rd : (BitVec 5)) : (Option ast) :=
   let d : reg_index := (BitVec.toNat Rd)
   let n : reg_index := (BitVec.toNat Rn)
   let m : reg_index := (BitVec.toNat Rm)
-  if (Bool.and (BEq.beq sf 0#1) (BEq.beq (BitVec.access imm6 5) 1#1))
+  bif (Bool.and (BEq.beq sf 0#1) (BEq.beq (BitVec.access imm6 5) 1#1))
   then none
   else
-    if (bne imm6 (0b000000 : (BitVec 6)))
+    (bif (bne imm6 (0b000000 : (BitVec 6)))
     then none
-    else (some (ExclusiveOr (d, n, m)))
+    else (some (ExclusiveOr (d, n, m))))
 
 def decodeDataMemoryBarrier (CRm : (BitVec 4)) : (Option ast) :=
-  if (bne CRm (0xF : (BitVec 4)))
+  bif (bne CRm (0xF : (BitVec 4)))
   then none
   else (some (DataMemoryBarrier ()))
 
@@ -1918,11 +1918,12 @@ def execute_DataMemoryBarrier (_ : Unit) : SailM Unit := do
 /-- Type quantifiers: t : Nat, 0 ≤ t ∧ t ≤ 31 -/
 def execute_CompareAndBranch (t : Nat) (offset : (BitVec 64)) : SailM Unit := do
   let operand ← do (rX t)
-  if (BEq.beq operand (0x0000000000000000 : (BitVec 64)))
+  bif (BEq.beq operand (0x0000000000000000 : (BitVec 64)))
   then
-    let base ← do (rPC ())
-    let addr := (base + offset)
-    (wPC addr)
+    (do
+      let base ← do (rPC ())
+      let addr := (base + offset)
+      (wPC addr))
   else writeReg _PC (BitVec.addInt (← readReg _PC) 4)
 
 def execute (merge_var : ast) : SailM Unit := do
@@ -1934,41 +1935,41 @@ def execute (merge_var : ast) : SailM Unit := do
   | .CompareAndBranch (t, offset) => (execute_CompareAndBranch t offset)
 
 def decode (v__0 : (BitVec 32)) : (Option ast) :=
-  if (Bool.and (BEq.beq (Sail.BitVec.extractLsb v__0 31 24) (0xF8 : (BitVec 8)))
+  bif (Bool.and (BEq.beq (Sail.BitVec.extractLsb v__0 31 24) (0xF8 : (BitVec 8)))
        (Bool.and (BEq.beq (Sail.BitVec.extractLsb v__0 21 21) (0b1 : (BitVec 1)))
          (BEq.beq (Sail.BitVec.extractLsb v__0 11 10) (0b10 : (BitVec 2)))))
   then
-    let S := (BitVec.access v__0 12)
+    (let S := (BitVec.access v__0 12)
     let option_v : (BitVec 3) := (Sail.BitVec.extractLsb v__0 15 13)
     let opc : (BitVec 2) := (Sail.BitVec.extractLsb v__0 23 22)
     let Rt : (BitVec 5) := (Sail.BitVec.extractLsb v__0 4 0)
     let Rn : (BitVec 5) := (Sail.BitVec.extractLsb v__0 9 5)
     let Rm : (BitVec 5) := (Sail.BitVec.extractLsb v__0 20 16)
-    (decodeLoadStoreRegister opc Rm option_v S Rn Rt)
+    (decodeLoadStoreRegister opc Rm option_v S Rn Rt))
   else
-    if (BEq.beq (Sail.BitVec.extractLsb v__0 30 24) (0b1001010 : (BitVec 7)))
+    (bif (BEq.beq (Sail.BitVec.extractLsb v__0 30 24) (0b1001010 : (BitVec 7)))
     then
-      let sf := (BitVec.access v__0 31)
+      (let sf := (BitVec.access v__0 31)
       let N := (BitVec.access v__0 21)
       let shift : (BitVec 2) := (Sail.BitVec.extractLsb v__0 23 22)
       let imm6 : (BitVec 6) := (Sail.BitVec.extractLsb v__0 15 10)
       let Rn : (BitVec 5) := (Sail.BitVec.extractLsb v__0 9 5)
       let Rm : (BitVec 5) := (Sail.BitVec.extractLsb v__0 20 16)
       let Rd : (BitVec 5) := (Sail.BitVec.extractLsb v__0 4 0)
-      (decodeExclusiveOr sf shift N Rm imm6 Rn Rd)
+      (decodeExclusiveOr sf shift N Rm imm6 Rn Rd))
     else
-      if (Bool.and (BEq.beq (Sail.BitVec.extractLsb v__0 31 12) (0xD5033 : (BitVec 20)))
+      (bif (Bool.and (BEq.beq (Sail.BitVec.extractLsb v__0 31 12) (0xD5033 : (BitVec 20)))
            (BEq.beq (Sail.BitVec.extractLsb v__0 7 0) (0xBF : (BitVec 8))))
       then
-        let CRm : (BitVec 4) := (Sail.BitVec.extractLsb v__0 11 8)
-        (decodeDataMemoryBarrier CRm)
+        (let CRm : (BitVec 4) := (Sail.BitVec.extractLsb v__0 11 8)
+        (decodeDataMemoryBarrier CRm))
       else
-        if (BEq.beq (Sail.BitVec.extractLsb v__0 31 24) (0xB4 : (BitVec 8)))
+        (bif (BEq.beq (Sail.BitVec.extractLsb v__0 31 24) (0xB4 : (BitVec 8)))
         then
-          let imm19 : (BitVec 19) := (Sail.BitVec.extractLsb v__0 23 5)
+          (let imm19 : (BitVec 19) := (Sail.BitVec.extractLsb v__0 23 5)
           let Rt : (BitVec 5) := (Sail.BitVec.extractLsb v__0 4 0)
-          (decodeCompareAndBranch imm19 Rt)
-        else none
+          (decodeCompareAndBranch imm19 Rt))
+        else none)))
 
 def iFetch (addr : (BitVec 64)) : SailM (BitVec 32) := do
   let req : (Mem_read_request 4 64 (BitVec 56) (Option TranslationInfo) arm_acc_type) :=
@@ -2093,10 +2094,9 @@ def undefined_Explicit_access_kind (_ : Unit) : SailM Explicit_access_kind := do
   : Type, k_n > 0 ∧ k_vasize > 0 -/
 def mem_read_request_is_exclusive (request : (Mem_read_request k_n k_vasize k_pa k_translation_summary k_arch_ak)) : Bool :=
   match request.access_kind with
-  | .AK_explicit eak =>
-    match eak.variety with
+  | .AK_explicit eak => (match eak.variety with
     | AV_exclusive => true
-    | _ => false
+    | _ => false)
   | _ => false
 
 /-- Type quantifiers: k_n : Nat, k_vasize : Nat, k_pa : Type, k_translation_summary : Type, k_arch_ak
@@ -2114,10 +2114,9 @@ def __monomorphize_writes : Bool := false
   : Type, k_n > 0 ∧ k_vasize > 0 -/
 def mem_write_request_is_exclusive (request : (Mem_write_request k_n k_vasize k_pa k_translation_summary k_arch_ak)) : Bool :=
   match request.access_kind with
-  | .AK_explicit eak =>
-    match eak.variety with
+  | .AK_explicit eak => (match eak.variety with
     | AV_exclusive => true
-    | _ => false
+    | _ => false)
   | _ => false
 
 def pa_bits (bv : (BitVec 56)) : (BitVec 64) :=
