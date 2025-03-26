@@ -127,7 +127,7 @@ def __id (x : Int) : Int :=
 
 /-- Type quantifiers: len : Nat, k_v : Nat, len ≥ 0 ∧ k_v ≥ 0 -/
 def sail_mask (len : Nat) (v : (BitVec k_v)) : (BitVec len) :=
-  if (len ≤b (Sail.BitVec.length v))
+  bif (len ≤b (Sail.BitVec.length v))
   then (Sail.BitVec.truncate v len)
   else (Sail.BitVec.zeroExtend v len)
 
@@ -137,32 +137,32 @@ def sail_ones (n : Nat) : (BitVec n) :=
 
 /-- Type quantifiers: l : Int, i : Int, n : Nat, n ≥ 0 -/
 def slice_mask {n : _} (i : Int) (l : Int) : (BitVec n) :=
-  if (l ≥b n)
+  bif (l ≥b n)
   then ((sail_ones n) <<< i)
   else
-    let one : (BitVec n) := (sail_mask n (0b1 : (BitVec 1)))
-    (((one <<< l) - one) <<< i)
+    (let one : (BitVec n) := (sail_mask n (0b1 : (BitVec 1)))
+    (((one <<< l) - one) <<< i))
 
 /-- Type quantifiers: n : Int, m : Int -/
 def _shl_int_general (m : Int) (n : Int) : Int :=
-  if (n ≥b 0)
+  bif (n ≥b 0)
   then (Int.shiftl m n)
   else (Int.shiftr m (Neg.neg n))
 
 /-- Type quantifiers: n : Int, m : Int -/
 def _shr_int_general (m : Int) (n : Int) : Int :=
-  if (n ≥b 0)
+  bif (n ≥b 0)
   then (Int.shiftr m n)
   else (Int.shiftl m (Neg.neg n))
 
 /-- Type quantifiers: m : Int, n : Int -/
 def fdiv_int (n : Int) (m : Int) : Int :=
-  if (Bool.and (n <b 0) (m >b 0))
+  bif (Bool.and (n <b 0) (m >b 0))
   then ((Int.tdiv (n +i 1) m) -i 1)
   else
-    if (Bool.and (n >b 0) (m <b 0))
+    (bif (Bool.and (n >b 0) (m <b 0))
     then ((Int.tdiv (n -i 1) m) -i 1)
-    else (Int.tdiv n m)
+    else (Int.tdiv n m))
 
 /-- Type quantifiers: m : Int, n : Int -/
 def fmod_int (n : Int) (m : Int) : Int :=
@@ -193,13 +193,13 @@ def GPRs : (Vector (RegisterRef (BitVec 64)) 31) :=
 
 /-- Type quantifiers: n : Nat, 0 ≤ n ∧ n ≤ 31 -/
 def wX (n : Nat) (value : (BitVec 64)) : SailM Unit := do
-  if (bne n 31)
+  bif (bne n 31)
   then writeRegRef (GetElem?.getElem! GPRs n) value
   else (pure ())
 
 /-- Type quantifiers: n : Nat, 0 ≤ n ∧ n ≤ 31 -/
 def rX (n : Nat) : SailM (BitVec 64) := do
-  if (bne n 31)
+  bif (bne n 31)
   then (reg_deref (GetElem?.getElem! GPRs n))
   else (pure (0x0000000000000000 : (BitVec 64)))
 
@@ -211,12 +211,13 @@ def wPC (pc : (BitVec 64)) : SailM Unit := do
 
 /-- Type quantifiers: r : Nat, 0 ≤ r ∧ r ≤ 31 -/
 def monad_test (r : Nat) : SailM (BitVec 1) := do
-  if (BEq.beq (← (rX r)) (0x0000000000000000 : (BitVec 64)))
+  bif (BEq.beq (← (rX r)) (0x0000000000000000 : (BitVec 64)))
   then (pure 1#1)
   else
-    if (BEq.beq (← (rX r)) (0x0000000000000001 : (BitVec 64)))
-    then (pure 1#1)
-    else (pure 0#1)
+    (do
+      bif (BEq.beq (← (rX r)) (0x0000000000000001 : (BitVec 64)))
+      then (pure 1#1)
+      else (pure 0#1))
 
 def initialize_registers (_ : Unit) : SailM Unit := do
   writeReg _PC (← (undefined_bitvector 64))

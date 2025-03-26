@@ -36,7 +36,7 @@ type context = {
   kid_id_renames : id option KBindings.t;
       (** Associates a kind variable to the corresponding argument of the function, used for implicit arguments. *)
   kid_id_renames_rev : kid Bindings.t;  (** Inverse of the [kid_id_renames] mapping. *)
-  loop_level : int;
+  mutable loop_level : int;
   in_sail_monad : bool;  (** Indicates whether we are in an expression of `SailM _` *)
   in_except_monad : bool;  (** Indicates whether we are in an expression of `ExceptM _ _` *)
 }
@@ -80,6 +80,7 @@ let add_global_kid_id_rename (global : global_context) id kid =
 let implicit_parens x = enclose (string "{") (string "}") x
 let leftarrow = string "←"
 let leftarrowdo = string "← do"
+
 let rec fix_id name =
   match name with
   (* Lean keywords to avoid, to expand as needed *)
@@ -188,6 +189,11 @@ let doc_big_int i = if i >= Z.zero then string (Big_int.to_string i) else parens
 
 let is_unit t = match t with Typ_aux (Typ_id (Id_aux (Id "unit", _)), _) -> true | _ -> false
 
+let is_lit e lit = match e with E_aux (E_lit (L_aux (lit', _)), _) -> lit = lit' | _ -> false
+
+let is_true e = is_lit e L_true
+let is_false e = is_lit e L_false
+
 (* Adapted from Coq PP *)
 let rec doc_nexp ctx (Nexp_aux (n, l) as nexp) =
   let rec plussub (Nexp_aux (n, l) as nexp) =
@@ -204,7 +210,7 @@ let rec doc_nexp ctx (Nexp_aux (n, l) as nexp) =
   and app (Nexp_aux (n, l) as nexp) =
     match n with
     | Nexp_if (i, t, e) ->
-        separate space [string "if"; doc_nconstraint ctx i; string "then"; atomic t; string "else"; atomic e]
+        separate space [string "bif"; doc_nconstraint ctx i; string "then"; atomic t; string "else"; atomic e]
     | Nexp_app (Id_aux (Id "div", _), [n1; n2]) -> separate space [atomic n1; string "/"; atomic n2]
     | Nexp_app (Id_aux (Id "mod", _), [n1; n2]) -> separate space [atomic n1; string "%"; atomic n2]
     | Nexp_app (Id_aux (Id "abs", _), [n1]) -> separate dot [atomic n1; string "natAbs"]
@@ -601,7 +607,7 @@ let op_of_id id =
 
 let unnop_of_id id = match id with Some "_lean_pow2" -> Some "2 ^ " | _ -> None
 
-let is_loop id = match string_of_id id with "while#" | "foreach#" -> true | _ -> false
+let is_loop id = match string_of_id id with "while#" | "foreach#" | "until#" -> true | _ -> false
 
 let has_loop (e : 'a exp) =
   let e_app (id, args) = is_loop id || List.fold_left ( || ) false args in
@@ -640,7 +646,7 @@ let make_loop_vars extra_binders varstuple =
 
 let name_loop_vars ctx =
   let ll = ctx.loop_level in
-  let ctx = { ctx with loop_level = ll + 1 } in
+  ctx.loop_level <- ll + 1;
   match ll with 0 -> (string "loop_vars", ctx) | _ -> (string "loop_vars_" ^^ string (string_of_int ll), ctx)
 
 let prepend_monad ctx exp doc =
@@ -653,9 +659,79 @@ let prepend_monad ctx exp doc =
 let rec doc_match_clause (as_monadic : bool) ctx (Pat_aux (cl, l)) =
   match cl with
   | Pat_exp (pat, branch) ->
-      group
-        (nest 2 (string "| " ^^ doc_pat ~in_match:true pat ^^ string " =>" ^^ break 1 ^^ doc_exp as_monadic ctx branch))
+      group (nest 2 (string "| " ^^ doc_pat ~in_match:true pat ^^ string " => " ^^ wrap_exp as_monadic ctx branch))
   | Pat_when (pat, when_, branch) -> failwith "The Lean backend does not support 'when' clauses in patterns"
+
+and wrap_exp as_monadic ctx e =
+  let with_arrow = not as_monadic in
+  let d = doc_exp as_monadic ctx e in
+  match e with
+  | E_aux (arg', _) -> (
+      match arg' with
+      | E_typ (_, e) when has_effect e -> wrap_with_do with_arrow true d
+      | E_typ (_, e) when has_early_return e -> parens d
+      | E_let _ | E_internal_plet _ | E_if _ | E_match _ | E_var _ | E_block _ ->
+          if has_effect e then wrap_with_do with_arrow true d else parens d
+      | _ when has_loop e -> wrap_with_do with_arrow true d
+      | _ -> d
+    )
+
+and doc_loop l as_monadic ctx loop_kind args =
+  let lambda effects lambda_pp d =
+    let lambda_pp = if effects then lambda_pp ^^ string " do" else lambda_pp in
+    parens (prefix 2 1 (group lambda_pp) d)
+  in
+  let cond, varstuple, body, measure =
+    match args with
+    | [cond; varstuple; body] -> (cond, varstuple, body, None)
+    | [cond; varstuple; body; measure] -> (cond, varstuple, body, Some measure)
+    | _ -> raise (Reporting.err_unreachable l __POS__ "Unexpected number of arguments for loop combinator")
+  in
+  let body =
+    match body with
+    | E_aux
+        ( E_internal_plet
+            ( P_aux ((P_wild | P_typ (_, P_aux (P_wild, _))), _),
+              E_aux
+                ( E_assert
+                    (E_aux (E_lit (L_aux (L_true, _)), _), E_aux (E_lit (L_aux (L_string "loop dummy assert", _)), _)),
+                  _
+                ),
+              body'
+            ),
+          _
+        ) ->
+        body'
+    | _ -> body
+  in
+  let body_effects = has_effect body in
+  let (E_aux (_, annot)) = cond in
+  (* let annot = Type_check.replace_typ Ast_util.bool_typ (snd annot) in
+  let cond = match loop_kind with `While -> cond | `Until -> E_aux (E_app (mk_id "not", [cond]), (l, annot)) in *)
+  let cond_effects = has_effect cond in
+  let vartuple_pp, base_lambda = make_loop_vars [] varstuple in
+  let vars_pp, body_ctx = name_loop_vars ctx in
+  let body_pp = doc_exp body_effects body_ctx body in
+  let vars_dec_pp = string "let mut " ^^ vars_pp ^^ string " := " ^^ vartuple_pp in
+  let cond_pp = doc_exp cond_effects ctx cond in
+  let cond_pp = lambda cond_effects base_lambda cond_pp in
+  let loop_cond = wrap_with_left_arrow cond_effects (cond_pp ^/^ vars_pp) in
+  match loop_kind with
+  | `While ->
+      let loop_head = flow (break 1) [string "while"; loop_cond; string "do"] in
+      let arrow = if body_effects then leftarrowdo else coloneq in
+      let loop_body_1 = string "let " ^^ vartuple_pp ^^ space ^^ coloneq ^^ space ^^ vars_pp in
+      let loop_body = loop_body_1 ^^ hardline ^^ prefix 2 1 (vars_pp ^^ space ^^ arrow) body_pp in
+      let full_loop = prefix 2 1 loop_head loop_body in
+      separate hardline [vars_dec_pp; full_loop; wrap_with_pure as_monadic vars_pp]
+  | `Until ->
+      let loop_head = string "repeat" in
+      let loop_footer = flow (break 1) [string "until"; loop_cond] in
+      let arrow = if body_effects then leftarrowdo else coloneq in
+      let loop_body_1 = string "let " ^^ vartuple_pp ^^ space ^^ coloneq ^^ space ^^ vars_pp in
+      let loop_body = loop_body_1 ^^ hardline ^^ prefix 2 1 (vars_pp ^^ space ^^ arrow) body_pp in
+      let full_loop = prefix 2 1 loop_head loop_body in
+      separate hardline [vars_dec_pp; full_loop; loop_footer; wrap_with_pure as_monadic vars_pp]
 
 and doc_exp (as_monadic : bool) ctx (E_aux (e, (l, annot)) as full_exp) =
   let env = env_of_tannot annot in
@@ -666,7 +742,7 @@ and doc_exp (as_monadic : bool) ctx (E_aux (e, (l, annot)) as full_exp) =
           match arg' with
           | E_typ (_, e) when has_effect e -> ((fun x -> wrap_with_do with_arrow true x), true)
           | E_typ (_, e) when has_early_return e -> (parens, false)
-          | E_let _ | E_internal_plet _ | E_if _ | E_match _ | E_var _ ->
+          | E_let _ | E_internal_plet _ | E_if _ | E_match _ | E_var _ | E_block _ ->
               if has_effect arg then ((fun x -> wrap_with_do with_arrow true x), true) else (parens, false)
           | _ when has_loop arg -> ((fun x -> wrap_with_do with_arrow true x), true)
           | _ -> ((fun x -> x), not with_arrow) (* for [sailTryCatch] the argument should be a computation *)
@@ -692,52 +768,8 @@ and doc_exp (as_monadic : bool) ctx (E_aux (e, (l, annot)) as full_exp) =
          nest 2 (parens (flow (break 1) (d_id :: d_args)))
         )
   | E_app (Id_aux (Id "__id", _), [e]) -> doc_exp as_monadic ctx e
-  | E_app (Id_aux (Id "while#", _), args) -> begin
-      let lambda effects lambda_pp d =
-        let lambda_pp = if effects then lambda_pp ^^ string " do" else lambda_pp in
-        parens (prefix 2 1 (group lambda_pp) d)
-      in
-      let cond, varstuple, body, measure =
-        match args with
-        | [cond; varstuple; body] -> (cond, varstuple, body, None)
-        | [cond; varstuple; body; measure] -> (cond, varstuple, body, Some measure)
-        | _ -> raise (Reporting.err_unreachable l __POS__ "Unexpected number of arguments for loop combinator")
-      in
-      let body =
-        match body with
-        | E_aux
-            ( E_internal_plet
-                ( P_aux ((P_wild | P_typ (_, P_aux (P_wild, _))), _),
-                  E_aux
-                    ( E_assert
-                        ( E_aux (E_lit (L_aux (L_true, _)), _),
-                          E_aux (E_lit (L_aux (L_string "loop dummy assert", _)), _)
-                        ),
-                      _
-                    ),
-                  body'
-                ),
-              _
-            ) ->
-            body'
-        | _ -> body
-      in
-      let body_effects = has_effect body in
-      let cond_effects = has_effect cond in
-      let vartuple_pp, base_lambda = make_loop_vars [] varstuple in
-      let vars_pp, body_ctx = name_loop_vars ctx in
-      let body_pp = doc_exp body_effects body_ctx body in
-      let vars_dec_pp = string "let mut " ^^ vars_pp ^^ string " := " ^^ vartuple_pp in
-      let cond_pp = doc_exp cond_effects ctx cond in
-      let cond_pp = lambda cond_effects base_lambda cond_pp in
-      let loop_cond = wrap_with_left_arrow cond_effects (cond_pp ^/^ vars_pp) in
-      let loop_head = flow (break 1) [string "while"; loop_cond; string "do"] in
-      let arrow = if body_effects then leftarrowdo else coloneq in
-      let loop_body_1 = string "let " ^^ vartuple_pp ^^ space ^^ coloneq ^^ space ^^ vars_pp in
-      let loop_body = loop_body_1 ^^ hardline ^^ prefix 2 1 (vars_pp ^^ space ^^ arrow) body_pp in
-      let full_loop = prefix 2 1 loop_head loop_body in
-      separate hardline [vars_dec_pp; full_loop; wrap_with_pure as_monadic vars_pp]
-    end
+  | E_app (Id_aux (Id "while#", _), args) -> doc_loop l as_monadic ctx `While args
+  | E_app (Id_aux (Id "until#", _), args) -> doc_loop l as_monadic ctx `Until args
   | E_app (Id_aux (Id "foreach#", _), args) -> begin
       match args with
       | [from_exp; to_exp; step_exp; ord_exp; vartuple; body] ->
@@ -771,6 +803,7 @@ and doc_exp (as_monadic : bool) ctx (E_aux (e, (l, annot)) as full_exp) =
           let from_exp_pp, to_exp_pp, step_exp_pp =
             (doc_exp false ctx from_exp, doc_exp false ctx to_exp, doc_exp false ctx step_exp)
           in
+          let step_exp_pp = if is_true ord_exp then step_exp_pp else minus ^^ step_exp_pp in
           let loopvar_pp = doc_id_ctor loopvar in
           let effects = has_effect body in
           let vartuple_pp, body_lambda = make_loop_vars [loopvar_pp] vartuple in
@@ -778,9 +811,7 @@ and doc_exp (as_monadic : bool) ctx (E_aux (e, (l, annot)) as full_exp) =
           let vars_pp, body_ctx = name_loop_vars ctx in
           let body_pp = doc_exp (as_monadic && effects) body_ctx body in
           let vars_dec_pp = string "let mut " ^^ vars_pp ^^ string " := " ^^ vartuple_pp in
-          let loop_bracket =
-            brackets (separate colon [from_exp_pp; to_exp_pp ^^ string " + 1"; step_exp_pp]) ^^ string "i"
-          in
+          let loop_bracket = brackets (separate colon [from_exp_pp; to_exp_pp; step_exp_pp]) ^^ string "i" in
           let loop_head = flow (break 1) [string "for"; loopvar_pp; string "in"; loop_bracket; string "do"] in
           let arrow = if effects then leftarrowdo else coloneq in
           let loop_body_1 = string "let " ^^ vartuple_pp ^^ space ^^ coloneq ^^ space ^^ vars_pp in
@@ -840,7 +871,7 @@ and doc_exp (as_monadic : bool) ctx (E_aux (e, (l, annot)) as full_exp) =
       let ctx = update_ctx_pat ctx lpat in
       let pp_let_line_f l = group (nest 2 (flow (break 1) l)) in
       let pp_let_line =
-        if has_effect lexp then
+        if has_effect lexp || has_loop then
           if is_unit (typ_of lexp) && is_anonymous_pat lpat then doc_exp true ctx lexp
           else (
             match (is_arrow_do, typ_ascription) with
@@ -905,20 +936,23 @@ and doc_exp (as_monadic : bool) ctx (E_aux (e, (l, annot)) as full_exp) =
         )
   | E_if (i, t, e) ->
       let statements_monadic = as_monadic || has_effect t || has_effect e in
-      nest 2 (string "if" ^^ space ^^ nest 1 (d_of_arg ctx i))
+      nest 2 (string "bif" ^^ space ^^ nest 1 (d_of_arg ctx i))
       ^^ hardline
-      ^^ prefix 2 1 (string "then") (doc_exp statements_monadic ctx t)
+      ^^ prefix 2 1 (string "then") (wrap_exp statements_monadic ctx t)
       ^^ hardline
-      ^^ prefix 2 1 (string "else") (doc_exp statements_monadic ctx e)
+      ^^ prefix 2 1 (string "else") (wrap_exp statements_monadic ctx e)
   | E_ref id -> string ".Reg " ^^ doc_id_ctor id
   | E_exit _ -> string "throw Error.Exit"
-  | E_throw e -> string "sailThrow " ^^ parens (doc_exp false ctx e)
+  | E_throw e ->
+      let arrow = if as_monadic then empty else leftarrow in
+      arrow ^^ string "sailThrow " ^^ parens (doc_exp false ctx e)
   | E_try (e, cases) ->
       let x = E_aux (E_id (Id_aux (Id "the_exception", Unknown)), (Unknown, annot)) in
       let cases = nest 2 (doc_exp true ctx (E_aux (E_match (x, cases), (Unknown, annot)))) in
       let try_catch = if has_early_return e then string "sailTryCatchE " else string "sailTryCatch " in
+      let arrow = if as_monadic then empty else leftarrow in
       nest 2
-        (try_catch
+        (arrow ^^ try_catch
         ^^ parens (d_of_arg ~with_arrow:false ctx e)
         ^^ space
         ^^ parens (string "fun the_exception => " ^^ hardline ^^ cases)

@@ -572,3 +572,8 @@ notation:50 x "≥b" y => decide (x ≥ y)
 notation:50 x ">b" y => decide (x > y)
 
 macro_rules | `(tactic| decreasing_trivial) => `(tactic| simp_all <;> omega)
+
+-- This lemma replaces `bif` by `if` in functions when Lean is trying to prove
+-- termination.
+@[wf_preprocess]
+theorem cond_eq_ite (b : Bool) (x y : α) : cond b x y = ite b x y := by cases b <;> rfl
