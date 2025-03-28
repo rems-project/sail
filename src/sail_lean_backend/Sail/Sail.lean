@@ -379,6 +379,9 @@ def undefined_bool (_ : Unit) : PreSailM RegisterType c ue Bool :=
 def undefined_int (_ : Unit) : PreSailM RegisterType c ue Int :=
   choose .int
 
+def undefined_range (low high : Int) : PreSailM RegisterType c ue Int := do
+  pure (low + (← choose .int) % (high - low))
+
 def undefined_nat (_ : Unit) : PreSailM RegisterType c ue Nat :=
   choose .nat
 
