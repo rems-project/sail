@@ -105,6 +105,7 @@ val get_val_spec : id -> t -> typquant * typ
 val get_val_specs : t -> (typquant * typ) Bindings.t
 val get_val_spec_orig : id -> t -> typquant * typ
 
+val is_outcome : id -> t -> bool
 val add_outcome : id -> typquant * typ * kinded_id list * id list * t -> t -> t
 val get_outcome : l -> id -> t -> typquant * typ * kinded_id list * id list * t
 val get_outcome_instantiation : t -> (Ast.l * typ_arg) KBindings.t
