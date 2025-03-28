@@ -218,7 +218,9 @@ let instrs_rename from_name to_name = visit_instrs (new rename_visitor from_name
 let string_of_name ?deref_current_exception:(dce = false) ?(zencode = true) =
   let ssa_num n = if n = -1 then "" else "/" ^ string_of_int n in
   function
-  | Gen (v1, v2, n) -> "%" ^ string_of_int v1 ^ "." ^ string_of_int v2 ^ ssa_num n
+  | Gen (v1, v2, n) ->
+      let s = "%" ^ string_of_int v1 ^ "." ^ string_of_int v2 in
+      (if zencode then Util.zencode_string s else s) ^ ssa_num n
   | Name (id, n) -> (if zencode then Util.zencode_string (string_of_id id) else string_of_id id) ^ ssa_num n
   | Have_exception n -> "have_exception" ^ ssa_num n
   | Return n -> "return" ^ ssa_num n
