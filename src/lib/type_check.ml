@@ -1452,6 +1452,10 @@ let typ_of_pat (P_aux (_, (l, tannot))) = typ_of_annot (l, tannot)
 
 let env_of_pat (P_aux (_, (l, tannot))) = env_of_annot (l, tannot)
 
+let typ_of_lexp (LE_aux (_, (l, tannot))) = typ_of_annot (l, tannot)
+
+let env_of_lexp (LE_aux (_, (l, tannot))) = env_of_annot (l, tannot)
+
 let typ_of_pexp (Pat_aux (_, (l, tannot))) = typ_of_annot (l, tannot)
 
 let env_of_pexp (Pat_aux (_, (l, tannot))) = env_of_annot (l, tannot)

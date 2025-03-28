@@ -181,6 +181,8 @@ module Env : sig
 
   val get_toplevel_lets : t -> IdSet.t
 
+  val is_outcome : id -> t -> bool
+
   val get_outcome_instantiation : t -> (Ast.l * typ_arg) KBindings.t
 
   (** Check if id is a constructor, then if it is return a (n, m, id, type_union) triple where the values represent its
@@ -387,6 +389,9 @@ val env_of_pat : tannot pat -> Env.t
 
 val typ_of_pexp : tannot pexp -> typ
 val env_of_pexp : tannot pexp -> Env.t
+
+val typ_of_lexp : tannot lexp -> typ
+val env_of_lexp : tannot lexp -> Env.t
 
 val typ_of_mpat : tannot mpat -> typ
 val env_of_mpat : tannot mpat -> Env.t

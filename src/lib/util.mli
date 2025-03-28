@@ -119,6 +119,8 @@ val option_these : 'a option list -> 'a list
     result is None is None. [option_all []] is [Some []] *)
 val option_all : 'a option list -> 'a list option
 
+val result_all : ('a, 'e) Result.t list -> ('a list, 'e) Result.t
+
 (** {2 List Functions} *)
 
 val list_empty : 'a list -> bool

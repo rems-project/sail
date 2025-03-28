@@ -267,9 +267,9 @@ let rec run istate =
       | Break frame ->
           print_endline "Breakpoint";
           { istate with mode = Evaluation frame }
-      | Effect_request (_, state, _, eff) ->
+      | Effect_request (out, state, stack, eff) ->
           let istate =
-            try { istate with mode = Evaluation (!Interpreter.effect_interp state eff) }
+            try { istate with mode = Evaluation (!Interpreter.effect_interp out state stack eff) }
             with Failure str ->
               print_endline str;
               { istate with mode = Normal }
@@ -304,9 +304,9 @@ let rec run_function istate depth =
       | Break frame ->
           print_endline "Breakpoint";
           { istate with mode = Evaluation frame }
-      | Effect_request (_, state, stack, eff) ->
+      | Effect_request (out, state, stack, eff) ->
           let istate =
-            try { istate with mode = Evaluation (!Interpreter.effect_interp state eff) }
+            try { istate with mode = Evaluation (!Interpreter.effect_interp out state stack eff) }
             with Failure str ->
               print_endline str;
               { istate with mode = Normal }
@@ -337,9 +337,9 @@ let rec run_steps istate n =
       | Break frame ->
           print_endline "Breakpoint";
           { istate with mode = Evaluation frame }
-      | Effect_request (_, state, _, eff) ->
+      | Effect_request (out, state, stack, eff) ->
           let istate =
-            try { istate with mode = Evaluation (!Interpreter.effect_interp state eff) }
+            try { istate with mode = Evaluation (!Interpreter.effect_interp out state stack eff) }
             with Failure str ->
               print_endline str;
               { istate with mode = Normal }
@@ -679,7 +679,9 @@ let handle_input' istate input =
                us in evaluation mode. *)
           let exp = Type_check.infer_exp istate.env (Initial_check.exp_of_string ~inline:pos str) in
           let istate = setup_interpreter_state istate in
-          let istate = { istate with mode = Evaluation (eval_frame (Step (lazy "", istate.state, return exp, []))) } in
+          let istate =
+            { istate with mode = Evaluation (eval_frame (Step (lazy "", istate.state, Monad.return exp, []))) }
+          in
           print_program istate;
           istate
       | Empty -> istate
@@ -725,9 +727,11 @@ let handle_input' istate input =
           | Break frame ->
               print_endline "Breakpoint";
               { istate with mode = Evaluation frame }
-          | Effect_request (_, state, _, eff) -> begin
+          | Effect_request (out, state, stack, eff) -> begin
               try
-                let istate = { istate with mode = Evaluation (!Interpreter.effect_interp state eff); state } in
+                let istate =
+                  { istate with mode = Evaluation (!Interpreter.effect_interp out state stack eff); state }
+                in
                 print_program istate;
                 istate
               with Failure str ->
