@@ -1019,6 +1019,15 @@ module ConvertType = struct
           | P.ATyp_lit (P.L_aux (P.L_true, _)) -> NC_true
           | P.ATyp_lit (P.L_aux (P.L_false, _)) -> NC_false
           | P.ATyp_in (n, P.ATyp_aux (P.ATyp_nset bounds, _)) -> NC_set (to_ast_nexp kenv ctx n, bounds)
+          | P.ATyp_if (i, t, e) ->
+              let i = to_ast_constraint kenv ctx i in
+              let i_loc = constraint_loc i in
+              let t = to_ast_constraint kenv ctx t in
+              let e = to_ast_constraint kenv ctx e in
+              NC_or
+                ( NC_aux (NC_and (i, t), l),
+                  NC_aux (NC_and (NC_aux (NC_app (mk_id ~loc:i_loc "not", [A_aux (A_bool i, i_loc)]), i_loc), e), l)
+                )
           | _ -> raise (Reporting.err_typ l "Invalid constraint")
         in
         NC_aux (aux, l)
