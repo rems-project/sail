@@ -439,7 +439,7 @@ void load_elf(char *filename, bool *is32bit_p, uint64_t *entry) {
         if (buffer == NULL) { goto fail; }
 
         int s = fread(buffer+read, 1, size - read, in);
-        if (s < 0) { goto fail; }
+        if (s < 0 || ferror(in)) { goto fail; }
         read += s;
     }
     fclose(in);
