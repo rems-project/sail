@@ -137,6 +137,9 @@ def extern_count_leading_zeros (_ : Unit) : Int :=
 def extern_count_trailing_zeros (_ : Unit) : Int :=
   (BitVec.countTrailingZeros (0x00FF0FF0 : (BitVec 32)))
 
+def extern_arith_shiftright (_ : Unit) : (BitVec 32) :=
+  (BitVec.rotateRight (0xDEADBEEF : (BitVec 32)) 4)
+
 def initialize_registers (_ : Unit) : Unit :=
   ()
 

@@ -237,7 +237,8 @@ val _builtin_mod_nat = pure {
   ocaml: "modulus",
   lem: "integerMod",
   c: "tmod_int",
-  coq: "Z.rem"
+  coq: "Z.rem",
+  lean: "Nat.mod"
 } : forall 'n 'm, 'n >= 0 & 'm >= 0. (int('n), int('m)) -> {'r, 0 <= 'r < 'm. int('r)}
 
 /* Below we need the fact that 2 ^ 'n >= 0, so we axiomatise it in the return
