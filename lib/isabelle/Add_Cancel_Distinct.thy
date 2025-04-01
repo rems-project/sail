@@ -119,7 +119,12 @@ fun cancel_step ctxt ct = let
     val choose2 = if length choose < Int.min (length lhs_sort, length rhs_sort)
       then choose else List.tl choose
     val _ = List.hd choose2 (* raise Empty if no progress can be made *)
-    val x = Variable.variant_frees ctxt [t] [("x", @{typ unit})]
+    (* TODO: Double-check the following lines, which had to be changed for
+       Isabelle 2025 due to an API change from variant_frees (which called
+       declare_names internally) to variant_names.  The updated code aims
+       to preserve the previous behaviour. *)
+    val ctxt' = Variable.declare_names t ctxt
+    val x = Variable.variant_names ctxt' [("x", @{typ unit})]
         |> the_single |> Free
     val conv = tag_sum_conv ctxt choose2 x then_conv split_by_var_conv ctxt x
     val lhs_split = conv lhs
