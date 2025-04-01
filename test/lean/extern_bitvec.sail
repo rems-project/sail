@@ -30,3 +30,7 @@ function extern_count_trailing_zeros() -> int = {
   return count_trailing_zeros(0x00FF0FF0)
 }
 
+function extern_arith_shiftright() -> bitvector(32) = {
+  return sail_arith_shiftright(0xDEADBEEF, 4)
+}
+
