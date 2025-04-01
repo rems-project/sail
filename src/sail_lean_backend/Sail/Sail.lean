@@ -96,6 +96,16 @@ def parse_hex_bits_digits (n : Nat) (str : String) : BitVec n :=
     BitVec.append bv c |>.cast (by simp_all)
 decreasing_by simp_all <;> omega
 
+def parse_dec_bits (n : Nat) (str : String) : BitVec n :=
+  go str.length str
+where
+  -- TODO: when there are lemmas about `String.take`, replace with WF induction
+  go (fuel : Nat) (str : String) :=
+    if fuel = 0 then 0 else
+      let lsd := str.get! ⟨str.length - 1⟩
+      let rest := str.take (str.length - 1)
+      (charToHex lsd).setWidth n + 10#n * go (fuel-1) rest
+
 def parse_hex_bits (n : Nat) (str : String) : BitVec n :=
   let bv := parse_hex_bits_digits (round4 n) (str.drop 2)
   bv.setWidth n
@@ -106,6 +116,10 @@ def valid_hex_bits (n : Nat) (str : String) : Bool :=
   str.all fun x => x.toLower ∈
     ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'a', 'b', 'c', 'd', 'e', 'f'] &&
   2 ^ n > (parse_hex_bits_digits (round4 n) str).toNat
+
+def valid_dec_bits (_ : Nat) (str : String) : Bool :=
+  str.all fun x => x.toLower ∈
+    ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9']
 
 def shift_bits_left (bv : BitVec n) (sh : BitVec m) : BitVec n :=
   bv <<< sh
