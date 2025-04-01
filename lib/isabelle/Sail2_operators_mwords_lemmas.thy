@@ -111,7 +111,7 @@ lemma of_bl_bin_word_of_int:
 lemma get_slice_int_0_bin_to_bl[simp]:
   "len > 0 \<Longrightarrow> get_slice_int len n 0 = of_bl (bin_to_bl (nat len) n)"
   unfolding get_slice_int_def get_slice_int_bv_def subrange_list_def
-  by (auto simp: subrange_list_dec_drop_take len_bin_to_bl_aux)
+  by (auto simp: subrange_list_dec_drop_take size_bin_to_bl_aux)
 
 lemma to_bl_of_bl[simp]:
   fixes bl :: "bool list"
