@@ -292,7 +292,7 @@ let message_of_type_error type_error =
               [
                 Line ("Identifier " ^ name ^ " is unbound" ^ hint_msg);
                 Line "";
-                Line ("There is a also a function " ^ name ^ " in scope.");
+                Line ("There is also a function " ^ name ^ " in scope.");
               ],
             None
           )

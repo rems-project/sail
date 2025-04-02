@@ -381,7 +381,7 @@ let help =
       sprintf ":option %s - Parse string as if it was an option passed on the command line. e.g. :option -help."
         (color yellow "<string>")
   | ":recheck" ->
-      sprintf ":recheck - Re type-check the Sail AST, and synchronize the interpreters internal state to that AST."
+      sprintf ":recheck - Re type-check the Sail AST, and synchronize the interpreter's internal state to that AST."
   | ":rewrite" ->
       sprintf ":rewrite %s - Apply a rewrite to the AST. %s shows all possible rewrites. See also %s"
         (color yellow "<rewrite> <args>") (color green ":list_rewrites") (color green ":rewrites")
@@ -500,7 +500,7 @@ let handle_input' istate input =
               [
                 "Universal commands - :(t)ype :(i)nfer :(q)uit :(v)erbose :prove :assume :clear :commands :help \
                  :output :option :show_register :hide_register";
-                "Normal mode commands - :elf :let :def :(b)ind :recheck :compile :reset " ^ more_commands;
+                "Normal mode commands - :let :def :(b)ind :recheck :compile :reset " ^ more_commands;
                 "Evaluation mode commands - :(r)un :(s)tep :step_(f)unction :(n)ormal";
                 "";
                 ":(c)ommand can be called as either :c or :command.";
