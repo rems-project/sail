@@ -22,7 +22,6 @@ sail = get_sail()
 # that you can run to exercise the language and the extracted output.
 # Not all self-tests are supported.
 skip_selftests = {
-    'list_rec_functions2',
     'outcome_impl',
     'assign_rename_bug',
     'union_variant_names',
