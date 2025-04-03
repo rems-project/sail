@@ -44,7 +44,6 @@ skip_selftests = {
     'issue136',
     'anf_as_pattern',
     'real_prop',
-    'lib_dec_bits',
     'constructor247',
     'deep_poly_nest',
     'config_abstract_bool', # Register type unsupported in state.ml
