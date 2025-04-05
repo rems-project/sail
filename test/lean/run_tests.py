@@ -30,7 +30,6 @@ skip_selftests = {
     'inc_tests',
     'poly_outcome',
     'string_of_bits',
-    'custom_flow',
     'pointer_assign',
     'concurrency_interface',
     'for_shadow',

@@ -3,6 +3,7 @@ val "print_endline" : string -> unit
 
 val operator <= = {
   coq: "Z.leb",
+  lean: "Int.lteq",
   _: "lteq"
 } : forall 'n 'm. (int('n), int('m)) -> bool('n <= 'm)
 
@@ -18,6 +19,7 @@ function test1 forall 'n 'm. (n: int('n), m: int('m)) -> unit = {
 
 val and_bool = {
   coq: "andb",
+  lean: "and",
   _: "and_bool"
 } : forall ('p: Bool) ('q: Bool). (bool('p), bool('q)) -> bool('p & 'q)
 
