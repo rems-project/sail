@@ -2922,7 +2922,7 @@ let rec rewrite_var_updates (E_aux (expaux, ((l, _) as annot)) as exp) =
         | Added_vars (v, P_aux (pat, _)) -> annot_letbind (pat, v) (get_loc_exp v) env (typ_of v)
         | Same_vars v -> LB_aux (LB_val (pat, v), lbannot)
       in
-      annot_exp (E_let (lb, body)) l env (typ_of body)
+      annot_exp (E_let (lb, body)) l env (typ_of exp)
   | E_var (lexp, v, body) ->
       (* Rewrite E_var into E_let and call recursively *)
       let rec aux lexp =
