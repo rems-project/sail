@@ -58,10 +58,11 @@ def initializeMemory (_size: MachineBits) (elf : ELF32File) : Std.HashMap Nat (B
           update_mem_segment mem inst.segment_base inst.segment_body.data
         ) default elf.interpreted_segments
   -- Handle interpreted_sections
-  let mem' := List.foldl (λ mem (_header, inst) => 
-          -- TODO(JP): Is this address correct?
-          update_mem_segment mem inst.section_offset inst.section_body.data
-        ) mem'' elf.interpreted_sections
+  let mem' := mem''
+  -- let mem' := List.foldl (λ mem (_header, inst) =>
+  --         -- TODO(JP): Is this address correct?
+  --         update_mem_segment mem inst.section_offset inst.section_body.data
+  --       ) mem'' elf.interpreted_sections
   -- Handle bits_and_bobs
   let mem := List.foldl (λ mem (addr, data) =>
           update_mem_segment mem addr data.data
