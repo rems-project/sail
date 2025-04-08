@@ -11,12 +11,12 @@ root = "Main"
 
 [[require]]
 name = "ELFSage"
-git = "https://github.com/ineol/ELFSage.git"
-rev = "f9b66dc2f1d3beb409d8982b3452e60edfae5d99"
+git = "https://github.com/GaloisInc/ELFSage.git"
+rev = "0338e21ae318eeea9ce551345f1b5288bc36e238"
 
 [[require]]
 name = "Lean_RV64D_LEAN"
 git = "https://github.com/ineol/sail-riscv.git"
-rev = "3930f37cdc31049b380c8cbc6f6dc989bd097809"
-subDir = "build/model/Lean_RV64D_LEAN"
+rev = "a091b3cbb6ee057d7c78084fa44835ad40b85230"
+subDir = "Lean_RV64D_LEAN"
 

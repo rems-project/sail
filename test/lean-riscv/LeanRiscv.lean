@@ -10,7 +10,7 @@ def readElf32 (elfFilepath : System.FilePath) : IO (Except String ELF32File) := 
   | .error warning => do
     pure (.error warning)
   | .ok (.elf32 elf) => do
-    -- IO.println s!"{repr elf}"
+    IO.println s!"{repr elf}"
     pure (.ok elf)
   | .ok (.elf64 _elf) => do
     pure (.error "64 bit ELF file not supported")
@@ -55,7 +55,7 @@ def initializeMemory (_size: MachineBits) (elf : ELF32File) : Std.HashMap Nat (B
   -- Handle interpreted_segments
   let mem'' := List.foldl (λ mem (_header, inst) => 
           -- TODO(JP): Is this address correct?
-          update_mem_segment mem inst.segment_offset inst.segment_body.data
+          update_mem_segment mem inst.segment_base inst.segment_body.data
         ) default elf.interpreted_segments
   -- Handle interpreted_sections
   let mem' := List.foldl (λ mem (_header, inst) => 
@@ -70,11 +70,13 @@ def initializeMemory (_size: MachineBits) (elf : ELF32File) : Std.HashMap Nat (B
   mem
 
 def initializeRegisters : Std.DHashMap Register RegisterType :=
-  Std.DHashMap.insert default sorry sorry -- DEFAULT_RSTVEC
+  Std.DHashMap.empty
+  -- TODO: initialize register properly
+  -- Std.DHashMap.insert default sorry sorry -- DEFAULT_RSTVEC
 
-noncomputable def runElf32 (elf : ELF32File) : IO UInt32 :=
+def runElf32 (elf : ELF32File) : IO UInt32 :=
   open Sail in
-  open Functions in
+  open LeanRV64DLEAN.Functions in
   let mem := initializeMemory MachineBits.B32 elf
   let regs := initializeRegisters
   let initialState := ⟨regs, (), mem, default, default, default⟩
