@@ -23,8 +23,8 @@ Bitvector pattern syntax category.
 Example: [sf:1,0011010000,Rm:5,000000,Rn:5,Rd:5]
 -/
 declare_syntax_cat bvpat
-syntax num : bvpat
-syntax ident : bvpat
+syntax num ("if" term)?: bvpat
+syntax ident ("if" term)?: bvpat
 syntax "[" bvpat_comp,* "]" ("if" term)? : bvpat
 
 open Lean
@@ -92,9 +92,9 @@ def BVPatComp.toBVVar? (c : BVPatComp) : MacroM (Option (TSyntax `ident)) := do
 
 def BVPat.getComponents (p : BVPat) : MacroM ((Array BVPatComp) × Option Term) :=
   match p with
-  | `(bvpat|$n:num) => do
+  | `(bvpat|$n:num $[if $t:term]?) => do
     let n ← `(bvpat_comp|$n:num)
-    return (#[n],none)
+    return (#[n],t)
   | `(bvpat| [$comp,*] $[if $t]?) => return (comp.getElems.reverse,t)
   | _ => return (#[],none)
 
@@ -102,7 +102,7 @@ def BVPat.getComponents (p : BVPat) : MacroM ((Array BVPatComp) × Option Term) 
 Return the number of bits in a bit-vector pattern.
 -/
 def BVPat.length (p : BVPat) : TermElabM (Option Nat) := do
-  if let `(bvpat|$_:ident) := p then return none else
+  if let `(bvpat|$_:ident $[if $_:term]?) := p then return none else
   let mut sz := 0
   for c in (← liftMacroM <| p.getComponents).1 do
     let n ← c.length
@@ -123,7 +123,7 @@ where `yᵢ`s are the pattern variables in `pat`.
 def declBVPatVars (vars : Array Term) (pats : Array BVPat) (rhs : Term) : TermElabM Term := do
   let mut result := rhs
   for (pat, var) in pats.zip vars do
-    if let `(bvpat|$i:ident) := pat then
+    if let `(bvpat|$i:ident $[if $t:term]?) := pat then
       result ← `(let $i := $var; $result)
       break
     let mut shift  := 0
@@ -145,6 +145,9 @@ def genBVPatMatchTest (vars : Array Term) (pats : Array BVPat): TermElabM Term :
   let mut result ← `(true)
 
   for (pat, var) in pats.zip vars do
+    if let `(bvpat|$i:ident if $t:term) := pat then
+      result ← `($result && (let $i := $var; $t:term))
+      break
     let mut shift := 0
     let (cs,if') ← liftMacroM <| pat.getComponents
     for c in cs do
