@@ -1985,7 +1985,7 @@ module Make (Config : CONFIG) = struct
                 muxers;
               let* this_pathcond =
                 let* pi = mapM Smt.smt_cval (get_pi n) in
-                return (Smt_exp.simp SimpSet.empty (smt_conj pi))
+                return (Smt_exp.simp SimpSet.empty (smt_conj (Var (Name (mk_id "assert_reachable#", -1)) :: pi)))
               in
               let* block = svir_cfnode spec_info ctx this_pathcond cfnode in
               List.iter add_comb_statement block;
