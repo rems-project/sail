@@ -226,35 +226,54 @@ let bind_numeric l typ env =
   | Some (kids, nc, nexp) -> (nexp, add_existential l (List.map (mk_kopt K_int) kids) nc env)
   | None -> typ_error l ("Expected " ^ string_of_typ typ ^ " to be numeric")
 
-let check_shadow_leaks l inner_env outer_env typ =
-  typ_debug (lazy ("Shadow leaks: " ^ string_of_typ typ));
-  let vars = tyvars_of_typ typ in
-  List.iter
-    (fun var ->
-      if Env.shadows var inner_env > Env.shadows var outer_env then
-        typ_error l ("Type variable " ^ string_of_kid var ^ " would leak into a scope where it is shadowed")
-      else (
-        match Env.get_typ_var_loc_opt var outer_env with
-        | Some _ -> ()
-        | None -> (
-            match Env.get_typ_var_loc_opt var inner_env with
-            | Some leak_l ->
-                typ_raise l
-                  (err_because
-                     ( Err_other
-                         ("The type variable " ^ string_of_kid var
-                        ^ " would leak into an outer scope.\n\nTry adding a type annotation to this expression."
-                         ),
-                       leak_l,
-                       Err_other ("Type variable " ^ string_of_kid var ^ " was introduced here")
-                     )
-                  )
-            | None -> Reporting.unreachable l __POS__ "Found a type with an unknown type variable"
-          )
+let promote_to_existential l inner_env outer_env typ =
+  typ_debug (lazy ("Promote to existential: " ^ string_of_typ typ));
+
+  let would_be_unbound var =
+    match Env.get_typ_var_opt var outer_env with
+    | Some (_, k) -> if Env.shadows var inner_env > Env.shadows var outer_env then Some k else None
+    | None -> (
+        match Env.get_typ_var_opt var inner_env with
+        | Some (_, k) -> Some k
+        | None -> Reporting.unreachable l __POS__ "Found a type with an unknown type variable"
       )
+  in
+
+  let unbound_in_outer vars =
+    KidSet.elements vars
+    |> List.map (fun var -> match would_be_unbound var with Some k -> Some (mk_kopt k var) | None -> None)
+    |> Util.option_these
+  in
+
+  let unbound_set unbounds = List.fold_left (fun s kopt -> KidSet.add (kopt_kid kopt) s) KidSet.empty unbounds in
+
+  let rec gather_constraints already_seen vars =
+    let unbounds = unbound_in_outer vars in
+    let unbound_vars = unbound_set unbounds in
+    let new_vars, nc =
+      List.fold_left
+        (fun (new_vars, conj) nc ->
+          let nc_vars = tyvars_of_constraint nc in
+          let nc_other_vars = KidSet.diff nc_vars unbound_vars in
+          if KidSet.cardinal nc_vars = KidSet.cardinal nc_other_vars then (new_vars, conj)
+          else (KidSet.union nc_other_vars new_vars, nc_and nc conj)
+        )
+        (KidSet.empty, nc_true) (Env.get_constraints inner_env)
+    in
+    let new_vars = KidSet.diff new_vars already_seen in
+    if not (KidSet.is_empty new_vars) then (
+      let more_unbounds, more_nc = gather_constraints vars new_vars in
+      (unbounds @ more_unbounds, nc_and nc more_nc)
     )
-    (KidSet.elements vars);
-  typ
+    else (unbounds, nc)
+  in
+
+  match gather_constraints KidSet.empty (tyvars_of_typ typ) with
+  | [], _ -> typ
+  | vars, nc ->
+      let ex_typ = mk_typ (Typ_exist (vars, nc, typ)) in
+      Env.wf_typ ~at:l outer_env ex_typ;
+      ex_typ
 
 (** Pull an (potentially)-existentially qualified type into the global typing environment **)
 let bind_existential l name typ env =
@@ -964,6 +983,13 @@ let alpha_equivalent env typ1 typ2 =
     typ_debug (lazy "Not alpha-equivalent");
     false
   )
+
+let alpha_equivalent_arg env (A_aux (arg1, _)) (A_aux (arg2, _)) =
+  match (arg1, arg2) with
+  | A_typ typ1, A_typ typ2 -> alpha_equivalent env typ1 typ2
+  | A_nexp n1, A_nexp n2 -> nexp_identical n1 n2
+  | A_bool nc1, A_bool nc2 -> nc_identical nc1 nc2
+  | _, _ -> false
 
 let unifier_constraint env (v, arg) =
   match arg with A_aux (A_nexp nexp, _) -> Env.add_constraint (nc_eq (nvar v) nexp) env | _ -> env
@@ -2195,14 +2221,14 @@ let rec check_exp env (E_aux (exp_aux, (l, uannot)) as exp : uannot exp) (Typ_au
           let tpat, inner_env = bind_pat_no_guard env pat ptyp in
           annot_exp
             (E_let (LB_aux (LB_val (tpat, checked_bind), (let_loc, empty_tannot)), crule check_exp inner_env exp typ))
-            (check_shadow_leaks l inner_env env typ)
+            (promote_to_existential l inner_env env typ)
       | LB_val (pat, bind) ->
           let inferred_bind = irule infer_exp env bind in
           ignore (check_pattern_duplicates env pat);
           let tpat, inner_env = bind_pat_no_guard env pat (typ_of inferred_bind) in
           annot_exp
             (E_let (LB_aux (LB_val (tpat, inferred_bind), (let_loc, empty_tannot)), crule check_exp inner_env exp typ))
-            (check_shadow_leaks l inner_env env typ)
+            (promote_to_existential l inner_env env typ)
     end
   | E_vector_append (v1, E_aux (E_vector [], _)), _ -> check_exp env v1 typ
   | E_vector_append (v1, v2), _ -> check_exp env (E_aux (E_app (mk_id "append", [v1; v2]), (l, uannot))) typ
@@ -2390,7 +2416,7 @@ let rec check_exp env (E_aux (exp_aux, (l, uannot)) as exp : uannot exp) (Typ_au
         | _ -> inner_env
       in
       let checked_body = crule check_exp inner_env body typ in
-      annot_exp (E_internal_plet (tpat, bind_exp, checked_body)) (check_shadow_leaks l inner_env env typ)
+      annot_exp (E_internal_plet (tpat, bind_exp, checked_body)) (promote_to_existential l inner_env env typ)
   | E_vector vec, orig_typ -> begin
       let literal_len = List.length vec in
       let tyvars, nc, typ =
@@ -3798,7 +3824,7 @@ and infer_exp env (E_aux (exp_aux, (l, uannot)) as exp) =
       let inferred_body = irule infer_exp inner_env body in
       annot_exp
         (E_internal_plet (tpat, bind_exp, inferred_body))
-        (check_shadow_leaks l inner_env env (typ_of inferred_body))
+        (promote_to_existential l inner_env env (typ_of inferred_body))
   | E_let (LB_aux (letbind, (let_loc, _)), exp) ->
       let bind_exp, pat, ptyp =
         match letbind with
@@ -3815,7 +3841,7 @@ and infer_exp env (E_aux (exp_aux, (l, uannot)) as exp) =
       let inferred_exp = irule infer_exp inner_env exp in
       annot_exp
         (E_let (LB_aux (LB_val (tpat, bind_exp), (let_loc, empty_tannot)), inferred_exp))
-        (check_shadow_leaks l inner_env env (typ_of inferred_exp))
+        (promote_to_existential l inner_env env (typ_of inferred_exp))
   | E_ref id when Env.is_register id env ->
       let typ = Env.get_register id env in
       annot_exp (E_ref id) (register_typ typ)
@@ -5173,29 +5199,29 @@ and check_outcome_instantiation :
   (* Instantiate the outcome type with these existing parameters *)
   let typ =
     List.fold_left
-      (fun typ (kid, (_, _, existing_typ)) -> typ_subst kid (mk_typ_arg (A_typ existing_typ)) typ)
+      (fun typ (kid, (_, _, existing_arg)) -> typ_subst kid existing_arg typ)
       typ (KBindings.bindings instantiated)
   in
 
   let instantiate_typ substs typ =
     List.fold_left
       (fun (typ, new_instantiated, fns, env) -> function
-        | IS_aux (IS_typ (kid, subst_typ), decl_l) -> begin
+        | IS_aux (IS_typ (kid, subst_arg), decl_l) -> begin
             match KBindings.find_opt kid instantiated with
-            | Some (_, _, existing_typ) when alpha_equivalent env subst_typ existing_typ ->
+            | Some (_, _, existing_arg) when alpha_equivalent_arg env subst_arg existing_arg ->
                 (typ, new_instantiated, fns, env)
-            | Some (prev_l, _, existing_typ) ->
+            | Some (prev_l, _, existing_arg) ->
                 let msg =
                   Printf.sprintf "Cannot instantiate %s with %s, already instantiated as %s" (string_of_kid kid)
-                    (string_of_typ subst_typ) (string_of_typ existing_typ)
+                    (string_of_typ_arg subst_arg) (string_of_typ_arg existing_arg)
                 in
                 typ_raise decl_l (err_because (Err_other msg, prev_l, Err_other "Previously instantiated here"))
             | None ->
-                Env.wf_typ ~at:decl_l env subst_typ;
-                ( typ_subst kid (mk_typ_arg (A_typ subst_typ)) typ,
-                  (kid, subst_typ) :: new_instantiated,
+                Env.wf_typ_arg ~at:decl_l env subst_arg;
+                ( typ_subst kid subst_arg typ,
+                  (kid, subst_arg) :: new_instantiated,
                   fns,
-                  Env.add_outcome_variable decl_l kid subst_typ env
+                  Env.add_outcome_variable decl_l kid subst_arg env
                 )
           end
         | IS_aux (IS_id (id_from, id_to), decl_l) -> (typ, new_instantiated, (id_from, id_to, decl_l) :: fns, env)
@@ -5224,14 +5250,10 @@ and check_outcome_instantiation :
       let from_typq, from_typ = Env.get_val_spec_orig id_from outcome_env in
       typ_debug (lazy (string_of_bind (to_typq, to_typ)));
 
+      let from_typ = List.fold_left (fun typ (v, subst_arg) -> typ_subst v subst_arg typ) from_typ new_instantiated in
       let from_typ =
         List.fold_left
-          (fun typ (v, subst_typ) -> typ_subst v (mk_typ_arg (A_typ subst_typ)) typ)
-          from_typ new_instantiated
-      in
-      let from_typ =
-        List.fold_left
-          (fun typ (v, (_, _, subst_typ)) -> typ_subst v (mk_typ_arg (A_typ subst_typ)) typ)
+          (fun typ (v, (_, _, subst_arg)) -> typ_subst v subst_arg typ)
           from_typ (KBindings.bindings instantiated)
       in
 

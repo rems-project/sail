@@ -44,6 +44,18 @@ def addInt {w : Nat} (x : BitVec w) (i : Int) : BitVec w :=
 def subInt (x : BitVec w) (i : Int) : BitVec w :=
   x - BitVec.ofInt w i
 
+def countLeadingZeros (x : BitVec w) : Nat :=
+  if h : w = 0 || BitVec.msb x then
+    0
+  else
+    1 + countLeadingZeros (x.extractLsb' 0 (w - 1))
+  decreasing_by
+    simp only [Bool.or_eq_true, decide_eq_true_eq, not_or, Bool.not_eq_true] at h
+    omega
+
+def countTrailingZeros (x : BitVec w) : Nat :=
+  countLeadingZeros (x.reverse)
+
 def append' (x : BitVec n) (y : BitVec m) {mn}
     (hmn : mn = n + m := by (conv => rhs; simp); try rfl) : BitVec mn :=
   (x.append y).cast hmn.symm

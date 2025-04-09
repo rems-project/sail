@@ -77,7 +77,9 @@ let opt_lean_import_files : string list ref = ref []
 
 let opt_lean_noncomputable : bool ref = ref false
 
-let lean_version : string = "lean4:nightly-2025-02-05"
+let opt_single_file : bool ref = ref false
+
+let lean_version : string = "lean4:nightly-2025-03-17"
 
 let lean_options =
   [
@@ -88,6 +90,10 @@ let lean_options =
     ( Flag.create ~prefix:["lean"] "force_output",
       Arg.Unit (fun () -> opt_lean_force_output := true),
       "removes the content of the output directory if it is non-empty"
+    );
+    ( Flag.create ~prefix:["lean"] "single_file",
+      Arg.Unit (fun () -> opt_single_file := true),
+      "puts the entire output in a single .lean file"
     );
     ( Flag.create ~prefix:["lean"] "noncomputable",
       Arg.Unit (fun () -> opt_lean_noncomputable := true),
@@ -183,6 +189,7 @@ type lean_context = {
   sail_dir : string;
   types_file : out_channel;
   funcs_file : out_channel;
+  import_files : out_channel list;
   lakefile : out_channel;
 }
 
@@ -205,7 +212,24 @@ let path_to_static_libarary sail_dir str = Filename.quote (sail_dir ^ "/src/sail
 let copy_from_static_library sail_dir lean_sail_dir str =
   Unix.system ("cp " ^ path_to_static_libarary sail_dir str ^ " " ^ Filename.quote lean_sail_dir)
 
-let start_lean_output (out_name : string) default_sail_dir =
+let print_function_file_prelude file out_name_camel (prev_file : string option) =
+  let _ =
+    match prev_file with
+    | None ->
+        output_string file ("import " ^ out_name_camel ^ ".Sail.Sail\n");
+        output_string file ("import " ^ out_name_camel ^ ".Sail.BitVec\n");
+        output_string file ("import " ^ out_name_camel ^ ".Sail.IntRange\n");
+        output_string file ("import " ^ out_name_camel ^ ".Defs\n");
+        List.iter
+          (fun filename -> output_string file ("import " ^ out_name_camel ^ "." ^ file_to_module filename ^ "\n"))
+          !opt_lean_import_files
+    | Some n -> output_string file ("import " ^ out_name_camel ^ "." ^ n ^ "\n")
+  in
+  output_string file ("\n" ^ file_prelude);
+  if !opt_lean_noncomputable then output_string file "noncomputable section\n\n";
+  output_string file ("namespace " ^ out_name_camel ^ ".Functions\n\n")
+
+let start_lean_output (out_name : string) (import_names : string list) default_sail_dir =
   let base_dir = match !opt_lean_output_dir with Some dir -> dir | None -> "." in
   let project_dir = Filename.concat base_dir out_name in
   if !opt_lean_force_output && Sys.file_exists project_dir && Sys.is_directory project_dir then (
@@ -222,6 +246,7 @@ let start_lean_output (out_name : string) default_sail_dir =
   close_out lean_toolchain;
   let sail_dir = Reporting.get_sail_dir default_sail_dir in
   let out_name_camel = Libsail.Util.to_upper_camel_case out_name in
+  let import_names_camel = List.map Libsail.Util.to_upper_camel_case import_names in
   let lean_src_dir = Filename.concat project_dir out_name_camel in
   if not (Sys.file_exists lean_src_dir) then Unix.mkdir lean_src_dir 0o775;
   let lean_sail_dir = lean_src_dir ^ "/Sail/" in
@@ -244,17 +269,21 @@ let start_lean_output (out_name : string) default_sail_dir =
   output_string types_file "open PreSail\n\n";
   output_string types_file file_prelude;
   let funcs_file = open_out (Filename.concat project_dir (out_name_camel ^ ".lean")) in
-  output_string funcs_file ("import " ^ out_name_camel ^ ".Sail.Sail\n");
-  output_string funcs_file ("import " ^ out_name_camel ^ ".Sail.BitVec\n");
-  output_string funcs_file ("import " ^ out_name_camel ^ ".Sail.IntRange\n");
-  output_string funcs_file ("import " ^ out_name_camel ^ ".Defs\n");
-  List.iter
-    (fun filename -> output_string funcs_file ("import " ^ out_name_camel ^ "." ^ file_to_module filename ^ "\n"))
-    !opt_lean_import_files;
-  output_string funcs_file ("\n" ^ file_prelude);
-  if !opt_lean_noncomputable then output_string funcs_file "noncomputable section\n\n";
   let lakefile = open_out (Filename.concat project_dir "lakefile.toml") in
-  { out_name; out_name_camel; sail_dir; types_file; funcs_file; lakefile }
+  let import_files =
+    List.map (fun name -> open_out (Filename.concat lean_src_dir (name ^ ".lean"))) import_names_camel
+  in
+  let last_import_name =
+    List.fold_left
+      (fun prev_name (out, n) ->
+        print_function_file_prelude out out_name_camel prev_name;
+        Some n
+      )
+      None
+      (List.combine import_files import_names_camel)
+  in
+  print_function_file_prelude funcs_file out_name_camel last_import_name;
+  { out_name; out_name_camel; sail_dir; types_file; funcs_file; import_files; lakefile }
 
 let close_context ctx =
   close_out ctx.types_file;
@@ -273,15 +302,40 @@ let create_lake_project (ctx : lean_context) executable =
     output_string ctx.lakefile ("root = \"" ^ ctx.out_name_camel ^ "\"\n")
   )
 
-let output (out_name : string) env effect_info ast default_sail_dir =
-  let ctx = start_lean_output out_name default_sail_dir in
-  let executable = Pretty_print_lean.pp_ast_lean env effect_info ast ctx.types_file ctx.funcs_file in
+let rec dedup_files (files : string list) (acc : string list) =
+  match files with
+  | [] -> acc
+  | f :: fs -> (
+      match List.fold_left (fun n y -> if y = f then n + 1 else n) 0 acc with
+      | 0 -> dedup_files fs (acc @ [f])
+      | n -> dedup_files fs (acc @ [f ^ Int.to_string (n - 1)])
+    )
+
+let output (out_name : string) env effect_info ({ defs; _ } as ast : Libsail.Type_check.typed_ast) default_sail_dir
+    single_file noncomputable =
+  let imports =
+    if single_file then []
+    else (
+      (* Collect all non-empty slices between include pragmas in the file *)
+      let imports = Pretty_print_lean.collect_import_files defs (out_name ^ ".sail") in
+      let imports = List.map file_to_module imports in
+      (* Discard the last import file, as we will use the main file instead *)
+      let imports = Pretty_print_lean.take (List.length imports - 1) imports in
+      dedup_files imports []
+    )
+  in
+  let ctx = start_lean_output out_name imports default_sail_dir in
+  let out_name_camel = Libsail.Util.to_upper_camel_case out_name in
+  let executable =
+    Pretty_print_lean.pp_ast_lean env effect_info ast out_name_camel ctx.types_file ctx.import_files ctx.funcs_file
+      noncomputable
+  in
   create_lake_project ctx executable
 (* Uncomment for debug output of the Sail code after the rewrite passes *)
 (* Pretty_print_sail.output_ast stdout (Type_check.strip_ast ast) *)
 
 let lean_target out_name { default_sail_dir; ctx; ast; effect_info; env; _ } =
   let out_name = match out_name with Some f -> f | None -> "out" in
-  output out_name env effect_info ast default_sail_dir
+  output out_name env effect_info ast default_sail_dir !opt_single_file !opt_lean_noncomputable
 
 let _ = Target.register ~name:"lean" ~options:lean_options ~rewrites:lean_rewrites ~asserts_termination:true lean_target

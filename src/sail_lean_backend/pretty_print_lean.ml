@@ -12,7 +12,13 @@ open Pretty_print_common
 (* Command line options *)
 let opt_extern_types : string list ref = ref []
 
-type global_context = { effect_info : Effects.side_effect_info; fun_args : string list Bindings.t }
+type global_context = {
+  effect_info : Effects.side_effect_info;
+  fun_args : string list Bindings.t;
+  kid_id_renames : id option KBindings.t;
+      (** Associates a kind variable to the corresponding argument of the function, used for implicit arguments. *)
+  kid_id_renames_rev : kid Bindings.t;  (** Inverse of the [kid_id_renames] mapping. *)
+}
 
 let the_main_function_has_been_seen = ref false
 
@@ -39,8 +45,8 @@ let context_init env global =
   {
     global;
     env;
-    kid_id_renames = KBindings.empty;
-    kid_id_renames_rev = Bindings.empty;
+    kid_id_renames = global.kid_id_renames;
+    kid_id_renames_rev = global.kid_id_renames_rev;
     loop_level = 0;
     in_sail_monad = false;
     in_except_monad = false;
@@ -57,6 +63,18 @@ let add_single_kid_id_rename ctx id kid =
     ctx with
     kid_id_renames = KBindings.add kid (Some id) kir;
     kid_id_renames_rev = Bindings.add id kid ctx.kid_id_renames_rev;
+  }
+
+let add_global_kid_id_rename (global : global_context) id kid =
+  let kir =
+    match Bindings.find_opt id global.kid_id_renames_rev with
+    | Some kid -> KBindings.add kid None global.kid_id_renames
+    | None -> global.kid_id_renames
+  in
+  {
+    global with
+    kid_id_renames = KBindings.add kid (Some id) kir;
+    kid_id_renames_rev = Bindings.add id kid global.kid_id_renames_rev;
   }
 
 let implicit_parens x = enclose (string "{") (string "}") x
@@ -670,9 +688,10 @@ and doc_exp (as_monadic : bool) ctx (E_aux (e, (l, annot)) as full_exp) =
           match arg' with
           | E_typ (_, e) when has_effect e -> ((fun x -> wrap_with_do with_arrow true x), true)
           | E_typ (_, e) when has_early_return e -> (parens, false)
-          | E_let _ | E_internal_plet _ | E_if _ | E_match _ ->
+          | E_let _ | E_internal_plet _ | E_if _ | E_match _ | E_var _ ->
               if has_effect arg then ((fun x -> wrap_with_do with_arrow true x), true) else (parens, false)
-          | _ -> ((fun x -> x), false)
+          | _ when has_loop arg -> ((fun x -> wrap_with_do with_arrow true x), true)
+          | _ -> ((fun x -> x), not with_arrow) (* for [sailTryCatch] the argument should be a computation *)
         )
     in
     wrap (doc_exp arg_monadic ctx arg)
@@ -923,7 +942,7 @@ and doc_exp (as_monadic : bool) ctx (E_aux (e, (l, annot)) as full_exp) =
       let try_catch = if has_early_return e then string "sailTryCatchE " else string "sailTryCatch " in
       nest 2
         (try_catch
-        ^^ parens (d_of_arg ~with_arrow:(not as_monadic) ctx e)
+        ^^ parens (d_of_arg ~with_arrow:false ctx e)
         ^^ space
         ^^ parens (string "fun the_exception => " ^^ hardline ^^ cases)
         )
@@ -1132,47 +1151,69 @@ let doc_typdef ctx (TD_aux (td, tannot) as full_typdef) =
 
 (* Copied from the Coq PP *)
 let doc_val ctx pat exp =
-  let id, pat_typ =
+  let global, id, pat_typ =
     match pat with
-    | P_aux (P_typ (typ, P_aux (P_id id, _)), _) -> (id, Some typ)
-    | P_aux (P_id id, _) -> (id, None)
-    | P_aux (P_var (P_aux (P_id id, _), TP_aux (TP_var kid, _)), _) when Id.compare id (id_of_kid kid) == 0 -> (id, None)
+    | P_aux (P_typ (typ, P_aux (P_id id, _)), _) -> (ctx.global, id, Some typ)
+    | P_aux (P_id id, _) -> (ctx.global, id, None)
+    | P_aux (P_var (P_aux (P_id id, _), TP_aux (TP_var kid, _)), _) when Id.compare id (id_of_kid kid) == 0 ->
+        let global = add_global_kid_id_rename ctx.global id kid in
+        (global, id, None)
     | P_aux (P_typ (typ, P_aux (P_var (P_aux (P_id id, _), TP_aux (TP_var kid, _)), _)), _)
       when Id.compare id (id_of_kid kid) == 0 ->
-        (id, Some typ)
+        let global = add_global_kid_id_rename ctx.global id kid in
+        (global, id, Some typ)
     | P_aux (P_var (P_aux (P_id id, _), TP_aux (TP_app (app_id, [TP_aux (TP_var kid, _)]), _)), _)
       when Id.compare app_id (mk_id "atom") == 0 && Id.compare id (id_of_kid kid) == 0 ->
-        (id, None)
+        let global = add_global_kid_id_rename ctx.global id kid in
+        (global, id, None)
     | P_aux
         (P_typ (typ, P_aux (P_var (P_aux (P_id id, _), TP_aux (TP_app (app_id, [TP_aux (TP_var kid, _)]), _)), _)), _)
       when Id.compare app_id (mk_id "atom") == 0 && Id.compare id (id_of_kid kid) == 0 ->
-        (id, Some typ)
+        let global = add_global_kid_id_rename ctx.global id kid in
+        (global, id, Some typ)
     | _ -> failwith ("Pattern " ^ string_of_pat_con pat ^ " " ^ string_of_pat pat ^ " not translatable yet.")
   in
   let typpp = match pat_typ with None -> empty | Some typ -> space ^^ colon ^^ space ^^ doc_typ ctx typ in
   let idpp = doc_id_ctor id in
   let base_pp = doc_exp false ctx exp in
-  nest 2 (group (string "def" ^^ space ^^ idpp ^^ typpp ^^ space ^^ coloneq ^/^ base_pp))
+  (global, nest 2 (group (string "def" ^^ space ^^ idpp ^^ typpp ^^ space ^^ coloneq ^/^ base_pp)))
 
-let rec doc_defs_rec ctx defs types docdefs =
+let should_print_function_def def =
+  match def with
+  | DEF_aux (DEF_fundef fdef, dannot) -> not (Env.is_extern (id_of_fundef fdef) dannot.env "lean")
+  | DEF_aux (DEF_let (LB_aux (LB_val (pat, exp), _)), _) -> true
+  | _ -> false
+
+let rec doc_defs_rec ctx defs types (former_funcs : document list) (docdefs : document) =
   match defs with
-  | [] -> (types, docdefs)
+  | [] -> (types, former_funcs @ [docdefs])
   | DEF_aux (DEF_fundef fdef, dannot) :: defs' ->
       let env = dannot.env in
       let pp_f =
         if Env.is_extern (id_of_fundef fdef) env "lean" then docdefs
         else docdefs ^^ group (doc_fundef ctx fdef) ^/^ hardline
       in
-      doc_defs_rec ctx defs' types pp_f
+      doc_defs_rec ctx defs' types former_funcs pp_f
   | DEF_aux (DEF_type tdef, _) :: defs' when List.mem (string_of_id (id_of_type_def tdef)) !opt_extern_types ->
-      doc_defs_rec ctx defs' types docdefs
+      doc_defs_rec ctx defs' types former_funcs docdefs
   | DEF_aux (DEF_type tdef, _) :: defs' ->
-      doc_defs_rec ctx defs' (types ^^ group (doc_typdef ctx tdef) ^/^ hardline) docdefs
+      doc_defs_rec ctx defs' (types ^^ group (doc_typdef ctx tdef) ^/^ hardline) former_funcs docdefs
   | DEF_aux (DEF_let (LB_aux (LB_val (pat, exp), _)), _) :: defs' ->
-      doc_defs_rec ctx defs' types (docdefs ^^ group (doc_val ctx pat exp) ^/^ hardline)
-  | _ :: defs' -> doc_defs_rec ctx defs' types docdefs
+      let global, pp_val = doc_val ctx pat exp in
+      let ctx = { ctx with global } in
+      doc_defs_rec ctx defs' types former_funcs (docdefs ^^ group pp_val ^/^ hardline)
+  | DEF_aux (DEF_pragma ("include_start", Pragma_line (file, _)), _) :: defs'
+  | DEF_aux (DEF_pragma ("file_start", Pragma_line (file, _)), _) :: defs'
+  | DEF_aux (DEF_pragma ("include_end", Pragma_line (file, _)), _) :: defs'
+  | DEF_aux (DEF_pragma ("file_end", Pragma_line (file, _)), _) :: defs'
+    when Filename.check_suffix file ".sail" ->
+      if docdefs = empty then doc_defs_rec ctx defs' types former_funcs docdefs
+      else doc_defs_rec ctx defs' types (former_funcs @ [docdefs]) empty
+  | d :: defs' ->
+      if should_print_function_def d then failwith "this case of doc_defs_rec should be unreachable"
+      else doc_defs_rec ctx defs' types former_funcs docdefs
 
-let doc_defs ctx defs = doc_defs_rec ctx defs empty empty
+let doc_defs ctx defs = doc_defs_rec ctx defs empty [] empty
 
 (* Remove all imports for now, they will be printed in other files. Probably just for testing. *)
 let rec remove_imports (defs : (Libsail.Type_check.tannot, Libsail.Type_check.env) def list) depth =
@@ -1296,11 +1337,43 @@ let populate_fun_args defs =
   in
   List.fold_left (fun args d -> add_args args d) Bindings.empty defs
 
-let pp_ast_lean (env : Type_check.env) effect_info ({ defs; _ } as ast : Libsail.Type_check.typed_ast) types_file
-    funcs_file =
+let rec collect_import_files_aux defs file_stack last_namespace ret =
+  match defs with
+  | [] -> ret
+  | DEF_aux (DEF_pragma ("include_start", Pragma_line (file, _)), _) :: ds
+  | DEF_aux (DEF_pragma ("file_start", Pragma_line (file, _)), _) :: ds
+    when Filename.check_suffix file ".sail" ->
+      collect_import_files_aux ds (file :: file_stack) last_namespace ret
+  | DEF_aux (DEF_pragma ("include_end", Pragma_line (file, _)), _) :: ds
+  | DEF_aux (DEF_pragma ("file_end", Pragma_line (file, _)), _) :: ds
+    when Filename.check_suffix file ".sail" -> (
+      match file_stack with
+      | f :: fs -> collect_import_files_aux ds fs last_namespace ret
+      | _ -> failwith "should not be reachable"
+    )
+  | d :: ds -> (
+      match file_stack with
+      | f :: _ ->
+          if should_print_function_def d && not (last_namespace = Some f) then
+            collect_import_files_aux ds file_stack (Some f) (ret @ [f])
+          else collect_import_files_aux ds file_stack last_namespace ret
+      | _ -> failwith "should not be reachable"
+    )
+
+let collect_import_files defs base =
+  let res = collect_import_files_aux defs [base] None [] in
+  if res = [] then [base] else res
+
+let rec take n xs = match (n, xs) with 0, _ -> [] | n, x :: xs -> x :: take (n - 1) xs | n, xs -> xs
+
+let rec last xs =
+  match xs with [] -> failwith "cannot take last element of empty list" | [x] -> x | x :: xs -> last xs
+
+let pp_ast_lean (env : Type_check.env) effect_info ({ defs; _ } as ast : Libsail.Type_check.typed_ast) out_name_camel
+    types_file imp_funcs_files funcs_file noncomputable =
   let regs = State.find_registers defs in
   let fun_args = populate_fun_args defs in
-  let global = { effect_info; fun_args } in
+  let global = { effect_info; fun_args; kid_id_renames = KBindings.empty; kid_id_renames_rev = Bindings.empty } in
   let ctx = context_init env global in
   let has_registers = List.length regs > 0 in
   let register_refs =
@@ -1309,12 +1382,29 @@ let pp_ast_lean (env : Type_check.env) effect_info ({ defs; _ } as ast : Libsail
   in
   let monad = doc_monad_abbrev defs has_registers in
   let instantiations = doc_instantiations ctx env in
-  let types, fundefs = doc_defs ctx defs in
-  let fundefs = string "namespace Functions\n\n" ^^ fundefs ^^ string "end Functions\n" in
+  let types, all_fundefss = doc_defs ctx defs in
+  let imp_fundefss, main_fundefs =
+    if imp_funcs_files = [] then ([], concat all_fundefss)
+    else (
+      let imp_fundefss = take (List.length all_fundefss - 1) all_fundefss in
+      let main_fundefs = last all_fundefss in
+      (imp_fundefss, main_fundefs)
+    )
+  in
+  let main_fundefs = main_fundefs ^^ string ("end " ^ out_name_camel ^ ".Functions") ^^ hardline in
   let main_function =
-    if !the_main_function_has_been_seen then main_function_stub effect_info has_registers else empty
+    if !the_main_function_has_been_seen then (
+      let stub = main_function_stub effect_info has_registers in
+      [string ("open " ^ out_name_camel ^ ".Functions\n\n") ^^ stub]
+    )
+    else []
   in
   let opens = IdSet.fold (fun id doc -> string "open " ^^ doc_id_ctor id ^^ hardline ^^ doc) !opens empty in
   print types_file (types ^^ register_refs ^^ monad ^^ instantiations);
-  print funcs_file (opens ^^ hardline ^^ fundefs ^^ string "open Functions\n\n" ^^ main_function);
+  let _ =
+    List.map2
+      (fun file defs -> print file (separate hardline (remove_empties [opens; defs])))
+      imp_funcs_files imp_fundefss
+  in
+  print funcs_file (separate hardline (remove_empties ([opens; main_fundefs] @ main_function)));
   !the_main_function_has_been_seen

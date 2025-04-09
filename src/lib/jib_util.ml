@@ -52,15 +52,18 @@ open Value2
 open PPrint
 module Document = Pretty_print_sail.Document
 
-let symbol_generator str =
+let generators = ref 0
+
+let symbol_generator () =
+  let gen_no = !generators in
+  incr generators;
   let counter = ref 0 in
   let gensym () =
-    let id = mk_id (str ^ "#" ^ string_of_int !counter) in
+    let id = Gen (gen_no, !counter, -1) in
     incr counter;
     id
   in
-  let reset () = counter := 0 in
-  (gensym, reset)
+  gensym
 
 (* Define wrappers for creating bytecode instructions. Each function
    uses a counter to assign each instruction a unique identifier. *)
@@ -76,10 +79,10 @@ let idecl l ctyp id = I_aux (I_decl (ctyp, id), (instr_number (), l))
 
 let ireset l ctyp id = I_aux (I_reset (ctyp, id), (instr_number (), l))
 
-let generate_static_var, _ = symbol_generator "gen_static"
+let generate_static_var = symbol_generator ()
 
 let istatic l ctyp value =
-  let id = Name (generate_static_var (), -1) in
+  let id = generate_static_var () in
   (id, I_aux (I_init (ctyp, id, Init_static value), (instr_number (), l)))
 
 let iinit l ctyp id cval = I_aux (I_init (ctyp, id, Init_cval cval), (instr_number (), l))
@@ -102,7 +105,7 @@ let ireturn ?loc:(l = Parse_ast.Unknown) cval = I_aux (I_return cval, (instr_num
 
 let iend l = I_aux (I_end (Return (-1)), (instr_number (), l))
 
-let iend_id l id = I_aux (I_end (Name (id, -1)), (instr_number (), l))
+let iend_name l name = I_aux (I_end name, (instr_number (), l))
 
 let iblock ?loc:(l = Parse_ast.Unknown) instrs = I_aux (I_block instrs, (instr_number (), l))
 
@@ -132,9 +135,16 @@ module Name = struct
   type t = name
   let compare id1 id2 =
     match (id1, id2) with
+    | Gen (x1, x2, n), Gen (y1, y2, m) ->
+        let c1 = Int.compare x1 y1 in
+        if c1 = 0 then (
+          let c2 = Int.compare x2 y2 in
+          if c2 = 0 then Int.compare n m else c2
+        )
+        else c1
     | Name (x, n), Name (y, m) ->
         let c1 = Id.compare x y in
-        if c1 = 0 then compare n m else c1
+        if c1 = 0 then Int.compare n m else c1
     | Have_exception n, Have_exception m -> compare n m
     | Current_exception n, Current_exception m -> compare n m
     | Return n, Return m -> compare n m
@@ -146,6 +156,8 @@ module Name = struct
         | Chan_stdout, Chan_stderr -> 1
         | Chan_stderr, Chan_stdout -> -1
       end
+    | Gen _, _ -> 1
+    | _, Gen _ -> -1
     | Name _, _ -> 1
     | _, Name _ -> -1
     | Have_exception _, _ -> 1
@@ -206,6 +218,7 @@ let instrs_rename from_name to_name = visit_instrs (new rename_visitor from_name
 let string_of_name ?deref_current_exception:(dce = false) ?(zencode = true) =
   let ssa_num n = if n = -1 then "" else "/" ^ string_of_int n in
   function
+  | Gen (v1, v2, n) -> "%" ^ string_of_int v1 ^ "." ^ string_of_int v2 ^ ssa_num n
   | Name (id, n) -> (if zencode then Util.zencode_string (string_of_id id) else string_of_id id) ^ ssa_num n
   | Have_exception n -> "have_exception" ^ ssa_num n
   | Return n -> "return" ^ ssa_num n

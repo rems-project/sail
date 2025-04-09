@@ -1180,7 +1180,7 @@ module Counterexample (Config : COUNTEREXAMPLE_CONFIG) = struct
 
   let rec find_arg l ctx id ctyp arg_smt_names = function
     | List [Atom "define-fun"; Atom str; List []; _; value] :: _
-      when Util.assoc_compare_opt Id.compare id arg_smt_names = Some (Some str) ->
+      when Util.assoc_compare_opt Name.compare id arg_smt_names = Some (Some str) ->
         (id, value_of_sexpr l ctx value ctyp)
     | _ :: sexps -> find_arg l ctx id ctyp arg_smt_names sexps
     | [] -> (id, V_unit)
@@ -1217,7 +1217,9 @@ module Counterexample (Config : COUNTEREXAMPLE_CONFIG) = struct
           let open Interpreter in
           print_endline (sprintf "Solver found counterexample: %s" Util.("ok" |> green |> clear));
           let counterexample = build_counterexample loc ctx args arg_ctyps arg_smt_names model in
-          List.iter (fun (id, v) -> print_endline ("  " ^ string_of_id id ^ " -> " ^ string_of_value v)) counterexample;
+          List.iter
+            (fun (id, v) -> print_endline ("  " ^ string_of_name id ^ " -> " ^ string_of_value v))
+            counterexample;
           let istate = initial_state ast env !primops in
           let annot = (Parse_ast.Unknown, Type_check.mk_tannot env bool_typ) in
           let call =

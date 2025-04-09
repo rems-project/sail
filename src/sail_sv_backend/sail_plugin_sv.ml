@@ -347,8 +347,8 @@ end
 
 let register_types cdefs =
   List.fold_left
-    (fun acc cdef -> match cdef with CDEF_aux (CDEF_register (id, ctyp, _), _) -> Bindings.add id ctyp acc | _ -> acc)
-    Bindings.empty cdefs
+    (fun acc cdef -> match cdef with CDEF_aux (CDEF_register (id, ctyp, _), _) -> NameMap.add id ctyp acc | _ -> acc)
+    NameMap.empty cdefs
 
 let jib_of_ast make_call_precise env ast effect_info =
   let open Jib_compile in

@@ -51,6 +51,7 @@ open Ast
 open Ast_defs
 open Ast_util
 open Jib
+open Jib_util
 open Type_check
 
 (** This forces all integer struct fields to be represented as int64_t. Specifically intended for the various TLB
@@ -78,10 +79,10 @@ type ctx = {
   local_env : Env.t;
   tc_env : Env.t;
   effect_info : Effects.side_effect_info;
-  locals : (mut * ctyp) Bindings.t;
+  locals : (mut * ctyp) NameMap.t;
   registers : ctyp Bindings.t;
   letbinds : int list;
-  letbind_ids : IdSet.t;
+  letbind_ids : NameSet.t;
   no_raw : bool;
   no_static : bool;
   coverage_override : bool;

@@ -58,7 +58,7 @@ module type CONFIG = sig
   val max_unknown_integer_width : int
   val max_unknown_bitvector_width : int
   val max_unknown_generic_vector_length : int
-  val register_map : id list CTMap.t
+  val register_map : name list CTMap.t
   val ignore_overflow : bool
 end
 
@@ -67,9 +67,9 @@ module Make (Config : CONFIG) : sig
     loc : Ast.l;
     file_name : string;
     function_id : id;
-    args : id list;
+    args : name list;
     arg_ctyps : ctyp list;
-    arg_smt_names : (id * string option) list;
+    arg_smt_names : (name * string option) list;
   }
 
   (** Generate SMT for all the $property and $counterexample pragmas provided, and write the generated SMT to
@@ -88,4 +88,4 @@ val compile :
   Type_check.Env.t ->
   Effects.side_effect_info ->
   Type_check.typed_ast ->
-  cdef list * Jib_compile.ctx * id list CTMap.t
+  cdef list * Jib_compile.ctx * name list CTMap.t

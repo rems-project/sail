@@ -107,8 +107,8 @@ val get_val_spec_orig : id -> t -> typquant * typ
 
 val add_outcome : id -> typquant * typ * kinded_id list * id list * t -> t -> t
 val get_outcome : l -> id -> t -> typquant * typ * kinded_id list * id list * t
-val get_outcome_instantiation : t -> (Ast.l * typ) KBindings.t
-val add_outcome_variable : l -> kid -> typ -> t -> t
+val get_outcome_instantiation : t -> (Ast.l * typ_arg) KBindings.t
+val add_outcome_variable : l -> kid -> typ_arg -> t -> t
 val set_outcome_typschm : outcome_loc:l -> typquant * typ -> t -> t
 val get_outcome_typschm_opt : t -> (typquant * typ) option
 
@@ -167,6 +167,7 @@ val add_constraint : ?global:bool -> ?reason:Ast.l * string -> n_constraint -> t
 val add_typquant : l -> typquant -> t -> t
 
 val get_typ_var : kid -> t -> kind_aux
+val get_typ_var_opt : kid -> t -> (Ast.l * kind_aux) option
 val get_typ_var_loc_opt : kid -> t -> Ast.l option
 val get_typ_vars : t -> kind_aux KBindings.t
 val get_typ_var_locs : t -> Ast.l KBindings.t
@@ -237,6 +238,7 @@ val is_toplevel : t -> l option
 
 (* Well formedness-checks *)
 val wf_typ : at:l -> t -> typ -> unit
+val wf_typ_arg : at:l -> t -> typ_arg -> unit
 val wf_constraint : at:l -> t -> n_constraint -> unit
 
 (** Some of the code in the environment needs to use the smt solver, which is defined below. To break the circularity

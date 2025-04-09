@@ -24,9 +24,7 @@ sail = get_sail()
 skip_selftests = {
     'list_rec_functions2',
     'pow2_var',
-    'exn_hello_world',
     'outcome_impl',
-    'primop',
     'assign_rename_bug',
     'union_variant_names',
     'varswap',
@@ -36,8 +34,6 @@ skip_selftests = {
     'string_of_bits',
     'custom_flow',
     'pointer_assign',
-    'ctz',
-    'spc_mappings',
     'concurrency_interface',
     'for_shadow',
     'string_literal_type',
@@ -47,19 +43,18 @@ skip_selftests = {
     'pc_no_wildcard',
     'type_if_bits',
     'nexp_simp_euclidian',
-    'toplevel_tyvar',
     'concurrency_interface_write',
     'read_write_ram',
     'issue136',
     'fail_exception',
     'anf_as_pattern',
-    'poly_mapping',
     'real_prop',
     'lib_dec_bits',
     'constructor247',
     'deep_poly_nest',
     'config_abstract_bool', # Register type unsupported in state.ml
     'newtype',
+    'assign_in_funarg',
     'encdec', # Deactivated to enable match_bv
     'encdec_subrange', # Deactivated to enable match_bv
     'option_nest', # Deactivated to enable match_bv
@@ -102,7 +97,7 @@ def test_lean(subdir: str, skip_list = None, runnable: bool = False):
                     'coq-print.splice',
                     '--strict-bitvector'
                 ] if runnable else [ ])
-                step('\'{}\' {} {} --lean --lean-output-dir {}'.format(sail, extra_flags, filename, basename), name=filename)
+                step('\'{}\' {} {} --lean --lean-single-file --lean-output-dir {}'.format(sail, extra_flags, filename, basename), name=filename)
                 if runnable and basename.startswith('fail'):
                     step(f'lake exe run > expected 2> err_status',
                          cwd=f'{basename}/out',

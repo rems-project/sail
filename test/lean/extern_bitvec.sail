@@ -22,3 +22,11 @@ function extern_vector_length(x : vector(3, int)) -> int = {
   return length(x)
 }
 
+function extern_count_leading_zeros() -> int = {
+  return count_leading_zeros(0x00FF0FF0)
+}
+
+function extern_count_trailing_zeros() -> int = {
+  return count_trailing_zeros(0x00FF0FF0)
+}
+

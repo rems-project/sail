@@ -250,7 +250,7 @@ module Remove_undefined = struct
   open Jib_util
   open Jib_visitor
 
-  let gensym, _ = symbol_generator "gz"
+  let gensym = symbol_generator ()
 
   let rec create_value l = function
     | CT_unit -> ([], V_lit (VL_unit, CT_unit))
@@ -268,7 +268,7 @@ module Remove_undefined = struct
         in
         (setup, V_tuple values)
     | ctyp ->
-        let gs = name (gensym ()) in
+        let gs = gensym () in
         ([idecl l ctyp gs], V_id (gs, ctyp))
 
   class visitor : jib_visitor =
@@ -294,7 +294,7 @@ module Remove_functions_to_references = struct
   open Jib_util
   open Jib_visitor
 
-  let gensym, _ = symbol_generator "gref"
+  let gensym = symbol_generator ()
 
   class visitor : jib_visitor =
     object
@@ -306,7 +306,7 @@ module Remove_functions_to_references = struct
       method! vinstr =
         function
         | I_aux (I_funcall (CR_one (CL_addr (CL_id (id, CT_ref reg_ctyp))), ext, f, args), (n, l)) ->
-            let gs = name (gensym ()) in
+            let gs = gensym () in
             ChangeTo
               (iblock
                  [
@@ -379,14 +379,7 @@ let rec find_function fid = function
   | cdef :: cdefs -> find_function fid cdefs
   | [] -> None
 
-let ssa_name i = function
-  | Name (id, _) -> Name (id, i)
-  | Have_exception _ -> Have_exception i
-  | Current_exception _ -> Current_exception i
-  | Throw_location _ -> Throw_location i
-  | Return _ -> Return i
-  | Channel (chan, _) -> Channel (chan, i)
-  | Memory_writes _ -> Memory_writes i
+let ssa_name = Jib_ssa.ssa_name
 
 let inline cdefs should_inline instrs =
   let inlines = ref (-1) in
@@ -432,7 +425,7 @@ let inline cdefs should_inline instrs =
     | I_aux (I_funcall (CR_one clexp, false, function_id, args), aux) as instr when should_inline (fst function_id) ->
       begin
         match find_function (fst function_id) cdefs with
-        | Some (None, ids, body) ->
+        | Some (Return_plain, ids, body) ->
             incr inlines;
             incr label_count;
             let inline_label = label "end_inline_" in
@@ -442,14 +435,14 @@ let inline cdefs should_inline instrs =
                is undone by fix_substs which removes the -2 SSA
                numbers. *)
             let args = List.map (cval_map_id (ssa_name (-2))) args in
-            let body = List.fold_right2 instrs_subst (List.map name ids) args body in
+            let body = List.fold_right2 instrs_subst ids args body in
             let body = List.map (map_instr fix_substs) body in
             let body = List.map (map_instr fix_labels) body in
             let body = List.map (map_instr (replace_end inline_label)) body in
             let body = List.map (map_instr (replace_return clexp)) body in
             I_aux (I_block (body @ [ilabel inline_label]), aux)
-        | Some (Some _, ids, body) ->
-            (* Some _ is only introduced by C backend, so we don't
+        | Some (Return_via _, ids, body) ->
+            (* Return_via _ is only introduced by C backend, so we don't
                expect it at this point. *)
             raise (Reporting.err_general (snd aux) "Unexpected return method in IR")
         | None -> instr
@@ -660,7 +653,7 @@ let remove_tuples cdefs ctx =
         Bindings.map
           (fun (extern, ctyps, ctyp, uannot) -> (extern, List.map fix_tuples ctyps, fix_tuples ctyp, uannot))
           ctx.valspecs;
-      locals = Bindings.map (fun (mut, ctyp) -> (mut, fix_tuples ctyp)) ctx.locals;
+      locals = NameMap.map (fun (mut, ctyp) -> (mut, fix_tuples ctyp)) ctx.locals;
     }
   in
   let to_struct = function

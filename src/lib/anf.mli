@@ -70,6 +70,7 @@
 open Ast
 open Ast_util
 open Jib
+open Jib_util
 open Type_check
 
 type function_id = Sail_function of id | Newtype_wrapper of id | Pure_extern of id | Extern of id
@@ -87,7 +88,7 @@ and 'a aexp_aux =
   | AE_app of function_id * 'a aval list * 'a
   | AE_typ of 'a aexp * 'a
   | AE_assign of 'a alexp * 'a aexp
-  | AE_let of mut * id * 'a * 'a aexp * 'a aexp * 'a
+  | AE_let of mut * name * 'a * 'a aexp * 'a aexp * 'a
   | AE_block of 'a aexp list * 'a aexp * 'a
   | AE_return of 'a aval * 'a
   | AE_exit of 'a aval * 'a
@@ -97,7 +98,7 @@ and 'a aexp_aux =
   | AE_match of 'a aval * ('a apat * 'a aexp * 'a aexp * uannot) list * 'a
   | AE_try of 'a aexp * ('a apat * 'a aexp * 'a aexp * uannot) list * 'a
   | AE_struct_update of 'a aval * 'a aval Bindings.t * 'a
-  | AE_for of id * 'a aexp * 'a aexp * 'a aexp * order * 'a aexp
+  | AE_for of name * 'a aexp * 'a aexp * 'a aexp * order * 'a aexp
   | AE_loop of loop * 'a aexp * 'a aexp
   | AE_short_circuit of sc_op * 'a aval * 'a aexp
       (** A short circuting operator (either [and] or [or]) must have only its first argument reduced to a trivial value
@@ -109,11 +110,11 @@ and 'a apat = AP_aux of 'a apat_aux * anf_annot
 
 and 'a apat_aux =
   | AP_tuple of 'a apat list
-  | AP_id of id * 'a
+  | AP_id of name * 'a
   | AP_global of id * 'a
   | AP_app of constructor_id * 'a apat * 'a
   | AP_cons of 'a apat * 'a apat
-  | AP_as of 'a apat * id * 'a
+  | AP_as of 'a apat * name * 'a
   | AP_struct of (id * 'a apat) list * 'a
   | AP_nil of 'a
   | AP_wild of 'a
@@ -122,7 +123,7 @@ and 'a apat_aux =
     fragments must be side-effect free expressions. *)
 and 'a aval =
   | AV_lit of lit * 'a
-  | AV_id of id * 'a lvar
+  | AV_id of name * 'a lvar
   | AV_abstract of id * 'a
   | AV_ref of id * 'a lvar
   | AV_tuple of 'a aval list
@@ -131,11 +132,7 @@ and 'a aval =
   | AV_record of 'a aval Bindings.t * 'a
   | AV_cval of cval * 'a
 
-and 'a alexp = AL_id of id * 'a | AL_addr of id * 'a | AL_field of 'a alexp * id
-
-(** When the ANF translation has to introduce new bindings it uses a counter to ensure uniqueness. This function resets
-    that counter. *)
-val reset_anf_counter : unit -> unit
+and 'a alexp = AL_id of name * 'a | AL_addr of name * 'a | AL_field of 'a alexp * id
 
 (** Get the location from an [aexp]'s annotation *)
 val aexp_loc : 'a aexp -> Parse_ast.l
@@ -155,17 +152,17 @@ val map_functions : (anf_annot -> function_id -> 'a aval list -> 'a -> 'a aexp_a
     function to their containing expression, and so on recursively in a bottom-up order. *)
 val fold_aexp : ('a aexp -> 'a aexp) -> 'a aexp -> 'a aexp
 
-val aexp_bindings : 'a aexp -> IdSet.t
+val aexp_bindings : 'a aexp -> NameSet.t
 
 val is_pure_aexp : Effects.side_effect_info -> 'a aexp -> bool
 
 val is_pure_case : Effects.side_effect_info -> 'a apat * 'a aexp * 'a aexp * uannot -> bool
 
 (** Remove all variable shadowing in an ANF expression *)
-val no_shadow : IdSet.t -> 'a aexp -> 'a aexp
+val no_shadow : NameSet.t -> 'a aexp -> 'a aexp
 
 val apat_globals : 'a apat -> (id * 'a) list
-val apat_types : 'a apat -> 'a Bindings.t
+val apat_types : 'a apat -> 'a NameMap.t
 
 (** Returns true if an ANF expression is dead due to flow typing implying it is unreachable. Note: This function calls
     SMT. *)

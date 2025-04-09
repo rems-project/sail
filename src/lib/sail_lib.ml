@@ -1184,8 +1184,7 @@ let rand_zvector (g : 'generators) (size : int) (_order : bool) (elem_gen : 'gen
 
 let rand_zbit (_ : 'generators) : bit = bit_of_bool (Random.bool ())
 
-let rand_zbitvector (g : 'generators) (size : int) (_order : bool) : bit list =
-  Util.list_init size (fun _ -> rand_zbit g)
+let rand_zbitvector (g : 'generators) (size : int) : bit list = Util.list_init size (fun _ -> rand_zbit g)
 
 let rand_zbool (_ : 'generators) : bool = Random.bool ()
 

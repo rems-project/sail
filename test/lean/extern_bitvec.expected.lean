@@ -41,11 +41,11 @@ set_option match.ignoreUnusedAlts true
 
 open Sail
 
+namespace Out.Functions
+
 open option
 
-namespace Functions
-
-/-- Type quantifiers: k_ex694# : Bool, k_ex693# : Bool -/
+/-- Type quantifiers: k_ex718# : Bool, k_ex717# : Bool -/
 def neq_bool (x : Bool) (y : Bool) : Bool :=
   (Bool.not (BEq.beq x y))
 
@@ -131,12 +131,16 @@ def extern_slice (x : (BitVec 16)) : (BitVec 4) :=
 def extern_vector_length (x : (Vector Int 3)) : Int :=
   (Vector.length x)
 
+def extern_count_leading_zeros (_ : Unit) : Int :=
+  (BitVec.countLeadingZeros (0x00FF0FF0 : (BitVec 32)))
+
+def extern_count_trailing_zeros (_ : Unit) : Int :=
+  (BitVec.countTrailingZeros (0x00FF0FF0 : (BitVec 32)))
+
 def initialize_registers (_ : Unit) : Unit :=
   ()
 
 def sail_model_init (x_0 : Unit) : Unit :=
   (initialize_registers ())
 
-end Functions
-open Functions
-
+end Out.Functions

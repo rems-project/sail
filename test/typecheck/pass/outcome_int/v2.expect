@@ -1,0 +1,10 @@
+[93mType error[0m:
+[96mpass/outcome_int/v2.sail[0m:11.25-32:
+11[96m |[0minstantiation test2 with 'n = 64
+  [91m |[0m                         [91m^-----^[0m
+  [91m |[0m Cannot instantiate 'n with 64, already instantiated as 32
+  [91m |[0m 
+  [91m |[0m [93mCaused by [0m[96mpass/outcome_int/v2.sail[0m:9.24-31:
+  [91m |[0m 9[96m |[0minstantiation test with 'n = 32
+  [91m |[0m  [91m |[0m                        [91m^-----^[0m
+  [91m |[0m  [91m |[0m Previously instantiated here
