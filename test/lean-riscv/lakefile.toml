@@ -17,6 +17,6 @@ rev = "0338e21ae318eeea9ce551345f1b5288bc36e238"
 [[require]]
 name = "Lean_RV64D_LEAN"
 git = "https://github.com/ineol/sail-riscv.git"
-rev = "a091b3cbb6ee057d7c78084fa44835ad40b85230"
+rev = "548be075a7b875a599717db1ca6a2a096e50a652"
 subDir = "Lean_RV64D_LEAN"
 

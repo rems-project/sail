@@ -10,7 +10,7 @@ def readElf32 (elfFilepath : System.FilePath) : IO (Except String ELF32File) := 
   | .error warning => do
     pure (.error warning)
   | .ok (.elf32 elf) => do
-    IO.println s!"{repr elf}"
+    -- IO.println s!"{repr elf}"
     pure (.ok elf)
   | .ok (.elf64 _elf) => do
     pure (.error "64 bit ELF file not supported")
@@ -71,9 +71,18 @@ def initializeMemory (_size: MachineBits) (elf : ELF32File) : Std.HashMap Nat (B
   mem
 
 def initializeRegisters : Std.DHashMap Register RegisterType :=
-  Std.DHashMap.empty
   -- TODO: initialize register properly
-  -- Std.DHashMap.insert default sorry sorry -- DEFAULT_RSTVEC
+  Std.DHashMap.empty
+
+def my_main (_ : PUnit) :=
+  open LeanRV64DLEAN.Functions in
+  open Sail in
+  do
+  -- monadLift (IO.print "TEST")
+  -- let _ <- pure (unsafeIO (IO.print "TEST"))
+  print_effect "TEST!"
+  -- print_effect
+  sail_main ()
 
 def runElf32 (elf : ELF32File) : IO UInt32 :=
   open Sail in
@@ -81,6 +90,7 @@ def runElf32 (elf : ELF32File) : IO UInt32 :=
   let mem := initializeMemory MachineBits.B32 elf
   let regs := initializeRegisters
   let initialState := ⟨regs, (), mem, default, default, default⟩
-  main_of_sail_main initialState (sail_model_init >=> sail_main)
+  main_of_sail_main initialState (sail_model_init >=> my_main)
+  -- main_of_sail_main initialState my_main
   
 
