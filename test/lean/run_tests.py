@@ -23,7 +23,6 @@ sail = get_sail()
 # Not all self-tests are supported.
 skip_selftests = {
     'list_rec_functions2',
-    'pow2_var',
     'outcome_impl',
     'assign_rename_bug',
     'union_variant_names',

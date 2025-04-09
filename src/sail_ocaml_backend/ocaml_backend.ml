@@ -283,15 +283,17 @@ let rec ocaml_exp ctx (E_aux (exp_aux, (l, _)) as exp) =
       begin_end (separate space [string "try"; ocaml_atomic_exp ctx exp; string "with"] ^/^ ocaml_pexps ctx pexps)
   | E_assign (lexp, exp) -> parens (ocaml_assignment ctx lexp exp)
   | E_if (c, t, e) ->
-      separate space
-        [
-          string "if";
-          ocaml_atomic_exp ctx c;
-          string "then";
-          ocaml_atomic_exp ctx t;
-          string "else";
-          ocaml_atomic_exp ctx e;
-        ]
+      parens
+        (separate space
+           [
+             string "if";
+             ocaml_atomic_exp ctx c;
+             string "then";
+             ocaml_atomic_exp ctx t;
+             string "else";
+             ocaml_atomic_exp ctx e;
+           ]
+        )
   | E_struct fexps ->
       enclose lbrace rbrace (group (separate_map (semi ^^ break 1) (ocaml_fexp (record_id l exp) ctx) fexps))
   | E_struct_update (exp, fexps) ->
