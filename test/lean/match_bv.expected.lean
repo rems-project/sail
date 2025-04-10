@@ -55,7 +55,7 @@ def __id (x : Int) : Int :=
 
 /-- Type quantifiers: len : Nat, k_v : Nat, len ≥ 0 ∧ k_v ≥ 0 -/
 def sail_mask (len : Nat) (v : (BitVec k_v)) : (BitVec len) :=
-  if (len ≤b (Sail.BitVec.length v))
+  bif (len ≤b (Sail.BitVec.length v))
   then (Sail.BitVec.truncate v len)
   else (Sail.BitVec.zeroExtend v len)
 
@@ -65,32 +65,32 @@ def sail_ones (n : Nat) : (BitVec n) :=
 
 /-- Type quantifiers: l : Int, i : Int, n : Nat, n ≥ 0 -/
 def slice_mask {n : _} (i : Int) (l : Int) : (BitVec n) :=
-  if (l ≥b n)
+  bif (l ≥b n)
   then ((sail_ones n) <<< i)
   else
-    let one : (BitVec n) := (sail_mask n (0b1 : (BitVec 1)))
-    (((one <<< l) - one) <<< i)
+    (let one : (BitVec n) := (sail_mask n (0b1 : (BitVec 1)))
+    (((one <<< l) - one) <<< i))
 
 /-- Type quantifiers: n : Int, m : Int -/
 def _shl_int_general (m : Int) (n : Int) : Int :=
-  if (n ≥b 0)
+  bif (n ≥b 0)
   then (Int.shiftl m n)
   else (Int.shiftr m (Neg.neg n))
 
 /-- Type quantifiers: n : Int, m : Int -/
 def _shr_int_general (m : Int) (n : Int) : Int :=
-  if (n ≥b 0)
+  bif (n ≥b 0)
   then (Int.shiftr m n)
   else (Int.shiftl m (Neg.neg n))
 
 /-- Type quantifiers: m : Int, n : Int -/
 def fdiv_int (n : Int) (m : Int) : Int :=
-  if (Bool.and (n <b 0) (m >b 0))
+  bif (Bool.and (n <b 0) (m >b 0))
   then ((Int.tdiv (n +i 1) m) -i 1)
   else
-    if (Bool.and (n >b 0) (m <b 0))
+    (bif (Bool.and (n >b 0) (m <b 0))
     then ((Int.tdiv (n -i 1) m) -i 1)
-    else (Int.tdiv n m)
+    else (Int.tdiv n m))
 
 /-- Type quantifiers: m : Int, n : Int -/
 def fmod_int (n : Int) (m : Int) : Int :=
@@ -119,13 +119,13 @@ def concat_str_dec (str : String) (x : Int) : String :=
 def decode (merge_var : (BitVec 32)) : Bool :=
   match_bv merge_var with
   | [11,111,0,00,opc:2,1,Rm:5,option_v:3,S,10,Rn:5,Rt:5] =>
-    if (BEq.beq Rm Rn)
+    (bif (BEq.beq Rm Rn)
     then true
-    else false
+    else false)
   | [sf,10,01010,shift:2,N,Rm:5,imm6:6,Rn:5,Rd:5] =>
-    if (BEq.beq Rn Rd)
+    (bif (BEq.beq Rn Rd)
     then true
-    else false
+    else false)
   | [1101010100,0,00,011,0011,CRm:4,1,01,11111] => true
   | [1,011010,0,imm19:19,Rt:5] => false
   | _ => true
@@ -138,16 +138,18 @@ def write_CSR (merge_var : (BitVec 12)) : SailM Bool := do
   | [1011100,index:5] if (Bool.and (BEq.beq xlen 32) (((BitVec.toNat index) ≥b 3) : Bool)) => do
     (pure true)
   | _ => do
-    assert false "Pattern match failure at match_bv.sail:36.0-38.1"
-    throw Error.Exit
+    (do
+      assert false "Pattern match failure at match_bv.sail:36.0-38.1"
+      throw Error.Exit)
 
 def write_CSR2 (merge_var : (BitVec 12)) : SailM Bool := do
   match_bv merge_var with
   | [1011100,index:5] if (Bool.and (BEq.beq xlen 32) (((BitVec.toNat index) ≥b 3) : Bool)) => do
     (pure true)
   | _ => do
-    assert false "Pattern match failure at match_bv.sail:41.0-43.1"
-    throw Error.Exit
+    (do
+      assert false "Pattern match failure at match_bv.sail:41.0-43.1"
+      throw Error.Exit)
 
 def initialize_registers (_ : Unit) : Unit :=
   ()

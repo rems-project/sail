@@ -63,7 +63,7 @@ def __id (x : Int) : Int :=
 
 /-- Type quantifiers: len : Nat, k_v : Nat, len ≥ 0 ∧ k_v ≥ 0 -/
 def sail_mask (len : Nat) (v : (BitVec k_v)) : (BitVec len) :=
-  if (len ≤b (Sail.BitVec.length v))
+  bif (len ≤b (Sail.BitVec.length v))
   then (Sail.BitVec.truncate v len)
   else (Sail.BitVec.zeroExtend v len)
 
@@ -73,32 +73,32 @@ def sail_ones (n : Nat) : (BitVec n) :=
 
 /-- Type quantifiers: l : Int, i : Int, n : Nat, n ≥ 0 -/
 def slice_mask {n : _} (i : Int) (l : Int) : (BitVec n) :=
-  if (l ≥b n)
+  bif (l ≥b n)
   then ((sail_ones n) <<< i)
   else
-    let one : (BitVec n) := (sail_mask n (0b1 : (BitVec 1)))
-    (((one <<< l) - one) <<< i)
+    (let one : (BitVec n) := (sail_mask n (0b1 : (BitVec 1)))
+    (((one <<< l) - one) <<< i))
 
 /-- Type quantifiers: n : Int, m : Int -/
 def _shl_int_general (m : Int) (n : Int) : Int :=
-  if (n ≥b 0)
+  bif (n ≥b 0)
   then (Int.shiftl m n)
   else (Int.shiftr m (Neg.neg n))
 
 /-- Type quantifiers: n : Int, m : Int -/
 def _shr_int_general (m : Int) (n : Int) : Int :=
-  if (n ≥b 0)
+  bif (n ≥b 0)
   then (Int.shiftr m n)
   else (Int.shiftl m (Neg.neg n))
 
 /-- Type quantifiers: m : Int, n : Int -/
 def fdiv_int (n : Int) (m : Int) : Int :=
-  if (Bool.and (n <b 0) (m >b 0))
+  bif (Bool.and (n <b 0) (m >b 0))
   then ((Int.tdiv (n +i 1) m) -i 1)
   else
-    if (Bool.and (n >b 0) (m <b 0))
+    (bif (Bool.and (n >b 0) (m <b 0))
     then ((Int.tdiv (n -i 1) m) -i 1)
-    else (Int.tdiv n m)
+    else (Int.tdiv n m))
 
 /-- Type quantifiers: m : Int, n : Int -/
 def fmod_int (n : Int) (m : Int) : Int :=
@@ -130,7 +130,7 @@ def foreach_loop (m : Nat) (n : Nat) : Nat := Id.run do
   let loop_i_lower := m
   let loop_i_upper := n
   let mut loop_vars := res
-  for i in [loop_i_lower:loop_i_upper + 1:1]i do
+  for i in [loop_i_lower:loop_i_upper:1]i do
     let res := loop_vars
     loop_vars := (res +i 1)
   (pure loop_vars)
@@ -140,7 +140,7 @@ def foreach_loopmon (m : Nat) (n : Nat) : SailM Nat := do
   let loop_i_lower := n
   let loop_i_upper := m
   let mut loop_vars := ()
-  for i in [loop_i_lower:loop_i_upper + 1:1]i do
+  for i in [loop_i_lower:loop_i_upper:1]i do
     let () := loop_vars
     loop_vars ← do writeReg r ((← readReg r) +i 1)
   (pure loop_vars)
@@ -153,7 +153,7 @@ def foreach_loopboth (m : Nat) (n : Nat) : SailM Nat := do
     let loop_i_lower := n
     let loop_i_upper := m
     let mut loop_vars := res
-    for i in [loop_i_lower:loop_i_upper + 1:1]i do
+    for i in [loop_i_lower:loop_i_upper:1]i do
       let res := loop_vars
       loop_vars ← do
         let res : Nat := (res +i 1)
@@ -170,7 +170,7 @@ def foreach_loopmultiplevar (m : Nat) (n : Nat) : Nat := Id.run do
     let loop_i_lower := m
     let loop_i_upper := n
     let mut loop_vars := (mult, res)
-    for i in [loop_i_lower:loop_i_upper + 1:1]i do
+    for i in [loop_i_lower:loop_i_upper:1]i do
       let (mult, res) := loop_vars
       loop_vars :=
         let res : Nat := (res +i 1)
@@ -185,7 +185,7 @@ def foreach_loopuseindex (m : Nat) (n : Nat) : Nat := Id.run do
   let loop_i_lower := m
   let loop_i_upper := n
   let mut loop_vars := res
-  for i in [loop_i_lower:loop_i_upper + 1:1]i do
+  for i in [loop_i_lower:loop_i_upper:1]i do
     let res := loop_vars
     loop_vars := (res +i i)
   (pure loop_vars)
