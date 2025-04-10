@@ -181,7 +181,7 @@ let no_fixed = { registers = Bindings.empty; fields = Bindings.empty }
 
 let rw_exp fixed target ok not_ok istate =
   let evaluate e_aux annot =
-    let initial_monad = Interpreter.return (E_aux (e_aux, annot)) in
+    let initial_monad = Interpreter.Monad.return (E_aux (e_aux, annot)) in
     try
       begin
         let v = run (Interpreter.Step (lazy "", istate, initial_monad, [])) in

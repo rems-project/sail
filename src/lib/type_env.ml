@@ -1250,6 +1250,8 @@ and add_mapping id (typq, typ1, typ2) env =
   |> add_val_spec ~ignore_duplicate:true forwards_matches_id (typq, forwards_matches_typ)
   |> add_val_spec ~ignore_duplicate:true backwards_matches_id (typq, backwards_matches_typ)
 
+let is_outcome id env = Bindings.mem id env.global.outcomes
+
 let get_outcome_instantiation env = env.global.outcome_instantiation
 
 let add_outcome_variable l kid arg env =

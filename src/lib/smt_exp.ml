@@ -1194,7 +1194,7 @@ module Counterexample (Config : COUNTEREXAMPLE_CONFIG) = struct
     | Interpreter.Step (lazy_str, _, _, _) -> run (Interpreter.eval_frame frame)
     | Interpreter.Break frame -> run (Interpreter.eval_frame frame)
     | Interpreter.Fail (_, _, _, _, msg) -> Result.Error msg
-    | Interpreter.Effect_request (out, state, stack, eff) -> run (Interpreter.default_effect_interp state eff)
+    | Interpreter.Effect_request (out, state, stack, eff) -> run (Interpreter.default_effect_interp out state stack eff)
 
   let check ~loc ~ctx ~env ~ast ~solver ~file_name ~function_id ~args ~arg_ctyps ~arg_smt_names =
     let open Printf in
@@ -1233,7 +1233,7 @@ module Counterexample (Config : COUNTEREXAMPLE_CONFIG) = struct
                 annot
               )
           in
-          let result = run (Step (lazy "", istate, return call, [])) in
+          let result = run (Step (lazy "", istate, Monad.return call, [])) in
           begin
             match result with
             | Result.Ok (V_bool false) | Result.Ok V_unit ->

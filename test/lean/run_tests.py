@@ -22,7 +22,6 @@ sail = get_sail()
 # that you can run to exercise the language and the extracted output.
 # Not all self-tests are supported.
 skip_selftests = {
-    'list_rec_functions2',
     'outcome_impl',
     'assign_rename_bug',
     'union_variant_names',
@@ -31,7 +30,6 @@ skip_selftests = {
     'inc_tests',
     'poly_outcome',
     'string_of_bits',
-    'custom_flow',
     'pointer_assign',
     'concurrency_interface',
     'for_shadow',
@@ -44,7 +42,6 @@ skip_selftests = {
     'issue136',
     'anf_as_pattern',
     'real_prop',
-    'lib_dec_bits',
     'constructor247',
     'deep_poly_nest',
     'config_abstract_bool', # Register type unsupported in state.ml

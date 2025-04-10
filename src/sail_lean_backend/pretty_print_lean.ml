@@ -1229,6 +1229,10 @@ let rec doc_defs_rec ctx defs types (former_funcs : document list) (docdefs : do
         else docdefs ^^ group (doc_fundef ctx fdef) ^/^ hardline
       in
       doc_defs_rec ctx defs' types former_funcs pp_f
+  | DEF_aux (DEF_internal_mutrec fdefs, dannot) :: defs' ->
+      let funs = separate_map hardline (fun fdef -> doc_fundef ctx fdef) fdefs in
+      let res = string "mutual" ^^ hardline ^^ funs ^^ hardline ^^ string "end" ^^ hardline in
+      doc_defs_rec ctx defs' types former_funcs (docdefs ^^ hardline ^^ res ^^ hardline)
   | DEF_aux (DEF_type tdef, _) :: defs' when List.mem (string_of_id (id_of_type_def tdef)) !opt_extern_types ->
       doc_defs_rec ctx defs' types former_funcs docdefs
   | DEF_aux (DEF_type tdef, _) :: defs' ->

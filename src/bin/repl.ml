@@ -267,9 +267,9 @@ let rec run istate =
       | Break frame ->
           print_endline "Breakpoint";
           { istate with mode = Evaluation frame }
-      | Effect_request (_, state, _, eff) ->
+      | Effect_request (out, state, stack, eff) ->
           let istate =
-            try { istate with mode = Evaluation (!Interpreter.effect_interp state eff) }
+            try { istate with mode = Evaluation (!Interpreter.effect_interp out state stack eff) }
             with Failure str ->
               print_endline str;
               { istate with mode = Normal }
@@ -304,9 +304,9 @@ let rec run_function istate depth =
       | Break frame ->
           print_endline "Breakpoint";
           { istate with mode = Evaluation frame }
-      | Effect_request (_, state, stack, eff) ->
+      | Effect_request (out, state, stack, eff) ->
           let istate =
-            try { istate with mode = Evaluation (!Interpreter.effect_interp state eff) }
+            try { istate with mode = Evaluation (!Interpreter.effect_interp out state stack eff) }
             with Failure str ->
               print_endline str;
               { istate with mode = Normal }
@@ -337,9 +337,9 @@ let rec run_steps istate n =
       | Break frame ->
           print_endline "Breakpoint";
           { istate with mode = Evaluation frame }
-      | Effect_request (_, state, _, eff) ->
+      | Effect_request (out, state, stack, eff) ->
           let istate =
-            try { istate with mode = Evaluation (!Interpreter.effect_interp state eff) }
+            try { istate with mode = Evaluation (!Interpreter.effect_interp out state stack eff) }
             with Failure str ->
               print_endline str;
               { istate with mode = Normal }
@@ -381,7 +381,7 @@ let help =
       sprintf ":option %s - Parse string as if it was an option passed on the command line. e.g. :option -help."
         (color yellow "<string>")
   | ":recheck" ->
-      sprintf ":recheck - Re type-check the Sail AST, and synchronize the interpreters internal state to that AST."
+      sprintf ":recheck - Re type-check the Sail AST, and synchronize the interpreter's internal state to that AST."
   | ":rewrite" ->
       sprintf ":rewrite %s - Apply a rewrite to the AST. %s shows all possible rewrites. See also %s"
         (color yellow "<rewrite> <args>") (color green ":list_rewrites") (color green ":rewrites")
@@ -500,7 +500,7 @@ let handle_input' istate input =
               [
                 "Universal commands - :(t)ype :(i)nfer :(q)uit :(v)erbose :prove :assume :clear :commands :help \
                  :output :option :show_register :hide_register";
-                "Normal mode commands - :elf :let :def :(b)ind :recheck :compile :reset " ^ more_commands;
+                "Normal mode commands - :let :def :(b)ind :recheck :compile :reset " ^ more_commands;
                 "Evaluation mode commands - :(r)un :(s)tep :step_(f)unction :(n)ormal";
                 "";
                 ":(c)ommand can be called as either :c or :command.";
@@ -679,7 +679,9 @@ let handle_input' istate input =
                us in evaluation mode. *)
           let exp = Type_check.infer_exp istate.env (Initial_check.exp_of_string ~inline:pos str) in
           let istate = setup_interpreter_state istate in
-          let istate = { istate with mode = Evaluation (eval_frame (Step (lazy "", istate.state, return exp, []))) } in
+          let istate =
+            { istate with mode = Evaluation (eval_frame (Step (lazy "", istate.state, Monad.return exp, []))) }
+          in
           print_program istate;
           istate
       | Empty -> istate
@@ -725,9 +727,11 @@ let handle_input' istate input =
           | Break frame ->
               print_endline "Breakpoint";
               { istate with mode = Evaluation frame }
-          | Effect_request (_, state, _, eff) -> begin
+          | Effect_request (out, state, stack, eff) -> begin
               try
-                let istate = { istate with mode = Evaluation (!Interpreter.effect_interp state eff); state } in
+                let istate =
+                  { istate with mode = Evaluation (!Interpreter.effect_interp out state stack eff); state }
+                in
                 print_program istate;
                 istate
               with Failure str ->

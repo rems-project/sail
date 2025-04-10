@@ -2548,17 +2548,11 @@ module Codegen (Config : CODEGEN_CONFIG) = struct
       let end_extern_cpp = separate hardline (List.map string [""; "#ifdef __cplusplus"; "}"; "#endif"]) in
       let hlhl = twice hardline in
 
-      let include_guard contents =
-        let symbol = sprintf "SAIL_MODEL_HEADER_%s" (String.uppercase_ascii basename) in
-        ksprintf string "#ifndef %s" symbol ^^ hardline ^^ ksprintf string "#define %s" symbol ^^ hlhl ^^ contents
-        ^^ hardline ^^ string "#endif" ^^ hardline
-      in
-
       let header =
         Option.map
           (fun header ->
-            preamble true ^^ hlhl ^^ header ^^ hardline ^^ end_extern_cpp ^^ hardline
-            |> include_guard |> Document.to_string
+            string "#pragma once" ^^ hlhl ^^ preamble true ^^ hlhl ^^ header ^^ hardline ^^ end_extern_cpp ^^ hardline
+            |> Document.to_string
           )
           header_doc_opt
       in
