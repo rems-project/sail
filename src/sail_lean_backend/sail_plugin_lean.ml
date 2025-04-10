@@ -77,9 +77,12 @@ let opt_lean_import_files : string list ref = ref []
 
 let opt_lean_noncomputable : bool ref = ref false
 
+let opt_lean_real_numbers : bool ref = ref false
+
 let opt_single_file : bool ref = ref false
 
-let lean_version : string = "lean4:nightly-2025-03-17"
+let lean_version : string = "lean4:nightly-2025-04-07"
+let mathlib_version : string = "nightly-testing-2025-04-07"
 
 let lean_options =
   [
@@ -98,6 +101,10 @@ let lean_options =
     ( Flag.create ~prefix:["lean"] "noncomputable",
       Arg.Unit (fun () -> opt_lean_noncomputable := true),
       "add a 'noncomputable section' at the beginning of the output"
+    );
+    ( Flag.create ~prefix:["lean"] "real-numbers",
+      Arg.Unit (fun () -> opt_lean_real_numbers := true),
+      "enable real numbers (in particular, depend on mathlib)"
     );
     ( Flag.create ~prefix:["lean"] ~arg:"typename" "extern_type",
       Arg.String Pretty_print_lean.(fun ty -> opt_extern_types := ty :: !opt_extern_types),
@@ -207,10 +214,10 @@ open Sail
 
 |}
 
-let path_to_static_libarary sail_dir str = Filename.quote (sail_dir ^ "/src/sail_lean_backend/Sail/" ^ str ^ ".lean")
+let path_to_static_library sail_dir str = Filename.quote (sail_dir ^ "/src/sail_lean_backend/Sail/" ^ str ^ ".lean")
 
 let copy_from_static_library sail_dir lean_sail_dir str =
-  Unix.system ("cp " ^ path_to_static_libarary sail_dir str ^ " " ^ Filename.quote lean_sail_dir)
+  Unix.system ("cp " ^ path_to_static_library sail_dir str ^ " " ^ Filename.quote lean_sail_dir)
 
 let print_function_file_prelude file out_name_camel (prev_file : string option) =
   let _ =
@@ -219,6 +226,7 @@ let print_function_file_prelude file out_name_camel (prev_file : string option) 
         output_string file ("import " ^ out_name_camel ^ ".Sail.Sail\n");
         output_string file ("import " ^ out_name_camel ^ ".Sail.BitVec\n");
         output_string file ("import " ^ out_name_camel ^ ".Sail.IntRange\n");
+        if !opt_lean_real_numbers then output_string file ("import " ^ out_name_camel ^ ".Sail.Real\n");
         output_string file ("import " ^ out_name_camel ^ ".Defs\n");
         List.iter
           (fun filename -> output_string file ("import " ^ out_name_camel ^ "." ^ file_to_module filename ^ "\n"))
@@ -254,6 +262,7 @@ let start_lean_output (out_name : string) (import_names : string list) default_s
   let _ = copy_from_static_library sail_dir lean_sail_dir "BitVec" in
   let _ = copy_from_static_library sail_dir lean_sail_dir "IntRange" in
   let _ = copy_from_static_library sail_dir lean_sail_dir "Sail" in
+  let _ = if !opt_lean_real_numbers then copy_from_static_library sail_dir lean_sail_dir "Real" |> ignore in
   opt_lean_import_files := (sail_dir ^ "/src/sail_lean_backend/Sail/Specialization.lean") :: !opt_lean_import_files;
   List.iter
     (fun filename ->
@@ -296,6 +305,12 @@ let create_lake_project (ctx : lean_context) executable =
     ("name = \"" ^ ctx.out_name ^ "\"\ndefaultTargets = [\"" ^ ctx.out_name_camel
    ^ "\"]\nmoreLeanArgs = [\"--tstack=400000\"]\n\n[[lean_lib]]\nname = \"" ^ ctx.out_name_camel ^ "\""
     );
+  if !opt_lean_real_numbers then (
+    output_string ctx.lakefile "\n\n[[require]]\n";
+    output_string ctx.lakefile "name = \"mathlib\"\n";
+    output_string ctx.lakefile "git = \"https://github.com/leanprover-community/mathlib4\"\n";
+    output_string ctx.lakefile (Printf.sprintf "rev = \"%s\"" mathlib_version)
+  );
   if executable then (
     output_string ctx.lakefile "\n\n[[lean_exe]]\n";
     output_string ctx.lakefile "name = \"run\"\n";
