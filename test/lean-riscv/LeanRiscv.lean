@@ -80,9 +80,10 @@ def my_main (_ : PUnit) :=
   do
   -- monadLift (IO.print "TEST")
   -- let _ <- pure (unsafeIO (IO.print "TEST"))
-  print_effect "TEST!"
+  dbg_trace "In my_main!"
   -- print_effect
   sail_main ()
+
 
 def runElf32 (elf : ELF32File) : IO UInt32 :=
   open Sail in
