@@ -400,7 +400,7 @@ let message_of_type_error type_error =
         (* Variables appearing in the types and constraint *)
         let appear_vars =
           KBindings.bindings tyvars.vars
-          |> List.map (fun (v, (l, _)) -> (v, l))
+          |> List.map (fun (v, (l, _, _)) -> (v, l))
           |> List.filter (fun (v, _) ->
                  KidSet.mem v (KidSet.union nc_vars (KidSet.union (tyvars_of_typ typ1) (tyvars_of_typ typ2)))
              )

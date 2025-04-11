@@ -122,6 +122,16 @@ let instantiate target ast =
           match exp with
           | E_app (f, args) -> E_aux (E_app (instantiate_id f id_substs, args), annot)
           | E_typ (typ, exp) -> E_aux (E_typ (instantiate_typ substs typ, exp), annot)
+          | E_constraint (NC_aux (NC_var v, _)) -> (
+              match KBindings.find_opt v substs with
+              | Some (_, A_aux (A_bool nc, _)) -> E_aux (E_constraint nc, annot)
+              | _ -> Reporting.unreachable (id_loc id) __POS__ "Failed to instantiate constraint"
+            )
+          | E_sizeof (Nexp_aux (Nexp_var v, _)) -> (
+              match KBindings.find_opt v substs with
+              | Some (_, A_aux (A_nexp n, _)) -> E_aux (E_sizeof n, annot)
+              | _ -> Reporting.unreachable (id_loc id) __POS__ "Failed to instantiate constraint"
+            )
           | _ -> E_aux (exp, annot)
         in
         let pat_alg = { id_pat_alg with p_aux = rewrite_p_aux } in

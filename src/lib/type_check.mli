@@ -129,7 +129,7 @@ module Env : sig
   val add_constraint : ?global:bool -> ?reason:Ast.l * string -> n_constraint -> t -> t
 
   (** Push all the type variables and constraints from a typquant into an environment *)
-  val add_typquant : Ast.l -> typquant -> t -> t
+  val add_typquant : ?from_outcome:bool -> Ast.l -> typquant -> t -> t
 
   val get_typ_var : kid -> t -> kind_aux
 
@@ -145,7 +145,7 @@ module Env : sig
   (** Check whether the identifier is a type name *)
   val bound_typ_id : t -> id -> bool
 
-  val add_typ_var : Ast.l -> kinded_id -> t -> t
+  val add_typ_var : ?from_outcome:bool -> Ast.l -> kinded_id -> t -> t
 
   val is_variant : id -> t -> bool
 

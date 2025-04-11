@@ -701,7 +701,7 @@ subst :: 'IS_' ::=
 outcome_spec :: 'OV_' ::=
   {{ com outcome declaration }}
   {{ aux _ l }}
-  | outcome id : typschm with kinded_id1 , ... , kinded_idn :: :: outcome
+  | outcome id : typschm with typquant :: :: outcome
 
 instantiation_spec :: 'IN_' ::=
   {{ aux _ annot }} {{ auxparam 'a }}
