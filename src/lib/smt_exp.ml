@@ -1074,7 +1074,7 @@ let string_of_smt_def def = Pretty_print_sail.Document.to_string (pp_smt_def def
 
 type counterexample_solver = Cvc5 | Cvc4 | Z3
 
-let counterexample_command = function Cvc5 -> "cvc5 --lang=smt2.6" | Cvc4 -> "cvc4 --lang=smt2.6" | Z3 -> "z3"
+let counterexample_command = function Cvc5 -> "cvc5 --lang=smt2.6" | Cvc4 -> "cvc4 --lang=smt2.6" | Z3 -> "z3 -model"
 
 let counterexample_solver_from_name name =
   match String.lowercase_ascii name with "cvc4" -> Some Cvc4 | "cvc5" -> Some Cvc5 | "z3" -> Some Z3 | _ -> None
@@ -1210,7 +1210,7 @@ module Counterexample (Config : COUNTEREXAMPLE_CONFIG) = struct
       with End_of_file -> ()
     end;
     let solver_output = List.rev !lines |> String.concat "\n" in
-    begin
+    let unsat =
       match parse_sexps solver_output with
       | Some (Atom "sat" :: (List (Atom "model" :: model) | List model) :: _) ->
           let open Value in
@@ -1244,15 +1244,23 @@ module Counterexample (Config : COUNTEREXAMPLE_CONFIG) = struct
             | Result.Error msg ->
                 ksprintf print_endline "Failed to replay counterexample: %s\n  %s" Util.("error" |> red |> clear) msg
             | _ -> ()
-          end
+          end;
+          false
       | Some (Atom "unsat" :: _) ->
           print_endline "Solver could not find counterexample";
           print_endline "Solver output:";
-          print_endline solver_output
+          print_endline solver_output;
+          true
+      | Some (Atom "sat" :: _) ->
+          print_endline (sprintf "Solver found counterexample: %s" Util.("ok" |> green |> clear));
+          print_endline "Solver output:";
+          print_endline solver_output;
+          false
       | _ ->
           print_endline "Unexpected solver output:";
-          print_endline solver_output
-    end;
+          print_endline solver_output;
+          false
+    in
     let _ = Unix.close_process_in in_chan in
-    ()
+    unsat
 end
