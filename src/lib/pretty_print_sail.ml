@@ -233,7 +233,8 @@ module Printer (Config : PRINT_CONFIG) = struct
     | [nc] -> kdoc ^^ comma ^^ space ^^ doc_nc nc
     | nc :: ncs -> kdoc ^^ comma ^^ space ^^ doc_nc (List.fold_left nc_and nc ncs)
 
-  let doc_param_quants quants =
+  let doc_param_quants ?(parenthesize = true) quants =
+    let parens_opt = if parenthesize then parens else fun doc -> doc in
     let doc_qi_kopt (QI_aux (qi_aux, _)) =
       match qi_aux with
       | QI_id kopt when is_int_kopt kopt -> [doc_kid (kopt_kid kopt) ^^ colon ^^ space ^^ string "Int"]
@@ -245,9 +246,9 @@ module Printer (Config : PRINT_CONFIG) = struct
     let kdoc = separate (comma ^^ space) (List.concat (List.map doc_qi_kopt quants)) in
     let ncs = List.concat (List.map qi_nc quants) in
     match ncs with
-    | [] -> parens kdoc
-    | [nc] -> parens kdoc ^^ comma ^^ space ^^ doc_nc nc
-    | nc :: ncs -> parens kdoc ^^ comma ^^ space ^^ doc_nc (List.fold_left nc_and nc ncs)
+    | [] -> parens_opt kdoc
+    | [nc] -> parens_opt kdoc ^^ space ^^ string "constraint" ^^ space ^^ doc_nc nc
+    | nc :: ncs -> parens_opt kdoc ^^ space ^^ string "constraint" ^^ space ^^ doc_nc (List.fold_left nc_and nc ncs)
 
   let doc_binding (TypQ_aux (tq_aux, _), typ) =
     match tq_aux with
@@ -257,8 +258,11 @@ module Printer (Config : PRINT_CONFIG) = struct
 
   let doc_typschm (TypSchm_aux (TypSchm_ts (typq, typ), _)) = doc_binding (typq, typ)
 
-  let doc_typquant (TypQ_aux (tq_aux, _)) =
-    match tq_aux with TypQ_no_forall -> None | TypQ_tq [] -> None | TypQ_tq qs -> Some (doc_param_quants qs)
+  let doc_typquant ?(parenthesize = true) (TypQ_aux (tq_aux, _)) =
+    match tq_aux with
+    | TypQ_no_forall -> None
+    | TypQ_tq [] -> None
+    | TypQ_tq qs -> Some (doc_param_quants ~parenthesize qs)
 
   let doc_lit (L_aux (l, _)) =
     utf8string
@@ -848,7 +852,7 @@ module Printer (Config : PRINT_CONFIG) = struct
     | DEF_constraint nc -> string "constraint" ^^ space ^^ doc_nc nc
     | DEF_outcome (OV_aux (OV_outcome (id, typschm, args), _), defs) -> (
         string "outcome" ^^ space ^^ doc_id id ^^ space ^^ colon ^^ space ^^ doc_typschm typschm ^^ break 1
-        ^^ (string "with" ^//^ separate_map (comma ^^ break 1) doc_kopt_no_parens args)
+        ^^ (match doc_typquant ~parenthesize:false args with Some doc -> string "with" ^//^ doc | None -> empty)
         ^^
         match defs with
         | [] -> empty

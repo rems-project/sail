@@ -985,11 +985,21 @@ param_kopt:
     { KOpt_aux (KOpt_kind (None, [$1], None, None), loc $startpos $endpos) }
 
 typaram:
-  | Lparen separated_nonempty_list_trailing(Comma, param_kopt) Rparen Comma typ
-    { let qi_nc = QI_aux (QI_constraint $5, loc $startpos($5) $endpos($5)) in
-      mk_typq $2 [qi_nc] $startpos $endpos }
-  | Lparen separated_nonempty_list_trailing(Comma, param_kopt) Rparen
-    { mk_typq $2 [] $startpos $endpos }
+  | Lparen; ks=separated_nonempty_list_trailing(Comma, param_kopt); Rparen; Comma; c=typ
+    { let qi_nc = QI_aux (QI_constraint c, loc $startpos(c) $endpos(c)) in
+      mk_typq ks [qi_nc] $startpos $endpos }
+  | Lparen; ks=separated_nonempty_list_trailing(Comma, param_kopt); Rparen; Constraint; c=typ
+    { let qi_nc = QI_aux (QI_constraint c, loc $startpos(c) $endpos(c)) in
+      mk_typq ks [qi_nc] $startpos $endpos }
+  | Lparen; ks=separated_nonempty_list_trailing(Comma, param_kopt); Rparen
+    { mk_typq ks [] $startpos $endpos }
+
+unbracketed_typaram:
+  | ks=separated_nonempty_list_trailing(Comma, param_kopt); Constraint; c=typ
+    { let qi_nc = QI_aux (QI_constraint c, loc $startpos(c) $endpos(c)) in
+      mk_typq ks [qi_nc] $startpos $endpos }
+  | ks=separated_nonempty_list_trailing(Comma, param_kopt)
+    { mk_typq ks [] $startpos $endpos }
 
 abstract_instantiation:
   | Eq; Config; key=separated_nonempty_list(Dot, Id)
@@ -1209,8 +1219,8 @@ let_def:
 
 outcome_spec_def:
   | Outcome id Colon typschm
-    { mk_outcome (OV_outcome ($2, $4, [])) $startpos $endpos }
-  | Outcome id Colon typschm With separated_nonempty_list(Comma, param_kopt)
+    { mk_outcome (OV_outcome ($2, $4, mk_typqn)) $startpos $endpos }
+  | Outcome id Colon typschm With unbracketed_typaram
     { mk_outcome (OV_outcome ($2, $4, $6)) $startpos $endpos }
 
 pure_opt:
@@ -1329,6 +1339,16 @@ overload_def:
   | Overload id Eq enum_bar
     { ($2, List.map fst $4) }
 
+def_trailing_constraint_aux:
+  | scattered_def
+    { DEF_scattered $1 }
+  | outcome_spec_def
+    { DEF_outcome ($1, []) }
+
+def_constraint_aux:
+  | Constraint typ
+    { DEF_constraint $2 }
+
 def_aux:
   | fun_def
     { DEF_fundef $1 }
@@ -1340,8 +1360,6 @@ def_aux:
     { let (prec, n, op) = $1 in DEF_fixity (prec, n, Id_aux (Id op, loc $startpos $endpos)) }
   | val_spec_def
     { DEF_val $1 }
-  | outcome_spec_def
-    { DEF_outcome ($1, []) }
   | outcome_spec_def Eq Lcurly defs_list Rcurly
     { DEF_outcome ($1, $4) }
   | instantiation_def
@@ -1354,12 +1372,10 @@ def_aux:
     { DEF_register $1 }
   | overload_def
     { let (id, ids) = $1 in DEF_overload (id, ids) }
-  | scattered_def
-    { DEF_scattered $1 }
   | default_def
     { DEF_default $1 }
-  | Constraint typ
-    { DEF_constraint $2 }
+  | Typedef Constraint typ
+    { DEF_constraint $3 }
   | Mutual Lcurly fun_def_list Rcurly
     { DEF_internal_mutrec $3 }
   | pragma = StructuredPragma; kvs = separated_list(Comma, attribute_data_key_value); Rcurly
@@ -1373,24 +1389,42 @@ def_aux:
   | TerminationMeasure id loop_measures
     { DEF_loop_measures ($2,$3) }
 
-def:
-  | visibility = Private; def = def
+def(AUX):
+  | visibility = Private; def = def(AUX)
     { DEF_aux (DEF_private def, loc $startpos(visibility) $endpos(visibility)) }
-  | attr = attribute; def = def
+  | attr = attribute; def = def(AUX)
     { DEF_aux (DEF_attribute (fst attr, snd attr, def), loc $startpos(attr) $endpos(attr)) }
-  | doc = Doc; def = def
+  | doc = Doc; def = def(AUX)
     { DEF_aux (DEF_doc (doc, def), loc $startpos(doc) $endpos(doc)) }
-  | d = def_aux
+  | d = AUX
     { DEF_aux (d, loc $startpos(d) $endpos(d)) }
 
-defs_list:
-  | def
+defs_post_trailing_constraint_list:
+  | def(def_trailing_constraint_aux)
     { [$1] }
-  | def defs_list
+  | def(def_aux)
+    { [$1] }
+  | def(def_trailing_constraint_aux) defs_post_trailing_constraint_list
+    { $1 :: $2 }
+  | def(def_aux) defs_list
+    { $1 :: $2 }
+
+defs_list:
+  | def(def_constraint_aux)
+    { [$1] }
+  | def(def_trailing_constraint_aux)
+    { [$1] }
+  | def(def_aux)
+    { [$1] }
+  | def(def_constraint_aux) defs_list
+    { $1 :: $2 }
+  | def(def_trailing_constraint_aux) defs_post_trailing_constraint_list
+    { $1 :: $2 }
+  | def(def_aux) defs_list
     { $1 :: $2 }
 
 def_eof:
-  | def Eof
+  | def(def_aux) Eof
     { $1 }
 
 file:
