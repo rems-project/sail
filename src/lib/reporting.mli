@@ -59,6 +59,9 @@ val opt_warnings : bool ref
 (** If this is true, we will print all warnings, even if generated with [~once_from]. *)
 val opt_all_warnings : bool ref
 
+(** If this is true, if any warnings are generated, Sail will terminate after all warnings are shown. *)
+val opt_warnings_as_error : bool ref
+
 (** How many backtrace entries to show for unreachable code errors *)
 val opt_backtrace_length : int ref
 
@@ -150,6 +153,9 @@ val simple_warn : string -> unit
 
 (** Will suppress all warnings for a given (Sail) file name. Used by $suppress_warnings directive in process_file.ml *)
 val suppress_warnings_for_file : string -> unit
+
+(** Will stop execution if warnings_as_error is set and any warnings have been generated. *)
+val check_warnings_as_error : unit -> unit
 
 val get_sail_dir : string -> string
 

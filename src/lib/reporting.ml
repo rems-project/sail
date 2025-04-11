@@ -93,6 +93,7 @@
 let opt_warnings = ref true
 let opt_all_warnings = ref false
 let opt_backtrace_length = ref 10
+let opt_warnings_as_error = ref false
 
 type pos_or_loc = Loc of Parse_ast.l | Pos of Lexing.position
 
@@ -247,6 +248,7 @@ let suppress_warnings_for_file f = ignored_files := StringSet.add f !ignored_fil
 let seen_warnings = ref RangeMap.empty
 let once_from_warnings = ref StringSet.empty
 let suppressed_warnings = ref 0
+let shown_warning_cnt = ref 0
 
 let suppressed_warning_info () =
   if !suppressed_warnings > 0 then (
@@ -274,6 +276,7 @@ let warn ?once_from ?(force_show = false) short_str l explanation =
     | _ -> false
   in
   if (!opt_warnings && not already_shown) || force_show then (
+    incr shown_warning_cnt;
     match simp_loc l with
     | Some (p1, p2) when not (StringSet.mem p1.pos_fname !ignored_files) ->
         let shorts = RangeMap.find_opt (p1, p2) !seen_warnings |> Option.value ~default:[] in
@@ -305,6 +308,7 @@ let format_warn ?once_from short_str l explanation =
     | _ -> false
   in
   if !opt_warnings && not already_shown then (
+    incr shown_warning_cnt;
     match simp_loc l with
     | Some (p1, p2) when not (StringSet.mem p1.pos_fname !ignored_files) ->
         let shorts = RangeMap.find_opt (p1, p2) !seen_warnings |> Option.value ~default:[] in
@@ -319,6 +323,15 @@ let format_warn ?once_from short_str l explanation =
   )
 
 let simple_warn str = warn str Parse_ast.Unknown ""
+
+let check_warnings_as_error () =
+  if !opt_warnings_as_error && !shown_warning_cnt > 0 then (
+    prerr_endline
+      (Util.("Error" |> yellow |> clear)
+      ^ ": " ^ string_of_int !shown_warning_cnt ^ " warnings were generated.  Treating as an error."
+      );
+    exit 1
+  )
 
 let get_sail_dir default_sail_dir =
   match Sys.getenv_opt "SAIL_DIR" with

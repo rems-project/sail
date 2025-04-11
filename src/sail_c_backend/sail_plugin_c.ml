@@ -207,6 +207,8 @@ let c_target out_file { ast; effect_info; env; default_sail_dir; _ } =
 
   let header_opt, impl = Codegen.compile_ast env effect_info basename ast in
 
+  Reporting.check_warnings_as_error ();
+
   let impl_out = Util.open_output_with_check (out_file ^ ".c") in
   output_string impl_out.channel impl;
   flush impl_out.channel;
