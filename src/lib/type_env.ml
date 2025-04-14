@@ -1597,8 +1597,9 @@ let add_register id typ env =
 
 let get_locals env =
   Bindings.fold
-    (fun id { item = typ; _ } locals ->
-      if not (Bindings.mem id locals) then Bindings.add id (Immutable, typ) locals else locals
+    (fun id item locals ->
+      if (not (Bindings.mem id locals)) && item_in_scope env item then Bindings.add id (Immutable, item.item) locals
+      else locals
     )
     env.global.letbinds env.locals
 

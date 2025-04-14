@@ -1946,7 +1946,8 @@ let crule r env exp typ =
     checked_exp
   with Type_error (l, err) ->
     decr depth;
-    typ_raise l err
+    let bt = Printexc.get_raw_backtrace () in
+    Printexc.raise_with_backtrace (Type_error (l, err)) bt
 
 let irule r env exp =
   incr depth;
@@ -1959,7 +1960,8 @@ let irule r env exp =
     inferred_exp
   with Type_error (l, err) ->
     decr depth;
-    typ_raise l err
+    let bt = Printexc.get_raw_backtrace () in
+    Printexc.raise_with_backtrace (Type_error (l, err)) bt
 
 (* This function adds useful assertion messages to asserts missing them *)
 let assert_msg = function
