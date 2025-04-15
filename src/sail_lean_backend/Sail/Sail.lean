@@ -30,13 +30,25 @@ def updateSubrange' {w : Nat} (x : BitVec w) (start len : Nat) (y : BitVec len) 
 def slice {w : Nat} (x : BitVec w) (start len : Nat) : BitVec len :=
   x.extractLsb' start len
 
+def sliceBE {w : Nat} (x : BitVec w) (start len : Nat) : BitVec len :=
+  x.extractLsb' (w - start - len) len
+
+def subrangeBE {w : Nat} (x : BitVec w) (lo hi : Nat) : BitVec (hi - lo + 1) :=
+  x.extractLsb' (w - hi - 1) _
+
 def updateSubrange {w : Nat} (x : BitVec w) (hi lo : Nat) (y : BitVec (hi - lo + 1)) : BitVec w :=
   updateSubrange' x lo _ y
+
+def updateSubrangeBE {w : Nat} (x : BitVec w) (lo hi : Nat) (y : BitVec (hi - lo + 1)) : BitVec w :=
+  updateSubrange' x (w - hi - 1) _ y
 
 def replicateBits {w : Nat} (x : BitVec w) (i : Nat) := BitVec.replicate i x
 
 def access {w : Nat} (x : BitVec w) (i : Nat) : BitVec 1 :=
   BitVec.ofBool x[i]!
+
+def accessBE {w : Nat} (x : BitVec w) (i : Nat) : BitVec 1 :=
+  BitVec.ofBool x[w - i - 1]!
 
 def addInt {w : Nat} (x : BitVec w) (i : Int) : BitVec w :=
   x + BitVec.ofInt w i
@@ -61,6 +73,8 @@ def append' (x : BitVec n) (y : BitVec m) {mn}
   (x.append y).cast hmn.symm
 
 def update (x : BitVec m) (n : Nat) (b : BitVec 1) := updateSubrange' x n _ b
+
+def updateBE (x : BitVec m) (n : Nat) (b : BitVec 1) := updateSubrange' x (m - n - 1) _ b
 
 def toBin {w : Nat} (x : BitVec w) : String :=
   List.asString (List.map (fun c => if c then '1' else '0') (List.ofFn (BitVec.getMsb' x)))
@@ -192,7 +206,7 @@ def String.leadingSpaces (s : String) : Nat :=
 def Vector.length (_v : Vector α n) : Nat :=
   n
 
-def vectorInit {n : Nat} (a : α) : Vector α n := Vector.mkVector n a
+def vectorInit {n : Nat} (a : α) : Vector α n := Vector.replicate n a
 
 def vectorUpdate (v : Vector α m) (n : Nat) (a : α) := v.set! n a
 
@@ -406,7 +420,7 @@ def undefined_bitvector (n : Nat) : PreSailM RegisterType c ue (BitVec n) :=
   choose <| .bitvector n
 
 def undefined_vector (n : Nat) (a : α) : PreSailM RegisterType c ue (Vector α n) :=
-  pure <| .mkVector n a
+  pure <| .replicate n a
 
 def internal_pick {α : Type} : List α → PreSailM RegisterType c ue α
   | [] => .error .Unreachable
