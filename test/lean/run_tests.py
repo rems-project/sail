@@ -25,7 +25,6 @@ skip_selftests = {
     'outcome_impl', # custom outcome types (not expected to work)
     'outcome_impl_int', # custom outcome types (not expected to work)
     'outcome_impl_bool', # custom outcome types (not expected to work)
-    'assign_rename_bug',
     'union_variant_names',
     'varswap',
     'real',
