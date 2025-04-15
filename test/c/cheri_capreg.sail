@@ -7,9 +7,11 @@ overload operator == = {eq_bit2}
 
 $include <vector_dec.sail>
 
-val "reg_deref" : forall ('a : Type). register('a) -> 'a
+val reg_deref = impure "reg_deref": forall ('a : Type). register('a) -> 'a
 
-val zeros_0 = pure "zeros" : forall 'n. int('n) -> bits('n)
+val zeros_0 = pure {
+  lean: "BitVec.zero",
+  _: "zeros" }: forall 'n. int('n) -> bits('n)
 
 val zeros : forall 'n. (implicit('n), unit) -> bits('n)
 function zeros(n, _) = zeros_0(n)

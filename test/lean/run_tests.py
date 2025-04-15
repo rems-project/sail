@@ -36,7 +36,6 @@ skip_selftests = {
     'concurrency_interface',
     'for_shadow',
     'string_literal_type',
-    'cheri_capreg',
     'issue429',
     'pc_no_wildcard',
     'type_if_bits',
