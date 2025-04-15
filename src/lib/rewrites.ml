@@ -2974,7 +2974,7 @@ let rec rewrite_var_updates (E_aux (expaux, ((l, _) as annot)) as exp) =
          we would introduce a new variable rather than using a wildcard and unit literal
       *)
       let is_trivial = function E_aux ((E_id _ | E_lit _), _) -> true | _ -> false in
-      if List.for_all is_trivial exps then exp
+      if find_updated_vars exp |> IdSet.is_empty then exp
       else (
         let tuple_typ = typ_of exp in
         let typs =
@@ -3004,7 +3004,7 @@ let rec rewrite_var_updates (E_aux (expaux, ((l, _) as annot)) as exp) =
               else (
                 let lb =
                   if is_unit_typ typ then LB_aux (LB_val (P_aux (P_wild, swaptyp typ annot), exp), annot)
-                  else LB_aux (LB_val (P_aux (P_id id, swaptyp typ annot), exp), annot)
+                  else LB_aux (LB_val (add_p_typ env typ (P_aux (P_id id, swaptyp typ annot)), exp), annot)
                 in
                 E_aux (E_let (lb, tup), annot)
               )
