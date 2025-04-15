@@ -1,6 +1,9 @@
 $include <flow.sail>
 
+$[sv_module { stdout = true }]
 val print_endline = "print_endline" : string -> unit
+
+$[sv_module { stdout = true }]
 val print_int = "print_int" : (string, int) -> unit
 
 union exception = {
