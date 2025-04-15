@@ -941,7 +941,7 @@ and doc_exp (as_monadic : bool) ctx (E_aux (e, (l, annot)) as full_exp) =
       ^^ prefix 2 1 (string "then") (wrap_exp statements_monadic ctx t)
       ^^ hardline
       ^^ prefix 2 1 (string "else") (wrap_exp statements_monadic ctx e)
-  | E_ref id -> string ".Reg " ^^ doc_id_ctor id
+  | E_ref id -> parens (string ".Reg " ^^ doc_id_ctor id)
   | E_exit _ -> string "throw Error.Exit"
   | E_throw e ->
       let arrow = if as_monadic then empty else leftarrow in

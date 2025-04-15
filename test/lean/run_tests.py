@@ -29,7 +29,6 @@ skip_selftests = {
     'union_variant_names',
     'varswap',
     'real',
-    'inc_tests',
     'poly_outcome',
     'string_of_bits',
     'pointer_assign',
