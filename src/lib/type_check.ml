@@ -561,6 +561,9 @@ let rec unify_typ l env goals (Typ_aux (aux1, _) as typ1) (Typ_aux (aux2, _) as 
             else unify_error l (string_of_typ typ1 ^ " is not contained within " ^ string_of_typ typ1)
         | _, _ -> merge_uvars env l (unify_nexp l env goals n1 m) (unify_nexp l env goals n2 m)
       end
+  | Typ_id bool, Typ_app (atom_bool, [A_aux (A_bool _, _)])
+    when string_of_id bool = "bool" && string_of_id atom_bool = "atom_bool" ->
+      KBindings.empty
   | Typ_app (id1, args1), Typ_app (id2, args2) when List.length args1 = List.length args2 && Id.compare id1 id2 = 0 ->
       List.fold_left (merge_uvars env l) KBindings.empty (List.map2 (unify_typ_arg l env goals) args1 args2)
   | Typ_app (id1, []), Typ_id id2 when Id.compare id1 id2 = 0 -> KBindings.empty
