@@ -82,6 +82,7 @@ module Make
     (Config : sig
       val max_unknown_bitvector_width : int
       val max_unknown_integer_width : int
+      val no_strings : bool
     end)
     () : S = struct
   let generated_library_defs = ref (StringSet.empty, [])
@@ -151,44 +152,48 @@ module Make
         let in_str = primop_name "in_str" in
         let out_str = primop_name "out_str" in
         let always_comb =
-          (* If the width is a multiple of four, format as hexadecimal.
+          if Config.no_strings then [mk_statement (svs_raw "out_str = SAIL_UNIT" ~outputs:[out_str])]
+          else (
+            (* If the width is a multiple of four, format as hexadecimal.
              We take care to ensure the formatting is identical to other
              Sail backends. *)
-          let zeros = Jib_util.name (mk_id "zeros") in
-          let bstr = Jib_util.name (mk_id "bstr") in
-          if width mod 4 = 0 then (
-            let zeros_init = String.make (width / 4) '0' in
-            [
-              SVS_var (zeros, CT_string, None);
-              SVS_var (bstr, CT_string, None);
-              svs_raw "bstr.hextoa(b)" ~inputs:[b] ~outputs:[bstr];
-              svs_raw (sprintf "zeros = \"%s\"" zeros_init) ~outputs:[zeros];
-              svs_raw
-                (sprintf
-                   "out_str = {in_str, s, $sformatf(\"0x%%s\", zeros.substr(0, %d - bstr.len()), bstr.toupper()), \
-                    \"\\n\"}"
-                   ((width / 4) - 1)
-                )
-                ~inputs:[in_str; s; zeros; bstr] ~outputs:[out_str];
-              SVS_assign (SVP_id Jib_util.return, Unit);
-            ]
-            |> List.map mk_statement
-          )
-          else (
-            let zeros_init = String.make width '0' in
-            [
-              SVS_var (zeros, CT_string, None);
-              SVS_var (bstr, CT_string, None);
-              svs_raw "bstr.bintoa(b)" ~inputs:[b] ~outputs:[bstr];
-              svs_raw (sprintf "zeros = \"%s\"" zeros_init) ~outputs:[zeros];
-              svs_raw
-                (sprintf "out_str = {in_str, s, $sformatf(\"0b%%s\", zeros.substr(0, %d - bstr.len())), bstr, \"\\n\"}"
-                   (width - 1)
-                )
-                ~inputs:[in_str; s; bstr; zeros] ~outputs:[out_str];
-              SVS_assign (SVP_id Jib_util.return, Unit);
-            ]
-            |> List.map mk_statement
+            let zeros = Jib_util.name (mk_id "zeros") in
+            let bstr = Jib_util.name (mk_id "bstr") in
+            if width mod 4 = 0 then (
+              let zeros_init = String.make (width / 4) '0' in
+              [
+                SVS_var (zeros, CT_string, None);
+                SVS_var (bstr, CT_string, None);
+                svs_raw "bstr.hextoa(b)" ~inputs:[b] ~outputs:[bstr];
+                svs_raw (sprintf "zeros = \"%s\"" zeros_init) ~outputs:[zeros];
+                svs_raw
+                  (sprintf
+                     "out_str = {in_str, s, $sformatf(\"0x%%s\", zeros.substr(0, %d - bstr.len()), bstr.toupper()), \
+                      \"\\n\"}"
+                     ((width / 4) - 1)
+                  )
+                  ~inputs:[in_str; s; zeros; bstr] ~outputs:[out_str];
+                SVS_assign (SVP_id Jib_util.return, Unit);
+              ]
+              |> List.map mk_statement
+            )
+            else (
+              let zeros_init = String.make width '0' in
+              [
+                SVS_var (zeros, CT_string, None);
+                SVS_var (bstr, CT_string, None);
+                svs_raw "bstr.bintoa(b)" ~inputs:[b] ~outputs:[bstr];
+                svs_raw (sprintf "zeros = \"%s\"" zeros_init) ~outputs:[zeros];
+                svs_raw
+                  (sprintf
+                     "out_str = {in_str, s, $sformatf(\"0b%%s\", zeros.substr(0, %d - bstr.len())), bstr, \"\\n\"}"
+                     (width - 1)
+                  )
+                  ~inputs:[in_str; s; bstr; zeros] ~outputs:[out_str];
+                SVS_assign (SVP_id Jib_util.return, Unit);
+              ]
+              |> List.map mk_statement
+            )
           )
         in
         SVD_module
@@ -213,70 +218,72 @@ module Make
         let hexstr = primop_name "hexstr" in
         let tempstr n = primop_name ("tempstr" ^ string_of_int n) in
         let defs =
-          List.init width (fun n -> SVD_var (tempstr n, CT_string))
-          @ [
-              SVD_var (zeros, CT_string);
-              SVD_var (hexstr, CT_string);
-              SVD_var (binstr, CT_string);
-              SVD_always_comb
-                (mk_statement
-                   (SVS_block
-                      (List.map mk_statement
-                         [
-                           svs_raw (sprintf "zeros = \"%s\"" (String.make width '0')) ~outputs:[zeros];
-                           svs_raw (sprintf "hexstr.hextoa(b.bits)") ~inputs:[b] ~outputs:[hexstr];
-                           svs_raw (sprintf "binstr.bintoa(b.bits)") ~inputs:[b] ~outputs:[binstr];
-                           svs_raw
-                             (sprintf "%s = {in_str, s}" (string_of_name ~zencode:false (tempstr 0)))
-                             ~inputs:[in_str; s]
-                             ~outputs:[tempstr 0];
-                         ]
-                      )
-                   )
-                );
-            ]
-          @ (List.init (width - 1) (fun n ->
-                 if (n + 1) mod 4 == 0 then
-                   svs_raw
-                     (sprintf
-                        "if (b.size == %d) %s = {%s, $sformatf(\"0x%%s\", zeros.substr(0, %d - hexstr.len()), \
-                         hexstr.toupper()), \"\\n\"}; else %s = %s"
-                        (n + 1)
-                        (string_of_name ~zencode:false (tempstr (n + 1)))
-                        (string_of_name ~zencode:false (tempstr n))
-                        (((n + 1) / 4) - 1)
-                        (string_of_name ~zencode:false (tempstr (n + 1)))
-                        (string_of_name ~zencode:false (tempstr n))
+          if Config.no_strings then [SVD_always_comb (mk_statement (svs_raw "out_str = SAIL_UNIT" ~outputs:[out_str]))]
+          else
+            List.init width (fun n -> SVD_var (tempstr n, CT_string))
+            @ [
+                SVD_var (zeros, CT_string);
+                SVD_var (hexstr, CT_string);
+                SVD_var (binstr, CT_string);
+                SVD_always_comb
+                  (mk_statement
+                     (SVS_block
+                        (List.map mk_statement
+                           [
+                             svs_raw (sprintf "zeros = \"%s\"" (String.make width '0')) ~outputs:[zeros];
+                             svs_raw (sprintf "hexstr.hextoa(b.bits)") ~inputs:[b] ~outputs:[hexstr];
+                             svs_raw (sprintf "binstr.bintoa(b.bits)") ~inputs:[b] ~outputs:[binstr];
+                             svs_raw
+                               (sprintf "%s = {in_str, s}" (string_of_name ~zencode:false (tempstr 0)))
+                               ~inputs:[in_str; s]
+                               ~outputs:[tempstr 0];
+                           ]
+                        )
                      )
-                     ~inputs:[b; zeros; hexstr; tempstr n]
-                     ~outputs:[tempstr (n + 1)]
-                 else
-                   svs_raw
-                     (sprintf
-                        "if (b.size == %d) %s = {%s, $sformatf(\"0b%%s\", zeros.substr(0, %d - binstr.len()), binstr), \
-                         \"\\n\"}; else %s = %s"
-                        (n + 1)
-                        (string_of_name ~zencode:false (tempstr (n + 1)))
-                        (string_of_name ~zencode:false (tempstr n))
-                        n
-                        (string_of_name ~zencode:false (tempstr (n + 1)))
-                        (string_of_name ~zencode:false (tempstr n))
+                  );
+              ]
+            @ (List.init (width - 1) (fun n ->
+                   if (n + 1) mod 4 == 0 then
+                     svs_raw
+                       (sprintf
+                          "if (b.size == %d) %s = {%s, $sformatf(\"0x%%s\", zeros.substr(0, %d - hexstr.len()), \
+                           hexstr.toupper()), \"\\n\"}; else %s = %s"
+                          (n + 1)
+                          (string_of_name ~zencode:false (tempstr (n + 1)))
+                          (string_of_name ~zencode:false (tempstr n))
+                          (((n + 1) / 4) - 1)
+                          (string_of_name ~zencode:false (tempstr (n + 1)))
+                          (string_of_name ~zencode:false (tempstr n))
+                       )
+                       ~inputs:[b; zeros; hexstr; tempstr n]
+                       ~outputs:[tempstr (n + 1)]
+                   else
+                     svs_raw
+                       (sprintf
+                          "if (b.size == %d) %s = {%s, $sformatf(\"0b%%s\", zeros.substr(0, %d - binstr.len()), \
+                           binstr), \"\\n\"}; else %s = %s"
+                          (n + 1)
+                          (string_of_name ~zencode:false (tempstr (n + 1)))
+                          (string_of_name ~zencode:false (tempstr n))
+                          n
+                          (string_of_name ~zencode:false (tempstr (n + 1)))
+                          (string_of_name ~zencode:false (tempstr n))
+                       )
+                       ~inputs:[b; zeros; binstr; tempstr n]
+                       ~outputs:[tempstr (n + 1)]
+               )
+              |> List.map (fun s -> SVD_always_comb (mk_statement s))
+              )
+            @ [
+                SVD_always_comb
+                  (mk_statement
+                     (svs_raw
+                        (sprintf "out_str = %s" (string_of_name ~zencode:false (tempstr (width - 1))))
+                        ~inputs:[tempstr (width - 1)]
+                        ~outputs:[out_str]
                      )
-                     ~inputs:[b; zeros; binstr; tempstr n]
-                     ~outputs:[tempstr (n + 1)]
-             )
-            |> List.map (fun s -> SVD_always_comb (mk_statement s))
-            )
-          @ [
-              SVD_always_comb
-                (mk_statement
-                   (svs_raw
-                      (sprintf "out_str = %s" (string_of_name ~zencode:false (tempstr (width - 1))))
-                      ~inputs:[tempstr (width - 1)]
-                      ~outputs:[out_str]
-                   )
-                );
-            ]
+                  );
+              ]
         in
         SVD_module
           {
@@ -296,7 +303,8 @@ module Make
         let zeros = primop_name "zeros" in
         let vars = [SVS_var (bstr, CT_string, None); SVS_var (zeros, CT_string, None)] in
         let body =
-          if width mod 4 = 0 then
+          if Config.no_strings then [svs_raw "return SAIL_UNIT"]
+          else if width mod 4 = 0 then
             [
               svs_raw "bstr.hextoa(b)" ~inputs:[b] ~outputs:[bstr];
               svs_raw (pf "zeros = \"%s\"" (String.make (width / 4) '0')) ~outputs:[zeros];
@@ -328,8 +336,10 @@ module Make
         let in_str = primop_name "in_str" in
         let out_str = primop_name "out_str" in
         let always_comb =
-          svs_raw "out_str = {in_str, s, $sformatf(\"%0d\", signed'(i)), \"\\n\"}" ~inputs:[in_str; s; i]
-            ~outputs:[out_str]
+          if Config.no_strings then svs_raw "out_str = SAIL_UNIT" ~outputs:[out_str]
+          else
+            svs_raw "out_str = {in_str, s, $sformatf(\"%0d\", signed'(i)), \"\\n\"}" ~inputs:[in_str; s; i]
+              ~outputs:[out_str]
         in
         SVD_module
           {
@@ -354,20 +364,23 @@ module Make
             return_type = Some CT_string;
             params = [(i, ctyp)];
             body =
-              mk_statement
-                (SVS_block
-                   (List.map mk_statement
-                      [
-                        SVS_var (s, CT_string, None);
-                        SVS_var (n, CT_bool, None);
-                        SVS_var (p, CT_string, None);
-                        svs_raw "is_negative = signed'(i) < 0" ~inputs:[i] ~outputs:[n];
-                        svs_raw "s.hextoa(is_negative ? (-i) : i)" ~inputs:[i; n] ~outputs:[s];
-                        svs_raw "prefix = is_negative ? \"-0x\" : \"0x\"" ~inputs:[n] ~outputs:[p];
-                        SVS_return (Fn ("str.++", [Var p; Var s]));
-                      ]
-                   )
-                );
+              ( if Config.no_strings then mk_statement (svs_raw "return SAIL_UNIT")
+                else
+                  mk_statement
+                    (SVS_block
+                       (List.map mk_statement
+                          [
+                            SVS_var (s, CT_string, None);
+                            SVS_var (n, CT_bool, None);
+                            SVS_var (p, CT_string, None);
+                            svs_raw "is_negative = signed'(i) < 0" ~inputs:[i] ~outputs:[n];
+                            svs_raw "s.hextoa(is_negative ? (-i) : i)" ~inputs:[i; n] ~outputs:[s];
+                            svs_raw "prefix = is_negative ? \"-0x\" : \"0x\"" ~inputs:[n] ~outputs:[p];
+                            SVS_return (Fn ("str.++", [Var p; Var s]));
+                          ]
+                       )
+                    )
+              );
           }
     )
 
@@ -384,21 +397,24 @@ module Make
             return_type = Some CT_string;
             params = [(i, ctyp)];
             body =
-              mk_statement
-                (SVS_block
-                   (List.map mk_statement
-                      [
-                        SVS_var (s, CT_string, None);
-                        SVS_var (n, CT_bool, None);
-                        SVS_var (p, CT_string, None);
-                        svs_raw "is_negative = signed'(i) < 0" ~inputs:[i] ~outputs:[n];
-                        svs_raw "s.hextoa(is_negative ? (-i) : i)" ~inputs:[i; n] ~outputs:[s];
-                        svs_raw "s = s.toupper()" ~inputs:[s] ~outputs:[s];
-                        svs_raw "prefix = is_negative ? \"-0x\" : \"0x\"" ~inputs:[n] ~outputs:[p];
-                        SVS_return (Fn ("str.++", [Var p; Var s]));
-                      ]
-                   )
-                );
+              ( if Config.no_strings then mk_statement (svs_raw "return SAIL_UNIT")
+                else
+                  mk_statement
+                    (SVS_block
+                       (List.map mk_statement
+                          [
+                            SVS_var (s, CT_string, None);
+                            SVS_var (n, CT_bool, None);
+                            SVS_var (p, CT_string, None);
+                            svs_raw "is_negative = signed'(i) < 0" ~inputs:[i] ~outputs:[n];
+                            svs_raw "s.hextoa(is_negative ? (-i) : i)" ~inputs:[i; n] ~outputs:[s];
+                            svs_raw "s = s.toupper()" ~inputs:[s] ~outputs:[s];
+                            svs_raw "prefix = is_negative ? \"-0x\" : \"0x\"" ~inputs:[n] ~outputs:[p];
+                            SVS_return (Fn ("str.++", [Var p; Var s]));
+                          ]
+                       )
+                    )
+              );
           }
     )
 
@@ -413,12 +429,19 @@ module Make
             return_type = Some CT_string;
             params = [(i, ctyp)];
             body =
-              mk_statement
-                (SVS_block
-                   (List.map mk_statement
-                      [SVS_var (s, CT_string, None); svs_raw "s.itoa(i)" ~inputs:[i] ~outputs:[s]; SVS_return (Var s)]
-                   )
-                );
+              ( if Config.no_strings then mk_statement (svs_raw "return SAIL_UNIT")
+                else
+                  mk_statement
+                    (SVS_block
+                       (List.map mk_statement
+                          [
+                            SVS_var (s, CT_string, None);
+                            svs_raw "s.itoa(i)" ~inputs:[i] ~outputs:[s];
+                            SVS_return (Var s);
+                          ]
+                       )
+                    )
+              );
           }
     )
 

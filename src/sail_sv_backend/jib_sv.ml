@@ -108,6 +108,7 @@ module Make (Config : CONFIG) = struct
       (struct
         let max_unknown_bitvector_width = Config.max_unknown_bitvector_width
         let max_unknown_integer_width = Config.max_unknown_integer_width
+        let no_strings = Config.no_strings
       end)
       ()
 
@@ -623,7 +624,8 @@ module Make (Config : CONFIG) = struct
     | Fn ("len", [Var v]) -> pp_name v ^^ dot ^^ string "size"
     | Fn ("len", [x]) -> string "sail_bits_size" ^^ parens (pp_smt x)
     | Fn ("cons", [x; xs]) -> lbrace ^^ pp_smt x ^^ comma ^^ space ^^ pp_smt xs ^^ rbrace
-    | Fn ("str.++", xs) -> lbrace ^^ separate_map (comma ^^ space) pp_smt xs ^^ rbrace
+    | Fn ("str.++", xs) ->
+        if Config.no_strings then string "SAIL_UNIT" else lbrace ^^ separate_map (comma ^^ space) pp_smt xs ^^ rbrace
     | Fn ("Array", xs) -> squote ^^ lbrace ^^ separate_map (comma ^^ space) pp_smt xs ^^ rbrace
     | Fn (f, args) -> string f ^^ parens (separate_map (comma ^^ space) pp_smt args)
     | Store (_, store_fn, arr, i, x) -> string store_fn ^^ parens (separate_map (comma ^^ space) pp_smt [arr; i; x])

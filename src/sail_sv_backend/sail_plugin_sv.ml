@@ -507,11 +507,13 @@ let verilog_target out_opt { ast; effect_info; env; default_sail_dir; _ } =
   let doc =
     let base = Generate_primop2.basic_defs !opt_max_unknown_bitvector_width !opt_max_unknown_integer_width in
     let reg_ref_enums, reg_ref_functions = sv_register_references spec_info in
-    Util.fold_left_last
-      (fun last doc set ->
-        ksprintf string "`define SAIL_DPI_%s" (String.uppercase_ascii set) ^^ if last then twice hardline else hardline
-      )
-      empty (StringSet.elements !opt_dpi_sets)
+    (if !opt_no_strings then string "`define SAIL_NOSTRINGS" ^^ hardline else empty)
+    ^^ Util.fold_left_last
+         (fun last doc set ->
+           ksprintf string "`define SAIL_DPI_%s" (String.uppercase_ascii set)
+           ^^ if last then twice hardline else hardline
+         )
+         empty (StringSet.elements !opt_dpi_sets)
     ^^ string base ^^ string "`include \"sail_modules.sv\"" ^^ twice hardline
     ^^ separate_map (twice hardline) (pp_def ctx None) svir_types
     ^^ twice hardline ^^ reg_ref_enums ^^ reg_ref_functions
@@ -660,7 +662,7 @@ let verilog_target out_opt { ast; effect_info; env; default_sail_dir; _ } =
 
   begin
     match !opt_verilate with
-    | Verilator_compile | Verilator_run ->
+    | Verilator_compile | Verilator_run -> (
         let file_info = Util.open_output_with_check ?directory:!opt_output_dir ("sim_" ^ out ^ ".cpp") in
         List.iter
           (fun line ->
@@ -684,12 +686,22 @@ let verilog_target out_opt { ast; effect_info; env; default_sail_dir; _ } =
             !opt_verilate_jobs (Filename.quote sail_sv_libdir) out out out extra cflags ldflags
         in
         print_endline ("Verilator command: " ^ verilator_command);
-        let _ = Unix.system verilator_command in
-        begin
-          match !opt_verilate with
-          | Verilator_run -> Reporting.system_checked (sprintf "%s_obj_dir/V%s" out "sail_toplevel")
-          | _ -> ()
-        end
+        let status = Unix.system verilator_command in
+        ( match status with
+        | WEXITED 0 -> ()
+        | WEXITED n ->
+            raise
+              (Reporting.err_general Parse_ast.Unknown
+                 (Printf.sprintf "Verilator exited with non-zero exit code (%d)" n)
+              )
+        | WSTOPPED n | WSIGNALED n ->
+            raise
+              (Reporting.err_general Parse_ast.Unknown (Printf.sprintf "Verilator stopped or killed by signal (%d)" n))
+        );
+        match !opt_verilate with
+        | Verilator_run -> Reporting.system_checked (sprintf "%s_obj_dir/V%s" out "sail_toplevel")
+        | _ -> ()
+      )
     | _ -> ()
   end
 
