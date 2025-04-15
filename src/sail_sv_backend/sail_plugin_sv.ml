@@ -478,7 +478,7 @@ let verilog_target out_opt { ast; effect_info; env; default_sail_dir; _ } =
     ^^ space ^^ string "sail_throw_location;" ^^ twice hardline
   in
 
-  let spec_info = Jib_sv.collect_spec_info ctx cdefs in
+  let spec_info = Sv_analysis.collect_spec_info ctx cdefs in
 
   let svir, fn_ctyps =
     List.fold_left
