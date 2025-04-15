@@ -158,8 +158,7 @@ def hex_bits_signed2_forwards (bv : (BitVec k_nn)) : (Nat × String) :=
     bif (BEq.beq (BitVec.access bv (len -i 1)) 1#1)
     then "stub1"
     else "stub2"
-  let t__3 := (Sail.BitVec.length bv)
-  (t__3, s)
+  ((Sail.BitVec.length bv), s)
 
 /-- Type quantifiers: k_nn : Nat, k_nn > 0 -/
 def hex_bits_signed2_forwards_matches (bv : (BitVec k_nn)) : Bool :=
