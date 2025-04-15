@@ -141,7 +141,7 @@ function clause execute (TMTest()) = {
 /* TABORT - dummy decoding */
 val decodeTMAbort : bits(6) -> option(ast) effect pure 
 function decodeTMAbort ([R] @ (imm5 : bits(5))) = {
-  Some(TMAbort(R,imm5));
+  Some(TMAbort(cast_bit_bool(R),imm5));
 }
 
 /* transactional memory, not part of the official spec */
@@ -149,7 +149,7 @@ function clause execute (TMAbort(retry,reason)) = {
   if 0b00000000 <_u TxNestingLevel then {
     status : bits(64) = Zeros();
     status[4..0] = reason; /* REASON */
-    status[8] = retry; /* RTRY */
+    status[8] = cast_bool_bit(retry); /* RTRY */
     status[9] = b1; /* ABRT */
     TMAbortEffect->bits() = status; /* fake effect */
   };
@@ -308,7 +308,7 @@ function clause decodeSystem (0b1101010100@0b0@0b00@(op1 : bits(3))@0b0100@(CRm 
 
 function clause execute ( MoveSystemImmediate(operand,field) ) = {
   match field {
-    PSTATEField_SP  => PSTATE_SP = operand[0],
+    PSTATEField_SP  => PSTATE_SP() = [operand[0]],
     PSTATEField_DAIFSet  => {
       PSTATE_D() = (PSTATE_D() | [operand[3]]);
       PSTATE_A() = (PSTATE_A() | [operand[2]]);
@@ -316,10 +316,10 @@ function clause execute ( MoveSystemImmediate(operand,field) ) = {
       PSTATE_F() = (PSTATE_F() | [operand[0]]);
     },
     PSTATEField_DAIFClr  => {
-      PSTATE_D = (PSTATE_D() & [NOT'(operand[3])]);
-      PSTATE_A = (PSTATE_A() & [NOT'(operand[2])]);
-      PSTATE_I = (PSTATE_I() & [NOT'(operand[1])]);
-      PSTATE_F = (PSTATE_F() & [NOT'(operand[0])]);
+      PSTATE_D() = (PSTATE_D() & [NOT'(operand[3])]);
+      PSTATE_A() = (PSTATE_A() & [NOT'(operand[2])]);
+      PSTATE_I() = (PSTATE_I() & [NOT'(operand[1])]);
+      PSTATE_F() = (PSTATE_F() & [NOT'(operand[0])]);
     }
   }
 }
@@ -564,7 +564,7 @@ scattered function decodeImplementationDefined
 
 /* instructions to signal to Sail that test begins/ends */
 function clause decodeImplementationDefined (0b1101010100@0b0@0b01@0b011@0b1@[_]@0b11@0b0000@0b000@0b0000@[isEnd]) = {
-  Some(ImplementationDefinedTestBeginEnd(isEnd));
+  Some(ImplementationDefinedTestBeginEnd(isEnd == b1));
 }
 
 function clause execute ( ImplementationDefinedTestBeginEnd(isEnd) ) = {
@@ -916,9 +916,9 @@ function clause execute ( LoadStoreAcqExc((n,t,t2,s,acctype,excl,pair,memop,elsi
           /* to the same physical locations after address translation. */
           /* ARM: wMem(address, dbytes, acctype) = data;
           status = ExclusiveMonitorsStatus(); */
-          status = flush_write_buffer_exclusive(
+          status = cast_bool_bit(flush_write_buffer_exclusive(
             wMem_exclusive(empty_write_buffer, address, dbytes, acctype, data)
-          );
+          ));
         };
         /* ARM: the following code was moved up, see note there
         wX(s) = (bits(32)) (ZeroExtend([status]));
@@ -1103,7 +1103,7 @@ function clause execute ( LoadStorePairNonTemp((wback,postindex,n,t,t2,acctype,m
 */
 }
 
-function sharedDecodeLoadImmediate (opc : bits(2),size : bits(2), Rn : bits(5), Rt : bits(5), wback : bit ,postindex : bit, scale : range(0,3), offset : bits(64), acctype : AccType,prefetchAllowed : bool) -> option(ast)
+function sharedDecodeLoadImmediate (opc : bits(2),size : bits(2), Rn : bits(5), Rt : bits(5), wback : bool ,postindex : bool, scale : range(0,3), offset : bits(64), acctype : AccType,prefetchAllowed : bool) -> option(ast)
           = {
   n : reg_index = UInt_reg(Rn);
   t : reg_index = UInt_reg(Rt);
@@ -1280,7 +1280,7 @@ function sharedDecodeLoadRegister(Rn:bits(5), Rt:bits(5), Rm:bits(5), opc : bits
   m : reg_index = UInt_reg(Rm);
   acctype : AccType = AccType_NORMAL;
   memop : MemOp = MemOp_LOAD; /* ARM: uninitialized */
-  _signed : boolean = b0; /* ARM: uninitialized */
+  _signed : boolean = false; /* ARM: uninitialized */
   regsize : { 'R, RegisterSize('R). int('R) }/* int('R) */ = 64; /* ARM: uninitialized */
 
   if opc[1] == b0 then {
@@ -1476,7 +1476,7 @@ function decodeLoadStoreRegisterUnsignedImmediate ((size:bits(2))@0b111@0b0@0b01
   sharedDecodeLoadImmediate (opc,size,Rn,Rt,wback,postindex,scale,offset,AccType_NORMAL,true);
 }
 
-function sharedDecodeLoadStorePair (L:boolean,opc : bits(2),imm7:bits(7),Rn:bits(5),Rt:bits(5),Rt2:bits(5),wback:boolean,postindex:boolean) -> option(ast) = {
+function sharedDecodeLoadStorePair (L:bit,opc : bits(2),imm7:bits(7),Rn:bits(5),Rt:bits(5),Rt2:bits(5),wback:boolean,postindex:boolean) -> option(ast) = {
   n : (reg_index) = UInt_reg(Rn);
   t : (reg_index) = UInt_reg(Rt);
   t2 : (reg_index) = UInt_reg(Rt2);

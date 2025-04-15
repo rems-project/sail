@@ -40,12 +40,12 @@ function AArch64_TakeReset(cold_reset) = {
   /* Enter the highest implemented Exception level in AArch64 state */
   PSTATE_nRW = 0b0;
   if HaveEL(EL3) then {
-    PSTATE_EL = EL3;
+    PSTATE_EL() = EL3;
     SCR_EL3->NS() = 0b0; /* Secure state */
   } else if HaveEL(EL2) then
-    PSTATE_EL = EL2
+    PSTATE_EL() = EL2
   else
-    PSTATE_EL = EL1;
+    PSTATE_EL() = EL1;
 
   /* Reset the system registers and other system components */
   AArch64_ResetControlRegisters(cold_reset);
@@ -598,7 +598,7 @@ function rELR'() -> bits(64) = {
 /* FIXME: this reads the whole register. Do we want that? */
 val SCTLR : bits(2) -> SCTLR_type effect {escape, rreg}
 function SCTLR (regime) = {
-   if      regime == EL1 then SCTLR_EL1
+   if      regime == EL1 then SCTLR_EL1_type_to_SCTLR_type(SCTLR_EL1)
    else if regime == EL2 then SCTLR_EL2
    else if regime == EL3 then SCTLR_EL3
    else Unreachable("SCTLR_type unreachable") /* ARM: Unreachable() */
@@ -858,7 +858,7 @@ function ShiftReg(N,_reg, stype, amount) = {
 function Prefetch(address : bits(64), prfop : bits(5)) -> unit = {
   hint : PrefetchHint = Prefetch_READ;
   target : uinteger = 0;
-  stream : boolean = b0;
+  stream : boolean = false;
 
   returnv : bool = false;
   match prfop[4..3] {
@@ -946,7 +946,7 @@ function AArch64_AlignmentFault(acctype : AccType, iswrite : boolean, secondstag
   ipaddress : bits(48) = UNKNOWN_BITS();
   level : uinteger = UNKNOWN;
   extflag : bit = UNKNOWN_BIT;
-  s2fs1walk : boolean = UNKNOWN_BIT;
+  s2fs1walk : boolean = undefined;
 
   AArch64_CreateFaultRecord(Fault_Alignment, ipaddress, level, acctype, iswrite,
                             extflag, secondstage, s2fs1walk);
@@ -958,7 +958,7 @@ function AArch64_NoFault() -> FaultRecord = {
   ipaddress : bits(48) = UNKNOWN_BITS();
   level : uinteger = UNKNOWN;
   acctype : AccType = AccType_NORMAL;
-  iswrite : boolean = UNKNOWN_BIT;
+  iswrite : boolean = undefined;
   extflag : bit = UNKNOWN_BIT;
   secondstage : boolean = false;
   s2fs1walk : boolean = false;

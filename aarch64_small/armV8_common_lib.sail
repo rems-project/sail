@@ -209,7 +209,7 @@ function CountLeadingZeroBits(x) =
   }
 /** FUNCTION:bits(N) Extend(bits(M) x, integer N, boolean unsigned) */
 
-val Extend : forall 'N 'M, 1 <= 'M & 'M < 'N. (implicit('N),bits('M),bit) -> bits('N) effect {escape}
+val Extend : forall 'N 'M, 1 <= 'M & 'M < 'N. (implicit('N),bits('M),bool) -> bits('N) effect {escape}
 function Extend (n, x, _unsigned) =
   if _unsigned then ZeroExtend(n,x) else SignExtend(n,x)
 
@@ -321,7 +321,7 @@ val NOT : forall 'N, 'N >= 0. bits('N) -> bits('N)
 function NOT(x) = ~(x)
 
 val NOT' : bit -> bit
-function NOT'(x) = ~(x)
+function NOT'(x) = if x == b0 then b1 else b0
 
 /** FUNCTION:shared/functions/common/Ones */
 
