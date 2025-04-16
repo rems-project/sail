@@ -1072,14 +1072,31 @@ let doc_funcl_body fixup_binders ctx (FCL_aux (FCL_funcl (id, pexp), annot)) =
   let is_monadic = has_effect exp in
   doc_exp is_monadic (context_with_env ctx env) exp
 
-let doc_funcl ctx funcl =
-  let comment, signature, ctx, fixup_binders = doc_funcl_init ctx.global funcl in
-  comment ^^ nest 2 (signature ^^ hardline ^^ doc_funcl_body fixup_binders ctx funcl)
+let doc_termination ctx fnpat (Rec_aux (meas, _)) =
+  match meas with
+  | Rec_nonrec | Rec_rec -> empty
+  | Rec_measure (pat, exp) ->
+      (* TODO: actually use the pattern *)
+      let term = doc_exp false ctx exp in
+      let term_by =
+        string "termination_by let " ^^ doc_pat pat ^^ string " := " ^^ doc_pat fnpat ^^ string "; " ^^ parens term
+        ^^ string ".toNat"
+      in
+      hardline ^^ term_by
 
-let doc_fundef ctx (FD_aux (FD_function (r, typa, fcls), fannot) as full_fundef) =
+let pat_of_funcl (FCL_aux (FCL_funcl (_, funcl), _)) =
+  match funcl with Pat_aux (Pat_exp (pat, _), _) -> pat | Pat_aux (Pat_when (pat, _, _), _) -> pat
+
+let doc_funcl ctx meas funcl =
+  let comment, signature, ctx, fixup_binders = doc_funcl_init ctx.global funcl in
+  let fnpat = pat_of_funcl funcl in
+  let termination = doc_termination ctx fnpat meas in
+  comment ^^ nest 2 (signature ^^ hardline ^^ doc_funcl_body fixup_binders ctx funcl) ^^ termination
+
+let doc_fundef ctx (FD_aux (FD_function (meas, typa, fcls), fannot) as full_fundef) =
   match fcls with
   | [] -> failwith "FD_function with empty function list"
-  | [funcl] -> doc_funcl ctx funcl
+  | [funcl] -> doc_funcl ctx meas funcl
   | _ -> failwith "FD_function with more than one clause"
 
 let doc_type_union ctx (Tu_aux (Tu_ty_id (ty, i), _)) =
