@@ -600,7 +600,14 @@ notation:50 x "<b" y => decide (x < y)
 notation:50 x "≥b" y => decide (x ≥ y)
 notation:50 x ">b" y => decide (x > y)
 
-macro_rules | `(tactic| decreasing_trivial) => `(tactic| simp_all <;> omega)
+-- for termination measures, since they're almost always `Int`s but not always
+abbrev Nat.toNat (x : Nat) := x
+
+set_option grind.warning false
+macro_rules | `(tactic| decreasing_trivial) => `(tactic|
+  first
+  | grind
+  | decide)
 
 -- This lemma replaces `bif` by `if` in functions when Lean is trying to prove
 -- termination.

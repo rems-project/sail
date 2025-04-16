@@ -169,7 +169,6 @@ let lean_rewrites =
        disappear into an internal pattern match *)
     ("merge_function_clauses", []);
     ("recheck_defs", []);
-    ("rewrite_explicit_measure", []);
     ("rewrite_loops_with_escape_effect", []);
     ("recheck_defs", []);
     ("infer_effects", [Bool_arg true]);
