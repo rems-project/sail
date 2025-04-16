@@ -180,8 +180,16 @@ let verilog_options =
     );
     (Flag.create ~prefix:["sv"] "nomem", Arg.Set opt_nomem, "don't emit a dynamic memory implementation");
     ( Flag.create ~prefix:["sv"] ~arg:"functionname" "fun2wires",
-      Arg.String (fun fn -> opt_fun2wires := fn :: !opt_fun2wires),
-      "Use input/output ports instead of emitting a function call"
+      Arg.String
+        (fun str ->
+          match String.index_opt str ':' with
+          | Some pos ->
+              opt_fun2wires :=
+                (String.sub str (pos + 1) (String.length str - pos - 1), int_of_string (String.sub str 0 pos))
+                :: !opt_fun2wires
+          | None -> opt_fun2wires := (str, 1) :: !opt_fun2wires
+        ),
+      "<slots>:<functionname> Use input/output ports instead of emitting a function call"
     );
     ( Flag.create ~prefix:["sv"] ~arg:"n" "specialize",
       Arg.Int (fun i -> opt_int_specialize := Some i),
@@ -338,6 +346,7 @@ module Verilog_config (C : JIB_CONFIG) : Jib_compile.CONFIG = struct
   let struct_value = false
   let tuple_value = false
   let track_throw = false
+  let assert_to_exception = true
   let branch_coverage = None
   let use_real = false
   let use_void = false
@@ -438,7 +447,8 @@ let verilog_target out_opt { ast; effect_info; env; default_sail_dir; _ } =
     let union_padding = !opt_padding
     let unreachable = !opt_unreachable
     let comb = !opt_comb
-    let ignore = !opt_fun2wires
+    let fun2wires = !opt_fun2wires
+    let ignore = List.map fst !opt_fun2wires
     let dpi_sets = !opt_dpi_sets
   end) in
   let open SV in
@@ -472,12 +482,13 @@ let verilog_target out_opt { ast; effect_info; env; default_sail_dir; _ } =
     ^^ twice hardline
   in
 
+  (*
   let exception_vars =
     string "bit sail_reached_unreachable;" ^^ hardline ^^ string "bit sail_have_exception;" ^^ hardline
     ^^ (if !opt_no_strings then string "sail_unit" else string "string")
     ^^ space ^^ string "sail_throw_location;" ^^ twice hardline
   in
-
+  *)
   let spec_info = Sv_analysis.collect_spec_info ctx cdefs in
 
   let svir, fn_ctyps =

@@ -49,6 +49,7 @@ open Libsail
 open Ast_util
 open Interactive.State
 
+let opt_assert_to_exception = ref false
 let opt_branch_coverage = ref None
 let opt_build = ref false
 let opt_generate_header = ref false
@@ -97,6 +98,7 @@ let c_options =
       Arg.String (fun str -> Specialize.add_initial_calls (IdSet.singleton (mk_id str))),
       "make sure the provided function identifier is preserved in C output"
     );
+    (Flag.create ~prefix:["c"] "assert_to_exception", Arg.Set opt_assert_to_exception, "turn assertions into exceptions");
     ( Flag.create ~prefix:["c"] "preserve_type",
       Arg.String (fun str -> opt_preserve_types := IdSet.add (mk_id str) !opt_preserve_types),
       "make sure the provided type identifier is preserved in the C output"
@@ -199,6 +201,7 @@ let c_target out_file { ast; effect_info; env; default_sail_dir; _ } =
     let reserved_words = reserveds
     let overrides = overrides
     let branch_coverage = !opt_branch_coverage
+    let assert_to_exception = !opt_assert_to_exception
     let preserve_types = !opt_preserve_types
   end) in
   Reporting.opt_warnings := true;
