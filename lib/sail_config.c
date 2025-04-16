@@ -70,10 +70,18 @@ void sail_config_set_file(const char *path)
   buffer[fsize] = 0;
   fclose(f);
 
-  sail_config = cJSON_Parse(buffer);
+  // Points to the position of a parse error if there was one.
+  const char *parse_end = buffer;
+
+  // Parse the JSON. Setting `require_null_terminated` to 1 enables
+  // two conflated checks: that the input is null terminated (which
+  // we guarantee above), and that there is no junk data after the JSON.
+  sail_config = cJSON_ParseWithLengthOpts(buffer, fsize + 1, &parse_end, 1);
 
   if (!sail_config) {
-    sail_assert(false, "Failed to parse configuration");
+    char error_message[128];
+    snprintf(error_message, sizeof error_message, "Failed to parse JSON configuration at offset %ld", parse_end - buffer);
+    sail_assert(false, error_message);
   }
 
   sail_free(buffer);
