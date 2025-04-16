@@ -289,6 +289,7 @@ module type CONFIG = sig
   val use_real : bool
   val branch_coverage : out_channel option
   val track_throw : bool
+  val assert_to_exception : bool
   val use_void : bool
   val eager_control_flow : bool
   val preserve_types : IdSet.t
@@ -386,6 +387,13 @@ module Make (C : CONFIG) = struct
     | _ -> []
 
   let unit_cval = V_lit (VL_unit, CT_unit)
+
+  let assert_exception l msg =
+    let exception_ctyp = CT_variant (mk_id "exception", []) in
+    let e = ngensym () in
+    ( [idecl l exception_ctyp e; ifuncall l (CL_id (e, exception_ctyp)) (mk_id "__assertion_failed#", []) [msg]],
+      V_id (e, exception_ctyp)
+    )
 
   let get_variable_ctyp id ctx =
     match NameMap.find_opt id ctx.locals with
@@ -1198,7 +1206,21 @@ module Make (C : CONFIG) = struct
       )
     | AE_app (Pure_extern id, args, _) -> compile_extern l ctx id args
     | AE_app (Extern id, args, typ) ->
-        if string_of_id id = "sail_config_get" then compile_config l ctx args typ else compile_extern l ctx id args
+        let str = string_of_id id in
+        if str = "sail_assert" && C.assert_to_exception then (
+          match args with
+          | [cond; msg] ->
+              let cond_setup, cond_cval, cond_cleanup = compile_aval l ctx cond in
+              let msg_setup, msg_cval, _ = compile_aval l ctx msg in
+              let exn_setup, exn_cval = assert_exception l msg_cval in
+              ( cond_setup @ [iif l cond_cval [] (msg_setup @ exn_setup @ [ithrow l exn_cval])] @ cond_cleanup,
+                (fun clexp -> icopy l clexp unit_cval),
+                []
+              )
+          | _ -> Reporting.unreachable l __POS__ "Bad arity for sail_assert"
+        )
+        else if str = "sail_config_get" then compile_config l ctx args typ
+        else compile_extern l ctx id args
     | AE_val aval ->
         let setup, cval, cleanup = compile_aval l ctx aval in
         (setup, (fun clexp -> icopy l clexp cval), cleanup)
@@ -1330,6 +1352,7 @@ module Make (C : CONFIG) = struct
         let aexp_setup, aexp_call, aexp_cleanup = compile_aexp ctx aexp in
         let try_return_id = ngensym () in
         let post_exception_handlers_label = label "post_exception_handlers_" in
+        let exn_cval = V_id (current_exception, ctyp_of_typ ctx (mk_typ (Typ_id (mk_id "exception")))) in
         let compile_case (apat, guard, body, case_uannot) =
           let trivial_guard =
             match guard with
@@ -1339,7 +1362,6 @@ module Make (C : CONFIG) = struct
             | _ -> false
           in
           let try_label = label "try_" in
-          let exn_cval = V_id (current_exception, ctyp_of_typ ctx (mk_typ (Typ_id (mk_id "exception")))) in
           let pre_destructure, destructure, destructure_cleanup, ctx =
             compile_match ctx apat exn_cval (fun l b -> ijump l b try_label)
           in
@@ -1369,6 +1391,18 @@ module Make (C : CONFIG) = struct
             ijump l (V_call (Bnot, [V_id (have_exception, CT_bool)])) post_exception_handlers_label;
             icopy l (CL_id (have_exception, CT_bool)) (V_lit (VL_bool false, CT_bool));
           ]
+          @ ( if C.assert_to_exception then
+                [
+                  iif l
+                    (V_ctor_kind (exn_cval, (mk_id "__assertion_failed#", [])))
+                    []
+                    [
+                      icopy l (CL_id (have_exception, CT_bool)) (V_lit (VL_bool true, CT_bool));
+                      igoto post_exception_handlers_label;
+                    ];
+                ]
+              else []
+            )
           @ List.concat (List.map compile_case cases)
           @ [
               (* fallthrough *)
@@ -1745,6 +1779,11 @@ module Make (C : CONFIG) = struct
           | Tu_aux (Tu_ty_id (typ, id), _) ->
               let ctx = { ctx with local_env = Env.add_typquant (id_loc id) typq ctx.local_env } in
               (ctyp_of_typ ctx typ, id)
+        in
+        let tus =
+          if string_of_id id = "exception" && C.assert_to_exception then
+            tus @ [Tu_aux (Tu_ty_id (string_typ, mk_id "__assertion_failed#"), mk_def_annot (gen_loc l) ())]
+          else tus
         in
         let ctus =
           List.fold_left (fun ctus (ctyp, id) -> Bindings.add id ctyp ctus) Bindings.empty (List.map compile_tu tus)
@@ -2833,16 +2872,34 @@ module Make (C : CONFIG) = struct
     let cdefs = List.concat (List.rev chunks) in
 
     (* If we don't have an exception type, add a dummy one *)
-    let dummy_exn = mk_id "__dummy_exn#" in
     let cdefs, ctx =
       if not (Bindings.mem (mk_id "exception") ctx.variants) then
-        ( CDEF_aux
-            (CDEF_type (CTD_variant (mk_id "exception", [], [(dummy_exn, CT_unit)])), mk_def_annot Parse_ast.Unknown ())
-          :: cdefs,
-          {
-            ctx with
-            variants = Bindings.add (mk_id "exception") ([], Bindings.singleton dummy_exn CT_unit) ctx.variants;
-          }
+        if C.assert_to_exception then (
+          let assertion_failed = mk_id "__assertion_failed#" in
+          ( CDEF_aux
+              ( CDEF_type (CTD_variant (mk_id "exception", [], [(assertion_failed, CT_string)])),
+                mk_def_annot Parse_ast.Unknown ()
+              )
+            :: cdefs,
+            {
+              ctx with
+              variants =
+                Bindings.add (mk_id "exception") ([], Bindings.singleton assertion_failed CT_string) ctx.variants;
+            }
+          )
+        )
+        else (
+          let dummy_exn = mk_id "__dummy_exn#" in
+          ( CDEF_aux
+              ( CDEF_type (CTD_variant (mk_id "exception", [], [(dummy_exn, CT_unit)])),
+                mk_def_annot Parse_ast.Unknown ()
+              )
+            :: cdefs,
+            {
+              ctx with
+              variants = Bindings.add (mk_id "exception") ([], Bindings.singleton dummy_exn CT_unit) ctx.variants;
+            }
+          )
         )
       else (cdefs, ctx)
     in

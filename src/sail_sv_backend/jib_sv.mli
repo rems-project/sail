@@ -77,6 +77,8 @@ module type CONFIG = sig
   val comb : bool
   val ignore : string list
 
+  val fun2wires : (string * int) list
+
   (** The SystemVerilog DPI (direct programming interface) lets the
       generated SystemVerilog directly call C functions. A Sail
       external function for the [systemverilog] target can be translated

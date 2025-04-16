@@ -202,6 +202,7 @@ let c_return exp = string "return" ^^ space ^^ exp ^^ semi
 
 module C_config (Opts : sig
   val branch_coverage : out_channel option
+  val assert_to_exception : bool
   val preserve_types : IdSet.t
 end) : CONFIG = struct
   (** Convert a sail type into a C-type. This function can be quite slow, because it uses ctx.local_env and SMT to
@@ -528,6 +529,7 @@ end) : CONFIG = struct
   let use_real = false
   let branch_coverage = Opts.branch_coverage
   let track_throw = true
+  let assert_to_exception = Opts.assert_to_exception
   let use_void = false
   let eager_control_flow = false
   let preserve_types = Opts.preserve_types
@@ -947,6 +949,7 @@ module type CODEGEN_CONFIG = sig
   val reserved_words : Util.StringSet.t
   val overrides : string Name_generator.Overrides.t
   val branch_coverage : out_channel option
+  val assert_to_exception : bool
   val preserve_types : IdSet.t
 end
 
@@ -2321,6 +2324,7 @@ module Codegen (Config : CODEGEN_CONFIG) = struct
   let jib_of_ast env effect_info ast =
     let module Jibc = Make (C_config (struct
       let branch_coverage = Config.branch_coverage
+      let assert_to_exception = Config.assert_to_exception
       let preserve_types = Config.preserve_types
     end)) in
     let ctx = initial_ctx env effect_info in
