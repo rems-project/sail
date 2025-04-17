@@ -54,6 +54,7 @@ module IntIntSet = Util.IntIntSet
 let opt_debug_no_literals = ref false
 
 type ctx = {
+  abstract : kind Bindings.t;
   variants : (typquant * type_union list) Bindings.t;
   structs : (typquant * (typ * id) list) Bindings.t;
   enums : IdSet.t Bindings.t;
@@ -601,8 +602,20 @@ module Make (C : Config) = struct
         (* If there are any rows after the wildcard row, they are redundant *)
         | Some (_, redundant) -> mk_complete ~redundant:(List.map (fun (idx, _) -> idx.num) redundant) all_rows []
         | None -> (
+            let abstract_decs =
+              ctx.abstract |> Bindings.bindings
+              |> List.filter_map (fun (id, kind) ->
+                     let name = Util.zencode_string (string_of_id id) in
+                     match kind with
+                     | K_aux (K_type, _) -> None
+                     | K_aux (K_int, _) -> Some (Printf.sprintf "(declare-const %s Int)" name)
+                     | K_aux (K_bool, _) -> Some (Printf.sprintf "(declare-const %s Bool)" name)
+                 )
+              |> String.concat "\n"
+            in
             let smtlib =
-              (if !require_head_exp_constraint then head_exp_constraint ^ "\n" else "")
+              abstract_decs ^ "\n"
+              ^ (if !require_head_exp_constraint then head_exp_constraint ^ "\n" else "")
               ^ Util.string_of_list "\n" (fun (v, ty) -> Printf.sprintf "(declare-const p%d %s)" v ty) just_vars
               ^ "\n"
               ^ Util.string_of_list "\n" (fun x -> x) (Util.option_these (List.map snd constrs))
