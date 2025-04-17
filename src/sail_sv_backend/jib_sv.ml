@@ -1094,7 +1094,11 @@ module Make (Config : CONFIG) = struct
     let open Jib_ssa in
     function
     | CF_start inits ->
-        let svir_start (id, ctyp) = SVS_aux (SVS_var (id, ctyp, None), Parse_ast.Unknown) in
+        let svir_start (id, ctyp) =
+          match id with
+          | Have_exception 0 -> SVS_aux (SVS_var (id, ctyp, Some (Bool_lit false)), Parse_ast.Unknown)
+          | _ -> SVS_aux (SVS_var (id, ctyp, None), Parse_ast.Unknown)
+        in
         let svir_inits = List.map svir_start (NameMap.bindings inits) in
         return svir_inits
     | CF_block (instrs, _) ->

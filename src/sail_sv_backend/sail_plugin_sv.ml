@@ -97,6 +97,7 @@ let opt_never_pack_unions = ref false
 let opt_padding = ref false
 let opt_nomem = ref false
 
+let opt_assert_to_exception = ref false
 let opt_unreachable = ref []
 let opt_fun2wires = ref []
 
@@ -178,6 +179,10 @@ let verilog_options =
       Arg.String (fun fn -> opt_unreachable := fn :: !opt_unreachable),
       "Mark function as unreachable."
     );
+    ( Flag.create ~prefix:["sv"] "assert_to_exception",
+      Arg.Set opt_assert_to_exception,
+      "turn assertions into exceptions"
+    );
     (Flag.create ~prefix:["sv"] "nomem", Arg.Set opt_nomem, "don't emit a dynamic memory implementation");
     ( Flag.create ~prefix:["sv"] ~arg:"functionname" "fun2wires",
       Arg.String
@@ -240,6 +245,7 @@ let verilog_rewrites =
 
 module type JIB_CONFIG = sig
   val make_call_precise : Jib_compile.ctx -> id -> bool
+  val assert_to_exception : bool
 end
 
 module Verilog_config (C : JIB_CONFIG) : Jib_compile.CONFIG = struct
@@ -346,7 +352,7 @@ module Verilog_config (C : JIB_CONFIG) : Jib_compile.CONFIG = struct
   let struct_value = false
   let tuple_value = false
   let track_throw = false
-  let assert_to_exception = true
+  let assert_to_exception = C.assert_to_exception
   let branch_coverage = None
   let use_real = false
   let use_void = false
@@ -363,6 +369,7 @@ let jib_of_ast make_call_precise env ast effect_info =
   let open Jib_compile in
   let module Jibc = Make (Verilog_config (struct
     let make_call_precise = make_call_precise
+    let assert_to_exception = !opt_assert_to_exception
   end)) in
   let ctx = initial_ctx env effect_info in
   Jibc.compile_ast ctx ast
