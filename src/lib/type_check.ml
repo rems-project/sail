@@ -2144,6 +2144,7 @@ let pattern_completeness_ctx env =
   (* For checking pattern completeness, ensure all types are in scope for the checker to use *)
   let env = Env.open_all_modules env in
   {
+    Pattern_completeness.abstract = Env.get_abstract_typs env;
     Pattern_completeness.variants = Env.get_variants env;
     Pattern_completeness.structs = Env.get_records env;
     Pattern_completeness.enums = Env.get_enums env;

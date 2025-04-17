@@ -901,6 +901,7 @@ module PC = Pattern_completeness.Make (PC_config)
 let pats_complete l env ps typ =
   let ctx =
     {
+      Pattern_completeness.abstract = Env.get_abstract_typs env;
       Pattern_completeness.variants = Env.get_variants env;
       Pattern_completeness.structs = Env.get_records env;
       Pattern_completeness.enums = Env.get_enums env;
