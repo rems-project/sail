@@ -2139,7 +2139,14 @@ module Make (Config : CONFIG) = struct
   and pp_def ctx in_module (SVD_aux (aux, _)) =
     match aux with
     | SVD_null -> empty
-    | SVD_var (id, ctyp) -> wrap_type ctyp (pp_name id) ^^ semi
+    | SVD_var (id, ctyp) -> (
+        let doc = wrap_type ctyp (pp_name id) ^^ semi in
+        match id with
+        | Have_exception 0 ->
+            let stmt = SVS_aux (SVS_assign (SVP_id id, Bool_lit false), Unknown) in
+            doc ^^ hardline ^^ string "assign " ^^ pp_statement ~terminator:semi stmt
+        | _ -> doc
+      )
     | SVD_initial statement -> string "initial" ^^ space ^^ pp_statement ~terminator:semi statement
     | SVD_always_ff statement ->
         let posedge_clk = char '@' ^^ parens (string "posedge" ^^ space ^^ string "clk") in
