@@ -10,3 +10,8 @@ else
   fi
   sed -e "s/MODULENAME/$2/g" -e "s/REGSTATE/$REGSTATE/g" < ../lem-ocaml-template.ml > main.ml
 fi
+
+# Copy only the library files we need
+for f in "instr_kinds" "operators_bitlists" "operators" "prompt" "prompt_monad" "state" "state_monad" "string" "undefined" "values"; do
+  cp "$3/src/gen_lib/sail2_$f.lem" .
+done
