@@ -91,7 +91,7 @@ let rec id_of_regtyp builtins (Typ_aux (t, l) as typ) =
   match t with
   | Typ_id id -> id
   | Typ_app (id, args) ->
-      let name_arg (A_aux (targ, _)) =
+      let name_arg (A_aux (targ, l)) =
         match targ with
         | A_typ targ -> string_of_id (id_of_regtyp builtins targ)
         | A_nexp nexp when is_nexp_constant (nexp_simp nexp) -> string_of_nexp (nexp_simp nexp)
