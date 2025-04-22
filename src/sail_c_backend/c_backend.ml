@@ -2364,15 +2364,16 @@ module Codegen (Config : CODEGEN_CONFIG) = struct
 
       let header_doc_opt, docs = List.map (codegen_def ctx) cdefs |> List.concat |> merge_file_docs in
 
-      let coverage_include, coverage_hook =
+      let coverage_include, coverage_hook_header, coverage_hook =
         let header = string "#include \"sail_coverage.h\"" in
         (* Generate a hook for the RTS to call if we have coverage
            enabled, so it can set the output file with an option. *)
+        let coverage_hook_header = string "extern void (*sail_rts_set_coverage_file)(const char *);" in
         let coverage_hook = string "void (*sail_rts_set_coverage_file)(const char *) = &sail_set_coverage_file;" in
         let no_coverage_hook = string "void (*sail_rts_set_coverage_file)(const char *) = NULL;" in
         match Config.branch_coverage with
-        | Some _ -> if Config.no_rts then ([header], []) else ([header], [coverage_hook])
-        | None -> if Config.no_rts then ([], []) else ([], [no_coverage_hook])
+        | Some _ -> if Config.no_rts then ([header], [], []) else ([header], [coverage_hook_header], [coverage_hook])
+        | None -> if Config.no_rts then ([], [], []) else ([], [coverage_hook_header], [no_coverage_hook])
       in
 
       let preamble in_header =
@@ -2384,7 +2385,7 @@ module Codegen (Config : CODEGEN_CONFIG) = struct
               else List.map (fun h -> string (Printf.sprintf "#include \"%s\"" h)) Config.includes
             )
           @ [string "#ifdef __cplusplus"; string "extern \"C\" {"; string "#endif"]
-          @ if in_header = Config.generate_header then coverage_hook else []
+          @ if in_header then coverage_hook_header else coverage_hook
           )
       in
 
