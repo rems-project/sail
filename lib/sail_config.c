@@ -174,12 +174,12 @@ bool sail_config_is_object(const sail_config_json config)
   return cJSON_IsObject((cJSON *)config);
 }
 
-bool sail_config_object_has_key(const sail_config_json config, const sail_string key)
+bool sail_config_object_has_key(const sail_config_json config, const_sail_string key)
 {
   return cJSON_HasObjectItem((cJSON *)config, key);
 }
 
-sail_config_json sail_config_object_key(const sail_config_json config, const sail_string key)
+sail_config_json sail_config_object_key(const sail_config_json config, const_sail_string key)
 {
   return (sail_config_json)cJSON_GetObjectItemCaseSensitive((cJSON *)config, key);
 }

@@ -88,8 +88,8 @@ sail_config_json sail_config_lookup(const char *dotted_key);
  */
 
 bool sail_config_is_object(const sail_config_json config);
-bool sail_config_object_has_key(const sail_config_json config, const sail_string key);
-sail_config_json sail_config_object_key(const sail_config_json config, const sail_string key);
+bool sail_config_object_has_key(const sail_config_json config, const_sail_string key);
+sail_config_json sail_config_object_key(const sail_config_json config, const_sail_string key);
 
 int64_t sail_config_list_length(const sail_config_json config);
 sail_config_json sail_config_list_nth(const sail_config_json config, int64_t index);
