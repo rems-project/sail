@@ -60,6 +60,9 @@ module type CONFIG = sig
       representation which can hold bitvectors of at most this length. *)
   val max_unknown_bitvector_width : int
 
+  (** Prefix global signals with the provided name *)
+  val global_prefix : string option
+
   (** Output SystemVerilog line directives where possible *)
   val line_directives : bool
 

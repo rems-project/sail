@@ -96,6 +96,7 @@ module type CONFIG = sig
   val recursion_depth : int
   val max_unknown_integer_width : int
   val max_unknown_bitvector_width : int
+  val global_prefix : string option
   val line_directives : bool
   val no_strings : bool
   val no_packed : bool
