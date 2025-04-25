@@ -77,24 +77,20 @@ module type CONFIG = sig
   val comb : bool
   val ignore : string list
 
-  val fun2wires : (string * int) list
+  (** The SystemVerilog DPI (direct programming interface) lets the generated SystemVerilog directly call C functions. A
+      Sail external function for the [systemverilog] target can be translated into a DPI binding using the [sv_function]
+      attribute, for example:
 
-  (** The SystemVerilog DPI (direct programming interface) lets the
-      generated SystemVerilog directly call C functions. A Sail
-      external function for the [systemverilog] target can be translated
-      into a DPI binding using the [sv_function] attribute, for example:
+      {@sail[
+        $[sv_function { dpi = true }]
+        val foo = pure "foo" : ...
 
-      {@sail
-      $[sv_function { dpi = true }]
-      val foo = pure "foo" : ...
+        $[sv_function { dpi = "memory" }]
+        val bar = pure "bar" : ...
+      ]}
 
-      $[sv_function { dpi = "memory" }]
-      val bar = pure "bar" : ...
-      }
-
-      In the above example [foo] will always generated a DPI binding,
-      but [bar] will only generate a DPI binding when ["memory"] is
-      included in [dpi_sets]. *)
+      In the above example [foo] will always generated a DPI binding, but [bar] will only generate a DPI binding when
+      ["memory"] is included in [dpi_sets]. *)
   val dpi_sets : Util.StringSet.t
 end
 

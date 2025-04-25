@@ -293,6 +293,7 @@ module type CONFIG = sig
   val use_void : bool
   val eager_control_flow : bool
   val preserve_types : IdSet.t
+  val fun_to_wires : int Bindings.t
 end
 
 module IdGraph = Graph.Make (Id)
@@ -2038,6 +2039,92 @@ module Make (C : CONFIG) = struct
 
   let letdef_count = ref 0
 
+  type funwire = Arg of int | Ret | Invoke
+
+  let compile_fun_to_wires ctx (def_annot : unit Ast.def_annot) id slots =
+    let l = gen_loc def_annot.loc in
+
+    (* Find the function's type. *)
+    let quant, Typ_aux (fn_typ, _) =
+      try Env.get_val_spec id ctx.local_env with Type_error.Type_error _ -> Env.get_val_spec id ctx.tc_env
+    in
+    let params = quant_kopts quant |> List.filter is_typ_kopt |> List.map kopt_kid in
+
+    let arg_typs, ret_typ = match fn_typ with Typ_fn (arg_typs, ret_typ) -> (arg_typs, ret_typ) | _ -> assert false in
+
+    let ctx = { ctx with local_env = Env.add_typquant (id_loc id) quant ctx.tc_env } in
+
+    let arg_ctyps = List.mapi (fun n typ -> (name (mk_id ("a" ^ string_of_int n)), ctyp_of_typ ctx typ)) arg_typs in
+    let ret_ctyp = ctyp_of_typ ctx ret_typ in
+
+    let num_args = List.length arg_ctyps in
+
+    let funwire_name = function
+      | Arg n -> name (append_id id (Printf.sprintf "_fw_arg%d#" n))
+      | Ret -> name (append_id id "_fw_ret#")
+      | Invoke -> name (append_id id "_fw_invoke#")
+    in
+
+    let funwire_ctyp = function Arg n -> snd (List.nth arg_ctyps n) | Ret -> ret_ctyp | Invoke -> CT_bool in
+
+    let slotvector ctyp = if slots > 1 then CT_fvector (slots, ctyp) else ctyp in
+
+    let mk_register fw =
+      let empty_def_annot = mk_def_annot l () in
+      CDEF_aux (CDEF_register (funwire_name fw, slotvector (funwire_ctyp fw), []), empty_def_annot)
+    in
+
+    let read_slot fw slot =
+      if slots > 1 then V_call (Index slot, [V_id (funwire_name fw, CT_fvector (slots, funwire_ctyp fw))])
+      else V_id (funwire_name fw, funwire_ctyp fw)
+    in
+
+    let write_slot fw slot cval =
+      if slots > 1 then (
+        let vector_ctyp = CT_fvector (slots, funwire_ctyp fw) in
+        iextern l
+          (CL_id (funwire_name fw, vector_ctyp))
+          (mk_id "internal_vector_update", [])
+          [V_id (funwire_name fw, vector_ctyp); V_lit (VL_int (Big_int.of_int slot), CT_fint 64); cval]
+      )
+      else icopy l (CL_id (funwire_name fw, funwire_ctyp fw)) (V_id (funwire_name fw, funwire_ctyp fw))
+    in
+
+    let updates =
+      List.init slots (fun slot ->
+          [
+            iif l
+              (V_call (Bnot, [read_slot Invoke slot]))
+              ([write_slot Invoke slot (V_lit (VL_bool true, CT_bool))]
+              @ List.mapi (fun n (arg, ctyp) -> write_slot (Arg n) slot (V_id (arg, ctyp))) arg_ctyps
+              @ [icopy l (CL_id (return, ret_ctyp)) (read_slot Ret slot); iend l]
+              )
+              [];
+          ]
+      )
+      |> List.concat
+    in
+
+    let exn_setup, exn_cval =
+      assert_exception l (V_lit (VL_string ("reached unreachable in " ^ string_of_id id), CT_string))
+    in
+
+    [mk_register Invoke]
+    @ List.init num_args (fun n -> mk_register (Arg n))
+    @ [mk_register Ret]
+    @ [
+        CDEF_aux (CDEF_val (id, params, List.map snd arg_ctyps, ret_ctyp, None), def_annot);
+        CDEF_aux
+          ( CDEF_fundef
+              ( id,
+                Return_plain,
+                List.map fst arg_ctyps,
+                fix_exception ~return:(Some ret_ctyp) ctx (updates @ exn_setup @ [ithrow l exn_cval])
+              ),
+            mk_def_annot l ()
+          );
+      ]
+
   let compile_funcl ctx def_annot id pat guard exp =
     let debug_attr = get_def_attribute "jib_debug" def_annot in
     let mapping_function_attr = get_def_attribute "mapping_function" def_annot in
@@ -2225,13 +2312,16 @@ module Make (C : CONFIG) = struct
             valspecs = Bindings.add id (extern, arg_ctyps, ret_ctyp, uannot_of_def_annot def_annot) ctx.valspecs;
           }
         )
-    | DEF_fundef (FD_aux (FD_function (_, _, [FCL_aux (FCL_funcl (id, Pat_aux (Pat_exp (pat, exp), _)), _)]), _)) ->
+    | DEF_fundef (FD_aux (FD_function (_, _, [FCL_aux (FCL_funcl (id, pexp), _)]), _)) -> (
         Util.progress "Compiling " (string_of_id id) n total;
-        compile_funcl ctx def_annot id pat None exp
-    | DEF_fundef (FD_aux (FD_function (_, _, [FCL_aux (FCL_funcl (id, Pat_aux (Pat_when (pat, guard, exp), _)), _)]), _))
-      ->
-        Util.progress "Compiling " (string_of_id id) n total;
-        compile_funcl ctx def_annot id pat (Some guard) exp
+        match Bindings.find_opt id C.fun_to_wires with
+        | Some slots -> (compile_fun_to_wires ctx def_annot id slots, ctx)
+        | None -> (
+            match pexp with
+            | Pat_aux (Pat_exp (pat, exp), _) -> compile_funcl ctx def_annot id pat None exp
+            | Pat_aux (Pat_when (pat, guard, exp), _) -> compile_funcl ctx def_annot id pat (Some guard) exp
+          )
+      )
     | DEF_fundef (FD_aux (FD_function (_, _, []), (l, _))) ->
         raise (Reporting.err_general l "Encountered function with no clauses")
     | DEF_fundef (FD_aux (FD_function (_, _, _ :: _ :: _), (l, _))) ->

@@ -533,6 +533,7 @@ end) : CONFIG = struct
   let use_void = false
   let eager_control_flow = false
   let preserve_types = Opts.preserve_types
+  let fun_to_wires = Bindings.empty
 end
 
 (** Functions that have heap-allocated return types are implemented by passing a pointer a location where the return

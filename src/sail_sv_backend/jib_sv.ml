@@ -97,7 +97,6 @@ module type CONFIG = sig
   val unreachable : string list
   val comb : bool
   val ignore : string list
-  val fun2wires : (string * int) list
   val dpi_sets : StringSet.t
 end
 
