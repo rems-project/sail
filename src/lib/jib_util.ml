@@ -264,6 +264,7 @@ let string_of_op = function
   | Ite -> "@ite"
   | Get_abstract -> "@get_abstract"
   | String_eq -> "@string_eq"
+  | Index n -> "@index::<" ^ string_of_int n ^ ">"
 
 (* String representation of ctyps here is only for debugging and
    intermediate language pretty-printer. *)
@@ -1086,6 +1087,11 @@ let rec infer_call op vs =
   | Ite, [_; t; _] -> cval_ctyp t
   | Get_abstract, [v] -> cval_ctyp v
   | String_eq, _ -> CT_bool
+  | Index _, [v] -> (
+      match cval_ctyp v with
+      | CT_fvector (_, ctyp) -> ctyp
+      | _ -> Reporting.unreachable Parse_ast.Unknown __POS__ "Invalid type for index argument"
+    )
   | _, _ -> Reporting.unreachable Parse_ast.Unknown __POS__ ("Invalid call to function " ^ string_of_op op)
 
 and cval_ctyp = function
@@ -1116,7 +1122,7 @@ let rec clexp_ctyp = function
   | CL_tuple (clexp, n) -> begin
       match clexp_ctyp clexp with
       | CT_tup typs -> begin try List.nth typs n with _ -> failwith "Tuple assignment index out of bounds" end
-      | ctyp -> failwith ("Bad ctyp for CL_addr " ^ string_of_ctyp ctyp)
+      | ctyp -> failwith ("Bad ctyp for CL_tuple " ^ string_of_ctyp ctyp)
     end
   | CL_void ctyp -> ctyp
 

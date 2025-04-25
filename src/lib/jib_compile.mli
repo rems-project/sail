@@ -173,6 +173,8 @@ module type CONFIG = sig
 
   (** Types to preserve in the Jib output *)
   val preserve_types : IdSet.t
+
+  val fun_to_wires : int Bindings.t
 end
 
 module IdGraph : sig

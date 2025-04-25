@@ -102,6 +102,7 @@ op :: '' ::=
   | ite               :: :: ite
   | get_abstract      :: :: get_abstract
   | string_eq         :: :: string_eq
+  | index nat         :: :: index
 % Integer ops
   | lt                :: :: ilt
   | lteq              :: :: ilteq

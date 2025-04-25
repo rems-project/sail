@@ -388,6 +388,19 @@ module Make (Config : CONFIG) (Primop_gen : PRIMOP_GEN) = struct
             let op = Primop_gen.is_empty l (cval_ctyp arg) in
             let* arg = smt_cval arg in
             return (Fn (op, [arg]))
+        | V_call (Index i, [vec]) -> (
+            let* l = current_location in
+            match cval_ctyp vec with
+            | CT_fvector (len, _) ->
+                let* vec = smt_cval vec in
+                let* i =
+                  bind
+                    (smt_cval (V_lit (VL_int (Big_int.of_int i), CT_fint 64)))
+                    (unsigned_size ~checked:false ~into:(required_width (Big_int.of_int (len - 1)) - 1) ~from:64)
+                in
+                return (Fn ("select", [vec; i]))
+            | _ -> Reporting.unreachable l __POS__ "Index for non-fixed-vector type found"
+          )
         | V_call (op, args) ->
             let* args = mapM smt_cval args in
             return (smt_cval_call op args)

@@ -99,7 +99,7 @@ let opt_nomem = ref false
 
 let opt_assert_to_exception = ref false
 let opt_unreachable = ref []
-let opt_fun2wires = ref []
+let opt_fun_to_wires = ref []
 
 let opt_dpi_sets = ref StringSet.empty
 
@@ -189,10 +189,10 @@ let verilog_options =
         (fun str ->
           match String.index_opt str ':' with
           | Some pos ->
-              opt_fun2wires :=
+              opt_fun_to_wires :=
                 (String.sub str (pos + 1) (String.length str - pos - 1), int_of_string (String.sub str 0 pos))
-                :: !opt_fun2wires
-          | None -> opt_fun2wires := (str, 1) :: !opt_fun2wires
+                :: !opt_fun_to_wires
+          | None -> opt_fun_to_wires := (str, 1) :: !opt_fun_to_wires
         ),
       "<slots>:<functionname> Use input/output ports instead of emitting a function call"
     );
@@ -246,6 +246,7 @@ let verilog_rewrites =
 module type JIB_CONFIG = sig
   val make_call_precise : Jib_compile.ctx -> id -> bool
   val assert_to_exception : bool
+  val fun_to_wires : int Bindings.t
 end
 
 module Verilog_config (C : JIB_CONFIG) : Jib_compile.CONFIG = struct
@@ -358,6 +359,7 @@ module Verilog_config (C : JIB_CONFIG) : Jib_compile.CONFIG = struct
   let use_void = false
   let eager_control_flow = true
   let preserve_types = IdSet.empty
+  let fun_to_wires = C.fun_to_wires
 end
 
 let register_types cdefs =
@@ -370,6 +372,8 @@ let jib_of_ast make_call_precise env ast effect_info =
   let module Jibc = Make (Verilog_config (struct
     let make_call_precise = make_call_precise
     let assert_to_exception = !opt_assert_to_exception
+    let fun_to_wires =
+      !opt_fun_to_wires |> List.to_seq |> Seq.map (fun (name, slots) -> (mk_id name, slots)) |> Bindings.of_seq
   end)) in
   let ctx = initial_ctx env effect_info in
   Jibc.compile_ast ctx ast
@@ -454,8 +458,7 @@ let verilog_target out_opt { ast; effect_info; env; default_sail_dir; _ } =
     let union_padding = !opt_padding
     let unreachable = !opt_unreachable
     let comb = !opt_comb
-    let fun2wires = !opt_fun2wires
-    let ignore = List.map fst !opt_fun2wires
+    let ignore = [] (* List.map fst !opt_fun2wires *)
     let dpi_sets = !opt_dpi_sets
   end) in
   let open SV in
