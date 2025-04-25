@@ -621,6 +621,7 @@ val nexp_subst : kid -> typ_arg -> nexp -> nexp
 val constraint_subst : kid -> typ_arg -> n_constraint -> n_constraint
 val typ_subst : kid -> typ_arg -> typ -> typ
 val typ_arg_subst : kid -> typ_arg -> typ_arg -> typ_arg
+val typquant_subst : kid -> typ_arg -> typquant -> typquant
 
 val subst_kid : (kid -> typ_arg -> 'a -> 'a) -> kid -> kid -> 'a -> 'a
 

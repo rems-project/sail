@@ -5241,13 +5241,13 @@ and check_outcome_instantiation :
     )
     param_constraints;
 
-  let instantiate_typ substs typ =
+  let instantiate_typ substs typq typ =
     List.fold_left
-      (fun (typ, new_instantiated, fns, env) -> function
+      (fun (typq, typ, new_instantiated, fns, env) -> function
         | IS_aux (IS_typ (kid, subst_arg), decl_l) -> begin
             match KBindings.find_opt kid instantiated with
             | Some (_, _, existing_arg) when alpha_equivalent_arg env subst_arg existing_arg ->
-                (typ, new_instantiated, fns, env)
+                (typquant_subst kid subst_arg typq, typ_subst kid subst_arg typ, new_instantiated, fns, env)
             | Some (prev_l, _, existing_arg) ->
                 let msg =
                   Printf.sprintf "Cannot instantiate %s with %s, already instantiated as %s" (string_of_kid kid)
@@ -5256,17 +5256,18 @@ and check_outcome_instantiation :
                 typ_raise decl_l (err_because (Err_other msg, prev_l, Err_other "Previously instantiated here"))
             | None ->
                 Env.wf_typ_arg ~at:decl_l env subst_arg;
-                ( typ_subst kid subst_arg typ,
+                ( typquant_subst kid subst_arg typq,
+                  typ_subst kid subst_arg typ,
                   (kid, subst_arg) :: new_instantiated,
                   fns,
                   Env.add_outcome_variable decl_l kid subst_arg env
                 )
           end
-        | IS_aux (IS_id (id_from, id_to), decl_l) -> (typ, new_instantiated, (id_from, id_to, decl_l) :: fns, env)
+        | IS_aux (IS_id (id_from, id_to), decl_l) -> (typq, typ, new_instantiated, (id_from, id_to, decl_l) :: fns, env)
         )
-      (typ, [], [], env) substs
+      (typq, typ, [], [], env) substs
   in
-  let typ, new_instantiated, fns, env = instantiate_typ substs typ in
+  let typq, typ, new_instantiated, fns, env = instantiate_typ substs typq typ in
 
   (* Make sure every required outcome parameter has been instantiated *)
   List.iter
