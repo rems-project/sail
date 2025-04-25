@@ -208,7 +208,7 @@ module Make (Config : CONFIG) = struct
         else ksprintf simple_type "logic [%d:0]" (width - 1)
     | CT_ref ctyp -> ksprintf simple_type "sail_reg_%s" (Util.zencode_string (string_of_ctyp ctyp))
     | CT_fvector (len, ctyp) ->
-        let outer_index = sprintf "[%d:0]" (len - 1) in
+        let outer_index = sprintf "[%d]" len in
         begin
           match sv_ctyp ~two_state ctyp with
           | ty, Some inner_index -> (ty, Some (inner_index ^ outer_index))
