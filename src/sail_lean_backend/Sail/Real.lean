@@ -1,6 +1,9 @@
 import Mathlib.Data.Real.Basic
 import Mathlib.Data.Real.Sqrt
 
+import THE_MODULE_NAME.Sail.Sail
+import THE_MODULE_NAME.Defs
+
 noncomputable section
 
 abbrev real := ℝ
@@ -61,3 +64,5 @@ def prerr_real (_ : String) (_ : real) : Unit := ()
 
 -- val "random_real" : unit -> real
 def random_real (_ : Unit) : real := 34
+
+def undefined_real (_ : Unit) : SailM real := return default

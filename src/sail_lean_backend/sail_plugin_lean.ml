@@ -225,7 +225,6 @@ let print_function_file_prelude file out_name_camel (prev_file : string option) 
         output_string file ("import " ^ out_name_camel ^ ".Sail.Sail\n");
         output_string file ("import " ^ out_name_camel ^ ".Sail.BitVec\n");
         output_string file ("import " ^ out_name_camel ^ ".Sail.IntRange\n");
-        if !opt_lean_real_numbers then output_string file ("import " ^ out_name_camel ^ ".Sail.Real\n");
         output_string file ("import " ^ out_name_camel ^ ".Defs\n");
         List.iter
           (fun filename -> output_string file ("import " ^ out_name_camel ^ "." ^ file_to_module filename ^ "\n"))
@@ -261,7 +260,10 @@ let start_lean_output (out_name : string) (import_names : string list) default_s
   let _ = copy_from_static_library sail_dir lean_sail_dir "BitVec" in
   let _ = copy_from_static_library sail_dir lean_sail_dir "IntRange" in
   let _ = copy_from_static_library sail_dir lean_sail_dir "Sail" in
-  let _ = if !opt_lean_real_numbers then copy_from_static_library sail_dir lean_sail_dir "Real" |> ignore in
+  let _ =
+    if !opt_lean_real_numbers then
+      opt_lean_import_files := (sail_dir ^ "/src/sail_lean_backend/Sail/Real.lean") :: !opt_lean_import_files
+  in
   opt_lean_import_files := (sail_dir ^ "/src/sail_lean_backend/Sail/Specialization.lean") :: !opt_lean_import_files;
   List.iter
     (fun filename ->

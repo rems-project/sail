@@ -90,6 +90,7 @@ let rec fix_id name =
   | "main" ->
       the_main_function_has_been_seen := true;
       "sail_main"
+  | "?" -> "questionMark"
   | _ -> if String.contains name '#' then fix_id (String.concat "_" (Util.split_on_char '#' name)) else name
 
 let doc_id_ctor (Id_aux (i, _)) =
@@ -472,7 +473,8 @@ let string_of_def (DEF_aux (d, _)) =
 (** Fix identifiers to match the standard Lean library. *)
 let fixup_match_id (Id_aux (id, l) as id') =
   match id with
-  | Id id -> Id_aux (Id (match id with "Some" -> "some" | "None" -> "none" | "early_return" -> "throw" | _ -> id), l)
+  | Id id ->
+      Id_aux (Id (match id with "Some" -> "some" | "None" -> "none" | "early_return" -> "throw" | _ -> fix_id id), l)
   | _ -> id'
 
 let rec update_ctx_pat (ctx : context) (P_aux (p, (l, annot)) as pat) =
