@@ -54,7 +54,7 @@ def lteq_real (x y : real) : Bool := x ≤ y
 def gteq_real (x y : real) : Bool := x ≥ y
 
 -- val pow_real = pure "real_power" : (real, int) -> real
-def pow_real (x : real) (n : Int) : real := x ^ n
+def real_power (x : real) (n : Int) : real := x ^ n
 
 -- val "print_real" : (string, real) -> unit
 def print_real (_ : String) (_ : real) : Unit := ()
