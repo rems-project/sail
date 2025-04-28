@@ -63,6 +63,8 @@ let optimize_aarch64_fast_struct = ref false
 
 let ngensym = symbol_generator ()
 
+type funwire = Arg of int | Ret | Invoke
+
 (**************************************************************************)
 (* 4. Conversion to low-level AST                                         *)
 (**************************************************************************)
@@ -2039,8 +2041,6 @@ module Make (C : CONFIG) = struct
 
   let letdef_count = ref 0
 
-  type funwire = Arg of int | Ret | Invoke
-
   let compile_fun_to_wires ctx (def_annot : unit Ast.def_annot) id slots =
     let l = gen_loc def_annot.loc in
 
@@ -2065,13 +2065,25 @@ module Make (C : CONFIG) = struct
       | Invoke -> name (append_id id "_fw_invoke#")
     in
 
+    let funwire_attr_info = function
+      | Arg n -> AD_aux (AD_num (Big_int.of_int n), l)
+      | Ret -> AD_aux (AD_string "return", l)
+      | Invoke -> AD_aux (AD_string "invoke", l)
+    in
+
+    let funwire_attr fw =
+      mk_def_annot
+        ~attrs:
+          [(l, "funwire", Some (AD_aux (AD_list [AD_aux (AD_string (string_of_id id), l); funwire_attr_info fw], l)))]
+        l ()
+    in
+
     let funwire_ctyp = function Arg n -> snd (List.nth arg_ctyps n) | Ret -> ret_ctyp | Invoke -> CT_bool in
 
     let slotvector ctyp = if slots > 1 then CT_fvector (slots, ctyp) else ctyp in
 
     let mk_register fw =
-      let empty_def_annot = mk_def_annot l () in
-      CDEF_aux (CDEF_register (funwire_name fw, slotvector (funwire_ctyp fw), []), empty_def_annot)
+      CDEF_aux (CDEF_register (funwire_name fw, slotvector (funwire_ctyp fw), []), funwire_attr fw)
     in
 
     let read_slot fw slot =

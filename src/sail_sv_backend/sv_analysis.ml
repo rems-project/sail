@@ -47,6 +47,7 @@
 
 open Libsail
 
+open Ast
 open Ast_util
 open Jib
 open Jib_compile
@@ -100,7 +101,7 @@ class footprint_visitor ctx registers (footprint : direct_footprint) : jib_visit
       | V_id (id, local_ctyp) ->
           begin
             match NameMap.find_opt id registers with
-            | Some ctyp ->
+            | Some (ctyp, _) ->
                 assert (ctyp_equal local_ctyp ctyp);
                 footprint.reads <- NameSet.add id footprint.reads
             | None -> ()
@@ -156,7 +157,7 @@ class footprint_visitor ctx registers (footprint : direct_footprint) : jib_visit
       | CL_id (id, local_ctyp) ->
           begin
             match NameMap.find_opt id registers with
-            | Some ctyp ->
+            | Some (ctyp, _) ->
                 assert (ctyp_equal local_ctyp ctyp);
                 footprint.writes <- NameSet.add id footprint.writes
             | None -> ()
@@ -200,7 +201,7 @@ type spec_info = {
   (* A map from register types to all the registers with that type *)
   register_ctyp_map : NameSet.t CTMap.t;
   (* A map from register names to types *)
-  registers : ctyp NameMap.t;
+  registers : (ctyp * unit def_annot) NameMap.t;
   (* A list of registers with initial values *)
   initialized_registers : name list;
   (* A list of constructor functions *)
@@ -222,12 +223,12 @@ let collect_spec_info ctx cdefs =
     List.fold_left
       (fun (ctyp_map, regs, inits) cdef ->
         match cdef with
-        | CDEF_aux (CDEF_register (id, ctyp, setup), _) ->
+        | CDEF_aux (CDEF_register (id, ctyp, setup), def_annot) ->
             let setup_id = match setup with [] -> [] | _ -> [id] in
             ( CTMap.update ctyp
                 (function Some ids -> Some (NameSet.add id ids) | None -> Some (NameSet.singleton id))
                 ctyp_map,
-              NameMap.add id ctyp regs,
+              NameMap.add id (ctyp, def_annot) regs,
               setup_id @ inits
             )
         | _ -> (ctyp_map, regs, inits)
