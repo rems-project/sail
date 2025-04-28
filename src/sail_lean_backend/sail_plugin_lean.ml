@@ -304,6 +304,7 @@ let create_lake_project (ctx : lean_context) executable =
     ("name = \"" ^ ctx.out_name ^ "\"\ndefaultTargets = [\"" ^ ctx.out_name_camel
    ^ "\"]\nmoreLeanArgs = [\"--tstack=400000\"]\n\n[[lean_lib]]\nname = \"" ^ ctx.out_name_camel ^ "\""
     );
+  output_string ctx.lakefile "\nleanOptions.weak.linter.style.nameCheck = false";
   if !opt_lean_real_numbers then (
     output_string ctx.lakefile "\n\n[[require]]\n";
     output_string ctx.lakefile "name = \"mathlib\"\n";

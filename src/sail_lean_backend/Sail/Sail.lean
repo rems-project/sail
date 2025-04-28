@@ -200,6 +200,9 @@ def get_slice_int (len n lo : Nat) : BitVec len :=
 def set_slice_int (len n lo : Nat) (x : BitVec len) : Int :=
   BitVec.toInt (BitVec.updateSubrange' (BitVec.ofInt len n) lo len x)
 
+def set_slice {n : Nat} (m : Nat) (bv : BitVec n) (start : Nat) (bv' : BitVec m) : BitVec n :=
+  BitVec.updateSubrange' bv start m bv'
+
 def String.leadingSpaces (s : String) : Nat :=
   s.length - (s.dropWhile (· = ' ')).length
 
@@ -349,6 +352,8 @@ end PreSailTypes
 def print_int : String → Int → Unit := fun _ _ => ()
 
 def prerr_int : String → Int → Unit := fun _ _ => ()
+
+def prerr_bits: String → BitVec n → Unit := fun _ _ => ()
 
 def print_endline : String → Unit := fun _  => ()
 
