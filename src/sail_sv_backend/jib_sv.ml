@@ -47,6 +47,7 @@
 
 open Libsail
 
+open Ast
 open Ast_util
 open Jib
 open Jib_compile
@@ -63,6 +64,7 @@ open Sv_analysis
 
 module IntSet = Util.IntSet
 module IntMap = Util.IntMap
+module StringMap = Util.StringMap
 
 let ngensym = symbol_generator ()
 
@@ -97,7 +99,9 @@ module type CONFIG = sig
   val unreachable : string list
   val comb : bool
   val ignore : string list
+  val fun_to_wires : (string * int) list
   val dpi_sets : StringSet.t
+  val skip_cyclic : bool
 end
 
 module Make (Config : CONFIG) = struct
@@ -1146,12 +1150,12 @@ module Make (Config : CONFIG) = struct
             | Some footprint ->
                 let reads =
                   List.map
-                    (fun id -> V_id (id, NameMap.find id spec_info.registers))
+                    (fun id -> V_id (id, fst (NameMap.find id spec_info.registers)))
                     (natural_sort_names (NameSet.elements (NameSet.union footprint.all_writes footprint.all_reads)))
                 in
                 let writes =
                   List.map
-                    (fun id -> CL_id (id, NameMap.find id spec_info.registers))
+                    (fun id -> CL_id (id, fst (NameMap.find id spec_info.registers)))
                     (natural_sort_names (NameSet.elements footprint.all_writes))
                 in
                 let throws =
@@ -1429,10 +1433,14 @@ module Make (Config : CONFIG) = struct
     let visit_order =
       try topsort cfg
       with Not_a_DAG n ->
-        raise
-          (Reporting.err_general Parse_ast.Unknown
-             (Printf.sprintf "%s: control flow graph is not acyclic (node %d is in cycle)" (string_of_sv_name name) n)
-          )
+        let msg =
+          Printf.sprintf "%s: control flow graph is not acyclic (node %d is in cycle)" (string_of_sv_name name) n
+        in
+        if Config.skip_cyclic then (
+          Reporting.warn "SystemVerilog generation" Parse_ast.Unknown msg;
+          []
+        )
+        else raise (Reporting.err_general Parse_ast.Unknown msg)
     in
 
     let variable_locations = ref Bindings.empty in
@@ -1567,7 +1575,7 @@ module Make (Config : CONFIG) = struct
               name = Jib_ssa.ssa_name 0 id;
               external_name =
                 (match id with Name (id, _) -> string_of_id (prepend_id "in_" id) | _ -> string_of_name id);
-              typ = NameMap.find id spec_info.registers;
+              typ = fst (NameMap.find id spec_info.registers);
             }
           )
           (natural_sort_names (NameSet.elements (NameSet.union footprint.all_writes footprint.all_reads)))
@@ -1611,7 +1619,7 @@ module Make (Config : CONFIG) = struct
               name = output_register id;
               external_name =
                 (match id with Name (id, _) -> string_of_id (prepend_id "out_" id) | _ -> string_of_name id);
-              typ = NameMap.find id spec_info.registers;
+              typ = fst (NameMap.find id spec_info.registers);
             }
           )
           (natural_sort_names (NameSet.elements footprint.all_writes))
@@ -1666,7 +1674,7 @@ module Make (Config : CONFIG) = struct
                   match Util.list_index (fun p -> Name.compare p name = 0) params with
                   | Some i -> Some (List.nth param_ctyps i)
                   | None -> (
-                      match NameMap.find_opt name spec_info.registers with Some ctyp -> Some ctyp | None -> None
+                      match NameMap.find_opt name spec_info.registers with Some (ctyp, _) -> Some ctyp | None -> None
                     )
                 )
             )
@@ -1698,7 +1706,18 @@ module Make (Config : CONFIG) = struct
     in
     { name; recursive = is_recursive; input_ports; output_ports; defs = List.map mk_def defs }
 
-  type register_info = { name : name; reset : name; inp : name; out : name; ctyp : ctyp }
+  type register_info = { name : name; reset : name; inp : name; out : name; ctyp : ctyp; annot : unit def_annot }
+
+  let is_funwire_register reg_info =
+    match get_def_attribute "funwire" reg_info.annot with
+    | Some (_, Some (AD_aux (AD_list [AD_aux (AD_string name, _); AD_aux (t, _)], _))) -> (
+        match t with
+        | AD_string "invoke" -> Some (name, Invoke)
+        | AD_string "return" -> Some (name, Ret)
+        | AD_num n -> Some (name, Arg (Big_int.to_int n))
+        | _ -> None
+      )
+    | _ -> None
 
   let toplevel_module spec_info ctx id fn_ctyps =
     if not (Bindings.mem id fn_ctyps && Bindings.mem id spec_info.footprints) then
@@ -1719,13 +1738,17 @@ module Make (Config : CONFIG) = struct
     let arg_conversions = Attr.get_types ~arity:(List.length arg_ctyps) attr in
     (* Registers that are exposed as output ports *)
     let exposed = Attr.get_string_set ~default:StringSet.empty "expose" attr in
+    let inout_regs = Attr.get_bool ~default:false "inout_regs" attr in
+    let exception_ports = Attr.get_bool ~default:false "exception_ports" attr in
     (* Text used to bracket output *)
     let prefix = Attr.get_string ~default:"SAIL START\\n" "prefix" attr in
     let suffix = Attr.get_string ~default:"SAIL END\\n" "suffix" attr in
+    let toplevel_name = Attr.get_string ~default:"sail_toplevel" "name" attr in
+    let finish = Attr.get_bool ~default:true "finish" attr in
 
     let register_ports =
       List.rev_map
-        (fun (reg, ctyp) ->
+        (fun (reg, (ctyp, def_annot)) ->
           match reg with
           | Name (id, -1) ->
               {
@@ -1734,8 +1757,9 @@ module Make (Config : CONFIG) = struct
                 inp = Name (prepend_id "in_" id, -1);
                 out = Name (prepend_id "out_" id, -1);
                 ctyp;
+                annot = def_annot;
               }
-          | _ -> { name = reg; reset = ngensym (); inp = ngensym (); out = ngensym (); ctyp }
+          | _ -> { name = reg; reset = ngensym (); inp = ngensym (); out = ngensym (); ctyp; annot = def_annot }
         )
         (NameMap.bindings spec_info.registers)
     in
@@ -1744,22 +1768,59 @@ module Make (Config : CONFIG) = struct
       List.stable_sort (fun r1 r2 -> natural_name_compare Bindings.empty r1.name r2.name) register_ports
     in
 
+    let qinputs = Queue.create () in
+    let qoutputs = Queue.create () in
+    let qdefs = Queue.create () in
+    let funwires_input = Queue.create () in
+    let funwires_output = Queue.create () in
+
+    let comb_queue q =
+      match List.of_seq (Queue.to_seq q) with [] -> [] | xs -> [SVD_always_comb (mk_statement (SVS_block xs))]
+    in
+
+    List.iter
+      (fun reg_info ->
+        if Option.is_some (is_funwire_register reg_info) then (
+          Queue.add (SVD_var (reg_info.inp, reg_info.ctyp)) qdefs;
+          Queue.add (SVD_var (reg_info.out, reg_info.ctyp)) qdefs
+        );
+        match is_funwire_register reg_info with
+        | Some (name, Invoke) ->
+            let name = Jib_util.name (mk_id (name ^ "_sail_invoke")) in
+            Queue.add (mk_port name reg_info.ctyp) qoutputs;
+            Queue.add (mk_statement (SVS_assign (SVP_id name, Var reg_info.out))) funwires_output
+        | Some (name, Ret) ->
+            let name = Jib_util.name (mk_id (name ^ "_sail_invoke_ret")) in
+            Queue.add (mk_port name reg_info.ctyp) qinputs;
+            Queue.add (mk_statement (SVS_assign (SVP_id reg_info.inp, Var name))) funwires_input
+        | Some (name, Arg n) ->
+            let name = Jib_util.name (mk_id (name ^ "_sail_invoke_arg_" ^ string_of_int n)) in
+            Queue.add (mk_port name reg_info.ctyp) qoutputs;
+            Queue.add (mk_statement (SVS_assign (SVP_id name, Var reg_info.out))) funwires_output
+        | None -> ()
+      )
+      sorted_register_ports;
+
     let find_register_port reg = List.find (fun reg_info -> Name.compare reg_info.name reg = 0) register_ports in
 
     let register_resets, register_inputs, register_outputs =
       List.fold_left
         (fun (resets, ins, outs) reg_info ->
-          ( mk_port reg_info.reset reg_info.ctyp :: resets,
-            SVD_var (reg_info.inp, reg_info.ctyp) :: ins,
-            SVD_var (reg_info.out, reg_info.ctyp) :: outs
-          )
+          if Option.is_none (is_funwire_register reg_info) then
+            ( mk_port reg_info.reset reg_info.ctyp :: resets,
+              (reg_info.inp, reg_info.ctyp) :: ins,
+              (reg_info.out, reg_info.ctyp) :: outs
+            )
+          else (resets, ins, outs)
         )
-        ([], [], []) register_ports
+        ([], [], []) (List.rev sorted_register_ports)
     in
+
+    let register_def (name, ctyp) = SVD_var (name, ctyp) in
 
     let exposed_registers =
       NameMap.fold
-        (fun reg ctyp ports -> if StringSet.mem (string_of_name reg) exposed then (reg, ctyp) :: ports else ports)
+        (fun reg (ctyp, _) ports -> if StringSet.mem (string_of_name reg) exposed then (reg, ctyp) :: ports else ports)
         spec_info.registers []
     in
     let memory_writes =
@@ -1769,7 +1830,7 @@ module Make (Config : CONFIG) = struct
       ]
     in
     let throws_outputs =
-      if footprint.throws || footprint.exits then
+      if (footprint.throws || footprint.exits) && not exception_ports then
         [SVD_var (Have_exception (-1), CT_bool); SVD_var (Current_exception (-1), spec_info.exception_ctyp)]
       else []
     in
@@ -1834,7 +1895,7 @@ module Make (Config : CONFIG) = struct
     in
     let always_block =
       let channel_writes =
-        ( if footprint.need_stdout then
+        ( if footprint.need_stdout && not Config.no_strings then
             [
               mk_statement
                 (svs_raw
@@ -1899,7 +1960,11 @@ module Make (Config : CONFIG) = struct
             spec_info.registers []
         in
         SVD_always_comb
-          (mk_statement (SVS_block (unchanged_registers @ channel_writes @ [mk_statement (svs_raw "$finish")])))
+          (mk_statement
+             (SVS_block
+                (unchanged_registers @ channel_writes @ if finish then [mk_statement (svs_raw "$finish")] else [])
+             )
+          )
       )
     in
     let initialize_registers =
@@ -1923,22 +1988,33 @@ module Make (Config : CONFIG) = struct
       | _ -> ([], [mk_port Jib_util.return ret_ctyp])
     in
     let defs =
-      register_inputs @ register_outputs @ throws_outputs @ channel_outputs @ memory_writes @ return_def
-      @ initialize_letbindings @ initialize_registers @ [instantiate_main; always_block]
+      (if inout_regs then [] else List.map register_def (register_inputs @ register_outputs))
+      @ throws_outputs @ channel_outputs @ memory_writes @ return_def @ initialize_letbindings @ initialize_registers
+      @ List.of_seq (Queue.to_seq qdefs)
+      @ comb_queue funwires_input @ [instantiate_main] @ comb_queue funwires_output @ [always_block]
     in
     {
-      name = SVN_string "sail_toplevel";
+      name = SVN_string toplevel_name;
       recursive = false;
       input_ports =
         ( if clk then
             [mk_port (name (mk_id "clk")) CT_bit; mk_port (name (mk_id "reset")) CT_bit] @ arg_ports @ register_resets
           else arg_ports
-        );
+        )
+        @ (if inout_regs then List.map (fun (name, ctyp) -> mk_port name ctyp) register_inputs else [])
+        @ List.of_seq (Queue.to_seq qinputs);
       output_ports =
-        output_ports
+        (output_ports
         @ List.map
             (fun (reg, ctyp) -> match reg with Name (reg, _) -> mk_port (Name (reg, -1)) ctyp | _ -> assert false)
-            exposed_registers;
+            exposed_registers
+        @ (if inout_regs then List.map (fun (name, ctyp) -> mk_port name ctyp) register_outputs else [])
+        @ List.of_seq (Queue.to_seq qoutputs)
+        @
+        if exception_ports then
+          [mk_port (Have_exception (-1)) CT_bool; mk_port (Current_exception (-1)) spec_info.exception_ctyp]
+        else []
+        );
       defs = List.map mk_def defs;
     }
 

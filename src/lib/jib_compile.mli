@@ -107,6 +107,8 @@ val ctx_has_val_spec : id -> ctx -> bool
     target name from the Target module. If unspecified and there is no current target, it defaults to "c". *)
 val initial_ctx : ?for_target:string -> Env.t -> Effects.side_effect_info -> ctx
 
+type funwire = Arg of int | Ret | Invoke
+
 val transparent_newtype : ctx -> ctyp -> ctyp
 
 val struct_field_bindings : Ast.l -> ctx -> ctyp -> Ast.id * ctyp Bindings.t

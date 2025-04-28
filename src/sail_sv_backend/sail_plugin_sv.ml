@@ -98,6 +98,7 @@ let opt_padding = ref false
 let opt_nomem = ref false
 
 let opt_assert_to_exception = ref false
+let opt_skip_cyclic = ref false
 let opt_unreachable = ref []
 let opt_fun_to_wires = ref []
 
@@ -183,6 +184,7 @@ let verilog_options =
       Arg.Set opt_assert_to_exception,
       "turn assertions into exceptions"
     );
+    (Flag.create ~prefix:["sv"] "skip_cyclic", Arg.Set opt_skip_cyclic, "skip generation for cyclic definitions");
     (Flag.create ~prefix:["sv"] "nomem", Arg.Set opt_nomem, "don't emit a dynamic memory implementation");
     ( Flag.create ~prefix:["sv"] ~arg:"functionname" "fun2wires",
       Arg.String
@@ -459,7 +461,9 @@ let verilog_target out_opt { ast; effect_info; env; default_sail_dir; _ } =
     let unreachable = !opt_unreachable
     let comb = !opt_comb
     let ignore = [] (* List.map fst !opt_fun2wires *)
+    let fun_to_wires = !opt_fun_to_wires
     let dpi_sets = !opt_dpi_sets
+    let skip_cyclic = !opt_skip_cyclic
   end) in
   let open SV in
   let sail_dir = Reporting.get_sail_dir default_sail_dir in

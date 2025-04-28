@@ -77,6 +77,8 @@ module type CONFIG = sig
   val comb : bool
   val ignore : string list
 
+  val fun_to_wires : (string * int) list
+
   (** The SystemVerilog DPI (direct programming interface) lets the generated SystemVerilog directly call C functions. A
       Sail external function for the [systemverilog] target can be translated into a DPI binding using the [sv_function]
       attribute, for example:
@@ -92,6 +94,10 @@ module type CONFIG = sig
       In the above example [foo] will always generated a DPI binding, but [bar] will only generate a DPI binding when
       ["memory"] is included in [dpi_sets]. *)
   val dpi_sets : Util.StringSet.t
+
+  (** If true we will simply skip generating the body of any cyclic (i.e. contains a loop that has not been unrolled)
+      definitions, and print a warning instead. This allows generation to proceed for other parts of the spec. *)
+  val skip_cyclic : bool
 end
 
 module Make (Config : CONFIG) : sig

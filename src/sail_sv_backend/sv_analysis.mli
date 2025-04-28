@@ -47,6 +47,7 @@
 
 open Libsail
 
+open Ast
 open Ast_util
 open Jib
 open Jib_util
@@ -70,7 +71,7 @@ val pure_footprint : footprint
 
 type spec_info = {
   register_ctyp_map : NameSet.t CTMap.t;  (** A map from register types to all the registers with that type *)
-  registers : ctyp NameMap.t;  (** A map from register names to types *)
+  registers : (ctyp * unit def_annot) NameMap.t;  (** A map from register names to types *)
   initialized_registers : name list;  (** A list of registers with initial values *)
   constructors : IdSet.t;  (** A list of constructor functions *)
   global_lets : NameSet.t;  (** Global letbindings *)
