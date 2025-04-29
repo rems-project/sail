@@ -68,6 +68,11 @@ let instantiate_typ substs typ =
     (fun typ -> function kid, (_, subst_arg) -> typ_subst kid subst_arg typ)
     typ (KBindings.bindings substs)
 
+let instantiate_typquant substs typq =
+  List.fold_left
+    (fun typq -> function kid, (_, subst_arg) -> typquant_subst kid subst_arg typq)
+    typq (KBindings.bindings substs)
+
 let instantiate_def target id substs = function
   | DEF_aux (DEF_impl (FCL_aux (FCL_funcl (target_id, pexp), (fcl_def_annot, tannot))), def_annot)
     when string_of_id target_id = target ->
@@ -143,7 +148,11 @@ let instantiate target ast =
           DEF_aux
             ( DEF_val
                 (VS_aux
-                   ( VS_val_spec (TypSchm_aux (TypSchm_ts (typq, instantiate_typ substs typ), l), id, extern),
+                   ( VS_val_spec
+                       ( TypSchm_aux (TypSchm_ts (instantiate_typquant substs typq, instantiate_typ substs typ), l),
+                         id,
+                         extern
+                       ),
                      (l, empty_uannot)
                    )
                 ),
