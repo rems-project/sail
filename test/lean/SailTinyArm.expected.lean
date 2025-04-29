@@ -451,6 +451,8 @@ instance : Arch where
   pa := (BitVec 56)
   abort := Fault
   translation := (Option TranslationInfo)
+  trans_start := Unit
+  trans_end := Unit
   fault := (Option FaultRecord)
   tlb_op := TLBIInfo
   cache_op := CacheRecord

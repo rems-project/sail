@@ -265,6 +265,8 @@ class Arch where
   pa : Type
   arch_ak : Type
   translation : Type
+  trans_start : Type
+  trans_end : Type
   abort : Type
   barrier : Type
   cache_op : Type
@@ -500,6 +502,11 @@ def read_ram (addr_size data_size : Nat) (_hex_ram addr : BitVec addr_size) : Pr
   pure bytes
 
 def sail_barrier (_ : α) : PreSailM RegisterType c ue Unit := pure ()
+def sail_cache_op [Arch] (_ : Arch.cache_op) : PreSailM RegisterType c ue Unit := pure ()
+def sail_tlbi [Arch] (_ : Arch.tlb_op) : PreSailM RegisterType c ue Unit := pure ()
+def sail_translation_start [Arch] (_ : Arch.trans_start) : PreSailM RegisterType c ue Unit := pure ()
+def sail_translation_end [Arch] (_ : Arch.trans_end) : PreSailM RegisterType c ue Unit := pure ()
+def sail_take_exception [Arch] (_ : Arch.fault) : PreSailM RegisterType c ue Unit := pure ()
 
 def cycle_count (_ : Unit) : PreSailM RegisterType c ue Unit :=
   modify fun s => { s with cycleCount := s.cycleCount + 1 }
