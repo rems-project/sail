@@ -85,8 +85,7 @@ let rec fix_id name =
   match name with
   (* Lean keywords to avoid, to expand as needed *)
   | "_lean_wildcard" -> "_"
-  | "rec" -> name ^ "'"
-  | "def" -> name ^ "'"
+  | "rec" | "def" | "at" -> name ^ "'"
   | "main" ->
       the_main_function_has_been_seen := true;
       "sail_main"
@@ -553,8 +552,8 @@ let wrap_with_pure (needs_return : bool) ?(with_parens = false) (d : document) =
   )
   else d
 
-let wrap_with_left_arrow (needs_return : bool) (d : document) =
-  if needs_return then parens (nest 2 (flow space [leftarrow; d])) else d
+let wrap_with_left_arrow (needs_left_arrow : bool) (d : document) =
+  if needs_left_arrow then parens (nest 2 (flow space [leftarrow; d])) else d
 
 let wrap_with_do (with_arrow : bool) (needs_return : bool) (d : document) =
   let ar_do = if with_arrow then string "← do" else string "do" in
@@ -855,7 +854,10 @@ and doc_exp (as_monadic : bool) ctx (E_aux (e, (l, annot)) as full_exp) =
         match typ_of full_exp with
         | Typ_aux (Typ_app (Id_aux (Id "bitvector", _), [A_aux (A_nexp m, _)]), _)
         | Typ_aux (Typ_app (Id_aux (Id "bits", _), [A_aux (A_nexp m, _)]), _) ->
-            nest 2 (parens (flow space [string "BitVec.join1"; brackets (separate_map comma_sp (d_of_arg ctx) vals)]))
+            nest 2
+              (wrap_with_pure as_monadic
+                 (parens (flow space [string "BitVec.join1"; brackets (separate_map comma_sp (d_of_arg ctx) vals)]))
+              )
         | _ ->
             string "#v"
             ^^ wrap_with_pure as_monadic (brackets (nest 2 (separate_map comma_sp (d_of_arg ctx) (List.rev vals))))
@@ -943,6 +945,7 @@ and doc_exp (as_monadic : bool) ctx (E_aux (e, (l, annot)) as full_exp) =
       ^^ prefix 2 1 (string "then") (wrap_exp statements_monadic ctx t)
       ^^ hardline
       ^^ prefix 2 1 (string "else") (wrap_exp statements_monadic ctx e)
+      |> wrap_with_left_arrow (statements_monadic && not as_monadic)
   | E_ref id -> parens (string ".Reg " ^^ doc_id_ctor id)
   | E_exit _ -> string "throw Error.Exit"
   | E_throw e ->

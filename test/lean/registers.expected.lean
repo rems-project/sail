@@ -18,6 +18,11 @@ inductive option (k_a : Type) where
   | None (_ : Unit)
   deriving Inhabited, BEq
 
+structure My_struct where
+  field1 : Int
+  field2 : (BitVec 1)
+  deriving Inhabited, BEq
+
 inductive Register : Type where
   | BIT
   | NAT
@@ -71,7 +76,7 @@ namespace Out.Functions
 open option
 open Register
 
-/-- Type quantifiers: k_ex873# : Bool, k_ex872# : Bool -/
+/-- Type quantifiers: k_ex940# : Bool, k_ex939# : Bool -/
 def neq_bool (x : Bool) (y : Bool) : Bool :=
   (Bool.not (BEq.beq x y))
 
@@ -145,6 +150,20 @@ def concat_str_dec (str : String) (x : Int) : String :=
 def test (_ : Unit) : SailM Int := do
   writeReg INT ((← readReg INT) +i 1)
   readReg INT
+
+def undefined_My_struct (_ : Unit) : SailM My_struct := do
+  (pure { field1 := (← (undefined_int ()))
+          field2 := (← (undefined_bit ())) })
+
+/-- Type quantifiers: k_ex1046# : Bool -/
+def test_reg_if_struct (x : My_struct) (b : Bool) : SailM My_struct := do
+  let y ← do
+    (pure { x with field1 := (← bif b
+        then readReg INT
+        else (pure 3)) })
+  (pure { y with field1 := (← bif (← readReg BOOL)
+      then readReg INT
+      else (pure 3)) })
 
 def initialize_registers (_ : Unit) : SailM Unit := do
   writeReg R0 (← (undefined_bitvector 64))
