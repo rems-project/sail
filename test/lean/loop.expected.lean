@@ -53,7 +53,7 @@ namespace Out.Functions
 open option
 open Register
 
-/-- Type quantifiers: k_ex1941# : Bool, k_ex1940# : Bool -/
+/-- Type quantifiers: k_ex2051# : Bool, k_ex2050# : Bool -/
 def neq_bool (x : Bool) (y : Bool) : Bool :=
   (Bool.not (BEq.beq x y))
 
@@ -246,6 +246,19 @@ def while_print (_ : Unit) : Unit := Id.run do
       loop_vars := ((i +i 1) : Int)
     (pure loop_vars) ) : Id Int )
   (pure (print_int "i = " i))
+
+def while_print_long (_ : Unit) : Unit := Id.run do
+  let this_is_a_very_long_variable_name_to_stress_the_formatting : Int := 0
+  let this_is_a_very_long_variable_name_to_stress_the_formatting ← (( do
+    let mut loop_vars := this_is_a_very_long_variable_name_to_stress_the_formatting
+    while (λ this_is_a_very_long_variable_name_to_stress_the_formatting =>
+      ((this_is_a_very_long_variable_name_to_stress_the_formatting +i this_is_a_very_long_variable_name_to_stress_the_formatting) <b 10))
+      loop_vars
+      do
+      let this_is_a_very_long_variable_name_to_stress_the_formatting := loop_vars
+      loop_vars := ((this_is_a_very_long_variable_name_to_stress_the_formatting +i 1) : Int)
+    (pure loop_vars) ) : Id Int )
+  (pure (print_int "i = " this_is_a_very_long_variable_name_to_stress_the_formatting))
 
 def initialize_registers (_ : Unit) : SailM Unit := do
   writeReg r (← (undefined_nat ()))

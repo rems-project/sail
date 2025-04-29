@@ -707,8 +707,6 @@ and doc_loop l as_monadic ctx loop_kind args =
   in
   let body_effects = has_effect body in
   let (E_aux (_, annot)) = cond in
-  (* let annot = Type_check.replace_typ Ast_util.bool_typ (snd annot) in
-  let cond = match loop_kind with `While -> cond | `Until -> E_aux (E_app (mk_id "not", [cond]), (l, annot)) in *)
   let cond_effects = has_effect cond in
   let vartuple_pp, base_lambda = make_loop_vars [] varstuple in
   let vars_pp, body_ctx = name_loop_vars ctx in
@@ -716,10 +714,10 @@ and doc_loop l as_monadic ctx loop_kind args =
   let vars_dec_pp = string "let mut " ^^ vars_pp ^^ string " := " ^^ vartuple_pp in
   let cond_pp = doc_exp cond_effects ctx cond in
   let cond_pp = lambda cond_effects base_lambda cond_pp in
-  let loop_cond = wrap_with_left_arrow cond_effects (cond_pp ^/^ vars_pp) in
+  let loop_cond = wrap_with_left_arrow cond_effects (prefix 2 1 cond_pp vars_pp) in
   match loop_kind with
   | `While ->
-      let loop_head = flow (break 1) [string "while"; loop_cond; string "do"] in
+      let loop_head = prefix 2 1 (string "while " ^^ loop_cond) (string "do") in
       let arrow = if body_effects then leftarrowdo else coloneq in
       let loop_body_1 = string "let " ^^ vartuple_pp ^^ space ^^ coloneq ^^ space ^^ vars_pp in
       let loop_body = loop_body_1 ^^ hardline ^^ prefix 2 1 (vars_pp ^^ space ^^ arrow) body_pp in
