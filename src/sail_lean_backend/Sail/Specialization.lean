@@ -54,6 +54,12 @@ abbrev read_ram (addr_size data_size : Nat) (_hex_ram addr : BitVec addr_size) :
 
 abbrev sail_barrier (a : α) : SailM Unit := PreSail.sail_barrier a
 
+abbrev sail_cache_op [Arch] (op : Arch.cache_op) : SailM Unit := PreSail.sail_cache_op op
+abbrev sail_tlbi [Arch] (op : Arch.tlb_op) : SailM Unit := PreSail.sail_tlbi op
+abbrev sail_translation_start [Arch] (ts : Arch.trans_start) : SailM Unit := PreSail.sail_translation_start ts
+abbrev sail_translation_end [Arch] (te : Arch.trans_end) : SailM Unit := PreSail.sail_translation_end te
+abbrev sail_take_exception [Arch] (f : Arch.fault) : SailM Unit := PreSail.sail_take_exception f
+
 abbrev cycle_count (a : Unit) : SailM Unit := PreSail.cycle_count a
 
 abbrev get_cycle_count (a : Unit) : SailM Nat := PreSail.get_cycle_count a
