@@ -68,6 +68,11 @@ module StringMap = Util.StringMap
 
 let ngensym = symbol_generator ()
 
+let symgen_asrt = symbol_generator ()
+let ngen_asrt () =
+  let n = match symgen_asrt () with Gen (_, n, _) -> n | _ -> failwith "symgen_asrt should return a Gen(int, _, _)" in
+  name @@ mk_id @@ Printf.sprintf "asrt_cond_%d" n
+
 let natural_name_compare variable_locations n1 n2 =
   let open Lexing in
   let name_compare id1 id2 ssa_num1 ssa_num2 =
@@ -88,20 +93,26 @@ let natural_name_compare variable_locations n1 n2 =
 let natural_sort_names names = List.stable_sort (natural_name_compare Bindings.empty) names
 
 module type CONFIG = sig
+  val recursion_depth : int
   val max_unknown_integer_width : int
   val max_unknown_bitvector_width : int
+  val global_prefix : string option
   val line_directives : bool
   val no_strings : bool
   val no_packed : bool
   val no_assertions : bool
   val never_pack_unions : bool
   val union_padding : bool
+  val no_unions : bool
   val unreachable : string list
+  val no_write_flush : bool
   val comb : bool
   val ignore : string list
   val fun_to_wires : (string * int) list
   val dpi_sets : StringSet.t
   val skip_cyclic : bool
+  val no_assert_fatal : bool
+  val assert_as_property : bool
 end
 
 module Make (Config : CONFIG) = struct
@@ -110,6 +121,7 @@ module Make (Config : CONFIG) = struct
   module Primops =
     Generate_primop2.Make
       (struct
+        let recursion_depth = Config.recursion_depth
         let max_unknown_bitvector_width = Config.max_unknown_bitvector_width
         let max_unknown_integer_width = Config.max_unknown_integer_width
         let no_strings = Config.no_strings
@@ -156,7 +168,7 @@ module Make (Config : CONFIG) = struct
       end)
       ()
 
-  let pp_id_string id = NameGen.to_string () id
+  let pp_id_string id = Globals.prepend Config.global_prefix @@ NameGen.to_string () id
 
   let pp_id id = string (pp_id_string id)
 
@@ -197,7 +209,7 @@ module Make (Config : CONFIG) = struct
     | CT_fbits width -> ksprintf simple_type "logic [%d:0]" (width - 1)
     | CT_sbits max_width ->
         let logic = sprintf "logic [%d:0]" (max_width - 1) in
-        ksprintf simple_type "struct packed { logic [7:0] size; %s bits; }" logic
+        ksprintf simple_type "struct packed { logic [7:0] sb_size; %s sb_bits; }" logic
     | CT_lbits -> simple_type "sail_bits"
     | CT_fint width when two_state -> ksprintf simple_type "bit [%d:0]" (width - 1)
     | CT_fint width -> ksprintf simple_type "logic [%d:0]" (width - 1)
@@ -447,7 +459,7 @@ module Make (Config : CONFIG) = struct
           ^^ separate space
                [
                  string "typedef";
-                 string "union";
+                 (if Config.no_unions then string "struct" else string "union");
                  string "packed";
                  group
                    (lbrace
@@ -623,9 +635,9 @@ module Make (Config : CONFIG) = struct
        SMTLIB bvsrem: Sign follows dividend *)
     | Fn ("bvsrem", [x; y]) -> opt_parens (separate space [sv_signed (pp_smt x); string "%"; sv_signed (pp_smt y)])
     | Fn ("select", [x; i]) -> pp_smt_parens x ^^ lbracket ^^ pp_smt i ^^ rbracket
-    | Fn ("contents", [Var v]) -> pp_name v ^^ dot ^^ string "bits"
+    | Fn ("contents", [Var v]) -> pp_name v ^^ dot ^^ string "sb_bits"
     | Fn ("contents", [x]) -> string "sail_bits_value" ^^ parens (pp_smt x)
-    | Fn ("len", [Var v]) -> pp_name v ^^ dot ^^ string "size"
+    | Fn ("len", [Var v]) -> pp_name v ^^ dot ^^ string "sb_size"
     | Fn ("len", [x]) -> string "sail_bits_size" ^^ parens (pp_smt x)
     | Fn ("cons", [x; xs]) -> lbrace ^^ pp_smt x ^^ comma ^^ space ^^ pp_smt xs ^^ rbrace
     | Fn ("str.++", xs) ->
@@ -895,7 +907,7 @@ module Make (Config : CONFIG) = struct
                       Fn ("or", [Fn ("not", [pathcond]); Fn ("not", [Var (Name (mk_id "assert_reachable#", -1))]); cond])
                   | None -> cond
                 in
-                wrap (SVS_block [SVS_aux (SVS_assert (cond, msg), l); SVS_aux (SVS_assign (ret, Unit), l)])
+                wrap (SVS_block [SVS_aux (SVS_assert (ngen_asrt (), cond, msg), l); SVS_aux (SVS_assign (ret, Unit), l)])
             | _ -> Reporting.unreachable l __POS__ "Invalid arguments for sail_assert"
           )
         else if Id.compare id (mk_id "sail_cons") = 0 then extern_generate l ctx creturn id "sail_cons" args
@@ -995,10 +1007,17 @@ module Make (Config : CONFIG) = struct
     match aux with
     | SVS_comment str -> concat_map string ["/* "; str; " */"]
     | SVS_split_comb -> string "/* split comb */"
-    | SVS_assert (cond, msg) ->
-        separate space
-          [string "if"; parens (pp_smt cond) ^^ semi; string "else"; string "$fatal" ^^ parens (pp_smt msg)]
-        ^^ terminator
+    | SVS_assert (name, cond, msg) ->
+        ( if not Config.no_assert_fatal then
+            separate space
+              [string "if"; parens (pp_smt cond) ^^ semi; string "else"; string "$fatal" ^^ parens (pp_smt msg)]
+            ^^ terminator
+          else empty
+        )
+        ^^
+        if Config.assert_as_property then
+          separate space [pp_name name; string " = "; parens (pp_smt cond)] ^^ terminator
+        else empty
     | SVS_foreach (i, exp, stmt) ->
         separate space [string "foreach"; parens (pp_smt exp ^^ brackets (pp_sv_name i))]
         ^^ nest 4 (hardline ^^ pp_statement ~terminator:empty stmt)
@@ -1610,7 +1629,7 @@ module Make (Config : CONFIG) = struct
     let get_final_name name = match NameMap.find_opt name final_names with Some n -> n | None -> name in
 
     let output_ports : sv_module_port list =
-      List.map2
+      Globals.map2
         (fun var ret_ctyp -> { name = get_final_name var; external_name = ""; typ = ret_ctyp })
         return_vars ret_ctyps
       @ List.map
@@ -1888,7 +1907,8 @@ module Make (Config : CONFIG) = struct
               module_name;
               instance_name = sprintf "sail_inst_let_%d" n;
               input_connections = [];
-              output_connections = List.map (fun id -> SVP_id (name id)) ids;
+              output_connections =
+                (if Option.is_some Config.global_prefix then [] else List.map (fun id -> SVP_id (name id)) ids);
             }
         )
         (IntMap.bindings spec_info.global_let_numbers)
@@ -1916,7 +1936,11 @@ module Make (Config : CONFIG) = struct
               | _ -> assert false
               )
             exposed_registers
-        @ [mk_statement (svs_raw "sail_flush_writes(out_memory_writes)" ~inputs:[Name (mk_id "out_memory_writes", -1)])]
+        @ Globals.Gen.always_comb_assignments Config.global_prefix
+        @
+        if Config.no_write_flush then []
+        else
+          [mk_statement (svs_raw "sail_flush_writes(out_memory_writes)" ~inputs:[Name (mk_id "out_memory_writes", -1)])]
       in
       if clk then (
         let reset_regs, inout_regs =
@@ -1988,7 +2012,8 @@ module Make (Config : CONFIG) = struct
       | _ -> ([], [mk_port Jib_util.return ret_ctyp])
     in
     let defs =
-      (if inout_regs then [] else List.map register_def (register_inputs @ register_outputs))
+      Globals.Gen.top_defs Config.global_prefix
+      @ (if inout_regs then [] else List.map register_def (register_inputs @ register_outputs))
       @ throws_outputs @ channel_outputs @ memory_writes @ return_def @ initialize_letbindings @ initialize_registers
       @ List.of_seq (Queue.to_seq qdefs)
       @ comb_queue funwires_input @ [instantiate_main] @ comb_queue funwires_output @ [always_block]
@@ -2018,8 +2043,48 @@ module Make (Config : CONFIG) = struct
       defs = List.map mk_def defs;
     }
 
+  class assertion_name_enumerator names : svir_visitor =
+    object
+      inherit empty_svir_visitor
+
+      method! vctyp _ = SkipChildren
+
+      method! vstatement s =
+        match s with
+        | SVS_aux (SVS_assert (name, _, _), _) ->
+            names := name :: !names;
+            DoChildren
+        | _ -> DoChildren
+    end
+
+  let get_asrt_names m =
+    (* Takes a sv_module and returns a list of names of assertions in the module *)
+    let names = ref [] in
+    ignore (visit_sv_def (new assertion_name_enumerator names) (mk_def (SVD_module m)));
+    !names
+
   let rec pp_module ctx m =
-    let params = if m.recursive then space ^^ string "#(parameter RECURSION_DEPTH = 10)" ^^ space else empty in
+    Globals.toggle @@ Sv_ir.string_of_sv_name (m : sv_module).name;
+    let params =
+      if m.recursive then
+        space ^^ string (Printf.sprintf "#(parameter RECURSION_DEPTH = %d)" Config.recursion_depth) ^^ space
+      else empty
+    in
+
+    let asrt_names = get_asrt_names m in
+    let assertion =
+      match String.concat " && " (List.map (string_of_name ~zencode:false) asrt_names) with
+      | "" -> empty
+      | s -> hardline ^^ string ("assert property (" ^ s ^ ");")
+    in
+    let asrt_defs = List.map (fun n -> SVD_aux (SVD_var (n, CT_bool), Unknown)) asrt_names in
+    let assertion = if Config.assert_as_property then assertion else empty in
+    let asrt_defs = if Config.assert_as_property then asrt_defs else [] in
+    let params =
+      if m.recursive then
+        space ^^ string (Printf.sprintf "#(parameter RECURSION_DEPTH = %d)" Config.recursion_depth) ^^ space
+      else empty
+    in
     let ports =
       match (m.input_ports, m.output_ports) with
       | [], [] -> semi
@@ -2042,7 +2107,7 @@ module Make (Config : CONFIG) = struct
       else doc
     in
     string "module" ^^ space ^^ pp_sv_name m.name ^^ params ^^ ports
-    ^^ generate (nest 4 (hardline ^^ separate_map hardline (pp_def ctx (Some m.name)) m.defs))
+    ^^ generate (nest 4 (hardline ^^ separate_map hardline (pp_def ctx (Some m.name)) (asrt_defs @ m.defs) ^^ assertion))
     ^^ hardline ^^ string "endmodule"
 
   and pp_fundef f =
@@ -2079,7 +2144,15 @@ module Make (Config : CONFIG) = struct
   and pp_def ctx in_module (SVD_aux (aux, _)) =
     match aux with
     | SVD_null -> empty
-    | SVD_var (id, ctyp) -> wrap_type ctyp (pp_name id) ^^ semi
+    | SVD_var (id, ctyp) when Globals.remove_top_vars Config.global_prefix in_module -> empty
+    | SVD_var (id, ctyp) -> (
+        let doc = wrap_type ctyp (pp_name id) ^^ semi in
+        match id with
+        | Have_exception 0 ->
+            let stmt = SVS_aux (SVS_assign (SVP_id id, Bool_lit false), Unknown) in
+            doc ^^ hardline ^^ string "assign " ^^ pp_statement ~terminator:semi stmt
+        | _ -> doc
+      )
     | SVD_initial statement -> string "initial" ^^ space ^^ pp_statement ~terminator:semi statement
     | SVD_always_ff statement ->
         let posedge_clk = char '@' ^^ parens (string "posedge" ^^ space ^^ string "clk") in
@@ -2385,7 +2458,7 @@ module Make (Config : CONFIG) = struct
         let module_name = SVN_string (sprintf "sail_setup_let_%d" n) in
         let setup_module =
           svir_module
-            ~return_vars:(List.map (fun (id, _) -> name id) bindings)
+            ~return_vars:(if Option.is_some Config.global_prefix then [] else List.map (fun (id, _) -> name id) bindings)
             spec_info ctx module_name [] [] (List.map snd bindings)
             (setup @ [iundefined CT_unit])
         in

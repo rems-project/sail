@@ -156,8 +156,8 @@ endfunction
 function automatic string sail_string_of_bits(sail_bits bv);
    string hexstr;
    string trimmed;
-   hexstr = $sformatf("%x", bv.bits);
-   trimmed = hexstr.substr(SAIL_BITS_WIDTH / 4 - (bv.size / 4), SAIL_BITS_WIDTH / 4 - 1).toupper();
+   hexstr = $sformatf("%x", bv.sb_bits);
+   trimmed = hexstr.substr(SAIL_BITS_WIDTH / 4 - (bv.sb_size / 4), SAIL_BITS_WIDTH / 4 - 1).toupper();
    return {"0x", trimmed};
 endfunction
 `endif
@@ -194,7 +194,7 @@ function automatic sail_bits emulator_read_mem(logic [63:0] addrsize, sail_bits 
    logic [SAIL_BITS_WIDTH-1:0] buffer;
    logic [SAIL_INDEX_WIDTH-2:0] i;
 
-   paddr = addr.bits[63:0];
+   paddr = addr.sb_bits[63:0];
 
    for (i = n[SAIL_INDEX_WIDTH-2:0]; i > 0; i = i - 1) begin
 `ifdef SAIL_DPI_MEMORY
@@ -217,7 +217,7 @@ endfunction
 
 function automatic bit emulator_read_tag(logic [63:0] addrsize, sail_bits addr);
    logic [63:0] paddr;
-   paddr = addr.bits[63:0];
+   paddr = addr.sb_bits[63:0];
 `ifdef SAIL_DPI_MEMORY
    return sail_read_tag(paddr);
 `else
@@ -243,8 +243,8 @@ module emulator_write_mem
       logic [SAIL_INDEX_WIDTH-2:0] i;
       sail_memory_writes tmp;
 
-      buffer = value.bits;
-      paddr = addr.bits[63:0];
+      buffer = value.sb_bits;
+      paddr = addr.sb_bits[63:0];
       tmp = in_writes;
 
       for (i = n[SAIL_INDEX_WIDTH-2:0]; i > 0; i = i - 1) begin

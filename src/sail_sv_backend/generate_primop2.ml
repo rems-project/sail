@@ -32,15 +32,15 @@ let sail_bits width =
   let index_top = required_width (Big_int.of_int (width - 1)) in
   [
     nf "typedef struct packed {";
-    pf "    logic [%d:0] size;" index_top;
-    pf "    logic [%d:0] bits;" (width - 1);
+    pf "    logic [%d:0] sb_size;" index_top;
+    pf "    logic [%d:0] sb_bits;" (width - 1);
     nf "} sail_bits;";
     "";
     pf "localparam SAIL_BITS_WIDTH = %d;" width;
     pf "localparam SAIL_INDEX_WIDTH = %d;" (index_top + 1);
     "";
-    pf "function automatic logic [%d:0] sail_bits_size(sail_bits bv); return bv.size; endfunction" index_top;
-    pf "function automatic logic [%d:0] sail_bits_value(sail_bits bv); return bv.bits; endfunction" (width - 1);
+    pf "function automatic logic [%d:0] sail_bits_size(sail_bits bv); return bv.sb_size; endfunction" index_top;
+    pf "function automatic logic [%d:0] sail_bits_value(sail_bits bv); return bv.sb_bits; endfunction" (width - 1);
   ]
 
 let sail_int width = [pf "typedef logic [%d:0] sail_int;" (width - 1)]
@@ -231,8 +231,8 @@ module Make
                         (List.map mk_statement
                            [
                              svs_raw (sprintf "zeros = \"%s\"" (String.make width '0')) ~outputs:[zeros];
-                             svs_raw (sprintf "hexstr.hextoa(b.bits)") ~inputs:[b] ~outputs:[hexstr];
-                             svs_raw (sprintf "binstr.bintoa(b.bits)") ~inputs:[b] ~outputs:[binstr];
+                             svs_raw (sprintf "hexstr.hextoa(b.sb_bits)") ~inputs:[b] ~outputs:[hexstr];
+                             svs_raw (sprintf "binstr.bintoa(b.sb_bits)") ~inputs:[b] ~outputs:[binstr];
                              svs_raw
                                (sprintf "%s = {in_str, s}" (string_of_name ~zencode:false (tempstr 0)))
                                ~inputs:[in_str; s]
@@ -246,7 +246,7 @@ module Make
                    if (n + 1) mod 4 == 0 then
                      svs_raw
                        (sprintf
-                          "if (b.size == %d) %s = {%s, $sformatf(\"0x%%s\", zeros.substr(0, %d - hexstr.len()), \
+                          "if (b.sb_size == %d) %s = {%s, $sformatf(\"0x%%s\", zeros.substr(0, %d - hexstr.len()), \
                            hexstr.toupper()), \"\\n\"}; else %s = %s"
                           (n + 1)
                           (string_of_name ~zencode:false (tempstr (n + 1)))
@@ -260,7 +260,7 @@ module Make
                    else
                      svs_raw
                        (sprintf
-                          "if (b.size == %d) %s = {%s, $sformatf(\"0b%%s\", zeros.substr(0, %d - binstr.len()), \
+                          "if (b.sb_size == %d) %s = {%s, $sformatf(\"0b%%s\", zeros.substr(0, %d - binstr.len()), \
                            binstr), \"\\n\"}; else %s = %s"
                           (n + 1)
                           (string_of_name ~zencode:false (tempstr (n + 1)))

@@ -50,12 +50,18 @@ open Libsail
 open Ast_util
 
 module type CONFIG = sig
+  (** Set recursion depth for recursive SystemVerilog modules *)
+  val recursion_depth : int
+
   (** If Sail does not know a precise bitwidth for an integer variable, it will use this width. *)
   val max_unknown_integer_width : int
 
   (** If Sail does not know the precise width for a bitvector variable, it will use a variable-length bitvector
       representation which can hold bitvectors of at most this length. *)
   val max_unknown_bitvector_width : int
+
+  (** Prefix global signals with the provided name *)
+  val global_prefix : string option
 
   (** Output SystemVerilog line directives where possible *)
   val line_directives : bool
@@ -73,7 +79,9 @@ module type CONFIG = sig
 
   val never_pack_unions : bool
   val union_padding : bool
+  val no_unions : bool
   val unreachable : string list
+  val no_write_flush : bool
   val comb : bool
   val ignore : string list
 
@@ -98,6 +106,9 @@ module type CONFIG = sig
   (** If true we will simply skip generating the body of any cyclic (i.e. contains a loop that has not been unrolled)
       definitions, and print a warning instead. This allows generation to proceed for other parts of the spec. *)
   val skip_cyclic : bool
+
+  val no_assert_fatal : bool
+  val assert_as_property : bool
 end
 
 module Make (Config : CONFIG) : sig
