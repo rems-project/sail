@@ -194,10 +194,10 @@ def toHexUpper (i : Int) : String :=
 
 end Int
 
-def get_slice_int (len n lo : Nat) : BitVec len :=
+def get_slice_int (len : Nat) (n : Int) (lo : Nat) : BitVec len :=
   BitVec.extractLsb' lo len (BitVec.ofInt (lo + len + 1) n)
 
-def set_slice_int (len n lo : Nat) (x : BitVec len) : Int :=
+def set_slice_int (len : Nat) (n : Int) (lo : Nat) (x : BitVec len) : Int :=
   BitVec.toInt (BitVec.updateSubrange' (BitVec.ofInt len n) lo len x)
 
 def set_slice {n : Nat} (m : Nat) (bv : BitVec n) (start : Nat) (bv' : BitVec m) : BitVec n :=
