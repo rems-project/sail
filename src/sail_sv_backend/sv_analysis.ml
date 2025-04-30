@@ -251,7 +251,12 @@ let collect_spec_info ctx cdefs =
       (fun (names, nums) cdef ->
         match cdef with
         | CDEF_aux (CDEF_let (n, bindings, _), _) ->
-            ( List.fold_left (fun acc (id, _) -> NameSet.add (name id) acc) names bindings,
+            ( List.fold_left
+                (fun acc (id, ctyp) ->
+                  Globals.add id ctyp;
+                  NameSet.add (name id) acc
+                )
+                names bindings,
               IntMap.add n (List.map fst bindings) nums
             )
         | _ -> (names, nums)
