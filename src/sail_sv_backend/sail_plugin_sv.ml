@@ -101,6 +101,8 @@ let opt_never_pack_unions = ref false
 let opt_padding = ref false
 let opt_no_unions = ref false
 let opt_nomem = ref false
+let opt_no_assert_fatal = ref false
+let opt_assert_as_property = ref false
 
 let opt_assert_to_exception = ref false
 let opt_skip_cyclic = ref false
@@ -224,6 +226,8 @@ let verilog_options =
       Arg.String (fun s -> opt_dpi_sets := StringSet.add s !opt_dpi_sets),
       "Use SystemVerilog DPI-C for a set of primitives (e.g. memory)"
     );
+    (Flag.create ~prefix:["sv"] "no_assert_fatal", Arg.Set opt_no_assert_fatal, "Do not generate '$fatal' code for assertions");
+    (Flag.create ~prefix:["sv"] "assert_as_property", Arg.Set opt_assert_as_property, "Generate SV properties for assertions");
   ]
 
 let verilog_rewrites =
@@ -481,6 +485,8 @@ let verilog_target out_opt { ast; effect_info; env; default_sail_dir; _ } =
     let fun_to_wires = !opt_fun_to_wires
     let dpi_sets = !opt_dpi_sets
     let skip_cyclic = !opt_skip_cyclic
+    let no_assert_fatal = !opt_no_assert_fatal
+    let assert_as_property = !opt_assert_as_property
   end) in
   let open SV in
   let sail_dir = Reporting.get_sail_dir default_sail_dir in

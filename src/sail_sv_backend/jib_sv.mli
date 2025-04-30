@@ -103,6 +103,9 @@ module type CONFIG = sig
   (** If true we will simply skip generating the body of any cyclic (i.e. contains a loop that has not been unrolled)
       definitions, and print a warning instead. This allows generation to proceed for other parts of the spec. *)
   val skip_cyclic : bool
+
+  val no_assert_fatal : bool
+  val assert_as_property : bool
 end
 
 module Make (Config : CONFIG) : sig

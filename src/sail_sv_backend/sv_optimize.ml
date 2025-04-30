@@ -596,7 +596,7 @@ module RemoveUnusedVariables = struct
         begin
           match else_stmt_opt with Some else_stmt -> statement_uses stack uses else_stmt | None -> ()
         end
-    | SVS_assert (cond, msg) ->
+    | SVS_assert (name, cond, msg) ->
         smt_uses stack uses cond;
         smt_uses stack uses msg
     | SVS_case { head_exp; cases; fallthrough } ->

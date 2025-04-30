@@ -68,6 +68,11 @@ module StringMap = Util.StringMap
 
 let ngensym = symbol_generator ()
 
+let symgen_asrt = symbol_generator ()
+let ngen_asrt () =
+  let n = match symgen_asrt () with Gen (_, n, _) -> n | _ -> failwith "symgen_asrt should return a Gen(int, _, _)" in
+  name @@ mk_id @@ Printf.sprintf "asrt_cond_%d" n
+
 let natural_name_compare variable_locations n1 n2 =
   let open Lexing in
   let name_compare id1 id2 ssa_num1 ssa_num2 =
@@ -105,6 +110,8 @@ module type CONFIG = sig
   val fun_to_wires : (string * int) list
   val dpi_sets : StringSet.t
   val skip_cyclic : bool
+  val no_assert_fatal : bool
+  val assert_as_property : bool
 end
 
 module Make (Config : CONFIG) = struct
@@ -899,7 +906,7 @@ module Make (Config : CONFIG) = struct
                       Fn ("or", [Fn ("not", [pathcond]); Fn ("not", [Var (Name (mk_id "assert_reachable#", -1))]); cond])
                   | None -> cond
                 in
-                wrap (SVS_block [SVS_aux (SVS_assert (cond, msg), l); SVS_aux (SVS_assign (ret, Unit), l)])
+                wrap (SVS_block [SVS_aux (SVS_assert (ngen_asrt (), cond, msg), l); SVS_aux (SVS_assign (ret, Unit), l)])
             | _ -> Reporting.unreachable l __POS__ "Invalid arguments for sail_assert"
           )
         else if Id.compare id (mk_id "sail_cons") = 0 then extern_generate l ctx creturn id "sail_cons" args
@@ -999,10 +1006,17 @@ module Make (Config : CONFIG) = struct
     match aux with
     | SVS_comment str -> concat_map string ["/* "; str; " */"]
     | SVS_split_comb -> string "/* split comb */"
-    | SVS_assert (cond, msg) ->
-        separate space
-          [string "if"; parens (pp_smt cond) ^^ semi; string "else"; string "$fatal" ^^ parens (pp_smt msg)]
-        ^^ terminator
+    | SVS_assert (name, cond, msg) ->
+        ( if not Config.no_assert_fatal then
+            separate space
+              [string "if"; parens (pp_smt cond) ^^ semi; string "else"; string "$fatal" ^^ parens (pp_smt msg)]
+            ^^ terminator
+          else empty
+        )
+        ^^
+        if Config.assert_as_property then
+          separate space [pp_name name; string " = "; parens (pp_smt cond)] ^^ terminator
+        else empty
     | SVS_foreach (i, exp, stmt) ->
         separate space [string "foreach"; parens (pp_smt exp ^^ brackets (pp_sv_name i))]
         ^^ nest 4 (hardline ^^ pp_statement ~terminator:empty stmt)
@@ -2025,7 +2039,42 @@ module Make (Config : CONFIG) = struct
       defs = List.map mk_def defs;
     }
 
+  class assertion_name_enumerator names : svir_visitor =
+    object
+      inherit empty_svir_visitor
+
+      method! vctyp _ = SkipChildren
+
+      method! vstatement s =
+        match s with
+        | SVS_aux (SVS_assert (name, _, _), _) ->
+            names := name :: !names;
+            DoChildren
+        | _ -> DoChildren
+    end
+
+  let get_asrt_names m =
+    (* Takes a sv_module and returns a list of names of assertions in the module *)
+    let names = ref [] in
+    ignore (visit_sv_def (new assertion_name_enumerator names) (mk_def (SVD_module m)));
+    !names
+
   let rec pp_module ctx m =
+    let params =
+      if m.recursive then
+        space ^^ string (Printf.sprintf "#(parameter RECURSION_DEPTH = %d)" Config.recursion_depth) ^^ space
+      else empty
+    in
+
+    let asrt_names = get_asrt_names m in
+    let assertion =
+      match String.concat " && " (List.map (string_of_name ~zencode:false) asrt_names) with
+      | "" -> empty
+      | s -> hardline ^^ string ("assert property (" ^ s ^ ");")
+    in
+    let asrt_defs = List.map (fun n -> SVD_aux (SVD_var (n, CT_bool), Unknown)) asrt_names in
+    let assertion = if Config.assert_as_property then assertion else empty in
+    let asrt_defs = if Config.assert_as_property then asrt_defs else [] in
     let params =
       if m.recursive then
         space ^^ string (Printf.sprintf "#(parameter RECURSION_DEPTH = %d)" Config.recursion_depth) ^^ space
@@ -2053,7 +2102,7 @@ module Make (Config : CONFIG) = struct
       else doc
     in
     string "module" ^^ space ^^ pp_sv_name m.name ^^ params ^^ ports
-    ^^ generate (nest 4 (hardline ^^ separate_map hardline (pp_def ctx (Some m.name)) m.defs))
+    ^^ generate (nest 4 (hardline ^^ separate_map hardline (pp_def ctx (Some m.name)) (asrt_defs @ m.defs) ^^ assertion))
     ^^ hardline ^^ string "endmodule"
 
   and pp_fundef f =
