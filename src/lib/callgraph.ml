@@ -230,6 +230,8 @@ let add_def_to_graph graph (DEF_aux (def, def_annot)) =
             |> IdSet.iter (fun f -> graph := G.add_edge self (Function f) !graph)
           with _ -> ()
         end
+      | E_sizeof (Nexp_aux (Nexp_id id, _)) -> graph := G.add_edge self (Type id) !graph
+      | E_constraint (NC_aux (NC_id id, _)) -> graph := G.add_edge self (Type id) !graph
       | _ -> ()
     end;
     E_aux (e_aux, annot)

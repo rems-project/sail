@@ -195,6 +195,7 @@ val bitvector_access = pure {
   interpreter: "access_inc",
   lem: "access_vec_inc",
   coq: "access_vec_inc",
+  lean: "BitVec.accessBE",
   _: "vector_access_inc"
 } : forall ('n : Int) ('m : Int), 0 <= 'm < 'n . (bits('n), int('m)) -> bit
 $endif
@@ -225,6 +226,7 @@ val bitvector_update = pure {
   interpreter: "update_inc",
   lem: "update_vec_inc",
   coq: "update_vec_inc",
+  lean: "BitVec.updateBE",
   _: "vector_update_inc"
 } : forall 'n 'm, 0 <= 'm < 'n. (bits('n), int('m), bit) -> bits('n)
 $endif
@@ -325,6 +327,7 @@ val subrange_bits = pure {
   interpreter: "subrange_inc",
   lem: "subrange_vec_Inc",
   coq: "subrange_vec_Inc",
+  lean: "BitVec.subrangeBE",
   _: "vector_subrange_inc"
 } : forall ('n : Int) ('m : Int) ('o : Int), 0 <= 'm <= 'o < 'n.
   (bits('n), int('m), int('o)) -> bits('o - 'm + 1)
@@ -347,6 +350,7 @@ val update_subrange_bits = pure {
   interpreter: "update_subrange_inc",
   lem: "update_subrange_vec_inc",
   coq: "update_subrange_vec_inc",
+  lean: "Sail.BitVec.updateSubrangeBE",
   _: "vector_update_subrange_inc"
 } : forall 'n 'm 'o, 0 <= 'm <= 'o < 'n. (bits('n), int('m), int('o), bits('o - ('m - 1))) -> bits('n)
 $endif
@@ -384,7 +388,9 @@ val slice = pure {
   _: "slice"} : forall 'n 'm 'o, 0 <= 'm & 0 <= 'n.
   (bits('m), int('o), int('n)) -> bits('n)
 $else
-val slice = pure "slice_inc" : forall 'n 'm 'o, 0 <= 'o < 'm & 'o + 'n <= 'm.
+val slice = pure {
+  lean: "BitVec.sliceBE",
+  _: "slice_inc"} : forall 'n 'm 'o, 0 <= 'o < 'm & 'o + 'n <= 'm.
   (bits('m), int('o), int('n)) -> bits('n)
 $endif
 

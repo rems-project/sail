@@ -561,6 +561,9 @@ let rec unify_typ l env goals (Typ_aux (aux1, _) as typ1) (Typ_aux (aux2, _) as 
             else unify_error l (string_of_typ typ1 ^ " is not contained within " ^ string_of_typ typ1)
         | _, _ -> merge_uvars env l (unify_nexp l env goals n1 m) (unify_nexp l env goals n2 m)
       end
+  | Typ_id bool, Typ_app (atom_bool, [A_aux (A_bool _, _)])
+    when string_of_id bool = "bool" && string_of_id atom_bool = "atom_bool" ->
+      KBindings.empty
   | Typ_app (id1, args1), Typ_app (id2, args2) when List.length args1 = List.length args2 && Id.compare id1 id2 = 0 ->
       List.fold_left (merge_uvars env l) KBindings.empty (List.map2 (unify_typ_arg l env goals) args1 args2)
   | Typ_app (id1, []), Typ_id id2 when Id.compare id1 id2 = 0 -> KBindings.empty
@@ -1151,6 +1154,7 @@ let rec move_to_front p ys = function
 let rec rewrite_sizeof' l env (Nexp_aux (aux, _) as nexp) =
   let mk_exp exp = mk_exp ~loc:l exp in
   match aux with
+  | Nexp_var v when Env.is_outcome_typ_var v env -> mk_exp (E_sizeof nexp)
   | Nexp_var v ->
       (* Use a simple heuristic to find the most likely local we can
          use, and move it to the front of the list. *)
@@ -1246,8 +1250,10 @@ and rewrite_nc_aux l env = function
   | NC_app (f, [A_aux (A_bool nc, _)]) when string_of_id f = "not" -> E_app (mk_id "not_bool", [rewrite_nc env nc])
   | NC_app (f, args) -> unaux_exp (rewrite_nc env (Env.expand_constraint_synonyms env (mk_nc (NC_app (f, args)))))
   | NC_var v ->
-      (* Would be better to translate change E_sizeof to take a kid, then rewrite to E_sizeof *)
-      E_id (id_of_kid v)
+      if Env.is_outcome_typ_var v env then E_constraint (NC_aux (NC_var v, l))
+      else
+        (* Would be better to translate change E_sizeof to take a kid, then rewrite to E_sizeof *)
+        E_id (id_of_kid v)
   | NC_id id when Env.is_abstract_typ id env -> E_constraint (NC_aux (NC_id id, l))
   | NC_id id -> typ_error l ("Cannot re-write constraint(" ^ string_of_id id ^ ")")
 
@@ -1943,7 +1949,8 @@ let crule r env exp typ =
     checked_exp
   with Type_error (l, err) ->
     decr depth;
-    typ_raise l err
+    let bt = Printexc.get_raw_backtrace () in
+    Printexc.raise_with_backtrace (Type_error (l, err)) bt
 
 let irule r env exp =
   incr depth;
@@ -1956,7 +1963,8 @@ let irule r env exp =
     inferred_exp
   with Type_error (l, err) ->
     decr depth;
-    typ_raise l err
+    let bt = Printexc.get_raw_backtrace () in
+    Printexc.raise_with_backtrace (Type_error (l, err)) bt
 
 (* This function adds useful assertion messages to asserts missing them *)
 let assert_msg = function
@@ -2136,6 +2144,7 @@ let pattern_completeness_ctx env =
   (* For checking pattern completeness, ensure all types are in scope for the checker to use *)
   let env = Env.open_all_modules env in
   {
+    Pattern_completeness.abstract = Env.get_abstract_typs env;
     Pattern_completeness.variants = Env.get_variants env;
     Pattern_completeness.structs = Env.get_records env;
     Pattern_completeness.enums = Env.get_enums env;
@@ -3529,12 +3538,14 @@ and infer_exp env (E_aux (exp_aux, (l, uannot)) as exp) =
   | E_sizeof nexp -> begin
       match nexp with
       | Nexp_aux (Nexp_id id, _) when Env.is_abstract_typ id env -> annot_exp (E_sizeof nexp) (atom_typ nexp)
+      | Nexp_aux (Nexp_var v, _) when Env.is_outcome_typ_var v env -> annot_exp (E_sizeof nexp) (atom_typ nexp)
       | _ -> crule check_exp env (rewrite_sizeof l env (Env.expand_nexp_synonyms env nexp)) (atom_typ nexp)
     end
   | E_constraint nc -> begin
       Env.wf_constraint ~at:l env nc;
       match nc with
       | NC_aux (NC_id id, _) when Env.is_abstract_typ id env -> annot_exp (E_constraint nc) (atom_bool_typ nc)
+      | NC_aux (NC_var v, _) when Env.is_outcome_typ_var v env -> annot_exp (E_constraint nc) (atom_bool_typ nc)
       | _ -> crule check_exp env (rewrite_nc env (Env.expand_constraint_synonyms env nc)) (atom_bool_typ nc)
     end
   | E_field (exp, field) -> begin
@@ -5150,7 +5161,7 @@ and check_outcome : Env.t -> outcome_spec -> untyped_def list -> outcome_spec * 
   | None -> begin
       incr depth;
       try
-        let local_env = add_typ_vars l params env in
+        let local_env = Env.add_typquant ~from_outcome:true l params env in
         wf_typschm local_env typschm;
         let quant, typ = match typschm with TypSchm_aux (TypSchm_ts (typq, typ), _) -> (typq, typ) in
         let local_env = Env.set_outcome_typschm ~outcome_loc:l (quant, typ) local_env in
@@ -5188,6 +5199,9 @@ and check_outcome_instantiation :
  fun env def_annot (IN_aux (IN_id id, (l, _))) substs ->
   typ_print (lazy (Util.("Check instantiation " |> cyan |> clear) ^ string_of_id id));
   let typq, typ, params, vals, outcome_env = Env.get_outcome l id env in
+
+  let param_vars, param_constraints = quant_split params in
+
   (* Find the outcome parameters that were already instantiated by previous instantiation commands *)
   let instantiated, uninstantiated =
     Util.map_split
@@ -5196,7 +5210,7 @@ and check_outcome_instantiation :
         | Some (prev_l, existing_typ) -> Ok (kopt_kid kopt, (prev_l, kopt_kind kopt, existing_typ))
         | None -> Error kopt
       )
-      params
+      param_vars
   in
   let instantiated = List.fold_left (fun m (kid, inst) -> KBindings.add kid inst m) KBindings.empty instantiated in
 
@@ -5207,13 +5221,33 @@ and check_outcome_instantiation :
       typ (KBindings.bindings instantiated)
   in
 
-  let instantiate_typ substs typ =
+  (* Check all the constraints on the outcome parameters *)
+  List.iter
+    (fun orig_nc ->
+      let nc =
+        List.fold_left
+          (fun nc (kid, (_, _, arg)) -> constraint_subst kid arg nc)
+          orig_nc (KBindings.bindings instantiated)
+      in
+      let nc =
+        List.fold_left
+          (fun nc -> function
+            | IS_aux (IS_typ (kid, subst_arg), decl_l) -> constraint_subst kid subst_arg nc | IS_aux (IS_id _, _) -> nc
+            )
+          nc substs
+      in
+      if not (prove __POS__ env nc) then
+        typ_error l ("Failed to prove outcome constraint " ^ string_of_n_constraint orig_nc)
+    )
+    param_constraints;
+
+  let instantiate_typ substs typq typ =
     List.fold_left
-      (fun (typ, new_instantiated, fns, env) -> function
+      (fun (typq, typ, new_instantiated, fns, env) -> function
         | IS_aux (IS_typ (kid, subst_arg), decl_l) -> begin
             match KBindings.find_opt kid instantiated with
             | Some (_, _, existing_arg) when alpha_equivalent_arg env subst_arg existing_arg ->
-                (typ, new_instantiated, fns, env)
+                (typquant_subst kid subst_arg typq, typ_subst kid subst_arg typ, new_instantiated, fns, env)
             | Some (prev_l, _, existing_arg) ->
                 let msg =
                   Printf.sprintf "Cannot instantiate %s with %s, already instantiated as %s" (string_of_kid kid)
@@ -5222,17 +5256,18 @@ and check_outcome_instantiation :
                 typ_raise decl_l (err_because (Err_other msg, prev_l, Err_other "Previously instantiated here"))
             | None ->
                 Env.wf_typ_arg ~at:decl_l env subst_arg;
-                ( typ_subst kid subst_arg typ,
+                ( typquant_subst kid subst_arg typq,
+                  typ_subst kid subst_arg typ,
                   (kid, subst_arg) :: new_instantiated,
                   fns,
                   Env.add_outcome_variable decl_l kid subst_arg env
                 )
           end
-        | IS_aux (IS_id (id_from, id_to), decl_l) -> (typ, new_instantiated, (id_from, id_to, decl_l) :: fns, env)
+        | IS_aux (IS_id (id_from, id_to), decl_l) -> (typq, typ, new_instantiated, (id_from, id_to, decl_l) :: fns, env)
         )
-      (typ, [], [], env) substs
+      (typq, typ, [], [], env) substs
   in
-  let typ, new_instantiated, fns, env = instantiate_typ substs typ in
+  let typq, typ, new_instantiated, fns, env = instantiate_typ substs typq typ in
 
   (* Make sure every required outcome parameter has been instantiated *)
   List.iter

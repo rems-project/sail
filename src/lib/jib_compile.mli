@@ -99,12 +99,15 @@ val ctx_has_val_spec : id -> ctx -> bool
 
     The target is the name that would appear in a valspec extern section, i.e.
 
+    {v
     val foo = { systemverilog: "bar", c: "baz" } = ...
+    v}
 
-    would mean "systemverilog" and "c" would be valid for_target parameters.
-    If unspecified it will get the current target name from the Target module.
-    If unspecified and there is no current target, it defaults to "c". *)
+    would mean "systemverilog" and "c" would be valid for_target parameters. If unspecified it will get the current
+    target name from the Target module. If unspecified and there is no current target, it defaults to "c". *)
 val initial_ctx : ?for_target:string -> Env.t -> Effects.side_effect_info -> ctx
+
+type funwire = Arg of int | Ret | Invoke
 
 val transparent_newtype : ctx -> ctyp -> ctyp
 
@@ -153,6 +156,9 @@ module type CONFIG = sig
       generation where we can't use strings *)
   val track_throw : bool
 
+  (** Assertions in the Sail code will be compiled to exceptions in the Jib output *)
+  val assert_to_exception : bool
+
   val use_void : bool
 
   (** Convert control flow where all branches are pure into, into eager variants, i.e.
@@ -169,6 +175,8 @@ module type CONFIG = sig
 
   (** Types to preserve in the Jib output *)
   val preserve_types : IdSet.t
+
+  val fun_to_wires : int Bindings.t
 end
 
 module IdGraph : sig

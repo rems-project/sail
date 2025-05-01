@@ -37,7 +37,7 @@ skip_tests = {
 print("Sail is {}".format(sail))
 print("Sail dir is {}".format(sail_dir))
 
-def test_sv(name, opts, skip_list):
+def test_sv(name, opts, skip_list, just_check):
     banner('Testing {} with options:{}'.format(name, opts))
     results = Results(name)
     for filenames in chunks(os.listdir('../c'), parallel()):
@@ -50,7 +50,7 @@ def test_sv(name, opts, skip_list):
             tests[filename] = os.fork()
             if tests[filename] == 0:
                 step('rm -rf {}_obj_dir'.format(basename));
-                if basename.startswith('fail'):
+                if basename.startswith('fail') or just_check:
                     step('\'{}\' --no-warn --sv ../c/{} -o {} --sv-verilate compile{} --sv-verilate-jobs 1 > {}.out'.format(sail, filename, basename, opts, basename))
                 else:
                     step('\'{}\' --no-warn --sv ../c/{} -o {} --sv-verilate run{} --sv-verilate-jobs 1 > {}.out'.format(sail, filename, basename, opts, basename))
@@ -63,7 +63,8 @@ def test_sv(name, opts, skip_list):
 
 xml = '<testsuites>\n'
 
-xml += test_sv('SystemVerilog', '', skip_tests)
+xml += test_sv('SystemVerilog', '', skip_tests, False)
+xml += test_sv('SystemVerilog (nostrings)', ' --sv-no-strings', skip_tests, True)
 # xml += test_sv('SystemVerilog', ' -sv_padding', skip_tests)
 # xml += test_sv('SystemVerilog', ' --Oconstant-fold', skip_tests)
 # xml += test_sv('SystemVerilog', ' -sv_specialize 2', skip_tests)

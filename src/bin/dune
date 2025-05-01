@@ -269,6 +269,9 @@
   (%{workspace_root}/src/sail_lean_backend/Sail/IntRange.lean
    as
    src/sail_lean_backend/Sail/IntRange.lean)
+  (%{workspace_root}/src/sail_lean_backend/Sail/Real.lean
+   as
+   src/sail_lean_backend/Sail/Real.lean)
   (%{workspace_root}/src/sail_lean_backend/Sail/Specialization.lean
    as
    src/sail_lean_backend/Sail/Specialization.lean)))

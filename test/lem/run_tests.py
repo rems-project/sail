@@ -30,6 +30,7 @@ skip_tests = {
     'config_mismatch',
     # Custom outcome
     'outcome_int',
+    'outcome_impl_int',
 }
 skip_tests_mwords = {
     'phantom_option',
@@ -72,6 +73,7 @@ skip_tests_mwords = {
     'config_mismatch',
     # Custom outcome
     'outcome_int',
+    'outcome_impl_int',
 }
 
 print('Sail is {}'.format(sail))

@@ -901,6 +901,7 @@ module PC = Pattern_completeness.Make (PC_config)
 let pats_complete l env ps typ =
   let ctx =
     {
+      Pattern_completeness.abstract = Env.get_abstract_typs env;
       Pattern_completeness.variants = Env.get_variants env;
       Pattern_completeness.structs = Env.get_records env;
       Pattern_completeness.enums = Env.get_enums env;
@@ -2984,7 +2985,7 @@ let rec rewrite_var_updates (E_aux (expaux, ((l, _) as annot)) as exp) =
          we would introduce a new variable rather than using a wildcard and unit literal
       *)
       let is_trivial = function E_aux ((E_id _ | E_lit _), _) -> true | _ -> false in
-      if List.for_all is_trivial exps then exp
+      if find_updated_vars exp |> IdSet.is_empty then exp
       else (
         let tuple_typ = typ_of exp in
         let typs =
@@ -3014,7 +3015,7 @@ let rec rewrite_var_updates (E_aux (expaux, ((l, _) as annot)) as exp) =
               else (
                 let lb =
                   if is_unit_typ typ then LB_aux (LB_val (P_aux (P_wild, swaptyp typ annot), exp), annot)
-                  else LB_aux (LB_val (P_aux (P_id id, swaptyp typ annot), exp), annot)
+                  else LB_aux (LB_val (add_p_typ env typ (P_aux (P_id id, swaptyp typ annot)), exp), annot)
                 in
                 E_aux (E_let (lb, tup), annot)
               )
@@ -4454,7 +4455,13 @@ let rewrite_unroll_constant_loops _type_env defs =
             let range = list_of_ord_range atyp n_start n_end n_step in
 
             (* Only unroll "small" loops, i.e. those with less than 'max_iter' iterations *)
-            if !opt_unroll_loops_max_iter <> 0 && List.length range > !opt_unroll_loops_max_iter then E_aux (e, annot)
+            if !opt_unroll_loops_max_iter <> 0 && List.length range > !opt_unroll_loops_max_iter then (
+              let (l : Parse_ast.l), _tannot = annot in
+              raise @@ Reporting.err_general l
+              @@ Printf.sprintf
+                   "Cannot unroll the loop because it has more iterations (%d) than the maximum allowed (%d)\n"
+                   (List.length range) !opt_unroll_loops_max_iter
+            )
             else (
               (* Build the final expression, a block of n times the body *)
               let bodies = List.map (fun z -> rewrite_exp_replace_id_with_num "i" z e_loop_body) range in

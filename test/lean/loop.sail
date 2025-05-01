@@ -90,3 +90,12 @@ function while_print() = {
   print_int("i = ", i)
 }
 
+val while_print_long : unit -> unit
+function while_print_long() = {
+  var this_is_a_very_long_variable_name_to_stress_the_formatting : int = 0;
+  while this_is_a_very_long_variable_name_to_stress_the_formatting + this_is_a_very_long_variable_name_to_stress_the_formatting < 10 do {
+    this_is_a_very_long_variable_name_to_stress_the_formatting = this_is_a_very_long_variable_name_to_stress_the_formatting + 1
+  };
+  print_int("i = ", this_is_a_very_long_variable_name_to_stress_the_formatting)
+}
+

@@ -370,7 +370,6 @@ let doc_spec_simple (VS_aux (VS_val_spec (ts, id, ext), _)) =
   Pretty_print_sail.doc_id id ^^ space ^^ colon ^^ space ^^ Pretty_print_sail.doc_typschm ts
 
 let latex_command ~docstring cat id no_loc l =
-  state.this <- Some id;
   (* To avoid problems with verbatim environments in commands, we have
      to put the sail code for each command in a separate file. *)
   let code_file = category_name cat ^ Util.file_encode_string (string_of_id id) ^ ".tex" in
@@ -477,6 +476,7 @@ let defs { defs; _ } =
   let outcomedefs = ref Bindings.empty in
 
   let latex_def (DEF_aux (aux, def_annot) as def) =
+    state.this <- (match ids_of_def def |> IdSet.elements with [id] -> Some id | _ -> None);
     let docstring = latex_docstring def_annot in
     match aux with
     | DEF_overload (id, ids) ->

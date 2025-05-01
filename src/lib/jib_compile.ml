@@ -63,6 +63,8 @@ let optimize_aarch64_fast_struct = ref false
 
 let ngensym = symbol_generator ()
 
+type funwire = Arg of int | Ret | Invoke
+
 (**************************************************************************)
 (* 4. Conversion to low-level AST                                         *)
 (**************************************************************************)
@@ -289,9 +291,11 @@ module type CONFIG = sig
   val use_real : bool
   val branch_coverage : out_channel option
   val track_throw : bool
+  val assert_to_exception : bool
   val use_void : bool
   val eager_control_flow : bool
   val preserve_types : IdSet.t
+  val fun_to_wires : int Bindings.t
 end
 
 module IdGraph = Graph.Make (Id)
@@ -386,6 +390,13 @@ module Make (C : CONFIG) = struct
     | _ -> []
 
   let unit_cval = V_lit (VL_unit, CT_unit)
+
+  let assert_exception l msg =
+    let exception_ctyp = CT_variant (mk_id "exception", []) in
+    let e = ngensym () in
+    ( [idecl l exception_ctyp e; ifuncall l (CL_id (e, exception_ctyp)) (mk_id "__assertion_failed#", []) [msg]],
+      V_id (e, exception_ctyp)
+    )
 
   let get_variable_ctyp id ctx =
     match NameMap.find_opt id ctx.locals with
@@ -1198,7 +1209,21 @@ module Make (C : CONFIG) = struct
       )
     | AE_app (Pure_extern id, args, _) -> compile_extern l ctx id args
     | AE_app (Extern id, args, typ) ->
-        if string_of_id id = "sail_config_get" then compile_config l ctx args typ else compile_extern l ctx id args
+        let str = string_of_id id in
+        if str = "sail_assert" && C.assert_to_exception then (
+          match args with
+          | [cond; msg] ->
+              let cond_setup, cond_cval, cond_cleanup = compile_aval l ctx cond in
+              let msg_setup, msg_cval, _ = compile_aval l ctx msg in
+              let exn_setup, exn_cval = assert_exception l msg_cval in
+              ( cond_setup @ [iif l cond_cval [] (msg_setup @ exn_setup @ [ithrow l exn_cval])] @ cond_cleanup,
+                (fun clexp -> icopy l clexp unit_cval),
+                []
+              )
+          | _ -> Reporting.unreachable l __POS__ "Bad arity for sail_assert"
+        )
+        else if str = "sail_config_get" then compile_config l ctx args typ
+        else compile_extern l ctx id args
     | AE_val aval ->
         let setup, cval, cleanup = compile_aval l ctx aval in
         (setup, (fun clexp -> icopy l clexp cval), cleanup)
@@ -1330,6 +1355,7 @@ module Make (C : CONFIG) = struct
         let aexp_setup, aexp_call, aexp_cleanup = compile_aexp ctx aexp in
         let try_return_id = ngensym () in
         let post_exception_handlers_label = label "post_exception_handlers_" in
+        let exn_cval = V_id (current_exception, ctyp_of_typ ctx (mk_typ (Typ_id (mk_id "exception")))) in
         let compile_case (apat, guard, body, case_uannot) =
           let trivial_guard =
             match guard with
@@ -1339,7 +1365,6 @@ module Make (C : CONFIG) = struct
             | _ -> false
           in
           let try_label = label "try_" in
-          let exn_cval = V_id (current_exception, ctyp_of_typ ctx (mk_typ (Typ_id (mk_id "exception")))) in
           let pre_destructure, destructure, destructure_cleanup, ctx =
             compile_match ctx apat exn_cval (fun l b -> ijump l b try_label)
           in
@@ -1369,6 +1394,18 @@ module Make (C : CONFIG) = struct
             ijump l (V_call (Bnot, [V_id (have_exception, CT_bool)])) post_exception_handlers_label;
             icopy l (CL_id (have_exception, CT_bool)) (V_lit (VL_bool false, CT_bool));
           ]
+          @ ( if C.assert_to_exception then
+                [
+                  iif l
+                    (V_ctor_kind (exn_cval, (mk_id "__assertion_failed#", [])))
+                    []
+                    [
+                      icopy l (CL_id (have_exception, CT_bool)) (V_lit (VL_bool true, CT_bool));
+                      igoto post_exception_handlers_label;
+                    ];
+                ]
+              else []
+            )
           @ List.concat (List.map compile_case cases)
           @ [
               (* fallthrough *)
@@ -1746,6 +1783,11 @@ module Make (C : CONFIG) = struct
               let ctx = { ctx with local_env = Env.add_typquant (id_loc id) typq ctx.local_env } in
               (ctyp_of_typ ctx typ, id)
         in
+        let tus =
+          if string_of_id id = "exception" && C.assert_to_exception then
+            tus @ [Tu_aux (Tu_ty_id (string_typ, mk_id "__assertion_failed#"), mk_def_annot (gen_loc l) ())]
+          else tus
+        in
         let ctus =
           List.fold_left (fun ctus (ctyp, id) -> Bindings.add id ctyp ctus) Bindings.empty (List.map compile_tu tus)
         in
@@ -1999,6 +2041,102 @@ module Make (C : CONFIG) = struct
 
   let letdef_count = ref 0
 
+  let compile_fun_to_wires ctx (def_annot : unit Ast.def_annot) id slots =
+    let l = gen_loc def_annot.loc in
+
+    (* Find the function's type. *)
+    let quant, Typ_aux (fn_typ, _) =
+      try Env.get_val_spec id ctx.local_env with Type_error.Type_error _ -> Env.get_val_spec id ctx.tc_env
+    in
+    let params = quant_kopts quant |> List.filter is_typ_kopt |> List.map kopt_kid in
+
+    let arg_typs, ret_typ = match fn_typ with Typ_fn (arg_typs, ret_typ) -> (arg_typs, ret_typ) | _ -> assert false in
+
+    let ctx = { ctx with local_env = Env.add_typquant (id_loc id) quant ctx.tc_env } in
+
+    let arg_ctyps = List.mapi (fun n typ -> (name (mk_id ("a" ^ string_of_int n)), ctyp_of_typ ctx typ)) arg_typs in
+    let ret_ctyp = ctyp_of_typ ctx ret_typ in
+
+    let num_args = List.length arg_ctyps in
+
+    let funwire_name = function
+      | Arg n -> name (append_id id (Printf.sprintf "_fw_arg%d#" n))
+      | Ret -> name (append_id id "_fw_ret#")
+      | Invoke -> name (append_id id "_fw_invoke#")
+    in
+
+    let funwire_attr_info = function
+      | Arg n -> AD_aux (AD_num (Big_int.of_int n), l)
+      | Ret -> AD_aux (AD_string "return", l)
+      | Invoke -> AD_aux (AD_string "invoke", l)
+    in
+
+    let funwire_attr fw =
+      mk_def_annot
+        ~attrs:
+          [(l, "funwire", Some (AD_aux (AD_list [AD_aux (AD_string (string_of_id id), l); funwire_attr_info fw], l)))]
+        l ()
+    in
+
+    let funwire_ctyp = function Arg n -> snd (List.nth arg_ctyps n) | Ret -> ret_ctyp | Invoke -> CT_bool in
+
+    let slotvector ctyp = if slots > 1 then CT_fvector (slots, ctyp) else ctyp in
+
+    let mk_register fw =
+      CDEF_aux (CDEF_register (funwire_name fw, slotvector (funwire_ctyp fw), []), funwire_attr fw)
+    in
+
+    let read_slot fw slot =
+      if slots > 1 then V_call (Index slot, [V_id (funwire_name fw, CT_fvector (slots, funwire_ctyp fw))])
+      else V_id (funwire_name fw, funwire_ctyp fw)
+    in
+
+    let write_slot fw slot cval =
+      if slots > 1 then (
+        let vector_ctyp = CT_fvector (slots, funwire_ctyp fw) in
+        iextern l
+          (CL_id (funwire_name fw, vector_ctyp))
+          (mk_id "internal_vector_update", [])
+          [V_id (funwire_name fw, vector_ctyp); V_lit (VL_int (Big_int.of_int slot), CT_fint 64); cval]
+      )
+      else icopy l (CL_id (funwire_name fw, funwire_ctyp fw)) (V_id (funwire_name fw, funwire_ctyp fw))
+    in
+
+    let updates =
+      List.init slots (fun slot ->
+          [
+            iif l
+              (V_call (Bnot, [read_slot Invoke slot]))
+              ([write_slot Invoke slot (V_lit (VL_bool true, CT_bool))]
+              @ List.mapi (fun n (arg, ctyp) -> write_slot (Arg n) slot (V_id (arg, ctyp))) arg_ctyps
+              @ [icopy l (CL_id (return, ret_ctyp)) (read_slot Ret slot); iend l]
+              )
+              [];
+          ]
+      )
+      |> List.concat
+    in
+
+    let exn_setup, exn_cval =
+      assert_exception l (V_lit (VL_string ("reached unreachable in " ^ string_of_id id), CT_string))
+    in
+
+    [mk_register Invoke]
+    @ List.init num_args (fun n -> mk_register (Arg n))
+    @ [mk_register Ret]
+    @ [
+        CDEF_aux (CDEF_val (id, params, List.map snd arg_ctyps, ret_ctyp, None), def_annot);
+        CDEF_aux
+          ( CDEF_fundef
+              ( id,
+                Return_plain,
+                List.map fst arg_ctyps,
+                fix_exception ~return:(Some ret_ctyp) ctx (updates @ exn_setup @ [ithrow l exn_cval])
+              ),
+            mk_def_annot l ()
+          );
+      ]
+
   let compile_funcl ctx def_annot id pat guard exp =
     let debug_attr = get_def_attribute "jib_debug" def_annot in
     let mapping_function_attr = get_def_attribute "mapping_function" def_annot in
@@ -2186,13 +2324,16 @@ module Make (C : CONFIG) = struct
             valspecs = Bindings.add id (extern, arg_ctyps, ret_ctyp, uannot_of_def_annot def_annot) ctx.valspecs;
           }
         )
-    | DEF_fundef (FD_aux (FD_function (_, _, [FCL_aux (FCL_funcl (id, Pat_aux (Pat_exp (pat, exp), _)), _)]), _)) ->
+    | DEF_fundef (FD_aux (FD_function (_, _, [FCL_aux (FCL_funcl (id, pexp), _)]), _)) -> (
         Util.progress "Compiling " (string_of_id id) n total;
-        compile_funcl ctx def_annot id pat None exp
-    | DEF_fundef (FD_aux (FD_function (_, _, [FCL_aux (FCL_funcl (id, Pat_aux (Pat_when (pat, guard, exp), _)), _)]), _))
-      ->
-        Util.progress "Compiling " (string_of_id id) n total;
-        compile_funcl ctx def_annot id pat (Some guard) exp
+        match Bindings.find_opt id C.fun_to_wires with
+        | Some slots -> (compile_fun_to_wires ctx def_annot id slots, ctx)
+        | None -> (
+            match pexp with
+            | Pat_aux (Pat_exp (pat, exp), _) -> compile_funcl ctx def_annot id pat None exp
+            | Pat_aux (Pat_when (pat, guard, exp), _) -> compile_funcl ctx def_annot id pat (Some guard) exp
+          )
+      )
     | DEF_fundef (FD_aux (FD_function (_, _, []), (l, _))) ->
         raise (Reporting.err_general l "Encountered function with no clauses")
     | DEF_fundef (FD_aux (FD_function (_, _, _ :: _ :: _), (l, _))) ->
@@ -2833,16 +2974,34 @@ module Make (C : CONFIG) = struct
     let cdefs = List.concat (List.rev chunks) in
 
     (* If we don't have an exception type, add a dummy one *)
-    let dummy_exn = mk_id "__dummy_exn#" in
     let cdefs, ctx =
       if not (Bindings.mem (mk_id "exception") ctx.variants) then
-        ( CDEF_aux
-            (CDEF_type (CTD_variant (mk_id "exception", [], [(dummy_exn, CT_unit)])), mk_def_annot Parse_ast.Unknown ())
-          :: cdefs,
-          {
-            ctx with
-            variants = Bindings.add (mk_id "exception") ([], Bindings.singleton dummy_exn CT_unit) ctx.variants;
-          }
+        if C.assert_to_exception then (
+          let assertion_failed = mk_id "__assertion_failed#" in
+          ( CDEF_aux
+              ( CDEF_type (CTD_variant (mk_id "exception", [], [(assertion_failed, CT_string)])),
+                mk_def_annot Parse_ast.Unknown ()
+              )
+            :: cdefs,
+            {
+              ctx with
+              variants =
+                Bindings.add (mk_id "exception") ([], Bindings.singleton assertion_failed CT_string) ctx.variants;
+            }
+          )
+        )
+        else (
+          let dummy_exn = mk_id "__dummy_exn#" in
+          ( CDEF_aux
+              ( CDEF_type (CTD_variant (mk_id "exception", [], [(dummy_exn, CT_unit)])),
+                mk_def_annot Parse_ast.Unknown ()
+              )
+            :: cdefs,
+            {
+              ctx with
+              variants = Bindings.add (mk_id "exception") ([], Bindings.singleton dummy_exn CT_unit) ctx.variants;
+            }
+          )
         )
       else (cdefs, ctx)
     in

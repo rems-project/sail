@@ -107,6 +107,9 @@ def test_lem(name):
     results.expect_failure("constructor247.sail", "don't attempt to support so many constructors in lem -> ocaml builds")
     results.expect_failure("either.sail", "Lem breaks because it has the same name as a library module")
     results.expect_failure("poly_outcome.sail", "test doesn't meet Lem library's expectations for the concurrency interface")
+    results.expect_failure("config_abstract_bool.sail", "type-level if not yet supported")
+    results.expect_failure("outcome_impl_int.sail", "unsupported outcome")
+    results.expect_failure("outcome_impl_bool.sail", "unsupported outcome")
     for filenames in chunks(os.listdir('.'), parallel()):
         tests = {}
         for filename in filenames:
@@ -118,9 +121,9 @@ def test_lem(name):
                 step('mv {}.lem {}_types.lem _lbuild_{}'.format(basename, basename, basename))
                 step('rm {}_lemmas.thy'.format(basename.capitalize()))
                 step('cp lbuild/* _lbuild_{}'.format(basename))
-                step('cp \'{}\'/src/gen_lib/*.lem _lbuild_{}'.format(sail_dir, basename))
                 os.chdir('_lbuild_{}'.format(basename))
-                step('../mk_lem_ocaml_main.sh {} {}'.format(basename, basename.capitalize()))
+                step('../mk_lem_ocaml_main.sh {} {} {}'.format(basename, basename.capitalize(), sail_dir))
+                step('lem -lib .. -ocaml *.lem')
                 step('ocamlbuild -use-ocamlfind main.native'.format(basename, basename))
                 step('./main.native 1> {}.lresult 2> {}.lerr'.format(basename, basename), expected_status = 1 if basename.startswith('fail') else 0)
                 step('diff ../{}.expect {}.lresult'.format(basename, basename))

@@ -85,11 +85,11 @@ let rec fix_id name =
   match name with
   (* Lean keywords to avoid, to expand as needed *)
   | "_lean_wildcard" -> "_"
-  | "rec" -> name ^ "'"
-  | "def" -> name ^ "'"
+  | "rec" | "def" | "at" -> name ^ "'"
   | "main" ->
       the_main_function_has_been_seen := true;
       "sail_main"
+  | "?" -> "questionMark"
   | _ -> if String.contains name '#' then fix_id (String.concat "_" (Util.split_on_char '#' name)) else name
 
 let doc_id_ctor (Id_aux (i, _)) =
@@ -472,7 +472,8 @@ let string_of_def (DEF_aux (d, _)) =
 (** Fix identifiers to match the standard Lean library. *)
 let fixup_match_id (Id_aux (id, l) as id') =
   match id with
-  | Id id -> Id_aux (Id (match id with "Some" -> "some" | "None" -> "none" | "early_return" -> "throw" | _ -> id), l)
+  | Id id ->
+      Id_aux (Id (match id with "Some" -> "some" | "None" -> "none" | "early_return" -> "throw" | _ -> fix_id id), l)
   | _ -> id'
 
 let rec update_ctx_pat (ctx : context) (P_aux (p, (l, annot)) as pat) =
@@ -558,8 +559,8 @@ let wrap_with_pure (needs_return : bool) ?(with_parens = false) (d : document) =
   )
   else d
 
-let wrap_with_left_arrow (needs_return : bool) (d : document) =
-  if needs_return then parens (nest 2 (flow space [leftarrow; d])) else d
+let wrap_with_left_arrow (needs_left_arrow : bool) (d : document) =
+  if needs_left_arrow then parens (nest 2 (flow space [leftarrow; d])) else d
 
 let wrap_with_do (with_arrow : bool) (needs_return : bool) (d : document) =
   let ar_do = if with_arrow then string "← do" else string "do" in
@@ -729,8 +730,6 @@ and doc_loop l as_monadic ctx loop_kind args =
   in
   let body_effects = has_effect body in
   let (E_aux (_, annot)) = cond in
-  (* let annot = Type_check.replace_typ Ast_util.bool_typ (snd annot) in
-  let cond = match loop_kind with `While -> cond | `Until -> E_aux (E_app (mk_id "not", [cond]), (l, annot)) in *)
   let cond_effects = has_effect cond in
   let vartuple_pp, base_lambda = make_loop_vars [] varstuple in
   let vars_pp, body_ctx = name_loop_vars ctx in
@@ -738,10 +737,10 @@ and doc_loop l as_monadic ctx loop_kind args =
   let vars_dec_pp = string "let mut " ^^ vars_pp ^^ string " := " ^^ vartuple_pp in
   let cond_pp = doc_exp cond_effects ctx cond in
   let cond_pp = lambda cond_effects base_lambda cond_pp in
-  let loop_cond = wrap_with_left_arrow cond_effects (cond_pp ^/^ vars_pp) in
+  let loop_cond = wrap_with_left_arrow cond_effects (prefix 2 1 cond_pp vars_pp) in
   match loop_kind with
   | `While ->
-      let loop_head = flow (break 1) [string "while"; loop_cond; string "do"] in
+      let loop_head = prefix 2 1 (string "while " ^^ loop_cond) (string "do") in
       let arrow = if body_effects then leftarrowdo else coloneq in
       let loop_body_1 = string "let " ^^ vartuple_pp ^^ space ^^ coloneq ^^ space ^^ vars_pp in
       let loop_body = loop_body_1 ^^ hardline ^^ prefix 2 1 (vars_pp ^^ space ^^ arrow) body_pp in
@@ -876,7 +875,10 @@ and doc_exp (as_monadic : bool) ctx (E_aux (e, (l, annot)) as full_exp) =
         match typ_of full_exp with
         | Typ_aux (Typ_app (Id_aux (Id "bitvector", _), [A_aux (A_nexp m, _)]), _)
         | Typ_aux (Typ_app (Id_aux (Id "bits", _), [A_aux (A_nexp m, _)]), _) ->
-            nest 2 (parens (flow space [string "BitVec.join1"; brackets (separate_map comma_sp (d_of_arg ctx) vals)]))
+            nest 2
+              (wrap_with_pure as_monadic
+                 (parens (flow space [string "BitVec.join1"; brackets (separate_map comma_sp (d_of_arg ctx) vals)]))
+              )
         | _ ->
             string "#v"
             ^^ wrap_with_pure as_monadic (brackets (nest 2 (separate_map comma_sp (d_of_arg ctx) (List.rev vals))))
@@ -965,7 +967,8 @@ and doc_exp (as_monadic : bool) ctx (E_aux (e, (l, annot)) as full_exp) =
       ^^ prefix 2 1 (string "then") (wrap_exp statements_monadic ctx t)
       ^^ hardline
       ^^ prefix 2 1 (string "else") (wrap_exp statements_monadic ctx e)
-  | E_ref id -> string ".Reg " ^^ doc_id_ctor id
+      |> wrap_with_left_arrow (statements_monadic && not as_monadic)
+  | E_ref id -> parens (string ".Reg " ^^ doc_id_ctor id)
   | E_exit _ -> string "throw Error.Exit"
   | E_throw e ->
       let arrow = if as_monadic then empty else leftarrow in
@@ -1101,19 +1104,36 @@ let doc_funcl_body fixup_binders ctx (FCL_aux (FCL_funcl (id, pexp), annot)) =
   let is_monadic = has_effect exp in
   doc_exp is_monadic (context_with_env ctx env) exp
 
-let doc_funcl ctx funcl =
+let doc_termination ctx fnpat (Rec_aux (meas, _)) =
+  match meas with
+  | Rec_nonrec | Rec_rec -> empty
+  | Rec_measure (pat, exp) ->
+      (* TODO: actually use the pattern *)
+      let term = doc_exp false ctx exp in
+      let term_by =
+        string "termination_by let " ^^ doc_pat ctx false pat ^^ string " := " ^^ doc_pat ctx false fnpat ^^ string "; "
+        ^^ parens term ^^ string ".toNat"
+      in
+      hardline ^^ term_by
+
+let pat_of_funcl (FCL_aux (FCL_funcl (_, funcl), _)) =
+  match funcl with Pat_aux (Pat_exp (pat, _), _) -> pat | Pat_aux (Pat_when (pat, _, _), _) -> pat
+
+let doc_funcl ctx meas funcl =
   let comment, signature, ctx, fixup_binders = doc_funcl_init ctx.global funcl in
-  comment ^^ nest 2 (signature ^^ hardline ^^ doc_funcl_body fixup_binders ctx funcl)
+  let fnpat = pat_of_funcl funcl in
+  let termination = doc_termination ctx fnpat meas in
+  comment ^^ nest 2 (signature ^^ hardline ^^ doc_funcl_body fixup_binders ctx funcl) ^^ termination
 
 let string_of_pexp p =
   let pat, guard, exp, _ = destruct_pexp p in
   let guard_str = match guard with None -> "" | Some guard -> " if " ^ string_of_exp guard in
   "| " ^ string_of_pat pat ^ guard_str ^ " -> " ^ string_of_exp exp ^ "\n"
 
-let doc_fundef ctx (FD_aux (FD_function (r, typa, fcls), fannot) as full_fundef) =
+let doc_fundef ctx (FD_aux (FD_function (meas, typa, fcls), fannot) as full_fundef) =
   match fcls with
   | [] -> failwith "FD_function with empty function list"
-  | [funcl] -> doc_funcl ctx funcl
+  | [funcl] -> doc_funcl ctx meas funcl
   | funcls ->
       failwith
         (List.fold_left
@@ -1327,6 +1347,8 @@ let doc_instantiations ctx env =
              string "pa := " ^^ doc_typ ctx params.pa_type;
              string "abort := " ^^ doc_typ ctx params.abort_type;
              string "translation := " ^^ doc_typ ctx params.translation_summary_type;
+             string "trans_start := " ^^ doc_typ ctx params.trans_start_type;
+             string "trans_end := " ^^ doc_typ ctx params.trans_end_type;
              string "fault := " ^^ doc_typ ctx params.fault_type;
              string "tlb_op := " ^^ doc_typ ctx params.tlbi_type;
              string "cache_op := " ^^ doc_typ ctx params.cache_op_type;

@@ -2199,6 +2199,19 @@ and typ_arg_subst_aux sv subst = function
   | A_typ typ -> A_typ (typ_subst sv subst typ)
   | A_bool nc -> A_bool (constraint_subst sv subst nc)
 
+let typquant_subst sv subst = function
+  | TypQ_aux (TypQ_no_forall, l) -> TypQ_aux (TypQ_no_forall, l)
+  | TypQ_aux (TypQ_tq qis, l) ->
+      let rec subst_qis = function
+        | [] -> []
+        | QI_aux (QI_id kopt, l) :: qis ->
+            if Kid.compare (kopt_kid kopt) sv = 0 then QI_aux (QI_id kopt, l) :: qis
+            else QI_aux (QI_id kopt, l) :: subst_qis qis
+        | QI_aux (QI_constraint nc, l) :: qis ->
+            QI_aux (QI_constraint (constraint_subst sv subst nc), l) :: subst_qis qis
+      in
+      TypQ_aux (TypQ_tq (subst_qis qis), l)
+
 let subst_kid subst sv v x =
   x
   |> subst sv (mk_typ_arg (A_bool (nc_var v)))

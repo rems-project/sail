@@ -182,12 +182,10 @@ def match_read (x : E) : SailM Unit := do
     | C => readReg r_C)
 
 def const16 (_ : Unit) : ((BitVec 16) × Bool) :=
-  let t__5 := (0xFFFF : (BitVec 16))
-  (t__5, true)
+  ((0xFFFF : (BitVec 16)), true)
 
 def const32 (_ : Unit) : ((BitVec 32) × Bool) :=
-  let t__3 := (0xEEEEEEEE : (BitVec 32))
-  (t__3, false)
+  ((0xEEEEEEEE : (BitVec 32)), false)
 
 /-- Type quantifiers: k_n : Nat, k_n ≥ 0 -/
 def match_width (x : (BitVec k_n)) : (BitVec (2 * k_n)) :=
@@ -195,9 +193,7 @@ def match_width (x : (BitVec k_n)) : (BitVec (2 * k_n)) :=
     match (Sail.BitVec.length x) with
     | 16 => (const16 ())
     | 32 => (const32 ())
-    | n =>
-      (let t__1 := (BitVec.zero n)
-      (t__1, false))
+    | n => ((BitVec.zero n), false)
   (foo ++ foo)
 
 def match_option_bitvec (x : (Option (BitVec 16))) : Int :=

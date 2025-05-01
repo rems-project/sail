@@ -381,7 +381,7 @@ type mapdef = MD_aux of mapdef_aux * l
 
 type outcome_spec_aux =
   (* outcome declaration *)
-  | OV_outcome of id * typschm * kinded_id list
+  | OV_outcome of id * typschm * typquant
 
 type outcome_spec = OV_aux of outcome_spec_aux * l
 

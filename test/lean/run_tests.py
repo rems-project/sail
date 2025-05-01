@@ -22,19 +22,18 @@ sail = get_sail()
 # that you can run to exercise the language and the extracted output.
 # Not all self-tests are supported.
 skip_selftests = {
-    'outcome_impl',
-    'assign_rename_bug',
+    'outcome_impl', # custom outcome types (not expected to work)
+    'outcome_impl_int', # custom outcome types (not expected to work)
+    'outcome_impl_bool', # custom outcome types (not expected to work)
     'union_variant_names',
     'varswap',
     'real',
-    'inc_tests',
     'poly_outcome',
     'string_of_bits',
     'pointer_assign',
     'concurrency_interface',
     'for_shadow',
     'string_literal_type',
-    'cheri_capreg',
     'issue429',
     'pc_no_wildcard',
     'type_if_bits',

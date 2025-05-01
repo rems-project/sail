@@ -106,8 +106,8 @@ val get_val_specs : t -> (typquant * typ) Bindings.t
 val get_val_spec_orig : id -> t -> typquant * typ
 
 val is_outcome : id -> t -> bool
-val add_outcome : id -> typquant * typ * kinded_id list * id list * t -> t -> t
-val get_outcome : l -> id -> t -> typquant * typ * kinded_id list * id list * t
+val add_outcome : id -> typquant * typ * typquant * id list * t -> t -> t
+val get_outcome : l -> id -> t -> typquant * typ * typquant * id list * t
 val get_outcome_instantiation : t -> (Ast.l * typ_arg) KBindings.t
 val add_outcome_variable : l -> kid -> typ_arg -> t -> t
 val set_outcome_typschm : outcome_loc:l -> typquant * typ -> t -> t
@@ -165,8 +165,9 @@ val get_global_constraints : t -> n_constraint list
 val get_constraint_reasons : t -> ((Ast.l * string) option * n_constraint) list
 val add_constraint : ?global:bool -> ?reason:Ast.l * string -> n_constraint -> t -> t
 
-val add_typquant : l -> typquant -> t -> t
+val add_typquant : ?from_outcome:bool -> l -> typquant -> t -> t
 
+val is_outcome_typ_var : kid -> t -> bool
 val get_typ_var : kid -> t -> kind_aux
 val get_typ_var_opt : kid -> t -> (Ast.l * kind_aux) option
 val get_typ_var_loc_opt : kid -> t -> Ast.l option
@@ -180,8 +181,8 @@ val lookup_typ_var : kid -> type_variables -> (Ast.l * kind_aux) option
 val is_shadowed : kid -> type_variables -> bool
 
 val shadows : kid -> t -> int
-val add_typ_var_shadow : l -> kinded_id -> t -> t * kid option
-val add_typ_var : l -> kinded_id -> t -> t
+val add_typ_var_shadow : ?from_outcome:bool -> l -> kinded_id -> t -> t * kid option
+val add_typ_var : ?from_outcome:bool -> l -> kinded_id -> t -> t
 
 val get_ret_typ : t -> typ option
 val add_ret_typ : typ -> t -> t

@@ -1067,15 +1067,43 @@ static parse_buffer *buffer_skip_whitespace(parse_buffer * const buffer)
         return NULL;
     }
 
-    if (cannot_access_at_index(buffer, 0))
-    {
-        return buffer;
-    }
+    enum State {
+        Whitespace,
+        SingleLineComment,
+        MultiLineComment,
+    } state = Whitespace;
 
-    while (can_access_at_index(buffer, 0) && (buffer_at_offset(buffer)[0] <= 32))
-    {
-       buffer->offset++;
+    while (buffer->offset < buffer->length) {
+        char c0 = buffer_at_offset(buffer)[0];
+        char c1 = buffer->offset + 1 < buffer->length ? buffer_at_offset(buffer)[1] : '\0';
+        switch (state) {
+            case Whitespace:
+                if (c0 == '/' && c1 == '/') {
+                    ++buffer->offset;
+                    state = SingleLineComment;
+                } else if (c0 == '/' && c1 == '*') {
+                    ++buffer->offset;
+                    state = MultiLineComment;
+                } else if (c0 > 32) {
+                    // Not a whitespace character or the start of a comment.
+                    goto done;
+                }
+                break;
+            case SingleLineComment:
+                if (c0 == '\n') {
+                    state = Whitespace;
+                }
+                break;
+            case MultiLineComment:
+                if (c0 == '*' && c1 == '/') {
+                    ++buffer->offset;
+                    state = Whitespace;
+                }
+                break;
+        }
+        ++buffer->offset;
     }
+done:
 
     if (buffer->offset == buffer->length)
     {

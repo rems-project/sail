@@ -100,7 +100,7 @@ type global_env = {
   letbinds : typ env_item Bindings.t;
   registers : typ env_item Bindings.t;
   overloads : id list multiple_env_item Bindings.t;
-  outcomes : (typquant * typ * kinded_id list * id list * (typquant * typ) env_item Bindings.t) env_item Bindings.t;
+  outcomes : (typquant * typ * typquant * id list * (typquant * typ) env_item Bindings.t) env_item Bindings.t;
   scattered_ids : ((l * string * Ast.attribute_data option) list, Ast.l) result Bindings.t;
   outcome_instantiation : (Ast.l * typ_arg) KBindings.t;
 }
@@ -142,7 +142,7 @@ type env = {
   opened : Project.ModSet.t;
   locals : (mut * typ) Bindings.t;
   filtered_overloads : (id * id list) Bindings.t;
-  typ_vars : (Ast.l * kind_aux) KBindings.t;
+  typ_vars : (Ast.l * kind_aux * type_var_origin) KBindings.t;
   shadow_vars : int KBindings.t;
   allow_bindings : bool;
   constraints : (constraint_reason * n_constraint) list;
@@ -291,10 +291,11 @@ let allow_user_undefined id env =
    referenced by constraints. *)
 let shadows v env = match KBindings.find_opt v env.shadow_vars with Some n -> n | None -> 0
 
-let add_typ_var_shadow l (KOpt_aux (KOpt_kind (K_aux (k, _), v), _)) env =
+let add_typ_var_shadow ?(from_outcome = false) l (KOpt_aux (KOpt_kind (K_aux (k, _), v), _)) env =
+  let origin = if from_outcome then Outcome else Normal in
   if KBindings.mem v env.typ_vars then begin
     let n = match KBindings.find_opt v env.shadow_vars with Some n -> n | None -> 0 in
-    let s_l, s_k = KBindings.find v env.typ_vars in
+    let s_l, s_k, s_origin = KBindings.find v env.typ_vars in
     let s_v = Kid_aux (Var (string_of_kid v ^ "#" ^ string_of_int n), l) in
     typ_print
       ( lazy
@@ -305,7 +306,7 @@ let add_typ_var_shadow l (KOpt_aux (KOpt_kind (K_aux (k, _), v), _)) env =
     ( {
         env with
         constraints = List.map (fun (l, nc) -> (l, constraint_subst v (arg_kopt (mk_kopt s_k s_v)) nc)) env.constraints;
-        typ_vars = KBindings.add v (l, k) (KBindings.add s_v (s_l, s_k) env.typ_vars);
+        typ_vars = KBindings.add v (l, k, origin) (KBindings.add s_v (s_l, s_k, s_origin) env.typ_vars);
         locals = Bindings.map (fun (mut, typ) -> (mut, typ_subst v (arg_kopt (mk_kopt s_k s_v)) typ)) env.locals;
         shadow_vars = KBindings.add v (n + 1) env.shadow_vars;
       },
@@ -314,25 +315,31 @@ let add_typ_var_shadow l (KOpt_aux (KOpt_kind (K_aux (k, _), v), _)) env =
   end
   else begin
     typ_print (lazy (adding ^ "type variable " ^ string_of_kid v ^ " : " ^ string_of_kind_aux k)) [@coverage off];
-    ({ env with typ_vars = KBindings.add v (l, k) env.typ_vars }, None)
+    ({ env with typ_vars = KBindings.add v (l, k, origin) env.typ_vars }, None)
   end
 
-let add_typ_var l kopt env = fst (add_typ_var_shadow l kopt env)
+let add_typ_var ?(from_outcome = false) l kopt env = fst (add_typ_var_shadow ~from_outcome l kopt env)
 
-let get_typ_var_opt kid env = KBindings.find_opt kid env.typ_vars
+let is_outcome_typ_var v env = match KBindings.find_opt v env.typ_vars with Some (_, _, Outcome) -> true | _ -> false
 
-let get_typ_var_loc_opt kid env = match KBindings.find_opt kid env.typ_vars with Some (l, _) -> Some l | None -> None
+let get_typ_var_opt kid env =
+  match KBindings.find_opt kid env.typ_vars with Some (l, k, _) -> Some (l, k) | None -> None
+
+let get_typ_var_loc_opt kid env =
+  match KBindings.find_opt kid env.typ_vars with Some (l, _, _) -> Some l | None -> None
 
 let get_typ_var kid env =
-  try snd (KBindings.find kid env.typ_vars)
-  with Not_found -> typ_error (kid_loc kid) ("No type variable " ^ string_of_kid kid)
+  match KBindings.find_opt kid env.typ_vars with
+  | Some (_, k, _) -> k
+  | None -> typ_error (kid_loc kid) ("No type variable " ^ string_of_kid kid)
 
-let get_typ_vars env = KBindings.map snd env.typ_vars
-let get_typ_var_locs env = KBindings.map fst env.typ_vars
+let get_typ_vars env = KBindings.map (fun (_, k, _) -> k) env.typ_vars
+let get_typ_var_locs env = KBindings.map (fun (l, _, _) -> l) env.typ_vars
 
 let get_typ_vars_info env = { vars = env.typ_vars; shadows = env.shadow_vars }
 
-let lookup_typ_var v tv_info = match KBindings.find_opt v tv_info.vars with Some v -> Some v | None -> None
+let lookup_typ_var v tv_info =
+  match KBindings.find_opt v tv_info.vars with Some (l, k, _) -> Some (l, k) | None -> None
 
 let is_shadowed v tv_info = match KBindings.find_opt v tv_info.shadows with Some _ -> true | None -> false
 
@@ -601,8 +608,8 @@ module Well_formedness = struct
     | Typ_id id -> typ_error l ("Undefined type " ^ string_of_id id)
     | Typ_var kid -> begin
         match KBindings.find kid env.typ_vars with
-        | _, K_type -> ()
-        | _, k ->
+        | _, K_type, _ -> ()
+        | _, k, _ ->
             typ_error l
               ("Type variable " ^ string_of_kid kid ^ " in type " ^ string_of_typ typ ^ " is " ^ string_of_kind_aux k
              ^ " rather than Type"
@@ -921,10 +928,10 @@ and expand_synonyms env (Typ_aux (typ, l)) =
       in
       let add_typ_var env (KOpt_aux (KOpt_kind (k, kid), l)) =
         try
-          let l, _ = KBindings.find kid env.typ_vars in
+          let l, _, _ = KBindings.find kid env.typ_vars in
           rebindings := kid :: !rebindings;
-          { env with typ_vars = KBindings.add (prepend_kid "syn#" kid) (l, unaux_kind k) env.typ_vars }
-        with Not_found -> { env with typ_vars = KBindings.add kid (l, unaux_kind k) env.typ_vars }
+          { env with typ_vars = KBindings.add (prepend_kid "syn#" kid) (l, unaux_kind k, Normal) env.typ_vars }
+        with Not_found -> { env with typ_vars = KBindings.add kid (l, unaux_kind k, Normal) env.typ_vars }
       in
 
       let env = List.fold_left add_typ_var env kopts in
@@ -1046,11 +1053,11 @@ let add_local id mtyp env =
   typ_print (lazy (adding ^ "local binding " ^ string_of_id id ^ " : " ^ string_of_mtyp mtyp)) [@coverage off];
   { env with locals = Bindings.add id mtyp env.locals }
 
-let add_typquant l quant env =
+let add_typquant ?(from_outcome = false) l quant env =
   let rec add_quant_item env = function QI_aux (qi, _) -> add_quant_item_aux env qi
   and add_quant_item_aux env = function
     | QI_constraint constr -> add_constraint constr env
-    | QI_id kopt -> add_typ_var l kopt env
+    | QI_id kopt -> add_typ_var ~from_outcome l kopt env
   in
   match quant with
   | TypQ_aux (TypQ_no_forall, _) -> env
@@ -1103,7 +1110,7 @@ let get_val_spec_opt id env =
         ( lazy
           ("get_val_spec: Env has "
           ^ string_of_list ", "
-              (fun (kid, (_, k)) -> string_of_kid kid ^ " => " ^ string_of_kind_aux k)
+              (fun (kid, (_, k, _)) -> string_of_kid kid ^ " => " ^ string_of_kind_aux k)
               (KBindings.bindings env.typ_vars)
           )
           ) [@coverage off];
@@ -1590,8 +1597,9 @@ let add_register id typ env =
 
 let get_locals env =
   Bindings.fold
-    (fun id { item = typ; _ } locals ->
-      if not (Bindings.mem id locals) then Bindings.add id (Immutable, typ) locals else locals
+    (fun id item locals ->
+      if (not (Bindings.mem id locals)) && item_in_scope env item then Bindings.add id (Immutable, item.item) locals
+      else locals
     )
     env.global.letbinds env.locals
 

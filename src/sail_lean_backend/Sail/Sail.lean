@@ -30,13 +30,25 @@ def updateSubrange' {w : Nat} (x : BitVec w) (start len : Nat) (y : BitVec len) 
 def slice {w : Nat} (x : BitVec w) (start len : Nat) : BitVec len :=
   x.extractLsb' start len
 
+def sliceBE {w : Nat} (x : BitVec w) (start len : Nat) : BitVec len :=
+  x.extractLsb' (w - start - len) len
+
+def subrangeBE {w : Nat} (x : BitVec w) (lo hi : Nat) : BitVec (hi - lo + 1) :=
+  x.extractLsb' (w - hi - 1) _
+
 def updateSubrange {w : Nat} (x : BitVec w) (hi lo : Nat) (y : BitVec (hi - lo + 1)) : BitVec w :=
   updateSubrange' x lo _ y
+
+def updateSubrangeBE {w : Nat} (x : BitVec w) (lo hi : Nat) (y : BitVec (hi - lo + 1)) : BitVec w :=
+  updateSubrange' x (w - hi - 1) _ y
 
 def replicateBits {w : Nat} (x : BitVec w) (i : Nat) := BitVec.replicate i x
 
 def access {w : Nat} (x : BitVec w) (i : Nat) : BitVec 1 :=
   BitVec.ofBool x[i]!
+
+def accessBE {w : Nat} (x : BitVec w) (i : Nat) : BitVec 1 :=
+  BitVec.ofBool x[w - i - 1]!
 
 def addInt {w : Nat} (x : BitVec w) (i : Int) : BitVec w :=
   x + BitVec.ofInt w i
@@ -61,6 +73,8 @@ def append' (x : BitVec n) (y : BitVec m) {mn}
   (x.append y).cast hmn.symm
 
 def update (x : BitVec m) (n : Nat) (b : BitVec 1) := updateSubrange' x n _ b
+
+def updateBE (x : BitVec m) (n : Nat) (b : BitVec 1) := updateSubrange' x (m - n - 1) _ b
 
 def toBin {w : Nat} (x : BitVec w) : String :=
   List.asString (List.map (fun c => if c then '1' else '0') (List.ofFn (BitVec.getMsb' x)))
@@ -180,11 +194,14 @@ def toHexUpper (i : Int) : String :=
 
 end Int
 
-def get_slice_int (len n lo : Nat) : BitVec len :=
+def get_slice_int (len : Nat) (n : Int) (lo : Nat) : BitVec len :=
   BitVec.extractLsb' lo len (BitVec.ofInt (lo + len + 1) n)
 
-def set_slice_int (len n lo : Nat) (x : BitVec len) : Int :=
+def set_slice_int (len : Nat) (n : Int) (lo : Nat) (x : BitVec len) : Int :=
   BitVec.toInt (BitVec.updateSubrange' (BitVec.ofInt len n) lo len x)
+
+def set_slice {n : Nat} (m : Nat) (bv : BitVec n) (start : Nat) (bv' : BitVec m) : BitVec n :=
+  BitVec.updateSubrange' bv start m bv'
 
 def String.leadingSpaces (s : String) : Nat :=
   s.length - (s.dropWhile (· = ' ')).length
@@ -192,7 +209,7 @@ def String.leadingSpaces (s : String) : Nat :=
 def Vector.length (_v : Vector α n) : Nat :=
   n
 
-def vectorInit {n : Nat} (a : α) : Vector α n := Vector.mkVector n a
+def vectorInit {n : Nat} (a : α) : Vector α n := Vector.replicate n a
 
 def vectorUpdate (v : Vector α m) (n : Nat) (a : α) := v.set! n a
 
@@ -248,6 +265,8 @@ class Arch where
   pa : Type
   arch_ak : Type
   translation : Type
+  trans_start : Type
+  trans_end : Type
   abort : Type
   barrier : Type
   cache_op : Type
@@ -336,6 +355,8 @@ def print_int : String → Int → Unit := fun _ _ => ()
 
 def prerr_int : String → Int → Unit := fun _ _ => ()
 
+def prerr_bits: String → BitVec n → Unit := fun _ _ => ()
+
 def print_endline : String → Unit := fun _  => ()
 
 def prerr_endline : String → Unit := fun _ => ()
@@ -406,7 +427,7 @@ def undefined_bitvector (n : Nat) : PreSailM RegisterType c ue (BitVec n) :=
   choose <| .bitvector n
 
 def undefined_vector (n : Nat) (a : α) : PreSailM RegisterType c ue (Vector α n) :=
-  pure <| .mkVector n a
+  pure <| .replicate n a
 
 def internal_pick {α : Type} : List α → PreSailM RegisterType c ue α
   | [] => .error .Unreachable
@@ -481,6 +502,11 @@ def read_ram (addr_size data_size : Nat) (_hex_ram addr : BitVec addr_size) : Pr
   pure bytes
 
 def sail_barrier (_ : α) : PreSailM RegisterType c ue Unit := pure ()
+def sail_cache_op [Arch] (_ : Arch.cache_op) : PreSailM RegisterType c ue Unit := pure ()
+def sail_tlbi [Arch] (_ : Arch.tlb_op) : PreSailM RegisterType c ue Unit := pure ()
+def sail_translation_start [Arch] (_ : Arch.trans_start) : PreSailM RegisterType c ue Unit := pure ()
+def sail_translation_end [Arch] (_ : Arch.trans_end) : PreSailM RegisterType c ue Unit := pure ()
+def sail_take_exception [Arch] (_ : Arch.fault) : PreSailM RegisterType c ue Unit := pure ()
 
 def cycle_count (_ : Unit) : PreSailM RegisterType c ue Unit :=
   modify fun s => { s with cycleCount := s.cycleCount + 1 }
@@ -586,7 +612,14 @@ notation:50 x "<b" y => decide (x < y)
 notation:50 x "≥b" y => decide (x ≥ y)
 notation:50 x ">b" y => decide (x > y)
 
-macro_rules | `(tactic| decreasing_trivial) => `(tactic| simp_all <;> omega)
+-- for termination measures, since they're almost always `Int`s but not always
+abbrev Nat.toNat (x : Nat) := x
+
+set_option grind.warning false
+macro_rules | `(tactic| decreasing_trivial) => `(tactic|
+  first
+  | grind
+  | decide)
 
 -- This lemma replaces `bif` by `if` in functions when Lean is trying to prove
 -- termination.

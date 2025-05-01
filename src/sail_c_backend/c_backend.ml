@@ -202,6 +202,7 @@ let c_return exp = string "return" ^^ space ^^ exp ^^ semi
 
 module C_config (Opts : sig
   val branch_coverage : out_channel option
+  val assert_to_exception : bool
   val preserve_types : IdSet.t
 end) : CONFIG = struct
   (** Convert a sail type into a C-type. This function can be quite slow, because it uses ctx.local_env and SMT to
@@ -528,9 +529,11 @@ end) : CONFIG = struct
   let use_real = false
   let branch_coverage = Opts.branch_coverage
   let track_throw = true
+  let assert_to_exception = Opts.assert_to_exception
   let use_void = false
   let eager_control_flow = false
   let preserve_types = Opts.preserve_types
+  let fun_to_wires = Bindings.empty
 end
 
 (** Functions that have heap-allocated return types are implemented by passing a pointer a location where the return
@@ -947,6 +950,7 @@ module type CODEGEN_CONFIG = sig
   val reserved_words : Util.StringSet.t
   val overrides : string Name_generator.Overrides.t
   val branch_coverage : out_channel option
+  val assert_to_exception : bool
   val preserve_types : IdSet.t
 end
 
@@ -2321,6 +2325,7 @@ module Codegen (Config : CODEGEN_CONFIG) = struct
   let jib_of_ast env effect_info ast =
     let module Jibc = Make (C_config (struct
       let branch_coverage = Config.branch_coverage
+      let assert_to_exception = Config.assert_to_exception
       let preserve_types = Config.preserve_types
     end)) in
     let ctx = initial_ctx env effect_info in
@@ -2360,15 +2365,16 @@ module Codegen (Config : CODEGEN_CONFIG) = struct
 
       let header_doc_opt, docs = List.map (codegen_def ctx) cdefs |> List.concat |> merge_file_docs in
 
-      let coverage_include, coverage_hook =
+      let coverage_include, coverage_hook_header, coverage_hook =
         let header = string "#include \"sail_coverage.h\"" in
         (* Generate a hook for the RTS to call if we have coverage
            enabled, so it can set the output file with an option. *)
+        let coverage_hook_header = string "extern void (*sail_rts_set_coverage_file)(const char *);" in
         let coverage_hook = string "void (*sail_rts_set_coverage_file)(const char *) = &sail_set_coverage_file;" in
         let no_coverage_hook = string "void (*sail_rts_set_coverage_file)(const char *) = NULL;" in
         match Config.branch_coverage with
-        | Some _ -> if Config.no_rts then ([header], []) else ([header], [coverage_hook])
-        | None -> if Config.no_rts then ([], []) else ([], [no_coverage_hook])
+        | Some _ -> if Config.no_rts then ([header], [], []) else ([header], [coverage_hook_header], [coverage_hook])
+        | None -> if Config.no_rts then ([], [], []) else ([], [coverage_hook_header], [no_coverage_hook])
       in
 
       let preamble in_header =
@@ -2380,7 +2386,7 @@ module Codegen (Config : CODEGEN_CONFIG) = struct
               else List.map (fun h -> string (Printf.sprintf "#include \"%s\"" h)) Config.includes
             )
           @ [string "#ifdef __cplusplus"; string "extern \"C\" {"; string "#endif"]
-          @ if in_header = Config.generate_header then coverage_hook else []
+          @ if in_header then coverage_hook_header else coverage_hook
           )
       in
 

@@ -69,6 +69,8 @@ let opt_includes = ref []
 
 let opt_toplevel = ref "main"
 
+let opt_global_prefix = ref None
+
 type verilate_mode = Verilator_none | Verilator_compile | Verilator_run
 
 let opt_verilate = ref Verilator_none
@@ -84,8 +86,12 @@ let opt_line_directives = ref false
 
 let opt_comb = ref false
 
+let opt_no_write_flush = ref false
+
 let opt_inregs = ref false
 let opt_outregs = ref false
+
+let opt_recursion_depth = ref 10
 
 let opt_max_unknown_integer_width = ref 128
 let opt_max_unknown_bitvector_width = ref 128
@@ -95,10 +101,15 @@ let opt_no_packed = ref false
 let opt_no_assertions = ref false
 let opt_never_pack_unions = ref false
 let opt_padding = ref false
+let opt_no_unions = ref false
 let opt_nomem = ref false
+let opt_no_assert_fatal = ref false
+let opt_assert_as_property = ref false
 
+let opt_assert_to_exception = ref false
+let opt_skip_cyclic = ref false
 let opt_unreachable = ref []
-let opt_fun2wires = ref []
+let opt_fun_to_wires = ref []
 
 let opt_dpi_sets = ref StringSet.empty
 
@@ -123,6 +134,10 @@ let verilog_options =
           opt_toplevel := s
         ),
       "Sail function to use as toplevel module"
+    );
+    ( Flag.create ~prefix:["sv"] "global_prefix",
+      Arg.String (fun s -> opt_global_prefix := Some s),
+      "declare global signals in a named module instead of toplevel"
     );
     ( Flag.create ~prefix:["sv"; "verilate"] ~arg:"compile|run" ~override:"sv_verilate" "mode",
       Arg.String
@@ -159,8 +174,16 @@ let verilog_options =
     );
     (Flag.create ~prefix:["sv"] "lines", Arg.Set opt_line_directives, "output `line directives");
     (Flag.create ~prefix:["sv"] "comb", Arg.Set opt_comb, "output an always_comb block instead of initial block");
+    ( Flag.create ~prefix:["sv"] "no_write_flush",
+      Arg.Set opt_no_write_flush,
+      "don't emit potentially unsupported sail_write_flush() in main module."
+    );
     (Flag.create ~prefix:["sv"] "inregs", Arg.Set opt_inregs, "take register values from inputs");
     (Flag.create ~prefix:["sv"] "outregs", Arg.Set opt_outregs, "output register values");
+    ( Flag.create ~prefix:["sv"] ~arg:"n" "recursion_depth",
+      Arg.Int (fun i -> opt_recursion_depth := i),
+      "set the depth of recursive SV modules"
+    );
     ( Flag.create ~prefix:["sv"] ~arg:"n" "int_size",
       Arg.Int (fun i -> opt_max_unknown_integer_width := i),
       "set the maximum width for unknown integers"
@@ -169,6 +192,7 @@ let verilog_options =
       Arg.Int (fun i -> opt_max_unknown_bitvector_width := i),
       "set the maximum width for bitvectors with unknown width"
     );
+    (Flag.create ~prefix:["sv"] "no_unions", Arg.Set opt_no_unions, " don't emit any union, instead emit struct");
     (Flag.create ~prefix:["sv"] "no_strings", Arg.Set opt_no_strings, "don't emit any strings, instead emit units");
     (Flag.create ~prefix:["sv"] "no_packed", Arg.Set opt_no_packed, "don't emit packed datastructures");
     (Flag.create ~prefix:["sv"] "no_assertions", Arg.Set opt_no_assertions, "ignore all Sail asserts");
@@ -178,10 +202,23 @@ let verilog_options =
       Arg.String (fun fn -> opt_unreachable := fn :: !opt_unreachable),
       "Mark function as unreachable."
     );
+    ( Flag.create ~prefix:["sv"] "assert_to_exception",
+      Arg.Set opt_assert_to_exception,
+      "turn assertions into exceptions"
+    );
+    (Flag.create ~prefix:["sv"] "skip_cyclic", Arg.Set opt_skip_cyclic, "skip generation for cyclic definitions");
     (Flag.create ~prefix:["sv"] "nomem", Arg.Set opt_nomem, "don't emit a dynamic memory implementation");
     ( Flag.create ~prefix:["sv"] ~arg:"functionname" "fun2wires",
-      Arg.String (fun fn -> opt_fun2wires := fn :: !opt_fun2wires),
-      "Use input/output ports instead of emitting a function call"
+      Arg.String
+        (fun str ->
+          match String.index_opt str ':' with
+          | Some pos ->
+              opt_fun_to_wires :=
+                (String.sub str (pos + 1) (String.length str - pos - 1), int_of_string (String.sub str 0 pos))
+                :: !opt_fun_to_wires
+          | None -> opt_fun_to_wires := (str, 1) :: !opt_fun_to_wires
+        ),
+      "<slots>:<functionname> Use input/output ports instead of emitting a function call"
     );
     ( Flag.create ~prefix:["sv"] ~arg:"n" "specialize",
       Arg.Int (fun i -> opt_int_specialize := Some i),
@@ -194,6 +231,14 @@ let verilog_options =
     ( Flag.create ~prefix:["sv"] ~arg:"set" "dpi",
       Arg.String (fun s -> opt_dpi_sets := StringSet.add s !opt_dpi_sets),
       "Use SystemVerilog DPI-C for a set of primitives (e.g. memory)"
+    );
+    ( Flag.create ~prefix:["sv"] "no_assert_fatal",
+      Arg.Set opt_no_assert_fatal,
+      "Do not generate '$fatal' code for assertions"
+    );
+    ( Flag.create ~prefix:["sv"] "assert_as_property",
+      Arg.Set opt_assert_as_property,
+      "Generate SV properties for assertions"
     );
   ]
 
@@ -232,6 +277,8 @@ let verilog_rewrites =
 
 module type JIB_CONFIG = sig
   val make_call_precise : Jib_compile.ctx -> id -> bool
+  val assert_to_exception : bool
+  val fun_to_wires : int Bindings.t
 end
 
 module Verilog_config (C : JIB_CONFIG) : Jib_compile.CONFIG = struct
@@ -338,11 +385,13 @@ module Verilog_config (C : JIB_CONFIG) : Jib_compile.CONFIG = struct
   let struct_value = false
   let tuple_value = false
   let track_throw = false
+  let assert_to_exception = C.assert_to_exception
   let branch_coverage = None
   let use_real = false
   let use_void = false
   let eager_control_flow = true
   let preserve_types = IdSet.empty
+  let fun_to_wires = C.fun_to_wires
 end
 
 let register_types cdefs =
@@ -354,6 +403,9 @@ let jib_of_ast make_call_precise env ast effect_info =
   let open Jib_compile in
   let module Jibc = Make (Verilog_config (struct
     let make_call_precise = make_call_precise
+    let assert_to_exception = !opt_assert_to_exception
+    let fun_to_wires =
+      !opt_fun_to_wires |> List.to_seq |> Seq.map (fun (name, slots) -> (mk_id name, slots)) |> Bindings.of_seq
   end)) in
   let ctx = initial_ctx env effect_info in
   Jibc.compile_ast ctx ast
@@ -428,18 +480,26 @@ let make_genlib_file filename =
 
 let verilog_target out_opt { ast; effect_info; env; default_sail_dir; _ } =
   let module SV = Jib_sv.Make (struct
+    let recursion_depth = !opt_recursion_depth
     let max_unknown_integer_width = !opt_max_unknown_integer_width
     let max_unknown_bitvector_width = !opt_max_unknown_bitvector_width
+    let global_prefix = !opt_global_prefix
     let line_directives = !opt_line_directives
     let no_strings = !opt_no_strings
     let no_packed = !opt_no_packed
     let no_assertions = !opt_no_assertions
     let never_pack_unions = !opt_never_pack_unions
     let union_padding = !opt_padding
+    let no_unions = !opt_no_unions
     let unreachable = !opt_unreachable
     let comb = !opt_comb
-    let ignore = !opt_fun2wires
+    let no_write_flush = !opt_no_write_flush
+    let ignore = [] (* List.map fst !opt_fun2wires *)
+    let fun_to_wires = !opt_fun_to_wires
     let dpi_sets = !opt_dpi_sets
+    let skip_cyclic = !opt_skip_cyclic
+    let no_assert_fatal = !opt_no_assert_fatal
+    let assert_as_property = !opt_assert_as_property
   end) in
   let open SV in
   let sail_dir = Reporting.get_sail_dir default_sail_dir in
@@ -472,13 +532,14 @@ let verilog_target out_opt { ast; effect_info; env; default_sail_dir; _ } =
     ^^ twice hardline
   in
 
+  (*
   let exception_vars =
     string "bit sail_reached_unreachable;" ^^ hardline ^^ string "bit sail_have_exception;" ^^ hardline
     ^^ (if !opt_no_strings then string "sail_unit" else string "string")
     ^^ space ^^ string "sail_throw_location;" ^^ twice hardline
   in
-
-  let spec_info = Jib_sv.collect_spec_info ctx cdefs in
+  *)
+  let spec_info = Sv_analysis.collect_spec_info ctx cdefs in
 
   let svir, fn_ctyps =
     List.fold_left
@@ -507,11 +568,13 @@ let verilog_target out_opt { ast; effect_info; env; default_sail_dir; _ } =
   let doc =
     let base = Generate_primop2.basic_defs !opt_max_unknown_bitvector_width !opt_max_unknown_integer_width in
     let reg_ref_enums, reg_ref_functions = sv_register_references spec_info in
-    Util.fold_left_last
-      (fun last doc set ->
-        ksprintf string "`define SAIL_DPI_%s" (String.uppercase_ascii set) ^^ if last then twice hardline else hardline
-      )
-      empty (StringSet.elements !opt_dpi_sets)
+    (if !opt_no_strings then string "`define SAIL_NOSTRINGS" ^^ hardline else empty)
+    ^^ Util.fold_left_last
+         (fun last doc set ->
+           ksprintf string "`define SAIL_DPI_%s" (String.uppercase_ascii set)
+           ^^ if last then twice hardline else hardline
+         )
+         empty (StringSet.elements !opt_dpi_sets)
     ^^ string base ^^ string "`include \"sail_modules.sv\"" ^^ twice hardline
     ^^ separate_map (twice hardline) (pp_def ctx None) svir_types
     ^^ twice hardline ^^ reg_ref_enums ^^ reg_ref_functions
@@ -660,7 +723,7 @@ let verilog_target out_opt { ast; effect_info; env; default_sail_dir; _ } =
 
   begin
     match !opt_verilate with
-    | Verilator_compile | Verilator_run ->
+    | Verilator_compile | Verilator_run -> (
         let file_info = Util.open_output_with_check ?directory:!opt_output_dir ("sim_" ^ out ^ ".cpp") in
         List.iter
           (fun line ->
@@ -684,12 +747,22 @@ let verilog_target out_opt { ast; effect_info; env; default_sail_dir; _ } =
             !opt_verilate_jobs (Filename.quote sail_sv_libdir) out out out extra cflags ldflags
         in
         print_endline ("Verilator command: " ^ verilator_command);
-        let _ = Unix.system verilator_command in
-        begin
-          match !opt_verilate with
-          | Verilator_run -> Reporting.system_checked (sprintf "%s_obj_dir/V%s" out "sail_toplevel")
-          | _ -> ()
-        end
+        let status = Unix.system verilator_command in
+        ( match status with
+        | WEXITED 0 -> ()
+        | WEXITED n ->
+            raise
+              (Reporting.err_general Parse_ast.Unknown
+                 (Printf.sprintf "Verilator exited with non-zero exit code (%d)" n)
+              )
+        | WSTOPPED n | WSIGNALED n ->
+            raise
+              (Reporting.err_general Parse_ast.Unknown (Printf.sprintf "Verilator stopped or killed by signal (%d)" n))
+        );
+        match !opt_verilate with
+        | Verilator_run -> Reporting.system_checked (sprintf "%s_obj_dir/V%s" out "sail_toplevel")
+        | _ -> ()
+      )
     | _ -> ()
   end
 

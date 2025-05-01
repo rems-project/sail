@@ -72,6 +72,7 @@ type ctx = {
   kinds : (kind_aux * P.l) KBindings.t;
   function_type_variables : (kind_aux * P.l) KBindings.t Bindings.t;
   type_constructors : type_constructor Bindings.t;
+  outcome_names : IdSet.t;
   outcome_variables : kind_aux KBindings.t;
   scattereds : (P.typquant * ctx) Bindings.t;
   fixities : (prec * int) Bindings.t;
@@ -112,6 +113,7 @@ let merge_ctx l ctx1 ctx2 =
          )
         )
         ctx1.function_type_variables ctx2.function_type_variables;
+    outcome_names = IdSet.union ctx1.outcome_names ctx2.outcome_names;
     outcome_variables =
       KBindings.merge
         (compatible ( = ) (fun v -> "Outcome definitions have different kinds for type variable " ^ string_of_kid v))
@@ -793,11 +795,11 @@ module KindInference = struct
     in
     return (typq, typ, kind)
 
-  let check_outcome ctx typq (P.ATyp_aux (_, l) as typ) kopts =
-    let* kopts = mapM (fun kopt -> fmap List.hd (add_vars [kopt])) kopts in
+  let check_outcome ctx typq (P.ATyp_aux (_, l) as typ) args =
+    let* args = infer_typquant ctx args in
     let* typq = infer_typquant ctx typq in
     let* typ = check ctx typ (Kind (K_type, l)) in
-    return (typq, typ, kopts)
+    return (typq, typ, args)
 
   let initial_env = { sets = []; next_unknown = 0; vars = [] }
 end
@@ -1480,16 +1482,10 @@ let to_ast_spec ctx (P.VS_aux (P.VS_val_spec (ts, id, ext), l)) =
 let to_ast_outcome ctx (ev : P.outcome_spec) : outcome_spec * ctx * ctx =
   match ev with
   | P.OV_aux (P.OV_outcome (id, P.TypSchm_aux (P.TypSchm_ts (typq, typ), ts_l), outcome_args), l) ->
+      let id = to_ast_id ctx id in
       let open KindInference in
       let (typq, typ, outcome_args), kenv = check_outcome ctx typq typ outcome_args initial_env in
-      let outcome_args, inner_ctx =
-        List.fold_left
-          (fun (args, ctx) arg ->
-            let (arg, _, ctx), _ = ConvertType.to_ast_kopts kenv ctx arg in
-            (arg @ args, ctx)
-          )
-          ([], ctx) outcome_args
-      in
+      let outcome_args, inner_ctx = ConvertType.to_ast_typquant kenv ctx outcome_args in
       let typq, ts_ctx = ConvertType.to_ast_typquant kenv inner_ctx typq in
       let typ = ConvertType.to_ast_typ kenv ts_ctx typ in
       let ctx =
@@ -1499,6 +1495,7 @@ let to_ast_outcome ctx (ev : P.outcome_spec) : outcome_spec * ctx * ctx =
             let k = unaux_kind (kopt_kind kopt) in
             {
               ctx with
+              outcome_names = IdSet.add id ctx.outcome_names;
               outcome_variables =
                 KBindings.update v
                   (function
@@ -1516,12 +1513,9 @@ let to_ast_outcome ctx (ev : P.outcome_spec) : outcome_spec * ctx * ctx =
                   ctx.outcome_variables;
             }
           )
-          ctx outcome_args
+          ctx (quant_kopts outcome_args)
       in
-      ( OV_aux (OV_outcome (to_ast_id ctx id, TypSchm_aux (TypSchm_ts (typq, typ), ts_l), List.rev outcome_args), l),
-        inner_ctx,
-        ctx
-      )
+      (OV_aux (OV_outcome (id, TypSchm_aux (TypSchm_ts (typq, typ), ts_l), outcome_args), l), inner_ctx, ctx)
 
 let rec to_ast_range ctx (P.BF_aux (r, l)) =
   (* TODO add check that ranges are sensible for some definition of sensible *)
@@ -2086,12 +2080,16 @@ let rec to_ast_def doc attrs vis ctx (P.DEF_aux (def, l)) : untyped_def list ctx
       ([DEF_aux (DEF_outcome (outcome_spec, List.rev defs), annot)], ctx)
   | P.DEF_instantiation (id, substs) ->
       let id = to_ast_id ctx id in
-      ( [
-          DEF_aux
-            (DEF_instantiation (IN_aux (IN_id id, (id_loc id, empty_uannot)), List.map (to_ast_subst ctx) substs), annot);
-        ],
-        ctx
-      )
+      if IdSet.mem id ctx.outcome_names then
+        ( [
+            DEF_aux
+              ( DEF_instantiation (IN_aux (IN_id id, (id_loc id, empty_uannot)), List.map (to_ast_subst ctx) substs),
+                annot
+              );
+          ],
+          ctx
+        )
+      else raise (Reporting.err_typ (id_loc id) ("Unknown outcome " ^ string_of_id id))
   | P.DEF_default typ_spec ->
       let default, ctx = to_ast_default ctx typ_spec in
       ([DEF_aux (DEF_default default, annot)], ctx)
@@ -2207,6 +2205,7 @@ let initial_ctx =
           ("float128", ([], P.K_type));
           ("float_rounding_mode", ([], P.K_type));
         ];
+    outcome_names = IdSet.empty;
     outcome_variables = KBindings.empty;
     function_type_variables = Bindings.empty;
     kinds = KBindings.empty;

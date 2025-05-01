@@ -111,6 +111,8 @@ module type CODEGEN_CONFIG = sig
       about all the possible branches will be written to the provided output channel. *)
   val branch_coverage : out_channel option
 
+  val assert_to_exception : bool
+
   val preserve_types : Ast_util.IdSet.t
 end
 
