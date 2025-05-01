@@ -81,6 +81,10 @@ let opt_lean_real_numbers : bool ref = ref false
 
 let opt_single_file : bool ref = ref false
 
+(* We keep two flags to use the [If_flag] in the list of rewrites. They should never be equal. *)
+let opt_enable_matchbv : bool ref = ref false
+let opt_disable_matchbv : bool ref = ref true
+
 let lean_version : string = "lean4:nightly-2025-04-07"
 let mathlib_version : string = "nightly-testing-2025-04-07"
 
@@ -97,6 +101,14 @@ let lean_options =
     ( Flag.create ~prefix:["lean"] "single_file",
       Arg.Unit (fun () -> opt_single_file := true),
       "puts the entire output in a single .lean file"
+    );
+    ( Flag.create ~prefix:["lean"] "matchbv",
+      Arg.Unit
+        (fun () ->
+          opt_disable_matchbv := false;
+          opt_enable_matchbv := true
+        ),
+      "use matchbv in the Lean output"
     );
     ( Flag.create ~prefix:["lean"] "noncomputable",
       Arg.Unit (fun () -> opt_lean_noncomputable := true),
@@ -141,11 +153,12 @@ let lean_rewrites =
     ("tuple_assignments", []);
     ("vector_concat_assignments", []);
     ("simple_assignments", []);
-    (* ("remove_vector_concat", []); *)
-    (* ("remove_bitvector_pats", []); *)
+    ("remove_vector_concat", [If_flag opt_disable_matchbv]);
+    ("remove_bitvector_pats", [If_flag opt_disable_matchbv]);
     (* ("remove_numeral_pats", []); *)
     (* ("pattern_literals", [Literal_arg "lem"]); *)
-    ("fun_guarded_pats", []);
+    ("fun_guarded_pats", [If_flag opt_enable_matchbv]);
+    ("guarded_pats", [If_flag opt_disable_matchbv]);
     (* ("register_ref_writes", rewrite_register_ref_writes); *)
     ("nexp_ids", []);
     ("split", [String_arg "execute"]);
@@ -164,7 +177,7 @@ let lean_rewrites =
     (* We need to do the exhaustiveness check before merging, because it may
        introduce new wildcard clauses *)
     ("recheck_defs", []);
-    (* ("make_cases_exhaustive", []); *)
+    ("make_cases_exhaustive", [If_flag opt_disable_matchbv]);
     (* merge funcls before adding the measure argument so that it doesn't
        disappear into an internal pattern match *)
     ("merge_function_clauses", []);

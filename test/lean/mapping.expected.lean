@@ -49,7 +49,7 @@ namespace Out.Functions
 open word_width
 open option
 
-/-- Type quantifiers: k_ex757# : Bool, k_ex756# : Bool -/
+/-- Type quantifiers: k_ex852# : Bool, k_ex851# : Bool -/
 def neq_bool (x : Bool) (y : Bool) : Bool :=
   (Bool.not (BEq.beq x y))
 
@@ -146,11 +146,16 @@ def size_bits_forwards (arg_ : word_width) : (BitVec 2) :=
   | DOUBLE => (0b11 : (BitVec 2))
 
 def size_bits_backwards (arg_ : (BitVec 2)) : word_width :=
-  match_bv arg_ with
-  | 00 => BYTE
-  | 01 => HALF
-  | 10 => WORD
-  | _ => DOUBLE
+  let b__0 := arg_
+  bif (BEq.beq b__0 (0b00 : (BitVec 2)))
+  then BYTE
+  else
+    (bif (BEq.beq b__0 (0b01 : (BitVec 2)))
+    then HALF
+    else
+      (bif (BEq.beq b__0 (0b10 : (BitVec 2)))
+      then WORD
+      else DOUBLE))
 
 def size_bits_forwards_matches (arg_ : word_width) : Bool :=
   match arg_ with
@@ -158,15 +163,21 @@ def size_bits_forwards_matches (arg_ : word_width) : Bool :=
   | HALF => true
   | WORD => true
   | DOUBLE => true
-  | _ => false
 
 def size_bits_backwards_matches (arg_ : (BitVec 2)) : Bool :=
-  match_bv arg_ with
-  | 00 => true
-  | 01 => true
-  | 10 => true
-  | 11 => true
-  | _ => false
+  let b__0 := arg_
+  bif (BEq.beq b__0 (0b00 : (BitVec 2)))
+  then true
+  else
+    (bif (BEq.beq b__0 (0b01 : (BitVec 2)))
+    then true
+    else
+      (bif (BEq.beq b__0 (0b10 : (BitVec 2)))
+      then true
+      else
+        (bif (BEq.beq b__0 (0b11 : (BitVec 2)))
+        then true
+        else false)))
 
 def size_bits2_forwards (arg_ : word_width) : (BitVec 2) :=
   match arg_ with
@@ -176,11 +187,16 @@ def size_bits2_forwards (arg_ : word_width) : (BitVec 2) :=
   | DOUBLE => (0b11 : (BitVec 2))
 
 def size_bits2_backwards (arg_ : (BitVec 2)) : word_width :=
-  match_bv arg_ with
-  | 00 => BYTE
-  | 01 => HALF
-  | 10 => WORD
-  | _ => DOUBLE
+  let b__0 := arg_
+  bif (BEq.beq b__0 (0b00 : (BitVec 2)))
+  then BYTE
+  else
+    (bif (BEq.beq b__0 (0b01 : (BitVec 2)))
+    then HALF
+    else
+      (bif (BEq.beq b__0 (0b10 : (BitVec 2)))
+      then WORD
+      else DOUBLE))
 
 def size_bits2_forwards_matches (arg_ : word_width) : Bool :=
   match arg_ with
@@ -188,15 +204,21 @@ def size_bits2_forwards_matches (arg_ : word_width) : Bool :=
   | HALF => true
   | WORD => true
   | DOUBLE => true
-  | _ => false
 
 def size_bits2_backwards_matches (arg_ : (BitVec 2)) : Bool :=
-  match_bv arg_ with
-  | 00 => true
-  | 01 => true
-  | 10 => true
-  | 11 => true
-  | _ => false
+  let b__0 := arg_
+  bif (BEq.beq b__0 (0b00 : (BitVec 2)))
+  then true
+  else
+    (bif (BEq.beq b__0 (0b01 : (BitVec 2)))
+    then true
+    else
+      (bif (BEq.beq b__0 (0b10 : (BitVec 2)))
+      then true
+      else
+        (bif (BEq.beq b__0 (0b11 : (BitVec 2)))
+        then true
+        else false)))
 
 def size_bits3_forwards (arg_ : word_width) : (BitVec 2) :=
   match arg_ with
@@ -206,11 +228,16 @@ def size_bits3_forwards (arg_ : word_width) : (BitVec 2) :=
   | DOUBLE => (0b11 : (BitVec 2))
 
 def size_bits3_backwards (arg_ : (BitVec 2)) : word_width :=
-  match_bv arg_ with
-  | 00 => BYTE
-  | 01 => HALF
-  | 10 => WORD
-  | _ => DOUBLE
+  let b__0 := arg_
+  bif (BEq.beq b__0 (0b00 : (BitVec 2)))
+  then BYTE
+  else
+    (bif (BEq.beq b__0 (0b01 : (BitVec 2)))
+    then HALF
+    else
+      (bif (BEq.beq b__0 (0b10 : (BitVec 2)))
+      then WORD
+      else DOUBLE))
 
 def size_bits3_forwards_matches (arg_ : word_width) : Bool :=
   match arg_ with
@@ -218,15 +245,21 @@ def size_bits3_forwards_matches (arg_ : word_width) : Bool :=
   | HALF => true
   | WORD => true
   | DOUBLE => true
-  | _ => false
 
 def size_bits3_backwards_matches (arg_ : (BitVec 2)) : Bool :=
-  match_bv arg_ with
-  | 00 => true
-  | 01 => true
-  | 10 => true
-  | 11 => true
-  | _ => false
+  let b__0 := arg_
+  bif (BEq.beq b__0 (0b00 : (BitVec 2)))
+  then true
+  else
+    (bif (BEq.beq b__0 (0b01 : (BitVec 2)))
+    then true
+    else
+      (bif (BEq.beq b__0 (0b10 : (BitVec 2)))
+      then true
+      else
+        (bif (BEq.beq b__0 (0b11 : (BitVec 2)))
+        then true
+        else false)))
 
 def initialize_registers (_ : Unit) : Unit :=
   ()

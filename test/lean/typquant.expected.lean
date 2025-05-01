@@ -50,7 +50,7 @@ namespace Out.Functions
 open virtaddr
 open option
 
-/-- Type quantifiers: k_ex749# : Bool, k_ex748# : Bool -/
+/-- Type quantifiers: k_ex761# : Bool, k_ex760# : Bool -/
 def neq_bool (x : Bool) (y : Bool) : Bool :=
   (Bool.not (BEq.beq x y))
 

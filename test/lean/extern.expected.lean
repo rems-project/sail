@@ -45,7 +45,7 @@ namespace Out.Functions
 
 open option
 
-/-- Type quantifiers: k_ex1150# : Bool, k_ex1149# : Bool -/
+/-- Type quantifiers: k_ex1162# : Bool, k_ex1161# : Bool -/
 def neq_bool (x : Bool) (y : Bool) : Bool :=
   (Bool.not (BEq.beq x y))
 
@@ -166,12 +166,10 @@ def sep_backwards (arg_ : String) : SailM Unit := do
 def sep_forwards_matches (arg_ : Unit) : Bool :=
   match arg_ with
   | () => true
-  | _ => false
 
 def sep_backwards_matches (arg_ : String) : SailM Bool := do
   match arg_ with
   | _ => throw Error.Exit
-  | _ => (pure false)
 
 def extern_add (_ : Unit) : Int :=
   (5 +i 4)
