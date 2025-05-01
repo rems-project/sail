@@ -829,7 +829,8 @@ module Make (C : CONFIG) = struct
                     rest;
                 ]
               )
-              [] members
+              [ibad_config l]
+              members
           in
           ( [idecl l enum_ctyp enum_name; idecl l CT_string enum_str]
             @ setup
