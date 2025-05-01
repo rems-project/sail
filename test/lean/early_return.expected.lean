@@ -363,7 +363,8 @@ def while_inner_earlyreturnpure_catch (n : Nat) : Bool := ExceptM.run do
 
 def match_early_return (x : E) : SailM E := SailME.run do
   match x with
-  | A => throw (← do
+  | A =>
+    throw (← do
         readReg r_A)
   | B => writeReg r_B A
   | C => writeReg r_C A
@@ -377,7 +378,8 @@ def match_early_return_inloop (x : E) : SailM E := SailME.run do
     let () := loop_vars
     loop_vars ← do
       match x with
-      | A => throw (← do
+      | A =>
+        throw (← do
             readReg r_A)
       | B => writeReg r_B A
       | C => writeReg r_C A
@@ -393,7 +395,8 @@ def match_early_return_inloop_2 (x : E) : SailM E := SailME.run do
     loop_vars ← do
       let y ← (( do
         match x with
-        | A => throw (← do
+        | A =>
+          throw (← do
               readReg r_A)
         | B => readReg r_B
         | C => readReg r_C ) : SailME _ E )
