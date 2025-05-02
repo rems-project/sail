@@ -47,7 +47,7 @@ open option
 
 /-- Type quantifiers: k_ex1669# : Bool, k_ex1668# : Bool -/
 def neq_bool (x : Bool) (y : Bool) : Bool :=
-  (Bool.not (BEq.beq x y))
+  (! (x == y))
 
 /-- Type quantifiers: x : Int -/
 def __id (x : Int) : Int :=
@@ -85,10 +85,10 @@ def _shr_int_general (m : Int) (n : Int) : Int :=
 
 /-- Type quantifiers: m : Int, n : Int -/
 def fdiv_int (n : Int) (m : Int) : Int :=
-  bif (Bool.and (n <b 0) (m >b 0))
+  bif ((n <b 0) && (m >b 0))
   then ((Int.tdiv (n +i 1) m) -i 1)
   else
-    (bif (Bool.and (n >b 0) (m <b 0))
+    (bif ((n >b 0) && (m <b 0))
     then ((Int.tdiv (n -i 1) m) -i 1)
     else (Int.tdiv n m))
 
@@ -117,44 +117,43 @@ def concat_str_dec (str : String) (x : Int) : String :=
   (HAppend.hAppend str (Int.repr x))
 
 def decode (v__0 : (BitVec 32)) : Bool :=
-  bif (Bool.and (BEq.beq (Sail.BitVec.extractLsb v__0 31 24) (0xF8 : (BitVec 8)))
-       (Bool.and (BEq.beq (Sail.BitVec.extractLsb v__0 21 21) (0b1 : (BitVec 1)))
-         (BEq.beq (Sail.BitVec.extractLsb v__0 11 10) (0b10 : (BitVec 2)))))
+  bif (((Sail.BitVec.extractLsb v__0 31 24) == (0xF8 : (BitVec 8))) && (((Sail.BitVec.extractLsb
+             v__0 21 21) == (0b1 : (BitVec 1))) && ((Sail.BitVec.extractLsb v__0 11 10) == (0b10 : (BitVec 2)))))
   then
     (let Rn : (BitVec 5) := (Sail.BitVec.extractLsb v__0 9 5)
     let Rm : (BitVec 5) := (Sail.BitVec.extractLsb v__0 20 16)
-    bif (BEq.beq Rm Rn)
+    bif (Rm == Rn)
     then true
     else false)
   else
-    (bif (BEq.beq (Sail.BitVec.extractLsb v__0 30 24) (0b1001010 : (BitVec 7)))
+    (bif ((Sail.BitVec.extractLsb v__0 30 24) == (0b1001010 : (BitVec 7)))
     then
       (let Rn : (BitVec 5) := (Sail.BitVec.extractLsb v__0 9 5)
       let Rd : (BitVec 5) := (Sail.BitVec.extractLsb v__0 4 0)
-      bif (BEq.beq Rn Rd)
+      bif (Rn == Rd)
       then true
       else false)
     else
-      (bif (Bool.and (BEq.beq (Sail.BitVec.extractLsb v__0 31 12) (0xD5033 : (BitVec 20)))
-           (BEq.beq (Sail.BitVec.extractLsb v__0 7 0) (0xBF : (BitVec 8))))
+      (bif (((Sail.BitVec.extractLsb v__0 31 12) == (0xD5033 : (BitVec 20))) && ((Sail.BitVec.extractLsb
+               v__0 7 0) == (0xBF : (BitVec 8))))
       then true
       else
-        (bif (BEq.beq (Sail.BitVec.extractLsb v__0 31 24) (0xB4 : (BitVec 8)))
+        (bif ((Sail.BitVec.extractLsb v__0 31 24) == (0xB4 : (BitVec 8)))
         then false
         else true)))
 
 def xlen := 32
 
 def write_CSR (v__26 : (BitVec 12)) : SailM Bool := do
-  bif (Bool.and (BEq.beq (Sail.BitVec.extractLsb v__26 11 5) (0b1011000 : (BitVec 7)))
-       (let index : (BitVec 5) := (Sail.BitVec.extractLsb v__26 4 0)
+  bif (((Sail.BitVec.extractLsb v__26 11 5) == (0b1011000 : (BitVec 7))) && (let index : (BitVec 5) :=
+         (Sail.BitVec.extractLsb v__26 4 0)
        ((BitVec.toNat index) ≥b 3) : Bool))
   then (pure true)
   else
     (do
-      bif (Bool.and (BEq.beq (Sail.BitVec.extractLsb v__26 11 5) (0b1011100 : (BitVec 7)))
-           (let index : (BitVec 5) := (Sail.BitVec.extractLsb v__26 4 0)
-           (Bool.and (BEq.beq xlen 32) (((BitVec.toNat index) ≥b 3) : Bool))))
+      bif (((Sail.BitVec.extractLsb v__26 11 5) == (0b1011100 : (BitVec 7))) && (let index : (BitVec 5) :=
+             (Sail.BitVec.extractLsb v__26 4 0)
+           ((xlen == 32) && (((BitVec.toNat index) ≥b 3) : Bool))))
       then (pure true)
       else
         (do
@@ -162,9 +161,9 @@ def write_CSR (v__26 : (BitVec 12)) : SailM Bool := do
           throw Error.Exit))
 
 def write_CSR2 (v__30 : (BitVec 12)) : SailM Bool := do
-  bif (Bool.and (BEq.beq (Sail.BitVec.extractLsb v__30 11 5) (0b1011100 : (BitVec 7)))
-       (let index : (BitVec 5) := (Sail.BitVec.extractLsb v__30 4 0)
-       (Bool.and (BEq.beq xlen 32) (((BitVec.toNat index) ≥b 3) : Bool))))
+  bif (((Sail.BitVec.extractLsb v__30 11 5) == (0b1011100 : (BitVec 7))) && (let index : (BitVec 5) :=
+         (Sail.BitVec.extractLsb v__30 4 0)
+       ((xlen == 32) && (((BitVec.toNat index) ≥b 3) : Bool))))
   then (pure true)
   else
     (do

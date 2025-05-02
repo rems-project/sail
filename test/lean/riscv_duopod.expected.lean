@@ -79,7 +79,7 @@ open Register
 
 /-- Type quantifiers: k_ex1030# : Bool, k_ex1029# : Bool -/
 def neq_bool (x : Bool) (y : Bool) : Bool :=
-  (Bool.not (BEq.beq x y))
+  (! (x == y))
 
 /-- Type quantifiers: x : Int -/
 def __id (x : Int) : Int :=
@@ -117,10 +117,10 @@ def _shr_int_general (m : Int) (n : Int) : Int :=
 
 /-- Type quantifiers: m : Int, n : Int -/
 def fdiv_int (n : Int) (m : Int) : Int :=
-  bif (Bool.and (n <b 0) (m >b 0))
+  bif ((n <b 0) && (m >b 0))
   then ((Int.tdiv (n +i 1) m) -i 1)
   else
-    (bif (Bool.and (n >b 0) (m <b 0))
+    (bif ((n >b 0) && (m <b 0))
     then ((Int.tdiv (n -i 1) m) -i 1)
     else (Int.tdiv n m))
 
@@ -162,12 +162,12 @@ def zeros (n : Nat) : (BitVec n) :=
 
 def rX (r : (BitVec 5)) : SailM (BitVec 64) := do
   let b__0 := r
-  bif (BEq.beq b__0 (0b00000 : (BitVec 5)))
+  bif (b__0 == (0b00000 : (BitVec 5)))
   then (pure (EXTZ (m := 64) (0x0 : (BitVec 4))))
   else (pure (GetElem?.getElem! (← readReg Xs) (BitVec.toNat r)))
 
 def wX (r : (BitVec 5)) (v : (BitVec 64)) : SailM Unit := do
-  bif (bne r (0b00000 : (BitVec 5)))
+  bif (r != (0b00000 : (BitVec 5)))
   then writeReg Xs (vectorUpdate (← readReg Xs) (BitVec.toNat r) v)
   else (pure ())
 
@@ -218,8 +218,8 @@ def execute (merge_var : ast) : SailM Unit := do
   | .LOAD (imm, rs1, rd) => (execute_LOAD imm rs1 rd)
 
 def decode (v__0 : (BitVec 32)) : (Option ast) :=
-  bif (Bool.and (BEq.beq (Sail.BitVec.extractLsb v__0 14 12) (0b000 : (BitVec 3)))
-       (BEq.beq (Sail.BitVec.extractLsb v__0 6 0) (0b0010011 : (BitVec 7))))
+  bif (((Sail.BitVec.extractLsb v__0 14 12) == (0b000 : (BitVec 3))) && ((Sail.BitVec.extractLsb
+           v__0 6 0) == (0b0010011 : (BitVec 7))))
   then
     (let imm : (BitVec 12) := (Sail.BitVec.extractLsb v__0 31 20)
     let rs1 : regbits := (Sail.BitVec.extractLsb v__0 19 15)
@@ -227,8 +227,8 @@ def decode (v__0 : (BitVec 32)) : (Option ast) :=
     let imm : (BitVec 12) := (Sail.BitVec.extractLsb v__0 31 20)
     (some (ITYPE (imm, rs1, rd, RISCV_ADDI))))
   else
-    (bif (Bool.and (BEq.beq (Sail.BitVec.extractLsb v__0 14 12) (0b011 : (BitVec 3)))
-         (BEq.beq (Sail.BitVec.extractLsb v__0 6 0) (0b0000011 : (BitVec 7))))
+    (bif (((Sail.BitVec.extractLsb v__0 14 12) == (0b011 : (BitVec 3))) && ((Sail.BitVec.extractLsb
+             v__0 6 0) == (0b0000011 : (BitVec 7))))
     then
       (let imm : (BitVec 12) := (Sail.BitVec.extractLsb v__0 31 20)
       let rs1 : regbits := (Sail.BitVec.extractLsb v__0 19 15)
