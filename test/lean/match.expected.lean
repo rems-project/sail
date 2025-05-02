@@ -61,7 +61,7 @@ open option
 open Register
 open E
 
-/-- Type quantifiers: k_ex824# : Bool, k_ex823# : Bool -/
+/-- Type quantifiers: k_ex803# : Bool, k_ex802# : Bool -/
 def neq_bool (x : Bool) (y : Bool) : Bool :=
   (Bool.not (BEq.beq x y))
 
@@ -198,10 +198,7 @@ def match_width (x : (BitVec k_n)) : (BitVec (2 * k_n)) :=
 
 def match_option_bitvec (x : (Option (BitVec 16))) : Int :=
   match x with
-  | .some b__0 =>
-    (bif (BEq.beq b__0 (0xFFFF : (BitVec 16)))
-    then 1
-    else 0)
+  | .some 0b1111111111111111 => 1
   | _ => 0
 
 def initialize_registers (_ : Unit) : SailM Unit := do
