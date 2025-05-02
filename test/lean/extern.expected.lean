@@ -47,7 +47,7 @@ open option
 
 /-- Type quantifiers: k_ex1162# : Bool, k_ex1161# : Bool -/
 def neq_bool (x : Bool) (y : Bool) : Bool :=
-  (Bool.not (BEq.beq x y))
+  (! (x == y))
 
 /-- Type quantifiers: x : Int -/
 def __id (x : Int) : Int :=
@@ -85,10 +85,10 @@ def _shr_int_general (m : Int) (n : Int) : Int :=
 
 /-- Type quantifiers: m : Int, n : Int -/
 def fdiv_int (n : Int) (m : Int) : Int :=
-  bif (Bool.and (n <b 0) (m >b 0))
+  bif ((n <b 0) && (m >b 0))
   then ((Int.tdiv (n +i 1) m) -i 1)
   else
-    (bif (Bool.and (n >b 0) (m <b 0))
+    (bif ((n >b 0) && (m <b 0))
     then ((Int.tdiv (n -i 1) m) -i 1)
     else (Int.tdiv n m))
 
@@ -127,7 +127,7 @@ def spc_backwards (x_0 : String) : Unit :=
 
 def spc_backwards_matches (s : String) : Bool :=
   let len := (String.length s)
-  (Bool.and (BEq.beq (String.leadingSpaces s) len) (len >b 0))
+  (((String.leadingSpaces s) == len) && (len >b 0))
 
 def opt_spc_forwards (_ : Unit) : String :=
   ""
@@ -139,7 +139,7 @@ def opt_spc_backwards (x_0 : String) : Unit :=
   ()
 
 def opt_spc_backwards_matches (s : String) : Bool :=
-  (BEq.beq (String.leadingSpaces s) (String.length s))
+  ((String.leadingSpaces s) == (String.length s))
 
 def def_spc_forwards (_ : Unit) : String :=
   " "
@@ -151,7 +151,7 @@ def def_spc_backwards (x_0 : String) : Unit :=
   ()
 
 def def_spc_backwards_matches (s : String) : Bool :=
-  (BEq.beq (String.leadingSpaces s) (String.length s))
+  ((String.leadingSpaces s) == (String.length s))
 
 def sep_forwards (arg_ : Unit) : String :=
   match arg_ with
@@ -223,28 +223,28 @@ def extern_abs_int_plain (_ : Unit) : Int :=
   (Sail.Int.intAbs x)
 
 def extern_eq_unit (_ : Unit) : Bool :=
-  (BEq.beq () ())
+  (() == ())
 
 def extern_eq_bit (_ : Unit) : Bool :=
-  (BEq.beq 0#1 1#1)
+  (0#1 == 1#1)
 
 def extern_not (_ : Unit) : Bool :=
-  (Bool.not true)
+  (! true)
 
 def extern_and (_ : Unit) : Bool :=
-  (Bool.and true false)
+  (true && false)
 
 def extern_and_no_flow (_ : Unit) : Bool :=
-  (Bool.and true false)
+  (true && false)
 
 def extern_or (_ : Unit) : Bool :=
-  (Bool.or true false)
+  (true || false)
 
 def extern_eq_bool (_ : Unit) : Bool :=
-  (BEq.beq true false)
+  (true == false)
 
 def extern_eq_int (_ : Unit) : Bool :=
-  (BEq.beq 5 4)
+  (5 == 4)
 
 def extern_lteq_int (_ : Unit) : Bool :=
   (5 ≤b 4)
@@ -259,7 +259,7 @@ def extern_gt_int (_ : Unit) : Bool :=
   (5 >b 4)
 
 def extern_eq_anything (_ : Unit) : Bool :=
-  (BEq.beq true true)
+  (true == true)
 
 def extern_vector_update (_ : Unit) : (Vector Int 5) :=
   (vectorUpdate #v[23, 23, 23, 23, 23] 2 42)
@@ -280,7 +280,7 @@ def extern_string_startswith (_ : Unit) : Bool :=
   (String.startsWith "Hello, world" "Hello")
 
 def extern_eq_string (_ : Unit) : Bool :=
-  (BEq.beq "Hello" "world")
+  ("Hello" == "world")
 
 def extern_concat_str (_ : Unit) : String :=
   (HAppend.hAppend "Hello, " "world")

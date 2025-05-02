@@ -51,7 +51,7 @@ open option
 
 /-- Type quantifiers: k_ex852# : Bool, k_ex851# : Bool -/
 def neq_bool (x : Bool) (y : Bool) : Bool :=
-  (Bool.not (BEq.beq x y))
+  (! (x == y))
 
 /-- Type quantifiers: x : Int -/
 def __id (x : Int) : Int :=
@@ -89,10 +89,10 @@ def _shr_int_general (m : Int) (n : Int) : Int :=
 
 /-- Type quantifiers: m : Int, n : Int -/
 def fdiv_int (n : Int) (m : Int) : Int :=
-  bif (Bool.and (n <b 0) (m >b 0))
+  bif ((n <b 0) && (m >b 0))
   then ((Int.tdiv (n +i 1) m) -i 1)
   else
-    (bif (Bool.and (n >b 0) (m <b 0))
+    (bif ((n >b 0) && (m <b 0))
     then ((Int.tdiv (n -i 1) m) -i 1)
     else (Int.tdiv n m))
 
@@ -147,13 +147,13 @@ def size_bits_forwards (arg_ : word_width) : (BitVec 2) :=
 
 def size_bits_backwards (arg_ : (BitVec 2)) : word_width :=
   let b__0 := arg_
-  bif (BEq.beq b__0 (0b00 : (BitVec 2)))
+  bif (b__0 == (0b00 : (BitVec 2)))
   then BYTE
   else
-    (bif (BEq.beq b__0 (0b01 : (BitVec 2)))
+    (bif (b__0 == (0b01 : (BitVec 2)))
     then HALF
     else
-      (bif (BEq.beq b__0 (0b10 : (BitVec 2)))
+      (bif (b__0 == (0b10 : (BitVec 2)))
       then WORD
       else DOUBLE))
 
@@ -166,16 +166,16 @@ def size_bits_forwards_matches (arg_ : word_width) : Bool :=
 
 def size_bits_backwards_matches (arg_ : (BitVec 2)) : Bool :=
   let b__0 := arg_
-  bif (BEq.beq b__0 (0b00 : (BitVec 2)))
+  bif (b__0 == (0b00 : (BitVec 2)))
   then true
   else
-    (bif (BEq.beq b__0 (0b01 : (BitVec 2)))
+    (bif (b__0 == (0b01 : (BitVec 2)))
     then true
     else
-      (bif (BEq.beq b__0 (0b10 : (BitVec 2)))
+      (bif (b__0 == (0b10 : (BitVec 2)))
       then true
       else
-        (bif (BEq.beq b__0 (0b11 : (BitVec 2)))
+        (bif (b__0 == (0b11 : (BitVec 2)))
         then true
         else false)))
 
@@ -188,13 +188,13 @@ def size_bits2_forwards (arg_ : word_width) : (BitVec 2) :=
 
 def size_bits2_backwards (arg_ : (BitVec 2)) : word_width :=
   let b__0 := arg_
-  bif (BEq.beq b__0 (0b00 : (BitVec 2)))
+  bif (b__0 == (0b00 : (BitVec 2)))
   then BYTE
   else
-    (bif (BEq.beq b__0 (0b01 : (BitVec 2)))
+    (bif (b__0 == (0b01 : (BitVec 2)))
     then HALF
     else
-      (bif (BEq.beq b__0 (0b10 : (BitVec 2)))
+      (bif (b__0 == (0b10 : (BitVec 2)))
       then WORD
       else DOUBLE))
 
@@ -207,16 +207,16 @@ def size_bits2_forwards_matches (arg_ : word_width) : Bool :=
 
 def size_bits2_backwards_matches (arg_ : (BitVec 2)) : Bool :=
   let b__0 := arg_
-  bif (BEq.beq b__0 (0b00 : (BitVec 2)))
+  bif (b__0 == (0b00 : (BitVec 2)))
   then true
   else
-    (bif (BEq.beq b__0 (0b01 : (BitVec 2)))
+    (bif (b__0 == (0b01 : (BitVec 2)))
     then true
     else
-      (bif (BEq.beq b__0 (0b10 : (BitVec 2)))
+      (bif (b__0 == (0b10 : (BitVec 2)))
       then true
       else
-        (bif (BEq.beq b__0 (0b11 : (BitVec 2)))
+        (bif (b__0 == (0b11 : (BitVec 2)))
         then true
         else false)))
 
@@ -229,13 +229,13 @@ def size_bits3_forwards (arg_ : word_width) : (BitVec 2) :=
 
 def size_bits3_backwards (arg_ : (BitVec 2)) : word_width :=
   let b__0 := arg_
-  bif (BEq.beq b__0 (0b00 : (BitVec 2)))
+  bif (b__0 == (0b00 : (BitVec 2)))
   then BYTE
   else
-    (bif (BEq.beq b__0 (0b01 : (BitVec 2)))
+    (bif (b__0 == (0b01 : (BitVec 2)))
     then HALF
     else
-      (bif (BEq.beq b__0 (0b10 : (BitVec 2)))
+      (bif (b__0 == (0b10 : (BitVec 2)))
       then WORD
       else DOUBLE))
 
@@ -248,16 +248,16 @@ def size_bits3_forwards_matches (arg_ : word_width) : Bool :=
 
 def size_bits3_backwards_matches (arg_ : (BitVec 2)) : Bool :=
   let b__0 := arg_
-  bif (BEq.beq b__0 (0b00 : (BitVec 2)))
+  bif (b__0 == (0b00 : (BitVec 2)))
   then true
   else
-    (bif (BEq.beq b__0 (0b01 : (BitVec 2)))
+    (bif (b__0 == (0b01 : (BitVec 2)))
     then true
     else
-      (bif (BEq.beq b__0 (0b10 : (BitVec 2)))
+      (bif (b__0 == (0b10 : (BitVec 2)))
       then true
       else
-        (bif (BEq.beq b__0 (0b11 : (BitVec 2)))
+        (bif (b__0 == (0b11 : (BitVec 2)))
         then true
         else false)))
 

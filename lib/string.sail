@@ -52,7 +52,7 @@ $include <arith.sail>
 val eq_string = pure {
    lem: "eq",
    coq: "generic_eq",
-   lean: "BEq.beq",
+   lean: "_lean_beq",
    _: "eq_string"} : (string, string) -> bool
 
 overload operator == = {eq_string}

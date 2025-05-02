@@ -59,7 +59,7 @@ open Register
 
 /-- Type quantifiers: k_ex805# : Bool, k_ex804# : Bool -/
 def neq_bool (x : Bool) (y : Bool) : Bool :=
-  (Bool.not (BEq.beq x y))
+  (! (x == y))
 
 /-- Type quantifiers: x : Int -/
 def __id (x : Int) : Int :=
@@ -97,10 +97,10 @@ def _shr_int_general (m : Int) (n : Int) : Int :=
 
 /-- Type quantifiers: m : Int, n : Int -/
 def fdiv_int (n : Int) (m : Int) : Int :=
-  bif (Bool.and (n <b 0) (m >b 0))
+  bif ((n <b 0) && (m >b 0))
   then ((Int.tdiv (n +i 1) m) -i 1)
   else
-    (bif (Bool.and (n >b 0) (m <b 0))
+    (bif ((n >b 0) && (m <b 0))
     then ((Int.tdiv (n -i 1) m) -i 1)
     else (Int.tdiv n m))
 
@@ -130,10 +130,10 @@ def concat_str_dec (str : String) (x : Int) : String :=
 
 /-- Type quantifiers: n : Nat, 0 ≤ n -/
 def elif (n : Nat) : (BitVec 1) :=
-  bif (BEq.beq n 0)
+  bif (n == 0)
   then 1#1
   else
-    (bif (BEq.beq n 1)
+    (bif (n == 1)
     then 1#1
     else 0#1)
 
@@ -146,7 +146,7 @@ def monadic_in_out (n : Nat) : SailM Nat := do
 
 /-- Type quantifiers: n : Nat, 0 ≤ n -/
 def monadic_lines (n : Nat) : SailM Unit := do
-  let b := (BEq.beq n 0)
+  let b := (n == 0)
   bif b
   then
     (do

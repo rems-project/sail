@@ -12,6 +12,8 @@ open Pretty_print_common
 (* Command line options *)
 let opt_extern_types : string list ref = ref []
 
+let opt_line_width : int ref = ref 100
+
 type global_context = {
   effect_info : Effects.side_effect_info;
   fun_args : string list Bindings.t;
@@ -86,7 +88,7 @@ let rec fix_id name =
   match name with
   (* Lean keywords to avoid, to expand as needed *)
   | "_lean_wildcard" -> "_"
-  | "rec" | "def" | "at" -> name ^ "'"
+  | "rec" | "def" | "at" | "alias" | "break" -> name ^ "'"
   | "main" ->
       the_main_function_has_been_seen := true;
       "sail_main"
@@ -586,6 +588,11 @@ let rec doc_implicit_args ?(docs = []) ns ims d_args =
 
 let op_of_id id =
   match id with
+  | Some "_lean_and" -> `Binop "&&"
+  | Some "_lean_or" -> `Binop "||"
+  | Some "_lean_beq" -> `Binop "=="
+  | Some "_lean_bne" -> `Binop "!="
+  | Some "_lean_not" -> `Unop "!"
   | Some "_lean_add" -> `Binop "+"
   | Some "_lean_addi" -> `Binop "+i"
   | Some "_lean_sub" -> `Binop "-"
@@ -603,8 +610,8 @@ let op_of_id id =
   | Some "_lean_ge" -> `Binop "≥b"
   | Some "_lean_le" -> `Binop "≤b"
   | Some "_lean_gt" -> `Binop ">b"
-  | Some "_lean_pow2" -> `Unnop "2 ^"
-  | Some "_lean_pow2i" -> `Unnop "2 ^i"
+  | Some "_lean_pow2" -> `Unop "2 ^"
+  | Some "_lean_pow2i" -> `Unop "2 ^i"
   | _ -> `NotOp
 
 let unnop_of_id id = match id with Some "_lean_pow2" -> Some "2 ^ " | _ -> None
@@ -840,7 +847,7 @@ and doc_exp (as_monadic : bool) ctx (E_aux (e, (l, annot)) as full_exp) =
           let e2 = List.nth d_args 1 in
           let res = e1 ^^ space ^^ string op ^^ space ^^ e2 in
           wrap_with_pure as_monadic (parens res) |> nest 2
-      | `Unnop op ->
+      | `Unop op ->
           let e = List.nth d_args 0 in
           let res = string op ^^ space ^^ e in
           wrap_with_pure as_monadic (parens res) |> nest 2
@@ -1433,5 +1440,5 @@ let pp_ast_lean (env : Type_check.env) effect_info ({ defs; _ } as ast : Libsail
       (fun file defs -> print file (separate hardline (remove_empties [opens; defs])))
       imp_funcs_files imp_fundefss
   in
-  print funcs_file (separate hardline (remove_empties ([opens; main_fundefs] @ main_function)));
+  print ~len:!opt_line_width funcs_file (separate hardline (remove_empties ([opens; main_fundefs] @ main_function)));
   !the_main_function_has_been_seen
