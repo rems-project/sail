@@ -99,3 +99,29 @@ function while_print_long() = {
   print_int("i = ", this_is_a_very_long_variable_name_to_stress_the_formatting)
 }
 
+val nothing : unit -> unit
+function nothing() : unit = ()
+
+val foreachpure : (int, int) -> unit
+function foreachpure (n : int, m : int) = {
+  x : int = n;
+  foreach (rr from 0 to (m - 1) by 1 in inc) {
+    let 'vec = n in
+      {
+          foreach (i from 0 to (m - 1) by 1 in inc) { nothing(); }
+      };
+    x = x + 1;
+  }
+}
+
+val foreachnotsopure : (nat, int) -> unit
+function foreachnotsopure (n : nat, m : int) = {
+  x : nat = n;
+  foreach (rr from 0 to (m - 1) by 1 in inc) {
+    let 'vec = n in
+      {
+          foreach (i from 0 to (m - 1) by 1 in inc) { r = x; }
+      };
+    x = x + 1;
+  }
+}
