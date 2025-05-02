@@ -81,6 +81,17 @@ def SailME.run (m : SailME α α) : SailM α := do
     | .error e => pure e
     | .ok e => pure e
 
+def _root_.ExceptT.map_error [Monad m] (e : ExceptT ε m α) (f : ε → ε') : ExceptT ε' m α :=
+  ExceptT.mk <| do
+    match ← e.run with
+    | .ok x => pure $ .ok x
+    | .error e => pure $ .error (f e)
+
+instance [∀ x, CoeT α x α'] : CoeT (SailME α β) e (SailME α' β) where
+  coe := e.map_error (fun x => x)
+
+def SailME.throw (e : α) : SailME α β := MonadExcept.throw e
+
 abbrev ExceptM α := ExceptT α Id
 
 def ExceptM.run (m : ExceptM α α) : α :=

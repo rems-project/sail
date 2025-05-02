@@ -38,7 +38,8 @@ type context = {
   kid_id_renames_rev : kid Bindings.t;  (** Inverse of the [kid_id_renames] mapping. *)
   mutable loop_level : int;
   in_sail_monad : bool;  (** Indicates whether we are in an expression of `SailM _` *)
-  in_except_monad : bool;  (** Indicates whether we are in an expression of `ExceptM _ _` *)
+  in_except_monad : document option;
+      (** Indicates whether we are in an expression of `ExceptM _ _` what the return type is. *)
 }
 
 let context_init env global =
@@ -49,7 +50,7 @@ let context_init env global =
     kid_id_renames_rev = global.kid_id_renames_rev;
     loop_level = 0;
     in_sail_monad = false;
-    in_except_monad = false;
+    in_except_monad = None;
   }
 let context_with_env ctx env = { ctx with env }
 
@@ -652,10 +653,10 @@ let name_loop_vars ctx =
 
 let prepend_monad ctx exp doc =
   match (ctx.in_sail_monad, ctx.in_except_monad) with
-  | true, true -> [string "SailME"; string "_"; doc]
-  | true, false -> [string "SailM"; doc]
-  | false, true -> [string "ExceptM"; string "_"; doc]
-  | false, false -> [string "Id"; doc]
+  | true, Some ty -> [string "SailME"; ty; doc]
+  | true, None -> [string "SailM"; doc]
+  | false, Some ty -> [string "ExceptM"; ty; doc]
+  | false, None -> [string "Id"; doc]
 
 let rec doc_match_clause (as_monadic : bool) ctx (Pat_aux (cl, l)) =
   match cl with
@@ -819,7 +820,9 @@ and doc_exp (as_monadic : bool) ctx (E_aux (e, (l, annot)) as full_exp) =
           separate hardline [vars_dec_pp; full_loop; wrap_with_pure as_monadic vars_pp]
       | _ -> raise (Reporting.err_unreachable l __POS__ "Unexpected number of arguments for loop combinator")
     end
-  | E_app ((Id_aux (Id "early_return", _) as f), [arg]) -> nest 2 (string "throw " ^^ d_of_arg ctx arg)
+  | E_app ((Id_aux (Id "early_return", _) as f), [arg]) ->
+      let throw = if ctx.in_sail_monad then string "SailME.throw " else string "throw " in
+      nest 2 (throw ^^ d_of_arg ctx arg)
   | E_app (f, args) -> (
       let _, f_typ = Env.get_val_spec f env in
       let implicits = get_fn_implicits f_typ in
@@ -1041,12 +1044,12 @@ let doc_funcl_init global (FCL_aux (FCL_funcl (id, pexp), annot)) =
   in
   let typ_quant_comment = doc_typ_quant_in_comment ctx tq_all in
   (* Use auto-implicits for type quanitifiers for now and see if this works *)
-  let doc_ret_typ = doc_typ ctx ret_typ in
+  let doc_ret_typ_orig = doc_typ ctx ret_typ in
   let is_monadic = effectful (effect_of exp) in
   let early_return = has_early_return exp in
   let has_loop = has_loop exp in
   (* Add monad for stateful functions *)
-  let doc_ret_typ = if is_monadic then string "SailM " ^^ doc_ret_typ else doc_ret_typ in
+  let doc_ret_typ = if is_monadic then string "SailM " ^^ doc_ret_typ_orig else doc_ret_typ_orig in
   let decl_val = [doc_ret_typ; coloneq] in
   (* Add do block for stateful functions *)
   let dec_val_end =
@@ -1057,7 +1060,9 @@ let doc_funcl_init global (FCL_aux (FCL_funcl (id, pexp), annot)) =
     | false, true, _ -> [string "ExceptM.run"; string "do"]
     | _ -> []
   in
-  let ctx = { ctx with in_sail_monad = is_monadic; in_except_monad = early_return } in
+  let ctx =
+    { ctx with in_sail_monad = is_monadic; in_except_monad = (if early_return then Some doc_ret_typ_orig else None) }
+  in
   let decl_val = decl_val @ dec_val_end in
   let computability = if IdSet.mem id !opt_noncomputable_functions then string "noncomputable" else empty in
   ( typ_quant_comment,
