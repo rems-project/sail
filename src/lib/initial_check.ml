@@ -66,7 +66,11 @@ module StringMap = Map.Make (String)
    $sail_internal marked files in the prelude. *)
 let reserved_type_ids = IdSet.of_list [mk_id "result"; mk_id "option"]
 
-type type_constructor = P.kind_aux list * P.kind_aux
+type type_constructor_arg = Vector_len | Kind of P.kind_aux
+
+let arg_to_kind = function Vector_len -> if !opt_strict_bitvector then P.K_nat else P.K_int | Kind k -> k
+
+type type_constructor = type_constructor_arg list * P.kind_aux
 
 type ctx = {
   kinds : (kind_aux * P.l) KBindings.t;
@@ -81,6 +85,11 @@ type ctx = {
 }
 
 type 'a ctx_out = 'a * ctx
+
+let get_type_constructor id ctx =
+  match Bindings.find_opt id ctx.type_constructors with
+  | None -> None
+  | Some (arg_kinds, ret_kind) -> Some (List.map arg_to_kind arg_kinds, ret_kind)
 
 let rec equal_ctx ctx1 ctx2 =
   KBindings.equal ( = ) ctx1.kinds ctx2.kinds
@@ -168,7 +177,7 @@ let to_ast_kind (P.K_aux (k, l)) =
   | P.K_bool -> Some (K_aux (K_bool, l))
 
 let parse_kind_constraint l v = function
-  | P.K_nat when !opt_strict_bitvector ->
+  | P.K_nat ->
       let v = Nexp_aux (Nexp_var v, kid_loc v) in
       Some (NC_aux (NC_ge (v, Nexp_aux (Nexp_constant Big_int.zero, l)), l))
   | _ -> None
@@ -180,7 +189,7 @@ let filter_order_kinds kinds = List.filter not_order_kind kinds
 let string_of_parse_kind_aux = function
   | P.K_order -> "Order"
   | P.K_int -> "Int"
-  | P.K_nat -> if !opt_strict_bitvector then "Nat" else "Int"
+  | P.K_nat -> "Nat"
   | P.K_bool -> "Bool"
   | P.K_type -> "Type"
 
@@ -548,7 +557,7 @@ module KindInference = struct
     | P.ATyp_app (id, args) ->
         let id' = to_ast_id ctx id in
         let* args =
-          match Bindings.find_opt id' ctx.type_constructors with
+          match get_type_constructor id' ctx with
           | None ->
               raise (ksprintf (Reporting.err_typ l) "Unknown type level operator or function %s" (string_of_id id'))
           | Some (kinds, ret_kind) ->
@@ -878,7 +887,7 @@ module ConvertType = struct
     | P.ATyp_app (id, args) ->
         let id = to_ast_id ctx id in
         begin
-          match Bindings.find_opt id ctx.type_constructors with
+          match get_type_constructor id ctx with
           | None -> raise (Reporting.err_typ l (sprintf "Could not find type constructor %s" (string_of_id id)))
           | Some (kinds, _) ->
               let non_order_kinds = List.filter_map to_ast_kind_aux kinds in
@@ -984,7 +993,7 @@ module ConvertType = struct
               | "|" -> NC_or (to_ast_constraint kenv ctx t1, to_ast_constraint kenv ctx t2)
               | _ -> (
                   let id = to_ast_id ctx id in
-                  match Bindings.find_opt id ctx.type_constructors with
+                  match get_type_constructor id ctx with
                   | None -> raise (Reporting.err_typ l (sprintf "Could not find type constructor %s" (string_of_id id)))
                   | Some (kinds, _) ->
                       let non_order_kinds = List.filter_map to_ast_kind_aux kinds in
@@ -1002,7 +1011,7 @@ module ConvertType = struct
           | P.ATyp_app (id, args) ->
               let id = to_ast_id ctx id in
               begin
-                match Bindings.find_opt id ctx.type_constructors with
+                match get_type_constructor id ctx with
                 | None -> raise (Reporting.err_typ l (sprintf "Could not find type constructor %s" (string_of_id id)))
                 | Some (kinds, _) ->
                     let non_order_kinds = List.filter_map to_ast_kind_aux kinds in
@@ -1529,7 +1538,7 @@ let rec to_ast_range ctx (P.BF_aux (r, l)) =
     )
 
 let add_constructor id typq kind ctx =
-  let kinds = List.map (fun kopt -> to_parse_kind (Some (unaux_kind (kopt_kind kopt)))) (quant_kopts typq) in
+  let kinds = List.map (fun kopt -> Kind (to_parse_kind (Some (unaux_kind (kopt_kind kopt))))) (quant_kopts typq) in
   { ctx with type_constructors = Bindings.add id (kinds, to_parse_kind (Some kind)) ctx.type_constructors }
 
 let anon_rec_constructor_typ record_id = function
@@ -1704,7 +1713,9 @@ let rec to_ast_typedef ctx def_annot (P.TD_aux (aux, l) : P.type_def) : untyped_
               {
                 ctx with
                 type_constructors =
-                  Bindings.add id (inference_kinds, to_parse_kind (Some (unaux_kind kind))) ctx.type_constructors;
+                  Bindings.add id
+                    (List.map (fun k -> Kind k) inference_kinds, to_parse_kind (Some (unaux_kind kind)))
+                    ctx.type_constructors;
               }
             )
         | None ->
@@ -2185,20 +2196,20 @@ let initial_ctx =
           ("string", ([], P.K_type));
           ("string_literal", ([], P.K_type));
           ("real", ([], P.K_type));
-          ("list", ([P.K_type], P.K_type));
-          ("register", ([P.K_type], P.K_type));
-          ("range", ([P.K_int; P.K_int], P.K_type));
-          ("bitvector", ([P.K_nat; P.K_order], P.K_type));
-          ("vector", ([P.K_nat; P.K_order; P.K_type], P.K_type));
-          ("atom", ([P.K_int], P.K_type));
-          ("atom_bool", ([P.K_bool], P.K_type));
-          ("implicit", ([P.K_int], P.K_type));
-          ("itself", ([P.K_int], P.K_type));
-          ("not", ([P.K_bool], P.K_bool));
-          ("ite", ([P.K_bool; P.K_int; P.K_int], P.K_int));
-          ("abs", ([P.K_int], P.K_int));
-          ("mod", ([P.K_int; P.K_int], P.K_int));
-          ("div", ([P.K_int; P.K_int], P.K_int));
+          ("list", ([Kind P.K_type], P.K_type));
+          ("register", ([Kind P.K_type], P.K_type));
+          ("range", ([Kind P.K_int; Kind P.K_int], P.K_type));
+          ("bitvector", ([Vector_len; Kind P.K_order], P.K_type));
+          ("vector", ([Vector_len; Kind P.K_order; Kind P.K_type], P.K_type));
+          ("atom", ([Kind P.K_int], P.K_type));
+          ("atom_bool", ([Kind P.K_bool], P.K_type));
+          ("implicit", ([Kind P.K_int], P.K_type));
+          ("itself", ([Kind P.K_int], P.K_type));
+          ("not", ([Kind P.K_bool], P.K_bool));
+          ("ite", ([Kind P.K_bool; Kind P.K_int; Kind P.K_int], P.K_int));
+          ("abs", ([Kind P.K_int], P.K_int));
+          ("mod", ([Kind P.K_int; Kind P.K_int], P.K_int));
+          ("div", ([Kind P.K_int; Kind P.K_int], P.K_int));
           ("float16", ([], P.K_type));
           ("float32", ([], P.K_type));
           ("float64", ([], P.K_type));
