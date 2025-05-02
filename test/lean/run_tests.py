@@ -82,7 +82,6 @@ def test_lean(subdir: str, skip_list = None, runnable: bool = False):
                     '--splice',
                     'coq-print.splice',
                     '--strict-bitvector',
-                    '--lean-matchbv'
                 ] if runnable else [ ]
                 if not runnable:
                     extra_flags.append('--lean-matchbv')

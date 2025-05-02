@@ -47,7 +47,7 @@ open option
 
 /-- Type quantifiers: k_ex807# : Bool, k_ex806# : Bool -/
 def neq_bool (x : Bool) (y : Bool) : Bool :=
-  (Bool.not (BEq.beq x y))
+  (! (x == y))
 
 /-- Type quantifiers: x : Int -/
 def __id (x : Int) : Int :=
@@ -85,10 +85,10 @@ def _shr_int_general (m : Int) (n : Int) : Int :=
 
 /-- Type quantifiers: m : Int, n : Int -/
 def fdiv_int (n : Int) (m : Int) : Int :=
-  bif (Bool.and (n <b 0) (m >b 0))
+  bif ((n <b 0) && (m >b 0))
   then ((Int.tdiv (n +i 1) m) -i 1)
   else
-    (bif (Bool.and (n >b 0) (m <b 0))
+    (bif ((n >b 0) && (m <b 0))
     then ((Int.tdiv (n -i 1) m) -i 1)
     else (Int.tdiv n m))
 
@@ -117,10 +117,10 @@ def concat_str_dec (str : String) (x : Int) : String :=
   (HAppend.hAppend str (Int.repr x))
 
 def bitvector_eq (x : (BitVec 16)) (y : (BitVec 16)) : Bool :=
-  (BEq.beq x y)
+  (x == y)
 
 def bitvector_neq (x : (BitVec 16)) (y : (BitVec 16)) : Bool :=
-  (bne x y)
+  (x != y)
 
 def bitvector_len (x : (BitVec 16)) : Nat :=
   (Sail.BitVec.length x)

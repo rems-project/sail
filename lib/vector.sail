@@ -60,7 +60,7 @@ val eq_bits = pure {
   interpreter: "eq_list",
   lem: "eq_vec",
   coq: "eq_vec",
-  lean: "BEq.beq",
+  lean: "_lean_beq",
   _: "eq_bits"
 } : forall 'n. (bits('n), bits('n)) -> bool
 
@@ -70,7 +70,7 @@ val neq_bits = pure {
   lem: "neq_vec",
   coq: "neq_vec",
   c: "neq_bits",
-  lean: "bne"
+  lean: "_lean_bne"
 } : forall 'n. (bits('n), bits('n)) -> bool
 
 function neq_bits(x, y) = not_bool(eq_bits(x, y))

@@ -59,6 +59,7 @@ abbrev sail_tlbi [Arch] (op : Arch.tlb_op) : SailM Unit := PreSail.sail_tlbi op
 abbrev sail_translation_start [Arch] (ts : Arch.trans_start) : SailM Unit := PreSail.sail_translation_start ts
 abbrev sail_translation_end [Arch] (te : Arch.trans_end) : SailM Unit := PreSail.sail_translation_end te
 abbrev sail_take_exception [Arch] (f : Arch.fault) : SailM Unit := PreSail.sail_take_exception f
+abbrev sail_return_exception [Arch] (a : Arch.pa) : SailM Unit := PreSail.sail_return_exception a
 
 abbrev cycle_count (a : Unit) : SailM Unit := PreSail.cycle_count a
 

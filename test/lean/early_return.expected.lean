@@ -67,7 +67,7 @@ open E
 
 /-- Type quantifiers: k_ex2312# : Bool, k_ex2311# : Bool -/
 def neq_bool (x : Bool) (y : Bool) : Bool :=
-  (Bool.not (BEq.beq x y))
+  (! (x == y))
 
 /-- Type quantifiers: x : Int -/
 def __id (x : Int) : Int :=
@@ -105,10 +105,10 @@ def _shr_int_general (m : Int) (n : Int) : Int :=
 
 /-- Type quantifiers: m : Int, n : Int -/
 def fdiv_int (n : Int) (m : Int) : Int :=
-  bif (Bool.and (n <b 0) (m >b 0))
+  bif ((n <b 0) && (m >b 0))
   then ((Int.tdiv (n +i 1) m) -i 1)
   else
-    (bif (Bool.and (n >b 0) (m <b 0))
+    (bif ((n >b 0) && (m <b 0))
     then ((Int.tdiv (n -i 1) m) -i 1)
     else (Int.tdiv n m))
 

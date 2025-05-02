@@ -119,7 +119,7 @@ open Register
 
 /-- Type quantifiers: k_ex2416# : Bool, k_ex2415# : Bool -/
 def neq_bool (x : Bool) (y : Bool) : Bool :=
-  (Bool.not (BEq.beq x y))
+  (! (x == y))
 
 /-- Type quantifiers: x : Int -/
 def __id (x : Int) : Int :=
@@ -157,10 +157,10 @@ def _shr_int_general (m : Int) (n : Int) : Int :=
 
 /-- Type quantifiers: m : Int, n : Int -/
 def fdiv_int (n : Int) (m : Int) : Int :=
-  bif (Bool.and (n <b 0) (m >b 0))
+  bif ((n <b 0) && (m >b 0))
   then ((Int.tdiv (n +i 1) m) -i 1)
   else
-    (bif (Bool.and (n >b 0) (m <b 0))
+    (bif ((n >b 0) && (m <b 0))
     then ((Int.tdiv (n -i 1) m) -i 1)
     else (Int.tdiv n m))
 
@@ -193,13 +193,13 @@ def GPRs : (Vector (RegisterRef (BitVec 64)) 31) :=
 
 /-- Type quantifiers: n : Nat, 0 ≤ n ∧ n ≤ 31 -/
 def wX (n : Nat) (value : (BitVec 64)) : SailM Unit := do
-  bif (bne n 31)
+  bif (n != 31)
   then writeRegRef (GetElem?.getElem! GPRs n) value
   else (pure ())
 
 /-- Type quantifiers: n : Nat, 0 ≤ n ∧ n ≤ 31 -/
 def rX (n : Nat) : SailM (BitVec 64) := do
-  bif (bne n 31)
+  bif (n != 31)
   then (reg_deref (GetElem?.getElem! GPRs n))
   else (pure (0x0000000000000000 : (BitVec 64)))
 
@@ -211,11 +211,11 @@ def wPC (pc : (BitVec 64)) : SailM Unit := do
 
 /-- Type quantifiers: r : Nat, 0 ≤ r ∧ r ≤ 31 -/
 def monad_test (r : Nat) : SailM (BitVec 1) := do
-  bif (BEq.beq (← (rX r)) (0x0000000000000000 : (BitVec 64)))
+  bif ((← (rX r)) == (0x0000000000000000 : (BitVec 64)))
   then (pure 1#1)
   else
     (do
-      bif (BEq.beq (← (rX r)) (0x0000000000000001 : (BitVec 64)))
+      bif ((← (rX r)) == (0x0000000000000001 : (BitVec 64)))
       then (pure 1#1)
       else (pure 0#1))
 

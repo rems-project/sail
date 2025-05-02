@@ -49,7 +49,7 @@ $define _GENERIC_EQUALITY
 
 $include <flow.sail>
 
-val eq_anything = pure {ocaml: "(fun (x, y) -> x = y)", lem: "eq", coq: "generic_eq", lean: "BEq.beq", _: "eq_anything"} : forall ('a : Type). ('a, 'a) -> bool
+val eq_anything = pure {ocaml: "(fun (x, y) -> x = y)", lem: "eq", coq: "generic_eq", lean: "_lean_beq", _: "eq_anything"} : forall ('a : Type). ('a, 'a) -> bool
 
 overload operator == = {eq_anything}
 

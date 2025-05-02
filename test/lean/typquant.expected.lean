@@ -52,7 +52,7 @@ open option
 
 /-- Type quantifiers: k_ex749# : Bool, k_ex748# : Bool -/
 def neq_bool (x : Bool) (y : Bool) : Bool :=
-  (Bool.not (BEq.beq x y))
+  (! (x == y))
 
 /-- Type quantifiers: x : Int -/
 def __id (x : Int) : Int :=
@@ -90,10 +90,10 @@ def _shr_int_general (m : Int) (n : Int) : Int :=
 
 /-- Type quantifiers: m : Int, n : Int -/
 def fdiv_int (n : Int) (m : Int) : Int :=
-  bif (Bool.and (n <b 0) (m >b 0))
+  bif ((n <b 0) && (m >b 0))
   then ((Int.tdiv (n +i 1) m) -i 1)
   else
-    (bif (Bool.and (n >b 0) (m <b 0))
+    (bif ((n >b 0) && (m <b 0))
     then ((Int.tdiv (n -i 1) m) -i 1)
     else (Int.tdiv n m))
 
@@ -155,7 +155,7 @@ def use_tuple_of_tuple (s : String) : String :=
 def hex_bits_signed2_forwards (bv : (BitVec k_nn)) : (Nat × String) :=
   let len := (Sail.BitVec.length bv)
   let s :=
-    bif (BEq.beq (BitVec.access bv (len -i 1)) 1#1)
+    bif ((BitVec.access bv (len -i 1)) == 1#1)
     then "stub1"
     else "stub2"
   ((Sail.BitVec.length bv), s)
@@ -167,11 +167,11 @@ def hex_bits_signed2_forwards_matches (bv : (BitVec k_nn)) : Bool :=
 /-- Type quantifiers: tuple_0.1 : Nat, tuple_0.1 > 0 -/
 def hex_bits_signed2_backwards (tuple_0 : (Nat × String)) : (BitVec tuple_0.1) :=
   let (notn, str) := tuple_0
-  bif (BEq.beq str "-")
+  bif (str == "-")
   then (BitVec.zero notn)
   else
     (let parsed := (BitVec.zero notn)
-    bif (BEq.beq (BitVec.access parsed (notn -i 1)) 0#1)
+    bif ((BitVec.access parsed (notn -i 1)) == 0#1)
     then parsed
     else (BitVec.zero notn))
 
@@ -186,7 +186,7 @@ def test_constr (app_0 : virtaddr) : (BitVec 32) :=
 
 /-- Type quantifiers: n : Nat, n ≥ 0 -/
 def termination (n : Nat) : Int :=
-  bif (BEq.beq n 0)
+  bif (n == 0)
   then 0
   else (1 +i (termination (n -i 1)))
 

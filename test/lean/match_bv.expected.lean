@@ -47,7 +47,7 @@ open option
 
 /-- Type quantifiers: k_ex1255# : Bool, k_ex1254# : Bool -/
 def neq_bool (x : Bool) (y : Bool) : Bool :=
-  (Bool.not (BEq.beq x y))
+  (! (x == y))
 
 /-- Type quantifiers: x : Int -/
 def __id (x : Int) : Int :=
@@ -85,10 +85,10 @@ def _shr_int_general (m : Int) (n : Int) : Int :=
 
 /-- Type quantifiers: m : Int, n : Int -/
 def fdiv_int (n : Int) (m : Int) : Int :=
-  bif (Bool.and (n <b 0) (m >b 0))
+  bif ((n <b 0) && (m >b 0))
   then ((Int.tdiv (n +i 1) m) -i 1)
   else
-    (bif (Bool.and (n >b 0) (m <b 0))
+    (bif ((n >b 0) && (m <b 0))
     then ((Int.tdiv (n -i 1) m) -i 1)
     else (Int.tdiv n m))
 
@@ -119,11 +119,11 @@ def concat_str_dec (str : String) (x : Int) : String :=
 def decode (merge_var : (BitVec 32)) : Bool :=
   match_bv merge_var with
   | [11,111,0,00,opc:2,1,Rm:5,option_v:3,S,10,Rn:5,Rt:5] =>
-    (bif (BEq.beq Rm Rn)
+    (bif (Rm == Rn)
     then true
     else false)
   | [sf,10,01010,shift:2,N,Rm:5,imm6:6,Rn:5,Rd:5] =>
-    (bif (BEq.beq Rn Rd)
+    (bif (Rn == Rd)
     then true
     else false)
   | [1101010100,0,00,011,0011,CRm:4,1,01,11111] => true
@@ -135,8 +135,7 @@ def xlen := 32
 def write_CSR (merge_var : (BitVec 12)) : SailM Bool := do
   match_bv merge_var with
   | [1011000:7,index:5] if ((BitVec.toNat index) ≥b 3) => do (pure true)
-  | [1011100,index:5] if (Bool.and (BEq.beq xlen 32) (((BitVec.toNat index) ≥b 3) : Bool)) => do
-    (pure true)
+  | [1011100,index:5] if ((xlen == 32) && (((BitVec.toNat index) ≥b 3) : Bool)) => do (pure true)
   | _ => do
     (do
       assert false "Pattern match failure at match_bv.sail:36.0-38.1"
@@ -144,8 +143,7 @@ def write_CSR (merge_var : (BitVec 12)) : SailM Bool := do
 
 def write_CSR2 (merge_var : (BitVec 12)) : SailM Bool := do
   match_bv merge_var with
-  | [1011100,index:5] if (Bool.and (BEq.beq xlen 32) (((BitVec.toNat index) ≥b 3) : Bool)) => do
-    (pure true)
+  | [1011100,index:5] if ((xlen == 32) && (((BitVec.toNat index) ≥b 3) : Bool)) => do (pure true)
   | _ => do
     (do
       assert false "Pattern match failure at match_bv.sail:41.0-43.1"

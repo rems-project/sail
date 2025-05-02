@@ -110,6 +110,10 @@ let lean_options =
         ),
       "use matchbv in the Lean output"
     );
+    ( Flag.create ~prefix:["lean"] "line_width",
+      Arg.Int (fun n -> Pretty_print_lean.opt_line_width := n),
+      "maximum line length of the generated Lean code"
+    );
     ( Flag.create ~prefix:["lean"] "noncomputable",
       Arg.Unit (fun () -> opt_lean_noncomputable := true),
       "add a 'noncomputable section' at the beginning of the output"
