@@ -827,6 +827,22 @@ and doc_exp (as_monadic : bool) ctx (E_aux (e, (l, annot)) as full_exp) =
           separate hardline [vars_dec_pp; full_loop; wrap_with_pure as_monadic vars_pp]
       | _ -> raise (Reporting.err_unreachable l __POS__ "Unexpected number of arguments for loop combinator")
     end
+  | E_for (loopvar, from_exp, to_exp, step_exp, Ord_aux (order, _), body) ->
+      let combinator = match order with Ord_inc -> "foreach_Z_up" | Ord_dec -> "foreach_Z_down" in
+      let from_exp_pp, to_exp_pp, step_exp_pp =
+        (doc_exp false ctx from_exp, doc_exp false ctx to_exp, doc_exp false ctx step_exp)
+      in
+      let step_exp_pp = match order with Ord_inc -> step_exp_pp | Ord_dec -> minus ^^ step_exp_pp in
+      let loop_bracket = brackets (separate colon [from_exp_pp; to_exp_pp; step_exp_pp]) ^^ string "i" in
+      let loopvar_pp = doc_id_ctor loopvar in
+      let body_effect = has_effect body in
+      let enter_monad = if body_effect then empty else string "Id.run" in
+      let loop_head =
+        flow (break 1) (remove_empties [enter_monad; string "for"; loopvar_pp; string "in"; loop_bracket; string "do"])
+      in
+      let loop_body = doc_exp body_effect ctx body in
+      let full_loop = prefix 2 1 loop_head loop_body in
+      full_loop
   | E_app ((Id_aux (Id "early_return", _) as f), [arg]) ->
       let throw = if ctx.in_sail_monad then string "SailME.throw " else string "throw " in
       nest 2 (throw ^^ d_of_arg ctx arg)
