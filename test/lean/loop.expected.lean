@@ -53,7 +53,7 @@ namespace Out.Functions
 open option
 open Register
 
-/-- Type quantifiers: k_ex2022# : Bool, k_ex2021# : Bool -/
+/-- Type quantifiers: k_ex2218# : Bool, k_ex2217# : Bool -/
 def neq_bool (x : Bool) (y : Bool) : Bool :=
   (! (x == y))
 
@@ -259,6 +259,42 @@ def while_print_long (_ : Unit) : Unit := Id.run do
       loop_vars := ((this_is_a_very_long_variable_name_to_stress_the_formatting +i 1) : Int)
     (pure loop_vars) ) : Id Int )
   (pure (print_int "i = " this_is_a_very_long_variable_name_to_stress_the_formatting))
+
+def nothing (_ : Unit) : Unit :=
+  ()
+
+/-- Type quantifiers: m : Int, n : Int -/
+def foreachpure (n : Int) (m : Int) : Unit := Id.run do
+  let x : Int := n
+  let x ← (( do
+    let loop_rr_lower := 0
+    let loop_rr_upper := (m -i 1)
+    let mut loop_vars := x
+    for rr in [loop_rr_lower:loop_rr_upper:1]i do
+      let x := loop_vars
+      loop_vars :=
+        let _ : Unit :=
+          let vec := n
+          Id.run for i in [0:(m -i 1):1]i do (nothing ())
+        (x +i 1)
+    (pure loop_vars) ) : Id Int )
+  (pure ())
+
+/-- Type quantifiers: m : Int, n : Nat, 0 ≤ n -/
+def foreachnotsopure (n : Nat) (m : Int) : SailM Unit := do
+  let x : Nat := n
+  let x ← (( do
+    let loop_rr_lower := 0
+    let loop_rr_upper := (m -i 1)
+    let mut loop_vars := x
+    for rr in [loop_rr_lower:loop_rr_upper:1]i do
+      let x := loop_vars
+      loop_vars ← do
+        let vec := n
+        for i in [0:(m -i 1):1]i do writeReg r x
+        (pure (x +i 1))
+    (pure loop_vars) ) : SailM Nat )
+  (pure ())
 
 def initialize_registers (_ : Unit) : SailM Unit := do
   writeReg r (← (undefined_nat ()))
