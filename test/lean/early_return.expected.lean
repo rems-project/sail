@@ -4,7 +4,7 @@ import Out.Sail.BitVec
 open PreSail
 
 set_option maxHeartbeats 1_000_000_000
-set_option maxRecDepth 10_000
+set_option maxRecDepth 1_000_000
 set_option linter.unusedVariables false
 set_option match.ignoreUnusedAlts true
 
@@ -53,7 +53,7 @@ import Out.Defs
 import Out.Specialization
 
 set_option maxHeartbeats 1_000_000_000
-set_option maxRecDepth 10_000
+set_option maxRecDepth 1_000_000
 set_option linter.unusedVariables false
 set_option match.ignoreUnusedAlts true
 
@@ -148,7 +148,7 @@ def foreach_earlyreturneffect (n : Nat) : SailM Bool := SailME.run do
     let () := loop_vars
     loop_vars ← do
       bif (i >b 5)
-      then throw (false : Bool)
+      then SailME.throw (false : Bool)
       else writeReg r ((← readReg r) +i 1)
   (pure loop_vars)
   (pure ((← readReg r) >b n))
@@ -166,7 +166,7 @@ def foreach_earlyreturnpure (n : Nat) : Bool := ExceptM.run do
         bif (i >b 5)
         then throw (false : Bool)
         else (pure (res +i i))
-    (pure loop_vars) ) : ExceptM _ Nat )
+    (pure loop_vars) ) : ExceptM Bool Nat )
   (pure (res >b n))
 
 /-- Type quantifiers: n : Nat, 0 ≤ n -/
@@ -184,7 +184,7 @@ def foreach_inner_earlyreturneffect (n : Nat) : SailM Bool := SailME.run do
         let () := loop_vars_1
         loop_vars_1 ← do
           bif (i >b 5)
-          then throw (false : Bool)
+          then SailME.throw (false : Bool)
           else writeReg r ((← readReg r) +i 1)
       (pure loop_vars_1)
   (pure loop_vars)
@@ -210,7 +210,7 @@ def foreach_inner_earlyreturnpure (n : Nat) : Bool := ExceptM.run do
             then throw (false : Bool)
             else (pure (res +i 1))
         (pure loop_vars_1)
-    (pure loop_vars) ) : ExceptM _ Nat )
+    (pure loop_vars) ) : ExceptM Bool Nat )
   (pure (res >b n))
 
 /-- Type quantifiers: n : Nat, 0 ≤ n -/
@@ -228,7 +228,7 @@ def foreach_inner_earlyreturneffect_catch (n : Nat) : SailM Bool := SailME.run d
         let () := loop_vars_1
         loop_vars_1 ← do
           bif (i >b 5)
-          then throw (false : Bool)
+          then SailME.throw (false : Bool)
           else writeReg r ((← readReg r) +i 1)
       (pure loop_vars_1)
       writeReg r ((← readReg r) *i 2)
@@ -255,9 +255,9 @@ def foreach_inner_earlyreturnpure_catch (n : Nat) : Bool := ExceptM.run do
               bif (i >b 5)
               then throw (false : Bool)
               else (pure (res +i 1))
-          (pure loop_vars_1) ) : ExceptM _ Nat )
+          (pure loop_vars_1) ) : ExceptM Bool Nat )
         (pure (res *i 2))
-    (pure loop_vars) ) : ExceptM _ Nat )
+    (pure loop_vars) ) : ExceptM Bool Nat )
   (pure (res >b n))
 
 /-- Type quantifiers: n : Nat, 0 ≤ n -/
@@ -267,7 +267,7 @@ def while_earlyreturneffect (n : Nat) : SailM Bool := SailME.run do
     let () := loop_vars
     loop_vars ← do
       bif ((← readReg r) >b 5)
-      then throw (false : Bool)
+      then SailME.throw (false : Bool)
       else writeReg r ((← readReg r) +i 1)
   (pure loop_vars)
   (pure ((← readReg r) >b n))
@@ -283,7 +283,7 @@ def while_earlyreturnpure (n : Nat) : Bool := ExceptM.run do
         bif (res >b 5)
         then throw (false : Bool)
         else (pure (res +i 1))
-    (pure loop_vars) ) : ExceptM _ Nat )
+    (pure loop_vars) ) : ExceptM Bool Nat )
   (pure (res >b n))
 
 /-- Type quantifiers: n : Nat, 0 ≤ n -/
@@ -297,7 +297,7 @@ def while_inner_earlyreturneffect (n : Nat) : SailM Bool := SailME.run do
         let () := loop_vars_1
         loop_vars_1 ← do
           bif (n >b 5)
-          then throw (false : Bool)
+          then SailME.throw (false : Bool)
           else writeReg r ((← readReg r) +i 1)
       (pure loop_vars_1)
   (pure loop_vars)
@@ -319,7 +319,7 @@ def while_inner_earlyreturnpure (n : Nat) : Bool := ExceptM.run do
             then throw (false : Bool)
             else (pure (res +i 1))
         (pure loop_vars_1)
-    (pure loop_vars) ) : ExceptM _ Nat )
+    (pure loop_vars) ) : ExceptM Bool Nat )
   (pure (res >b n))
 
 /-- Type quantifiers: n : Nat, 0 ≤ n -/
@@ -333,7 +333,7 @@ def while_inner_earlyreturneffect_catch (n : Nat) : SailM Bool := SailME.run do
         let () := loop_vars_1
         loop_vars_1 ← do
           bif (n >b 5)
-          then throw (false : Bool)
+          then SailME.throw (false : Bool)
           else writeReg r ((← readReg r) +i 1)
       (pure loop_vars_1)
       writeReg r ((← readReg r) *i 2)
@@ -356,15 +356,15 @@ def while_inner_earlyreturnpure_catch (n : Nat) : Bool := ExceptM.run do
               bif (n >b 5)
               then throw (false : Bool)
               else (pure (res +i 1))
-          (pure loop_vars_1) ) : ExceptM _ Nat )
+          (pure loop_vars_1) ) : ExceptM Bool Nat )
         (pure (res *i 2))
-    (pure loop_vars) ) : ExceptM _ Nat )
+    (pure loop_vars) ) : ExceptM Bool Nat )
   (pure (res >b n))
 
 def match_early_return (x : E) : SailM E := SailME.run do
   match x with
   | A =>
-    throw (← do
+    SailME.throw (← do
         readReg r_A)
   | B => writeReg r_B A
   | C => writeReg r_C A
@@ -379,7 +379,7 @@ def match_early_return_inloop (x : E) : SailM E := SailME.run do
     loop_vars ← do
       match x with
       | A =>
-        throw (← do
+        SailME.throw (← do
             readReg r_A)
       | B => writeReg r_B A
       | C => writeReg r_C A
@@ -396,10 +396,10 @@ def match_early_return_inloop_2 (x : E) : SailM E := SailME.run do
       let y ← (( do
         match x with
         | A =>
-          throw (← do
+          SailME.throw (← do
               readReg r_A)
         | B => readReg r_B
-        | C => readReg r_C ) : SailME _ E )
+        | C => readReg r_C ) : SailME E E )
       (pure ())
   (pure loop_vars)
   readReg r_B
@@ -414,7 +414,7 @@ def match_early_return_loop (x : E) : SailM E := SailME.run do
       for i in [loop_i_lower:loop_i_upper:1]i do
         let () := loop_vars
         loop_vars ← do
-          throw (← do
+          SailME.throw (← do
               readReg r_A)
       (pure loop_vars))
   | B => writeReg r_B A
@@ -427,9 +427,9 @@ def ite_early_return (x : Bool) : SailM E := SailME.run do
   let y ← (( do
     bif x
     then
-      throw (← do
+      SailME.throw (← do
           readReg r_A)
-    else readReg r_B ) : SailME _ E )
+    else readReg r_B ) : SailME E E )
   readReg r_B
 
 /-- Type quantifiers: k_ex2626# : Bool -/
@@ -444,9 +444,9 @@ def ite_early_return_inloop (x : Bool) : SailM E := SailME.run do
       let y ← (( do
         bif x
         then
-          throw (← do
+          SailME.throw (← do
               readReg r_A)
-        else readReg r_B ) : SailME _ E )
+        else readReg r_B ) : SailME E E )
       (pure ())
   (pure loop_vars)
   readReg r_B
@@ -462,7 +462,7 @@ def ite_early_return_loop (x : Bool) : SailM E := SailME.run do
       for i in [loop_i_lower:loop_i_upper:1]i do
         let () := loop_vars
         loop_vars ← do
-          throw (← do
+          SailME.throw (← do
               readReg r_A)
       (pure loop_vars))
   else writeReg r_B A
@@ -477,10 +477,10 @@ def ite_early_return_seq (x : Bool) : SailM E := SailME.run do
   let y ← (( do
     bif x
     then
-      throw (← do
+      SailME.throw (← do
           (unit_type A)
           readReg r_A)
-    else readReg r_B ) : SailME _ E )
+    else readReg r_B ) : SailME E E )
   readReg r_B
 
 def initialize_registers (_ : Unit) : SailM Unit := do
