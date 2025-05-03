@@ -157,9 +157,9 @@ val map_if : ('a -> bool) -> ('a -> 'a) -> 'a list -> 'a list
 
 val map_exists : ('b -> bool) -> ('a -> 'b) -> 'a list -> bool
 
-(** [list_to_front i l] resorts the list [l] by bringing the element at index [i]
-    to the front.
-    @throws Failure if [i] is not smaller than the length of [l]*)
+(** [list_to_front i l] resorts the list [l] by bringing the element at index [i] to the front.
+
+    Throws [Failure] if [i] is not smaller than the length of [l]*)
 val list_to_front : int -> 'a list -> 'a list
 
 (** [undo_list_to_front i l] resorts the list [l] by moving the head element to index index [i] It's the inverse of
