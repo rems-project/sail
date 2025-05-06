@@ -78,11 +78,14 @@ def test_lean(subdir: str, skip_list = None, runnable: bool = False):
                 step('rm -r {} || true'.format(basename))
                 step('mkdir -p {}'.format(basename))
                 # TODO: should probably be dependent on whether print should be pure or effectful.
-                extra_flags = ' '.join([
+                extra_flags = [
                     '--splice',
                     'coq-print.splice',
-                    '--strict-bitvector'
-                ] if runnable else [ ])
+                    '--strict-bitvector',
+                ] if runnable else [ ]
+                if not runnable:
+                    extra_flags.append('--lean-matchbv')
+                extra_flags = ' '.join(extra_flags)
                 step('\'{}\' {} {} --lean --lean-single-file --lean-output-dir {}'.format(sail, extra_flags, filename, basename), name=filename)
                 if runnable and basename.startswith('fail'):
                     step(f'lake exe run > expected 2> err_status',

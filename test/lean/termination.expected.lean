@@ -50,7 +50,7 @@ namespace Out.Functions
 open option
 open E
 
-/-- Type quantifiers: k_ex783# : Bool, k_ex782# : Bool -/
+/-- Type quantifiers: k_ex772# : Bool, k_ex771# : Bool -/
 def neq_bool (x : Bool) (y : Bool) : Bool :=
   (! (x == y))
 
@@ -156,7 +156,7 @@ def measure2 (x : E) : Int :=
   | B => 5
   | C => 1
 
-/-- Type quantifiers: k_ex887# : Bool -/
+/-- Type quantifiers: k_ex876# : Bool -/
 def enabled2 (b : Bool) (e : E) : Bool :=
   match e with
   | A => (enabled2 b B)

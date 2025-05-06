@@ -487,38 +487,45 @@ let rec update_ctx_pat (ctx : context) (P_aux (p, (l, annot)) as pat) =
       List.fold_left update_ctx_pat ctx pats
   | _ -> ctx
 
-let rec doc_pat ?(need_parens = false) ?(in_match = false) ?(in_vector = false) (P_aux (p, (l, annot)) as pat) =
+let rec doc_pat ?(need_parens = false) ?(in_vector = false) ctx in_match_bv (P_aux (p, (l, annot)) as pat) =
   let opt_parens doc = if need_parens then parens doc else doc in
   match p with
   | P_wild -> underscore
   | P_lit lit when in_vector -> doc_vec_lit lit
   | P_lit lit -> doc_lit lit
-  | P_typ (Typ_aux (Typ_id (Id_aux (Id "bit", _)), _), p) when in_vector -> doc_pat p ^^ string ":1"
+  | P_typ (Typ_aux (Typ_id (Id_aux (Id "bit", _)), _), p) when in_vector -> doc_pat ctx in_match_bv p ^^ string ":1"
   | P_typ (Typ_aux (Typ_app (Id_aux (Id id, _), [A_aux (A_nexp (Nexp_aux (Nexp_constant i, _)), _)]), _), p)
     when in_vector && (id = "bits" || id = "bitvector") ->
-      doc_pat p ^^ string ":" ^^ doc_big_int i
-  | P_typ (ptyp, p) ->
-      let wrap x = if in_match then parens x else x in
-      wrap (doc_pat p)
+      doc_pat ctx in_match_bv p ^^ string ":" ^^ doc_big_int i
+  | P_typ (ptyp, p) when in_vector -> doc_pat ctx in_match_bv p ^^ string ":" ^^ doc_typ ctx ptyp
+  | P_typ (ptyp, p) -> doc_pat ctx in_match_bv p
   | P_id id -> fixup_match_id id |> doc_id_ctor
-  | P_tuple pats -> separate (string ", ") (List.map doc_pat pats) |> parens
-  | P_list pats -> separate (string ", ") (List.map doc_pat pats) |> brackets
-  | P_vector pats -> concat (List.map (doc_pat ~in_vector:true) pats)
-  | P_vector_concat pats -> separate (string ",") (List.map (doc_pat ~in_vector:true) pats) |> brackets
+  | P_tuple pats -> separate (string ", ") (List.map (doc_pat ctx in_match_bv) pats) |> parens
+  | P_list pats -> separate (string ", ") (List.map (doc_pat ctx in_match_bv) pats) |> brackets
+  | P_vector pats
+    when List.for_all (fun p -> match p with P_aux (P_lit _, _) -> true | _ -> false) pats && not in_match_bv ->
+      string "0b" ^^ concat (List.map (doc_pat ~in_vector:true ctx in_match_bv) pats)
+  | P_vector pats -> concat (List.map (doc_pat ~in_vector:true ctx in_match_bv) pats)
+  | P_vector_concat pats when in_vector ->
+      separate (string ",") (List.map (doc_pat ~in_vector:true ctx in_match_bv) pats)
+  | P_vector_concat pats -> separate (string ",") (List.map (doc_pat ~in_vector:true ctx in_match_bv) pats) |> brackets
   | P_app (Id_aux (Id "None", _), p) -> string "none"
   | P_app (cons, pats) ->
       opt_parens
         (string "."
         ^^ doc_id_ctor (fixup_match_id cons)
         ^^ space
-        ^^ separate_map (string ", ") (doc_pat ~need_parens:true) pats
+        ^^ separate_map (string ", ") (doc_pat ~need_parens:true ctx in_match_bv) pats
         )
-  | P_var (p, _) -> doc_pat p
-  | P_as (pat, id) -> doc_pat pat
+  | P_var (p, _) -> doc_pat ctx in_match_bv p
+  | P_as (pat, id) -> doc_pat ctx in_match_bv pat
   | P_struct (pats, _) ->
-      let pats = List.map (fun (id, pat) -> separate space [doc_id_ctor id; coloneq; doc_pat pat]) pats in
+      let pats =
+        List.map (fun (id, pat) -> separate space [doc_id_ctor id; coloneq; doc_pat ctx in_match_bv pat]) pats
+      in
       braces (space ^^ separate (comma ^^ space) pats ^^ space)
-  | P_cons (hd_pat, tl_pat) -> parens (separate space [doc_pat hd_pat; string "::"; doc_pat tl_pat])
+  | P_cons (hd_pat, tl_pat) ->
+      parens (separate space [doc_pat ctx in_match_bv hd_pat; string "::"; doc_pat ctx in_match_bv tl_pat])
   | _ -> failwith ("Doc Pattern " ^ string_of_pat_con pat ^ " " ^ string_of_pat pat ^ " not translatable yet.")
 
 let doc_pat_typ_ascription ctx (P_aux (p, (l, annot)) as pat) =
@@ -573,9 +580,8 @@ let get_fn_implicits (Typ_aux (t, _)) : bool list =
 let rec is_bitvector_pattern (P_aux (pat, _)) =
   match pat with P_vector _ | P_vector_concat _ -> true | P_as (pat, _) -> is_bitvector_pattern pat | _ -> false
 
-let match_or_match_bv brs =
-  if List.exists (function Pat_aux (Pat_exp (pat, _), _) -> is_bitvector_pattern pat | _ -> false) brs then "match_bv "
-  else "match "
+let is_match_bv =
+  List.exists (function Pat_aux (Pat_exp (pat, _), _) | Pat_aux (Pat_when (pat, _, _), _) -> is_bitvector_pattern pat)
 
 let rec doc_implicit_args ?(docs = []) ns ims d_args =
   match (ns, ims, d_args) with
@@ -665,11 +671,28 @@ let prepend_monad ctx exp doc =
   | false, Some ty -> [string "ExceptM"; ty; doc]
   | false, None -> [string "Id"; doc]
 
-let rec doc_match_clause (as_monadic : bool) ctx (Pat_aux (cl, l)) =
+let match_or_match_bv (is_match_bv : bool) brs = if is_match_bv then "match_bv " else "match "
+
+let rec doc_match_clause (is_bv : bool) (as_monadic : bool) ctx (Pat_aux (cl, l) as p) =
   match cl with
   | Pat_exp (pat, branch) ->
-      group (nest 2 (string "| " ^^ doc_pat ~in_match:true pat ^^ string " => " ^^ wrap_exp as_monadic ctx branch))
-  | Pat_when (pat, when_, branch) -> failwith "The Lean backend does not support 'when' clauses in patterns"
+      group
+        (nest 2
+           (string "| " ^^ doc_pat ctx is_bv pat ^^ string " =>"
+           ^^ string (if is_bv && as_monadic then " do" else "")
+           ^^ break 1 ^^ wrap_exp as_monadic ctx branch
+           )
+        )
+  | Pat_when (pat, when_, branch) when is_bv ->
+      group
+        (nest 2
+           (string "| " ^^ doc_pat ctx is_bv pat ^^ string " if " ^^ doc_exp false ctx when_ ^^ string " =>"
+           ^^ string (if is_bv && as_monadic then " do" else "")
+           ^^ break 1 ^^ wrap_exp as_monadic ctx branch
+           )
+        )
+  | Pat_when (pat, when_, branch) ->
+      failwith ("The Lean backend does not support 'when' clauses in patterns:\n" ^ string_of_pexp p)
 
 and wrap_exp as_monadic ctx e =
   let with_arrow = not as_monadic in
@@ -894,7 +917,7 @@ and doc_exp (as_monadic : bool) ctx (E_aux (e, (l, annot)) as full_exp) =
   | E_let (LB_aux (LB_val (lpat, lexp), _), e') | E_internal_plet (lpat, lexp, e') ->
       let has_loop = has_loop lexp in
       let is_arrow_do = match e with E_let _ when not has_loop -> false | _ -> true in
-      let id_typ = doc_pat lpat in
+      let id_typ = doc_pat ctx false lpat in
       let typ_ascription = doc_pat_typ_ascription ctx lpat in
       let ctx = update_ctx_pat ctx lpat in
       let pp_let_line_f l = group (nest 2 (flow (break 1) l)) in
@@ -949,12 +972,13 @@ and doc_exp (as_monadic : bool) ctx (E_aux (e, (l, annot)) as full_exp) =
       wrap_with_pure as_monadic
         (braces (space ^^ doc_exp false ctx exp ^^ string " with " ^^ separate (comma ^^ space) args ^^ space))
   | E_match (discr, brs) ->
+      let is_match_bv = is_match_bv brs in
       let as_monadic' =
         List.exists (fun x -> effectful (effect_of_annot (match x with Pat_aux (_, (_, annot)) -> annot))) brs
         || as_monadic
       in
-      let cases = separate_map hardline (doc_match_clause as_monadic' ctx) brs in
-      string (match_or_match_bv brs) ^^ d_of_arg ctx discr ^^ string " with" ^^ hardline ^^ cases
+      let cases = separate_map hardline (doc_match_clause is_match_bv as_monadic' ctx) brs in
+      string (match_or_match_bv is_match_bv brs) ^^ d_of_arg ctx discr ^^ string " with" ^^ hardline ^^ cases
   | E_assign ((LE_aux (le_act, tannot) as le), e) ->
       wrap_with_left_arrow (not as_monadic)
         ( match le_act with
@@ -1051,7 +1075,12 @@ let doc_funcl_init global (FCL_aux (FCL_funcl (id, pexp), annot)) =
            | Some (Some id, _) -> (pat, id, typ)
            | Some (None, _) ->
                (pat, mk_id ~loc:l (Printf.sprintf "x_%i" i), typ) (* TODO fresh name or wildcard instead of x *)
-           | _ -> failwith "Argument pattern not translatable yet."
+           | _ ->
+               ( pat,
+                 Id_aux (Id "TODO_ARG_PATTERN", Unknown),
+                 Typ_aux (Typ_id (Id_aux (Id "TODO_ARG_PATTERN", Unknown)), Unknown)
+               )
+           (*failwith "Argument pattern not translatable yet."*)
        )
   in
   let ctx = context_init env global in
@@ -1110,8 +1139,8 @@ let doc_termination ctx fnpat (Rec_aux (meas, _)) =
       (* TODO: actually use the pattern *)
       let term = doc_exp false ctx exp in
       let term_by =
-        string "termination_by let " ^^ doc_pat pat ^^ string " := " ^^ doc_pat fnpat ^^ string "; " ^^ parens term
-        ^^ string ".toNat"
+        string "termination_by let " ^^ doc_pat ctx false pat ^^ string " := " ^^ doc_pat ctx false fnpat ^^ string "; "
+        ^^ parens term ^^ string ".toNat"
       in
       hardline ^^ term_by
 
@@ -1124,11 +1153,21 @@ let doc_funcl ctx meas funcl =
   let termination = doc_termination ctx fnpat meas in
   comment ^^ nest 2 (signature ^^ hardline ^^ doc_funcl_body fixup_binders ctx funcl) ^^ termination
 
+let string_of_pexp p =
+  let pat, guard, exp, _ = destruct_pexp p in
+  let guard_str = match guard with None -> "" | Some guard -> " if " ^ string_of_exp guard in
+  "| " ^ string_of_pat pat ^ guard_str ^ " -> " ^ string_of_exp exp ^ "\n"
+
 let doc_fundef ctx (FD_aux (FD_function (meas, typa, fcls), fannot) as full_fundef) =
   match fcls with
   | [] -> failwith "FD_function with empty function list"
   | [funcl] -> doc_funcl ctx meas funcl
-  | _ -> failwith "FD_function with more than one clause"
+  | funcls ->
+      failwith
+        (List.fold_left
+           (fun acc (FCL_aux (FCL_funcl (id, pexp), annot)) -> acc ^ string_of_pexp pexp)
+           "FD_function with more than one clause :\n" funcls
+        )
 
 let doc_type_union ctx (Tu_aux (Tu_ty_id (ty, i), _)) =
   nest 2 (flow space [pipe; doc_id_ctor i; parens (flow space [underscore; colon; doc_typ ctx ty])])

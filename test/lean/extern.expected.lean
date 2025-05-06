@@ -46,7 +46,7 @@ namespace Out.Functions
 
 open option
 
-/-- Type quantifiers: k_ex1162# : Bool, k_ex1161# : Bool -/
+/-- Type quantifiers: k_ex1150# : Bool, k_ex1149# : Bool -/
 def neq_bool (x : Bool) (y : Bool) : Bool :=
   (! (x == y))
 
@@ -156,7 +156,8 @@ def def_spc_backwards_matches (s : String) : Bool :=
 
 def sep_forwards (arg_ : Unit) : String :=
   match arg_ with
-  | () => (String.append (opt_spc_forwards ())
+  | () =>
+    (String.append (opt_spc_forwards ())
       (String.append "," (String.append (def_spc_forwards ()) "")))
 
 def sep_backwards (arg_ : String) : SailM Unit := do
@@ -166,10 +167,12 @@ def sep_backwards (arg_ : String) : SailM Unit := do
 def sep_forwards_matches (arg_ : Unit) : Bool :=
   match arg_ with
   | () => true
+  | _ => false
 
 def sep_backwards_matches (arg_ : String) : SailM Bool := do
   match arg_ with
   | _ => throw Error.Exit
+  | _ => (pure false)
 
 def extern_add (_ : Unit) : Int :=
   (5 +i 4)

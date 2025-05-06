@@ -54,7 +54,7 @@ namespace Out.Functions
 open option
 open e_test
 
-/-- Type quantifiers: k_ex705# : Bool, k_ex704# : Bool -/
+/-- Type quantifiers: k_ex694# : Bool, k_ex693# : Bool -/
 def neq_bool (x : Bool) (y : Bool) : Bool :=
   (! (x == y))
 

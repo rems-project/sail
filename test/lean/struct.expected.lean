@@ -63,7 +63,7 @@ namespace Out.Functions
 
 open option
 
-/-- Type quantifiers: k_ex760# : Bool, k_ex759# : Bool -/
+/-- Type quantifiers: k_ex749# : Bool, k_ex748# : Bool -/
 def neq_bool (x : Bool) (y : Bool) : Bool :=
   (! (x == y))
 
@@ -160,7 +160,8 @@ def match_struct (value : My_struct) : SailM Int := do
   match value with
   | { field2 := 0#1, field1 := g__0 } => (pure 0)
   | { field1 := field1, field2 := 1#1 } => (pure field1)
-  | _ => (do
+  | _ =>
+    (do
       assert false "Pattern match failure at struct.sail:39.4-42.5"
       throw Error.Exit)
 

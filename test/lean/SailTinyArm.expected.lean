@@ -509,7 +509,7 @@ open CacheOp
 open Barrier
 open AccessType
 
-/-- Type quantifiers: k_ex6347# : Bool, k_ex6346# : Bool -/
+/-- Type quantifiers: k_ex5891# : Bool, k_ex5890# : Bool -/
 def neq_bool (x : Bool) (y : Bool) : Bool :=
   (! (x == y))
 
@@ -1937,41 +1937,14 @@ def execute (merge_var : ast) : SailM Unit := do
   | .DataMemoryBarrier arg0 => (execute_DataMemoryBarrier arg0)
   | .CompareAndBranch (t, offset) => (execute_CompareAndBranch t offset)
 
-def decode (v__0 : (BitVec 32)) : (Option ast) :=
-  bif (((Sail.BitVec.extractLsb v__0 31 24) == (0xF8 : (BitVec 8))) && (((Sail.BitVec.extractLsb
-             v__0 21 21) == (0b1 : (BitVec 1))) && ((Sail.BitVec.extractLsb v__0 11 10) == (0b10 : (BitVec 2)))))
-  then
-    (let S := (BitVec.access v__0 12)
-    let option_v : (BitVec 3) := (Sail.BitVec.extractLsb v__0 15 13)
-    let opc : (BitVec 2) := (Sail.BitVec.extractLsb v__0 23 22)
-    let Rt : (BitVec 5) := (Sail.BitVec.extractLsb v__0 4 0)
-    let Rn : (BitVec 5) := (Sail.BitVec.extractLsb v__0 9 5)
-    let Rm : (BitVec 5) := (Sail.BitVec.extractLsb v__0 20 16)
-    (decodeLoadStoreRegister opc Rm option_v S Rn Rt))
-  else
-    (bif ((Sail.BitVec.extractLsb v__0 30 24) == (0b1001010 : (BitVec 7)))
-    then
-      (let sf := (BitVec.access v__0 31)
-      let N := (BitVec.access v__0 21)
-      let shift : (BitVec 2) := (Sail.BitVec.extractLsb v__0 23 22)
-      let imm6 : (BitVec 6) := (Sail.BitVec.extractLsb v__0 15 10)
-      let Rn : (BitVec 5) := (Sail.BitVec.extractLsb v__0 9 5)
-      let Rm : (BitVec 5) := (Sail.BitVec.extractLsb v__0 20 16)
-      let Rd : (BitVec 5) := (Sail.BitVec.extractLsb v__0 4 0)
-      (decodeExclusiveOr sf shift N Rm imm6 Rn Rd))
-    else
-      (bif (((Sail.BitVec.extractLsb v__0 31 12) == (0xD5033 : (BitVec 20))) && ((Sail.BitVec.extractLsb
-               v__0 7 0) == (0xBF : (BitVec 8))))
-      then
-        (let CRm : (BitVec 4) := (Sail.BitVec.extractLsb v__0 11 8)
-        (decodeDataMemoryBarrier CRm))
-      else
-        (bif ((Sail.BitVec.extractLsb v__0 31 24) == (0xB4 : (BitVec 8)))
-        then
-          (let imm19 : (BitVec 19) := (Sail.BitVec.extractLsb v__0 23 5)
-          let Rt : (BitVec 5) := (Sail.BitVec.extractLsb v__0 4 0)
-          (decodeCompareAndBranch imm19 Rt))
-        else none)))
+def decode (merge_var : (BitVec 32)) : (Option ast) :=
+  match_bv merge_var with
+  | [11,111,0,00,opc:2,1,Rm:5,option_v:3,S,10,Rn:5,Rt:5] =>
+    (decodeLoadStoreRegister opc Rm option_v S Rn Rt)
+  | [sf,10,01010,shift:2,N,Rm:5,imm6:6,Rn:5,Rd:5] => (decodeExclusiveOr sf shift N Rm imm6 Rn Rd)
+  | [1101010100,0,00,011,0011,CRm:4,1,01,11111] => (decodeDataMemoryBarrier CRm)
+  | [1,011010,0,imm19:19,Rt:5] => (decodeCompareAndBranch imm19 Rt)
+  | _ => none
 
 def iFetch (addr : (BitVec 64)) : SailM (BitVec 32) := do
   let req : (Mem_read_request 4 64 (BitVec 56) (Option TranslationInfo) arm_acc_type) :=
@@ -2096,7 +2069,8 @@ def undefined_Explicit_access_kind (_ : Unit) : SailM Explicit_access_kind := do
   : Type, k_n > 0 ∧ k_vasize > 0 -/
 def mem_read_request_is_exclusive (request : (Mem_read_request k_n k_vasize k_pa k_translation_summary k_arch_ak)) : Bool :=
   match request.access_kind with
-  | .AK_explicit eak => (match eak.variety with
+  | .AK_explicit eak =>
+    (match eak.variety with
     | AV_exclusive => true
     | _ => false)
   | _ => false
@@ -2116,7 +2090,8 @@ def __monomorphize_writes : Bool := false
   : Type, k_n > 0 ∧ k_vasize > 0 -/
 def mem_write_request_is_exclusive (request : (Mem_write_request k_n k_vasize k_pa k_translation_summary k_arch_ak)) : Bool :=
   match request.access_kind with
-  | .AK_explicit eak => (match eak.variety with
+  | .AK_explicit eak =>
+    (match eak.variety with
     | AV_exclusive => true
     | _ => false)
   | _ => false

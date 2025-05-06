@@ -62,7 +62,7 @@ open option
 open Register
 open E
 
-/-- Type quantifiers: k_ex804# : Bool, k_ex803# : Bool -/
+/-- Type quantifiers: k_ex803# : Bool, k_ex802# : Bool -/
 def neq_bool (x : Bool) (y : Bool) : Bool :=
   (! (x == y))
 
@@ -167,7 +167,8 @@ def match_reg (x : E) : SailM E := do
 /-- Type quantifiers: y : Int -/
 def match_let (x : E) (y : Int) : SailM Int := do
   match x with
-  | A => (do
+  | A =>
+    (do
       let x := (y +i y)
       let z ← do (pure ((y +i y) +i (← (undefined_int ()))))
       (pure (z +i x)))
@@ -195,6 +196,11 @@ def match_width (x : (BitVec k_n)) : (BitVec (2 * k_n)) :=
     | 32 => (const32 ())
     | n => ((BitVec.zero n), false)
   (foo ++ foo)
+
+def match_option_bitvec (x : (Option (BitVec 16))) : Int :=
+  match x with
+  | .some 0b1111111111111111 => 1
+  | _ => 0
 
 def initialize_registers (_ : Unit) : SailM Unit := do
   writeReg r_A (← (undefined_E ()))
