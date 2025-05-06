@@ -5,7 +5,7 @@ namespace Sail
 
 namespace BitVec
 
-def length {w : Nat} (_ : BitVec w) : Nat := w
+abbrev length {w : Nat} (_ : BitVec w) : Nat := w
 
 def signExtend {w : Nat} (x : BitVec w) (w' : Nat) : BitVec w' :=
   x.signExtend w'
@@ -206,8 +206,7 @@ def set_slice {n : Nat} (m : Nat) (bv : BitVec n) (start : Nat) (bv' : BitVec m)
 def String.leadingSpaces (s : String) : Nat :=
   s.length - (s.dropWhile (· = ' ')).length
 
-def Vector.length (_v : Vector α n) : Nat :=
-  n
+abbrev Vector.length (_v : Vector α n) : Nat := n
 
 def vectorInit {n : Nat} (a : α) : Vector α n := Vector.replicate n a
 
