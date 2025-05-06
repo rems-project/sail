@@ -4455,13 +4455,12 @@ let rewrite_unroll_constant_loops _type_env defs =
             let range = list_of_ord_range atyp n_start n_end n_step in
 
             (* Only unroll "small" loops, i.e. those with less than 'max_iter' iterations *)
-            if !opt_unroll_loops_max_iter <> 0 && List.length range > !opt_unroll_loops_max_iter then (
-              let (l : Parse_ast.l), _tannot = annot in
-              raise @@ Reporting.err_general l
+            if !opt_unroll_loops_max_iter <> 0 && List.length range > !opt_unroll_loops_max_iter then
+              raise
+              @@ Reporting.err_general (fst annot)
               @@ Printf.sprintf
                    "Cannot unroll the loop because it has more iterations (%d) than the maximum allowed (%d)\n"
                    (List.length range) !opt_unroll_loops_max_iter
-            )
             else (
               (* Build the final expression, a block of n times the body *)
               let bodies = List.map (fun z -> rewrite_exp_replace_id_with_num "i" z e_loop_body) range in
