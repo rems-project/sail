@@ -264,10 +264,11 @@ let start_lean_output (out_name : string) (import_names : string list) default_s
   let _ = copy_from_static_library sail_dir lean_sail_dir "BitVec" in
   let _ = copy_from_static_library sail_dir lean_sail_dir "IntRange" in
   let _ = copy_from_static_library sail_dir lean_sail_dir "Sail" in
-  let _ =
-    if !opt_lean_real_numbers then
-      opt_lean_import_files := (sail_dir ^ "/src/sail_lean_backend/Sail/Real.lean") :: !opt_lean_import_files
+  let real_numbers_file =
+    if !opt_lean_real_numbers then "/src/sail_lean_backend/Sail/Real.lean"
+    else "/src/sail_lean_backend/Sail/FakeReal.lean"
   in
+  opt_lean_import_files := (sail_dir ^ real_numbers_file) :: !opt_lean_import_files;
   opt_lean_import_files := (sail_dir ^ "/src/sail_lean_backend/Sail/Specialization.lean") :: !opt_lean_import_files;
   List.iter
     (fun filename ->
