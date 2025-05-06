@@ -913,18 +913,22 @@ let pats_complete l env ps typ =
   PC.is_complete l ctx ps typ
 
 (* Rewrite guarded patterns into a combination of if-expressions and
-    unguarded pattern matches
+   unguarded pattern matches
 
-    Strategy:
-    - Split clauses into groups where the first pattern subsumes all the
-      following ones
-    - Translate the groups in reverse order, using the next group as a
-      fall-through target, if there is one
-    - Within a group,
-      - translate the sequence of clauses to an if-then-else cascade using the
-        guards as long as the patterns are equivalent modulo substitution, or
-      - recursively translate the remaining clauses to a pattern match if
-        there is a difference in the patterns.
+  If [fun_only] is [true], do not rewrite bitvector patterns that are not
+  function parameters. The motivation is that the Lean backend can natively
+  handle those.
+
+  Strategy:
+  - Split clauses into groups where the first pattern subsumes all the
+    following ones
+  - Translate the groups in reverse order, using the next group as a
+    fall-through target, if there is one
+  - Within a group,
+    - translate the sequence of clauses to an if-then-else cascade using the
+      guards as long as the patterns are equivalent modulo substitution, or
+    - recursively translate the remaining clauses to a pattern match if
+      there is a difference in the patterns.
 
    TODO: Compare this more closely with the algorithm in the CPP'18 paper of
    Spector-Zabusky et al, who seem to use the opposite grouping and merging
