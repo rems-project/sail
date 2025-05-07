@@ -4888,7 +4888,10 @@ let check_type_union u_l non_rec_env env variant typq (Tu_aux (Tu_ty_id (arg_typ
   let env, restore =
     Env.with_private_visibility_if ~at:(visibility_loc def_annot.visibility) (is_private def_annot.visibility) env
   in
-  env |> Env.add_union_id ?in_module v (typq, typ) |> Env.add_val_spec ?in_module v (typq, typ) |> restore
+  env
+  |> Env.add_union_id ?in_module v (typq, typ)
+  |> Env.add_val_spec ?in_module ~already_bound:true v (typq, typ)
+  |> restore
 
 let check_record l env def_annot id typq fields =
   forbid_recursive_types l (fun () ->
