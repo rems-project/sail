@@ -279,8 +279,20 @@ let rec options =
       );
       ("-no_warn", Arg.Clear Reporting.opt_warnings, " do not print warnings");
       ("-all_warnings", Arg.Set Reporting.opt_all_warnings, " print all warning messages");
-      ("-strict_var", Arg.Set Type_check.opt_strict_var, " require var expressions for variable declarations");
-      ("-strict_bitvector", Arg.Set Initial_check.opt_strict_bitvector, " require bitvectors to be indexed by naturals");
+      ( "-strict_var",
+        Arg.Tuple [Arg.Unit (fun () -> Preprocess.add_symbol "STRICT_VAR"); Arg.Set Type_check.opt_strict_var],
+        " require var expressions for variable declarations"
+      );
+      ( "-strict_bitvector",
+        Arg.Tuple
+          [Arg.Unit (fun () -> Preprocess.add_symbol "STRICT_BITVECTOR"); Arg.Set Initial_check.opt_strict_bitvector],
+        " require bitvectors to be indexed by naturals"
+      );
+      ( "-strict_exponentials",
+        Arg.Tuple
+          [Arg.Unit (fun () -> Preprocess.add_symbol "STRICT_EXPONENTIALS"); Arg.Set Type_env.opt_strict_exponentials],
+        " type level exponentials must have a non-negative argument"
+      );
       ("-plugin", Arg.String (fun plugin -> load_plugin options plugin), "<file> load a Sail plugin");
       ("-just_check", Arg.Set opt_just_check, " terminate immediately after typechecking");
       ( "-memo_z3",

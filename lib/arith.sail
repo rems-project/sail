@@ -108,10 +108,18 @@ val prerr_int = impure "prerr_int_effect" : (string, int) -> unit
 
 $endif
 
+$ifdef STRICT_EXPONENTIALS
+
+val pow2 = pure {lean : "_lean_pow2i", _:"pow2"} : forall 'n, 'n >= 0. int('n) -> int(2 ^ 'n)
+
+$else
+
 /*!
 We have special support for raising values to the power of two. Any Sail expression `2 ^ x` will be compiled to this builtin.
 */
 val pow2 = pure {lean : "_lean_pow2i", _:"pow2"} : forall 'n. int('n) -> int(2 ^ 'n)
+
+$endif
 
 // ***** Integer shifts *****
 
