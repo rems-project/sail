@@ -387,7 +387,7 @@ let bound_typ_id env id =
   || Bindings.mem id env.global.enums || Bindings.mem id builtin_typs
   || Bindings.mem id env.global.abstract_typs
 
-let get_binding_loc env id =
+let get_type_binding_loc env id =
   let find map = Some (item_loc (Bindings.find id map)) in
   if Bindings.mem id builtin_typs then None
   else if Bindings.mem id env.global.unions then find env.global.unions
@@ -398,7 +398,7 @@ let get_binding_loc env id =
   else None
 
 let already_bound str id env =
-  match get_binding_loc env id with
+  match get_type_binding_loc env id with
   | Some l ->
       typ_raise (id_loc id)
         (Err_inner
@@ -412,20 +412,22 @@ let already_bound str id env =
       let suffix = if Bindings.mem id builtin_typs then " as a built-in type" else "" in
       typ_error (id_loc id) ("Cannot create " ^ str ^ " type " ^ string_of_id id ^ ", name is already bound" ^ suffix)
 
-let bound_ctor_fn env id =
+let bound_global env id =
   Bindings.mem id env.global.val_specs || Bindings.mem id env.global.union_ids || Bindings.mem id env.global.enum_ids
+  || Bindings.mem id env.global.registers
 
-let get_ctor_fn_binding_loc env id =
+let get_global_binding_loc env id =
   (* union constructors also get a val_spec entry, so check unions first *)
   if Bindings.mem id env.global.union_ids then
     Some ("a union constructor", item_loc (Bindings.find id env.global.union_ids))
   else if Bindings.mem id env.global.val_specs then Some ("a function", item_loc (Bindings.find id env.global.val_specs))
   else if Bindings.mem id env.global.enum_ids then
     Some ("an enumeration member", item_loc (Bindings.find id env.global.enum_ids))
+  else if Bindings.mem id env.global.registers then Some ("a register", item_loc (Bindings.find id env.global.registers))
   else None
 
-let already_bound_ctor_fn str id env =
-  match get_ctor_fn_binding_loc env id with
+let already_bound_global str id env =
+  match get_global_binding_loc env id with
   | Some (description, l) ->
       typ_raise (id_loc id)
         (Err_inner
@@ -473,15 +475,15 @@ let add_overloads l id ids env =
   typ_print
     (lazy (adding ^ "overloads for " ^ string_of_id id ^ " [" ^ string_of_list ", " string_of_id ids ^ "]"))
   [@coverage off];
-  if bound_ctor_fn env id then (
-    let description, bound_l = Option.get (get_ctor_fn_binding_loc env id) in
+  if bound_global env id then (
+    let description, bound_l = Option.get (get_global_binding_loc env id) in
     typ_error
       (Hint ("Previous binding", bound_l, l))
       (string_of_id id ^ " cannot be defined as an overload, as it is already bound to " ^ description)
   );
   List.iter
     (fun overload ->
-      if not (bound_ctor_fn env overload || Bindings.mem overload env.global.overloads) then
+      if not (bound_global env overload || Bindings.mem overload env.global.overloads) then
         typ_error
           (Hint ("unbound identifier", id_loc overload, l))
           ("Cannot create or extend overload " ^ string_of_id id ^ ", " ^ string_of_id overload ^ " is not bound")
@@ -1127,7 +1129,7 @@ let get_val_spec id env =
   | None -> typ_raise (id_loc id) (Err_no_function_type { id; functions = get_val_specs env })
 
 let add_union_id ?in_module id bind env =
-  if bound_ctor_fn env id then already_bound_ctor_fn "union constructor" id env
+  if bound_global env id then already_bound_global "union constructor" id env
   else (
     typ_print (lazy (adding ^ "union identifier " ^ string_of_id id ^ " : " ^ string_of_bind bind)) [@coverage off];
     update_global
@@ -1196,28 +1198,36 @@ let rec update_val_spec ?in_module id (typq, typ) env =
     | _ -> typ_error (id_loc id) "val definition must have a mapping or function type"
   end
 
-and add_val_spec ?in_module ?(ignore_duplicate = false) id (bind_typq, bind_typ) env =
-  if (not (Bindings.mem id env.global.val_specs)) || ignore_duplicate then
+and add_val_spec ?in_module ?(already_bound = false) ?(ignore_duplicate = false) id (bind_typq, bind_typ) env =
+  let duplicate = Bindings.mem id env.global.val_specs in
+  (* If already_bound = , we can add a val_spec for something that
+     is already bound as a global identifier in the typing
+     environment. This is used for union constructors. *)
+  let is_bound = bound_global env id && not already_bound in
+  let warn_on_duplicate () =
+    if duplicate && not ignore_duplicate then (
+      let previous_loc =
+        match Bindings.choose_opt (Bindings.filter (fun key _ -> Id.compare id key = 0) env.global.val_specs) with
+        | Some (prev_id, _) -> id_loc prev_id
+        | None -> Parse_ast.Unknown
+      in
+      let open Error_format in
+      Reporting.format_warn ~once_from:__POS__
+        ("Duplicate function type definition for " ^ string_of_id id)
+        (id_loc id)
+        (Seq
+           [
+             Line "This duplicate definition is being ignored!";
+             Location ("", Some "previous definition here", previous_loc, Seq []);
+           ]
+        )
+    )
+  in
+  if (not is_bound) || duplicate then (
+    warn_on_duplicate ();
     update_val_spec ?in_module id (bind_typq, bind_typ) env
-  else if ignore_duplicate then env
-  else (
-    let previous_loc =
-      match Bindings.choose_opt (Bindings.filter (fun key _ -> Id.compare id key = 0) env.global.val_specs) with
-      | Some (prev_id, _) -> id_loc prev_id
-      | None -> Parse_ast.Unknown
-    in
-    let open Error_format in
-    Reporting.format_warn ~once_from:__POS__
-      ("Duplicate function type definition for " ^ string_of_id id)
-      (id_loc id)
-      (Seq
-         [
-           Line "This duplicate definition is being ignored!";
-           Location ("", Some "previous definition here", previous_loc, Seq []);
-         ]
-      );
-    env
   )
+  else already_bound_global "function" id env
 
 and add_outcome id (typq, typ, params, vals, outcome_env) env =
   update_global
@@ -1314,7 +1324,7 @@ let add_enum' is_scattered id ids env =
                 typ_error
                   (Hint ("Register defined here ", item.loc, id_loc member))
                   ("Enumeration member " ^ string_of_id member ^ " is already bound as a register")
-            | None -> if bound_ctor_fn env member then already_bound_ctor_fn "enumeration member" member env else ()
+            | None -> if bound_global env member then already_bound_global "enumeration member" member env else ()
           )
       )
       ids;

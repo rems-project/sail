@@ -96,7 +96,16 @@ val get_default_order : t -> order
 val get_default_order_opt : t -> order option
 val set_default_order : order -> t -> t
 
-val add_val_spec : ?in_module:Project.mod_id -> ?ignore_duplicate:bool -> id -> typquant * typ -> t -> t
+(** Add a function type (val spec) to the global typing environment.
+
+    If already_bound = true, we can add a val_spec for something that is already bound as a global identifier in the
+    typing environment. This is used for union constructors.
+
+    For legacy reasons, function declarations can be duplicated. This will typically produce a warning. If
+    ignore_duplicate is true, this warning is supressed. *)
+val add_val_spec :
+  ?in_module:Project.mod_id -> ?already_bound:bool -> ?ignore_duplicate:bool -> id -> typquant * typ -> t -> t
+
 val update_val_spec : ?in_module:Project.mod_id -> id -> typquant * typ -> t -> t
 val define_val_spec : id -> t -> t
 val get_defined_val_specs : t -> IdSet.t
