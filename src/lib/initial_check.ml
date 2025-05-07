@@ -1116,8 +1116,6 @@ let to_ast_nexp = ConvertType.to_ast_nexp KindInference.initial_env
 
 let to_ast_bitfield_index_nexp = ConvertType.to_ast_bitfield_index_nexp
 
-let to_ast_kopts = ConvertType.to_ast_kopts KindInference.initial_env
-
 let to_ast_typquant = ConvertType.to_ast_typquant KindInference.initial_env
 
 let to_ast_type_union = ConvertType.to_ast_type_union KindInference.initial_env

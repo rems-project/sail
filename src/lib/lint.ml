@@ -76,9 +76,6 @@ let scan_exp_in_scattered_def f (SD_aux (aux, _)) =
 
 let scan_exp_in_fundef f (FD_aux (FD_function (_, _, funcls), _)) = List.iter (scan_exp_in_funcl f) funcls
 
-let scan_exp_in_internal_loop_measure f (Measure_aux (aux, _)) =
-  match aux with Measure_none -> () | Measure_some exp -> f exp
-
 let rec scan_exp_in_def f (DEF_aux (aux, _)) =
   match aux with
   | DEF_fundef fdef -> scan_exp_in_fundef f fdef

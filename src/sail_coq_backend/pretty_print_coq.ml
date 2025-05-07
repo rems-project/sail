@@ -2512,7 +2512,7 @@ let countable_types defs =
    the default names and the functions might not exist.  We can't check "no_enum_number_conversions" because it is
    added automatically when the functions are generated. *)
 let enum_fn_names defs =
-  let rec aux (enum_map, fn_set) (DEF_aux (d, def_annot)) =
+  let aux (enum_map, fn_set) (DEF_aux (d, def_annot)) =
     match d with
     | DEF_type (TD_aux (TD_enum (id, _, _), _)) -> begin
         let attr_opt = get_def_attribute "enum_number_conversions" def_annot in

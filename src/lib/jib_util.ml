@@ -1225,7 +1225,7 @@ let ctype_def_has_ctyp pred = function
   | CTD_struct (_, _, fields) -> List.exists (fun (_, ctyp) -> pred ctyp) fields
   | CTD_variant (_, _, ctors) -> List.exists (fun (_, ctyp) -> pred ctyp) ctors
 
-let rec cdef_has_ctyp pred (CDEF_aux (aux, _)) =
+let cdef_has_ctyp pred (CDEF_aux (aux, _)) =
   match aux with
   | CDEF_register (_, ctyp, instrs) -> pred ctyp || List.exists (instr_has_ctyp pred) instrs
   | CDEF_val (_, _, ctyps, ctyp, _) -> List.exists pred ctyps || pred ctyp
