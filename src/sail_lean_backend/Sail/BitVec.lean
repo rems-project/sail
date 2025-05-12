@@ -228,7 +228,7 @@ def elabMatchBv : TermElab := fun stx typ? =>
       ← if let some rhsElse := rhsElse? then
           `(Function.const _ $rhsElse)
         else
-          `(fun _ => by try bv_decide; try grind)
+          `(fun _ => by try bv_decide -enums)
 
     for ps in pss.reverse, rhs in rhss.reverse do
       let test ← genBVPatMatchTest xs ps
