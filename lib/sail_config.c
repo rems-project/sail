@@ -47,13 +47,30 @@ typedef struct sail_json* sail_config_json;
 
 static cJSON *sail_config;
 
-void sail_config_set_file(const char *path)
+void sail_config_set_string(const char *json)
 {
   cJSON_Hooks hooks;
   hooks.malloc_fn = &sail_malloc;
   hooks.free_fn = &sail_free;
   cJSON_InitHooks(&hooks);
 
+  // Points to the position of a parse error if there was one.
+  const char *parse_end = json;
+
+  // Parse the JSON. Setting `require_null_terminated` to 1 enables
+  // two conflated checks: that the input is null terminated (which
+  // we guarantee above), and that there is no junk data after the JSON.
+  sail_config = cJSON_ParseWithOpts(json, &parse_end, 1);
+
+  if (!sail_config) {
+    char error_message[128];
+    snprintf(error_message, sizeof error_message, "Failed to parse JSON configuration at offset %ld", parse_end - json);
+    sail_assert(false, error_message);
+  }
+}
+
+void sail_config_set_file(const char *path)
+{
   FILE *f = fopen(path, "rb");
   fseek(f, 0, SEEK_END);
   long fsize = ftell(f);
@@ -70,19 +87,14 @@ void sail_config_set_file(const char *path)
   buffer[fsize] = 0;
   fclose(f);
 
-  // Points to the position of a parse error if there was one.
-  const char *parse_end = buffer;
-
-  // Parse the JSON. Setting `require_null_terminated` to 1 enables
-  // two conflated checks: that the input is null terminated (which
-  // we guarantee above), and that there is no junk data after the JSON.
-  sail_config = cJSON_ParseWithLengthOpts(buffer, fsize + 1, &parse_end, 1);
-
-  if (!sail_config) {
-    char error_message[128];
-    snprintf(error_message, sizeof error_message, "Failed to parse JSON configuration at offset %ld", parse_end - buffer);
-    sail_assert(false, error_message);
+  // Check there are no null bytes in the file because
+  // sail_config_set_string() relies on null termination
+  // to find the end of the string.
+  for (size_t i = 0; i < fsize; ++i) {
+    sail_assert(buffer[i] != 0, "Null byte in JSON configuration");
   }
+
+  sail_config_set_string(buffer);
 
   sail_free(buffer);
 }
