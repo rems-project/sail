@@ -55,7 +55,15 @@ typedef const_sail_string sail_config_key[];
 typedef struct sail_json* sail_config_json;
 
 /*
- * This file sets the runtime JSON config file
+ * Load the runtime JSON config from a null-terminated
+ * string containing JSON data.
+ */
+ void sail_config_set_string(const char *json);
+
+/*
+ * Load the runtime JSON config from a file. The file
+ * is read into memory and closed so it does not need
+ * to exist after this function returns.
  */
 void sail_config_set_file(const char *path);
 
