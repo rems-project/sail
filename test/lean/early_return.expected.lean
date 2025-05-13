@@ -66,31 +66,13 @@ open option
 open Register
 open E
 
-/-- Type quantifiers: k_ex2312# : Bool, k_ex2311# : Bool -/
+/-- Type quantifiers: k_ex2332# : Bool, k_ex2331# : Bool -/
 def neq_bool (x : Bool) (y : Bool) : Bool :=
   (! (x == y))
 
 /-- Type quantifiers: x : Int -/
 def __id (x : Int) : Int :=
   x
-
-/-- Type quantifiers: len : Nat, k_v : Nat, len ≥ 0 ∧ k_v ≥ 0 -/
-def sail_mask (len : Nat) (v : (BitVec k_v)) : (BitVec len) :=
-  bif (len ≤b (Sail.BitVec.length v))
-  then (Sail.BitVec.truncate v len)
-  else (Sail.BitVec.zeroExtend v len)
-
-/-- Type quantifiers: n : Nat, n ≥ 0 -/
-def sail_ones (n : Nat) : (BitVec n) :=
-  (Complement.complement (BitVec.zero n))
-
-/-- Type quantifiers: l : Int, i : Int, n : Nat, n ≥ 0 -/
-def slice_mask {n : _} (i : Int) (l : Int) : (BitVec n) :=
-  bif (l ≥b n)
-  then ((sail_ones n) <<< i)
-  else
-    (let one : (BitVec n) := (sail_mask n (0b1 : (BitVec 1)))
-    (((one <<< l) - one) <<< i))
 
 /-- Type quantifiers: n : Int, m : Int -/
 def _shl_int_general (m : Int) (n : Int) : Int :=
@@ -116,6 +98,46 @@ def fdiv_int (n : Int) (m : Int) : Int :=
 /-- Type quantifiers: m : Int, n : Int -/
 def fmod_int (n : Int) (m : Int) : Int :=
   (n -i (m *i (fdiv_int n m)))
+
+/-- Type quantifiers: len : Nat, k_v : Nat, len ≥ 0 ∧ k_v ≥ 0 -/
+def sail_mask (len : Nat) (v : (BitVec k_v)) : (BitVec len) :=
+  bif (len ≤b (Sail.BitVec.length v))
+  then (Sail.BitVec.truncate v len)
+  else (Sail.BitVec.zeroExtend v len)
+
+/-- Type quantifiers: n : Nat, n ≥ 0 -/
+def sail_ones (n : Nat) : (BitVec n) :=
+  (Complement.complement (BitVec.zero n))
+
+/-- Type quantifiers: l : Int, i : Int, n : Nat, n ≥ 0 -/
+def slice_mask {n : _} (i : Int) (l : Int) : (BitVec n) :=
+  bif (l ≥b n)
+  then ((sail_ones n) <<< i)
+  else
+    (let one : (BitVec n) := (sail_mask n (0b1 : (BitVec 1)))
+    (((one <<< l) - one) <<< i))
+
+/-- Type quantifiers: n : Nat, n > 0 -/
+def to_bytes_le {n : _} (b : (BitVec (8 * n))) : (Vector (BitVec 8) n) := Id.run do
+  let res := (vectorInit (BitVec.zero 8))
+  let loop_i_lower := 0
+  let loop_i_upper := (n -i 1)
+  let mut loop_vars := res
+  for i in [loop_i_lower:loop_i_upper:1]i do
+    let res := loop_vars
+    loop_vars := (vectorUpdate res i (Sail.BitVec.extractLsb b ((8 *i i) +i 7) (8 *i i)))
+  (pure loop_vars)
+
+/-- Type quantifiers: n : Nat, n > 0 -/
+def from_bytes_le {n : _} (v : (Vector (BitVec 8) n)) : (BitVec (8 * n)) := Id.run do
+  let res := (BitVec.zero (8 *i n))
+  let loop_i_lower := 0
+  let loop_i_upper := (n -i 1)
+  let mut loop_vars := res
+  for i in [loop_i_lower:loop_i_upper:1]i do
+    let res := loop_vars
+    loop_vars := (Sail.BitVec.updateSubrange res ((8 *i i) +i 7) (8 *i i) (GetElem?.getElem! v i))
+  (pure loop_vars)
 
 /-- Type quantifiers: k_a : Type -/
 def is_none (opt : (Option k_a)) : Bool :=
@@ -422,7 +444,7 @@ def match_early_return_loop (x : E) : SailM E := SailME.run do
   | C => writeReg r_C A
   readReg r_B
 
-/-- Type quantifiers: k_ex2624# : Bool -/
+/-- Type quantifiers: k_ex2648# : Bool -/
 def ite_early_return (x : Bool) : SailM E := SailME.run do
   writeReg r_A (← readReg r_C)
   let y ← (( do
@@ -433,7 +455,7 @@ def ite_early_return (x : Bool) : SailM E := SailME.run do
     else readReg r_B ) : SailME E E )
   readReg r_B
 
-/-- Type quantifiers: k_ex2626# : Bool -/
+/-- Type quantifiers: k_ex2650# : Bool -/
 def ite_early_return_inloop (x : Bool) : SailM E := SailME.run do
   let loop_i_lower := 0
   let loop_i_upper := 10
@@ -452,7 +474,7 @@ def ite_early_return_inloop (x : Bool) : SailM E := SailME.run do
   (pure loop_vars)
   readReg r_B
 
-/-- Type quantifiers: k_ex2630# : Bool -/
+/-- Type quantifiers: k_ex2654# : Bool -/
 def ite_early_return_loop (x : Bool) : SailM E := SailME.run do
   bif x
   then
@@ -472,7 +494,7 @@ def ite_early_return_loop (x : Bool) : SailM E := SailME.run do
 def unit_type (x : E) : SailM Unit := do
   writeReg r_A x
 
-/-- Type quantifiers: k_ex2634# : Bool -/
+/-- Type quantifiers: k_ex2658# : Bool -/
 def ite_early_return_seq (x : Bool) : SailM E := SailME.run do
   writeReg r_A (← readReg r_C)
   let y ← (( do
