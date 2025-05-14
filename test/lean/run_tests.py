@@ -46,6 +46,7 @@ skip_selftests = {
     'config_abstract_bool', # Register type unsupported in state.ml
     'newtype',
     'assign_in_funarg',
+    'concurrency_interface_v2',
 }
 
 print("Sail is {}".format(sail))

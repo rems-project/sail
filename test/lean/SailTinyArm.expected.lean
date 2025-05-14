@@ -509,31 +509,13 @@ open CacheOp
 open Barrier
 open AccessType
 
-/-- Type quantifiers: k_ex5891# : Bool, k_ex5890# : Bool -/
+/-- Type quantifiers: k_ex5911# : Bool, k_ex5910# : Bool -/
 def neq_bool (x : Bool) (y : Bool) : Bool :=
   (! (x == y))
 
 /-- Type quantifiers: x : Int -/
 def __id (x : Int) : Int :=
   x
-
-/-- Type quantifiers: len : Nat, k_v : Nat, len ≥ 0 ∧ k_v ≥ 0 -/
-def sail_mask (len : Nat) (v : (BitVec k_v)) : (BitVec len) :=
-  bif (len ≤b (Sail.BitVec.length v))
-  then (Sail.BitVec.truncate v len)
-  else (Sail.BitVec.zeroExtend v len)
-
-/-- Type quantifiers: n : Nat, n ≥ 0 -/
-def sail_ones (n : Nat) : (BitVec n) :=
-  (Complement.complement (BitVec.zero n))
-
-/-- Type quantifiers: l : Int, i : Int, n : Nat, n ≥ 0 -/
-def slice_mask {n : _} (i : Int) (l : Int) : (BitVec n) :=
-  bif (l ≥b n)
-  then ((sail_ones n) <<< i)
-  else
-    (let one : (BitVec n) := (sail_mask n (0b1 : (BitVec 1)))
-    (((one <<< l) - one) <<< i))
 
 /-- Type quantifiers: n : Int, m : Int -/
 def _shl_int_general (m : Int) (n : Int) : Int :=
@@ -559,6 +541,46 @@ def fdiv_int (n : Int) (m : Int) : Int :=
 /-- Type quantifiers: m : Int, n : Int -/
 def fmod_int (n : Int) (m : Int) : Int :=
   (n -i (m *i (fdiv_int n m)))
+
+/-- Type quantifiers: len : Nat, k_v : Nat, len ≥ 0 ∧ k_v ≥ 0 -/
+def sail_mask (len : Nat) (v : (BitVec k_v)) : (BitVec len) :=
+  bif (len ≤b (Sail.BitVec.length v))
+  then (Sail.BitVec.truncate v len)
+  else (Sail.BitVec.zeroExtend v len)
+
+/-- Type quantifiers: n : Nat, n ≥ 0 -/
+def sail_ones (n : Nat) : (BitVec n) :=
+  (Complement.complement (BitVec.zero n))
+
+/-- Type quantifiers: l : Int, i : Int, n : Nat, n ≥ 0 -/
+def slice_mask {n : _} (i : Int) (l : Int) : (BitVec n) :=
+  bif (l ≥b n)
+  then ((sail_ones n) <<< i)
+  else
+    (let one : (BitVec n) := (sail_mask n (0b1 : (BitVec 1)))
+    (((one <<< l) - one) <<< i))
+
+/-- Type quantifiers: n : Nat, n > 0 -/
+def to_bytes_le {n : _} (b : (BitVec (8 * n))) : (Vector (BitVec 8) n) := Id.run do
+  let res := (vectorInit (BitVec.zero 8))
+  let loop_i_lower := 0
+  let loop_i_upper := (n -i 1)
+  let mut loop_vars := res
+  for i in [loop_i_lower:loop_i_upper:1]i do
+    let res := loop_vars
+    loop_vars := (vectorUpdate res i (Sail.BitVec.extractLsb b ((8 *i i) +i 7) (8 *i i)))
+  (pure loop_vars)
+
+/-- Type quantifiers: n : Nat, n > 0 -/
+def from_bytes_le {n : _} (v : (Vector (BitVec 8) n)) : (BitVec (8 * n)) := Id.run do
+  let res := (BitVec.zero (8 *i n))
+  let loop_i_lower := 0
+  let loop_i_upper := (n -i 1)
+  let mut loop_vars := res
+  for i in [loop_i_lower:loop_i_upper:1]i do
+    let res := loop_vars
+    loop_vars := (Sail.BitVec.updateSubrange res ((8 *i i) +i 7) (8 *i i) (GetElem?.getElem! v i))
+  (pure loop_vars)
 
 /-- Type quantifiers: k_a : Type -/
 def is_none (opt : (Option k_a)) : Bool :=

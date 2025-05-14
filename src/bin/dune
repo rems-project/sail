@@ -55,6 +55,12 @@
   (%{workspace_root}/lib/concurrency_interface/read_write.sail
    as
    lib/concurrency_interface/read_write.sail)
+  (%{workspace_root}/lib/concurrency_interface/read_write_v1.sail
+   as
+   lib/concurrency_interface/read_write_v1.sail)
+  (%{workspace_root}/lib/concurrency_interface/read_write_v2.sail
+   as
+   lib/concurrency_interface/read_write_v2.sail)
   (%{workspace_root}/lib/concurrency_interface/sysreg.sail
    as
    lib/concurrency_interface/sysreg.sail)
