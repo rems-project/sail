@@ -1,4 +1,4 @@
-import Std.Data.DHashMap
+import Std.Data.ExtDHashMap
 import Std.Data.HashMap
 
 namespace Sail
@@ -375,7 +375,7 @@ section Regs
 variable {Register : Type} {RegisterType : Register → Type} [DecidableEq Register] [Hashable Register]
 
 structure SequentialState (RegisterType : Register → Type) (c : ChoiceSource) where
-  regs : Std.DHashMap Register RegisterType
+  regs : Std.ExtDHashMap Register RegisterType
   choiceState : c.α
   mem : Std.HashMap Nat (BitVec 8)
   tags : Unit
@@ -601,6 +601,9 @@ instance [GetElem? coll Nat elem valid] : GetElem? coll Int elem (λ c i ↦ val
 
 instance : HPow Int Int Int where
   hPow x n := x ^ n.toNat
+
+instance [BEq α] [Hashable α] : Inhabited (Std.ExtDHashMap α β) where
+  default := ∅
 
 infixl:65 " +i "   => fun (x y : Int) => x + y
 infixl:65 " -i "   => fun (x y : Int) => x - y
