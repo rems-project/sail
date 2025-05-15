@@ -354,11 +354,17 @@ let output (out_name : string) env effect_info ({ defs; _ } as ast : Libsail.Typ
       (* Collect all non-empty slices between include pragmas in the file *)
       let imports = Pretty_print_lean.collect_import_files defs (out_name ^ ".sail") in
       let importTree = Pretty_print_lean.collect_import_files2 defs (out_name ^ ".sail") in
-      print_string (Pretty_print_lean.string_of_import_tree importTree);
+      let importTree = Pretty_print_lean.import_tree_remove_last importTree in
+      Pretty_print_sail.output_ast stdout (Type_check.strip_ast ast);
       let imports = List.map file_to_module imports in
       (* Discard the last import file, as we will use the main file instead *)
       let imports = Pretty_print_lean.take (List.length imports - 1) imports in
-      dedup_files imports []
+      let imports = dedup_files imports [] in
+      print_endline (Pretty_print_lean.string_of_import_tree importTree);
+      print_endline (string_of_int (Pretty_print_lean.import_tree_size importTree));
+      print_endline (String.concat ", " imports);
+      print_endline (string_of_int (List.length imports));
+      imports
     )
   in
   let ctx = start_lean_output out_name imports default_sail_dir in
