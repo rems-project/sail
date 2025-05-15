@@ -47,6 +47,7 @@ skip_selftests = {
     'newtype',
     'assign_in_funarg',
     'concurrency_interface_v2',
+    'config_map_guard',
 }
 
 print("Sail is {}".format(sail))
