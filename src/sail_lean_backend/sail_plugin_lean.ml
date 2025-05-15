@@ -85,8 +85,8 @@ let opt_single_file : bool ref = ref false
 let opt_enable_matchbv : bool ref = ref false
 let opt_disable_matchbv : bool ref = ref true
 
-let lean_version : string = "lean4:nightly-2025-04-07"
-let mathlib_version : string = "nightly-testing-2025-04-07"
+let lean_version : string = "lean4:nightly-2025-05-14"
+let mathlib_version : string = "v4.20.0-rc5"
 
 let lean_options =
   [
