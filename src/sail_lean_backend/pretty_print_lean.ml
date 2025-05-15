@@ -26,6 +26,8 @@ let the_main_function_has_been_seen = ref false
 
 let opt_noncomputable_functions : IdSet.t ref = ref IdSet.empty
 
+let opt_partial_functions : IdSet.t ref = ref IdSet.empty
+
 let remove_empties (docs : document list) = List.filter (fun d -> d != empty) docs
 
 let opens = ref IdSet.empty
@@ -1116,9 +1118,11 @@ let doc_funcl_init global (FCL_aux (FCL_funcl (id, pexp), annot)) =
     { ctx with in_sail_monad = is_monadic; in_except_monad = (if early_return then Some doc_ret_typ_orig else None) }
   in
   let decl_val = decl_val @ dec_val_end in
+  let partiality = if IdSet.mem id !opt_partial_functions then string "partial" else empty in
   let computability = if IdSet.mem id !opt_noncomputable_functions then string "noncomputable" else empty in
   ( typ_quant_comment,
-    separate space (remove_empties [computability; string "def"; doc_id_ctor id] @ binders @ [colon] @ decl_val),
+    separate space
+      (remove_empties [partiality; computability; string "def"; doc_id_ctor id] @ binders @ [colon] @ decl_val),
     ctx,
     fixup_binders
   )

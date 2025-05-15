@@ -133,7 +133,11 @@ let lean_options =
     ( Flag.create ~prefix:["lean"] ~arg:"func-name" "noncomputable_function",
       Arg.String
         Pretty_print_lean.(fun fn -> opt_noncomputable_functions := IdSet.add (mk_id fn) !opt_noncomputable_functions),
-      "do not generate a definition for the type"
+      "do not generate executable code for this function"
+    );
+    ( Flag.create ~prefix:["lean"] ~arg:"func-name" "partial_function",
+      Arg.String Pretty_print_lean.(fun fn -> opt_partial_functions := IdSet.add (mk_id fn) !opt_partial_functions),
+      "disable the totality check for this function"
     );
   ]
 
