@@ -1186,7 +1186,10 @@ let doc_typdef ctx (TD_aux (td, tannot) as full_typdef) =
   | TD_enum (id, fields, _) ->
       let fields = List.map doc_id_ctor fields in
       let fields = List.map (fun i -> space ^^ pipe ^^ space ^^ i) fields in
-      let derivers = if List.length fields == 0 then [string "BEq"] else [string "Inhabited"; string "BEq"] in
+      let derivers =
+        if List.length fields == 0 then [string "BEq"; string "Repr"]
+        else [string "Inhabited"; string "BEq"; string "Repr"]
+      in
       let enums_doc = concat fields in
       let _ = opens := IdSet.add id !opens in
       let id = doc_id_ctor id in
@@ -1202,7 +1205,7 @@ let doc_typdef ctx (TD_aux (td, tannot) as full_typdef) =
       doc_typ_quant_in_comment ctx tq
       ^^ nest 2
            (flow (break 1) (remove_empties [string "structure"; doc_id_ctor id; rectyp; string "where"])
-           ^^ hardline ^^ fields_doc ^^ hardline ^^ string "deriving Inhabited, BEq"
+           ^^ hardline ^^ fields_doc ^^ hardline ^^ string "deriving Inhabited, BEq, Repr"
            )
   | TD_abbrev (id, tq, A_aux (A_typ (Typ_aux (Typ_app (Id_aux (Id "range", _), _), _) as t), _)) ->
       let vars = doc_typ_quant_relevant ctx tq in
@@ -1224,7 +1227,9 @@ let doc_typdef ctx (TD_aux (td, tannot) as full_typdef) =
       let rectyp = List.map (fun d -> parens d) rectyp |> separate space in
       let _ = opens := IdSet.add id !opens in
       let id = doc_id_ctor id in
-      let derivers = if List.length ar == 0 then [string "BEq"] else [string "Inhabited"; string "BEq"] in
+      let derivers =
+        if List.length ar == 0 then [string "BEq"; string "Repr"] else [string "Inhabited"; string "BEq"; string "Repr"]
+      in
       doc_typ_quant_in_comment ctx tq
       ^^ nest 2
            (nest 2 (flow space (remove_empties [string "inductive"; id; rectyp; string "where"]))
@@ -1320,7 +1325,7 @@ let register_enums registers =
     [
       string "inductive Register : Type where";
       separate_map hardline (fun (_, id, _) -> string "  | " ^^ doc_id_ctor id) registers;
-      string "  deriving DecidableEq, Hashable";
+      string "  deriving DecidableEq, Hashable, Repr";
       string "open Register";
       empty;
     ]

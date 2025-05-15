@@ -16,7 +16,7 @@ abbrev bits k_n := (BitVec k_n)
 inductive option (k_a : Type) where
   | Some (_ : k_a)
   | None (_ : Unit)
-  deriving Inhabited, BEq
+  deriving Inhabited, BEq, Repr
 
 abbrev xlen : Int := 64
 
@@ -27,18 +27,18 @@ abbrev xlenbits := (BitVec 64)
 abbrev regbits := (BitVec 5)
 
 inductive iop where | RISCV_ADDI | RISCV_SLTI | RISCV_SLTIU | RISCV_XORI | RISCV_ORI | RISCV_ANDI
-  deriving Inhabited, BEq
+  deriving Inhabited, BEq, Repr
 
 inductive ast where
   | ITYPE (_ : ((BitVec 12) × regbits × regbits × iop))
   | LOAD (_ : ((BitVec 12) × regbits × regbits))
-  deriving Inhabited, BEq
+  deriving Inhabited, BEq, Repr
 
 inductive Register : Type where
   | Xs
   | nextPC
   | PC
-  deriving DecidableEq, Hashable
+  deriving DecidableEq, Hashable, Repr
 open Register
 
 abbrev RegisterType : Register → Type
