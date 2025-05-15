@@ -53,6 +53,8 @@ val opt_smt_linearize : bool ref
 (** Val use a separate string literal type *)
 val opt_string_literal_type : bool ref
 
+val opt_strict_exponentials : bool ref
+
 type global_env
 
 type env

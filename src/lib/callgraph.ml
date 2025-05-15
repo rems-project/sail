@@ -508,7 +508,6 @@ let filter_ast_ids roots cuts ast =
   filter_ast cuts g ast
 
 let top_sort_defs ast =
-  prerr_endline "SORTING";
   let module NM = Map.Make (Node) in
   (* Flatten mutrecs; if they're necessary they'll be rebuilt *)
   let ast =

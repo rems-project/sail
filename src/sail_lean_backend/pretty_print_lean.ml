@@ -311,7 +311,7 @@ and doc_typ_app ctx (A_aux (t, _) as typ) =
   | A_bool nc -> failwith ("Constraint " ^ string_of_n_constraint nc ^ "not translatable yet.")
   | A_nexp m -> doc_nexp ctx m
 
-let rec captured_typ_var ((i, Typ_aux (t, _)) as typ) =
+let captured_typ_var ((i, Typ_aux (t, _)) as typ) =
   match t with
   | Typ_app (Id_aux (Id "atom", _), [A_aux (A_nexp (Nexp_aux (Nexp_var ki, _)), _)])
   | Typ_app (Id_aux (Id "implicit", _), [A_aux (A_nexp (Nexp_aux (Nexp_var ki, _)), _)]) ->

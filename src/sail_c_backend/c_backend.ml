@@ -815,7 +815,7 @@ module Combine_variables = struct
 
   let modify_error l = Reporting.unreachable l __POS__ "Combine variables optimisation failed"
 
-  let modify l (skipped, nesting) ctyp x y =
+  let modify l (skipped, nesting) ctyp x pattern_y =
     let rec traverse state instrs =
       match state with
       | Find (skipped, (child :: grandchildren as nesting)) -> (
@@ -830,7 +830,9 @@ module Combine_variables = struct
         )
       | Find (skipped, []) -> (
           match instrs with
-          | I_aux (I_decl (ctyp', y), _) :: instrs when ctyp_equal ctyp ctyp' -> traverse (Modify (no_offset, y)) instrs
+          | I_aux (I_decl (ctyp', y), _) :: instrs when ctyp_equal ctyp ctyp' ->
+              assert (Name.compare pattern_y y = 0);
+              traverse (Modify (no_offset, y)) instrs
           | I_aux (I_block block, aux) :: instrs when skipped > 0 ->
               I_aux (I_block block, aux) :: traverse (Find (skipped - 1, [])) instrs
           | instr :: instrs -> instr :: traverse (Find (skipped, [])) instrs
@@ -1508,7 +1510,7 @@ module Codegen (Config : CODEGEN_CONFIG) = struct
           | CT_sbits _ -> ("undefined_sbits()", [])
           | CT_lbits when !optimize_fixed_bits -> ("undefined_lbits(false)", [])
           | CT_bool -> ("false", [])
-          | CT_enum id -> (sprintf "((%s)0)" (sgen_ctyp ctyp), [])
+          | CT_enum _ -> (sprintf "((%s)0)" (sgen_ctyp ctyp), [])
           | CT_tup ctyps when is_stack_ctyp ctx ctyp ->
               let gs = ngensym () in
               let fold (n, ctyp) (inits, prev) =

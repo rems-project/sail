@@ -64,7 +64,7 @@ def test_projects():
             tests[filename] = os.fork()
             if tests[filename] == 0:
                 if filename.startswith('fail'):
-                    step('\'{}\' --no-memo-z3 project/{} --all-modules 2> project/{}.error'.format(sail, filename, basename), expected_status = 1)
+                    step('\'{}\' --no-memo-z3 --strict-bitvector project/{} --all-modules 2> project/{}.error'.format(sail, filename, basename), expected_status = 1)
                     step('diff project/{}.error project/{}.expect'.format(basename, basename))
                     step('rm project/{}.error'.format(basename))
                 else:

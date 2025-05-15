@@ -56,8 +56,6 @@ let rec map_last f = function
       let x = f false x in
       x :: map_last f xs
 
-let line_comment_opt = function Comment (Lexer.Comment_line, _, _, contents, _trailing) -> Some contents | _ -> None
-
 (* Remove additional (> 1) trailing newlines at the end of a string *)
 let discard_extra_trailing_newlines s =
   let len = String.length s in
@@ -180,9 +178,6 @@ module PPrintWrapper = struct
   let separate_map sep f xs = Util.fold_left_index (fun n acc x -> if n = 0 then f x else acc ^^ sep ^^ f x) Empty xs
 
   let separate sep xs = separate_map sep (fun x -> x) xs
-
-  let concat_map_last f xs =
-    Util.fold_left_index_last (fun n last acc x -> if n = 0 then f last x else acc ^^ f last x) Empty xs
 
   let prefix n b x y = Group (x ^^ Nest (n, break b ^^ y))
 

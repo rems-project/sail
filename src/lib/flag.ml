@@ -44,8 +44,6 @@
 (*  SPDX-License-Identifier: BSD-2-Clause                                   *)
 (****************************************************************************)
 
-open Arg
-
 type t = {
   prefix : string list;
   hide_prefix : bool;

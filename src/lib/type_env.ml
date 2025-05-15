@@ -58,6 +58,8 @@ let opt_smt_linearize = ref false
 
 let opt_string_literal_type = ref false
 
+let opt_strict_exponentials = ref false
+
 module StringMap = Map.Make (String)
 
 module IdPair = struct
@@ -554,6 +556,9 @@ module Well_formedness = struct
   let with_existential exs =
     match exs.constr with Some ex_constraint -> fun c -> nc_or (nc_not ex_constraint) c | None -> fun c -> c
 
+  let conj_constraint exs c =
+    { exs with constr = (match exs.constr with None -> Some c | Some c' -> Some (nc_and c c')) }
+
   let check_args_typquant id exs env args typq =
     let kopts, ncs = quant_split typq in
     let rec subst_args kopts args =
@@ -721,12 +726,25 @@ module Well_formedness = struct
     | Nexp_times (nexp1, nexp2) | Nexp_sum (nexp1, nexp2) | Nexp_minus (nexp1, nexp2) ->
         wf_nexp exs env nexp1;
         wf_nexp exs env nexp2
-    | Nexp_exp nexp -> wf_nexp exs env nexp (* MAYBE: Could put restrictions on what is allowed here *)
+    | Nexp_exp nexp ->
+        wf_nexp exs env nexp;
+        if !opt_strict_exponentials then (
+          match env.prove with
+          | Some prove ->
+              let with_existential =
+                match exs.constr with
+                | Some ex_constraint -> fun c -> nc_or (nc_not ex_constraint) c
+                | None -> fun c -> c
+              in
+              if not (prove env (with_existential (nc_gteq nexp (nint 0)))) then
+                typ_error l "Exponent must be greater than or equal to zero"
+          | None -> Reporting.unreachable l __POS__ "No prover in environment when checking well-formedness"
+        )
     | Nexp_neg nexp -> wf_nexp exs env nexp
     | Nexp_if (i, t, e) ->
         wf_constraint exs env i;
-        wf_nexp exs env t;
-        wf_nexp exs env e
+        wf_nexp (conj_constraint exs i) env t;
+        wf_nexp (conj_constraint exs (nc_not i)) env e
 
   and wf_constraint (exs : existential) env (NC_aux (nc_aux, l) as nc) =
     wf_debug "constraint" string_of_n_constraint nc exs;

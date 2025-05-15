@@ -1044,17 +1044,6 @@ module Make (C : CONFIG) = struct
     in
     compile_config' l ctx key ctyp
 
-  let rec apat_ctyp ctx (AP_aux (apat, { env; _ })) =
-    let ctx = { ctx with local_env = env } in
-    match apat with
-    | AP_tuple apats -> CT_tup (List.map (apat_ctyp ctx) apats)
-    | AP_global (_, typ) -> ctyp_of_typ ctx typ
-    | AP_cons (apat, _) -> CT_list (ctyp_suprema (apat_ctyp ctx apat))
-    | AP_wild typ | AP_nil typ | AP_id (_, typ) -> ctyp_of_typ ctx typ
-    | AP_app (_, _, typ) -> ctyp_of_typ ctx typ
-    | AP_as (_, _, typ) -> ctyp_of_typ ctx typ
-    | AP_struct (_, typ) -> ctyp_of_typ ctx typ
-
   let rec compile_match ctx (AP_aux (apat_aux, { env; loc = l; _ })) cval on_failure =
     let ctx = { ctx with local_env = env } in
     let ctyp = cval_ctyp cval in
