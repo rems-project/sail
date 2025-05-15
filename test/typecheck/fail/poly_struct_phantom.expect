@@ -1,0 +1,5 @@
+[93mType error[0m:
+[96mfail/poly_struct_phantom.sail[0m:14.10-53:
+14[96m |[0m  let x = struct S { f1 = 3, f2 = true, f3 = "test" };
+  [91m |[0m          [91m^-----------------------------------------^[0m
+  [91m |[0m Failed to instantiate ('c : Type) when inferring struct literal of type S

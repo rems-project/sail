@@ -637,7 +637,7 @@ let rec sail_exp_from_json ~at:l env typ =
               fields
             |> Util.option_all
           in
-          Some (mk_exp ~loc:l (E_struct fexps))
+          Some (mk_exp ~loc:l (E_struct (SN_id id, fexps)))
         else if typ_is_variant env base_typ then
           let* id, _ = destruct_typ_args base_typ in
           match obj with

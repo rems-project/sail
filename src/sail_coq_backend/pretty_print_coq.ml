@@ -962,7 +962,7 @@ and doc_pat_no_existential ctxt apat_needed (P_aux (p, (l, annot)) as pat) typ =
       let ppp = doc_op (string "::") p_pp pp_pp in
       if apat_needed then parens ppp else ppp
   | P_string_append _ -> unreachable l __POS__ "string append pattern found in Coq backend, should have been rewritten"
-  | P_struct (fpats, _) ->
+  | P_struct (_, fpats, _) ->
       let type_id =
         match typ with
         | (Typ_aux (Typ_id tid, _) | Typ_aux (Typ_app (tid, _), _)) when Env.is_record tid env -> tid
@@ -1168,7 +1168,7 @@ let merge_new_tyvars ctxt old_env pat new_env =
        they'd do *)
     | P_app (_, ps) | P_vector ps | P_vector_concat ps | P_tuple ps | P_list ps | P_string_append ps ->
         List.fold_left merge_pat m ps
-    | P_struct (fields, _) -> List.fold_left merge_pat m (List.map snd fields)
+    | P_struct (_, fields, _) -> List.fold_left merge_pat m (List.map snd fields)
     | P_cons (p1, p2) -> merge_pat (merge_pat m p1) p2
   in
   let m, r = IdSet.fold remove_binding (pat_ids pat) (ctxt.kid_id_renames, ctxt.kid_id_renames_rev) in
@@ -1899,7 +1899,7 @@ let doc_exp, doc_let =
           | Complex s -> string (autocast_name ^ " (T := fun _sz => " ^ s ^ "%type)") ^^ space ^^ parens epp
         in
         if aexp_needed then parens epp else epp
-    | E_struct fexps ->
+    | E_struct (_, fexps) ->
         let recordtyp =
           match destruct_tannot annot with
           | Some (env, Typ_aux (Typ_id tid, _)) | Some (env, Typ_aux (Typ_app (tid, _), _)) ->

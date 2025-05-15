@@ -430,12 +430,13 @@ let rec step (E_aux (e_aux, annot) as orig_exp) =
       | Enum _ -> return (exp_of_value (V_member (string_of_id id)))
       | _ -> fail ("Couldn't find id " ^ string_of_id id)
     end
-  | E_struct fexps ->
+  | E_struct (struct_name, fexps) ->
       let evaluated, unevaluated = Util.take_drop is_value_fexp fexps in
       begin
         match unevaluated with
         | FE_aux (FE_fexp (id, exp), fe_annot) :: fexps ->
-            step exp >>= fun exp' -> wrap (E_struct (evaluated @ (FE_aux (FE_fexp (id, exp'), fe_annot) :: fexps)))
+            step exp >>= fun exp' ->
+            wrap (E_struct (struct_name, evaluated @ (FE_aux (FE_fexp (id, exp'), fe_annot) :: fexps)))
         | [] ->
             List.map value_of_fexp fexps
             |> List.fold_left (fun record (field, v) -> StringMap.add field v record) StringMap.empty
@@ -697,7 +698,7 @@ and pattern_match env (P_aux (p_aux, (l, _))) value =
           (hd_match && tl_match, Bindings.merge combine hd_bind tl_bind)
       | None -> (false, Bindings.empty)
     end
-  | P_struct (fpats, _) ->
+  | P_struct (_, fpats, _) ->
       List.fold_left
         (fun (matches, binds) (field, pat) ->
           match StringMap.find_opt (string_of_id field) (coerce_record value) with

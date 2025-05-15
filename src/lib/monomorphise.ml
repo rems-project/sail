@@ -513,7 +513,7 @@ let freshen_pat_bindings p =
     | P_tuple ps ->
         let ps, vs = List.split (List.map aux ps) in
         (mkp (P_tuple ps), List.concat vs)
-    | P_struct (fps, fwild) ->
+    | P_struct (struct_name, fps, fwild) ->
         let fps, vs =
           List.split
             (List.map
@@ -524,7 +524,7 @@ let freshen_pat_bindings p =
                fps
             )
         in
-        (mkp (P_struct (fps, fwild)), List.concat vs)
+        (mkp (P_struct (struct_name, fps, fwild)), List.concat vs)
     | P_list ps ->
         let ps, vs = List.split (List.map aux ps) in
         (mkp (P_list ps), List.concat vs)
@@ -965,9 +965,9 @@ let split_defs target all_errors (splits : split_req list) env ast =
         | P_vector_concat ps -> relist spl (fun ps -> P_vector_concat ps) ps
         | P_string_append ps -> relist spl (fun ps -> P_string_append ps) ps
         | P_tuple ps -> relist spl (fun ps -> P_tuple ps) ps
-        | P_struct (fps, fwild) ->
+        | P_struct (struct_name, fps, fwild) ->
             let fields, ps = List.split fps in
-            relist spl (fun ps -> P_struct (List.combine fields ps, fwild)) ps
+            relist spl (fun ps -> P_struct (struct_name, List.combine fields ps, fwild)) ps
         | P_list ps -> relist spl (fun ps -> P_list ps) ps
         | P_cons (p1, p2) -> re2 spl (fun p1' p2' -> P_cons (p1', p2')) p1 p2
         | P_vector_subrange _ ->
@@ -1074,7 +1074,7 @@ let split_defs target all_errors (splits : split_req list) env ast =
         | E_vector_append (e1, e2) -> re (E_vector_append (map_exp e1, map_exp e2))
         | E_list es -> re (E_list (List.map map_exp es))
         | E_cons (e1, e2) -> re (E_cons (map_exp e1, map_exp e2))
-        | E_struct fes -> re (E_struct (List.map map_fexp fes))
+        | E_struct (struct_name, fes) -> re (E_struct (struct_name, List.map map_fexp fes))
         | E_struct_update (e, fes) -> re (E_struct_update (map_exp e, List.map map_fexp fes))
         | E_field (e, id) -> re (E_field (map_exp e, id))
         | E_match (e, cases) -> re (E_match (map_exp e, List.concat (List.map map_pexp cases)))
@@ -2338,7 +2338,7 @@ module Analysis = struct
       | E_vector_update_subrange (e1, e2, e3, e4) ->
           let ds, assigns, r = non_det [e1; e2; e3; e4] in
           (merge_deps ds, assigns, r)
-      | E_struct fexps ->
+      | E_struct (_, fexps) ->
           let es = List.map (function FE_aux (FE_fexp (_, e), _) -> e) fexps in
           let ds, assigns, r = non_det es in
           (merge_deps ds, assigns, r)
@@ -2658,7 +2658,7 @@ module Analysis = struct
             (s, v, KidSet.fold (fun kid k -> KBindings.add kid (Have (s, ExtraSplits.empty, LetSplits.empty)) k) kids k)
         | P_app (_, pats) -> of_list pats
         | P_vector pats | P_vector_concat pats | P_string_append pats | P_tuple pats | P_list pats -> of_list pats
-        | P_struct (fpats, _) -> List.map snd fpats |> of_list
+        | P_struct (_, fpats, _) -> List.map snd fpats |> of_list
         | P_cons (p1, p2) -> of_list [p1; p2]
         | P_vector_subrange _ ->
             Reporting.unreachable l __POS__ "vector subrange pattern should be removed before monomorphisation"

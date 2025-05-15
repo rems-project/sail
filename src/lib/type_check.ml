@@ -1630,7 +1630,7 @@ let check_pattern_duplicates env pat =
         collect_duplicates p2
     | P_app (_, ps) | P_vector ps | P_vector_concat ps | P_tuple ps | P_list ps | P_string_append ps ->
         List.iter collect_duplicates ps
-    | P_struct (fpats, _) -> List.iter (fun (_, pat) -> collect_duplicates pat) fpats
+    | P_struct (_, fpats, _) -> List.iter (fun (_, pat) -> collect_duplicates pat) fpats
   in
   collect_duplicates pat;
   match Bindings.choose_opt (Bindings.filter is_duplicate !ids) with
@@ -2132,6 +2132,14 @@ let unwrap_vector_concat_elem ~at:l = function
 
 let vector_concat_elem_is_ok = function VC_elem_ok _ -> true | _ -> false
 
+let check_struct_name l rectyp_id = function
+  | SN_anon -> ()
+  | SN_id id ->
+      if not (Id.compare rectyp_id id = 0) then
+        typ_error
+          (Hint ("struct literal named here", id_loc id, l))
+          (Printf.sprintf "Struct type %s found, %s expected" (string_of_id id) (string_of_id rectyp_id))
+
 module PC_config = struct
   type t = tannot
   let typ_of_t = typ_of_tannot
@@ -2200,13 +2208,14 @@ let rec check_exp env (E_aux (exp_aux, (l, uannot)) as exp : uannot exp) (Typ_au
         FE_aux (FE_fexp (field, checked_exp), (l, empty_tannot))
       in
       annot_exp (E_struct_update (checked_exp, List.map check_fexp fexps)) typ
-  | E_struct fexps, _ ->
+  | E_struct (struct_name, fexps), _ ->
       let rectyp_id =
         match Env.expand_synonyms env typ with
         | (Typ_aux (Typ_id rectyp_id, _) | Typ_aux (Typ_app (rectyp_id, _), _)) when Env.is_record rectyp_id env ->
             rectyp_id
         | _ -> typ_error l ("The type " ^ string_of_typ typ ^ " is not a record")
       in
+      check_struct_name l rectyp_id struct_name;
       let record_fields = ref (Env.get_record rectyp_id env |> snd |> List.map snd |> IdSet.of_list) in
       let check_fexp (FE_aux (FE_fexp (field, exp), (l, _))) =
         record_fields := IdSet.remove field !record_fields;
@@ -2220,7 +2229,7 @@ let rec check_exp env (E_aux (exp_aux, (l, uannot)) as exp : uannot exp) (Typ_au
         FE_aux (FE_fexp (field, checked_exp), (l, empty_tannot))
       in
       let fexps = List.map check_fexp fexps in
-      if IdSet.is_empty !record_fields then annot_exp (E_struct fexps) typ
+      if IdSet.is_empty !record_fields then annot_exp (E_struct (SN_id rectyp_id, fexps)) typ
       else
         typ_error l
           ("struct literal missing fields: " ^ string_of_list ", " string_of_id (IdSet.elements !record_fields))
@@ -2914,13 +2923,14 @@ and bind_pat env (P_aux (pat_aux, (l, uannot)) as pat) typ =
       let nc = match destruct_atom_bool env typ with Some nc -> nc | None -> assert false in
       (annot_pat (P_lit lit) (atom_bool_typ nc_false), Env.add_constraint (nc_not nc) env, [])
   | P_vector_concat (pat :: pats) -> bind_vector_concat_pat l env uannot pat pats (Some typ)
-  | P_struct (fpats, fwild) ->
+  | P_struct (struct_name, fpats, fwild) ->
       let rectyp_id =
         match Env.expand_synonyms env typ with
         | (Typ_aux (Typ_id rectyp_id, _) | Typ_aux (Typ_app (rectyp_id, _), _)) when Env.is_record rectyp_id env ->
             rectyp_id
         | _ -> typ_error l ("The type " ^ string_of_typ typ ^ " is not a record")
       in
+      check_struct_name l rectyp_id struct_name;
       let record_fields = ref (Env.get_record rectyp_id env |> snd |> List.map snd |> IdSet.of_list) in
       let bind_fpat (fpats, env, guards) (field, pat) =
         record_fields := IdSet.remove field !record_fields;
@@ -2934,7 +2944,8 @@ and bind_pat env (P_aux (pat_aux, (l, uannot)) as pat) typ =
         ((field, typed_pat) :: fpats, env, guards @ new_guards)
       in
       let fpats, env, guards = List.fold_left bind_fpat ([], env, []) fpats in
-      if IdSet.is_empty !record_fields then (annot_pat (P_struct (List.rev fpats, FP_no_wild)) typ, env, guards)
+      if IdSet.is_empty !record_fields then
+        (annot_pat (P_struct (SN_id rectyp_id, List.rev fpats, FP_no_wild)) typ, env, guards)
       else (
         (* If we have a field wildcard .. then insert the missing `field = _` here *)
         match fwild with
@@ -2943,7 +2954,7 @@ and bind_pat env (P_aux (pat_aux, (l, uannot)) as pat) typ =
               List.map (fun id -> (id, mk_pat ~loc:fwild_loc P_wild)) (IdSet.elements !record_fields)
             in
             let missing_fpats, env, guards = List.fold_left bind_fpat ([], env, []) missing_fields in
-            (annot_pat (P_struct (List.rev fpats @ missing_fpats, FP_no_wild)) typ, env, guards)
+            (annot_pat (P_struct (SN_id rectyp_id, List.rev fpats @ missing_fpats, FP_no_wild)) typ, env, guards)
         | FP_no_wild ->
             typ_error l
               ("struct pattern missing fields: " ^ string_of_list ", " string_of_id (IdSet.elements !record_fields))
@@ -3574,6 +3585,44 @@ and infer_exp env (E_aux (exp_aux, (l, uannot)) as exp) =
             (Hint ("Has type " ^ string_of_typ (typ_of inferred_exp), exp_loc exp, l))
             ("Type accessed by field expression is not a struct, it has type " ^ string_of_typ (typ_of inferred_exp))
     end
+  | E_struct (struct_name, fexps) -> (
+      match struct_name with
+      | SN_anon -> typ_error l "Cannot infer type of struct literal"
+      | SN_id rectyp_id ->
+          let record_typq, record_fields = Env.get_record rectyp_id env in
+          let record_fields = ref (record_fields |> List.map snd |> IdSet.of_list) in
+          let all_unifiers = ref KBindings.empty in
+          let check_fexp (FE_aux (FE_fexp (field, exp), (l, _))) =
+            record_fields := IdSet.remove field !record_fields;
+            let _, rectyp_q, field_typ = Env.get_accessor rectyp_id field env in
+            let inferred_exp = irule infer_exp env exp in
+            ( try
+                let unifiers = unify l env (tyvars_of_typ field_typ) field_typ (typ_of inferred_exp) in
+                all_unifiers := merge_uvars env l unifiers !all_unifiers
+              with Unification_error (l, m) ->
+                typ_error l ("While inferring type for struct literal of type " ^ string_of_id rectyp_id ^ ": " ^ m)
+            );
+            FE_aux (FE_fexp (field, inferred_exp), (l, empty_tannot))
+          in
+          let fexps = List.map check_fexp fexps in
+          let args =
+            List.map
+              (fun kopt ->
+                match KBindings.find_opt (kopt_kid kopt) !all_unifiers with
+                | Some typ_arg -> typ_arg
+                | None ->
+                    typ_error l
+                      ("Failed to instantiate " ^ string_of_kinded_id kopt ^ " when inferring struct literal of type "
+                     ^ string_of_id rectyp_id
+                      )
+              )
+              (quant_kopts record_typq)
+          in
+          if IdSet.is_empty !record_fields then annot_exp (E_struct (SN_id rectyp_id, fexps)) (app_typ rectyp_id args)
+          else
+            typ_error l
+              ("struct literal missing fields: " ^ string_of_list ", " string_of_id (IdSet.elements !record_fields))
+    )
   | E_tuple exps ->
       let inferred_exps = List.map (irule infer_exp env) exps in
       annot_exp (E_tuple inferred_exps) (mk_typ (Typ_tuple (List.map typ_of inferred_exps)))
@@ -4305,13 +4354,14 @@ and bind_mpat allow_unknown other_env env (MP_aux (mpat_aux, (l, uannot)) as mpa
   | MP_lit (L_aux (L_false, _) as lit) when is_atom_bool typ ->
       let nc = match destruct_atom_bool env typ with Some n -> n | None -> assert false in
       (annot_mpat (MP_lit lit) (atom_bool_typ nc_false), Env.add_constraint (nc_not nc) env, [])
-  | MP_struct fmpats ->
+  | MP_struct (struct_name, fmpats) ->
       let rectyp_id =
         match Env.expand_synonyms env typ with
         | (Typ_aux (Typ_id rectyp_id, _) | Typ_aux (Typ_app (rectyp_id, _), _)) when Env.is_record rectyp_id env ->
             rectyp_id
         | _ -> typ_error l ("The type " ^ string_of_typ typ ^ " is not a record")
       in
+      check_struct_name l rectyp_id struct_name;
       let record_fields = ref (Env.get_record rectyp_id env |> snd |> List.map snd |> IdSet.of_list) in
       let bind_fmpat (fmpats, env, guards) (field, mpat) =
         record_fields := IdSet.remove field !record_fields;
@@ -4325,7 +4375,7 @@ and bind_mpat allow_unknown other_env env (MP_aux (mpat_aux, (l, uannot)) as mpa
         ((field, typed_mpat) :: fmpats, env, guards @ new_guards)
       in
       let fmpats, env, guards = List.fold_left bind_fmpat ([], env, []) fmpats in
-      if IdSet.is_empty !record_fields then (annot_mpat (MP_struct (List.rev fmpats)) typ, env, guards)
+      if IdSet.is_empty !record_fields then (annot_mpat (MP_struct (SN_id rectyp_id, List.rev fmpats)) typ, env, guards)
       else
         typ_error l
           ("struct pattern missing fields: " ^ string_of_list ", " string_of_id (IdSet.elements !record_fields))

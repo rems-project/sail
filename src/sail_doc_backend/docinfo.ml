@@ -217,7 +217,7 @@ let rec json_of_pat (P_aux (aux, _)) =
   | P_list pats -> seq_pat_json "list" pats
   | P_cons (pat_hd, pat_tl) -> `Assoc [pat_type "cons"; ("hd", json_of_pat pat_hd); ("tl", json_of_pat pat_tl)]
   | P_string_append pats -> seq_pat_json "string_append" pats
-  | P_struct (fpats, fwild) ->
+  | P_struct (_, fpats, fwild) ->
       `Assoc
         [
           pat_type "struct";

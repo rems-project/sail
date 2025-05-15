@@ -633,7 +633,7 @@ let rec anf_pat ?(global = false) (P_aux (p_aux, (l, tannot)) as pat) =
         (mk_apat (AP_nil (typ_of_pat pat)))
   | P_lit (L_aux (L_unit, _)) -> mk_apat (AP_wild (typ_of_pat pat))
   | P_as (pat, id) -> mk_apat (AP_as (anf_pat ~global pat, name id, typ_of_pat pat))
-  | P_struct (fpats, FP_no_wild) ->
+  | P_struct (_, fpats, FP_no_wild) ->
       mk_apat (AP_struct (List.map (fun (field, pat) -> (field, anf_pat ~global pat)) fpats, typ_of_pat pat))
   | _ -> Reporting.unreachable l __POS__ ("Could not convert pattern to ANF: " ^ string_of_pat pat) [@coverage off]
 
@@ -845,7 +845,7 @@ let rec anf (E_aux (e_aux, (l, tannot)) as exp) =
       let avals = List.map to_aval aexps in
       let wrap = List.fold_left (fun f g x -> f (g x)) (fun x -> x) (List.map snd avals) in
       wrap (mk_aexp (AE_val (AV_tuple (List.map fst avals))))
-  | E_struct fexps ->
+  | E_struct (_, fexps) ->
       let anf_fexp (FE_aux (FE_fexp (id, exp), _)) =
         let aval, wrap = to_aval (anf exp) in
         ((id, aval), wrap)
