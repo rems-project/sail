@@ -295,7 +295,7 @@ inductive Access_variety where
   | AV_plain
   | AV_exclusive
   | AV_atomic_rmw
-  deriving Inhabited, DecidableEq
+  deriving Inhabited, DecidableEq, Repr
 
 export Access_variety (AV_plain AV_exclusive AV_atomic_rmw)
 
@@ -303,26 +303,28 @@ inductive Access_strength where
   | AS_normal
   | AS_rel_or_acq
   | AS_acq_rcpc
-  deriving Inhabited, DecidableEq
+  deriving Inhabited, DecidableEq, Repr
 
 export Access_strength(AS_normal AS_rel_or_acq AS_acq_rcpc)
 
 structure Explicit_access_kind where
   variety : Access_variety
   strength : Access_strength
+deriving Repr
 
 inductive Access_kind (arch : Type) where
   | AK_explicit (_ : Explicit_access_kind)
   | AK_ifetch (_ : Unit)
   | AK_ttw (_ : Unit)
   | AK_arch (_ : arch)
-  deriving Inhabited
+  deriving Inhabited, Repr
 
 export Access_kind(AK_explicit AK_ifetch AK_ttw AK_arch)
 
 inductive Result (α : Type) (β : Type) where
   | Ok (_ : α)
   | Err (_ : β)
+  deriving Repr
 export Result(Ok Err)
 
 structure Mem_read_request
@@ -333,7 +335,7 @@ structure Mem_read_request
   translation : ts
   size : Int
   tag : Bool
-  deriving Inhabited
+  deriving Inhabited, Repr
 
 structure Mem_write_request
   (n : Nat) (vasize : Nat) (pa : Type) (ts : Type) (arch_ak : Type) where
@@ -344,7 +346,7 @@ structure Mem_write_request
   size : Int
   value : (Option (BitVec (8 * n)))
   tag : (Option Bool)
-  deriving Inhabited
+  deriving Inhabited, Repr
 
 end ConcurrencyInterface
 
