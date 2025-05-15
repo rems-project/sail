@@ -693,7 +693,7 @@ let rec chunk_pat comments chunks (P_aux (aux, l)) =
       let hd_pat_chunks = rec_chunk_pat hd_pat in
       let tl_pat_chunks = rec_chunk_pat tl_pat in
       Queue.add (Binary (hd_pat_chunks, "::", tl_pat_chunks)) chunks
-  | P_struct fpats ->
+  | P_struct (_, fpats) ->
       let is_fpat_wild = function FP_aux (FP_wild, _) -> true | _ -> false in
       let wild_fpats, field_fpats = List.partition is_fpat_wild fpats in
       let fpats = field_fpats @ wild_fpats in
@@ -841,7 +841,7 @@ let rec chunk_exp comments chunks (E_aux (aux, l)) =
   | E_list exps ->
       let exps = chunk_delimit ~delim:"," ~get_loc:(fun (E_aux (_, l)) -> l) ~chunk:chunk_exp comments exps in
       Queue.add (Tuple ("[|", "|]", 0, exps)) chunks
-  | E_struct fexps ->
+  | E_struct (_, fexps) ->
       let fexps = chunk_delimit ~delim:"," ~get_loc:(fun (E_aux (_, l)) -> l) ~chunk:chunk_exp comments fexps in
       Queue.add (Tuple ("struct {", "}", 1, fexps)) chunks
   | E_struct_update (exp, fexps) ->

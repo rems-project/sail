@@ -350,7 +350,10 @@ let remove_vector_concat_pat pat =
       p_list = (fun ps -> P_list (List.map (fun p -> p false) ps));
       p_cons = (fun (p, ps) -> P_cons (p false, ps false));
       p_string_append = (fun ps -> P_string_append (List.map (fun p -> p false) ps));
-      p_struct = (fun (fpats, fwild) -> P_struct (List.map (fun (field, p) -> (field, p false)) fpats, fwild));
+      p_struct =
+        (fun (struct_name, fpats, fwild) ->
+          P_struct (struct_name, List.map (fun (field, p) -> (field, p false)) fpats, fwild)
+        );
       p_aux =
         (fun (pat, ((l, _) as annot)) contained_in_p_as ->
           match pat with
@@ -519,10 +522,10 @@ let remove_vector_concat_pat pat =
           (P_string_append ps, List.flatten decls)
         );
       p_struct =
-        (fun (fpats, fwild) ->
+        (fun (struct_name, fpats, fwild) ->
           let fields, ps = List.split fpats in
           let ps, decls = List.split ps in
-          (P_struct (List.map2 (fun field p -> (field, p)) fields ps, fwild), List.flatten decls)
+          (P_struct (struct_name, List.map2 (fun field p -> (field, p)) fields ps, fwild), List.flatten decls)
         );
       p_cons = (fun ((p, decls), (p', decls')) -> (P_cons (p, p'), decls @ decls'));
       p_aux = (fun ((pat, decls), annot) -> p_aux ((pat, decls), annot));
@@ -708,7 +711,7 @@ let rec is_irrefutable_pattern (P_aux (p, ann)) =
   | P_app (f, args) ->
       Env.is_singleton_union_constructor f (env_of_annot ann) && List.for_all is_irrefutable_pattern args
   | P_vector ps | P_vector_concat ps | P_tuple ps | P_list ps -> List.for_all is_irrefutable_pattern ps
-  | P_struct (fpats, _) ->
+  | P_struct (_, fpats, _) ->
       let ps = List.map snd fpats in
       List.for_all is_irrefutable_pattern ps
   | P_cons (p1, p2) -> is_irrefutable_pattern p1 && is_irrefutable_pattern p2
@@ -767,7 +770,7 @@ let rec subsumes_pat (P_aux (p1, annot1) as pat1) (P_aux (p2, annot2) as pat2) =
       | Some substs1, Some substs2 -> Some (substs1 @ substs2)
       | _ -> None
     )
-  | P_struct (fields1, wild1), P_struct (fields2, wild2) ->
+  | P_struct (_, fields1, wild1), P_struct (_, fields2, wild2) ->
       List.fold_left
         (fun acc (f1, p1) ->
           match List.find_opt (fun (f2, _) -> Id.compare f1 f2 == 0) fields2 with
@@ -872,12 +875,14 @@ let rec pat_to_exp env (P_aux (pat, (l, annot)) as p_aux) =
       let string_append str1 str2 = annot_exp (E_app (mk_id "string_append", [str1; str2])) l env string_typ in
       List.fold_right string_append (List.map pat_to_exp pats) empty_string
     end
-  | P_struct (fpats, FP_no_wild) ->
+  | P_struct (struct_name, fpats, FP_no_wild) ->
       rewrap
         (E_struct
-           (List.map (fun (field, pat) -> FE_aux (FE_fexp (field, pat_to_exp pat), (gen_loc l, empty_tannot))) fpats)
+           ( struct_name,
+             List.map (fun (field, pat) -> FE_aux (FE_fexp (field, pat_to_exp pat), (gen_loc l, empty_tannot))) fpats
+           )
         )
-  | P_struct (_, FP_wild l) -> Reporting.unreachable l __POS__ "pat_to_exp given field wildcard"
+  | P_struct (_, _, FP_wild l) -> Reporting.unreachable l __POS__ "pat_to_exp given field wildcard"
 
 let case_exp e t cs =
   let l = get_loc_exp e in
@@ -1059,7 +1064,7 @@ let rec contains_bitvector_pat (P_aux (pat, annot)) =
   | P_app (_, pats) | P_tuple pats | P_list pats -> List.exists contains_bitvector_pat pats
   | P_cons (p, ps) -> contains_bitvector_pat p || contains_bitvector_pat ps
   | P_string_append ps -> List.exists contains_bitvector_pat ps
-  | P_struct (fpats, _) -> List.exists contains_bitvector_pat (List.map snd fpats)
+  | P_struct (_, fpats, _) -> List.exists contains_bitvector_pat (List.map snd fpats)
 
 let contains_bitvector_pexp = function
   | Pat_aux (Pat_exp (pat, _), _) | Pat_aux (Pat_when (pat, _, _), _) -> contains_bitvector_pat pat
@@ -1094,7 +1099,10 @@ let remove_bitvector_pat (P_aux (_, (l, _)) as pat) =
       p_tuple = (fun ps -> P_tuple (List.map (fun p -> p false) ps));
       p_list = (fun ps -> P_list (List.map (fun p -> p false) ps));
       p_cons = (fun (p, ps) -> P_cons (p false, ps false));
-      p_struct = (fun (fpats, fwild) -> P_struct (List.map (fun (field, p) -> (field, p false)) fpats, fwild));
+      p_struct =
+        (fun (struct_name, fpats, fwild) ->
+          P_struct (struct_name, List.map (fun (field, p) -> (field, p false)) fpats, fwild)
+        );
       p_aux =
         (fun (pat, annot) contained_in_p_as ->
           let env = env_of_annot annot in
@@ -1252,10 +1260,10 @@ let remove_bitvector_pat (P_aux (_, (l, _)) as pat) =
           (P_string_append ps, flatten_guards_decls gdls)
         );
       p_struct =
-        (fun (fpats, fwild) ->
+        (fun (struct_name, fpats, fwild) ->
           let fields, ps = List.split fpats in
           let ps, gdls = List.split ps in
-          (P_struct (List.map2 (fun field p -> (field, p)) fields ps, fwild), flatten_guards_decls gdls)
+          (P_struct (struct_name, List.map2 (fun field p -> (field, p)) fields ps, fwild), flatten_guards_decls gdls)
         );
       p_tuple =
         (fun ps ->
@@ -2421,7 +2429,7 @@ let rewrite_ast_letbind_effects effect_info env =
     | E_list exps -> n_exp_nameL exps (fun exps -> k (pure_rewrap (E_list exps)))
     | E_cons (exp1, exp2) ->
         n_exp_name exp1 (fun exp1 -> n_exp_name exp2 (fun exp2 -> k (pure_rewrap (E_cons (exp1, exp2)))))
-    | E_struct fexps -> n_fexpL fexps (fun fexps -> k (pure_rewrap (E_struct fexps)))
+    | E_struct (struct_name, fexps) -> n_fexpL fexps (fun fexps -> k (pure_rewrap (E_struct (struct_name, fexps))))
     | E_struct_update (exp1, fexps) ->
         n_exp_name exp1 (fun exp1 -> n_fexpL fexps (fun fexps -> k (pure_rewrap (E_struct_update (exp1, fexps)))))
     | E_field (exp1, id) -> n_exp_name exp1 (fun exp1 -> k (pure_rewrap (E_field (exp1, id))))
@@ -3301,7 +3309,7 @@ let rec exp_of_mpat (MP_aux (mpat, (l, annot))) =
         ( E_match (E_aux (E_id id, (l, annot)), [Pat_aux (Pat_exp (pat_of_mpat mpat, exp_of_mpat mpat), (l, annot))]),
           (l, annot)
         )
-  | MP_struct fmpats ->
+  | MP_struct (struct_name, fmpats) ->
       let combined_loc field mpat =
         match (Reporting.simp_loc (id_loc field), Reporting.simp_loc (mpat_loc mpat)) with
         | Some (s, _), Some (_, e) -> Parse_ast.Range (s, e)
@@ -3309,9 +3317,12 @@ let rec exp_of_mpat (MP_aux (mpat, (l, annot))) =
       in
       E_aux
         ( E_struct
-            (List.map
-               (fun (field, mpat) -> FE_aux (FE_fexp (field, exp_of_mpat mpat), (combined_loc field mpat, empty_uannot)))
-               fmpats
+            ( struct_name,
+              List.map
+                (fun (field, mpat) ->
+                  FE_aux (FE_fexp (field, exp_of_mpat mpat), (combined_loc field mpat, empty_uannot))
+                )
+                fmpats
             ),
           (l, annot)
         )
@@ -3717,7 +3728,7 @@ module MakeExhaustive = struct
               (List.map (fun l -> RP_app (id, l)) res_args @ Bindings.find id ctx.constructor_to_rest, progress)
           | _ -> inconsistent ()
         )
-      | P_struct (field_pats, _) ->
+      | P_struct (struct_name, field_pats, _) ->
           let all_ids, res_pats =
             match res_pat with
             | RP_struct res_fields ->
@@ -4537,7 +4548,7 @@ let remove_bitfield_records type_env =
     let e_aux (e, a) =
       let exp = E_aux (e, a) in
       match e with
-      | E_struct [FE_aux (FE_fexp (f, e'), _)] when is_bitfield_exp exp && string_of_id f = "bits" -> e'
+      | E_struct (_, [FE_aux (FE_fexp (f, e'), _)]) when is_bitfield_exp exp && string_of_id f = "bits" -> e'
       | _ -> exp
     in
     let le_vector ((LE_aux (le_aux, _) as lexp), field) =

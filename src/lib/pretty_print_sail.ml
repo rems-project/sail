@@ -280,6 +280,8 @@ module Printer (Config : PRINT_CONFIG) = struct
       | L_string s -> "\"" ^ String.escaped s ^ "\""
       )
 
+  let doc_struct_name = function SN_anon -> string "struct" | SN_id id -> string "struct" ^^ space ^^ doc_id id
+
   let rec doc_pat (P_aux (p_aux, (_, uannot))) =
     let wrap, attrs_doc =
       match get_attributes uannot with
@@ -309,11 +311,11 @@ module Printer (Config : PRINT_CONFIG) = struct
       | P_cons (hd_pat, tl_pat) -> parens (separate space [doc_pat hd_pat; string "::"; doc_pat tl_pat])
       | P_string_append [] -> string "\"\""
       | P_string_append pats -> parens (separate_map (string " ^ ") doc_pat pats)
-      | P_struct (fpats, fwild) ->
+      | P_struct (struct_name, fpats, fwild) ->
           let fpats = List.map (fun (field, pat) -> separate space [doc_id field; equals; doc_pat pat]) fpats in
           let fwild = match fwild with FP_wild _ -> [string "_"] | FP_no_wild -> [] in
           let fpats = fpats @ fwild in
-          separate space [string "struct"; lbrace; separate (comma ^^ space) fpats; rbrace]
+          separate space [doc_struct_name struct_name; lbrace; separate (comma ^^ space) fpats; rbrace]
     in
     wrap (attrs_doc ^^ pat_doc)
 
@@ -442,7 +444,8 @@ module Printer (Config : PRINT_CONFIG) = struct
         ^//^ doc_exp else_exp
     | E_list exps -> string "[|" ^^ separate_map (comma ^^ space) doc_exp exps ^^ string "|]"
     | E_cons (exp1, exp2) -> doc_atomic_exp exp1 ^^ space ^^ string "::" ^^ space ^^ doc_exp exp2
-    | E_struct fexps -> separate space [string "struct"; string "{"; doc_fexps fexps; string "}"]
+    | E_struct (struct_name, fexps) ->
+        separate space [doc_struct_name struct_name; string "{"; doc_fexps fexps; string "}"]
     | E_loop (While, measure, cond, exp) ->
         separate space ([string "while"] @ doc_measure measure @ [doc_exp cond; string "do"; doc_exp exp])
     | E_loop (Until, measure, cond, exp) ->

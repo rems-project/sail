@@ -1,0 +1,8 @@
+[93mType error[0m:
+[96mfail/struct_bad_name.sail[0m:18.22-23:
+18[96m |[0m  let x : S2 = struct S { f1 = 3, f2 = true };
+  [92m |[0m                      [92m^[0m [92mstruct literal named here[0m
+[96mfail/struct_bad_name.sail[0m:18.15-45:
+18[96m |[0m  let x : S2 = struct S { f1 = 3, f2 = true };
+  [91m |[0m               [91m^----------------------------^[0m
+  [91m |[0m Struct type S found, S2 expected

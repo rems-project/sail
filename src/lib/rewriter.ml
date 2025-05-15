@@ -171,7 +171,8 @@ let rewrite_pat rewriters (P_aux (pat, (l, annot))) =
   | P_list pats -> rewrap (P_list (List.map rewrite pats))
   | P_cons (pat1, pat2) -> rewrap (P_cons (rewrite pat1, rewrite pat2))
   | P_string_append pats -> rewrap (P_string_append (List.map rewrite pats))
-  | P_struct (fpats, fwild) -> rewrap (P_struct (List.map (fun (field, pat) -> (field, rewrite pat)) fpats, fwild))
+  | P_struct (struct_name, fpats, fwild) ->
+      rewrap (P_struct (struct_name, List.map (fun (field, pat) -> (field, rewrite pat)) fpats, fwild))
 
 let rewrite_mpat rewriters (MP_aux (pat, (l, annot))) =
   let rewrap p = MP_aux (p, (l, annot)) in
@@ -187,7 +188,8 @@ let rewrite_mpat rewriters (MP_aux (pat, (l, annot))) =
   | MP_list pats -> rewrap (MP_list (List.map rewrite pats))
   | MP_cons (pat1, pat2) -> rewrap (MP_cons (rewrite pat1, rewrite pat2))
   | MP_string_append pats -> rewrap (MP_string_append (List.map rewrite pats))
-  | MP_struct fpats -> rewrap (MP_struct (List.map (fun (field, pat) -> (field, rewrite pat)) fpats))
+  | MP_struct (struct_name, fpats) ->
+      rewrap (MP_struct (struct_name, List.map (fun (field, pat) -> (field, rewrite pat)) fpats))
 
 let rewrite_exp rewriters (E_aux (exp, (l, annot))) =
   let rewrap e = E_aux (e, (l, annot)) in
@@ -217,9 +219,13 @@ let rewrite_exp rewriters (E_aux (exp, (l, annot))) =
   | E_vector_append (v1, v2) -> rewrap (E_vector_append (rewrite v1, rewrite v2))
   | E_list exps -> rewrap (E_list (List.map rewrite exps))
   | E_cons (h, t) -> rewrap (E_cons (rewrite h, rewrite t))
-  | E_struct fexps ->
+  | E_struct (struct_name, fexps) ->
       rewrap
-        (E_struct (List.map (fun (FE_aux (FE_fexp (id, e), fannot)) -> FE_aux (FE_fexp (id, rewrite e), fannot)) fexps))
+        (E_struct
+           ( struct_name,
+             List.map (fun (FE_aux (FE_fexp (id, e), fannot)) -> FE_aux (FE_fexp (id, rewrite e), fannot)) fexps
+           )
+        )
   | E_struct_update (re, fexps) ->
       rewrap
         (E_struct_update
@@ -395,7 +401,7 @@ type ('a, 'pat, 'pat_aux) pat_alg = {
   p_list : 'pat list -> 'pat_aux;
   p_cons : 'pat * 'pat -> 'pat_aux;
   p_string_append : 'pat list -> 'pat_aux;
-  p_struct : (id * 'pat) list * field_pat_wildcard -> 'pat_aux;
+  p_struct : struct_name * (id * 'pat) list * field_pat_wildcard -> 'pat_aux;
   p_aux : 'pat_aux * 'a annot -> 'pat;
 }
 
@@ -416,7 +422,8 @@ let rec fold_pat_aux (alg : ('a, 'pat, 'pat_aux) pat_alg) : 'a pat_aux -> 'pat_a
   | P_list ps -> alg.p_list (List.map (fold_pat alg) ps)
   | P_cons (ph, pt) -> alg.p_cons (fold_pat alg ph, fold_pat alg pt)
   | P_string_append ps -> alg.p_string_append (List.map (fold_pat alg) ps)
-  | P_struct (fpats, fwild) -> alg.p_struct (List.map (fun (field, pat) -> (field, fold_pat alg pat)) fpats, fwild)
+  | P_struct (struct_name, fpats, fwild) ->
+      alg.p_struct (struct_name, List.map (fun (field, pat) -> (field, fold_pat alg pat)) fpats, fwild)
 
 and fold_pat (alg : ('a, 'pat, 'pat_aux) pat_alg) : 'a pat -> 'pat = function
   | P_aux (pat, annot) -> alg.p_aux (fold_pat_aux alg pat, annot)
@@ -434,7 +441,8 @@ let rec fold_mpat_aux (alg : ('a, 'mpat, 'mpat_aux) pat_alg) : 'a mpat_aux -> 'm
   | MP_list ps -> alg.p_list (List.map (fold_mpat alg) ps)
   | MP_cons (ph, pt) -> alg.p_cons (fold_mpat alg ph, fold_mpat alg pt)
   | MP_string_append ps -> alg.p_string_append (List.map (fold_mpat alg) ps)
-  | MP_struct fmpats -> alg.p_struct (List.map (fun (field, mpat) -> (field, fold_mpat alg mpat)) fmpats, FP_no_wild)
+  | MP_struct (struct_name, fmpats) ->
+      alg.p_struct (struct_name, List.map (fun (field, mpat) -> (field, fold_mpat alg mpat)) fmpats, FP_no_wild)
 
 and fold_mpat (alg : ('a, 'mpat, 'mpat_aux) pat_alg) : 'a mpat -> 'mpat = function
   | MP_aux (mpat, annot) -> alg.p_aux (fold_mpat_aux alg mpat, annot)
@@ -458,7 +466,7 @@ let id_pat_alg : ('a, 'a pat, 'a pat_aux) pat_alg =
     p_list = (fun ps -> P_list ps);
     p_cons = (fun (ph, pt) -> P_cons (ph, pt));
     p_string_append = (fun ps -> P_string_append ps);
-    p_struct = (fun (fpats, fwild) -> P_struct (fpats, fwild));
+    p_struct = (fun (struct_name, fpats, fwild) -> P_struct (struct_name, fpats, fwild));
     p_aux = (fun (pat, annot) -> P_aux (pat, annot));
   }
 
@@ -481,9 +489,9 @@ let id_mpat_alg : ('a, 'a mpat option, 'a mpat_aux option) pat_alg =
     p_cons = (fun (ph, pt) -> Option.bind ph (fun ph -> Option.map (fun pt -> MP_cons (ph, pt)) pt));
     p_string_append = (fun ps -> Option.map (fun ps -> MP_string_append ps) (Util.option_all ps));
     p_struct =
-      (fun (fs, _) ->
+      (fun (struct_name, fs, _) ->
         Option.map
-          (fun fs -> MP_struct fs)
+          (fun fs -> MP_struct (struct_name, fs))
           (List.map (fun (id, v) -> Option.map (fun v -> (id, v)) v) fs |> Util.option_all)
       );
     p_aux = (fun (pat, annot) -> Option.map (fun pat -> MP_aux (pat, annot)) pat);
@@ -525,7 +533,7 @@ type ( 'a,
   e_vector_append : 'exp * 'exp -> 'exp_aux;
   e_list : 'exp list -> 'exp_aux;
   e_cons : 'exp * 'exp -> 'exp_aux;
-  e_struct : 'fexp list -> 'exp_aux;
+  e_struct : struct_name * 'fexp list -> 'exp_aux;
   e_struct_update : 'exp * 'fexp list -> 'exp_aux;
   e_field : 'exp * id -> 'exp_aux;
   e_case : 'exp * 'pexp list -> 'exp_aux;
@@ -596,7 +604,7 @@ let rec fold_exp_aux alg = function
   | E_vector_append (e1, e2) -> alg.e_vector_append (fold_exp alg e1, fold_exp alg e2)
   | E_list es -> alg.e_list (List.map (fold_exp alg) es)
   | E_cons (e1, e2) -> alg.e_cons (fold_exp alg e1, fold_exp alg e2)
-  | E_struct fexps -> alg.e_struct (List.map (fold_fexp alg) fexps)
+  | E_struct (struct_name, fexps) -> alg.e_struct (struct_name, List.map (fold_fexp alg) fexps)
   | E_struct_update (e, fexps) -> alg.e_struct_update (fold_exp alg e, List.map (fold_fexp alg) fexps)
   | E_field (e, id) -> alg.e_field (fold_exp alg e, id)
   | E_match (e, pexps) -> alg.e_case (fold_exp alg e, List.map (fold_pexp alg) pexps)
@@ -675,7 +683,7 @@ let id_exp_alg =
     e_vector_append = (fun (e1, e2) -> E_vector_append (e1, e2));
     e_list = (fun es -> E_list es);
     e_cons = (fun (e1, e2) -> E_cons (e1, e2));
-    e_struct = (fun fexps -> E_struct fexps);
+    e_struct = (fun (struct_name, fexps) -> E_struct (struct_name, fexps));
     e_struct_update = (fun (e1, fexp) -> E_struct_update (e1, fexp));
     e_field = (fun (e1, id) -> E_field (e1, id));
     e_case = (fun (e1, pexps) -> E_match (e1, pexps));
@@ -747,10 +755,10 @@ let compute_pat_alg bot join =
     p_cons = (fun ((vh, ph), (vt, pt)) -> (join vh vt, P_cons (ph, pt)));
     p_string_append = split_join (fun ps -> P_string_append ps);
     p_struct =
-      (fun (fpats, fwild) ->
+      (fun (struct_name, fpats, fwild) ->
         let fields, ps = List.split fpats in
         let vs, ps = List.split ps in
-        (join_list vs, P_struct (List.map2 (fun field p -> (field, p)) fields ps, fwild))
+        (join_list vs, P_struct (struct_name, List.map2 (fun field p -> (field, p)) fields ps, fwild))
       );
     p_aux = (fun ((v, pat), annot) -> (v, P_aux (pat, annot)));
   }
@@ -792,9 +800,9 @@ let compute_exp_alg bot join =
     e_list = split_join (fun es -> E_list es);
     e_cons = (fun ((v1, e1), (v2, e2)) -> (join v1 v2, E_cons (e1, e2)));
     e_struct =
-      (fun fexps ->
+      (fun (struct_name, fexps) ->
         let vs, fexps = List.split fexps in
-        (join_list vs, E_struct fexps)
+        (join_list vs, E_struct (struct_name, fexps))
       );
     e_struct_update =
       (fun ((v1, e1), fexps) ->
@@ -876,7 +884,7 @@ let pure_pat_alg bot join =
     p_tuple = join_list;
     p_list = join_list;
     p_string_append = join_list;
-    p_struct = (fun (xs, _) -> join_list (List.map snd xs));
+    p_struct = (fun (_, xs, _) -> join_list (List.map snd xs));
     p_cons = (fun (vh, vt) -> join vh vt);
     p_aux = (fun (v, annot) -> v);
   }
@@ -907,7 +915,7 @@ let pure_exp_alg bot join =
     e_vector_append = (fun (v1, v2) -> join v1 v2);
     e_list = join_list;
     e_cons = (fun (v1, v2) -> join v1 v2);
-    e_struct = (fun vs -> join_list vs);
+    e_struct = (fun (_, vs) -> join_list vs);
     e_struct_update = (fun (v1, vf) -> join_list (v1 :: vf));
     e_field = (fun (v1, id) -> v1);
     e_case = (fun (v1, vps) -> join_list (v1 :: vps));
@@ -1132,7 +1140,7 @@ let default_fold_exp f x (E_aux (e, ann) as exp) =
       let x, e1 = f x e1 in
       let x, e2 = f x e2 in
       (x, re (E_cons (e1, e2)))
-  | E_struct fexps ->
+  | E_struct (struct_name, fexps) ->
       let x, fexps =
         List.fold_left
           (fun (x, fes) fe ->
@@ -1141,7 +1149,7 @@ let default_fold_exp f x (E_aux (e, ann) as exp) =
           )
           (x, []) fexps
       in
-      (x, re (E_struct (List.rev fexps)))
+      (x, re (E_struct (struct_name, List.rev fexps)))
   | E_struct_update (e, fexps) ->
       let x, e = f x e in
       let x, fexps =

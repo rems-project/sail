@@ -580,8 +580,8 @@ atomic_pat:
     { mk_pat (P_list []) $startpos $endpos }
   | LsquareBar pat_list RsquareBar
     { mk_pat (P_list $2) $startpos $endpos }
-  | Struct Lcurly separated_nonempty_list_trailing(Comma, fpat) Rcurly
-    { mk_pat (P_struct $3) $startpos $endpos }
+  | Struct id? Lcurly separated_nonempty_list_trailing(Comma, fpat) Rcurly
+    { mk_pat (P_struct ($2, $4)) $startpos $endpos }
 
 fpat:
   | id Eq pat
@@ -805,8 +805,8 @@ atomic_exp:
     { mk_exp (E_vector_subrange ($1, $3, $5)) $startpos $endpos }
   | atomic_exp Lsquare exp Comma exp Rsquare
     { mk_exp (E_app (mk_id (Id "slice") $startpos($2) $endpos, [$1; $3; $5])) $startpos $endpos }
-  | Struct Lcurly fexp_exp_list Rcurly
-    { mk_exp (E_struct $3) $startpos $endpos }
+  | Struct id? Lcurly fexp_exp_list Rcurly
+    { mk_exp (E_struct ($2, $4)) $startpos $endpos }
   | Lcurly exp With fexp_exp_list Rcurly
     { mk_exp (E_struct_update ($2, $4)) $startpos $endpos }
   | Lsquare Rsquare
@@ -1165,8 +1165,8 @@ atomic_mpat:
     { mk_mpat (MP_list $2) $startpos $endpos }
   | atomic_mpat Colon typ_no_caret
     { mk_mpat (MP_typ ($1, $3)) $startpos $endpos }
-  | Struct Lcurly separated_nonempty_list_trailing(Comma, fmpat) Rcurly
-    { mk_mpat (MP_struct $3) $startpos $endpos }
+  | Struct id? Lcurly separated_nonempty_list_trailing(Comma, fmpat) Rcurly
+    { mk_mpat (MP_struct ($2, $4)) $startpos $endpos }
 
 fmpat:
   | id Eq mpat

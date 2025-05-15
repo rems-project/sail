@@ -519,7 +519,7 @@ let rec doc_pat ?(need_parens = false) ?(in_vector = false) ctx in_match_bv (P_a
         )
   | P_var (p, _) -> doc_pat ctx in_match_bv p
   | P_as (pat, id) -> doc_pat ctx in_match_bv pat
-  | P_struct (pats, _) ->
+  | P_struct (_, pats, _) ->
       let pats =
         List.map (fun (id, pat) -> separate space [doc_id_ctor id; coloneq; doc_pat ctx in_match_bv pat]) pats
       in
@@ -960,7 +960,7 @@ and doc_exp (as_monadic : bool) ctx (E_aux (e, (l, annot)) as full_exp) =
       in
       pp_let_line ^^ hardline ^^ doc_exp as_monadic ctx e'
   | E_internal_return e -> doc_exp false ctx e (* ??? *)
-  | E_struct fexps ->
+  | E_struct (_, fexps) ->
       let args = List.map d_of_field fexps in
       wrap_with_pure as_monadic (braces (space ^^ align (separate hardline args) ^^ space))
   | E_field (exp, id) ->

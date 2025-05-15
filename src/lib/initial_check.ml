@@ -698,7 +698,7 @@ module KindInference = struct
     | P.P_string_append pats ->
         let* pats = mapM (infer_pat ctx) pats in
         wrap (P.P_string_append pats)
-    | P.P_struct fpats ->
+    | P.P_struct (struct_name, fpats) ->
         let* fpats =
           mapM
             (fun (P.FP_aux (aux, l)) ->
@@ -710,7 +710,7 @@ module KindInference = struct
             )
             fpats
         in
-        wrap (P.P_struct fpats)
+        wrap (P.P_struct (struct_name, fpats))
     | P.P_attribute (attr, arg, pat) ->
         let* pat = infer_pat ctx pat in
         wrap (P.P_attribute (attr, arg, pat))
@@ -1222,7 +1222,8 @@ let rec to_ast_pat ctx (P.P_aux (aux, l)) =
         | P.P_list pats -> P_list (List.map (to_ast_pat ctx) pats)
         | P.P_cons (pat1, pat2) -> P_cons (to_ast_pat ctx pat1, to_ast_pat ctx pat2)
         | P.P_string_append pats -> P_string_append (List.map (to_ast_pat ctx) pats)
-        | P.P_struct fpats ->
+        | P.P_struct (struct_name, fpats) ->
+            let struct_name = match struct_name with None -> SN_anon | Some id -> SN_id (to_ast_id ctx id) in
             let wild_fpats, fpats = List.partition is_wild_fpat fpats in
             let field_wildcard =
               match wild_fpats with
@@ -1239,7 +1240,7 @@ let rec to_ast_pat ctx (P.P_aux (aux, l)) =
             check_duplicate_fields
               ~error:(fun f -> Printf.sprintf "Duplicate field '%s' in struct pattern" f)
               ~field_id:fst fpats;
-            P_struct (fpats, field_wildcard)
+            P_struct (struct_name, fpats, field_wildcard)
       in
       P_aux (aux, (l, empty_uannot))
 
@@ -1273,7 +1274,7 @@ and to_ast_exp ctx exp =
         | P.E_attribute _ | P.E_infix _ -> assert false
         | P.E_block exps -> (
             match to_ast_fexps false ctx exps with
-            | Some fexps -> E_struct fexps
+            | Some fexps -> E_struct (SN_anon, fexps)
             | None -> E_block (List.map (to_ast_exp ctx) exps)
           )
         | P.E_id id ->
@@ -1324,9 +1325,10 @@ and to_ast_exp ctx exp =
         | P.E_vector_append (e1, e2) -> E_vector_append (to_ast_exp ctx e1, to_ast_exp ctx e2)
         | P.E_list exps -> E_list (List.map (to_ast_exp ctx) exps)
         | P.E_cons (e1, e2) -> E_cons (to_ast_exp ctx e1, to_ast_exp ctx e2)
-        | P.E_struct fexps -> (
+        | P.E_struct (struct_name, fexps) -> (
+            let struct_name = match struct_name with None -> SN_anon | Some id -> SN_id (to_ast_id ctx id) in
             match to_ast_fexps true ctx fexps with
-            | Some fexps -> E_struct fexps
+            | Some fexps -> E_struct (struct_name, fexps)
             | None -> raise (Reporting.err_unreachable l __POS__ "to_ast_fexps with true returned none")
           )
         | P.E_struct_update (exp, fexps) -> (
@@ -1877,8 +1879,9 @@ let rec to_ast_mpat ctx (P.MP_aux (mpat, l)) =
       | P.MP_cons (pat1, pat2) -> MP_cons (to_ast_mpat ctx pat1, to_ast_mpat ctx pat2)
       | P.MP_string_append pats -> MP_string_append (List.map (to_ast_mpat ctx) pats)
       | P.MP_typ (mpat, typ) -> MP_typ (to_ast_mpat ctx mpat, to_ast_typ ctx typ)
-      | P.MP_struct fmpats ->
-          MP_struct (List.map (fun (field, mpat) -> (to_ast_id ctx field, to_ast_mpat ctx mpat)) fmpats)
+      | P.MP_struct (struct_name, fmpats) ->
+          let struct_name = match struct_name with None -> SN_anon | Some id -> SN_id (to_ast_id ctx id) in
+          MP_struct (struct_name, List.map (fun (field, mpat) -> (to_ast_id ctx field, to_ast_mpat ctx mpat)) fmpats)
       ),
       (l, empty_uannot)
     )
@@ -2323,7 +2326,7 @@ let generate_undefined_record id typq fields =
     mk_fundef
       [
         mk_funcl (prepend_id "undefined_" id) pat
-          (mk_exp (E_struct (List.map (fun (_, id) -> mk_fexp id (mk_lit_exp L_undef)) fields)));
+          (mk_exp (E_struct (SN_anon, List.map (fun (_, id) -> mk_fexp id (mk_lit_exp L_undef)) fields)));
       ];
   ]
 

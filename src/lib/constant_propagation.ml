@@ -88,7 +88,7 @@ let rec is_value (E_aux (e, (l, annot))) =
   | E_id id -> is_constructor id
   | E_lit _ -> true
   | E_tuple es | E_vector es -> List.for_all is_value es
-  | E_struct fes -> List.for_all (fun (FE_aux (FE_fexp (_, e), _)) -> is_value e) fes
+  | E_struct (_, fes) -> List.for_all (fun (FE_aux (FE_fexp (_, e), _)) -> is_value e) fes
   | E_app (id, es) -> is_constructor id && List.for_all is_value es
   (* We add casts to undefined to keep the type information in the AST *)
   | E_typ (typ, E_aux (E_lit (L_aux (L_undef, _)), _)) -> true
@@ -457,10 +457,10 @@ let const_props target ast =
       | E_cons (e1, e2) ->
           let e1', e2', assigns = non_det_exp_2 e1 e2 in
           re (E_cons (e1', e2')) assigns
-      | E_struct fes ->
+      | E_struct (struct_name, fes) ->
           let assigned_in_fes = assigned_vars_in_fexps fes in
           let assigns = isubst_minus_set assigns assigned_in_fes in
-          re (E_struct (const_prop_fexps substs assigns fes)) assigns
+          re (E_struct (struct_name, const_prop_fexps substs assigns fes)) assigns
       | E_struct_update (e, fes) ->
           let assigned_in = IdSet.union (assigned_vars_in_fexps fes) (assigned_vars e) in
           let assigns = isubst_minus_set assigns assigned_in in
@@ -468,13 +468,13 @@ let const_props target ast =
           let fes' = const_prop_fexps substs assigns fes in
           begin
             match unaux_exp (fst (uncast_exp e')) with
-            | E_struct fes0 ->
+            | E_struct (struct_name, fes0) ->
                 let apply_fexp (FE_aux (FE_fexp (id, e), _)) (FE_aux (FE_fexp (id', e'), ann)) =
                   if Id.compare id id' = 0 then FE_aux (FE_fexp (id', e), ann) else FE_aux (FE_fexp (id', e'), ann)
                 in
                 let update_fields fexp = List.map (apply_fexp fexp) in
                 let fes0' = List.fold_right update_fields fes' fes0 in
-                re (E_struct fes0') assigns
+                re (E_struct (struct_name, fes0')) assigns
             | _ -> re (E_struct_update (e', fes')) assigns
           end
       | E_field (e, id) ->
@@ -482,7 +482,7 @@ let const_props target ast =
           begin
             let is_field (FE_aux (FE_fexp (id', _), _)) = Id.compare id id' = 0 in
             match unaux_exp e' with
-            | E_struct fes0 when List.exists is_field fes0 ->
+            | E_struct (_, fes0) when List.exists is_field fes0 ->
                 let (FE_aux (FE_fexp (_, e), _)) = List.find is_field fes0 in
                 re (unaux_exp e) assigns
             | _ -> re (E_field (e', id)) assigns
