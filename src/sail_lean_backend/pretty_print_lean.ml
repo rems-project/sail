@@ -9,6 +9,19 @@ open Rewriter
 open PPrint
 open Pretty_print_common
 
+type import_tree_element =
+  | Str of string
+  | Tr of import_tree
+
+and import_tree = ImportNode of import_tree_element list
+
+let rec string_of_import_tree_element e =
+  match e with
+  | Str s -> s
+  | Tr t -> string_of_import_tree t
+
+and string_of_import_tree (ImportNode cs) = "[" ^ String.concat ", " (List.map string_of_import_tree_element cs) ^"]"
+
 (* Command line options *)
 let opt_extern_types : string list ref = ref []
 
@@ -1457,6 +1470,44 @@ let rec collect_import_files_aux defs file_stack last_namespace ret =
 let collect_import_files defs base =
   let res = collect_import_files_aux defs [base] None [] in
   if res = [] then [base] else res
+
+let rec defs_until_end ?(depth = 0) defs  = 
+  match defs with
+  | [] -> []
+  | (DEF_aux (DEF_pragma ("include_start", Pragma_line (file, _)), _) as d) :: ds
+  | (DEF_aux (DEF_pragma ("file_start", Pragma_line (file, _)), _) as d) :: ds ->
+    d :: defs_until_end ~depth:(depth + 1) ds
+  | (DEF_aux (DEF_pragma ("include_end", Pragma_line (file, _)), _) as d) :: ds
+  | (DEF_aux (DEF_pragma ("file_end", Pragma_line (file, _)), _) as d) :: ds ->
+    if depth = 0 then [] else d :: defs_until_end ~depth:(depth - 1) ds
+  | d :: ds -> d :: defs_until_end ~depth:depth ds
+
+let rec defs_after_end ?(depth = 0) defs =
+  match defs with
+  | [] -> []
+  | (DEF_aux (DEF_pragma ("include_start", Pragma_line (file, _)), _) as d) :: ds
+  | (DEF_aux (DEF_pragma ("file_start", Pragma_line (file, _)), _) as d) :: ds ->
+    defs_after_end ~depth:(depth + 1) ds
+  | (DEF_aux (DEF_pragma ("include_end", Pragma_line (file, _)), _) as d) :: ds
+  | (DEF_aux (DEF_pragma ("file_end", Pragma_line (file, _)), _) as d) :: ds ->
+    if depth = 0 then ds else defs_after_end ~depth:(depth - 1) ds
+  | d :: ds -> defs_after_end ~depth:depth ds
+
+let rec collect_import_files2 ?(last = None) defs base = 
+  match defs with
+  | [] -> ImportNode []
+  | (DEF_aux (DEF_pragma ("include_start", Pragma_line (file, _)), _) as d) :: ds
+  | (DEF_aux (DEF_pragma ("file_start", Pragma_line (file, _)), _) as d) :: ds ->
+    let child = collect_import_files2 (defs_until_end ds) file in
+    let ImportNode suffix = collect_import_files2 (defs_after_end ds) file in
+    if child = ImportNode [] then ImportNode suffix else ImportNode ((Tr child) :: suffix)
+  | (DEF_aux (DEF_pragma ("include_end", Pragma_line (file, _)), _) as d) :: ds
+  | (DEF_aux (DEF_pragma ("file_end", Pragma_line (file, _)), _) as d) :: ds ->
+    failwith "this case of collect_import_files_aux should be unreachable"
+  | d :: ds ->
+    let ImportNode suffix = collect_import_files2 ~last:(Some base) ds base in
+    if last = Some base then ImportNode suffix else
+    ImportNode (Str base :: suffix)
 
 let rec take n xs = match (n, xs) with 0, _ -> [] | n, x :: xs -> x :: take (n - 1) xs | n, xs -> xs
 
