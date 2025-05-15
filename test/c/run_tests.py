@@ -147,8 +147,9 @@ def test_coq(name):
     results.expect_failure("concurrency_interface.sail", "test doesn't meet Coq library's expectations for the concurrency interface")
     results.expect_failure("concurrency_interface_v2.sail", "test doesn't meet Coq library's expectations for the concurrency interface")
     results.expect_failure("outcome_impl.sail", "test doesn't meet Coq backend's expectations for the concurrency interface")
+    results.expect_failure("outcome_impl_int.sail", "test doesn't meet Coq backend's expectations for the concurrency interface")
+    results.expect_failure("outcome_impl_bool.sail", "test doesn't meet Coq backend's expectations for the concurrency interface")
     results.expect_failure("pc_no_wildcard.sail", "register type unsupported by Coq backend")
-    results.expect_failure("cheri_capreg.sail", "test has strange 'pure' reg_deref")
     results.expect_failure("poly_outcome.sail", "test doesn't meet Coq library's expectations for the concurrency interface")
     results.expect_failure("poly_mapping.sail", "test requires non-standard hex built-ins")
     results.expect_failure("real.sail", "print_real not available for Coq at present")
@@ -157,12 +158,14 @@ def test_coq(name):
     results.expect_failure("fail_issue203.sail", "test output checking not supported for Coq yet")
     results.expect_failure("vector_example.sail", "bug: function defs and function calls treat 'len equation differently in Coq backend")
     results.expect_failure("list_torture.sail", "Coq backend doesn't remove a phantom type parameter")
-    results.expect_failure("type_if_bits.sail", "existential type not supported by Coq backend yet")
     results.expect_failure("lib_hex_bits_signed.sail","bug: unable to drop the type variable")
     results.expect_failure("for_shadow.sail","bug: remove_e_assign rewrite assumes <= available")
     results.expect_failure("concurrency_interface_write.sail","Test output not supported in concurrency interface yet")
     results.expect_failure("config_abstract_bool.sail", "Not quite supported register type")
     results.expect_failure("newtype.sail", "Type definition with a parameter that should be merged, inferred, or made explicit")
+    results.expect_failure("simple_while.sail", "Loop without termination measure")
+    results.expect_failure("simple_while2.sail", "Loop without termination measure")
+    results.expect_failure("simple_while3.sail", "Loop without termination measure")
     for filenames in chunks(os.listdir('.'), parallel()):
         tests = {}
         for filename in filenames:
