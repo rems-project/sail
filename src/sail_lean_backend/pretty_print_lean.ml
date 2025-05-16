@@ -11,9 +11,9 @@ open Pretty_print_common
 
 let rec take n xs = match (n, xs) with 0, _ -> [] | n, x :: xs -> x :: take (n - 1) xs | n, xs -> xs
 
-type import_tree_element = Str of string | Tr of import_tree
+type 'a import_tree_element = Str of 'a | Tr of 'a import_tree
 
-and import_tree = ImportNode of import_tree_element list
+and 'a import_tree = ImportNode of 'a import_tree_element list
 
 let rec string_of_import_tree_element e = match e with Str s -> s | Tr t -> string_of_import_tree t
 
@@ -33,11 +33,29 @@ let rec import_tree_map f (ImportNode cs) =
 let rec import_tree_imports (ImportNode cs as t) =
   match cs with
   | [] -> []
-  | _ -> (match List.nth_opt cs (List.length cs - 1) with
-          | None -> []
-          | Some (Str s) -> [s]
-          | Some (Tr t') -> (import_tree_imports (import_tree_remove_last t)) @ (import_tree_imports t'))
-  
+  | _ -> (
+      match List.nth_opt cs (List.length cs - 1) with
+      | None -> []
+      | Some (Str s) -> [s]
+      | Some (Tr t') -> import_tree_imports (import_tree_remove_last t) @ import_tree_imports t'
+    )
+
+let rec import_tree_in_order (ImportNode cs) =
+  match cs with
+  | [] -> []
+  | Str s :: cs -> s :: import_tree_in_order (ImportNode cs)
+  | Tr t :: cs -> import_tree_in_order t @ import_tree_in_order (ImportNode cs)
+
+let import_tree_cons (x : 'a) (ImportNode xs) = ImportNode (x :: xs)
+
+let rec import_tree_combine (x : 'a import_tree) (y : 'b import_tree) : ('a * 'b) import_tree =
+  match (x, y) with
+  | ImportNode [], ImportNode [] -> ImportNode []
+  | ImportNode (Str x :: xs), ImportNode (Str y :: ys) ->
+      import_tree_cons (Str (x, y)) (import_tree_combine (ImportNode xs) (ImportNode ys))
+  | ImportNode (Tr x :: xs), ImportNode (Tr y :: ys) ->
+      import_tree_cons (Tr (import_tree_combine x y)) (import_tree_combine (ImportNode xs) (ImportNode ys))
+  | _, _ -> failwith "import trees to be combined do not have the same structure!"
 
 (* Command line options *)
 let opt_extern_types : string list ref = ref []
