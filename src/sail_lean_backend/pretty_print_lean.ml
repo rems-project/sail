@@ -27,6 +27,18 @@ let rec import_tree_size (ImportNode cs) =
 
 let import_tree_remove_last (ImportNode cs) = ImportNode (take (List.length cs - 1) cs)
 
+let rec import_tree_map f (ImportNode cs) =
+  ImportNode (List.map (fun e -> match e with Str s -> Str (f s) | Tr t -> Tr (import_tree_map f t)) cs)
+
+let rec import_tree_imports (ImportNode cs as t) =
+  match cs with
+  | [] -> []
+  | _ -> (match List.nth_opt cs (List.length cs - 1) with
+          | None -> []
+          | Some (Str s) -> [s]
+          | Some (Tr t') -> (import_tree_imports (import_tree_remove_last t)) @ (import_tree_imports t'))
+  
+
 (* Command line options *)
 let opt_extern_types : string list ref = ref []
 
@@ -1480,10 +1492,12 @@ let rec defs_until_end ?(depth = 0) defs =
   match defs with
   | [] -> []
   | (DEF_aux (DEF_pragma ("include_start", Pragma_line (file, _)), _) as d) :: ds
-  | (DEF_aux (DEF_pragma ("file_start", Pragma_line (file, _)), _) as d) :: ds ->
+  | (DEF_aux (DEF_pragma ("file_start", Pragma_line (file, _)), _) as d) :: ds
+    when Filename.check_suffix file ".sail" ->
       d :: defs_until_end ~depth:(depth + 1) ds
   | (DEF_aux (DEF_pragma ("include_end", Pragma_line (file, _)), _) as d) :: ds
-  | (DEF_aux (DEF_pragma ("file_end", Pragma_line (file, _)), _) as d) :: ds ->
+  | (DEF_aux (DEF_pragma ("file_end", Pragma_line (file, _)), _) as d) :: ds
+    when Filename.check_suffix file ".sail" ->
       if depth = 0 then [] else d :: defs_until_end ~depth:(depth - 1) ds
   | d :: ds -> d :: defs_until_end ~depth ds
 
@@ -1491,10 +1505,12 @@ let rec defs_after_end ?(depth = 0) defs =
   match defs with
   | [] -> []
   | (DEF_aux (DEF_pragma ("include_start", Pragma_line (file, _)), _) as d) :: ds
-  | (DEF_aux (DEF_pragma ("file_start", Pragma_line (file, _)), _) as d) :: ds ->
+  | (DEF_aux (DEF_pragma ("file_start", Pragma_line (file, _)), _) as d) :: ds
+    when Filename.check_suffix file ".sail" ->
       defs_after_end ~depth:(depth + 1) ds
   | (DEF_aux (DEF_pragma ("include_end", Pragma_line (file, _)), _) as d) :: ds
-  | (DEF_aux (DEF_pragma ("file_end", Pragma_line (file, _)), _) as d) :: ds ->
+  | (DEF_aux (DEF_pragma ("file_end", Pragma_line (file, _)), _) as d) :: ds
+    when Filename.check_suffix file ".sail" ->
       if depth = 0 then ds else defs_after_end ~depth:(depth - 1) ds
   | d :: ds -> defs_after_end ~depth ds
 
@@ -1502,12 +1518,14 @@ let rec collect_import_files_aux2 ?(last = None) defs base =
   match defs with
   | [] -> ImportNode []
   | (DEF_aux (DEF_pragma ("include_start", Pragma_line (file, _)), _) as d) :: ds
-  | (DEF_aux (DEF_pragma ("file_start", Pragma_line (file, _)), _) as d) :: ds ->
-      let child = collect_import_files_aux2 (defs_until_end ds) file in
-      let (ImportNode suffix) = collect_import_files_aux2 (defs_after_end ds) base in
+  | (DEF_aux (DEF_pragma ("file_start", Pragma_line (file, _)), _) as d) :: ds
+    when Filename.check_suffix file ".sail" ->
+      let child = collect_import_files_aux2 ~last (defs_until_end ds) file in
+      let (ImportNode suffix) = collect_import_files_aux2 ~last (defs_after_end ds) base in
       if child = ImportNode [] then ImportNode suffix else ImportNode (Tr child :: suffix)
   | (DEF_aux (DEF_pragma ("include_end", Pragma_line (file, _)), _) as d) :: ds
-  | (DEF_aux (DEF_pragma ("file_end", Pragma_line (file, _)), _) as d) :: ds ->
+  | (DEF_aux (DEF_pragma ("file_end", Pragma_line (file, _)), _) as d) :: ds
+    when Filename.check_suffix file ".sail" ->
       failwith "this case of collect_import_files_aux should be unreachable"
   | d :: ds ->
       if last = Some base || base = "" || not (should_print_function_def d) then collect_import_files_aux2 ~last ds base
@@ -1517,9 +1535,7 @@ let rec collect_import_files_aux2 ?(last = None) defs base =
       )
 
 let collect_import_files2 defs base =
-  match collect_import_files_aux2 defs base with
-  | ImportNode [] -> ImportNode [Str base]
-  | x -> x
+  match collect_import_files_aux2 defs base with ImportNode [] -> ImportNode [Str base] | x -> x
 
 let rec last xs =
   match xs with [] -> failwith "cannot take last element of empty list" | [x] -> x | x :: xs -> last xs
