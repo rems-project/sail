@@ -199,7 +199,7 @@ let rec fix_id avoid remove_tick name =
   | "in" | "let" | "match" | "return" | "then" | "where" | "with" | "by" | "exists" | "exists2" | "using"
   (* other identifiers we shouldn't override *)
   | "assert" | "lsl" | "lsr" | "asr" | "type" | "function" | "raise" | "try" | "check" | "field" | "LT" | "GT" | "EQ"
-  | "Z" | "O" | "R" | "S" | "mod" | "M" | "tt" | "I" | "register_ref" | "vec" ->
+  | "Z" | "O" | "R" | "S" | "mod" | "M" | "tt" | "I" | "register_ref" | "vec" | "pair" ->
       name ^ "'"
   | _ ->
       if StringSet.mem name avoid then name ^ "'"

@@ -17,6 +17,7 @@ $include <flow.sail>
 $include <arith.sail>
 $include <option.sail>
 $include <vector_dec.sail>
+$include <reverse_endianness.sail>
 
 $include <regfp.sail>
 
@@ -110,9 +111,9 @@ overload operator - = {sub_int, sub_vec, sub_vec_int}
 /* function reg_index x = unsigned(x) */
 
 
-val quotient_nat = {ocaml: "quotient", interpreter: "quotient", lem: "integerDiv"} : 
+val quotient_nat = {ocaml: "quotient", interpreter: "quotient", lem: "integerDiv", coq: "ZEuclid.div"} : 
     forall 'M 'N, 'M >= 0 & 'N >= 0. (int('M), int('N)) -> int(div('M,'N))
-val quotient = {ocaml: "quotient", interpreter: "quotient", lem: "integerDiv"} : 
+val quotient = {ocaml: "quotient", interpreter: "quotient", lem: "integerDiv", coq: "ZEuclid.div"} : 
     forall 'M 'N. (int('M), int('N)) -> int(div('M,'N))
 overload quot = {quotient_nat, quotient}
 
@@ -149,4 +150,4 @@ function error(message) = {
 type min ('M : Int, 'N : Int) = {'O, ('O == 'M | 'O == 'N) & 'O <= 'M & 'O <= 'N. int('O)}
 
 
-val appendL = {ocaml: "append", interpreter: "append_list", lem: "append_list"} : forall ('a:Type). (list('a),list('a)) -> list('a)
+val appendL = {ocaml: "append", interpreter: "append_list", lem: "append_list", coq: "List.app"} : forall ('a:Type). (list('a),list('a)) -> list('a)
