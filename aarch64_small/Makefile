@@ -23,9 +23,21 @@ MONO_SPLICES_OPTS=$(foreach file,$(MONO_SPLICES),-splice $(file))
 
 all: armV8.lem for-rmem/armV8.lem for-rmem/armV8_toFromInterp2.ml for-rmem/armV8.defs
 
+.PHONY: interactive
+interactive: $(SOURCES)
+	$(SAIL) $(SAILFLAGS) -i $^
+
 armV8.lem: $(SOURCES)
 # also generates armV8_embed_sequential.lem, armV8_embed_types.lem, armV8_toFromInterp.lem
 	$(SAIL) $(SAILFLAGS) -lem -lem_lib ArmV8_extras_embed -o armV8 $^
+
+armV8.v armV8_types.v: $(SOURCES)
+	$(SAIL) $(SAILFLAGS) -coq -coq_lib armV8_extras -o armV8 $^
+
+armV8.vo armV8_types.vo armV8_extras.vo: armV8.v armV8_types.v armV8_extras.v
+	coqc armV8_types.v
+	coqc armV8_extras.v
+	coqc armV8.v
 
 armV8.smt_model: $(SOURCES)
 	$(SAIL) $(SAILFLAGS) -smt_serialize -o armV8 $^
@@ -61,6 +73,7 @@ clean:
 	rm -f mono/armV8_types.lem mono/armV8.lem mono/armV8_extras_embed.lem
 	rm -f mono/ArmV8_lemmas.thy mono/ArmV8_types_lemmas.thy
 	rm -f mono/ArmV8_types.thy mono/ArmV8.thy mono/ArmV8_extras_embed.thy
+	rm -f armV8.v armV8_types.v armV8.vo armV8_types.vo armV8_extras.vo
 
 ######################################################################
 ETCDIR=../etc
