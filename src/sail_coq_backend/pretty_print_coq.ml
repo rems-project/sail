@@ -418,6 +418,31 @@ let classify_ex_type ctxt env ?binding ?(rawbools = false) (Typ_aux (t, l) as t0
   in
   match t with Typ_exist (kopts, _, t1) -> (ExGeneral, kopts, t1) | _ -> (ExNone, [], t0)
 
+(* maybe TODO: this could be provided by the type checker, and shared with bind_pat *)
+let typ_of_constructor env f typ l =
+  let typq, ctor_typ = Env.get_union_id f env in
+  let quants = quant_items typq in
+  begin
+    match Env.expand_synonyms (Env.add_typquant l typq env) ctor_typ with
+    | Typ_aux (Typ_fn ([arg_typ], ret_typ), _) -> begin
+        try
+          let goals = quant_kopts typq |> List.map kopt_kid |> KidSet.of_list in
+          let unifiers = unify l env goals ret_typ typ in
+          let arg_typ' = subst_unifiers unifiers arg_typ in
+          arg_typ'
+        with exc ->
+          raise
+            (Reporting.err_unreachable l __POS__
+               ("Unification error when pattern matching against union constructor: " ^ Printexc.to_string exc)
+            )
+      end
+    | _ ->
+        raise
+          (Reporting.err_unreachable l __POS__
+             ("Mal-formed constructor " ^ string_of_id f ^ " with type " ^ string_of_typ ctor_typ)
+          )
+  end
+
 (* Calculate the existential type bindings that should make it into the Rocq output as dependent pairs. *)
 
 let relevant_existential_vars ctxt env kopts typ =
@@ -429,6 +454,115 @@ let relevant_type_vars ctxt env typ =
   match typ with
   | Typ_aux (Typ_exist (kopts, _nc, typ'), _) -> relevant_existential_vars ctxt env kopts typ'
   | _ -> ([], typ)
+
+let destruct_atom_kid env typ =
+  match destruct_atom_nexp env typ with
+  | Some (Nexp_aux (Nexp_var kid, _)) -> Some kid
+  | Some _ -> None
+  | None -> (
+      match destruct_atom_bool env typ with Some (NC_aux (NC_var kid, _)) -> Some kid | _ -> None
+    )
+
+(* Change pat to replace binders with wildcards when there's an existentially bound type variable
+   we will be able to use instead, and update the context to add them to the kid_id_renames mapping. *)
+let merge_kid_ids_in_pat ctxt env pat =
+  let rec aux kids (P_aux (p, ann) as pat) typ =
+    let more_kids, (Typ_aux (t, typ_l) as typ) = relevant_type_vars ctxt env typ in
+    let kids = List.fold_left (fun s kopt -> KidSet.add (kopt_kid kopt) s) kids more_kids in
+    match (p, t) with
+    | P_lit _, _ | P_wild, _ | P_vector_subrange _, _ | P_app (_, []), _ -> ([], pat)
+    | P_id id, _ -> begin
+        match destruct_atom_kid env typ with
+        | Some kid when KidSet.mem kid kids -> ([(id, kid)], P_aux (P_wild, ann))
+        | _ -> ([], pat)
+      end
+    | P_typ (p_typ, pat'), _ ->
+        let r, pat' = aux kids pat' typ in
+        (r, P_aux (P_typ (typ, pat'), ann))
+    | P_as (pat', id), _ ->
+        let r, pat' = aux kids pat' typ in
+        (r, P_aux (P_as (pat', id), ann))
+    | P_var (pat', tp), _ ->
+        let r, pat' = aux kids pat' typ in
+        (r, P_aux (P_var (pat', tp), ann))
+    | P_app (id, [pat]), _ ->
+        let arg_typ = typ_of_constructor env id typ typ_l in
+        let r, pat = aux kids pat arg_typ in
+        (r, P_aux (P_app (id, [pat]), ann))
+    | P_app (id, _), _ ->
+        raise
+          (Reporting.err_unreachable (fst ann) __POS__
+             ("Pattern for " ^ string_of_id id
+            ^ " has multiple arguments; should have been reduced to one in the typechecker"
+             )
+          )
+    | P_vector pats, _ ->
+        let _, elt_typ = vector_typ_args_of typ in
+        let r, pats =
+          List.fold_left
+            (fun (r, t) h ->
+              let r', h = aux kids h elt_typ in
+              (r @ r', h :: t)
+            )
+            ([], []) pats
+        in
+        (r, P_aux (P_vector (List.rev pats), ann))
+    | P_vector_concat pats, _ ->
+        raise
+          (Reporting.err_unreachable (fst ann) __POS__
+             "vector concatenation patterns should have been removed before pretty-printing"
+          )
+    | P_tuple pats, Typ_tuple typs ->
+        let r, pats =
+          List.fold_left2
+            (fun (r, t) h typ ->
+              let r', h = aux kids h typ in
+              (r @ r', h :: t)
+            )
+            ([], []) pats typs
+        in
+        (r, P_aux (P_tuple (List.rev pats), ann))
+    | P_tuple _, _ -> unreachable (fst ann) __POS__ "Tuple pattern without tuple type"
+    | P_list pats, Typ_app (list_id, [A_aux (A_typ elt_typ, _)]) when Id.compare list_id (mk_id "list") == 0 ->
+        let r, pats =
+          List.fold_left
+            (fun (r, t) h ->
+              let r', h = aux kids h elt_typ in
+              (r @ r', h :: t)
+            )
+            ([], []) pats
+        in
+        (r, P_aux (P_list (List.rev pats), ann))
+    | P_list _, _ -> unreachable (fst ann) __POS__ "List pattern without list type"
+    | P_cons (hpat, tpat), Typ_app (list_id, [A_aux (A_typ elt_typ, _)]) when Id.compare list_id (mk_id "list") == 0 ->
+        let hr, hpat = aux kids hpat elt_typ in
+        let tr, tpat = aux kids tpat typ in
+        (hr @ tr, P_aux (P_cons (hpat, tpat), ann))
+    | P_cons _, _ -> unreachable (fst ann) __POS__ "Cons pattern without list type"
+    | P_string_append pats, _ ->
+        raise
+          (Reporting.err_unreachable (fst ann) __POS__
+             "string append patterns should have been removed before pretty-printing"
+          )
+    (* TODO: use the struct information from the current type, because the type variables will
+       probably have been renamed in the annotation. *)
+    | P_struct (name, fpats, fpw), _TODO ->
+        let r, fpats =
+          List.fold_left
+            (fun (r, t) (id, h) ->
+              let r', h = aux kids h (typ_of_pat h) in
+              (r @ r', (id, h) :: t)
+            )
+            ([], []) fpats
+        in
+        (r, P_aux (P_struct (name, List.rev fpats, fpw), ann))
+    | P_not _, _ -> unreachable (fst ann) __POS__ "Coq backend doesn't support not patterns"
+    | P_or _, _ -> unreachable (fst ann) __POS__ "Coq backend doesn't support or patterns yet"
+  in
+  let typ = Env.expand_synonyms env (typ_of_pat pat) in
+  let renames, pat = aux KidSet.empty pat typ in
+  let ctxt = List.fold_left (fun ctxt (id, kid) -> add_single_kid_id_rename ctxt id kid) ctxt renames in
+  (ctxt, pat)
 
 let rec flatten_nc (NC_aux (nc, l) as nc_full) =
   match nc with NC_and (nc1, nc2) -> flatten_nc nc1 @ flatten_nc nc2 | _ -> [nc_full]
@@ -861,31 +995,6 @@ let compute_kid_shadow env kid loc =
     Kid_aux (Var (string_of_kid kid ^ "#" ^ string_of_int (Env.shadows kid env)), loc)
   else kid
 
-(* maybe TODO: this could be provided by the type checker, and shared with bind_pat *)
-let typ_of_constructor env f typ l =
-  let typq, ctor_typ = Env.get_union_id f env in
-  let quants = quant_items typq in
-  begin
-    match Env.expand_synonyms (Env.add_typquant l typq env) ctor_typ with
-    | Typ_aux (Typ_fn ([arg_typ], ret_typ), _) -> begin
-        try
-          let goals = quant_kopts typq |> List.map kopt_kid |> KidSet.of_list in
-          let unifiers = unify l env goals ret_typ typ in
-          let arg_typ' = subst_unifiers unifiers arg_typ in
-          arg_typ'
-        with exc ->
-          raise
-            (Reporting.err_unreachable l __POS__
-               ("Unification error when pattern matching against union constructor: " ^ Printexc.to_string exc)
-            )
-      end
-    | _ ->
-        raise
-          (Reporting.err_unreachable l __POS__
-             ("Mal-formed constructor " ^ string_of_id f ^ " with type " ^ string_of_typ ctor_typ)
-          )
-  end
-
 (* Format a pattern, also eliminating dependent pairs when necessary. *)
 
 let rec doc_pat ctxt apat_needed pat typ =
@@ -896,10 +1005,12 @@ let rec doc_pat ctxt apat_needed pat typ =
   | h :: t ->
       let inner = doc_pat_no_existential ctxt true pat typ in
       (* Ensure that the inner pattern only gets parens when it needs to *)
-      let inner = string "@existT _ _ _" ^^ space ^^ inner in
-      (* We could bind the kid, but leave it alone for now so that we don't have to deal with
-       name clashes, especially with Sail variables. *)
-      let pp = List.fold_left (fun pp _kid -> string "@existT _ _ _" ^^ space ^^ parens pp) inner t in
+      let inner = string "@existT _ _ " ^^ doc_var ctxt (kopt_kid h) ^^ space ^^ inner in
+      let pp =
+        List.fold_left
+          (fun pp kopt -> string "@existT _ _ " ^^ doc_var ctxt (kopt_kid kopt) ^^ space ^^ parens pp)
+          inner t
+      in
       if apat_needed then parens pp else pp
 
 and doc_pat_no_existential ctxt apat_needed (P_aux (p, (l, annot)) as pat) typ =
@@ -2204,6 +2315,7 @@ let doc_exp, doc_let =
     group (doc_op coloneq fname e_pp)
   and doc_case ctxt old_env tail_position typ = function
     | Pat_aux (Pat_exp (pat, e), _) ->
+        let ctxt, pat = merge_kid_ids_in_pat ctxt old_env pat in
         let new_ctxt = merge_new_tyvars ctxt old_env pat (env_of e) in
         let pat_pp = doc_pat ctxt false pat typ in
         group (prefix 3 1 (separate space [pipe; pat_pp; bigarrow]) (group (top_exp new_ctxt false tail_position e)))
