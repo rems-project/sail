@@ -168,9 +168,7 @@ let typschm_is_pure (TypSchm_aux (TypSchm_ts (_, ATyp_aux (typ, _)), _)) =
   | ATyp_fn (_, _, ATyp_aux (ATyp_set effs, _)) -> effs = []
   | _ -> true
 
-let fix_extern typschm = function
-  | None -> None
-  | Some extern -> Some { extern with pure = typschm_is_pure typschm }
+let fix_extern typschm extern = { extern with pure = typschm_is_pure typschm }
 
 let funcl_annot fs fcl =
   List.fold_right (fun f fcl -> f fcl) fs fcl
@@ -1238,32 +1236,35 @@ extern_binding:
     { ("_", $3) }
 
 externs:
-  |
-    { None, false }
-  | Eq String
+  | s=String
     { warn_extern_effect (loc $startpos $endpos);
-      Some { pure = true; bindings = [("_", $2)] }, true }
-  | Eq Lcurly separated_nonempty_list_trailing(Comma, extern_binding) Rcurly
+      { pure = true; bindings = [("_", s)] }, true }
+  | Lcurly; b=separated_nonempty_list_trailing(Comma, extern_binding); Rcurly
     { warn_extern_effect (loc $startpos $endpos);
-      Some { pure = true; bindings = $3 }, true }
-  | Eq pure_opt String
-    { Some { pure = $2; bindings = [("_", $3)] }, false }
-  | Eq pure_opt Lcurly separated_nonempty_list_trailing(Comma, extern_binding) Rcurly
-    { Some { pure = $2; bindings = $4 }, false }
+      { pure = true; bindings = b }, true }
+  | p=pure_opt; s=String
+    { { pure = p; bindings = [("_", s)] }, false }
+  | p=pure_opt; Lcurly; b=separated_nonempty_list_trailing(Comma, extern_binding); Rcurly
+    { { pure = p; bindings = b }, false }
 
 val_spec_def:
-  | Val String Colon typschm
-    { let typschm = $4 in
-      mk_vs (VS_val_spec (typschm, mk_id (Id $2) $startpos($2) $endpos($2), Some { pure = typschm_is_pure typschm; bindings = [("_", $2)] })) $startpos $endpos }
-  | Val id externs Colon typschm
-    { let typschm = $5 in
-      let externs, need_fix = $3 in
-      mk_vs (VS_val_spec (typschm, $2, (if need_fix then fix_extern typschm externs else externs))) $startpos $endpos }
-  | Val Cast id externs Colon typschm
-    { cast_deprecated (loc $startpos($2) $endpos($2));
-      let typschm = $6 in
-      let externs, need_fix = $4 in
-      mk_vs (VS_val_spec (typschm, $3, (if need_fix then fix_extern typschm externs else externs))) $startpos $endpos }
+  | Val; f=String; Colon; ts=typschm
+    { mk_vs (VS_val_spec (ts, mk_id (Id f) $startpos(f) $endpos(f), Some { pure = typschm_is_pure ts; bindings = [("_", f)] })) $startpos $endpos }
+  | Val; f=id; Colon; ts=typschm
+    { mk_vs (VS_val_spec (ts, f, None)) $startpos $endpos }
+  | Val; f=id; Eq; externs=externs; Colon; ts=typschm
+    { let externs, need_fix = externs in
+      mk_vs (VS_val_spec (ts, f, Some (if need_fix then fix_extern ts externs else externs))) $startpos $endpos }
+  | Val; f=id; Colon; ts=typschm; Eq; externs=externs
+    { let externs, need_fix = externs in
+      mk_vs (VS_val_spec (ts, f, Some (if need_fix then fix_extern ts externs else externs))) $startpos $endpos }
+  | Val; c=Cast; f=id; Colon; ts=typschm
+    { cast_deprecated (loc $startpos(c) $endpos(c));
+      mk_vs (VS_val_spec (ts, f, None)) $startpos $endpos }
+  | Val; c=Cast; f=id; Eq; externs=externs; Colon; ts=typschm
+    { cast_deprecated (loc $startpos(c) $endpos(c));
+      let externs, need_fix = externs in
+      mk_vs (VS_val_spec (ts, f, Some (if need_fix then fix_extern ts externs else externs))) $startpos $endpos }
 
 register_def:
   | Register id Colon typ
