@@ -12,7 +12,7 @@ jobs:
       matrix:
         version: [5.2.1]
         os: [ubuntu-24.04]
-        suite: [typecheck, exec, sv, prover, other]
+        suite: [typecheck, exec, sv, lean, prover, other]
 
     runs-on: ${{ matrix.os }}
 
