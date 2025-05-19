@@ -10,10 +10,12 @@ sail:
 install: sail
 	dune install
 
+libsail_coverage:
+	$(MAKE) -C lib/coverage
 
 # Build binary tarball. The lib directory is very large and not needed
 # for running the compiler. TARBALL_EXTRA_BIN can be used to bundle z3.
-tarball: sail
+tarball: sail libsail_coverage
 	dune install --relocatable --prefix=_build/tarball/sail
 	rm -rf _build/tarball/sail/lib
 	cp LICENSE _build/tarball/sail
@@ -22,6 +24,7 @@ tarball: sail
 ifdef TARBALL_EXTRA_BIN
 	cp $(TARBALL_EXTRA_BIN) _build/tarball/sail/bin/
 endif
+	cp lib/coverage/libsail_coverage.a _build/tarball/sail/share/sail/lib/coverage/
 	tar czvf _build/sail.tar.gz -C _build/tarball sail
 
 coverage:
