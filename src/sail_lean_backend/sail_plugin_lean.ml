@@ -299,22 +299,27 @@ let start_lean_output (out_name : string) (import_names : string Pretty_print_le
   let funcs_file = open_out (Filename.concat project_dir (out_name_camel ^ ".lean")) in
   let lakefile = open_out (Filename.concat project_dir "lakefile.toml") in
   let import_files =
-    Pretty_print_lean.import_tree_map
+    List.map
       (fun name -> open_out (Filename.concat lean_src_dir (name ^ ".lean")))
-      import_names_camel
+      (Pretty_print_lean.import_tree_in_order import_names_camel)
   in
-  (* let last_import_names =
-    List.fold_left
-      (fun prev_name (out, n) ->
-        print_function_file_prelude out out_name_camel prev_name;
-        Some n
-      )
-      None
-      (List.combine import_files import_names_camel)
-  in
-  print_function_file_prelude funcs_file out_name_camel last_import_names; *)
-
-  let import_files = Pretty_print_lean.import_tree_in_order import_files in
+  let import_trees = Pretty_print_lean.import_tree_prefixes import_names_camel in
+  let imports = List.combine import_trees import_files in
+  print_endline (String.concat ", " (Pretty_print_lean.import_tree_in_order import_names_camel));
+  List.iter
+    (fun (t, out) ->
+      print_endline ("printing " ^ Pretty_print_lean.import_tree_name t);
+      print_endline ("tree " ^ Pretty_print_lean.string_of_import_tree t);
+      print_endline
+        ("imports "
+        ^ String.concat ", " (Pretty_print_lean.import_tree_imports (Pretty_print_lean.import_tree_remove_last t))
+        );
+      let imps = Pretty_print_lean.import_tree_imports (Pretty_print_lean.import_tree_remove_last t) in
+      print_function_file_prelude out out_name_camel imps
+    )
+    imports;
+  print_function_file_prelude funcs_file out_name_camel
+    (Pretty_print_lean.import_tree_imports (Pretty_print_lean.import_tree_remove_last import_names_camel));
   { out_name; out_name_camel; sail_dir; types_file; funcs_file; import_files; lakefile }
 
 let close_context ctx =
@@ -341,14 +346,17 @@ let create_lake_project (ctx : lean_context) executable =
     output_string ctx.lakefile ("root = \"" ^ ctx.out_name_camel ^ "\"\n")
   )
 
-let rec dedup_files (files : string list) (acc : string list) =
+let rec dedup_files (files : string Pretty_print_lean.import_tree) (acc : string Pretty_print_lean.import_tree) =
   match files with
-  | [] -> acc
-  | f :: fs -> (
-      match List.fold_left (fun n y -> if y = f then n + 1 else n) 0 acc with
-      | 0 -> dedup_files fs (acc @ [f])
-      | n -> dedup_files fs (acc @ [f ^ Int.to_string (n - 1)])
+  | ImportNode [] -> acc
+  | ImportNode (Str f :: fs) -> (
+      match List.fold_left (fun n y -> if y = f then n + 1 else n) 0 (Pretty_print_lean.import_tree_in_order acc) with
+      | 0 -> dedup_files (ImportNode fs) (Pretty_print_lean.import_tree_snoc acc (Pretty_print_lean.Str f))
+      | n ->
+          dedup_files (ImportNode fs)
+            (Pretty_print_lean.import_tree_snoc acc (Pretty_print_lean.Str (f ^ Int.to_string (n - 1))))
     )
+  | ImportNode (Tr t :: fs) -> dedup_files (ImportNode fs) (dedup_files t acc)
 
 let output (out_name : string) env effect_info ({ defs; _ } as ast : Libsail.Type_check.typed_ast) default_sail_dir
     single_file noncomputable =
@@ -364,9 +372,14 @@ let output (out_name : string) env effect_info ({ defs; _ } as ast : Libsail.Typ
       let importTree = Pretty_print_lean.import_tree_map file_to_module importTree in
       (* Discard the last import file, as we will use the main file instead *)
       let imports = Pretty_print_lean.take (List.length imports - 1) imports in
-      let imports = dedup_files imports [] in
+      let imports = dedup_files importTree (ImportNode []) in
       print_endline (Pretty_print_lean.string_of_import_tree importTree);
       print_endline (string_of_int (Pretty_print_lean.import_tree_size importTree));
+      print_endline
+        (String.concat ", "
+           (Pretty_print_lean.import_tree_imports (Pretty_print_lean.import_tree_remove_last importTree))
+        );
+      let importTree = Pretty_print_lean.import_tree_remove_last importTree in
       importTree
     )
   in

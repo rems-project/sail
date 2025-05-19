@@ -25,6 +25,13 @@ let rec import_tree_size (ImportNode cs) =
   | Tr t :: cs -> import_tree_size t + import_tree_size (ImportNode cs)
   | [] -> 0
 
+let rec import_tree_name (ImportNode cs) =
+  match cs with
+  | [] -> failwith "cannnot get name of empty import tree"
+  | [Str s] -> s
+  | [Tr t] -> import_tree_name t
+  | _ :: cs -> import_tree_name (ImportNode cs)
+
 let import_tree_remove_last (ImportNode cs) = ImportNode (take (List.length cs - 1) cs)
 
 let rec import_tree_map f (ImportNode cs) =
@@ -48,6 +55,8 @@ let rec import_tree_in_order (ImportNode cs) =
 
 let import_tree_cons (x : 'a) (ImportNode xs) = ImportNode (x :: xs)
 
+let import_tree_snoc (ImportNode xs) (x : 'a) = ImportNode (xs @ [x])
+
 let rec import_tree_combine (x : 'a import_tree) (y : 'b import_tree) : ('a * 'b) import_tree =
   match (x, y) with
   | ImportNode [], ImportNode [] -> ImportNode []
@@ -56,6 +65,18 @@ let rec import_tree_combine (x : 'a import_tree) (y : 'b import_tree) : ('a * 'b
   | ImportNode (Tr x :: xs), ImportNode (Tr y :: ys) ->
       import_tree_cons (Tr (import_tree_combine x y)) (import_tree_combine (ImportNode xs) (ImportNode ys))
   | _, _ -> failwith "import trees to be combined do not have the same structure!"
+
+let rec import_tree_element_reverse x = match x with Str s -> Str s | Tr t -> Tr (import_tree_reverse t)
+
+and import_tree_reverse (ImportNode cs) = ImportNode (List.rev (List.map import_tree_element_reverse cs))
+
+let rec import_tree_suffixes (ImportNode cs) =
+  match cs with
+  | [] -> []
+  | Str _ :: cs' -> ImportNode cs :: import_tree_suffixes (ImportNode cs')
+  | Tr t :: cs' -> import_tree_suffixes t @ import_tree_suffixes (ImportNode cs')
+
+let import_tree_prefixes t = List.rev (List.map import_tree_reverse (import_tree_suffixes (import_tree_reverse t)))
 
 (* Command line options *)
 let opt_extern_types : string list ref = ref []
