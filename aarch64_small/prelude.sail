@@ -143,7 +143,7 @@ val print = "print_endline" : string -> unit
 
 val error : forall ('a : Type). string -> 'a effect{escape}
 function error(message) = {
-  print(message); 
+  assert(false, message); 
   exit()
 }
 
