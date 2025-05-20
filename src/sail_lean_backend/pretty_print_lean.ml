@@ -66,6 +66,20 @@ let rec import_tree_combine (x : 'a import_tree) (y : 'b import_tree) : ('a * 'b
       import_tree_cons (Tr (import_tree_combine x y)) (import_tree_combine (ImportNode xs) (ImportNode ys))
   | _, _ -> failwith "import trees to be combined do not have the same structure!"
 
+let rec import_tree_last (x : 'a import_tree) : 'a option =
+  match x with
+  | ImportNode [] -> None
+  | ImportNode [Str s] -> Some s
+  | ImportNode [Tr t] -> import_tree_last t
+  | ImportNode (Str s :: cs) ->
+      (match import_tree_last (ImportNode cs) with
+      | None -> Some s
+      | Some s' -> Some s')
+  | ImportNode (Tr t :: cs) ->
+      (match import_tree_last (ImportNode cs) with
+      | None -> None
+      | Some s' -> Some s')
+
 let rec import_tree_element_reverse x = match x with Str s -> Str s | Tr t -> Tr (import_tree_reverse t)
 
 and import_tree_reverse (ImportNode cs) = ImportNode (List.rev (List.map import_tree_element_reverse cs))
@@ -1341,9 +1355,36 @@ let should_print_function_def def =
   | DEF_aux (DEF_let (LB_aux (LB_val (pat, exp), _)), _) -> true
   | _ -> false
 
+let rec defs_until_end ?(depth = 0) defs =
+  match defs with
+  | [] -> []
+  | (DEF_aux (DEF_pragma ("include_start", Pragma_line (file, _)), _) as d) :: ds
+  | (DEF_aux (DEF_pragma ("file_start", Pragma_line (file, _)), _) as d) :: ds
+    when Filename.check_suffix file ".sail" ->
+      d :: defs_until_end ~depth:(depth + 1) ds
+  | (DEF_aux (DEF_pragma ("include_end", Pragma_line (file, _)), _) as d) :: ds
+  | (DEF_aux (DEF_pragma ("file_end", Pragma_line (file, _)), _) as d) :: ds
+    when Filename.check_suffix file ".sail" ->
+      if depth = 0 then [] else d :: defs_until_end ~depth:(depth - 1) ds
+  | d :: ds -> if should_print_function_def d then d :: defs_until_end ~depth ds else defs_until_end ~depth ds
+
+let rec defs_after_end ?(depth = 0) defs =
+  match defs with
+  | [] -> []
+  | (DEF_aux (DEF_pragma ("include_start", Pragma_line (file, _)), _) as d) :: ds
+  | (DEF_aux (DEF_pragma ("file_start", Pragma_line (file, _)), _) as d) :: ds
+    when Filename.check_suffix file ".sail" ->
+      defs_after_end ~depth:(depth + 1) ds
+  | (DEF_aux (DEF_pragma ("include_end", Pragma_line (file, _)), _) as d) :: ds
+  | (DEF_aux (DEF_pragma ("file_end", Pragma_line (file, _)), _) as d) :: ds
+    when Filename.check_suffix file ".sail" ->
+      if depth = 0 then ds else defs_after_end ~depth:(depth - 1) ds
+  | d :: ds -> defs_after_end ~depth ds
+
 let rec doc_defs_rec ctx defs types (former_funcs : document list) (docdefs : document) =
   match defs with
-  | [] -> (types, former_funcs @ [docdefs])
+  | [] ->
+    (types, former_funcs @ [docdefs])
   | DEF_aux (DEF_fundef fdef, dannot) :: defs' ->
       let env = dannot.env in
       let pp_f =
@@ -1365,24 +1406,17 @@ let rec doc_defs_rec ctx defs types (former_funcs : document list) (docdefs : do
       doc_defs_rec ctx defs' types former_funcs (docdefs ^^ group pp_val ^/^ hardline)
   | DEF_aux (DEF_pragma ("include_start", Pragma_line (file, _)), _) :: defs'
   | DEF_aux (DEF_pragma ("file_start", Pragma_line (file, _)), _) :: defs'
+    when Filename.check_suffix file ".sail" && docdefs != empty && defs_until_end defs' != [] ->
+      doc_defs_rec ctx defs' types (former_funcs @ [docdefs]) empty
   | DEF_aux (DEF_pragma ("include_end", Pragma_line (file, _)), _) :: defs'
   | DEF_aux (DEF_pragma ("file_end", Pragma_line (file, _)), _) :: defs'
-    when Filename.check_suffix file ".sail" ->
-      if docdefs = empty then doc_defs_rec ctx defs' types former_funcs docdefs
-      else doc_defs_rec ctx defs' types (former_funcs @ [docdefs]) empty
+    when Filename.check_suffix file ".sail" && docdefs != empty ->
+      doc_defs_rec ctx defs' types (former_funcs @ [docdefs]) empty
   | d :: defs' ->
       if should_print_function_def d then failwith "this case of doc_defs_rec should be unreachable"
       else doc_defs_rec ctx defs' types former_funcs docdefs
 
 let doc_defs ctx defs = doc_defs_rec ctx defs empty [] empty
-
-(* Remove all imports for now, they will be printed in other files. Probably just for testing. *)
-let rec remove_imports (defs : (Libsail.Type_check.tannot, Libsail.Type_check.env) def list) depth =
-  match defs with
-  | [] -> []
-  | DEF_aux (DEF_pragma ("include_start", _), _) :: ds -> remove_imports ds (depth + 1)
-  | DEF_aux (DEF_pragma ("include_end", _), _) :: ds -> remove_imports ds (depth - 1)
-  | d :: ds -> if depth > 0 then remove_imports ds depth else d :: remove_imports ds depth
 
 let add_reg_typ typ_map (typ, id, _) =
   let typ_id = State.id_of_regtyp IdSet.empty typ in
@@ -1500,59 +1534,6 @@ let populate_fun_args defs =
   in
   List.fold_left (fun args d -> add_args args d) Bindings.empty defs
 
-let rec collect_import_files_aux defs file_stack last_namespace ret =
-  match defs with
-  | [] -> ret
-  | DEF_aux (DEF_pragma ("include_start", Pragma_line (file, _)), _) :: ds
-  | DEF_aux (DEF_pragma ("file_start", Pragma_line (file, _)), _) :: ds
-    when Filename.check_suffix file ".sail" ->
-      collect_import_files_aux ds (file :: file_stack) last_namespace ret
-  | DEF_aux (DEF_pragma ("include_end", Pragma_line (file, _)), _) :: ds
-  | DEF_aux (DEF_pragma ("file_end", Pragma_line (file, _)), _) :: ds
-    when Filename.check_suffix file ".sail" -> (
-      match file_stack with
-      | f :: fs -> collect_import_files_aux ds fs last_namespace ret
-      | _ -> failwith "should not be reachable"
-    )
-  | d :: ds -> (
-      match file_stack with
-      | f :: _ ->
-          if should_print_function_def d && not (last_namespace = Some f) then
-            collect_import_files_aux ds file_stack (Some f) (ret @ [f])
-          else collect_import_files_aux ds file_stack last_namespace ret
-      | _ -> failwith "should not be reachable"
-    )
-
-let collect_import_files defs base =
-  let res = collect_import_files_aux defs [base] None [] in
-  if res = [] then [base] else res
-
-let rec defs_until_end ?(depth = 0) defs =
-  match defs with
-  | [] -> []
-  | (DEF_aux (DEF_pragma ("include_start", Pragma_line (file, _)), _) as d) :: ds
-  | (DEF_aux (DEF_pragma ("file_start", Pragma_line (file, _)), _) as d) :: ds
-    when Filename.check_suffix file ".sail" ->
-      d :: defs_until_end ~depth:(depth + 1) ds
-  | (DEF_aux (DEF_pragma ("include_end", Pragma_line (file, _)), _) as d) :: ds
-  | (DEF_aux (DEF_pragma ("file_end", Pragma_line (file, _)), _) as d) :: ds
-    when Filename.check_suffix file ".sail" ->
-      if depth = 0 then [] else d :: defs_until_end ~depth:(depth - 1) ds
-  | d :: ds -> d :: defs_until_end ~depth ds
-
-let rec defs_after_end ?(depth = 0) defs =
-  match defs with
-  | [] -> []
-  | (DEF_aux (DEF_pragma ("include_start", Pragma_line (file, _)), _) as d) :: ds
-  | (DEF_aux (DEF_pragma ("file_start", Pragma_line (file, _)), _) as d) :: ds
-    when Filename.check_suffix file ".sail" ->
-      defs_after_end ~depth:(depth + 1) ds
-  | (DEF_aux (DEF_pragma ("include_end", Pragma_line (file, _)), _) as d) :: ds
-  | (DEF_aux (DEF_pragma ("file_end", Pragma_line (file, _)), _) as d) :: ds
-    when Filename.check_suffix file ".sail" ->
-      if depth = 0 then ds else defs_after_end ~depth:(depth - 1) ds
-  | d :: ds -> defs_after_end ~depth ds
-
 let rec collect_import_files_aux2 ?(last = None) defs base =
   match defs with
   | [] -> ImportNode []
@@ -1560,7 +1541,8 @@ let rec collect_import_files_aux2 ?(last = None) defs base =
   | (DEF_aux (DEF_pragma ("file_start", Pragma_line (file, _)), _) as d) :: ds
     when Filename.check_suffix file ".sail" ->
       let child = collect_import_files_aux2 ~last (defs_until_end ds) file in
-      let (ImportNode suffix) = collect_import_files_aux2 ~last (defs_after_end ds) base in
+      let newLast = if child = ImportNode [] then last else import_tree_last child in
+      let (ImportNode suffix) = collect_import_files_aux2 ~last:newLast (defs_after_end ds) base in
       if child = ImportNode [] then ImportNode suffix else ImportNode (Tr child :: suffix)
   | (DEF_aux (DEF_pragma ("include_end", Pragma_line (file, _)), _) as d) :: ds
   | (DEF_aux (DEF_pragma ("file_end", Pragma_line (file, _)), _) as d) :: ds
@@ -1568,10 +1550,7 @@ let rec collect_import_files_aux2 ?(last = None) defs base =
       failwith "this case of collect_import_files_aux should be unreachable"
   | d :: ds ->
       if last = Some base || base = "" || not (should_print_function_def d) then collect_import_files_aux2 ~last ds base
-      else (
-        let (ImportNode suffix) = collect_import_files_aux2 ~last:(Some base) ds base in
-        ImportNode (Str base :: suffix)
-      )
+      else import_tree_cons (Str base) (collect_import_files_aux2 ~last:(Some base) ds base)
 
 let collect_import_files2 defs base =
   match collect_import_files_aux2 defs base with ImportNode [] -> ImportNode [Str base] | x -> x

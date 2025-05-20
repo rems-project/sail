@@ -305,21 +305,13 @@ let start_lean_output (out_name : string) (import_names : string Pretty_print_le
   in
   let import_trees = Pretty_print_lean.import_tree_prefixes import_names_camel in
   let imports = List.combine import_trees import_files in
-  print_endline (String.concat ", " (Pretty_print_lean.import_tree_in_order import_names_camel));
   List.iter
     (fun (t, out) ->
-      print_endline ("printing " ^ Pretty_print_lean.import_tree_name t);
-      print_endline ("tree " ^ Pretty_print_lean.string_of_import_tree t);
-      print_endline
-        ("imports "
-        ^ String.concat ", " (Pretty_print_lean.import_tree_imports (Pretty_print_lean.import_tree_remove_last t))
-        );
       let imps = Pretty_print_lean.import_tree_imports (Pretty_print_lean.import_tree_remove_last t) in
       print_function_file_prelude out out_name_camel imps
     )
     imports;
-  print_function_file_prelude funcs_file out_name_camel
-    (Pretty_print_lean.import_tree_imports (Pretty_print_lean.import_tree_remove_last import_names_camel));
+  print_function_file_prelude funcs_file out_name_camel (Pretty_print_lean.import_tree_imports import_names_camel);
   { out_name; out_name_camel; sail_dir; types_file; funcs_file; import_files; lakefile }
 
 let close_context ctx =
@@ -346,17 +338,23 @@ let create_lake_project (ctx : lean_context) executable =
     output_string ctx.lakefile ("root = \"" ^ ctx.out_name_camel ^ "\"\n")
   )
 
-let rec dedup_files (files : string Pretty_print_lean.import_tree) (acc : string Pretty_print_lean.import_tree) =
+let rec dedup_files (files : string Pretty_print_lean.import_tree) (acc : string list) =
   match files with
-  | ImportNode [] -> acc
+  | ImportNode [] -> Pretty_print_lean.ImportNode []
   | ImportNode (Str f :: fs) -> (
-      match List.fold_left (fun n y -> if y = f then n + 1 else n) 0 (Pretty_print_lean.import_tree_in_order acc) with
-      | 0 -> dedup_files (ImportNode fs) (Pretty_print_lean.import_tree_snoc acc (Pretty_print_lean.Str f))
+      match List.fold_left (fun n y -> if y = f then n + 1 else n) 0 acc with
+      | 0 ->
+          let (ImportNode rs) = dedup_files (ImportNode fs) (f :: acc) in
+          ImportNode (Str f :: rs)
       | n ->
-          dedup_files (ImportNode fs)
-            (Pretty_print_lean.import_tree_snoc acc (Pretty_print_lean.Str (f ^ Int.to_string (n - 1))))
+          let f' = f ^ Int.to_string (n - 1) in
+          let (ImportNode rs) = dedup_files (ImportNode fs) (f' :: acc) in
+          ImportNode (Str f' :: rs)
     )
-  | ImportNode (Tr t :: fs) -> dedup_files (ImportNode fs) (dedup_files t acc)
+  | ImportNode (Tr t :: fs) ->
+      let t' = dedup_files t acc in
+      let (ImportNode fs') = dedup_files (ImportNode fs) (Pretty_print_lean.import_tree_in_order t' @ acc) in
+      ImportNode (Tr t' :: fs')
 
 let output (out_name : string) env effect_info ({ defs; _ } as ast : Libsail.Type_check.typed_ast) default_sail_dir
     single_file noncomputable =
@@ -364,21 +362,13 @@ let output (out_name : string) env effect_info ({ defs; _ } as ast : Libsail.Typ
     if single_file then Pretty_print_lean.ImportNode []
     else (
       (* Collect all non-empty slices between include pragmas in the file *)
-      let imports = Pretty_print_lean.collect_import_files defs (out_name ^ ".sail") in
       let importTree = Pretty_print_lean.collect_import_files2 defs (out_name ^ ".sail") in
       (* let importTree = Pretty_print_lean.import_tree_remove_last importTree in *)
       (* Pretty_print_sail.output_ast stdout (Type_check.strip_ast ast); *)
-      let imports = List.map file_to_module imports in
       let importTree = Pretty_print_lean.import_tree_map file_to_module importTree in
+      (* Deduplicate files in the import tree *)
+      let importTree = dedup_files importTree [] in
       (* Discard the last import file, as we will use the main file instead *)
-      let imports = Pretty_print_lean.take (List.length imports - 1) imports in
-      let imports = dedup_files importTree (ImportNode []) in
-      print_endline (Pretty_print_lean.string_of_import_tree importTree);
-      print_endline (string_of_int (Pretty_print_lean.import_tree_size importTree));
-      print_endline
-        (String.concat ", "
-           (Pretty_print_lean.import_tree_imports (Pretty_print_lean.import_tree_remove_last importTree))
-        );
       let importTree = Pretty_print_lean.import_tree_remove_last importTree in
       importTree
     )
