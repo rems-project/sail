@@ -71,7 +71,8 @@ let opt_all_modules = ref false
 let opt_show_sail_dir = ref false
 let opt_project_files : string list ref = ref []
 let opt_variable_assignments : string list ref = ref []
-let opt_config_file : string option ref = ref None
+let opt_model_config_file : string option ref = ref None
+let opt_sail_config_file : string option ref = ref None
 let opt_format = ref false
 let opt_format_backup : string option ref = ref None
 let opt_format_only : string list ref = ref []
@@ -254,7 +255,8 @@ let rec options =
       );
       ("-all_modules", Arg.Set opt_all_modules, " use all modules in project file");
       ("-list_files", Arg.Set Frontend.opt_list_files, " list files used in all project files");
-      ("-config", Arg.String (fun file -> opt_config_file := Some file), "<file> configuration file");
+      ("-config", Arg.String (fun file -> opt_model_config_file := Some file), "<file> model configuration file");
+      ("-sail_config", Arg.String (fun file -> opt_sail_config_file := Some file), "<file> sail configuration file");
       ( "-output-schema",
         Arg.String (fun file -> opt_output_schema_file := Some file),
         "<file> output configuration schema"
@@ -453,22 +455,20 @@ let file_to_string filename =
     close_in chan;
     Buffer.contents buf
 
+let parse_json_config_file file =
+  if Sys.file_exists file then (
+    let json =
+      try Yojson.Safe.from_file ~fname:file ~lnum:0 file
+      with Yojson.Json_error message ->
+        raise
+          (Reporting.err_general Parse_ast.Unknown (Printf.sprintf "Failed to parse configuration file:\n%s" message))
+    in
+    json
+  )
+  else raise (Reporting.err_general Parse_ast.Unknown (Printf.sprintf "Configuration file %s does not exist" file))
+
 let get_model_config () =
-  match !opt_config_file with
-  | Some file ->
-      if Sys.file_exists file then (
-        let json =
-          try Yojson.Safe.from_file ~fname:file ~lnum:0 file
-          with Yojson.Json_error message ->
-            raise
-              (Reporting.err_general Parse_ast.Unknown
-                 (Printf.sprintf "Failed to parse configuration file:\n%s" message)
-              )
-        in
-        json
-      )
-      else raise (Reporting.err_general Parse_ast.Unknown (Printf.sprintf "Configuration file %s does not exist" file))
-  | None -> `Assoc []
+  match !opt_model_config_file with Some file -> parse_json_config_file file | None -> `Assoc []
 
 let run_sail (config : Yojson.Safe.t option) tgt =
   Target.run_pre_parse_hook tgt ();
@@ -623,12 +623,6 @@ let get_implicit_config_file override_file =
       | None -> find_file_above (Sys.getcwd ()) "sail_config.json"
     )
 
-let parse_config_file file =
-  try Some (Yojson.Safe.from_file ~fname:file ~lnum:0 file)
-  with Yojson.Json_error message ->
-    Reporting.warn "" Parse_ast.Unknown (Printf.sprintf "Failed to parse configuration file: %s" message);
-    None
-
 let main () =
   (* let _ = Memtrace.start_tracing ~context:None ~sampling_rate:1e-6 ~filename:"trace.ctf" in *)
   if Option.is_some (Sys.getenv_opt "SAIL_NEW_CLI") then opt_new_cli := true;
@@ -654,7 +648,7 @@ let main () =
 
   Arg.parse_dynamic options (fun s -> opt_free_arguments := !opt_free_arguments @ [s]) usage_msg;
 
-  let config = Option.bind (get_implicit_config_file None) parse_config_file in
+  let config = Option.map parse_json_config_file (get_implicit_config_file !opt_sail_config_file) in
 
   feature_check ();
 
