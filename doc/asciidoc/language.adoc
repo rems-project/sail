@@ -1066,6 +1066,39 @@ val write_memory : (bits(64), bits(8)) -> unit
 overload memory = {read_memory, write_memory}
 ----
 
+=== Registers
+:reg: sail_doc/register.json
+
+We have discussed mutable variables defined with `var`, and assignment
+to those variables in the previous sections. The global state of an
+ISA is defined in Sail by a set of _registers_, which essentially act
+as global mutable variables. For example, we could define and use a register
+as follows:
+
+sail::EXAMPLE[from=reg,type=span]
+
+We can provide a default initial value to a register, or leave it
+undefined. In the above example the register definition is equivalent
+to writing
+
+[source,sail]
+----
+register R : bits(64) = undefined
+----
+
+For readability reasons, local variables are not permitted to shadow
+global register definitions, as the following example demonstrates.
+
+[source,sail]
+----
+include::../examples/register_shadow.sail[]
+----
+
+[source]
+----
+include::sail_doc/register_shadow.error[]
+----
+
 === Bitfields
 :bitf: sail_doc/bitfield.json
 
