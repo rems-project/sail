@@ -1,0 +1,19 @@
+function rX r = {
+    let foo = Xs[1];
+    let foo = Xs[a];
+    let foo = Xs[unsigned(r)];
+    let foo = Xs[
+        1
+    ]; // comment
+    let foo = /* comment */ Xs[
+        unsigned(r)
+    ];
+    let foo = Xs[
+        let r = 1 in
+        unsigned(r)
+    ]; // comment
+    let foo = Xs[
+        let foooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooo = 1 in
+        foo
+    ];
+}

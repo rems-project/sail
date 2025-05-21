@@ -253,6 +253,11 @@ module PPrintWrapper = struct
         )
       )
       lines
+
+  (* TODO: maybe save line_number in ast *)
+  let is_single_line_block_comment s =
+    let lines = Util.split_on_char '\n' s in
+    List.length lines <= 1
 end
 
 open PPrintWrapper
@@ -342,7 +347,12 @@ let unary_operator_precedence = function
   | "2^" -> (10, atomic, empty)
   | _ -> (10, subatomic, empty)
 
-let can_hang chunks = match Queue.peek_opt chunks with Some (Comment _) -> false | _ -> true
+let can_hang chunks =
+  match Queue.peek_opt chunks with
+  | Some (Comment (t, _, _, contents, _)) -> (
+      match t with Lexer.Comment_block -> is_single_line_block_comment contents | _ -> false
+    )
+  | _ -> true
 
 let opt_delim s = ifflat empty (string s)
 
@@ -527,7 +537,8 @@ module Make (Config : CONFIG) = struct
     | Index (exp, ix) ->
         let exp_doc = doc_chunks (opts |> atomic |> expression_like) exp in
         let ix_doc = doc_chunks (opts |> nonatomic |> expression_like) ix in
-        exp_doc ^^ surround indent 0 (char '[') ix_doc (char ']') |> subatomic_parens opts
+        let ix_doc = surround_hardline false indent 0 (char '[') ix_doc (char ']') in
+        exp_doc ^^ ix_doc
     | Exists ex ->
         let ex_doc =
           doc_chunks (atomic opts) ex.vars
@@ -648,7 +659,7 @@ module Make (Config : CONFIG) = struct
           separate space [string (binder_keyword binder); doc_chunks (atomic opts) x; char '=']
           ^^ nest 4 (hardline ^^ doc_chunks (nonatomic opts) y)
     | Binder (binder, x, y, z) ->
-        prefix indent 1
+        group
           (separate space
              [
                string (binder_keyword binder);
@@ -658,7 +669,8 @@ module Make (Config : CONFIG) = struct
                string "in";
              ]
           )
-          (doc_chunks (nonatomic opts) z)
+        ^^ break 1
+        ^^ doc_chunks (nonatomic opts) z
     | Match m ->
         let kw1, kw2 = match_keywords m.kind in
         string kw1 ^^ space
