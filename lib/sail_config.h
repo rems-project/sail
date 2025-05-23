@@ -77,7 +77,7 @@ void sail_config_cleanup(void);
 /*
  * Get the JSON corresponding to some key.
  */
-sail_config_json sail_config_get(const size_t n, const_sail_string key[]);
+sail_config_json sail_config_get(const size_t n, const_sail_string const *key);
 
 /*
  * Get the JSON corresponding to some key. Rather than an array the
