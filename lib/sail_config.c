@@ -104,7 +104,7 @@ void sail_config_cleanup(void)
   cJSON_Delete((cJSON *)sail_config);
 }
 
-sail_config_json sail_config_get(size_t n, const char *key[])
+sail_config_json sail_config_get(size_t n, const_sail_string const *key)
 {
   sail_config_json result;
   cJSON *json = (cJSON *)sail_config;
