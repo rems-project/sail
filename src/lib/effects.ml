@@ -111,6 +111,8 @@ let non_exec = EffectSet.mem NonExec
 
 let pure = EffectSet.is_empty
 
+let pure_or_exit effs = EffectSet.is_empty effs || (EffectSet.mem Exit effs && EffectSet.cardinal effs = 1)
+
 let effectful set = not (pure set)
 
 let has_outcome id = EffectSet.mem (Outcome id)
@@ -397,7 +399,7 @@ let check_side_effects effect_info ast =
           IdSet.iter
             (fun id ->
               match Bindings.find_opt id effect_info.letbinds with
-              | Some eff when not (pure eff) ->
+              | Some eff when not (pure_or_exit eff) ->
                   raise
                     (Reporting.err_general (id_loc id)
                        ("Top-level let statement must not have any side effects. Found side effects: "

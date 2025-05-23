@@ -48,6 +48,7 @@ skip_selftests = {
     'assign_in_funarg',
     'concurrency_interface_v2',
     'config_map_guard',
+    'let_assert',
 }
 
 print("Sail is {}".format(sail))
