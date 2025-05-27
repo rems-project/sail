@@ -9,6 +9,8 @@ open Rewriter
 open PPrint
 open Pretty_print_common
 
+module IntSet = Set.Make (Int)
+
 (* Command line options *)
 let opt_extern_types : string list ref = ref []
 
@@ -1317,6 +1319,43 @@ let rec doc_defs_rec ctx defs types (former_funcs : document list) (docdefs : do
       else doc_defs_rec ctx defs' types former_funcs docdefs
 
 let doc_defs ctx defs = doc_defs_rec ctx defs empty [] empty
+
+let rec collect_imports_rec (cg : Callgraph.callgraph) (defs : (tannot, env) def list) (map : int Bindings.t) 
+    (accs : IntSet.t list) (acc : IntSet.t) (idx : int) : IntSet.t list =
+  match defs with
+  | [] -> accs @ [acc]
+  | DEF_aux (DEF_fundef fdef, dannot) :: defs' ->
+      let id = id_of_fundef fdef in
+      let map = Bindings.add id idx map in
+      let deps = Callgraph.G.children cg (Function id) in
+      let deps : int list = List.filter_map
+        (fun n -> match n with
+         | Callgraph.Function id ->
+           Bindings.find_opt id map
+         | _ -> None) deps in
+      let acc = List.fold_left (fun map i -> IntSet.add i map) acc deps in
+      collect_imports_rec cg defs map accs acc idx
+  | DEF_aux (DEF_internal_mutrec fdefs, dannot) :: defs' ->
+      let map = List.fold_left (fun map fdef -> Bindings.add (id_of_fundef fdef) idx map) map fdefs in
+      collect_imports_rec cg defs map accs acc idx
+  | DEF_aux (DEF_type tdef, _) :: defs' ->
+      collect_imports_rec cg defs map accs acc idx
+  | DEF_aux (DEF_let (LB_aux (LB_val (pat, exp), _)), _) :: defs' ->
+      (* TODO populate map *)
+      collect_imports_rec cg defs map accs acc idx
+  | DEF_aux (DEF_pragma ("include_start", Pragma_line (file, _)), _) :: defs'
+  | DEF_aux (DEF_pragma ("file_start", Pragma_line (file, _)), _) :: defs'
+  | DEF_aux (DEF_pragma ("include_end", Pragma_line (file, _)), _) :: defs'
+  | DEF_aux (DEF_pragma ("file_end", Pragma_line (file, _)), _) :: defs'
+    when Filename.check_suffix file ".sail" ->
+      if IntSet.cardinal acc = 0 then collect_imports_rec cg defs map accs acc idx
+      else collect_imports_rec cg defs map (accs @ [acc]) IntSet.empty (idx + 1)
+  | d :: defs' ->
+      if should_print_function_def d then failwith "this case of collect_imports_rec should be unreachable"
+      else collect_imports_rec cg defs map accs acc idx
+
+let rec collect_imports (cg : Callgraph.callgraph) (defs : (tannot, env) def list) =
+  collect_imports_rec cg defs Bindings.empty [] IntSet.empty 0
 
 (* Remove all imports for now, they will be printed in other files. Probably just for testing. *)
 let rec remove_imports (defs : (Libsail.Type_check.tannot, Libsail.Type_check.env) def list) depth =

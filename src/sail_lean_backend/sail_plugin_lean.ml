@@ -239,10 +239,10 @@ let path_to_static_library sail_dir str = Filename.quote (sail_dir ^ "/src/sail_
 let copy_from_static_library sail_dir lean_sail_dir str =
   Unix.system ("cp " ^ path_to_static_library sail_dir str ^ " " ^ Filename.quote lean_sail_dir)
 
-let print_function_file_prelude file out_name_camel (prev_file : string option) =
+let print_function_file_prelude file out_name_camel (imp_refs : string list) =
   let _ =
-    match prev_file with
-    | None ->
+    match imp_refs with
+    | [] ->
         output_string file ("import " ^ out_name_camel ^ ".Sail.Sail\n");
         output_string file ("import " ^ out_name_camel ^ ".Sail.BitVec\n");
         output_string file ("import " ^ out_name_camel ^ ".Sail.IntRange\n");
@@ -250,13 +250,13 @@ let print_function_file_prelude file out_name_camel (prev_file : string option) 
         List.iter
           (fun filename -> output_string file ("import " ^ out_name_camel ^ "." ^ file_to_module filename ^ "\n"))
           !opt_lean_import_files
-    | Some n -> output_string file ("import " ^ out_name_camel ^ "." ^ n ^ "\n")
+    | ns -> List.iter (fun n -> output_string file ("import " ^ out_name_camel ^ "." ^ n ^ "\n")) ns
   in
   output_string file ("\n" ^ file_prelude);
   if !opt_lean_noncomputable then output_string file "noncomputable section\n\n";
   output_string file ("namespace " ^ out_name_camel ^ ".Functions\n\n")
 
-let start_lean_output (out_name : string) (import_names : string list) default_sail_dir =
+let start_lean_output (out_name : string) (import_names : string list) (import_refs : (string list) list) default_sail_dir =
   let base_dir = match !opt_lean_output_dir with Some dir -> dir | None -> "." in
   let project_dir = Filename.concat base_dir out_name in
   if !opt_lean_force_output && Sys.file_exists project_dir && Sys.is_directory project_dir then (
@@ -305,14 +305,15 @@ let start_lean_output (out_name : string) (import_names : string list) default_s
   let import_files =
     List.map (fun name -> open_out (Filename.concat lean_src_dir (name ^ ".lean"))) import_names_camel
   in
+  (* TODO get the last import name by other means than this fold *)
   let last_import_name =
     List.fold_left
-      (fun prev_name (out, n) ->
-        print_function_file_prelude out out_name_camel prev_name;
-        Some n
+      (fun prev_name (out, (n, imps)) ->
+        print_function_file_prelude out out_name_camel imps;
+        [n]
       )
-      None
-      (List.combine import_files import_names_camel)
+      []
+      (List.combine import_files (List.combine import_names_camel import_refs))
   in
   print_function_file_prelude funcs_file out_name_camel last_import_name;
   { out_name; out_name_camel; sail_dir; types_file; funcs_file; import_files; lakefile }
@@ -352,18 +353,26 @@ let rec dedup_files (files : string list) (acc : string list) =
 
 let output (out_name : string) env effect_info ({ defs; _ } as ast : Libsail.Type_check.typed_ast) default_sail_dir
     single_file noncomputable =
-  let imports =
-    if single_file then []
+  let cg = Callgraph.graph_of_ast ast in
+  let (files, import_sets) =
+    if single_file then ([], [])
     else (
+      let import_sets = Pretty_print_lean.collect_imports cg defs in
       (* Collect all non-empty slices between include pragmas in the file *)
-      let imports = Pretty_print_lean.collect_import_files defs (out_name ^ ".sail") in
-      let imports = List.map file_to_module imports in
+      let import_files = Pretty_print_lean.collect_import_files defs (out_name ^ ".sail") in
+      let import_files = List.map file_to_module import_files in
       (* Discard the last import file, as we will use the main file instead *)
-      let imports = Pretty_print_lean.take (List.length imports - 1) imports in
-      dedup_files imports []
+      let import_files = Pretty_print_lean.take (List.length import_files - 1) import_files in
+      (* Disambiguate import files *)
+      let import_files = dedup_files import_files [] in
+      (* Convert the integers in import_sets into Lean module names *)
+      let import_sets : (string list) list = List.map (fun is ->
+        let is = Pretty_print_lean.IntSet.to_list is in
+        List.filter_map (List.nth_opt import_files) is) import_sets in
+      (import_files, import_sets)
     )
   in
-  let ctx = start_lean_output out_name imports default_sail_dir in
+  let ctx = start_lean_output out_name files import_sets default_sail_dir in
   let out_name_camel = Libsail.Util.to_upper_camel_case out_name in
   let executable =
     Pretty_print_lean.pp_ast_lean env effect_info ast out_name_camel ctx.types_file ctx.import_files ctx.funcs_file
