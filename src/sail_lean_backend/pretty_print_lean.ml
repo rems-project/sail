@@ -71,14 +71,12 @@ let rec import_tree_last (x : 'a import_tree) : 'a option =
   | ImportNode [] -> None
   | ImportNode [Str s] -> Some s
   | ImportNode [Tr t] -> import_tree_last t
-  | ImportNode (Str s :: cs) ->
-      (match import_tree_last (ImportNode cs) with
-      | None -> Some s
-      | Some s' -> Some s')
-  | ImportNode (Tr t :: cs) ->
-      (match import_tree_last (ImportNode cs) with
-      | None -> None
-      | Some s' -> Some s')
+  | ImportNode (Str s :: cs) -> (
+      match import_tree_last (ImportNode cs) with None -> Some s | Some s' -> Some s'
+    )
+  | ImportNode (Tr t :: cs) -> (
+      match import_tree_last (ImportNode cs) with None -> None | Some s' -> Some s'
+    )
 
 let rec import_tree_element_reverse x = match x with Str s -> Str s | Tr t -> Tr (import_tree_reverse t)
 
@@ -1383,8 +1381,7 @@ let rec defs_after_end ?(depth = 0) defs =
 
 let rec doc_defs_rec ctx defs types (former_funcs : document list) (docdefs : document) =
   match defs with
-  | [] ->
-    (types, former_funcs @ [docdefs])
+  | [] -> (types, former_funcs @ [docdefs])
   | DEF_aux (DEF_fundef fdef, dannot) :: defs' ->
       let env = dannot.env in
       let pp_f =

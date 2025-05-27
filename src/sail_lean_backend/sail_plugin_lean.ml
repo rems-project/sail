@@ -311,6 +311,7 @@ let start_lean_output (out_name : string) (import_names : string Pretty_print_le
       print_function_file_prelude out out_name_camel imps
     )
     imports;
+  print_endline (Pretty_print_lean.string_of_import_tree import_names_camel);
   print_function_file_prelude funcs_file out_name_camel (Pretty_print_lean.import_tree_imports import_names_camel);
   { out_name; out_name_camel; sail_dir; types_file; funcs_file; import_files; lakefile }
 
@@ -363,7 +364,6 @@ let output (out_name : string) env effect_info ({ defs; _ } as ast : Libsail.Typ
     else (
       (* Collect all non-empty slices between include pragmas in the file *)
       let importTree = Pretty_print_lean.collect_import_files2 defs (out_name ^ ".sail") in
-      (* let importTree = Pretty_print_lean.import_tree_remove_last importTree in *)
       (* Pretty_print_sail.output_ast stdout (Type_check.strip_ast ast); *)
       let importTree = Pretty_print_lean.import_tree_map file_to_module importTree in
       (* Deduplicate files in the import tree *)
