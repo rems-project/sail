@@ -215,6 +215,8 @@ module Env : sig
 
   val expand_synonyms : t -> typ -> typ
 
+  val simplify_constraints : t -> t
+
   (** Expand type synonyms and remove register annotations (i.e. register<t> -> t)) *)
   val base_typ_of : t -> typ -> typ
 

@@ -236,6 +236,8 @@ val expand_synonyms : t -> typ -> typ
 val expand_nexp_synonyms : t -> nexp -> nexp
 val expand_constraint_synonyms : t -> n_constraint -> n_constraint
 
+val simplify_constraints : t -> t
+
 val base_typ_of : t -> typ -> typ
 
 val allow_unknowns : t -> bool
