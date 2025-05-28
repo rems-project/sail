@@ -21,7 +21,7 @@ inductive option (k_a : Type) where
 structure My_struct where
   field1 : Int
   field2 : (BitVec 1)
-  deriving Inhabited, BEq, Repr
+  deriving BEq, Inhabited, Repr
 
 inductive Register : Type where
   | BIT
