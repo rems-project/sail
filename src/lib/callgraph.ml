@@ -106,7 +106,8 @@ let rec constraint_ids' (NC_aux (aux, _)) =
   | NC_equal (a1, a2) | NC_not_equal (a1, a2) -> IdSet.union (typ_arg_ids' a1) (typ_arg_ids' a2)
   | NC_le (n1, n2) | NC_ge (n1, n2) | NC_lt (n1, n2) | NC_gt (n1, n2) -> IdSet.union (nexp_ids' n1) (nexp_ids' n2)
   | NC_or (nc1, nc2) | NC_and (nc1, nc2) -> IdSet.union (constraint_ids' nc1) (constraint_ids' nc2)
-  | NC_var _ | NC_true | NC_false | NC_set _ -> IdSet.empty
+  | NC_set (n, _) -> nexp_ids' n
+  | NC_var _ | NC_true | NC_false -> IdSet.empty
   | NC_id id -> IdSet.singleton id
   | NC_app (id, args) -> IdSet.add id (List.fold_left IdSet.union IdSet.empty (List.map typ_arg_ids' args))
 
@@ -402,6 +403,20 @@ let add_def_to_graph graph (DEF_aux (def, def_annot)) =
           )
           ids
     | DEF_internal_mutrec fundefs -> List.iter scan_fundef fundefs
+    | DEF_constraint nc ->
+        let ids = constraint_ids nc in
+        IdSet.iter
+          (fun id1 ->
+            IdSet.iter
+              (fun id2 ->
+                if not (Id.compare id1 id2 = 0) then (
+                  graph := G.add_edge (Type id1) (Type id2) !graph;
+                  graph := G.add_edge (Type id2) (Type id1) !graph
+                )
+              )
+              ids
+          )
+          ids
     | _ -> ()
   end;
   !graph
@@ -491,6 +506,11 @@ let filter_ast_extra cuts g ast keep_std =
           | [] -> filter_ast' g defs
           | _ -> DEF_aux (DEF_internal_mutrec fundefs', def_annot) :: filter_ast' g defs
         end
+    | DEF_aux (DEF_constraint nc, def_annot) :: defs ->
+        let ids = constraint_ids nc in
+        if IdSet.exists (fun id -> NM.mem (Type id) g) ids then
+          DEF_aux (DEF_constraint nc, def_annot) :: filter_ast' g defs
+        else filter_ast' g defs
     | def :: defs when defines_nodes def ->
         if in_graph def && not (is_cut def) then def :: filter_ast' g defs else filter_ast' g defs
     | def :: defs -> def :: filter_ast' g defs
