@@ -1028,6 +1028,12 @@ and add_constraint ?(global = false) ?reason constr env =
         else { env with constraints = (reason, constr) :: env.constraints }
   )
 
+let simplify_constraints env =
+  let simplify (reason, nc) = (reason, constraint_simp (expand_constraint_synonyms env nc)) in
+  update_global
+    (fun global -> { global with constraints = List.map simplify global.constraints })
+    { env with constraints = List.map simplify env.constraints }
+
 let wf_typ ~at:at_l env (Typ_aux (_, l) as typ) =
   Well_formedness.wf_debug "typ" string_of_typ typ Well_formedness.no_existential;
   incr depth;
