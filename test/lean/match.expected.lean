@@ -19,7 +19,7 @@ inductive option (k_a : Type) where
   deriving Inhabited, BEq, Repr
 
 inductive E where | A | B | C
-  deriving Inhabited, BEq, Repr
+  deriving BEq, Inhabited, Repr
 
 inductive Register : Type where
   | r_C

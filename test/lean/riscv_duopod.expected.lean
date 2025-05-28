@@ -27,7 +27,7 @@ abbrev xlenbits := (BitVec 64)
 abbrev regbits := (BitVec 5)
 
 inductive iop where | RISCV_ADDI | RISCV_SLTI | RISCV_SLTIU | RISCV_XORI | RISCV_ORI | RISCV_ANDI
-  deriving Inhabited, BEq, Repr
+  deriving BEq, Inhabited, Repr
 
 inductive ast where
   | ITYPE (_ : ((BitVec 12) × regbits × regbits × iop))

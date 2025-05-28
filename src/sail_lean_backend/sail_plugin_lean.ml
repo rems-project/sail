@@ -139,6 +139,10 @@ let lean_options =
       Arg.String Pretty_print_lean.(fun fn -> opt_partial_functions := IdSet.add (mk_id fn) !opt_partial_functions),
       "disable the totality check for this function"
     );
+    ( Flag.create ~prefix:["lean"] ~arg:"func-name" "non_beq_type",
+      Arg.String Pretty_print_lean.(fun fn -> non_beq_types := IdSet.add (mk_id fn) !non_beq_types),
+      "disable deriving a BEq instance for this type"
+    );
   ]
 
 (* TODO[javra]: Currently these are the same as the Coq rewrites, we might want to change them. *)

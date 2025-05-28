@@ -19,11 +19,11 @@ inductive option (k_a : Type) where
   deriving Inhabited, BEq, Repr
 
 inductive e_test where | VAL
-  deriving Inhabited, BEq, Repr
+  deriving BEq, Inhabited, Repr
 
 structure s_test where
   f : e_test
-  deriving Inhabited, BEq, Repr
+  deriving BEq, Inhabited, Repr
 
 abbrev Register := PEmpty
 abbrev RegisterType : Register -> Type := PEmpty.elim

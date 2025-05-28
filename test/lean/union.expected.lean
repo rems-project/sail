@@ -13,11 +13,11 @@ open Sail
 structure rectangle where
   width : Int
   height : Int
-  deriving Inhabited, BEq, Repr
+  deriving BEq, Inhabited, Repr
 
 structure circle where
   radius : Int
-  deriving Inhabited, BEq, Repr
+  deriving BEq, Inhabited, Repr
 
 inductive shape where
   | Rectangle (_ : rectangle)

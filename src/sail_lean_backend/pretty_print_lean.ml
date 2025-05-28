@@ -28,6 +28,8 @@ let opt_noncomputable_functions : IdSet.t ref = ref IdSet.empty
 
 let opt_partial_functions : IdSet.t ref = ref IdSet.empty
 
+let non_beq_types : IdSet.t ref = ref IdSet.empty
+
 let remove_empties (docs : document list) = List.filter (fun d -> d != empty) docs
 
 let opens = ref IdSet.empty
@@ -1197,10 +1199,8 @@ let doc_typdef ctx (TD_aux (td, tannot) as full_typdef) =
   | TD_enum (id, fields, _) ->
       let fields = List.map doc_id_ctor fields in
       let fields = List.map (fun i -> space ^^ pipe ^^ space ^^ i) fields in
-      let derivers =
-        if List.length fields == 0 then [string "BEq"; string "Repr"]
-        else [string "Inhabited"; string "BEq"; string "Repr"]
-      in
+      let derivers = if List.length fields == 0 then [string "Repr"] else [string "Inhabited"; string "Repr"] in
+      let derivers = if IdSet.mem id !non_beq_types then derivers else string "BEq" :: derivers in
       let enums_doc = concat fields in
       let _ = opens := IdSet.add id !opens in
       let id = doc_id_ctor id in
@@ -1213,10 +1213,12 @@ let doc_typdef ctx (TD_aux (td, tannot) as full_typdef) =
       let fields_doc = separate hardline fields in
       let rectyp = doc_typ_quant_relevant ctx tq in
       let rectyp = List.map (fun d -> parens d) rectyp |> separate space in
+      let derivers = [string "Inhabited"; string "Repr"] in
+      let derivers = if IdSet.mem id !non_beq_types then derivers else string "BEq" :: derivers in
       doc_typ_quant_in_comment ctx tq
       ^^ nest 2
            (flow (break 1) (remove_empties [string "structure"; doc_id_ctor id; rectyp; string "where"])
-           ^^ hardline ^^ fields_doc ^^ hardline ^^ string "deriving Inhabited, BEq, Repr"
+           ^^ hardline ^^ fields_doc ^^ hardline ^^ string "deriving" ^^ space ^^ separate comma_sp derivers
            )
   | TD_abbrev (id, tq, A_aux (A_typ (Typ_aux (Typ_app (Id_aux (Id "range", _), _), _) as t), _)) ->
       let vars = doc_typ_quant_relevant ctx tq in
@@ -1237,13 +1239,12 @@ let doc_typdef ctx (TD_aux (td, tannot) as full_typdef) =
       let rectyp = doc_typ_quant_relevant ctx tq in
       let rectyp = List.map (fun d -> parens d) rectyp |> separate space in
       let _ = opens := IdSet.add id !opens in
-      let id = doc_id_ctor id in
-      let derivers =
-        if List.length ar == 0 then [string "BEq"; string "Repr"] else [string "Inhabited"; string "BEq"; string "Repr"]
-      in
+      let derivers = [string "Repr"] in
+      let derivers = if IdSet.mem id !non_beq_types then derivers else string "BEq" :: derivers in
+      let derivers = if List.length ar == 0 then derivers else string "Inhabited" :: derivers in
       doc_typ_quant_in_comment ctx tq
       ^^ nest 2
-           (nest 2 (flow space (remove_empties [string "inductive"; id; rectyp; string "where"]))
+           (nest 2 (flow space (remove_empties [string "inductive"; doc_id_ctor id; rectyp; string "where"]))
            ^^ pp_tus ^^ hardline ^^ string "deriving" ^^ space ^^ separate comma_sp derivers
            )
   | _ -> failwith ("Type definition " ^ string_of_type_def_con full_typdef ^ " not translatable yet.")

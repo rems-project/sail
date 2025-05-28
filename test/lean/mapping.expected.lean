@@ -19,7 +19,7 @@ inductive option (k_a : Type) where
   deriving Inhabited, BEq, Repr
 
 inductive word_width where | BYTE | HALF | WORD | DOUBLE
-  deriving Inhabited, BEq, Repr
+  deriving BEq, Inhabited, Repr
 
 abbrev Register := PEmpty
 abbrev RegisterType : Register -> Type := PEmpty.elim
