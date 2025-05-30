@@ -569,18 +569,15 @@ and nexp_simp_aux = function
             Nexp_constant (Big_int.pow_int_positive 2 (Big_int.to_int c))
         | _ -> Nexp_exp nexp
       end
+  | Nexp_if (i, t, e) -> (
+      match constraint_simp i with
+      | NC_aux (NC_true, _) -> unaux_nexp (nexp_simp t)
+      | NC_aux (NC_false, _) -> unaux_nexp (nexp_simp e)
+      | _ -> Nexp_if (i, nexp_simp t, nexp_simp e)
+    )
   | nexp -> nexp
 
-let rec get_nexp_constant (Nexp_aux (n, _)) =
-  match nexp_simp_aux n with
-  | Nexp_constant c -> Some c
-  (* nexp_simp does not always expand large existentials *)
-  | Nexp_exp e -> begin
-      match get_nexp_constant e with Some c -> Some (Big_int.pow_int_positive 2 (Big_int.to_int c)) | None -> None
-    end
-  | _ -> None
-
-let rec constraint_simp (NC_aux (nc_aux, l)) =
+and constraint_simp (NC_aux (nc_aux, l)) =
   let nc_aux =
     match nc_aux with
     | NC_set (nexp, ints) ->
@@ -667,6 +664,15 @@ and typ_arg_simp (A_aux (aux, l)) =
   | A_nexp nexp -> A_aux (A_nexp (nexp_simp nexp), l)
   | A_bool nc -> A_aux (A_bool (constraint_simp nc), l)
   | A_typ typ -> A_aux (A_typ typ, l)
+
+let rec get_nexp_constant (Nexp_aux (n, _)) =
+  match nexp_simp_aux n with
+  | Nexp_constant c -> Some c
+  (* nexp_simp does not always expand large existentials *)
+  | Nexp_exp e -> begin
+      match get_nexp_constant e with Some c -> Some (Big_int.pow_int_positive 2 (Big_int.to_int c)) | None -> None
+    end
+  | _ -> None
 
 let rec constraint_conj (NC_aux (nc_aux, _) as nc) =
   match nc_aux with NC_and (nc1, nc2) -> constraint_conj nc1 @ constraint_conj nc2 | _ -> [nc]
