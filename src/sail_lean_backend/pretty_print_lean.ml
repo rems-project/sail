@@ -363,7 +363,7 @@ let doc_quant_item_only_vars ctx (QI_aux (qi, annot)) =
 let doc_typ_quant_only_vars ctx (TypQ_aux (tq, _) as tq_full) =
   match tq with TypQ_tq qs -> List.filter_map (doc_quant_item_only_vars ctx) qs | TypQ_no_forall -> []
 
-let lean_escape_string s = Str.global_replace (Str.regexp "\"") "\"\"" s
+let lean_escape_string s = Str.global_replace (Str.regexp "\"") "\\\"" s
 
 let doc_lit (L_aux (lit, l)) =
   match lit with
