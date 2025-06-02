@@ -589,10 +589,28 @@ and constraint_simp (NC_aux (nc_aux, l)) =
         end
     | NC_equal (arg1, arg2) ->
         let arg1, arg2 = (typ_arg_simp arg1, typ_arg_simp arg2) in
-        if typ_arg_compare arg1 arg2 = 0 then NC_true else NC_equal (arg1, arg2)
+        if typ_arg_compare arg1 arg2 = 0 then NC_true
+        else (
+          match (arg1, arg2) with
+          | A_aux (A_nexp (Nexp_aux (Nexp_constant c1, _)), _), A_aux (A_nexp (Nexp_aux (Nexp_constant c2, _)), _)
+            when not (Big_int.equal c1 c2) ->
+              NC_false
+          | A_aux (A_bool (NC_aux (NC_true, _)), _), A_aux (A_bool (NC_aux (NC_false, _)), _) -> NC_false
+          | A_aux (A_bool (NC_aux (NC_false, _)), _), A_aux (A_bool (NC_aux (NC_true, _)), _) -> NC_false
+          | _, _ -> NC_equal (arg1, arg2)
+        )
     | NC_not_equal (arg1, arg2) ->
         let arg1, arg2 = (typ_arg_simp arg1, typ_arg_simp arg2) in
-        if typ_arg_compare arg1 arg2 = 0 then NC_false else NC_not_equal (arg1, arg2)
+        if typ_arg_compare arg1 arg2 = 0 then NC_false
+        else (
+          match (arg1, arg2) with
+          | A_aux (A_nexp (Nexp_aux (Nexp_constant c1, _)), _), A_aux (A_nexp (Nexp_aux (Nexp_constant c2, _)), _)
+            when not (Big_int.equal c1 c2) ->
+              NC_true
+          | A_aux (A_bool (NC_aux (NC_true, _)), _), A_aux (A_bool (NC_aux (NC_false, _)), _) -> NC_true
+          | A_aux (A_bool (NC_aux (NC_false, _)), _), A_aux (A_bool (NC_aux (NC_true, _)), _) -> NC_true
+          | _, _ -> NC_not_equal (arg1, arg2)
+        )
     | NC_and (nc1, nc2) ->
         let nc1, nc2 = (constraint_simp nc1, constraint_simp nc2) in
         begin
