@@ -214,7 +214,7 @@ let rec ocaml_pat ctx (P_aux (pat_aux, (l, _)) as pat) =
       | _ -> zencode_upper ctx id ^^ space ^^ parens (separate_map (comma ^^ space) (ocaml_pat ctx) pats)
     end
   | P_cons (hd_pat, tl_pat) -> ocaml_pat ctx hd_pat ^^ string " :: " ^^ ocaml_pat ctx tl_pat
-  | P_struct (fpats, FP_no_wild) ->
+  | P_struct (_, fpats, FP_no_wild) ->
       lbrace ^^ space
       ^^ separate_map (semi ^^ space) (fun (field, p) -> ocaml_fpat (pat_record_id l pat) ctx field p) fpats
       ^^ space ^^ rbrace
@@ -281,18 +281,20 @@ let rec ocaml_exp ctx (E_aux (exp_aux, (l, _)) as exp) =
       begin_end (separate space [string "match"; ocaml_atomic_exp ctx exp; string "with"] ^/^ ocaml_pexps ctx pexps)
   | E_try (exp, pexps) ->
       begin_end (separate space [string "try"; ocaml_atomic_exp ctx exp; string "with"] ^/^ ocaml_pexps ctx pexps)
-  | E_assign (lexp, exp) -> ocaml_assignment ctx lexp exp
+  | E_assign (lexp, exp) -> parens (ocaml_assignment ctx lexp exp)
   | E_if (c, t, e) ->
-      separate space
-        [
-          string "if";
-          ocaml_atomic_exp ctx c;
-          string "then";
-          ocaml_atomic_exp ctx t;
-          string "else";
-          ocaml_atomic_exp ctx e;
-        ]
-  | E_struct fexps ->
+      parens
+        (separate space
+           [
+             string "if";
+             ocaml_atomic_exp ctx c;
+             string "then";
+             ocaml_atomic_exp ctx t;
+             string "else";
+             ocaml_atomic_exp ctx e;
+           ]
+        )
+  | E_struct (_, fexps) ->
       enclose lbrace rbrace (group (separate_map (semi ^^ break 1) (ocaml_fexp (record_id l exp) ctx) fexps))
   | E_struct_update (exp, fexps) ->
       enclose lbrace rbrace
@@ -419,7 +421,19 @@ and ocaml_atomic_exp ctx (E_aux (exp_aux, _) as exp) =
       | Local (Mutable, _) -> bang ^^ zencode ctx id
     end
   | E_list exps -> enclose lbracket rbracket (separate_map (semi ^^ space) (ocaml_exp ctx) exps)
-  | E_tuple exps -> parens (separate_map (comma ^^ space) (ocaml_exp ctx) exps)
+  | E_tuple exps ->
+      let len = List.length exps in
+      let flip =
+        separate space
+          [
+            string "fun";
+            parens (separate (comma ^^ space) (List.init len (fun n -> string ("v" ^ string_of_int n))));
+            string "->";
+            parens (separate (comma ^^ space) (List.init len (fun n -> string ("v" ^ string_of_int (len - (n + 1))))));
+          ]
+        |> parens
+      in
+      parens (flip ^^ space ^^ parens (separate_map (comma ^^ space) (ocaml_exp ctx) (List.rev exps)))
   | _ -> parens (ocaml_exp ctx exp)
 
 and ocaml_assignment ctx (LE_aux (lexp_aux, _) as lexp) exp =

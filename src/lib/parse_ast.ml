@@ -187,7 +187,7 @@ type pat_aux =
   | P_list of pat list (* list pattern *)
   | P_cons of pat * pat (* cons pattern *)
   | P_string_append of pat list (* string append pattern, x ^^ y *)
-  | P_struct of fpat list (* struct pattern *)
+  | P_struct of id option * fpat list (* struct pattern *)
   | P_attribute of string * attribute_data option * pat
 
 and pat = P_aux of pat_aux * l
@@ -233,7 +233,7 @@ and exp_aux =
   | E_vector_append of exp * exp (* vector concatenation *)
   | E_list of exp list (* list *)
   | E_cons of exp * exp (* cons *)
-  | E_struct of exp list (* struct *)
+  | E_struct of id option * exp list (* struct *)
   | E_struct_update of exp * exp list (* functional update of struct *)
   | E_field of exp * id (* field projection from struct *)
   | E_match of exp * pexp list (* pattern matching *)
@@ -353,7 +353,7 @@ type mpat_aux =
   | MP_string_append of mpat list
   | MP_typ of mpat * atyp
   | MP_as of mpat * id
-  | MP_struct of (id * mpat) list
+  | MP_struct of id option * (id * mpat) list
 
 and mpat = MP_aux of mpat_aux * l
 
@@ -381,7 +381,7 @@ type mapdef = MD_aux of mapdef_aux * l
 
 type outcome_spec_aux =
   (* outcome declaration *)
-  | OV_outcome of id * typschm * kinded_id list
+  | OV_outcome of id * typschm * typquant
 
 type outcome_spec = OV_aux of outcome_spec_aux * l
 

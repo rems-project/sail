@@ -49,6 +49,7 @@ open Libsail
 open Ast_util
 open Interactive.State
 
+let opt_assert_to_exception = ref false
 let opt_branch_coverage = ref None
 let opt_build = ref false
 let opt_generate_header = ref false
@@ -97,6 +98,7 @@ let c_options =
       Arg.String (fun str -> Specialize.add_initial_calls (IdSet.singleton (mk_id str))),
       "make sure the provided function identifier is preserved in C output"
     );
+    (Flag.create ~prefix:["c"] "assert_to_exception", Arg.Set opt_assert_to_exception, "turn assertions into exceptions");
     ( Flag.create ~prefix:["c"] "preserve_type",
       Arg.String (fun str -> opt_preserve_types := IdSet.add (mk_id str) !opt_preserve_types),
       "make sure the provided type identifier is preserved in the C output"
@@ -199,14 +201,16 @@ let c_target out_file { ast; effect_info; env; default_sail_dir; _ } =
     let reserved_words = reserveds
     let overrides = overrides
     let branch_coverage = !opt_branch_coverage
+    let assert_to_exception = !opt_assert_to_exception
     let preserve_types = !opt_preserve_types
   end) in
   Reporting.opt_warnings := true;
-  let echo_output, basename = match out_file with Some f -> (false, f) | None -> (true, "out") in
+  let echo_output, out_file = match out_file with Some f -> (false, f) | None -> (true, "out") in
+  let basename = Filename.basename out_file in
 
   let header_opt, impl = Codegen.compile_ast env effect_info basename ast in
 
-  let impl_out = Util.open_output_with_check (basename ^ ".c") in
+  let impl_out = Util.open_output_with_check (out_file ^ ".c") in
   output_string impl_out.channel impl;
   flush impl_out.channel;
   Util.close_output_with_check impl_out;
@@ -214,7 +218,7 @@ let c_target out_file { ast; effect_info; env; default_sail_dir; _ } =
   ( match header_opt with
   | None -> ()
   | Some header ->
-      let header_out = Util.open_output_with_check (basename ^ ".h") in
+      let header_out = Util.open_output_with_check (out_file ^ ".h") in
       output_string header_out.channel header;
       flush header_out.channel;
       Util.close_output_with_check header_out
@@ -230,7 +234,7 @@ let c_target out_file { ast; effect_info; env; default_sail_dir; _ } =
 
   if !opt_build then (
     let sail_dir = Reporting.get_sail_dir default_sail_dir in
-    let cmd = Printf.sprintf "%s -lgmp -I '%s'/lib '%s'/lib/*.c %s.c -o %s" "gcc" sail_dir sail_dir basename basename in
+    let cmd = Printf.sprintf "%s -lgmp -I '%s'/lib '%s'/lib/*.c %s.c -o %s" "gcc" sail_dir sail_dir out_file out_file in
     let _ = Unix.system cmd in
     ()
   )

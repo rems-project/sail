@@ -92,7 +92,7 @@ let get_field_exp range inner_exp =
   in
   aux (List.map mk_slice (indices_of_range range))
 
-let construct_bitfield_struct _ exp = mk_exp (E_struct [mk_fexp (mk_id "bits") exp])
+let construct_bitfield_struct _ exp = mk_exp (E_struct (SN_anon, [mk_fexp (mk_id "bits") exp]))
 
 let construct_bitfield_exp name exp = mk_exp (E_app (prepend_id "Mk_" name, [exp]))
 

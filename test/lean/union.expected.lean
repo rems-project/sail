@@ -4,7 +4,7 @@ import Out.Sail.BitVec
 open PreSail
 
 set_option maxHeartbeats 1_000_000_000
-set_option maxRecDepth 10_000
+set_option maxRecDepth 1_000_000
 set_option linter.unusedVariables false
 set_option match.ignoreUnusedAlts true
 
@@ -13,22 +13,22 @@ open Sail
 structure rectangle where
   width : Int
   height : Int
-  deriving BEq
+  deriving BEq, Inhabited, Repr
 
 structure circle where
   radius : Int
-  deriving BEq
+  deriving BEq, Inhabited, Repr
 
 inductive shape where
   | Rectangle (_ : rectangle)
   | Circle (_ : circle)
-  deriving BEq
+  deriving Inhabited, BEq, Repr
 
 /-- Type quantifiers: k_a : Type -/
 inductive my_option (k_a : Type) where
   | MySome (_ : k_a)
   | MyNone (_ : Unit)
-  deriving BEq
+  deriving Inhabited, BEq, Repr
 
 abbrev Register := PEmpty
 abbrev RegisterType : Register -> Type := PEmpty.elim
@@ -45,18 +45,19 @@ import Out.Sail.BitVec
 import Out.Sail.IntRange
 import Out.Defs
 import Out.Specialization
+import Out.FakeReal
 
 set_option maxHeartbeats 1_000_000_000
-set_option maxRecDepth 10_000
+set_option maxRecDepth 1_000_000
 set_option linter.unusedVariables false
 set_option match.ignoreUnusedAlts true
 
 open Sail
 
+namespace Out.Functions
+
 open shape
 open my_option
-
-namespace Functions
 
 def undefined_rectangle (_ : Unit) : SailM rectangle := do
   (pure { width := (← (undefined_int ()))
@@ -81,6 +82,4 @@ def initialize_registers (_ : Unit) : Unit :=
 def sail_model_init (x_0 : Unit) : Unit :=
   (initialize_registers ())
 
-end Functions
-open Functions
-
+end Out.Functions

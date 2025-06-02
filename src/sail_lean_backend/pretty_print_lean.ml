@@ -12,11 +12,23 @@ open Pretty_print_common
 (* Command line options *)
 let opt_extern_types : string list ref = ref []
 
-type global_context = { effect_info : Effects.side_effect_info; fun_args : string list Bindings.t }
+let opt_line_width : int ref = ref 100
+
+type global_context = {
+  effect_info : Effects.side_effect_info;
+  fun_args : string list Bindings.t;
+  kid_id_renames : id option KBindings.t;
+      (** Associates a kind variable to the corresponding argument of the function, used for implicit arguments. *)
+  kid_id_renames_rev : kid Bindings.t;  (** Inverse of the [kid_id_renames] mapping. *)
+}
 
 let the_main_function_has_been_seen = ref false
 
 let opt_noncomputable_functions : IdSet.t ref = ref IdSet.empty
+
+let opt_partial_functions : IdSet.t ref = ref IdSet.empty
+
+let non_beq_types : IdSet.t ref = ref IdSet.empty
 
 let remove_empties (docs : document list) = List.filter (fun d -> d != empty) docs
 
@@ -30,20 +42,21 @@ type context = {
   kid_id_renames : id option KBindings.t;
       (** Associates a kind variable to the corresponding argument of the function, used for implicit arguments. *)
   kid_id_renames_rev : kid Bindings.t;  (** Inverse of the [kid_id_renames] mapping. *)
-  loop_level : int;
+  mutable loop_level : int;
   in_sail_monad : bool;  (** Indicates whether we are in an expression of `SailM _` *)
-  in_except_monad : bool;  (** Indicates whether we are in an expression of `ExceptM _ _` *)
+  in_except_monad : document option;
+      (** Indicates whether we are in an expression of `ExceptM _ _` what the return type is. *)
 }
 
 let context_init env global =
   {
     global;
     env;
-    kid_id_renames = KBindings.empty;
-    kid_id_renames_rev = Bindings.empty;
+    kid_id_renames = global.kid_id_renames;
+    kid_id_renames_rev = global.kid_id_renames_rev;
     loop_level = 0;
     in_sail_monad = false;
-    in_except_monad = false;
+    in_except_monad = None;
   }
 let context_with_env ctx env = { ctx with env }
 
@@ -59,17 +72,31 @@ let add_single_kid_id_rename ctx id kid =
     kid_id_renames_rev = Bindings.add id kid ctx.kid_id_renames_rev;
   }
 
+let add_global_kid_id_rename (global : global_context) id kid =
+  let kir =
+    match Bindings.find_opt id global.kid_id_renames_rev with
+    | Some kid -> KBindings.add kid None global.kid_id_renames
+    | None -> global.kid_id_renames
+  in
+  {
+    global with
+    kid_id_renames = KBindings.add kid (Some id) kir;
+    kid_id_renames_rev = Bindings.add id kid global.kid_id_renames_rev;
+  }
+
 let implicit_parens x = enclose (string "{") (string "}") x
 let leftarrow = string "←"
 let leftarrowdo = string "← do"
+
 let rec fix_id name =
   match name with
   (* Lean keywords to avoid, to expand as needed *)
-  | "rec" -> name ^ "'"
-  | "def" -> name ^ "'"
+  | "_lean_wildcard" -> "_"
+  | "rec" | "def" | "at" | "alias" | "break" -> name ^ "'"
   | "main" ->
       the_main_function_has_been_seen := true;
       "sail_main"
+  | "?" -> "questionMark"
   | _ -> if String.contains name '#' then fix_id (String.concat "_" (Util.split_on_char '#' name)) else name
 
 let doc_id_ctor (Id_aux (i, _)) =
@@ -169,6 +196,11 @@ let doc_big_int i = if i >= Z.zero then string (Big_int.to_string i) else parens
 
 let is_unit t = match t with Typ_aux (Typ_id (Id_aux (Id "unit", _)), _) -> true | _ -> false
 
+let is_lit e lit = match e with E_aux (E_lit (L_aux (lit', _)), _) -> lit = lit' | _ -> false
+
+let is_true e = is_lit e L_true
+let is_false e = is_lit e L_false
+
 (* Adapted from Coq PP *)
 let rec doc_nexp ctx (Nexp_aux (n, l) as nexp) =
   let rec plussub (Nexp_aux (n, l) as nexp) =
@@ -185,7 +217,7 @@ let rec doc_nexp ctx (Nexp_aux (n, l) as nexp) =
   and app (Nexp_aux (n, l) as nexp) =
     match n with
     | Nexp_if (i, t, e) ->
-        separate space [string "if"; doc_nconstraint ctx i; string "then"; atomic t; string "else"; atomic e]
+        separate space [string "bif"; doc_nconstraint ctx i; string "then"; atomic t; string "else"; atomic e]
     | Nexp_app (Id_aux (Id "div", _), [n1; n2]) -> separate space [atomic n1; string "/"; atomic n2]
     | Nexp_app (Id_aux (Id "mod", _), [n1; n2]) -> separate space [atomic n1; string "%"; atomic n2]
     | Nexp_app (Id_aux (Id "abs", _), [n1]) -> separate dot [atomic n1; string "natAbs"]
@@ -266,7 +298,15 @@ and doc_typ ctx (Typ_aux (t, _) as typ) =
       parens (separate space [string "Result"; doc_typ ctx typ1; doc_typ ctx typ2])
   | Typ_var kid -> doc_kid ctx kid
   | Typ_app (id, args) -> parens (doc_id_ctor id ^^ space ^^ separate_map space (doc_typ_arg ctx `Only_relevant) args)
-  | Typ_exist (_, _, typ) -> doc_typ ctx typ
+  | Typ_exist (kids, _, typ) ->
+      let ctx =
+        List.fold_left
+          (fun ctx (KOpt_aux (KOpt_kind (_, kid), annot)) ->
+            add_single_kid_id_rename ctx (Id_aux (Id "_lean_wildcard", annot)) kid
+          )
+          ctx kids
+      in
+      doc_typ ctx typ
   | _ -> failwith ("Type " ^ string_of_typ_con typ ^ " " ^ string_of_typ typ ^ " not translatable yet.")
 
 and doc_typ_app ctx (A_aux (t, _) as typ) =
@@ -275,7 +315,7 @@ and doc_typ_app ctx (A_aux (t, _) as typ) =
   | A_bool nc -> failwith ("Constraint " ^ string_of_n_constraint nc ^ "not translatable yet.")
   | A_nexp m -> doc_nexp ctx m
 
-let rec captured_typ_var ((i, Typ_aux (t, _)) as typ) =
+let captured_typ_var ((i, Typ_aux (t, _)) as typ) =
   match t with
   | Typ_app (Id_aux (Id "atom", _), [A_aux (A_nexp (Nexp_aux (Nexp_var ki, _)), _)])
   | Typ_app (Id_aux (Id "implicit", _), [A_aux (A_nexp (Nexp_aux (Nexp_var ki, _)), _)]) ->
@@ -323,7 +363,7 @@ let doc_quant_item_only_vars ctx (QI_aux (qi, annot)) =
 let doc_typ_quant_only_vars ctx (TypQ_aux (tq, _) as tq_full) =
   match tq with TypQ_tq qs -> List.filter_map (doc_quant_item_only_vars ctx) qs | TypQ_no_forall -> []
 
-let lean_escape_string s = Str.global_replace (Str.regexp "\"") "\"\"" s
+let lean_escape_string s = Str.global_replace (Str.regexp "\"") "\\\"" s
 
 let doc_lit (L_aux (lit, l)) =
   match lit with
@@ -439,7 +479,8 @@ let string_of_def (DEF_aux (d, _)) =
 (** Fix identifiers to match the standard Lean library. *)
 let fixup_match_id (Id_aux (id, l) as id') =
   match id with
-  | Id id -> Id_aux (Id (match id with "Some" -> "some" | "None" -> "none" | "early_return" -> "throw" | _ -> id), l)
+  | Id id ->
+      Id_aux (Id (match id with "Some" -> "some" | "None" -> "none" | "early_return" -> "throw" | _ -> fix_id id), l)
   | _ -> id'
 
 let rec update_ctx_pat (ctx : context) (P_aux (p, (l, annot)) as pat) =
@@ -450,38 +491,52 @@ let rec update_ctx_pat (ctx : context) (P_aux (p, (l, annot)) as pat) =
       List.fold_left update_ctx_pat ctx pats
   | _ -> ctx
 
-let rec doc_pat ?(need_parens = false) ?(in_match = false) ?(in_vector = false) (P_aux (p, (l, annot)) as pat) =
+let rec doc_pat ?(need_parens = false) ?(in_vector = false) ctx in_match_bv (P_aux (p, (l, annot)) as pat) =
   let opt_parens doc = if need_parens then parens doc else doc in
+  let env = env_of_tannot annot in
   match p with
   | P_wild -> underscore
   | P_lit lit when in_vector -> doc_vec_lit lit
   | P_lit lit -> doc_lit lit
-  | P_typ (Typ_aux (Typ_id (Id_aux (Id "bit", _)), _), p) when in_vector -> doc_pat p ^^ string ":1"
+  | P_typ (Typ_aux (Typ_id (Id_aux (Id "bit", _)), _), p) when in_vector -> doc_pat ctx in_match_bv p ^^ string ":1"
   | P_typ (Typ_aux (Typ_app (Id_aux (Id id, _), [A_aux (A_nexp (Nexp_aux (Nexp_constant i, _)), _)]), _), p)
     when in_vector && (id = "bits" || id = "bitvector") ->
-      doc_pat p ^^ string ":" ^^ doc_big_int i
-  | P_typ (ptyp, p) ->
-      let wrap x = if in_match then parens x else x in
-      wrap (doc_pat p)
-  | P_id id -> fixup_match_id id |> doc_id_ctor
-  | P_tuple pats -> separate (string ", ") (List.map doc_pat pats) |> parens
-  | P_list pats -> separate (string ", ") (List.map doc_pat pats) |> brackets
-  | P_vector pats -> concat (List.map (doc_pat ~in_vector:true) pats)
-  | P_vector_concat pats -> separate (string ",") (List.map (doc_pat ~in_vector:true) pats) |> brackets
+      doc_pat ctx in_match_bv p ^^ string ":" ^^ doc_big_int i
+  | P_typ (ptyp, p) when in_vector -> doc_pat ctx in_match_bv p ^^ string ":" ^^ doc_typ ctx ptyp
+  | P_typ (ptyp, p) -> doc_pat ctx in_match_bv p
+  | P_id id -> (
+      match typ_of_pat pat with
+      | Typ_aux (Typ_app (Id_aux (Id id', _), [A_aux (A_nexp (Nexp_aux (Nexp_constant i, _)), _)]), _)
+        when in_vector && (id' = "bits" || id' = "bitvector") ->
+          (fixup_match_id id |> doc_id_ctor) ^^ string ":" ^^ doc_big_int i
+      | _ -> fixup_match_id id |> doc_id_ctor
+    )
+  | P_tuple pats -> separate (string ", ") (List.map (doc_pat ctx in_match_bv) pats) |> parens
+  | P_list pats -> separate (string ", ") (List.map (doc_pat ctx in_match_bv) pats) |> brackets
+  | P_vector pats
+    when List.for_all (fun p -> match p with P_aux (P_lit _, _) -> true | _ -> false) pats && not in_match_bv ->
+      string "0b" ^^ concat (List.map (doc_pat ~in_vector:true ctx in_match_bv) pats)
+  | P_vector pats -> concat (List.map (doc_pat ~in_vector:true ctx in_match_bv) pats)
+  | P_vector_concat pats when in_vector ->
+      separate (string ",") (List.map (doc_pat ~in_vector:true ctx in_match_bv) pats)
+  | P_vector_concat pats -> separate (string ",") (List.map (doc_pat ~in_vector:true ctx in_match_bv) pats) |> brackets
   | P_app (Id_aux (Id "None", _), p) -> string "none"
   | P_app (cons, pats) ->
       opt_parens
         (string "."
         ^^ doc_id_ctor (fixup_match_id cons)
         ^^ space
-        ^^ separate_map (string ", ") (doc_pat ~need_parens:true) pats
+        ^^ separate_map (string ", ") (doc_pat ~need_parens:true ctx in_match_bv) pats
         )
-  | P_var (p, _) -> doc_pat p
-  | P_as (pat, id) -> doc_pat pat
-  | P_struct (pats, _) ->
-      let pats = List.map (fun (id, pat) -> separate space [doc_id_ctor id; coloneq; doc_pat pat]) pats in
+  | P_var (p, _) -> doc_pat ctx in_match_bv p
+  | P_as (pat, id) -> doc_pat ctx in_match_bv pat
+  | P_struct (_, pats, _) ->
+      let pats =
+        List.map (fun (id, pat) -> separate space [doc_id_ctor id; coloneq; doc_pat ctx in_match_bv pat]) pats
+      in
       braces (space ^^ separate (comma ^^ space) pats ^^ space)
-  | P_cons (hd_pat, tl_pat) -> parens (separate space [doc_pat hd_pat; string "::"; doc_pat tl_pat])
+  | P_cons (hd_pat, tl_pat) ->
+      parens (separate space [doc_pat ctx in_match_bv hd_pat; string "::"; doc_pat ctx in_match_bv tl_pat])
   | _ -> failwith ("Doc Pattern " ^ string_of_pat_con pat ^ " " ^ string_of_pat pat ^ " not translatable yet.")
 
 let doc_pat_typ_ascription ctx (P_aux (p, (l, annot)) as pat) =
@@ -518,8 +573,8 @@ let wrap_with_pure (needs_return : bool) ?(with_parens = false) (d : document) =
   )
   else d
 
-let wrap_with_left_arrow (needs_return : bool) (d : document) =
-  if needs_return then parens (nest 2 (flow space [leftarrow; d])) else d
+let wrap_with_left_arrow (needs_left_arrow : bool) (d : document) =
+  if needs_left_arrow then parens (nest 2 (flow space [leftarrow; d])) else d
 
 let wrap_with_do (with_arrow : bool) (needs_return : bool) (d : document) =
   let ar_do = if with_arrow then string "← do" else string "do" in
@@ -536,9 +591,8 @@ let get_fn_implicits (Typ_aux (t, _)) : bool list =
 let rec is_bitvector_pattern (P_aux (pat, _)) =
   match pat with P_vector _ | P_vector_concat _ -> true | P_as (pat, _) -> is_bitvector_pattern pat | _ -> false
 
-let match_or_match_bv brs =
-  if List.exists (function Pat_aux (Pat_exp (pat, _), _) -> is_bitvector_pattern pat | _ -> false) brs then "match_bv "
-  else "match "
+let is_match_bv =
+  List.exists (function Pat_aux (Pat_exp (pat, _), _) | Pat_aux (Pat_when (pat, _, _), _) -> is_bitvector_pattern pat)
 
 let rec doc_implicit_args ?(docs = []) ns ims d_args =
   match (ns, ims, d_args) with
@@ -551,6 +605,11 @@ let rec doc_implicit_args ?(docs = []) ns ims d_args =
 
 let op_of_id id =
   match id with
+  | Some "_lean_and" -> `Binop "&&"
+  | Some "_lean_or" -> `Binop "||"
+  | Some "_lean_beq" -> `Binop "=="
+  | Some "_lean_bne" -> `Binop "!="
+  | Some "_lean_not" -> `Unop "!"
   | Some "_lean_add" -> `Binop "+"
   | Some "_lean_addi" -> `Binop "+i"
   | Some "_lean_sub" -> `Binop "-"
@@ -568,13 +627,13 @@ let op_of_id id =
   | Some "_lean_ge" -> `Binop "≥b"
   | Some "_lean_le" -> `Binop "≤b"
   | Some "_lean_gt" -> `Binop ">b"
-  | Some "_lean_pow2" -> `Unnop "2 ^"
-  | Some "_lean_pow2i" -> `Unnop "2 ^i"
+  | Some "_lean_pow2" -> `Unop "2 ^"
+  | Some "_lean_pow2i" -> `Unop "2 ^i"
   | _ -> `NotOp
 
 let unnop_of_id id = match id with Some "_lean_pow2" -> Some "2 ^ " | _ -> None
 
-let is_loop id = match string_of_id id with "while#" | "foreach#" -> true | _ -> false
+let is_loop id = match string_of_id id with "while#" | "foreach#" | "until#" -> true | _ -> false
 
 let has_loop (e : 'a exp) =
   let e_app (id, args) = is_loop id || List.fold_left ( || ) false args in
@@ -613,22 +672,107 @@ let make_loop_vars extra_binders varstuple =
 
 let name_loop_vars ctx =
   let ll = ctx.loop_level in
-  let ctx = { ctx with loop_level = ll + 1 } in
+  ctx.loop_level <- ll + 1;
   match ll with 0 -> (string "loop_vars", ctx) | _ -> (string "loop_vars_" ^^ string (string_of_int ll), ctx)
 
 let prepend_monad ctx exp doc =
   match (ctx.in_sail_monad, ctx.in_except_monad) with
-  | true, true -> [string "SailME"; string "_"; doc]
-  | true, false -> [string "SailM"; doc]
-  | false, true -> [string "ExceptM"; string "_"; doc]
-  | false, false -> [string "Id"; doc]
+  | true, Some ty -> [string "SailME"; ty; doc]
+  | true, None -> [string "SailM"; doc]
+  | false, Some ty -> [string "ExceptM"; ty; doc]
+  | false, None -> [string "Id"; doc]
 
-let rec doc_match_clause (as_monadic : bool) ctx (Pat_aux (cl, l)) =
+let match_or_match_bv (is_match_bv : bool) brs = if is_match_bv then "match_bv " else "match "
+
+let rec doc_match_clause (is_bv : bool) (as_monadic : bool) ctx (Pat_aux (cl, l) as p) =
   match cl with
   | Pat_exp (pat, branch) ->
       group
-        (nest 2 (string "| " ^^ doc_pat ~in_match:true pat ^^ string " =>" ^^ break 1 ^^ doc_exp as_monadic ctx branch))
-  | Pat_when (pat, when_, branch) -> failwith "The Lean backend does not support 'when' clauses in patterns"
+        (nest 2
+           (string "| " ^^ doc_pat ctx is_bv pat ^^ string " =>"
+           ^^ string (if is_bv && as_monadic then " do" else "")
+           ^^ break 1 ^^ wrap_exp as_monadic ctx branch
+           )
+        )
+  | Pat_when (pat, when_, branch) when is_bv ->
+      group
+        (nest 2
+           (string "| " ^^ doc_pat ctx is_bv pat ^^ string " if " ^^ doc_exp false ctx when_ ^^ string " =>"
+           ^^ string (if is_bv && as_monadic then " do" else "")
+           ^^ break 1 ^^ wrap_exp as_monadic ctx branch
+           )
+        )
+  | Pat_when (pat, when_, branch) ->
+      failwith ("The Lean backend does not support 'when' clauses in patterns:\n" ^ string_of_pexp p)
+
+and wrap_exp as_monadic ctx e =
+  let with_arrow = not as_monadic in
+  let d = doc_exp as_monadic ctx e in
+  match e with
+  | E_aux (arg', _) -> (
+      match arg' with
+      | E_typ (_, e) when has_effect e -> wrap_with_do with_arrow true d
+      | E_typ (_, e) when has_early_return e -> parens d
+      | E_let _ | E_internal_plet _ | E_if _ | E_match _ | E_var _ | E_block _ ->
+          if has_effect e then wrap_with_do with_arrow true d else parens d
+      | _ when has_loop e -> wrap_with_do with_arrow true d
+      | _ -> d
+    )
+
+and doc_loop l as_monadic ctx loop_kind args =
+  let lambda effects lambda_pp d =
+    let lambda_pp = if effects then lambda_pp ^^ string " do" else lambda_pp in
+    parens (prefix 2 1 (group lambda_pp) d)
+  in
+  let cond, varstuple, body, measure =
+    match args with
+    | [cond; varstuple; body] -> (cond, varstuple, body, None)
+    | [cond; varstuple; body; measure] -> (cond, varstuple, body, Some measure)
+    | _ -> raise (Reporting.err_unreachable l __POS__ "Unexpected number of arguments for loop combinator")
+  in
+  let body =
+    match body with
+    | E_aux
+        ( E_internal_plet
+            ( P_aux ((P_wild | P_typ (_, P_aux (P_wild, _))), _),
+              E_aux
+                ( E_assert
+                    (E_aux (E_lit (L_aux (L_true, _)), _), E_aux (E_lit (L_aux (L_string "loop dummy assert", _)), _)),
+                  _
+                ),
+              body'
+            ),
+          _
+        ) ->
+        body'
+    | _ -> body
+  in
+  let body_effects = has_effect body in
+  let (E_aux (_, annot)) = cond in
+  let cond_effects = has_effect cond in
+  let vartuple_pp, base_lambda = make_loop_vars [] varstuple in
+  let vars_pp, body_ctx = name_loop_vars ctx in
+  let body_pp = doc_exp body_effects body_ctx body in
+  let vars_dec_pp = string "let mut " ^^ vars_pp ^^ string " := " ^^ vartuple_pp in
+  let cond_pp = doc_exp cond_effects ctx cond in
+  let cond_pp = lambda cond_effects base_lambda cond_pp in
+  let loop_cond = wrap_with_left_arrow cond_effects (prefix 2 1 cond_pp vars_pp) in
+  match loop_kind with
+  | `While ->
+      let loop_head = prefix 2 1 (string "while " ^^ loop_cond) (string "do") in
+      let arrow = if body_effects then leftarrowdo else coloneq in
+      let loop_body_1 = string "let " ^^ vartuple_pp ^^ space ^^ coloneq ^^ space ^^ vars_pp in
+      let loop_body = loop_body_1 ^^ hardline ^^ prefix 2 1 (vars_pp ^^ space ^^ arrow) body_pp in
+      let full_loop = prefix 2 1 loop_head loop_body in
+      separate hardline [vars_dec_pp; full_loop; wrap_with_pure as_monadic vars_pp]
+  | `Until ->
+      let loop_head = string "repeat" in
+      let loop_footer = flow (break 1) [string "until"; loop_cond] in
+      let arrow = if body_effects then leftarrowdo else coloneq in
+      let loop_body_1 = string "let " ^^ vartuple_pp ^^ space ^^ coloneq ^^ space ^^ vars_pp in
+      let loop_body = loop_body_1 ^^ hardline ^^ prefix 2 1 (vars_pp ^^ space ^^ arrow) body_pp in
+      let full_loop = prefix 2 1 loop_head loop_body in
+      separate hardline [vars_dec_pp; full_loop; loop_footer; wrap_with_pure as_monadic vars_pp]
 
 and doc_exp (as_monadic : bool) ctx (E_aux (e, (l, annot)) as full_exp) =
   let env = env_of_tannot annot in
@@ -639,9 +783,10 @@ and doc_exp (as_monadic : bool) ctx (E_aux (e, (l, annot)) as full_exp) =
           match arg' with
           | E_typ (_, e) when has_effect e -> ((fun x -> wrap_with_do with_arrow true x), true)
           | E_typ (_, e) when has_early_return e -> (parens, false)
-          | E_let _ | E_internal_plet _ | E_if _ | E_match _ ->
+          | E_let _ | E_internal_plet _ | E_if _ | E_match _ | E_var _ | E_block _ ->
               if has_effect arg then ((fun x -> wrap_with_do with_arrow true x), true) else (parens, false)
-          | _ -> ((fun x -> x), false)
+          | _ when has_loop arg -> ((fun x -> wrap_with_do with_arrow true x), true)
+          | _ -> ((fun x -> x), not with_arrow) (* for [sailTryCatch] the argument should be a computation *)
         )
     in
     wrap (doc_exp arg_monadic ctx arg)
@@ -664,52 +809,8 @@ and doc_exp (as_monadic : bool) ctx (E_aux (e, (l, annot)) as full_exp) =
          nest 2 (parens (flow (break 1) (d_id :: d_args)))
         )
   | E_app (Id_aux (Id "__id", _), [e]) -> doc_exp as_monadic ctx e
-  | E_app (Id_aux (Id "while#", _), args) -> begin
-      let lambda effects lambda_pp d =
-        let lambda_pp = if effects then lambda_pp ^^ string " do" else lambda_pp in
-        parens (prefix 2 1 (group lambda_pp) d)
-      in
-      let cond, varstuple, body, measure =
-        match args with
-        | [cond; varstuple; body] -> (cond, varstuple, body, None)
-        | [cond; varstuple; body; measure] -> (cond, varstuple, body, Some measure)
-        | _ -> raise (Reporting.err_unreachable l __POS__ "Unexpected number of arguments for loop combinator")
-      in
-      let body =
-        match body with
-        | E_aux
-            ( E_internal_plet
-                ( P_aux ((P_wild | P_typ (_, P_aux (P_wild, _))), _),
-                  E_aux
-                    ( E_assert
-                        ( E_aux (E_lit (L_aux (L_true, _)), _),
-                          E_aux (E_lit (L_aux (L_string "loop dummy assert", _)), _)
-                        ),
-                      _
-                    ),
-                  body'
-                ),
-              _
-            ) ->
-            body'
-        | _ -> body
-      in
-      let body_effects = has_effect body in
-      let cond_effects = has_effect cond in
-      let vartuple_pp, base_lambda = make_loop_vars [] varstuple in
-      let vars_pp, body_ctx = name_loop_vars ctx in
-      let body_pp = doc_exp body_effects body_ctx body in
-      let vars_dec_pp = string "let mut " ^^ vars_pp ^^ string " := " ^^ vartuple_pp in
-      let cond_pp = doc_exp cond_effects ctx cond in
-      let cond_pp = lambda cond_effects base_lambda cond_pp in
-      let loop_cond = wrap_with_left_arrow cond_effects (cond_pp ^/^ vars_pp) in
-      let loop_head = flow (break 1) [string "while"; loop_cond; string "do"] in
-      let arrow = if body_effects then leftarrowdo else coloneq in
-      let loop_body_1 = string "let " ^^ vartuple_pp ^^ space ^^ coloneq ^^ space ^^ vars_pp in
-      let loop_body = loop_body_1 ^^ hardline ^^ prefix 2 1 (vars_pp ^^ space ^^ arrow) body_pp in
-      let full_loop = prefix 2 1 loop_head loop_body in
-      separate hardline [vars_dec_pp; full_loop; wrap_with_pure as_monadic vars_pp]
-    end
+  | E_app (Id_aux (Id "while#", _), args) -> doc_loop l as_monadic ctx `While args
+  | E_app (Id_aux (Id "until#", _), args) -> doc_loop l as_monadic ctx `Until args
   | E_app (Id_aux (Id "foreach#", _), args) -> begin
       match args with
       | [from_exp; to_exp; step_exp; ord_exp; vartuple; body] ->
@@ -743,6 +844,7 @@ and doc_exp (as_monadic : bool) ctx (E_aux (e, (l, annot)) as full_exp) =
           let from_exp_pp, to_exp_pp, step_exp_pp =
             (doc_exp false ctx from_exp, doc_exp false ctx to_exp, doc_exp false ctx step_exp)
           in
+          let step_exp_pp = if is_true ord_exp then step_exp_pp else minus ^^ step_exp_pp in
           let loopvar_pp = doc_id_ctor loopvar in
           let effects = has_effect body in
           let vartuple_pp, body_lambda = make_loop_vars [loopvar_pp] vartuple in
@@ -750,9 +852,7 @@ and doc_exp (as_monadic : bool) ctx (E_aux (e, (l, annot)) as full_exp) =
           let vars_pp, body_ctx = name_loop_vars ctx in
           let body_pp = doc_exp (as_monadic && effects) body_ctx body in
           let vars_dec_pp = string "let mut " ^^ vars_pp ^^ string " := " ^^ vartuple_pp in
-          let loop_bracket =
-            brackets (separate colon [from_exp_pp; to_exp_pp ^^ string " + 1"; step_exp_pp]) ^^ string "i"
-          in
+          let loop_bracket = brackets (separate colon [from_exp_pp; to_exp_pp; step_exp_pp]) ^^ string "i" in
           let loop_head = flow (break 1) [string "for"; loopvar_pp; string "in"; loop_bracket; string "do"] in
           let arrow = if effects then leftarrowdo else coloneq in
           let loop_body_1 = string "let " ^^ vartuple_pp ^^ space ^^ coloneq ^^ space ^^ vars_pp in
@@ -761,7 +861,25 @@ and doc_exp (as_monadic : bool) ctx (E_aux (e, (l, annot)) as full_exp) =
           separate hardline [vars_dec_pp; full_loop; wrap_with_pure as_monadic vars_pp]
       | _ -> raise (Reporting.err_unreachable l __POS__ "Unexpected number of arguments for loop combinator")
     end
-  | E_app ((Id_aux (Id "early_return", _) as f), [arg]) -> nest 2 (string "throw " ^^ d_of_arg ctx arg)
+  | E_for (loopvar, from_exp, to_exp, step_exp, Ord_aux (order, _), body) ->
+      let combinator = match order with Ord_inc -> "foreach_Z_up" | Ord_dec -> "foreach_Z_down" in
+      let from_exp_pp, to_exp_pp, step_exp_pp =
+        (doc_exp false ctx from_exp, doc_exp false ctx to_exp, doc_exp false ctx step_exp)
+      in
+      let step_exp_pp = match order with Ord_inc -> step_exp_pp | Ord_dec -> minus ^^ step_exp_pp in
+      let loop_bracket = brackets (separate colon [from_exp_pp; to_exp_pp; step_exp_pp]) ^^ string "i" in
+      let loopvar_pp = doc_id_ctor loopvar in
+      let body_effect = has_effect body in
+      let enter_monad = if body_effect then empty else string "Id.run" in
+      let loop_head =
+        flow (break 1) (remove_empties [enter_monad; string "for"; loopvar_pp; string "in"; loop_bracket; string "do"])
+      in
+      let loop_body = doc_exp body_effect ctx body in
+      let full_loop = prefix 2 1 loop_head loop_body in
+      full_loop
+  | E_app ((Id_aux (Id "early_return", _) as f), [arg]) ->
+      let throw = if ctx.in_sail_monad then string "SailME.throw " else string "throw " in
+      nest 2 (throw ^^ d_of_arg ctx arg)
   | E_app (f, args) -> (
       let _, f_typ = Env.get_val_spec f env in
       let implicits = get_fn_implicits f_typ in
@@ -779,7 +897,7 @@ and doc_exp (as_monadic : bool) ctx (E_aux (e, (l, annot)) as full_exp) =
           let e2 = List.nth d_args 1 in
           let res = e1 ^^ space ^^ string op ^^ space ^^ e2 in
           wrap_with_pure as_monadic (parens res) |> nest 2
-      | `Unnop op ->
+      | `Unop op ->
           let e = List.nth d_args 0 in
           let res = string op ^^ space ^^ e in
           wrap_with_pure as_monadic (parens res) |> nest 2
@@ -794,7 +912,10 @@ and doc_exp (as_monadic : bool) ctx (E_aux (e, (l, annot)) as full_exp) =
         match typ_of full_exp with
         | Typ_aux (Typ_app (Id_aux (Id "bitvector", _), [A_aux (A_nexp m, _)]), _)
         | Typ_aux (Typ_app (Id_aux (Id "bits", _), [A_aux (A_nexp m, _)]), _) ->
-            nest 2 (parens (flow space [string "BitVec.join1"; brackets (separate_map comma_sp (d_of_arg ctx) vals)]))
+            nest 2
+              (wrap_with_pure as_monadic
+                 (parens (flow space [string "BitVec.join1"; brackets (separate_map comma_sp (d_of_arg ctx) vals)]))
+              )
         | _ ->
             string "#v"
             ^^ wrap_with_pure as_monadic (brackets (nest 2 (separate_map comma_sp (d_of_arg ctx) (List.rev vals))))
@@ -807,12 +928,12 @@ and doc_exp (as_monadic : bool) ctx (E_aux (e, (l, annot)) as full_exp) =
   | E_let (LB_aux (LB_val (lpat, lexp), _), e') | E_internal_plet (lpat, lexp, e') ->
       let has_loop = has_loop lexp in
       let is_arrow_do = match e with E_let _ when not has_loop -> false | _ -> true in
-      let id_typ = doc_pat lpat in
+      let id_typ = doc_pat ctx false lpat in
       let typ_ascription = doc_pat_typ_ascription ctx lpat in
       let ctx = update_ctx_pat ctx lpat in
       let pp_let_line_f l = group (nest 2 (flow (break 1) l)) in
       let pp_let_line =
-        if has_effect lexp then
+        if has_effect lexp || has_loop then
           if is_unit (typ_of lexp) && is_anonymous_pat lpat then doc_exp true ctx lexp
           else (
             match (is_arrow_do, typ_ascription) with
@@ -850,7 +971,7 @@ and doc_exp (as_monadic : bool) ctx (E_aux (e, (l, annot)) as full_exp) =
       in
       pp_let_line ^^ hardline ^^ doc_exp as_monadic ctx e'
   | E_internal_return e -> doc_exp false ctx e (* ??? *)
-  | E_struct fexps ->
+  | E_struct (_, fexps) ->
       let args = List.map d_of_field fexps in
       wrap_with_pure as_monadic (braces (space ^^ align (separate hardline args) ^^ space))
   | E_field (exp, id) ->
@@ -862,12 +983,13 @@ and doc_exp (as_monadic : bool) ctx (E_aux (e, (l, annot)) as full_exp) =
       wrap_with_pure as_monadic
         (braces (space ^^ doc_exp false ctx exp ^^ string " with " ^^ separate (comma ^^ space) args ^^ space))
   | E_match (discr, brs) ->
+      let is_match_bv = is_match_bv brs in
       let as_monadic' =
         List.exists (fun x -> effectful (effect_of_annot (match x with Pat_aux (_, (_, annot)) -> annot))) brs
         || as_monadic
       in
-      let cases = separate_map hardline (doc_match_clause as_monadic' ctx) brs in
-      string (match_or_match_bv brs) ^^ d_of_arg ctx discr ^^ string " with" ^^ hardline ^^ cases
+      let cases = separate_map hardline (doc_match_clause is_match_bv as_monadic' ctx) brs in
+      string (match_or_match_bv is_match_bv brs) ^^ d_of_arg ctx discr ^^ string " with" ^^ hardline ^^ cases
   | E_assign ((LE_aux (le_act, tannot) as le), e) ->
       wrap_with_left_arrow (not as_monadic)
         ( match le_act with
@@ -877,21 +999,25 @@ and doc_exp (as_monadic : bool) ctx (E_aux (e, (l, annot)) as full_exp) =
         )
   | E_if (i, t, e) ->
       let statements_monadic = as_monadic || has_effect t || has_effect e in
-      nest 2 (string "if" ^^ space ^^ nest 1 (d_of_arg ctx i))
+      nest 2 (string "bif" ^^ space ^^ nest 1 (d_of_arg ctx i))
       ^^ hardline
-      ^^ prefix 2 1 (string "then") (doc_exp statements_monadic ctx t)
+      ^^ prefix 2 1 (string "then") (wrap_exp statements_monadic ctx t)
       ^^ hardline
-      ^^ prefix 2 1 (string "else") (doc_exp statements_monadic ctx e)
-  | E_ref id -> string ".Reg " ^^ doc_id_ctor id
+      ^^ prefix 2 1 (string "else") (wrap_exp statements_monadic ctx e)
+      |> wrap_with_left_arrow (statements_monadic && not as_monadic)
+  | E_ref id -> parens (string ".Reg " ^^ doc_id_ctor id)
   | E_exit _ -> string "throw Error.Exit"
-  | E_throw e -> string "sailThrow " ^^ parens (doc_exp false ctx e)
+  | E_throw e ->
+      let arrow = if as_monadic then empty else leftarrow in
+      arrow ^^ string "sailThrow " ^^ parens (doc_exp false ctx e)
   | E_try (e, cases) ->
       let x = E_aux (E_id (Id_aux (Id "the_exception", Unknown)), (Unknown, annot)) in
       let cases = nest 2 (doc_exp true ctx (E_aux (E_match (x, cases), (Unknown, annot)))) in
       let try_catch = if has_early_return e then string "sailTryCatchE " else string "sailTryCatch " in
+      let arrow = if as_monadic then empty else leftarrow in
       nest 2
-        (try_catch
-        ^^ parens (d_of_arg ~with_arrow:(not as_monadic) ctx e)
+        (arrow ^^ try_catch
+        ^^ parens (d_of_arg ~with_arrow:false ctx e)
         ^^ space
         ^^ parens (string "fun the_exception => " ^^ hardline ^^ cases)
         )
@@ -960,7 +1086,12 @@ let doc_funcl_init global (FCL_aux (FCL_funcl (id, pexp), annot)) =
            | Some (Some id, _) -> (pat, id, typ)
            | Some (None, _) ->
                (pat, mk_id ~loc:l (Printf.sprintf "x_%i" i), typ) (* TODO fresh name or wildcard instead of x *)
-           | _ -> failwith "Argument pattern not translatable yet."
+           | _ ->
+               ( pat,
+                 Id_aux (Id "TODO_ARG_PATTERN", Unknown),
+                 Typ_aux (Typ_id (Id_aux (Id "TODO_ARG_PATTERN", Unknown)), Unknown)
+               )
+           (*failwith "Argument pattern not translatable yet."*)
        )
   in
   let ctx = context_init env global in
@@ -976,12 +1107,12 @@ let doc_funcl_init global (FCL_aux (FCL_funcl (id, pexp), annot)) =
   in
   let typ_quant_comment = doc_typ_quant_in_comment ctx tq_all in
   (* Use auto-implicits for type quanitifiers for now and see if this works *)
-  let doc_ret_typ = doc_typ ctx ret_typ in
+  let doc_ret_typ_orig = doc_typ ctx ret_typ in
   let is_monadic = effectful (effect_of exp) in
   let early_return = has_early_return exp in
   let has_loop = has_loop exp in
   (* Add monad for stateful functions *)
-  let doc_ret_typ = if is_monadic then string "SailM " ^^ doc_ret_typ else doc_ret_typ in
+  let doc_ret_typ = if is_monadic then string "SailM " ^^ doc_ret_typ_orig else doc_ret_typ_orig in
   let decl_val = [doc_ret_typ; coloneq] in
   (* Add do block for stateful functions *)
   let dec_val_end =
@@ -992,11 +1123,15 @@ let doc_funcl_init global (FCL_aux (FCL_funcl (id, pexp), annot)) =
     | false, true, _ -> [string "ExceptM.run"; string "do"]
     | _ -> []
   in
-  let ctx = { ctx with in_sail_monad = is_monadic; in_except_monad = early_return } in
+  let ctx =
+    { ctx with in_sail_monad = is_monadic; in_except_monad = (if early_return then Some doc_ret_typ_orig else None) }
+  in
   let decl_val = decl_val @ dec_val_end in
+  let partiality = if IdSet.mem id !opt_partial_functions then string "partial" else empty in
   let computability = if IdSet.mem id !opt_noncomputable_functions then string "noncomputable" else empty in
   ( typ_quant_comment,
-    separate space (remove_empties [computability; string "def"; doc_id_ctor id] @ binders @ [colon] @ decl_val),
+    separate space
+      (remove_empties [partiality; computability; string "def"; doc_id_ctor id] @ binders @ [colon] @ decl_val),
     ctx,
     fixup_binders
   )
@@ -1010,15 +1145,42 @@ let doc_funcl_body fixup_binders ctx (FCL_aux (FCL_funcl (id, pexp), annot)) =
   let is_monadic = has_effect exp in
   doc_exp is_monadic (context_with_env ctx env) exp
 
-let doc_funcl ctx funcl =
-  let comment, signature, ctx, fixup_binders = doc_funcl_init ctx.global funcl in
-  comment ^^ nest 2 (signature ^^ hardline ^^ doc_funcl_body fixup_binders ctx funcl)
+let doc_termination ctx fnpat (Rec_aux (meas, _)) =
+  match meas with
+  | Rec_nonrec | Rec_rec -> empty
+  | Rec_measure (pat, exp) ->
+      (* TODO: actually use the pattern *)
+      let term = doc_exp false ctx exp in
+      let term_by =
+        string "termination_by let " ^^ doc_pat ctx false pat ^^ string " := " ^^ doc_pat ctx false fnpat ^^ string "; "
+        ^^ parens term ^^ string ".toNat"
+      in
+      hardline ^^ term_by
 
-let doc_fundef ctx (FD_aux (FD_function (r, typa, fcls), fannot) as full_fundef) =
+let pat_of_funcl (FCL_aux (FCL_funcl (_, funcl), _)) =
+  match funcl with Pat_aux (Pat_exp (pat, _), _) -> pat | Pat_aux (Pat_when (pat, _, _), _) -> pat
+
+let doc_funcl ctx meas funcl =
+  let comment, signature, ctx, fixup_binders = doc_funcl_init ctx.global funcl in
+  let fnpat = pat_of_funcl funcl in
+  let termination = doc_termination ctx fnpat meas in
+  comment ^^ nest 2 (signature ^^ hardline ^^ doc_funcl_body fixup_binders ctx funcl) ^^ termination
+
+let string_of_pexp p =
+  let pat, guard, exp, _ = destruct_pexp p in
+  let guard_str = match guard with None -> "" | Some guard -> " if " ^ string_of_exp guard in
+  "| " ^ string_of_pat pat ^ guard_str ^ " -> " ^ string_of_exp exp ^ "\n"
+
+let doc_fundef ctx (FD_aux (FD_function (meas, typa, fcls), fannot) as full_fundef) =
   match fcls with
   | [] -> failwith "FD_function with empty function list"
-  | [funcl] -> doc_funcl ctx funcl
-  | _ -> failwith "FD_function with more than one clause"
+  | [funcl] -> doc_funcl ctx meas funcl
+  | funcls ->
+      failwith
+        (List.fold_left
+           (fun acc (FCL_aux (FCL_funcl (id, pexp), annot)) -> acc ^ string_of_pexp pexp)
+           "FD_function with more than one clause :\n" funcls
+        )
 
 let doc_type_union ctx (Tu_aux (Tu_ty_id (ty, i), _)) =
   nest 2 (flow space [pipe; doc_id_ctor i; parens (flow space [underscore; colon; doc_typ ctx ty])])
@@ -1037,7 +1199,8 @@ let doc_typdef ctx (TD_aux (td, tannot) as full_typdef) =
   | TD_enum (id, fields, _) ->
       let fields = List.map doc_id_ctor fields in
       let fields = List.map (fun i -> space ^^ pipe ^^ space ^^ i) fields in
-      let derivers = if List.length fields == 0 then [string "BEq"] else [string "Inhabited"; string "BEq"] in
+      let derivers = if List.length fields == 0 then [string "Repr"] else [string "Inhabited"; string "Repr"] in
+      let derivers = if IdSet.mem id !non_beq_types then derivers else string "BEq" :: derivers in
       let enums_doc = concat fields in
       let _ = opens := IdSet.add id !opens in
       let id = doc_id_ctor id in
@@ -1050,10 +1213,12 @@ let doc_typdef ctx (TD_aux (td, tannot) as full_typdef) =
       let fields_doc = separate hardline fields in
       let rectyp = doc_typ_quant_relevant ctx tq in
       let rectyp = List.map (fun d -> parens d) rectyp |> separate space in
+      let derivers = [string "Inhabited"; string "Repr"] in
+      let derivers = if IdSet.mem id !non_beq_types then derivers else string "BEq" :: derivers in
       doc_typ_quant_in_comment ctx tq
       ^^ nest 2
            (flow (break 1) (remove_empties [string "structure"; doc_id_ctor id; rectyp; string "where"])
-           ^^ hardline ^^ fields_doc ^^ hardline ^^ string "deriving BEq"
+           ^^ hardline ^^ fields_doc ^^ hardline ^^ string "deriving" ^^ space ^^ separate comma_sp derivers
            )
   | TD_abbrev (id, tq, A_aux (A_typ (Typ_aux (Typ_app (Id_aux (Id "range", _), _), _) as t), _)) ->
       let vars = doc_typ_quant_relevant ctx tq in
@@ -1074,57 +1239,85 @@ let doc_typdef ctx (TD_aux (td, tannot) as full_typdef) =
       let rectyp = doc_typ_quant_relevant ctx tq in
       let rectyp = List.map (fun d -> parens d) rectyp |> separate space in
       let _ = opens := IdSet.add id !opens in
-      let id = doc_id_ctor id in
+      let derivers = [string "Repr"] in
+      let derivers = if IdSet.mem id !non_beq_types then derivers else string "BEq" :: derivers in
+      let derivers = if List.length ar == 0 then derivers else string "Inhabited" :: derivers in
       doc_typ_quant_in_comment ctx tq
       ^^ nest 2
-           (nest 2 (flow space (remove_empties [string "inductive"; id; rectyp; string "where"]))
-           ^^ pp_tus ^^ hardline ^^ string "deriving BEq"
+           (nest 2 (flow space (remove_empties [string "inductive"; doc_id_ctor id; rectyp; string "where"]))
+           ^^ pp_tus ^^ hardline ^^ string "deriving" ^^ space ^^ separate comma_sp derivers
            )
   | _ -> failwith ("Type definition " ^ string_of_type_def_con full_typdef ^ " not translatable yet.")
 
 (* Copied from the Coq PP *)
 let doc_val ctx pat exp =
-  let id, pat_typ =
+  let global, id, pat_typ =
     match pat with
-    | P_aux (P_typ (typ, P_aux (P_id id, _)), _) -> (id, Some typ)
-    | P_aux (P_id id, _) -> (id, None)
-    | P_aux (P_var (P_aux (P_id id, _), TP_aux (TP_var kid, _)), _) when Id.compare id (id_of_kid kid) == 0 -> (id, None)
+    | P_aux (P_typ (typ, P_aux (P_id id, _)), _) -> (ctx.global, id, Some typ)
+    | P_aux (P_id id, _) -> (ctx.global, id, None)
+    | P_aux (P_var (P_aux (P_id id, _), TP_aux (TP_var kid, _)), _) when Id.compare id (id_of_kid kid) == 0 ->
+        let global = add_global_kid_id_rename ctx.global id kid in
+        (global, id, None)
     | P_aux (P_typ (typ, P_aux (P_var (P_aux (P_id id, _), TP_aux (TP_var kid, _)), _)), _)
       when Id.compare id (id_of_kid kid) == 0 ->
-        (id, Some typ)
+        let global = add_global_kid_id_rename ctx.global id kid in
+        (global, id, Some typ)
     | P_aux (P_var (P_aux (P_id id, _), TP_aux (TP_app (app_id, [TP_aux (TP_var kid, _)]), _)), _)
       when Id.compare app_id (mk_id "atom") == 0 && Id.compare id (id_of_kid kid) == 0 ->
-        (id, None)
+        let global = add_global_kid_id_rename ctx.global id kid in
+        (global, id, None)
     | P_aux
         (P_typ (typ, P_aux (P_var (P_aux (P_id id, _), TP_aux (TP_app (app_id, [TP_aux (TP_var kid, _)]), _)), _)), _)
       when Id.compare app_id (mk_id "atom") == 0 && Id.compare id (id_of_kid kid) == 0 ->
-        (id, Some typ)
+        let global = add_global_kid_id_rename ctx.global id kid in
+        (global, id, Some typ)
     | _ -> failwith ("Pattern " ^ string_of_pat_con pat ^ " " ^ string_of_pat pat ^ " not translatable yet.")
   in
   let typpp = match pat_typ with None -> empty | Some typ -> space ^^ colon ^^ space ^^ doc_typ ctx typ in
   let idpp = doc_id_ctor id in
   let base_pp = doc_exp false ctx exp in
-  nest 2 (group (string "def" ^^ space ^^ idpp ^^ typpp ^^ space ^^ coloneq ^/^ base_pp))
+  (global, nest 2 (group (string "def" ^^ space ^^ idpp ^^ typpp ^^ space ^^ coloneq ^/^ base_pp)))
 
-let rec doc_defs_rec ctx defs types docdefs =
+let should_print_function_def def =
+  match def with
+  | DEF_aux (DEF_fundef fdef, dannot) -> not (Env.is_extern (id_of_fundef fdef) dannot.env "lean")
+  | DEF_aux (DEF_let (LB_aux (LB_val (pat, exp), _)), _) -> true
+  | _ -> false
+
+let rec doc_defs_rec ctx defs types (former_funcs : document list) (docdefs : document) =
   match defs with
-  | [] -> (types, docdefs)
+  | [] -> (types, former_funcs @ [docdefs])
   | DEF_aux (DEF_fundef fdef, dannot) :: defs' ->
       let env = dannot.env in
       let pp_f =
         if Env.is_extern (id_of_fundef fdef) env "lean" then docdefs
         else docdefs ^^ group (doc_fundef ctx fdef) ^/^ hardline
       in
-      doc_defs_rec ctx defs' types pp_f
+      doc_defs_rec ctx defs' types former_funcs pp_f
+  | DEF_aux (DEF_internal_mutrec fdefs, dannot) :: defs' ->
+      let funs = separate_map hardline (fun fdef -> doc_fundef ctx fdef) fdefs in
+      let res = string "mutual" ^^ hardline ^^ funs ^^ hardline ^^ string "end" ^^ hardline in
+      doc_defs_rec ctx defs' types former_funcs (docdefs ^^ hardline ^^ res ^^ hardline)
   | DEF_aux (DEF_type tdef, _) :: defs' when List.mem (string_of_id (id_of_type_def tdef)) !opt_extern_types ->
-      doc_defs_rec ctx defs' types docdefs
+      doc_defs_rec ctx defs' types former_funcs docdefs
   | DEF_aux (DEF_type tdef, _) :: defs' ->
-      doc_defs_rec ctx defs' (types ^^ group (doc_typdef ctx tdef) ^/^ hardline) docdefs
+      doc_defs_rec ctx defs' (types ^^ group (doc_typdef ctx tdef) ^/^ hardline) former_funcs docdefs
   | DEF_aux (DEF_let (LB_aux (LB_val (pat, exp), _)), _) :: defs' ->
-      doc_defs_rec ctx defs' types (docdefs ^^ group (doc_val ctx pat exp) ^/^ hardline)
-  | _ :: defs' -> doc_defs_rec ctx defs' types docdefs
+      let global, pp_val = doc_val ctx pat exp in
+      let ctx = { ctx with global } in
+      doc_defs_rec ctx defs' types former_funcs (docdefs ^^ group pp_val ^/^ hardline)
+  | DEF_aux (DEF_pragma ("include_start", Pragma_line (file, _)), _) :: defs'
+  | DEF_aux (DEF_pragma ("file_start", Pragma_line (file, _)), _) :: defs'
+  | DEF_aux (DEF_pragma ("include_end", Pragma_line (file, _)), _) :: defs'
+  | DEF_aux (DEF_pragma ("file_end", Pragma_line (file, _)), _) :: defs'
+    when Filename.check_suffix file ".sail" ->
+      if docdefs = empty then doc_defs_rec ctx defs' types former_funcs docdefs
+      else doc_defs_rec ctx defs' types (former_funcs @ [docdefs]) empty
+  | d :: defs' ->
+      if should_print_function_def d then failwith "this case of doc_defs_rec should be unreachable"
+      else doc_defs_rec ctx defs' types former_funcs docdefs
 
-let doc_defs ctx defs = doc_defs_rec ctx defs empty empty
+let doc_defs ctx defs = doc_defs_rec ctx defs empty [] empty
 
 (* Remove all imports for now, they will be printed in other files. Probably just for testing. *)
 let rec remove_imports (defs : (Libsail.Type_check.tannot, Libsail.Type_check.env) def list) depth =
@@ -1144,7 +1337,7 @@ let register_enums registers =
     [
       string "inductive Register : Type where";
       separate_map hardline (fun (_, id, _) -> string "  | " ^^ doc_id_ctor id) registers;
-      string "  deriving DecidableEq, Hashable";
+      string "  deriving DecidableEq, Hashable, Repr";
       string "open Register";
       empty;
     ]
@@ -1200,6 +1393,8 @@ let doc_instantiations ctx env =
              string "pa_OfNat := BitVec.instOfNat"; (* TODO: Hardcoding this for now.. ^^ doc_typ ctx params.pa_type; *)
              string "abort := " ^^ doc_typ ctx params.abort_type;
              string "translation := " ^^ doc_typ ctx params.translation_summary_type;
+             string "trans_start := " ^^ doc_typ ctx params.trans_start_type;
+             string "trans_end := " ^^ doc_typ ctx params.trans_end_type;
              string "fault := " ^^ doc_typ ctx params.fault_type;
              string "tlb_op := " ^^ doc_typ ctx params.tlbi_type;
              string "cache_op := " ^^ doc_typ ctx params.cache_op_type;
@@ -1249,11 +1444,43 @@ let populate_fun_args defs =
   in
   List.fold_left (fun args d -> add_args args d) Bindings.empty defs
 
-let pp_ast_lean (env : Type_check.env) effect_info ({ defs; _ } as ast : Libsail.Type_check.typed_ast) types_file
-    funcs_file =
+let rec collect_import_files_aux defs file_stack last_namespace ret =
+  match defs with
+  | [] -> ret
+  | DEF_aux (DEF_pragma ("include_start", Pragma_line (file, _)), _) :: ds
+  | DEF_aux (DEF_pragma ("file_start", Pragma_line (file, _)), _) :: ds
+    when Filename.check_suffix file ".sail" ->
+      collect_import_files_aux ds (file :: file_stack) last_namespace ret
+  | DEF_aux (DEF_pragma ("include_end", Pragma_line (file, _)), _) :: ds
+  | DEF_aux (DEF_pragma ("file_end", Pragma_line (file, _)), _) :: ds
+    when Filename.check_suffix file ".sail" -> (
+      match file_stack with
+      | f :: fs -> collect_import_files_aux ds fs last_namespace ret
+      | _ -> failwith "should not be reachable"
+    )
+  | d :: ds -> (
+      match file_stack with
+      | f :: _ ->
+          if should_print_function_def d && not (last_namespace = Some f) then
+            collect_import_files_aux ds file_stack (Some f) (ret @ [f])
+          else collect_import_files_aux ds file_stack last_namespace ret
+      | _ -> failwith "should not be reachable"
+    )
+
+let collect_import_files defs base =
+  let res = collect_import_files_aux defs [base] None [] in
+  if res = [] then [base] else res
+
+let rec take n xs = match (n, xs) with 0, _ -> [] | n, x :: xs -> x :: take (n - 1) xs | n, xs -> xs
+
+let rec last xs =
+  match xs with [] -> failwith "cannot take last element of empty list" | [x] -> x | x :: xs -> last xs
+
+let pp_ast_lean (env : Type_check.env) effect_info ({ defs; _ } as ast : Libsail.Type_check.typed_ast) out_name_camel
+    types_file imp_funcs_files funcs_file noncomputable =
   let regs = State.find_registers defs in
   let fun_args = populate_fun_args defs in
-  let global = { effect_info; fun_args } in
+  let global = { effect_info; fun_args; kid_id_renames = KBindings.empty; kid_id_renames_rev = Bindings.empty } in
   let ctx = context_init env global in
   let has_registers = List.length regs > 0 in
   let register_refs =
@@ -1262,12 +1489,29 @@ let pp_ast_lean (env : Type_check.env) effect_info ({ defs; _ } as ast : Libsail
   in
   let monad = doc_monad_abbrev defs has_registers in
   let instantiations = doc_instantiations ctx env in
-  let types, fundefs = doc_defs ctx defs in
-  let fundefs = string "namespace Functions\n\n" ^^ fundefs ^^ string "end Functions\n" in
+  let types, all_fundefss = doc_defs ctx defs in
+  let imp_fundefss, main_fundefs =
+    if imp_funcs_files = [] then ([], concat all_fundefss)
+    else (
+      let imp_fundefss = take (List.length all_fundefss - 1) all_fundefss in
+      let main_fundefs = last all_fundefss in
+      (imp_fundefss, main_fundefs)
+    )
+  in
+  let main_fundefs = main_fundefs ^^ string ("end " ^ out_name_camel ^ ".Functions") ^^ hardline in
   let main_function =
-    if !the_main_function_has_been_seen then main_function_stub effect_info has_registers else empty
+    if !the_main_function_has_been_seen then (
+      let stub = main_function_stub effect_info has_registers in
+      [string ("open " ^ out_name_camel ^ ".Functions\n\n") ^^ stub]
+    )
+    else []
   in
   let opens = IdSet.fold (fun id doc -> string "open " ^^ doc_id_ctor id ^^ hardline ^^ doc) !opens empty in
   print types_file (types ^^ register_refs ^^ monad ^^ instantiations);
-  print funcs_file (opens ^^ hardline ^^ fundefs ^^ string "open Functions\n\n" ^^ main_function);
+  let _ =
+    List.map2
+      (fun file defs -> print file (separate hardline (remove_empties [opens; defs])))
+      imp_funcs_files imp_fundefss
+  in
+  print ~len:!opt_line_width funcs_file (separate hardline (remove_empties ([opens; main_fundefs] @ main_function)));
   !the_main_function_has_been_seen

@@ -28,6 +28,9 @@ skip_tests = {
     'float_prelude',
     # No possible configuration
     'config_mismatch',
+    # Custom outcome
+    'outcome_int',
+    'outcome_impl_int',
 }
 skip_tests_mwords = {
     'phantom_option',
@@ -68,6 +71,9 @@ skip_tests_mwords = {
     'bits_alias_cast',
     # No possible configuration
     'config_mismatch',
+    # Custom outcome
+    'outcome_int',
+    'outcome_impl_int',
 }
 
 print('Sail is {}'.format(sail))

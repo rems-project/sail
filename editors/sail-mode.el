@@ -88,7 +88,7 @@
     (modify-syntax-entry ?> "." st)
     (modify-syntax-entry ?_ "w" st)
     (modify-syntax-entry ?' "w" st)
-    (modify-syntax-entry ?* ". 23" st)
+    (modify-syntax-entry ?* ". 23n" st)
     (modify-syntax-entry ?/ ". 124b" st)
     (modify-syntax-entry ?\n "> b" st)
     st)

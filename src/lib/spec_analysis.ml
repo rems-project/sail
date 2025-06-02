@@ -114,7 +114,7 @@ let bindings_from_pat p =
     | P_vector ps | P_vector_concat ps | P_string_append ps | P_app (_, ps) | P_tuple ps | P_list ps ->
         List.concat (List.map aux_pat ps)
     | P_cons (p1, p2) -> aux_pat p1 @ aux_pat p2
-    | P_struct (fps, _) -> List.map snd fps |> List.map aux_pat |> List.concat
+    | P_struct (_, fps, _) -> List.map snd fps |> List.map aux_pat |> List.concat
   in
   aux_pat p
 
@@ -176,7 +176,8 @@ let nexp_subst_fns substs =
     | P_tuple ps -> re (P_tuple (List.map s_pat ps))
     | P_list ps -> re (P_list (List.map s_pat ps))
     | P_cons (p1, p2) -> re (P_cons (s_pat p1, s_pat p2))
-    | P_struct (fps, fwild) -> re (P_struct (List.map (fun (field, p) -> (field, s_pat p)) fps, fwild))
+    | P_struct (struct_name, fps, fwild) ->
+        re (P_struct (struct_name, List.map (fun (field, p) -> (field, s_pat p)) fps, fwild))
   in
   let rec s_exp (E_aux (e, (l, annot))) =
     let re e = E_aux (e, (l, s_tannot annot)) in
@@ -203,7 +204,7 @@ let nexp_subst_fns substs =
     | E_vector_append (e1, e2) -> re (E_vector_append (s_exp e1, s_exp e2))
     | E_list es -> re (E_list (List.map s_exp es))
     | E_cons (e1, e2) -> re (E_cons (s_exp e1, s_exp e2))
-    | E_struct fes -> re (E_struct (List.map s_fexp fes))
+    | E_struct (struct_name, fes) -> re (E_struct (struct_name, List.map s_fexp fes))
     | E_struct_update (e, fes) -> re (E_struct_update (s_exp e, List.map s_fexp fes))
     | E_field (e, id) -> re (E_field (s_exp e, id))
     | E_match (e, cases) -> re (E_match (s_exp e, List.map s_pexp cases))

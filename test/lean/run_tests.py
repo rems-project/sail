@@ -22,45 +22,33 @@ sail = get_sail()
 # that you can run to exercise the language and the extracted output.
 # Not all self-tests are supported.
 skip_selftests = {
-    'list_rec_functions2',
-    'pow2_var',
-    'exn_hello_world',
-    'outcome_impl',
-    'primop',
-    'assign_rename_bug',
+    'outcome_impl', # custom outcome types (not expected to work)
+    'outcome_impl_int', # custom outcome types (not expected to work)
+    'outcome_impl_bool', # custom outcome types (not expected to work)
     'union_variant_names',
     'varswap',
     'real',
-    'inc_tests',
     'poly_outcome',
     'string_of_bits',
-    'custom_flow',
     'pointer_assign',
-    'ctz',
-    'spc_mappings',
     'concurrency_interface',
     'for_shadow',
     'string_literal_type',
-    'cheri_capreg',
-    'loop_exception',
     'issue429',
     'pc_no_wildcard',
     'type_if_bits',
     'nexp_simp_euclidian',
-    'toplevel_tyvar',
-    'concurrency_interface_write',
-    'read_write_ram',
     'issue136',
-    'fail_exception',
     'anf_as_pattern',
-    'poly_mapping',
     'real_prop',
-    'lib_dec_bits',
     'constructor247',
-    'config_vec_list',
     'deep_poly_nest',
     'config_abstract_bool', # Register type unsupported in state.ml
     'newtype',
+    'assign_in_funarg',
+    'concurrency_interface_v2',
+    'config_map_guard',
+    'let_assert',
 }
 
 print("Sail is {}".format(sail))
@@ -93,12 +81,15 @@ def test_lean(subdir: str, skip_list = None, runnable: bool = False):
                 step('rm -r {} || true'.format(basename))
                 step('mkdir -p {}'.format(basename))
                 # TODO: should probably be dependent on whether print should be pure or effectful.
-                extra_flags = ' '.join([
+                extra_flags = [
                     '--splice',
                     'coq-print.splice',
-                    '--strict-bitvector'
-                ] if runnable else [ ])
-                step('\'{}\' {} {} --lean --lean-output-dir {}'.format(sail, extra_flags, filename, basename), name=filename)
+                    '--strict-bitvector',
+                ] if runnable else [ ]
+                if not runnable:
+                    extra_flags.append('--lean-matchbv')
+                extra_flags = ' '.join(extra_flags)
+                step('\'{}\' {} {} --lean --lean-single-file --lean-output-dir {}'.format(sail, extra_flags, filename, basename), name=filename)
                 if runnable and basename.startswith('fail'):
                     step(f'lake exe run > expected 2> err_status',
                          cwd=f'{basename}/out',

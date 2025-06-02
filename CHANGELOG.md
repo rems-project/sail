@@ -1,6 +1,13 @@
 Changelog
 =========
 
+Sail 0.19.1
+-----------
+
+This is primarily a bugfix release for Sail 0.19. It also includes
+performance fixes that should significantly reduce the time and memory
+usage when generating C code from Sail.
+
 Sail 0.19
 ---------
 

@@ -106,7 +106,8 @@ let rec constraint_ids' (NC_aux (aux, _)) =
   | NC_equal (a1, a2) | NC_not_equal (a1, a2) -> IdSet.union (typ_arg_ids' a1) (typ_arg_ids' a2)
   | NC_le (n1, n2) | NC_ge (n1, n2) | NC_lt (n1, n2) | NC_gt (n1, n2) -> IdSet.union (nexp_ids' n1) (nexp_ids' n2)
   | NC_or (nc1, nc2) | NC_and (nc1, nc2) -> IdSet.union (constraint_ids' nc1) (constraint_ids' nc2)
-  | NC_var _ | NC_true | NC_false | NC_set _ -> IdSet.empty
+  | NC_set (n, _) -> nexp_ids' n
+  | NC_var _ | NC_true | NC_false -> IdSet.empty
   | NC_id id -> IdSet.singleton id
   | NC_app (id, args) -> IdSet.add id (List.fold_left IdSet.union IdSet.empty (List.map typ_arg_ids' args))
 
@@ -135,7 +136,7 @@ and typ_arg_ids' (A_aux (aux, _)) =
 let constraint_ids nc = IdSet.diff (constraint_ids' nc) builtins
 
 and typ_ids typ = IdSet.diff (typ_ids' typ) builtins
-let typ_arg_ids nc = IdSet.diff (typ_arg_ids' nc) builtins
+let typ_arg_ids arg = IdSet.diff (typ_arg_ids' arg) builtins
 
 type callgraph = Graph.Make(Node).graph
 
@@ -230,6 +231,8 @@ let add_def_to_graph graph (DEF_aux (def, def_annot)) =
             |> IdSet.iter (fun f -> graph := G.add_edge self (Function f) !graph)
           with _ -> ()
         end
+      | E_sizeof (Nexp_aux (Nexp_id id, _)) -> graph := G.add_edge self (Type id) !graph
+      | E_constraint (NC_aux (NC_id id, _)) -> graph := G.add_edge self (Type id) !graph
       | _ -> ()
     end;
     E_aux (e_aux, annot)
@@ -317,6 +320,16 @@ let add_def_to_graph graph (DEF_aux (def, def_annot)) =
       (fun id -> if Env.is_mapping id def_annot.env then Some id else None)
   in
 
+  let scan_fundef fdef =
+    let id = id_of_fundef fdef in
+    graph := G.add_edges (Function id) [] !graph;
+    (* When we have a function defining a mapping, add edges back to the mapping so that it ends up
+           in the same component as the val_spec *)
+    Option.iter (fun mapping -> graph := G.add_edges (Mapping mapping) [Function id] !graph) (is_mapping_fn id);
+    scan_fundef_tannot (Function id) fdef;
+    ignore (rewrite_fun (rewriters (Function id)) fdef)
+  in
+
   begin
     match def with
     | DEF_val (VS_aux (VS_val_spec (TypSchm_aux (TypSchm_ts (typq, (Typ_aux (Typ_bidir _, _) as typ)), _), id, _), _))
@@ -336,14 +349,7 @@ let add_def_to_graph graph (DEF_aux (def, def_annot)) =
         graph := G.add_edges (Function id) [] !graph;
         scan_typquant (Function id) typq;
         IdSet.iter (fun typ_id -> graph := G.add_edge (Function id) (Type typ_id) !graph) (typ_ids typ)
-    | DEF_fundef fdef ->
-        let id = id_of_fundef fdef in
-        graph := G.add_edges (Function id) [] !graph;
-        (* When we have a function defining a mapping, add edges back to the mapping so that it ends up
-           in the same component as the val_spec *)
-        Option.iter (fun mapping -> graph := G.add_edges (Mapping mapping) [Function id] !graph) (is_mapping_fn id);
-        scan_fundef_tannot (Function id) fdef;
-        ignore (rewrite_fun (rewriters (Function id)) fdef)
+    | DEF_fundef fdef -> scan_fundef fdef
     | DEF_mapdef mdef ->
         let id = id_of_mapdef mdef in
         graph := G.add_edges (Mapping id) [] !graph;
@@ -380,8 +386,8 @@ let add_def_to_graph graph (DEF_aux (def, def_annot)) =
         List.iter
           (function
             | IS_aux (IS_id (_, id_to), _) -> graph := G.add_edges (Function id) [Function id_to] !graph
-            | IS_aux (IS_typ (_, typ), _) ->
-                IdSet.iter (fun typ_id -> graph := G.add_edge (Function id) (Type typ_id) !graph) (typ_ids typ)
+            | IS_aux (IS_typ (_, arg), _) ->
+                IdSet.iter (fun typ_id -> graph := G.add_edge (Function id) (Type typ_id) !graph) (typ_arg_ids arg)
             )
           substs
     | DEF_scattered (SD_aux (sdef, _)) -> begin
@@ -394,6 +400,21 @@ let add_def_to_graph graph (DEF_aux (def, def_annot)) =
           (fun id' ->
             let n = if Env.is_union_constructor id' def_annot.env then Constructor id' else Function id' in
             graph := G.add_edge (Overload id) n !graph
+          )
+          ids
+    | DEF_internal_mutrec fundefs -> List.iter scan_fundef fundefs
+    | DEF_constraint nc ->
+        let ids = constraint_ids nc in
+        IdSet.iter
+          (fun id1 ->
+            IdSet.iter
+              (fun id2 ->
+                if not (Id.compare id1 id2 = 0) then (
+                  graph := G.add_edge (Type id1) (Type id2) !graph;
+                  graph := G.add_edge (Type id2) (Type id1) !graph
+                )
+              )
+              ids
           )
           ids
     | _ -> ()
@@ -437,6 +458,7 @@ let nodes_of_def (DEF_aux (def, _)) =
   | DEF_outcome (OV_aux (OV_outcome (id, _, _), _), _) -> NS.singleton (Outcome id)
   | DEF_instantiation (IN_aux (IN_id id, _), _) -> NS.singleton (Function id)
   | DEF_overload (id, _) -> NS.singleton (Overload id)
+  | DEF_internal_mutrec fundefs -> List.map id_of_fundef fundefs |> List.map (fun i -> Function i) |> NS.of_list
   | _ -> NS.empty
 
 let filter_ast_extra cuts g ast keep_std =
@@ -477,6 +499,18 @@ let filter_ast_extra cuts g ast keep_std =
           def :: in_file defs
         )
         else def :: filter_ast' g defs
+    | DEF_aux (DEF_internal_mutrec fundefs, def_annot) :: defs ->
+        let fundefs' = List.filter (fun fd -> NM.mem (Function (id_of_fundef fd)) g) fundefs in
+        begin
+          match fundefs' with
+          | [] -> filter_ast' g defs
+          | _ -> DEF_aux (DEF_internal_mutrec fundefs', def_annot) :: filter_ast' g defs
+        end
+    | DEF_aux (DEF_constraint nc, def_annot) :: defs ->
+        let ids = constraint_ids nc in
+        if IdSet.exists (fun id -> NM.mem (Type id) g) ids then
+          DEF_aux (DEF_constraint nc, def_annot) :: filter_ast' g defs
+        else filter_ast' g defs
     | def :: defs when defines_nodes def ->
         if in_graph def && not (is_cut def) then def :: filter_ast' g defs else filter_ast' g defs
     | def :: defs -> def :: filter_ast' g defs
@@ -495,6 +529,21 @@ let filter_ast_ids roots cuts ast =
 
 let top_sort_defs ast =
   let module NM = Map.Make (Node) in
+  (* Flatten mutrecs; if they're necessary they'll be rebuilt *)
+  let ast =
+    {
+      ast with
+      defs =
+        List.map
+          (function
+            | DEF_aux (DEF_internal_mutrec fds, def_annot) ->
+                List.map (fun fd -> DEF_aux (DEF_fundef fd, def_annot)) fds
+            | d -> [d]
+            )
+          ast.defs
+        |> List.concat;
+    }
+  in
   (* Build callgraph, and collect definitions per node, so that we can efficiently reorder later *)
   let g = graph_of_ast ast in
   let defs_of_nodes =
@@ -512,8 +561,12 @@ let top_sort_defs ast =
      Hence, we only consider the definitions for the original order, not the specs.
      When rebuilding the AST using `defs_of_nodes`, the specs will be placed right
      before their corresponding function definitions. *)
-  let fun_id_of_def = function DEF_aux (DEF_fundef fd, _) -> Some (id_of_fundef fd) | _ -> None in
-  let defined_funs = List.filter_map fun_id_of_def ast.defs |> IdSet.of_list in
+  let fun_id_of_def = function
+    | DEF_aux (DEF_fundef fd, _) -> [id_of_fundef fd]
+    | DEF_aux (DEF_internal_mutrec fundefs, _) -> List.map id_of_fundef fundefs
+    | _ -> []
+  in
+  let defined_funs = List.map fun_id_of_def ast.defs |> List.concat |> IdSet.of_list in
   let is_defined_val_spec = function
     | DEF_aux (DEF_val vs, _) when IdSet.mem (id_of_val_spec vs) defined_funs -> true
     | _ -> false
@@ -588,12 +641,12 @@ let slice_instantiation_types sail_dir ast =
          | DEF_aux (DEF_instantiation (_, substs), _) ->
              Some
                (List.filter_map
-                  (function IS_aux (IS_typ (_, typ), _) -> Some typ | IS_aux (IS_id _, _) -> None)
+                  (function IS_aux (IS_typ (_, arg), _) -> Some arg | IS_aux (IS_id _, _) -> None)
                   substs
                )
          | _ -> None
          )
-    |> List.concat |> List.map typ_ids |> List.fold_left IdSet.union IdSet.empty |> IdSet.elements
+    |> List.concat |> List.map typ_arg_ids |> List.fold_left IdSet.union IdSet.empty |> IdSet.elements
     |> List.map (fun id -> Type id)
     |> NodeSet.of_list
   in

@@ -110,7 +110,7 @@ type ('a, 'pat, 'pat_aux) pat_alg = {
   p_list : 'pat list -> 'pat_aux;
   p_cons : 'pat * 'pat -> 'pat_aux;
   p_string_append : 'pat list -> 'pat_aux;
-  p_struct : (id * 'pat) list * field_pat_wildcard -> 'pat_aux;
+  p_struct : struct_name * (id * 'pat) list * field_pat_wildcard -> 'pat_aux;
   p_aux : 'pat_aux * 'a annot -> 'pat;
 }
 
@@ -151,7 +151,7 @@ type ( 'a,
   e_vector_append : 'exp * 'exp -> 'exp_aux;
   e_list : 'exp list -> 'exp_aux;
   e_cons : 'exp * 'exp -> 'exp_aux;
-  e_struct : 'fexp list -> 'exp_aux;
+  e_struct : struct_name * 'fexp list -> 'exp_aux;
   e_struct_update : 'exp * 'fexp list -> 'exp_aux;
   e_field : 'exp * id -> 'exp_aux;
   e_case : 'exp * 'pexp list -> 'exp_aux;

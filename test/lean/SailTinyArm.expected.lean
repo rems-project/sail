@@ -4,7 +4,7 @@ import Out.Sail.BitVec
 open PreSail
 
 set_option maxHeartbeats 1_000_000_000
-set_option maxRecDepth 10_000
+set_option maxRecDepth 1_000_000
 set_option linter.unusedVariables false
 set_option match.ignoreUnusedAlts true
 
@@ -16,7 +16,7 @@ abbrev bits k_n := (BitVec k_n)
 inductive option (k_a : Type) where
   | Some (_ : k_a)
   | None (_ : Unit)
-  deriving BEq
+  deriving Inhabited, BEq, Repr
 
 abbrev MAIRType := (BitVec 64)
 
@@ -25,41 +25,41 @@ abbrev S1PIRType := (BitVec 64)
 abbrev S2PIRType := (BitVec 64)
 
 inductive SecurityState where | SS_NonSecure | SS_Root | SS_Realm | SS_Secure
-  deriving Inhabited, BEq
+  deriving BEq, Inhabited, Repr
 
 abbrev PARTIDtype := (BitVec 16)
 
 abbrev PMGtype := (BitVec 8)
 
 inductive PARTIDspaceType where | PIdSpace_Secure | PIdSpace_Root | PIdSpace_Realm | PIdSpace_NonSecure
-  deriving Inhabited, BEq
+  deriving BEq, Inhabited, Repr
 
 structure MPAMinfo where
   mpam_sp : PARTIDspaceType
   partid : PARTIDtype
   pmg : PMGtype
-  deriving BEq
+  deriving BEq, Inhabited, Repr
 
 inductive AccessType where | AccessType_IFETCH | AccessType_GPR | AccessType_ASIMD | AccessType_SVE | AccessType_SME | AccessType_IC | AccessType_DC | AccessType_DCZero | AccessType_AT | AccessType_NV2 | AccessType_SPE | AccessType_GCS | AccessType_GPTW | AccessType_TTW
-  deriving Inhabited, BEq
+  deriving BEq, Inhabited, Repr
 
 inductive VARange where | VARange_LOWER | VARange_UPPER
-  deriving Inhabited, BEq
+  deriving BEq, Inhabited, Repr
 
 inductive MemAtomicOp where | MemAtomicOp_GCSSS1 | MemAtomicOp_ADD | MemAtomicOp_BIC | MemAtomicOp_EOR | MemAtomicOp_ORR | MemAtomicOp_SMAX | MemAtomicOp_SMIN | MemAtomicOp_UMAX | MemAtomicOp_UMIN | MemAtomicOp_SWP | MemAtomicOp_CAS
-  deriving Inhabited, BEq
+  deriving BEq, Inhabited, Repr
 
 inductive CacheOp where | CacheOp_Clean | CacheOp_Invalidate | CacheOp_CleanInvalidate
-  deriving Inhabited, BEq
+  deriving BEq, Inhabited, Repr
 
 inductive CacheOpScope where | CacheOpScope_SetWay | CacheOpScope_PoU | CacheOpScope_PoC | CacheOpScope_PoE | CacheOpScope_PoP | CacheOpScope_PoDP | CacheOpScope_PoPA | CacheOpScope_ALLU | CacheOpScope_ALLUIS
-  deriving Inhabited, BEq
+  deriving BEq, Inhabited, Repr
 
 inductive CacheType where | CacheType_Data | CacheType_Tag | CacheType_Data_Tag | CacheType_Instruction
-  deriving Inhabited, BEq
+  deriving BEq, Inhabited, Repr
 
 inductive CachePASpace where | CPAS_NonSecure | CPAS_Any | CPAS_RealmNonSecure | CPAS_Realm | CPAS_Root | CPAS_SecureNonSecure | CPAS_Secure
-  deriving Inhabited, BEq
+  deriving BEq, Inhabited, Repr
 
 structure AccessDescriptor where
   acctype : AccessType
@@ -95,25 +95,25 @@ structure AccessDescriptor where
   tagchecked : Bool
   tagaccess : Bool
   mpam : MPAMinfo
-  deriving BEq
+  deriving BEq, Inhabited, Repr
 
 inductive MemType where | MemType_Normal | MemType_Device
-  deriving Inhabited, BEq
+  deriving BEq, Inhabited, Repr
 
 inductive DeviceType where | DeviceType_GRE | DeviceType_nGRE | DeviceType_nGnRE | DeviceType_nGnRnE
-  deriving Inhabited, BEq
+  deriving BEq, Inhabited, Repr
 
 structure MemAttrHints where
   attrs : (BitVec 2)
   hints : (BitVec 2)
   transient : Bool
-  deriving BEq
+  deriving BEq, Inhabited, Repr
 
 inductive Shareability where | Shareability_NSH | Shareability_ISH | Shareability_OSH
-  deriving Inhabited, BEq
+  deriving BEq, Inhabited, Repr
 
 inductive MemTagType where | MemTag_Untagged | MemTag_AllocationTagged | MemTag_CanonicallyTagged
-  deriving Inhabited, BEq
+  deriving BEq, Inhabited, Repr
 
 structure MemoryAttributes where
   memtype : MemType
@@ -124,29 +124,29 @@ structure MemoryAttributes where
   tags : MemTagType
   notagaccess : Bool
   xs : (BitVec 1)
-  deriving BEq
+  deriving BEq, Inhabited, Repr
 
 inductive PASpace where | PAS_NonSecure | PAS_Secure | PAS_Root | PAS_Realm
-  deriving Inhabited, BEq
+  deriving BEq, Inhabited, Repr
 
 structure FullAddress where
   paspace : PASpace
   address : (BitVec 56)
-  deriving BEq
+  deriving BEq, Inhabited, Repr
 
 inductive GPCF where | GPCF_None | GPCF_AddressSize | GPCF_Walk | GPCF_EABT | GPCF_Fail
-  deriving Inhabited, BEq
+  deriving BEq, Inhabited, Repr
 
 structure GPCFRecord where
   gpf : GPCF
   level : Int
-  deriving BEq
+  deriving BEq, Inhabited, Repr
 
 inductive Fault where | Fault_None | Fault_AccessFlag | Fault_Alignment | Fault_Background | Fault_Domain | Fault_Permission | Fault_Translation | Fault_AddressSize | Fault_SyncExternal | Fault_SyncExternalOnWalk | Fault_SyncParity | Fault_SyncParityOnWalk | Fault_GPCFOnWalk | Fault_GPCFOnOutput | Fault_AsyncParity | Fault_AsyncExternal | Fault_TagCheck | Fault_Debug | Fault_TLBConflict | Fault_BranchTarget | Fault_HWUpdateAccessFlag | Fault_Lockdown | Fault_Exclusive | Fault_ICacheMaint
-  deriving Inhabited, BEq
+  deriving BEq, Inhabited, Repr
 
 inductive ErrorState where | ErrorState_UC | ErrorState_UEU | ErrorState_UEO | ErrorState_UER | ErrorState_CE | ErrorState_Uncategorized | ErrorState_IMPDEF
-  deriving Inhabited, BEq
+  deriving BEq, Inhabited, Repr
 
 structure FaultRecord where
   statuscode : Fault
@@ -169,13 +169,13 @@ structure FaultRecord where
   domain : (BitVec 4)
   merrorstate : ErrorState
   debugmoe : (BitVec 4)
-  deriving BEq
+  deriving BEq, Inhabited, Repr
 
 inductive MBReqDomain where | MBReqDomain_Nonshareable | MBReqDomain_InnerShareable | MBReqDomain_OuterShareable | MBReqDomain_FullSystem
-  deriving Inhabited, BEq
+  deriving BEq, Inhabited, Repr
 
 inductive MBReqTypes where | MBReqTypes_Reads | MBReqTypes_Writes | MBReqTypes_All
-  deriving Inhabited, BEq
+  deriving BEq, Inhabited, Repr
 
 structure CacheRecord where
   acctype : AccessType
@@ -196,13 +196,13 @@ structure CacheRecord where
   asid : (BitVec 16)
   security : SecurityState
   cpas : CachePASpace
-  deriving BEq
+  deriving BEq, Inhabited, Repr
 
 inductive Regime where | Regime_EL3 | Regime_EL30 | Regime_EL2 | Regime_EL20 | Regime_EL10
-  deriving Inhabited, BEq
+  deriving BEq, Inhabited, Repr
 
 inductive TGx where | TGx_4KB | TGx_16KB | TGx_64KB
-  deriving Inhabited, BEq
+  deriving BEq, Inhabited, Repr
 
 structure S1TTWParams where
   ha : (BitVec 1)
@@ -245,7 +245,7 @@ structure S1TTWParams where
   dc : (BitVec 1)
   sif : (BitVec 1)
   mair : MAIRType
-  deriving BEq
+  deriving BEq, Inhabited, Repr
 
 structure S2TTWParams where
   ha : (BitVec 1)
@@ -279,7 +279,7 @@ structure S2TTWParams where
   ee : (BitVec 1)
   ptw : (BitVec 1)
   vm : (BitVec 1)
-  deriving BEq
+  deriving BEq, Inhabited, Repr
 
 structure TranslationInfo where
   regime : Regime
@@ -291,16 +291,16 @@ structure TranslationInfo where
   s1params : (Option S1TTWParams)
   s2params : (Option S2TTWParams)
   memattrs : MemoryAttributes
-  deriving BEq
+  deriving BEq, Inhabited, Repr
 
 inductive TLBILevel where | TLBILevel_Any | TLBILevel_Last
-  deriving Inhabited, BEq
+  deriving BEq, Inhabited, Repr
 
 inductive TLBIOp where | TLBIOp_DALL | TLBIOp_DASID | TLBIOp_DVA | TLBIOp_IALL | TLBIOp_IASID | TLBIOp_IVA | TLBIOp_ALL | TLBIOp_ASID | TLBIOp_IPAS2 | TLBIPOp_IPAS2 | TLBIOp_VAA | TLBIOp_VA | TLBIPOp_VAA | TLBIPOp_VA | TLBIOp_VMALL | TLBIOp_VMALLS12 | TLBIOp_RIPAS2 | TLBIPOp_RIPAS2 | TLBIOp_RVAA | TLBIOp_RVA | TLBIPOp_RVAA | TLBIPOp_RVA | TLBIOp_RPA | TLBIOp_PAALL
-  deriving Inhabited, BEq
+  deriving BEq, Inhabited, Repr
 
 inductive TLBIMemAttr where | TLBI_AllAttr | TLBI_ExcludeXS
-  deriving Inhabited, BEq
+  deriving BEq, Inhabited, Repr
 
 structure TLBIRecord where
   op : TLBIOp
@@ -318,7 +318,7 @@ structure TLBIRecord where
   d128 : Bool
   ttl : (BitVec 4)
   tg : (BitVec 2)
-  deriving BEq
+  deriving BEq, Inhabited, Repr
 
 inductive arm_acc_type where
   | SAcc_ASIMD (_ : Bool)
@@ -332,18 +332,18 @@ inductive arm_acc_type where
   | SAcc_SPE (_ : Unit)
   | SAcc_GCS (_ : Unit)
   | SAcc_GPTW (_ : Unit)
-  deriving BEq
+  deriving Inhabited, BEq, Repr
 
 structure TLBIInfo where
   rec' : TLBIRecord
   shareability : Shareability
-  deriving BEq
+  deriving BEq, Inhabited, Repr
 
 structure DxB where
   domain : MBReqDomain
   types : MBReqTypes
   nXS : Bool
-  deriving BEq
+  deriving BEq, Inhabited, Repr
 
 inductive Barrier where
   | Barrier_DSB (_ : DxB)
@@ -352,7 +352,7 @@ inductive Barrier where
   | Barrier_SSBB (_ : Unit)
   | Barrier_PSSBB (_ : Unit)
   | Barrier_SB (_ : Unit)
-  deriving BEq
+  deriving Inhabited, BEq, Repr
 
 abbrev boolean := (BitVec 1)
 
@@ -368,7 +368,7 @@ inductive ast where
   | ExclusiveOr (_ : (reg_index × reg_index × reg_index))
   | DataMemoryBarrier (_ : Unit)
   | CompareAndBranch (_ : (reg_index × (BitVec 64)))
-  deriving BEq
+  deriving Inhabited, BEq, Repr
 
 inductive Register : Type where
   | R0
@@ -403,7 +403,7 @@ inductive Register : Type where
   | R29
   | R30
   | _PC
-  deriving DecidableEq, Hashable
+  deriving DecidableEq, Hashable, Repr
 open Register
 
 abbrev RegisterType : Register → Type
@@ -451,6 +451,8 @@ instance : Arch where
   pa := (BitVec 56)
   abort := Fault
   translation := (Option TranslationInfo)
+  trans_start := Unit
+  trans_end := Unit
   fault := (Option FaultRecord)
   tlb_op := TLBIInfo
   cache_op := CacheRecord
@@ -466,13 +468,16 @@ import Out.Sail.BitVec
 import Out.Sail.IntRange
 import Out.Defs
 import Out.Specialization
+import Out.FakeReal
 
 set_option maxHeartbeats 1_000_000_000
-set_option maxRecDepth 10_000
+set_option maxRecDepth 1_000_000
 set_option linter.unusedVariables false
 set_option match.ignoreUnusedAlts true
 
 open Sail
+
+namespace Out.Functions
 
 open option
 open ast
@@ -504,19 +509,42 @@ open CacheOp
 open Barrier
 open AccessType
 
-namespace Functions
-
-/-- Type quantifiers: k_ex6347# : Bool, k_ex6346# : Bool -/
+/-- Type quantifiers: k_ex5911# : Bool, k_ex5910# : Bool -/
 def neq_bool (x : Bool) (y : Bool) : Bool :=
-  (Bool.not (BEq.beq x y))
+  (! (x == y))
 
 /-- Type quantifiers: x : Int -/
 def __id (x : Int) : Int :=
   x
 
+/-- Type quantifiers: n : Int, m : Int -/
+def _shl_int_general (m : Int) (n : Int) : Int :=
+  bif (n ≥b 0)
+  then (Int.shiftl m n)
+  else (Int.shiftr m (Neg.neg n))
+
+/-- Type quantifiers: n : Int, m : Int -/
+def _shr_int_general (m : Int) (n : Int) : Int :=
+  bif (n ≥b 0)
+  then (Int.shiftr m n)
+  else (Int.shiftl m (Neg.neg n))
+
+/-- Type quantifiers: m : Int, n : Int -/
+def fdiv_int (n : Int) (m : Int) : Int :=
+  bif ((n <b 0) && (m >b 0))
+  then ((Int.tdiv (n +i 1) m) -i 1)
+  else
+    (bif ((n >b 0) && (m <b 0))
+    then ((Int.tdiv (n -i 1) m) -i 1)
+    else (Int.tdiv n m))
+
+/-- Type quantifiers: m : Int, n : Int -/
+def fmod_int (n : Int) (m : Int) : Int :=
+  (n -i (m *i (fdiv_int n m)))
+
 /-- Type quantifiers: len : Nat, k_v : Nat, len ≥ 0 ∧ k_v ≥ 0 -/
 def sail_mask (len : Nat) (v : (BitVec k_v)) : (BitVec len) :=
-  if (len ≤b (Sail.BitVec.length v))
+  bif (len ≤b (Sail.BitVec.length v))
   then (Sail.BitVec.truncate v len)
   else (Sail.BitVec.zeroExtend v len)
 
@@ -526,36 +554,33 @@ def sail_ones (n : Nat) : (BitVec n) :=
 
 /-- Type quantifiers: l : Int, i : Int, n : Nat, n ≥ 0 -/
 def slice_mask {n : _} (i : Int) (l : Int) : (BitVec n) :=
-  if (l ≥b n)
+  bif (l ≥b n)
   then ((sail_ones n) <<< i)
   else
-    let one : (BitVec n) := (sail_mask n (0b1 : (BitVec 1)))
-    (((one <<< l) - one) <<< i)
+    (let one : (BitVec n) := (sail_mask n (0b1 : (BitVec 1)))
+    (((one <<< l) - one) <<< i))
 
-/-- Type quantifiers: n : Int, m : Int -/
-def _shl_int_general (m : Int) (n : Int) : Int :=
-  if (n ≥b 0)
-  then (Int.shiftl m n)
-  else (Int.shiftr m (Neg.neg n))
+/-- Type quantifiers: n : Nat, n > 0 -/
+def to_bytes_le {n : _} (b : (BitVec (8 * n))) : (Vector (BitVec 8) n) := Id.run do
+  let res := (vectorInit (BitVec.zero 8))
+  let loop_i_lower := 0
+  let loop_i_upper := (n -i 1)
+  let mut loop_vars := res
+  for i in [loop_i_lower:loop_i_upper:1]i do
+    let res := loop_vars
+    loop_vars := (vectorUpdate res i (Sail.BitVec.extractLsb b ((8 *i i) +i 7) (8 *i i)))
+  (pure loop_vars)
 
-/-- Type quantifiers: n : Int, m : Int -/
-def _shr_int_general (m : Int) (n : Int) : Int :=
-  if (n ≥b 0)
-  then (Int.shiftr m n)
-  else (Int.shiftl m (Neg.neg n))
-
-/-- Type quantifiers: m : Int, n : Int -/
-def fdiv_int (n : Int) (m : Int) : Int :=
-  if (Bool.and (n <b 0) (m >b 0))
-  then ((Int.tdiv (n +i 1) m) -i 1)
-  else
-    if (Bool.and (n >b 0) (m <b 0))
-    then ((Int.tdiv (n -i 1) m) -i 1)
-    else (Int.tdiv n m)
-
-/-- Type quantifiers: m : Int, n : Int -/
-def fmod_int (n : Int) (m : Int) : Int :=
-  (n -i (m *i (fdiv_int n m)))
+/-- Type quantifiers: n : Nat, n > 0 -/
+def from_bytes_le {n : _} (v : (Vector (BitVec 8) n)) : (BitVec (8 * n)) := Id.run do
+  let res := (BitVec.zero (8 *i n))
+  let loop_i_lower := 0
+  let loop_i_upper := (n -i 1)
+  let mut loop_vars := res
+  for i in [loop_i_lower:loop_i_upper:1]i do
+    let res := loop_vars
+    loop_vars := (Sail.BitVec.updateSubrange res ((8 *i i) +i 7) (8 *i i) (GetElem?.getElem! v i))
+  (pure loop_vars)
 
 /-- Type quantifiers: k_a : Type -/
 def is_none (opt : (Option k_a)) : Bool :=
@@ -1786,17 +1811,17 @@ def undefined_DxB (_ : Unit) : SailM DxB := do
           nXS := (← (undefined_bool ())) })
 
 def GPRs : (Vector (RegisterRef (BitVec 64)) 31) :=
-  #v[.Reg R0, .Reg R1, .Reg R2, .Reg R3, .Reg R4, .Reg R5, .Reg R6, .Reg R7, .Reg R8, .Reg R9, .Reg R10, .Reg R11, .Reg R12, .Reg R13, .Reg R14, .Reg R15, .Reg R16, .Reg R17, .Reg R18, .Reg R19, .Reg R20, .Reg R21, .Reg R22, .Reg R23, .Reg R24, .Reg R25, .Reg R26, .Reg R27, .Reg R28, .Reg R29, .Reg R30]
+  #v[(.Reg R0), (.Reg R1), (.Reg R2), (.Reg R3), (.Reg R4), (.Reg R5), (.Reg R6), (.Reg R7), (.Reg R8), (.Reg R9), (.Reg R10), (.Reg R11), (.Reg R12), (.Reg R13), (.Reg R14), (.Reg R15), (.Reg R16), (.Reg R17), (.Reg R18), (.Reg R19), (.Reg R20), (.Reg R21), (.Reg R22), (.Reg R23), (.Reg R24), (.Reg R25), (.Reg R26), (.Reg R27), (.Reg R28), (.Reg R29), (.Reg R30)]
 
 /-- Type quantifiers: n : Nat, 0 ≤ n ∧ n ≤ 31 -/
 def wX (n : Nat) (value : (BitVec 64)) : SailM Unit := do
-  if (bne n 31)
+  bif (n != 31)
   then writeRegRef (GetElem?.getElem! GPRs n) value
   else (pure ())
 
 /-- Type quantifiers: n : Nat, 0 ≤ n ∧ n ≤ 31 -/
 def rX (n : Nat) : SailM (BitVec 64) := do
-  if (bne n 31)
+  bif (n != 31)
   then (reg_deref (GetElem?.getElem! GPRs n))
   else (pure (0x0000000000000000 : (BitVec 64)))
 
@@ -1810,29 +1835,29 @@ def decodeLoadStoreRegister (opc : (BitVec 2)) (Rm : (BitVec 5)) (option_v : (Bi
   let t : reg_index := (BitVec.toNat Rt)
   let n : reg_index := (BitVec.toNat Rn)
   let m : reg_index := (BitVec.toNat Rm)
-  if (Bool.or (bne option_v (0b011 : (BitVec 3))) (BEq.beq S 1#1))
+  bif ((option_v != (0b011 : (BitVec 3))) || (S == 1#1))
   then none
   else
-    if (BEq.beq opc (0b00 : (BitVec 2)))
+    (bif (opc == (0b00 : (BitVec 2)))
     then (some (LoadRegister (t, n, m)))
     else
-      if (BEq.beq opc (0b01 : (BitVec 2)))
+      (bif (opc == (0b01 : (BitVec 2)))
       then (some (StoreRegister (t, n, m)))
-      else none
+      else none))
 
 def decodeExclusiveOr (sf : (BitVec 1)) (shift : (BitVec 2)) (N : (BitVec 1)) (Rm : (BitVec 5)) (imm6 : (BitVec 6)) (Rn : (BitVec 5)) (Rd : (BitVec 5)) : (Option ast) :=
   let d : reg_index := (BitVec.toNat Rd)
   let n : reg_index := (BitVec.toNat Rn)
   let m : reg_index := (BitVec.toNat Rm)
-  if (Bool.and (BEq.beq sf 0#1) (BEq.beq (BitVec.access imm6 5) 1#1))
+  bif ((sf == 0#1) && ((BitVec.access imm6 5) == 1#1))
   then none
   else
-    if (bne imm6 (0b000000 : (BitVec 6)))
+    (bif (imm6 != (0b000000 : (BitVec 6)))
     then none
-    else (some (ExclusiveOr (d, n, m)))
+    else (some (ExclusiveOr (d, n, m))))
 
 def decodeDataMemoryBarrier (CRm : (BitVec 4)) : (Option ast) :=
-  if (bne CRm (0xF : (BitVec 4)))
+  bif (CRm != (0xF : (BitVec 4)))
   then none
   else (some (DataMemoryBarrier ()))
 
@@ -1918,11 +1943,12 @@ def execute_DataMemoryBarrier (_ : Unit) : SailM Unit := do
 /-- Type quantifiers: t : Nat, 0 ≤ t ∧ t ≤ 31 -/
 def execute_CompareAndBranch (t : Nat) (offset : (BitVec 64)) : SailM Unit := do
   let operand ← do (rX t)
-  if (BEq.beq operand (0x0000000000000000 : (BitVec 64)))
+  bif (operand == (0x0000000000000000 : (BitVec 64)))
   then
-    let base ← do (rPC ())
-    let addr := (base + offset)
-    (wPC addr)
+    (do
+      let base ← do (rPC ())
+      let addr := (base + offset)
+      (wPC addr))
   else writeReg _PC (BitVec.addInt (← readReg _PC) 4)
 
 def execute (merge_var : ast) : SailM Unit := do
@@ -1933,42 +1959,14 @@ def execute (merge_var : ast) : SailM Unit := do
   | .DataMemoryBarrier arg0 => (execute_DataMemoryBarrier arg0)
   | .CompareAndBranch (t, offset) => (execute_CompareAndBranch t offset)
 
-def decode (v__0 : (BitVec 32)) : (Option ast) :=
-  if (Bool.and (BEq.beq (Sail.BitVec.extractLsb v__0 31 24) (0xF8 : (BitVec 8)))
-       (Bool.and (BEq.beq (Sail.BitVec.extractLsb v__0 21 21) (0b1 : (BitVec 1)))
-         (BEq.beq (Sail.BitVec.extractLsb v__0 11 10) (0b10 : (BitVec 2)))))
-  then
-    let S := (BitVec.access v__0 12)
-    let option_v : (BitVec 3) := (Sail.BitVec.extractLsb v__0 15 13)
-    let opc : (BitVec 2) := (Sail.BitVec.extractLsb v__0 23 22)
-    let Rt : (BitVec 5) := (Sail.BitVec.extractLsb v__0 4 0)
-    let Rn : (BitVec 5) := (Sail.BitVec.extractLsb v__0 9 5)
-    let Rm : (BitVec 5) := (Sail.BitVec.extractLsb v__0 20 16)
+def decode (merge_var : (BitVec 32)) : (Option ast) :=
+  match_bv merge_var with
+  | [11,111,0,00,opc:2,1,Rm:5,option_v:3,S,10,Rn:5,Rt:5] =>
     (decodeLoadStoreRegister opc Rm option_v S Rn Rt)
-  else
-    if (BEq.beq (Sail.BitVec.extractLsb v__0 30 24) (0b1001010 : (BitVec 7)))
-    then
-      let sf := (BitVec.access v__0 31)
-      let N := (BitVec.access v__0 21)
-      let shift : (BitVec 2) := (Sail.BitVec.extractLsb v__0 23 22)
-      let imm6 : (BitVec 6) := (Sail.BitVec.extractLsb v__0 15 10)
-      let Rn : (BitVec 5) := (Sail.BitVec.extractLsb v__0 9 5)
-      let Rm : (BitVec 5) := (Sail.BitVec.extractLsb v__0 20 16)
-      let Rd : (BitVec 5) := (Sail.BitVec.extractLsb v__0 4 0)
-      (decodeExclusiveOr sf shift N Rm imm6 Rn Rd)
-    else
-      if (Bool.and (BEq.beq (Sail.BitVec.extractLsb v__0 31 12) (0xD5033 : (BitVec 20)))
-           (BEq.beq (Sail.BitVec.extractLsb v__0 7 0) (0xBF : (BitVec 8))))
-      then
-        let CRm : (BitVec 4) := (Sail.BitVec.extractLsb v__0 11 8)
-        (decodeDataMemoryBarrier CRm)
-      else
-        if (BEq.beq (Sail.BitVec.extractLsb v__0 31 24) (0xB4 : (BitVec 8)))
-        then
-          let imm19 : (BitVec 19) := (Sail.BitVec.extractLsb v__0 23 5)
-          let Rt : (BitVec 5) := (Sail.BitVec.extractLsb v__0 4 0)
-          (decodeCompareAndBranch imm19 Rt)
-        else none
+  | [sf,10,01010,shift:2,N,Rm:5,imm6:6,Rn:5,Rd:5] => (decodeExclusiveOr sf shift N Rm imm6 Rn Rd)
+  | [1101010100,0,00,011,0011,CRm:4,1,01,11111] => (decodeDataMemoryBarrier CRm)
+  | [1,011010,0,imm19:19,Rt:5] => (decodeCompareAndBranch imm19 Rt)
+  | _ => none
 
 def iFetch (addr : (BitVec 64)) : SailM (BitVec 32) := do
   let req : (Mem_read_request 4 64 (BitVec 56) (Option TranslationInfo) arm_acc_type) :=
@@ -2094,9 +2092,9 @@ def undefined_Explicit_access_kind (_ : Unit) : SailM Explicit_access_kind := do
 def mem_read_request_is_exclusive (request : (Mem_read_request k_n k_vasize k_pa k_translation_summary k_arch_ak)) : Bool :=
   match request.access_kind with
   | .AK_explicit eak =>
-    match eak.variety with
+    (match eak.variety with
     | AV_exclusive => true
-    | _ => false
+    | _ => false)
   | _ => false
 
 /-- Type quantifiers: k_n : Nat, k_vasize : Nat, k_pa : Type, k_translation_summary : Type, k_arch_ak
@@ -2115,9 +2113,9 @@ def __monomorphize_writes : Bool := false
 def mem_write_request_is_exclusive (request : (Mem_write_request k_n k_vasize k_pa k_translation_summary k_arch_ak)) : Bool :=
   match request.access_kind with
   | .AK_explicit eak =>
-    match eak.variety with
+    (match eak.variety with
     | AV_exclusive => true
-    | _ => false
+    | _ => false)
   | _ => false
 
 def pa_bits (bv : (BitVec 56)) : (BitVec 64) :=
@@ -2160,6 +2158,4 @@ def initialize_registers (_ : Unit) : SailM Unit := do
 def sail_model_init (x_0 : Unit) : SailM Unit := do
   (initialize_registers ())
 
-end Functions
-open Functions
-
+end Out.Functions

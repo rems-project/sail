@@ -54,6 +54,7 @@ module IntIntSet = Util.IntIntSet
 let opt_debug_no_literals = ref false
 
 type ctx = {
+  abstract : kind Bindings.t;
   variants : (typquant * type_union list) Bindings.t;
   structs : (typquant * (typ * id) list) Bindings.t;
   enums : IdSet.t Bindings.t;
@@ -185,7 +186,8 @@ let number_pat (from : int) (pat : 'a pat) : ('a * int) pat * int =
       | P_list ps -> P_list (List.map (go counter) ps)
       | P_cons (p1, p2) -> P_cons (go counter p1, go counter p2)
       | P_string_append ps -> P_string_append (List.map (go counter) ps)
-      | P_struct (fps, fwild) -> P_struct (List.map (fun (field, p) -> (field, go counter p)) fps, fwild)
+      | P_struct (struct_name, fps, fwild) ->
+          P_struct (struct_name, List.map (fun (field, p) -> (field, go counter p)) fps, fwild)
       | P_id id -> P_id id
       | P_lit lit -> P_lit lit
       | P_wild -> P_wild
@@ -204,7 +206,7 @@ let rec contains_mapping ctx (P_aux (aux, _)) =
   | P_or (p1, p2) | P_cons (p1, p2) -> contains_mapping ctx p1 || contains_mapping ctx p2
   | P_tuple ps | P_vector ps | P_vector_concat ps | P_string_append ps | P_list ps ->
       List.exists (contains_mapping ctx) ps
-  | P_struct (fps, _) -> List.exists (fun (_, p) -> contains_mapping ctx p) fps
+  | P_struct (_, fps, _) -> List.exists (fun (_, p) -> contains_mapping ctx p) fps
 
 let preserved_explanation =
   "Sail cannot simplify the above pattern match:\n"
@@ -286,7 +288,8 @@ module Make (C : Config) = struct
         | P_list ps -> P_list (List.map (go wild) ps)
         | P_cons (p1, p2) -> P_cons (go wild p1, go wild p2)
         | P_string_append ps -> P_string_append (List.map (go wild) ps)
-        | P_struct (fps, fwild) -> P_struct (List.map (fun (field, p) -> (field, go wild p)) fps, fwild)
+        | P_struct (struct_name, fps, fwild) ->
+            P_struct (struct_name, List.map (fun (field, p) -> (field, go wild p)) fps, fwild)
         | P_id id -> P_id id
         | P_lit (L_aux (L_num n, _)) when wild ->
             t := C.add_attribute (gen_loc l) "int_wildcard" (Some (AD_aux (AD_num n, gen_loc l))) !t;
@@ -450,7 +453,7 @@ module Make (C : Config) = struct
     | P_cons (hd_pat, tl_pat) -> GP_cons (generalize ctx head_exp_typ hd_pat, generalize ctx head_exp_typ tl_pat)
     | P_list xs ->
         List.fold_right (fun pat tl_gpat -> GP_cons (generalize ctx head_exp_typ pat, tl_gpat)) xs GP_empty_list
-    | P_struct (fpats, FP_no_wild) -> begin
+    | P_struct (_, fpats, FP_no_wild) -> begin
         let get_field_typs struct_id =
           match Bindings.find_opt struct_id ctx.structs with
           | Some (typq, field_typs) -> (typq, field_typs)
@@ -601,8 +604,20 @@ module Make (C : Config) = struct
         (* If there are any rows after the wildcard row, they are redundant *)
         | Some (_, redundant) -> mk_complete ~redundant:(List.map (fun (idx, _) -> idx.num) redundant) all_rows []
         | None -> (
+            let abstract_decs =
+              ctx.abstract |> Bindings.bindings
+              |> List.filter_map (fun (id, kind) ->
+                     let name = Util.zencode_string (string_of_id id) in
+                     match kind with
+                     | K_aux (K_type, _) -> None
+                     | K_aux (K_int, _) -> Some (Printf.sprintf "(declare-const %s Int)" name)
+                     | K_aux (K_bool, _) -> Some (Printf.sprintf "(declare-const %s Bool)" name)
+                 )
+              |> String.concat "\n"
+            in
             let smtlib =
-              (if !require_head_exp_constraint then head_exp_constraint ^ "\n" else "")
+              abstract_decs ^ "\n"
+              ^ (if !require_head_exp_constraint then head_exp_constraint ^ "\n" else "")
               ^ Util.string_of_list "\n" (fun (v, ty) -> Printf.sprintf "(declare-const p%d %s)" v ty) just_vars
               ^ "\n"
               ^ Util.string_of_list "\n" (fun x -> x) (Util.option_these (List.map snd constrs))
@@ -791,7 +806,7 @@ module Make (C : Config) = struct
     let xs, ys = Util.split_after i unmatcheds in
     let field_elems = Util.take num_fields ys in
     let zs = Util.drop num_fields ys in
-    xs @ (mk_exp (E_struct (List.map2 (fun field elem -> mk_fexp field elem) fields field_elems)) :: zs)
+    xs @ (mk_exp (E_struct (SN_anon, List.map2 (fun field elem -> mk_fexp field elem) fields field_elems)) :: zs)
 
   let rector ctor i unmatcheds =
     let xs, ys = Util.split_after i unmatcheds in

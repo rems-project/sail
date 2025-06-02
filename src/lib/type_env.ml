@@ -58,6 +58,8 @@ let opt_smt_linearize = ref false
 
 let opt_string_literal_type = ref false
 
+let opt_strict_exponentials = ref false
+
 module StringMap = Map.Make (String)
 
 module IdPair = struct
@@ -100,9 +102,9 @@ type global_env = {
   letbinds : typ env_item Bindings.t;
   registers : typ env_item Bindings.t;
   overloads : id list multiple_env_item Bindings.t;
-  outcomes : (typquant * typ * kinded_id list * id list * (typquant * typ) env_item Bindings.t) env_item Bindings.t;
+  outcomes : (typquant * typ * typquant * id list * (typquant * typ) env_item Bindings.t) env_item Bindings.t;
   scattered_ids : ((l * string * Ast.attribute_data option) list, Ast.l) result Bindings.t;
-  outcome_instantiation : (Ast.l * typ) KBindings.t;
+  outcome_instantiation : (Ast.l * typ_arg) KBindings.t;
 }
 
 let empty_global_env =
@@ -142,7 +144,7 @@ type env = {
   opened : Project.ModSet.t;
   locals : (mut * typ) Bindings.t;
   filtered_overloads : (id * id list) Bindings.t;
-  typ_vars : (Ast.l * kind_aux) KBindings.t;
+  typ_vars : (Ast.l * kind_aux * type_var_origin) KBindings.t;
   shadow_vars : int KBindings.t;
   allow_bindings : bool;
   constraints : (constraint_reason * n_constraint) list;
@@ -291,10 +293,11 @@ let allow_user_undefined id env =
    referenced by constraints. *)
 let shadows v env = match KBindings.find_opt v env.shadow_vars with Some n -> n | None -> 0
 
-let add_typ_var_shadow l (KOpt_aux (KOpt_kind (K_aux (k, _), v), _)) env =
+let add_typ_var_shadow ?(from_outcome = false) l (KOpt_aux (KOpt_kind (K_aux (k, _), v), _)) env =
+  let origin = if from_outcome then Outcome else Normal in
   if KBindings.mem v env.typ_vars then begin
     let n = match KBindings.find_opt v env.shadow_vars with Some n -> n | None -> 0 in
-    let s_l, s_k = KBindings.find v env.typ_vars in
+    let s_l, s_k, s_origin = KBindings.find v env.typ_vars in
     let s_v = Kid_aux (Var (string_of_kid v ^ "#" ^ string_of_int n), l) in
     typ_print
       ( lazy
@@ -305,7 +308,7 @@ let add_typ_var_shadow l (KOpt_aux (KOpt_kind (K_aux (k, _), v), _)) env =
     ( {
         env with
         constraints = List.map (fun (l, nc) -> (l, constraint_subst v (arg_kopt (mk_kopt s_k s_v)) nc)) env.constraints;
-        typ_vars = KBindings.add v (l, k) (KBindings.add s_v (s_l, s_k) env.typ_vars);
+        typ_vars = KBindings.add v (l, k, origin) (KBindings.add s_v (s_l, s_k, s_origin) env.typ_vars);
         locals = Bindings.map (fun (mut, typ) -> (mut, typ_subst v (arg_kopt (mk_kopt s_k s_v)) typ)) env.locals;
         shadow_vars = KBindings.add v (n + 1) env.shadow_vars;
       },
@@ -314,23 +317,31 @@ let add_typ_var_shadow l (KOpt_aux (KOpt_kind (K_aux (k, _), v), _)) env =
   end
   else begin
     typ_print (lazy (adding ^ "type variable " ^ string_of_kid v ^ " : " ^ string_of_kind_aux k)) [@coverage off];
-    ({ env with typ_vars = KBindings.add v (l, k) env.typ_vars }, None)
+    ({ env with typ_vars = KBindings.add v (l, k, origin) env.typ_vars }, None)
   end
 
-let add_typ_var l kopt env = fst (add_typ_var_shadow l kopt env)
+let add_typ_var ?(from_outcome = false) l kopt env = fst (add_typ_var_shadow ~from_outcome l kopt env)
 
-let get_typ_var_loc_opt kid env = match KBindings.find_opt kid env.typ_vars with Some (l, _) -> Some l | None -> None
+let is_outcome_typ_var v env = match KBindings.find_opt v env.typ_vars with Some (_, _, Outcome) -> true | _ -> false
+
+let get_typ_var_opt kid env =
+  match KBindings.find_opt kid env.typ_vars with Some (l, k, _) -> Some (l, k) | None -> None
+
+let get_typ_var_loc_opt kid env =
+  match KBindings.find_opt kid env.typ_vars with Some (l, _, _) -> Some l | None -> None
 
 let get_typ_var kid env =
-  try snd (KBindings.find kid env.typ_vars)
-  with Not_found -> typ_error (kid_loc kid) ("No type variable " ^ string_of_kid kid)
+  match KBindings.find_opt kid env.typ_vars with
+  | Some (_, k, _) -> k
+  | None -> typ_error (kid_loc kid) ("No type variable " ^ string_of_kid kid)
 
-let get_typ_vars env = KBindings.map snd env.typ_vars
-let get_typ_var_locs env = KBindings.map fst env.typ_vars
+let get_typ_vars env = KBindings.map (fun (_, k, _) -> k) env.typ_vars
+let get_typ_var_locs env = KBindings.map (fun (l, _, _) -> l) env.typ_vars
 
 let get_typ_vars_info env = { vars = env.typ_vars; shadows = env.shadow_vars }
 
-let lookup_typ_var v tv_info = match KBindings.find_opt v tv_info.vars with Some v -> Some v | None -> None
+let lookup_typ_var v tv_info =
+  match KBindings.find_opt v tv_info.vars with Some (l, k, _) -> Some (l, k) | None -> None
 
 let is_shadowed v tv_info = match KBindings.find_opt v tv_info.shadows with Some _ -> true | None -> false
 
@@ -378,7 +389,7 @@ let bound_typ_id env id =
   || Bindings.mem id env.global.enums || Bindings.mem id builtin_typs
   || Bindings.mem id env.global.abstract_typs
 
-let get_binding_loc env id =
+let get_type_binding_loc env id =
   let find map = Some (item_loc (Bindings.find id map)) in
   if Bindings.mem id builtin_typs then None
   else if Bindings.mem id env.global.unions then find env.global.unions
@@ -389,7 +400,7 @@ let get_binding_loc env id =
   else None
 
 let already_bound str id env =
-  match get_binding_loc env id with
+  match get_type_binding_loc env id with
   | Some l ->
       typ_raise (id_loc id)
         (Err_inner
@@ -403,20 +414,22 @@ let already_bound str id env =
       let suffix = if Bindings.mem id builtin_typs then " as a built-in type" else "" in
       typ_error (id_loc id) ("Cannot create " ^ str ^ " type " ^ string_of_id id ^ ", name is already bound" ^ suffix)
 
-let bound_ctor_fn env id =
+let bound_global env id =
   Bindings.mem id env.global.val_specs || Bindings.mem id env.global.union_ids || Bindings.mem id env.global.enum_ids
+  || Bindings.mem id env.global.registers
 
-let get_ctor_fn_binding_loc env id =
+let get_global_binding_loc env id =
   (* union constructors also get a val_spec entry, so check unions first *)
   if Bindings.mem id env.global.union_ids then
     Some ("a union constructor", item_loc (Bindings.find id env.global.union_ids))
   else if Bindings.mem id env.global.val_specs then Some ("a function", item_loc (Bindings.find id env.global.val_specs))
   else if Bindings.mem id env.global.enum_ids then
     Some ("an enumeration member", item_loc (Bindings.find id env.global.enum_ids))
+  else if Bindings.mem id env.global.registers then Some ("a register", item_loc (Bindings.find id env.global.registers))
   else None
 
-let already_bound_ctor_fn str id env =
-  match get_ctor_fn_binding_loc env id with
+let already_bound_global str id env =
+  match get_global_binding_loc env id with
   | Some (description, l) ->
       typ_raise (id_loc id)
         (Err_inner
@@ -464,15 +477,15 @@ let add_overloads l id ids env =
   typ_print
     (lazy (adding ^ "overloads for " ^ string_of_id id ^ " [" ^ string_of_list ", " string_of_id ids ^ "]"))
   [@coverage off];
-  if bound_ctor_fn env id then (
-    let description, bound_l = Option.get (get_ctor_fn_binding_loc env id) in
+  if bound_global env id then (
+    let description, bound_l = Option.get (get_global_binding_loc env id) in
     typ_error
       (Hint ("Previous binding", bound_l, l))
       (string_of_id id ^ " cannot be defined as an overload, as it is already bound to " ^ description)
   );
   List.iter
     (fun overload ->
-      if not (bound_ctor_fn env overload || Bindings.mem overload env.global.overloads) then
+      if not (bound_global env overload || Bindings.mem overload env.global.overloads) then
         typ_error
           (Hint ("unbound identifier", id_loc overload, l))
           ("Cannot create or extend overload " ^ string_of_id id ^ ", " ^ string_of_id overload ^ " is not bound")
@@ -543,6 +556,9 @@ module Well_formedness = struct
   let with_existential exs =
     match exs.constr with Some ex_constraint -> fun c -> nc_or (nc_not ex_constraint) c | None -> fun c -> c
 
+  let conj_constraint exs c =
+    { exs with constr = (match exs.constr with None -> Some c | Some c' -> Some (nc_and c c')) }
+
   let check_args_typquant id exs env args typq =
     let kopts, ncs = quant_split typq in
     let rec subst_args kopts args =
@@ -599,8 +615,8 @@ module Well_formedness = struct
     | Typ_id id -> typ_error l ("Undefined type " ^ string_of_id id)
     | Typ_var kid -> begin
         match KBindings.find kid env.typ_vars with
-        | _, K_type -> ()
-        | _, k ->
+        | _, K_type, _ -> ()
+        | _, k, _ ->
             typ_error l
               ("Type variable " ^ string_of_kid kid ^ " in type " ^ string_of_typ typ ^ " is " ^ string_of_kind_aux k
              ^ " rather than Type"
@@ -710,12 +726,25 @@ module Well_formedness = struct
     | Nexp_times (nexp1, nexp2) | Nexp_sum (nexp1, nexp2) | Nexp_minus (nexp1, nexp2) ->
         wf_nexp exs env nexp1;
         wf_nexp exs env nexp2
-    | Nexp_exp nexp -> wf_nexp exs env nexp (* MAYBE: Could put restrictions on what is allowed here *)
+    | Nexp_exp nexp ->
+        wf_nexp exs env nexp;
+        if !opt_strict_exponentials then (
+          match env.prove with
+          | Some prove ->
+              let with_existential =
+                match exs.constr with
+                | Some ex_constraint -> fun c -> nc_or (nc_not ex_constraint) c
+                | None -> fun c -> c
+              in
+              if not (prove env (with_existential (nc_gteq nexp (nint 0)))) then
+                typ_error l "Exponent must be greater than or equal to zero"
+          | None -> Reporting.unreachable l __POS__ "No prover in environment when checking well-formedness"
+        )
     | Nexp_neg nexp -> wf_nexp exs env nexp
     | Nexp_if (i, t, e) ->
         wf_constraint exs env i;
-        wf_nexp exs env t;
-        wf_nexp exs env e
+        wf_nexp (conj_constraint exs i) env t;
+        wf_nexp (conj_constraint exs (nc_not i)) env e
 
   and wf_constraint (exs : existential) env (NC_aux (nc_aux, l) as nc) =
     wf_debug "constraint" string_of_n_constraint nc exs;
@@ -919,10 +948,10 @@ and expand_synonyms env (Typ_aux (typ, l)) =
       in
       let add_typ_var env (KOpt_aux (KOpt_kind (k, kid), l)) =
         try
-          let l, _ = KBindings.find kid env.typ_vars in
+          let l, _, _ = KBindings.find kid env.typ_vars in
           rebindings := kid :: !rebindings;
-          { env with typ_vars = KBindings.add (prepend_kid "syn#" kid) (l, unaux_kind k) env.typ_vars }
-        with Not_found -> { env with typ_vars = KBindings.add kid (l, unaux_kind k) env.typ_vars }
+          { env with typ_vars = KBindings.add (prepend_kid "syn#" kid) (l, unaux_kind k, Normal) env.typ_vars }
+        with Not_found -> { env with typ_vars = KBindings.add kid (l, unaux_kind k, Normal) env.typ_vars }
       in
 
       let env = List.fold_left add_typ_var env kopts in
@@ -999,6 +1028,12 @@ and add_constraint ?(global = false) ?reason constr env =
         else { env with constraints = (reason, constr) :: env.constraints }
   )
 
+let simplify_constraints env =
+  let simplify (reason, nc) = (reason, constraint_simp (expand_constraint_synonyms env nc)) in
+  update_global
+    (fun global -> { global with constraints = List.map simplify global.constraints })
+    { env with constraints = List.map simplify env.constraints }
+
 let wf_typ ~at:at_l env (Typ_aux (_, l) as typ) =
   Well_formedness.wf_debug "typ" string_of_typ typ Well_formedness.no_existential;
   incr depth;
@@ -1009,6 +1044,17 @@ let wf_typ ~at:at_l env (Typ_aux (_, l) as typ) =
     decr depth;
     let extra, l = match l with Parse_ast.Unknown -> (" here", at_l) | _ -> ("", l) in
     typ_raise l (err_because (Err_other ("Well-formedness check failed for type" ^ extra), err_l, err))
+
+let wf_typ_arg ~at:at_l env (A_aux (_, l) as arg) =
+  Well_formedness.wf_debug "typ_arg" string_of_typ_arg arg Well_formedness.no_existential;
+  incr depth;
+  try
+    Well_formedness.wf_typ_arg Well_formedness.no_existential env arg;
+    decr depth
+  with Type_error (err_l, err) ->
+    decr depth;
+    let extra, l = match l with Parse_ast.Unknown -> (" here", at_l) | _ -> ("", l) in
+    typ_raise l (err_because (Err_other ("Well-formedness check failed for type argument" ^ extra), err_l, err))
 
 let wf_constraint ~at:at_l env (NC_aux (_, l) as nc) =
   Well_formedness.wf_debug "constraint" string_of_n_constraint nc Well_formedness.no_existential;
@@ -1033,11 +1079,11 @@ let add_local id mtyp env =
   typ_print (lazy (adding ^ "local binding " ^ string_of_id id ^ " : " ^ string_of_mtyp mtyp)) [@coverage off];
   { env with locals = Bindings.add id mtyp env.locals }
 
-let add_typquant l quant env =
+let add_typquant ?(from_outcome = false) l quant env =
   let rec add_quant_item env = function QI_aux (qi, _) -> add_quant_item_aux env qi
   and add_quant_item_aux env = function
     | QI_constraint constr -> add_constraint constr env
-    | QI_id kopt -> add_typ_var l kopt env
+    | QI_id kopt -> add_typ_var ~from_outcome l kopt env
   in
   match quant with
   | TypQ_aux (TypQ_no_forall, _) -> env
@@ -1090,7 +1136,7 @@ let get_val_spec_opt id env =
         ( lazy
           ("get_val_spec: Env has "
           ^ string_of_list ", "
-              (fun (kid, (_, k)) -> string_of_kid kid ^ " => " ^ string_of_kind_aux k)
+              (fun (kid, (_, k, _)) -> string_of_kid kid ^ " => " ^ string_of_kind_aux k)
               (KBindings.bindings env.typ_vars)
           )
           ) [@coverage off];
@@ -1107,7 +1153,7 @@ let get_val_spec id env =
   | None -> typ_raise (id_loc id) (Err_no_function_type { id; functions = get_val_specs env })
 
 let add_union_id ?in_module id bind env =
-  if bound_ctor_fn env id then already_bound_ctor_fn "union constructor" id env
+  if bound_global env id then already_bound_global "union constructor" id env
   else (
     typ_print (lazy (adding ^ "union identifier " ^ string_of_id id ^ " : " ^ string_of_bind bind)) [@coverage off];
     update_global
@@ -1176,28 +1222,36 @@ let rec update_val_spec ?in_module id (typq, typ) env =
     | _ -> typ_error (id_loc id) "val definition must have a mapping or function type"
   end
 
-and add_val_spec ?in_module ?(ignore_duplicate = false) id (bind_typq, bind_typ) env =
-  if (not (Bindings.mem id env.global.val_specs)) || ignore_duplicate then
+and add_val_spec ?in_module ?(already_bound = false) ?(ignore_duplicate = false) id (bind_typq, bind_typ) env =
+  let duplicate = Bindings.mem id env.global.val_specs in
+  (* If already_bound = , we can add a val_spec for something that
+     is already bound as a global identifier in the typing
+     environment. This is used for union constructors. *)
+  let is_bound = bound_global env id && not already_bound in
+  let warn_on_duplicate () =
+    if duplicate && not ignore_duplicate then (
+      let previous_loc =
+        match Bindings.choose_opt (Bindings.filter (fun key _ -> Id.compare id key = 0) env.global.val_specs) with
+        | Some (prev_id, _) -> id_loc prev_id
+        | None -> Parse_ast.Unknown
+      in
+      let open Error_format in
+      Reporting.format_warn ~once_from:__POS__
+        ("Duplicate function type definition for " ^ string_of_id id)
+        (id_loc id)
+        (Seq
+           [
+             Line "This duplicate definition is being ignored!";
+             Location ("", Some "previous definition here", previous_loc, Seq []);
+           ]
+        )
+    )
+  in
+  if (not is_bound) || duplicate then (
+    warn_on_duplicate ();
     update_val_spec ?in_module id (bind_typq, bind_typ) env
-  else if ignore_duplicate then env
-  else (
-    let previous_loc =
-      match Bindings.choose_opt (Bindings.filter (fun key _ -> Id.compare id key = 0) env.global.val_specs) with
-      | Some (prev_id, _) -> id_loc prev_id
-      | None -> Parse_ast.Unknown
-    in
-    let open Error_format in
-    Reporting.format_warn ~once_from:__POS__
-      ("Duplicate function type definition for " ^ string_of_id id)
-      (id_loc id)
-      (Seq
-         [
-           Line "This duplicate definition is being ignored!";
-           Location ("", Some "previous definition here", previous_loc, Seq []);
-         ]
-      );
-    env
   )
+  else already_bound_global "function" id env
 
 and add_outcome id (typq, typ, params, vals, outcome_env) env =
   update_global
@@ -1237,11 +1291,13 @@ and add_mapping id (typq, typ1, typ2) env =
   |> add_val_spec ~ignore_duplicate:true forwards_matches_id (typq, forwards_matches_typ)
   |> add_val_spec ~ignore_duplicate:true backwards_matches_id (typq, backwards_matches_typ)
 
+let is_outcome id env = Bindings.mem id env.global.outcomes
+
 let get_outcome_instantiation env = env.global.outcome_instantiation
 
-let add_outcome_variable l kid typ env =
+let add_outcome_variable l kid arg env =
   update_global
-    (fun global -> { global with outcome_instantiation = KBindings.add kid (l, typ) global.outcome_instantiation })
+    (fun global -> { global with outcome_instantiation = KBindings.add kid (l, arg) global.outcome_instantiation })
     env
 
 let set_outcome_typschm ~outcome_loc:l (quant, typ) env =
@@ -1292,7 +1348,7 @@ let add_enum' is_scattered id ids env =
                 typ_error
                   (Hint ("Register defined here ", item.loc, id_loc member))
                   ("Enumeration member " ^ string_of_id member ^ " is already bound as a register")
-            | None -> if bound_ctor_fn env member then already_bound_ctor_fn "enumeration member" member env else ()
+            | None -> if bound_global env member then already_bound_global "enumeration member" member env else ()
           )
       )
       ids;
@@ -1575,8 +1631,9 @@ let add_register id typ env =
 
 let get_locals env =
   Bindings.fold
-    (fun id { item = typ; _ } locals ->
-      if not (Bindings.mem id locals) then Bindings.add id (Immutable, typ) locals else locals
+    (fun id item locals ->
+      if (not (Bindings.mem id locals)) && item_in_scope env item then Bindings.add id (Immutable, item.item) locals
+      else locals
     )
     env.global.letbinds env.locals
 

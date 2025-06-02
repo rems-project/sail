@@ -62,7 +62,6 @@ type gstate = {
   primops : (value list -> value) StringMap.t;
   letbinds : Type_check.tannot letbind list;
   fundefs : Type_check.tannot fundef Bindings.t;
-  last_write_ea : (value * value * value) option;
   typecheck_env : Type_check.Env.t;
 }
 
@@ -122,109 +121,90 @@ let fallthrough =
 
 type return_value = Return_ok of value | Return_exception of value
 
-(* when changing effect arms remember to also update effect_request type below *)
-type 'a response =
-  | Early_return of value
-  | Exception of value
-  | Assertion_failed of string
-  | Call of id * value list * (return_value -> 'a)
-  | Fail of string
-  | Read_mem of (* read_kind : *) value * (* address : *) value * (* length : *) value * (value -> 'a)
-  | Write_ea of (* write_kind : *) value * (* address : *) value * (* length : *) value * (unit -> 'a)
-  | Excl_res of (bool -> 'a)
-  | Write_mem of
-      (* write_kind : *) value * (* address : *) value * (* length : *) value * (* value : *) value * (bool -> 'a)
-  | Barrier of (* barrier_kind : *) value * (unit -> 'a)
-  | Read_reg of string * (value -> 'a)
-  | Write_reg of string * value * (unit -> 'a)
-  | Get_primop of string * ((value list -> value) -> 'a)
-  | Get_local of string * (value -> 'a)
-  | Put_local of string * value * (unit -> 'a)
-  | Get_global_letbinds of (Type_check.tannot letbind list -> 'a)
+module Monad = struct
+  (* when changing effect arms remember to also update effect_request type below *)
+  type 'a response =
+    | Early_return of value
+    | Exception of value
+    | Assertion_failed of string
+    | Call of id * value list * (return_value -> 'a)
+    | Fail of string
+    | Read_reg of string * (value -> 'a)
+    | Write_reg of string * value * (unit -> 'a)
+    | Get_primop of string * ((value list -> value) -> 'a)
+    | Get_local of string * (value -> 'a)
+    | Put_local of string * value * (unit -> 'a)
+    | Get_global_letbinds of (Type_check.tannot letbind list -> 'a)
 
-and 'a monad = Pure of 'a | Yield of 'a monad response
+  and 'a t = Pure of 'a | Yield of 'a t response
 
-let map_response f = function
-  | Early_return v -> Early_return v
-  | Exception v -> Exception v
-  | Assertion_failed str -> Assertion_failed str
-  | Call (id, vals, cont) -> Call (id, vals, fun v -> f (cont v))
-  | Fail s -> Fail s
-  | Read_mem (rk, addr, len, cont) -> Read_mem (rk, addr, len, fun v -> f (cont v))
-  | Write_ea (wk, addr, len, cont) -> Write_ea (wk, addr, len, fun () -> f (cont ()))
-  | Excl_res cont -> Excl_res (fun b -> f (cont b))
-  | Write_mem (wk, addr, len, v, cont) -> Write_mem (wk, addr, len, v, fun b -> f (cont b))
-  | Barrier (bk, cont) -> Barrier (bk, fun () -> f (cont ()))
-  | Read_reg (name, cont) -> Read_reg (name, fun v -> f (cont v))
-  | Write_reg (name, v, cont) -> Write_reg (name, v, fun () -> f (cont ()))
-  | Get_primop (name, cont) -> Get_primop (name, fun op -> f (cont op))
-  | Get_local (name, cont) -> Get_local (name, fun v -> f (cont v))
-  | Put_local (name, v, cont) -> Put_local (name, v, fun () -> f (cont ()))
-  | Get_global_letbinds cont -> Get_global_letbinds (fun lbs -> f (cont lbs))
+  let map_response f = function
+    | Early_return v -> Early_return v
+    | Exception v -> Exception v
+    | Assertion_failed str -> Assertion_failed str
+    | Call (id, vals, cont) -> Call (id, vals, fun v -> f (cont v))
+    | Fail s -> Fail s
+    | Read_reg (name, cont) -> Read_reg (name, fun v -> f (cont v))
+    | Write_reg (name, v, cont) -> Write_reg (name, v, fun () -> f (cont ()))
+    | Get_primop (name, cont) -> Get_primop (name, fun op -> f (cont op))
+    | Get_local (name, cont) -> Get_local (name, fun v -> f (cont v))
+    | Put_local (name, v, cont) -> Put_local (name, v, fun () -> f (cont ()))
+    | Get_global_letbinds cont -> Get_global_letbinds (fun lbs -> f (cont lbs))
 
-let rec liftM f = function Pure x -> Pure (f x) | Yield g -> Yield (map_response (liftM f) g)
+  let rec liftM f = function Pure x -> Pure (f x) | Yield g -> Yield (map_response (liftM f) g)
 
-let return x = Pure x
+  let ( let+ ) = liftM
 
-let rec bind m f = match m with Pure x -> f x | Yield m -> Yield (map_response (fun m -> bind m f) m)
+  let return x = Pure x
 
-let ( >>= ) m f = bind m f
+  let rec bind m f = match m with Pure x -> f x | Yield m -> Yield (map_response (fun m -> bind m f) m)
 
-let ( >> ) m1 m2 = bind m1 (function () -> m2)
+  let ( >>= ) m f = bind m f
 
-type ('a, 'b) either = Left of 'a | Right of 'b
+  let ( let* ) = bind
 
-(* Support for interpreting exceptions *)
+  let ( >> ) m1 m2 = bind m1 (function () -> m2)
 
-let catch m =
-  match m with
-  | Pure x -> Pure (Right x)
-  | Yield (Exception v) -> Pure (Left v)
-  | Yield resp -> Yield (map_response (fun m -> liftM (fun r -> Right r) m) resp)
+  (* Support for interpreting exceptions *)
 
-let throw v = Yield (Exception v)
+  let catch m =
+    match m with
+    | Pure x -> Pure (Ok x)
+    | Yield (Exception v) -> Pure (Error v)
+    | Yield resp -> Yield (map_response (fun m -> liftM (fun r -> Ok r) m) resp)
 
-let call (f : id) (args : value list) : return_value monad = Yield (Call (f, args, fun v -> Pure v))
+  let throw v = Yield (Exception v)
 
-let read_mem rk addr len : value monad = Yield (Read_mem (rk, addr, len, fun v -> Pure v))
+  let call f args = Yield (Call (f, args, fun v -> Pure v))
 
-let write_ea wk addr len : unit monad = Yield (Write_ea (wk, addr, len, fun () -> Pure ()))
+  let read_reg name = Yield (Read_reg (name, fun v -> Pure v))
 
-let excl_res () : bool monad = Yield (Excl_res (fun b -> Pure b))
+  let write_reg name v = Yield (Write_reg (name, v, fun () -> Pure ()))
 
-let write_mem wk addr len v : bool monad = Yield (Write_mem (wk, addr, len, v, fun b -> Pure b))
+  let fail s = Yield (Fail s)
 
-let barrier bk : unit monad = Yield (Barrier (bk, fun () -> Pure ()))
+  let get_primop name = Yield (Get_primop (name, fun op -> Pure op))
 
-let read_reg name : value monad = Yield (Read_reg (name, fun v -> Pure v))
+  let get_local name = Yield (Get_local (name, fun v -> Pure v))
 
-let write_reg name v : unit monad = Yield (Write_reg (name, v, fun () -> Pure ()))
+  let put_local name v = Yield (Put_local (name, v, fun () -> Pure ()))
 
-let fail s = Yield (Fail s)
+  let get_global_letbinds () = Yield (Get_global_letbinds (fun lbs -> Pure lbs))
 
-let get_primop name : (value list -> value) monad = Yield (Get_primop (name, fun op -> Pure op))
+  let early_return v = Yield (Early_return v)
 
-let get_local name : value monad = Yield (Get_local (name, fun v -> Pure v))
+  let assertion_failed msg = Yield (Assertion_failed msg)
 
-let put_local name v : unit monad = Yield (Put_local (name, v, fun () -> Pure ()))
+  let expect_ok ~error = function Ok v -> Pure v | Error e -> Yield (Fail (error e))
 
-let get_global_letbinds () : Type_check.tannot letbind list monad = Yield (Get_global_letbinds (fun lbs -> Pure lbs))
+  let expect_some ~none = function Some v -> Pure v | None -> Yield (Fail none)
+end
 
-let early_return v = Yield (Early_return v)
-
-let assertion_failed msg = Yield (Assertion_failed msg)
-
-let liftM2 f m1 m2 =
-  m1 >>= fun x ->
-  m2 >>= fun y -> return (f x y)
+open Monad
 
 let letbind_pat_ids (LB_aux (LB_val (pat, _), _)) = pat_ids pat
 
 let subst id value exp = Ast_util.subst id (exp_of_value value) exp
-
-let local_variable id lstate gstate =
-  try Bindings.find id lstate.locals |> exp_of_value
-  with Not_found -> failwith ("Could not find local variable " ^ string_of_id id)
 
 (**************************************************************************)
 (* 2. Expression Evaluation                                               *)
@@ -280,6 +260,31 @@ let complete_bindings =
           (value_zeros [V_int len]) ((v1, n1, m1) :: partial_values)
     | Partial_binding [] -> Reporting.unreachable Parse_ast.Unknown __POS__ "Empty partial binding set"
     )
+
+let rec split_list_exact acc ns xs =
+  match (ns, xs) with
+  | [], [] -> Some []
+  | [], _ -> None
+  | n :: ns, _ when Big_int.equal n Big_int.zero -> (
+      match split_list_exact [] ns xs with Some split -> Some (List.rev acc :: split) | None -> None
+    )
+  | n :: ns, x :: xs -> split_list_exact (x :: acc) (Big_int.pred n :: ns) xs
+  | _, [] -> None
+
+let lexp_vector_concat_widths env lexps =
+  let open Type_check in
+  let get_length lexp =
+    let l = lexp_loc lexp in
+    let typ = typ_of_lexp lexp in
+    match destruct_vector env typ with
+    | Some (nexp, _) -> Option.to_result ~none:l (solve_unique env nexp)
+    | None -> (
+        match destruct_bitvector env typ with
+        | Some nexp -> Option.to_result ~none:l (solve_unique env nexp)
+        | None -> Error l
+      )
+  in
+  Util.result_all (List.map get_length lexps)
 
 let rec step (E_aux (e_aux, annot) as orig_exp) =
   let wrap e_aux' = return (E_aux (e_aux', annot)) in
@@ -340,62 +345,30 @@ let rec step (E_aux (e_aux, annot) as orig_exp) =
       (* FIXME: Currently not general enough *)
       wrap (E_app (mk_id "vector_update_subrange_dec", [vec; n; m; x]))
   (* otherwise left-to-right evaluation order for function applications *)
-  | E_app (id, exps) ->
+  | E_app (id, exps) -> (
+      let open Type_check in
       let evaluated, unevaluated = Util.take_drop is_value exps in
-      begin
-        let open Type_check in
-        match unevaluated with
-        | exp :: exps -> step exp >>= fun exp' -> wrap (E_app (id, evaluated @ (exp' :: exps)))
-        | [] when Env.is_union_constructor id (env_of_annot annot) ->
-            return (exp_of_value (V_ctor (string_of_id id, List.map value_of_exp evaluated)))
-        | [] when is_interpreter_extern id (env_of_annot annot) -> begin
-            let extern = get_interpreter_extern id (env_of_annot annot) in
-            match extern with
-            | "reg_deref" ->
-                let regname = List.hd evaluated |> value_of_exp |> coerce_ref in
-                read_reg regname >>= fun v -> return (exp_of_value v)
-            | "read_mem" -> begin
-                match evaluated with
-                | [rk; addrsize; addr; len] ->
-                    read_mem (value_of_exp rk) (value_of_exp addr) (value_of_exp len) >>= fun v ->
-                    return (exp_of_value v)
-                | _ -> fail "Wrong number of parameters to read_mem intrinsic"
-              end
-            | "write_mem_ea" -> begin
-                match evaluated with
-                | [wk; addrsize; addr; len] ->
-                    write_ea (value_of_exp wk) (value_of_exp addr) (value_of_exp len) >> wrap unit_exp
-                | _ -> fail "Wrong number of parameters to write_ea intrinsic"
-              end
-            | "excl_res" -> begin
-                match evaluated with
-                | [_] -> excl_res () >>= fun b -> return (exp_of_value (V_bool b))
-                | _ -> fail "Wrong number of parameters to excl_res intrinsic"
-              end
-            | "write_mem" -> begin
-                match evaluated with
-                | [wk; addrsize; addr; len; v] ->
-                    write_mem (value_of_exp wk) (value_of_exp addr) (value_of_exp len) (value_of_exp v) >>= fun b ->
-                    return (exp_of_value (V_bool b))
-                | _ -> fail "Wrong number of parameters to write_memv intrinsic"
-              end
-            | "barrier" -> begin
-                match evaluated with
-                | [bk] -> barrier (value_of_exp bk) >> wrap unit_exp
-                | _ -> fail "Wrong number of parameters to barrier intrinsic"
-              end
-            | _ -> (
-                get_primop extern >>= fun op ->
-                try return (exp_of_value (op (List.map value_of_exp evaluated)))
-                with _ as exc -> fail ("Exception calling primop '" ^ extern ^ "': " ^ Printexc.to_string exc)
-              )
-          end
-        | [] -> (
-            call id (List.map value_of_exp evaluated) >>= function
-            | Return_ok v -> return (exp_of_value v)
-            | Return_exception v -> wrap (E_throw (exp_of_value v))
+      match unevaluated with
+      | exp :: exps -> step exp >>= fun exp' -> wrap (E_app (id, evaluated @ (exp' :: exps)))
+      | [] when Env.is_union_constructor id (env_of_annot annot) ->
+          return (exp_of_value (V_ctor (string_of_id id, List.map value_of_exp evaluated)))
+      | [] when is_interpreter_extern id (env_of_annot annot) -> (
+          let extern = get_interpreter_extern id (env_of_annot annot) in
+          if extern = "reg_deref" then (
+            let regname = List.hd evaluated |> value_of_exp |> coerce_ref in
+            read_reg regname >>= fun v -> return (exp_of_value v)
           )
-      end
+          else
+            get_primop extern >>= fun op ->
+            try return (exp_of_value (op (List.map value_of_exp evaluated)))
+            with _ as exc -> fail ("Exception calling primop '" ^ extern ^ "': " ^ Printexc.to_string exc)
+        )
+      | [] -> (
+          call id (List.map value_of_exp evaluated) >>= function
+          | Return_ok v -> return (exp_of_value v)
+          | Return_exception v -> wrap (E_throw (exp_of_value v))
+        )
+    )
   | E_app_infix (x, id, y) when is_value x && is_value y -> (
       call id [value_of_exp x; value_of_exp y] >>= function
       | Return_ok v -> return (exp_of_value v)
@@ -457,12 +430,13 @@ let rec step (E_aux (e_aux, annot) as orig_exp) =
       | Enum _ -> return (exp_of_value (V_member (string_of_id id)))
       | _ -> fail ("Couldn't find id " ^ string_of_id id)
     end
-  | E_struct fexps ->
+  | E_struct (struct_name, fexps) ->
       let evaluated, unevaluated = Util.take_drop is_value_fexp fexps in
       begin
         match unevaluated with
         | FE_aux (FE_fexp (id, exp), fe_annot) :: fexps ->
-            step exp >>= fun exp' -> wrap (E_struct (evaluated @ (FE_aux (FE_fexp (id, exp'), fe_annot) :: fexps)))
+            step exp >>= fun exp' ->
+            wrap (E_struct (struct_name, evaluated @ (FE_aux (FE_fexp (id, exp'), fe_annot) :: fexps)))
         | [] ->
             List.map value_of_fexp fexps
             |> List.fold_left (fun record (field, v) -> StringMap.add field v record) StringMap.empty
@@ -532,19 +506,41 @@ let rec step (E_aux (e_aux, annot) as orig_exp) =
   | E_assign (LE_aux (LE_deref reference, annot), exp) ->
       let name = coerce_ref (value_of_exp reference) in
       write_reg name (value_of_exp exp) >> wrap unit_exp
-  | E_assign (LE_aux (LE_tuple lexps, annot), exp) -> fail "Tuple assignment"
+  | E_assign (LE_aux (LE_tuple lexps, annot), exp) ->
+      if is_value exp then (
+        match value_of_exp exp with
+        | V_tuple vs when List.compare_lengths lexps vs = 0 ->
+            E_block (List.map2 (fun lexp v -> E_aux (E_assign (lexp, exp_of_value v), annot)) lexps vs) |> wrap
+        | _ -> fail "Type error in tuple assignment"
+      )
+      else
+        let* exp' = step exp in
+        wrap (E_assign (LE_aux (LE_tuple lexps, annot), exp'))
   | E_assign (LE_aux (LE_vector_concat lexps, annot), exp) ->
-      fail "Vector concat assignment"
-      (*
-     let values = coerce_tuple (value_of_exp exp) in
-     wrap (E_block (List.map2 (fun lexp v -> E_aux (E_assign (lexp, exp_of_value v), (Parse_ast.Unknown, None))) lexps values))
-      *)
+      let env = Type_check.env_of_annot annot in
+      if is_value exp then (
+        let* widths =
+          expect_ok (lexp_vector_concat_widths env lexps) ~error:(fun _ ->
+              "Non-constant width in vector concatenation assignment"
+          )
+        in
+        let vs = coerce_gv (value_of_exp exp) in
+        let* split =
+          expect_some (split_list_exact [] widths vs) ~none:"Type error in vector concatenation assignment"
+        in
+        assert (List.compare_lengths lexps split = 0);
+        E_block (List.map2 (fun lexp vs -> E_aux (E_assign (lexp, exp_of_value (V_vector vs)), annot)) lexps split)
+        |> wrap
+      )
+      else
+        let* exp' = step exp in
+        wrap (E_assign (LE_aux (LE_vector_concat lexps, annot), exp'))
   | E_try (exp, pexps) when is_value exp -> return exp
   | E_try (exp, pexps) -> begin
       catch (step exp) >>= fun exp' ->
       match exp' with
-      | Left exn -> wrap (E_match (exp_of_value exn, pexps @ [fallthrough]))
-      | Right exp' -> wrap (E_try (exp', pexps))
+      | Error exn -> wrap (E_match (exp_of_value exn, pexps @ [fallthrough]))
+      | Ok exp' -> wrap (E_try (exp', pexps))
     end
   | E_for (id, exp_from, exp_to, exp_step, ord, body) when is_value exp_from && is_value exp_to && is_value exp_step ->
       let v_from = value_of_exp exp_from in
@@ -702,7 +698,7 @@ and pattern_match env (P_aux (p_aux, (l, _))) value =
           (hd_match && tl_match, Bindings.merge combine hd_bind tl_bind)
       | None -> (false, Bindings.empty)
     end
-  | P_struct (fpats, _) ->
+  | P_struct (_, fpats, _) ->
       List.fold_left
         (fun (matches, binds) (field, pat) ->
           match StringMap.find_opt (string_of_id field) (coerce_record value) with
@@ -735,35 +731,25 @@ type frame =
   | Step of
       string Lazy.t
       * state
-      * Type_check.tannot exp monad
-      * (string Lazy.t * lstate * (return_value -> Type_check.tannot exp monad)) list
+      * Type_check.tannot exp Monad.t
+      * (string Lazy.t * lstate * (return_value -> Type_check.tannot exp Monad.t)) list
   | Break of frame
   | Effect_request of
       string Lazy.t
       * state
-      * (string Lazy.t * lstate * (return_value -> Type_check.tannot exp monad)) list
+      * (string Lazy.t * lstate * (return_value -> Type_check.tannot exp Monad.t)) list
       * effect_request
   | Fail of
       string Lazy.t
       * state
-      * Type_check.tannot exp monad
-      * (string Lazy.t * lstate * (return_value -> Type_check.tannot exp monad)) list
+      * Type_check.tannot exp Monad.t
+      * (string Lazy.t * lstate * (return_value -> Type_check.tannot exp Monad.t)) list
       * string
 
-(* when changing effect_request remember to also update response type above *)
 and effect_request =
-  | Read_mem of (* read_kind : *) value * (* address : *) value * (* length : *) value * (value -> state -> frame)
-  | Write_ea of (* write_kind : *) value * (* address : *) value * (* length : *) value * (unit -> state -> frame)
-  | Excl_res of (bool -> state -> frame)
-  | Write_mem of
-      (* write_kind : *) value
-      * (* address : *) value
-      * (* length : *) value
-      * (* value : *) value
-      * (bool -> state -> frame)
-  | Barrier of (* barrier_kind : *) value * (unit -> state -> frame)
   | Read_reg of string * (value -> state -> frame)
   | Write_reg of string * value * (unit -> state -> frame)
+  | Outcome of id * value list * (return_value -> Type_check.tannot exp Monad.t)
 
 let rec eval_frame' = function
   | Done (state, v) -> Done (state, v)
@@ -785,6 +771,9 @@ let rec eval_frame' = function
             let body = exp_of_fundef (Bindings.find id gstate.fundefs) arg in
             Break (Step (lazy "", (initial_lstate, gstate), return body, (out, lstate, cont) :: stack))
           with Not_found -> Step (out, state, fail ("Fundef not found: " ^ string_of_id id), stack)
+        end
+      | Yield (Call (id, vals, cont)), _ when Type_check.Env.is_outcome id gstate.typecheck_env -> begin
+          Effect_request (out, state, stack, Outcome (id, vals, cont))
         end
       | Yield (Call (id, vals, cont)), _ -> begin
           let arg = if List.length vals != 1 then tuple_value vals else List.hd vals in
@@ -814,32 +803,6 @@ let rec eval_frame' = function
           let state' = ({ locals = Bindings.add (mk_id name) v lstate.locals }, gstate) in
           eval_frame' (Step (out, state', cont (), stack))
       | Yield (Get_global_letbinds cont), _ -> eval_frame' (Step (out, state, cont gstate.letbinds, stack))
-      | Yield (Read_mem (rk, addr, len, cont)), _ ->
-          Effect_request
-            ( out,
-              state,
-              stack,
-              Read_mem (rk, addr, len, fun result state' -> eval_frame' (Step (out, state', cont result, stack)))
-            )
-      | Yield (Write_ea (wk, addr, len, cont)), _ ->
-          Effect_request
-            ( out,
-              state,
-              stack,
-              Write_ea (wk, addr, len, fun () state' -> eval_frame' (Step (out, state', cont (), stack)))
-            )
-      | Yield (Excl_res cont), _ ->
-          Effect_request (out, state, stack, Excl_res (fun b state' -> eval_frame' (Step (out, state', cont b, stack))))
-      | Yield (Write_mem (wk, addr, len, v, cont)), _ ->
-          Effect_request
-            ( out,
-              state,
-              stack,
-              Write_mem (wk, addr, len, v, fun b state' -> eval_frame' (Step (out, state', cont b, stack)))
-            )
-      | Yield (Barrier (bk, cont)), _ ->
-          Effect_request
-            (out, state, stack, Barrier (bk, fun () state' -> eval_frame' (Step (out, state', cont (), stack))))
       | Yield (Early_return v), [] -> Done (state, v)
       | Yield (Early_return v), head :: stack' ->
           Step (stack_string head, (stack_state head, gstate), stack_cont head (Return_ok v), stack')
@@ -852,40 +815,9 @@ let rec eval_frame' = function
 let eval_frame frame =
   try eval_frame' frame with Type_error.Type_error (l, err) -> raise (Type_error.to_reporting_exn l err)
 
-let default_effect_interp state eff =
+let default_effect_interp out state stack eff =
   let lstate, gstate = state in
   match eff with
-  | Read_mem (rk, addr, len, cont) ->
-      (* all read-kinds treated the same in single-threaded interpreter *)
-      let addr' = coerce_bv addr in
-      let len' = coerce_int len in
-      let result = mk_vector (Sail_lib.read_ram (List.length addr', len', [], addr')) in
-      cont result state
-  | Write_ea (wk, addr, len, cont) ->
-      (* just store the values for the next Write_memv *)
-      let state' = (lstate, { gstate with last_write_ea = Some (wk, addr, len) }) in
-      cont () state'
-  | Excl_res cont ->
-      (* always succeeds in single-threaded interpreter *)
-      cont true state
-  | Write_mem (wk, addr, len, v, cont) -> begin
-      match gstate.last_write_ea with
-      | Some (wk', addr', len') ->
-          let state' = (lstate, { gstate with last_write_ea = None }) in
-          (* all write-kinds treated the same in single-threaded interpreter *)
-          let addr' = coerce_bv addr in
-          let len' = coerce_int len in
-          let v' = coerce_bv v in
-          if Big_int.mul len' (Big_int.of_int 8) = Big_int.of_int (List.length v') then (
-            let b = Sail_lib.write_ram (List.length addr', len', [], addr', v') in
-            cont b state'
-          )
-          else failwith "Write_memv with length mismatch to preceding Write_ea"
-      | None -> failwith "Write_memv without preceding Write_ea"
-    end
-  | Barrier (bk, cont) ->
-      (* no-op in single-threaded interpreter *)
-      cont () state
   | Read_reg (name, cont) ->
       if gstate.allow_registers then (
         try cont (Bindings.find (mk_id name) gstate.registers) state
@@ -901,10 +833,16 @@ let default_effect_interp state eff =
         )
         else failwith ("Write of nonexistent register: " ^ name)
       else failwith ("Register write disallowed by allow_registers setting: " ^ name)
+  | Outcome (id, vals, cont) -> (
+      let arg = if List.length vals != 1 then tuple_value vals else List.hd vals in
+      match Bindings.find_opt id gstate.fundefs with
+      | Some fundef ->
+          let body = exp_of_fundef fundef arg in
+          Step (lazy "", (initial_lstate, gstate), return body, (out, lstate, cont) :: stack)
+      | None -> failwith ("Outcome implementation not found: " ^ string_of_id id)
+    )
 
 let effect_interp = ref default_effect_interp
-
-let set_effect_interp interp = effect_interp := interp
 
 let rec run_frame frame =
   match frame with
@@ -912,7 +850,7 @@ let rec run_frame frame =
   | Fail (_, _, _, _, msg) -> failwith ("run_frame got Fail: " ^ msg)
   | Step (_, _, _, _) -> run_frame (eval_frame frame)
   | Break frame -> run_frame (eval_frame frame)
-  | Effect_request (_, state, _, eff) -> run_frame (!effect_interp state eff)
+  | Effect_request (out, state, stack, eff) -> run_frame (!effect_interp out state stack eff)
 
 let eval_exp state exp = run_frame (Step (lazy "", state, return exp, []))
 
@@ -923,7 +861,6 @@ let initial_gstate primops defs env =
     primops;
     letbinds = defs_letbinds defs;
     fundefs = Bindings.empty;
-    last_write_ea = None;
     typecheck_env = env;
   }
 
@@ -954,45 +891,3 @@ let initial_state ?(registers = true) ?(undef_registers = true) ast env primops 
   let gstate = List.fold_left add_function gstate ast.defs in
   let gstate = { (initialize_registers registers undef_registers gstate ast.defs) with allow_registers = registers } in
   (initial_lstate, gstate)
-
-type value_result = Value_success of value | Value_error of exn
-
-let decode_instruction state bv =
-  try
-    let env = (snd state).typecheck_env in
-    let untyped = mk_exp (E_app (mk_id "decode", [mk_exp (E_vector (List.map mk_lit_exp bv))])) in
-    let typed =
-      Type_check.check_exp env untyped
-        (app_typ (mk_id "option") [A_aux (A_typ (mk_typ (Typ_id (mk_id "ast"))), Parse_ast.Unknown)])
-    in
-    let evaled = eval_exp state typed in
-    match evaled with
-    | V_ctor ("Some", [v]) -> Value_success v
-    | V_ctor ("None", _) -> failwith "decode returned None"
-    | _ -> failwith "decode returned wrong value type"
-  with _ as exn -> Value_error exn
-
-let annot_exp_effect e_aux l env typ = E_aux (e_aux, (l, Type_check.mk_tannot env typ))
-let annot_exp e_aux l env typ = annot_exp_effect e_aux l env typ
-let id_typ id = mk_typ (Typ_id (mk_id id))
-
-let analyse_instruction state ast =
-  let env = (snd state).typecheck_env in
-  let unk = Parse_ast.Unknown in
-  let typed =
-    annot_exp
-      (E_app (mk_id "initial_analysis", [annot_exp (E_internal_value ast) unk env (id_typ "ast")]))
-      unk env
-      (tuple_typ
-         [id_typ "regfps"; id_typ "regfps"; id_typ "regfps"; id_typ "niafps"; id_typ "diafp"; id_typ "instruction_kind"]
-      )
-  in
-  Step (lazy (Document.to_string (Printer.doc_exp (Type_check.strip_exp typed))), state, return typed, [])
-
-let execute_instruction state ast =
-  let env = (snd state).typecheck_env in
-  let unk = Parse_ast.Unknown in
-  let typed =
-    annot_exp (E_app (mk_id "execute", [annot_exp (E_internal_value ast) unk env (id_typ "ast")])) unk env unit_typ
-  in
-  Step (lazy (Document.to_string (Printer.doc_exp (Type_check.strip_exp typed))), state, return typed, [])

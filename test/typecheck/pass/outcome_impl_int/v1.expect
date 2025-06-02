@@ -1,0 +1,5 @@
+[93mType error[0m:
+[96mpass/outcome_impl_int/v1.sail[0m:18.14-17:
+18[96m |[0minstantiation foo with 'n = 48
+  [91m |[0m              [91m^-^[0m
+  [91m |[0m Failed to prove outcome constraint 'n in {32, 64}

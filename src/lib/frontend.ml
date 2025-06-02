@@ -110,7 +110,9 @@ let instantiate_abstract_types tgt config insts ast =
     env_update :=
       Type_check.Env.(
         fun env ->
-          prev_env_update env |> remove_abstract_typ id |> add_typ_synonym id (mk_empty_typquant ~loc:(gen_loc l)) arg
+          prev_env_update env |> remove_abstract_typ id
+          |> add_typ_synonym id (mk_empty_typquant ~loc:(gen_loc l)) arg
+          |> simplify_constraints
       )
   in
   let instantiate = function

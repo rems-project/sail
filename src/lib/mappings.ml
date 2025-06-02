@@ -162,10 +162,10 @@ let rec extract_mapping_pats map_uannot is_mapping subst (P_aux (aux, annot)) =
   | P_wild -> (P_aux (P_wild, annot), [])
   | P_lit lit -> (P_aux (P_lit lit, annot), [])
   | P_vector_subrange (id, n, m) -> (P_aux (P_vector_subrange (id, n, m), annot), [])
-  | P_struct (fpats, fwild) ->
+  | P_struct (struct_name, fpats, fwild) ->
       let fields, pats = List.split fpats in
       let pats, found_mapping = extract_mapping_pats_list map_uannot is_mapping subst pats in
-      (P_aux (P_struct (List.combine fields pats, fwild), annot), found_mapping)
+      (P_aux (P_struct (struct_name, List.combine fields pats, fwild), annot), found_mapping)
 
 and extract_mapping_pats_list map_uannot is_mapping subst pats =
   let extracted = List.map (extract_mapping_pats map_uannot is_mapping subst) pats in

@@ -77,6 +77,7 @@ chan :: 'Chan_' ::=
   | stderr :: :: stderr
 
 name :: '' ::=
+  | nat0 nat1 nat2        :: :: gen
   | id nat                :: :: name
   | have_exception nat    :: :: have_exception
   | current_exception nat :: :: current_exception
@@ -84,6 +85,10 @@ name :: '' ::=
   | channel chan nat      :: :: channel
   | memory_writes nat     :: :: memory_writes
   | return nat            :: :: return
+
+return_name :: '' ::=
+  | name :: :: return_via
+  |      :: :: return_plain
 
 op :: '' ::=
   | not               :: :: bnot
@@ -97,6 +102,7 @@ op :: '' ::=
   | ite               :: :: ite
   | get_abstract      :: :: get_abstract
   | string_eq         :: :: string_eq
+  | index nat         :: :: index
 % Integer ops
   | lt                :: :: ilt
   | lteq              :: :: ilteq
@@ -132,13 +138,13 @@ cval :: 'V_' ::=
   | name : ctyp                                     :: :: id
   | id : ctyp                                       :: :: member
   | value : ctyp                                    :: :: lit
-  | ( cval0 , ... , cvaln ) ctyp                    :: :: tuple
+  | ( cval0 , ... , cvaln )                         :: :: tuple
   | struct { id0 = cval0 , ... , idn = cvaln } ctyp :: :: struct
-  | cval is uid ctyp                                :: :: ctor_kind
-  | cval as uid ctyp                                :: :: ctor_unwrap
+  | cval is uid                                     :: :: ctor_kind
+  | cval as uid : ctyp                              :: :: ctor_unwrap
   | cval nat0 nat1                                  :: :: tuple_member
   | op ( cval0 , ... , cvaln )                      :: :: call
-  | cval . id                                       :: :: field
+  | cval . id : ctyp                                :: :: field
 
 % Note that init / clear are sometimes referred to as create / kill
 
@@ -183,9 +189,9 @@ ctyp :: 'CT_' ::=
 % into C. We don't fully worry about precise implementation details at
 % this point, as C doesn't have variants or tuples natively, but these
 % need to be encoded.
-  | enum id ( id0 , ... , idn )                    :: :: enum
-  | struct id ( id0 * ctyp0 , ... , idn * ctypn )  :: :: struct
-  | variant id ( id0 * ctyp0 , ... , idn * ctypn ) :: :: variant
+  | enum id                            :: :: enum
+  | struct id < ctyp0 , ... , ctypn >  :: :: struct
+  | variant id < ctyp0 , ... , ctypn > :: :: variant
 
 % A vector type for non-bit vectors, and a (linked) list type.
   | fvector ( nat , ctyp )  :: :: fvector
@@ -204,7 +210,7 @@ ctyp :: 'CT_' ::=
 clexp :: 'CL_' ::=
   | name : ctyp              :: :: id
   | name0 rmw name1 : ctyp   :: :: rmw
-  | clexp . id               :: :: field
+  | clexp . id : ctyp        :: :: field
   | * clexp                  :: :: addr
   | clexp . nat              :: :: tuple
   | void : ctyp              :: :: void
@@ -272,8 +278,8 @@ ctype_def_init :: 'CTDI_' ::=
 ctype_def :: 'CTD_' ::=
   {{ com C type definition }}
   | enum id = id0 '|' ... '|' idn                    :: :: enum
-  | struct id = { id0 : ctyp0 , ... , idn : ctypn }  :: :: struct
-  | variant id = { id0 : ctyp0 , ... , idn : ctypn } :: :: variant
+  | struct id kid0 ... kidn = { id0 : ctyp0 , ... , idm : ctypm }  :: :: struct
+  | variant id kid0 ... kidn = { id0 : ctyp0 , ... , idm : ctypm } :: :: variant
   | abbrev id = ctyp                                 :: :: abbrev
   | abstract id : ctyp ctype_def_init                :: :: abstract
 
@@ -284,7 +290,7 @@ def_annot :: '' ::=
 
 cdef :: 'CDEF_' ::=
   {{ aux _ def_annot }}
-  | register id : ctyp = {
+  | register name : ctyp = {
       instr0 ; ... ; instrn
     } :: :: register
   | ctype_def :: :: type
@@ -294,13 +300,13 @@ cdef :: 'CDEF_' ::=
       instr0 ; ... ; instrm
     } :: :: let
 
-  | val id = mstring ( ctyp0 , ... , ctypn ) -> ctyp :: :: val
+  | val id kid0 ... kidn ( ctyp0 , ... , ctypm ) -> ctyp = mstring :: :: val
 
 % If mid = Some id this indicates that the caller should allocate the
 % return type and passes a pointer to it as an extra argument id for
 % the function to fill in. This is only done via Jib->Jib rewrites
 % used when compiling to C.
-  | function id mid ( id0 , ... , idn ) {
+  | function id return_name ( name0 , ... , namen ) {
       instr0 ; ... ; instrm
     } :: :: fundef
 

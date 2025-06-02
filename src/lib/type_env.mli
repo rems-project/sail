@@ -53,6 +53,8 @@ val opt_smt_linearize : bool ref
 (** Val use a separate string literal type *)
 val opt_string_literal_type : bool ref
 
+val opt_strict_exponentials : bool ref
+
 type global_env
 
 type env
@@ -96,7 +98,16 @@ val get_default_order : t -> order
 val get_default_order_opt : t -> order option
 val set_default_order : order -> t -> t
 
-val add_val_spec : ?in_module:Project.mod_id -> ?ignore_duplicate:bool -> id -> typquant * typ -> t -> t
+(** Add a function type (val spec) to the global typing environment.
+
+    If already_bound = true, we can add a val_spec for something that is already bound as a global identifier in the
+    typing environment. This is used for union constructors.
+
+    For legacy reasons, function declarations can be duplicated. This will typically produce a warning. If
+    ignore_duplicate is true, this warning is supressed. *)
+val add_val_spec :
+  ?in_module:Project.mod_id -> ?already_bound:bool -> ?ignore_duplicate:bool -> id -> typquant * typ -> t -> t
+
 val update_val_spec : ?in_module:Project.mod_id -> id -> typquant * typ -> t -> t
 val define_val_spec : id -> t -> t
 val get_defined_val_specs : t -> IdSet.t
@@ -105,10 +116,11 @@ val get_val_spec : id -> t -> typquant * typ
 val get_val_specs : t -> (typquant * typ) Bindings.t
 val get_val_spec_orig : id -> t -> typquant * typ
 
-val add_outcome : id -> typquant * typ * kinded_id list * id list * t -> t -> t
-val get_outcome : l -> id -> t -> typquant * typ * kinded_id list * id list * t
-val get_outcome_instantiation : t -> (Ast.l * typ) KBindings.t
-val add_outcome_variable : l -> kid -> typ -> t -> t
+val is_outcome : id -> t -> bool
+val add_outcome : id -> typquant * typ * typquant * id list * t -> t -> t
+val get_outcome : l -> id -> t -> typquant * typ * typquant * id list * t
+val get_outcome_instantiation : t -> (Ast.l * typ_arg) KBindings.t
+val add_outcome_variable : l -> kid -> typ_arg -> t -> t
 val set_outcome_typschm : outcome_loc:l -> typquant * typ -> t -> t
 val get_outcome_typschm_opt : t -> (typquant * typ) option
 
@@ -164,9 +176,11 @@ val get_global_constraints : t -> n_constraint list
 val get_constraint_reasons : t -> ((Ast.l * string) option * n_constraint) list
 val add_constraint : ?global:bool -> ?reason:Ast.l * string -> n_constraint -> t -> t
 
-val add_typquant : l -> typquant -> t -> t
+val add_typquant : ?from_outcome:bool -> l -> typquant -> t -> t
 
+val is_outcome_typ_var : kid -> t -> bool
 val get_typ_var : kid -> t -> kind_aux
+val get_typ_var_opt : kid -> t -> (Ast.l * kind_aux) option
 val get_typ_var_loc_opt : kid -> t -> Ast.l option
 val get_typ_vars : t -> kind_aux KBindings.t
 val get_typ_var_locs : t -> Ast.l KBindings.t
@@ -178,8 +192,8 @@ val lookup_typ_var : kid -> type_variables -> (Ast.l * kind_aux) option
 val is_shadowed : kid -> type_variables -> bool
 
 val shadows : kid -> t -> int
-val add_typ_var_shadow : l -> kinded_id -> t -> t * kid option
-val add_typ_var : l -> kinded_id -> t -> t
+val add_typ_var_shadow : ?from_outcome:bool -> l -> kinded_id -> t -> t * kid option
+val add_typ_var : ?from_outcome:bool -> l -> kinded_id -> t -> t
 
 val get_ret_typ : t -> typ option
 val add_ret_typ : typ -> t -> t
@@ -222,6 +236,8 @@ val expand_synonyms : t -> typ -> typ
 val expand_nexp_synonyms : t -> nexp -> nexp
 val expand_constraint_synonyms : t -> n_constraint -> n_constraint
 
+val simplify_constraints : t -> t
+
 val base_typ_of : t -> typ -> typ
 
 val allow_unknowns : t -> bool
@@ -237,6 +253,7 @@ val is_toplevel : t -> l option
 
 (* Well formedness-checks *)
 val wf_typ : at:l -> t -> typ -> unit
+val wf_typ_arg : at:l -> t -> typ_arg -> unit
 val wf_constraint : at:l -> t -> n_constraint -> unit
 
 (** Some of the code in the environment needs to use the smt solver, which is defined below. To break the circularity

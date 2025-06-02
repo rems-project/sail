@@ -4,7 +4,7 @@ import Out.Sail.BitVec
 open PreSail
 
 set_option maxHeartbeats 1_000_000_000
-set_option maxRecDepth 10_000
+set_option maxRecDepth 1_000_000
 set_option linter.unusedVariables false
 set_option match.ignoreUnusedAlts true
 
@@ -25,16 +25,16 @@ import Out.Sail.BitVec
 import Out.Sail.IntRange
 import Out.Defs
 import Out.Specialization
+import Out.FakeReal
 
 set_option maxHeartbeats 1_000_000_000
-set_option maxRecDepth 10_000
+set_option maxRecDepth 1_000_000
 set_option linter.unusedVariables false
 set_option match.ignoreUnusedAlts true
 
 open Sail
 
-
-namespace Functions
+namespace Out.Functions
 
 def foo (y : Unit) : Unit :=
   y
@@ -45,6 +45,4 @@ def initialize_registers (_ : Unit) : Unit :=
 def sail_model_init (x_0 : Unit) : Unit :=
   (initialize_registers ())
 
-end Functions
-open Functions
-
+end Out.Functions

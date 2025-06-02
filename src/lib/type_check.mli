@@ -117,6 +117,8 @@ module Env : sig
 
   val is_abstract_typ : id -> t -> bool
 
+  val get_abstract_typs : t -> kind Bindings.t
+
   val remove_abstract_typ : id -> t -> t
 
   (** Check if a local variable is mutable. Throws Type_error if it isn't a local variable. Probably best to use
@@ -129,7 +131,7 @@ module Env : sig
   val add_constraint : ?global:bool -> ?reason:Ast.l * string -> n_constraint -> t -> t
 
   (** Push all the type variables and constraints from a typquant into an environment *)
-  val add_typquant : Ast.l -> typquant -> t -> t
+  val add_typquant : ?from_outcome:bool -> Ast.l -> typquant -> t -> t
 
   val get_typ_var : kid -> t -> kind_aux
 
@@ -145,7 +147,7 @@ module Env : sig
   (** Check whether the identifier is a type name *)
   val bound_typ_id : t -> id -> bool
 
-  val add_typ_var : Ast.l -> kinded_id -> t -> t
+  val add_typ_var : ?from_outcome:bool -> Ast.l -> kinded_id -> t -> t
 
   val is_variant : id -> t -> bool
 
@@ -181,7 +183,9 @@ module Env : sig
 
   val get_toplevel_lets : t -> IdSet.t
 
-  val get_outcome_instantiation : t -> (Ast.l * typ) KBindings.t
+  val is_outcome : id -> t -> bool
+
+  val get_outcome_instantiation : t -> (Ast.l * typ_arg) KBindings.t
 
   (** Check if id is a constructor, then if it is return a (n, m, id, type_union) triple where the values represent its
       position (n) in the list of (m) constructors, the union name, and the type_union entry itself *)
@@ -210,6 +214,8 @@ module Env : sig
   val expand_nexp_synonyms : t -> nexp -> nexp
 
   val expand_synonyms : t -> typ -> typ
+
+  val simplify_constraints : t -> t
 
   (** Expand type synonyms and remove register annotations (i.e. register<t> -> t)) *)
   val base_typ_of : t -> typ -> typ
@@ -387,6 +393,9 @@ val env_of_pat : tannot pat -> Env.t
 
 val typ_of_pexp : tannot pexp -> typ
 val env_of_pexp : tannot pexp -> Env.t
+
+val typ_of_lexp : tannot lexp -> typ
+val env_of_lexp : tannot lexp -> Env.t
 
 val typ_of_mpat : tannot mpat -> typ
 val env_of_mpat : tannot mpat -> Env.t

@@ -77,7 +77,16 @@ let opt_lean_import_files : string list ref = ref []
 
 let opt_lean_noncomputable : bool ref = ref false
 
-let lean_version : string = "lean4:nightly-2025-02-05"
+let opt_lean_real_numbers : bool ref = ref false
+
+let opt_single_file : bool ref = ref false
+
+(* We keep two flags to use the [If_flag] in the list of rewrites. They should never be equal. *)
+let opt_enable_matchbv : bool ref = ref false
+let opt_disable_matchbv : bool ref = ref true
+
+let lean_version : string = "lean4:nightly-2025-05-26"
+let mathlib_version : string = "v4.20.0-rc5"
 
 let lean_options =
   [
@@ -89,9 +98,29 @@ let lean_options =
       Arg.Unit (fun () -> opt_lean_force_output := true),
       "removes the content of the output directory if it is non-empty"
     );
+    ( Flag.create ~prefix:["lean"] "single_file",
+      Arg.Unit (fun () -> opt_single_file := true),
+      "puts the entire output in a single .lean file"
+    );
+    ( Flag.create ~prefix:["lean"] "matchbv",
+      Arg.Unit
+        (fun () ->
+          opt_disable_matchbv := false;
+          opt_enable_matchbv := true
+        ),
+      "use matchbv in the Lean output"
+    );
+    ( Flag.create ~prefix:["lean"] "line_width",
+      Arg.Int (fun n -> Pretty_print_lean.opt_line_width := n),
+      "maximum line length of the generated Lean code"
+    );
     ( Flag.create ~prefix:["lean"] "noncomputable",
       Arg.Unit (fun () -> opt_lean_noncomputable := true),
       "add a 'noncomputable section' at the beginning of the output"
+    );
+    ( Flag.create ~prefix:["lean"] "real-numbers",
+      Arg.Unit (fun () -> opt_lean_real_numbers := true),
+      "enable real numbers (in particular, depend on mathlib)"
     );
     ( Flag.create ~prefix:["lean"] ~arg:"typename" "extern_type",
       Arg.String Pretty_print_lean.(fun ty -> opt_extern_types := ty :: !opt_extern_types),
@@ -104,7 +133,15 @@ let lean_options =
     ( Flag.create ~prefix:["lean"] ~arg:"func-name" "noncomputable_function",
       Arg.String
         Pretty_print_lean.(fun fn -> opt_noncomputable_functions := IdSet.add (mk_id fn) !opt_noncomputable_functions),
-      "do not generate a definition for the type"
+      "do not generate executable code for this function"
+    );
+    ( Flag.create ~prefix:["lean"] ~arg:"func-name" "partial_function",
+      Arg.String Pretty_print_lean.(fun fn -> opt_partial_functions := IdSet.add (mk_id fn) !opt_partial_functions),
+      "disable the totality check for this function"
+    );
+    ( Flag.create ~prefix:["lean"] ~arg:"func-name" "non_beq_type",
+      Arg.String Pretty_print_lean.(fun fn -> non_beq_types := IdSet.add (mk_id fn) !non_beq_types),
+      "disable deriving a BEq instance for this type"
     );
   ]
 
@@ -128,11 +165,12 @@ let lean_rewrites =
     ("tuple_assignments", []);
     ("vector_concat_assignments", []);
     ("simple_assignments", []);
-    ("remove_vector_concat", []);
-    ("remove_bitvector_pats", []);
+    ("remove_vector_concat", [If_flag opt_disable_matchbv]);
+    ("remove_bitvector_pats", [If_flag opt_disable_matchbv]);
     (* ("remove_numeral_pats", []); *)
     (* ("pattern_literals", [Literal_arg "lem"]); *)
-    ("guarded_pats", []);
+    ("fun_guarded_pats", [If_flag opt_enable_matchbv]);
+    ("guarded_pats", [If_flag opt_disable_matchbv]);
     (* ("register_ref_writes", rewrite_register_ref_writes); *)
     ("nexp_ids", []);
     ("split", [String_arg "execute"]);
@@ -151,12 +189,11 @@ let lean_rewrites =
     (* We need to do the exhaustiveness check before merging, because it may
        introduce new wildcard clauses *)
     ("recheck_defs", []);
-    ("make_cases_exhaustive", []);
+    ("make_cases_exhaustive", [If_flag opt_disable_matchbv]);
     (* merge funcls before adding the measure argument so that it doesn't
        disappear into an internal pattern match *)
     ("merge_function_clauses", []);
     ("recheck_defs", []);
-    ("rewrite_explicit_measure", []);
     ("rewrite_loops_with_escape_effect", []);
     ("recheck_defs", []);
     ("infer_effects", [Bool_arg true]);
@@ -183,6 +220,7 @@ type lean_context = {
   sail_dir : string;
   types_file : out_channel;
   funcs_file : out_channel;
+  import_files : out_channel list;
   lakefile : out_channel;
 }
 
@@ -192,7 +230,7 @@ let file_to_module (filename : string) =
 
 let file_prelude =
   {|set_option maxHeartbeats 1_000_000_000
-set_option maxRecDepth 10_000
+set_option maxRecDepth 1_000_000
 set_option linter.unusedVariables false
 set_option match.ignoreUnusedAlts true
 
@@ -200,12 +238,29 @@ open Sail
 
 |}
 
-let path_to_static_libarary sail_dir str = Filename.quote (sail_dir ^ "/src/sail_lean_backend/Sail/" ^ str ^ ".lean")
+let path_to_static_library sail_dir str = Filename.quote (sail_dir ^ "/src/sail_lean_backend/Sail/" ^ str ^ ".lean")
 
 let copy_from_static_library sail_dir lean_sail_dir str =
-  Unix.system ("cp " ^ path_to_static_libarary sail_dir str ^ " " ^ Filename.quote lean_sail_dir)
+  Unix.system ("cp " ^ path_to_static_library sail_dir str ^ " " ^ Filename.quote lean_sail_dir)
 
-let start_lean_output (out_name : string) default_sail_dir =
+let print_function_file_prelude file out_name_camel (prev_file : string option) =
+  let _ =
+    match prev_file with
+    | None ->
+        output_string file ("import " ^ out_name_camel ^ ".Sail.Sail\n");
+        output_string file ("import " ^ out_name_camel ^ ".Sail.BitVec\n");
+        output_string file ("import " ^ out_name_camel ^ ".Sail.IntRange\n");
+        output_string file ("import " ^ out_name_camel ^ ".Defs\n");
+        List.iter
+          (fun filename -> output_string file ("import " ^ out_name_camel ^ "." ^ file_to_module filename ^ "\n"))
+          !opt_lean_import_files
+    | Some n -> output_string file ("import " ^ out_name_camel ^ "." ^ n ^ "\n")
+  in
+  output_string file ("\n" ^ file_prelude);
+  if !opt_lean_noncomputable then output_string file "noncomputable section\n\n";
+  output_string file ("namespace " ^ out_name_camel ^ ".Functions\n\n")
+
+let start_lean_output (out_name : string) (import_names : string list) default_sail_dir =
   let base_dir = match !opt_lean_output_dir with Some dir -> dir | None -> "." in
   let project_dir = Filename.concat base_dir out_name in
   if !opt_lean_force_output && Sys.file_exists project_dir && Sys.is_directory project_dir then (
@@ -222,6 +277,7 @@ let start_lean_output (out_name : string) default_sail_dir =
   close_out lean_toolchain;
   let sail_dir = Reporting.get_sail_dir default_sail_dir in
   let out_name_camel = Libsail.Util.to_upper_camel_case out_name in
+  let import_names_camel = List.map Libsail.Util.to_upper_camel_case import_names in
   let lean_src_dir = Filename.concat project_dir out_name_camel in
   if not (Sys.file_exists lean_src_dir) then Unix.mkdir lean_src_dir 0o775;
   let lean_sail_dir = lean_src_dir ^ "/Sail/" in
@@ -229,6 +285,11 @@ let start_lean_output (out_name : string) default_sail_dir =
   let _ = copy_from_static_library sail_dir lean_sail_dir "BitVec" in
   let _ = copy_from_static_library sail_dir lean_sail_dir "IntRange" in
   let _ = copy_from_static_library sail_dir lean_sail_dir "Sail" in
+  let real_numbers_file =
+    if !opt_lean_real_numbers then "/src/sail_lean_backend/Sail/Real.lean"
+    else "/src/sail_lean_backend/Sail/FakeReal.lean"
+  in
+  opt_lean_import_files := (sail_dir ^ real_numbers_file) :: !opt_lean_import_files;
   opt_lean_import_files := (sail_dir ^ "/src/sail_lean_backend/Sail/Specialization.lean") :: !opt_lean_import_files;
   List.iter
     (fun filename ->
@@ -244,17 +305,21 @@ let start_lean_output (out_name : string) default_sail_dir =
   output_string types_file "open PreSail\n\n";
   output_string types_file file_prelude;
   let funcs_file = open_out (Filename.concat project_dir (out_name_camel ^ ".lean")) in
-  output_string funcs_file ("import " ^ out_name_camel ^ ".Sail.Sail\n");
-  output_string funcs_file ("import " ^ out_name_camel ^ ".Sail.BitVec\n");
-  output_string funcs_file ("import " ^ out_name_camel ^ ".Sail.IntRange\n");
-  output_string funcs_file ("import " ^ out_name_camel ^ ".Defs\n");
-  List.iter
-    (fun filename -> output_string funcs_file ("import " ^ out_name_camel ^ "." ^ file_to_module filename ^ "\n"))
-    !opt_lean_import_files;
-  output_string funcs_file ("\n" ^ file_prelude);
-  if !opt_lean_noncomputable then output_string funcs_file "noncomputable section\n\n";
   let lakefile = open_out (Filename.concat project_dir "lakefile.toml") in
-  { out_name; out_name_camel; sail_dir; types_file; funcs_file; lakefile }
+  let import_files =
+    List.map (fun name -> open_out (Filename.concat lean_src_dir (name ^ ".lean"))) import_names_camel
+  in
+  let last_import_name =
+    List.fold_left
+      (fun prev_name (out, n) ->
+        print_function_file_prelude out out_name_camel prev_name;
+        Some n
+      )
+      None
+      (List.combine import_files import_names_camel)
+  in
+  print_function_file_prelude funcs_file out_name_camel last_import_name;
+  { out_name; out_name_camel; sail_dir; types_file; funcs_file; import_files; lakefile }
 
 let close_context ctx =
   close_out ctx.types_file;
@@ -267,21 +332,53 @@ let create_lake_project (ctx : lean_context) executable =
     ("name = \"" ^ ctx.out_name ^ "\"\ndefaultTargets = [\"" ^ ctx.out_name_camel
    ^ "\"]\nmoreLeanArgs = [\"--tstack=400000\"]\n\n[[lean_lib]]\nname = \"" ^ ctx.out_name_camel ^ "\""
     );
+  output_string ctx.lakefile "\nleanOptions.weak.linter.style.nameCheck = false";
+  if !opt_lean_real_numbers then (
+    output_string ctx.lakefile "\n\n[[require]]\n";
+    output_string ctx.lakefile "name = \"mathlib\"\n";
+    output_string ctx.lakefile "git = \"https://github.com/leanprover-community/mathlib4\"\n";
+    output_string ctx.lakefile (Printf.sprintf "rev = \"%s\"" mathlib_version)
+  );
   if executable then (
     output_string ctx.lakefile "\n\n[[lean_exe]]\n";
     output_string ctx.lakefile "name = \"run\"\n";
     output_string ctx.lakefile ("root = \"" ^ ctx.out_name_camel ^ "\"\n")
   )
 
-let output (out_name : string) env effect_info ast default_sail_dir =
-  let ctx = start_lean_output out_name default_sail_dir in
-  let executable = Pretty_print_lean.pp_ast_lean env effect_info ast ctx.types_file ctx.funcs_file in
+let rec dedup_files (files : string list) (acc : string list) =
+  match files with
+  | [] -> acc
+  | f :: fs -> (
+      match List.fold_left (fun n y -> if y = f then n + 1 else n) 0 acc with
+      | 0 -> dedup_files fs (acc @ [f])
+      | n -> dedup_files fs (acc @ [f ^ Int.to_string (n - 1)])
+    )
+
+let output (out_name : string) env effect_info ({ defs; _ } as ast : Libsail.Type_check.typed_ast) default_sail_dir
+    single_file noncomputable =
+  let imports =
+    if single_file then []
+    else (
+      (* Collect all non-empty slices between include pragmas in the file *)
+      let imports = Pretty_print_lean.collect_import_files defs (out_name ^ ".sail") in
+      let imports = List.map file_to_module imports in
+      (* Discard the last import file, as we will use the main file instead *)
+      let imports = Pretty_print_lean.take (List.length imports - 1) imports in
+      dedup_files imports []
+    )
+  in
+  let ctx = start_lean_output out_name imports default_sail_dir in
+  let out_name_camel = Libsail.Util.to_upper_camel_case out_name in
+  let executable =
+    Pretty_print_lean.pp_ast_lean env effect_info ast out_name_camel ctx.types_file ctx.import_files ctx.funcs_file
+      noncomputable
+  in
   create_lake_project ctx executable
 (* Uncomment for debug output of the Sail code after the rewrite passes *)
 (* Pretty_print_sail.output_ast stdout (Type_check.strip_ast ast) *)
 
 let lean_target out_name { default_sail_dir; ctx; ast; effect_info; env; _ } =
   let out_name = match out_name with Some f -> f | None -> "out" in
-  output out_name env effect_info ast default_sail_dir
+  output out_name env effect_info ast default_sail_dir !opt_single_file !opt_lean_noncomputable
 
 let _ = Target.register ~name:"lean" ~options:lean_options ~rewrites:lean_rewrites ~asserts_termination:true lean_target

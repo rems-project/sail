@@ -64,6 +64,9 @@ type 'a check_writer
 (** The SMT generation monad contains the location of the expression or definition we are generating SMT for *)
 val current_location : Parse_ast.l check_writer
 
+(** Get the Jib context during SMT generation *)
+val get_context : Jib_compile.ctx check_writer
+
 val return : 'a -> 'a check_writer
 
 val bind : 'a check_writer -> ('a -> 'b check_writer) -> 'b check_writer
@@ -78,9 +81,9 @@ val mapM : ('a -> 'b check_writer) -> 'a list -> 'b list check_writer
 
 val iterM : ('a -> unit check_writer) -> 'a list -> unit check_writer
 
-val run : 'a check_writer -> Parse_ast.l -> 'a * checks
+val run : 'a check_writer -> Parse_ast.l -> Jib_compile.ctx -> 'a * checks
 
-val mk_check_writer : (Parse_ast.l -> 'a * checks) -> 'a check_writer
+val mk_check_writer : (Parse_ast.l -> Jib_compile.ctx -> 'a * checks) -> 'a check_writer
 
 val string_used : unit check_writer
 
@@ -117,7 +120,7 @@ module type CONFIG = sig
   (** Some SystemVerilog implementations (e.g. Verilator), don't support unpacked union types, which forces us to
       generate different code for different unions depending on the types the contain. This is abstracted into a
       classify function that the instantiator of this module can supply. *)
-  val union_ctyp_classify : ctyp -> bool
+  val union_ctyp_classify : Jib_compile.ctx -> ctyp -> bool
 
   (** How we handle register references differs between backends *)
   val register_ref : string -> Smt_exp.smt_exp

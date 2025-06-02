@@ -44,6 +44,8 @@ val visit_ctyp : common_visitor -> ctyp -> ctyp
 
 val visit_cval : jib_visitor -> cval -> cval
 
+val visit_init : jib_visitor -> init -> init
+
 val visit_clexp : jib_visitor -> clexp -> clexp
 
 val visit_instr : jib_visitor -> instr -> instr

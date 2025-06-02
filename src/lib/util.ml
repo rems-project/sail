@@ -237,6 +237,13 @@ let rec option_all = function
   | None :: _ -> None
   | Some x :: xs -> begin match option_all xs with None -> None | Some xs -> Some (x :: xs) end
 
+let rec result_all = function
+  | [] -> Ok []
+  | Error e :: _ -> Error e
+  | Ok x :: xs -> (
+      match result_all xs with Error e -> Error e | Ok xs -> Ok (x :: xs)
+    )
+
 let rec map_all (f : 'a -> 'b option) (l : 'a list) : 'b list option =
   match l with
   | [] -> Some []

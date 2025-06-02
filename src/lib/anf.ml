@@ -70,7 +70,7 @@ and 'a aexp_aux =
   | AE_app of function_id * 'a aval list * 'a
   | AE_typ of 'a aexp * 'a
   | AE_assign of 'a alexp * 'a aexp
-  | AE_let of mut * id * 'a * 'a aexp * 'a aexp * 'a
+  | AE_let of mut * name * 'a * 'a aexp * 'a aexp * 'a
   | AE_block of 'a aexp list * 'a aexp * 'a
   | AE_return of 'a aval * 'a
   | AE_exit of 'a aval * 'a
@@ -80,7 +80,7 @@ and 'a aexp_aux =
   | AE_match of 'a aval * ('a apat * 'a aexp * 'a aexp * uannot) list * 'a
   | AE_try of 'a aexp * ('a apat * 'a aexp * 'a aexp * uannot) list * 'a
   | AE_struct_update of 'a aval * 'a aval Bindings.t * 'a
-  | AE_for of id * 'a aexp * 'a aexp * 'a aexp * order * 'a aexp
+  | AE_for of name * 'a aexp * 'a aexp * 'a aexp * order * 'a aexp
   | AE_loop of loop * 'a aexp * 'a aexp
   | AE_short_circuit of sc_op * 'a aval * 'a aexp
 
@@ -90,18 +90,18 @@ and 'a apat = AP_aux of 'a apat_aux * anf_annot
 
 and 'a apat_aux =
   | AP_tuple of 'a apat list
-  | AP_id of id * 'a
+  | AP_id of name * 'a
   | AP_global of id * 'a
   | AP_app of constructor_id * 'a apat * 'a
   | AP_cons of 'a apat * 'a apat
-  | AP_as of 'a apat * id * 'a
+  | AP_as of 'a apat * name * 'a
   | AP_struct of (id * 'a apat) list * 'a
   | AP_nil of 'a
   | AP_wild of 'a
 
 and 'a aval =
   | AV_lit of lit * 'a
-  | AV_id of id * 'a lvar
+  | AV_id of name * 'a lvar
   | AV_abstract of id * 'a
   | AV_ref of id * 'a lvar
   | AV_tuple of 'a aval list
@@ -110,7 +110,7 @@ and 'a aval =
   | AV_record of 'a aval Bindings.t * 'a
   | AV_cval of cval * 'a
 
-and 'a alexp = AL_id of id * 'a | AL_addr of id * 'a | AL_field of 'a alexp * id
+and 'a alexp = AL_id of name * 'a | AL_addr of name * 'a | AL_field of 'a alexp * id
 
 let aexp_loc (AE_aux (_, { loc = l; _ })) = l
 
@@ -118,16 +118,16 @@ let aexp_loc (AE_aux (_, { loc = l; _ })) = l
 
 let rec apat_bindings (AP_aux (apat_aux, _)) =
   match apat_aux with
-  | AP_tuple apats -> List.fold_left IdSet.union IdSet.empty (List.map apat_bindings apats)
-  | AP_id (id, _) -> IdSet.singleton id
-  | AP_global (id, _) -> IdSet.empty
+  | AP_tuple apats -> List.fold_left NameSet.union NameSet.empty (List.map apat_bindings apats)
+  | AP_id (id, _) -> NameSet.singleton id
+  | AP_global (id, _) -> NameSet.empty
   | AP_app (_, apat, _) -> apat_bindings apat
-  | AP_cons (apat1, apat2) -> IdSet.union (apat_bindings apat1) (apat_bindings apat2)
-  | AP_as (apat, id, _) -> IdSet.add id (apat_bindings apat)
-  | AP_nil _ -> IdSet.empty
-  | AP_wild _ -> IdSet.empty
+  | AP_cons (apat1, apat2) -> NameSet.union (apat_bindings apat1) (apat_bindings apat2)
+  | AP_as (apat, id, _) -> NameSet.add id (apat_bindings apat)
+  | AP_nil _ -> NameSet.empty
+  | AP_wild _ -> NameSet.empty
   | AP_struct (afpats, _) ->
-      List.fold_left IdSet.union IdSet.empty (List.map (fun (_, apat) -> apat_bindings apat) afpats)
+      List.fold_left NameSet.union NameSet.empty (List.map (fun (_, apat) -> apat_bindings apat) afpats)
 
 (** This function returns the types of all bound variables in a pattern. It ignores AP_global, apat_globals is used for
     that. *)
@@ -140,28 +140,29 @@ let rec apat_types (AP_aux (apat_aux, { env; _ })) =
     | Some _, Some _ -> assert false
   in
   match apat_aux with
-  | AP_tuple apats -> List.fold_left (Bindings.merge merge) Bindings.empty (List.map apat_types apats)
-  | AP_id (id, typ) when not (is_enum_member id env) -> Bindings.singleton id typ
-  | AP_id _ -> Bindings.empty
-  | AP_global (id, _) -> Bindings.empty
+  | AP_tuple apats -> List.fold_left (NameMap.merge merge) NameMap.empty (List.map apat_types apats)
+  | AP_id (id, typ) -> (
+      match id with Name (id, _) when is_enum_member id env -> NameMap.empty | _ -> NameMap.singleton id typ
+    )
+  | AP_global (id, _) -> NameMap.empty
   | AP_app (_, apat, _) -> apat_types apat
-  | AP_cons (apat1, apat2) -> (Bindings.merge merge) (apat_types apat1) (apat_types apat2)
-  | AP_as (apat, id, typ) -> Bindings.add id typ (apat_types apat)
-  | AP_nil _ -> Bindings.empty
-  | AP_wild _ -> Bindings.empty
+  | AP_cons (apat1, apat2) -> (NameMap.merge merge) (apat_types apat1) (apat_types apat2)
+  | AP_as (apat, id, typ) -> NameMap.add id typ (apat_types apat)
+  | AP_nil _ -> NameMap.empty
+  | AP_wild _ -> NameMap.empty
   | AP_struct (afpats, _) ->
-      List.fold_left (Bindings.merge merge) Bindings.empty (List.map (fun (_, apat) -> apat_types apat) afpats)
+      List.fold_left (NameMap.merge merge) NameMap.empty (List.map (fun (_, apat) -> apat_types apat) afpats)
 
 let rec apat_rename from_id to_id (AP_aux (apat_aux, annot)) =
   let apat_aux =
     match apat_aux with
     | AP_tuple apats -> AP_tuple (List.map (apat_rename from_id to_id) apats)
-    | AP_id (id, typ) when Id.compare id from_id = 0 -> AP_id (to_id, typ)
+    | AP_id (id, typ) when Name.compare id from_id = 0 -> AP_id (to_id, typ)
     | AP_id (id, typ) -> AP_id (id, typ)
     | AP_global (id, typ) -> AP_global (id, typ)
     | AP_app (ctor, apat, typ) -> AP_app (ctor, apat_rename from_id to_id apat, typ)
     | AP_cons (apat1, apat2) -> AP_cons (apat_rename from_id to_id apat1, apat_rename from_id to_id apat2)
-    | AP_as (apat, id, typ) when Id.compare id from_id = 0 -> AP_as (apat, to_id, typ)
+    | AP_as (apat, id, typ) when Name.compare id from_id = 0 -> AP_as (apat, to_id, typ)
     | AP_as (apat, id, typ) -> AP_as (apat, id, typ)
     | AP_nil typ -> AP_nil typ
     | AP_wild typ -> AP_wild typ
@@ -203,22 +204,21 @@ let aexp_typ (AE_aux (aux, _)) =
 
 let rec aval_rename from_id to_id = function
   | AV_lit (lit, typ) -> AV_lit (lit, typ)
-  | AV_id (id, lvar) when Id.compare id from_id = 0 -> AV_id (to_id, lvar)
+  | AV_id (id, lvar) when Name.compare id from_id = 0 -> AV_id (to_id, lvar)
   | AV_id (id, lvar) -> AV_id (id, lvar)
-  | AV_ref (id, lvar) when Id.compare id from_id = 0 -> AV_ref (to_id, lvar)
-  | AV_ref (id, lvar) -> AV_ref (id, lvar)
+  | AV_ref (register_id, lvar) -> AV_ref (register_id, lvar)
   | AV_abstract (id, typ) ->
       AV_abstract (id, typ) (* This id is an abstract type variable, so we don't rename it here *)
   | AV_tuple avals -> AV_tuple (List.map (aval_rename from_id to_id) avals)
   | AV_list (avals, typ) -> AV_list (List.map (aval_rename from_id to_id) avals, typ)
   | AV_vector (avals, typ) -> AV_vector (List.map (aval_rename from_id to_id) avals, typ)
   | AV_record (avals, typ) -> AV_record (Bindings.map (aval_rename from_id to_id) avals, typ)
-  | AV_cval (cval, typ) -> AV_cval (cval_rename (name from_id) (name to_id) cval, typ)
+  | AV_cval (cval, typ) -> AV_cval (cval_rename from_id to_id cval, typ)
 
 let rec alexp_rename from_id to_id = function
-  | AL_id (id, typ) when Id.compare from_id id = 0 -> AL_id (to_id, typ)
+  | AL_id (id, typ) when Name.compare from_id id = 0 -> AL_id (to_id, typ)
   | AL_id (id, typ) -> AL_id (id, typ)
-  | AL_addr (id, typ) when Id.compare from_id id = 0 -> AL_addr (to_id, typ)
+  | AL_addr (id, typ) when Name.compare from_id id = 0 -> AL_addr (to_id, typ)
   | AL_addr (id, typ) -> AL_id (id, typ)
   | AL_field (alexp, field_id) -> AL_field (alexp_rename from_id to_id alexp, field_id)
 
@@ -230,7 +230,7 @@ let rec aexp_rename from_id to_id (AE_aux (aexp, annot)) =
     | AE_app (id, avals, typ) -> AE_app (id, List.map (aval_rename from_id to_id) avals, typ)
     | AE_typ (aexp, typ) -> AE_typ (recur aexp, typ)
     | AE_assign (alexp, aexp) -> AE_assign (alexp_rename from_id to_id alexp, aexp_rename from_id to_id aexp)
-    | AE_let (mut, id, typ1, aexp1, aexp2, typ2) when Id.compare from_id id = 0 ->
+    | AE_let (mut, id, typ1, aexp1, aexp2, typ2) when Name.compare from_id id = 0 ->
         AE_let (mut, id, typ1, recur aexp1, aexp2, typ2)
     | AE_let (mut, id, typ1, aexp1, aexp2, typ2) -> AE_let (mut, id, typ1, recur aexp1, recur aexp2, typ2)
     | AE_block (aexps, aexp, typ) -> AE_block (List.map recur aexps, recur aexp, typ)
@@ -246,7 +246,7 @@ let rec aexp_rename from_id to_id (AE_aux (aexp, annot)) =
         AE_try (aexp_rename from_id to_id aexp, List.map (apexp_rename from_id to_id) apexps, typ)
     | AE_struct_update (aval, avals, typ) ->
         AE_struct_update (aval_rename from_id to_id aval, Bindings.map (aval_rename from_id to_id) avals, typ)
-    | AE_for (id, aexp1, aexp2, aexp3, order, aexp4) when Id.compare from_id to_id = 0 ->
+    | AE_for (id, aexp1, aexp2, aexp3, order, aexp4) when Name.compare from_id id = 0 ->
         AE_for (id, aexp1, aexp2, aexp3, order, aexp4)
     | AE_for (id, aexp1, aexp2, aexp3, order, aexp4) ->
         AE_for (id, recur aexp1, recur aexp2, recur aexp3, order, recur aexp4)
@@ -256,7 +256,7 @@ let rec aexp_rename from_id to_id (AE_aux (aexp, annot)) =
   AE_aux (aexp, annot)
 
 and apexp_rename from_id to_id (apat, aexp1, aexp2, uannot) =
-  if IdSet.mem from_id (apat_bindings apat) then (apat, aexp1, aexp2, uannot)
+  if NameSet.mem from_id (apat_bindings apat) then (apat, aexp1, aexp2, uannot)
   else (apat, aexp_rename from_id to_id aexp1, aexp_rename from_id to_id aexp2, uannot)
 
 let rec fold_aexp f (AE_aux (aexp, annot)) =
@@ -309,22 +309,17 @@ let rec is_pure_aexp effect_info (AE_aux (aexp, { uannot; _ })) =
 let is_pure_case effect_info (_, guard, body, _) = is_pure_aexp effect_info guard && is_pure_aexp effect_info body
 
 let aexp_bindings aexp =
-  let ids = ref IdSet.empty in
+  let ids = ref NameSet.empty in
   let collect_lets = function
     | AE_aux (AE_let (_, id, _, _, _, _), _) as aexp ->
-        ids := IdSet.add id !ids;
+        ids := NameSet.add id !ids;
         aexp
     | aexp -> aexp
   in
   ignore (fold_aexp collect_lets aexp);
   !ids
 
-let shadow_counter = ref 0
-
-let new_shadow id =
-  let shadow_id = append_id id ("shadow#" ^ string_of_int !shadow_counter) in
-  incr shadow_counter;
-  shadow_id
+let new_shadow = symbol_generator ()
 
 let rec no_shadow ids (AE_aux (aexp, annot)) =
   let aexp =
@@ -333,13 +328,13 @@ let rec no_shadow ids (AE_aux (aexp, annot)) =
     | AE_app (id, avals, typ) -> AE_app (id, avals, typ)
     | AE_typ (aexp, typ) -> AE_typ (no_shadow ids aexp, typ)
     | AE_assign (alexp, aexp) -> AE_assign (alexp, no_shadow ids aexp)
-    | AE_let (mut, id, typ1, aexp1, aexp2, typ2) when IdSet.mem id ids ->
-        let shadow_id = new_shadow id in
+    | AE_let (mut, id, typ1, aexp1, aexp2, typ2) when NameSet.mem id ids ->
+        let shadow_id = new_shadow () in
         let aexp1 = no_shadow ids aexp1 in
-        let ids = IdSet.add shadow_id ids in
+        let ids = NameSet.add shadow_id ids in
         AE_let (mut, shadow_id, typ1, aexp1, no_shadow ids (aexp_rename id shadow_id aexp2), typ2)
     | AE_let (mut, id, typ1, aexp1, aexp2, typ2) ->
-        AE_let (mut, id, typ1, no_shadow (IdSet.add id ids) aexp1, no_shadow (IdSet.add id ids) aexp2, typ2)
+        AE_let (mut, id, typ1, no_shadow (NameSet.add id ids) aexp1, no_shadow (NameSet.add id ids) aexp2, typ2)
     | AE_block (aexps, aexp, typ) -> AE_block (List.map (no_shadow ids) aexps, no_shadow ids aexp, typ)
     | AE_return (aval, typ) -> AE_return (aval, typ)
     | AE_exit (aval, typ) -> AE_exit (aval, typ)
@@ -349,15 +344,15 @@ let rec no_shadow ids (AE_aux (aexp, annot)) =
     | AE_match (aval, apexps, typ) -> AE_match (aval, List.map (no_shadow_apexp ids) apexps, typ)
     | AE_try (aexp, apexps, typ) -> AE_try (no_shadow ids aexp, List.map (no_shadow_apexp ids) apexps, typ)
     | AE_struct_update (aval, avals, typ) -> AE_struct_update (aval, avals, typ)
-    | AE_for (id, aexp1, aexp2, aexp3, order, aexp4) when IdSet.mem id ids ->
-        let shadow_id = new_shadow id in
+    | AE_for (id, aexp1, aexp2, aexp3, order, aexp4) when NameSet.mem id ids ->
+        let shadow_id = new_shadow () in
         let aexp1 = no_shadow ids aexp1 in
         let aexp2 = no_shadow ids aexp2 in
         let aexp3 = no_shadow ids aexp3 in
-        let ids = IdSet.add shadow_id ids in
+        let ids = NameSet.add shadow_id ids in
         AE_for (shadow_id, aexp1, aexp2, aexp3, order, no_shadow ids (aexp_rename id shadow_id aexp4))
     | AE_for (id, aexp1, aexp2, aexp3, order, aexp4) ->
-        let ids = IdSet.add id ids in
+        let ids = NameSet.add id ids in
         AE_for (id, no_shadow ids aexp1, no_shadow ids aexp2, no_shadow ids aexp3, order, no_shadow ids aexp4)
     | AE_loop (loop, aexp1, aexp2) -> AE_loop (loop, no_shadow ids aexp1, no_shadow ids aexp2)
     | AE_short_circuit (op, aval, aexp) -> AE_short_circuit (op, aval, no_shadow ids aexp)
@@ -365,13 +360,13 @@ let rec no_shadow ids (AE_aux (aexp, annot)) =
   AE_aux (aexp, annot)
 
 and no_shadow_apexp ids (apat, aexp1, aexp2, uannot) =
-  let shadows = IdSet.inter (apat_bindings apat) ids in
-  let shadows = List.map (fun id -> (id, new_shadow id)) (IdSet.elements shadows) in
+  let shadows = NameSet.inter (apat_bindings apat) ids in
+  let shadows = List.map (fun id -> (id, new_shadow ())) (NameSet.elements shadows) in
   let rename aexp = List.fold_left (fun aexp (from_id, to_id) -> aexp_rename from_id to_id aexp) aexp shadows in
   let rename_apat apat = List.fold_left (fun apat (from_id, to_id) -> apat_rename from_id to_id apat) apat shadows in
-  let ids = IdSet.union (apat_bindings apat) (IdSet.union ids (IdSet.of_list (List.map snd shadows))) in
+  let ids = NameSet.union (apat_bindings apat) (NameSet.union ids (NameSet.of_list (List.map snd shadows))) in
   let new_guard = no_shadow ids (rename aexp1) in
-  (rename_apat apat, new_guard, no_shadow (IdSet.union ids (aexp_bindings new_guard)) (rename aexp2), uannot)
+  (rename_apat apat, new_guard, no_shadow (NameSet.union ids (aexp_bindings new_guard)) (rename aexp2), uannot)
 
 (* Map over all the avals in an aexp. *)
 let rec map_aval f (AE_aux (aexp, annot)) =
@@ -462,6 +457,8 @@ let pp_order = function Ord_aux (Ord_inc, _) -> string "inc" | Ord_aux (Ord_dec,
 
 let pp_id id = string (string_of_id id)
 
+let pp_name id = string (string_of_name id)
+
 let pp_function_id = function
   | Sail_function id -> pp_id id
   | Newtype_wrapper id -> string "newtype" ^^ space ^^ pp_id id
@@ -473,8 +470,8 @@ let pp_constructor_id = function
   | Newtype_wrapper id -> string "newtype" ^^ space ^^ pp_id id
 
 let rec pp_alexp = function
-  | AL_id (id, typ) -> pp_annot typ (pp_id id)
-  | AL_addr (id, typ) -> string "*" ^^ parens (pp_annot typ (pp_id id))
+  | AL_id (id, typ) -> pp_annot typ (pp_name id)
+  | AL_addr (id, typ) -> string "*" ^^ parens (pp_annot typ (pp_name id))
   | AL_field (alexp, field) -> pp_alexp alexp ^^ dot ^^ pp_id field
 
 let pp_anf_uannot uannot =
@@ -499,14 +496,14 @@ let rec pp_aexp (AE_aux (aexp, annot)) =
         begin
           match binding with
           | AE_aux (AE_let _, _) ->
-              (pp_annot typ (separate space [keyword; pp_annot id_typ (pp_id id); string "="])
+              (pp_annot typ (separate space [keyword; pp_annot id_typ (pp_name id); string "="])
               ^^ hardline
               ^^ nest 2 (pp_aexp binding)
               )
               ^^ hardline ^^ string "in" ^^ space ^^ pp_aexp body
           | _ ->
               pp_annot typ
-                (separate space [keyword; pp_annot id_typ (pp_id id); string "="; pp_aexp binding; string "in"])
+                (separate space [keyword; pp_annot id_typ (pp_name id); string "="; pp_aexp binding; string "in"])
               ^^ hardline ^^ pp_aexp body
         end
   | AE_if (cond, then_aexp, else_aexp, typ) ->
@@ -525,7 +522,7 @@ let rec pp_aexp (AE_aux (aexp, annot)) =
              (parens
                 (separate (break 1)
                    [
-                     pp_id id;
+                     pp_name id;
                      string "from " ^^ pp_aexp aexp1;
                      string "to " ^^ pp_aexp aexp2;
                      string "by " ^^ pp_aexp aexp3;
@@ -550,13 +547,13 @@ and pp_apat (AP_aux (apat_aux, annot)) =
   ^^
   match apat_aux with
   | AP_wild _ -> string "_"
-  | AP_id (id, typ) -> pp_annot typ (pp_id id)
+  | AP_id (id, typ) -> pp_annot typ (pp_name id)
   | AP_global (id, _) -> pp_id id
   | AP_tuple apats -> parens (separate_map (comma ^^ space) pp_apat apats)
   | AP_app (ctor, apat, typ) -> pp_annot typ (pp_constructor_id ctor ^^ parens (pp_apat apat))
   | AP_nil _ -> string "[||]"
   | AP_cons (hd_apat, tl_apat) -> pp_apat hd_apat ^^ string " :: " ^^ pp_apat tl_apat
-  | AP_as (apat, id, _) -> pp_apat apat ^^ string " as " ^^ pp_id id
+  | AP_as (apat, id, _) -> pp_apat apat ^^ string " as " ^^ pp_name id
   | AP_struct (afpats, _) ->
       separate space
         [
@@ -578,7 +575,7 @@ and pp_block = function
 
 and pp_aval = function
   | AV_lit (lit, typ) -> pp_annot typ (string (string_of_lit lit))
-  | AV_id (id, lvar) -> pp_lvar lvar (pp_id id)
+  | AV_id (id, lvar) -> pp_lvar lvar (pp_name id)
   | AV_abstract (id, typ) -> string "sizeof" ^^ parens (pp_annot typ (pp_id id))
   | AV_tuple avals -> parens (separate_map (comma ^^ space) pp_aval avals)
   | AV_ref (id, lvar) -> string "ref" ^^ space ^^ pp_lvar lvar (pp_id id)
@@ -600,7 +597,7 @@ let ae_lit lit typ = AE_val (AV_lit (lit, typ))
 
 let is_dead_aexp (AE_aux (_, { env; _ })) = prove __POS__ env nc_false
 
-let gensym, reset_anf_counter = symbol_generator "ga"
+let gensym = symbol_generator ()
 
 let rec split_block l = function
   | [exp] -> ([], exp)
@@ -613,7 +610,7 @@ let rec anf_pat ?(global = false) (P_aux (p_aux, (l, tannot)) as pat) =
   let mk_apat aux = AP_aux (aux, { loc = l; env = env_of_tannot tannot; uannot = untyped_annot tannot }) in
   match p_aux with
   | P_id id when global -> mk_apat (AP_global (id, typ_of_pat pat))
-  | P_id id -> mk_apat (AP_id (id, typ_of_pat pat))
+  | P_id id -> mk_apat (AP_id (name id, typ_of_pat pat))
   | P_wild -> mk_apat (AP_wild (typ_of_pat pat))
   | P_tuple pats -> mk_apat (AP_tuple (List.map (fun pat -> anf_pat ~global pat) pats))
   | P_app (id, [subpat]) -> (
@@ -635,8 +632,8 @@ let rec anf_pat ?(global = false) (P_aux (p_aux, (l, tannot)) as pat) =
         pats
         (mk_apat (AP_nil (typ_of_pat pat)))
   | P_lit (L_aux (L_unit, _)) -> mk_apat (AP_wild (typ_of_pat pat))
-  | P_as (pat, id) -> mk_apat (AP_as (anf_pat ~global pat, id, typ_of_pat pat))
-  | P_struct (fpats, FP_no_wild) ->
+  | P_as (pat, id) -> mk_apat (AP_as (anf_pat ~global pat, name id, typ_of_pat pat))
+  | P_struct (_, fpats, FP_no_wild) ->
       mk_apat (AP_struct (List.map (fun (field, pat) -> (field, anf_pat ~global pat)) fpats, typ_of_pat pat))
   | _ -> Reporting.unreachable l __POS__ ("Could not convert pattern to ANF: " ^ string_of_pat pat) [@coverage off]
 
@@ -655,7 +652,7 @@ let rec anf (E_aux (e_aux, (l, tannot)) as exp) =
 
   let rec anf_lexp env (LE_aux (aux, (l, _)) as lexp) =
     match aux with
-    | LE_id id | LE_typ (_, id) -> ((fun x -> x), AL_id (id, lvar_typ ~loc:l (Env.lookup_id id env)))
+    | LE_id id | LE_typ (_, id) -> ((fun x -> x), AL_id (name id, lvar_typ ~loc:l (Env.lookup_id id env)))
     | LE_field (lexp, field_id) ->
         let wrap, alexp = anf_lexp env lexp in
         (wrap, AL_field (alexp, field_id))
@@ -718,7 +715,7 @@ let rec anf (E_aux (e_aux, (l, tannot)) as exp) =
       mk_aexp (AE_loop (loop_typ, acond, aexp))
   | E_for (id, exp1, exp2, exp3, order, body) ->
       let aexp1, aexp2, aexp3, abody = (anf exp1, anf exp2, anf exp3, anf body) in
-      mk_aexp (AE_for (id, aexp1, aexp2, aexp3, order, abody))
+      mk_aexp (AE_for (name id, aexp1, aexp2, aexp3, order, abody))
   | E_if (cond, then_exp, else_exp) ->
       let cond_val, wrap = to_aval (anf cond) in
       let then_aexp = anf then_exp in
@@ -796,7 +793,7 @@ let rec anf (E_aux (e_aux, (l, tannot)) as exp) =
   | E_id id ->
       let lvar = Env.lookup_id id (env_of exp) in
       begin
-        match lvar with _ -> mk_aexp (AE_val (AV_id (id, lvar)))
+        match lvar with _ -> mk_aexp (AE_val (AV_id (name id, lvar)))
       end
   | E_ref id ->
       let lvar = Env.lookup_id id (env_of exp) in
@@ -837,7 +834,7 @@ let rec anf (E_aux (e_aux, (l, tannot)) as exp) =
       let mut = match binder with E_var _ -> Mutable | E_let _ -> Immutable | _ -> assert false in
       let env = env_of body in
       let lvar = Env.lookup_id id env in
-      mk_aexp (AE_let (mut, id, lvar_typ ~loc:l lvar, anf binding, anf body, typ_of exp))
+      mk_aexp (AE_let (mut, name id, lvar_typ ~loc:l lvar, anf binding, anf body, typ_of exp))
   | E_var (lexp, _, _) ->
       Reporting.unreachable l __POS__
         ("Encountered complex l-expression " ^ string_of_lexp lexp ^ " when converting to ANF") [@coverage off]
@@ -848,7 +845,7 @@ let rec anf (E_aux (e_aux, (l, tannot)) as exp) =
       let avals = List.map to_aval aexps in
       let wrap = List.fold_left (fun f g x -> f (g x)) (fun x -> x) (List.map snd avals) in
       wrap (mk_aexp (AE_val (AV_tuple (List.map fst avals))))
-  | E_struct fexps ->
+  | E_struct (_, fexps) ->
       let anf_fexp (FE_aux (FE_fexp (id, exp), _)) =
         let aval, wrap = to_aval (anf exp) in
         ((id, aval), wrap)

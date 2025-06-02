@@ -65,8 +65,13 @@ let rec instantiate_id id = function
 
 let instantiate_typ substs typ =
   List.fold_left
-    (fun typ -> function kid, (_, subst_typ) -> typ_subst kid (mk_typ_arg (A_typ subst_typ)) typ)
+    (fun typ -> function kid, (_, subst_arg) -> typ_subst kid subst_arg typ)
     typ (KBindings.bindings substs)
+
+let instantiate_typquant substs typq =
+  List.fold_left
+    (fun typq -> function kid, (_, subst_arg) -> typquant_subst kid subst_arg typq)
+    typq (KBindings.bindings substs)
 
 let instantiate_def target id substs = function
   | DEF_aux (DEF_impl (FCL_aux (FCL_funcl (target_id, pexp), (fcl_def_annot, tannot))), def_annot)
@@ -122,6 +127,16 @@ let instantiate target ast =
           match exp with
           | E_app (f, args) -> E_aux (E_app (instantiate_id f id_substs, args), annot)
           | E_typ (typ, exp) -> E_aux (E_typ (instantiate_typ substs typ, exp), annot)
+          | E_constraint (NC_aux (NC_var v, _)) -> (
+              match KBindings.find_opt v substs with
+              | Some (_, A_aux (A_bool nc, _)) -> E_aux (E_constraint nc, annot)
+              | _ -> Reporting.unreachable (id_loc id) __POS__ "Failed to instantiate constraint"
+            )
+          | E_sizeof (Nexp_aux (Nexp_var v, _)) -> (
+              match KBindings.find_opt v substs with
+              | Some (_, A_aux (A_nexp n, _)) -> E_aux (E_sizeof n, annot)
+              | _ -> Reporting.unreachable (id_loc id) __POS__ "Failed to instantiate constraint"
+            )
           | _ -> E_aux (exp, annot)
         in
         let pat_alg = { id_pat_alg with p_aux = rewrite_p_aux } in
@@ -133,7 +148,11 @@ let instantiate target ast =
           DEF_aux
             ( DEF_val
                 (VS_aux
-                   ( VS_val_spec (TypSchm_aux (TypSchm_ts (typq, instantiate_typ substs typ), l), id, extern),
+                   ( VS_val_spec
+                       ( TypSchm_aux (TypSchm_ts (instantiate_typquant substs typq, instantiate_typ substs typ), l),
+                         id,
+                         extern
+                       ),
                      (l, empty_uannot)
                    )
                 ),

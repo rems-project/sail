@@ -129,15 +129,28 @@ function float_round_and_compose (sign, exp, mantissa, rounding_mode) = {
   let fp = float_decompose (mantissa);
   let bitsize = length (mantissa);
   let one = sail_zero_extend ([bitone], bitsize);
+  let zero = sail_zero_extend ([bitzero], bitsize);
   let three = sail_zero_extend ([bitone, bitone], bitsize);
   let increment = float_rounding_increment (sign, mantissa, rounding_mode);
 
   let exp_limit = sub_bits (sail_shiftleft (one, length (fp.exp)), three);
   let exp_reach_limit = not (unsigned (exp) < unsigned (exp_limit));
+  let exp_overflow = unsigned (exp) > unsigned (exp_limit);
 
-  if exp_reach_limit then assert (false, "Not implemented yet.");
+  let mantissa_limit = sail_shiftleft (one, bitsize - 1);
+  let mantissa_overflow = not (unsigned (mantissa_limit)
+    > unsigned (mantissa) + unsigned(increment));
 
-  float_compose_after_round (sign, exp, mantissa, increment, rounding_mode);
+  if exp_reach_limit & (exp_overflow | mantissa_overflow) then {
+    let all_ones_exp = sub_bits (sail_shiftleft (one, length (fp.exp)), one);
+    let exp_and_mantissa = sail_shiftleft (all_ones_exp, length (fp.mantissa));
+    let result = sign @ truncate (exp_and_mantissa, bitsize - 1);
+    let tail = if is_all_zeros (increment) then one else zero;
+
+    (sub_bits (result, tail), fp_eflag_overflow_and_inexact)
+  } else {
+    float_compose_after_round (sign, exp, mantissa, increment, rounding_mode);
+  }
 }
 
 val      float_add_same_exp_internal : forall 'n, 'n in {16, 32, 64, 128}.

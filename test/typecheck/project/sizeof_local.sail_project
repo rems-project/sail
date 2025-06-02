@@ -1,0 +1,15 @@
+
+P {
+  files sizeof_local/prelude.sail
+}
+
+A {
+  requires P
+  files sizeof_local/a.sail
+}
+
+B {
+  after A
+  requires P
+  files sizeof_local/b.sail
+}

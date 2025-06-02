@@ -4,7 +4,7 @@ import Out.Sail.BitVec
 open PreSail
 
 set_option maxHeartbeats 1_000_000_000
-set_option maxRecDepth 10_000
+set_option maxRecDepth 1_000_000
 set_option linter.unusedVariables false
 set_option match.ignoreUnusedAlts true
 
@@ -16,11 +16,11 @@ abbrev bits k_n := (BitVec k_n)
 inductive option (k_a : Type) where
   | Some (_ : k_a)
   | None (_ : Unit)
-  deriving BEq
+  deriving Inhabited, BEq, Repr
 
 inductive virtaddr where
   | virtaddr (_ : (BitVec 32))
-  deriving BEq
+  deriving Inhabited, BEq, Repr
 
 abbrev Register := PEmpty
 abbrev RegisterType : Register -> Type := PEmpty.elim
@@ -37,30 +37,56 @@ import Out.Sail.BitVec
 import Out.Sail.IntRange
 import Out.Defs
 import Out.Specialization
+import Out.FakeReal
 
 set_option maxHeartbeats 1_000_000_000
-set_option maxRecDepth 10_000
+set_option maxRecDepth 1_000_000
 set_option linter.unusedVariables false
 set_option match.ignoreUnusedAlts true
 
 open Sail
 
+namespace Out.Functions
+
 open virtaddr
 open option
 
-namespace Functions
-
-/-- Type quantifiers: k_ex761# : Bool, k_ex760# : Bool -/
+/-- Type quantifiers: k_ex769# : Bool, k_ex768# : Bool -/
 def neq_bool (x : Bool) (y : Bool) : Bool :=
-  (Bool.not (BEq.beq x y))
+  (! (x == y))
 
 /-- Type quantifiers: x : Int -/
 def __id (x : Int) : Int :=
   x
 
+/-- Type quantifiers: n : Int, m : Int -/
+def _shl_int_general (m : Int) (n : Int) : Int :=
+  bif (n ≥b 0)
+  then (Int.shiftl m n)
+  else (Int.shiftr m (Neg.neg n))
+
+/-- Type quantifiers: n : Int, m : Int -/
+def _shr_int_general (m : Int) (n : Int) : Int :=
+  bif (n ≥b 0)
+  then (Int.shiftr m n)
+  else (Int.shiftl m (Neg.neg n))
+
+/-- Type quantifiers: m : Int, n : Int -/
+def fdiv_int (n : Int) (m : Int) : Int :=
+  bif ((n <b 0) && (m >b 0))
+  then ((Int.tdiv (n +i 1) m) -i 1)
+  else
+    (bif ((n >b 0) && (m <b 0))
+    then ((Int.tdiv (n -i 1) m) -i 1)
+    else (Int.tdiv n m))
+
+/-- Type quantifiers: m : Int, n : Int -/
+def fmod_int (n : Int) (m : Int) : Int :=
+  (n -i (m *i (fdiv_int n m)))
+
 /-- Type quantifiers: len : Nat, k_v : Nat, len ≥ 0 ∧ k_v ≥ 0 -/
 def sail_mask (len : Nat) (v : (BitVec k_v)) : (BitVec len) :=
-  if (len ≤b (Sail.BitVec.length v))
+  bif (len ≤b (Sail.BitVec.length v))
   then (Sail.BitVec.truncate v len)
   else (Sail.BitVec.zeroExtend v len)
 
@@ -70,36 +96,33 @@ def sail_ones (n : Nat) : (BitVec n) :=
 
 /-- Type quantifiers: l : Int, i : Int, n : Nat, n ≥ 0 -/
 def slice_mask {n : _} (i : Int) (l : Int) : (BitVec n) :=
-  if (l ≥b n)
+  bif (l ≥b n)
   then ((sail_ones n) <<< i)
   else
-    let one : (BitVec n) := (sail_mask n (0b1 : (BitVec 1)))
-    (((one <<< l) - one) <<< i)
+    (let one : (BitVec n) := (sail_mask n (0b1 : (BitVec 1)))
+    (((one <<< l) - one) <<< i))
 
-/-- Type quantifiers: n : Int, m : Int -/
-def _shl_int_general (m : Int) (n : Int) : Int :=
-  if (n ≥b 0)
-  then (Int.shiftl m n)
-  else (Int.shiftr m (Neg.neg n))
+/-- Type quantifiers: n : Nat, n > 0 -/
+def to_bytes_le {n : _} (b : (BitVec (8 * n))) : (Vector (BitVec 8) n) := Id.run do
+  let res := (vectorInit (BitVec.zero 8))
+  let loop_i_lower := 0
+  let loop_i_upper := (n -i 1)
+  let mut loop_vars := res
+  for i in [loop_i_lower:loop_i_upper:1]i do
+    let res := loop_vars
+    loop_vars := (vectorUpdate res i (Sail.BitVec.extractLsb b ((8 *i i) +i 7) (8 *i i)))
+  (pure loop_vars)
 
-/-- Type quantifiers: n : Int, m : Int -/
-def _shr_int_general (m : Int) (n : Int) : Int :=
-  if (n ≥b 0)
-  then (Int.shiftr m n)
-  else (Int.shiftl m (Neg.neg n))
-
-/-- Type quantifiers: m : Int, n : Int -/
-def fdiv_int (n : Int) (m : Int) : Int :=
-  if (Bool.and (n <b 0) (m >b 0))
-  then ((Int.tdiv (n +i 1) m) -i 1)
-  else
-    if (Bool.and (n >b 0) (m <b 0))
-    then ((Int.tdiv (n -i 1) m) -i 1)
-    else (Int.tdiv n m)
-
-/-- Type quantifiers: m : Int, n : Int -/
-def fmod_int (n : Int) (m : Int) : Int :=
-  (n -i (m *i (fdiv_int n m)))
+/-- Type quantifiers: n : Nat, n > 0 -/
+def from_bytes_le {n : _} (v : (Vector (BitVec 8) n)) : (BitVec (8 * n)) := Id.run do
+  let res := (BitVec.zero (8 *i n))
+  let loop_i_lower := 0
+  let loop_i_upper := (n -i 1)
+  let mut loop_vars := res
+  for i in [loop_i_lower:loop_i_upper:1]i do
+    let res := loop_vars
+    loop_vars := (Sail.BitVec.updateSubrange res ((8 *i i) +i 7) (8 *i i) (GetElem?.getElem! v i))
+  (pure loop_vars)
 
 /-- Type quantifiers: k_a : Type -/
 def is_none (opt : (Option k_a)) : Bool :=
@@ -155,7 +178,7 @@ def use_tuple_of_tuple (s : String) : String :=
 def hex_bits_signed2_forwards (bv : (BitVec k_nn)) : (Nat × String) :=
   let len := (Sail.BitVec.length bv)
   let s :=
-    if (BEq.beq (BitVec.access bv (len -i 1)) 1#1)
+    bif ((BitVec.access bv (len -i 1)) == 1#1)
     then "stub1"
     else "stub2"
   ((Sail.BitVec.length bv), s)
@@ -167,13 +190,13 @@ def hex_bits_signed2_forwards_matches (bv : (BitVec k_nn)) : Bool :=
 /-- Type quantifiers: tuple_0.1 : Nat, tuple_0.1 > 0 -/
 def hex_bits_signed2_backwards (tuple_0 : (Nat × String)) : (BitVec tuple_0.1) :=
   let (notn, str) := tuple_0
-  if (BEq.beq str "-")
+  bif (str == "-")
   then (BitVec.zero notn)
   else
-    let parsed := (BitVec.zero notn)
-    if (BEq.beq (BitVec.access parsed (notn -i 1)) 0#1)
+    (let parsed := (BitVec.zero notn)
+    bif ((BitVec.access parsed (notn -i 1)) == 0#1)
     then parsed
-    else (BitVec.zero notn)
+    else (BitVec.zero notn))
 
 /-- Type quantifiers: tuple_0.1 : Nat, tuple_0.1 > 0 -/
 def hex_bits_signed2_backwards_matches (tuple_0 : (Nat × String)) : Bool :=
@@ -186,7 +209,7 @@ def test_constr (app_0 : virtaddr) : (BitVec 32) :=
 
 /-- Type quantifiers: n : Nat, n ≥ 0 -/
 def termination (n : Nat) : Int :=
-  if (BEq.beq n 0)
+  bif (n == 0)
   then 0
   else (1 +i (termination (n -i 1)))
 
@@ -196,6 +219,4 @@ def initialize_registers (_ : Unit) : Unit :=
 def sail_model_init (x_0 : Unit) : Unit :=
   (initialize_registers ())
 
-end Functions
-open Functions
-
+end Out.Functions

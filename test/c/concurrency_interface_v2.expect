@@ -1,0 +1,9 @@
+least significant byte = 0x78
+read memory (no tag read) = 0xABCD1234FFFF5678
+read memory 4 lower bytes (no tag read) = 0xFFFF5678
+read memory 4 higher bytes (no tag read) = 0xABCD1234
+read memory (true tag) = 0xABCD1234FFFF5678
+read memory (false tag) = 0xABCD1234DEAD5678
+read memory 2 bytes (false tag) = 0xDEAD
+c = 1
+0xFFFF

@@ -1,11 +1,11 @@
-import Std.Data.DHashMap
+import Std.Data.ExtDHashMap
 import Std.Data.HashMap
 
 namespace Sail
 
 namespace BitVec
 
-def length {w : Nat} (_ : BitVec w) : Nat := w
+abbrev length {w : Nat} (_ : BitVec w) : Nat := w
 
 def signExtend {w : Nat} (x : BitVec w) (w' : Nat) : BitVec w' :=
   x.signExtend w'
@@ -30,13 +30,25 @@ def updateSubrange' {w : Nat} (x : BitVec w) (start len : Nat) (y : BitVec len) 
 def slice {w : Nat} (x : BitVec w) (start len : Nat) : BitVec len :=
   x.extractLsb' start len
 
+def sliceBE {w : Nat} (x : BitVec w) (start len : Nat) : BitVec len :=
+  x.extractLsb' (w - start - len) len
+
+def subrangeBE {w : Nat} (x : BitVec w) (lo hi : Nat) : BitVec (hi - lo + 1) :=
+  x.extractLsb' (w - hi - 1) _
+
 def updateSubrange {w : Nat} (x : BitVec w) (hi lo : Nat) (y : BitVec (hi - lo + 1)) : BitVec w :=
   updateSubrange' x lo _ y
+
+def updateSubrangeBE {w : Nat} (x : BitVec w) (lo hi : Nat) (y : BitVec (hi - lo + 1)) : BitVec w :=
+  updateSubrange' x (w - hi - 1) _ y
 
 def replicateBits {w : Nat} (x : BitVec w) (i : Nat) := BitVec.replicate i x
 
 def access {w : Nat} (x : BitVec w) (i : Nat) : BitVec 1 :=
   BitVec.ofBool x[i]!
+
+def accessBE {w : Nat} (x : BitVec w) (i : Nat) : BitVec 1 :=
+  BitVec.ofBool x[w - i - 1]!
 
 def addInt {w : Nat} (x : BitVec w) (i : Int) : BitVec w :=
   x + BitVec.ofInt w i
@@ -44,11 +56,25 @@ def addInt {w : Nat} (x : BitVec w) (i : Int) : BitVec w :=
 def subInt (x : BitVec w) (i : Int) : BitVec w :=
   x - BitVec.ofInt w i
 
+def countLeadingZeros (x : BitVec w) : Nat :=
+  if h : w = 0 || BitVec.msb x then
+    0
+  else
+    1 + countLeadingZeros (x.extractLsb' 0 (w - 1))
+  decreasing_by
+    simp only [Bool.or_eq_true, decide_eq_true_eq, not_or, Bool.not_eq_true] at h
+    omega
+
+def countTrailingZeros (x : BitVec w) : Nat :=
+  countLeadingZeros (x.reverse)
+
 def append' (x : BitVec n) (y : BitVec m) {mn}
     (hmn : mn = n + m := by (conv => rhs; simp); try rfl) : BitVec mn :=
   (x.append y).cast hmn.symm
 
 def update (x : BitVec m) (n : Nat) (b : BitVec 1) := updateSubrange' x n _ b
+
+def updateBE (x : BitVec m) (n : Nat) (b : BitVec 1) := updateSubrange' x (m - n - 1) _ b
 
 def toBin {w : Nat} (x : BitVec w) : String :=
   List.asString (List.map (fun c => if c then '1' else '0') (List.ofFn (BitVec.getMsb' x)))
@@ -84,6 +110,16 @@ def parse_hex_bits_digits (n : Nat) (str : String) : BitVec n :=
     BitVec.append bv c |>.cast (by simp_all)
 decreasing_by simp_all <;> omega
 
+def parse_dec_bits (n : Nat) (str : String) : BitVec n :=
+  go str.length str
+where
+  -- TODO: when there are lemmas about `String.take`, replace with WF induction
+  go (fuel : Nat) (str : String) :=
+    if fuel = 0 then 0 else
+      let lsd := str.get! ⟨str.length - 1⟩
+      let rest := str.take (str.length - 1)
+      (charToHex lsd).setWidth n + 10#n * go (fuel-1) rest
+
 def parse_hex_bits (n : Nat) (str : String) : BitVec n :=
   let bv := parse_hex_bits_digits (round4 n) (str.drop 2)
   bv.setWidth n
@@ -94,6 +130,10 @@ def valid_hex_bits (n : Nat) (str : String) : Bool :=
   str.all fun x => x.toLower ∈
     ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'a', 'b', 'c', 'd', 'e', 'f'] &&
   2 ^ n > (parse_hex_bits_digits (round4 n) str).toNat
+
+def valid_dec_bits (_ : Nat) (str : String) : Bool :=
+  str.all fun x => x.toLower ∈
+    ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9']
 
 def shift_bits_left (bv : BitVec n) (sh : BitVec m) : BitVec n :=
   bv <<< sh
@@ -154,19 +194,21 @@ def toHexUpper (i : Int) : String :=
 
 end Int
 
-def get_slice_int (len n lo : Nat) : BitVec len :=
+def get_slice_int (len : Nat) (n : Int) (lo : Nat) : BitVec len :=
   BitVec.extractLsb' lo len (BitVec.ofInt (lo + len + 1) n)
 
-def set_slice_int (len n lo : Nat) (x : BitVec len) : Int :=
+def set_slice_int (len : Nat) (n : Int) (lo : Nat) (x : BitVec len) : Int :=
   BitVec.toInt (BitVec.updateSubrange' (BitVec.ofInt len n) lo len x)
+
+def set_slice {n : Nat} (m : Nat) (bv : BitVec n) (start : Nat) (bv' : BitVec m) : BitVec n :=
+  BitVec.updateSubrange' bv start m bv'
 
 def String.leadingSpaces (s : String) : Nat :=
   s.length - (s.dropWhile (· = ' ')).length
 
-def Vector.length (_v : Vector α n) : Nat :=
-  n
+abbrev Vector.length (_v : Vector α n) : Nat := n
 
-def vectorInit {n : Nat} (a : α) : Vector α n := Vector.mkVector n a
+def vectorInit {n : Nat} (a : α) : Vector α n := Vector.replicate n a
 
 def vectorUpdate (v : Vector α m) (n : Nat) (a : α) := v.set! n a
 
@@ -223,6 +265,8 @@ class Arch where
   pa_OfNat {n : Nat} : OfNat pa n
   arch_ak : Type
   translation : Type
+  trans_start : Type
+  trans_end : Type
   abort : Type
   barrier : Type
   cache_op : Type
@@ -252,29 +296,36 @@ inductive Access_variety where
   | AV_plain
   | AV_exclusive
   | AV_atomic_rmw
-deriving DecidableEq
+  deriving Inhabited, DecidableEq, Repr
+
 export Access_variety (AV_plain AV_exclusive AV_atomic_rmw)
 
 inductive Access_strength where
   | AS_normal
   | AS_rel_or_acq
   | AS_acq_rcpc
+  deriving Inhabited, DecidableEq, Repr
+
 export Access_strength(AS_normal AS_rel_or_acq AS_acq_rcpc)
 
 structure Explicit_access_kind where
   variety : Access_variety
   strength : Access_strength
+deriving Repr
 
 inductive Access_kind (arch : Type) where
   | AK_explicit (_ : Explicit_access_kind)
   | AK_ifetch (_ : Unit)
   | AK_ttw (_ : Unit)
   | AK_arch (_ : arch)
+  deriving Inhabited, Repr
+
 export Access_kind(AK_explicit AK_ifetch AK_ttw AK_arch)
 
 inductive Result (α : Type) (β : Type) where
   | Ok (_ : α)
   | Err (_ : β)
+  deriving Repr
 export Result(Ok Err)
 
 structure Mem_read_request
@@ -285,6 +336,7 @@ structure Mem_read_request
   translation : ts
   size : Int
   tag : Bool
+  deriving Inhabited, Repr
 
 structure Mem_write_request
   (n : Nat) (vasize : Nat) (pa : Type) (ts : Type) (arch_ak : Type) where
@@ -295,10 +347,25 @@ structure Mem_write_request
   size : Int
   value : (Option (BitVec (8 * n)))
   tag : (Option Bool)
+  deriving Inhabited, Repr
 
 end ConcurrencyInterface
 
 end PreSailTypes
+
+def print_int : String → Int → Unit := fun _ _ => ()
+
+def prerr_int : String → Int → Unit := fun _ _ => ()
+
+def prerr_bits: String → BitVec n → Unit := fun _ _ => ()
+
+def print_endline : String → Unit := fun _  => ()
+
+def prerr_endline : String → Unit := fun _ => ()
+
+def print : String → Unit := fun _ => ()
+
+def prerr : String → Unit := fun _ => ()
 
 end Sail
 
@@ -311,7 +378,7 @@ section Regs
 variable {Register : Type} {RegisterType : Register → Type} [DecidableEq Register] [Hashable Register]
 
 structure SequentialState (RegisterType : Register → Type) (c : ChoiceSource) where
-  regs : Std.DHashMap Register RegisterType
+  regs : Std.ExtDHashMap Register RegisterType
   choiceState : c.α
   mem : Std.HashMap Nat (BitVec 8)
   tags : Unit
@@ -349,6 +416,9 @@ def undefined_bool (_ : Unit) : PreSailM RegisterType c ue Bool :=
 def undefined_int (_ : Unit) : PreSailM RegisterType c ue Int :=
   choose .int
 
+def undefined_range (low high : Int) : PreSailM RegisterType c ue Int := do
+  pure (low + (← choose .int) % (high - low))
+
 def undefined_nat (_ : Unit) : PreSailM RegisterType c ue Nat :=
   choose .nat
 
@@ -359,7 +429,7 @@ def undefined_bitvector (n : Nat) : PreSailM RegisterType c ue (BitVec n) :=
   choose <| .bitvector n
 
 def undefined_vector (n : Nat) (a : α) : PreSailM RegisterType c ue (Vector α n) :=
-  pure <| .mkVector n a
+  pure <| .replicate n a
 
 def internal_pick {α : Type} : List α → PreSailM RegisterType c ue α
   | [] => .error .Unreachable
@@ -391,9 +461,7 @@ def assert (p : Bool) (s : String) : PreSailM RegisterType c ue Unit :=
 section ConcurrencyInterface
 
 def writeByte (addr : Nat) (value : BitVec 8) : PreSailM RegisterType c ue PUnit := do
-  match (← get).mem.containsThenInsert addr value with
-    | (true, m) => modify fun s => { s with mem := m }
-    | (false, _) => throw (.OutOfMemoryRange addr)
+  modify fun s => { s with mem := s.mem.insert addr value }
 
 def writeBytes (addr : Nat) (value : BitVec (8 * n)) : PreSailM RegisterType c ue Bool := do
   let list := List.ofFn (λ i : Fin n => (addr + i.val, value.extractLsb' (8 * i.val) 8))
@@ -423,8 +491,8 @@ def readBytes (size : Nat) (addr : Nat) : PreSailM RegisterType c ue ((BitVec (8
   | n + 1 => do
     let b ← readByte addr
     let (bytes, bool) ← readBytes n (addr+1)
-    have h : 8 + 8 * n = 8 * (n + 1) := by omega
-    return (h ▸ b.append bytes, bool)
+    have h : 8 * n + 8 = 8 * (n + 1) := by omega
+    return (h ▸ bytes.append b, bool)
 
 def sail_mem_read [Arch] (req : Mem_read_request n vasize (BitVec pa_size) ts arch) : PreSailM RegisterType c ue (Result ((BitVec (8 * n)) × (Option Bool)) Arch.abort) := do
   let addr := req.pa.toNat
@@ -436,6 +504,12 @@ def read_ram (addr_size data_size : Nat) (_hex_ram addr : BitVec addr_size) : Pr
   pure bytes
 
 def sail_barrier (_ : α) : PreSailM RegisterType c ue Unit := pure ()
+def sail_cache_op [Arch] (_ : Arch.cache_op) : PreSailM RegisterType c ue Unit := pure ()
+def sail_tlbi [Arch] (_ : Arch.tlb_op) : PreSailM RegisterType c ue Unit := pure ()
+def sail_translation_start [Arch] (_ : Arch.trans_start) : PreSailM RegisterType c ue Unit := pure ()
+def sail_translation_end [Arch] (_ : Arch.trans_end) : PreSailM RegisterType c ue Unit := pure ()
+def sail_take_exception [Arch] (_ : Arch.fault) : PreSailM RegisterType c ue Unit := pure ()
+def sail_return_exception [Arch] (_ : Arch.pa) : PreSailM RegisterType c ue Unit := pure ()
 
 def cycle_count (_ : Unit) : PreSailM RegisterType c ue Unit :=
   modify fun s => { s with cycleCount := s.cycleCount + 1 }
@@ -531,6 +605,9 @@ instance [GetElem? coll Nat elem valid] : GetElem? coll Int elem (λ c i ↦ val
 instance : HPow Int Int Int where
   hPow x n := x ^ n.toNat
 
+instance [BEq α] [Hashable α] : Inhabited (Std.ExtDHashMap α β) where
+  default := ∅
+
 infixl:65 " +i "   => fun (x y : Int) => x + y
 infixl:65 " -i "   => fun (x y : Int) => x - y
 infixl:65 " ^i "   => fun (x y : Int) => x ^ y
@@ -541,4 +618,16 @@ notation:50 x "<b" y => decide (x < y)
 notation:50 x "≥b" y => decide (x ≥ y)
 notation:50 x ">b" y => decide (x > y)
 
-macro_rules | `(tactic| decreasing_trivial) => `(tactic| simp_all <;> omega)
+-- for termination measures, since they're almost always `Int`s but not always
+abbrev Nat.toNat (x : Nat) := x
+
+set_option grind.warning false
+macro_rules | `(tactic| decreasing_trivial) => `(tactic|
+  first
+  | grind
+  | decide)
+
+-- This lemma replaces `bif` by `if` in functions when Lean is trying to prove
+-- termination.
+@[wf_preprocess]
+theorem cond_eq_ite (b : Bool) (x y : α) : cond b x y = ite b x y := by cases b <;> rfl

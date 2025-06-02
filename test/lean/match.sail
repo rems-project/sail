@@ -81,3 +81,12 @@ function match_width x = {
   bitvector_concat(foo, foo)
 }
 
+val match_option_bitvec : (option(bitvector(16))) -> int
+
+function match_option_bitvec (x : option(bitvector(16))) = {
+  match x {
+    Some(0xFFFF) => 1,
+    _ => 0
+  }
+}
+

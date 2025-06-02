@@ -17,6 +17,7 @@ $include <flow.sail>
 $include <arith.sail>
 $include <option.sail>
 $include <vector_dec.sail>
+$include <reverse_endianness.sail>
 
 $include <regfp.sail>
 
@@ -33,7 +34,6 @@ overload operator << = {shift_bits_left, shift_left}
 overload operator >> = {shift_bits_right, shift_right}
 
 
-val replicate_bits = "replicate_bits" : forall 'n 'm. (bits('n), int('m)) -> bits('n * 'm)
 val operator ^^ = "replicate_bits" : forall 'n 'm. (bits('n), int('m)) -> bits('n * 'm)
 
 
@@ -83,7 +83,6 @@ val or_bits = {c:"or_bits", _: "or_vec"} : forall 'n. (bits('n), bits('n)) -> bi
 overload operator | = {or_bool, or_bits}
 
 
-val not_vec = {c:"not_bits", _:"not_vec"} : forall 'n. bits('n) -> bits('n)
 overload ~ = {not_bool, not_vec}
 
 val eq_anything = {ocaml: "(fun (x, y) -> x = y)", lem: "eq", coq: "generic_eq", _:"eq_anything"} : forall ('a : Type). ('a, 'a) -> bool
@@ -96,20 +95,13 @@ function neq_vec (x, y) = not_bool(eq_bits(x, y))
 val neq_anything = {lem: "neq", coq: "generic_neq"} : forall ('a : Type). ('a, 'a) -> bool
 function neq_anything (x, y) = not_bool(x == y)
 
-overload operator != = {neq_atom, neq_int, neq_vec, neq_anything}
+overload operator != = {neq_int, neq_vec, neq_anything}
 
 
-val add_int = {ocaml: "add_int", interpreter: "add_int", lem: "integerAdd", c: "add_int", coq: "Z.add"} : forall 'n 'm.
-  (int('n), int('m)) -> int('n + 'm)
 val add_vec = {c: "add_bits", _: "add_vec"} : forall 'n. (bits('n), bits('n)) -> bits('n)
 val add_vec_int = {c: "add_bits_int", _: "add_vec_int"} : forall 'n. (bits('n), int) -> bits('n)
 overload operator + = {add_int, add_vec, add_vec_int}
 
-val sub_int = {ocaml: "sub_int", interpreter: "sub_int", lem: "integerMinus", c: "sub_int", coq: "Z.sub"} : forall 'n 'm.
-  (int('n), int('m)) -> int('n - 'm)
-val sub_nat = {ocaml: "(fun (x,y) -> let n = sub_int (x,y) in if Big_int.less_equal n Big_int.zero then Big_int.zero else n)",
-	       interpreter: "sub_nat", lem: "integerMinus", coq: "sub_nat", c: "sub_nat"}
-            : (nat, nat) -> nat
 val sub_vec = {c: "sub_bits", _: "sub_vec"} : forall 'n. (bits('n), bits('n)) -> bits('n)
 val sub_vec_int = {c: "sub_bits_int", _: "sub_vec_int"} : forall 'n. (bits('n), int) -> bits('n)
 overload operator - = {sub_int, sub_vec, sub_vec_int}
@@ -119,9 +111,9 @@ overload operator - = {sub_int, sub_vec, sub_vec_int}
 /* function reg_index x = unsigned(x) */
 
 
-val quotient_nat = {ocaml: "quotient", interpreter: "quotient", lem: "integerDiv"} : 
+val quotient_nat = {ocaml: "quotient", interpreter: "quotient", lem: "integerDiv", coq: "ZEuclid.div"} : 
     forall 'M 'N, 'M >= 0 & 'N >= 0. (int('M), int('N)) -> int(div('M,'N))
-val quotient = {ocaml: "quotient", interpreter: "quotient", lem: "integerDiv"} : 
+val quotient = {ocaml: "quotient", interpreter: "quotient", lem: "integerDiv", coq: "ZEuclid.div"} : 
     forall 'M 'N. (int('M), int('N)) -> int(div('M,'N))
 overload quot = {quotient_nat, quotient}
 
@@ -135,11 +127,9 @@ val to_bits : forall 'l, 'l >= 0.(implicit('l), int) -> bits('l)
 function to_bits (l, n) = __raw_GetSlice_int(l, n, 0)
 
 
-val xor_vec = {c: "xor_bits", _: "xor_vec"} : forall 'n. (bits('n), bits('n)) -> bits('n)
-
 val int_power = {ocaml: "int_power", interpreter: "int_power", lem: "pow", coq: "pow", c: "pow_int"} : (int, int) -> int
 
-overload operator ^ = {xor_vec, int_power, concat_str}
+overload operator ^ = {xor_vec, int_power}
 
 
 val mask : forall 'l 'm, 'l >= 0 & 'm >= 0. (implicit('l), bits('m)) -> bits('l)
@@ -153,11 +143,11 @@ val print = "print_endline" : string -> unit
 
 val error : forall ('a : Type). string -> 'a effect{escape}
 function error(message) = {
-  print(message); 
+  assert(false, message); 
   exit()
 }
 
 type min ('M : Int, 'N : Int) = {'O, ('O == 'M | 'O == 'N) & 'O <= 'M & 'O <= 'N. int('O)}
 
 
-val appendL = {ocaml: "append", interpreter: "append_list", lem: "append_list"} : forall ('a:Type). (list('a),list('a)) -> list('a)
+val appendL = {ocaml: "append", interpreter: "append_list", lem: "append_list", coq: "List.app"} : forall ('a:Type). (list('a),list('a)) -> list('a)

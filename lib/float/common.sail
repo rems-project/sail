@@ -25,6 +25,8 @@ let fp_eflag_oveflow        : fp_exception_flags = 0b00100
 let fp_eflag_underflow      : fp_exception_flags = 0b01000
 let fp_eflag_inexact        : fp_exception_flags = 0b10000
 
+let fp_eflag_overflow_and_inexact : fp_exception_flags = fp_eflag_oveflow | fp_eflag_inexact
+
 let fp_rounding_rne     : fp_rounding_modes = 0b00001
 let fp_rounding_rna     : fp_rounding_modes = 0b00010
 let fp_rounding_rdn     : fp_rounding_modes = 0b00011

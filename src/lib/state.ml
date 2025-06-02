@@ -91,15 +91,15 @@ let rec id_of_regtyp builtins (Typ_aux (t, l) as typ) =
   match t with
   | Typ_id id -> id
   | Typ_app (id, args) ->
-      let name_arg (A_aux (targ, _)) =
+      let name_arg (A_aux (targ, l)) =
         match targ with
         | A_typ targ -> string_of_id (id_of_regtyp builtins targ)
         | A_nexp nexp when is_nexp_constant (nexp_simp nexp) -> string_of_nexp (nexp_simp nexp)
-        | _ -> raise (Reporting.err_typ l "Unsupported register type")
+        | _ -> raise (Reporting.err_typ l ("Unsupported register type " ^ string_of_typ typ))
       in
       if IdSet.mem id builtins && not (is_bitvector_typ typ) then id
       else append_id id (String.concat "_" ("" :: List.map name_arg args))
-  | _ -> raise (Reporting.err_typ l "Unsupported register type")
+  | _ -> raise (Reporting.err_typ l ("Unsupported register type " ^ string_of_typ typ))
 
 let regstate_field typ = append_id (id_of_regtyp IdSet.empty typ) "_reg"
 

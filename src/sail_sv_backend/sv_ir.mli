@@ -84,7 +84,7 @@ type sv_module = {
 and sv_function = {
   function_name : sv_name;
   return_type : Jib.ctyp option;
-  params : (Ast.id * Jib.ctyp) list;
+  params : (Jib.name * Jib.ctyp) list;
   body : sv_statement;
 }
 
@@ -132,7 +132,7 @@ and sv_statement_aux =
   | SVS_case of { head_exp : smt_exp; cases : (smt_exp * sv_statement) list; fallthrough : sv_statement option }
   | SVS_if of smt_exp * sv_statement option * sv_statement option
   | SVS_block of sv_statement list
-  | SVS_assert of smt_exp * smt_exp
+  | SVS_assert of Jib.name * smt_exp * smt_exp
   | SVS_foreach of sv_name * smt_exp * sv_statement
   | SVS_for of sv_for * sv_statement
   | SVS_raw of string * Jib.name list * Jib.name list

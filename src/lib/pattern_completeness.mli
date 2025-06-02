@@ -53,6 +53,7 @@ open Ast_util
 val opt_debug_no_literals : bool ref
 
 type ctx = {
+  abstract : kind Bindings.t;
   variants : (typquant * type_union list) Bindings.t;
   structs : (typquant * (typ * id) list) Bindings.t;
   enums : IdSet.t Bindings.t;

@@ -55,7 +55,15 @@ typedef const_sail_string sail_config_key[];
 typedef struct sail_json* sail_config_json;
 
 /*
- * This file sets the runtime JSON config file
+ * Load the runtime JSON config from a null-terminated
+ * string containing JSON data.
+ */
+ void sail_config_set_string(const char *json);
+
+/*
+ * Load the runtime JSON config from a file. The file
+ * is read into memory and closed so it does not need
+ * to exist after this function returns.
  */
 void sail_config_set_file(const char *path);
 
@@ -69,7 +77,7 @@ void sail_config_cleanup(void);
 /*
  * Get the JSON corresponding to some key.
  */
-sail_config_json sail_config_get(const size_t n, const_sail_string key[]);
+sail_config_json sail_config_get(const size_t n, const_sail_string const *key);
 
 /*
  * Get the JSON corresponding to some key. Rather than an array the
@@ -88,8 +96,8 @@ sail_config_json sail_config_lookup(const char *dotted_key);
  */
 
 bool sail_config_is_object(const sail_config_json config);
-bool sail_config_object_has_key(const sail_config_json config, const sail_string key);
-sail_config_json sail_config_object_key(const sail_config_json config, const sail_string key);
+bool sail_config_object_has_key(const sail_config_json config, const_sail_string key);
+sail_config_json sail_config_object_key(const sail_config_json config, const_sail_string key);
 
 int64_t sail_config_list_length(const sail_config_json config);
 sail_config_json sail_config_list_nth(const sail_config_json config, int64_t index);

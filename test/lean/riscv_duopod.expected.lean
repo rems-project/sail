@@ -4,7 +4,7 @@ import Out.Sail.BitVec
 open PreSail
 
 set_option maxHeartbeats 1_000_000_000
-set_option maxRecDepth 10_000
+set_option maxRecDepth 1_000_000
 set_option linter.unusedVariables false
 set_option match.ignoreUnusedAlts true
 
@@ -16,7 +16,7 @@ abbrev bits k_n := (BitVec k_n)
 inductive option (k_a : Type) where
   | Some (_ : k_a)
   | None (_ : Unit)
-  deriving BEq
+  deriving Inhabited, BEq, Repr
 
 abbrev xlen : Int := 64
 
@@ -27,18 +27,18 @@ abbrev xlenbits := (BitVec 64)
 abbrev regbits := (BitVec 5)
 
 inductive iop where | RISCV_ADDI | RISCV_SLTI | RISCV_SLTIU | RISCV_XORI | RISCV_ORI | RISCV_ANDI
-  deriving Inhabited, BEq
+  deriving BEq, Inhabited, Repr
 
 inductive ast where
   | ITYPE (_ : ((BitVec 12) × regbits × regbits × iop))
   | LOAD (_ : ((BitVec 12) × regbits × regbits))
-  deriving BEq
+  deriving Inhabited, BEq, Repr
 
 inductive Register : Type where
   | Xs
   | nextPC
   | PC
-  deriving DecidableEq, Hashable
+  deriving DecidableEq, Hashable, Repr
 open Register
 
 abbrev RegisterType : Register → Type
@@ -62,32 +62,58 @@ import Out.Sail.BitVec
 import Out.Sail.IntRange
 import Out.Defs
 import Out.Specialization
+import Out.FakeReal
 
 set_option maxHeartbeats 1_000_000_000
-set_option maxRecDepth 10_000
+set_option maxRecDepth 1_000_000
 set_option linter.unusedVariables false
 set_option match.ignoreUnusedAlts true
 
 open Sail
+
+namespace Out.Functions
 
 open option
 open iop
 open ast
 open Register
 
-namespace Functions
-
-/-- Type quantifiers: k_ex1030# : Bool, k_ex1029# : Bool -/
+/-- Type quantifiers: k_ex869# : Bool, k_ex868# : Bool -/
 def neq_bool (x : Bool) (y : Bool) : Bool :=
-  (Bool.not (BEq.beq x y))
+  (! (x == y))
 
 /-- Type quantifiers: x : Int -/
 def __id (x : Int) : Int :=
   x
 
+/-- Type quantifiers: n : Int, m : Int -/
+def _shl_int_general (m : Int) (n : Int) : Int :=
+  bif (n ≥b 0)
+  then (Int.shiftl m n)
+  else (Int.shiftr m (Neg.neg n))
+
+/-- Type quantifiers: n : Int, m : Int -/
+def _shr_int_general (m : Int) (n : Int) : Int :=
+  bif (n ≥b 0)
+  then (Int.shiftr m n)
+  else (Int.shiftl m (Neg.neg n))
+
+/-- Type quantifiers: m : Int, n : Int -/
+def fdiv_int (n : Int) (m : Int) : Int :=
+  bif ((n <b 0) && (m >b 0))
+  then ((Int.tdiv (n +i 1) m) -i 1)
+  else
+    (bif ((n >b 0) && (m <b 0))
+    then ((Int.tdiv (n -i 1) m) -i 1)
+    else (Int.tdiv n m))
+
+/-- Type quantifiers: m : Int, n : Int -/
+def fmod_int (n : Int) (m : Int) : Int :=
+  (n -i (m *i (fdiv_int n m)))
+
 /-- Type quantifiers: len : Nat, k_v : Nat, len ≥ 0 ∧ k_v ≥ 0 -/
 def sail_mask (len : Nat) (v : (BitVec k_v)) : (BitVec len) :=
-  if (len ≤b (Sail.BitVec.length v))
+  bif (len ≤b (Sail.BitVec.length v))
   then (Sail.BitVec.truncate v len)
   else (Sail.BitVec.zeroExtend v len)
 
@@ -97,36 +123,33 @@ def sail_ones (n : Nat) : (BitVec n) :=
 
 /-- Type quantifiers: l : Int, i : Int, n : Nat, n ≥ 0 -/
 def slice_mask {n : _} (i : Int) (l : Int) : (BitVec n) :=
-  if (l ≥b n)
+  bif (l ≥b n)
   then ((sail_ones n) <<< i)
   else
-    let one : (BitVec n) := (sail_mask n (0b1 : (BitVec 1)))
-    (((one <<< l) - one) <<< i)
+    (let one : (BitVec n) := (sail_mask n (0b1 : (BitVec 1)))
+    (((one <<< l) - one) <<< i))
 
-/-- Type quantifiers: n : Int, m : Int -/
-def _shl_int_general (m : Int) (n : Int) : Int :=
-  if (n ≥b 0)
-  then (Int.shiftl m n)
-  else (Int.shiftr m (Neg.neg n))
+/-- Type quantifiers: n : Nat, n > 0 -/
+def to_bytes_le {n : _} (b : (BitVec (8 * n))) : (Vector (BitVec 8) n) := Id.run do
+  let res := (vectorInit (BitVec.zero 8))
+  let loop_i_lower := 0
+  let loop_i_upper := (n -i 1)
+  let mut loop_vars := res
+  for i in [loop_i_lower:loop_i_upper:1]i do
+    let res := loop_vars
+    loop_vars := (vectorUpdate res i (Sail.BitVec.extractLsb b ((8 *i i) +i 7) (8 *i i)))
+  (pure loop_vars)
 
-/-- Type quantifiers: n : Int, m : Int -/
-def _shr_int_general (m : Int) (n : Int) : Int :=
-  if (n ≥b 0)
-  then (Int.shiftr m n)
-  else (Int.shiftl m (Neg.neg n))
-
-/-- Type quantifiers: m : Int, n : Int -/
-def fdiv_int (n : Int) (m : Int) : Int :=
-  if (Bool.and (n <b 0) (m >b 0))
-  then ((Int.tdiv (n +i 1) m) -i 1)
-  else
-    if (Bool.and (n >b 0) (m <b 0))
-    then ((Int.tdiv (n -i 1) m) -i 1)
-    else (Int.tdiv n m)
-
-/-- Type quantifiers: m : Int, n : Int -/
-def fmod_int (n : Int) (m : Int) : Int :=
-  (n -i (m *i (fdiv_int n m)))
+/-- Type quantifiers: n : Nat, n > 0 -/
+def from_bytes_le {n : _} (v : (Vector (BitVec 8) n)) : (BitVec (8 * n)) := Id.run do
+  let res := (BitVec.zero (8 *i n))
+  let loop_i_lower := 0
+  let loop_i_upper := (n -i 1)
+  let mut loop_vars := res
+  for i in [loop_i_lower:loop_i_upper:1]i do
+    let res := loop_vars
+    loop_vars := (Sail.BitVec.updateSubrange res ((8 *i i) +i 7) (8 *i i) (GetElem?.getElem! v i))
+  (pure loop_vars)
 
 /-- Type quantifiers: k_a : Type -/
 def is_none (opt : (Option k_a)) : Bool :=
@@ -161,13 +184,12 @@ def zeros (n : Nat) : (BitVec n) :=
   (BitVec.replicateBits (0b0 : (BitVec 1)) n)
 
 def rX (r : (BitVec 5)) : SailM (BitVec 64) := do
-  let b__0 := r
-  if (BEq.beq b__0 (0b00000 : (BitVec 5)))
-  then (pure (EXTZ (m := 64) (0x0 : (BitVec 4))))
-  else (pure (GetElem?.getElem! (← readReg Xs) (BitVec.toNat r)))
+  match_bv r with
+  | 00000 => do (pure (EXTZ (m := 64) (0x0 : (BitVec 4))))
+  | _ => do (pure (GetElem?.getElem! (← readReg Xs) (BitVec.toNat r)))
 
 def wX (r : (BitVec 5)) (v : (BitVec 64)) : SailM Unit := do
-  if (bne r (0b00000 : (BitVec 5)))
+  bif (r != (0b00000 : (BitVec 5)))
   then writeReg Xs (vectorUpdate (← readReg Xs) (BitVec.toNat r) v)
   else (pure ())
 
@@ -202,40 +224,26 @@ def execute_LOAD (imm : (BitVec 12)) (rs1 : (BitVec 5)) (rd : (BitVec 5)) : Sail
   let result ← (( do (read_mem addr 8) ) : SailM xlenbits )
   (wX rd result)
 
-def execute_ITYPE (arg0 : (BitVec 12)) (arg1 : (BitVec 5)) (arg2 : (BitVec 5)) (arg3 : iop) : SailM Unit := do
-  let merge_var := (arg0, arg1, arg2, arg3)
-  match merge_var with
-  | (imm, rs1, rd, RISCV_ADDI) =>
-    let rs1_val ← do (rX rs1)
-    let imm_ext : xlenbits := (EXTS (m := 64) imm)
-    let result := (rs1_val + imm_ext)
-    (wX rd result)
-  | _ => throw Error.Exit
+def execute_ITYPE (imm : (BitVec 12)) (rs1 : (BitVec 5)) (rd : (BitVec 5)) (id_3 : iop) : SailM Unit := do
+  let rs1_val ← do (rX rs1)
+  let imm_ext : xlenbits := (EXTS (m := 64) imm)
+  let result := (rs1_val + imm_ext)
+  (wX rd result)
 
 def execute (merge_var : ast) : SailM Unit := do
   match merge_var with
   | .ITYPE (imm, rs1, rd, arg3) => (execute_ITYPE imm rs1 rd arg3)
   | .LOAD (imm, rs1, rd) => (execute_LOAD imm rs1 rd)
+  | _ =>
+    (do
+      assert false "Pattern match failure at riscv_duopod.sail:138.0-142.1"
+      throw Error.Exit)
 
-def decode (v__0 : (BitVec 32)) : (Option ast) :=
-  if (Bool.and (BEq.beq (Sail.BitVec.extractLsb v__0 14 12) (0b000 : (BitVec 3)))
-       (BEq.beq (Sail.BitVec.extractLsb v__0 6 0) (0b0010011 : (BitVec 7))))
-  then
-    let imm : (BitVec 12) := (Sail.BitVec.extractLsb v__0 31 20)
-    let rs1 : regbits := (Sail.BitVec.extractLsb v__0 19 15)
-    let rd : regbits := (Sail.BitVec.extractLsb v__0 11 7)
-    let imm : (BitVec 12) := (Sail.BitVec.extractLsb v__0 31 20)
-    (some (ITYPE (imm, rs1, rd, RISCV_ADDI)))
-  else
-    if (Bool.and (BEq.beq (Sail.BitVec.extractLsb v__0 14 12) (0b011 : (BitVec 3)))
-         (BEq.beq (Sail.BitVec.extractLsb v__0 6 0) (0b0000011 : (BitVec 7))))
-    then
-      let imm : (BitVec 12) := (Sail.BitVec.extractLsb v__0 31 20)
-      let rs1 : regbits := (Sail.BitVec.extractLsb v__0 19 15)
-      let rd : regbits := (Sail.BitVec.extractLsb v__0 11 7)
-      let imm : (BitVec 12) := (Sail.BitVec.extractLsb v__0 31 20)
-      (some (LOAD (imm, rs1, rd)))
-    else none
+def decode (merge_var : (BitVec 32)) : (Option ast) :=
+  match_bv merge_var with
+  | [imm:12,rs1:regbits,000,rd:regbits,0010011] => (some (ITYPE (imm, rs1, rd, RISCV_ADDI)))
+  | [imm:12,rs1:regbits,011,rd:regbits,0000011] => (some (LOAD (imm, rs1, rd)))
+  | _ => none
 
 def initialize_registers (_ : Unit) : SailM Unit := do
   writeReg PC (← (undefined_bitvector 64))
@@ -245,6 +253,4 @@ def initialize_registers (_ : Unit) : SailM Unit := do
 def sail_model_init (x_0 : Unit) : SailM Unit := do
   (initialize_registers ())
 
-end Functions
-open Functions
-
+end Out.Functions

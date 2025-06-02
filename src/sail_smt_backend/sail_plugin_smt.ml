@@ -165,13 +165,26 @@ let smt_target out_file { ast; effect_info; env; _ } =
   let t = Profile.start () in
   let generated_smt = SMTGen.generate_smt ~properties ~name_file ~smt_includes:!opt_smt_includes ctx cdefs in
   Profile.finish "Generating SMT" t;
-  if !opt_smt_auto then
+  if !opt_smt_auto then (
+    let unsats =
+      List.map
+        (fun ({ loc; file_name; function_id; args; arg_ctyps; arg_smt_names } : SMTGen.generated_smt_info) ->
+          ( Counterexample.check ~loc ~ctx ~env:ctx.tc_env ~ast ~solver:!opt_smt_auto_solver ~file_name ~function_id
+              ~args ~arg_ctyps ~arg_smt_names,
+            function_id
+          )
+        )
+        generated_smt
+    in
     List.iter
-      (fun ({ file_name; function_id; args; arg_ctyps; arg_smt_names } : SMTGen.generated_smt_info) ->
-        Counterexample.check ~env:ctx.tc_env ~ast ~solver:!opt_smt_auto_solver ~file_name ~function_id ~args ~arg_ctyps
-          ~arg_smt_names
+      (fun (u, fid) ->
+        if u = false then (
+          let l, tf = (Ast_util.id_loc fid, Ast_util.string_of_id fid) in
+          raise (Reporting.err_general l ("Property check failure for " ^ tf ^ "."))
+        )
       )
-      generated_smt;
+      unsats
+  );
   ()
 
 let _ = Target.register ~name:"smt" ~options:smt_options ~rewrites:smt_rewrites smt_target

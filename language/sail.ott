@@ -413,6 +413,10 @@ field_pat_wildcard :: 'FP_' ::=
   | _ l :: :: wild
   |     :: :: no_wild
 
+struct_name :: 'SN_' ::=
+  | id :: :: id
+  |    :: :: anon
+
 pat :: 'P_' ::=
   {{ com pattern }}
   {{ aux _ annot }} {{ auxparam 'a }}
@@ -450,7 +454,7 @@ pat :: 'P_' ::=
     {{ com Cons patterns }}
   | pat1 ^^ ... ^^ patn                      :: :: string_append
     {{ com string append pattern, x ^^ y }}
-  | struct { id1 = pat1 , ... , idn = patn , field_pat_wildcard } :: :: struct
+  | struct struct_name { id1 = pat1 , ... , idn = patn , field_pat_wildcard } :: :: struct
     {{ com struct pattern }}
 
 parsing
@@ -509,7 +513,7 @@ exp :: 'E_' ::=
   | exp1 '::' exp2                                    :: :: cons {{ com cons }}
 
   % structs
-  | struct { fexp0 , ... , fexpn }                    :: :: struct {{ com struct }}
+  | struct struct_name { fexp0 , ... , fexpn }        :: :: struct {{ com struct }}
   | { exp with fexp0 , ... , fexpn }                  :: :: struct_update {{ com functional update of struct }}
   | exp . id                                          :: :: field {{ com field projection from struct  }}
 
@@ -664,7 +668,7 @@ mpat :: 'MP_' ::=
   | mpat1 ^^ ... ^^ mpatn              ::   :: string_append
   | mpat : typ                         ::   :: typ
   | mpat as id                         ::   :: as
-  | struct { id1 = mpat1 , ... , idn = mpatn } :: :: struct
+  | struct struct_name { id1 = mpat1 , ... , idn = mpatn } :: :: struct
 
 mpexp :: 'MPat_' ::=
   {{ aux _ annot }} {{ auxparam 'a }}
@@ -693,15 +697,15 @@ letbind :: 'LB_' ::=
 subst :: 'IS_' ::=
   {{ aux _ l }}
   {{ com instantiation substitution }}
-  | kid = typ :: :: typ
+  | kid = typ_arg :: :: typ
     {{ com instantiate a type variable with a type }}
-  | id1 = id2 :: :: id
+  | id1 = id2     :: :: id
     {{ com instantiate an identifier with another identifier }}
 
 outcome_spec :: 'OV_' ::=
   {{ com outcome declaration }}
   {{ aux _ l }}
-  | outcome id : typschm with kinded_id1 , ... , kinded_idn :: :: outcome
+  | outcome id : typschm with typquant :: :: outcome
 
 instantiation_spec :: 'IN_' ::=
   {{ aux _ annot }} {{ auxparam 'a }}

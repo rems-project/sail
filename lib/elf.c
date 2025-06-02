@@ -142,6 +142,7 @@ uint64_t rev64(uint64_t x) {
 #define ELFDATA2LSB     1  /* Little-endian ELF */
 
 #define ET_EXEC         2  /* Executable file */
+#define ET_DYN          3  /* Dynamically-linked/Position-independent file */
 
 #define EM_ARM     0x0028  /* 32-bit ARM */
 #define EM_AARCH64 0x00B7  /* 64-bit ARM */
@@ -294,19 +295,19 @@ typedef struct
     Elf64_Xword   st_size;          /* Symbol size */
 } Elf64_Sym;
 
-void loadBlock32(const char* buffer, Elf32_Off off, Elf32_Addr addr, Elf32_Word filesz, Elf32_Word memsz) {
+void loadBlock32(const char* buffer, Elf32_Off off, Elf32_Addr addr, Elf32_Word filesz, Elf32_Word memsz, const int64_t load_offset) {
     //// std::cout << "Loading block from " << off << " to " << addr << "+:" << filesz << std::endl;
     for(Elf32_Off i = 0; i < filesz; ++i) {
         //// std::cout << "Writing " << (int)buffer[off+i] << " to " << addr+i << std::endl;
-	write_mem(addr+i, 0xff & buffer[off+i]);
+        write_mem(load_offset+addr+i, 0xff & buffer[off+i]);
     }
     // Zero fill if p_memsz > p_filesz
     for(Elf32_Off i = filesz; i < memsz; ++i) {
-	write_mem(addr+i, 0);
+        write_mem(load_offset+addr+i, 0);
     }
 }
 
-void loadProgHdr32(bool le, const char* buffer, Elf32_Off off, const int total_file_size) {
+void loadProgHdr32(bool le, const char* buffer, Elf32_Off off, const int64_t load_offset, const int total_file_size) {
     //// std::cout << "Loading program header at " << off << std::endl;
     if (off > total_file_size - sizeof(Elf32_Phdr)) {
       fprintf(stderr, "Invalid ELF file, section header overruns end of file\n");
@@ -321,23 +322,23 @@ void loadProgHdr32(bool le, const char* buffer, Elf32_Off off, const int total_f
 	    fprintf(stderr, "Invalid ELF file, section overruns end of file\n");
 	    exit(EXIT_FAILURE);
         }
-        loadBlock32(buffer, off, rdAddr32(le, phdr->p_paddr), filesz, rdWord32(le, phdr->p_memsz));
+        loadBlock32(buffer, off, rdAddr32(le, phdr->p_paddr), filesz, rdWord32(le, phdr->p_memsz), load_offset);
     }
 }
 
-void loadBlock64(const char* buffer, Elf64_Off off, Elf64_Addr addr, Elf64_Word filesz, Elf64_Word memsz) {
+void loadBlock64(const char* buffer, Elf64_Off off, Elf64_Addr addr, Elf64_Word filesz, Elf64_Word memsz, const int64_t load_offset) {
     //// std::cout << "Loading block from " << off << " to " << addr << "+:" << filesz << std::endl;
     for(Elf64_Off i = 0; i < filesz; ++i) {
         // fprintf(stderr, "Writing 0x%x to 0x%lx\n", (int)buffer[off+i], addr+i);
-	write_mem(addr+i, 0xff & buffer[off+i]);
+        write_mem(load_offset+addr+i, 0xff & buffer[off+i]);
     }
     // Zero fill if p_memsz > p_filesz
     for(Elf64_Off i = filesz; i < memsz; ++i) {
-	write_mem(addr+i, 0);
+        write_mem(load_offset+addr+i, 0);
     }
 }
 
-void loadProgHdr64(bool le, const char* buffer, Elf64_Off off, const int total_file_size) {
+void loadProgHdr64(bool le, const char* buffer, Elf64_Off off, const int64_t load_offset, const int total_file_size) {
     //// std::cout << "Loading program header at " << off << std::endl;
     if (off > total_file_size - sizeof(Elf64_Phdr)) {
       fprintf(stderr, "Invalid ELF file, section header overruns end of file\n");
@@ -352,11 +353,11 @@ void loadProgHdr64(bool le, const char* buffer, Elf64_Off off, const int total_f
 	  fprintf(stderr, "Invalid ELF file, section overruns end of file\n");
 	  exit(EXIT_FAILURE);
         }
-        loadBlock64(buffer, off, rdAddr64(le, phdr->p_paddr), filesz, rdXword64(le, phdr->p_memsz));
+        loadBlock64(buffer, off, rdAddr64(le, phdr->p_paddr), filesz, rdXword64(le, phdr->p_memsz), load_offset);
     }
 }
 
-void checkELFHdr(const char* buffer, const int total_file_size) {
+void checkELFHdr(const char* buffer, const int total_file_size, bool *is_dynamic, bool *is32bit_p) {
     if (total_file_size < sizeof(Elf32_Ehdr)) {
         fprintf(stderr, "File too small, not big enough even for 32-bit ELF header\n");
         exit(EXIT_FAILURE);
@@ -372,13 +373,16 @@ void checkELFHdr(const char* buffer, const int total_file_size) {
     if (hdr->e_ident[EI_CLASS] == ELFCLASS32) {
         bool le = hdr->e_ident[EI_DATA] == ELFDATA2LSB;
         Elf32_Ehdr *ehdr = (Elf32_Ehdr*) &buffer[0];
-        if (rdHalf32(le, ehdr->e_type) != ET_EXEC ||
+        if ((rdHalf32(le, ehdr->e_type) != ET_EXEC && rdHalf32(le, ehdr->e_type) != ET_DYN) ||
             (rdHalf32(le, ehdr->e_machine) != EM_ARM &&
              rdHalf64(le, ehdr->e_machine) != EM_RISCV &&
              rdHalf64(le, ehdr->e_machine) != EM_X86)) {
-            fprintf(stderr, "Invalid ELF type or machine for class (32-bit)\n");
+            fprintf(stderr, "Invalid ELF type (0x%x) or machine (0x%x) for class (32-bit)\n",
+                    ehdr->e_type, ehdr->e_machine);
             exit(EXIT_FAILURE);
         }
+        if (is_dynamic) *is_dynamic = rdHalf32(le, ehdr->e_type) == ET_DYN;
+        if (is32bit_p) *is32bit_p = true;
     } else if (hdr->e_ident[EI_CLASS] == ELFCLASS64) {
         if (total_file_size < sizeof(Elf64_Ehdr)) {
             fprintf(stderr, "File too small, specifies 64-bit ELF but not big enough for 64-bit ELF header\n");
@@ -386,46 +390,55 @@ void checkELFHdr(const char* buffer, const int total_file_size) {
         }
         bool le = hdr->e_ident[EI_DATA] == ELFDATA2LSB;
         Elf64_Ehdr *ehdr = (Elf64_Ehdr*) &buffer[0];
-        if (rdHalf64(le, ehdr->e_type) != ET_EXEC ||
+        if ((rdHalf64(le, ehdr->e_type) != ET_EXEC && rdHalf64(le, ehdr->e_type) != ET_DYN) ||
             (rdHalf64(le, ehdr->e_machine) != EM_AARCH64 &&
              rdHalf64(le, ehdr->e_machine) != EM_RISCV &&
              rdHalf64(le, ehdr->e_machine) != EM_X86_64)) {
-            fprintf(stderr, "Invalid ELF type or machine for class (64-bit)\n");
+            fprintf(stderr, "Invalid ELF type (0x%x) or machine (0x%x) for class (64-bit)\n",
+                    ehdr->e_type, ehdr->e_machine);
             exit(EXIT_FAILURE);
         }
+        if (is_dynamic) *is_dynamic = rdHalf64(le, ehdr->e_type) == ET_DYN;
+        if (is32bit_p) *is32bit_p = false;
     } else {
         fprintf(stderr, "Unrecognized ELF file format\n");
         exit(EXIT_FAILURE);
     }
 }
 
-void loadELFHdr(const char* buffer, const int total_file_size, bool *is32bit_p, uint64_t *entry) {
-    checkELFHdr(buffer, total_file_size);
+void loadELFHdr(const char* buffer, const int total_file_size, bool allow_pie, const int64_t pie_load_offset, bool *is32bit_p, uint64_t *entry) {
+    bool is_dynamic;
+    checkELFHdr(buffer, total_file_size, &is_dynamic, NULL);
+    int64_t load_offset = (allow_pie && is_dynamic) ? pie_load_offset : 0;
 
+    if (!allow_pie && is_dynamic) {
+        fprintf(stderr, "Cannot load ET_DYN ELF file\n");
+        exit(EXIT_FAILURE);
+    }
     Elf32_Ehdr *hdr = (Elf32_Ehdr*) &buffer[0];
     if (hdr->e_ident[EI_CLASS] == ELFCLASS32) {
         bool le = hdr->e_ident[EI_DATA] == ELFDATA2LSB;
         Elf32_Ehdr *ehdr = (Elf32_Ehdr*) &buffer[0];
-	for(int i = 0; i < rdHalf32(le, ehdr->e_phnum); ++i) {
-	  loadProgHdr32(le, buffer, rdOff32(le, ehdr->e_phoff) + i * rdHalf32(le, ehdr->e_phentsize), total_file_size);
-	}
+        for(int i = 0; i < rdHalf32(le, ehdr->e_phnum); ++i) {
+            loadProgHdr32(le, buffer, rdOff32(le, ehdr->e_phoff) + i * rdHalf32(le, ehdr->e_phentsize), load_offset, total_file_size);
+        }
         if (is32bit_p) *is32bit_p = true;
-        if (entry) *entry = (uint64_t) ehdr->e_entry;
+        if (entry) *entry = (uint64_t) ehdr->e_entry + load_offset;
     } else if (hdr->e_ident[EI_CLASS] == ELFCLASS64) {
         bool le = hdr->e_ident[EI_DATA] == ELFDATA2LSB;
         Elf64_Ehdr *ehdr = (Elf64_Ehdr*) &buffer[0];
-	for(int i = 0; i < rdHalf64(le, ehdr->e_phnum); ++i) {
-	  loadProgHdr64(le, buffer, rdOff64(le, ehdr->e_phoff) + i * rdHalf64(le, ehdr->e_phentsize), total_file_size);
-	}
+        for(int i = 0; i < rdHalf64(le, ehdr->e_phnum); ++i) {
+            loadProgHdr64(le, buffer, rdOff64(le, ehdr->e_phoff) + i * rdHalf64(le, ehdr->e_phentsize), load_offset, total_file_size);
+        }
         if (is32bit_p) *is32bit_p = false;
-        if (entry) *entry = ehdr->e_entry;
+        if (entry) *entry = ehdr->e_entry + load_offset;
     } else {
         fprintf(stderr, "Unrecognized ELF file format\n");
         exit(EXIT_FAILURE);
     }
 }
 
-void load_elf(char *filename, bool *is32bit_p, uint64_t *entry) {
+void load_elf_at_offset(char *filename, bool allow_pie, const int64_t pie_load_offset, bool *is32bit_p, uint64_t *entry) {
     // Read input file into memory
     char* buffer = NULL;
     int   size   = 0;
@@ -439,11 +452,11 @@ void load_elf(char *filename, bool *is32bit_p, uint64_t *entry) {
         if (buffer == NULL) { goto fail; }
 
         int s = fread(buffer+read, 1, size - read, in);
-        if (s < 0) { goto fail; }
+        if (s < 0 || ferror(in)) { goto fail; }
         read += s;
     }
     fclose(in);
-    loadELFHdr(buffer, read, is32bit_p, entry);
+    loadELFHdr(buffer, read, allow_pie, pie_load_offset, is32bit_p, entry);
     free(buffer);
     return;
 
@@ -452,11 +465,15 @@ fail:
     exit(EXIT_FAILURE);
 }
 
+void load_elf(char *filename, bool *is32bit_p, uint64_t *entry) {
+    load_elf_at_offset(filename, false, 0, is32bit_p, entry);
+}
+
 // symbol lookup for very simple ELF files (single symtab, two strtabs): looks up a
 // single symbol at a time, but avoids retaining memory.
 
 int lookupSymbol(const char *buffer, const int total_file_size, const char *symname, uint64_t *value) {
-    checkELFHdr(buffer, total_file_size);
+    checkELFHdr(buffer, total_file_size, NULL, NULL);
     Elf32_Ehdr *hdr = (Elf32_Ehdr*) &buffer[0];
     if (hdr->e_ident[EI_CLASS] == ELFCLASS32) {
         bool le = hdr->e_ident[EI_DATA] == ELFDATA2LSB;

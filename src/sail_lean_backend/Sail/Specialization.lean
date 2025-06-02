@@ -15,6 +15,8 @@ abbrev undefined_bool (_ : Unit) : SailM Bool := PreSail.undefined_bool ()
 
 abbrev undefined_int (_ : Unit) : SailM Int := PreSail.undefined_int ()
 
+abbrev undefined_range (low high : Int) : SailM Int := PreSail.undefined_range low high
+
 abbrev undefined_nat (_ : Unit) : SailM Nat := PreSail.undefined_nat ()
 
 abbrev undefined_string (_ : Unit) : SailM String := PreSail.undefined_string ()
@@ -52,6 +54,13 @@ abbrev read_ram (addr_size data_size : Nat) (_hex_ram addr : BitVec addr_size) :
 
 abbrev sail_barrier (a : α) : SailM Unit := PreSail.sail_barrier a
 
+abbrev sail_cache_op [Arch] (op : Arch.cache_op) : SailM Unit := PreSail.sail_cache_op op
+abbrev sail_tlbi [Arch] (op : Arch.tlb_op) : SailM Unit := PreSail.sail_tlbi op
+abbrev sail_translation_start [Arch] (ts : Arch.trans_start) : SailM Unit := PreSail.sail_translation_start ts
+abbrev sail_translation_end [Arch] (te : Arch.trans_end) : SailM Unit := PreSail.sail_translation_end te
+abbrev sail_take_exception [Arch] (f : Arch.fault) : SailM Unit := PreSail.sail_take_exception f
+abbrev sail_return_exception [Arch] (a : Arch.pa) : SailM Unit := PreSail.sail_return_exception a
+
 abbrev cycle_count (a : Unit) : SailM Unit := PreSail.cycle_count a
 
 abbrev get_cycle_count (a : Unit) : SailM Nat := PreSail.get_cycle_count a
@@ -72,6 +81,17 @@ def SailME.run (m : SailME α α) : SailM α := do
   match (← ExceptT.run m) with
     | .error e => pure e
     | .ok e => pure e
+
+def _root_.ExceptT.map_error [Monad m] (e : ExceptT ε m α) (f : ε → ε') : ExceptT ε' m α :=
+  ExceptT.mk <| do
+    match ← e.run with
+    | .ok x => pure $ .ok x
+    | .error e => pure $ .error (f e)
+
+instance [∀ x, CoeT α x α'] : CoeT (SailME α β) e (SailME α' β) where
+  coe := e.map_error (fun x => x)
+
+def SailME.throw (e : α) : SailME α β := MonadExcept.throw e
 
 abbrev ExceptM α := ExceptT α Id
 

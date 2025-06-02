@@ -411,7 +411,7 @@ module RemoveUnusedVariables = struct
             let frame =
               match aux with
               | SVD_fundef f ->
-                  let paramset = List.fold_left (fun set (id, _) -> NameSet.add (name id) set) NameSet.empty f.params in
+                  let paramset = List.fold_left (fun set (id, _) -> NameSet.add id set) NameSet.empty f.params in
                   Function paramset
               | SVD_module m ->
                   let portset =
@@ -596,7 +596,7 @@ module RemoveUnusedVariables = struct
         begin
           match else_stmt_opt with Some else_stmt -> statement_uses stack uses else_stmt | None -> ()
         end
-    | SVS_assert (cond, msg) ->
+    | SVS_assert (name, cond, msg) ->
         smt_uses stack uses cond;
         smt_uses stack uses msg
     | SVS_case { head_exp; cases; fallthrough } ->
@@ -618,7 +618,7 @@ module RemoveUnusedVariables = struct
     match aux with
     | SVD_type _ | SVD_null | SVD_dpi_function _ -> ()
     | SVD_fundef { params; body; _ } ->
-        let paramset = List.fold_left (fun set (id, _) -> NameSet.add (name id) set) NameSet.empty params in
+        let paramset = List.fold_left (fun set (id, _) -> NameSet.add id set) NameSet.empty params in
         push (Function paramset) stack;
         statement_uses stack uses body;
         pop stack

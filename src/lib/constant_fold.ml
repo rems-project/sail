@@ -69,7 +69,7 @@ and exp_of_value =
   | V_bool true -> mk_lit_exp L_true
   | V_bool false -> mk_lit_exp L_false
   | V_string str -> mk_lit_exp (L_string str)
-  | V_record fields -> mk_exp (E_struct (List.map fexp_of_ctor (StringMap.bindings fields)))
+  | V_record fields -> mk_exp (E_struct (SN_anon, List.map fexp_of_ctor (StringMap.bindings fields)))
   | V_vector vs -> mk_exp (E_vector (List.map exp_of_value vs))
   | V_tuple vs -> mk_exp (E_tuple (List.map exp_of_value vs))
   | V_unit -> mk_lit_exp L_unit
@@ -135,7 +135,7 @@ let rec is_constant (E_aux (e_aux, _) as exp) =
   match e_aux with
   | E_lit _ -> true
   | E_vector exps -> List.for_all is_constant exps
-  | E_struct fexps -> List.for_all is_constant_fexp fexps
+  | E_struct (_, fexps) -> List.for_all is_constant_fexp fexps
   | E_typ (_, exp) -> is_constant exp
   | E_tuple exps -> List.for_all is_constant exps
   | E_id id -> (
@@ -181,7 +181,7 @@ let no_fixed = { registers = Bindings.empty; fields = Bindings.empty }
 
 let rw_exp fixed target ok not_ok istate =
   let evaluate e_aux annot =
-    let initial_monad = Interpreter.return (E_aux (e_aux, annot)) in
+    let initial_monad = Interpreter.Monad.return (E_aux (e_aux, annot)) in
     try
       begin
         let v = run (Interpreter.Step (lazy "", istate, initial_monad, [])) in

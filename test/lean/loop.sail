@@ -80,3 +80,48 @@ function while_loopmultiplevar(m : nat, n : nat) -> nat = {
   };
   mult
 }
+
+val while_print : unit -> unit
+function while_print() = {
+  var i : int = 0;
+  while i < 10 do {
+    i = i + 1
+  };
+  print_int("i = ", i)
+}
+
+val while_print_long : unit -> unit
+function while_print_long() = {
+  var this_is_a_very_long_variable_name_to_stress_the_formatting : int = 0;
+  while this_is_a_very_long_variable_name_to_stress_the_formatting + this_is_a_very_long_variable_name_to_stress_the_formatting < 10 do {
+    this_is_a_very_long_variable_name_to_stress_the_formatting = this_is_a_very_long_variable_name_to_stress_the_formatting + 1
+  };
+  print_int("i = ", this_is_a_very_long_variable_name_to_stress_the_formatting)
+}
+
+val nothing : unit -> unit
+function nothing() : unit = ()
+
+val foreachpure : (int, int) -> unit
+function foreachpure (n : int, m : int) = {
+  x : int = n;
+  foreach (rr from 0 to (m - 1) by 1 in inc) {
+    let 'vec = n in
+      {
+          foreach (i from 0 to (m - 1) by 1 in inc) { nothing(); }
+      };
+    x = x + 1;
+  }
+}
+
+val foreachnotsopure : (nat, int) -> unit
+function foreachnotsopure (n : nat, m : int) = {
+  x : nat = n;
+  foreach (rr from 0 to (m - 1) by 1 in inc) {
+    let 'vec = n in
+      {
+          foreach (i from 0 to (m - 1) by 1 in inc) { r = x; }
+      };
+    x = x + 1;
+  }
+}

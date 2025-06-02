@@ -168,9 +168,7 @@ let typschm_is_pure (TypSchm_aux (TypSchm_ts (_, ATyp_aux (typ, _)), _)) =
   | ATyp_fn (_, _, ATyp_aux (ATyp_set effs, _)) -> effs = []
   | _ -> true
 
-let fix_extern typschm = function
-  | None -> None
-  | Some extern -> Some { extern with pure = typschm_is_pure typschm }
+let fix_extern typschm extern = { extern with pure = typschm_is_pure typschm }
 
 let funcl_annot fs fcl =
   List.fold_right (fun f fcl -> f fcl) fs fcl
@@ -580,8 +578,8 @@ atomic_pat:
     { mk_pat (P_list []) $startpos $endpos }
   | LsquareBar pat_list RsquareBar
     { mk_pat (P_list $2) $startpos $endpos }
-  | Struct Lcurly separated_nonempty_list_trailing(Comma, fpat) Rcurly
-    { mk_pat (P_struct $3) $startpos $endpos }
+  | Struct id? Lcurly separated_nonempty_list_trailing(Comma, fpat) Rcurly
+    { mk_pat (P_struct ($2, $4)) $startpos $endpos }
 
 fpat:
   | id Eq pat
@@ -805,8 +803,8 @@ atomic_exp:
     { mk_exp (E_vector_subrange ($1, $3, $5)) $startpos $endpos }
   | atomic_exp Lsquare exp Comma exp Rsquare
     { mk_exp (E_app (mk_id (Id "slice") $startpos($2) $endpos, [$1; $3; $5])) $startpos $endpos }
-  | Struct Lcurly fexp_exp_list Rcurly
-    { mk_exp (E_struct $3) $startpos $endpos }
+  | Struct id? Lcurly fexp_exp_list Rcurly
+    { mk_exp (E_struct ($2, $4)) $startpos $endpos }
   | Lcurly exp With fexp_exp_list Rcurly
     { mk_exp (E_struct_update ($2, $4)) $startpos $endpos }
   | Lsquare Rsquare
@@ -985,11 +983,21 @@ param_kopt:
     { KOpt_aux (KOpt_kind (None, [$1], None, None), loc $startpos $endpos) }
 
 typaram:
-  | Lparen separated_nonempty_list_trailing(Comma, param_kopt) Rparen Comma typ
-    { let qi_nc = QI_aux (QI_constraint $5, loc $startpos($5) $endpos($5)) in
-      mk_typq $2 [qi_nc] $startpos $endpos }
-  | Lparen separated_nonempty_list_trailing(Comma, param_kopt) Rparen
-    { mk_typq $2 [] $startpos $endpos }
+  | Lparen; ks=separated_nonempty_list_trailing(Comma, param_kopt); Rparen; Comma; c=typ
+    { let qi_nc = QI_aux (QI_constraint c, loc $startpos(c) $endpos(c)) in
+      mk_typq ks [qi_nc] $startpos $endpos }
+  | Lparen; ks=separated_nonempty_list_trailing(Comma, param_kopt); Rparen; Constraint; c=typ
+    { let qi_nc = QI_aux (QI_constraint c, loc $startpos(c) $endpos(c)) in
+      mk_typq ks [qi_nc] $startpos $endpos }
+  | Lparen; ks=separated_nonempty_list_trailing(Comma, param_kopt); Rparen
+    { mk_typq ks [] $startpos $endpos }
+
+unbracketed_typaram:
+  | ks=separated_nonempty_list_trailing(Comma, param_kopt); Constraint; c=typ
+    { let qi_nc = QI_aux (QI_constraint c, loc $startpos(c) $endpos(c)) in
+      mk_typq ks [qi_nc] $startpos $endpos }
+  | ks=separated_nonempty_list_trailing(Comma, param_kopt)
+    { mk_typq ks [] $startpos $endpos }
 
 abstract_instantiation:
   | Eq; Config; key=separated_nonempty_list(Dot, Id)
@@ -1155,8 +1163,8 @@ atomic_mpat:
     { mk_mpat (MP_list $2) $startpos $endpos }
   | atomic_mpat Colon typ_no_caret
     { mk_mpat (MP_typ ($1, $3)) $startpos $endpos }
-  | Struct Lcurly separated_nonempty_list_trailing(Comma, fmpat) Rcurly
-    { mk_mpat (MP_struct $3) $startpos $endpos }
+  | Struct id? Lcurly separated_nonempty_list_trailing(Comma, fmpat) Rcurly
+    { mk_mpat (MP_struct ($2, $4)) $startpos $endpos }
 
 fmpat:
   | id Eq mpat
@@ -1209,8 +1217,8 @@ let_def:
 
 outcome_spec_def:
   | Outcome id Colon typschm
-    { mk_outcome (OV_outcome ($2, $4, [])) $startpos $endpos }
-  | Outcome id Colon typschm With separated_nonempty_list(Comma, param_kopt)
+    { mk_outcome (OV_outcome ($2, $4, mk_typqn)) $startpos $endpos }
+  | Outcome id Colon typschm With unbracketed_typaram
     { mk_outcome (OV_outcome ($2, $4, $6)) $startpos $endpos }
 
 pure_opt:
@@ -1228,32 +1236,35 @@ extern_binding:
     { ("_", $3) }
 
 externs:
-  |
-    { None, false }
-  | Eq String
+  | s=String
     { warn_extern_effect (loc $startpos $endpos);
-      Some { pure = true; bindings = [("_", $2)] }, true }
-  | Eq Lcurly separated_nonempty_list_trailing(Comma, extern_binding) Rcurly
+      { pure = true; bindings = [("_", s)] }, true }
+  | Lcurly; b=separated_nonempty_list_trailing(Comma, extern_binding); Rcurly
     { warn_extern_effect (loc $startpos $endpos);
-      Some { pure = true; bindings = $3 }, true }
-  | Eq pure_opt String
-    { Some { pure = $2; bindings = [("_", $3)] }, false }
-  | Eq pure_opt Lcurly separated_nonempty_list_trailing(Comma, extern_binding) Rcurly
-    { Some { pure = $2; bindings = $4 }, false }
+      { pure = true; bindings = b }, true }
+  | p=pure_opt; s=String
+    { { pure = p; bindings = [("_", s)] }, false }
+  | p=pure_opt; Lcurly; b=separated_nonempty_list_trailing(Comma, extern_binding); Rcurly
+    { { pure = p; bindings = b }, false }
 
 val_spec_def:
-  | Val String Colon typschm
-    { let typschm = $4 in
-      mk_vs (VS_val_spec (typschm, mk_id (Id $2) $startpos($2) $endpos($2), Some { pure = typschm_is_pure typschm; bindings = [("_", $2)] })) $startpos $endpos }
-  | Val id externs Colon typschm
-    { let typschm = $5 in
-      let externs, need_fix = $3 in
-      mk_vs (VS_val_spec (typschm, $2, (if need_fix then fix_extern typschm externs else externs))) $startpos $endpos }
-  | Val Cast id externs Colon typschm
-    { cast_deprecated (loc $startpos($2) $endpos($2));
-      let typschm = $6 in
-      let externs, need_fix = $4 in
-      mk_vs (VS_val_spec (typschm, $3, (if need_fix then fix_extern typschm externs else externs))) $startpos $endpos }
+  | Val; f=String; Colon; ts=typschm
+    { mk_vs (VS_val_spec (ts, mk_id (Id f) $startpos(f) $endpos(f), Some { pure = typschm_is_pure ts; bindings = [("_", f)] })) $startpos $endpos }
+  | Val; f=id; Colon; ts=typschm
+    { mk_vs (VS_val_spec (ts, f, None)) $startpos $endpos }
+  | Val; f=id; Eq; externs=externs; Colon; ts=typschm
+    { let externs, need_fix = externs in
+      mk_vs (VS_val_spec (ts, f, Some (if need_fix then fix_extern ts externs else externs))) $startpos $endpos }
+  | Val; f=id; Colon; ts=typschm; Eq; externs=externs
+    { let externs, need_fix = externs in
+      mk_vs (VS_val_spec (ts, f, Some (if need_fix then fix_extern ts externs else externs))) $startpos $endpos }
+  | Val; c=Cast; f=id; Colon; ts=typschm
+    { cast_deprecated (loc $startpos(c) $endpos(c));
+      mk_vs (VS_val_spec (ts, f, None)) $startpos $endpos }
+  | Val; c=Cast; f=id; Eq; externs=externs; Colon; ts=typschm
+    { cast_deprecated (loc $startpos(c) $endpos(c));
+      let externs, need_fix = externs in
+      mk_vs (VS_val_spec (ts, f, Some (if need_fix then fix_extern ts externs else externs))) $startpos $endpos }
 
 register_def:
   | Register id Colon typ
@@ -1329,6 +1340,16 @@ overload_def:
   | Overload id Eq enum_bar
     { ($2, List.map fst $4) }
 
+def_trailing_constraint_aux:
+  | scattered_def
+    { DEF_scattered $1 }
+  | outcome_spec_def
+    { DEF_outcome ($1, []) }
+
+def_constraint_aux:
+  | Constraint typ
+    { DEF_constraint $2 }
+
 def_aux:
   | fun_def
     { DEF_fundef $1 }
@@ -1340,8 +1361,6 @@ def_aux:
     { let (prec, n, op) = $1 in DEF_fixity (prec, n, Id_aux (Id op, loc $startpos $endpos)) }
   | val_spec_def
     { DEF_val $1 }
-  | outcome_spec_def
-    { DEF_outcome ($1, []) }
   | outcome_spec_def Eq Lcurly defs_list Rcurly
     { DEF_outcome ($1, $4) }
   | instantiation_def
@@ -1354,12 +1373,10 @@ def_aux:
     { DEF_register $1 }
   | overload_def
     { let (id, ids) = $1 in DEF_overload (id, ids) }
-  | scattered_def
-    { DEF_scattered $1 }
   | default_def
     { DEF_default $1 }
-  | Constraint typ
-    { DEF_constraint $2 }
+  | Typedef Constraint typ
+    { DEF_constraint $3 }
   | Mutual Lcurly fun_def_list Rcurly
     { DEF_internal_mutrec $3 }
   | pragma = StructuredPragma; kvs = separated_list(Comma, attribute_data_key_value); Rcurly
@@ -1373,24 +1390,42 @@ def_aux:
   | TerminationMeasure id loop_measures
     { DEF_loop_measures ($2,$3) }
 
-def:
-  | visibility = Private; def = def
+def(AUX):
+  | visibility = Private; def = def(AUX)
     { DEF_aux (DEF_private def, loc $startpos(visibility) $endpos(visibility)) }
-  | attr = attribute; def = def
+  | attr = attribute; def = def(AUX)
     { DEF_aux (DEF_attribute (fst attr, snd attr, def), loc $startpos(attr) $endpos(attr)) }
-  | doc = Doc; def = def
+  | doc = Doc; def = def(AUX)
     { DEF_aux (DEF_doc (doc, def), loc $startpos(doc) $endpos(doc)) }
-  | d = def_aux
+  | d = AUX
     { DEF_aux (d, loc $startpos(d) $endpos(d)) }
 
-defs_list:
-  | def
+defs_post_trailing_constraint_list:
+  | def(def_trailing_constraint_aux)
     { [$1] }
-  | def defs_list
+  | def(def_aux)
+    { [$1] }
+  | def(def_trailing_constraint_aux) defs_post_trailing_constraint_list
+    { $1 :: $2 }
+  | def(def_aux) defs_list
+    { $1 :: $2 }
+
+defs_list:
+  | def(def_constraint_aux)
+    { [$1] }
+  | def(def_trailing_constraint_aux)
+    { [$1] }
+  | def(def_aux)
+    { [$1] }
+  | def(def_constraint_aux) defs_list
+    { $1 :: $2 }
+  | def(def_trailing_constraint_aux) defs_post_trailing_constraint_list
+    { $1 :: $2 }
+  | def(def_aux) defs_list
     { $1 :: $2 }
 
 def_eof:
-  | def Eof
+  | def(def_aux) Eof
     { $1 }
 
 file:

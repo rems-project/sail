@@ -47,28 +47,54 @@ typedef struct sail_json* sail_config_json;
 
 static cJSON *sail_config;
 
-void sail_config_set_file(const char *path)
+void sail_config_set_string(const char *json)
 {
   cJSON_Hooks hooks;
   hooks.malloc_fn = &sail_malloc;
   hooks.free_fn = &sail_free;
   cJSON_InitHooks(&hooks);
 
+  // Points to the position of a parse error if there was one.
+  const char *parse_end = json;
+
+  // Parse the JSON. Setting `require_null_terminated` to 1 enables
+  // two conflated checks: that the input is null terminated (which
+  // we guarantee above), and that there is no junk data after the JSON.
+  sail_config = cJSON_ParseWithOpts(json, &parse_end, 1);
+
+  if (!sail_config) {
+    char error_message[128];
+    snprintf(error_message, sizeof error_message, "Failed to parse JSON configuration at offset %ld", parse_end - json);
+    sail_assert(false, error_message);
+  }
+}
+
+void sail_config_set_file(const char *path)
+{
   FILE *f = fopen(path, "rb");
   fseek(f, 0, SEEK_END);
   long fsize = ftell(f);
   fseek(f, 0, SEEK_SET);
 
   char *buffer = (char *)sail_malloc(fsize + 1);
-  fread(buffer, fsize, 1, f);
+
+  size_t ret_size = fread(buffer, fsize, 1, f);
+
+  if (ret_size != 1) {
+    sail_assert(false, "Failed to read configuration");
+  }
+
   buffer[fsize] = 0;
   fclose(f);
 
-  sail_config = cJSON_Parse(buffer);
-
-  if (!sail_config) {
-    sail_assert(false, "Failed to parse configuration");
+  // Check there are no null bytes in the file because
+  // sail_config_set_string() relies on null termination
+  // to find the end of the string.
+  for (size_t i = 0; i < fsize; ++i) {
+    sail_assert(buffer[i] != 0, "Null byte in JSON configuration");
   }
+
+  sail_config_set_string(buffer);
 
   sail_free(buffer);
 }
@@ -78,7 +104,7 @@ void sail_config_cleanup(void)
   cJSON_Delete((cJSON *)sail_config);
 }
 
-sail_config_json sail_config_get(size_t n, const char *key[])
+sail_config_json sail_config_get(size_t n, const_sail_string const *key)
 {
   sail_config_json result;
   cJSON *json = (cJSON *)sail_config;
@@ -89,7 +115,7 @@ sail_config_json sail_config_get(size_t n, const char *key[])
     } else {
       fprintf(stderr, "Failed to access configuration item: '");
       for (int j = 0; j < n; j++) {
-        fprintf(stderr, ".%s", key[i]);
+        fprintf(stderr, ".%s", key[j]);
       }
       fprintf(stderr, "'\n");
       exit(EXIT_FAILURE);
@@ -112,7 +138,6 @@ sail_config_json sail_config_lookup(const char *dotted_key)
       char *key = (char *)sail_malloc((i - start) + 1);
       strncpy(key, dotted_key + start, i - start);
       key[i - start] = '\0';
-      fprintf(stderr, "'%s'\n", key);
       start = i + 1;
 
       if (cJSON_IsObject(json)) {
@@ -161,12 +186,12 @@ bool sail_config_is_object(const sail_config_json config)
   return cJSON_IsObject((cJSON *)config);
 }
 
-bool sail_config_object_has_key(const sail_config_json config, const sail_string key)
+bool sail_config_object_has_key(const sail_config_json config, const_sail_string key)
 {
   return cJSON_HasObjectItem((cJSON *)config, key);
 }
 
-sail_config_json sail_config_object_key(const sail_config_json config, const sail_string key)
+sail_config_json sail_config_object_key(const sail_config_json config, const_sail_string key)
 {
   return (sail_config_json)cJSON_GetObjectItemCaseSensitive((cJSON *)config, key);
 }

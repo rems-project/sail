@@ -46,49 +46,53 @@
 
 $sail_internal
 
-$ifndef _CONCURRENCY_INTERFACE
-$define _CONCURRENCY_INTERFACE
+$ifndef _CONCURRENCY_INTERFACE_READ_WRITE_V1
+$define _CONCURRENCY_INTERFACE_READ_WRITE_V1
 
-$ifdef _DEFAULT_DEC
-$include <vector_dec.sail>
-$else
-$include <vector_inc.sail>
-$endif
+$include <concurrency_interface/common.sail>
 
-$include <option.sail>
-$include <result.sail>
-$include <emulator_memory.sail>
 
-$target_set emulator_prover c ocaml interpreter lem coq
-$target_set emulator c isla ocaml interpreter
-$target_set prover lem coq
-
+$option -lem_extern_type Access_variety
+$option -coq_extern_type Access_variety
+$option -lean_extern_type Access_variety
 enum Access_variety = {
   AV_plain,
   AV_exclusive,
   AV_atomic_rmw
 }
 
+$option -lem_extern_type Access_strength
+$option -coq_extern_type Access_strength
+$option -lean_extern_type Access_strength
 enum Access_strength = {
   AS_normal,
   AS_rel_or_acq, // Release or acquire
   AS_acq_rcpc // Release-consistency with processor consistency
 }
 
+$option -lem_extern_type Explicit_access_kind
+$option -coq_extern_type Explicit_access_kind
+$option -lean_extern_type Explicit_access_kind
 struct Explicit_access_kind = {
   variety : Access_variety,
   strength : Access_strength
 }
 
+$option -lem_extern_type Access_kind
+$option -coq_extern_type Access_kind
+$option -lean_extern_type Access_kind
 union Access_kind('arch_ak : Type) = {
   AK_explicit: Explicit_access_kind,
   AK_ifetch : unit, // Instruction fetch
   AK_ttw : unit, // Translation table walk
-  AK_arch : 'arch_ak // Architecture specific type of access.
+  AK_arch : 'arch_ak // Architecture specific type of access
 }
 
+$option -lem_extern_type Mem_read_request
+$option -coq_extern_type Mem_read_request
+$option -lean_extern_type Mem_read_request
 struct Mem_read_request('n : Int, 'vasize : Int, 'pa : Type, 'ts : Type,
-                        'arch_ak: Type), 'n > 0 = {
+                        'arch_ak : Type), 'n > 0 & 'vasize >= 0 = {
   access_kind : Access_kind('arch_ak),
   // There may not always be a virtual address, e.g. when translation is off.
   // Additionally, translate reads don't have a (VA, PA) pair in the
@@ -123,6 +127,18 @@ function mem_read_request_is_ifetch(request) = {
     }
 }
 
+$ifdef SYMBOLIC
+
+register __monomorphize_reads: bool = false
+register __monomorphize_writes: bool = false
+
+$else
+
+let __monomorphize_reads: bool = false
+let __monomorphize_writes: bool = false
+
+$endif
+
 outcome sail_mem_read : forall 'n 'vasize, 'n > 0 & 'vasize > 0.
   Mem_read_request('n, 'vasize, 'pa, 'translation_summary, 'arch_ak)
       -> result((bits(8 * 'n), option(bool)), 'abort)
@@ -134,8 +150,10 @@ with
 = {
     val pa_bits : 'pa -> {'pasize, 'pasize in {32, 64}. bits('pasize)}
 
-    impl emulator(request) = {
+    impl emulator_or_isla(request) = {
         let pa = pa_bits(request.pa);
+        // In Isla, the address of an instruction fetch must be concrete
+        let pa = if mem_read_request_is_ifetch(request) | __monomorphize_reads then __monomorphize(pa) else pa;
         let tag: option(bool) = if request.tag then {
             if length(pa) == 32 then {
                 Some(read_tag#(32, pa))
@@ -167,11 +185,14 @@ with
     }
 }
 
+$option -lem_extern_type Mem_write_request
+$option -coq_extern_type Mem_write_request
+$option -lean_extern_type Mem_write_request
 struct Mem_write_request('n : Int, 'vasize : Int, 'pa : Type, 'ts : Type,
-                         'arch_ak : Type), 'n > 0 = {
+                         'arch_ak : Type), 'n > 0 & 'vasize >= 0 = {
   access_kind : Access_kind('arch_ak),
   va : option(bits('vasize)),
-  pa : 'pa,          
+  pa : 'pa,
   translation : 'ts,
   size : int('n),
   value : option(bits(8 * 'n)),
@@ -192,20 +213,20 @@ function mem_write_request_is_exclusive(request) = {
 }
 
 // the bool in the result is for the success/failure of a write-exclusive or a CAS, i.e.
-outcome sail_mem_write_request : forall 'n 'vasize, 'n > 0 & 'vasize > 0.
+outcome sail_mem_write : forall 'n 'vasize, 'n > 0 & 'vasize > 0.
   Mem_write_request('n, 'vasize, 'pa, 'translation_summary, 'arch_ak)
       -> result(option(bool), 'abort)
 with
   'pa : Type,
   'translation_summary : Type,
   'arch_ak : Type,
-  'write_kind : Type,
   'abort : Type
 = {
     val pa_bits : 'pa -> {'pasize, 'pasize in {32, 64}. bits('pasize)}
 
-    impl emulator(request) = {
+    impl emulator_or_isla(request) = {
         let pa = pa_bits(request.pa);
+        let pa = if __monomorphize_writes then __monomorphize(pa) else pa;
         let b: bool = match request.value {
             Some(value) => if mem_write_request_is_exclusive(request) then {
                 if length(pa) == 32 then {
@@ -233,5 +254,14 @@ with
         Ok(Some(b))
     }
 }
+
+// Used when we want a non memory read/write to appear in Isla's addr relation
+$iftarget isla
+val sail_address_announce = impure "address_announce" : forall 'addrsize, 'addrsize in {32, 64}. (int('addrsize), bits('addrsize)) -> unit
+$else
+val sail_address_announce : forall 'addrsize, 'addrsize in {32, 64}. (int('addrsize), bits('addrsize)) -> unit
+
+function sail_address_announce(_, _) = ()
+$endif
 
 $endif

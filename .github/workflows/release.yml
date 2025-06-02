@@ -56,14 +56,15 @@ jobs:
           findutils \
           diffutils \
           rsync \
-          which
+          which \
+          cargo
         curl -L -o /usr/local/bin/opam https://github.com/ocaml/opam/releases/download/2.1.5/opam-2.1.5-i686-linux
         chmod +x /usr/local/bin/opam
 
     - name: System dependencies (Mac)
       if: startsWith(matrix.os, 'macos')
       run: |
-        brew install --force --overwrite gpatch gmp z3 pkgconf opam git
+        brew install --force --overwrite gpatch gmp z3 pkgconf opam git rust
 
     - uses: actions/checkout@v4
 
@@ -125,7 +126,7 @@ jobs:
     - name: Make release tarball
       run: |
         eval $(opam env)
-        make tarball TARBALL_EXTRA_BIN=$(which z3)
+        make tarball TARBALL_EXTRA_BIN=z3/build/z3
 
     - uses: actions/attest-build-provenance@v1
       with:

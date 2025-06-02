@@ -49,17 +49,19 @@ open Libsail
 
 open Ast_util
 
-type spec_info
-
-val collect_spec_info : Jib_compile.ctx -> Jib.cdef list -> spec_info
-
 module type CONFIG = sig
+  (** Set recursion depth for recursive SystemVerilog modules *)
+  val recursion_depth : int
+
   (** If Sail does not know a precise bitwidth for an integer variable, it will use this width. *)
   val max_unknown_integer_width : int
 
   (** If Sail does not know the precise width for a bitvector variable, it will use a variable-length bitvector
       representation which can hold bitvectors of at most this length. *)
   val max_unknown_bitvector_width : int
+
+  (** Prefix global signals with the provided name *)
+  val global_prefix : string option
 
   (** Output SystemVerilog line directives where possible *)
   val line_directives : bool
@@ -77,27 +79,36 @@ module type CONFIG = sig
 
   val never_pack_unions : bool
   val union_padding : bool
+  val no_unions : bool
   val unreachable : string list
+  val no_write_flush : bool
   val comb : bool
   val ignore : string list
 
-  (** The SystemVerilog DPI (direct programming interface) lets the
-      generated SystemVerilog directly call C functions. A Sail
-      external function for the [systemverilog] target can be translated
-      into a DPI binding using the [sv_function] attribute, for example:
+  val fun_to_wires : (string * int) list
 
-      {@sail
-      $[sv_function { dpi = true }]
-      val foo = pure "foo" : ...
+  (** The SystemVerilog DPI (direct programming interface) lets the generated SystemVerilog directly call C functions. A
+      Sail external function for the [systemverilog] target can be translated into a DPI binding using the [sv_function]
+      attribute, for example:
 
-      $[sv_function { dpi = "memory" }]
-      val bar = pure "bar" : ...
-      }
+      {@sail[
+        $[sv_function { dpi = true }]
+        val foo = pure "foo" : ...
 
-      In the above example [foo] will always generated a DPI binding,
-      but [bar] will only generate a DPI binding when ["memory"] is
-      included in [dpi_sets]. *)
+        $[sv_function { dpi = "memory" }]
+        val bar = pure "bar" : ...
+      ]}
+
+      In the above example [foo] will always generated a DPI binding, but [bar] will only generate a DPI binding when
+      ["memory"] is included in [dpi_sets]. *)
   val dpi_sets : Util.StringSet.t
+
+  (** If true we will simply skip generating the body of any cyclic (i.e. contains a loop that has not been unrolled)
+      definitions, and print a warning instead. This allows generation to proceed for other parts of the spec. *)
+  val skip_cyclic : bool
+
+  val no_assert_fatal : bool
+  val assert_as_property : bool
 end
 
 module Make (Config : CONFIG) : sig
@@ -110,13 +121,13 @@ module Make (Config : CONFIG) : sig
   }
 
   val svir_cdef :
-    spec_info ->
+    Sv_analysis.spec_info ->
     Jib_compile.ctx ->
     (unit Ast.def_annot * Jib.ctyp list * Libsail.Jib.ctyp) Bindings.t ->
     Jib.cdef ->
     Sv_ir.sv_def list * (unit Ast.def_annot * Jib.ctyp list * Jib.ctyp) Bindings.t
 
-  val pp_def : Sv_ir.sv_name option -> Sv_ir.sv_def -> PPrint.document
+  val pp_def : Jib_compile.ctx -> Sv_ir.sv_name option -> Sv_ir.sv_def -> PPrint.document
 
   (** Create a SystemVerilog module that wraps the provided Sail function in a more convenient interface.
 
@@ -126,17 +137,21 @@ module Make (Config : CONFIG) : sig
       The way this is generated is controlled by the sv_toplevel attribute, which is attached to the signature of the
       function. *)
   val toplevel_module :
-    Ast.id -> spec_info -> (unit Ast.def_annot * Jib.ctyp list * Jib.ctyp) Bindings.t -> Sv_ir.sv_module
+    Sv_analysis.spec_info ->
+    Jib_compile.ctx ->
+    Ast.id ->
+    (unit Ast.def_annot * Jib.ctyp list * Jib.ctyp) Bindings.t ->
+    Sv_ir.sv_module
 
   val sv_cdef :
-    spec_info ->
+    Sv_analysis.spec_info ->
     Jib_compile.ctx ->
     (Jib.ctyp list * Libsail.Jib.ctyp) Bindings.t ->
     string list ->
     Jib.cdef ->
     cdef_doc * (Jib.ctyp list * Jib.ctyp) Bindings.t * string list
 
-  val sv_register_references : spec_info -> PPrint.document * PPrint.document
+  val sv_register_references : Sv_analysis.spec_info -> PPrint.document * PPrint.document
 
   val sv_fundef_with :
     Jib_compile.ctx -> string -> Ast.id list -> Jib.ctyp list -> Jib.ctyp -> PPrint.document -> PPrint.document
