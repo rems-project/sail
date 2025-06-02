@@ -1233,7 +1233,10 @@ let doc_typdef ctx (TD_aux (td, tannot) as full_typdef) =
       let vars = doc_typ_quant_only_vars ctx tq in
       let vars = separate space vars in
       nest 2 (flow (break 1) [string "abbrev"; doc_id_ctor id; colon; string "Int"; coloneq; doc_nexp ctx ne])
-  | TD_abbrev (id, tq, A_aux (A_bool nc, _)) -> empty
+  | TD_abbrev (id, TypQ_aux (TypQ_no_forall, _), A_aux (A_bool nc, _)) ->
+      (* We currently cannot handle explicit parameters because of the Int/Nat mismatch. *)
+      nest 2 (flow (break 1) [string "abbrev"; doc_id_ctor id; colon; string "Bool"; coloneq; doc_nconstraint ctx nc])
+  | TD_abbrev _ -> empty
   | TD_variant (id, tq, ar, _) ->
       let pp_tus = concat (List.map (fun tu -> hardline ^^ doc_type_union ctx tu) ar) in
       let rectyp = doc_typ_quant_relevant ctx tq in

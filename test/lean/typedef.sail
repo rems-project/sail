@@ -7,6 +7,8 @@ type xlenbits         = bits(xlen)
 
 let xlen = 64
 
+type booltype : Bool = xlen == 64
+
 type my_bits('n) = bitvector('n)
 
 val EXTZ : forall 'n 'm, 'm >= 'n. (implicit('m), bits('n)) -> bits('m)
