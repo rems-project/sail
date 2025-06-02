@@ -8,8 +8,4 @@ Explicit effect annotations are deprecated. They are no longer used and can be r
 [96mpass/short_circuit_bool_ex/v1.sail[0m:25.36-40:
 25[96m |[0m  if (true | assertive(n) > 0) then true else true
   [91m |[0m                                    [91m^--^[0m
-  [91m |[0m Failed to prove constraint: 0 == 1
-  [91m |[0m 
-  [91m |[0m constraint from [96mpass/short_circuit_bool_ex/v1.sail[0m:21.23-29:
-  [91m |[0m 21[96m |[0mval bad : unit -> bool(0 == 1) effect {escape}
-  [91m |[0m   [91m |[0m                       [91m^----^[0m [91mThis type argument[0m
+  [91m |[0m Failed to prove constraint: (not(true) & (not(false) | true)), as it simplifies directly to false
