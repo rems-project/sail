@@ -9,6 +9,8 @@ open Rewriter
 open PPrint
 open Pretty_print_common
 
+module IntSet = Set.Make (Int)
+
 (* Command line options *)
 let opt_extern_types : string list ref = ref []
 
@@ -1322,6 +1324,46 @@ let rec doc_defs_rec ctx defs types (former_funcs : document list) (docdefs : do
 
 let doc_defs ctx defs = doc_defs_rec ctx defs empty [] empty
 
+let add_node_to_map_and_ref_set (cg : Callgraph.callgraph) (map : int Bindings.t) (acc : IntSet.t) (idx : int)
+    (m : Callgraph.node) =
+  let map = Bindings.add (Callgraph.node_id m) idx map in
+  let deps = Callgraph.G.children cg m in
+  let deps : int list = List.filter_map (fun n -> Bindings.find_opt (Callgraph.node_id n) map) deps in
+  let acc = List.fold_left (fun map i -> if i < idx then IntSet.add i map else map) acc deps in
+  (map, acc)
+
+let add_def_to_map_and_ref_set cg map acc idx (d : (tannot, env) def) =
+  let is = Callgraph.nodes_of_def d in
+  Callgraph.NodeSet.fold (fun n (map, acc) -> add_node_to_map_and_ref_set cg map acc idx n) is (map, acc)
+
+let rec collect_imports_rec (cg : Callgraph.callgraph) (defs : (tannot, env) def list) (map : int Bindings.t)
+    (accs : IntSet.t list) (acc : IntSet.t) (idx : int) (nonempty_print : bool) : IntSet.t list =
+  match defs with
+  | [] -> accs @ [acc]
+  | (DEF_aux (DEF_fundef fdef, dannot) as d) :: defs' ->
+      let map, acc = add_def_to_map_and_ref_set cg map acc idx d in
+      collect_imports_rec cg defs' map accs acc idx true
+  | (DEF_aux (DEF_internal_mutrec fdefs, dannot) as d) :: defs' ->
+      let map, acc = add_def_to_map_and_ref_set cg map acc idx d in
+      collect_imports_rec cg defs' map accs acc idx true
+  | DEF_aux (DEF_type tdef, _) :: defs' -> collect_imports_rec cg defs' map accs acc idx nonempty_print
+  | (DEF_aux (DEF_let (LB_aux (LB_val (pat, exp), _)), _) as d) :: defs' ->
+      let map, acc = add_def_to_map_and_ref_set cg map acc idx d in
+      collect_imports_rec cg defs' map accs acc idx true
+  | DEF_aux (DEF_pragma ("include_start", Pragma_line (file, _)), _) :: defs'
+  | DEF_aux (DEF_pragma ("file_start", Pragma_line (file, _)), _) :: defs'
+  | DEF_aux (DEF_pragma ("include_end", Pragma_line (file, _)), _) :: defs'
+  | DEF_aux (DEF_pragma ("file_end", Pragma_line (file, _)), _) :: defs'
+    when Filename.check_suffix file ".sail" ->
+      if not nonempty_print then collect_imports_rec cg defs' map accs acc idx nonempty_print
+      else collect_imports_rec cg defs' map (accs @ [acc]) IntSet.empty (idx + 1) false
+  | d :: defs' ->
+      if should_print_function_def d then failwith "this case of collect_imports_rec should be unreachable"
+      else collect_imports_rec cg defs' map accs acc idx nonempty_print
+
+let rec collect_imports (cg : Callgraph.callgraph) (defs : (tannot, env) def list) =
+  collect_imports_rec cg defs Bindings.empty [] IntSet.empty 0 false
+
 (* Remove all imports for now, they will be printed in other files. Probably just for testing. *)
 let rec remove_imports (defs : (Libsail.Type_check.tannot, Libsail.Type_check.env) def list) depth =
   match defs with
@@ -1473,11 +1515,6 @@ let collect_import_files defs base =
   let res = collect_import_files_aux defs [base] None [] in
   if res = [] then [base] else res
 
-let rec take n xs = match (n, xs) with 0, _ -> [] | n, x :: xs -> x :: take (n - 1) xs | n, xs -> xs
-
-let rec last xs =
-  match xs with [] -> failwith "cannot take last element of empty list" | [x] -> x | x :: xs -> last xs
-
 let pp_ast_lean (env : Type_check.env) effect_info ({ defs; _ } as ast : Libsail.Type_check.typed_ast) out_name_camel
     types_file imp_funcs_files funcs_file noncomputable =
   let regs = State.find_registers defs in
@@ -1493,12 +1530,7 @@ let pp_ast_lean (env : Type_check.env) effect_info ({ defs; _ } as ast : Libsail
   let instantiations = doc_instantiations ctx env in
   let types, all_fundefss = doc_defs ctx defs in
   let imp_fundefss, main_fundefs =
-    if imp_funcs_files = [] then ([], concat all_fundefss)
-    else (
-      let imp_fundefss = take (List.length all_fundefss - 1) all_fundefss in
-      let main_fundefs = last all_fundefss in
-      (imp_fundefss, main_fundefs)
-    )
+    if imp_funcs_files = [] then ([], concat all_fundefss) else (Util.butlast all_fundefss, Util.last all_fundefss)
   in
   let main_fundefs = main_fundefs ^^ string ("end " ^ out_name_camel ^ ".Functions") ^^ hardline in
   let main_function =
