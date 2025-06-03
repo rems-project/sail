@@ -375,7 +375,7 @@ let output (out_name : string) env effect_info ({ defs; _ } as ast : Libsail.Typ
       let import_refs : string list list =
         List.map
           (fun is ->
-            let is = Pretty_print_lean.IntSet.to_list is in
+            let is = Pretty_print_lean.IntSet.elements is in
             List.filter_map (List.nth_opt import_files) is
           )
           import_sets
