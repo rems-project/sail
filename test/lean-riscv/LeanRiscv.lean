@@ -1,8 +1,8 @@
 -- This module serves as the root of the `LeanRiscv` library.
 -- Import modules here that should be built as part of the library.
 import ELFSage
-import LeanRV64D
-import LeanRV64D.Sail.Sail
+import LeanRV64DExecutable
+import LeanRV64DExecutable.Sail.Sail
 
 def readElf32 (elfFilepath : System.FilePath) : IO (Except String ELF32File) := do
   let bytes <- IO.FS.readBinFile elfFilepath
@@ -75,7 +75,7 @@ def initializeRegisters : Std.ExtDHashMap Register RegisterType :=
   Std.ExtDHashMap.emptyWithCapacity
 
 def my_main (_ : PUnit) :=
-  open LeanRV64D.Functions in
+  open LeanRV64DExecutable.Functions in
   open Sail in
   do
   -- monadLift (IO.print "TEST")
@@ -87,7 +87,7 @@ def my_main (_ : PUnit) :=
 
 def runElf32 (elf : ELF32File) : IO UInt32 :=
   open Sail in
-  open LeanRV64D.Functions in
+  open LeanRV64DExecutable.Functions in
   let mem := initializeMemory MachineBits.B32 elf
   let regs := initializeRegisters
   let initialState := ⟨regs, (), mem, default, default, default⟩
