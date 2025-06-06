@@ -483,6 +483,15 @@ end) : CONFIG = struct
         | _ -> no_change
       end
     | "vector_access", [AV_cval (vec, _); AV_cval (n, _)] -> AE_val (AV_cval (V_call (Bvaccess, [vec; n]), typ))
+    | "vector_access", [v; AV_cval (n, _)] -> (
+        match destruct_vector ctx.tc_env (aval_typ v) with
+        | Some _ -> (
+            match cval_ctyp n with
+            | CT_fint 64 -> AE_app (Pure_extern (mk_id "fast_vector_access"), args, typ)
+            | _ -> no_change
+          )
+        | None -> no_change
+      )
     | "add_int", [AV_cval (op1, _); AV_cval (op2, _)] -> begin
         match destruct_range ctx.local_env typ with
         | None -> no_change
@@ -1443,6 +1452,11 @@ module Codegen (Config : CODEGEN_CONFIG) = struct
               | cval :: _ -> sprintf "vector_access_%s" (sgen_ctyp_name (cval_ctyp cval))
               | _ -> c_error "vector access function with bad arity."
             end
+          | "fast_vector_access", _ -> begin
+              match args with
+              | cval :: _ -> sprintf "fast_vector_access_%s" (sgen_ctyp_name (cval_ctyp cval))
+              | _ -> c_error "vector access function with bad arity."
+            end
           | "vector_init", _ -> sprintf "vector_init_%s" (sgen_ctyp_name ctyp)
           | "vector_update_subrange", _ -> sprintf "vector_update_subrange_%s" (sgen_ctyp_name ctyp)
           | "vector_update_subrange_inc", _ -> sprintf "vector_update_subrange_inc_%s" (sgen_ctyp_name ctyp)
@@ -2047,6 +2061,19 @@ module Codegen (Config : CODEGEN_CONFIG) = struct
             (ksprintf string "vector_access_%s(%s *rop, %s op, sail_int n)" (sgen_id id) (sgen_ctyp ctyp) (sgen_id id))
             [c_stmt "int m = sail_int_get_ui(n)"; sail_copy ~suffix:";" (sgen_ctyp_name ctyp) "rop, op.data[m]"]
       in
+      let fast_vector_access =
+        if is_stack_ctyp ctx ctyp then
+          c_function
+            ~return:("static " ^ sgen_ctyp ctyp)
+            (ksprintf string "fast_vector_access_%s(%s op, int64_t n)" (sgen_id id) (sgen_id id))
+            [c_stmt "return op.data[n]"]
+        else
+          c_function ~return:"static void"
+            (ksprintf string "fast_vector_access_%s(%s *rop, %s op, int64_t n)" (sgen_id id) (sgen_ctyp ctyp)
+               (sgen_id id)
+            )
+            [sail_copy ~suffix:";" (sgen_ctyp_name ctyp) "rop, op.data[n]"]
+      in
       let internal_vector_init =
         c_function ~return:"static void"
           (ksprintf string "internal_vector_init_%s(%s *rop, const int64_t len)" (sgen_id id) (sgen_id id))
@@ -2105,6 +2132,7 @@ module Codegen (Config : CODEGEN_CONFIG) = struct
           Impl vector_reinit;
           Impl vector_undefined;
           Impl vector_access;
+          Impl fast_vector_access;
           Impl vector_set;
           Impl vector_update;
           Impl vector_equal;
