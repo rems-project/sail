@@ -886,7 +886,8 @@ module Make (Config : CONFIG) = struct
         in
         let updates, lexp = svir_clexp l ctx clexp in
         wrap (with_updates l updates (SVS_assign (lexp, value)))
-    | I_funcall (creturn, preserve_name, (id, _), args) ->
+    | I_funcall (creturn, extern_info, (id, _), args) ->
+        let preserve_name = match extern_info with Extern _ -> true | Call -> false in
         if ctx_is_extern id ctx then (
           let name = ctx_get_extern id ctx in
           extern_generate l ctx creturn id name args
@@ -1159,7 +1160,8 @@ module Make (Config : CONFIG) = struct
             let writes = List.map (fun id -> CL_id (id, reg_ctyp)) (natural_sort_names (NameSet.elements regs)) in
             ChangeTo
               (I_aux
-                 ( I_funcall (CR_multi writes, true, (mk_id encoded, []), V_id (id, CT_ref reg_ctyp) :: cval :: reads),
+                 ( I_funcall
+                     (CR_multi writes, Extern CT_unit, (mk_id encoded, []), V_id (id, CT_ref reg_ctyp) :: cval :: reads),
                    iannot
                  )
               )
@@ -1250,7 +1252,10 @@ module Make (Config : CONFIG) = struct
                             let reads =
                               List.map (fun id -> V_id (id, reg_ctyp)) (natural_sort_names (NameSet.elements regs))
                             in
-                            ChangeTo (I_aux (I_funcall (CR_one clexp, true, (mk_id encoded, []), cval :: reads), iannot))
+                            ChangeTo
+                              (I_aux
+                                 (I_funcall (CR_one clexp, Extern reg_ctyp, (mk_id encoded, []), cval :: reads), iannot)
+                              )
                         | _ -> Reporting.unreachable (snd iannot) __POS__ "Invalid type for reg_deref argument"
                       end
                     | _ -> Reporting.unreachable (snd iannot) __POS__ "Invalid arguments for reg_deref"

@@ -517,6 +517,7 @@ unit prerr(const_sail_string str);
 unit prerr_endline(const_sail_string str);
 
 unit print_int(const_sail_string str, const sail_int op);
+unit fast_print_int(const_sail_string str, const int64_t op);
 unit prerr_int(const_sail_string str, const sail_int op);
 
 unit sail_putchar(const sail_int op);

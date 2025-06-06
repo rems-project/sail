@@ -65,72 +65,6 @@ let symbol_generator () =
   in
   gensym
 
-(* Define wrappers for creating bytecode instructions. Each function
-   uses a counter to assign each instruction a unique identifier. *)
-
-let instr_counter = ref 0
-
-let instr_number () =
-  let n = !instr_counter in
-  incr instr_counter;
-  n
-
-let idecl l ctyp id = I_aux (I_decl (ctyp, id), (instr_number (), l))
-
-let ireset l ctyp id = I_aux (I_reset (ctyp, id), (instr_number (), l))
-
-let generate_static_var = symbol_generator ()
-
-let istatic l ctyp value =
-  let id = generate_static_var () in
-  (id, I_aux (I_init (ctyp, id, Init_static value), (instr_number (), l)))
-
-let iinit l ctyp id cval = I_aux (I_init (ctyp, id, Init_cval cval), (instr_number (), l))
-
-let ijson_key l id parts = I_aux (I_init (CT_json_key, id, Init_json_key parts), (instr_number (), l))
-
-let iif l cval then_instrs else_instrs = I_aux (I_if (cval, then_instrs, else_instrs), (instr_number (), l))
-
-let ifuncall l clexp id cvals = I_aux (I_funcall (CR_one clexp, false, id, cvals), (instr_number (), l))
-
-let ifuncall_multi l clexps id cvals = I_aux (I_funcall (CR_multi clexps, false, id, cvals), (instr_number (), l))
-
-let iextern l clexp id cvals = I_aux (I_funcall (CR_one clexp, true, id, cvals), (instr_number (), l))
-
-let icopy l clexp cval = I_aux (I_copy (clexp, cval), (instr_number (), l))
-
-let iclear ?loc:(l = Parse_ast.Unknown) ctyp id = I_aux (I_clear (ctyp, id), (instr_number (), l))
-
-let ireturn ?loc:(l = Parse_ast.Unknown) cval = I_aux (I_return cval, (instr_number (), l))
-
-let iend l = I_aux (I_end (Return (-1)), (instr_number (), l))
-
-let iend_name l name = I_aux (I_end name, (instr_number (), l))
-
-let iblock ?loc:(l = Parse_ast.Unknown) instrs = I_aux (I_block instrs, (instr_number (), l))
-
-let itry_block l instrs = I_aux (I_try_block instrs, (instr_number (), l))
-
-let ithrow l cval = I_aux (I_throw cval, (instr_number (), l))
-
-let icomment ?loc:(l = Parse_ast.Unknown) str = I_aux (I_comment str, (instr_number (), l))
-
-let ilabel ?loc:(l = Parse_ast.Unknown) label = I_aux (I_label label, (instr_number (), l))
-
-let igoto ?loc:(l = Parse_ast.Unknown) label = I_aux (I_goto label, (instr_number (), l))
-
-let iundefined ?loc:(l = Parse_ast.Unknown) ctyp = I_aux (I_undefined ctyp, (instr_number (), l))
-
-let imatch_failure l = I_aux (I_exit "match", (instr_number (), l))
-
-let iexit l = I_aux (I_exit "explicit", (instr_number (), l))
-
-let ibad_config l = I_aux (I_exit "bad config", (instr_number (), l))
-
-let iraw ?loc:(l = Parse_ast.Unknown) str = I_aux (I_raw str, (instr_number (), l))
-
-let ijump l cval label = I_aux (I_jump (cval, label), (instr_number (), l))
-
 module Name = struct
   type t = name
   let compare id1 id2 =
@@ -387,10 +321,10 @@ let rec doc_instr (I_aux (aux, _)) =
   | I_comment str -> twice space ^^ string "//" ^^ string str
   | I_throw cval -> ksprintf instr "throw %s" (string_of_cval cval)
   | I_return cval -> ksprintf instr "return %s" (string_of_cval cval)
-  | I_funcall (creturn, false, uid, args) ->
+  | I_funcall (creturn, Call, uid, args) ->
       ksprintf instr "%s = %s(%s)" (string_of_creturn creturn) (string_of_uid uid)
         (Util.string_of_list ", " string_of_cval args)
-  | I_funcall (creturn, true, uid, args) ->
+  | I_funcall (creturn, Extern _, uid, args) ->
       ksprintf instr "%s = $%s(%s)" (string_of_creturn creturn) (string_of_uid uid)
         (Util.string_of_list ", " string_of_cval args)
   | I_copy (clexp, cval) -> ksprintf instr "%s = %s" (string_of_clexp clexp) (string_of_cval cval)
@@ -410,6 +344,90 @@ let rec doc_instr (I_aux (aux, _)) =
       ^^ hardline ^^ twice space ^^ char '}'
 
 let string_of_instr i = Document.to_string (doc_instr i)
+
+let rec clexp_ctyp = function
+  | CL_id (_, ctyp) -> ctyp
+  | CL_rmw (_, _, ctyp) -> ctyp
+  | CL_field (_, _, ctyp) -> ctyp
+  | CL_addr clexp -> begin
+      match clexp_ctyp clexp with
+      | CT_ref ctyp -> ctyp
+      | ctyp -> failwith ("Bad ctyp for CL_addr " ^ string_of_ctyp ctyp)
+    end
+  | CL_tuple (clexp, n) -> begin
+      match clexp_ctyp clexp with
+      | CT_tup typs -> begin try List.nth typs n with _ -> failwith "Tuple assignment index out of bounds" end
+      | ctyp -> failwith ("Bad ctyp for CL_tuple " ^ string_of_ctyp ctyp)
+    end
+  | CL_void ctyp -> ctyp
+
+(* Define wrappers for creating bytecode instructions. Each function
+   uses a counter to assign each instruction a unique identifier. *)
+
+let instr_counter = ref 0
+
+let instr_number () =
+  let n = !instr_counter in
+  incr instr_counter;
+  n
+
+let idecl l ctyp id = I_aux (I_decl (ctyp, id), (instr_number (), l))
+
+let ireset l ctyp id = I_aux (I_reset (ctyp, id), (instr_number (), l))
+
+let generate_static_var = symbol_generator ()
+
+let istatic l ctyp value =
+  let id = generate_static_var () in
+  (id, I_aux (I_init (ctyp, id, Init_static value), (instr_number (), l)))
+
+let iinit l ctyp id cval = I_aux (I_init (ctyp, id, Init_cval cval), (instr_number (), l))
+
+let ijson_key l id parts = I_aux (I_init (CT_json_key, id, Init_json_key parts), (instr_number (), l))
+
+let iif l cval then_instrs else_instrs = I_aux (I_if (cval, then_instrs, else_instrs), (instr_number (), l))
+
+let ifuncall l clexp id cvals = I_aux (I_funcall (CR_one clexp, Call, id, cvals), (instr_number (), l))
+
+let ifuncall_multi l clexps id cvals = I_aux (I_funcall (CR_multi clexps, Call, id, cvals), (instr_number (), l))
+
+let iextern ?return_ctyp l clexp id cvals =
+  let return_ctyp = match return_ctyp with None -> clexp_ctyp clexp | Some ctyp -> ctyp in
+  I_aux (I_funcall (CR_one clexp, Extern return_ctyp, id, cvals), (instr_number (), l))
+
+let icopy l clexp cval = I_aux (I_copy (clexp, cval), (instr_number (), l))
+
+let iclear ?loc:(l = Parse_ast.Unknown) ctyp id = I_aux (I_clear (ctyp, id), (instr_number (), l))
+
+let ireturn ?loc:(l = Parse_ast.Unknown) cval = I_aux (I_return cval, (instr_number (), l))
+
+let iend l = I_aux (I_end (Return (-1)), (instr_number (), l))
+
+let iend_name l name = I_aux (I_end name, (instr_number (), l))
+
+let iblock ?loc:(l = Parse_ast.Unknown) instrs = I_aux (I_block instrs, (instr_number (), l))
+
+let itry_block l instrs = I_aux (I_try_block instrs, (instr_number (), l))
+
+let ithrow l cval = I_aux (I_throw cval, (instr_number (), l))
+
+let icomment ?loc:(l = Parse_ast.Unknown) str = I_aux (I_comment str, (instr_number (), l))
+
+let ilabel ?loc:(l = Parse_ast.Unknown) label = I_aux (I_label label, (instr_number (), l))
+
+let igoto ?loc:(l = Parse_ast.Unknown) label = I_aux (I_goto label, (instr_number (), l))
+
+let iundefined ?loc:(l = Parse_ast.Unknown) ctyp = I_aux (I_undefined ctyp, (instr_number (), l))
+
+let imatch_failure l = I_aux (I_exit "match", (instr_number (), l))
+
+let iexit l = I_aux (I_exit "explicit", (instr_number (), l))
+
+let ibad_config l = I_aux (I_exit "bad config", (instr_number (), l))
+
+let iraw ?loc:(l = Parse_ast.Unknown) str = I_aux (I_raw str, (instr_number (), l))
+
+let ijump l cval label = I_aux (I_jump (cval, label), (instr_number (), l))
 
 let rec map_ctyp f = function
   | ( CT_lint | CT_fint _ | CT_constant _ | CT_lbits | CT_fbits _ | CT_sbits _ | CT_float _ | CT_rounding_mode | CT_bit
@@ -833,6 +851,8 @@ let map_creturn_ctyp f = function
 let map_init_ctyp f init =
   match init with Init_cval cval -> Init_cval (map_cval_ctyp f cval) | Init_static _ | Init_json_key _ -> init
 
+let map_extern_ctyp f = function Call -> Call | Extern ctyp -> Extern (f ctyp)
+
 let rec map_instr_ctyp f (I_aux (instr, aux)) =
   let instr =
     match instr with
@@ -842,7 +862,12 @@ let rec map_instr_ctyp f (I_aux (instr, aux)) =
         I_if (map_cval_ctyp f cval, List.map (map_instr_ctyp f) then_instrs, List.map (map_instr_ctyp f) else_instrs)
     | I_jump (cval, label) -> I_jump (map_cval_ctyp f cval, label)
     | I_funcall (creturn, extern, (id, ctyps), cvals) ->
-        I_funcall (map_creturn_ctyp f creturn, extern, (id, List.map f ctyps), List.map (map_cval_ctyp f) cvals)
+        I_funcall
+          ( map_creturn_ctyp f creturn,
+            map_extern_ctyp f extern,
+            (id, List.map f ctyps),
+            List.map (map_cval_ctyp f) cvals
+          )
     | I_copy (clexp, cval) -> I_copy (map_clexp_ctyp f clexp, map_cval_ctyp f cval)
     | I_clear (ctyp, id) -> I_clear (f ctyp, id)
     | I_return cval -> I_return (map_cval_ctyp f cval)
@@ -1111,22 +1136,6 @@ and cval_ctyp = function
   | V_struct (_, ctyp) -> ctyp
   | V_tuple cvals -> CT_tup (List.map cval_ctyp cvals)
   | V_call (op, vs) -> infer_call op vs
-
-let rec clexp_ctyp = function
-  | CL_id (_, ctyp) -> ctyp
-  | CL_rmw (_, _, ctyp) -> ctyp
-  | CL_field (_, _, ctyp) -> ctyp
-  | CL_addr clexp -> begin
-      match clexp_ctyp clexp with
-      | CT_ref ctyp -> ctyp
-      | ctyp -> failwith ("Bad ctyp for CL_addr " ^ string_of_ctyp ctyp)
-    end
-  | CL_tuple (clexp, n) -> begin
-      match clexp_ctyp clexp with
-      | CT_tup typs -> begin try List.nth typs n with _ -> failwith "Tuple assignment index out of bounds" end
-      | ctyp -> failwith ("Bad ctyp for CL_tuple " ^ string_of_ctyp ctyp)
-    end
-  | CL_void ctyp -> ctyp
 
 let creturn_ctyp = function CR_one clexp -> clexp_ctyp clexp | CR_multi clexps -> CT_tup (List.map clexp_ctyp clexps)
 

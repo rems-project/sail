@@ -57,7 +57,11 @@ module Big_int = Nat_big_num
 (* 1. Conversion to A-normal form (ANF)                                   *)
 (**************************************************************************)
 
-type function_id = Sail_function of id | Newtype_wrapper of id | Pure_extern of id | Extern of id
+type function_id =
+  | Sail_function of id
+  | Newtype_wrapper of id
+  | Pure_extern of id * typ option
+  | Extern of id * typ option
 
 type constructor_id = Constructor of id | Newtype_wrapper of id
 
@@ -294,8 +298,8 @@ let rec is_pure_aexp effect_info (AE_aux (aexp, { uannot; _ })) =
   | None -> (
       match aexp with
       | AE_app (Sail_function f, _, _) -> Effects.function_is_pure f effect_info
-      | AE_app (Pure_extern f, _, _) -> true
-      | AE_app (Extern f, _, _) -> false
+      | AE_app (Pure_extern (f, _), _, _) -> true
+      | AE_app (Extern (f, _), _, _) -> false
       | AE_typ (aexp, _) -> is_pure_aexp effect_info aexp
       | AE_let (Immutable, _, _, aexp1, aexp2, _) -> is_pure_aexp effect_info aexp1 && is_pure_aexp effect_info aexp2
       | AE_match (_, arms, _) ->
@@ -462,8 +466,8 @@ let pp_name id = string (string_of_name id)
 let pp_function_id = function
   | Sail_function id -> pp_id id
   | Newtype_wrapper id -> string "newtype" ^^ space ^^ pp_id id
-  | Pure_extern id -> string "pure_extern" ^^ space ^^ pp_id id
-  | Extern id -> string "extern" ^^ space ^^ pp_id id
+  | Pure_extern (id, _) -> string "pure_extern" ^^ space ^^ pp_id id
+  | Extern (id, _) -> string "extern" ^^ space ^^ pp_id id
 
 let pp_constructor_id = function
   | Constructor id -> pp_id id
@@ -783,13 +787,13 @@ let rec anf (E_aux (e_aux, (l, tannot)) as exp) =
       let aexp2 = anf exp2 in
       let aval1, wrap1 = to_aval aexp1 in
       let aval2, wrap2 = to_aval aexp2 in
-      wrap1 (wrap2 (mk_aexp (AE_app (Extern (mk_id "sail_assert"), [aval1; aval2], unit_typ))))
+      wrap1 (wrap2 (mk_aexp (AE_app (Extern (mk_id "sail_assert", None), [aval1; aval2], unit_typ))))
   | E_cons (exp1, exp2) ->
       let aexp1 = anf exp1 in
       let aexp2 = anf exp2 in
       let aval1, wrap1 = to_aval aexp1 in
       let aval2, wrap2 = to_aval aexp2 in
-      wrap1 (wrap2 (mk_aexp (AE_app (Extern (mk_id "sail_cons"), [aval1; aval2], typ_of exp))))
+      wrap1 (wrap2 (mk_aexp (AE_app (Extern (mk_id "sail_cons", None), [aval1; aval2], typ_of exp))))
   | E_id id ->
       let lvar = Env.lookup_id id (env_of exp) in
       begin
@@ -800,7 +804,7 @@ let rec anf (E_aux (e_aux, (l, tannot)) as exp) =
       mk_aexp (AE_val (AV_ref (id, lvar)))
   | E_config key ->
       let anf_key_part part = AV_lit (mk_lit (L_string part), string_typ) in
-      mk_aexp (AE_app (Extern (mk_id "sail_config_get"), List.map anf_key_part key, typ_of exp))
+      mk_aexp (AE_app (Extern (mk_id "sail_config_get", None), List.map anf_key_part key, typ_of exp))
   | E_match (match_exp, pexps) ->
       let match_aval, match_wrap = to_aval (anf match_exp) in
       let anf_pexp (Pat_aux (pat_aux, (l, tannot))) =

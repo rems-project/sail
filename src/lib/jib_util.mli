@@ -63,7 +63,7 @@ val ijson_key : l -> name -> string list -> instr
 val iif : l -> cval -> instr list -> instr list -> instr
 val ifuncall : l -> clexp -> id * ctyp list -> cval list -> instr
 val ifuncall_multi : l -> clexp list -> id * ctyp list -> cval list -> instr
-val iextern : l -> clexp -> id * ctyp list -> cval list -> instr
+val iextern : ?return_ctyp:ctyp -> l -> clexp -> id * ctyp list -> cval list -> instr
 val icopy : l -> clexp -> cval -> instr
 val iclear : ?loc:l -> ctyp -> name -> instr
 val ireturn : ?loc:l -> cval -> instr

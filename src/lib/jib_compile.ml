@@ -686,7 +686,7 @@ module Make (C : CONFIG) = struct
 
   let compile_funcall ?override_id l ctx id args = compile_funcall_with ?override_id l ctx id (compile_aval l ctx) args
 
-  let compile_extern l ctx id args =
+  let compile_extern l ctx id args return_ctyp =
     let setup = ref [] in
     let cleanup = ref [] in
 
@@ -699,7 +699,7 @@ module Make (C : CONFIG) = struct
 
     let setup_args = List.map setup_arg args in
 
-    (List.rev !setup, (fun clexp -> iextern l clexp (id, []) setup_args), !cleanup)
+    (List.rev !setup, (fun clexp -> iextern ?return_ctyp l clexp (id, []) setup_args), !cleanup)
 
   let select_abstract l ctx string_id f =
     let rec if_chain = function [] -> [] | [(_, e)] -> e | (i, t) :: e -> [iif l i t (if_chain e)] in
@@ -1197,8 +1197,10 @@ module Make (C : CONFIG) = struct
             (setup, (fun clexp -> icopy l clexp cval), cleanup)
         | _ -> Reporting.unreachable l __POS__ "Found newtype wrapper with > 1 argument during Jib generation"
       )
-    | AE_app (Pure_extern id, args, _) -> compile_extern l ctx id args
-    | AE_app (Extern id, args, typ) ->
+    | AE_app (Pure_extern (id, return_typ), args, typ) ->
+        let return_ctyp = Option.map (ctyp_of_typ ctx) return_typ in
+        compile_extern l ctx id args return_ctyp
+    | AE_app (Extern (id, return_typ), args, typ) ->
         let str = string_of_id id in
         if str = "sail_assert" && C.assert_to_exception then (
           match args with
@@ -1213,7 +1215,10 @@ module Make (C : CONFIG) = struct
           | _ -> Reporting.unreachable l __POS__ "Bad arity for sail_assert"
         )
         else if str = "sail_config_get" then compile_config l ctx args typ
-        else compile_extern l ctx id args
+        else (
+          let return_ctyp = Option.map (ctyp_of_typ ctx) return_typ in
+          compile_extern l ctx id args return_ctyp
+        )
     | AE_val aval ->
         let setup, cval, cleanup = compile_aval l ctx aval in
         (setup, (fun clexp -> icopy l clexp cval), cleanup)
@@ -2130,6 +2135,7 @@ module Make (C : CONFIG) = struct
   let compile_funcl ctx def_annot id pat guard exp =
     let debug_attr = get_def_attribute "jib_debug" def_annot in
     let mapping_function_attr = get_def_attribute "mapping_function" def_annot in
+    let test_no_gmp = get_def_attribute "test_no_gmp" def_annot in
 
     if Option.is_some debug_attr then (
       let extra = if Option.is_some mapping_function_attr then " (mapping)" else "" in
@@ -2221,6 +2227,20 @@ module Make (C : CONFIG) = struct
       prerr_endline Util.("IR for " ^ string_of_id id ^ ":" |> yellow |> bold |> clear);
       List.iter (fun instr -> prerr_endline (string_of_instr instr)) instrs
     );
+
+    if Option.is_some test_no_gmp then
+      List.iter
+        (fun instr ->
+          iter_instr
+            (function
+              | I_aux (I_decl (ctyp, _), (_, l)) | I_aux (I_init (ctyp, _, _), (_, l)) ->
+                  if ctyp_equal ctyp CT_lint || ctyp_equal ctyp CT_lbits then
+                    raise (Reporting.err_general l "Found GMP large integer or bitvector with test_no_gmp attribute")
+              | _ -> ()
+              )
+            instr
+        )
+        instrs;
 
     (* If the function is a mapping, we generate an infallible version (that never causes a match_failure) *)
     let mapping_infallible, return_ctx =
@@ -2735,71 +2755,86 @@ module Make (C : CONFIG) = struct
 
     let precise_call call tail =
       match call with
-      | I_aux (I_funcall (CR_one clexp, true, (id, _), args), ((_, l) as aux)) as instr ->
-          if string_of_id id = "sail_cons" then (
-            match args with
-            | [hd_arg; tl_arg] ->
-                let ctyp_arg = ctyp_suprema (cval_ctyp hd_arg) in
-                if not (ctyp_equal (cval_ctyp hd_arg) ctyp_arg) then (
-                  let gs = ngensym () in
-                  let cast = [idecl l ctyp_arg gs; icopy l (CL_id (gs, ctyp_arg)) hd_arg] in
-                  let cleanup = [iclear ~loc:l ctyp_arg gs] in
+      | I_aux (I_funcall (CR_one clexp, extern_info, (id, ctyp_args), args), ((_, l) as aux)) as instr -> (
+          match extern_info with
+          | Extern ret_ctyp ->
+              if string_of_id id = "sail_cons" then (
+                match args with
+                | [hd_arg; tl_arg] ->
+                    let ctyp_arg = ctyp_suprema (cval_ctyp hd_arg) in
+                    if not (ctyp_equal (cval_ctyp hd_arg) ctyp_arg) then (
+                      let gs = ngensym () in
+                      let cast = [idecl l ctyp_arg gs; icopy l (CL_id (gs, ctyp_arg)) hd_arg] in
+                      let cleanup = [iclear ~loc:l ctyp_arg gs] in
+                      [
+                        iblock
+                          (cast
+                          @ [
+                              I_aux
+                                (I_funcall (CR_one clexp, Extern ret_ctyp, (id, []), [V_id (gs, ctyp_arg); tl_arg]), aux);
+                            ]
+                          @ tail @ cleanup
+                          );
+                      ]
+                    )
+                    else instr :: tail
+                | _ ->
+                    (* cons must have two arguments *)
+                    Reporting.unreachable (id_loc id) __POS__ "Invalid cons call"
+              )
+              else if not (ctyp_equal (clexp_ctyp clexp) ret_ctyp) then (
+                let gs = ngensym () in
+                let setup = [idecl l ret_ctyp gs] in
+                let new_clexp = CL_id (gs, ret_ctyp) in
+                let cleanup = [icopy l clexp (V_id (gs, ret_ctyp)); iclear ~loc:l ret_ctyp gs] in
+                setup
+                @ [I_aux (I_funcall (CR_one new_clexp, Extern ret_ctyp, (id, ctyp_args), args), aux)]
+                @ cleanup @ tail
+              )
+              else instr :: tail
+          | Call -> (
+              match get_function_typ id with
+              | Some (param_ctyps, ret_ctyp) when C.make_call_precise ctx id param_ctyps ret_ctyp ->
+                  if List.compare_lengths args param_ctyps <> 0 then
+                    Reporting.unreachable (id_loc id) __POS__
+                      ("Function call found with incorrect arity: " ^ string_of_id id);
+                  let casted_args =
+                    List.map2
+                      (fun arg param_ctyp ->
+                        if not (ctyp_equal (cval_ctyp arg) param_ctyp) then (
+                          let gs = ngensym () in
+                          let cast = [idecl l param_ctyp gs; icopy l (CL_id (gs, param_ctyp)) arg] in
+                          let cleanup = [iclear ~loc:l param_ctyp gs] in
+                          (cast, V_id (gs, param_ctyp), cleanup)
+                        )
+                        else ([], arg, [])
+                      )
+                      args param_ctyps
+                  in
+                  let ret_setup, clexp, ret_cleanup =
+                    if not (ctyp_equal (clexp_ctyp clexp) ret_ctyp) then (
+                      let gs = ngensym () in
+                      ( [idecl l ret_ctyp gs],
+                        CL_id (gs, ret_ctyp),
+                        [icopy l clexp (V_id (gs, ret_ctyp)); iclear ~loc:l ret_ctyp gs]
+                      )
+                    )
+                    else ([], clexp, [])
+                  in
+                  let casts = List.map (fun (x, _, _) -> x) casted_args |> List.concat in
+                  let args = List.map (fun (_, y, _) -> y) casted_args in
+                  let cleanup = List.rev_map (fun (_, _, z) -> z) casted_args |> List.concat in
                   [
-                    iblock
-                      (cast
-                      @ [I_aux (I_funcall (CR_one clexp, true, (id, []), [V_id (gs, ctyp_arg); tl_arg]), aux)]
-                      @ tail @ cleanup
+                    iblock1
+                      (casts @ ret_setup
+                      @ [I_aux (I_funcall (CR_one clexp, Call, (id, ctyp_args), args), aux)]
+                      @ tail @ ret_cleanup @ cleanup
                       );
                   ]
-                )
-                else instr :: tail
-            | _ ->
-                (* cons must have two arguments *)
-                Reporting.unreachable (id_loc id) __POS__ "Invalid cons call"
-          )
-          else instr :: tail
-      | I_aux (I_funcall (CR_one clexp, false, (id, ctyp_args), args), ((_, l) as aux)) as instr -> begin
-          match get_function_typ id with
-          | Some (param_ctyps, ret_ctyp) when C.make_call_precise ctx id param_ctyps ret_ctyp ->
-              if List.compare_lengths args param_ctyps <> 0 then
-                Reporting.unreachable (id_loc id) __POS__
-                  ("Function call found with incorrect arity: " ^ string_of_id id);
-              let casted_args =
-                List.map2
-                  (fun arg param_ctyp ->
-                    if not (ctyp_equal (cval_ctyp arg) param_ctyp) then (
-                      let gs = ngensym () in
-                      let cast = [idecl l param_ctyp gs; icopy l (CL_id (gs, param_ctyp)) arg] in
-                      let cleanup = [iclear ~loc:l param_ctyp gs] in
-                      (cast, V_id (gs, param_ctyp), cleanup)
-                    )
-                    else ([], arg, [])
-                  )
-                  args param_ctyps
-              in
-              let ret_setup, clexp, ret_cleanup =
-                if not (ctyp_equal (clexp_ctyp clexp) ret_ctyp) then (
-                  let gs = ngensym () in
-                  ( [idecl l ret_ctyp gs],
-                    CL_id (gs, ret_ctyp),
-                    [icopy l clexp (V_id (gs, ret_ctyp)); iclear ~loc:l ret_ctyp gs]
-                  )
-                )
-                else ([], clexp, [])
-              in
-              let casts = List.map (fun (x, _, _) -> x) casted_args |> List.concat in
-              let args = List.map (fun (_, y, _) -> y) casted_args in
-              let cleanup = List.rev_map (fun (_, _, z) -> z) casted_args |> List.concat in
-              [
-                iblock1
-                  (casts @ ret_setup
-                  @ [I_aux (I_funcall (CR_one clexp, false, (id, ctyp_args), args), aux)]
-                  @ tail @ ret_cleanup @ cleanup
-                  );
-              ]
-          | Some _ -> instr :: tail
-          | None -> instr :: tail
-        end
+              | Some _ -> instr :: tail
+              | None -> instr :: tail
+            )
+        )
       | instr -> instr :: tail
     in
 
