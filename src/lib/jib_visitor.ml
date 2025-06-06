@@ -179,11 +179,18 @@ let rec visit_instr vis outer_instr =
     | I_aux (I_label _, _) -> no_change
     | I_aux (I_funcall (creturn, extern, (id, ctyps), cvals), aux) ->
         let creturn' = visit_creturn vis creturn in
+        let extern' =
+          match extern with
+          | Call -> extern
+          | Extern ret_ctyp ->
+              let ret_ctyp' = visit_ctyp vis ret_ctyp in
+              if ret_ctyp == ret_ctyp' then extern else Extern ret_ctyp'
+        in
         let id' = visit_id vis id in
         let ctyps' = visit_ctyps vis ctyps in
         let cvals' = visit_cvals vis cvals in
-        if creturn == creturn' && id == id' && ctyps == ctyps' && cvals == cvals' then no_change
-        else I_aux (I_funcall (creturn', extern, (id', ctyps'), cvals'), aux)
+        if creturn == creturn' && extern == extern' && id == id' && ctyps == ctyps' && cvals == cvals' then no_change
+        else I_aux (I_funcall (creturn', extern', (id', ctyps'), cvals'), aux)
     | I_aux (I_copy (clexp, cval), aux) ->
         let clexp' = visit_clexp vis clexp in
         let cval' = visit_cval vis cval in

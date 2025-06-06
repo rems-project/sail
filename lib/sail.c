@@ -1891,6 +1891,12 @@ unit print_int(const_sail_string str, const sail_int op)
   return UNIT;
 }
 
+unit fast_print_int(const_sail_string str, const int64_t op)
+{
+  printf("%s%" PRId64 "\n", str, op);
+  return UNIT;
+}
+
 unit prerr_int(const_sail_string str, const sail_int op)
 {
   fputs(str, stderr);

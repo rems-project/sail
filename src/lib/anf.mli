@@ -73,7 +73,11 @@ open Jib
 open Jib_util
 open Type_check
 
-type function_id = Sail_function of id | Newtype_wrapper of id | Pure_extern of id | Extern of id
+type function_id =
+  | Sail_function of id
+  | Newtype_wrapper of id
+  | Pure_extern of id * typ option
+  | Extern of id * typ option
 
 type constructor_id = Constructor of id | Newtype_wrapper of id
 

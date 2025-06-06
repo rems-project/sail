@@ -523,7 +523,8 @@ module Make (Config : CONFIG) = struct
   let smt_instr state ctx (I_aux (aux, (_, l)) as instr) =
     let open Type_check in
     match aux with
-    | I_funcall (CR_one (CL_id (id, ret_ctyp)), extern, (function_id, _), args) ->
+    | I_funcall (CR_one (CL_id (id, ret_ctyp)), extern_info, (function_id, _), args) ->
+        let extern = match extern_info with Extern _ -> true | Call -> false in
         if ctx_is_extern function_id ctx then (
           let name = ctx_get_extern function_id ctx in
           if name = "sail_assume" then (
@@ -964,7 +965,7 @@ module Make (Config : CONFIG) = struct
 
       method! vinstr =
         function
-        | I_aux (I_funcall (CR_one (CL_addr (CL_id (id, ctyp))), false, function_id, args), (_, l)) -> begin
+        | I_aux (I_funcall (CR_one (CL_addr (CL_id (id, ctyp))), Call, function_id, args), (_, l)) -> begin
             match ctyp with
             | CT_ref reg_ctyp -> begin
                 match CTMap.find_opt reg_ctyp Config.register_map with
@@ -989,7 +990,7 @@ module Make (Config : CONFIG) = struct
                 raise
                   (Reporting.err_general l "Register reference assignment must take a register reference as an argument")
           end
-        | I_aux (I_funcall (CR_one clexp, false, function_id, [reg_ref]), (_, l)) as instr ->
+        | I_aux (I_funcall (CR_one clexp, Call, function_id, [reg_ref]), (_, l)) as instr ->
             let open Type_check in
             begin
               match

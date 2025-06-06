@@ -422,7 +422,7 @@ let inline cdefs should_inline instrs =
   in
 
   let inline_instr = function
-    | I_aux (I_funcall (CR_one clexp, false, function_id, args), aux) as instr when should_inline (fst function_id) ->
+    | I_aux (I_funcall (CR_one clexp, Call, function_id, args), aux) as instr when should_inline (fst function_id) ->
       begin
         match find_function (fst function_id) cdefs with
         | Some (Return_plain, ids, body) ->

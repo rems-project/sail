@@ -229,6 +229,20 @@ init :: 'Init_' ::=
   | static value                     :: :: static
   | json_key string0 . ... . stringn :: :: json_key
 
+% A Jib function call may be to a Sail function defined by a valspec
+% or it can be an external call returning a C value with a specific type
+%
+% Note that a Sail function defined by a valspec
+%
+% val f : T = { c = "bar" }
+%
+% is not considered an extern call here. These extern functions are
+% special runtime functions used by the C backend, or used to implement
+% type specific peephole optimisations etc.
+funtype :: '' ::=
+  | call        :: :: call
+  | extern ctyp :: :: extern
+
 instr :: 'I_' ::=
   {{ aux _ iannot }}
 % The following are the minimal set of instructions output by
@@ -238,7 +252,7 @@ instr :: 'I_' ::=
   | jump ( cval ) string                           :: :: jump
   | goto string                                    :: :: goto
   | string :                                       :: :: label
-  | creturn = bool uid ( cval0 , ... , cvaln )     :: :: funcall
+  | creturn = funtype uid ( cval0 , ... , cvaln )  :: :: funcall
   | clexp = cval                                   :: :: copy
   | clear ctyp name                                :: :: clear
   | undefined ctyp                                 :: :: undefined
