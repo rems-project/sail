@@ -331,7 +331,7 @@ let regval_base_convs typ =
 
 let add_regval_conv ctx env id typ defs =
   let typ_str = Document.to_string (doc_typ typ) in
-  let v_exp = mk_exp (E_id (mk_id "v")) in
+  let v_exp = mk_exp (E_id (mk_id "v#")) in
   let base_typ = regval_base_typ env typ in
   (* Create a function that converts from regval to the target type. *)
   let from_name, to_name = regval_base_convs typ in
@@ -343,13 +343,13 @@ let add_regval_conv ctx env id typ defs =
     | Some id ->
         let base_exp = mk_exp (E_app (mk_id from_base, [v_exp])) in
         let result_exp = Bitfield.construct_bitfield_struct id v_exp in
-        let some_clause = "Some(v) => Some(" ^ string_of_exp result_exp ^ ")" in
+        let some_clause = "Some(v#) => Some(" ^ string_of_exp result_exp ^ ")" in
         let clauses = " { " ^ some_clause ^ ", None() => None() }" in
-        "function " ^ from_name ^ " v = match " ^ string_of_exp base_exp ^ clauses
+        "function " ^ from_name ^ " v# = match " ^ string_of_exp base_exp ^ clauses
     | _ ->
         String.concat "\n"
           [
-            Printf.sprintf "function %s Regval_%s(v) = Some(v)" from_name constr_name;
+            Printf.sprintf "function %s Regval_%s(v#) = Some(v#)" from_name constr_name;
             Printf.sprintf "and %s _ = None()" from_name;
           ]
   in
@@ -360,7 +360,7 @@ let add_regval_conv ctx env id typ defs =
     if is_bitfield_typ env typ then mk_exp (E_app (mk_id to_base, [Bitfield.get_bits_field v_exp]))
     else mk_exp (E_app (mk_id ("Regval_" ^ constr_name), [v_exp]))
   in
-  let to_function = Printf.sprintf "function %s v = %s" to_name (string_of_exp to_exp) in
+  let to_function = Printf.sprintf "function %s v# = %s" to_name (string_of_exp to_exp) in
   let to_defs = if is_defined defs to_name then [] else [to_val; to_function] in
   let cdefs = List.concat (List.map (fun s -> fst (defs_of_string __POS__ ctx s)) (from_defs @ to_defs)) in
   defs @ cdefs
