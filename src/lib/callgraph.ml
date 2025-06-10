@@ -338,6 +338,7 @@ let add_def_to_graph graph (DEF_aux (def, def_annot)) =
         List.iter
           (fun gen_id -> graph := G.add_edges (Function gen_id) [Mapping id] !graph)
           [
+            id;
             append_id id "_forwards";
             append_id id "_forwards_matches";
             append_id id "_backwards";
