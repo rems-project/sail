@@ -4617,6 +4617,16 @@ let rewrite_toplevel_let_patterns env ast =
   let defs = List.map rewrite_def ast.defs |> List.concat in
   { ast with defs }
 
+(* Remove definitions when they're shadowed by an external declaration.  Avoids problems with (e.g.)
+   adding effects to deal with termination to an otherwise pure function, which was causing the
+   definitions and the external function to disagree on whether the function is pure. *)
+let rewrite_remove_extern_defs target env ast =
+  let is_not_extern_def = function
+    | DEF_aux (DEF_fundef fd, _) when Env.is_extern (id_of_fundef fd) env target -> false
+    | _ -> true
+  in
+  { ast with defs = List.filter is_not_extern_def ast.defs }
+
 let opt_mono_rewrites = ref false
 let opt_mono_complex_nexps = ref true
 
@@ -4812,6 +4822,7 @@ let all_rewriters =
     ("add_unspecified_rec", basic_rewriter rewrite_add_unspecified_rec);
     ("toplevel_let_patterns", basic_rewriter rewrite_toplevel_let_patterns);
     ("remove_bitfield_records", basic_rewriter remove_bitfield_records);
+    ("remove_extern_defs", String_rewriter (fun target -> basic_rewriter (rewrite_remove_extern_defs target)));
   ]
 
 let rewrites_interpreter =
