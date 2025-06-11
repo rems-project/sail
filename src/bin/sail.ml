@@ -77,6 +77,7 @@ let opt_format = ref false
 let opt_format_backup : string option ref = ref None
 let opt_format_only : string list ref = ref []
 let opt_format_skip : string list ref = ref []
+let opt_format_debug : bool ref = ref false
 let opt_slice_instantiation_types : bool ref = ref false
 let opt_output_schema_file : string option ref = ref None
 
@@ -271,6 +272,7 @@ let rec options =
         Arg.String (fun file -> opt_format_skip := file :: !opt_format_skip),
         "<file> skip formatting this file"
       );
+      ("-fmt_debug", Arg.Bool (fun debug -> opt_format_debug := debug), "<bool> debug mode");
       ( "-slice_instantiation_types",
         Arg.Tuple [Arg.Set Type_check.opt_no_bitfield_expansion; Arg.Set opt_slice_instantiation_types],
         " (experimental) produce a Sail file containing all of the types that are used in instantiations"
@@ -572,7 +574,7 @@ let run_sail_format (config : Yojson.Safe.t option) =
     (fun (f, (comments, parse_ast)) ->
       let source = file_to_string f in
       if is_format_file f && not (is_skipped_file f) then (
-        let formatted = Formatter.format_defs ~debug:true f source comments parse_ast in
+        let formatted = Formatter.format_defs ~debug:!opt_format_debug f source comments parse_ast in
         begin
           match !opt_format_backup with
           | Some suffix ->
