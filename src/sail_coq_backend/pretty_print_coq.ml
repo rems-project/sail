@@ -2432,13 +2432,12 @@ let types_used_with_generic_eq defs =
   let typs_req_def (DEF_aux (aux, _) as def) =
     match aux with
     | DEF_type _ | DEF_constraint _ | DEF_val _ | DEF_fixity _ | DEF_overload _ | DEF_default _ | DEF_pragma _
-    | DEF_register _ ->
+    | DEF_register _ | DEF_instantiation _ | DEF_outcome _ ->
         IdSet.empty
     | DEF_fundef fd -> typs_req_fundef fd
     | DEF_internal_mutrec fds -> List.fold_left IdSet.union IdSet.empty (List.map typs_req_fundef fds)
     | DEF_let lb -> fst (Rewriter.fold_letbind alg lb)
-    | DEF_mapdef _ | DEF_scattered _ | DEF_measure _ | DEF_loop_measures _ | DEF_impl _ | DEF_instantiation _
-    | DEF_outcome _ ->
+    | DEF_mapdef _ | DEF_scattered _ | DEF_measure _ | DEF_loop_measures _ | DEF_impl _ ->
         unreachable (def_loc def) __POS__ "Definition found in the Coq back-end that should have been rewritten away"
   in
   List.fold_left IdSet.union IdSet.empty (List.map typs_req_def defs)
@@ -3797,8 +3796,10 @@ let doc_def global unimplemented generic_eq_types countable_types enum_number_de
   | DEF_loop_measures (id, _) ->
       unreachable (id_loc id) __POS__
         ("Loop termination measures for " ^ string_of_id id ^ " should have been rewritten before backend")
-  | DEF_impl _ | DEF_outcome _ | DEF_instantiation _ ->
-      unreachable (def_loc def) __POS__ "Event definition should have been rewritten before backend"
+  | DEF_impl _ -> unreachable (def_loc def) __POS__ "Event definition should have been rewritten before backend"
+  (* The instantiation has already been applied by a rewrite and we don't need to output anything for it
+     here.  They are still present to provide information for instantiating the concurrency interface. *)
+  | DEF_instantiation _ | DEF_outcome _ -> empty
   (* This backend doesn't currently support abstract types, so they must have been instantiated by now and
      the constraints don't need to appear in the output. *)
   | DEF_constraint _ -> empty
@@ -4493,92 +4494,179 @@ let pp_ast_coq library_style (types_file, types_modules) (defs_file, defs_module
       | BBV -> IdSet.empty
     in
     let interface_defs =
-      match concurrency_monad_params with
-      | None ->
-          string "Definition read_reg {A E} := @read_reg register A E."
-          ^^ hardline
-          ^^ string "Definition write_reg {A E} := @write_reg register A E."
-          ^^ hardline
-          ^^
-          if suppress_MR_M then empty
+      if Preprocess.have_symbol "CONCURRENCY_INTERFACE_V2" then
+        let open Monad_params in
+        let type_substs, id_substs = find_instantiations ast.defs in
+        let pp_typish name default =
+          match KBindings.find_opt (mk_kid name) type_substs with
+          | Some typ_arg -> doc_typ_arg { empty_ctxt with global } type_env typ_arg
+          | None -> string default
+        in
+        let pp_id name default =
+          match Bindings.find_opt (mk_id name) id_substs with
+          | Some id -> doc_id { empty_ctxt with global } id
+          | None -> string default
+        in
+        let mr_m =
+          if suppress_MR_M then []
           else
-            separate hardline
-              [
-                string ("Definition MR r a := monadR register a r " ^ exc_typ ^ ".");
-                string ("Definition M a := monad register a " ^ exc_typ ^ ".");
-                string ("Definition returnM {A:Type} := @returnm register A " ^ exc_typ ^ ".");
-                string ("Definition returnR {A:Type} (R:Type) := @returnm register A (R + " ^ exc_typ ^ ").");
-              ]
-      | Some params ->
-          let pp_typ = doc_typ { empty_ctxt with global } type_env in
-          let open Monad_params in
-          let mr_m =
-            if suppress_MR_M then []
-            else
-              [
-                empty;
-                string ("Definition M := Defs.monad " ^ exc_typ ^ ".");
-                string ("Definition MR r := Defs.monad (r + " ^ exc_typ ^ ")%type.");
-                string ("Definition returnM {A:Type} : A -> M A := Defs.returnm (E := " ^ exc_typ ^ ").");
-                string
-                  ("Definition returnR {A:Type} (R:Type) : A -> MR R A := Defs.returnm (E := R + " ^ exc_typ ^ ")%type.");
-              ]
-          in
-          separate hardline
-            ([
-               string "Definition read_reg {A E} := @read_reg register A E.";
-               string "Definition write_reg {A E} := @write_reg register A E.";
-               empty;
-               (* Explicitly say which definitions are type so that Coq uses the
+            [
+              empty;
+              string ("Definition M := Defs.monad " ^ exc_typ ^ ".");
+              string ("Definition MR r := Defs.monad (r + " ^ exc_typ ^ ")%type.");
+              string ("Definition returnM {A:Type} : A -> M A := Defs.returnm (E := " ^ exc_typ ^ ").");
+              string
+                ("Definition returnR {A:Type} (R:Type) : A -> MR R A := Defs.returnm (E := R + " ^ exc_typ ^ ")%type.");
+            ]
+        in
+        let usual_type name =
+          [
+            string ("  Definition " ^ name ^ " : Type := ") ^^ pp_typish name "unit" ^^ string ".";
+            string ("  Definition " ^ name ^ "_eq : EqDecision " ^ name ^ " := _.");
+            string ("  Definition " ^ name ^ "_countable : Countable " ^ name ^ " := _.");
+          ]
+        in
+        let classifier name =
+          string ("  Definition " ^ name ^ " := ") ^^ pp_id name "fun (_ : mem_acc) => false" ^^ string "."
+        in
+        separate hardline
+          ([
+             string "Definition read_reg {A E} := @read_reg register A E.";
+             string "Definition write_reg {A E} := @write_reg register A E.";
+             empty;
+             (* Explicitly say which definitions are type so that Coq uses the
                   type scope, otherwise a type like (mword 2 * mword 3) will fail
                   typechecking because it attempts to use multiplication. *)
-               string "Module Arch <: Arch.";
-               string "  Definition reg : Type -> Type := register.";
-               string "  Definition reg_eq := @Decidable_eq_register.";
-               string "  Include GRegister.";
-               string "  Definition greg_eq := @Decidable_eq_greg.";
-               string "  Definition greg_cnt := @Countable_greg.";
-               string "  Definition regval_inhabited := @Inhabited_register_values.";
-               string "  Definition regval_eq := @Decidable_eq_register_values.";
-               string "  Definition regval_cnt := @Countable_register_values.";
-               string "  Definition regval_transport A B := @register_transport A B (fun x => x).";
-               string "  Definition regval_transport_sound A := @register_transport_sound A (fun x => x).";
-               (*   string "  Definition reg_countable : Countable reg := _.";*)
-               string "  Definition va_size := 64%N.";
-               string "  Definition pa : Type := " ^^ pp_typ params.pa_type ^^ string ".";
-               string "  Definition pa_eq : EqDecision pa := _.";
-               string "  Definition pa_countable : Countable pa := _.";
-               string "  Definition arch_ak : Type := " ^^ pp_typ params.arch_ak_type ^^ string ".";
-               string "  Definition arch_ak_eq : EqDecision arch_ak := _.";
-               string "  Definition translation : Type := " ^^ pp_typ params.translation_summary_type ^^ string ".";
-               string "  Definition translation_eq : EqDecision translation := _.";
-               string "  Definition trans_start := " ^^ pp_typ params.trans_start_type ^^ string ".";
-               string "  Definition trans_start_eq : EqDecision trans_start := _.";
-               string "  Definition trans_end := " ^^ pp_typ params.trans_end_type ^^ string ".";
-               string "  Definition trans_end_eq : EqDecision trans_end := _.";
-               string "  Definition abort : Type := " ^^ pp_typ params.abort_type ^^ string ".";
-               string "  Definition abort_eq : EqDecision abort := _.";
-               string "  Definition barrier : Type := " ^^ pp_typ params.barrier_type ^^ string ".";
-               string "  Definition barrier_eq : EqDecision barrier := _.";
-               string "  Definition cache_op : Type := " ^^ pp_typ params.cache_op_type ^^ string ".";
-               string "  Definition cache_op_eq : EqDecision cache_op := _.";
-               string "  Definition tlb_op : Type := " ^^ pp_typ params.tlbi_type ^^ string ".";
-               string "  Definition tlb_op_eq : EqDecision tlb_op := _.";
-               string "  Definition fault : Type := " ^^ pp_typ params.fault_type ^^ string ".";
-               string "  Definition fault_eq : EqDecision fault := _.";
-               string "  Definition sys_reg_id : Type := " ^^ pp_typ params.sys_reg_id_type ^^ string ".";
-               string "  Definition sys_reg_id_eq : EqDecision sys_reg_id := _.";
-               string "  Definition sys_reg_id_countable : Countable sys_reg_id := _.";
-               string "End Arch.";
-               empty;
-               string "Module Interface := Interface Arch.";
-               string "Module Defs := Defs Arch Interface.";
-             ]
-            @ mr_m
-            )
+             string "Module Arch <: Arch.";
+             string "  Definition reg : Type -> Type := register.";
+             string "  Definition reg_eq := @Decidable_eq_register.";
+             string "  Include GRegister.";
+             string "  Definition greg_eq := @Decidable_eq_greg.";
+             string "  Definition greg_cnt := @Countable_greg.";
+             string "  Definition regval_inhabited := @Inhabited_register_values.";
+             string "  Definition regval_eq := @Decidable_eq_register_values.";
+             string "  Definition regval_cnt := @Countable_register_values.";
+             string "  Definition regval_transport A B := @register_transport A B (fun x => x).";
+             string "  Definition regval_transport_sound A := @register_transport_sound A (fun x => x).";
+             (*   string "  Definition reg_countable : Countable reg := _.";*)
+             string "  Definition addr_size : N := Z.to_N (" ^^ pp_typish "addr_size" "64" ^^ string ").";
+           ]
+          @ usual_type "addr_space" @ usual_type "mem_acc"
+          @ [
+              string "  Definition CHERI : bool := " ^^ pp_typish "CHERI" "false" ^^ string ".";
+              string "  Definition cap_size_log : Z := " ^^ pp_typish "cap_size_log" "0" ^^ string ".";
+              classifier "mem_acc_is_explicit";
+              classifier "mem_acc_is_ifetch";
+              classifier "mem_acc_is_ttw";
+              classifier "mem_acc_is_relaxed";
+              classifier "mem_acc_is_rel_acq_rcpc";
+              classifier "mem_acc_is_rel_acq_rcsc";
+              classifier "mem_acc_is_standalone";
+              classifier "mem_acc_is_exclusive";
+              classifier "mem_acc_is_atomic_rmw";
+            ]
+          @ usual_type "trans_start" @ usual_type "trans_end" @ usual_type "abort" @ usual_type "barrier"
+          @ usual_type "cache_op" @ usual_type "tlb_op" @ usual_type "fault" @ usual_type "sys_reg_id"
+          @ [
+              string "End Arch.";
+              empty;
+              string "Module Interface := Interface Arch.";
+              string "Module Defs := Defs Arch Interface.";
+            ]
+          @ mr_m
+          )
+      else (
+        match concurrency_monad_params with
+        | None ->
+            string "Definition read_reg {A E} := @read_reg register A E."
+            ^^ hardline
+            ^^ string "Definition write_reg {A E} := @write_reg register A E."
+            ^^ hardline
+            ^^
+            if suppress_MR_M then empty
+            else
+              separate hardline
+                [
+                  string ("Definition MR r a := monadR register a r " ^ exc_typ ^ ".");
+                  string ("Definition M a := monad register a " ^ exc_typ ^ ".");
+                  string ("Definition returnM {A:Type} := @returnm register A " ^ exc_typ ^ ".");
+                  string ("Definition returnR {A:Type} (R:Type) := @returnm register A (R + " ^ exc_typ ^ ").");
+                ]
+        | Some params ->
+            let pp_typ = doc_typ { empty_ctxt with global } type_env in
+            let open Monad_params in
+            let mr_m =
+              if suppress_MR_M then []
+              else
+                [
+                  empty;
+                  string ("Definition M := Defs.monad " ^ exc_typ ^ ".");
+                  string ("Definition MR r := Defs.monad (r + " ^ exc_typ ^ ")%type.");
+                  string ("Definition returnM {A:Type} : A -> M A := Defs.returnm (E := " ^ exc_typ ^ ").");
+                  string
+                    ("Definition returnR {A:Type} (R:Type) : A -> MR R A := Defs.returnm (E := R + " ^ exc_typ
+                   ^ ")%type."
+                    );
+                ]
+            in
+            separate hardline
+              ([
+                 string "Definition read_reg {A E} := @read_reg register A E.";
+                 string "Definition write_reg {A E} := @write_reg register A E.";
+                 empty;
+                 (* Explicitly say which definitions are type so that Coq uses the
+                  type scope, otherwise a type like (mword 2 * mword 3) will fail
+                  typechecking because it attempts to use multiplication. *)
+                 string "Module Arch <: Arch.";
+                 string "  Definition reg : Type -> Type := register.";
+                 string "  Definition reg_eq := @Decidable_eq_register.";
+                 string "  Include GRegister.";
+                 string "  Definition greg_eq := @Decidable_eq_greg.";
+                 string "  Definition greg_cnt := @Countable_greg.";
+                 string "  Definition regval_inhabited := @Inhabited_register_values.";
+                 string "  Definition regval_eq := @Decidable_eq_register_values.";
+                 string "  Definition regval_cnt := @Countable_register_values.";
+                 string "  Definition regval_transport A B := @register_transport A B (fun x => x).";
+                 string "  Definition regval_transport_sound A := @register_transport_sound A (fun x => x).";
+                 (*   string "  Definition reg_countable : Countable reg := _.";*)
+                 string "  Definition va_size := 64%N.";
+                 string "  Definition pa : Type := " ^^ pp_typ params.pa_type ^^ string ".";
+                 string "  Definition pa_eq : EqDecision pa := _.";
+                 string "  Definition pa_countable : Countable pa := _.";
+                 string "  Definition arch_ak : Type := " ^^ pp_typ params.arch_ak_type ^^ string ".";
+                 string "  Definition arch_ak_eq : EqDecision arch_ak := _.";
+                 string "  Definition translation : Type := " ^^ pp_typ params.translation_summary_type ^^ string ".";
+                 string "  Definition translation_eq : EqDecision translation := _.";
+                 string "  Definition trans_start := " ^^ pp_typ params.trans_start_type ^^ string ".";
+                 string "  Definition trans_start_eq : EqDecision trans_start := _.";
+                 string "  Definition trans_end := " ^^ pp_typ params.trans_end_type ^^ string ".";
+                 string "  Definition trans_end_eq : EqDecision trans_end := _.";
+                 string "  Definition abort : Type := " ^^ pp_typ params.abort_type ^^ string ".";
+                 string "  Definition abort_eq : EqDecision abort := _.";
+                 string "  Definition barrier : Type := " ^^ pp_typ params.barrier_type ^^ string ".";
+                 string "  Definition barrier_eq : EqDecision barrier := _.";
+                 string "  Definition cache_op : Type := " ^^ pp_typ params.cache_op_type ^^ string ".";
+                 string "  Definition cache_op_eq : EqDecision cache_op := _.";
+                 string "  Definition tlb_op : Type := " ^^ pp_typ params.tlbi_type ^^ string ".";
+                 string "  Definition tlb_op_eq : EqDecision tlb_op := _.";
+                 string "  Definition fault : Type := " ^^ pp_typ params.fault_type ^^ string ".";
+                 string "  Definition fault_eq : EqDecision fault := _.";
+                 string "  Definition sys_reg_id : Type := " ^^ pp_typ params.sys_reg_id_type ^^ string ".";
+                 string "  Definition sys_reg_id_eq : EqDecision sys_reg_id := _.";
+                 string "  Definition sys_reg_id_countable : Countable sys_reg_id := _.";
+                 string "End Arch.";
+                 empty;
+                 string "Module Interface := Interface Arch.";
+                 string "Module Defs := Defs Arch Interface.";
+               ]
+              @ mr_m
+              )
+      )
     in
 
     let typdefs, defs = List.partition is_typ_def defs in
+    let inst_defs, main_defs = Callgraph.partition_instantiation_definitions defs in
+    let typdefs = typdefs @ inst_defs in
 
     let enum_fn_map, enum_fn_set = enum_fn_names typdefs in
     let enum_number_defs, defs =
@@ -4652,7 +4740,10 @@ let pp_ast_coq library_style (types_file, types_modules) (defs_file, defs_module
                (fun lib -> separate space [string "Require Import"; string lib] ^^ dot)
                defs_modules;
              hardline;
-             (if Option.is_some concurrency_monad_params then string "Import Defs." ^^ hardline else empty);
+             ( if Preprocess.have_symbol "CONCURRENCY_INTERFACE_V2" || Option.is_some concurrency_monad_params then
+                 string "Import Defs." ^^ hardline
+               else empty
+             );
              ( if !opt_coq_record_update then
                  string "From RecordUpdate Require Import RecordSet."
                  ^^ hardline ^^ string "Import RecordSetNotations." ^^ hardline
