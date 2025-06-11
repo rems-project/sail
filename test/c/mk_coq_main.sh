@@ -3,6 +3,9 @@
 OUT="_coqbuild_$1/main.v"
 
 if grep -q 'ConcurrencyInterface' "_coqbuild_$1/$1.v"; then
+  if grep -q 'ConcurrencyInterfaceV2' "_coqbuild_$1/$1.v"; then
+    V2=true
+  fi
   if grep -q 'sail_model_init.*: unit :=' "_coqbuild_$1/$1.v"; then
     RUN="main tt"
   else
@@ -34,6 +37,9 @@ if grep -q 'ConcurrencyInterface' "_coqbuild_$1/$1.v"; then
   
   (* NB: write and read wrongly assume that PAs are tag aligned *)
   
+EOF
+  if [ -z "$V2" ]; then
+  cat <<EOF >> "$OUT"
   Definition write_mem (st : state) n (req : Interface.WriteReq.t n) :=
     let base_addr := mword_to_N req.(Interface.WriteReq.pa) in
     let addrs := State_monad.genlist (fun i => base_addr + N.of_nat i)%N (N.to_nat n) in
@@ -52,6 +58,36 @@ if grep -q 'ConcurrencyInterface' "_coqbuild_$1/$1.v"; then
     let value := N.recursion (definitions.bv_0 (8 * n)) read_byte n in
     let tag := if req.(Interface.ReadReq.tag) then Some (opt_def false (NMap.find base_addr st.(state_tags))) else None in
     (value, tag).
+EOF
+  else
+  cat <<EOF >> "$OUT"
+  Definition write_mem (st : state) n nt (req : Interface.WriteReq.t n nt) :=
+    let base_addr := mword_to_N req.(Interface.WriteReq.address) in
+    let addrs := State_monad.genlist (fun i => base_addr + N.of_nat i)%N (N.to_nat n) in
+    let write_byte i m := NMap.add (base_addr + i)%N (definitions.bv_extract (8 * i) 8 req.(Interface.WriteReq.value)) m in
+    let cap_size := N.pow 2 (Z.to_N Arch.cap_size_log) in
+    let write_tag i m := NMap.add (base_addr + i * cap_size)%N (MachineWord.MachineWord.get_bit req.(Interface.WriteReq.tags) i) m in
+    let new_tags :=
+      if Z.of_N nt >? 0 then N.recursion st.(state_tags) write_tag nt else NMap.add (mword_to_N (definitions.bv_and req.(Interface.WriteReq.address) (definitions.bv_opp (definitions.Z_to_bv _ (Z.of_N cap_size))))) false st.(state_tags)
+    in
+    {| state_memory := N.recursion st.(state_memory) write_byte n;
+       state_tags := new_tags;
+       state_regs := st.(state_regs);
+       state_cycles := st.(state_cycles);
+       state_output := st.(state_output)
+    |}.
+  
+  Definition read_mem (st : state) n nt (req : Interface.ReadReq.t n nt) : definitions.bv (8 * n) * definitions.bv nt :=
+    let base_addr := mword_to_N req.(Interface.ReadReq.address) in
+    let read_byte i v := definitions.bv_or (definitions.bv_shiftl (definitions.bv_zero_extend (8 * n) (opt_def (definitions.bv_0 8) (NMap.find (base_addr + i)%N st.(state_memory)))) (definitions.Z_to_bv (8 * n)%N (Z.of_N (8 * i)))) v in
+    let cap_size := N.pow 2 (Z.to_N Arch.cap_size_log) in
+    let read_tag i v := MachineWord.MachineWord.set_bit v i (opt_def false (NMap.find (base_addr + i * cap_size)%N st.(state_tags))) in
+    let value := N.recursion (definitions.bv_0 (8 * n)) read_byte n in
+    let tag := N.recursion (definitions.bv_0 nt) read_tag nt in
+    (value, tag).
+EOF
+  fi
+  cat <<EOF >> "$OUT"
   
   Definition read_reg {T} (st : state) (r : register T) : T := register_lookup r st.(state_regs).
   Definition write_reg {T} (st : state) (r : register T) (v : T) : state :=
@@ -72,8 +108,19 @@ if grep -q 'ConcurrencyInterface' "_coqbuild_$1/$1.v"; then
       match out in Interface.outcome _ T return (T -> _) -> _ with
       | Interface.Message msg => fun k => run (k tt) (write_message st msg)
       | Interface.Choose _ty => fun k => run (k base.inhabitant) st
+EOF
+  if [ -z "$V2" ]; then
+  cat <<EOF >> "$OUT"
       | Interface.MemWrite n req => fun k => run (k (inl None)) (write_mem st n req)
       | Interface.MemRead n req => fun k => run (k (inl (read_mem st n req))) st
+EOF
+  else
+  cat <<EOF >> "$OUT"
+      | Interface.MemWrite n nt req => fun k => run (k (inl None)) (write_mem st n nt req)
+      | Interface.MemRead n nt req => fun k => run (k (inl (read_mem st n nt req))) st
+EOF
+  fi
+  cat <<EOF >> "$OUT"
       | Interface.Barrier _ => fun k => run (k tt) st
       | Interface.CycleCount => fun k => run (k tt) (cycle_count st)
       | Interface.GetCycleCount => fun k => run (k st.(state_cycles)) st

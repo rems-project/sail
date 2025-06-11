@@ -144,7 +144,6 @@ def test_coq(name):
     results.expect_failure("read_write_ram.sail", "uses memory primitives not provided by default in Coq")
     results.expect_failure("fail_exception.sail", "try-blocks around pure expressions not supported in Coq (and a little silly)")
     results.expect_failure("loop_exception.sail", "try-blocks around pure expressions not supported in Coq (and a little silly)")
-    results.expect_failure("concurrency_interface_v2.sail", "test doesn't meet Coq library's expectations for the concurrency interface")
     results.expect_failure("outcome_impl.sail", "test doesn't meet Coq backend's expectations for the concurrency interface")
     results.expect_failure("outcome_impl_int.sail", "test doesn't meet Coq backend's expectations for the concurrency interface")
     results.expect_failure("outcome_impl_bool.sail", "test doesn't meet Coq backend's expectations for the concurrency interface")

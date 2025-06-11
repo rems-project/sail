@@ -49,6 +49,8 @@ open Ast_defs
 open Ast_util
 open Type_check
 
+(* For v1 of the concurrency interface, this extracts a fixed set of types. *)
+
 type parameters = {
   abort_type : typ;
   barrier_type : typ;
@@ -120,3 +122,22 @@ let find_monad_parameters type_env =
           arch_ak_type;
           sys_reg_id_type;
         }
+
+(* For later versions, find_instantiations pulls out mappings for
+   instantiated types and identifiers. *)
+
+let find_instantiations defs =
+  List.fold_left
+    (fun (type_substs, id_substs) def ->
+      match def with
+      | DEF_aux (DEF_instantiation (_, substs), _) ->
+          List.fold_left
+            (fun (type_substs, id_substs) (IS_aux (is, _)) ->
+              match is with
+              | IS_typ (kid, ty_arg) -> (KBindings.add kid ty_arg type_substs, id_substs)
+              | IS_id (id_from, id_to) -> (type_substs, Bindings.add id_from id_to id_substs)
+            )
+            (type_substs, id_substs) substs
+      | _ -> (type_substs, id_substs)
+    )
+    (KBindings.empty, Bindings.empty) defs

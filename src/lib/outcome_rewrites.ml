@@ -102,11 +102,13 @@ let rec instantiated_or_abstract l = function
       else raise (Reporting.err_general l "Multiple instantiations found for target")
 
 let instantiate target ast =
+  (* Some backends will need the instantiations to hook up to a particular interface *)
+  let keep_original_defs = String.compare target "coq" == 0 in
   let process_def outcomes = function
     | DEF_aux (DEF_outcome (OV_aux (OV_outcome (id, TypSchm_aux (TypSchm_ts (typq, typ), _), args), l), outcome_defs), _)
-      ->
-        (Bindings.add id (typq, typ, args, l, outcome_defs) outcomes, [])
-    | DEF_aux (DEF_instantiation (IN_aux (IN_id id, annot), id_substs), def_annot) ->
+      as def ->
+        (Bindings.add id (typq, typ, args, l, outcome_defs) outcomes, if keep_original_defs then [def] else [])
+    | DEF_aux (DEF_instantiation (IN_aux (IN_id id, annot), id_substs), def_annot) as def ->
         let l = gen_loc (id_loc id) in
         let env = env_of_annot annot in
         let substs = Env.get_outcome_instantiation env in
@@ -178,7 +180,7 @@ let instantiate target ast =
           )
           |> Type_error.check_defs env
         in
-        (outcomes, outcome_defs)
+        (outcomes, if keep_original_defs then def :: outcome_defs else outcome_defs)
     | def -> (outcomes, [def])
   in
   { ast with defs = snd (Util.fold_left_concat_map process_def Bindings.empty ast.defs) }

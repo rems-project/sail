@@ -655,6 +655,28 @@ let slice_instantiation_types sail_dir ast =
   let ast = filter_ast_extra NodeSet.empty g ast false in
   filter_library_files sail_dir ast
 
+let partition_instantiation_definitions defs =
+  let module NodeMap = Map.Make (Node) in
+  let module G = Graph.Make (Node) in
+  let g = graph_of_defs defs in
+  let roots =
+    defs
+    |> List.filter_map (function
+         | DEF_aux (DEF_instantiation (_, substs), _) ->
+             Some
+               (List.filter_map
+                  (function IS_aux (IS_typ _, _) -> None | IS_aux (IS_id (_, id_to), _) -> Some (Function id_to))
+                  substs
+               )
+         | _ -> None
+         )
+    |> List.concat |> NS.of_list
+  in
+  Printf.eprintf "FOUND: %s\n%!"
+    (String.concat ", " @@ List.map (fun n -> string_of_id @@ node_id n) @@ NS.elements roots);
+  let g = G.prune roots NS.empty g in
+  List.partition (fun def -> NS.exists (fun n -> NodeMap.mem n g) (nodes_of_def def)) defs
+
 module FCG = Graph.Make (Id)
 
 let function_call_graph ast =
