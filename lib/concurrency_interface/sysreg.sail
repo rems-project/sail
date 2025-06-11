@@ -59,16 +59,16 @@ $include <concurrency_interface/common.sail>
    At the moment there is some support for this in the Coq backend,
    in addition to the plain emulation implementation below. */
 
-outcome sail_sys_reg_write : forall 'a. ('id, register('a), 'a) -> unit
+outcome sail_sys_reg_write : forall 'a. ('sys_reg_id, register('a), 'a) -> unit
 with
-  'id : Type
+  'sys_reg_id : Type
 = {
   impl emulator_or_isla(_id, reg, value) = *reg = value
 }
 
-outcome sail_sys_reg_read : forall 'a. ('id, register('a)) -> 'a
+outcome sail_sys_reg_read : forall 'a. ('sys_reg_id, register('a)) -> 'a
 with
-  'id : Type
+  'sys_reg_id : Type
 = {
   impl emulator_or_isla(_id, reg) = *reg
 }
