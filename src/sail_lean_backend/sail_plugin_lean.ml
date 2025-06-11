@@ -150,7 +150,7 @@ let lean_rewrites =
   let open Rewrites in
   [
     ("move_termination_measures", []);
-    ("instantiate_outcomes", [String_arg "coq"]);
+    ("instantiate_outcomes", [String_arg "lean"]);
     ("realize_mappings", []);
     ("remove_vector_subrange_pats", []);
     ("remove_duplicate_valspecs", []);
@@ -183,7 +183,7 @@ let lean_rewrites =
     (* ("remove_assert", rewrite_ast_remove_assert); *)
     ("top_sort_defs", []);
     ("add_register_init_function", []);
-    ("const_prop_mutrec", [String_arg "coq"]);
+    ("const_prop_mutrec", [String_arg "lean"]);
     ("exp_lift_assign", []);
     ("early_return", []);
     (* We need to do the exhaustiveness check before merging, because it may
