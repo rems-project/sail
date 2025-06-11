@@ -76,6 +76,7 @@ let opt_sail_config_file : string option ref = ref None
 let opt_format = ref false
 let opt_format_backup : string option ref = ref None
 let opt_format_only : string list ref = ref []
+let opt_format_emit : string ref = ref "file"
 let opt_format_skip : string list ref = ref []
 let opt_slice_instantiation_types : bool ref = ref false
 let opt_output_schema_file : string option ref = ref None
@@ -267,6 +268,10 @@ let rec options =
         "<suffix> create backups of formatted files as 'file.suffix'"
       );
       ("-fmt_only", Arg.String (fun file -> opt_format_only := file :: !opt_format_only), "<file> format only this file");
+      ( "-fmt_emit",
+        Arg.String (fun output -> opt_format_emit := output),
+        "[file(default)|stdout] update target file or just output to stdout"
+      );
       ( "-fmt_skip",
         Arg.String (fun file -> opt_format_skip := file :: !opt_format_skip),
         "<file> skip formatting this file"
@@ -581,9 +586,15 @@ let run_sail_format (config : Yojson.Safe.t option) =
               close_out out_chan
           | None -> ()
         end;
-        let file_info = Util.open_output_with_check f in
-        output_string file_info.channel formatted;
-        Util.close_output_with_check file_info
+        match !opt_format_emit with
+        | "file" ->
+            let file_info = Util.open_output_with_check f in
+            output_string file_info.channel formatted;
+            Util.close_output_with_check file_info
+        | "stdout" ->
+            output_string stdout formatted;
+            flush stdout
+        | _ -> raise (Failure "unknown format_emit option")
       )
     )
     parsed_files
