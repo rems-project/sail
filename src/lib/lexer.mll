@@ -180,6 +180,8 @@ rule token comments = parse
   | ";"                                 { Semi }
   | "*"                                 { Star }
   | "_"                                 { Under }
+  | "+:"                                { PlusColon }
+  | "-:"                                { MinusColon }
   | "[|"                                { LsquareBar }
   | "|]"                                { RsquareBar }
   | "{|"                                { LcurlyBar }

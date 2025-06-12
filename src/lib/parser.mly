@@ -157,10 +157,8 @@ type vector_update =
 
 let rec mk_vector_updates input updates n m =
   match updates with
-  | VU_single (idx, value) :: updates ->
+  | (idx, value) :: updates ->
      mk_vector_updates (mk_exp (E_vector_update (input, idx, value)) n m) updates n m
-  | VU_range (high, low, value) :: updates ->
-     mk_vector_updates (mk_exp (E_vector_update_subrange (input, high, low, value)) n m) updates n m
   | [] -> input
 
 let typschm_is_pure (TypSchm_aux (TypSchm_ts (_, ATyp_aux (typ, _)), _)) =
@@ -222,7 +220,7 @@ let set_syntax_deprecated l =
 %nonassoc Then
 %nonassoc Else
 
-%token Bar Comma Dot Eof Minus Semi Under DotDot At ColonColon Caret Star
+%token Bar Comma Dot Eof Minus Semi Under DotDot At ColonColon Caret Star PlusColon MinusColon
 %token Lcurly Rcurly Lparen Rparen Lsquare Rsquare LcurlyBar RcurlyBar LsquareBar RsquareBar
 %token MinusGt Bidir
 
@@ -754,6 +752,16 @@ block:
   | pat Eq exp
     { LB_aux (LB_val ($1, $3), loc $startpos $endpos) }
 
+vector_access(E):
+  | exp=E
+    { VA_aux (VA_index exp, loc $startpos $endpos) }
+  | lhs=E; DotDot; rhs=E
+    { VA_aux (VA_subrange (lhs, rhs), loc $startpos $endpos) }
+  | lhs=E; PlusColon; rhs=E
+    { VA_aux (VA_indexed_add (lhs, rhs), loc $startpos $endpos) }
+  | lhs=E; MinusColon; rhs=E
+    { VA_aux (VA_indexed_sub (lhs, rhs), loc $startpos $endpos) }
+
 atomic_exp:
   | atomic_exp Colon atomic_typ
     { mk_exp (E_typ ($3, $1)) $startpos $endpos }
@@ -797,12 +805,8 @@ atomic_exp:
     { mk_exp (E_assert ($3, mk_lit_exp (L_string "") $startpos($4) $endpos($4))) $startpos $endpos }
   | Assert Lparen exp Comma exp Rparen
     { mk_exp (E_assert ($3, $5)) $startpos $endpos }
-  | atomic_exp Lsquare exp Rsquare
+  | atomic_exp Lsquare vector_access(exp) Rsquare
     { mk_exp (E_vector_access ($1, $3)) $startpos $endpos }
-  | atomic_exp Lsquare exp DotDot exp Rsquare
-    { mk_exp (E_vector_subrange ($1, $3, $5)) $startpos $endpos }
-  | atomic_exp Lsquare exp Comma exp Rsquare
-    { mk_exp (E_app (mk_id (Id "slice") $startpos($2) $endpos, [$1; $3; $5])) $startpos $endpos }
   | Struct id? Lcurly fexp_exp_list Rcurly
     { mk_exp (E_struct ($2, $4)) $startpos $endpos }
   | Lcurly exp With fexp_exp_list Rcurly
@@ -843,12 +847,12 @@ exp_list:
     { $1 :: $3 }
 
 vector_update:
-  | atomic_exp Eq exp
-    { VU_single ($1, $3) }
-  | atomic_exp DotDot atomic_exp Eq exp
-    { VU_range ($1, $3, $5) }
-  | id
-    { VU_single (mk_exp (E_id $1) $startpos $endpos, mk_exp (E_id $1) $startpos $endpos)}
+  | va=vector_access(atomic_exp); Eq; e=exp
+    { (va, e) }
+  | id=id
+    { let l = loc $startpos $endpos in
+      let exp = E_aux (E_id id, l) in
+      (VA_aux (VA_index exp, l), exp) }
 
 vector_update_list:
   | vector_update Comma?

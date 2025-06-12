@@ -210,6 +210,14 @@ type measure_aux =
 
 and measure = Measure_aux of measure_aux * l
 
+and vector_access_aux =
+  | VA_index of exp (* A single index [N] *)
+  | VA_subrange of exp * exp (* Accessing a range [N .. M] *)
+  | VA_indexed_add of exp * exp (* SystemVerilog-style indexed part select [M +: N] *)
+  | VA_indexed_sub of exp * exp (* SystemVerilog-style indexed part select [M -: N] *)
+
+and vector_access = VA_aux of vector_access_aux * l
+
 and exp_aux =
   (* Expression *)
   | E_block of exp list (* block (parsing conflict with structs?) *)
@@ -226,10 +234,8 @@ and exp_aux =
   | E_loop of loop * measure * exp * exp
   | E_for of id * exp * exp * exp * atyp * exp (* loop *)
   | E_vector of exp list (* vector (indexed from 0) *)
-  | E_vector_access of exp * exp (* vector access *)
-  | E_vector_subrange of exp * exp * exp (* subvector extraction *)
-  | E_vector_update of exp * exp * exp (* vector functional update *)
-  | E_vector_update_subrange of exp * exp * exp * exp (* vector subrange update (with vector) *)
+  | E_vector_access of exp * vector_access
+  | E_vector_update of exp * vector_access * exp (* vector functional update *)
   | E_vector_append of exp * exp (* vector concatenation *)
   | E_list of exp list (* list *)
   | E_cons of exp * exp (* cons *)
