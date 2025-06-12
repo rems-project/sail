@@ -672,8 +672,6 @@ let partition_instantiation_definitions defs =
          )
     |> List.concat |> NS.of_list
   in
-  Printf.eprintf "FOUND: %s\n%!"
-    (String.concat ", " @@ List.map (fun n -> string_of_id @@ node_id n) @@ NS.elements roots);
   let g = G.prune roots NS.empty g in
   List.partition (fun def -> NS.exists (fun n -> NodeMap.mem n g) (nodes_of_def def)) defs
 
