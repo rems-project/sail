@@ -89,7 +89,7 @@ def test_lean(subdir: str, skip_list = None, runnable: bool = False):
                 if not runnable:
                     extra_flags.append('--lean-matchbv')
                 extra_flags = ' '.join(extra_flags)
-                step('\'{}\' {} {} --lean --lean-single-file --lean-output-dir {}'.format(sail, extra_flags, filename, basename), name=filename)
+                step('\'{}\' {} {} --lean --lean-single-file  --lean-executable --lean-output-dir {}'.format(sail, extra_flags, filename, basename), name=filename)
                 if runnable and basename.startswith('fail'):
                     step(f'lake exe run > expected 2> err_status',
                          cwd=f'{basename}/out',

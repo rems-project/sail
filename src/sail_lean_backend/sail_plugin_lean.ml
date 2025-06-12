@@ -81,6 +81,8 @@ let opt_lean_real_numbers : bool ref = ref false
 
 let opt_single_file : bool ref = ref false
 
+let opt_lean_executable : bool ref = ref false
+
 (* We keep two flags to use the [If_flag] in the list of rewrites. They should never be equal. *)
 let opt_enable_matchbv : bool ref = ref false
 let opt_disable_matchbv : bool ref = ref true
@@ -142,6 +144,10 @@ let lean_options =
     ( Flag.create ~prefix:["lean"] ~arg:"func-name" "non_beq_type",
       Arg.String Pretty_print_lean.(fun fn -> non_beq_types := IdSet.add (mk_id fn) !non_beq_types),
       "disable deriving a BEq instance for this type"
+    );
+    ( Flag.create ~prefix:["lean"] "executable",
+      Arg.Unit (fun () -> opt_lean_executable := true),
+      "generate an executable if there is a main function in the Sail program"
     );
   ]
 
@@ -391,7 +397,7 @@ let output (out_name : string) env effect_info ({ defs; _ } as ast : Libsail.Typ
     Pretty_print_lean.pp_ast_lean env effect_info ast out_name_camel ctx.types_file ctx.import_files ctx.funcs_file
       noncomputable
   in
-  create_lake_project ctx executable
+  create_lake_project ctx (executable && !opt_lean_executable)
 (* Uncomment for debug output of the Sail code after the rewrite passes *)
 (* Pretty_print_sail.output_ast stdout (Type_check.strip_ast ast) *)
 
