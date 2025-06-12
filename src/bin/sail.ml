@@ -578,32 +578,51 @@ let run_sail_format (config : Yojson.Safe.t option) =
       | None -> Format_sail.default_config
   end in
   let module Formatter = Format_sail.Make (Config) in
-  let parsed_files = List.map (fun f -> (f, Initial_check.parse_file f)) !opt_free_arguments in
-  List.iter
-    (fun (f, (comments, parse_ast)) ->
-      let source = file_to_string f in
-      if is_format_file f && not (is_skipped_file f) then (
-        let formatted = Formatter.format_defs ~debug:!opt_format_debug f source comments parse_ast in
-        begin
-          match !opt_format_backup with
-          | Some suffix ->
-              let out_chan = open_out (f ^ "." ^ suffix) in
-              output_string out_chan source;
-              close_out out_chan
-          | None -> ()
-        end;
-        match !opt_format_emit with
-        | "file" ->
-            let file_info = Util.open_output_with_check f in
-            output_string file_info.channel formatted;
-            Util.close_output_with_check file_info
-        | "stdout" ->
-            output_string stdout formatted;
-            flush stdout
-        | _ -> raise (Failure "unknown format_emit option")
+  if List.is_empty !opt_free_arguments then (
+    let read_stdin_lines () =
+      let rec read_loop acc =
+        try
+          let line = input_line stdin in
+          read_loop (line :: acc)
+        with End_of_file -> List.rev acc
+      in
+      read_loop []
+    in
+    let source = String.concat "\n" (read_stdin_lines ()) in
+    let f = "stdin" in
+    let comments, parse_ast = Initial_check.parse_file_from_string ~filename:f ~contents:source in
+    let formatted = Formatter.format_defs f source comments parse_ast in
+    output_string stdout formatted;
+    flush stdout
+  )
+  else (
+    let parsed_files = List.map (fun f -> (f, Initial_check.parse_file f)) !opt_free_arguments in
+    List.iter
+      (fun (f, (comments, parse_ast)) ->
+        let source = file_to_string f in
+        if is_format_file f && not (is_skipped_file f) then (
+          let formatted = Formatter.format_defs ~debug:true f source comments parse_ast in
+          begin
+            match !opt_format_backup with
+            | Some suffix ->
+                let out_chan = open_out (f ^ "." ^ suffix) in
+                output_string out_chan source;
+                close_out out_chan
+            | None -> ()
+          end;
+          match !opt_format_emit with
+          | "file" ->
+              let file_info = Util.open_output_with_check f in
+              output_string file_info.channel formatted;
+              Util.close_output_with_check file_info
+          | "stdout" ->
+              output_string stdout formatted;
+              flush stdout
+          | _ -> raise (Failure "unknown format_emit option")
+        )
       )
-    )
-    parsed_files
+      parsed_files
+  )
 
 let feature_check () =
   match !opt_have_feature with None -> () | Some symbol -> if Preprocess.have_symbol symbol then exit 0 else exit 2
