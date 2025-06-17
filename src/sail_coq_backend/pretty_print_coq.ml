@@ -1125,21 +1125,22 @@ let rec nexp_const_eval (Nexp_aux (n, l) as nexp) =
 (* Decide whether two nexps used in a vector size are similar; if not
    a cast will be inserted *)
 let similar_nexps ctxt env ?(existentials = []) n1 n2 =
-  let rec same_nexp_shape (Nexp_aux (n1, _)) (Nexp_aux (n2, _)) =
+  let rec same_nexp_shape (Nexp_aux (n1, _) as nexp1) (Nexp_aux (n2, _)) =
     match (n1, n2) with
     | Nexp_id _, Nexp_id _ -> true
+    (* An existential can take on any compatible value *)
+    | _, Nexp_var k2
+      when List.exists (fun k -> Kid.compare k2 k == 0) existentials && not (prove __POS__ env (nc_neq nexp1 (nvar k2)))
+      ->
+        true
     (* TODO: this is really just an approximation to what we really
        want: will the Coq types have the same names?  We could
        probably do better by tracking which existential kids are equal
-       to bound kids.  We do a bit more than we orginally did to
-       detect when there's an existential which fits. *)
+       to bound kids. *)
     | Nexp_var k1, Nexp_var k2 ->
-        (Kid.compare k1 k2 == 0
+        Kid.compare k1 k2 == 0
         || prove __POS__ env (nc_eq (nvar k1) (nvar k2))
            && ((not (KidSet.mem k1 ctxt.bound_nvars)) || not (KidSet.mem k2 ctxt.bound_nvars))
-        )
-        || List.exists (fun k -> Kid.compare k2 k == 0) existentials
-           && not (prove __POS__ env (nc_neq (nvar k1) (nvar k2)))
     | Nexp_constant c1, Nexp_constant c2 -> Nat_big_num.equal c1 c2
     | Nexp_if (i1, t1, e1), Nexp_if (i2, t2, e2) ->
         NC.compare i1 i2 == 0 && same_nexp_shape t1 t2 && same_nexp_shape e1 e2
@@ -1291,10 +1292,10 @@ let maybe_parens_comma_list f ls =
 
 let complex_autocast ctxt env ?existentials top1 top2 =
   let ignore_apps_of = IdSet.of_list (List.map mk_id ["register"; "range"; "implicit"; "atom"; "atom_bool"]) in
-  let rec aux_typ env1 env2 (Typ_aux (t1, l1) as typ1) (Typ_aux (t2, l2) as typ2) =
+  let rec aux_typ env1 env2 existentials (Typ_aux (t1, l1) as typ1) (Typ_aux (t2, l2) as typ2) =
     match (t1, t2) with
     | Typ_app (f, args1), Typ_app (f', args2) when Id.compare f f' == 0 && not (IdSet.mem f ignore_apps_of) ->
-        let rs, args = List.split (List.map2 (aux_arg env1 env2) args1 args2) in
+        let rs, args = List.split (List.map2 (aux_arg env1 env2 existentials) args1 args2) in
         let f, args =
           if string_of_id f = "vector" then ("vec", List.rev args)
           else if string_of_id f = "bitvector" then ("mword", args)
@@ -1302,28 +1303,29 @@ let complex_autocast ctxt env ?existentials top1 top2 =
         in
         if List.exists (fun x -> x) rs then (true, "(" ^ f ^ " " ^ String.concat " " args ^ ")") else (false, "_")
     | Typ_tuple typs1, Typ_tuple typs2 ->
-        let rs, typs = List.split (List.map2 (aux_typ env1 env2) typs1 typs2) in
+        let rs, typs = List.split (List.map2 (aux_typ env1 env2 existentials) typs1 typs2) in
         if List.exists (fun x -> x) rs then (true, "(" ^ String.concat " * " typs ^ ")") else (false, "_")
     | Typ_exist (kopts, nc, typ), _ ->
         let env1 = List.fold_left (fun env kopt -> Env.add_typ_var l1 kopt env) env1 kopts in
         let env1 = Env.add_constraint nc env1 in
-        aux_typ env1 env2 typ typ2
+        aux_typ env1 env2 existentials typ typ2
     | _, Typ_exist (kopts, nc, typ) ->
         let env2 = List.fold_left (fun env kopt -> Env.add_typ_var l2 kopt env) env2 kopts in
+        let existentials = List.map kopt_kid kopts @ existentials in
         let env2 = Env.add_constraint nc env2 in
-        aux_typ env1 env2 typ1 typ
+        aux_typ env1 env2 existentials typ1 typ
     | _ ->
         let typ1' = Env.expand_synonyms env1 typ1 in
         let typ2' = Env.expand_synonyms env2 typ2 in
         if Typ.compare typ1 typ1' == 0 && Typ.compare typ2 typ2' == 0 then (false, "_")
-        else aux_typ env1 env2 typ1' typ2'
-  and aux_arg env1 env2 (A_aux (a1, _)) (A_aux (a2, _)) =
+        else aux_typ env1 env2 existentials typ1' typ2'
+  and aux_arg env1 env2 existentials (A_aux (a1, _)) (A_aux (a2, _)) =
     match (a1, a2) with
-    | A_nexp n1, A_nexp n2 -> if similar_nexps ctxt env ?existentials n1 n2 then (false, "_") else (true, "_sz")
-    | A_typ typ1, A_typ typ2 -> aux_typ env1 env2 typ1 typ2
+    | A_nexp n1, A_nexp n2 -> if similar_nexps ctxt env ~existentials n1 n2 then (false, "_") else (true, "_sz")
+    | A_typ typ1, A_typ typ2 -> aux_typ env1 env2 existentials typ1 typ2
     | _ -> (false, "_")
   in
-  aux_typ env env top1 top2
+  aux_typ env env (Option.value ~default:[] existentials) top1 top2
 
 (* Record whether we need to add an autocast for moving between
    different representations of a bitvector size, and if so whether we
@@ -1819,6 +1821,8 @@ let doc_exp, doc_let =
 
               let simple_type_equations = Type_check.instantiate_simple_equations (quant_items tqs) in
 
+              let env_kids = Env.get_typ_vars env in
+
               let doc_arg want_parens arg typ_from_fn =
                 let env = env_of arg in
                 let fixed_ghost_arg =
@@ -1831,25 +1835,48 @@ let doc_exp, doc_let =
                   | _ -> false
                 in
                 let typ_from_fn = subst_unifiers inst typ_from_fn in
-                let typ_from_fn = Env.expand_synonyms inst_env typ_from_fn in
-                (* TODO: more sophisticated check *)
+                let typ_from_fn' = Env.expand_synonyms inst_env typ_from_fn in
+                let expected_typ_opt =
+                  let annot = match arg with E_aux (_, a) -> a in
+                  expected_typ_of annot
+                in
                 let () =
-                  debug ctxt (lazy (" arg type found    " ^ string_of_typ (typ_of arg)));
-                  debug ctxt (lazy (" arg type expected " ^ string_of_typ typ_from_fn))
+                  debug ctxt (lazy (" arg type found        " ^ string_of_typ (typ_of arg)));
+                  debug ctxt
+                    ( lazy
+                      (" arg type expected     "
+                      ^ match expected_typ_opt with Some t -> string_of_typ t | None -> "<none>"
+                      )
+                      );
+                  debug ctxt (lazy (" arg type instantiated " ^ string_of_typ typ_from_fn))
                 in
                 let typ_of_arg = Env.expand_synonyms env (typ_of arg) in
                 let typ_of_arg = expand_range_type typ_of_arg in
                 let typ_of_arg' = match typ_of_arg with Typ_aux (Typ_exist (_, _, t), _) -> t | t -> t in
-                let typ_from_fn' = match typ_from_fn with Typ_aux (Typ_exist (_, _, t), _) -> t | t -> t in
+                (* The type checker will unpack existentials for functions, but we can still spot
+                   them because they're not bound in the environment *)
+                let existentials =
+                  tyvars_of_typ typ_from_fn' |> KidSet.elements
+                  |> List.filter (fun kid -> not (KBindings.mem kid env_kids))
+                in
+                let autocast_arg =
+                  (* If there's an expected type in the argument's annotation, we can leave cast
+                     insertion to the pretty printing of the argument, otherwise we use the
+                     difference between the instantiated type and the inferred type to work out
+                     if a cast is required at this point. *)
+                  match expected_typ_opt with
+                  | Some _ -> No
+                  | None -> autocast_req ctxt env ~existentials (typ_of arg) typ_from_fn typ_of_arg' typ_from_fn'
+                in
+                debug ctxt (lazy (" autocast: " ^ string_of_auto_t autocast_arg));
                 (* If the argument is an integer that can be inferred from the
                    context in a different form, let Coq fill it in.  E.g.,
                    when "64" is really "8 * width".  Avoid cases where the
                    type checker has introduced a phantom type variable while
                    calculating the instantiations. *)
                 let vars_in_env n =
-                  let ekids = Env.get_typ_vars env in
                   let frees = tyvars_of_nexp n in
-                  (not (KidSet.is_empty frees)) && KidSet.for_all (fun kid -> KBindings.mem kid ekids) frees
+                  (not (KidSet.is_empty frees)) && KidSet.for_all (fun kid -> KBindings.mem kid env_kids) frees
                 in
                 match (destruct_atom_nexp env typ_of_arg, destruct_atom_nexp env typ_from_fn) with
                 | _, _ when fixed_ghost_arg ->
@@ -1870,7 +1897,22 @@ let doc_exp, doc_let =
                 | Some (Nexp_aux (Nexp_var v, _)), _
                   when KidSet.mem v ctxt.bound_nvars && not (KBindings.mem v ctxt.kid_id_renames) ->
                     doc_var ctxt v
-                | _ -> construct_dep_pairs ctxt inst_env want_parens arg typ_from_fn
+                | _ ->
+                    let inner_parens, outer_parens =
+                      match (want_parens, autocast_arg) with
+                      | false, No -> (false, false)
+                      | false, _ -> (true, false)
+                      | true, No -> (true, false)
+                      | true, _ -> (true, true)
+                    in
+                    let arg_pp = construct_dep_pairs ctxt inst_env inner_parens arg typ_from_fn in
+                    let arg_pp =
+                      match autocast_arg with
+                      | No -> arg_pp
+                      | Simple -> string "autocast" ^^ space ^^ string "(T := mword)" ^/^ arg_pp
+                      | Complex s -> string ("autocast (T := fun _sz => " ^ s ^ "%type)") ^/^ arg_pp
+                    in
+                    if outer_parens then parens arg_pp else arg_pp
               in
               let epp =
                 if is_ctor then (
@@ -1914,8 +1956,8 @@ let doc_exp, doc_let =
               let epp =
                 match autocast with
                 | No -> epp
-                | Simple -> string autocast_id ^^ space ^^ string "(T := mword)" ^^ space ^^ parens epp
-                | Complex s -> string (autocast_id ^ " (T := fun _sz => " ^ s ^ "%type)") ^^ space ^^ parens epp
+                | Simple -> string autocast_id ^^ space ^^ string "(T := mword)" ^/^ parens epp
+                | Complex s -> string (autocast_id ^ " (T := fun _sz => " ^ s ^ "%type)") ^/^ parens epp
               in
               liftR (if aexp_needed then parens (align epp) else epp)
         end
