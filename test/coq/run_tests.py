@@ -40,7 +40,6 @@ def test(name, dir, lib):
     results.expect_failure('rebind.sail', 'Variable shadowing')
     results.expect_failure('exist_tlb.sail', 'Existential that requires more type information')
     results.expect_failure('equation_arguments.sail', 'Essential use of an equality constraint in the context')
-    results.expect_failure('multiple_unifiers.sail', 'Essential use of an equality constraint in the context')
     results.expect_failure('type_div.sail', 'Essential use of an equality constraint in the context')
     results.expect_failure('concurrency_interface_dec.sail', 'Need to be built against stdpp version of Sail (for now)')
     results.expect_failure('concurrency_interface_inc.sail', 'Need to be built against stdpp version of Sail (for now)')
