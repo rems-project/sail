@@ -288,6 +288,43 @@ constraint 'addr_size > 0 & 'cap_size_log >= 0
     }
 }
 
+/* This type represent an announcement of an address that will be read or written.
+   All the parameters must match up with the content of the later access.  We assume
+   that the access kind identifies whether the operation is a read, write, or rmw
+   operation.
+ */
+$option -lem_extern_type Mem_address_announce
+$option -coq_extern_type Mem_address_announce
+$option -lean_extern_type Mem_address_announce
+struct Mem_address_announce('n : Int, 'nt : Int, 'addr_size : Int, 'addr_space : Type,
+    'mem_acc : Type), 'n >= 0 & 'nt >= 0 & 'addr_size > 0 = {
+  access_kind : 'mem_acc,
+  address : bits('addr_size),
+  address_space : 'addr_space,
+  size : int('n),
+  num_tag : int('nt),
+}
+
+/* Requests a memory write. If the write cannot happen due to
+   atomicity/exclusive constraints, then the execution path is discarded as
+   impossible (size-0 non deterministic choice). Is the responsability of the
+   Sail model to do the proper non-determinitic choices beforehand */
+outcome sail_mem_address_announce : forall 'n 'nt, 'n >= 0 & (if 'CHERI then 'nt >= 0 else 'nt == 0).
+  Mem_address_announce('n, 'nt, 'addr_size, 'addr_space, 'mem_acc)
+      -> unit
+with
+  'addr_size : Int,
+  'addr_space : Type,
+  'mem_acc : Type,
+  'abort : Type,
+  'CHERI : Bool,
+  'cap_size_log : Int
+constraint 'addr_size > 0 & 'cap_size_log >= 0
+= {
+    // For now, just drop these
+    impl emulator_or_isla(request) = ()
+}
+
 // Used when we want a non memory read/write to appear in Isla's addr relation
 $iftarget isla
 val sail_address_announce = impure "address_announce" : forall 'addrsize, 'addrsize in {32, 64}. (int('addrsize), bits('addrsize)) -> unit
