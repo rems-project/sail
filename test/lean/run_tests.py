@@ -45,7 +45,6 @@ skip_selftests = {
     'deep_poly_nest',
     'config_abstract_bool', # Register type unsupported in state.ml
     'newtype',
-    'assign_in_funarg',
     'concurrency_interface_v2',
     'config_map_guard',
     'let_assert',

@@ -2936,6 +2936,8 @@ let rec rewrite_var_updates (E_aux (expaux, ((l, _) as annot)) as exp) =
           Same_vars (E_aux (expaux, annot))
   in
 
+  let is_trivial = function E_aux ((E_id _ | E_lit _), _) -> true | _ -> false in
+
   match expaux with
   | E_let (lb, body) ->
       let body = rewrite_var_updates body in
@@ -2996,8 +2998,7 @@ let rec rewrite_var_updates (E_aux (expaux, ((l, _) as annot)) as exp) =
          If i = 3 was instead a side-effecting expression with a non-unit type
          we would introduce a new variable rather than using a wildcard and unit literal
       *)
-      let is_trivial = function E_aux ((E_id _ | E_lit _), _) -> true | _ -> false in
-      if find_updated_vars exp |> IdSet.is_empty then exp
+      if IdSet.is_empty @@ find_updated_vars exp then exp
       else (
         let tuple_typ = typ_of exp in
         let typs =
@@ -3033,6 +3034,36 @@ let rec rewrite_var_updates (E_aux (expaux, ((l, _) as annot)) as exp) =
               )
             )
             bindings trivial_tuple
+        in
+        rewrite_var_updates exp
+      )
+  | E_app (f, args) ->
+      if IdSet.is_empty @@ find_updated_vars exp then exp
+      else (
+        let args = List.map (fun arg -> (fresh_id "a__" l, typ_of arg, arg)) args in
+        let trivial_args =
+          List.map
+            (fun (id, typ, arg) ->
+              if is_trivial arg then arg
+              else if is_unit_typ typ then E_aux (E_lit (L_aux (L_unit, l)), swaptyp unit_typ annot)
+              else E_aux (E_id id, swaptyp typ annot)
+            )
+            args
+        in
+        let trivial_app = E_aux (E_app (f, trivial_args), annot) in
+        let exp =
+          List.fold_right
+            (fun (id, typ, arg) app ->
+              if is_trivial arg then app
+              else (
+                let lb =
+                  if is_unit_typ typ then LB_aux (LB_val (P_aux (P_wild, swaptyp typ annot), arg), annot)
+                  else LB_aux (LB_val (add_p_typ env typ (P_aux (P_id id, swaptyp typ annot)), arg), annot)
+                in
+                E_aux (E_let (lb, app), annot)
+              )
+            )
+            args trivial_app
         in
         rewrite_var_updates exp
       )
