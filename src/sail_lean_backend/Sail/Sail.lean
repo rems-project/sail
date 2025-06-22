@@ -77,7 +77,7 @@ def update (x : BitVec m) (n : Nat) (b : BitVec 1) := updateSubrange' x n _ b
 def updateBE (x : BitVec m) (n : Nat) (b : BitVec 1) := updateSubrange' x (m - n - 1) _ b
 
 def toBin {w : Nat} (x : BitVec w) : String :=
-  List.asString (List.map (fun c => if c then '1' else '0') (List.ofFn (BitVec.getMsb' x)))
+  List.asString (List.map (fun c => if c then '1' else '0') (List.ofFn (BitVec.getMsb x)))
 
 def toFormatted {w : Nat} (x : BitVec w) : String :=
   if (length x % 4) == 0 then

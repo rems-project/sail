@@ -87,7 +87,7 @@ let opt_lean_executable : bool ref = ref false
 let opt_enable_matchbv : bool ref = ref false
 let opt_disable_matchbv : bool ref = ref true
 
-let lean_version : string = "lean4-pr-releases:pr-release-8577"
+let lean_version : string = "lean4:nightly-2025-06-21"
 let mathlib_version : string = "v4.20.0-rc5"
 
 let lean_options =
