@@ -4608,7 +4608,7 @@ let pp_ast_coq library_style (types_file, types_modules) (defs_file, defs_module
               classifier "mem_acc_is_atomic_rmw";
             ]
           @ usual_type "trans_start" @ usual_type "trans_end" @ usual_type "abort" @ usual_type "barrier"
-          @ usual_type "cache_op" @ usual_type "tlb_op" @ usual_type "fault" @ usual_type "sys_reg_id"
+          @ usual_type "cache_op" @ usual_type "tlbi" @ usual_type "exn" @ usual_type "sys_reg_id"
           @ [
               string "End Arch.";
               empty;
