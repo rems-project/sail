@@ -1497,6 +1497,7 @@ let to_ast_outcome ctx (ev : P.outcome_spec) : outcome_spec * ctx * ctx =
       let outcome_args, inner_ctx = ConvertType.to_ast_typquant kenv ctx outcome_args in
       let typq, ts_ctx = ConvertType.to_ast_typquant kenv inner_ctx typq in
       let typ = ConvertType.to_ast_typ kenv ts_ctx typ in
+      let ctx = { ctx with outcome_names = IdSet.add id ctx.outcome_names } in
       let ctx =
         List.fold_left
           (fun ctx kopt ->
@@ -1504,7 +1505,6 @@ let to_ast_outcome ctx (ev : P.outcome_spec) : outcome_spec * ctx * ctx =
             let k = unaux_kind (kopt_kind kopt) in
             {
               ctx with
-              outcome_names = IdSet.add id ctx.outcome_names;
               outcome_variables =
                 KBindings.update v
                   (function

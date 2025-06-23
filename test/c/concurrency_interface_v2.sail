@@ -59,6 +59,9 @@ enum my_barrier = Barrier1 | Barrier2
 
 instantiation sail_barrier with 'barrier = my_barrier
 
+instantiation sail_take_exception with 'exn = int
+instantiation sail_return_exception
+
 register R1 : bits(64)
 register R2 : bits(64)
 
@@ -178,6 +181,9 @@ function main() = {
         },
         _ => print_endline("invalid read"),
     };
+
+    sail_take_exception(5);
+    sail_return_exception();
 
     /* Cycle count primitives */
     sail_end_cycle();
