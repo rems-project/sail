@@ -4596,7 +4596,7 @@ let pp_ast_coq library_style (types_file, types_modules) (defs_file, defs_module
           @ usual_type "addr_space" @ usual_type "mem_acc"
           @ [
               string "  Definition CHERI : bool := " ^^ pp_typish "CHERI" "false" ^^ string ".";
-              string "  Definition cap_size_log : Z := " ^^ pp_typish "cap_size_log" "0" ^^ string ".";
+              string "  Definition cap_size_log : N := " ^^ pp_typish "cap_size_log" "0" ^^ string ".";
               classifier "mem_acc_is_explicit";
               classifier "mem_acc_is_ifetch";
               classifier "mem_acc_is_ttw";

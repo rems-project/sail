@@ -65,7 +65,7 @@ EOF
     let base_addr := mword_to_N req.(Interface.WriteReq.address) in
     let addrs := State_monad.genlist (fun i => base_addr + N.of_nat i)%N (N.to_nat n) in
     let write_byte i m := NMap.add (base_addr + i)%N (definitions.bv_extract (8 * i) 8 req.(Interface.WriteReq.value)) m in
-    let cap_size := N.pow 2 (Z.to_N Arch.cap_size_log) in
+    let cap_size := N.pow 2 Arch.cap_size_log in
     let write_tag i m := NMap.add (base_addr + i * cap_size)%N (MachineWord.MachineWord.get_bit req.(Interface.WriteReq.tags) i) m in
     let new_tags :=
       if Z.of_N nt >? 0 then N.recursion st.(state_tags) write_tag nt else NMap.add (mword_to_N (definitions.bv_and req.(Interface.WriteReq.address) (definitions.bv_opp (definitions.Z_to_bv _ (Z.of_N cap_size))))) false st.(state_tags)
@@ -80,7 +80,7 @@ EOF
   Definition read_mem (st : state) n nt (req : Interface.ReadReq.t n nt) : definitions.bv (8 * n) * definitions.bv nt :=
     let base_addr := mword_to_N req.(Interface.ReadReq.address) in
     let read_byte i v := definitions.bv_or (definitions.bv_shiftl (definitions.bv_zero_extend (8 * n) (opt_def (definitions.bv_0 8) (NMap.find (base_addr + i)%N st.(state_memory)))) (definitions.Z_to_bv (8 * n)%N (Z.of_N (8 * i)))) v in
-    let cap_size := N.pow 2 (Z.to_N Arch.cap_size_log) in
+    let cap_size := N.pow 2 Arch.cap_size_log in
     let read_tag i v := MachineWord.MachineWord.set_bit v i (opt_def false (NMap.find (base_addr + i * cap_size)%N st.(state_tags))) in
     let value := N.recursion (definitions.bv_0 (8 * n)) read_byte n in
     let tag := N.recursion (definitions.bv_0 nt) read_tag nt in
