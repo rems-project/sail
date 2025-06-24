@@ -113,11 +113,15 @@ EOF
   cat <<EOF >> "$OUT"
       | Interface.MemWrite n req => fun k => run (k (inl None)) (write_mem st n req)
       | Interface.MemRead n req => fun k => run (k (inl (read_mem st n req))) st
+      | Interface.TakeException _ => fun k => run (k tt) st
+      | Interface.ReturnException _ => fun k => run (k tt) st
 EOF
   else
   cat <<EOF >> "$OUT"
       | Interface.MemWrite n nt req => fun k => run (k (inl None)) (write_mem st n nt req)
       | Interface.MemRead n nt req => fun k => run (k (inl (read_mem st n nt req))) st
+      | Interface.TakeException _ => fun k => run (k tt) st
+      | Interface.ReturnException => fun k => run (k tt) st
 EOF
   fi
   cat <<EOF >> "$OUT"
