@@ -2051,6 +2051,14 @@ def sail_pick_dependency (reg : (RegisterRef k_a)) : Unit :=
 def __monomorphize (bv : (BitVec k_n)) : (BitVec k_n) :=
   bv
 
+/-- Type quantifiers: n : Int -/
+def __monomorphize_int (n : Int) : Int :=
+  n
+
+/-- Type quantifiers: k_b : Bool -/
+def __monomorphize_bool (b : Bool) : Bool :=
+  b
+
 def undefined_Access_variety (_ : Unit) : SailM Access_variety := do
   (internal_pick [AV_plain, AV_exclusive, AV_atomic_rmw])
 
