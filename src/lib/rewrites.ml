@@ -2970,7 +2970,7 @@ let rec rewrite_var_updates (E_aux (expaux, ((l, _) as annot)) as exp) =
       let lb = LB_aux (LB_val (P_aux (P_wild, annot), exp), annot) in
       let exp' = E_aux (E_let (lb, E_aux (E_lit (mk_lit ~loc:l L_unit), annot)), annot) in
       rewrite_var_updates exp'
-  | E_if _ | E_match _ ->
+  | E_if _ | E_match _ | E_try _ ->
       let var_id = fresh_id "u__" l in
       let lb = LB_aux (LB_val (P_aux (P_id var_id, annot), exp), annot) in
       let exp' = E_aux (E_let (lb, E_aux (E_id var_id, annot)), annot) in
