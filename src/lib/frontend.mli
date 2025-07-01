@@ -51,7 +51,10 @@ open Ast_util
 val opt_ddump_initial_ast : bool ref
 val opt_ddump_side_effect : bool ref
 val opt_ddump_tc_ast : bool ref
-val opt_list_files : bool ref
+
+(** If [Some sep], then list the files included in the given sail_project file using [sep] as a separator. *)
+val opt_list_files : string option ref
+
 val opt_reformat : string option ref
 
 (** env_update: This function takes a pre abstract instantiation type environment, and makes any abstract types concrete
