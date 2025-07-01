@@ -53,7 +53,7 @@ module StringMap = Map.Make (String)
 let opt_ddump_initial_ast = ref false
 let opt_ddump_side_effect = ref false
 let opt_ddump_tc_ast = ref false
-let opt_list_files = ref false
+let opt_list_files = ref None
 let opt_reformat : string option ref = ref None
 
 let finalize_ast asserts_termination ctx env ast =
@@ -327,17 +327,19 @@ let load_modules ?target default_sail_dir options env proj root_mod_ids =
       mod_ids
   in
 
-  if !opt_list_files then (
-    let included_files =
-      List.map (fun parsed_module -> if parsed_module.included then parsed_module.files else []) parsed_modules
-      |> List.concat
-    in
-    print_endline
-      (Util.string_of_list " "
-         (fun s -> s)
-         (List.filter_map (function File { filename; _ } -> Some filename | Generated _ -> None) included_files)
-      );
-    exit 0
+  ( match !opt_list_files with
+  | Some sep ->
+      let included_files =
+        List.map (fun parsed_module -> if parsed_module.included then parsed_module.files else []) parsed_modules
+        |> List.concat
+      in
+      print_endline
+        (Util.string_of_list sep
+           (fun s -> s)
+           (List.filter_map (function File { filename; _ } -> Some filename | Generated _ -> None) included_files)
+        );
+      exit 0
+  | None -> ()
   );
 
   let all_files =

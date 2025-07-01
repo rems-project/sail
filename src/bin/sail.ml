@@ -256,7 +256,11 @@ let rec options =
         " <type variable=value> instantiate an abstract type variable"
       );
       ("-all_modules", Arg.Set opt_all_modules, " use all modules in project file");
-      ("-list_files", Arg.Set Frontend.opt_list_files, " list files used in all project files");
+      ("-list_files", Arg.Unit (fun () -> Frontend.opt_list_files := Some " "), " list files used in all project files");
+      ( "-list_files_separated",
+        Arg.String (fun sep -> Frontend.opt_list_files := Some sep),
+        " list files used in all project files, with a provided separator"
+      );
       ("-config", Arg.String (fun file -> opt_model_config_file := Some file), "<file> model configuration file");
       ("-sail_config", Arg.String (fun file -> opt_sail_config_file := Some file), "<file> sail configuration file");
       ( "-output-schema",
