@@ -89,28 +89,28 @@ jobs:
         git config --global --add safe.directory '*'
         git fetch --unshallow
 
-    # - name: Restore cached ~/.opam
-    #   id: cache-opam-restore
-    #   uses: actions/cache/restore@v4
-    #   with:
-    #     path: ~/.opam
-    #     key: ${{ matrix.opam_cache_key }}
+    - name: Restore cached ~/.opam
+      id: cache-opam-restore
+      uses: actions/cache/restore@v4
+      with:
+        path: ~/.opam
+        key: ${{ matrix.opam_cache_key }}
 
-    # - name: Init opam
-    #   if: steps.cache-opam-restore.outputs.cache-hit != 'true'
-    #   run: |
-    #     # Sandboxing doesn't work in Docker.
-    #     opam init --disable-sandboxing --yes --no-setup --shell=sh --compiler=${{ matrix.ocaml_version }} && \
-    #     eval "$(opam env)" && \
-    #     ocaml --version
+    - name: Init opam
+      if: steps.cache-opam-restore.outputs.cache-hit != 'true'
+      run: |
+        # Sandboxing doesn't work in Docker.
+        opam init --disable-sandboxing --yes --no-setup --shell=sh --compiler=${{ matrix.ocaml_version }} && \
+        eval "$(opam env)" && \
+        ocaml --version
 
-    # - name: Save cached opam
-    #   if: steps.cache-opam-restore.outputs.cache-hit != 'true'
-    #   id: cache-opam-save
-    #   uses: actions/cache/save@v4
-    #   with:
-    #     path: ~/.opam
-    #     key: ${{ steps.cache-opam-restore.outputs.cache-primary-key }}
+    - name: Save cached opam
+      if: steps.cache-opam-restore.outputs.cache-hit != 'true'
+      id: cache-opam-save
+      uses: actions/cache/save@v4
+      with:
+        path: ~/.opam
+        key: ${{ steps.cache-opam-restore.outputs.cache-primary-key }}
 
     - name: Install Sail
       run: |
