@@ -18,11 +18,13 @@ jobs:
             os: ubuntu-latest
             container: rockylinux:8
             ocaml_version: 5.2.1
+            opam_arch: i686
             opam_cache_key: rocky8-5.2.1
           - name: linux-arm64
             os: ubuntu-24.04-arm
             container: rockylinux:8
             ocaml_version: 5.2.1
+            opam_arch: arm64
             opam_cache_key: rocky8-5.2.1
           # MacOS disabled for now due to code signing and notarisation requirements
           # - name: mac-arm64 */
@@ -63,7 +65,7 @@ jobs:
           rsync \
           which \
           cargo
-        curl -L -o /usr/local/bin/opam https://github.com/ocaml/opam/releases/download/2.1.5/opam-2.1.5-i686-linux
+        curl -L -o /usr/local/bin/opam https://github.com/ocaml/opam/releases/download/2.1.5/opam-2.1.5-${{ matrix.opam_arch }}-linux
         chmod +x /usr/local/bin/opam
 
     - name: System dependencies (Mac)
