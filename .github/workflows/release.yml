@@ -19,6 +19,11 @@ jobs:
             container: rockylinux:8
             ocaml_version: 5.2.1
             opam_cache_key: rocky8-5.2.1
+          - name: linux-arm64
+            os: ubuntu-24.04-arm
+            container: rockylinux:8
+            ocaml_version: 5.2.1
+            opam_cache_key: rocky8-5.2.1
           # MacOS disabled for now due to code signing and notarisation requirements
           # - name: mac-arm64 */
           #   os: macos-latest */
