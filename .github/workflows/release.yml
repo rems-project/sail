@@ -14,13 +14,13 @@ jobs:
     strategy:
       matrix:
         include:
-          - name: linux-x86_64
+          - name: Linux-x86_64
             os: ubuntu-latest
             container: rockylinux:8
             ocaml_version: 5.2.1
             opam_arch: i686
             opam_cache_key: rocky8-5.2.1
-          - name: linux-aarch64
+          - name: Linux-aarch64
             os: ubuntu-24.04-arm
             container: rockylinux:8
             ocaml_version: 5.2.1
