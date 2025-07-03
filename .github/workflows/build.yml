@@ -10,7 +10,7 @@ jobs:
     strategy:
       matrix:
         version: [4.08.1, 5.2.1]
-        os: [ubuntu-latest, macos-latest]
+        os: [ubuntu-latest, ubuntu-24.04-arm, macos-latest]
         exclude:
         - os: macos-latest
           version: 4.08.1
