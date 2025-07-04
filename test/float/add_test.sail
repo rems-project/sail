@@ -58,6 +58,7 @@ function test_float_add () -> unit = {
   assert(float_add (fp16_pos_normal_add_3_op_0, fp16_pos_normal_add_3_op_1) == (fp16_pos_normal_add_3_sum, fp_eflag_none));
   assert(float_add (fp16_neg_normal_add_4_op_0, fp16_neg_normal_add_4_op_1) == (fp16_neg_normal_add_4_sum, fp_eflag_none));
   assert(float_add (fp16_neg_normal_add_5_op_0, fp16_neg_normal_add_5_op_1) == (fp16_neg_normal_add_5_sum, fp_eflag_none));
+  assert(float_add (fp16_pos_normal_add_14_op_0, fp16_neg_normal_add_14_op_1) == (fp16_pos_normal_add_14_sum, fp_eflag_none));
 
   float_set_rounding (fp_rounding_rne);
 
@@ -156,6 +157,7 @@ function test_float_add () -> unit = {
   assert(float_add (fp32_pos_normal_add_3_op_0, fp32_pos_normal_add_3_op_1) == (fp32_pos_normal_add_3_sum, fp_eflag_none));
   assert(float_add (fp32_neg_normal_add_4_op_0, fp32_neg_normal_add_4_op_1) == (fp32_neg_normal_add_4_sum, fp_eflag_none));
   assert(float_add (fp32_neg_normal_add_5_op_0, fp32_neg_normal_add_5_op_1) == (fp32_neg_normal_add_5_sum, fp_eflag_none));
+  assert(float_add (fp32_pos_normal_add_14_op_0, fp32_neg_normal_add_14_op_1) == (fp32_pos_normal_add_14_sum, fp_eflag_none));
 
   float_set_rounding (fp_rounding_rne);
 
@@ -254,6 +256,7 @@ function test_float_add () -> unit = {
   assert(float_add (fp64_pos_normal_add_3_op_0, fp64_pos_normal_add_3_op_1) == (fp64_pos_normal_add_3_sum, fp_eflag_none));
   assert(float_add (fp64_neg_normal_add_4_op_0, fp64_neg_normal_add_4_op_1) == (fp64_neg_normal_add_4_sum, fp_eflag_none));
   assert(float_add (fp64_neg_normal_add_5_op_0, fp64_neg_normal_add_5_op_1) == (fp64_neg_normal_add_5_sum, fp_eflag_none));
+  assert(float_add (fp64_pos_normal_add_14_op_0, fp64_neg_normal_add_14_op_1) == (fp64_pos_normal_add_14_sum, fp_eflag_none));
 
   float_set_rounding (fp_rounding_rne);
 
@@ -352,6 +355,7 @@ function test_float_add () -> unit = {
   assert(float_add (fp128_pos_normal_add_3_op_0, fp128_pos_normal_add_3_op_1) == (fp128_pos_normal_add_3_sum, fp_eflag_none));
   assert(float_add (fp128_neg_normal_add_4_op_0, fp128_neg_normal_add_4_op_1) == (fp128_neg_normal_add_4_sum, fp_eflag_none));
   assert(float_add (fp128_neg_normal_add_5_op_0, fp128_neg_normal_add_5_op_1) == (fp128_neg_normal_add_5_sum, fp_eflag_none));
+  assert(float_add (fp128_pos_normal_add_14_op_0, fp128_neg_normal_add_14_op_1) == (fp128_pos_normal_add_14_sum, fp_eflag_none));
 
   float_set_rounding (fp_rounding_rne);
 

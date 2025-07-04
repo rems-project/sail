@@ -21,7 +21,10 @@ function float_add (op_0, op_1) = {
 
   let (sum, flags) = if same_sign
                      then float_add_internal (op_0, op_1)
-                     else float_sub_internal (op_0, op_1);
+                     else {
+                          let fp_1 = float_decompose (op_1);
+                          float_sub_internal (op_0, not_vec(fp_1.sign) @ fp_1.exp @ fp_1.mantissa);
+                     };
   (sum, flags);
 }
 

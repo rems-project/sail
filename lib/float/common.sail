@@ -119,4 +119,12 @@ function is_highest_zero (op) = op['n - 1] == bitzero
 val      is_all_zeros : forall 'n, 0 < 'n. bits('n) -> bool
 function is_all_zeros (op) = op == sail_zeros ('n)
 
+val sub_bits_int = {
+  ocaml: "sub_vec_int",
+  interpreter: "sub_vec_int",
+  lem: "sub_vec_int",
+  c: "sub_bits_int",
+  coq: "sub_vec_int"
+} : forall 'n. (bits('n), int) -> bits('n)
+
 $endif
