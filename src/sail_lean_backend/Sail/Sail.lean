@@ -1,5 +1,5 @@
 import Std.Data.ExtDHashMap
-import Std.Data.HashMap
+import Std.Data.ExtHashMap
 
 namespace Sail
 
@@ -379,7 +379,7 @@ variable {Register : Type} {RegisterType : Register → Type} [DecidableEq Regis
 structure SequentialState (RegisterType : Register → Type) (c : ChoiceSource) where
   regs : Std.ExtDHashMap Register RegisterType
   choiceState : c.α
-  mem : Std.HashMap Nat (BitVec 8)
+  mem : Std.ExtHashMap Nat (BitVec 8)
   tags : Unit
   cycleCount : Nat -- Part of the concurrency interface. See `{get_}cycle_count`
   sailOutput : Array String -- TODO: be able to use the IO monad to run
