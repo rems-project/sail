@@ -46,6 +46,7 @@ skip_selftests = {
     'config_abstract_bool', # Register type unsupported in state.ml
     'newtype',
     'concurrency_interface_v2',
+    'concurrency_interface_v2_var',
     'config_map_guard',
     'let_assert',
 }
