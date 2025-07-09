@@ -5268,10 +5268,12 @@ and check_outcome_instantiation :
   let instantiated = List.fold_left (fun m (kid, inst) -> KBindings.add kid inst m) KBindings.empty instantiated in
 
   (* Instantiate the outcome type with these existing parameters *)
-  let typ =
+  let typq, typ =
     List.fold_left
-      (fun typ (kid, (_, _, existing_arg)) -> typ_subst kid existing_arg typ)
-      typ (KBindings.bindings instantiated)
+      (fun (typq, typ) (kid, (_, _, existing_arg)) ->
+        (typquant_subst kid existing_arg typq, typ_subst kid existing_arg typ)
+      )
+      (typq, typ) (KBindings.bindings instantiated)
   in
 
   (* Check all the constraints on the outcome parameters *)

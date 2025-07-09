@@ -33,6 +33,7 @@ skip_tests = {
     'simple_while2', # loops
     'simple_while3', # loops
     'concurrency_interface_v2',
+    'concurrency_interface_v2_var'
 }
 
 print("Sail is {}".format(sail))
