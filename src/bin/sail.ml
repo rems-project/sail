@@ -206,7 +206,7 @@ let version_check ~required =
   || (required.major = version.major && required.minor < version.minor)
   || (required.major = version.major && required.minor = version.minor && required.patch <= version.patch)
 
-let usage_msg = version_string ^ "\nusage: sail <options> <file1.sail> ... <fileN.sail>\n"
+let usage_msg = "Sail " ^ version_string ^ "\nusage: sail <options> <file1.sail> ... <fileN.sail>\n"
 
 let help options = raise (Arg.Help (Arg.usage_string options usage_msg))
 
@@ -663,7 +663,16 @@ let main () =
       )
   end;
 
-  Arg.parse_dynamic options (fun s -> opt_free_arguments := !opt_free_arguments @ [s]) usage_msg;
+  let argv = Sail_file.sail_argv () in
+  ( try Arg.parse_argv_dynamic argv options (fun s -> opt_free_arguments := !opt_free_arguments @ [s]) usage_msg with
+  | Arg.Bad _ ->
+      prerr_endline usage_msg;
+      prerr_endline "Use 'sail --help' for a list of available arguments.";
+      exit 1
+  | Arg.Help msg ->
+      prerr_endline msg;
+      exit 0
+  );
 
   let config = Option.map parse_json_config_file (get_implicit_config_file !opt_sail_config_file) in
 

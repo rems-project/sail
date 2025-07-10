@@ -241,7 +241,7 @@ module SailHandler : FILE_HANDLER = struct
 
   let process ~default_sail_dir ~target_name ~options ctx (filename, comments, defs) =
     let defs = Preprocess.preprocess default_sail_dir target_name options defs in
-    let ast, ctx = Initial_check.process_ast ctx (Parse_ast.Defs [(filename, defs)]) in
+    let ast, ctx = Initial_check.process_ast ctx (Parse_ast.Defs [(Some filename, defs)]) in
     ({ ast with comments = [(filename, comments)] }, ctx)
 
   let check env ast = Type_error.check env ast
@@ -286,7 +286,7 @@ let process_files ~target_name ~default_sail_dir ~options ctx vs_ids regs files 
           ((cont.ctx, IdSet.union vs_ids cont.vs_ids, regs @ cont.regs), ProcessedFile { filename; cont = cont.check })
       | Generated defs ->
           let defs = Preprocess.preprocess default_sail_dir target_name options defs in
-          let ast, ctx = Initial_check.process_ast ctx (Parse_ast.Defs [("", defs)]) in
+          let ast, ctx = Initial_check.process_ast ctx (Parse_ast.Defs [(None, defs)]) in
           ((ctx, vs_ids, regs), ProcessedGenerated ast.defs)
       )
     (ctx, vs_ids, regs) files

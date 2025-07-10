@@ -102,10 +102,25 @@ type info = {
 let new_info ~owner ~given_path ~canonical_path ~contents =
   { owner; given_path; canonical_path; contents; next_edit = 0; edits = Array.make 64 None }
 
+let sail_argv () =
+  let actual_argv = Sys.argv in
+  let from_env =
+    match Sys.getenv_opt "SAIL_ENCODED_FLAGS" with
+    | Some flags ->
+        (* Split on ASCII unit separator, like CARGO_ENCODED_RUSTFLAGS in Rust *)
+        String.split_on_char '\x1f' flags
+    | None -> (
+        match Sys.getenv_opt "SAIL_FLAGS" with
+        | Some flags -> String.split_on_char ' ' flags |> List.filter (fun flag -> flag <> "")
+        | None -> []
+      )
+  in
+  Array.append actual_argv (Array.of_list from_env)
+
 let files : (int, info) Hashtbl.t =
   let tbl = Hashtbl.create 64 in
   let repl_contents = Array.make 1 "0000001,0000016" in
-  let argv_contents = Sys.argv in
+  let argv_contents = sail_argv () in
   Hashtbl.add tbl interactive_repl
     (new_info ~owner:Compiler ~given_path:"REPL" ~canonical_path:"REPL" ~contents:repl_contents);
   Hashtbl.add tbl argv (new_info ~owner:Compiler ~given_path:"ARGV" ~canonical_path:"ARGV" ~contents:argv_contents);
