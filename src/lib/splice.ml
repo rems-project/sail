@@ -113,7 +113,7 @@ let annotate_ast ast =
 
 let splice ctx ast file =
   let parsed_ast = Initial_check.parse_file file |> snd in
-  let repl_ast, _ = Initial_check.process_ast ctx (Parse_ast.Defs [(file, parsed_ast)]) in
+  let repl_ast, _ = Initial_check.process_ast ctx (Parse_ast.Defs [(Some file, parsed_ast)]) in
   let repl_ast = map_ast_annot (fun (l, _) -> (l, Type_check.empty_tannot)) repl_ast in
   let repl_ast = annotate_ast repl_ast in
   let repl_ids, repl_specs = scan_ast repl_ast in

@@ -49,8 +49,14 @@ type handle = private int
 (** This is a special handle that contains inputs to the sail -i REPL *)
 val interactive_repl : handle
 
-(** This is a special handle that treats the Sail argv array as a file for error reporting *)
+(** This is a special handle that treats the Sail argv array as a file for error reporting, with one member of the argv
+    array per line. *)
 val argv : handle
+
+(** This returns the argv array used by Sail. It combines OCaml's Sys.argv with the value of either SAIL_ENCODED_FLAGS
+    (arguments separated by the ASCII unit separator [0x1f]) or SAIL_FLAGS (space separated) using the first only if
+    both are present. *)
+val sail_argv : unit -> string Array.t
 
 val repl_prompt_line : unit -> int
 

@@ -481,4 +481,4 @@ and lexp = LE_aux of lexp_aux * l
 
 type defs =
   (* Definition sequence *)
-  | Defs of (string * def list) list
+  | Defs of (string option * def list) list
