@@ -390,11 +390,11 @@ let add_child parent child map =
     map
 
 let get_parents id proj =
-  let parents = ref ModSet.empty in
+  let parents = ref [] in
   let rec loop child =
     match ModMap.find_opt child proj.parents with
     | Some parent ->
-        parents := ModSet.add parent !parents;
+        parents := parent :: !parents;
         loop parent
     | None -> ()
   in
@@ -516,7 +516,7 @@ class dependency_visitor (proj : project_structure) =
             let before = get_before stack proj in
             let after = get_after stack proj in
 
-            proj.requires <- ModMap.add id (ModSet.union (get_parents id proj) requires) proj.requires;
+            proj.requires <- ModMap.add id (ModSet.union (ModSet.of_list (get_parents id proj)) requires) proj.requires;
 
             proj.deps <- ModGraph.add_edges id [] proj.deps;
             proj.deps <- ModSet.fold (fun r -> ModGraph.add_edge id r) requires proj.deps;

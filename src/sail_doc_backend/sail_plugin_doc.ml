@@ -134,6 +134,7 @@ let doc_target out_file { ast; _ } =
 
 let _ =
   Target.register ~name:"doc" ~options:doc_options ~supports_abstract_types:true ~supports_runtime_config:true
+    ~skip_initial_rewrite:true
     ~pre_parse_hook:(fun () ->
       Type_check.opt_expand_valspec := false;
       Type_check.opt_no_bitfield_expansion := true

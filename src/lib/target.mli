@@ -78,6 +78,8 @@ val supports_abstract_types : target -> bool
     time. *)
 val supports_runtime_config : target -> bool
 
+val skip_initial_rewrite : target -> bool
+
 (** {2 Target registration} *)
 
 (** Used for plugins to register custom Sail targets/backends.
@@ -94,6 +96,7 @@ val supports_runtime_config : target -> bool
     @param ?pre_parse_hook A function to call right at the start, before parsing
     @param ?pre_initial_check_hook A function to call after parsing, but before de-sugaring
     @param ?pre_rewrites_hook A function to call before doing any rewrites
+    @param ?skip_initial_rewrite Skips the initial rewriting pass
     @param ?rewrites A sequence of Sail to Sail rewrite passes for the target
     @param ?asserts_termination Whether termination measures are enforced by assertions in the target
     @param ?supports_abstract_types Whether the target supports abstract types to be passed to the target
@@ -109,6 +112,7 @@ val register :
   ?pre_parse_hook:(unit -> unit) ->
   ?pre_initial_check_hook:(string list -> unit) ->
   ?pre_rewrites_hook:(typed_ast -> Effects.side_effect_info -> Env.t -> unit) ->
+  ?skip_initial_rewrite:bool ->
   ?rewrites:(string * Rewrites.rewriter_arg list) list ->
   ?asserts_termination:bool ->
   ?supports_abstract_types:bool ->
