@@ -111,6 +111,8 @@ val get_module_id : project_structure -> string -> mod_id option
 
 val get_children : mod_id -> project_structure -> ModSet.t
 
+val get_parents : mod_id -> project_structure -> mod_id list
+
 (** Create a predicate that returns true for any module that is (transitively) required by any module in the roots set
     of modules. *)
 val required_modules : roots:ModSet.t -> project_structure -> mod_id -> bool

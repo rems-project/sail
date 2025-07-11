@@ -327,13 +327,6 @@ let json_of_let_doc docinfo =
     @ json_of_attributes docinfo.attributes
     )
 
-let json_of_pair x_label f y_label g (x, y) =
-  match (f x, g y) with
-  | `Null, `Null -> `Null
-  | x, `Null -> `Assoc [(x_label, x)]
-  | `Null, y -> `Assoc [(y_label, y)]
-  | x, y -> `Assoc [(x_label, x); (y_label, y)]
-
 type anchor_doc = { source : location_or_raw; comment : string option }
 
 let json_of_anchor_doc docinfo =
@@ -342,17 +335,33 @@ let json_of_anchor_doc docinfo =
     @ match docinfo.comment with Some c -> [("comment", `String c)] | None -> []
     )
 
+type 'a linkable = { doc : 'a; links : hyperlink list; module_path : string list option }
+
+let json_of_linkable x_label f linkable =
+  match f linkable.doc with
+  | `Null -> `Null
+  | x ->
+      let links =
+        match linkable.links with [] -> [] | _ -> [("links", `List (List.map json_of_hyperlink linkable.links))]
+      in
+      let path =
+        match linkable.module_path with
+        | None -> []
+        | Some mods -> [("path", `List (List.map (fun m -> `String m) mods))]
+      in
+      `Assoc ((x_label, x) :: (links @ path))
+
 type 'a docinfo = {
   embedding : embedding;
   git : (string * bool) option;
   hashes : (string * string) list;
-  functions : ('a function_doc * hyperlink list) Bindings.t;
-  mappings : ('a mapping_doc * hyperlink list) Bindings.t;
-  valspecs : (valspec_doc * hyperlink list) Bindings.t;
-  type_defs : (type_def_doc * hyperlink list) Bindings.t;
-  registers : (register_doc * hyperlink list) Bindings.t;
-  lets : (let_doc * hyperlink list) Bindings.t;
-  anchors : (anchor_doc * hyperlink list) Bindings.t;
+  functions : 'a function_doc linkable Bindings.t;
+  mappings : 'a mapping_doc linkable Bindings.t;
+  valspecs : valspec_doc linkable Bindings.t;
+  type_defs : type_def_doc linkable Bindings.t;
+  registers : register_doc linkable Bindings.t;
+  lets : let_doc linkable Bindings.t;
+  anchors : anchor_doc linkable Bindings.t;
   spans : location_or_raw Bindings.t;
 }
 
@@ -368,23 +377,13 @@ let json_of_docinfo docinfo =
     @ [
         ("embedding", `String (embedding_string docinfo.embedding));
         ("hashes", `Assoc (List.map (fun (key, hash) -> (key, `Assoc [("md5", `String hash)])) docinfo.hashes));
-        ( "functions",
-          json_of_bindings docinfo.functions (json_of_pair "function" json_of_function_doc "links" json_of_hyperlinks)
-        );
-        ( "mappings",
-          json_of_bindings docinfo.mappings (json_of_pair "mapping" json_of_mapping_doc "links" json_of_hyperlinks)
-        );
-        ("vals", json_of_bindings docinfo.valspecs (json_of_pair "val" json_of_valspec_doc "links" json_of_hyperlinks));
-        ( "types",
-          json_of_bindings docinfo.type_defs (json_of_pair "type" json_of_type_def_doc "links" json_of_hyperlinks)
-        );
-        ( "registers",
-          json_of_bindings docinfo.registers (json_of_pair "register" json_of_register_doc "links" json_of_hyperlinks)
-        );
-        ("lets", json_of_bindings docinfo.lets (json_of_pair "let" json_of_let_doc "links" json_of_hyperlinks));
-        ( "anchors",
-          json_of_bindings docinfo.anchors (json_of_pair "anchor" json_of_anchor_doc "links" json_of_hyperlinks)
-        );
+        ("functions", json_of_bindings docinfo.functions (json_of_linkable "function" json_of_function_doc));
+        ("mappings", json_of_bindings docinfo.mappings (json_of_linkable "mapping" json_of_mapping_doc));
+        ("vals", json_of_bindings docinfo.valspecs (json_of_linkable "val" json_of_valspec_doc));
+        ("types", json_of_bindings docinfo.type_defs (json_of_linkable "type" json_of_type_def_doc));
+        ("registers", json_of_bindings docinfo.registers (json_of_linkable "register" json_of_register_doc));
+        ("lets", json_of_bindings docinfo.lets (json_of_linkable "let" json_of_let_doc));
+        ("anchors", json_of_bindings docinfo.anchors (json_of_linkable "anchor" json_of_anchor_doc));
         ("spans", json_of_bindings docinfo.spans json_of_span);
       ]
   in
@@ -608,6 +607,15 @@ module Generator (Converter : Markdown.CONVERTER) (Config : CONFIG) = struct
     let clauses = List.filter (included_mapping_clause files) clauses in
     match clauses with [] -> None | _ -> Some (List.mapi docinfo_for_mapcl clauses)
 
+  let get_module_path def_annot =
+    let project_opt = Type_check.Env.get_modules def_annot.env in
+    let mod_id = Type_check.Env.get_current_module def_annot.env in
+    match project_opt with
+    | Some project when Project.valid_module_id project mod_id ->
+        let parents = Project.get_parents mod_id project in
+        Some (List.map (fun id -> fst (Project.module_name project id)) (parents @ [mod_id]))
+    | _ -> None
+
   let docinfo_for_ast ~files ~hyperlinks ast =
     let gitinfo =
       git_command "rev-parse HEAD"
@@ -633,11 +641,12 @@ module Generator (Converter : Markdown.CONVERTER) (Config : CONFIG) = struct
     let skip_file file = if List.exists (same_file file) files then false else initial_skip in
     let skipping = function true :: _ -> true | _ -> false in
     let docinfo_for_def (docinfo, skips) (DEF_aux (aux, def_annot) as def) =
+      let module_path = get_module_path def_annot in
       let links = hyperlinks files def in
       match aux with
       (* Maintain a stack of booleans, for each file if it was not
-         specified via -doc_file, we push true to skip it. If no
-         -doc_file flags are passed, include everything. *)
+         specified via --doc-file, we push true to skip it. If no
+         --doc-file flags are passed, include everything. *)
       | DEF_pragma (("file_start" | "include_start"), Pragma_line (path, _)) -> (docinfo, skip_file path :: skips)
       | DEF_pragma (("file_end" | "include_end"), _) -> (docinfo, match skips with _ :: skips -> skips | [] -> [])
       (* Function definiton may be scattered, so we can't skip it *)
@@ -646,7 +655,7 @@ module Generator (Converter : Markdown.CONVERTER) (Config : CONFIG) = struct
           ( begin
               match docinfo_for_fundef ~ast def_annot files fdef with
               | None -> docinfo
-              | Some info -> { docinfo with functions = Bindings.add id (info, links) docinfo.functions }
+              | Some doc -> { docinfo with functions = Bindings.add id { doc; links; module_path } docinfo.functions }
             end,
             skips
           )
@@ -655,27 +664,44 @@ module Generator (Converter : Markdown.CONVERTER) (Config : CONFIG) = struct
           ( begin
               match docinfo_for_mapdef files mdef with
               | None -> docinfo
-              | Some info -> { docinfo with mappings = Bindings.add id (info, links) docinfo.mappings }
+              | Some doc -> { docinfo with mappings = Bindings.add id { doc; links; module_path } docinfo.mappings }
             end,
             skips
           )
       | _ when skipping skips -> (docinfo, skips)
       | DEF_val vs ->
           let id = id_of_val_spec vs in
-          ({ docinfo with valspecs = Bindings.add id (docinfo_for_valspec def_annot vs, links) docinfo.valspecs }, skips)
+          ( {
+              docinfo with
+              valspecs = Bindings.add id { doc = docinfo_for_valspec def_annot vs; links; module_path } docinfo.valspecs;
+            },
+            skips
+          )
       | DEF_type td ->
           let id = id_of_type_def td in
-          ({ docinfo with type_defs = Bindings.add id (docinfo_for_type_def td, links) docinfo.type_defs }, skips)
+          ( {
+              docinfo with
+              type_defs = Bindings.add id { doc = docinfo_for_type_def td; links; module_path } docinfo.type_defs;
+            },
+            skips
+          )
       | DEF_register rd ->
           let id = id_of_dec_spec rd in
-          ( { docinfo with registers = Bindings.add id (docinfo_for_register def_annot rd, links) docinfo.registers },
+          ( {
+              docinfo with
+              registers =
+                Bindings.add id { doc = docinfo_for_register def_annot rd; links; module_path } docinfo.registers;
+            },
             skips
           )
       | DEF_let (LB_aux (LB_val (pat, _), _) as letbind) ->
           let ids = pat_ids pat in
           ( IdSet.fold
               (fun id docinfo ->
-                { docinfo with lets = Bindings.add id (docinfo_for_let def_annot letbind, links) docinfo.lets }
+                {
+                  docinfo with
+                  lets = Bindings.add id { doc = docinfo_for_let def_annot letbind; links; module_path } docinfo.lets;
+                }
               )
               ids docinfo,
             skips
@@ -692,10 +718,11 @@ module Generator (Converter : Markdown.CONVERTER) (Config : CONFIG) = struct
           match aux with
           | DEF_pragma ("anchor", Pragma_line (arg, _)) ->
               let links = hyperlinks files def in
+              let module_path = get_module_path def_annot in
               let anchor_info =
                 { source = doc_loc l Type_check.strip_def Reformatter.doc_def def; comment = def_annot.doc_comment }
               in
-              anchored := Bindings.add (mk_id arg) (anchor_info, links) !anchored
+              anchored := Bindings.add (mk_id arg) { doc = anchor_info; links; module_path } !anchored
           | _ -> ()
         )
         ast.defs;

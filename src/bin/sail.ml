@@ -542,7 +542,7 @@ let run_sail (config : Yojson.Safe.t option) tgt =
   let config_json = get_model_config () in
   let ast, instantiation = Frontend.instantiate_abstract_types (Some tgt) config_json !opt_instantiations ast in
   let schema, ast = Config.rewrite_ast tgt env instantiation config_json ast in
-  let ast, env = Frontend.initial_rewrite effect_info env ast in
+  let ast, env = if Target.skip_initial_rewrite tgt then (ast, env) else Frontend.initial_rewrite effect_info env ast in
   let ast, env = match !opt_splice with [] -> (ast, env) | files -> Splice.splice_files ctx ast (List.rev files) in
   let effect_info = Effects.infer_side_effects (Target.asserts_termination tgt) ast in
 

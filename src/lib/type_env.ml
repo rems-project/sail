@@ -202,6 +202,8 @@ type t = env
 
 let set_modules proj env = update_global (fun global -> { global with modules = Some proj }) env
 
+let get_modules env = env.global.modules
+
 let get_module_id_opt env name = Option.bind env.global.modules (fun proj -> Project.get_module_id proj name)
 
 let get_module_id ~at:l env name =
@@ -217,6 +219,8 @@ let start_module ~at:l mod_id env =
       { env with current_module = mod_id; opened = Project.ModSet.of_list (Project.global_scope :: requires) }
 
 let end_module env = { env with current_module = Project.global_scope; opened = Project.ModSet.empty }
+
+let get_current_module env = env.current_module
 
 let open_all_modules env = { env with open_all = true }
 

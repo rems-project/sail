@@ -65,6 +65,8 @@ type t = env
     invalidate all module identifiers! *)
 val set_modules : Project.project_structure -> t -> t
 
+val get_modules : t -> Project.project_structure option
+
 val get_module_id_opt : t -> string -> Project.mod_id option
 val get_module_id : at:l -> t -> string -> Project.mod_id
 
@@ -74,6 +76,8 @@ val start_module : at:l -> Project.mod_id -> t -> t
 
 (** End the current module context, returning us to type-checking in the global scope. *)
 val end_module : t -> t
+
+val get_current_module : t -> Project.mod_id
 
 (** This effectively disables all module related access control *)
 val open_all_modules : t -> t
