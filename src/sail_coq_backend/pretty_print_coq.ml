@@ -128,6 +128,7 @@ type context = {
   is_monadic : bool;
   proof_mode : bool;
       (* Is the body being given via a tactic in proof mode (affects implicit arguments in recursive definitions *)
+  none_nesting_depth : int; (* Track the number of nested None patterns to trigger special case in doc_case *)
 }
 let empty_ctxt =
   {
@@ -151,6 +152,7 @@ let empty_ctxt =
     ret_typ_pp = PPrint.empty;
     is_monadic = false;
     proof_mode = false;
+    none_nesting_depth = 0;
   }
 
 let add_single_kid_id_rename ctxt id kid =
@@ -2014,7 +2016,7 @@ let doc_exp, doc_let =
             | _ -> raise (Reporting.err_unreachable l __POS__ "Tuple doesn't have a tuple type")
           in
           let exp_pps = List.map2 (fun exp typ -> construct_dep_pairs ctxt (env_of exp) false exp typ) exps typs in
-          parens (separate (string ", ") exp_pps)
+          group (parens (align (separate (string "," ^^ break 1) exp_pps)))
         )
     | E_typ (typ, e) ->
         let env = env_of_annot (l, annot) in
@@ -2134,15 +2136,14 @@ let doc_exp, doc_let =
         raise (Reporting.err_unreachable l __POS__ "E_vector_update should have been rewritten before pretty-printing")
     | E_list exps -> brackets (separate_map (semi ^^ break 1) expN exps)
     | E_match (e, pexps) ->
-        let only_integers e = expY e in
         let epp =
           group
-            (separate space [string "match"; only_integers e; string "with"]
+            (separate space [string "match"; align (expN e); string "with"]
             ^/^ separate_map (break 1) (doc_case ctxt (env_of_annot (l, annot)) tail_position (typ_of e)) pexps
             ^/^ string "end"
             )
         in
-        if aexp_needed then parens (align epp) else align epp
+        epp
     | E_try (e, pexps) ->
         if effectful (effect_of e) then (
           let try_catch = if Option.is_some ctxt.early_ret then "try_catchR" else "try_catch" in
@@ -2360,7 +2361,24 @@ let doc_exp, doc_let =
         let ctxt, pat = merge_kid_ids_in_pat ctxt old_env pat in
         let new_ctxt = merge_new_tyvars ctxt old_env pat (env_of e) in
         let pat_pp = doc_pat ctxt false pat typ in
-        group (prefix 3 1 (separate space [pipe; pat_pp; bigarrow]) (group (top_exp new_ctxt false tail_position e)))
+        (* As a special case to prevent code generated from mappings becoming so indented that the
+           pretty printing breaks down, we spot deep nestings of None patterns and put some blank
+           lines around the case rather than indenting further. *)
+        let new_ctxt, hardline_pp =
+          match pat with
+          | P_aux (P_app (id, [_]), _) when Id.compare id (mk_id "None") == 0 ->
+              ({ new_ctxt with none_nesting_depth = new_ctxt.none_nesting_depth + 1 }, new_ctxt.none_nesting_depth > 4)
+          | _ -> (new_ctxt, false)
+        in
+        if hardline_pp then
+          group
+            (separate space [pipe; pat_pp; bigarrow]
+            ^^ hardline ^^ hardline
+            ^^ group (top_exp new_ctxt false tail_position e)
+            ^^ hardline
+            )
+        else
+          group (prefix 3 1 (separate space [pipe; pat_pp; bigarrow]) (group (top_exp new_ctxt false tail_position e)))
     | Pat_aux (Pat_when (_, _, _), (l, _)) ->
         raise
           (Reporting.err_unreachable l __POS__
@@ -3395,6 +3413,7 @@ let doc_funcl_init global proof_mode mutrec rec_opt ?rec_set (FCL_aux (FCL_funcl
       (* filled in below *)
       is_monadic;
       proof_mode;
+      none_nesting_depth = 0;
     }
   in
   let ctxt =
