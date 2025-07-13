@@ -3837,11 +3837,20 @@ module MakeExhaustive = struct
       | Pat_aux (Pat_when _, (l, _)) ->
           raise (Reporting.err_unreachable l __POS__ "Guarded pattern should have been rewritten away")
 
-  let check_cases process is_wild loc_of cases =
+  let check_cases warned_unknown process is_wild loc_of cases =
     let rec aux rps acc = function
       | [] -> (acc, rps)
       | [p] when is_wild p && match rps with [] -> true | _ -> false ->
-          let () = Reporting.print_err (loc_of p) "Match checking" "Redundant wildcard clause" in
+          let l = loc_of p in
+          let warn =
+            match (l, !warned_unknown) with
+            | Parse_ast.Unknown, true -> false
+            | Parse_ast.Unknown, false ->
+                warned_unknown := true;
+                true
+            | _, _ -> true
+          in
+          let () = if warn then Reporting.print_err (loc_of p) "Match checking" "Redundant wildcard clause" in
           (acc, [])
       | h :: t ->
           let rps', progress = process rps h in
@@ -3869,11 +3878,11 @@ module MakeExhaustive = struct
 
   let funcl_loc (FCL_aux (_, (def_annot, _))) = def_annot.loc
 
-  let rewrite_case redo_effects (e, ann) =
+  let rewrite_case warned_unknown redo_effects (e, ann) =
     match e with
     | E_match (e1, cases) | E_try (e1, cases) -> begin
         let env = env_of_annot ann in
-        let cases, rps = check_cases (process_pexp env) pexp_is_wild pexp_loc cases in
+        let cases, rps = check_cases warned_unknown (process_pexp env) pexp_is_wild pexp_loc cases in
         let rebuild cases =
           match e with E_match _ -> E_match (e1, cases) | E_try _ -> E_try (e1, cases) | _ -> assert false
         in
@@ -3916,7 +3925,7 @@ module MakeExhaustive = struct
       end
     | _ -> E_aux (e, ann)
 
-  let rewrite_fun rewriters (FD_aux (FD_function (r, t, fcls), f_ann)) =
+  let rewrite_fun warned_unknown rewriters (FD_aux (FD_function (r, t, fcls), f_ann)) =
     let id, fcl_ann =
       match fcls with
       | FCL_aux (FCL_funcl (id, _), ann) :: _ -> (id, ann)
@@ -3924,7 +3933,7 @@ module MakeExhaustive = struct
     in
     let env = env_of_tannot (snd fcl_ann) in
     let process_funcl rps (FCL_aux (FCL_funcl (_, pexp), _)) = process_pexp env rps pexp in
-    let fcls, rps = check_cases process_funcl funcl_is_wild funcl_loc fcls in
+    let fcls, rps = check_cases warned_unknown process_funcl funcl_is_wild funcl_loc fcls in
     let fcls' =
       List.map
         (function FCL_aux (FCL_funcl (id, pexp), ann) -> FCL_aux (FCL_funcl (id, rewrite_pexp rewriters pexp), ann))
@@ -3948,8 +3957,10 @@ module MakeExhaustive = struct
         FD_aux (FD_function (r, t, fcls' @ [default]), f_ann)
 
   let rewrite effect_info env ast =
+    (* Have we already warned about a redundunt wildcard at an unknown location? *)
+    let warned_unknown = ref false in
     let redo_effects = ref false in
-    let alg = { id_exp_alg with e_aux = rewrite_case redo_effects } in
+    let alg = { id_exp_alg with e_aux = rewrite_case warned_unknown redo_effects } in
     let ast' =
       rewrite_ast_base
         {
@@ -3958,7 +3969,7 @@ module MakeExhaustive = struct
           rewrite_mpat;
           rewrite_let;
           rewrite_lexp;
-          rewrite_fun;
+          rewrite_fun = rewrite_fun warned_unknown;
           rewrite_def;
           rewrite_ast = rewrite_ast_base_progress "Make patterns exhaustive";
         }
