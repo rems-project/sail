@@ -3828,9 +3828,12 @@ let doc_val global pat exp =
       )
   in
   let idpp = doc_id bare_ctxt id in
-  let base_pp = doc_exp ctxt false true exp ^^ dot in
+  let base_pp = doc_exp ctxt false true exp in
+  (* If the expression has assertions or incomplete pattern matches (if/when we allow that) then
+     unwrap the value.  There will be a typechecking failure in Rocq if there's an effect. *)
+  let def_pp = if effectful (effect_of exp) then group (string "unwrap_value" ^/^ parens base_pp) else base_pp in
   let () = debug_depth := 0 in
-  group (string "Definition" ^^ space ^^ idpp ^^ typpp ^^ space ^^ coloneq ^/^ base_pp)
+  group (string "Definition" ^^ space ^^ idpp ^^ typpp ^^ space ^^ coloneq ^/^ def_pp ^^ dot)
   ^^ hardline
   ^^ group (separate space [string "#[export] Hint Unfold"; idpp; colon; string "sail."])
   ^^ hardline
