@@ -2157,7 +2157,7 @@ let doc_exp, doc_let =
           in
           if aexp_needed then parens (align epp) else align epp
         )
-        else raise (Reporting.err_todo l "Warning: try-block around pure expression")
+        else group (string "(* try block removed because subexpression never throws an exception *)" ^/^ expY e)
     | E_throw e ->
         let epp = liftR (separate space [string "throw"; expY e]) in
         if aexp_needed then parens (align epp) else align epp
