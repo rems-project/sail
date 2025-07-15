@@ -19,6 +19,7 @@ print("Sail dir is {}".format(sail_dir))
 
 skip_tests = {
   'while_PM', # Not currently in a useful state
+  'type_pow_zero', # uses cvc4, not worth rerunning for rocq output
 }
 
 def test(name, dir, lib):

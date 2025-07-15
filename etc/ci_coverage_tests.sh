@@ -25,6 +25,9 @@ elif [ "$1" = "other" ]; then
     test/sailcov/run_tests.py || returncode=1
     test/format/run_tests.py || returncode=1
     test/oneoff/run_tests.py || returncode=1
+elif [ "$1" = "rocq" ]; then
+    test/coq/run_tests.py || returncode=1
+    test/c/run_tests.py --targets coq || returncode=1
 fi
 
 exit $returncode
