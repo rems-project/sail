@@ -87,8 +87,8 @@ let opt_lean_executable : bool ref = ref false
 let opt_enable_matchbv : bool ref = ref false
 let opt_disable_matchbv : bool ref = ref true
 
-let lean_version : string = "lean4:nightly-2025-06-21"
-let mathlib_version : string = "v4.20.0-rc5"
+let lean_version : string = "lean4:nightly-2025-07-10"
+let mathlib_version : string = "nightly-testing-2025-07-10"
 
 let lean_options =
   [
@@ -345,7 +345,7 @@ let create_lake_project (ctx : lean_context) executable =
   if !opt_lean_real_numbers then (
     output_string ctx.lakefile "\n\n[[require]]\n";
     output_string ctx.lakefile "name = \"mathlib\"\n";
-    output_string ctx.lakefile "git = \"https://github.com/leanprover-community/mathlib4\"\n";
+    output_string ctx.lakefile "git = \"https://github.com/leanprover-community/mathlib4-nightly-testing\"";
     output_string ctx.lakefile (Printf.sprintf "rev = \"%s\"" mathlib_version)
   );
   if executable then (

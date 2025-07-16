@@ -71,7 +71,7 @@ instance : ForIn' m IntRange Int inferInstance where
       · omega
       · simp_all [instMemIntRange]
         omega
-    · simp_all only [instMemIntRange, gt_iff_lt, ite_false, and_true, ne_eq]; rw [toNat_lt_toNat]
+    · simp_all only [instMemIntRange, gt_iff_lt, ite_false, ne_eq]; rw [toNat_lt_toNat]
       · omega
       · omega
   have := range.step_pos
