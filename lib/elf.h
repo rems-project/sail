@@ -55,12 +55,12 @@ extern "C" {
 #endif
 
 // Loads only ET_EXEC executable files.
-void load_elf(char *filename, bool *is32bit_p, uint64_t *entry);
+void load_elf(const char *filename, bool *is32bit_p, uint64_t *entry);
 
 // Loads ET_EXEC or ET_DYN (if allow_pie is true), or only ET_EXEC (if allow_pie is false).
 // If allow_pie is true, pie_load_offset is added to the load offsets specified in the file.
 // If allow_pie is false, pie_load_offset is ignored.
-void load_elf_at_offset(char *filename, bool allow_pie, const int64_t pie_load_offset, bool *is32bit_p, uint64_t *entry);
+void load_elf_at_offset(const char *filename, bool allow_pie, const int64_t pie_load_offset, bool *is32bit_p, uint64_t *entry);
 
 int  lookup_sym(const char *filename, const char *symname, uint64_t *value);
 

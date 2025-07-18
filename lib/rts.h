@@ -160,7 +160,7 @@ bool emulator_write_mem_exclusive(const uint64_t addr_size,
 
 unit load_raw(fbits addr, const_sail_string file);
 
-void load_image(char *);
+void load_image(const char *);
 
 /* ***** Tracing ***** */
 
@@ -203,7 +203,7 @@ void trace_unknown(void);
 void trace_argsep(void);
 void trace_argend(void);
 void trace_retend(void);
-void trace_start(char *);
+void trace_start(const char *);
 void trace_end(void);
 
 /*
