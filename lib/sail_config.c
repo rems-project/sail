@@ -94,6 +94,9 @@ void sail_config_set_file(const char *path)
     sail_assert(buffer[i] != 0, "Null byte in JSON configuration");
   }
 
+  // Remove all comments and blanks. 
+  cJSON_Minify(buffer);
+
   sail_config_set_string(buffer);
 
   sail_free(buffer);
