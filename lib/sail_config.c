@@ -63,8 +63,14 @@ void sail_config_set_string(const char *json)
   sail_config = cJSON_ParseWithOpts(json, &parse_end, 1);
 
   if (!sail_config) {
-    char error_message[128];
-    snprintf(error_message, sizeof error_message, "Failed to parse JSON configuration at offset %ld", parse_end - json);
+    char error_message[256];
+    const char *error_ptr = cJSON_GetErrorPtr();
+    if (error_ptr != NULL) {
+        snprintf(error_message, sizeof error_message, "Failed to parse JSON configuration at offset %ld: [%s]", parse_end - json, error_ptr);
+    }
+    else {
+        snprintf(error_message, sizeof error_message, "Failed to parse JSON configuration at offset %ld", parse_end - json);
+    }
     sail_assert(false, error_message);
   }
 }
