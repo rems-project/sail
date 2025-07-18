@@ -308,10 +308,11 @@ static cJSON_bool parse_number(cJSON * const item, parse_buffer * const input_bu
 {
     double number = 0;
     unsigned char *after_end = NULL;
-    unsigned char number_c_string[64];
+    unsigned char *number_c_string;
     unsigned char decimal_point = get_decimal_point();
     size_t i = 0;
-    unsigned char *output = NULL;
+    size_t number_string_length = 0;
+    cJSON_bool has_decimal_point = false;
 
     if ((input_buffer == NULL) || (input_buffer->content == NULL))
     {
@@ -321,7 +322,7 @@ static cJSON_bool parse_number(cJSON * const item, parse_buffer * const input_bu
     /* copy the number into a temporary buffer and replace '.' with the decimal point
      * of the current locale (for strtod)
      * This also takes care of '\0' not necessarily being available for marking the end of the input */
-    for (i = 0; (i < (sizeof(number_c_string) - 1)) && can_access_at_index(input_buffer, i); i++)
+    for (i = 0; can_access_at_index(input_buffer, i); i++)
     {
         switch (buffer_at_offset(input_buffer)[i])
         {
@@ -339,11 +340,12 @@ static cJSON_bool parse_number(cJSON * const item, parse_buffer * const input_bu
             case '-':
             case 'e':
             case 'E':
-                number_c_string[i] = buffer_at_offset(input_buffer)[i];
+                number_string_length++;
                 break;
 
             case '.':
-                number_c_string[i] = decimal_point;
+                number_string_length++;
+                has_decimal_point = true;
                 break;
 
             default:
@@ -351,18 +353,36 @@ static cJSON_bool parse_number(cJSON * const item, parse_buffer * const input_bu
         }
     }
 loop_end:
-    number_c_string[i] = '\0';
+    /* malloc for temporary buffer, add 1 for '\0' */
+    number_c_string = (unsigned char *) input_buffer->hooks.allocate(number_string_length + 1);
+    if (number_c_string == NULL)
+    {
+        return false; /* allocation failure */
+    }
 
-    output = (unsigned char*)input_buffer->hooks.allocate(i * sizeof(char) + 1);
-    memcpy(output, number_c_string, i + 1);
+    memcpy(number_c_string, buffer_at_offset(input_buffer), number_string_length);
+    number_c_string[number_string_length] = '\0';
+
+    if (has_decimal_point)
+    {
+        for (i = 0; i < number_string_length; i++)
+        {
+            if (number_c_string[i] == '.')
+            {
+                /* replace '.' with the decimal point of the current locale (for strtod) */
+                number_c_string[i] = decimal_point;
+            }
+        }
+    }
 
     number = strtod((const char*)number_c_string, (char**)&after_end);
     if (number_c_string == after_end)
     {
+        /* free the temporary buffer */
+        input_buffer->hooks.deallocate(number_c_string);
         return false; /* parse_error */
     }
 
-    item->valuestring = (char*)output;
     item->valuedouble = number;
 
     /* use saturation in case of overflow */
@@ -382,6 +402,8 @@ loop_end:
     item->type = cJSON_Number;
 
     input_buffer->offset += (size_t)(after_end - number_c_string);
+    /* free the temporary buffer */
+    input_buffer->hooks.deallocate(number_c_string);
     return true;
 }
 
@@ -1067,43 +1089,15 @@ static parse_buffer *buffer_skip_whitespace(parse_buffer * const buffer)
         return NULL;
     }
 
-    enum State {
-        Whitespace,
-        SingleLineComment,
-        MultiLineComment,
-    } state = Whitespace;
-
-    while (buffer->offset < buffer->length) {
-        char c0 = buffer_at_offset(buffer)[0];
-        char c1 = buffer->offset + 1 < buffer->length ? buffer_at_offset(buffer)[1] : '\0';
-        switch (state) {
-            case Whitespace:
-                if (c0 == '/' && c1 == '/') {
-                    ++buffer->offset;
-                    state = SingleLineComment;
-                } else if (c0 == '/' && c1 == '*') {
-                    ++buffer->offset;
-                    state = MultiLineComment;
-                } else if (c0 > 32) {
-                    // Not a whitespace character or the start of a comment.
-                    goto done;
-                }
-                break;
-            case SingleLineComment:
-                if (c0 == '\n') {
-                    state = Whitespace;
-                }
-                break;
-            case MultiLineComment:
-                if (c0 == '*' && c1 == '/') {
-                    ++buffer->offset;
-                    state = Whitespace;
-                }
-                break;
-        }
-        ++buffer->offset;
+    if (cannot_access_at_index(buffer, 0))
+    {
+        return buffer;
     }
-done:
+
+    while (can_access_at_index(buffer, 0) && (buffer_at_offset(buffer)[0] <= 32))
+    {
+       buffer->offset++;
+    }
 
     if (buffer->offset == buffer->length)
     {
