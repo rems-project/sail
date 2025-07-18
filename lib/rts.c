@@ -440,7 +440,7 @@ unit load_raw(fbits addr, const_sail_string file)
   return UNIT;
 }
 
-void load_image(char *file)
+void load_image(const char *file)
 {
   FILE *fp = fopen(file, "r");
 
@@ -546,7 +546,7 @@ void trace_retend(void) {
   if (g_trace_enabled) fputs("\n", stderr);
 }
 
-void trace_start(char *name)
+void trace_start(const char *name)
 {
   if (g_trace_enabled) {
     fprintf(stderr, "[TRACE] ");

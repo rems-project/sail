@@ -438,7 +438,7 @@ void loadELFHdr(const char* buffer, const int total_file_size, bool allow_pie, c
     }
 }
 
-void load_elf_at_offset(char *filename, bool allow_pie, const int64_t pie_load_offset, bool *is32bit_p, uint64_t *entry) {
+void load_elf_at_offset(const char *filename, bool allow_pie, const int64_t pie_load_offset, bool *is32bit_p, uint64_t *entry) {
     // Read input file into memory
     char* buffer = NULL;
     int   size   = 0;
@@ -465,7 +465,7 @@ fail:
     exit(EXIT_FAILURE);
 }
 
-void load_elf(char *filename, bool *is32bit_p, uint64_t *entry) {
+void load_elf(const char *filename, bool *is32bit_p, uint64_t *entry) {
     load_elf_at_offset(filename, false, 0, is32bit_p, entry);
 }
 
