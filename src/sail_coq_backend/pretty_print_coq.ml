@@ -4261,6 +4261,9 @@ end = struct
           string "  | None => \"<impossible>\"";
           string "  end.";
           empty;
+          string "Instance Pretty_greg : Pretty GRegister.greg :=";
+          string "  fun '(GRegister.GReg reg) => string_of_register reg.";
+          empty;
           string "Definition register_of_string (s : string) : option GRegister.greg :=";
           string "  match List.find (fun '(s', _r) => String.eqb s s') register_list with";
           string "  | Some (_s, r) => Some r";
@@ -4607,6 +4610,7 @@ let pp_ast_coq library_style (types_file, types_modules) (defs_file, defs_module
              string "  Include GRegister.";
              string "  Definition greg_eq := @Decidable_eq_greg.";
              string "  Definition greg_cnt := @Countable_greg.";
+             string "  Definition greg_pretty := @Pretty_greg.";
              string "  Definition regval_inhabited := @Inhabited_register_values.";
              string "  Definition regval_eq := @Decidable_eq_register_values.";
              string "  Definition regval_cnt := @Countable_register_values.";
@@ -4765,7 +4769,8 @@ let pp_ast_coq library_style (types_file, types_modules) (defs_file, defs_module
             hardline;
             ( match library_style with
             | BBV -> empty
-            | Stdpp -> separate hardline [string "From stdpp Require Import base countable."; string "Require Eqdep."]
+            | Stdpp ->
+                separate hardline [string "From stdpp Require Import base countable pretty."; string "Require Eqdep."]
             );
             (separate_map hardline)
               (fun lib -> separate space [string "Require Import"; string lib] ^^ dot)
