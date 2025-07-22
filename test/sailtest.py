@@ -5,6 +5,7 @@ import subprocess
 import datetime
 import argparse
 import signal
+import html
 
 def signal_handler(sig, frame):
     sys.exit(0)
@@ -170,7 +171,8 @@ class Results:
         self._xfail_reasons[test] = reason
 
     def _add_status(self, test, result, msg):
-        self.xml += f'    <testcase name="{test}">\n      <{result} message="{msg}">{msg}</{result}>\n    </testcase>\n'
+        qmsg = html.escape(msg)
+        self.xml += f'    <testcase name="{test}">\n      <{result} message="{qmsg}">{qmsg}</{result}>\n    </testcase>\n'
 
     def _add_failure(self, test, msg):
         self.failures += 1
