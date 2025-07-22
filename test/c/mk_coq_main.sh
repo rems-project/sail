@@ -101,7 +101,7 @@ EOF
   Definition cycle_count (st : state) : state :=
     {| state_memory := st.(state_memory); state_tags := st.(state_tags); state_regs := st.(state_regs); state_cycles := st.(state_cycles) + 1; state_output := st.(state_output) |}.
   
-  Function run (t : M unit) (st : state) : string + {T : Type & Interface.outcome _ T} :=
+  Fixpoint run (t : M unit) (st : state) : string + {T : Type & Interface.outcome _ T} :=
     match t with
     | Interface.Ret _ => inl st.(state_output)
     | Interface.Next out k =>
