@@ -139,7 +139,6 @@ EOF
   let result := eval vm_compute in (run ($RUN) init_state) in
   match result with
     | inl ?msg => idtac "OK"; exact (msg, "")
-    (*| [(Ex (Failure ?s),?state,_)] => idtac "Fail:" s; exact (state.(ss_output), "Assertion failed: " ++ s)*)
     | _ => idtac "Fail (unexpected result):" result; exact ("","")
   end)).
   Redirect "output" (let t := eval vm_compute in (fst outerr) in idtac t).
@@ -183,7 +182,8 @@ EOF
   let result := eval vm_compute in (liftState register_accessors ($RUN) (init_state $REGSTATE) default_choice) in
   match result with
     | [(Value tt,?state,_)] => idtac "OK"; exact (state.(ss_output), "")
-    | [(Ex (Failure ?s),?state,_)] => idtac "Fail:" s; exact (state.(ss_output), "Assertion failed: " ++ s)
+    | [(Ex (Failure ?s),?state,_)] => idtac "Fail:" s; exact (state.(ss_output), "Assertion failed: " ++ s ++ "
+")
     | _ => idtac "Fail (unexpected result):" result; exact ("","")
   end)).
   Redirect "output" (let t := eval vm_compute in (fst outerr) in idtac t).
