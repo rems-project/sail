@@ -1340,16 +1340,10 @@ let rec collect_imports_rec (cg : Callgraph.callgraph) (defs : (tannot, env) def
     (accs : IntSet.t list) (acc : IntSet.t) (idx : int) (nonempty_print : bool) : IntSet.t list =
   match defs with
   | [] -> accs @ [acc]
-  | (DEF_aux (DEF_fundef fdef, dannot) as d) :: defs' ->
-      let map, acc = add_def_to_map_and_ref_set cg map acc idx d in
-      collect_imports_rec cg defs' map accs acc idx true
-  | (DEF_aux (DEF_internal_mutrec fdefs, dannot) as d) :: defs' ->
+  | (DEF_aux ((DEF_fundef _ | DEF_internal_mutrec _ | DEF_let _ | DEF_register _), _) as d) :: defs' ->
       let map, acc = add_def_to_map_and_ref_set cg map acc idx d in
       collect_imports_rec cg defs' map accs acc idx true
   | DEF_aux (DEF_type tdef, _) :: defs' -> collect_imports_rec cg defs' map accs acc idx nonempty_print
-  | (DEF_aux (DEF_let (LB_aux (LB_val (pat, exp), _)), _) as d) :: defs' ->
-      let map, acc = add_def_to_map_and_ref_set cg map acc idx d in
-      collect_imports_rec cg defs' map accs acc idx true
   | DEF_aux (DEF_pragma ("include_start", Pragma_line (file, _)), _) :: defs'
   | DEF_aux (DEF_pragma ("file_start", Pragma_line (file, _)), _) :: defs'
   | DEF_aux (DEF_pragma ("include_end", Pragma_line (file, _)), _) :: defs'
