@@ -77,6 +77,15 @@ type embedding = Plain | Base64
 
 let embedding_string = function Plain -> "plain" | Base64 -> "base64"
 
+let get_module_path env =
+  let project_opt = Type_check.Env.get_modules env in
+  let mod_id = Type_check.Env.get_current_module env in
+  match project_opt with
+  | Some project when Project.valid_module_id project mod_id ->
+      let parents = Project.get_parents mod_id project in
+      Some (List.map (fun id -> fst (Project.module_name project id)) (parents @ [mod_id]))
+  | _ -> None
+
 let json_of_bindings b f =
   Bindings.bindings b |> List.map (fun (key, elem) -> (string_of_id key, f elem)) |> fun elements -> `Assoc elements
 
@@ -233,6 +242,7 @@ type 'a function_clause_doc = {
   wavedrom : string option;
   guard_source : location_or_raw option;
   body_source : location_or_raw;
+  module_path : string list option;
   comment : string option;
   splits : location_or_raw Bindings.t option;
   attributes : (string * attribute_data option) list;
@@ -249,6 +259,7 @@ let json_of_function_clause_doc docinfo =
     @ (match docinfo.comment with Some s -> [("comment", `String s)] | None -> [])
     @ (match docinfo.guard_source with Some s -> [("guard", json_of_location_or_raw s)] | None -> [])
     @ [("body", json_of_location_or_raw docinfo.body_source)]
+    @ (match docinfo.module_path with Some mods -> [("path", `List (List.map (fun m -> `String m) mods))] | None -> [])
     @ (match docinfo.splits with Some s -> [("splits", json_of_bindings s json_of_location_or_raw)] | None -> [])
     @ json_of_attributes docinfo.attributes
     )
@@ -532,6 +543,7 @@ module Generator (Converter : Markdown.CONVERTER) (Config : CONFIG) = struct
           end
       | _ -> doc_loc (exp_loc exp) Type_check.strip_exp Reformatter.doc_exp exp
     in
+    let module_path = get_module_path (Type_check.env_of exp) in
 
     let splits = funcl_splits ~ast ~error_loc:(pat_loc pat) attrs exp in
 
@@ -542,6 +554,7 @@ module Generator (Converter : Markdown.CONVERTER) (Config : CONFIG) = struct
       wavedrom = Wavedrom.of_pattern ~labels:None pat |> Option.map encode;
       guard_source;
       body_source;
+      module_path;
       comment = Option.map encode comment;
       splits;
       attributes = List.map (fun (_, attr, data) -> (attr, data)) attrs;
@@ -607,15 +620,6 @@ module Generator (Converter : Markdown.CONVERTER) (Config : CONFIG) = struct
     let clauses = List.filter (included_mapping_clause files) clauses in
     match clauses with [] -> None | _ -> Some (List.mapi docinfo_for_mapcl clauses)
 
-  let get_module_path def_annot =
-    let project_opt = Type_check.Env.get_modules def_annot.env in
-    let mod_id = Type_check.Env.get_current_module def_annot.env in
-    match project_opt with
-    | Some project when Project.valid_module_id project mod_id ->
-        let parents = Project.get_parents mod_id project in
-        Some (List.map (fun id -> fst (Project.module_name project id)) (parents @ [mod_id]))
-    | _ -> None
-
   let docinfo_for_ast ~files ~hyperlinks ast =
     let gitinfo =
       git_command "rev-parse HEAD"
@@ -641,7 +645,7 @@ module Generator (Converter : Markdown.CONVERTER) (Config : CONFIG) = struct
     let skip_file file = if List.exists (same_file file) files then false else initial_skip in
     let skipping = function true :: _ -> true | _ -> false in
     let docinfo_for_def (docinfo, skips) (DEF_aux (aux, def_annot) as def) =
-      let module_path = get_module_path def_annot in
+      let module_path = get_module_path def_annot.env in
       let links = hyperlinks files def in
       match aux with
       (* Maintain a stack of booleans, for each file if it was not
@@ -718,7 +722,7 @@ module Generator (Converter : Markdown.CONVERTER) (Config : CONFIG) = struct
           match aux with
           | DEF_pragma ("anchor", Pragma_line (arg, _)) ->
               let links = hyperlinks files def in
-              let module_path = get_module_path def_annot in
+              let module_path = get_module_path def_annot.env in
               let anchor_info =
                 { source = doc_loc l Type_check.strip_def Reformatter.doc_def def; comment = def_annot.doc_comment }
               in
