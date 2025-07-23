@@ -152,7 +152,6 @@ def test_coq(name):
     results.expect_failure("poly_mapping.sail", "test requires non-standard hex built-ins")
     results.expect_failure("real.sail", "print_real not available for Coq at present")
     results.expect_failure("real_prop.sail", "random_real not available for Coq at present")
-    results.expect_failure("list_torture.sail", "Coq backend doesn't remove a phantom type parameter")
     results.expect_failure("lib_hex_bits_signed.sail","bug: unable to drop the type variable")
     results.expect_failure("for_shadow.sail","bug: remove_e_assign rewrite assumes <= available")
     results.expect_failure("newtype.sail", "Type definition with a parameter that should be merged, inferred, or made explicit")

@@ -1834,6 +1834,7 @@ let doc_exp, doc_let =
                       | Some (A_aux (A_nexp (Nexp_aux (Nexp_constant _, _)), _)) -> true
                       | _ -> false
                     end
+                  | Some (Nexp_aux (Nexp_constant _, _)) -> true
                   | _ -> false
                 in
                 let typ_from_fn = subst_unifiers inst typ_from_fn in
@@ -3446,9 +3447,10 @@ let doc_funcl_init global proof_mode mutrec rec_opt ?rec_set (FCL_aux (FCL_funcl
   (* Put the constraints after pattern matching so that any type variable that's
      been replaced by one of the term-level arguments is bound. *)
   let quantspp, constrspp = doc_typquant_items_separate ctxt env braces tq in
-  let is_fixed_by_eqn env typ =
+  let is_fixed_constant env typ =
     match destruct_atom_nexp env typ with
     | Some (Nexp_aux (Nexp_var kid, _)) -> KBindings.find_opt kid constant_kids
+    | Some (Nexp_aux (Nexp_constant c, _)) -> Some c
     | _ -> None
   in
   let exp = List.fold_left (fun body f -> f body) (bind exp) binds in
@@ -3463,7 +3465,7 @@ let doc_funcl_init global proof_mode mutrec rec_opt ?rec_set (FCL_aux (FCL_funcl
     match pat_is_plain_binder env pat with
     | Some id -> begin
         let id_pp = match id with Some id -> doc_id ctxt id | None -> underscore in
-        match is_fixed_by_eqn env exp_typ with
+        match is_fixed_constant env exp_typ with
         | Some constant ->
             parens
               (separate space [id_pp; colon; doc_typ ctxt env typ; string ":="; string (Big_int.to_string constant)])
