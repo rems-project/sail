@@ -266,8 +266,8 @@ let print_function_file_prelude file out_name_camel (imp_refs : string list) =
   if !opt_lean_noncomputable then output_string file "noncomputable section\n\n";
   output_string file ("namespace " ^ out_name_camel ^ ".Functions\n\n")
 
-let start_lean_output (out_name : string) (import_names : string list) (import_refs : string list list) default_sail_dir
-    =
+let start_lean_output (out_name : string) (import_names : string list) (import_refs : string list list)
+    (main_import_refs : string list) default_sail_dir =
   let base_dir = match !opt_lean_output_dir with Some dir -> dir | None -> "." in
   let project_dir = Filename.concat base_dir out_name in
   if !opt_lean_force_output && Sys.file_exists project_dir && Sys.is_directory project_dir then (
@@ -286,6 +286,7 @@ let start_lean_output (out_name : string) (import_names : string list) (import_r
   let out_name_camel = Libsail.Util.to_upper_camel_case out_name in
   let import_names_camel = List.map Libsail.Util.to_upper_camel_case import_names in
   let import_refs_camel = List.map (fun rs -> List.map Libsail.Util.to_upper_camel_case rs) import_refs in
+  let main_import_refs_camel = List.map Libsail.Util.to_upper_camel_case main_import_refs in
   let lean_src_dir = Filename.concat project_dir out_name_camel in
   if not (Sys.file_exists lean_src_dir) then Unix.mkdir lean_src_dir 0o775;
   let lean_sail_dir = lean_src_dir ^ "/Sail/" in
@@ -327,7 +328,8 @@ let start_lean_output (out_name : string) (import_names : string list) (import_r
       []
       (List.combine import_files (List.combine import_names_camel import_refs_camel))
   in
-  print_function_file_prelude funcs_file out_name_camel last_import_name;
+  let funcs_file_imports = main_import_refs_camel @ last_import_name in
+  print_function_file_prelude funcs_file out_name_camel funcs_file_imports;
   { out_name; out_name_camel; sail_dir; types_file; funcs_file; import_files; lakefile }
 
 let close_context ctx =
@@ -366,8 +368,8 @@ let rec dedup_files (files : string list) (acc : string list) =
 let output (out_name : string) env effect_info ({ defs; _ } as ast : Libsail.Type_check.typed_ast) default_sail_dir
     single_file noncomputable =
   let cg = Callgraph.graph_of_ast ast in
-  let files, import_sets =
-    if single_file then ([], [])
+  let files, import_sets, main_import_set =
+    if single_file then ([], [], [])
     else (
       let import_sets = Pretty_print_lean.collect_imports cg defs in
       (* Collect all non-empty slices between include pragmas in the file *)
@@ -386,12 +388,11 @@ let output (out_name : string) env effect_info ({ defs; _ } as ast : Libsail.Typ
           )
           import_sets
       in
-      let import_refs = Util.butlast import_refs in
 
-      (import_files, import_refs)
+      (import_files, Util.butlast import_refs, Util.last import_refs)
     )
   in
-  let ctx = start_lean_output out_name files import_sets default_sail_dir in
+  let ctx = start_lean_output out_name files import_sets main_import_set default_sail_dir in
   let out_name_camel = Libsail.Util.to_upper_camel_case out_name in
   let executable =
     Pretty_print_lean.pp_ast_lean env effect_info ast out_name_camel ctx.types_file ctx.import_files ctx.funcs_file
