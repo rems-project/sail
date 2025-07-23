@@ -154,7 +154,6 @@ def test_coq(name):
     results.expect_failure("real_prop.sail", "random_real not available for Coq at present")
     results.expect_failure("fail_assert_mono_bug.sail", "test output checking not supported for Coq yet")
     results.expect_failure("fail_issue203.sail", "test output checking not supported for Coq yet")
-    results.expect_failure("vector_example.sail", "bug: function defs and function calls treat 'len equation differently in Coq backend")
     results.expect_failure("list_torture.sail", "Coq backend doesn't remove a phantom type parameter")
     results.expect_failure("lib_hex_bits_signed.sail","bug: unable to drop the type variable")
     results.expect_failure("for_shadow.sail","bug: remove_e_assign rewrite assumes <= available")
