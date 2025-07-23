@@ -118,7 +118,8 @@ type context = {
      n_constraints with equivalent variables in doc_nc_exp. *)
   kid_id_renames : id option KBindings.t; (* tyvar -> argument renames *)
   kid_id_renames_rev : kid Bindings.t; (* reverse of kid_id_renames *)
-  constant_kids : Nat_big_num.num KBindings.t; (* type variables that should be replaced by a constant definition *)
+  fixed_toplevel_kids : typ_arg KBindings.t;
+      (* type variables that are defined by an equation in the function signature *)
   bound_nvars : KidSet.t;
   build_at_return : string option;
   recursive_fns : (int * int * bool) Bindings.t;
@@ -144,7 +145,7 @@ let empty_ctxt =
     kid_renames = KBindings.empty;
     kid_id_renames = KBindings.empty;
     kid_id_renames_rev = Bindings.empty;
-    constant_kids = KBindings.empty;
+    fixed_toplevel_kids = KBindings.empty;
     bound_nvars = KidSet.empty;
     build_at_return = None;
     recursive_fns = Bindings.empty;
@@ -860,16 +861,11 @@ let doc_lit (L_aux (lit, l)) =
 let doc_quant_item_id ?(prop_vars = false) ctx delimit (QI_aux (qi, _)) =
   match qi with
   | QI_id (KOpt_aux (KOpt_kind (K_aux (kind, _), kid), _)) -> begin
-      if KBindings.mem kid ctx.kid_id_renames then None
+      if KBindings.mem kid ctx.kid_id_renames || KBindings.mem kid ctx.fixed_toplevel_kids then None
       else (
         match kind with
         | K_type -> Some (delimit (separate space [doc_var ctx kid; colon; string "Type"]))
-        | K_int -> begin
-            match KBindings.find_opt kid ctx.constant_kids with
-            | Some value ->
-                Some (parens (separate space [doc_var ctx kid; colon; string "Z :="; string (Big_int.to_string value)]))
-            | None -> Some (delimit (separate space [doc_var ctx kid; colon; string "Z"]))
-          end
+        | K_int -> Some (delimit (separate space [doc_var ctx kid; colon; string "Z"]))
         | K_bool ->
             Some (delimit (separate space [doc_var ctx kid; colon; string (if prop_vars then "Prop" else "bool")]))
       )
@@ -1348,11 +1344,15 @@ type auto_t = Simple | Complex of string | No
 let string_of_auto_t = function No -> "no" | Simple -> "simple" | Complex s -> "complex(" ^ s ^ ")"
 
 let autocast_req ctxt env ?existentials typ1 typ2 typ1_expanded typ2_expanded =
+  let typ1_expanded = Type_check.subst_unifiers ctxt.fixed_toplevel_kids typ1_expanded in
+  let typ2_expanded = Type_check.subst_unifiers ctxt.fixed_toplevel_kids typ2_expanded in
   match (typ1_expanded, typ2_expanded) with
   | ( Typ_aux (Typ_app (Id_aux (Id "bitvector", _), [A_aux (A_nexp n1, _)]), _),
       Typ_aux (Typ_app (Id_aux (Id "bitvector", _), [A_aux (A_nexp n2, _)]), _) ) ->
       if similar_nexps ctxt env ?existentials n1 n2 then No else Simple
   | _ -> (
+      let typ1 = Type_check.subst_unifiers ctxt.fixed_toplevel_kids typ1 in
+      let typ2 = Type_check.subst_unifiers ctxt.fixed_toplevel_kids typ2 in
       match complex_autocast ctxt env ?existentials typ1 typ2 with false, _ -> No | true, s -> Complex s
     )
 
@@ -3365,6 +3365,11 @@ type mutrec_pos = NotMutrec | FirstFn | LaterFn
 let doc_funcl_init global proof_mode mutrec rec_opt ?rec_set (FCL_aux (FCL_funcl (id, pexp), annot)) =
   let env = env_of_tannot (snd annot) in
   let tq, typ = Env.get_val_spec_orig id env in
+
+  (* When printing a function application, we use an instantiation from the type checker.  That will
+     use any simple equations in the constraints, so we substitute them here to match. *)
+  let simple_type_equations = Type_check.instantiate_simple_equations (quant_items tq) in
+  let typ = Type_check.subst_unifiers simple_type_equations typ in
   let arg_typs, ret_typ, _ =
     match typ with
     | Typ_aux (Typ_fn (arg_typs, ret_typ), _) -> (arg_typs, ret_typ, no_effect)
@@ -3388,7 +3393,6 @@ let doc_funcl_init global proof_mode mutrec rec_opt ?rec_set (FCL_aux (FCL_funcl
       (fun kid idopt m -> match idopt with Some id -> Bindings.add id kid m | None -> m)
       kid_to_arg_rename Bindings.empty
   in
-  let simple_type_equations = Type_check.instantiate_simple_equations (quant_items tq) in
   let constant_kids =
     kbindings_filter_map
       (fun kid inst -> match inst with A_aux (A_nexp (Nexp_aux (Nexp_constant value, _)), _) -> Some value | _ -> None)
@@ -3402,7 +3406,7 @@ let doc_funcl_init global proof_mode mutrec rec_opt ?rec_set (FCL_aux (FCL_funcl
       kid_renames = mk_kid_renames global.avoid_target_names ids_to_avoid kids_used;
       kid_id_renames = kid_to_arg_rename;
       kid_id_renames_rev = kir_rev;
-      constant_kids;
+      fixed_toplevel_kids = simple_type_equations;
       bound_nvars = bound_kids;
       build_at_return = None;
       (* filled in below *)
@@ -3479,6 +3483,10 @@ let doc_funcl_init global proof_mode mutrec rec_opt ?rec_set (FCL_aux (FCL_funcl
   let atom_constrs = List.filter_map (atom_constraint ctxt) pats in
   let retpp = if is_monadic then string "M" ^^ space ^^ parens ctxt.ret_typ_pp else doc_typ ctxt env ret_typ in
   let idpp = doc_id ctxt id in
+  let type_equation_pps =
+    KBindings.bindings simple_type_equations
+    |> List.map (fun (kid, typ_arg) -> parens (doc_var ctxt kid ^^ string " := " ^^ doc_typ_arg ctxt env typ_arg))
+  in
   let intropp, accpp, measurepp, fixupspp =
     match rec_opt with
     | Rec_aux (Rec_measure _, _) ->
@@ -3523,7 +3531,7 @@ let doc_funcl_init global proof_mode mutrec rec_opt ?rec_set (FCL_aux (FCL_funcl
           )
   in
   ( group
-      (flow (break 1) ([intropp; idpp] @ quantspp @ [patspp] @ constrspp @ atom_constrs @ accpp)
+      (flow (break 1) ([intropp; idpp] @ quantspp @ [patspp] @ type_equation_pps @ constrspp @ atom_constrs @ accpp)
       ^/^ flow (break 1) (measurepp @ [colon; retpp])
       ),
     ctxt,
@@ -3703,6 +3711,8 @@ let doc_regtype_fields global (tname, (n1, n2, fields)) =
 
 (* Remove some type variables in a similar fashion to merge_kids_atoms *)
 let doc_axiom_typschm typ_env is_monadic l (tqs, typ) =
+  let simple_type_equations = Type_check.instantiate_simple_equations (quant_items tqs) in
+  let typ = Type_check.subst_unifiers simple_type_equations typ in
   let typ_env = Env.add_typquant l tqs typ_env in
   match typ with
   | Typ_aux (Typ_fn (typs, ret_ty), l') ->
@@ -3719,7 +3729,6 @@ let doc_axiom_typschm typ_env is_monadic l (tqs, typ) =
       let args, used = List.fold_left check_typ (KidSet.empty, KidSet.empty) typs in
       let used = if is_number ret_ty then used else KidSet.union used (tyvars_of_typ ret_ty) in
       let kopts, constraints = quant_split tqs in
-      let used = List.fold_left (fun used nc -> KidSet.union used (tyvars_of_constraint nc)) used constraints in
       let tqs =
         match tqs with
         | TypQ_aux (TypQ_tq qs, l) ->
@@ -3746,11 +3755,13 @@ let doc_axiom_typschm typ_env is_monadic l (tqs, typ) =
       in
       let doc_typ' typ =
         match Type_check.destruct_atom_nexp typ_env typ with
+        | Some (Nexp_aux (Nexp_var kid, _)) when KBindings.mem kid simple_type_equations ->
+            let v = KBindings.find kid simple_type_equations in
+            parens (doc_var empty_ctxt kid ^^ string " := " ^^ doc_typ_arg empty_ctxt typ_env v)
         | Some (Nexp_aux (Nexp_var kid, _)) when KidSet.mem kid args -> parens (doc_var empty_ctxt kid ^^ string " : Z")
         (* This case is silly, but useful for tests *)
         | Some (Nexp_aux (Nexp_constant n, _)) ->
-            let v = fresh_var () in
-            parens (v ^^ string " : Z") ^/^ comment (v ^^ string " =? " ^^ string (Big_int.to_string n))
+            parens (underscore ^^ string " : Z := " ^^ string (Big_int.to_string n))
         | _ -> (
             match Type_check.destruct_atom_bool typ_env typ with
             | Some (NC_aux (NC_var kid, _)) when KidSet.mem kid args ->
@@ -3774,8 +3785,8 @@ let doc_val_spec global def_annot unimplemented (VS_aux (VS_val_spec (_, id, _),
     let _, next_env = check_val_spec typ_env def_annot (strip_val_spec vs) in
     let tys = Env.get_val_spec id next_env in
     let is_monadic = not (Effects.function_is_pure id global.effect_info) in
-    group
-      (separate space [string "Axiom"; doc_id bare_ctxt id; colon; doc_axiom_typschm typ_env is_monadic l tys] ^^ dot)
+    nest 2
+      (flow (break 1) [string "Axiom"; doc_id bare_ctxt id; colon; doc_axiom_typschm typ_env is_monadic l tys] ^^ dot)
     ^/^ hardline
   )
   else empty (* Type signatures appear in definitions *)
