@@ -1828,6 +1828,8 @@ let doc_exp, doc_let =
               let doc_arg want_parens arg typ_from_fn =
                 let env = env_of arg in
                 let fixed_ghost_arg =
+                  (not is_extern)
+                  &&
                   match destruct_atom_nexp fn_typ_env typ_from_fn with
                   | Some (Nexp_aux (Nexp_var kid, _)) -> begin
                       match KBindings.find_opt kid simple_type_equations with
