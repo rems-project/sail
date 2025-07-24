@@ -4274,9 +4274,17 @@ end = struct
           string "  | None => \"<impossible>\"";
           string "  end.";
           empty;
-          string "Instance Pretty_greg : Pretty GRegister.greg :=";
-          string "  fun '(GRegister.GReg reg) => string_of_register reg.";
-          empty;
+        ]
+      @ ( match ctxt.global.library_style with
+        | BBV -> []
+        | Stdpp ->
+            [
+              string "Instance Pretty_greg : Pretty GRegister.greg :=";
+              string "  fun '(GRegister.GReg reg) => string_of_register reg.";
+              empty;
+            ]
+        )
+      @ [
           string "Definition register_of_string (s : string) : option GRegister.greg :=";
           string "  match List.find (fun '(s', _r) => String.eqb s s') register_list with";
           string "  | Some (_s, r) => Some r";
