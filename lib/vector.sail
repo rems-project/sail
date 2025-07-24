@@ -164,7 +164,11 @@ val sail_mask : forall 'len 'v, 'len >= 0 & 'v >= 0. (int('len), bits('v)) -> bi
 
 function sail_mask(len, v) = if len <= length(v) then truncate(v, len) else sail_zero_extend(v, len)
 
+/* Note: the old ^ operator won't work for lengths ending in 2 because the special lexing for
+   power-of-two exponentials will override it. */
 overload operator ^ = {sail_mask}
+infix 8 =^
+overload operator =^ = {sail_mask}
 
 val bitvector_concat = pure {
   ocaml: "append",
