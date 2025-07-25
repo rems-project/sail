@@ -1693,7 +1693,7 @@ let check_duplicate_enum_ids ids =
         | Some previous ->
             raise
               (Reporting.err_general
-                 (Hint ("previous occurence here", previous, l))
+                 (Hint ("previous occurrence here", previous, l))
                  (Printf.sprintf "Enumeration member '%s' occurs twice in enum declaration" (string_of_id id))
               )
         | None -> Bindings.add id (id_loc id) seen
