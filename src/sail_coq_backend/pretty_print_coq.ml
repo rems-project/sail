@@ -3497,7 +3497,10 @@ let doc_funcl_init global proof_mode mutrec rec_opt ?rec_set (FCL_aux (FCL_funcl
   let idpp = doc_id ctxt id in
   let type_equation_pps =
     KBindings.bindings simple_type_equations
-    |> List.map (fun (kid, typ_arg) -> parens (doc_var ctxt kid ^^ string " := " ^^ doc_typ_arg ctxt env typ_arg))
+    |> List.filter_map (fun (kid, typ_arg) ->
+           if KidSet.mem kid eliminated_kids then None
+           else Some (parens (doc_var ctxt kid ^^ string " := " ^^ doc_typ_arg ctxt env typ_arg))
+       )
   in
   let intropp, accpp, measurepp, fixupspp =
     match rec_opt with
