@@ -465,8 +465,8 @@ fail:
     exit(EXIT_FAILURE);
 }
 
-void load_elf(const char *filename, bool *is32bit_p, uint64_t *entry) {
-    load_elf_at_offset(filename, false, 0, is32bit_p, entry);
+void load_elf(const char *filename, bool *is32bit_p, uint64_t *entry, bool allow_dyn=false) {
+    load_elf_at_offset(filename, allow_dyn, 0, is32bit_p, entry);
 }
 
 // symbol lookup for very simple ELF files (single symtab, two strtabs): looks up a
