@@ -50,7 +50,7 @@ namespace Out.Functions
 open word_width
 open option
 
-/-- Type quantifiers: k_ex777# : Bool, k_ex776# : Bool -/
+/-- Type quantifiers: k_ex921# : Bool, k_ex920# : Bool -/
 def neq_bool (x : Bool) (y : Bool) : Bool :=
   (! (x == y))
 
@@ -249,6 +249,163 @@ def size_bits3_backwards_matches (arg_ : (BitVec 2)) : Bool :=
   | 01 => true
   | 10 => true
   | 11 => true
+  | _ => false
+
+def ta_flag_forwards (arg_ : String) : SailM (BitVec 1) := do
+  match arg_ with
+  | "ta" => (pure (0b1 : (BitVec 1)))
+  | "tu" => (pure (0b0 : (BitVec 1)))
+  | _ =>
+    (do
+      assert false "Pattern match failure at unknown location"
+      throw Error.Exit)
+
+def ta_flag_backwards (arg_ : (BitVec 1)) : String :=
+  match_bv arg_ with
+  | 1 => "ta"
+  | _ => "tu"
+
+def ta_flag_forwards_matches (arg_ : String) : Bool :=
+  match arg_ with
+  | "ta" => true
+  | "tu" => true
+  | _ => false
+
+def ta_flag_backwards_matches (arg_ : (BitVec 1)) : Bool :=
+  match_bv arg_ with
+  | 1 => true
+  | 0 => true
+  | _ => false
+
+/-- Type quantifiers: k_n : Nat, k_n > 0 -/
+def hex_bits_forwards (bv : (BitVec k_n)) : (Nat × String) :=
+  ((Sail.BitVec.length bv), (Int.toHex (BitVec.toNat bv)))
+
+/-- Type quantifiers: k_n : Nat, k_n > 0 -/
+def hex_bits_forwards_matches (bv : (BitVec k_n)) : Bool :=
+  true
+
+/-- Type quantifiers: tuple_0.1 : Nat, tuple_0.1 > 0 -/
+def hex_bits_backwards (tuple_0 : (Nat × String)) : (BitVec tuple_0.1) :=
+  let (n, str) := tuple_0
+  (parse_hex_bits n str)
+
+/-- Type quantifiers: tuple_0.1 : Nat, tuple_0.1 > 0 -/
+def hex_bits_backwards_matches (tuple_0 : (Nat × String)) : Bool :=
+  let (n, str) := tuple_0
+  (valid_hex_bits n str)
+
+def hex_bits_2_forwards (arg_ : (BitVec 2)) : SailM String := do
+  let head_exp_ := arg_
+  match (match head_exp_ with
+  | mapping0_ =>
+    (match (hex_bits_forwards mapping0_) with
+    | (2, s) => (some s)
+    | _ => none)
+  | _ => none) with
+  | .some result => (pure result)
+  | _ =>
+    (do
+      assert false "Pattern match failure at unknown location"
+      throw Error.Exit)
+
+def hex_bits_2_backwards (arg_ : String) : (BitVec 2) :=
+  match arg_ with
+  | s => (hex_bits_backwards (2, s))
+
+def hex_bits_2_forwards_matches (arg_ : (BitVec 2)) : Bool :=
+  let head_exp_ := arg_
+  match (match head_exp_ with
+  | mapping0_ =>
+    (match (hex_bits_forwards mapping0_) with
+    | (2, s) => (some true)
+    | _ => none)
+  | _ => none) with
+  | .some result => result
+  | none =>
+    (match head_exp_ with
+    | _ => false)
+
+def hex_bits_2_backwards_matches (arg_ : String) : Bool :=
+  match arg_ with
+  | s => true
+  | _ => false
+
+def vtype_assembly_forwards (arg_ : String) : SailM ((BitVec 1) × (BitVec 1)) := do
+  throw Error.Exit
+
+def vtype_assembly_backwards (arg_ : ((BitVec 1) × (BitVec 1))) : SailM String := do
+  match arg_ with
+  | (ta, sew) =>
+    (do
+      bif ((BitVec.access sew 0) == 1#1)
+      then (pure (String.append (ta_flag_backwards sew) (String.append (ta_flag_backwards ta) "")))
+      else (hex_bits_2_forwards ((ta : (BitVec 1)) ++ (sew : (BitVec 1)))))
+
+def vtype_assembly_forwards_matches (arg_ : String) : SailM Bool := do
+  throw Error.Exit
+
+def vtype_assembly_backwards_matches (arg_ : ((BitVec 1) × (BitVec 1))) : Bool :=
+  match arg_ with
+  | (ta, sew) =>
+    (bif ((BitVec.access sew 0) == 1#1)
+    then true
+    else true)
+
+def vtype_assembly2_forwards (arg_ : String) : SailM ((BitVec 1) × (BitVec 1)) := do
+  let head_exp_ := arg_
+  match (let mapping0_ := head_exp_
+  bif (hex_bits_2_backwards_matches mapping0_)
+  then
+    (match_bv (hex_bits_2_backwards mapping0_) with
+    | [ta:1,sew:1] => (some (ta, sew))
+    | _ => none)
+  else none) with
+  | .some result => (pure result)
+  | _ =>
+    (do
+      assert false "Pattern match failure at unknown location"
+      throw Error.Exit)
+
+def vtype_assembly2_backwards (arg_ : ((BitVec 1) × (BitVec 1))) : SailM String := do
+  match arg_ with
+  | (ta, sew) => (hex_bits_2_forwards ((ta : (BitVec 1)) ++ (sew : (BitVec 1))))
+
+def vtype_assembly2_forwards_matches (arg_ : String) : Bool :=
+  let head_exp_ := arg_
+  match (let mapping0_ := head_exp_
+  bif (hex_bits_2_backwards_matches mapping0_)
+  then
+    (match_bv (hex_bits_2_backwards mapping0_) with
+    | [ta:1,sew:1] => (some true)
+    | _ => none)
+  else none) with
+  | .some result => result
+  | none =>
+    (match head_exp_ with
+    | _ => false)
+
+def vtype_assembly2_backwards_matches (arg_ : ((BitVec 1) × (BitVec 1))) : Bool :=
+  match arg_ with
+  | (ta, sew) => true
+  | _ => false
+
+def vtype_assembly3_forwards (arg_ : String) : SailM ((BitVec 1) × (BitVec 1)) := do
+  match arg_ with
+  | _ => throw Error.Exit
+
+def vtype_assembly3_backwards (arg_ : ((BitVec 1) × (BitVec 1))) : String :=
+  match arg_ with
+  | (ta, sew) => (String.append (ta_flag_backwards sew) (String.append (ta_flag_backwards ta) ""))
+
+def vtype_assembly3_forwards_matches (arg_ : String) : SailM Bool := do
+  match arg_ with
+  | _ => throw Error.Exit
+  | _ => (pure false)
+
+def vtype_assembly3_backwards_matches (arg_ : ((BitVec 1) × (BitVec 1))) : Bool :=
+  match arg_ with
+  | (ta, sew) => true
   | _ => false
 
 def initialize_registers (_ : Unit) : Unit :=

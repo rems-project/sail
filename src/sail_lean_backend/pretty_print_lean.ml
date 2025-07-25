@@ -1138,6 +1138,25 @@ let doc_funcl_init global (FCL_aux (FCL_funcl (id, pexp), annot)) =
     fixup_binders
   )
 
+let mapping_regex = Str.regexp "_\\(forward\\|backwards\\)\\(_matches\\)?$"
+
+(* Mappings with string concatenation on the LHS are not translated to
+executable code by sail, so we detect the pattern to replace the forward mapping
+direction by a function that throws an exception. cf #260 *)
+let untranslatable_mapping id exp =
+  let rec exp_disc e =
+    match e with
+    | E_aux (E_let (_, e), _) -> exp_disc e
+    | E_aux (E_app (_, [E_aux (E_exit _, _)]), _) -> true
+    | _ -> false
+  in
+  let rec exp_match e =
+    match e with E_aux (E_let (_, e), _) -> exp_match e | E_aux (E_match (e, _), _) -> exp_disc e | _ -> false
+  in
+
+  let id = string_of_id id in
+  if Str.string_match mapping_regex id 0 then false else exp_match exp
+
 let doc_funcl_body fixup_binders ctx (FCL_aux (FCL_funcl (id, pexp), annot)) =
   let env = env_of_tannot (snd annot) in
   let _, _, exp, _ = destruct_pexp pexp in
@@ -1145,7 +1164,7 @@ let doc_funcl_body fixup_binders ctx (FCL_aux (FCL_funcl (id, pexp), annot)) =
      this adds a let binding at the beginning of the function, of the form [let x := (arg0, arg1)] *)
   let exp = fixup_binders exp in
   let is_monadic = has_effect exp in
-  doc_exp is_monadic (context_with_env ctx env) exp
+  if untranslatable_mapping id exp then string "throw Error.Exit" else doc_exp is_monadic (context_with_env ctx env) exp
 
 let doc_termination ctx fnpat (Rec_aux (meas, _)) =
   match meas with
