@@ -3379,7 +3379,7 @@ let doc_funcl_init global proof_mode mutrec rec_opt ?rec_set (FCL_aux (FCL_funcl
   (* When printing a function application, we use an instantiation from the type checker.  That will
      use any simple equations in the constraints, so we substitute them here to match. *)
   let simple_type_equations = Type_check.instantiate_simple_equations (quant_items tq) in
-  let typ = Type_check.subst_unifiers simple_type_equations typ in
+
   let arg_typs, ret_typ, _ =
     match typ with
     | Typ_aux (Typ_fn (arg_typs, ret_typ), _) -> (arg_typs, ret_typ, no_effect)
@@ -3467,6 +3467,7 @@ let doc_funcl_init global proof_mode mutrec rec_opt ?rec_set (FCL_aux (FCL_funcl
   let used_a_pattern = ref false in
   let doc_binder ((P_aux (p, ann) as pat), typ) =
     let env = env_of_annot ann in
+    let typ = Type_check.subst_unifiers simple_type_equations typ in
     let exp_typ = Env.expand_synonyms env typ in
     let () =
       debug ctxt (lazy (" pattern " ^ string_of_pat pat));
