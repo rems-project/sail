@@ -120,6 +120,7 @@ type context = {
   kid_id_renames_rev : kid Bindings.t; (* reverse of kid_id_renames *)
   fixed_toplevel_kids : typ_arg KBindings.t;
       (* type variables that are defined by an equation in the function signature *)
+  dropped_kids : KidSet.t; (* type variables from the function signature that don't appear in the generated code *)
   bound_nvars : KidSet.t;
   build_at_return : string option;
   recursive_fns : (int * int * bool) Bindings.t;
@@ -146,6 +147,7 @@ let empty_ctxt =
     kid_id_renames = KBindings.empty;
     kid_id_renames_rev = Bindings.empty;
     fixed_toplevel_kids = KBindings.empty;
+    dropped_kids = KidSet.empty;
     bound_nvars = KidSet.empty;
     build_at_return = None;
     recursive_fns = Bindings.empty;
@@ -861,7 +863,11 @@ let doc_lit (L_aux (lit, l)) =
 let doc_quant_item_id ?(prop_vars = false) ctx delimit (QI_aux (qi, _)) =
   match qi with
   | QI_id (KOpt_aux (KOpt_kind (K_aux (kind, _), kid), _)) -> begin
-      if KBindings.mem kid ctx.kid_id_renames || KBindings.mem kid ctx.fixed_toplevel_kids then None
+      if
+        KBindings.mem kid ctx.kid_id_renames
+        || KBindings.mem kid ctx.fixed_toplevel_kids
+        || KidSet.mem kid ctx.dropped_kids
+      then None
       else (
         match kind with
         | K_type -> Some (delimit (separate space [doc_var ctx kid; colon; string "Type"]))
@@ -1900,7 +1906,8 @@ let doc_exp, doc_let =
                 | Some (Nexp_aux (Nexp_var _, _)), Some (Nexp_aux (Nexp_constant c, _)) -> string (Big_int.to_string c)
                 (* If an integer argument is the same as a type variable, but we couldn't merge them, then use the type variable to ensure that the result type won't be the wrong one. *)
                 | Some (Nexp_aux (Nexp_var v, _)), _
-                  when KidSet.mem v ctxt.bound_nvars && not (KBindings.mem v ctxt.kid_id_renames) ->
+                  when KidSet.mem v ctxt.bound_nvars
+                       && not (KBindings.mem v ctxt.kid_id_renames || KidSet.mem v ctxt.dropped_kids) ->
                     doc_var ctxt v
                 | _ ->
                     let inner_parens, outer_parens =
@@ -3410,6 +3417,7 @@ let doc_funcl_init global proof_mode mutrec rec_opt ?rec_set (FCL_aux (FCL_funcl
       kid_id_renames = kid_to_arg_rename;
       kid_id_renames_rev = kir_rev;
       fixed_toplevel_kids = simple_type_equations;
+      dropped_kids = KidSet.diff bound_kids (coq_nvars_of_typ typ);
       bound_nvars = bound_kids;
       build_at_return = None;
       (* filled in below *)
