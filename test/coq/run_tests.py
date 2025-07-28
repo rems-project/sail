@@ -36,7 +36,6 @@ def test(name, dir, lib):
     results.expect_failure('try_while_try.sail', 'TODO, add termination measure')
     results.expect_failure('no_val_recur.sail', 'TODO, add termination measure')
     results.expect_failure('phantom_option.sail', 'Type variables that need to be filled in')
-    results.expect_failure('plus_one_unify.sail', 'Type variables that need to be filled in')
     results.expect_failure('rebind.sail', 'Variable shadowing')
     results.expect_failure('exist_tlb.sail', 'Existential that requires more type information')
     results.expect_failure('type_div.sail', 'Essential use of an equality constraint in the context')
