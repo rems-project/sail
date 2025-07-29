@@ -655,7 +655,7 @@ let slice_instantiation_types sail_dir ast =
   let ast = filter_ast_extra NodeSet.empty g ast false in
   filter_library_files sail_dir ast
 
-let partition_instantiation_definitions defs =
+let partition_instantiation_definitions include_types defs =
   let module NodeMap = Map.Make (Node) in
   let module G = Graph.Make (Node) in
   let g = graph_of_defs defs in
@@ -664,9 +664,14 @@ let partition_instantiation_definitions defs =
     |> List.filter_map (function
          | DEF_aux (DEF_instantiation (_, substs), _) ->
              Some
-               (List.filter_map
-                  (function IS_aux (IS_typ _, _) -> None | IS_aux (IS_id (_, id_to), _) -> Some (Function id_to))
+               (List.map
+                  (function
+                    | IS_aux (IS_typ (_, arg), _) ->
+                        if include_types then typ_arg_ids arg |> IdSet.elements |> List.map (fun id -> Type id) else []
+                    | IS_aux (IS_id (_, id_to), _) -> [Function id_to]
+                    )
                   substs
+               |> List.concat
                )
          | _ -> None
          )

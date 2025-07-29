@@ -4577,8 +4577,9 @@ let calculate_type_rewrite env =
   let clashes = IdSet.filter (Env.bound_typ_id env) constructors in
   IdSet.fold (fun id m -> Bindings.add id (append_id id "_typ") m) clashes Bindings.empty
 
-let pp_ast_coq library_style (types_file, types_modules) (defs_file, defs_modules) type_defs_module opt_coq_isla ctx
-    effect_info type_env ({ defs; _ } as ast) concurrency_monad_params top_line suppress_MR_M =
+let pp_ast_coq library_style (types_file, types_modules) (interface_file, interface_modules) (defs_file, defs_modules)
+    type_defs_module opt_coq_isla ctx effect_info type_env ({ defs; _ } as ast) concurrency_monad_params top_line
+    suppress_MR_M =
   try
     let is_typ_def = function DEF_aux (DEF_type _, _) -> true | _ -> false in
     let exc_typ = find_exc_typ defs in
@@ -4767,11 +4768,9 @@ let pp_ast_coq library_style (types_file, types_modules) (defs_file, defs_module
       )
     in
 
-    let typdefs, defs = List.partition is_typ_def defs in
-    let inst_defs, main_defs = Callgraph.partition_instantiation_definitions defs in
-    let typdefs = typdefs @ inst_defs in
-
-    let enum_fn_map, enum_fn_set = enum_fn_names typdefs in
+    (* Separate out the functions between enums and numbers so that they can be presented alongside
+       the type definitions. *)
+    let enum_fn_map, enum_fn_set = enum_fn_names defs in
     let enum_number_defs, defs =
       let doc_def = doc_def global unimplemented generic_eq_types countable_types (Bindings.empty, Bindings.empty) in
       Util.map_split
@@ -4788,6 +4787,11 @@ let pp_ast_coq library_style (types_file, types_modules) (defs_file, defs_module
       (enum_fn_map, List.fold_left (fun m (id, def_pp) -> Bindings.add id def_pp m) Bindings.empty enum_number_defs)
     in
 
+    let separate_interface_file = Option.is_some interface_file in
+    let inst_defs, defs = Callgraph.partition_instantiation_definitions separate_interface_file defs in
+    let typdefs, defs = List.partition is_typ_def defs in
+    let typdefs = if not separate_interface_file then typdefs @ inst_defs else typdefs in
+
     let doc_def = doc_def global unimplemented generic_eq_types countable_types enum_number_defs in
     let () =
       if !opt_undef_axioms || IdSet.is_empty unimplemented then ()
@@ -4797,6 +4801,48 @@ let pp_ast_coq library_style (types_file, types_modules) (defs_file, defs_module
           ^ String.concat "\n" (List.map string_of_id (IdSet.elements unimplemented))
           )
     in
+    Option.iter
+      (fun interface_file ->
+        (print interface_file)
+          (separate hardline
+             ([
+                string "(*" ^^ string top_line ^^ string "*)";
+                hardline;
+                ( match library_style with
+                | BBV -> empty
+                | Stdpp ->
+                    separate hardline
+                      [string "From stdpp Require Import base countable pretty."; string "Require Eqdep."]
+                );
+                (separate_map hardline)
+                  (fun lib -> separate space [string "Require Import"; string lib] ^^ dot)
+                  interface_modules;
+                ( if !opt_coq_record_update then
+                    string "From RecordUpdate Require Import RecordSet."
+                    ^^ hardline ^^ string "Import RecordSetNotations." ^^ hardline
+                  else empty
+                );
+                string "Import ListNotations.";
+                string "Open Scope string.";
+                string "Open Scope bool.";
+                string "Open Scope Z.";
+                empty;
+                separate empty (List.map doc_def inst_defs);
+                empty;
+              ]
+             @
+             if !opt_generate_extern_types then []
+             else
+               [
+                 NewRegisters.doc_reg_info global type_env registers;
+                 string "(* Instantiate library definitions with types. *)";
+                 empty;
+                 interface_defs;
+               ]
+             )
+          )
+      )
+      interface_file;
     (print types_file)
       (separate hardline
          ([
@@ -4824,7 +4870,7 @@ let pp_ast_coq library_style (types_file, types_modules) (defs_file, defs_module
             empty;
           ]
          @
-         if !opt_generate_extern_types then []
+         if !opt_generate_extern_types || Option.is_some interface_file then []
          else
            [
              NewRegisters.doc_reg_info global type_env registers;
