@@ -25,7 +25,7 @@ ifdef TARBALL_EXTRA_BIN
 	cp $(TARBALL_EXTRA_BIN) _build/tarball/sail/bin/
 endif
 	cp lib/coverage/libsail_coverage.a _build/tarball/sail/share/sail/lib/coverage/
-	tar czvf _build/sail.tar.gz -C _build/tarball sail
+	tar czvf _build/sail-$(shell uname -s)-$(shell uname -m).tar.gz -C _build/tarball sail
 
 coverage:
 	dune build --release --instrument-with bisect_ppx

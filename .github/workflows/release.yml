@@ -14,11 +14,18 @@ jobs:
     strategy:
       matrix:
         include:
-          - name: linux-amd64
+          - name: Linux-x86_64
             os: ubuntu-latest
             container: rockylinux:8
             ocaml_version: 5.2.1
+            opam_arch: i686
             opam_cache_key: rocky8-5.2.1
+          - name: Linux-aarch64
+            os: ubuntu-24.04-arm
+            container: rockylinux:8
+            ocaml_version: 5.2.1
+            opam_arch: arm64
+            opam_cache_key: rocky8-5.2.1-arm
           # MacOS disabled for now due to code signing and notarisation requirements
           # - name: mac-arm64 */
           #   os: macos-latest */
@@ -58,7 +65,7 @@ jobs:
           rsync \
           which \
           cargo
-        curl -L -o /usr/local/bin/opam https://github.com/ocaml/opam/releases/download/2.1.5/opam-2.1.5-i686-linux
+        curl -L -o /usr/local/bin/opam https://github.com/ocaml/opam/releases/download/2.1.5/opam-2.1.5-${{ matrix.opam_arch }}-linux
         chmod +x /usr/local/bin/opam
 
     - name: System dependencies (Mac)
@@ -130,10 +137,10 @@ jobs:
 
     - uses: actions/attest-build-provenance@v1
       with:
-        subject-path: _build/sail.tar.gz
+        subject-path: _build/sail-${{ matrix.name }}.tar.gz
 
     - name: Upload tarball
       uses: actions/upload-artifact@v4
       with:
         name: sail-${{ matrix.name }}
-        path: _build/sail.tar.gz
+        path: _build/sail-${{ matrix.name }}.tar.gz
