@@ -50,6 +50,8 @@ open Ast
 open Ast_defs
 open Ast_util
 
+val opt_debug_callgraph : string option ref
+
 type node =
   | Register of id
   | Function of id

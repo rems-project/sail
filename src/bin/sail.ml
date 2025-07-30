@@ -377,6 +377,10 @@ let rec options =
       ("-ddump_side_effect", Arg.Set Frontend.opt_ddump_side_effect, " (debug) dump side effect info");
       ("-dtc_verbose", Arg.Int Type_check.set_tc_debug, "<verbosity> (debug) verbose typechecker output: 0 is silent");
       ("-dsmt_verbose", Arg.Set Constraint.opt_smt_verbose, " (debug) print SMTLIB constraints sent to SMT solver");
+      ( "-dcallgraph",
+        Arg.String (fun str -> Callgraph.opt_debug_callgraph := Some str),
+        "<file> (debug) dump callgraph to file"
+      );
       ("-dmagic_hash", Arg.Set Initial_check.opt_magic_hash, " (debug) allow special character # in identifiers");
       ("-dno_error_filenames", Arg.Set Error_format.opt_debug_no_filenames, " (debug) do not print filenames in errors");
       ( "-dprofile",
