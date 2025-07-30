@@ -135,6 +135,22 @@ let fp16_neg_denormal_add_1_op_0 = 0x83ff
 let fp16_neg_denormal_add_1_op_1 = 0x8002
 let fp16_neg_denormal_add_1_sum  = 0x8401
 
+let fp16_pos_diff_exp_add_0_op_0 = 0x7b23
+let fp16_pos_diff_exp_add_0_op_1 = 0x7cf1
+let fp16_pos_diff_exp_add_0_sum  = 0x7ef1
+
+let fp16_neg_diff_exp_add_0_op_0 = 0xfb23
+let fp16_neg_diff_exp_add_0_op_1 = 0xffc0
+let fp16_neg_diff_exp_add_0_sum  = 0xffc0
+
+let fp16_pos_diff_exp_add_1_op_0 = 0x7b23
+let fp16_pos_diff_exp_add_1_op_1 = 0x7f80
+let fp16_pos_diff_exp_add_1_sum  = 0x7c00
+
+let fp16_neg_diff_exp_add_1_op_0 = 0xfb23
+let fp16_neg_diff_exp_add_1_op_1 = 0xfc00
+let fp16_neg_diff_exp_add_1_sum  = 0xfc00
+
 /* Single floating point */
 let fp32_pos_snan_0      = 0x7f800001
 let fp32_pos_snan_1      = 0x7f8f0000
@@ -259,6 +275,22 @@ let fp32_neg_denormal_add_0_sum  = 0x80100020
 let fp32_neg_denormal_add_1_op_0 = 0x807fffff
 let fp32_neg_denormal_add_1_op_1 = 0x80000002
 let fp32_neg_denormal_add_1_sum  = 0x80800001
+
+let fp32_pos_diff_exp_add_0_op_0 = 0x7c01293d
+let fp32_pos_diff_exp_add_0_op_1 = 0x7f8f0001
+let fp32_pos_diff_exp_add_0_sum  = 0x7fcf0001
+
+let fp32_neg_diff_exp_add_0_op_0 = 0xfb230000
+let fp32_neg_diff_exp_add_0_op_1 = 0xffff0000
+let fp32_neg_diff_exp_add_0_sum  = 0xffff0000
+
+let fp32_pos_diff_exp_add_1_op_0 = 0x7b21dac4
+let fp32_pos_diff_exp_add_1_op_1 = 0x7ffe0000
+let fp32_pos_diff_exp_add_1_sum  = 0x7f800000
+
+let fp32_neg_diff_exp_add_1_op_0 = 0xf0137dea
+let fp32_neg_diff_exp_add_1_op_1 = 0xff800000
+let fp32_neg_diff_exp_add_1_sum  = 0xff800000
 
 /* Double floating point */
 let fp64_pos_snan_0      = 0x7ff0000000000001
@@ -385,6 +417,22 @@ let fp64_neg_denormal_add_1_op_0 = 0x800fffffffffffff
 let fp64_neg_denormal_add_1_op_1 = 0x8000000000000002
 let fp64_neg_denormal_add_1_sum  = 0x8010000000000001
 
+let fp64_pos_diff_exp_add_0_op_0 = 0x7c0abe312d21293d
+let fp64_pos_diff_exp_add_0_op_1 = 0x7ff7700000000001
+let fp64_pos_diff_exp_add_0_sum  = 0x7fff700000000001
+
+let fp64_neg_diff_exp_add_0_op_0 = 0xfb23000de2382100
+let fp64_neg_diff_exp_add_0_op_1 = 0xfffffc0103821191
+let fp64_neg_diff_exp_add_0_sum  = 0xfffffc0103821191
+
+let fp64_pos_diff_exp_add_1_op_0 = 0x7b21da992de2a2c4
+let fp64_pos_diff_exp_add_1_op_1 = 0x7ffef00000000000
+let fp64_pos_diff_exp_add_1_sum  = 0x7ff0000000000000
+
+let fp64_neg_diff_exp_add_1_op_0 = 0xf0137dea282de121
+let fp64_neg_diff_exp_add_1_op_1 = 0xfff0000000000000
+let fp64_neg_diff_exp_add_1_sum  = 0xfff0000000000000
+
 /* Quad floating point */
 let fp128_pos_snan_0     = 0x7fff0000000000000000000000000001
 let fp128_pos_snan_1     = 0x7fff000000000000ff00000000000000
@@ -509,5 +557,21 @@ let fp128_neg_denormal_add_0_sum  = 0x80001000000000000000000000000090
 let fp128_neg_denormal_add_1_op_0 = 0x8000ffffffffffffffffffffffffffff
 let fp128_neg_denormal_add_1_op_1 = 0x80000000000000000000000000000003
 let fp128_neg_denormal_add_1_sum  = 0x80010000000000000000000000000002
+
+let fp128_pos_diff_exp_add_0_op_0 = 0x7c0abe312282812dedacd9212d21293d
+let fp128_pos_diff_exp_add_0_op_1 = 0x7fff700000000000ddde000000000001
+let fp128_pos_diff_exp_add_0_sum  = 0x7ffff00000000000ddde000000000001
+
+let fp128_neg_diff_exp_add_0_op_0 = 0xfb2300838de88128dc82120de2382100
+let fp128_neg_diff_exp_add_0_op_1 = 0xffffffff0382119192922111dde21223
+let fp128_neg_diff_exp_add_0_sum  = 0xffffffff0382119192922111dde21223
+
+let fp128_pos_diff_exp_add_1_op_0 = 0x7b21da992dd999292847221923e2a2c4
+let fp128_pos_diff_exp_add_1_op_1 = 0x7fffffe0000000000000000000000000
+let fp128_pos_diff_exp_add_1_sum  = 0x7fff0000000000000000000000000000
+
+let fp128_neg_diff_exp_add_1_op_0 = 0xf0137dea282de12727deac6e6e631231
+let fp128_neg_diff_exp_add_1_op_1 = 0xffffff80000000000000000000000000
+let fp128_neg_diff_exp_add_1_sum  = 0xffff0000000000000000000000000000
 
 $endif

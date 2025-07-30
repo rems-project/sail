@@ -123,11 +123,24 @@ function float_compose_after_round (sign, exp, mantissa, increment, rounding_mod
   (sign @ exp_and_mantissa, eflag);
 }
 
+val      float_get_sign_with_all_ones_exp : forall 'n, 'n in {16, 32, 64, 128}.
+  (bits(1), bits('n)) -> bits('n)
+function float_get_sign_with_all_ones_exp (sign, op) = {
+  let bitsize = length (op);
+  let fp = float_decompose (op);
+  let one = sail_zero_extend ([bitone], bitsize);
+  let all_ones = sub_bits (sail_shiftleft (one, length (fp.exp)), one);
+  let all_ones_exp = sail_shiftleft (all_ones, length (fp.mantissa));
+
+  sign @ truncate (all_ones_exp, bitsize - 1);
+}
+
 val      float_round_and_compose : forall 'n, 'n in {16, 32, 64, 128}.
   (bits(1), bits('n), bits('n), fp_rounding_modes) -> (bits('n), fp_exception_flags)
 function float_round_and_compose (sign, exp, mantissa, rounding_mode) = {
-  let fp = float_decompose (mantissa);
-  let bitsize = length (mantissa);
+  let op = mantissa;
+  let fp = float_decompose (op);
+  let bitsize = length (op);
   let one = sail_zero_extend ([bitone], bitsize);
   let zero = sail_zero_extend ([bitzero], bitsize);
   let three = sail_zero_extend ([bitone, bitone], bitsize);
@@ -142,9 +155,7 @@ function float_round_and_compose (sign, exp, mantissa, rounding_mode) = {
     > unsigned (mantissa) + unsigned(increment));
 
   if exp_reach_limit & (exp_overflow | mantissa_overflow) then {
-    let all_ones_exp = sub_bits (sail_shiftleft (one, length (fp.exp)), one);
-    let exp_and_mantissa = sail_shiftleft (all_ones_exp, length (fp.mantissa));
-    let result = sign @ truncate (exp_and_mantissa, bitsize - 1);
+    let result = float_get_sign_with_all_ones_exp (sign, op);
     let tail = if is_all_zeros (increment) then one else zero;
 
     (sub_bits (result, tail), fp_eflag_overflow_and_inexact)
@@ -209,6 +220,47 @@ function float_add_same_exp (op_0, op_1) = {
     float_add_same_exp_internal (op_0, op_1);
 }
 
+val      float_add_less_than_exp: forall 'n, 'n in {16, 32, 64, 128}.
+  (bits('n), bits('n)) -> (bits('n), fp_exception_flags)
+function float_add_less_than_exp (op_0, op_1) = {
+  let bitsize = length (op_0);
+  let fp_0 = float_decompose (op_0);
+  let fp_1 = float_decompose (op_1);
+
+  assert (unsigned (fp_0.exp) < unsigned (fp_1.exp),
+    "The exp of floating point op_0 must be less than op_1.");
+
+  let is_exp_all_ones = is_all_ones (fp_1.exp);
+  let mantissa_shift = sail_shiftleft (fp_1.mantissa, length (fp_1.exp) - 2);
+  let is_nan = not (is_all_zeros (mantissa_shift));
+
+  if is_exp_all_ones & is_nan then
+    float_propagate_nan (op_0, op_1)
+  else if is_exp_all_ones then {
+    (float_get_sign_with_all_ones_exp (fp_0.sign, op_0), fp_eflag_none)
+  } else {
+    assert (false, "Not implemented yet.");
+    (sail_zeros ('n), fp_eflag_none);
+  }
+}
+
+val      float_add_diff_exp: forall 'n, 'n in {16, 32, 64, 128}.
+  (bits('n), bits('n)) -> (bits('n), fp_exception_flags)
+function float_add_diff_exp (op_0, op_1) = {
+  let bitsize = length (op_0);
+  let fp_0 = float_decompose (op_0);
+  let fp_1 = float_decompose (op_1);
+
+  assert (fp_0.exp != fp_1.exp, "The exp of floating point cannot be same.");
+
+  if unsigned (fp_0.exp) < unsigned (fp_1.exp) then
+    float_add_less_than_exp (op_0, op_1)
+  else {
+    assert (false, "Not implemented yet.");
+    (sail_zeros ('n), fp_eflag_none);
+  }
+}
+
 val      float_add_internal : forall 'n, 'n in {16, 32, 64, 128}.
   (bits('n), bits('n)) -> (bits('n), fp_exception_flags)
 function float_add_internal (op_0, op_1) = {
@@ -220,10 +272,8 @@ function float_add_internal (op_0, op_1) = {
 
   if fp_0.exp == fp_1.exp then
     float_add_same_exp (op_0, op_1)
-  else {
-    assert (false, "Not implemented yet.");
-    (sail_zeros ('n), fp_eflag_none);
-  }
+  else
+    float_add_diff_exp (op_0, op_1)
 }
 
 val      float_sub_internal : forall 'n, 'n in {16, 32, 64, 128}.
