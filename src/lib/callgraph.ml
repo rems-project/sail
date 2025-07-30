@@ -49,6 +49,8 @@ open Ast_defs
 open Ast_util
 open Rewriter
 
+let opt_debug_callgraph = ref None
+
 type node =
   | Register of id
   | Function of id
@@ -84,6 +86,18 @@ let node_kind = function
   | FunctionMeasure _ -> 7
   | LoopMeasures _ -> 8
   | Outcome _ -> 9
+
+let node_color = function
+  | Register _ -> "firebrick1"
+  | Function _ -> "gray90"
+  | Mapping _ -> "beige"
+  | Letbind _ -> "darkorchid1"
+  | Type _ -> "aquamarine"
+  | Overload _ -> "coral"
+  | Constructor _ -> "chartreuse"
+  | FunctionMeasure _ -> "darkseagreen"
+  | LoopMeasures _ -> "peachpuff"
+  | Outcome _ -> "olive"
 
 module Node = struct
   type t = node
@@ -128,7 +142,7 @@ and typ_ids' (Typ_aux (aux, _)) =
   | Typ_fn (typs, typ) -> IdSet.union (typ_ids' typ) (List.fold_left IdSet.union IdSet.empty (List.map typ_ids' typs))
   | Typ_bidir (typ1, typ2) -> IdSet.union (typ_ids' typ1) (typ_ids' typ2)
   | Typ_tuple typs -> List.fold_left IdSet.union IdSet.empty (List.map typ_ids' typs)
-  | Typ_exist (_, _, typ) -> typ_ids' typ
+  | Typ_exist (_, nc, typ) -> IdSet.union (constraint_ids' nc) (typ_ids' typ)
 
 and typ_arg_ids' (A_aux (aux, _)) =
   match aux with A_typ typ -> typ_ids' typ | A_nexp nexp -> nexp_ids' nexp | A_bool nc -> constraint_ids' nc
@@ -547,6 +561,16 @@ let top_sort_defs ast =
   in
   (* Build callgraph, and collect definitions per node, so that we can efficiently reorder later *)
   let g = graph_of_ast ast in
+  ( match !opt_debug_callgraph with
+  | Some out ->
+      let chan = open_out out in
+      G.make_dot ~node_color
+        ~edge_color:(fun _ _ -> "black")
+        ~string_of_node:(fun id -> string_of_id (node_id id))
+        chan g;
+      close_out chan
+  | None -> ()
+  );
   let defs_of_nodes =
     let add defs d =
       let update_node defs n = NM.update n (function Some ds -> Some (d :: ds) | None -> Some [d]) defs in
