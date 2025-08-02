@@ -54,7 +54,7 @@ namespace Out.Functions
 open option
 open Register
 
-/-- Type quantifiers: k_ex2238# : Bool, k_ex2237# : Bool -/
+/-- Type quantifiers: k_ex2414# : Bool, k_ex2413# : Bool -/
 def neq_bool (x : Bool) (y : Bool) : Bool :=
   (! (x == y))
 
@@ -268,6 +268,27 @@ def while_print (_ : Unit) : Unit := Id.run do
       let i := loop_vars
       loop_vars := ((i +i 1) : Int)
     (pure loop_vars) ) : Id Int )
+  (pure (print_int "i = " i))
+
+def while_print_fuel (_ : Unit) : SailM Unit := do
+  let i : Int := 0
+  let i ← (( do
+    let loop_vars ← whileFuelM (fuel :=100) (fun i => (pure (i <b 100))) i
+      fun i => do
+        assert true "loop dummy assert"
+        (pure (i +i 1))
+    (pure loop_vars) ) : SailM Int )
+  (pure (print_int "i = " i))
+
+/-- Type quantifiers: n : Int -/
+def until_print_fuel (n : Int) : SailM Unit := do
+  let i : Int := 0
+  let i ← (( do
+    let loop_vars ← untilFuelM (fuel :=n) (fun i => (pure (i <b 100))) i
+      fun i => do
+        assert true "loop dummy assert"
+        (pure (i +i 1))
+    (pure loop_vars) ) : SailM Int )
   (pure (print_int "i = " i))
 
 def while_print_long (_ : Unit) : Unit := Id.run do

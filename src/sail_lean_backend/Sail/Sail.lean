@@ -538,6 +538,7 @@ def sailTryCatchE (e : ExceptT β (PreSailM RegisterType c ue) α) (h : ue → E
 
 end Regs
 
+
 end PreSail
 
 namespace Sail
@@ -560,6 +561,24 @@ def main_of_sail_main (initialState : SequentialState RegisterType c) (main : Un
     return 1
 
 end Sail
+
+def whileFuelM {α} [Monad m] (fuel : Nat) (cond : α → m Bool) (init : α) (f : α → m α)  :=
+  let rec go x n := do
+    match n with
+    | 0 => pure x
+    | n+1 =>
+      if ←cond x then go (←f x) n else pure x
+  go init fuel
+
+def untilFuelM {α} [Monad m] (fuel : Nat) (cond : α → m Bool) (init : α) (f : α → m α)  :=
+  let rec go x n := do
+    match n with
+    | 0 => pure x
+    | n+1 =>
+      let x ← f x
+      if ←cond x then pure x else go x n
+  go init fuel
+
 
 instance : CoeT Int x Nat where
   coe := x.toNat
@@ -627,3 +646,4 @@ macro_rules | `(tactic| decreasing_trivial) => `(tactic|
 -- termination.
 @[wf_preprocess]
 theorem cond_eq_ite (b : Bool) (x y : α) : cond b x y = ite b x y := by cases b <;> rfl
+

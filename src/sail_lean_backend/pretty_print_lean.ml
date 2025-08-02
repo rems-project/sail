@@ -635,7 +635,8 @@ let op_of_id id =
 
 let unnop_of_id id = match id with Some "_lean_pow2" -> Some "2 ^ " | _ -> None
 
-let is_loop id = match string_of_id id with "while#" | "foreach#" | "until#" -> true | _ -> false
+let is_loop id =
+  match string_of_id id with "while#" | "while#t" | "foreach#" | "until#" | "until#t" -> true | _ -> false
 
 let has_loop (e : 'a exp) =
   let e_app (id, args) = is_loop id || List.fold_left ( || ) false args in
@@ -721,6 +722,7 @@ and wrap_exp as_monadic ctx e =
       | _ -> d
     )
 
+(* TODO: refactor this function *)
 and doc_loop l as_monadic ctx loop_kind args =
   let lambda effects lambda_pp d =
     let lambda_pp = if effects then lambda_pp ^^ string " do" else lambda_pp in
@@ -759,6 +761,7 @@ and doc_loop l as_monadic ctx loop_kind args =
   let cond_pp = doc_exp cond_effects ctx cond in
   let cond_pp = lambda cond_effects base_lambda cond_pp in
   let loop_cond = wrap_with_left_arrow cond_effects (prefix 2 1 cond_pp vars_pp) in
+  let measure = Option.map (fun m -> parens (string "fuel :=" ^^ doc_exp false ctx m)) measure in
   match loop_kind with
   | `While ->
       let loop_head = prefix 2 1 (string "while " ^^ loop_cond) (string "do") in
@@ -767,6 +770,19 @@ and doc_loop l as_monadic ctx loop_kind args =
       let loop_body = loop_body_1 ^^ hardline ^^ prefix 2 1 (vars_pp ^^ space ^^ arrow) body_pp in
       let full_loop = prefix 2 1 loop_head loop_body in
       separate hardline [vars_dec_pp; full_loop; wrap_with_pure as_monadic vars_pp]
+  | `WhileFuel | `UntilFuel ->
+      let measure = Option.get measure in
+      let cond_pp = parens (string "fun " ^^ vartuple_pp ^^ string " => " ^^ doc_exp true ctx cond) in
+      let init = doc_exp false ctx varstuple in
+      let loop_fn = match loop_kind with `WhileFuel -> "whileFuelM" | _ -> "untilFuelM" in
+      let loop_head = string loop_fn ^^ space ^^ measure ^^ space ^^ cond_pp ^^ space ^^ init in
+      let arrow = if body_effects then leftarrowdo else coloneq in
+      let fun_header = string "fun " ^^ vartuple_pp ^^ space ^^ string "=> do" in
+      let body_pp = doc_exp true body_ctx body in
+      let loop_body = prefix 2 1 fun_header body_pp in
+      let full_loop = prefix 2 1 loop_head loop_body in
+      let full_loop = string "let" ^^ space ^^ vars_pp ^^ space ^^ leftarrow ^^ space ^^ full_loop in
+      separate hardline [full_loop; wrap_with_pure as_monadic vars_pp]
   | `Until ->
       let loop_head = string "repeat" in
       let loop_footer = flow (break 1) [string "until"; loop_cond] in
@@ -812,7 +828,9 @@ and doc_exp (as_monadic : bool) ctx (E_aux (e, (l, annot)) as full_exp) =
         )
   | E_app (Id_aux (Id "__id", _), [e]) -> doc_exp as_monadic ctx e
   | E_app (Id_aux (Id "while#", _), args) -> doc_loop l as_monadic ctx `While args
+  | E_app (Id_aux (Id "while#t", _), args) -> doc_loop l as_monadic ctx `WhileFuel args
   | E_app (Id_aux (Id "until#", _), args) -> doc_loop l as_monadic ctx `Until args
+  | E_app (Id_aux (Id "until#t", _), args) -> doc_loop l as_monadic ctx `UntilFuel args
   | E_app (Id_aux (Id "foreach#", _), args) -> begin
       match args with
       | [from_exp; to_exp; step_exp; ord_exp; vartuple; body] ->
