@@ -64,9 +64,13 @@ git pull
 opam reinstall sail
 ```
 
-To remove the pin and revert to the latest released opam package type:
+To remove the pin and revert to the latest released opam package type, run in the parrent dir of sail:
 ```
 opam pin remove sail
+```
+or run it in sail dir.
+```
+opam pin remove .
 ```
 
 ### Building from source (without opam)
