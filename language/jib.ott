@@ -79,6 +79,7 @@ chan :: 'Chan_' ::=
 name :: '' ::=
   | nat0 nat1 nat2        :: :: gen
   | id nat                :: :: name
+  | abstract id           :: :: abstract
   | have_exception nat    :: :: have_exception
   | current_exception nat :: :: current_exception
   | throw_location nat    :: :: throw_location
@@ -100,7 +101,6 @@ op :: '' ::=
   | eq                :: :: eq
   | neq               :: :: neq
   | ite               :: :: ite
-  | get_abstract      :: :: get_abstract
   | string_eq         :: :: string_eq
   | index nat         :: :: index
 % Integer ops

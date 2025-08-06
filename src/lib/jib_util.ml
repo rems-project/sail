@@ -79,6 +79,7 @@ module Name = struct
     | Name (x, n), Name (y, m) ->
         let c1 = Id.compare x y in
         if c1 = 0 then Int.compare n m else c1
+    | Abstract x, Abstract y -> Id.compare x y
     | Have_exception n, Have_exception m -> compare n m
     | Current_exception n, Current_exception m -> compare n m
     | Return n, Return m -> compare n m
@@ -94,6 +95,8 @@ module Name = struct
     | _, Gen _ -> -1
     | Name _, _ -> 1
     | _, Name _ -> -1
+    | Abstract _, _ -> 1
+    | _, Abstract _ -> -1
     | Have_exception _, _ -> 1
     | _, Have_exception _ -> -1
     | Current_exception _, _ -> 1
@@ -156,6 +159,7 @@ let string_of_name ?deref_current_exception:(dce = false) ?(zencode = true) =
       let s = "%" ^ string_of_int v1 ^ "." ^ string_of_int v2 in
       (if zencode then Util.zencode_string s else s) ^ ssa_num n
   | Name (id, n) -> (if zencode then Util.zencode_string (string_of_id id) else string_of_id id) ^ ssa_num n
+  | Abstract id -> string_of_id id
   | Have_exception n -> "have_exception" ^ ssa_num n
   | Return n -> "return" ^ ssa_num n
   | Current_exception n when dce -> "(*current_exception)" ^ ssa_num n
@@ -198,7 +202,6 @@ let string_of_op = function
   | Set_slice -> "@set_slice"
   | Concat -> "@concat"
   | Ite -> "@ite"
-  | Get_abstract -> "@get_abstract"
   | String_eq -> "@string_eq"
   | Index n -> "@index::<" ^ string_of_int n ^ ">"
 
@@ -1112,7 +1115,6 @@ let rec infer_call op vs =
       | _ -> Reporting.unreachable Parse_ast.Unknown __POS__ "Invalid type for concat argument"
     end
   | Ite, [_; t; _] -> cval_ctyp t
-  | Get_abstract, [v] -> cval_ctyp v
   | String_eq, _ -> CT_bool
   | Index _, [v] -> (
       match cval_ctyp v with
