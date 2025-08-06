@@ -86,12 +86,13 @@ module Make_optimizer (S : Sequence) = struct
     let hash = function
       | Gen (v1, v2, n) -> Hashtbl.hash (0, (v1, v2, n))
       | Name (Id_aux (aux, _), n) -> Hashtbl.hash (1, (aux, n))
-      | Have_exception n -> Hashtbl.hash (2, n)
-      | Current_exception n -> Hashtbl.hash (3, n)
-      | Throw_location n -> Hashtbl.hash (4, n)
-      | Return n -> Hashtbl.hash (5, n)
-      | Channel (chan, n) -> Hashtbl.hash (6, (chan, n))
-      | Memory_writes n -> Hashtbl.hash (7, n)
+      | Abstract (Id_aux (aux, _)) -> Hashtbl.hash (2, aux)
+      | Have_exception n -> Hashtbl.hash (3, n)
+      | Current_exception n -> Hashtbl.hash (4, n)
+      | Throw_location n -> Hashtbl.hash (5, n)
+      | Return n -> Hashtbl.hash (6, n)
+      | Channel (chan, n) -> Hashtbl.hash (7, (chan, n))
+      | Memory_writes n -> Hashtbl.hash (8, n)
   end
 
   module NameHashtbl = Hashtbl.Make (NameHash)

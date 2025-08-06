@@ -57,6 +57,7 @@ end)
 let ssa_name i = function
   | Gen (v1, v2, _) -> Gen (v1, v2, i)
   | Name (id, _) -> Name (id, i)
+  | Abstract id -> Abstract id
   | Have_exception _ -> Have_exception i
   | Current_exception _ -> Current_exception i
   | Throw_location _ -> Throw_location i
@@ -67,6 +68,7 @@ let ssa_name i = function
 let unssa_name = function
   | Gen (v1, v2, n) -> (Gen (v1, v2, -1), n)
   | Name (id, n) -> (Name (id, -1), n)
+  | Abstract id -> (Abstract id, -1)
   | Have_exception n -> (Have_exception (-1), n)
   | Current_exception n -> (Current_exception (-1), n)
   | Throw_location n -> (Throw_location (-1), n)

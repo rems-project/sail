@@ -1012,6 +1012,7 @@ module Codegen (Config : CODEGEN_CONFIG) = struct
     function
     | Gen (v1, v2, n) -> NameGen.to_string () (mk_id (sprintf "%d.%d" v1 v2)) ^ ssa_num n
     | Name (id, n) -> NameGen.to_string () id ^ ssa_num n
+    | Abstract id -> NameGen.to_string ~prefix:"abstract_" () id
     | Have_exception n -> "have_exception" ^ ssa_num n
     | Return n -> "return" ^ ssa_num n
     | Current_exception n -> "(*current_exception)" ^ ssa_num n
@@ -1247,7 +1248,6 @@ module Codegen (Config : CODEGEN_CONFIG) = struct
         | CT_sbits 64, CT_sbits 64 -> sprintf "append_ss(%s, %s)" (sgen_cval v1) (sgen_cval v2)
         | _ -> assert false
       end
-    | Get_abstract, [v] -> sgen_cval v
     | Ite, [i; t; e] -> sprintf "(%s ? %s : %s)" (sgen_cval i) (sgen_cval t) (sgen_cval e)
     | String_eq, [s1; s2] -> sprintf "(strcmp(%s, %s) == 0)" (sgen_cval s1) (sgen_cval s2)
     | _, _ -> failwith "Could not generate cval primop"
@@ -1584,8 +1584,11 @@ module Codegen (Config : CODEGEN_CONFIG) = struct
                 c_function ~return:"void"
                   (ksprintf string "sail_set_abstract_%s(%s v)" (string_of_id id) (sgen_ctyp ctyp))
                   [
-                    ( if is_stack_ctyp ctx ctyp then ksprintf c_stmt "%s = v" (sgen_id id)
-                      else sail_copy ~suffix:";" (sgen_ctyp_name ctyp) "&%s, v" (sgen_id id)
+                    ( if is_stack_ctyp ctx ctyp then
+                        ksprintf c_stmt "%s = v" (NameGen.to_string ~prefix:"abstract_" () id)
+                      else
+                        sail_copy ~suffix:";" (sgen_ctyp_name ctyp) "&%s, v"
+                          (NameGen.to_string ~prefix:"abstract_" () id)
                     );
                   ]
               )
@@ -1596,7 +1599,11 @@ module Codegen (Config : CODEGEN_CONFIG) = struct
                   [separate_map hardline (codegen_instr (mk_id "set_abstract") ctx) init]
               )
         in
-        [HeaderOnly setter_prototype; Impl (ksprintf string "%s %s;" (sgen_ctyp ctyp) (sgen_id id)); Impl setter]
+        [
+          HeaderOnly setter_prototype;
+          Impl (ksprintf string "%s %s;" (sgen_ctyp ctyp) (NameGen.to_string ~prefix:"abstract_" () id));
+          Impl setter;
+        ]
     | CTD_enum (id, (first_id :: _ as ids)) ->
         let enum_name = sgen_id id in
         let enum_eq =

@@ -424,7 +424,7 @@ module Make (C : CONFIG) = struct
         | Some (_, ctyp) -> ([], V_id (id, ctyp), [])
         | None -> ([], V_id (id, ctyp_of_typ ctx (lvar_typ typ)), [])
       end
-    | AV_abstract (id, typ) -> ([], V_call (Get_abstract, [V_id (name id, ctyp_of_typ ctx typ)]), [])
+    | AV_abstract (id, typ) -> ([], V_id (Abstract id, ctyp_of_typ ctx typ), [])
     | AV_ref (id, typ) -> ([], V_lit (VL_ref (string_of_id id), CT_ref (ctyp_of_typ ctx (lvar_typ typ))), [])
     | AV_lit (L_aux (L_string str, _), typ) -> ([], V_lit (VL_string (String.escaped str), ctyp_of_typ ctx typ), [])
     | AV_lit (L_aux (L_num n, _), typ) when C.ignore_64 -> ([], V_lit (VL_int n, ctyp_of_typ ctx typ), [])
@@ -778,12 +778,12 @@ module Make (C : CONFIG) = struct
                         iextern l
                           (CL_id (value, ctyp))
                           (mk_id "sail_config_unwrap_abstract_bits", [])
-                          [V_call (Get_abstract, [V_id (name id, abstract_ctyp)]); V_id (json, CT_json)];
+                          [V_id (Abstract id, abstract_ctyp); V_id (json, CT_json)];
                       ]
                   | CT_lint | CT_fint _ ->
                       let len = ngensym () in
                       [
-                        iinit l (CT_fint 64) len (V_call (Get_abstract, [V_id (name id, abstract_ctyp)]));
+                        iinit l (CT_fint 64) len (V_id (Abstract id, abstract_ctyp));
                         iextern l
                           (CL_id (value, ctyp))
                           (mk_id "sail_config_unwrap_abstract_bits", [])
@@ -1805,7 +1805,7 @@ module Make (C : CONFIG) = struct
               (* The abstract initialisers are ran very early, before the rest of the model,
                  so we can't rely on Jib static initialisers being set up. *)
               let setup, call, cleanup = compile_config' l { ctx with no_static = true } key ctyp in
-              CTDI_instrs (setup @ [call (CL_id (name id, ctyp))] @ cleanup)
+              CTDI_instrs (setup @ [call (CL_id (Abstract id, ctyp))] @ cleanup)
           | TDC_none -> CTDI_none
         in
         match kind with

@@ -297,6 +297,7 @@ module Make (Config : CONFIG) = struct
     function
     | Gen (v1, v2, n) -> pp_id_string (mk_id (sprintf "%d.%d" v1 v2)) ^ ssa_num n
     | Name (id, n) -> pp_id_string id ^ ssa_num n
+    | Abstract id -> pp_id_string id
     | Have_exception n -> "sail_have_exception" ^ ssa_num n
     | Current_exception n -> "sail_current_exception" ^ ssa_num n
     | Throw_location n -> "sail_throw_location" ^ ssa_num n
