@@ -372,6 +372,19 @@ let rec options =
           ),
         " unroll function in a set of mutually recursive functions"
       );
+      ( "-ddump_project_depgraph",
+        Arg.String (fun file -> Project.opt_ddump_depgraph := Some file),
+        " (debug) dump module dependency graph to a file"
+      );
+      ("-ddump_project_depgraph_reduced", Arg.Set Project.opt_ddump_depgraph_reduced, " (debug) dump reduced depgraph");
+      ( "-ddump_project_depgraph_skip_deps",
+        Arg.Set Project.opt_ddump_depgraph_skip_deps,
+        " (debug) skip dependencies in depgraph"
+      );
+      ( "-ddump_project_depgraph_skip_reqs",
+        Arg.Set Project.opt_ddump_depgraph_skip_reqs,
+        " (debug) skip requires in depgraph"
+      );
       ("-ddump_initial_ast", Arg.Set Frontend.opt_ddump_initial_ast, " (debug) dump the initial ast to stdout");
       ("-ddump_tc_ast", Arg.Set Frontend.opt_ddump_tc_ast, " (debug) dump the typechecked ast to stdout");
       ("-ddump_side_effect", Arg.Set Frontend.opt_ddump_side_effect, " (debug) dump side effect info");

@@ -130,3 +130,10 @@ val module_requires : project_structure -> mod_id -> mod_id list
 val all_files : project_structure -> string spanned list
 
 val all_modules : project_structure -> mod_id list
+
+(** Print the project structure. *)
+val opt_ddump_depgraph : string option ref
+
+val opt_ddump_depgraph_reduced : bool ref
+val opt_ddump_depgraph_skip_deps : bool ref
+val opt_ddump_depgraph_skip_reqs : bool ref
