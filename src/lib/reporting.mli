@@ -70,6 +70,13 @@ val loc_to_string : Parse_ast.l -> string
 (** [loc_file] returns the file for a location *)
 val loc_file : Parse_ast.l -> string option
 
+(** Extend the span of a location to include the provided lexing position as it's second position. *)
+val extend_loc : Lexing.position -> Ast.l -> Ast.l
+
+val start_pos : Ast.l -> Lexing.position option
+
+val range : Lexing.position option -> Lexing.position option -> Ast.l
+
 (** Reduce a location to a pair of positions if possible *)
 val simp_loc : Ast.l -> (Lexing.position * Lexing.position) option
 
