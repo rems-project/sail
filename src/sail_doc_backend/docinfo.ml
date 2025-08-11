@@ -529,18 +529,20 @@ module Generator (Converter : Markdown.CONVERTER) (Config : CONFIG) = struct
     in
     let body_source =
       match exp with
-      | E_aux (E_block (exp :: exps), _) ->
+      | E_aux (E_block (exp :: exps), (block_loc, _)) -> (
           let first_loc = exp_loc exp in
           let last_loc = exp_loc (Util.last (exp :: exps)) in
-          begin
-            match (Reporting.simp_loc first_loc, Reporting.simp_loc last_loc) with
-            | Some (p1, _), Some (_, p2) when p1.pos_fname = p2.pos_fname && Filename.is_relative p1.pos_fname ->
-                (* Make sure the first line is indented correctly *)
+          match (Reporting.simp_loc first_loc, Reporting.simp_loc last_loc, Reporting.simp_loc block_loc) with
+          | Some (p1, _), Some (_, p2), Some (block_p1, block_p2)
+            when p1.pos_fname = p2.pos_fname && Filename.is_relative p1.pos_fname ->
+              if block_p1.pos_lnum < p1.pos_lnum then
+                (* Make sure the first line is indented correctly, when it's on a different line to the start of the block. *)
                 doc_lexing_pos { p1 with pos_cnum = p1.pos_bol } p2
-            | _, _ ->
-                let block = Type_check.strip_exp exp :: List.map Type_check.strip_exp exps in
-                Raw (Reformatter.doc_block block |> Document.to_string |> encode)
-          end
+              else doc_lexing_pos block_p1 block_p2
+          | _, _, _ ->
+              let block = Type_check.strip_exp exp :: List.map Type_check.strip_exp exps in
+              Raw (Reformatter.doc_block block |> Document.to_string |> encode)
+        )
       | _ -> doc_loc (exp_loc exp) Type_check.strip_exp Reformatter.doc_exp exp
     in
     let module_path = get_module_path (Type_check.env_of exp) in
