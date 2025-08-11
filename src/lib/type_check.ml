@@ -2561,78 +2561,119 @@ and check_or_infer_sequence ~at:l env xs tyvars nc typ_opt =
   | None -> None
 
 and check_block l env exps ret_typ =
+  (* The first thing we do when checking a block is to get the lexing
+     position at the end of the final expression, which we can use to
+     construct spans for new expressions constructed when
+     type-checking the block. *)
+  let final_pos =
+    match Util.last_opt exps with
+    | Some exp -> (
+        match Reporting.simp_loc (exp_loc exp) with Some (_, p) -> Some p | None -> None
+      )
+    | None -> None
+  in
+  (* The check_block' function returns a list of checked expressions,
+     and in addition the lexing position of the first expression. In
+     combination with the final_pos above, this can be used to
+     construct correct spans for sub-parts of the block. *)
+  let _, block_exp = check_block' final_pos env exps ret_typ in
+  block_exp
+
+and check_block' f_p env exps ret_typ =
   let final env exp = match ret_typ with Some typ -> crule check_exp env exp typ | None -> irule infer_exp env exp in
-  let annot_exp exp typ exp_typ = E_aux (exp, (l, mk_expected_tannot env typ exp_typ)) in
+  let extend_block l = match f_p with Some p -> Reporting.extend_loc p l | None -> l in
+  let annot_exp l exp typ exp_typ = E_aux (exp, (l, mk_expected_tannot env typ exp_typ)) in
   match Nl_flow.analyze exps with
   | [] -> (
       match ret_typ with
       | Some typ ->
-          typ_equality l env typ unit_typ;
-          []
-      | None -> []
+          typ_equality (Reporting.range f_p f_p) env typ unit_typ;
+          (None, [])
+      | None -> (None, [])
     )
-  (* We need the special case for assign even if it's the last
-     expression in the block because the block provides the scope when
-     it's a declaration. *)
-  | E_aux (E_assign (lexp, bind), (assign_l, _)) :: exps -> begin
-      match lexp_assignment_type env lexp with
-      | Update ->
-          let texp, env = bind_assignment assign_l env lexp bind in
-          texp :: check_block l env exps ret_typ
-      | Declaration ->
-          if !opt_strict_var then typ_error assign_l "Variables must be declared with an explicit var expression"
-          else (
-            let lexp, bind, env =
-              match bind_assignment l env lexp bind with
-              | E_aux (E_assign (lexp, bind), _), env -> (lexp, bind, env)
-              | _, _ -> assert false
-            in
-            let rec last_typ = function [exp] -> typ_of exp | _ :: exps -> last_typ exps | [] -> unit_typ in
-            let rest = check_block l env exps ret_typ in
-            let typ = last_typ rest in
-            [annot_exp (E_var (lexp, bind, annot_exp (E_block rest) typ ret_typ)) typ ret_typ]
+  | exp :: exps -> (
+      let l = exp_loc exp in
+      let s_p = Reporting.start_pos (exp_loc exp) in
+      match (exp, exps) with
+      (* We need the special case for assign even if it's the last
+         expression in the block because the block provides the scope when
+         it's a declaration. *)
+      | E_aux (E_assign (lexp, bind), (assign_l, _)), _ ->
+          let exps =
+            match lexp_assignment_type env lexp with
+            | Update ->
+                let texp, env = bind_assignment assign_l env lexp bind in
+                let _, exps = check_block' f_p env exps ret_typ in
+                texp :: exps
+            | Declaration ->
+                if !opt_strict_var then typ_error assign_l "Variables must be declared with an explicit var expression"
+                else (
+                  let lexp, bind, env =
+                    match bind_assignment assign_l env lexp bind with
+                    | E_aux (E_assign (lexp, bind), _), env -> (lexp, bind, env)
+                    | _, _ -> assert false
+                  in
+                  let rec last_typ = function [exp] -> typ_of exp | _ :: exps -> last_typ exps | [] -> unit_typ in
+                  let p1, rest = check_block' f_p env exps ret_typ in
+                  let typ = last_typ rest in
+                  [
+                    annot_exp (extend_block assign_l)
+                      (E_var (lexp, bind, annot_exp (Reporting.range p1 f_p) (E_block rest) typ ret_typ))
+                      typ ret_typ;
+                  ]
+                )
+          in
+          (s_p, exps)
+      | _, [] -> (Reporting.start_pos (exp_loc exp), [final env exp])
+      | E_aux (E_app (f, [E_aux (E_constraint nc, (constraint_l, _))]), _), _ when string_of_id f = "_assume" ->
+          Env.wf_constraint ~at:l env nc;
+          let env = Env.add_constraint nc env in
+          let annotated_exp =
+            annot_exp (exp_loc exp) (E_app (f, [annot_exp constraint_l (E_constraint nc) bool_typ None])) unit_typ None
+          in
+          let _, exps = check_block' f_p env exps ret_typ in
+          (s_p, annotated_exp :: exps)
+      | E_aux (E_assert (constr_exp, msg), (assert_l, _)), _ ->
+          let msg = assert_msg msg in
+          let constr_exp = crule check_exp env constr_exp bool_typ in
+          let checked_msg = crule check_exp env msg string_typ in
+          let env, added_constraint =
+            match assert_constraint env true constr_exp with
+            | Some nc ->
+                typ_print (lazy (adding ^ "constraint " ^ string_of_n_constraint nc ^ " for assert"));
+                (Env.add_constraint ~reason:(assert_l, "assertion") nc env, true)
+            | None -> (env, false)
+          in
+          let texp = annot_exp assert_l (E_assert (constr_exp, checked_msg)) unit_typ (Some unit_typ) in
+          let _, checked_exps = check_block' f_p env exps ret_typ in
+          (* If we can prove false, then any code after the assertion
+             is dead. In this inconsistent typing environment we can
+             do some broken things, so we eliminate this dead code
+             here *)
+          if added_constraint && List.compare_length_with exps 1 >= 0 && prove __POS__ env nc_false then (
+            let ret_typ = List.rev checked_exps |> List.hd |> typ_of in
+            (s_p, texp :: [crule check_exp env (mk_exp ~loc:assert_l (E_exit (mk_lit_exp L_unit))) ret_typ])
           )
-    end
-  | [exp] -> [final env exp]
-  | E_aux (E_app (f, [E_aux (E_constraint nc, _)]), _) :: exps when string_of_id f = "_assume" ->
-      Env.wf_constraint ~at:l env nc;
-      let env = Env.add_constraint nc env in
-      let annotated_exp = annot_exp (E_app (f, [annot_exp (E_constraint nc) bool_typ None])) unit_typ None in
-      annotated_exp :: check_block l env exps ret_typ
-  | E_aux (E_assert (constr_exp, msg), (assert_l, _)) :: exps ->
-      let msg = assert_msg msg in
-      let constr_exp = crule check_exp env constr_exp bool_typ in
-      let checked_msg = crule check_exp env msg string_typ in
-      let env, added_constraint =
-        match assert_constraint env true constr_exp with
-        | Some nc ->
-            typ_print (lazy (adding ^ "constraint " ^ string_of_n_constraint nc ^ " for assert"));
-            (Env.add_constraint ~reason:(assert_l, "assertion") nc env, true)
-        | None -> (env, false)
-      in
-      let texp = annot_exp (E_assert (constr_exp, checked_msg)) unit_typ (Some unit_typ) in
-      let checked_exps = check_block l env exps ret_typ in
-      (* If we can prove false, then any code after the assertion is
-         dead. In this inconsistent typing environment we can do some
-         broken things, so we eliminate this dead code here *)
-      if added_constraint && List.compare_length_with exps 1 >= 0 && prove __POS__ env nc_false then (
-        let ret_typ = List.rev checked_exps |> List.hd |> typ_of in
-        texp :: [crule check_exp env (mk_exp ~loc:assert_l (E_exit (mk_lit_exp L_unit))) ret_typ]
-      )
-      else texp :: checked_exps
-  | (E_aux (E_if (cond, (E_aux (E_throw _, _) | E_aux (E_block [E_aux (E_throw _, _)], _)), _), _) as exp) :: exps ->
-      let texp = crule check_exp env exp (mk_typ (Typ_id (mk_id "unit"))) in
-      let cond' = crule check_exp env cond (mk_typ (Typ_id (mk_id "bool"))) in
-      let env = add_opt_constraint l "if-throw" (Option.map nc_not (assert_constraint env false cond')) env in
-      texp :: check_block l env exps ret_typ
-  | (E_aux (E_if (cond, then_exp, _), _) as exp) :: exps when exp_unconditionally_returns then_exp ->
-      let texp = crule check_exp env exp (mk_typ (Typ_id (mk_id "unit"))) in
-      let cond' = crule check_exp env cond (mk_typ (Typ_id (mk_id "bool"))) in
-      let env = add_opt_constraint l "unconditional if" (Option.map nc_not (assert_constraint env false cond')) env in
-      texp :: check_block l env exps ret_typ
-  | exp :: exps ->
-      let texp = crule check_exp env exp (mk_typ (Typ_id (mk_id "unit"))) in
-      texp :: check_block l env exps ret_typ
+          else (s_p, texp :: checked_exps)
+      | (E_aux (E_if (cond, (E_aux (E_throw _, _) | E_aux (E_block [E_aux (E_throw _, _)], _)), _), _) as exp), _ ->
+          let texp = crule check_exp env exp (mk_typ (Typ_id (mk_id "unit"))) in
+          let cond' = crule check_exp env cond (mk_typ (Typ_id (mk_id "bool"))) in
+          let env = add_opt_constraint l "if-throw" (Option.map nc_not (assert_constraint env false cond')) env in
+          let _, exps = check_block' f_p env exps ret_typ in
+          (s_p, texp :: exps)
+      | (E_aux (E_if (cond, then_exp, _), _) as exp), _ when exp_unconditionally_returns then_exp ->
+          let texp = crule check_exp env exp (mk_typ (Typ_id (mk_id "unit"))) in
+          let cond' = crule check_exp env cond (mk_typ (Typ_id (mk_id "bool"))) in
+          let env =
+            add_opt_constraint l "unconditional if" (Option.map nc_not (assert_constraint env false cond')) env
+          in
+          let _, exps = check_block' f_p env exps ret_typ in
+          (s_p, texp :: exps)
+      | _, _ ->
+          let texp = crule check_exp env exp (mk_typ (Typ_id (mk_id "unit"))) in
+          let _, exps = check_block' f_p env exps ret_typ in
+          (s_p, texp :: exps)
+    )
 
 and check_case env pat_typ pexp typ =
   let pat, guard, case, (l, uannot) = destruct_pexp pexp in

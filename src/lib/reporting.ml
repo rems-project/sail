@@ -113,11 +113,29 @@ let loc_to_string l =
   format_message (Location ("", None, l, Line "")) (buffer_formatter b);
   Buffer.contents b
 
+let rec extend_loc p2 = function
+  | Parse_ast.Unknown -> Parse_ast.Unknown
+  | Parse_ast.Unique (n, l) -> Parse_ast.Unique (n, extend_loc p2 l)
+  | Parse_ast.Generated l -> Parse_ast.Generated (extend_loc p2 l)
+  | Parse_ast.Hint (hint, l1, l2) -> Parse_ast.Hint (hint, l1, extend_loc p2 l2)
+  | Parse_ast.Range (p1, _) -> Parse_ast.Range (p1, p2)
+
+let rec start_pos = function
+  | Parse_ast.Unknown -> None
+  | Parse_ast.Unique (_, l) -> start_pos l
+  | Parse_ast.Generated l -> start_pos l
+  | Parse_ast.Hint (_, _, l) -> start_pos l
+  | Parse_ast.Range (p1, _) -> Some p1
+
+let range p1 p2 = match (p1, p2) with Some p1, Some p2 -> Parse_ast.Range (p1, p2) | _, _ -> Parse_ast.Unknown
+
 let rec simp_loc = function
   | Parse_ast.Unknown -> None
   | Parse_ast.Unique (_, l) -> simp_loc l
   | Parse_ast.Generated l -> simp_loc l
-  | Parse_ast.Hint (_, l1, l2) -> begin match simp_loc l1 with None -> simp_loc l2 | pos -> pos end
+  | Parse_ast.Hint (_, l1, l2) -> (
+      match simp_loc l2 with None -> simp_loc l1 | pos -> pos
+    )
   | Parse_ast.Range (p1, p2) -> Some (p1, p2)
 
 let rec is_unknown_loc = function
