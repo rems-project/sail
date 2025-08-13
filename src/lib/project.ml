@@ -415,7 +415,7 @@ let rec collect_files = function
   | [] -> []
 
 let add_root root_opt (file, l) =
-  match root_opt with Some root -> (root ^ Filename.dir_sep ^ file, l) | None -> (file, l)
+  match root_opt with None | Some "." -> (file, l) | Some root -> (root ^ Filename.dir_sep ^ file, l)
 
 class structure_visitor (proj : project_structure) =
   object
