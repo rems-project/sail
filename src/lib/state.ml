@@ -87,6 +87,26 @@ let generate_register_id_enum = function
       let reg (typ, id) = string_of_id id in
       ["type register_id = " ^ String.concat " | " (List.map reg registers)]
 
+(* A reasonably printable version of an nexp that we can use in identifiers.  Generally we should
+   just have a constant here, but if not we should try something sensible (e.g., at the time of
+   writing nexp_simp chickens out for powers of two above seven...). *)
+
+let rec id_of_nexp = function Nexp_aux (nexp, _) -> id_of_nexp_aux nexp
+
+and id_of_nexp_aux = function
+  | Nexp_id id -> string_of_id id
+  | Nexp_var kid -> string_of_kid kid
+  | Nexp_constant c -> Big_int.to_string c
+  | Nexp_times (n1, n2) -> id_of_nexp n1 ^ "_times_" ^ id_of_nexp n2
+  | Nexp_sum (n1, n2) -> id_of_nexp n1 ^ "_plus_" ^ id_of_nexp n2
+  | Nexp_minus (n1, n2) -> id_of_nexp n1 ^ "_minus_" ^ id_of_nexp n2
+  | Nexp_app (id, nexps) -> string_of_id id ^ "_" ^ Util.string_of_list "_" id_of_nexp nexps
+  | Nexp_exp n -> "exp_" ^ id_of_nexp n
+  | Nexp_neg n -> "neg_" ^ id_of_nexp n
+  | Nexp_if (i, t, e) ->
+      (* TODO: include constraints if necessary... *)
+      "if_" (* ^ string_of_n_constraint i*) ^ "_then_" ^ id_of_nexp t ^ "_else_" ^ id_of_nexp e
+
 let rec id_of_regtyp builtins (Typ_aux (t, l) as typ) =
   match t with
   | Typ_id id -> id
@@ -94,7 +114,7 @@ let rec id_of_regtyp builtins (Typ_aux (t, l) as typ) =
       let name_arg (A_aux (targ, l)) =
         match targ with
         | A_typ targ -> string_of_id (id_of_regtyp builtins targ)
-        | A_nexp nexp when is_nexp_constant (nexp_simp nexp) -> string_of_nexp (nexp_simp nexp)
+        | A_nexp nexp when is_nexp_constant (nexp_simp nexp) -> id_of_nexp (nexp_simp nexp)
         | _ -> raise (Reporting.err_typ l ("Unsupported register type " ^ string_of_typ typ))
       in
       if IdSet.mem id builtins && not (is_bitvector_typ typ) then id
