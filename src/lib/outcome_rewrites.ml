@@ -53,6 +53,8 @@ open Type_check
 open Type_error
 open Rewriter
 
+open Coq_extern
+
 let rec in_substs id = function
   | IS_aux (IS_id (id_from, _), _) :: _ when Id.compare id id_from = 0 -> true
   | _ :: substs -> in_substs id substs

@@ -52,6 +52,8 @@ open Type_check
 open Spec_analysis
 open Rewriter
 
+open Coq_def_annot
+
 let fresh_name_counter = ref 0
 
 let fresh_name () =

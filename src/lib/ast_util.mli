@@ -108,6 +108,8 @@ val add_def_attribute : l -> string -> attribute_data option -> 'a def_annot -> 
 
 val get_def_attribute : string -> 'a def_annot -> (l * attribute_data option) option
 
+val get_def_attributes : 'a def_annot -> (l * string * attribute_data option) list
+
 val remove_def_attribute : string -> 'a def_annot -> 'a def_annot
 
 val def_annot_map_loc : (l -> l) -> 'a def_annot -> 'a def_annot

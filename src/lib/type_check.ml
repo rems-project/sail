@@ -55,6 +55,7 @@ open Parse_ast.Attribute_data
 module Big_int = Nat_big_num
 
 open Type_internal
+open Coq_def_annot
 
 let set_tc_debug level = opt_tc_debug := level
 
@@ -4883,7 +4884,7 @@ let check_mapdef env def_annot (MD_aux (MD_mapping (id, tannot_opt, mapcls), (l,
   end;
   (* If we have a val spec, then the mapping itself shouldn't be marked as private *)
   let fix_body_visibility =
-    match (have_val_spec, def_annot.visibility) with
+    match (have_val_spec, def_annot.Coq_def_annot.visibility) with
     | Some vs_l, Private priv_l ->
         raise
           (Reporting.err_general
@@ -5184,16 +5185,16 @@ and check_scattered : Env.t -> env def_annot -> uannot scattered_def -> typed_de
   match sdef with
   | SD_function (id, tannot_opt) ->
       ( [DEF_aux (DEF_scattered (SD_aux (SD_function (id, tannot_opt), (l, empty_tannot))), def_annot)],
-        Env.add_scattered_id id def_annot.attrs env
+        Env.add_scattered_id id (get_def_attributes def_annot) env
       )
   | SD_mapping (id, tannot_opt) ->
       ( [DEF_aux (DEF_scattered (SD_aux (SD_mapping (id, tannot_opt), (l, empty_tannot))), def_annot)],
-        Env.add_scattered_id id def_annot.attrs env
+        Env.add_scattered_id id (get_def_attributes def_annot) env
       )
   | SD_end id -> ([], Env.end_scattered_id ~at:l id env)
   | SD_enum id ->
       ( [DEF_aux (DEF_scattered (SD_aux (SD_enum id, (l, empty_tannot))), def_annot)],
-        Env.add_scattered_enum id def_annot.attrs env
+        Env.add_scattered_enum id (get_def_attributes def_annot) env
       )
   | SD_enumcl (id, member) ->
       ( [DEF_aux (DEF_scattered (SD_aux (SD_enumcl (id, member), (l, empty_tannot))), def_annot)],
@@ -5234,14 +5235,14 @@ and check_scattered : Env.t -> env def_annot -> uannot scattered_def -> typed_de
       let funcl_env = Env.add_typquant fcl_def_annot.loc typq env in
       let funcl = check_funcl funcl_env funcl typ in
       ( [DEF_aux (DEF_scattered (SD_aux (SD_funcl funcl, (l, mk_tannot ~uannot funcl_env typ))), def_annot)],
-        Env.add_scattered_id id def_annot.attrs env
+        Env.add_scattered_id id (get_def_attributes def_annot) env
       )
   | SD_mapcl (id, mapcl) ->
       let typq, typ = Env.get_val_spec id env in
       let mapcl_env = Env.add_typquant l typq env in
       let mapcl = check_mapcl mapcl_env mapcl typ in
       ( [DEF_aux (DEF_scattered (SD_aux (SD_mapcl (id, mapcl), (l, empty_tannot))), def_annot)],
-        Env.add_scattered_id id def_annot.attrs env
+        Env.add_scattered_id id (get_def_attributes def_annot) env
       )
 
 and check_outcome : Env.t -> outcome_spec -> untyped_def list -> outcome_spec * typed_def list * Env.t =
