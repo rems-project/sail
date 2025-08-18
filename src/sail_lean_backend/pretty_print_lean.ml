@@ -219,7 +219,7 @@ let rec doc_nexp ctx (Nexp_aux (n, l) as nexp) =
   and app (Nexp_aux (n, l) as nexp) =
     match n with
     | Nexp_if (i, t, e) ->
-        separate space [string "bif"; doc_nconstraint ctx i; string "then"; atomic t; string "else"; atomic e]
+        separate space [string "if"; doc_nconstraint ctx i; string "then"; atomic t; string "else"; atomic e]
     | Nexp_app (Id_aux (Id "div", _), [n1; n2]) -> separate space [atomic n1; string "/"; atomic n2]
     | Nexp_app (Id_aux (Id "mod", _), [n1; n2]) -> separate space [atomic n1; string "%"; atomic n2]
     | Nexp_app (Id_aux (Id "abs", _), [n1]) -> separate dot [atomic n1; string "natAbs"]
@@ -1001,7 +1001,7 @@ and doc_exp (as_monadic : bool) ctx (E_aux (e, (l, annot)) as full_exp) =
         )
   | E_if (i, t, e) ->
       let statements_monadic = as_monadic || has_effect t || has_effect e in
-      nest 2 (string "bif" ^^ space ^^ nest 1 (d_of_arg ctx i))
+      nest 2 (string "if" ^^ space ^^ nest 1 (d_of_arg ctx i))
       ^^ hardline
       ^^ prefix 2 1 (string "then") (wrap_exp statements_monadic ctx t)
       ^^ hardline
