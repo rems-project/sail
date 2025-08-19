@@ -90,6 +90,27 @@ function while_print() = {
   print_int("i = ", i)
 }
 
+
+val while_print_fuel : unit -> unit
+function while_print_fuel() = {
+  var i : int = 0;
+  while i < 100 do {
+    i = i + 1
+  };
+  print_int("i = ", i)
+}
+termination_measure while_print_fuel while 100
+
+val until_print_fuel : int -> unit
+function until_print_fuel(n) = {
+  var i : int = 0;
+  repeat
+    i = i + 1
+  until i < 100;
+  print_int("i = ", i)
+}
+termination_measure until_print_fuel repeat n
+
 val while_print_long : unit -> unit
 function while_print_long() = {
   var this_is_a_very_long_variable_name_to_stress_the_formatting : int = 0;
