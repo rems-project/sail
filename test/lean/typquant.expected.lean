@@ -61,22 +61,22 @@ def __id (x : Int) : Int :=
 
 /-- Type quantifiers: n : Int, m : Int -/
 def _shl_int_general (m : Int) (n : Int) : Int :=
-  if (n ≥b 0)
+  if ((n ≥b 0) : Bool)
   then (Int.shiftl m n)
   else (Int.shiftr m (Neg.neg n))
 
 /-- Type quantifiers: n : Int, m : Int -/
 def _shr_int_general (m : Int) (n : Int) : Int :=
-  if (n ≥b 0)
+  if ((n ≥b 0) : Bool)
   then (Int.shiftr m n)
   else (Int.shiftl m (Neg.neg n))
 
 /-- Type quantifiers: m : Int, n : Int -/
 def fdiv_int (n : Int) (m : Int) : Int :=
-  if ((n <b 0) && (m >b 0))
+  if (((n <b 0) && (m >b 0)) : Bool)
   then ((Int.tdiv (n +i 1) m) -i 1)
   else
-    (if ((n >b 0) && (m <b 0))
+    (if (((n >b 0) && (m <b 0)) : Bool)
     then ((Int.tdiv (n -i 1) m) -i 1)
     else (Int.tdiv n m))
 
@@ -86,7 +86,7 @@ def fmod_int (n : Int) (m : Int) : Int :=
 
 /-- Type quantifiers: len : Nat, k_v : Nat, len ≥ 0 ∧ k_v ≥ 0 -/
 def sail_mask (len : Nat) (v : (BitVec k_v)) : (BitVec len) :=
-  if (len ≤b (Sail.BitVec.length v))
+  if ((len ≤b (Sail.BitVec.length v)) : Bool)
   then (Sail.BitVec.truncate v len)
   else (Sail.BitVec.zeroExtend v len)
 
@@ -96,7 +96,7 @@ def sail_ones (n : Nat) : (BitVec n) :=
 
 /-- Type quantifiers: l : Int, i : Int, n : Nat, n ≥ 0 -/
 def slice_mask {n : _} (i : Int) (l : Int) : (BitVec n) :=
-  if (l ≥b n)
+  if ((l ≥b n) : Bool)
   then ((sail_ones n) <<< i)
   else
     (let one : (BitVec n) := (sail_mask n (0b1 : (BitVec 1)))
@@ -178,7 +178,7 @@ def use_tuple_of_tuple (s : String) : String :=
 def hex_bits_signed2_forwards (bv : (BitVec k_nn)) : (Nat × String) :=
   let len := (Sail.BitVec.length bv)
   let s :=
-    if ((BitVec.access bv (len -i 1)) == 1#1)
+    if (((BitVec.access bv (len -i 1)) == 1#1) : Bool)
     then "stub1"
     else "stub2"
   ((Sail.BitVec.length bv), s)
@@ -190,11 +190,11 @@ def hex_bits_signed2_forwards_matches (bv : (BitVec k_nn)) : Bool :=
 /-- Type quantifiers: tuple_0.1 : Nat, tuple_0.1 > 0 -/
 def hex_bits_signed2_backwards (tuple_0 : (Nat × String)) : (BitVec tuple_0.1) :=
   let (notn, str) := tuple_0
-  if (str == "-")
+  if ((str == "-") : Bool)
   then (BitVec.zero notn)
   else
     (let parsed := (BitVec.zero notn)
-    if ((BitVec.access parsed (notn -i 1)) == 0#1)
+    if (((BitVec.access parsed (notn -i 1)) == 0#1) : Bool)
     then parsed
     else (BitVec.zero notn))
 
@@ -209,7 +209,7 @@ def test_constr (app_0 : virtaddr) : (BitVec 32) :=
 
 /-- Type quantifiers: n : Nat, n ≥ 0 -/
 def termination (n : Nat) : Int :=
-  if (n == 0)
+  if ((n == 0) : Bool)
   then 0
   else (1 +i (termination (n -i 1)))
 
