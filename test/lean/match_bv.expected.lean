@@ -56,22 +56,22 @@ def __id (x : Int) : Int :=
 
 /-- Type quantifiers: n : Int, m : Int -/
 def _shl_int_general (m : Int) (n : Int) : Int :=
-  bif (n ≥b 0)
+  if ((n ≥b 0) : Bool)
   then (Int.shiftl m n)
   else (Int.shiftr m (Neg.neg n))
 
 /-- Type quantifiers: n : Int, m : Int -/
 def _shr_int_general (m : Int) (n : Int) : Int :=
-  bif (n ≥b 0)
+  if ((n ≥b 0) : Bool)
   then (Int.shiftr m n)
   else (Int.shiftl m (Neg.neg n))
 
 /-- Type quantifiers: m : Int, n : Int -/
 def fdiv_int (n : Int) (m : Int) : Int :=
-  bif ((n <b 0) && (m >b 0))
+  if (((n <b 0) && (m >b 0)) : Bool)
   then ((Int.tdiv (n +i 1) m) -i 1)
   else
-    (bif ((n >b 0) && (m <b 0))
+    (if (((n >b 0) && (m <b 0)) : Bool)
     then ((Int.tdiv (n -i 1) m) -i 1)
     else (Int.tdiv n m))
 
@@ -81,7 +81,7 @@ def fmod_int (n : Int) (m : Int) : Int :=
 
 /-- Type quantifiers: len : Nat, k_v : Nat, len ≥ 0 ∧ k_v ≥ 0 -/
 def sail_mask (len : Nat) (v : (BitVec k_v)) : (BitVec len) :=
-  bif (len ≤b (Sail.BitVec.length v))
+  if ((len ≤b (Sail.BitVec.length v)) : Bool)
   then (Sail.BitVec.truncate v len)
   else (Sail.BitVec.zeroExtend v len)
 
@@ -91,7 +91,7 @@ def sail_ones (n : Nat) : (BitVec n) :=
 
 /-- Type quantifiers: l : Int, i : Int, n : Nat, n ≥ 0 -/
 def slice_mask {n : _} (i : Int) (l : Int) : (BitVec n) :=
-  bif (l ≥b n)
+  if ((l ≥b n) : Bool)
   then ((sail_ones n) <<< i)
   else
     (let one : (BitVec n) := (sail_mask n (0b1 : (BitVec 1)))
@@ -142,11 +142,11 @@ def concat_str_dec (str : String) (x : Int) : String :=
 def decode (merge_var : (BitVec 32)) : Bool :=
   match_bv merge_var with
   | [11,111,0,00,opc:2,1,Rm:5,option_v:3,S,10,Rn:5,Rt:5] =>
-    (bif (Rm == Rn)
+    (if ((Rm == Rn) : Bool)
     then true
     else false)
   | [sf,10,01010,shift:2,N,Rm:5,imm6:6,Rn:5,Rd:5] =>
-    (bif (Rn == Rd)
+    (if ((Rn == Rd) : Bool)
     then true
     else false)
   | [1101010100,0,00,011,0011,CRm:4,1,01,11111] => true

@@ -128,22 +128,22 @@ def __id (x : Int) : Int :=
 
 /-- Type quantifiers: n : Int, m : Int -/
 def _shl_int_general (m : Int) (n : Int) : Int :=
-  bif (n ≥b 0)
+  if ((n ≥b 0) : Bool)
   then (Int.shiftl m n)
   else (Int.shiftr m (Neg.neg n))
 
 /-- Type quantifiers: n : Int, m : Int -/
 def _shr_int_general (m : Int) (n : Int) : Int :=
-  bif (n ≥b 0)
+  if ((n ≥b 0) : Bool)
   then (Int.shiftr m n)
   else (Int.shiftl m (Neg.neg n))
 
 /-- Type quantifiers: m : Int, n : Int -/
 def fdiv_int (n : Int) (m : Int) : Int :=
-  bif ((n <b 0) && (m >b 0))
+  if (((n <b 0) && (m >b 0)) : Bool)
   then ((Int.tdiv (n +i 1) m) -i 1)
   else
-    (bif ((n >b 0) && (m <b 0))
+    (if (((n >b 0) && (m <b 0)) : Bool)
     then ((Int.tdiv (n -i 1) m) -i 1)
     else (Int.tdiv n m))
 
@@ -153,7 +153,7 @@ def fmod_int (n : Int) (m : Int) : Int :=
 
 /-- Type quantifiers: len : Nat, k_v : Nat, len ≥ 0 ∧ k_v ≥ 0 -/
 def sail_mask (len : Nat) (v : (BitVec k_v)) : (BitVec len) :=
-  bif (len ≤b (Sail.BitVec.length v))
+  if ((len ≤b (Sail.BitVec.length v)) : Bool)
   then (Sail.BitVec.truncate v len)
   else (Sail.BitVec.zeroExtend v len)
 
@@ -163,7 +163,7 @@ def sail_ones (n : Nat) : (BitVec n) :=
 
 /-- Type quantifiers: l : Int, i : Int, n : Nat, n ≥ 0 -/
 def slice_mask {n : _} (i : Int) (l : Int) : (BitVec n) :=
-  bif (l ≥b n)
+  if ((l ≥b n) : Bool)
   then ((sail_ones n) <<< i)
   else
     (let one : (BitVec n) := (sail_mask n (0b1 : (BitVec 1)))
@@ -216,13 +216,13 @@ def GPRs : (Vector (RegisterRef (BitVec 64)) 31) :=
 
 /-- Type quantifiers: n : Nat, 0 ≤ n ∧ n ≤ 31 -/
 def wX (n : Nat) (value : (BitVec 64)) : SailM Unit := do
-  bif (n != 31)
+  if ((n != 31) : Bool)
   then writeRegRef (GetElem?.getElem! GPRs n) value
   else (pure ())
 
 /-- Type quantifiers: n : Nat, 0 ≤ n ∧ n ≤ 31 -/
 def rX (n : Nat) : SailM (BitVec 64) := do
-  bif (n != 31)
+  if ((n != 31) : Bool)
   then (reg_deref (GetElem?.getElem! GPRs n))
   else (pure (0x0000000000000000 : (BitVec 64)))
 
@@ -234,11 +234,11 @@ def wPC (pc : (BitVec 64)) : SailM Unit := do
 
 /-- Type quantifiers: r : Nat, 0 ≤ r ∧ r ≤ 31 -/
 def monad_test (r : Nat) : SailM (BitVec 1) := do
-  bif ((← (rX r)) == (0x0000000000000000 : (BitVec 64)))
+  if (((← (rX r)) == (0x0000000000000000 : (BitVec 64))) : Bool)
   then (pure 1#1)
   else
     (do
-      bif ((← (rX r)) == (0x0000000000000001 : (BitVec 64)))
+      if (((← (rX r)) == (0x0000000000000001 : (BitVec 64))) : Bool)
       then (pure 1#1)
       else (pure 0#1))
 

@@ -519,22 +519,22 @@ def __id (x : Int) : Int :=
 
 /-- Type quantifiers: n : Int, m : Int -/
 def _shl_int_general (m : Int) (n : Int) : Int :=
-  bif (n ≥b 0)
+  if ((n ≥b 0) : Bool)
   then (Int.shiftl m n)
   else (Int.shiftr m (Neg.neg n))
 
 /-- Type quantifiers: n : Int, m : Int -/
 def _shr_int_general (m : Int) (n : Int) : Int :=
-  bif (n ≥b 0)
+  if ((n ≥b 0) : Bool)
   then (Int.shiftr m n)
   else (Int.shiftl m (Neg.neg n))
 
 /-- Type quantifiers: m : Int, n : Int -/
 def fdiv_int (n : Int) (m : Int) : Int :=
-  bif ((n <b 0) && (m >b 0))
+  if (((n <b 0) && (m >b 0)) : Bool)
   then ((Int.tdiv (n +i 1) m) -i 1)
   else
-    (bif ((n >b 0) && (m <b 0))
+    (if (((n >b 0) && (m <b 0)) : Bool)
     then ((Int.tdiv (n -i 1) m) -i 1)
     else (Int.tdiv n m))
 
@@ -544,7 +544,7 @@ def fmod_int (n : Int) (m : Int) : Int :=
 
 /-- Type quantifiers: len : Nat, k_v : Nat, len ≥ 0 ∧ k_v ≥ 0 -/
 def sail_mask (len : Nat) (v : (BitVec k_v)) : (BitVec len) :=
-  bif (len ≤b (Sail.BitVec.length v))
+  if ((len ≤b (Sail.BitVec.length v)) : Bool)
   then (Sail.BitVec.truncate v len)
   else (Sail.BitVec.zeroExtend v len)
 
@@ -554,7 +554,7 @@ def sail_ones (n : Nat) : (BitVec n) :=
 
 /-- Type quantifiers: l : Int, i : Int, n : Nat, n ≥ 0 -/
 def slice_mask {n : _} (i : Int) (l : Int) : (BitVec n) :=
-  bif (l ≥b n)
+  if ((l ≥b n) : Bool)
   then ((sail_ones n) <<< i)
   else
     (let one : (BitVec n) := (sail_mask n (0b1 : (BitVec 1)))
@@ -1815,13 +1815,13 @@ def GPRs : (Vector (RegisterRef (BitVec 64)) 31) :=
 
 /-- Type quantifiers: n : Nat, 0 ≤ n ∧ n ≤ 31 -/
 def wX (n : Nat) (value : (BitVec 64)) : SailM Unit := do
-  bif (n != 31)
+  if ((n != 31) : Bool)
   then writeRegRef (GetElem?.getElem! GPRs n) value
   else (pure ())
 
 /-- Type quantifiers: n : Nat, 0 ≤ n ∧ n ≤ 31 -/
 def rX (n : Nat) : SailM (BitVec 64) := do
-  bif (n != 31)
+  if ((n != 31) : Bool)
   then (reg_deref (GetElem?.getElem! GPRs n))
   else (pure (0x0000000000000000 : (BitVec 64)))
 
@@ -1835,13 +1835,13 @@ def decodeLoadStoreRegister (opc : (BitVec 2)) (Rm : (BitVec 5)) (option_v : (Bi
   let t : reg_index := (BitVec.toNat Rt)
   let n : reg_index := (BitVec.toNat Rn)
   let m : reg_index := (BitVec.toNat Rm)
-  bif ((option_v != (0b011 : (BitVec 3))) || (S == 1#1))
+  if (((option_v != (0b011 : (BitVec 3))) || (S == 1#1)) : Bool)
   then none
   else
-    (bif (opc == (0b00 : (BitVec 2)))
+    (if ((opc == (0b00 : (BitVec 2))) : Bool)
     then (some (LoadRegister (t, n, m)))
     else
-      (bif (opc == (0b01 : (BitVec 2)))
+      (if ((opc == (0b01 : (BitVec 2))) : Bool)
       then (some (StoreRegister (t, n, m)))
       else none))
 
@@ -1849,15 +1849,15 @@ def decodeExclusiveOr (sf : (BitVec 1)) (shift : (BitVec 2)) (N : (BitVec 1)) (R
   let d : reg_index := (BitVec.toNat Rd)
   let n : reg_index := (BitVec.toNat Rn)
   let m : reg_index := (BitVec.toNat Rm)
-  bif ((sf == 0#1) && ((BitVec.access imm6 5) == 1#1))
+  if (((sf == 0#1) && ((BitVec.access imm6 5) == 1#1)) : Bool)
   then none
   else
-    (bif (imm6 != (0b000000 : (BitVec 6)))
+    (if ((imm6 != (0b000000 : (BitVec 6))) : Bool)
     then none
     else (some (ExclusiveOr (d, n, m))))
 
 def decodeDataMemoryBarrier (CRm : (BitVec 4)) : (Option ast) :=
-  bif (CRm != (0xF : (BitVec 4)))
+  if ((CRm != (0xF : (BitVec 4))) : Bool)
   then none
   else (some (DataMemoryBarrier ()))
 
@@ -1943,7 +1943,7 @@ def execute_DataMemoryBarrier (_ : Unit) : SailM Unit := do
 /-- Type quantifiers: t : Nat, 0 ≤ t ∧ t ≤ 31 -/
 def execute_CompareAndBranch (t : Nat) (offset : (BitVec 64)) : SailM Unit := do
   let operand ← do (rX t)
-  bif (operand == (0x0000000000000000 : (BitVec 64)))
+  if ((operand == (0x0000000000000000 : (BitVec 64))) : Bool)
   then
     (do
       let base ← do (rPC ())
