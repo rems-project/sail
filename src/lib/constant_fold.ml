@@ -61,15 +61,15 @@ let rec fexp_of_ctor (field, value) = FE_aux (FE_fexp (mk_id field, exp_of_value
    we must convert that back to expression to re-insert it in the AST
 *)
 and exp_of_value =
-  let open Value in
+  let open Value_type in
   function
   | V_int n -> mk_lit_exp (L_num n)
-  | V_bit Sail_lib.B0 -> mk_lit_exp L_zero
-  | V_bit Sail_lib.B1 -> mk_lit_exp L_one
+  | V_bit B0 -> mk_lit_exp L_zero
+  | V_bit B1 -> mk_lit_exp L_one
   | V_bool true -> mk_lit_exp L_true
   | V_bool false -> mk_lit_exp L_false
   | V_string str -> mk_lit_exp (L_string str)
-  | V_record fields -> mk_exp (E_struct (SN_anon, List.map fexp_of_ctor (StringMap.bindings fields)))
+  | V_record fields -> mk_exp (E_struct (SN_anon, List.map fexp_of_ctor fields))
   | V_vector vs -> mk_exp (E_vector (List.map exp_of_value vs))
   | V_tuple vs -> mk_exp (E_tuple (List.map exp_of_value vs))
   | V_unit -> mk_lit_exp L_unit
@@ -80,11 +80,11 @@ and exp_of_value =
    that we avoid traversing through every element of vectors and
    lists, so a list of large lists could still sneak through *)
 let rec is_too_large =
-  let open Value in
+  let open Value_type in
   function
   | V_int _ | V_bit _ | V_bool _ | V_string _ | V_unit | V_attempted_read _ | V_real _ | V_ref _ | V_member _ -> false
   | V_vector vs | V_tuple vs | V_list vs -> List.compare_length_with vs 256 > 0
-  | V_record fields -> StringMap.exists (fun _ v -> is_too_large v) fields
+  | V_record fields -> List.exists (fun (_, v) -> is_too_large v) fields
   | V_ctor (_, vs) -> List.exists is_too_large vs
 
 (* We want to avoid evaluating things like print statements at compile
@@ -158,7 +158,7 @@ let rec run frame =
       (* return a dummy value to read_reg requests which we handle above
          if an expression finally evals to it, but the interpreter
          will fail if it tries to actually use. See value.ml *)
-      run (cont (Value.V_attempted_read reg) st)
+      run (cont (Value_type.V_attempted_read reg) st)
   | Interpreter.Effect_request _ -> assert false (* effectful, raise exception to abort constant folding *)
 
 (** This rewriting pass looks for function applications (E_app) expressions where every argument is a literal. It passes

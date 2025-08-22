@@ -48,6 +48,7 @@ open Ast
 open Ast_util
 open Ast_defs
 open Type_check
+open Value_type
 open Value
 
 type gstate = {

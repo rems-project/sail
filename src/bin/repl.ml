@@ -207,6 +207,7 @@ let setup_sail_scripting istate =
 
   List.iter
     (fun (cmd, (help, action)) ->
+      let open Value_type in
       let open Value in
       let name = sail_command_name cmd in
       let impl values =

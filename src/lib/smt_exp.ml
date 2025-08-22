@@ -1128,6 +1128,7 @@ module Counterexample (Config : COUNTEREXAMPLE_CONFIG) = struct
 
   let rec value_of_sexpr l ctx sexpr =
     let open Jib in
+    let open Value_type in
     let open Value in
     function
     | CT_fbits width -> begin
@@ -1145,6 +1146,7 @@ module Counterexample (Config : COUNTEREXAMPLE_CONFIG) = struct
                    StringMap.add (string_of_id field_id) (value_of_sexpr l ctx sexpr ctyp) m
                  )
                  StringMap.empty fields smt_fields
+              |> StringMap.bindings
               )
         | _ -> raise (Reporting.err_general l ("Cannot parse sexpr as struct " ^ string_of_sexpr sexpr))
       end

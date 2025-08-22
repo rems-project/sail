@@ -1,26 +1,15 @@
 Require Extraction.
 
 Set Extraction KeepSingleton.
+Set Extraction Output Directory ".".
 
-From Stdlib Require ExtrOcamlBasic.
-
-Parameter string : Set.
-
-Extract Inlined Constant string => "string".
+Require Import Value_type.
 
 Parameter loc : Set.
 
 Definition l := loc.
 
 Extract Inlined Constant loc => "Parse_ast.l".
-
-Parameter num : Set.
-
-Extract Inlined Constant num => "Nat_big_num.num".
-
-Parameter value : Set.
-
-Extract Inlined Constant value => "Value.value".
 
 Parameter ext_attribute_data : Set.
 
@@ -222,6 +211,26 @@ Inductive pat_aux (a : Set) : Set :=
 with pat (a : Set) : Set :=
 | P_aux : pat_aux a -> annot a -> pat a.
 
+Arguments P_aux {_}.
+
+Arguments P_lit {_}.
+Arguments P_wild {_}.
+Arguments P_or {_}.
+Arguments P_not {_}.
+Arguments P_as {_}.
+Arguments P_typ {_}.
+Arguments P_id {_}.
+Arguments P_var {_}.
+Arguments P_app {_}.
+Arguments P_vector {_}.
+Arguments P_vector_concat {_}.
+Arguments P_vector_subrange {_}.
+Arguments P_tuple {_}.
+Arguments P_list {_}.
+Arguments P_cons {_}.
+Arguments P_string_append {_}.
+Arguments P_struct {_}.
+
 Inductive quant_item : Set :=
 | QI_aux : quant_item_aux -> loc -> quant_item.
 
@@ -325,6 +334,57 @@ with letbind_aux (a : Set) : Set :=
 
 with letbind (a : Set) : Set :=
 | LB_aux : letbind_aux a -> annot a -> letbind a.
+
+Arguments E_block {_}.
+Arguments E_id {_}.
+Arguments E_lit {_}.
+Arguments E_typ {_}.
+Arguments E_app {_}.
+Arguments E_app_infix {_}.
+Arguments E_tuple {_}.
+Arguments E_if {_}.
+Arguments E_loop {_}.
+Arguments E_for {_}.
+Arguments E_vector {_}.
+Arguments E_vector_access {_}.
+Arguments E_vector_subrange {_}.
+Arguments E_vector_update {_}.
+Arguments E_vector_update_subrange {_}.
+Arguments E_vector_append {_}.
+Arguments E_list {_}.
+Arguments E_cons {_}.
+Arguments E_struct {_}.
+Arguments E_struct_update {_}.
+Arguments E_field {_}.
+Arguments E_match {_}.
+Arguments E_let {_}.
+Arguments E_assign {_}.
+Arguments E_sizeof {_}.
+Arguments E_return {_}.
+Arguments E_exit {_}.
+Arguments E_config {_}.
+Arguments E_ref {_}.
+Arguments E_throw {_}.
+Arguments E_try {_}.
+Arguments E_assert {_}.
+Arguments E_var {_}.
+Arguments E_internal_plet {_}.
+Arguments E_internal_return {_}.
+Arguments E_internal_value {_}.
+Arguments E_internal_assume {_}.
+Arguments E_constraint {_}.
+Arguments E_aux {_}.
+
+Arguments Pat_aux {_}.
+Arguments Pat_exp {_}.
+Arguments Pat_when {_}.
+
+Arguments LB_aux {_}.
+Arguments LB_val {_}.
+
+Arguments LE_aux {_}.
+Arguments LE_id {_}.
+Arguments LE_typ {_}.
 
 Inductive typquant_aux : Set :=
 | TypQ_tq : list quant_item -> typquant_aux
@@ -517,5 +577,3 @@ Inductive impldef (a : Set) : Set :=
 
 Inductive opt_default (a : Set) : Set :=
 | Def_val_aux : opt_default_aux a -> annot a -> opt_default a.
-
-Extraction "ast.ml" l attribute_data def impldef opt_default.

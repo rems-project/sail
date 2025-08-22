@@ -47,6 +47,7 @@
 open Ast
 open Ast_defs
 open Ast_util
+open Value_type
 open Value
 module Document = Pretty_print_sail.Document
 
@@ -72,8 +73,8 @@ type state = lstate * gstate
 let value_of_lit (L_aux (l_aux, _)) =
   match l_aux with
   | L_unit -> V_unit
-  | L_zero -> V_bit Sail_lib.B0
-  | L_one -> V_bit Sail_lib.B1
+  | L_zero -> V_bit B0
+  | L_one -> V_bit B1
   | L_true -> V_bool true
   | L_false -> V_bool false
   | L_string str -> V_string str
@@ -253,10 +254,7 @@ let complete_bindings =
         in
         let len = Big_int.sub (Big_int.succ max) min in
         List.fold_left
-          (fun bv (slice, n, m) ->
-            prerr_endline (string_of_value slice);
-            value_update_subrange [bv; V_int n; V_int m; slice]
-          )
+          (fun bv (slice, n, m) -> value_update_subrange [bv; V_int n; V_int m; slice])
           (value_zeros [V_int len]) ((v1, n1, m1) :: partial_values)
     | Partial_binding [] -> Reporting.unreachable Parse_ast.Unknown __POS__ "Empty partial binding set"
     )
@@ -286,6 +284,59 @@ let lexp_vector_concat_widths env lexps =
   in
   Util.result_all (List.map get_length lexps)
 
+module RocqSemantics = Interpret.Semantics (struct
+  type tannot = Type_check.tannot
+  let get_type tannot =
+    let typ = Type_check.typ_of_tannot tannot in
+    typ
+  let id_equal x y = Id.compare x y = 0
+  let id_equal_string x s = string_of_id x = s
+  let bits_of_hex_string = Sail_lib.bits_of_string
+  let bits_of_bin_string s = List.map Sail_lib.bin_char (Sail_lib.list_of_string s)
+  let rational_of_string = Sail_lib.real_of_string
+end)
+
+let rec adapt env = function
+  | Interpret.Monad.Pure exp -> Pure exp
+  | Interpret.Monad.Exception v -> Yield (Exception v)
+  | Interpret.Monad.Match_failure l -> fail "Pattern match failure"
+  | Interpret.Monad.Assertion_failed s -> Yield (Assertion_failed s)
+  | Interpret.Monad.Read_reg (name, cont) -> Yield (Read_reg (string_of_id name, fun v -> adapt env (cont v)))
+  | Interpret.Monad.Write_reg (name, value, cont) ->
+      Yield (Write_reg (string_of_id name, value, fun () -> adapt env (cont ())))
+  | Interpret.Monad.Call (id, args, cont) ->
+      if Type_check.Env.is_union_constructor id env then
+        adapt env (cont (Interpret.Return_ok (V_ctor (string_of_id id, args))))
+      else if is_interpreter_extern id env then (
+        let extern = get_interpreter_extern id env in
+        if extern = "reg_deref" then (
+          let regname = coerce_string (List.hd args) in
+          read_reg regname >>= fun v -> return (exp_of_value v)
+        )
+        else
+          get_primop extern >>= fun op ->
+          try adapt env (cont (Interpret.Return_ok (op args)))
+          with _ as exc -> fail ("Exception calling primop '" ^ extern ^ "': " ^ Printexc.to_string exc)
+      )
+      else
+        Yield
+          (Call
+             ( id,
+               args,
+               function
+               | Return_ok v -> adapt env (cont (Interpret.Return_ok v))
+               | Return_exception v -> adapt env (cont (Interpret.Return_exception v))
+             )
+          )
+  | Interpret.Monad.Get_undefined (typ, cont) ->
+      let undef_exp = Ast_util.undefined_of_typ false Parse_ast.Unknown (fun _ -> empty_uannot) typ in
+      let undef_exp = Type_check.check_exp env undef_exp typ in
+      return undef_exp
+  | Interpret.Monad.Runtime_type_error l -> Reporting.unreachable l __POS__ "Runtime type error in interpreter"
+
+let step env exp = adapt env (RocqSemantics.step exp)
+
+(*
 let rec step (E_aux (e_aux, annot) as orig_exp) =
   let wrap e_aux' = return (E_aux (e_aux', annot)) in
   match e_aux with
@@ -440,7 +491,7 @@ let rec step (E_aux (e_aux, annot) as orig_exp) =
         | [] ->
             List.map value_of_fexp fexps
             |> List.fold_left (fun record (field, v) -> StringMap.add field v record) StringMap.empty
-            |> (fun record -> V_record record)
+            |> (fun record -> V_record (StringMap.bindings record))
             |> exp_of_value |> return
       end
   | E_struct_update (exp, fexps) when not (is_value exp) -> step exp >>= fun exp' -> wrap (E_struct_update (exp', fexps))
@@ -456,7 +507,7 @@ let rec step (E_aux (e_aux, annot) as orig_exp) =
             |> List.fold_left
                  (fun record (field, v) -> StringMap.add field v record)
                  (coerce_record (value_of_exp record))
-            |> (fun record -> V_record record)
+            |> (fun record -> V_record (StringMap.bindings record))
             |> exp_of_value |> return
       end
   | E_field (exp, id) when not (is_value exp) -> step exp >>= fun exp' -> wrap (E_field (exp', id))
@@ -596,7 +647,9 @@ let rec step (E_aux (e_aux, annot) as orig_exp) =
   | E_cons (hd, tl) -> step hd >>= fun hd' -> wrap (E_cons (hd', tl))
   | _ -> raise (Invalid_argument ("Unimplemented " ^ string_of_exp orig_exp))
 
-and exp_of_lexp (LE_aux (lexp_aux, _)) =
+ *)
+
+let rec exp_of_lexp (LE_aux (lexp_aux, _)) =
   match lexp_aux with
   | LE_id id -> mk_exp (E_id id)
   | LE_app (f, args) -> mk_exp (E_app (f, args))
@@ -611,7 +664,7 @@ and exp_of_lexp (LE_aux (lexp_aux, _)) =
       mk_exp (E_vector_append (exp_of_lexp lexp, exp_of_lexp (mk_lexp (LE_vector_concat lexps))))
   | LE_field (lexp, id) -> mk_exp (E_field (exp_of_lexp lexp, id))
 
-and pattern_match env (P_aux (p_aux, (l, _))) value =
+let rec pattern_match env (P_aux (p_aux, (l, _))) value =
   match p_aux with
   | P_lit lit -> (eq_value (value_of_lit lit) value, Bindings.empty)
   | P_wild -> (true, Bindings.empty)
@@ -763,23 +816,25 @@ let rec eval_frame' = function
       | Pure v, head :: stack' when is_value v ->
           Step (stack_string head, (stack_state head, gstate), stack_cont head (Return_ok (value_of_exp v)), stack')
       | Pure exp', _ ->
+          (* prerr_endline ("S " ^ string_of_exp exp'); *)
           let out' = lazy (Document.to_string (Printer.doc_exp (Type_check.strip_exp exp'))) in
-          Step (out', state, step exp', stack)
+          Step (out', state, step gstate.typecheck_env exp', stack)
       | Yield (Call (id, vals, cont)), _ when string_of_id id = "break" -> begin
           let arg = if List.length vals != 1 then tuple_value vals else List.hd vals in
           try
             let body = exp_of_fundef (Bindings.find id gstate.fundefs) arg in
-            Break (Step (lazy "", (initial_lstate, gstate), return body, (out, lstate, cont) :: stack))
+            Break (Step (lazy (string_of_exp body), (initial_lstate, gstate), return body, (out, lstate, cont) :: stack))
           with Not_found -> Step (out, state, fail ("Fundef not found: " ^ string_of_id id), stack)
         end
       | Yield (Call (id, vals, cont)), _ when Type_check.Env.is_outcome id gstate.typecheck_env -> begin
           Effect_request (out, state, stack, Outcome (id, vals, cont))
         end
       | Yield (Call (id, vals, cont)), _ -> begin
+          (* prerr_endline ("C " ^ string_of_id id); *)
           let arg = if List.length vals != 1 then tuple_value vals else List.hd vals in
           try
             let body = exp_of_fundef (Bindings.find id gstate.fundefs) arg in
-            Step (lazy "", (initial_lstate, gstate), return body, (out, lstate, cont) :: stack)
+            Step (lazy (string_of_exp body), (initial_lstate, gstate), return body, (out, lstate, cont) :: stack)
           with Not_found -> Step (out, state, fail ("Fundef not found: " ^ string_of_id id), stack)
         end
       | Yield (Read_reg (name, cont)), _ ->
@@ -876,7 +931,10 @@ let rec initialize_registers allow_registers undef_registers gstate =
             { gstate with registers = Bindings.add id (eval_exp (initial_lstate, gstate) exp) gstate.registers }
         | None -> gstate
         | Some exp ->
-            { gstate with registers = Bindings.add id (eval_exp (initial_lstate, gstate) exp) gstate.registers }
+            (* prerr_endline ("EVAL " ^ string_of_exp exp); *)
+            let evaluated = eval_exp (initial_lstate, gstate) exp in
+            (* prerr_endline ("GOT " ^ string_of_value evaluated); *)
+            { gstate with registers = Bindings.add id evaluated gstate.registers }
       end
     | _ -> gstate
   in

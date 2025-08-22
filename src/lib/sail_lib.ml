@@ -44,6 +44,8 @@
 (*  SPDX-License-Identifier: BSD-2-Clause                                   *)
 (****************************************************************************)
 
+open Value_type
+
 module Big_int = Nat_big_num
 
 (* for ToFromInterp_lib_foo *)
@@ -107,8 +109,6 @@ let sail_trace_call (type t) (name : string) (in_string : string) (string_of_out
 let trace_call str =
   trace str;
   incr trace_depth
-
-type bit = B0 | B1
 
 let eq_anything (a, b) = a = b
 

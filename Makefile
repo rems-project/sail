@@ -1,4 +1,4 @@
-.PHONY: all isail sail install coverage clean asciidoc docker test core-tests c-tests
+.PHONY: all isail sail install coverage clean asciidoc docker test core-tests c-tests extraction
 
 all: sail
 
@@ -12,6 +12,9 @@ install: sail
 
 libsail_coverage:
 	$(MAKE) -C lib/coverage
+
+extraction:
+	$(MAKE) -C src/lib/rocq
 
 # Build binary tarball. The lib directory is very large and not needed
 # for running the compiler. TARBALL_EXTRA_BIN can be used to bundle z3.
