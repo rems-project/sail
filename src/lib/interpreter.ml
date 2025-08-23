@@ -296,6 +296,9 @@ module RocqSemantics = Interpret.Semantics (struct
     | Local _ | Unbound _ -> Interpret.Local_variable
     | Enum _ -> Interpret.Enum_member
   let id_equal x y = Id.compare x y = 0
+  let num_equal x y = Big_int.compare x y = 0
+  let string_equal x y = String.compare x y = 0
+  let rational_equal x y = Rational.equal x y
   let id_equal_string x s = string_of_id x = s
   let string_of_id = string_of_id
   let bits_of_hex_string = Sail_lib.bits_of_string

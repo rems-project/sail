@@ -221,6 +221,12 @@ Module Type TANNOT.
 
   Parameter id_equal : id -> id -> bool.
 
+  Parameter num_equal : num -> num -> bool.
+
+  Parameter string_equal : string -> string -> bool.
+
+  Parameter rational_equal : rational -> rational -> bool.
+
   Parameter id_equal_string : id -> string -> bool.
 
   Parameter string_of_id : id -> string.
@@ -262,10 +268,15 @@ Module Semantics (T : TANNOT).
           E_aux (E_let (LB_aux (LB_val pat (substitute n v y)) lb_annot) (substitute n v body)) annot
     | E_match head_exp arms =>
         E_aux (E_match (substitute n v head_exp) (map (substitute_arm n v) arms)) annot
+    | E_try head_exp arms =>
+        E_aux (E_try (substitute n v head_exp) (map (substitute_arm n v) arms)) annot
     | E_list xs =>
         E_aux (E_list (map (substitute n v) xs)) annot
     | E_typ typ x => E_aux (E_typ typ (substitute n v x)) annot
     | E_lit _ => E_aux aux annot
+    | E_throw exn => E_aux (E_throw (substitute n v exn)) annot
+    | E_assert x msg =>
+        E_aux (E_assert (substitute n v x) (substitute n v msg)) annot
     (* FIXME: Loops *)
     | E_loop _ _ _ _ => E_aux aux annot
     | E_for _ _ _ _ _ _ => E_aux aux annot
@@ -305,12 +316,80 @@ Module Semantics (T : TANNOT).
 
   Definition no_match : bool * list (id * value) := (false, nil).
 
+  Definition same_bits (bs : list bit) (vs : list value) : bool :=
+    fst (fold_left
+           (fun match_info b =>
+              match match_info with
+              | (_, []) => (false, [])
+              | (false, _) => (false, [])
+              | (true, V_bit B0 :: vs) =>
+                match b with
+                | B0 => (true, vs)
+                | B1 => (false, [])
+                end
+              | (true, V_bit B1 :: vs) =>
+                match b with
+                | B1 => (true, vs)
+                | B0 => (false, [])
+                end
+              | (_, _ :: _) => (false, [])
+              end
+           )
+           bs
+           (true, vs)).
+
+  Lemma same_bits_cons : forall (b : bit) (bs : list bit),
+      same_bits (b :: bs) (V_bit b :: map V_bit bs) = same_bits bs (map V_bit bs).
+  Proof.
+    intros.
+    destruct b.
+    all: unfold same_bits.
+    all: cbn.
+    all: reflexivity.
+  Qed.
+
+  Lemma same_bits_refl : forall (bs : list bit),
+      same_bits bs (map V_bit bs) = true.
+  Proof.
+    induction bs.
+    easy.
+    rewrite same_bits_cons.
+    assumption.
+  Qed.
+
+  Definition pattern_match_literal (l : Ast.lit) (v : value) : bool :=
+    let 'L_aux aux annot := l in
+    match (aux, v) with
+    | (L_unit, V_unit) => true
+    | (L_zero, V_bit B0) => true
+    | (L_one, V_bit B1) => true
+    | (L_true, V_bool true) => true
+    | (L_false, V_bool false) => true
+    | (L_num n, V_int m) => T.num_equal n m
+    | (L_hex s, V_vector vs) => same_bits (T.bits_of_hex_string s) vs
+    | (L_bin s, V_vector vs) => same_bits (T.bits_of_bin_string s) vs
+    | (L_string s1, V_string s2) => T.string_equal s1 s2
+    | (L_real r1, V_real r2) => T.rational_equal (T.rational_of_string r1) r2
+    | _ => false
+    end.
+
   Fixpoint pattern_match (p : Ast.pat T.tannot) (v : value) {struct p} : bool * list (id * value) :=
     let 'P_aux aux annot := p in
     match aux with
     | P_wild => (true, [])
-    | P_id n => (true, [(n, v)])
+    | P_id n =>
+        match T.get_id_type (snd annot) n with
+        | Enum_member =>
+            match v with
+            | V_member m =>
+                (T.id_equal_string n m, [])
+            | _ => no_match
+            end
+        | _ =>
+            (true, [(n, v)])
+        end
     | P_typ _ p => pattern_match p v
+    | P_lit l => (pattern_match_literal l v, [])
     | P_as p n =>
         let '(matched, bindings) := pattern_match p v in
         (matched, (n, v) :: bindings)
@@ -375,8 +454,53 @@ Module Semantics (T : TANNOT).
         (* Matching a list on a non-list *)
         | _ => no_match
         end
-    | _ =>
-        (true, [])
+    | P_vector ps =>
+        match v with
+        | V_vector vs =>
+            fst (fold_left
+                   (fun match_info p =>
+                      match match_info with
+                      (* The vector and pattern are different lengths, so no match *)
+                      | (_, []) => (no_match, [])
+                      (* A previous element pattern already failed *)
+                      | ((false, _), v :: vs) => (no_match, vs)
+                      | ((true, vars), v :: vs) =>
+                          let '(matched, more_vars) := pattern_match p v in
+                     ((matched, vars ++ more_vars), vs)
+                      end
+                   )
+                   ps
+                   ((true, []), vs))
+        (* Matching a list on a non-list *)
+        | _ => no_match
+        end
+    | P_cons p ps =>
+        match v with
+        | V_list nil => no_match
+        | V_list (v :: vs) =>
+            let '(hd_matched, hd_bound) := pattern_match p v in
+            let '(tl_matched, tl_bound) := pattern_match ps (V_list vs) in
+            (andb hd_matched tl_matched, hd_bound ++ tl_bound)
+        | _ => no_match
+        end
+    | P_or lhs_p rhs_p =>
+        let '(lhs_matched, lhs_bound) := pattern_match lhs_p v in
+        let '(rhs_matched, rhs_bound) := pattern_match rhs_p v in
+        if lhs_matched then
+          (true, lhs_bound)
+        else if rhs_matched then
+               (true, rhs_bound)
+             else
+               no_match
+    | P_not p =>
+        let '(p_matched, _) := pattern_match p v in
+        (negb p_matched, [])
+    | P_var p _ => pattern_match p v
+    (* TODO *)
+    | P_struct _ _ _ => (true, [])
+    | P_vector_concat _ => (true, [])
+    | P_vector_subrange _ _ _ => (true, [])
+    | P_string_append _ => (true, [])
     end.
 
   Program Fixpoint step (orig_exp : exp T.tannot) {measure (depth orig_exp)} : t (exp T.tannot) :=
@@ -384,18 +508,16 @@ Module Semantics (T : TANNOT).
     let wrap e_aux' := pure (E_aux e_aux' annot) in
     match aux with
     | E_block xs =>
-        (
-          match xs with
-          | [] => wrap (E_internal_value V_unit)
-          | [E_aux (E_internal_value v) annot] => pure (E_aux (E_internal_value v) annot)
-          | [E_aux (E_block ys) annot] => pure (E_aux (E_block ys) annot)
-          | x :: xs =>
-              if is_value x then
-                wrap (E_block xs)
-              else
-                bind (step x) (fun x' => wrap (E_block (x' :: xs)))
-          end
-        )
+        match xs with
+        | [] => wrap (E_internal_value V_unit)
+        | [E_aux (E_internal_value v) annot] => pure (E_aux (E_internal_value v) annot)
+        | [E_aux (E_block ys) annot] => pure (E_aux (E_block ys) annot)
+        | x :: xs =>
+            if is_value x then
+              wrap (E_block xs)
+            else
+              bind (step x) (fun x' => wrap (E_block (x' :: xs)))
+        end
     | E_id id =>
         match T.get_id_type (snd annot) id with
         | Global_register =>
