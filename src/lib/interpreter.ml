@@ -289,8 +289,15 @@ module RocqSemantics = Interpret.Semantics (struct
   let get_type tannot =
     let typ = Type_check.typ_of_tannot tannot in
     typ
+  let get_id_type tannot id =
+    let env = Type_check.env_of_tannot tannot in
+    match Type_check.Env.lookup_id id env with
+    | Register _ -> Interpret.Global_register
+    | Local _ | Unbound _ -> Interpret.Local_variable
+    | Enum _ -> Interpret.Enum_member
   let id_equal x y = Id.compare x y = 0
   let id_equal_string x s = string_of_id x = s
+  let string_of_id = string_of_id
   let bits_of_hex_string = Sail_lib.bits_of_string
   let bits_of_bin_string s = List.map Sail_lib.bin_char (Sail_lib.list_of_string s)
   let rational_of_string = Sail_lib.real_of_string
@@ -301,9 +308,16 @@ let rec adapt env = function
   | Interpret.Monad.Exception v -> Yield (Exception v)
   | Interpret.Monad.Match_failure l -> fail "Pattern match failure"
   | Interpret.Monad.Assertion_failed s -> Yield (Assertion_failed s)
-  | Interpret.Monad.Read_reg (name, cont) -> Yield (Read_reg (string_of_id name, fun v -> adapt env (cont v)))
-  | Interpret.Monad.Write_reg (name, value, cont) ->
-      Yield (Write_reg (string_of_id name, value, fun () -> adapt env (cont ())))
+  | Interpret.Monad.Read_var (var_type, name, cont) -> (
+      match var_type with
+      | Interpret.Monad.Var_register -> Yield (Read_reg (string_of_id name, fun v -> adapt env (cont v)))
+      | Interpret.Monad.Var_local -> Yield (Get_local (string_of_id name, fun v -> adapt env (cont v)))
+    )
+  | Interpret.Monad.Write_var (var_type, name, value, cont) -> (
+      match var_type with
+      | Interpret.Monad.Var_register -> Yield (Write_reg (string_of_id name, value, fun () -> adapt env (cont ())))
+      | Interpret.Monad.Var_local -> Yield (Put_local (string_of_id name, value, fun () -> adapt env (cont ())))
+    )
   | Interpret.Monad.Call (id, args, cont) ->
       if Type_check.Env.is_union_constructor id env then
         adapt env (cont (Interpret.Return_ok (V_ctor (string_of_id id, args))))

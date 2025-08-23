@@ -24,6 +24,10 @@ Inductive return_value : Set :=
 | Return_exception : value -> return_value.
 
 Module Monad.
+  Inductive var_type : Set :=
+  | Var_local : var_type
+  | Var_register : var_type.
+
   Inductive t (a : Set) : Set :=
   | Pure : a -> t a
   | Exception : value -> t a
@@ -31,8 +35,8 @@ Module Monad.
   | Match_failure : Ast.loc -> t a
   | Assertion_failed : string -> t a
   | Call : id -> list value -> (return_value -> t a) -> t a
-  | Read_reg : id -> (value -> t a) -> t a
-  | Write_reg : id -> value -> (unit -> t a) -> t a
+  | Read_var : var_type -> id -> (value -> t a) -> t a
+  | Write_var : var_type -> id -> value -> (unit -> t a) -> t a
   | Get_undefined : typ -> (value -> t a) -> t a.
 
   Arguments Pure {_}.
@@ -41,8 +45,8 @@ Module Monad.
   Arguments Match_failure {_}.
   Arguments Assertion_failed {_}.
   Arguments Call {_}.
-  Arguments Read_reg {_}.
-  Arguments Write_reg {_}.
+  Arguments Read_var {_}.
+  Arguments Write_var {_}.
   Arguments Get_undefined {_}.
 
   Fixpoint bind {A B : Set} (m : t A) (f : A -> t B) : t B :=
@@ -53,8 +57,8 @@ Module Monad.
     | Match_failure l => Match_failure l
     | Assertion_failed msg => Assertion_failed msg
     | Call id args cont => Call id args (fun v => bind (cont v) f)
-    | Read_reg r cont => Read_reg r (fun v => bind (cont v) f)
-    | Write_reg r v cont => Write_reg r v (fun u => bind (cont u) f)
+    | Read_var t r cont => Read_var t r (fun v => bind (cont v) f)
+    | Write_var t r v cont => Write_var t r v (fun u => bind (cont u) f)
     | Get_undefined t cont => Get_undefined t (fun v => bind (cont v) f)
     end.
 
@@ -66,8 +70,8 @@ Module Monad.
     | Match_failure l => Match_failure l
     | Assertion_failed msg => Assertion_failed msg
     | Call id args cont => Call id args (fun v => fmap f (cont v))
-    | Read_reg r cont => Read_reg r (fun v => fmap f (cont v))
-    | Write_reg r v cont => Write_reg r v (fun u => fmap f (cont u))
+    | Read_var t r cont => Read_var t r (fun v => fmap f (cont v))
+    | Write_var t r v cont => Write_var t r v (fun u => fmap f (cont u))
     | Get_undefined t cont => Get_undefined t (fun v => fmap f (cont v))
     end.
 
@@ -92,21 +96,31 @@ Module Monad.
     | Match_failure l => Match_failure l
     | Assertion_failed msg => Assertion_failed msg
     | Call id args cont => Call id args (fun v => fmap Continue (cont v))
-    | Read_reg r cont => Read_reg r (fun v => fmap Continue (cont v))
-    | Write_reg r v cont => Write_reg r v (fun _ => fmap Continue (cont ()))
+    | Read_var t r cont => Read_var t r (fun v => fmap Continue (cont v))
+    | Write_var t r v cont => Write_var t r v (fun _ => fmap Continue (cont ()))
     | Get_undefined t cont => Get_undefined t (fun v => fmap Continue (cont v))
     end.
 
-  Theorem bind_pure : forall (A B : Set) (f : A -> t B) (x : A), bind (pure x) f = f x.
+  Theorem bind_left_id : forall (A B : Set) (f : A -> t B) (x : A), bind (pure x) f = f x.
   Proof.
-    unfold bind. unfold pure.
-    reflexivity.
+    cbn. reflexivity.
+  Qed.
+
+  Theorem bind_right_id : forall (A : Set) (m : t A), bind m pure = m.
+  Proof.
+    induction m as [| | | | | ? ? cont | ? ? cont | ? ? ? cont | ? cont]; try easy.
+    all: cbn.
+    all: f_equal.
+    all: apply functional_extensionality.
+    all: intros.
+    all: specialize (H x).
+    all: assumption.
   Qed.
 
   Theorem bind_assoc : forall (A B C : Set) (f : A -> t B) (g : B -> t C) (x : t A),
       bind (bind x f) g = bind x (fun y => bind (f y) g).
   Proof.
-    induction x as [| | | | | ? ? cont | ? cont | ? ? cont | ? cont]; try easy.
+    induction x as [| | | | | ? ? cont | ? ? cont | ? ? ? cont | ? cont]; try easy.
     all: cbn.
     all: f_equal.
     all: apply functional_extensionality.
@@ -189,6 +203,11 @@ Proof.
   reflexivity.
 Qed.
 
+Inductive id_type :=
+| Local_variable : id_type
+| Global_register : id_type
+| Enum_member : id_type.
+
 (** Sail annotates terms with custom type annotation data, which we
     don't have access to here. Instead use a functor parameterised by
     the following TANNOT signature, which can provide the methods we
@@ -198,9 +217,13 @@ Module Type TANNOT.
 
   Parameter get_type : tannot -> typ.
 
+  Parameter get_id_type : tannot -> id -> id_type.
+
   Parameter id_equal : id -> id -> bool.
 
   Parameter id_equal_string : id -> string -> bool.
+
+  Parameter string_of_id : id -> string.
 
   Parameter bits_of_hex_string : string -> list bit.
 
@@ -374,13 +397,27 @@ Module Semantics (T : TANNOT).
           end
         )
     | E_id id =>
-        Read_reg id (fun v => wrap (E_internal_value v))
+        match T.get_id_type (snd annot) id with
+        | Global_register =>
+            Read_var Var_register id (fun v => wrap (E_internal_value v))
+        | Local_variable =>
+            Read_var Var_local id (fun v => wrap (E_internal_value v))
+        | Enum_member =>
+            wrap (E_internal_value (V_member (T.string_of_id id)))
+        end
     | E_assign l x =>
         match x with
         | E_aux (E_internal_value v) _ =>
             match l with
             | LE_aux (LE_id var | LE_typ _ var) _ =>
-                Write_reg var v (fun _ => wrap (E_internal_value V_unit))
+                match T.get_id_type (snd annot) var with
+                | Global_register =>
+                    Write_var Var_register var v (fun _ => wrap (E_internal_value V_unit))
+                | Local_variable =>
+                    Write_var Var_local var v (fun _ => wrap (E_internal_value V_unit))
+                | Enum_member =>
+                    Runtime_type_error (fst annot)
+                end
             | _ =>
                 Runtime_type_error (fst annot)
             end
@@ -389,30 +426,28 @@ Module Semantics (T : TANNOT).
         end
     | E_var l x body => wrap (E_block (E_aux (E_assign l x) annot :: [body]))
     | E_match head_exp arms =>
-        (
-          match head_exp with
-          | E_aux (E_internal_value v) _ =>
-              (
-                match arms with
-                | Pat_aux (Pat_exp pat body) _ :: next_arms =>
-                    let '(matched, arm_substs) := pattern_match pat v in
-                    if matched then
-                      pure (fold_left (fun body s => substitute (fst s) (snd s) body) arm_substs body)
-                    else
-                      wrap (E_match head_exp next_arms)
-                | Pat_aux (Pat_when pat _ body) _ :: next_arms =>
-                    let '(matched, arm_substs) := pattern_match pat v in
-                    if matched then
-                      pure (fold_left (fun body s => substitute (fst s) (snd s) body) arm_substs body)
-                    else
-                      wrap (E_match head_exp next_arms)
-                | [] => Match_failure (fst annot)
-                end
-              )
-          | _ =>
-              bind (step head_exp) (fun head_exp' => wrap (E_match head_exp' arms))
-          end
-        )
+        match head_exp with
+        | E_aux (E_internal_value v) _ =>
+            (
+              match arms with
+              | Pat_aux (Pat_exp pat body) _ :: next_arms =>
+                  let '(matched, arm_substs) := pattern_match pat v in
+                  if matched then
+                    pure (fold_left (fun body s => substitute (fst s) (snd s) body) arm_substs body)
+                  else
+                    wrap (E_match head_exp next_arms)
+              | Pat_aux (Pat_when pat _ body) _ :: next_arms =>
+                  let '(matched, arm_substs) := pattern_match pat v in
+                  if matched then
+                    pure (fold_left (fun body s => substitute (fst s) (snd s) body) arm_substs body)
+                  else
+                    wrap (E_match head_exp next_arms)
+              | [] => Match_failure (fst annot)
+              end
+            )
+        | _ =>
+            bind (step head_exp) (fun head_exp' => wrap (E_match head_exp' arms))
+        end
     | E_let (LB_aux (LB_val pat x) lb_annot) body =>
         (
           match x with
