@@ -55,7 +55,7 @@ type gstate = {
   registers : value Bindings.t;
   allow_registers : bool; (* For some uses we want to forbid touching any registers. *)
   primops : (value list -> value) StringMap.t;
-  letbinds : tannot letbind list;
+  letbinds : value Bindings.t;
   fundefs : tannot fundef Bindings.t;
   typecheck_env : Env.t;
 }

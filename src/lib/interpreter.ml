@@ -61,7 +61,7 @@ type gstate = {
   registers : value Bindings.t;
   allow_registers : bool; (* For some uses we want to forbid touching any registers. *)
   primops : (value list -> value) StringMap.t;
-  letbinds : Type_check.tannot letbind list;
+  letbinds : value Bindings.t;
   fundefs : Type_check.tannot fundef Bindings.t;
   typecheck_env : Type_check.Env.t;
 }
@@ -135,7 +135,6 @@ module Monad = struct
     | Get_primop of string * ((value list -> value) -> 'a)
     | Get_local of string * (value -> 'a)
     | Put_local of string * value * (unit -> 'a)
-    | Get_global_letbinds of (Type_check.tannot letbind list -> 'a)
 
   and 'a t = Pure of 'a | Yield of 'a t response
 
@@ -150,7 +149,6 @@ module Monad = struct
     | Get_primop (name, cont) -> Get_primop (name, fun op -> f (cont op))
     | Get_local (name, cont) -> Get_local (name, fun v -> f (cont v))
     | Put_local (name, v, cont) -> Put_local (name, v, fun () -> f (cont ()))
-    | Get_global_letbinds cont -> Get_global_letbinds (fun lbs -> f (cont lbs))
 
   let rec liftM f = function Pure x -> Pure (f x) | Yield g -> Yield (map_response (liftM f) g)
 
@@ -189,8 +187,6 @@ module Monad = struct
   let get_local name = Yield (Get_local (name, fun v -> Pure v))
 
   let put_local name v = Yield (Put_local (name, v, fun () -> Pure ()))
-
-  let get_global_letbinds () = Yield (Get_global_letbinds (fun lbs -> Pure lbs))
 
   let early_return v = Yield (Early_return v)
 
@@ -852,6 +848,13 @@ and effect_request =
   | Write_reg of string * value * (unit -> state -> frame)
   | Outcome of id * value list * (return_value -> Type_check.tannot exp Monad.t)
 
+let read_variable id lstate gstate =
+  match Bindings.find_opt id lstate.locals with
+  | Some v -> v
+  | None -> (
+      match Bindings.find_opt id gstate.letbinds with Some v -> v | None -> raise Not_found
+    )
+
 let rec eval_frame' = function
   | Done (state, v) -> Done (state, v)
   | Fail (out, state, m, stack, msg) -> Fail (out, state, m, stack, msg)
@@ -899,13 +902,12 @@ let rec eval_frame' = function
           with Not_found -> eval_frame' (Step (out, state, fail ("No such primop: " ^ name), stack))
         end
       | Yield (Get_local (name, cont)), _ -> begin
-          try eval_frame' (Step (out, state, cont (Bindings.find (mk_id name) lstate.locals), stack))
+          try eval_frame' (Step (out, state, cont (read_variable (mk_id name) lstate gstate), stack))
           with Not_found -> eval_frame' (Step (out, state, fail ("Local not found: " ^ name), stack))
         end
       | Yield (Put_local (name, v, cont)), _ ->
           let state' = ({ locals = Bindings.add (mk_id name) v lstate.locals }, gstate) in
           eval_frame' (Step (out, state', cont (), stack))
-      | Yield (Get_global_letbinds cont), _ -> eval_frame' (Step (out, state, cont gstate.letbinds, stack))
       | Yield (Early_return v), [] -> Done (state, v)
       | Yield (Early_return v), head :: stack' ->
           Step (stack_string head, (stack_state head, gstate), stack_cont head (Return_ok v), stack')
@@ -962,7 +964,7 @@ let initial_gstate primops defs env =
     registers = Bindings.empty;
     allow_registers = true;
     primops;
-    letbinds = defs_letbinds defs;
+    letbinds = Bindings.empty;
     fundefs = Bindings.empty;
     typecheck_env = env;
   }
@@ -984,6 +986,13 @@ let rec initialize_registers allow_registers undef_registers gstate =
             (* prerr_endline ("GOT " ^ string_of_value evaluated); *)
             { gstate with registers = Bindings.add id evaluated gstate.registers }
       end
+    | DEF_aux (DEF_let (LB_aux (LB_val (pat, exp), annot)), def_annot) ->
+        let evaluated = eval_exp (initial_lstate, gstate) exp in
+        let _, bindings = pattern_match def_annot.env pat evaluated in
+        {
+          gstate with
+          letbinds = Bindings.fold (fun id v lbs -> Bindings.add id v lbs) (complete_bindings bindings) gstate.letbinds;
+        }
     | _ -> gstate
   in
   function def :: defs -> initialize_registers allow_registers undef_registers (process_def def) defs | [] -> gstate
