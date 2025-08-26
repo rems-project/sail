@@ -30,6 +30,7 @@ Module Monad.
 
   Inductive t (a : Set) : Set :=
   | Pure : a -> t a
+  | Early_return : value -> t a
   | Exception : value -> t a
   | Runtime_type_error : Ast.loc -> t a
   | Match_failure : Ast.loc -> t a
@@ -40,6 +41,7 @@ Module Monad.
   | Get_undefined : typ -> (value -> t a) -> t a.
 
   Arguments Pure {_}.
+  Arguments Early_return {_}.
   Arguments Exception {_}.
   Arguments Runtime_type_error {_}.
   Arguments Match_failure {_}.
@@ -52,6 +54,7 @@ Module Monad.
   Fixpoint bind {A B : Set} (m : t A) (f : A -> t B) : t B :=
     match m with
     | Pure x => f x
+    | Early_return v => Early_return v
     | Exception v => Exception v
     | Runtime_type_error l => Runtime_type_error l
     | Match_failure l => Match_failure l
@@ -65,6 +68,7 @@ Module Monad.
   Fixpoint fmap {A B : Set} (f : A -> B) (m : t A) : t B :=
     match m with
     | Pure x => Pure (f x)
+    | Early_return v => Early_return v
     | Exception v => Exception v
     | Runtime_type_error l => Runtime_type_error l
     | Match_failure l => Match_failure l
@@ -88,9 +92,10 @@ Module Monad.
   Arguments Continue {_}.
   Arguments Caught {_}.
 
-  Fixpoint catch {A : Set} (m : t A) : t (caught A) :=
+  Definition catch {A : Set} (m : t A) : t (caught A) :=
     match m with
     | Pure x => Pure (Continue x)
+    | Early_return v => Early_return v
     | Exception v => Pure (Caught v)
     | Runtime_type_error l => Runtime_type_error l
     | Match_failure l => Match_failure l
@@ -108,7 +113,7 @@ Module Monad.
 
   Theorem bind_right_id : forall (A : Set) (m : t A), bind m pure = m.
   Proof.
-    induction m as [| | | | | ? ? cont | ? ? cont | ? ? ? cont | ? cont]; try easy.
+    induction m as [| | | | | | ? ? cont | ? ? cont | ? ? ? cont | ? cont]; try easy.
     all: cbn.
     all: f_equal.
     all: apply functional_extensionality.
@@ -120,7 +125,7 @@ Module Monad.
   Theorem bind_assoc : forall (A B C : Set) (f : A -> t B) (g : B -> t C) (x : t A),
       bind (bind x f) g = bind x (fun y => bind (f y) g).
   Proof.
-    induction x as [| | | | | ? ? cont | ? ? cont | ? ? ? cont | ? cont]; try easy.
+    induction x as [| | | | | | ? ? cont | ? ? cont | ? ? ? cont | ? cont]; try easy.
     all: cbn.
     all: f_equal.
     all: apply functional_extensionality.
@@ -173,6 +178,23 @@ Fixpoint left_to_right {A : Set} (xs : list (exp A)) {struct xs} : (list (exp A)
   | x :: xs => ([], x :: xs)
   end.
 
+Fixpoint all_evaluated_fields {A : Set} (f : id -> string) (xs : list (fexp A)) : list (string * value) :=
+  match xs with
+  | [] => []
+  | FE_aux (FE_fexp id (E_aux (E_internal_value v) _)) _ :: xs =>
+      (f id, v) :: all_evaluated_fields f xs
+  | _ :: xs => all_evaluated_fields f xs
+  end.
+
+Fixpoint left_to_right_fields {A : Set} (xs : list (fexp A)) {struct xs} : (list (fexp A) * list (fexp A)) :=
+  match xs with
+  | [] => ([], [])
+  | FE_aux (FE_fexp id (E_aux (E_internal_value v) annot)) fe_annot :: xs =>
+      let '(vs, xs') := left_to_right_fields xs in
+      (FE_aux (FE_fexp id (E_aux (E_internal_value v) annot)) fe_annot :: vs, xs')
+  | x :: xs => ([], x :: xs)
+  end.
+
 Inductive ltr2 (A : Set) : Set :=
 | LTR2_0 : exp A -> exp A -> ltr2 A
 | LTR2_1 : value -> exp A -> ltr2 A
@@ -208,6 +230,19 @@ Inductive id_type :=
 | Global_register : id_type
 | Enum_member : id_type.
 
+Fixpoint take_drop {A : Set} (n : nat) (xs : list A) : list A * list A :=
+  match (n, xs) with
+  | (0, xs) => ([], xs)
+  | (S m, []) => ([], [])
+  | (S m, x :: xs) =>
+      let '(ys, zs) := take_drop m xs in
+      (x :: ys, zs)
+  end.
+
+Inductive vector_concat_split :=
+| No_split : vector_concat_split
+| Split : nat -> vector_concat_split.
+
 (** Sail annotates terms with custom type annotation data, which we
     don't have access to here. Instead use a functor parameterised by
     the following TANNOT signature, which can provide the methods we
@@ -218,6 +253,8 @@ Module Type TANNOT.
   Parameter get_type : tannot -> typ.
 
   Parameter get_id_type : tannot -> id -> id_type.
+
+  Parameter get_split : tannot -> vector_concat_split.
 
   Parameter id_equal : id -> id -> bool.
 
@@ -236,6 +273,8 @@ Module Type TANNOT.
   Parameter bits_of_bin_string : string -> list bit.
 
   Parameter rational_of_string : string -> rational.
+
+  Parameter fallthrough : Ast.pexp tannot.
 End TANNOT.
 
 Module Semantics (T : TANNOT).
@@ -474,6 +513,28 @@ Module Semantics (T : TANNOT).
         (* Matching a list on a non-list *)
         | _ => no_match
         end
+    | P_vector_concat ps =>
+        match v with
+        | V_vector vs =>
+            fst (fold_left
+                   (fun match_info p =>
+                    let '(P_aux _ annot) := p in
+                    match T.get_split (snd annot) with
+                    | Split s =>
+                        match match_info with
+                        | (_, []) => (no_match, [])
+                        | ((false, _), vs) => (no_match, vs)
+                        | ((true, bound), vs) =>
+                            let '(vs_take, vs_drop) := take_drop s vs in
+                            let '(matched, more_bound) := pattern_match p (V_vector vs_take) in
+                            ((matched, bound ++ more_bound), vs_drop)
+                        end
+                    | No_split => (no_match, [])
+                    end)
+                   ps
+                   ((true, []), vs))
+        | _ => no_match
+        end
     | P_cons p ps =>
         match v with
         | V_list nil => no_match
@@ -498,10 +559,19 @@ Module Semantics (T : TANNOT).
     | P_var p _ => pattern_match p v
     (* TODO *)
     | P_struct _ _ _ => (true, [])
-    | P_vector_concat _ => (true, [])
     | P_vector_subrange _ _ _ => (true, [])
     | P_string_append _ => (true, [])
     end.
+
+  Fixpoint lookup_field (l : Ast.loc) (name : string) (fields : list (string * value)) {struct fields} : t value :=
+      match fields with
+      | [] => Runtime_type_error l
+      | (name', v) :: fields =>
+          if T.string_equal name name' then
+            pure v
+          else
+            lookup_field l name fields
+      end.
 
   Program Fixpoint step (orig_exp : exp T.tannot) {measure (depth orig_exp)} : t (exp T.tannot) :=
     let 'E_aux aux annot := orig_exp in
@@ -526,6 +596,11 @@ Module Semantics (T : TANNOT).
             Read_var Var_local id (fun v => wrap (E_internal_value v))
         | Enum_member =>
             wrap (E_internal_value (V_member (T.string_of_id id)))
+        end
+    | E_return x =>
+        match x with
+        | E_aux (E_internal_value v) annot => Early_return v
+        | _ => bind (step x) (fun x' => wrap (E_return x'))
         end
     | E_assign l x =>
         match x with
@@ -587,31 +662,27 @@ Module Semantics (T : TANNOT).
         bind (value_of_lit lit (T.get_type (snd annot)))
              (fun v => wrap (E_internal_value v))
     | E_tuple xs =>
-        (
-          let '(evaluated, unevaluated) := left_to_right xs in
-          match unevaluated with
-          | cons x xs =>
-              bind (step x) (fun x' => wrap (E_tuple (x' :: xs)))
-          | nil => wrap (E_internal_value (V_tuple (all_evaluated evaluated)))
-          end
-        )
+        let '(evaluated, unevaluated) := left_to_right xs in
+        match unevaluated with
+        | x :: xs =>
+            bind (step x) (fun x' => wrap (E_tuple (evaluated ++ (x' :: xs))))
+        | [] => wrap (E_internal_value (V_tuple (all_evaluated evaluated)))
+        end
     | E_typ _ x => pure x
     | E_app id args =>
-        (
-          let '(evaluated, unevaluated) := left_to_right args in
-          match unevaluated with
-          | x :: xs =>
-              bind (step x) (fun x' => wrap (E_app id (evaluated ++ (x' :: xs))))
-          | [] =>
-              bind (Call id (all_evaluated evaluated) pure)
-                (fun r =>
-                   match r with
-                   | Return_ok v => wrap (E_internal_value v)
-                   | Return_exception exn => wrap (E_throw (E_aux (E_internal_value exn) annot))
-                   end
-                )
-          end
-        )
+        let '(evaluated, unevaluated) := left_to_right args in
+        match unevaluated with
+        | x :: xs =>
+            bind (step x) (fun x' => wrap (E_app id (evaluated ++ (x' :: xs))))
+        | [] =>
+            bind (Call id (all_evaluated evaluated) pure)
+              (fun r =>
+                 match r with
+                 | Return_ok v => wrap (E_internal_value v)
+                 | Return_exception exn => wrap (E_throw (E_aux (E_internal_value exn) annot))
+                 end
+              )
+        end
     | E_app_infix arg1 id arg2 =>
         (
           match left_to_right2 arg1 arg2 with
@@ -660,6 +731,26 @@ Module Semantics (T : TANNOT).
                    )
              end
           )
+    | E_field x f =>
+        match x with
+        | E_aux (E_internal_value v) _ =>
+            match v with
+            | V_record fields =>
+                bind (lookup_field (fst annot) (T.string_of_id f) fields)
+                  (fun v => wrap (E_internal_value v))
+            | _ => Runtime_type_error (fst annot)
+            end
+        | _ =>
+            bind (step x) (fun x' => wrap (E_field x' f))
+        end
+    | E_struct struct_id fs =>
+        let '(evaluated, unevaluated) := left_to_right_fields fs in
+        match unevaluated with
+        | FE_aux (FE_fexp name x) annot :: xs =>
+            bind (step x) (fun x' => wrap (E_struct struct_id (evaluated ++ (FE_aux (FE_fexp name x') annot :: xs))))
+        | [] =>
+            wrap (E_internal_value (V_record (all_evaluated_fields T.string_of_id evaluated)))
+        end
     | E_vector xs =>
         (
           let '(evaluated, unevaluated) := left_to_right xs in
@@ -711,12 +802,28 @@ Module Semantics (T : TANNOT).
               (catch (step x))
               (fun x' =>
                  match x' with
-                 | Caught exn => wrap (E_match (E_aux (E_internal_value exn) annot) arms)
+                 | Caught exn => wrap (E_match (E_aux (E_internal_value exn) annot) (arms ++ [T.fallthrough]))
                  | Continue x'' => wrap (E_try x'' arms)
                  end
               )
         end
-    | _ => Runtime_type_error (fst annot)
+    | E_internal_value v => wrap (E_internal_value v)
+    (* TODO: *)
+    | E_loop _ _ _ _ | E_for _ _ _ _ _ _ => Runtime_type_error (fst annot)
+    | E_vector_access _ _ => Runtime_type_error (fst annot)
+    | E_vector_subrange _ _ _ => Runtime_type_error (fst annot)
+    | E_vector_update _ _ _ => Runtime_type_error (fst annot)
+    | E_vector_update_subrange _ _ _ _ => Runtime_type_error (fst annot)
+    | E_vector_append _ _ => Runtime_type_error (fst annot)
+    | E_struct_update _ _ => Runtime_type_error (fst annot)
+    | E_sizeof _ => Runtime_type_error (fst annot)
+    | E_constraint _ => Runtime_type_error (fst annot)
+    | E_exit _ => Runtime_type_error (fst annot)
+    | E_config _ => Runtime_type_error (fst annot)
+    | E_ref _ => Runtime_type_error (fst annot)
+    | E_internal_plet _ _ _ => Runtime_type_error (fst annot)
+    | E_internal_return _ => Runtime_type_error (fst annot)
+    | E_internal_assume _ _ => Runtime_type_error (fst annot)
     end.
   Next Obligation.
     cbn.

@@ -3201,7 +3201,7 @@ and bind_vector_concat_generic :
 
     (* Now we have two similar cases for ordinary vectors and bitvectors *)
     match elem_typ with
-    | Some elem_typ ->
+    | Some elem_typ -> (
         let fold_len len pat =
           let l = funcs.get_loc_typed pat in
           let len', elem_typ' = destruct_vector_typ l env (funcs.typ_of pat) in
@@ -3212,19 +3212,18 @@ and bind_vector_concat_generic :
         let before_len = List.fold_left fold_len (nint 0) before_uninferred in
         let after_len = List.fold_left fold_len (nint 0) after_uninferred in
         let inferred_len = nexp_simp (nsum before_len after_len) in
-        begin
-          match uninferred with
-          | Some (total_len, uninferred_pat) ->
-              let total_len = nconstant total_len in
-              let uninferred_len = nexp_simp (nminus total_len inferred_len) in
-              let checked_pat, env, guards' = funcs.bind env uninferred_pat (vector_typ uninferred_len elem_typ) in
-              ( annotate (before_uninferred @ [checked_pat] @ after_uninferred) (vector_typ total_len elem_typ),
-                env,
-                guards' @ guards
-              )
-          | None -> (annotate before_uninferred (dvector_typ env inferred_len elem_typ), env, guards)
-        end
-    | None ->
+        match uninferred with
+        | Some (total_len, uninferred_pat) ->
+            let total_len = nconstant total_len in
+            let uninferred_len = nexp_simp (nminus total_len inferred_len) in
+            let checked_pat, env, guards' = funcs.bind env uninferred_pat (vector_typ uninferred_len elem_typ) in
+            ( annotate (before_uninferred @ [checked_pat] @ after_uninferred) (vector_typ total_len elem_typ),
+              env,
+              guards' @ guards
+            )
+        | None -> (annotate before_uninferred (dvector_typ env inferred_len elem_typ), env, guards)
+      )
+    | None -> (
         let fold_len len pat =
           let l = funcs.get_loc_typed pat in
           let len' = destruct_bitvector_typ l env (funcs.typ_of pat) in
@@ -3234,19 +3233,18 @@ and bind_vector_concat_generic :
         let before_len = List.fold_left fold_len (nint 0) before_uninferred in
         let after_len = List.fold_left fold_len (nint 0) after_uninferred in
         let inferred_len = nexp_simp (nsum before_len after_len) in
-        begin
-          match uninferred with
-          | Some (total_len, uninferred_pat) ->
-              let total_len = nconstant total_len in
-              let uninferred_len = nexp_simp (nminus total_len inferred_len) in
-              let uninferred_len = check_constant_len (funcs.get_loc uninferred_pat) uninferred_len in
-              let checked_pat, env, guards' = funcs.bind env uninferred_pat (bitvector_typ uninferred_len) in
-              ( annotate (before_uninferred @ [checked_pat] @ after_uninferred) (bitvector_typ total_len),
-                env,
-                guards' @ guards
-              )
-          | None -> (annotate before_uninferred (bitvector_typ inferred_len), env, guards)
-        end
+        match uninferred with
+        | Some (total_len, uninferred_pat) ->
+            let total_len = nconstant total_len in
+            let uninferred_len = nexp_simp (nminus total_len inferred_len) in
+            let uninferred_len = check_constant_len (funcs.get_loc uninferred_pat) uninferred_len in
+            let checked_pat, env, guards' = funcs.bind env uninferred_pat (bitvector_typ uninferred_len) in
+            ( annotate (before_uninferred @ [checked_pat] @ after_uninferred) (bitvector_typ total_len),
+              env,
+              guards' @ guards
+            )
+        | None -> (annotate before_uninferred (bitvector_typ inferred_len), env, guards)
+      )
   )
 
 and bind_vector_concat_pat l env uannot pat pats typ_opt =

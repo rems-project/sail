@@ -375,6 +375,9 @@ Arguments E_internal_assume {_}.
 Arguments E_constraint {_}.
 Arguments E_aux {_}.
 
+Arguments FE_aux {_}.
+Arguments FE_fexp {_}.
+
 Arguments Pat_aux {_}.
 Arguments Pat_exp {_}.
 Arguments Pat_when {_}.

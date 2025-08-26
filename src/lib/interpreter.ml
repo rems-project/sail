@@ -284,30 +284,61 @@ let lexp_vector_concat_widths env lexps =
   in
   Util.result_all (List.map get_length lexps)
 
+let rec to_rocq_nat n =
+  match Big_int.compare n Big_int.zero with
+  | -1 -> raise (Reporting.err_unreachable Parse_ast.Unknown __POS__ "Invalid integer to rocq nat conversion")
+  | 0 -> Datatypes.O
+  | _ -> Datatypes.S (to_rocq_nat (Big_int.pred n))
+
 module RocqSemantics = Interpret.Semantics (struct
   type tannot = Type_check.tannot
+
   let get_type tannot =
     let typ = Type_check.typ_of_tannot tannot in
     typ
+
   let get_id_type tannot id =
     let env = Type_check.env_of_tannot tannot in
     match Type_check.Env.lookup_id id env with
     | Register _ -> Interpret.Global_register
     | Local _ | Unbound _ -> Interpret.Local_variable
     | Enum _ -> Interpret.Enum_member
+
+  let get_split tannot =
+    let env = Type_check.env_of_tannot tannot in
+    let typ = Type_check.typ_of_tannot tannot in
+    match Type_check.destruct_vector env typ with
+    | Some (Nexp_aux (Nexp_constant n, _), _) -> Interpret.Split (to_rocq_nat n)
+    | _ -> (
+        match Type_check.destruct_bitvector env typ with
+        | Some (Nexp_aux (Nexp_constant n, _)) -> Interpret.Split (to_rocq_nat n)
+        | _ -> Interpret.No_split
+      )
+
   let id_equal x y = Id.compare x y = 0
+
   let num_equal x y = Big_int.compare x y = 0
+
   let string_equal x y = String.compare x y = 0
+
   let rational_equal x y = Rational.equal x y
+
   let id_equal_string x s = string_of_id x = s
+
   let string_of_id = string_of_id
+
   let bits_of_hex_string = Sail_lib.bits_of_string
+
   let bits_of_bin_string s = List.map Sail_lib.bin_char (Sail_lib.list_of_string s)
+
   let rational_of_string = Sail_lib.real_of_string
+
+  let fallthrough = fallthrough
 end)
 
 let rec adapt env = function
   | Interpret.Monad.Pure exp -> Pure exp
+  | Interpret.Monad.Early_return v -> Yield (Early_return v)
   | Interpret.Monad.Exception v -> Yield (Exception v)
   | Interpret.Monad.Match_failure l -> fail "Pattern match failure"
   | Interpret.Monad.Assertion_failed s -> Yield (Assertion_failed s)
