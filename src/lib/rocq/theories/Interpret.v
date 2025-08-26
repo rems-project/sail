@@ -169,6 +169,34 @@ Fixpoint all_evaluated {A : Set} (xs : list (exp A)) : list value :=
   | _ :: xs => all_evaluated xs
   end.
 
+Fixpoint take_evaluated {A : Set} (xs : list (exp A)) : list (exp A) :=
+  match xs with
+  | [] => []
+  | E_aux (E_internal_value v) a :: xs =>
+      cons (E_aux (E_internal_value v) a) (take_evaluated xs)
+  | _ :: xs => []
+  end.
+
+Fixpoint drop_evaluated {A : Set} (xs : list (exp A)) : list (exp A) :=
+  match xs with
+  | [] => []
+  | E_aux (E_internal_value v) _ :: xs => drop_evaluated xs
+  | x :: xs => x :: xs
+  end.
+
+Lemma take_drop_evaluated_concat : forall (A : Set) (xs : list (exp A)),
+    take_evaluated xs ++ drop_evaluated xs = xs.
+Proof.
+  induction xs.
+  - cbn. reflexivity.
+  - destruct a.
+    destruct e.
+    all: cbn.
+    all: try reflexivity.
+    rewrite IHxs.
+    reflexivity.
+Qed.
+
 Fixpoint left_to_right {A : Set} (xs : list (exp A)) {struct xs} : (list (exp A) * list (exp A)) :=
   match xs with
   | [] => ([], [])
@@ -177,6 +205,20 @@ Fixpoint left_to_right {A : Set} (xs : list (exp A)) {struct xs} : (list (exp A)
       (E_aux (E_internal_value v) annot :: vs, xs')
   | x :: xs => ([], x :: xs)
   end.
+
+Lemma ltr_tuple : forall (A : Set) (xs : list (exp A)),
+    left_to_right xs = (take_evaluated xs, drop_evaluated xs).
+Proof.
+  induction xs.
+  - cbn.
+    reflexivity.
+  - destruct a.
+    destruct e.
+    all: cbn.
+    all: try reflexivity.
+    rewrite IHxs.
+    reflexivity.
+Qed.
 
 Fixpoint all_evaluated_fields {A : Set} (f : id -> string) (xs : list (fexp A)) : list (string * value) :=
   match xs with
@@ -214,8 +256,35 @@ Definition left_to_right2 {A : Set} (x y : exp A) : ltr2 A :=
 Fixpoint depth {A : Set} (x : exp A) {struct x} : nat :=
   let 'E_aux aux _ := x in
   match aux with
-  | E_block xs => fold_right max 0 (map depth xs) + 1
-  | E_tuple xs => fold_right max 0 (map depth xs) + 1
+  | E_block xs | E_tuple xs | E_app _ xs | E_vector xs | E_list xs => fold_right max 0 (map depth xs) + 1
+  | E_return x | E_field x _ | E_throw x => depth x + 1
+  | E_assign l x => max (lexp_depth l) (depth x) + 1
+  | E_match x arms | E_try x arms =>
+      let arm_depths :=
+        map (fun arm =>
+               match arm with
+               | Pat_aux (Pat_exp _ y) _ => depth y
+               | Pat_aux (Pat_when _ guard y) _ => max (depth guard) (depth y)
+               end
+          ) arms in
+      max (depth x) (fold_right max 0 arm_depths) + 1
+  | E_struct _ fields =>
+      let field_depths :=
+        map (fun f => let 'FE_aux (FE_fexp _ y) _ := f in depth y) fields
+      in
+      fold_right max 0 field_depths + 1
+  | E_let (LB_aux (LB_val _ y) _) body => max (depth y) (depth body) + 1
+  | E_app_infix x _ y | E_cons x y => max (depth x) (depth y) + 1
+  | E_if i t e => max (depth i) (max (depth t) (depth e)) + 1
+  | E_assert x msg => max (depth x) (depth msg) + 1
+  | _ => 0
+  end
+with
+lexp_depth {A : Set} (l : lexp A) {struct l} : nat :=
+  let 'LE_aux aux _ := l in
+  match aux with
+  | LE_deref x => depth x + 1
+  | LE_app _ xs => fold_right max 0 (map depth xs) + 1
   | _ => 0
   end.
 
@@ -223,6 +292,15 @@ Lemma depth_block : forall (A : Set) (x : exp A) xs annot,
     depth (E_aux (E_block (x :: xs)) annot) = max (depth x) (fold_right max 0 (map depth xs)) + 1.
 Proof.
   reflexivity.
+Qed.
+
+Lemma fold_right_max_acc : forall x y zs, x <= y -> x < fold_right max y zs + 1.
+Proof.
+  induction zs.
+  - cbn.
+    lia.
+  - cbn.
+    lia.
 Qed.
 
 Inductive id_type :=
@@ -825,11 +903,220 @@ Module Semantics (T : TANNOT).
     | E_internal_return _ => Runtime_type_error (fst annot)
     | E_internal_assume _ _ => Runtime_type_error (fst annot)
     end.
+  Solve Obligations of step with (try easy; cbn; try lia).
+  Next Obligation.
+    (try easy; cbn; lia).
+  Defined.
+  Next Obligation.
+    (try easy; cbn; lia).
+  Defined.
+  Next Obligation.
+    (try easy; cbn; lia).
+  Defined.
+  Next Obligation.
+    (try easy; cbn; lia).
+  Defined.
+  Next Obligation.
+    (try easy; cbn; lia).
+  Defined.
+  Next Obligation.
+    (try easy; cbn; lia).
+  Defined.
+  Next Obligation.
+    (try easy; cbn; lia).
+  Defined.
+  Next Obligation.
+    (try easy; cbn; lia).
+  Defined.
+  Next Obligation.
+    (try easy; cbn; lia).
+  Defined.
+  Next Obligation.
+    (try easy; cbn; lia).
+  Defined.
+  Next Obligation.
+    (try easy; cbn; lia).
+  Defined.
+  Next Obligation.
+    (try easy; cbn; lia).
+  Defined.
+  Next Obligation.
+    (try easy; cbn; lia).
+  Defined.
+  Next Obligation.
+    (try easy; cbn; lia).
+  Defined.
+  Next Obligation.
+    (try easy; cbn; lia).
+  Defined.
+  Next Obligation.
+    (try easy; cbn; lia).
+  Defined.
+  Next Obligation.
+    (try easy; cbn; lia).
+  Defined.
+  Next Obligation.
+    (try easy; cbn; lia).
+  Defined.
+  Next Obligation.
+    (try easy; cbn; lia).
+  Defined.
+  Next Obligation.
+    (try easy; cbn; lia).
+  Defined.
+  Next Obligation.
+    (try easy; cbn; lia).
+  Defined.
+  Next Obligation.
+    (try easy; cbn; lia).
+  Defined.
+  Next Obligation.
+    (try easy; cbn; lia).
+  Defined.
+  Next Obligation.
+    (try easy; cbn; lia).
+  Defined.
+  Next Obligation.
+    (try easy; cbn; lia).
+  Defined.
+  Next Obligation.
+    (try easy; cbn; lia).
+  Defined.
+  Next Obligation.
+    (try easy; cbn; lia).
+  Defined.
+  Next Obligation.
+    (try easy; cbn; lia).
+  Defined.
+  Next Obligation.
+    (try easy; cbn; lia).
+  Defined.
+  Next Obligation.
+    (try easy; cbn; lia).
+  Defined.
+  Next Obligation.
+    (try easy; cbn; lia).
+  Defined.
+  Next Obligation.
+    (try easy; cbn; lia).
+  Defined.
+  Next Obligation.
+    (try easy; cbn; lia).
+  Defined.
+  Next Obligation.
+    (try easy; cbn; lia).
+  Defined.
+  Next Obligation.
+    (try easy; cbn; lia).
+  Defined.
+  Next Obligation.
+    (try easy; cbn; lia).
+  Defined.
+  Next Obligation.
+    (try easy; cbn; lia).
+  Defined.
+  Next Obligation.
+    (try easy; cbn; lia).
+  Defined.
+  Next Obligation.
+    (try easy; cbn; lia).
+  Defined.
+  Next Obligation.
+    (try easy; cbn; lia).
+  Defined.
+  Next Obligation.
+    (try easy; cbn; lia).
+  Defined.
+  Next Obligation.
+    (try easy; cbn; lia).
+  Defined.
+  Next Obligation.
+    (try easy; cbn; lia).
+  Defined.
   Next Obligation.
     cbn.
+    rewrite ltr_tuple in Heq_anonymous.
+    inversion Heq_anonymous.
+    rewrite <- (take_drop_evaluated_concat T.tannot xs0).
+    rewrite <- H1.
+    rewrite <- H0.
+    rewrite map_app.
+    rewrite fold_right_app.
+    cbn.
+    apply fold_right_max_acc.
     lia.
   Defined.
-  Admit Obligations.
+  Next Obligation.
+    cbn.
+    rewrite ltr_tuple in Heq_anonymous.
+    inversion Heq_anonymous.
+    rewrite <- (take_drop_evaluated_concat T.tannot args).
+    rewrite <- H1.
+    rewrite <- H0.
+    rewrite map_app.
+    rewrite fold_right_app.
+    cbn.
+    apply fold_right_max_acc.
+    lia.
+  Defined.
+  Next Obligation.
+    (try easy; cbn; lia).
+  Defined.
+  Next Obligation.
+    (try easy; cbn; lia).
+  Defined.
+  Next Obligation.
+    (try easy; cbn; lia).
+  Defined.
+  Next Obligation.
+    (try easy; cbn; lia).
+  Defined.
+  Next Obligation.
+    (try easy; cbn; lia).
+  Defined.
+  Next Obligation.
+    (try easy; cbn; lia).
+  Defined.
+  Next Obligation.
+    Admitted.
+  Next Obligation.
+    cbn.
+    rewrite ltr_tuple in Heq_anonymous.
+    inversion Heq_anonymous.
+    rewrite <- (take_drop_evaluated_concat T.tannot xs).
+    rewrite <- H1.
+    rewrite <- H0.
+    rewrite map_app.
+    rewrite fold_right_app.
+    cbn.
+    apply fold_right_max_acc.
+    lia.
+  Defined.
+  Next Obligation.
+    cbn.
+    rewrite ltr_tuple in Heq_anonymous.
+    inversion Heq_anonymous.
+    rewrite <- (take_drop_evaluated_concat T.tannot xs).
+    rewrite <- H1.
+    rewrite <- H0.
+    rewrite map_app.
+    rewrite fold_right_app.
+    cbn.
+    apply fold_right_max_acc.
+    lia.
+  Defined.
+  Next Obligation.
+    (try easy; cbn; lia).
+  Defined.
+  Next Obligation.
+    (try easy; cbn; lia).
+  Defined.
+  Next Obligation.
+    (try easy; cbn; lia).
+  Defined.
+  Final Obligation.
+    (try easy; cbn; lia).
+  Defined.
 End Semantics.
 
 Extraction Blacklist List.

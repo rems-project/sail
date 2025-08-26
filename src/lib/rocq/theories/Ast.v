@@ -387,7 +387,14 @@ Arguments LB_val {_}.
 
 Arguments LE_aux {_}.
 Arguments LE_id {_}.
+Arguments LE_deref {_}.
+Arguments LE_app {_}.
 Arguments LE_typ {_}.
+Arguments LE_tuple {_}.
+Arguments LE_vector_concat {_}.
+Arguments LE_vector {_}.
+Arguments LE_vector_range {_}.
+Arguments LE_field {_}.
 
 Inductive typquant_aux : Set :=
 | TypQ_tq : list quant_item -> typquant_aux
