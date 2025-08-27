@@ -253,6 +253,25 @@ Definition left_to_right2 {A : Set} (x y : exp A) : ltr2 A :=
   | (_, _) => LTR2_0 x y
   end.
 
+Inductive ltr3 (A : Set) : Set :=
+| LTR3_0 : exp A -> exp A -> exp A -> ltr3 A
+| LTR3_1 : value -> exp A -> exp A -> ltr3 A
+| LTR3_2 : value -> value -> exp A -> ltr3 A
+| LTR3_3 : value -> value -> value -> ltr3 A.
+
+Arguments LTR3_0 {_}.
+Arguments LTR3_1 {_}.
+Arguments LTR3_2 {_}.
+Arguments LTR3_3 {_}.
+
+Definition left_to_right3 {A : Set} (x y z : exp A) : ltr3 A :=
+  match (x, y, z) with
+  | (E_aux (E_internal_value v1) _, E_aux (E_internal_value v2) _, E_aux (E_internal_value v3) _) => LTR3_3 v1 v2 v3
+  | (E_aux (E_internal_value v1) _, E_aux (E_internal_value v2) _, _) => LTR3_2 v1 v2 z
+  | (E_aux (E_internal_value v1) _, _, _) => LTR3_1 v1 y z
+  | (_, _, _) => LTR3_0 x y z
+  end.
+
 Fixpoint depth {A : Set} (x : exp A) {struct x} : nat :=
   let 'E_aux aux _ := x in
   match aux with
@@ -277,6 +296,12 @@ Fixpoint depth {A : Set} (x : exp A) {struct x} : nat :=
   | E_app_infix x _ y | E_cons x y => max (depth x) (depth y) + 1
   | E_if i t e => max (depth i) (max (depth t) (depth e)) + 1
   | E_assert x msg => max (depth x) (depth msg) + 1
+  | E_for _ from to amount _ body =>
+      let f := depth from in
+      let t := depth to in
+      let a := depth amount in
+      let b := depth body in
+      fold_right max 0 [f; t; a; b] + 1
   | _ => 0
   end
 with
@@ -353,6 +378,14 @@ Module Type TANNOT.
   Parameter rational_of_string : string -> rational.
 
   Parameter fallthrough : Ast.pexp tannot.
+
+  Parameter value_gt : value -> value -> value.
+
+  Parameter value_lt : value -> value -> value.
+
+  Parameter value_add_int : value -> value -> value.
+
+  Parameter value_sub_int : value -> value -> value.
 End TANNOT.
 
 Module Semantics (T : TANNOT).
@@ -361,8 +394,10 @@ Module Semantics (T : TANNOT).
     match aux with
     | P_lit _ | P_wild => false
     | P_id m => T.id_equal n m
-    | P_typ _ pat => binds_id n pat
+    | P_typ _ pat | P_var pat _ => binds_id n pat
     | P_as pat m => binds_id n pat || T.id_equal n m
+    | P_cons hd_p tl_p => binds_id n hd_p || binds_id n tl_p
+    | P_tuple ps | P_list ps | P_vector ps => fold_left orb (map (binds_id n) ps) false
     | _ => false
     end.
 
@@ -383,6 +418,8 @@ Module Semantics (T : TANNOT).
           E_aux (E_let (LB_aux (LB_val pat (substitute n v y)) lb_annot) body) annot
         else
           E_aux (E_let (LB_aux (LB_val pat (substitute n v y)) lb_annot) (substitute n v body)) annot
+    | E_var l x body =>
+        E_aux (E_var (substitute_lexp n v l) (substitute n v x) (substitute n v body)) annot
     | E_match head_exp arms =>
         E_aux (E_match (substitute n v head_exp) (map (substitute_arm n v) arms)) annot
     | E_try head_exp arms =>
@@ -394,9 +431,30 @@ Module Semantics (T : TANNOT).
     | E_throw exn => E_aux (E_throw (substitute n v exn)) annot
     | E_assert x msg =>
         E_aux (E_assert (substitute n v x) (substitute n v msg)) annot
+    | E_assign l x =>
+        E_aux (E_assign (substitute_lexp n v l) (substitute n v x)) annot
+    | E_cons x xs =>
+        E_aux (E_cons (substitute n v x) (substitute n v xs)) annot
+    | E_field x f =>
+        E_aux (E_field (substitute n v x) f) annot
     (* FIXME: Loops *)
-    | E_loop _ _ _ _ => E_aux aux annot
-    | E_for _ _ _ _ _ _ => E_aux aux annot
+    | E_loop loop_kind measure cond body => E_aux (E_loop loop_kind measure (substitute n v cond) (substitute n v body)) annot
+    | E_for loop_var from to amount ord body =>
+        if T.id_equal n loop_var then
+          E_aux (E_for loop_var (substitute n v from) (substitute n v to) (substitute n v amount) ord body) annot
+        else
+          E_aux (E_for loop_var (substitute n v from) (substitute n v to) (substitute n v amount) ord (substitute n v body)) annot
+    | E_struct struct_name fields =>
+        E_aux
+          (E_struct
+             struct_name
+             (map
+                (fun f =>
+                   let 'FE_aux (FE_fexp name x) fe_annot := f in
+                   FE_aux (FE_fexp name (substitute n v x)) fe_annot
+                )
+                fields))
+          annot
     | _ => E_aux aux annot
     end
   with substitute_arm {A} (n : Ast.id) (v : Value_type.value) (arm : pexp A) : pexp A :=
@@ -412,6 +470,12 @@ Module Semantics (T : TANNOT).
           Pat_aux (Pat_when pat guard body) annot
         else
           Pat_aux (Pat_when pat (substitute n v guard) (substitute n v body)) annot
+    end
+  with substitute_lexp {A} (n : Ast.id) (v : Value_type.value) (l : lexp A) : lexp A :=
+    let 'LE_aux aux annot := l in
+    match aux with
+    | LE_deref x => LE_aux (LE_deref (substitute n v x)) annot
+    | _ => l
     end.
 
   Definition value_of_lit (lit : Ast.lit) (typ : Ast.typ) : t value :=
@@ -490,6 +554,16 @@ Module Semantics (T : TANNOT).
     | _ => false
     end.
 
+  Fixpoint get_struct_field (name : string) (fields : list (string * value)) {struct fields} : value :=
+    match fields with
+    | (name', v) :: rest_fields =>
+        if T.string_equal name name' then
+          v
+        else
+          get_struct_field name rest_fields
+    | [] => V_unit
+    end.
+
   Fixpoint pattern_match (p : Ast.pat T.tannot) (v : value) {struct p} : bool * list (id * value) :=
     let 'P_aux aux annot := p in
     match aux with
@@ -532,6 +606,11 @@ Module Semantics (T : TANNOT).
               no_match
         | _ => no_match
         end
+    | P_tuple [] =>
+        match v with
+        | V_unit => (true, [])
+        | _ => no_match
+        end
     | P_tuple ps =>
         match v with
         | V_tuple vs =>
@@ -554,20 +633,23 @@ Module Semantics (T : TANNOT).
     | P_list ps =>
         match v with
         | V_list vs =>
-            fst (fold_left
-                   (fun match_info p =>
-                      match match_info with
-                      (* The list and pattern are different lengths, so no match *)
-                      | (_, []) => (no_match, [])
-                      (* A previous element pattern already failed *)
-                      | ((false, _), v :: vs) => (no_match, vs)
-                      | ((true, vars), v :: vs) =>
-                          let '(matched, more_vars) := pattern_match p v in
-                     ((matched, vars ++ more_vars), vs)
-                      end
-                   )
-                   ps
-                   ((true, []), vs))
+            if Nat.eqb (length ps) (length vs) then
+              fst (fold_left
+                     (fun match_info p =>
+                        match match_info with
+                        (* The list and pattern are different lengths, so no match *)
+                        | (_, []) => (no_match, [])
+                        (* A previous element pattern already failed *)
+                        | ((false, _), v :: vs) => (no_match, vs)
+                        | ((true, vars), v :: vs) =>
+                            let '(matched, more_vars) := pattern_match p v in
+                            ((matched, vars ++ more_vars), vs)
+                        end
+                     )
+                     ps
+                     ((true, []), vs))
+            else
+              no_match
         (* Matching a list on a non-list *)
         | _ => no_match
         end
@@ -635,8 +717,22 @@ Module Semantics (T : TANNOT).
         let '(p_matched, _) := pattern_match p v in
         (negb p_matched, [])
     | P_var p _ => pattern_match p v
+    | P_struct _ field_patterns _ =>
+        match v with
+        | V_record fields =>
+            fold_left
+              (fun match_info fp =>
+                 let '(prev_matched, prev_bound) := match_info in
+                 let '(name, p) := fp in
+                 let v := get_struct_field (T.string_of_id name) fields in
+                 let '(matched, bound) := pattern_match p v in
+                 (andb prev_matched matched, prev_bound ++ bound)
+              )
+              field_patterns
+              (true, [])
+        | _ => no_match
+        end
     (* TODO *)
-    | P_struct _ _ _ => (true, [])
     | P_vector_subrange _ _ _ => (true, [])
     | P_string_append _ => (true, [])
     end.
@@ -692,6 +788,14 @@ Module Semantics (T : TANNOT).
                     Write_var Var_local var v (fun _ => wrap (E_internal_value V_unit))
                 | Enum_member =>
                     Runtime_type_error (fst annot)
+                end
+            | LE_aux (LE_deref reference) le_annot =>
+                match reference with
+                | E_aux (E_internal_value (V_ref register_name)) _ =>
+                    Write_var Var_register (Id_aux (Id register_name) (fst le_annot)) v (fun _ => wrap (E_internal_value V_unit))
+                | E_aux (E_internal_value _) _ => Runtime_type_error (fst le_annot)
+                | _ =>
+                    bind (step reference) (fun reference' => wrap (E_assign (LE_aux (LE_deref reference') le_annot) x))
                 end
             | _ =>
                 Runtime_type_error (fst annot)
@@ -886,8 +990,51 @@ Module Semantics (T : TANNOT).
               )
         end
     | E_internal_value v => wrap (E_internal_value v)
+    | E_ref register_name =>
+        wrap (E_internal_value (V_ref (T.string_of_id register_name)))
     (* TODO: *)
-    | E_loop _ _ _ _ | E_for _ _ _ _ _ _ => Runtime_type_error (fst annot)
+    | E_loop While measure cond body =>
+        wrap (E_if cond (E_aux (E_block [body; orig_exp]) annot) (E_aux (E_internal_value V_unit) annot))
+    | E_loop Until measure cond body =>
+        wrap (E_block [body; E_aux (E_if cond (E_aux (E_internal_value V_unit) annot) orig_exp) annot])
+    | E_for loop_var from to amount ord body =>
+        match left_to_right3 from to amount with
+        | LTR3_0 _ _ _ =>
+            bind (step from) (fun from' => wrap (E_for loop_var from' to amount ord body))
+        | LTR3_1 _ _ _ =>
+            bind (step to) (fun to' => wrap (E_for loop_var from to' amount ord body))
+        | LTR3_2 _ _ _ =>
+            bind (step amount) (fun amount' => wrap (E_for loop_var from to amount' ord body))
+        | LTR3_3 v_from v_to v_amount =>
+            match ord with
+            | Ord_aux Ord_inc _ =>
+                match T.value_gt v_from v_to with
+                | V_bool true => wrap (E_internal_value V_unit)
+                | V_bool false =>
+                    wrap
+                      (E_block
+                         [
+                           substitute loop_var v_from body;
+                           E_aux (E_for loop_var (E_aux (E_internal_value (T.value_add_int v_from v_amount)) annot) to amount ord body) annot
+                         ]
+                      )
+                | _ => Runtime_type_error (fst annot)
+                end
+            | Ord_aux Ord_dec _ =>
+                match T.value_lt v_from v_to with
+                | V_bool true => wrap (E_internal_value V_unit)
+                | V_bool false =>
+                    wrap
+                      (E_block
+                         [
+                           substitute loop_var v_from body;
+                           E_aux (E_for loop_var (E_aux (E_internal_value (T.value_sub_int v_from v_amount)) annot) to amount ord body) annot
+                         ]
+                      )
+                | _ => Runtime_type_error (fst annot)
+                end
+            end
+        end
     | E_vector_access _ _ => Runtime_type_error (fst annot)
     | E_vector_subrange _ _ _ => Runtime_type_error (fst annot)
     | E_vector_update _ _ _ => Runtime_type_error (fst annot)
@@ -898,141 +1045,11 @@ Module Semantics (T : TANNOT).
     | E_constraint _ => Runtime_type_error (fst annot)
     | E_exit _ => Runtime_type_error (fst annot)
     | E_config _ => Runtime_type_error (fst annot)
-    | E_ref _ => Runtime_type_error (fst annot)
     | E_internal_plet _ _ _ => Runtime_type_error (fst annot)
     | E_internal_return _ => Runtime_type_error (fst annot)
     | E_internal_assume _ _ => Runtime_type_error (fst annot)
     end.
-  Solve Obligations of step with (try easy; cbn; try lia).
-  Next Obligation.
-    (try easy; cbn; lia).
-  Defined.
-  Next Obligation.
-    (try easy; cbn; lia).
-  Defined.
-  Next Obligation.
-    (try easy; cbn; lia).
-  Defined.
-  Next Obligation.
-    (try easy; cbn; lia).
-  Defined.
-  Next Obligation.
-    (try easy; cbn; lia).
-  Defined.
-  Next Obligation.
-    (try easy; cbn; lia).
-  Defined.
-  Next Obligation.
-    (try easy; cbn; lia).
-  Defined.
-  Next Obligation.
-    (try easy; cbn; lia).
-  Defined.
-  Next Obligation.
-    (try easy; cbn; lia).
-  Defined.
-  Next Obligation.
-    (try easy; cbn; lia).
-  Defined.
-  Next Obligation.
-    (try easy; cbn; lia).
-  Defined.
-  Next Obligation.
-    (try easy; cbn; lia).
-  Defined.
-  Next Obligation.
-    (try easy; cbn; lia).
-  Defined.
-  Next Obligation.
-    (try easy; cbn; lia).
-  Defined.
-  Next Obligation.
-    (try easy; cbn; lia).
-  Defined.
-  Next Obligation.
-    (try easy; cbn; lia).
-  Defined.
-  Next Obligation.
-    (try easy; cbn; lia).
-  Defined.
-  Next Obligation.
-    (try easy; cbn; lia).
-  Defined.
-  Next Obligation.
-    (try easy; cbn; lia).
-  Defined.
-  Next Obligation.
-    (try easy; cbn; lia).
-  Defined.
-  Next Obligation.
-    (try easy; cbn; lia).
-  Defined.
-  Next Obligation.
-    (try easy; cbn; lia).
-  Defined.
-  Next Obligation.
-    (try easy; cbn; lia).
-  Defined.
-  Next Obligation.
-    (try easy; cbn; lia).
-  Defined.
-  Next Obligation.
-    (try easy; cbn; lia).
-  Defined.
-  Next Obligation.
-    (try easy; cbn; lia).
-  Defined.
-  Next Obligation.
-    (try easy; cbn; lia).
-  Defined.
-  Next Obligation.
-    (try easy; cbn; lia).
-  Defined.
-  Next Obligation.
-    (try easy; cbn; lia).
-  Defined.
-  Next Obligation.
-    (try easy; cbn; lia).
-  Defined.
-  Next Obligation.
-    (try easy; cbn; lia).
-  Defined.
-  Next Obligation.
-    (try easy; cbn; lia).
-  Defined.
-  Next Obligation.
-    (try easy; cbn; lia).
-  Defined.
-  Next Obligation.
-    (try easy; cbn; lia).
-  Defined.
-  Next Obligation.
-    (try easy; cbn; lia).
-  Defined.
-  Next Obligation.
-    (try easy; cbn; lia).
-  Defined.
-  Next Obligation.
-    (try easy; cbn; lia).
-  Defined.
-  Next Obligation.
-    (try easy; cbn; lia).
-  Defined.
-  Next Obligation.
-    (try easy; cbn; lia).
-  Defined.
-  Next Obligation.
-    (try easy; cbn; lia).
-  Defined.
-  Next Obligation.
-    (try easy; cbn; lia).
-  Defined.
-  Next Obligation.
-    (try easy; cbn; lia).
-  Defined.
-  Next Obligation.
-    (try easy; cbn; lia).
-  Defined.
+  Solve Obligations of step with (program_simpl; try easy; cbn; try lia).
   Next Obligation.
     cbn.
     rewrite ltr_tuple in Heq_anonymous.
@@ -1058,24 +1075,6 @@ Module Semantics (T : TANNOT).
     cbn.
     apply fold_right_max_acc.
     lia.
-  Defined.
-  Next Obligation.
-    (try easy; cbn; lia).
-  Defined.
-  Next Obligation.
-    (try easy; cbn; lia).
-  Defined.
-  Next Obligation.
-    (try easy; cbn; lia).
-  Defined.
-  Next Obligation.
-    (try easy; cbn; lia).
-  Defined.
-  Next Obligation.
-    (try easy; cbn; lia).
-  Defined.
-  Next Obligation.
-    (try easy; cbn; lia).
   Defined.
   Next Obligation.
     Admitted.
@@ -1104,18 +1103,6 @@ Module Semantics (T : TANNOT).
     cbn.
     apply fold_right_max_acc.
     lia.
-  Defined.
-  Next Obligation.
-    (try easy; cbn; lia).
-  Defined.
-  Next Obligation.
-    (try easy; cbn; lia).
-  Defined.
-  Next Obligation.
-    (try easy; cbn; lia).
-  Defined.
-  Final Obligation.
-    (try easy; cbn; lia).
   Defined.
 End Semantics.
 

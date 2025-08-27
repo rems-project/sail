@@ -330,6 +330,14 @@ module RocqSemantics = Interpret.Semantics (struct
   let rational_of_string = Sail_lib.real_of_string
 
   let fallthrough = fallthrough
+
+  let value_gt x y = value_gt [x; y]
+
+  let value_lt x y = value_lt [x; y]
+
+  let value_add_int x y = value_add_int [x; y]
+
+  let value_sub_int x y = value_sub_int [x; y]
 end)
 
 let rec adapt env = function
@@ -354,8 +362,9 @@ let rec adapt env = function
       else if is_interpreter_extern id env then (
         let extern = get_interpreter_extern id env in
         if extern = "reg_deref" then (
-          let regname = coerce_string (List.hd args) in
-          read_reg regname >>= fun v -> return (exp_of_value v)
+          let regname = coerce_ref (List.hd args) in
+          let* v = read_reg regname in
+          adapt env (cont (Interpret.Return_ok v))
         )
         else
           get_primop extern >>= fun op ->
@@ -867,7 +876,6 @@ let rec eval_frame' = function
       | Pure v, head :: stack' when is_value v ->
           Step (stack_string head, (stack_state head, gstate), stack_cont head (Return_ok (value_of_exp v)), stack')
       | Pure exp', _ ->
-          (* prerr_endline ("S " ^ string_of_exp exp'); *)
           let out' = lazy (Document.to_string (Printer.doc_exp (Type_check.strip_exp exp'))) in
           Step (out', state, step gstate.typecheck_env exp', stack)
       | Yield (Call (id, vals, cont)), _ when string_of_id id = "break" -> begin
@@ -881,7 +889,6 @@ let rec eval_frame' = function
           Effect_request (out, state, stack, Outcome (id, vals, cont))
         end
       | Yield (Call (id, vals, cont)), _ -> begin
-          (* prerr_endline ("C " ^ string_of_id id); *)
           let arg = if List.length vals != 1 then tuple_value vals else List.hd vals in
           try
             let body = exp_of_fundef (Bindings.find id gstate.fundefs) arg in
