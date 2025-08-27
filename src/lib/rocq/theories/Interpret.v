@@ -807,23 +807,40 @@ Module Semantics (T : TANNOT).
     | E_match head_exp arms =>
         match head_exp with
         | E_aux (E_internal_value v) _ =>
-            (
-              match arms with
-              | Pat_aux (Pat_exp pat body) _ :: next_arms =>
-                  let '(matched, arm_substs) := pattern_match pat v in
-                  if matched then
-                    pure (fold_left (fun body s => substitute (fst s) (snd s) body) arm_substs body)
-                  else
-                    wrap (E_match head_exp next_arms)
-              | Pat_aux (Pat_when pat _ body) _ :: next_arms =>
-                  let '(matched, arm_substs) := pattern_match pat v in
-                  if matched then
-                    pure (fold_left (fun body s => substitute (fst s) (snd s) body) arm_substs body)
-                  else
-                    wrap (E_match head_exp next_arms)
-              | [] => Match_failure (fst annot)
-              end
-            )
+            match arms with
+            | Pat_aux (Pat_exp pat body) _ :: next_arms =>
+                let '(matched, arm_substs) := pattern_match pat v in
+                if matched then
+                  pure (fold_left (fun body s => substitute (fst s) (snd s) body) arm_substs body)
+                else
+                  wrap (E_match head_exp next_arms)
+            | Pat_aux (Pat_when pat guard body) pexp_annot :: next_arms =>
+                let '(matched, arm_substs) := pattern_match pat v in
+                if matched then
+                  let guard := fold_left (fun g s => substitute (fst s) (snd s) g) arm_substs guard in
+                  match guard with
+                  | E_aux (E_internal_value v_guard) _ =>
+                      match v_guard with
+                      | V_bool true =>
+                          let '(matched, arm_substs) := pattern_match pat v in
+                          if matched then
+                            pure (fold_left (fun body s => substitute (fst s) (snd s) body) arm_substs body)
+                          else
+                            wrap (E_match head_exp next_arms)
+                      | V_bool false =>
+                          wrap (E_match head_exp next_arms)
+                      | _ => Runtime_type_error (fst pexp_annot)
+                      end
+                  | _ =>
+                      bind
+                        (step guard)
+                        (fun guard' =>
+                           wrap (E_match head_exp (Pat_aux (Pat_when pat guard' body) pexp_annot :: next_arms)))
+                  end
+                else
+                  wrap (E_match head_exp next_arms)
+            | [] => Match_failure (fst annot)
+            end
         | _ =>
             bind (step head_exp) (fun head_exp' => wrap (E_match head_exp' arms))
         end
@@ -1050,6 +1067,8 @@ Module Semantics (T : TANNOT).
     | E_internal_assume _ _ => Runtime_type_error (fst annot)
     end.
   Solve Obligations of step with (program_simpl; try easy; cbn; try lia).
+  Next Obligation.
+    Admitted.
   Next Obligation.
     cbn.
     rewrite ltr_tuple in Heq_anonymous.
