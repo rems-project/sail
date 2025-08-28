@@ -346,16 +346,8 @@ let rec adapt env = function
   | Interpret.Monad.Exception v -> Yield (Exception v)
   | Interpret.Monad.Match_failure l -> fail "Pattern match failure"
   | Interpret.Monad.Assertion_failed s -> Yield (Assertion_failed s)
-  | Interpret.Monad.Read_var (var_type, name, cont) -> (
-      match var_type with
-      | Interpret.Monad.Var_register -> Yield (Read_reg (string_of_id name, fun v -> adapt env (cont v)))
-      | Interpret.Monad.Var_local -> Yield (Get_local (string_of_id name, fun v -> adapt env (cont v)))
-    )
-  | Interpret.Monad.Write_var (var_type, name, value, cont) -> (
-      match var_type with
-      | Interpret.Monad.Var_register -> Yield (Write_reg (string_of_id name, value, fun () -> adapt env (cont ())))
-      | Interpret.Monad.Var_local -> Yield (Put_local (string_of_id name, value, fun () -> adapt env (cont ())))
-    )
+  | Interpret.Monad.Read_var (place, cont) -> read_var env place cont
+  | Interpret.Monad.Write_var (place, value, cont) -> write_var env place value cont
   | Interpret.Monad.Call (id, args, cont) ->
       if Type_check.Env.is_union_constructor id env then
         adapt env (cont (Interpret.Return_ok (V_ctor (string_of_id id, args))))
@@ -386,6 +378,28 @@ let rec adapt env = function
       let undef_exp = Type_check.check_exp env undef_exp typ in
       return undef_exp
   | Interpret.Monad.Runtime_type_error l -> Reporting.unreachable l __POS__ "Runtime type error in interpreter"
+
+and read_var env place cont =
+  let open Interpret in
+  match place with
+  | PL_id (name, var_type) -> (
+      match var_type with
+      | Var_register -> Yield (Read_reg (string_of_id name, fun v -> adapt env (cont v)))
+      | Var_local -> Yield (Get_local (string_of_id name, fun v -> adapt env (cont v)))
+    )
+  | PL_register name -> Yield (Read_reg (name, fun v -> adapt env (cont v)))
+  | _ -> failwith "Unsupported read"
+
+and write_var env place value cont =
+  let open Interpret in
+  match place with
+  | PL_id (name, var_type) -> (
+      match var_type with
+      | Var_register -> Yield (Write_reg (string_of_id name, value, fun () -> adapt env (cont ())))
+      | Var_local -> Yield (Put_local (string_of_id name, value, fun () -> adapt env (cont ())))
+    )
+  | PL_register name -> Yield (Write_reg (name, value, fun () -> adapt env (cont ())))
+  | _ -> failwith "Unsupported write"
 
 let step env exp = adapt env (RocqSemantics.step exp)
 

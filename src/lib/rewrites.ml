@@ -4877,7 +4877,6 @@ let rewrites_interpreter =
     ("pat_string_append", []);
     ("mapping_patterns", []);
     ("undefined", [Bool_arg false]);
-    ("tuple_assignments", []);
     ("vector_concat_assignments", []);
     ("simple_assignments", []);
   ]

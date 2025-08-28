@@ -23,10 +23,29 @@ Inductive return_value : Set :=
 | Return_ok : value -> return_value
 | Return_exception : value -> return_value.
 
+Inductive var_type : Set :=
+| Var_local : var_type
+| Var_register : var_type.
+
+Inductive id_type :=
+| Local_variable : id_type
+| Global_register : id_type
+| Enum_member : id_type.
+
+Inductive place : Set :=
+| PL_id : id -> var_type -> place
+| PL_register : string -> place
+| PL_vector : place -> num -> place
+| PL_vector_range : place -> num -> num -> place
+| PL_field : place -> id -> place.
+
+Inductive destructure : Set :=
+| DL_app : id -> list value -> destructure
+| DL_tuple : list destructure -> destructure
+| DL_vector_concat : list destructure -> destructure
+| DL_place : place -> destructure.
+
 Module Monad.
-  Inductive var_type : Set :=
-  | Var_local : var_type
-  | Var_register : var_type.
 
   Inductive t (a : Set) : Set :=
   | Pure : a -> t a
@@ -36,8 +55,8 @@ Module Monad.
   | Match_failure : Ast.loc -> t a
   | Assertion_failed : string -> t a
   | Call : id -> list value -> (return_value -> t a) -> t a
-  | Read_var : var_type -> id -> (value -> t a) -> t a
-  | Write_var : var_type -> id -> value -> (unit -> t a) -> t a
+  | Read_var : place -> (value -> t a) -> t a
+  | Write_var : place -> value -> (unit -> t a) -> t a
   | Get_undefined : typ -> (value -> t a) -> t a.
 
   Arguments Pure {_}.
@@ -60,10 +79,13 @@ Module Monad.
     | Match_failure l => Match_failure l
     | Assertion_failed msg => Assertion_failed msg
     | Call id args cont => Call id args (fun v => bind (cont v) f)
-    | Read_var t r cont => Read_var t r (fun v => bind (cont v) f)
-    | Write_var t r v cont => Write_var t r v (fun u => bind (cont u) f)
+    | Read_var r cont => Read_var r (fun v => bind (cont v) f)
+    | Write_var r v cont => Write_var r v (fun u => bind (cont u) f)
     | Get_undefined t cont => Get_undefined t (fun v => bind (cont v) f)
     end.
+
+  Notation "x ← y ; z" := (bind y (fun x : _ => z))
+    (at level 20, y at level 100, z at level 200, only parsing).
 
   Fixpoint fmap {A B : Set} (f : A -> B) (m : t A) : t B :=
     match m with
@@ -74,12 +96,21 @@ Module Monad.
     | Match_failure l => Match_failure l
     | Assertion_failed msg => Assertion_failed msg
     | Call id args cont => Call id args (fun v => fmap f (cont v))
-    | Read_var t r cont => Read_var t r (fun v => fmap f (cont v))
-    | Write_var t r v cont => Write_var t r v (fun u => fmap f (cont u))
+    | Read_var r cont => Read_var r (fun v => fmap f (cont v))
+    | Write_var r v cont => Write_var r v (fun u => fmap f (cont u))
     | Get_undefined t cont => Get_undefined t (fun v => fmap f (cont v))
     end.
 
   Definition pure {A : Set} (x : A) : t A := Pure x.
+
+  Fixpoint sequence {A : Set} (ls : list (t A)) : t (list A) :=
+  match ls with
+  | m :: ms =>
+      x ← m;
+      xs ← sequence ms;
+      pure (x :: xs)
+  | [] => pure []
+  end.
 
   Definition get_undefined (typ : Ast.typ) : t value := Get_undefined typ pure.
 
@@ -101,8 +132,8 @@ Module Monad.
     | Match_failure l => Match_failure l
     | Assertion_failed msg => Assertion_failed msg
     | Call id args cont => Call id args (fun v => fmap Continue (cont v))
-    | Read_var t r cont => Read_var t r (fun v => fmap Continue (cont v))
-    | Write_var t r v cont => Write_var t r v (fun _ => fmap Continue (cont ()))
+    | Read_var r cont => Read_var r (fun v => fmap Continue (cont v))
+    | Write_var r v cont => Write_var r v (fun _ => fmap Continue (cont ()))
     | Get_undefined t cont => Get_undefined t (fun v => fmap Continue (cont v))
     end.
 
@@ -113,7 +144,7 @@ Module Monad.
 
   Theorem bind_right_id : forall (A : Set) (m : t A), bind m pure = m.
   Proof.
-    induction m as [| | | | | | ? ? cont | ? ? cont | ? ? ? cont | ? cont]; try easy.
+    induction m as [| | | | | | ? ? cont | ? cont | ? ? cont | ? cont]; try easy.
     all: cbn.
     all: f_equal.
     all: apply functional_extensionality.
@@ -125,7 +156,7 @@ Module Monad.
   Theorem bind_assoc : forall (A B C : Set) (f : A -> t B) (g : B -> t C) (x : t A),
       bind (bind x f) g = bind x (fun y => bind (f y) g).
   Proof.
-    induction x as [| | | | | | ? ? cont | ? ? cont | ? ? ? cont | ? cont]; try easy.
+    induction x as [| | | | | | ? ? cont | ? cont | ? ? cont | ? cont]; try easy.
     all: cbn.
     all: f_equal.
     all: apply functional_extensionality.
@@ -196,6 +227,12 @@ Proof.
     rewrite IHxs.
     reflexivity.
 Qed.
+
+Definition coerce_place {A : Set} (loc : Ast.loc) (d : destructure) : t place :=
+  match d with
+  | DL_place p => pure p
+  | _ => Runtime_type_error loc
+  end.
 
 Fixpoint left_to_right {A : Set} (xs : list (exp A)) {struct xs} : (list (exp A) * list (exp A)) :=
   match xs with
@@ -292,6 +329,11 @@ Fixpoint depth {A : Set} (x : exp A) {struct x} : nat :=
         map (fun f => let 'FE_aux (FE_fexp _ y) _ := f in depth y) fields
       in
       fold_right max 0 field_depths + 1
+  | E_struct_update x fields =>
+      let field_depths :=
+        map (fun f => let 'FE_aux (FE_fexp _ y) _ := f in depth y) fields
+      in
+      max (depth x) (fold_right max 0 field_depths) + 1
   | E_let (LB_aux (LB_val _ y) _) body => max (depth y) (depth body) + 1
   | E_app_infix x _ y | E_cons x y => max (depth x) (depth y) + 1
   | E_if i t e => max (depth i) (max (depth t) (depth e)) + 1
@@ -310,7 +352,10 @@ lexp_depth {A : Set} (l : lexp A) {struct l} : nat :=
   match aux with
   | LE_deref x => depth x + 1
   | LE_app _ xs => fold_right max 0 (map depth xs) + 1
-  | _ => 0
+  | LE_tuple ls
+  | LE_vector_concat ls => fold_right max 0 (map lexp_depth ls) + 1
+  | LE_vector l _ | LE_vector_range l _ _ | LE_field l _ => lexp_depth l + 1
+  | LE_id _ | LE_typ _ _ => 0
   end.
 
 Lemma depth_block : forall (A : Set) (x : exp A) xs annot,
@@ -328,11 +373,6 @@ Proof.
     lia.
 Qed.
 
-Inductive id_type :=
-| Local_variable : id_type
-| Global_register : id_type
-| Enum_member : id_type.
-
 Fixpoint take_drop {A : Set} (n : nat) (xs : list A) : list A * list A :=
   match (n, xs) with
   | (0, xs) => ([], xs)
@@ -341,6 +381,14 @@ Fixpoint take_drop {A : Set} (n : nat) (xs : list A) : list A * list A :=
       let '(ys, zs) := take_drop m xs in
       (x :: ys, zs)
   end.
+
+Lemma take_drop_all : forall (A : Set) (xs : list A),
+    take_drop (length xs) xs = (xs, []).
+Proof.
+  induction xs.
+  - cbn. reflexivity.
+  - cbn. rewrite IHxs. reflexivity.
+Qed.
 
 Inductive vector_concat_split :=
 | No_split : vector_concat_split
@@ -437,7 +485,6 @@ Module Semantics (T : TANNOT).
         E_aux (E_cons (substitute n v x) (substitute n v xs)) annot
     | E_field x f =>
         E_aux (E_field (substitute n v x) f) annot
-    (* FIXME: Loops *)
     | E_loop loop_kind measure cond body => E_aux (E_loop loop_kind measure (substitute n v cond) (substitute n v body)) annot
     | E_for loop_var from to amount ord body =>
         if T.id_equal n loop_var then
@@ -452,6 +499,17 @@ Module Semantics (T : TANNOT).
                 (fun f =>
                    let 'FE_aux (FE_fexp name x) fe_annot := f in
                    FE_aux (FE_fexp name (substitute n v x)) fe_annot
+                )
+                fields))
+          annot
+    | E_struct_update x fields =>
+        E_aux
+          (E_struct_update
+             (substitute n v x)
+             (map
+                (fun f =>
+                   let 'FE_aux (FE_fexp name y) fe_annot := f in
+                   FE_aux (FE_fexp name (substitute n v y)) fe_annot
                 )
                 fields))
           annot
@@ -747,6 +805,169 @@ Module Semantics (T : TANNOT).
             lookup_field l name fields
       end.
 
+  Fixpoint lexp_subexps (l : lexp T.tannot) : list (exp T.tannot) :=
+    let 'LE_aux aux _ := l in
+    match aux with
+    | LE_id _ | LE_typ _ _ => []
+    | LE_deref x => [x]
+    | LE_app _ xs => xs
+    | LE_tuple ls
+    | LE_vector_concat ls =>
+        concat (map lexp_subexps ls)
+    | LE_vector l x => lexp_subexps l ++ [x]
+    | LE_vector_range l n m => lexp_subexps l ++ [n; m]
+    | LE_field l _ => lexp_subexps l
+    end.
+
+  Fixpoint update_lexp_subexps (xs : list (exp T.tannot)) (l : lexp T.tannot) : lexp T.tannot * list (exp T.tannot) :=
+    let 'LE_aux aux annot := l in
+    match aux with
+    | LE_id _ | LE_typ _ _ => (l, xs)
+    | LE_deref _ =>
+        match xs with
+        | y :: ys =>
+            (LE_aux (LE_deref y) annot, ys)
+        | _ => (l, xs)
+        end
+    | LE_field l f =>
+        let '(l', ys) := update_lexp_subexps xs l in
+        (LE_aux (LE_field l' f) annot, ys)
+    | LE_app id args =>
+        let '(ys, zs) := take_drop (length args) xs in
+        (LE_aux (LE_app id ys) annot, zs)
+    | LE_tuple ls =>
+        let '(ls, xs) :=
+          fold_left
+            (fun acc l =>
+               let '(ls, xs) := acc in
+               let '(l, xs) := update_lexp_subexps xs l in
+               (ls ++ [l], xs)
+            )
+            ls
+            ([], xs)
+        in
+        (LE_aux (LE_tuple ls) annot, xs)
+    | LE_vector_concat ls =>
+        let '(ls, xs) :=
+          fold_left
+            (fun acc l =>
+               let '(ls, xs) := acc in
+               let '(l, xs) := update_lexp_subexps xs l in
+               (ls ++ [l], xs)
+            )
+            ls
+            ([], xs)
+        in
+        (LE_aux (LE_tuple ls) annot, xs)
+    | LE_vector l n =>
+        match update_lexp_subexps xs l with
+        | (l, n :: xs) =>
+            (LE_aux (LE_vector l n) annot, xs)
+        | _ =>
+            (l, [])
+        end
+    | LE_vector_range l n m =>
+        match update_lexp_subexps xs l with
+        | (l, n :: m :: xs) =>
+            (LE_aux (LE_vector_range l n m) annot, xs)
+        | _ =>
+            (l, [])
+        end
+    end.
+
+  Fixpoint destructuring_assignment (annot : Ast.annot T.tannot) (d : destructure) (v : value) : t unit :=
+    match d with
+    | DL_place p =>
+        Write_var p v (fun _ => pure tt)
+    | DL_tuple ds =>
+        match v with
+        | V_tuple vs =>
+            if Nat.eqb (length ds) (length vs) then
+              let '(assignment, _) :=
+                fold_left
+                  (fun acc d =>
+                     match acc with
+                     | (prev, v :: vs) =>
+                         (bind prev (fun _ => destructuring_assignment annot d v), vs)
+                     | (prev, []) => (prev, [])
+                     end
+                  )
+                  ds
+                  (pure tt, vs)
+              in
+              assignment
+            else
+              Runtime_type_error (fst annot)
+        | _ =>
+            Runtime_type_error (fst annot)
+        end
+    | _ =>
+        Runtime_type_error (fst annot)
+    end.
+
+  Fixpoint lexp_to_destructure (l : lexp T.tannot) {struct l} : t destructure :=
+    let 'LE_aux aux annot := l in
+    match aux with
+    | LE_id var
+    | LE_typ _ var =>
+        match T.get_id_type (snd annot) var with
+        | Global_register =>
+            pure (DL_place (PL_id var Var_register))
+        | Local_variable =>
+            pure (DL_place (PL_id var Var_local))
+        | Enum_member =>
+            Runtime_type_error (fst annot)
+        end
+    | LE_deref x =>
+        match x with
+        | E_aux (E_internal_value (V_ref r)) _ =>
+            pure (DL_place (PL_register r))
+        | _ =>
+            Runtime_type_error (fst annot)
+        end
+    | LE_app name args =>
+        let evaluated := all_evaluated args in
+        pure (DL_app name evaluated)
+    | LE_tuple ls =>
+        ds ← sequence (map lexp_to_destructure ls);
+        pure (DL_tuple ds)
+    | LE_vector_concat ls =>
+        ds ← sequence (map lexp_to_destructure ls);
+        pure (DL_vector_concat ds)
+    | LE_field l f =>
+        p ← bind (lexp_to_destructure l) (@coerce_place T.tannot (fst annot));
+        pure (DL_place (PL_field p f))
+    | LE_vector l n =>
+        p ← bind (lexp_to_destructure l) (@coerce_place T.tannot (fst annot));
+        match n with
+        | E_aux (E_internal_value (V_int n)) _ =>
+            pure (DL_place (PL_vector p n))
+        | _ =>
+            Runtime_type_error (fst annot)
+        end
+    | LE_vector_range l n m =>
+        p ← bind (lexp_to_destructure l) (@coerce_place T.tannot (fst annot));
+        match (n, m) with
+        | (E_aux (E_internal_value (V_int n)) _, E_aux (E_internal_value (V_int m)) _) =>
+            pure (DL_place (PL_vector p n))
+        | _ =>
+            Runtime_type_error (fst annot)
+        end
+    end.
+
+  Fixpoint update_field (name : string) (v : value) (fields : list (string * value)) : list (string * value) :=
+    match fields with
+    | (name', old_v) :: rest =>
+        if T.string_equal name name' then
+          (name, v) :: rest
+        else
+          (name', old_v) :: update_field name v rest
+   | [] => []
+   end.
+
+  #[local]
+  Obligation Tactic := (program_simpl; try easy; cbn; try lia).
+
   Program Fixpoint step (orig_exp : exp T.tannot) {measure (depth orig_exp)} : t (exp T.tannot) :=
     let 'E_aux aux annot := orig_exp in
     let wrap e_aux' := pure (E_aux e_aux' annot) in
@@ -765,9 +986,9 @@ Module Semantics (T : TANNOT).
     | E_id id =>
         match T.get_id_type (snd annot) id with
         | Global_register =>
-            Read_var Var_register id (fun v => wrap (E_internal_value v))
+            Read_var (PL_id id Var_register) (fun v => wrap (E_internal_value v))
         | Local_variable =>
-            Read_var Var_local id (fun v => wrap (E_internal_value v))
+            Read_var (PL_id id Var_local) (fun v => wrap (E_internal_value v))
         | Enum_member =>
             wrap (E_internal_value (V_member (T.string_of_id id)))
         end
@@ -777,31 +998,23 @@ Module Semantics (T : TANNOT).
         | _ => bind (step x) (fun x' => wrap (E_return x'))
         end
     | E_assign l x =>
-        match x with
-        | E_aux (E_internal_value v) _ =>
-            match l with
-            | LE_aux (LE_id var | LE_typ _ var) _ =>
-                match T.get_id_type (snd annot) var with
-                | Global_register =>
-                    Write_var Var_register var v (fun _ => wrap (E_internal_value V_unit))
-                | Local_variable =>
-                    Write_var Var_local var v (fun _ => wrap (E_internal_value V_unit))
-                | Enum_member =>
-                    Runtime_type_error (fst annot)
-                end
-            | LE_aux (LE_deref reference) le_annot =>
-                match reference with
-                | E_aux (E_internal_value (V_ref register_name)) _ =>
-                    Write_var Var_register (Id_aux (Id register_name) (fst le_annot)) v (fun _ => wrap (E_internal_value V_unit))
-                | E_aux (E_internal_value _) _ => Runtime_type_error (fst le_annot)
-                | _ =>
-                    bind (step reference) (fun reference' => wrap (E_assign (LE_aux (LE_deref reference') le_annot) x))
-                end
+        let lxs := lexp_subexps l in
+        let '(evaluated, unevaluated) := left_to_right lxs in
+        match unevaluated with
+        | lx :: lxs =>
+            lx' ← step lx;
+            let '(l', _) := update_lexp_subexps (evaluated ++ (lx' :: lxs)) l in
+            wrap (E_assign l' x)
+        | [] =>
+            match x with
+            | E_aux (E_internal_value v) _ =>
+                d ← lexp_to_destructure l;
+                _ ← destructuring_assignment annot d v;
+                wrap (E_internal_value V_unit)
             | _ =>
-                Runtime_type_error (fst annot)
+                x' ← step x;
+                wrap (E_assign l x')
             end
-        | _ =>
-            bind (step x) (fun x' => wrap (E_assign l x'))
         end
     | E_var l x body => wrap (E_block (E_aux (E_assign l x) annot :: [body]))
     | E_match head_exp arms =>
@@ -871,10 +1084,24 @@ Module Semantics (T : TANNOT).
     | E_app id args =>
         let '(evaluated, unevaluated) := left_to_right args in
         match unevaluated with
-        | x :: xs =>
-            bind (step x) (fun x' => wrap (E_app id (evaluated ++ (x' :: xs))))
+        | u :: us =>
+            u' ← step u;
+            wrap (E_app id (evaluated ++ (u' :: us)))
         | [] =>
-            bind (Call id (all_evaluated evaluated) pure)
+            r ← Call id (all_evaluated evaluated) pure;
+            match r with
+            | Return_ok v => wrap (E_internal_value v)
+            | Return_exception exn => wrap (E_throw (E_aux (E_internal_value exn) annot))
+            end
+        end
+    | E_app_infix arg1 id arg2 =>
+        match left_to_right2 arg1 arg2 with
+        | LTR2_0 _ _ =>
+            bind (step arg1) (fun arg1' => wrap (E_app_infix arg1' id arg2))
+        | LTR2_1 v1 _ =>
+            bind (step arg2) (fun arg2' => wrap (E_app_infix arg1 id arg2'))
+        | LTR2_2 v1 v2 =>
+            bind (Call id [v1; v2] pure)
               (fun r =>
                  match r with
                  | Return_ok v => wrap (E_internal_value v)
@@ -882,23 +1109,6 @@ Module Semantics (T : TANNOT).
                  end
               )
         end
-    | E_app_infix arg1 id arg2 =>
-        (
-          match left_to_right2 arg1 arg2 with
-          | LTR2_0 _ _ =>
-              bind (step arg1) (fun arg1' => wrap (E_app_infix arg1' id arg2))
-          | LTR2_1 v1 _ =>
-              bind (step arg2) (fun arg2' => wrap (E_app_infix arg1 id arg2'))
-          | LTR2_2 v1 v2 =>
-              bind (Call id [v1; v2] pure)
-                (fun r =>
-                   match r with
-                   | Return_ok v => wrap (E_internal_value v)
-                   | Return_exception exn => wrap (E_throw (E_aux (E_internal_value exn) annot))
-                   end
-                )
-          end
-        )
     | E_if i t e =>
         bind (is_bool i)
           (fun b =>
@@ -949,6 +1159,24 @@ Module Semantics (T : TANNOT).
             bind (step x) (fun x' => wrap (E_struct struct_id (evaluated ++ (FE_aux (FE_fexp name x') annot :: xs))))
         | [] =>
             wrap (E_internal_value (V_record (all_evaluated_fields T.string_of_id evaluated)))
+        end
+    | E_struct_update x fs =>
+        match x with
+        | E_aux (E_internal_value (V_record fields)) _ =>
+            let '(evaluated, unevaluated) := left_to_right_fields fs in
+            match unevaluated with
+            | FE_aux (FE_fexp name y) annot :: ys =>
+                y' ← step y;
+                wrap (E_struct_update x (evaluated ++ (FE_aux (FE_fexp name y') annot :: ys)))
+            | [] =>
+                let updates := all_evaluated_fields T.string_of_id evaluated in
+                let fields := fold_left (fun fields s => update_field (fst s) (snd s) fields) updates fields in
+                wrap (E_internal_value (V_record fields))
+            end
+        | E_aux (E_internal_value _) _ => Runtime_type_error (fst annot)
+        | _ =>
+            x' ← step x;
+            wrap (E_struct_update x' fs)
         end
     | E_vector xs =>
         (
@@ -1057,7 +1285,6 @@ Module Semantics (T : TANNOT).
     | E_vector_update _ _ _ => Runtime_type_error (fst annot)
     | E_vector_update_subrange _ _ _ _ => Runtime_type_error (fst annot)
     | E_vector_append _ _ => Runtime_type_error (fst annot)
-    | E_struct_update _ _ => Runtime_type_error (fst annot)
     | E_sizeof _ => Runtime_type_error (fst annot)
     | E_constraint _ => Runtime_type_error (fst annot)
     | E_exit _ => Runtime_type_error (fst annot)
@@ -1066,7 +1293,8 @@ Module Semantics (T : TANNOT).
     | E_internal_return _ => Runtime_type_error (fst annot)
     | E_internal_assume _ _ => Runtime_type_error (fst annot)
     end.
-  Solve Obligations of step with (program_simpl; try easy; cbn; try lia).
+  Next Obligation.
+    Admitted.
   Next Obligation.
     Admitted.
   Next Obligation.
@@ -1098,6 +1326,8 @@ Module Semantics (T : TANNOT).
   Next Obligation.
     Admitted.
   Next Obligation.
+    Admitted.
+  Next Obligation.
     cbn.
     rewrite ltr_tuple in Heq_anonymous.
     inversion Heq_anonymous.
@@ -1110,7 +1340,7 @@ Module Semantics (T : TANNOT).
     apply fold_right_max_acc.
     lia.
   Defined.
-  Next Obligation.
+  Final Obligation.
     cbn.
     rewrite ltr_tuple in Heq_anonymous.
     inversion Heq_anonymous.
