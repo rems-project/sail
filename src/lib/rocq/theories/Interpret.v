@@ -46,7 +46,6 @@ Inductive destructure : Set :=
 | DL_place : place -> destructure.
 
 Module Monad.
-
   Inductive t (a : Set) : Set :=
   | Pure : a -> t a
   | Early_return : value -> t a
@@ -83,7 +82,6 @@ Module Monad.
     | Write_var r v cont => Write_var r v (fun u => bind (cont u) f)
     | Get_undefined t cont => Get_undefined t (fun v => bind (cont v) f)
     end.
-
   Notation "x ← y ; z" := (bind y (fun x : _ => z))
     (at level 20, y at level 100, z at level 200, only parsing).
 
@@ -312,7 +310,8 @@ Definition left_to_right3 {A : Set} (x y z : exp A) : ltr3 A :=
 Fixpoint depth {A : Set} (x : exp A) {struct x} : nat :=
   let 'E_aux aux _ := x in
   match aux with
-  | E_block xs | E_tuple xs | E_app _ xs | E_vector xs | E_list xs => fold_right max 0 (map depth xs) + 1
+  | E_block xs | E_tuple xs | E_app _ xs | E_vector xs | E_list xs =>
+      fold_right max 0 (map depth xs) + 1
   | E_return x | E_field x _ | E_throw x => depth x + 1
   | E_assign l x => max (lexp_depth l) (depth x) + 1
   | E_match x arms | E_try x arms =>
@@ -344,19 +343,80 @@ Fixpoint depth {A : Set} (x : exp A) {struct x} : nat :=
       let a := depth amount in
       let b := depth body in
       fold_right max 0 [f; t; a; b] + 1
-  | _ => 0
+  | E_typ _ x => depth x + 1
+  | E_loop _ _ cond body => max (depth cond) (depth body) + 1
+  | E_vector_access x n => max (depth x) (depth n) + 1
+  | E_vector_subrange x n m => max (depth x) (max (depth n) (depth m)) + 1
+  | E_vector_update x n y => max (depth x) (max (depth n) (depth y)) + 1
+  | E_vector_update_subrange x n m y => max (depth x) (max (depth n) (max (depth m) (depth y))) + 1
+  | E_vector_append x y => max (depth x) (depth y) + 1
+  | E_exit x => depth x + 1
+  | E_var l x y => max (lexp_depth l) (max (depth x) (depth y)) + 1
+  | E_id _ | E_lit _ | E_sizeof _ | E_constraint _ | E_config _ | E_ref _ | E_internal_value _ => 0
+  (* Internal constructors we can ignore for now *)
+  | E_internal_plet _ _ _ => 0
+  | E_internal_return _ => 0
+  | E_internal_assume _ _ => 0
   end
-with
-lexp_depth {A : Set} (l : lexp A) {struct l} : nat :=
+with lexp_depth {A : Set} (l : lexp A) {struct l} : nat :=
   let 'LE_aux aux _ := l in
   match aux with
   | LE_deref x => depth x + 1
   | LE_app _ xs => fold_right max 0 (map depth xs) + 1
   | LE_tuple ls
   | LE_vector_concat ls => fold_right max 0 (map lexp_depth ls) + 1
-  | LE_vector l _ | LE_vector_range l _ _ | LE_field l _ => lexp_depth l + 1
+  | LE_vector l n => lexp_depth l + depth n + 1
+  | LE_vector_range l n m => lexp_depth l + depth n + depth m + 1
+  | LE_field l _ => lexp_depth l + 1
   | LE_id _ | LE_typ _ _ => 0
   end.
+
+Fixpoint All {A : Type} (f : A -> Prop) (xs : list A) {struct xs} : Prop :=
+  match xs with
+  | [] => True
+  | x :: xs =>  f x /\ All f xs
+  end.
+
+Section lexp_ind_g.
+    Variables (A : Set)
+              (P : lexp A -> Prop)
+              (H_id : forall id ann, P (LE_aux (LE_id id) ann))
+              (H_deref : forall x ann, P (LE_aux (LE_deref x) ann))
+              (H_app : forall f xs ann, P (LE_aux (LE_app f xs) ann))
+              (H_typ : forall id typ ann, P (LE_aux (LE_typ typ id) ann))
+              (H_tuple : forall ls ann, All P ls -> P (LE_aux (LE_tuple ls) ann))
+              (H_vector_concat : forall ls ann, All P ls -> P (LE_aux (LE_vector_concat ls) ann))
+              (H_vector : forall l n ann, P l -> P (LE_aux (LE_vector l n) ann))
+              (H_vector_range : forall l n m ann, P l -> P (LE_aux (LE_vector_range l n m) ann))
+              (H_field : forall (l : lexp A) f ann, P l -> P (LE_aux (LE_field l f) ann)).
+
+    Fixpoint lexp_ind_g l : P l.
+    Proof using H_app H_deref H_field H_id H_tuple H_typ H_vector H_vector_concat H_vector_range.
+      destruct l as [aux ann].
+      destruct aux.
+      - apply H_id.
+      - apply H_deref.
+      - apply H_app.
+      - apply H_typ.
+      - {
+        apply H_tuple.
+        induction l.
+        - unfold All. trivial.
+        - unfold All. easy.
+      }
+      - {
+        apply H_vector_concat.
+        induction l.
+        - unfold All. trivial.
+        - unfold All. easy.
+      }
+      - apply H_vector. trivial.
+      - apply H_vector_range. trivial.
+      - apply H_field. trivial.
+    Qed.
+End lexp_ind_g.
+
+Check lexp_ind_g.
 
 Lemma depth_block : forall (A : Set) (x : exp A) xs annot,
     depth (E_aux (E_block (x :: xs)) annot) = max (depth x) (fold_right max 0 (map depth xs)) + 1.
@@ -365,6 +425,15 @@ Proof.
 Qed.
 
 Lemma fold_right_max_acc : forall x y zs, x <= y -> x < fold_right max y zs + 1.
+Proof.
+  induction zs.
+  - cbn.
+    lia.
+  - cbn.
+    lia.
+Qed.
+
+Lemma fold_right_max_acc2 : forall x y zs, x <= y -> x <= fold_right max y zs.
 Proof.
   induction zs.
   - cbn.
@@ -821,6 +890,111 @@ Module Semantics (T : TANNOT).
     | LE_vector_range l n m => lexp_subexps l ++ [n; m]
     | LE_field l _ => lexp_subexps l
     end.
+
+  Fixpoint Exists {A : Type} (f : A -> Prop) (xs : list A) {struct xs} : Prop :=
+    match xs with
+    | [] => False
+    | x :: xs =>  f x \/ Exists f xs
+    end.
+
+  Fixpoint Is_subexp (x : exp T.tannot) (l : lexp T.tannot) {struct l} : Prop :=
+    let 'LE_aux aux _ := l in
+    match aux with
+    | LE_id _ | LE_typ _ _ => False
+    | LE_deref y => x = y
+    | LE_vector l n => Is_subexp x l \/ x = n
+    | LE_vector_range l n m => Is_subexp x l \/ x = n \/ x = m
+    | LE_field l _ => Is_subexp x l
+    | LE_tuple ls | LE_vector_concat ls => Exists (Is_subexp x) ls
+    | LE_app _ args => Exists (fun arg => x = arg) args
+    end.
+
+  Lemma max_rhs_plus_1 : forall x y z, x < z + 1 -> x < max y z + 1.
+  Proof.
+    lia.
+  Qed.
+
+  Lemma max_lhs_plus_1_le : forall x y z, x <= y -> x < max y z + 1.
+  Proof.
+    lia.
+  Qed.
+
+  Lemma test : forall (x : exp T.tannot) (xs : list (exp T.tannot)),
+    Exists (fun arg => x = arg) xs ->
+    depth x < fold_right Nat.max 0 (map depth xs) + 1.
+  Proof.
+    induction xs.
+    - cbn. easy.
+    - cbn.
+      intros.
+      destruct H.
+      rewrite H.
+      lia.
+      apply max_rhs_plus_1.
+      apply IHxs.
+      assumption.
+  Qed.
+
+  Lemma fold_max_app : forall xs ys, fold_right max 0 (xs ++ ys) = max (fold_right max 0 xs) (fold_right max 0 ys).
+  Proof.
+    induction xs.
+    - cbn. reflexivity.
+    - cbn.
+      intros.
+      rewrite (IHxs ys).
+      lia.
+  Qed.
+
+  Lemma lexp_subexps_depth : forall (l : lexp T.tannot),
+    fold_right max 0 (map depth (lexp_subexps l)) <= lexp_depth l.
+  Proof.
+     intros.
+     induction l using lexp_ind_g.
+     - cbn. reflexivity.
+     - cbn. lia.
+     - cbn. lia.
+     - cbn. reflexivity.
+     - {
+       induction ls.
+       - cbn. lia.
+       - cbn.
+         cbn in IHls.
+         rewrite map_app.
+         unfold All in H.
+         inversion H.
+         fold (@All (lexp T.tannot)) in H1.
+         apply IHls in H1.
+         rewrite fold_max_app.
+         lia.
+     }
+     - {
+       induction ls.
+       - cbn. lia.
+       - cbn.
+         cbn in IHls.
+         rewrite map_app.
+         unfold All in H.
+         inversion H.
+         fold (@All (lexp T.tannot)) in H1.
+         apply IHls in H1.
+         rewrite fold_max_app.
+         lia.
+     }
+     - cbn.
+       rewrite map_app.
+       rewrite fold_max_app.
+       cbn.
+       lia.
+     - cbn.
+       rewrite map_app.
+       rewrite fold_max_app.
+       cbn.
+       lia.
+     - cbn. lia.
+  Qed.
+
+  Lemma depth_subst : forall n v (x : exp T.tannot), depth (substitute n v x) <= depth x.
+    Admitted.
 
   Fixpoint update_lexp_subexps (xs : list (exp T.tannot)) (l : lexp T.tannot) : lexp T.tannot * list (exp T.tannot) :=
     let 'LE_aux aux annot := l in
@@ -1297,7 +1471,19 @@ Module Semantics (T : TANNOT).
     | E_internal_assume _ _ => Runtime_type_error (fst annot)
     end.
   Next Obligation.
-    Admitted.
+    cbn.
+    rewrite ltr_tuple in Heq_anonymous.
+    apply max_lhs_plus_1_le.
+    apply (PeanoNat.Nat.le_trans _ (fold_right max 0 (map depth (lexp_subexps l))) _).
+    rewrite <- (take_drop_evaluated_concat T.tannot (lexp_subexps l)).
+    inversion Heq_anonymous.
+    rewrite map_app.
+    rewrite fold_right_app.
+    cbn.
+    apply fold_right_max_acc2.
+    lia.
+    apply lexp_subexps_depth.
+  Defined.
   Next Obligation.
     Admitted.
   Next Obligation.
