@@ -437,16 +437,18 @@ Module Type TANNOT.
 End TANNOT.
 
 Module Semantics (T : TANNOT).
-  Fixpoint binds_id {A} (n : Ast.id) (pat : Ast.pat A) : bool :=
-    let 'P_aux aux annot := pat in
+  Fixpoint binds_id {A} (n : Ast.id) (p : Ast.pat A) : bool :=
+    let 'P_aux aux annot := p in
     match aux with
-    | P_lit _ | P_wild => false
+    | P_lit _ | P_wild | P_not _ => false
     | P_id m => T.id_equal n m
-    | P_typ _ pat | P_var pat _ => binds_id n pat
+    | P_typ _ p | P_var p _ => binds_id n p
     | P_as pat m => binds_id n pat || T.id_equal n m
-    | P_cons hd_p tl_p => binds_id n hd_p || binds_id n tl_p
-    | P_tuple ps | P_list ps | P_vector ps => fold_left orb (map (binds_id n) ps) false
-    | _ => false
+    | P_tuple ps | P_list ps | P_vector ps | P_app _ ps | P_vector_concat ps | P_string_append ps =>
+        fold_left orb (map (binds_id n) ps) false
+    | P_or p1 p2 | P_cons p1 p2 => binds_id n p1 || binds_id n p2
+    | P_struct _ ps _ => fold_left orb (map (fun fp => binds_id n (snd fp)) ps) false
+    | P_vector_subrange m _ _ => T.id_equal n m
     end.
 
   Fixpoint substitute {A} (n : Ast.id) (v : Value_type.value) (x : exp A) : exp A :=
@@ -513,6 +515,7 @@ Module Semantics (T : TANNOT).
                 )
                 fields))
           annot
+    | E_return x => E_aux (E_return (substitute n v x)) annot
     | _ => E_aux aux annot
     end
   with substitute_arm {A} (n : Ast.id) (v : Value_type.value) (arm : pexp A) : pexp A :=
