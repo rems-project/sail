@@ -10,6 +10,7 @@ From Stdlib Require Import Program.
 
 Require Import Value_type.
 Require Import Ast.
+Require Import AstInduction.
 
 Import ListNotations.
 
@@ -263,6 +264,21 @@ Fixpoint all_evaluated_fields {A : Set} (f : id -> string) (xs : list (fexp A)) 
   | _ :: xs => all_evaluated_fields f xs
   end.
 
+Fixpoint take_evaluated_fields {A : Set} (xs : list (fexp A)) : list (fexp A) :=
+  match xs with
+  | [] => []
+  | FE_aux (FE_fexp id (E_aux (E_internal_value v) ann)) fe_ann :: xs =>
+      FE_aux (FE_fexp id (E_aux (E_internal_value v) ann)) fe_ann :: take_evaluated_fields xs
+  | _ :: xs => []
+  end.
+
+Fixpoint drop_evaluated_fields {A : Set} (xs : list (fexp A)) : list (fexp A) :=
+  match xs with
+  | [] => []
+  | FE_aux (FE_fexp _ (E_aux (E_internal_value v) _)) _ :: xs => drop_evaluated_fields xs
+  | x :: xs => x :: xs
+  end.
+
 Fixpoint left_to_right_fields {A : Set} (xs : list (fexp A)) {struct xs} : (list (fexp A) * list (fexp A)) :=
   match xs with
   | [] => ([], [])
@@ -271,6 +287,32 @@ Fixpoint left_to_right_fields {A : Set} (xs : list (fexp A)) {struct xs} : (list
       (FE_aux (FE_fexp id (E_aux (E_internal_value v) annot)) fe_annot :: vs, xs')
   | x :: xs => ([], x :: xs)
   end.
+
+Lemma take_drop_evaluated_fields_concat : forall (A : Set) (fxs : list (fexp A)),
+  take_evaluated_fields fxs ++ drop_evaluated_fields fxs = fxs.
+Proof.
+  induction fxs as [| fx fxs ].
+  - reflexivity.
+  - destruct fx as [aux ?].
+    destruct aux as [? e].
+    destruct e as [e_aux ?].
+    destruct e_aux.
+    all: try reflexivity.
+    cbn. rewrite IHfxs. reflexivity.
+Qed.
+
+Lemma ltr_fields_tuple : forall (A : Set) (fxs : list (fexp A)),
+  left_to_right_fields fxs = (take_evaluated_fields fxs, drop_evaluated_fields fxs).
+Proof.
+  induction fxs as [| fx fxs ].
+  - reflexivity.
+  - destruct fx as [aux ?].
+    destruct aux as [? e].
+    destruct e as [e_aux ?].
+    destruct e_aux.
+    all: try reflexivity.
+    cbn. rewrite IHfxs. reflexivity.
+Qed.
 
 Inductive ltr2 (A : Set) : Set :=
 | LTR2_0 : exp A -> exp A -> ltr2 A
@@ -306,123 +348,6 @@ Definition left_to_right3 {A : Set} (x y z : exp A) : ltr3 A :=
   | (E_aux (E_internal_value v1) _, _, _) => LTR3_1 v1 y z
   | (_, _, _) => LTR3_0 x y z
   end.
-
-Fixpoint depth {A : Set} (x : exp A) {struct x} : nat :=
-  let 'E_aux aux _ := x in
-  match aux with
-  | E_block xs | E_tuple xs | E_app _ xs | E_vector xs | E_list xs =>
-      fold_right max 0 (map depth xs) + 1
-  | E_return x | E_field x _ | E_throw x => depth x + 1
-  | E_assign l x => max (lexp_depth l) (depth x) + 1
-  | E_match x arms | E_try x arms =>
-      let arm_depths :=
-        map (fun arm =>
-               match arm with
-               | Pat_aux (Pat_exp _ y) _ => depth y
-               | Pat_aux (Pat_when _ guard y) _ => max (depth guard) (depth y)
-               end
-          ) arms in
-      max (depth x) (fold_right max 0 arm_depths) + 1
-  | E_struct _ fields =>
-      let field_depths :=
-        map (fun f => let 'FE_aux (FE_fexp _ y) _ := f in depth y) fields
-      in
-      fold_right max 0 field_depths + 1
-  | E_struct_update x fields =>
-      let field_depths :=
-        map (fun f => let 'FE_aux (FE_fexp _ y) _ := f in depth y) fields
-      in
-      max (depth x) (fold_right max 0 field_depths) + 1
-  | E_let (LB_aux (LB_val _ y) _) body => max (depth y) (depth body) + 1
-  | E_app_infix x _ y | E_cons x y => max (depth x) (depth y) + 1
-  | E_if i t e => max (depth i) (max (depth t) (depth e)) + 1
-  | E_assert x msg => max (depth x) (depth msg) + 1
-  | E_for _ from to amount _ body =>
-      let f := depth from in
-      let t := depth to in
-      let a := depth amount in
-      let b := depth body in
-      fold_right max 0 [f; t; a; b] + 1
-  | E_typ _ x => depth x + 1
-  | E_loop _ _ cond body => max (depth cond) (depth body) + 1
-  | E_vector_access x n => max (depth x) (depth n) + 1
-  | E_vector_subrange x n m => max (depth x) (max (depth n) (depth m)) + 1
-  | E_vector_update x n y => max (depth x) (max (depth n) (depth y)) + 1
-  | E_vector_update_subrange x n m y => max (depth x) (max (depth n) (max (depth m) (depth y))) + 1
-  | E_vector_append x y => max (depth x) (depth y) + 1
-  | E_exit x => depth x + 1
-  | E_var l x y => max (lexp_depth l) (max (depth x) (depth y)) + 1
-  | E_id _ | E_lit _ | E_sizeof _ | E_constraint _ | E_config _ | E_ref _ | E_internal_value _ => 0
-  (* Internal constructors we can ignore for now *)
-  | E_internal_plet _ _ _ => 0
-  | E_internal_return _ => 0
-  | E_internal_assume _ _ => 0
-  end
-with lexp_depth {A : Set} (l : lexp A) {struct l} : nat :=
-  let 'LE_aux aux _ := l in
-  match aux with
-  | LE_deref x => depth x + 1
-  | LE_app _ xs => fold_right max 0 (map depth xs) + 1
-  | LE_tuple ls
-  | LE_vector_concat ls => fold_right max 0 (map lexp_depth ls) + 1
-  | LE_vector l n => lexp_depth l + depth n + 1
-  | LE_vector_range l n m => lexp_depth l + depth n + depth m + 1
-  | LE_field l _ => lexp_depth l + 1
-  | LE_id _ | LE_typ _ _ => 0
-  end.
-
-Fixpoint All {A : Type} (f : A -> Prop) (xs : list A) {struct xs} : Prop :=
-  match xs with
-  | [] => True
-  | x :: xs =>  f x /\ All f xs
-  end.
-
-Section lexp_ind_g.
-    Variables (A : Set)
-              (P : lexp A -> Prop)
-              (H_id : forall id ann, P (LE_aux (LE_id id) ann))
-              (H_deref : forall x ann, P (LE_aux (LE_deref x) ann))
-              (H_app : forall f xs ann, P (LE_aux (LE_app f xs) ann))
-              (H_typ : forall id typ ann, P (LE_aux (LE_typ typ id) ann))
-              (H_tuple : forall ls ann, All P ls -> P (LE_aux (LE_tuple ls) ann))
-              (H_vector_concat : forall ls ann, All P ls -> P (LE_aux (LE_vector_concat ls) ann))
-              (H_vector : forall l n ann, P l -> P (LE_aux (LE_vector l n) ann))
-              (H_vector_range : forall l n m ann, P l -> P (LE_aux (LE_vector_range l n m) ann))
-              (H_field : forall (l : lexp A) f ann, P l -> P (LE_aux (LE_field l f) ann)).
-
-    Fixpoint lexp_ind_g l : P l.
-    Proof using H_app H_deref H_field H_id H_tuple H_typ H_vector H_vector_concat H_vector_range.
-      destruct l as [aux ann].
-      destruct aux.
-      - apply H_id.
-      - apply H_deref.
-      - apply H_app.
-      - apply H_typ.
-      - {
-        apply H_tuple.
-        induction l.
-        - unfold All. trivial.
-        - unfold All. easy.
-      }
-      - {
-        apply H_vector_concat.
-        induction l.
-        - unfold All. trivial.
-        - unfold All. easy.
-      }
-      - apply H_vector. trivial.
-      - apply H_vector_range. trivial.
-      - apply H_field. trivial.
-    Qed.
-End lexp_ind_g.
-
-Check lexp_ind_g.
-
-Lemma depth_block : forall (A : Set) (x : exp A) xs annot,
-    depth (E_aux (E_block (x :: xs)) annot) = max (depth x) (fold_right max 0 (map depth xs)) + 1.
-Proof.
-  reflexivity.
-Qed.
 
 Lemma fold_right_max_acc : forall x y zs, x <= y -> x < fold_right max y zs + 1.
 Proof.
@@ -960,9 +885,8 @@ Module Semantics (T : TANNOT).
        - cbn.
          cbn in IHls.
          rewrite map_app.
-         unfold All in H.
+         rewrite Forall_cons_iff in H.
          inversion H.
-         fold (@All (lexp T.tannot)) in H1.
          apply IHls in H1.
          rewrite fold_max_app.
          lia.
@@ -973,9 +897,8 @@ Module Semantics (T : TANNOT).
        - cbn.
          cbn in IHls.
          rewrite map_app.
-         unfold All in H.
+         rewrite Forall_cons_iff in H.
          inversion H.
-         fold (@All (lexp T.tannot)) in H1.
          apply IHls in H1.
          rewrite fold_max_app.
          lia.
@@ -993,8 +916,173 @@ Module Semantics (T : TANNOT).
      - cbn. lia.
   Qed.
 
-  Lemma depth_subst : forall n v (x : exp T.tannot), depth (substitute n v x) <= depth x.
-    Admitted.
+  Lemma depth_if : forall (b : bool) (x y : exp T.tannot), depth (if b then x else y) <= max (depth x) (depth y).
+  Proof.
+    destruct b; lia.
+  Qed.
+
+  Lemma fexp_subst : forall f (lx : fexp T.tannot),
+    (let 'FE_aux (FE_fexp id x) ann := lx in FE_aux (FE_fexp id (f x)) ann) =
+    FE_aux (FE_fexp (fexp_name lx) (f (fexp_exp lx))) (fexp_annot lx).
+  Proof.
+    destruct lx as [aux ?].
+    destruct aux.
+    cbn.
+    reflexivity.
+  Qed.
+
+  Lemma depth_subst_helper : forall x y z w, x <= z -> y + 1 <= w + 1 -> max x y + 1 <= max z w + 1.
+  Proof.
+    lia.
+  Qed.
+
+  Theorem depth_subst : forall n v (x : exp T.tannot), depth (substitute n v x) <= depth x.
+  Proof.
+    intros n v.
+    einduction x using exp_ind_mutual_g.
+    19: {
+      induction fields.
+      - reflexivity.
+      - rewrite Forall_cons_iff in H.
+        inversion H as [Hhd Htl].
+        apply IHfields in Htl.
+        cbn.
+        rewrite map_map.
+        setoid_rewrite fexp_subst.
+        cbn in Htl.
+        rewrite map_map in Htl.
+        setoid_rewrite fexp_subst in Htl.
+        apply depth_subst_helper.
+        apply (PeanoNat.Nat.le_trans _ _ _ Hhd).
+        destruct a.
+        destruct f.
+        reflexivity.
+        lia.
+    }
+    19: {
+      cbn.
+      apply depth_subst_helper.
+      assumption.
+      induction fields.
+      - reflexivity.
+      - rewrite Forall_cons_iff in H.
+        inversion H as [Hhd Htl].
+        apply IHfields in Htl.
+        cbn.
+        rewrite map_map.
+        setoid_rewrite fexp_subst.
+        cbn in Htl.
+        rewrite map_map in Htl.
+        setoid_rewrite fexp_subst in Htl.
+        apply depth_subst_helper.
+        apply (PeanoNat.Nat.le_trans _ _ _ Hhd).
+        destruct a.
+        destruct f.
+        reflexivity.
+        lia.
+    }
+    all: (cbn; try easy; try lia).
+    - {
+      induction xs.
+      - reflexivity.
+      - cbn.
+        rewrite Forall_cons_iff in H.
+        inversion H as [Hhd Htl].
+        apply IHxs in Htl.
+        lia.
+    }
+    - cbn.
+      apply (PeanoNat.Nat.le_trans _ _ _ (depth_if _ _ _)).
+      reflexivity.
+    - {
+      induction xs.
+      - reflexivity.
+      - cbn.
+        rewrite Forall_cons_iff in H.
+        inversion H as [Hhd Htl].
+        apply IHxs in Htl.
+        lia.
+    }
+    - {
+      induction xs.
+      - reflexivity.
+      - cbn.
+        rewrite Forall_cons_iff in H.
+        inversion H as [Hhd Htl].
+        apply IHxs in Htl.
+        lia.
+    }
+    - cbn.
+      apply (PeanoNat.Nat.le_trans _ _ _ (depth_if _ _ _)).
+      cbn.
+      lia.
+    - {
+      induction xs.
+      - reflexivity.
+      - cbn.
+        rewrite Forall_cons_iff in H.
+        inversion H as [Hhd Htl].
+        apply IHxs in Htl.
+        lia.
+    }
+    - {
+      induction xs.
+      - reflexivity.
+      - cbn.
+        rewrite Forall_cons_iff in H.
+        inversion H as [Hhd Htl].
+        apply IHxs in Htl.
+        lia.
+    }
+    - {
+      apply depth_subst_helper.
+      assumption.
+      induction arms.
+      - reflexivity.
+      - rewrite Forall_cons_iff in H.
+        inversion H as [Hhd Htl].
+        apply IHarms in Htl.
+        cbn.
+        apply depth_subst_helper.
+        cbn in Hhd.
+        destruct a as [aux ?].
+        destruct aux; cbn; destruct (binds_id n p); try reflexivity; try assumption.
+        cbn in Hhd.
+        lia.
+        assumption.
+    }
+    - destruct (binds_id n p); cbn; lia.
+    - apply depth_subst_helper.
+      apply IHe.
+      lia.
+    - {
+      apply depth_subst_helper.
+      assumption.
+      induction arms.
+      - reflexivity.
+      - rewrite Forall_cons_iff in H.
+        inversion H as [Hhd Htl].
+        apply IHarms in Htl.
+        cbn.
+        apply depth_subst_helper.
+        cbn in Hhd.
+        destruct a as [aux ?].
+        destruct aux; cbn; destruct (binds_id n p); try reflexivity; try assumption.
+        cbn in Hhd.
+        lia.
+        assumption.
+    }
+    - cbn in IHe1; lia.
+    - cbn; reflexivity.
+    - cbn; try assumption; lia.
+    - cbn; reflexivity.
+    - cbn; reflexivity.
+    - cbn; reflexivity.
+    - cbn; reflexivity.
+    - cbn; reflexivity.
+    - cbn; reflexivity.
+    - cbn; reflexivity.
+  Qed.
 
   Fixpoint update_lexp_subexps (xs : list (exp T.tannot)) (l : lexp T.tannot) : lexp T.tannot * list (exp T.tannot) :=
     let 'LE_aux aux annot := l in
@@ -1158,7 +1246,8 @@ Module Semantics (T : TANNOT).
             if is_value x then
               wrap (E_block xs)
             else
-              bind (step x) (fun x' => wrap (E_block (x' :: xs)))
+              x' ← step x;
+              wrap (E_block (x' :: xs))
         end
     | E_id id =>
         match T.get_id_type (snd annot) id with
@@ -1201,20 +1290,20 @@ Module Semantics (T : TANNOT).
             | Pat_aux (Pat_exp pat body) _ :: next_arms =>
                 let '(matched, arm_substs) := pattern_match pat v in
                 if matched then
-                  pure (fold_left (fun body s => substitute (fst s) (snd s) body) arm_substs body)
+                  pure (fold_right (fun s body => substitute (fst s) (snd s) body) body arm_substs)
                 else
                   wrap (E_match head_exp next_arms)
             | Pat_aux (Pat_when pat guard body) pexp_annot :: next_arms =>
                 let '(matched, arm_substs) := pattern_match pat v in
                 if matched then
-                  let guard := fold_left (fun g s => substitute (fst s) (snd s) g) arm_substs guard in
+                  let guard := fold_right (fun s g => substitute (fst s) (snd s) g)  guard arm_substs in
                   match guard with
                   | E_aux (E_internal_value v_guard) _ =>
                       match v_guard with
                       | V_bool true =>
                           let '(matched, arm_substs) := pattern_match pat v in
                           if matched then
-                            pure (fold_left (fun body s => substitute (fst s) (snd s) body) arm_substs body)
+                            pure (fold_right (fun s body => substitute (fst s) (snd s) body) body arm_substs)
                           else
                             wrap (E_match head_exp next_arms)
                       | V_bool false =>
@@ -1235,18 +1324,17 @@ Module Semantics (T : TANNOT).
             bind (step head_exp) (fun head_exp' => wrap (E_match head_exp' arms))
         end
     | E_let (LB_aux (LB_val pat x) lb_annot) body =>
-        (
-          match x with
-          | E_aux (E_internal_value v) _ =>
-              let '(matched, body_substs) := pattern_match pat v in
-              if matched then
-                pure (fold_left (fun body s => substitute (fst s) (snd s) body) body_substs body)
-              else
-                Match_failure (fst annot)
-          | _ =>
-              bind (step x) (fun x' => wrap (E_let (LB_aux (LB_val pat x') lb_annot) body))
-          end
-        )
+        match x with
+        | E_aux (E_internal_value v) _ =>
+            let '(matched, body_substs) := pattern_match pat v in
+            if matched then
+              pure (fold_left (fun body s => substitute (fst s) (snd s) body) body_substs body)
+            else
+              Match_failure (fst annot)
+        | _ =>
+            x' ← step x;
+            wrap (E_let (LB_aux (LB_val pat x') lb_annot) body)
+        end
     | E_lit lit =>
         bind (value_of_lit lit (T.get_type (snd annot)))
              (fun v => wrap (E_internal_value v))
@@ -1254,10 +1342,11 @@ Module Semantics (T : TANNOT).
         let '(evaluated, unevaluated) := left_to_right xs in
         match unevaluated with
         | x :: xs =>
-            bind (step x) (fun x' => wrap (E_tuple (evaluated ++ (x' :: xs))))
+            x' ← step x;
+            wrap (E_tuple (evaluated ++ (x' :: xs)))
         | [] => wrap (E_internal_value (V_tuple (all_evaluated evaluated)))
         end
-    | E_typ _ x => pure x
+    | E_typ _ x => step x
     | E_app id args =>
         let '(evaluated, unevaluated) := left_to_right args in
         match unevaluated with
@@ -1485,7 +1574,14 @@ Module Semantics (T : TANNOT).
     apply lexp_subexps_depth.
   Defined.
   Next Obligation.
-    Admitted.
+    clear Heq_anonymous.
+    clear n.
+    induction arm_substs.
+    - cbn; lia.
+    - cbn.
+      apply (PeanoNat.Nat.le_lt_trans _ _ _ (depth_subst _ _ _)).
+      apply IHarm_substs.
+  Defined.
   Next Obligation.
     cbn.
     rewrite ltr_tuple in Heq_anonymous.
@@ -1513,9 +1609,29 @@ Module Semantics (T : TANNOT).
     lia.
   Defined.
   Next Obligation.
-    Admitted.
+    rewrite ltr_fields_tuple in Heq_anonymous.
+    inversion Heq_anonymous.
+    rewrite <- (take_drop_evaluated_fields_concat T.tannot _).
+    rewrite <- H0.
+    rewrite <- H1.
+    rewrite map_app.
+    rewrite fold_right_app.
+    cbn.
+    apply fold_right_max_acc.
+    lia.
+  Defined.
   Next Obligation.
-    Admitted.
+    rewrite ltr_fields_tuple in Heq_anonymous.
+    inversion Heq_anonymous.
+    rewrite <- (take_drop_evaluated_fields_concat T.tannot _).
+    rewrite <- H0.
+    rewrite <- H1.
+    rewrite map_app.
+    rewrite fold_right_app.
+    cbn.
+    apply fold_right_max_acc.
+    lia.
+  Defined.
   Next Obligation.
     cbn.
     rewrite ltr_tuple in Heq_anonymous.
