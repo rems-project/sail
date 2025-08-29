@@ -24,7 +24,7 @@
    true
    %{jib_ott})))
 
-(copy_files rocq/*.{ml,mli})
+(copy_files extraction/*.{ml,mli})
 
 (copy_files ../gen_lib/*.lem)
 
