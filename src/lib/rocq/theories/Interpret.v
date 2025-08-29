@@ -305,14 +305,14 @@ Inductive evaluated (a : Set) : Set :=
 Arguments Evaluated {a} _.
 Arguments Unevaluated {a}.
 
-Definition is_bool {A : Set} (exp : exp A) : t (evaluated bool) :=
+Definition get_bool {A : Set} (exp : exp A) : t (evaluated bool) :=
   match exp with
   | E_aux (E_internal_value (V_bool b)) _ => pure (Evaluated b)
   | E_aux (E_internal_value _) annot => Runtime_type_error (fst annot)
   | _ => pure Unevaluated
   end.
 
-Definition is_string {A : Set} (exp : exp A) : t (evaluated string) :=
+Definition get_string {A : Set} (exp : exp A) : t (evaluated string) :=
   match exp with
   | E_aux (E_internal_value (V_string s)) _ => pure (Evaluated s)
   | E_aux (E_internal_value _) annot => Runtime_type_error (fst annot)
@@ -937,97 +937,9 @@ Module Semantics (T : TANNOT).
             lookup_field l name fields
       end.
 
-  Fixpoint lexp_subexps (l : lexp T.tannot) : list (exp T.tannot) :=
-    let 'LE_aux aux _ := l in
-    match aux with
-    | LE_id _ | LE_typ _ _ => []
-    | LE_deref x => [x]
-    | LE_app _ xs => xs
-    | LE_tuple ls
-    | LE_vector_concat ls =>
-        concat (map lexp_subexps ls)
-    | LE_vector l x => lexp_subexps l ++ [x]
-    | LE_vector_range l n m => lexp_subexps l ++ [n; m]
-    | LE_field l _ => lexp_subexps l
-    end.
-
-  Fixpoint Exists {A : Type} (f : A -> Prop) (xs : list A) {struct xs} : Prop :=
-    match xs with
-    | [] => False
-    | x :: xs =>  f x \/ Exists f xs
-    end.
-
-  Fixpoint Is_subexp (x : exp T.tannot) (l : lexp T.tannot) {struct l} : Prop :=
-    let 'LE_aux aux _ := l in
-    match aux with
-    | LE_id _ | LE_typ _ _ => False
-    | LE_deref y => x = y
-    | LE_vector l n => Is_subexp x l \/ x = n
-    | LE_vector_range l n m => Is_subexp x l \/ x = n \/ x = m
-    | LE_field l _ => Is_subexp x l
-    | LE_tuple ls | LE_vector_concat ls => Exists (Is_subexp x) ls
-    | LE_app _ args => Exists (fun arg => x = arg) args
-    end.
-
   Lemma max_lhs_plus_1_le : forall x y z, x <= y -> x < max y z + 1.
   Proof.
     lia.
-  Qed.
-
-  Lemma fold_max_app : forall xs ys, fold_right max 0 (xs ++ ys) = max (fold_right max 0 xs) (fold_right max 0 ys).
-  Proof.
-    induction xs.
-    - cbn. reflexivity.
-    - cbn.
-      intros.
-      rewrite (IHxs ys).
-      lia.
-  Qed.
-
-  Lemma lexp_subexps_depth : forall (l : lexp T.tannot),
-    fold_right max 0 (map depth (lexp_subexps l)) <= lexp_depth l.
-  Proof.
-     intros.
-     induction l using lexp_ind_g.
-     - cbn. reflexivity.
-     - cbn. lia.
-     - cbn. lia.
-     - cbn. reflexivity.
-     - {
-       induction ls.
-       - cbn. lia.
-       - cbn.
-         cbn in IHls.
-         rewrite map_app.
-         rewrite Forall_cons_iff in H.
-         inversion H.
-         apply IHls in H1.
-         rewrite fold_max_app.
-         lia.
-     }
-     - {
-       induction ls.
-       - cbn. lia.
-       - cbn.
-         cbn in IHls.
-         rewrite map_app.
-         rewrite Forall_cons_iff in H.
-         inversion H.
-         apply IHls in H1.
-         rewrite fold_max_app.
-         lia.
-     }
-     - cbn.
-       rewrite map_app.
-       rewrite fold_max_app.
-       cbn.
-       lia.
-     - cbn.
-       rewrite map_app.
-       rewrite fold_max_app.
-       cbn.
-       lia.
-     - cbn. lia.
   Qed.
 
   Lemma depth_if : forall (b : bool) (x y : exp T.tannot), depth (if b then x else y) <= max (depth x) (depth y).
@@ -1410,7 +1322,7 @@ Module Semantics (T : TANNOT).
         if T.is_or_bool id then
           match args with
           | [lhs; rhs] =>
-              b ← is_bool lhs;
+              b ← get_bool lhs;
               match b with
               | Evaluated true => wrap (E_internal_value (V_bool true))
               | Evaluated false => pure rhs
@@ -1423,7 +1335,7 @@ Module Semantics (T : TANNOT).
         else if T.is_and_bool id then
           match args with
           | [lhs; rhs] =>
-              b ← is_bool lhs;
+              b ← get_bool lhs;
               match b with
               | Evaluated true => pure rhs
               | Evaluated false => wrap (E_internal_value (V_bool false))
@@ -1446,23 +1358,23 @@ Module Semantics (T : TANNOT).
               | Return_exception exn => wrap (E_throw (E_aux (E_internal_value exn) annot))
               end
           end
-    | E_app_infix arg1 id arg2 =>
-        match left_to_right2 arg1 arg2 with
+    | E_app_infix lhs id rhs =>
+        match left_to_right2 lhs rhs with
         | LTR2_0 _ _ =>
-            bind (step arg1) (fun arg1' => wrap (E_app_infix arg1' id arg2))
-        | LTR2_1 v1 _ =>
-            bind (step arg2) (fun arg2' => wrap (E_app_infix arg1 id arg2'))
+            lhs' ← step lhs;
+            wrap (E_app_infix lhs' id rhs)
+        | LTR2_1 _ _ =>
+            rhs' ← step rhs;
+            wrap (E_app_infix lhs id rhs')
         | LTR2_2 v1 v2 =>
-            bind (Call id [v1; v2] pure)
-              (fun r =>
-                 match r with
-                 | Return_ok v => wrap (E_internal_value v)
-                 | Return_exception exn => wrap (E_throw (E_aux (E_internal_value exn) annot))
-                 end
-              )
+            r ← Call id [v1; v2] pure;
+            match r with
+            | Return_ok v => wrap (E_internal_value v)
+            | Return_exception exn => wrap (E_throw (E_aux (E_internal_value exn) annot))
+            end
         end
     | E_if i t e =>
-        b ← is_bool i;
+        b ← get_bool i;
         match b with
         | Unevaluated =>
             i' ← step i;
@@ -1471,26 +1383,24 @@ Module Semantics (T : TANNOT).
         | Evaluated false => pure e
         end
     | E_assert x msg =>
-        bind (is_bool x)
-          (fun b =>
-             match b with
-             | Unevaluated =>
-                 bind (step x) (fun x' => wrap (E_assert x' msg))
-             | Evaluated b =>
-                 bind (is_string msg)
-                   (fun s =>
-                      match s with
-                      | Unevaluated =>
-                          bind (step msg) (fun msg' => wrap (E_assert x msg'))
-                      | Evaluated s =>
-                          if b then
-                            wrap (E_internal_value V_unit)
-                          else
-                            Assertion_failed s
-                      end
-                   )
-             end
-          )
+        b ← get_bool x;
+        match b with
+        | Unevaluated =>
+            x' ← step x;
+            wrap (E_assert x' msg)
+        | Evaluated b =>
+            s ← get_string msg;
+            match s with
+            | Unevaluated =>
+                msg' ← step msg;
+                wrap (E_assert x msg')
+            | Evaluated s =>
+                if b then
+                  wrap (E_internal_value V_unit)
+                else
+                  Assertion_failed s
+            end
+        end
     | E_field x f =>
         match x with
         | E_aux (E_internal_value v) _ =>
@@ -1507,7 +1417,8 @@ Module Semantics (T : TANNOT).
         let '(evaluated, unevaluated) := left_to_right_fields fs in
         match unevaluated with
         | FE_aux (FE_fexp name x) annot :: xs =>
-            bind (step x) (fun x' => wrap (E_struct struct_id (evaluated ++ (FE_aux (FE_fexp name x') annot :: xs))))
+            x' ← step x;
+            wrap (E_struct struct_id (evaluated ++ (FE_aux (FE_fexp name x') annot :: xs)))
         | [] =>
             wrap (E_internal_value (V_record (all_evaluated_fields T.string_of_id evaluated)))
         end
