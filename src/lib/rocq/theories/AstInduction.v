@@ -88,6 +88,79 @@ Fixpoint lexp_subexps {A : Set} (l : lexp A) : list (exp A) :=
   | LE_field l _ => lexp_subexps l
   end.
 
+Fixpoint take_drop {A : Set} (n : nat) (xs : list A) : list A * list A :=
+  match (n, xs) with
+  | (0, xs) => ([], xs)
+  | (S m, []) => ([], [])
+  | (S m, x :: xs) =>
+      let '(ys, zs) := take_drop m xs in
+      (x :: ys, zs)
+  end.
+
+Lemma take_drop_all : forall (A : Set) (xs : list A),
+    take_drop (length xs) xs = (xs, []).
+Proof.
+  induction xs.
+  - cbn. reflexivity.
+  - cbn. rewrite IHxs. reflexivity.
+Qed.
+
+Fixpoint update_lexp_subexps {A : Set} (xs : list (exp A)) (l : lexp A) : lexp A * list (exp A) :=
+  let 'LE_aux aux annot := l in
+  match aux with
+  | LE_id _ | LE_typ _ _ => (l, xs)
+  | LE_deref _ =>
+      match xs with
+      | y :: ys =>
+          (LE_aux (LE_deref y) annot, ys)
+      | _ => (l, xs)
+      end
+  | LE_field l f =>
+      let '(l', ys) := update_lexp_subexps xs l in
+      (LE_aux (LE_field l' f) annot, ys)
+  | LE_app id args =>
+      let '(ys, zs) := take_drop (length args) xs in
+      (LE_aux (LE_app id ys) annot, zs)
+  | LE_tuple ls =>
+      let '(ls, xs) :=
+        fold_left
+          (fun acc l =>
+             let '(ls, xs) := acc in
+             let '(l, xs) := update_lexp_subexps xs l in
+             (ls ++ [l], xs)
+          )
+          ls
+          ([], xs)
+      in
+      (LE_aux (LE_tuple ls) annot, xs)
+  | LE_vector_concat ls =>
+      let '(ls, xs) :=
+        fold_left
+          (fun acc l =>
+             let '(ls, xs) := acc in
+             let '(l, xs) := update_lexp_subexps xs l in
+             (ls ++ [l], xs)
+          )
+          ls
+          ([], xs)
+      in
+      (LE_aux (LE_tuple ls) annot, xs)
+  | LE_vector l n =>
+      match update_lexp_subexps xs l with
+      | (l, n :: xs) =>
+          (LE_aux (LE_vector l n) annot, xs)
+      | _ =>
+          (l, [])
+      end
+  | LE_vector_range l n m =>
+      match update_lexp_subexps xs l with
+      | (l, n :: m :: xs) =>
+          (LE_aux (LE_vector_range l n m) annot, xs)
+      | _ =>
+          (l, [])
+      end
+  end.
+
 Section exp_ind_g.
   Variables
     (A : Set)

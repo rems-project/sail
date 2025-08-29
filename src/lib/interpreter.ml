@@ -239,6 +239,20 @@ let combine _ v1 v2 =
   | Some (Complete_binding _), Some (Complete_binding _) -> failwith "Tried to bind same identifier twice!"
   | Some _, Some _ -> failwith "Tried to mix partial and complete binding!"
 
+let complete_value = function
+  | ((v1, n1), m1) :: partial_values ->
+      let max, min =
+        List.fold_left
+          (fun (max, min) ((_, n), m) -> (Big_int.max max (Big_int.max n m), Big_int.min min (Big_int.min n m)))
+          (n1, m1) partial_values
+      in
+      let len = Big_int.sub (Big_int.succ max) min in
+      List.fold_left
+        (fun bv ((slice, n), m) -> value_update_subrange [bv; V_int n; V_int m; slice])
+        (value_zeros [V_int len])
+        (((v1, n1), m1) :: partial_values)
+  | [] -> Reporting.unreachable Parse_ast.Unknown __POS__ "Empty partial binding set"
+
 let complete_bindings =
   Bindings.map (function
     | Complete_binding v -> v
@@ -338,6 +352,12 @@ module RocqSemantics = Interpret.Semantics (struct
   let value_add_int x y = value_add_int [x; y]
 
   let value_sub_int x y = value_sub_int [x; y]
+
+  let complete_value vs = complete_value vs
+
+  let is_and_bool id = String.equal (string_of_id id) "and_bool"
+
+  let is_or_bool id = String.equal (string_of_id id) "or_bool"
 end)
 
 let rec adapt env = function
@@ -402,334 +422,6 @@ and write_var env place value cont =
   | _ -> failwith "Unsupported write"
 
 let step env exp = adapt env (RocqSemantics.step exp)
-
-(*
-let rec step (E_aux (e_aux, annot) as orig_exp) =
-  let wrap e_aux' = return (E_aux (e_aux', annot)) in
-  match e_aux with
-  | E_block [] -> wrap (E_lit (L_aux (L_unit, Parse_ast.Unknown)))
-  | E_block [exp] when is_value exp -> return exp
-  | E_block [(E_aux (E_block _, _) as exp)] -> return exp
-  | E_block (exp :: exps) when is_value exp -> wrap (E_block exps)
-  | E_block (exp :: exps) -> step exp >>= fun exp' -> wrap (E_block (exp' :: exps))
-  | E_lit (L_aux (L_undef, _)) -> begin
-      let env = Type_check.env_of_annot annot in
-      let typ = Type_check.typ_of_annot annot in
-      let undef_exp = Ast_util.undefined_of_typ false Parse_ast.Unknown (fun _ -> empty_uannot) typ in
-      let undef_exp = Type_check.check_exp env undef_exp typ in
-      return undef_exp
-    end
-  | E_lit lit -> begin try return (exp_of_value (value_of_lit lit)) with Failure s -> fail ("Failure: " ^ s) end
-  | E_if (exp, then_exp, else_exp) when is_true exp -> return then_exp
-  | E_if (exp, then_exp, else_exp) when is_false exp -> return else_exp
-  | E_if (exp, then_exp, else_exp) -> step exp >>= fun exp' -> wrap (E_if (exp', then_exp, else_exp))
-  | E_loop (While, _, exp, body) -> wrap (E_if (exp, E_aux (E_block [body; orig_exp], annot), exp_of_value V_unit))
-  | E_loop (Until, _, exp, body) -> wrap (E_block [body; E_aux (E_if (exp, exp_of_value V_unit, orig_exp), annot)])
-  | E_assert (exp, msg) when is_true exp -> wrap unit_exp
-  | E_assert (exp, msg) when is_false exp && is_value msg -> assertion_failed (coerce_string (value_of_exp msg))
-  | E_assert (exp, msg) when is_false exp -> step msg >>= fun msg' -> wrap (E_assert (exp, msg'))
-  | E_assert (exp, msg) -> step exp >>= fun exp' -> wrap (E_assert (exp', msg))
-  | E_vector exps ->
-      let evaluated, unevaluated = Util.take_drop is_value exps in
-      begin
-        match unevaluated with
-        | exp :: exps -> step exp >>= fun exp' -> wrap (E_vector (evaluated @ (exp' :: exps)))
-        | [] -> return (exp_of_value (V_vector (List.map value_of_exp evaluated)))
-      end
-  | E_list exps ->
-      let evaluated, unevaluated = Util.take_drop is_value exps in
-      begin
-        match unevaluated with
-        | exp :: exps -> step exp >>= fun exp' -> wrap (E_list (evaluated @ (exp' :: exps)))
-        | [] -> return (exp_of_value (V_list (List.map value_of_exp evaluated)))
-      end
-  (* Special rules for short circuting boolean operators *)
-  | E_app (id, [x; y]) when (string_of_id id = "and_bool" || string_of_id id = "or_bool") && not (is_value x) ->
-      step x >>= fun x' -> wrap (E_app (id, [x'; y]))
-  | E_app (id, [x; y]) when string_of_id id = "and_bool" && is_false x -> return (exp_of_value (V_bool false))
-  | E_app (id, [x; y]) when string_of_id id = "or_bool" && is_true x -> return (exp_of_value (V_bool true))
-  | E_let (LB_aux (LB_val (pat, bind), lb_annot), body) when not (is_value bind) ->
-      step bind >>= fun bind' -> wrap (E_let (LB_aux (LB_val (pat, bind'), lb_annot), body))
-  | E_let (LB_aux (LB_val (pat, bind), lb_annot), body) ->
-      let matched, bindings = pattern_match (Type_check.env_of orig_exp) pat (value_of_exp bind) in
-      if matched then
-        return
-          (List.fold_left (fun body (id, v) -> subst id v body) body (Bindings.bindings (complete_bindings bindings)))
-      else fail "Match failure"
-  | E_vector_subrange (vec, n, m) -> wrap (E_app (mk_id "vector_subrange_dec", [vec; n; m]))
-  | E_vector_access (vec, n) -> wrap (E_app (mk_id "vector_access_dec", [vec; n]))
-  | E_vector_update (vec, n, x) -> wrap (E_app (mk_id "vector_update", [vec; n; x]))
-  | E_vector_update_subrange (vec, n, m, x) ->
-      (* FIXME: Currently not general enough *)
-      wrap (E_app (mk_id "vector_update_subrange_dec", [vec; n; m; x]))
-  (* otherwise left-to-right evaluation order for function applications *)
-  | E_app (id, exps) -> (
-      let open Type_check in
-      let evaluated, unevaluated = Util.take_drop is_value exps in
-      match unevaluated with
-      | exp :: exps -> step exp >>= fun exp' -> wrap (E_app (id, evaluated @ (exp' :: exps)))
-      | [] when Env.is_union_constructor id (env_of_annot annot) ->
-          return (exp_of_value (V_ctor (string_of_id id, List.map value_of_exp evaluated)))
-      | [] when is_interpreter_extern id (env_of_annot annot) -> (
-          let extern = get_interpreter_extern id (env_of_annot annot) in
-          if extern = "reg_deref" then (
-            let regname = List.hd evaluated |> value_of_exp |> coerce_ref in
-            read_reg regname >>= fun v -> return (exp_of_value v)
-          )
-          else
-            get_primop extern >>= fun op ->
-            try return (exp_of_value (op (List.map value_of_exp evaluated)))
-            with _ as exc -> fail ("Exception calling primop '" ^ extern ^ "': " ^ Printexc.to_string exc)
-        )
-      | [] -> (
-          call id (List.map value_of_exp evaluated) >>= function
-          | Return_ok v -> return (exp_of_value v)
-          | Return_exception v -> wrap (E_throw (exp_of_value v))
-        )
-    )
-  | E_app_infix (x, id, y) when is_value x && is_value y -> (
-      call id [value_of_exp x; value_of_exp y] >>= function
-      | Return_ok v -> return (exp_of_value v)
-      | Return_exception v -> wrap (E_throw (exp_of_value v))
-    )
-  | E_app_infix (x, id, y) when is_value x -> step y >>= fun y' -> wrap (E_app_infix (x, id, y'))
-  | E_app_infix (x, id, y) -> step x >>= fun x' -> wrap (E_app_infix (x', id, y))
-  | E_return exp when is_value exp -> early_return (value_of_exp exp)
-  | E_return exp -> step exp >>= fun exp' -> wrap (E_return exp')
-  | E_tuple exps ->
-      let evaluated, unevaluated = Util.take_drop is_value exps in
-      begin
-        match unevaluated with
-        | exp :: exps -> step exp >>= fun exp' -> wrap (E_tuple (evaluated @ (exp' :: exps)))
-        | [] -> return (exp_of_value (tuple_value (List.map value_of_exp exps)))
-      end
-  | E_match (exp, pexps) when not (is_value exp) -> step exp >>= fun exp' -> wrap (E_match (exp', pexps))
-  | E_match (_, []) -> fail "Pattern matching failed"
-  | E_match (exp, Pat_aux (Pat_exp (pat, body), _) :: pexps) -> begin
-      try
-        let matched, bindings = pattern_match (Type_check.env_of body) pat (value_of_exp exp) in
-        if matched then
-          return
-            (List.fold_left (fun body (id, v) -> subst id v body) body (Bindings.bindings (complete_bindings bindings)))
-        else wrap (E_match (exp, pexps))
-      with Failure s -> fail ("Failure: " ^ s)
-    end
-  | E_match (exp, Pat_aux (Pat_when (pat, guard, body), pat_annot) :: pexps) when not (is_value guard) -> begin
-      try
-        let matched, bindings = pattern_match (Type_check.env_of body) pat (value_of_exp exp) in
-        let bindings = complete_bindings bindings in
-        if matched then (
-          let guard = List.fold_left (fun guard (id, v) -> subst id v guard) guard (Bindings.bindings bindings) in
-          let body = List.fold_left (fun body (id, v) -> subst id v body) body (Bindings.bindings bindings) in
-          step guard >>= fun guard' -> wrap (E_match (exp, Pat_aux (Pat_when (pat, guard', body), pat_annot) :: pexps))
-        )
-        else wrap (E_match (exp, pexps))
-      with Failure s -> fail ("Failure: " ^ s)
-    end
-  | E_match (exp, Pat_aux (Pat_when (pat, guard, body), pat_annot) :: pexps) when is_true guard -> return body
-  | E_match (exp, Pat_aux (Pat_when (pat, guard, body), pat_annot) :: pexps) when is_false guard ->
-      wrap (E_match (exp, pexps))
-  | E_typ (typ, exp) -> return exp
-  | E_throw exp when is_value exp -> throw (value_of_exp exp)
-  | E_throw exp -> step exp >>= fun exp' -> wrap (E_throw exp')
-  | E_exit exp when is_value exp -> throw (V_ctor ("Exit", [value_of_exp exp]))
-  | E_exit exp -> step exp >>= fun exp' -> wrap (E_exit exp')
-  | E_ref id -> return (exp_of_value (V_ref (string_of_id id)))
-  | E_id id -> begin
-      let open Type_check in
-      match Env.lookup_id id (env_of_annot annot) with
-      | Register _ -> read_reg (string_of_id id) >>= fun v -> return (exp_of_value v)
-      | Local (Mutable, _) -> get_local (string_of_id id) >>= fun v -> return (exp_of_value v)
-      | Local (Immutable, _) ->
-          (* if we get here without already having substituted, it must be a top-level letbind *)
-          get_global_letbinds () >>= fun lbs ->
-          let chain = build_letchain id lbs orig_exp in
-          return chain
-      | Enum _ -> return (exp_of_value (V_member (string_of_id id)))
-      | _ -> fail ("Couldn't find id " ^ string_of_id id)
-    end
-  | E_struct (struct_name, fexps) ->
-      let evaluated, unevaluated = Util.take_drop is_value_fexp fexps in
-      begin
-        match unevaluated with
-        | FE_aux (FE_fexp (id, exp), fe_annot) :: fexps ->
-            step exp >>= fun exp' ->
-            wrap (E_struct (struct_name, evaluated @ (FE_aux (FE_fexp (id, exp'), fe_annot) :: fexps)))
-        | [] ->
-            List.map value_of_fexp fexps
-            |> List.fold_left (fun record (field, v) -> StringMap.add field v record) StringMap.empty
-            |> (fun record -> V_record (StringMap.bindings record))
-            |> exp_of_value |> return
-      end
-  | E_struct_update (exp, fexps) when not (is_value exp) -> step exp >>= fun exp' -> wrap (E_struct_update (exp', fexps))
-  | E_struct_update (record, fexps) ->
-      let evaluated, unevaluated = Util.take_drop is_value_fexp fexps in
-      begin
-        match unevaluated with
-        | FE_aux (FE_fexp (id, exp), fe_annot) :: fexps ->
-            step exp >>= fun exp' ->
-            wrap (E_struct_update (record, evaluated @ (FE_aux (FE_fexp (id, exp'), fe_annot) :: fexps)))
-        | [] ->
-            List.map value_of_fexp fexps
-            |> List.fold_left
-                 (fun record (field, v) -> StringMap.add field v record)
-                 (coerce_record (value_of_exp record))
-            |> (fun record -> V_record (StringMap.bindings record))
-            |> exp_of_value |> return
-      end
-  | E_field (exp, id) when not (is_value exp) -> step exp >>= fun exp' -> wrap (E_field (exp', id))
-  | E_field (exp, id) ->
-      let record = coerce_record (value_of_exp exp) in
-      return (exp_of_value (StringMap.find (string_of_id id) record))
-  | E_var (lexp, exp, E_aux (E_block body, _)) -> wrap (E_block (E_aux (E_assign (lexp, exp), annot) :: body))
-  | E_var (lexp, exp, body) -> wrap (E_block [E_aux (E_assign (lexp, exp), annot); body])
-  | E_assign (lexp, exp) when not (is_value exp) -> step exp >>= fun exp' -> wrap (E_assign (lexp, exp'))
-  | E_assign (LE_aux (LE_app (id, args), _), exp) -> wrap (E_app (id, args @ [exp]))
-  | E_assign (LE_aux (LE_field (lexp, id), ul), exp) -> begin
-      try
-        let open Type_check in
-        let lexp_exp = infer_exp (env_of_annot annot) (exp_of_lexp (strip_lexp lexp)) in
-        let exp' = E_aux (E_struct_update (lexp_exp, [FE_aux (FE_fexp (id, exp), ul)]), ul) in
-        wrap (E_assign (lexp, exp'))
-      with Failure s -> fail ("Failure: " ^ s)
-    end
-  | E_assign (LE_aux (LE_vector (vec, n), lexp_annot), exp) -> begin
-      try
-        let open Type_check in
-        let vec_exp = infer_exp (env_of_annot annot) (exp_of_lexp (strip_lexp vec)) in
-        let exp' = E_aux (E_vector_update (vec_exp, n, exp), lexp_annot) in
-        wrap (E_assign (vec, exp'))
-      with Failure s -> fail ("Failure: " ^ s)
-    end
-  | E_assign (LE_aux (LE_vector_range (vec, n, m), lexp_annot), exp) -> begin
-      try
-        let open Type_check in
-        let vec_exp = infer_exp (env_of_annot annot) (exp_of_lexp (strip_lexp vec)) in
-        (* FIXME: let the type checker check this *)
-        let exp' = E_aux (E_vector_update_subrange (vec_exp, n, m, exp), lexp_annot) in
-        wrap (E_assign (vec, exp'))
-      with Failure s -> fail ("Failure: " ^ s)
-    end
-  | E_assign (LE_aux (LE_id id, _), exp) | E_assign (LE_aux (LE_typ (_, id), _), exp) -> begin
-      let open Type_check in
-      let name = string_of_id id in
-      match Env.lookup_id id (env_of_annot annot) with
-      | Register _ -> write_reg name (value_of_exp exp) >> wrap unit_exp
-      | Local (Mutable, _) | Unbound _ -> put_local name (value_of_exp exp) >> wrap unit_exp
-      | Local (Immutable, _) -> fail ("Assignment to immutable local: " ^ name)
-      | Enum _ -> fail ("Assignment to union constructor: " ^ name)
-    end
-  | E_assign (LE_aux (LE_deref reference, annot), exp) when not (is_value reference) ->
-      step reference >>= fun reference' -> wrap (E_assign (LE_aux (LE_deref reference', annot), exp))
-  | E_assign (LE_aux (LE_deref reference, annot), exp) ->
-      let name = coerce_ref (value_of_exp reference) in
-      write_reg name (value_of_exp exp) >> wrap unit_exp
-  | E_assign (LE_aux (LE_tuple lexps, annot), exp) ->
-      if is_value exp then (
-        match value_of_exp exp with
-        | V_tuple vs when List.compare_lengths lexps vs = 0 ->
-            E_block (List.map2 (fun lexp v -> E_aux (E_assign (lexp, exp_of_value v), annot)) lexps vs) |> wrap
-        | _ -> fail "Type error in tuple assignment"
-      )
-      else
-        let* exp' = step exp in
-        wrap (E_assign (LE_aux (LE_tuple lexps, annot), exp'))
-  | E_assign (LE_aux (LE_vector_concat lexps, annot), exp) ->
-      let env = Type_check.env_of_annot annot in
-      if is_value exp then (
-        let* widths =
-          expect_ok (lexp_vector_concat_widths env lexps) ~error:(fun _ ->
-              "Non-constant width in vector concatenation assignment"
-          )
-        in
-        let vs = coerce_gv (value_of_exp exp) in
-        let* split =
-          expect_some (split_list_exact [] widths vs) ~none:"Type error in vector concatenation assignment"
-        in
-        assert (List.compare_lengths lexps split = 0);
-        E_block (List.map2 (fun lexp vs -> E_aux (E_assign (lexp, exp_of_value (V_vector vs)), annot)) lexps split)
-        |> wrap
-      )
-      else
-        let* exp' = step exp in
-        wrap (E_assign (LE_aux (LE_vector_concat lexps, annot), exp'))
-  | E_try (exp, pexps) when is_value exp -> return exp
-  | E_try (exp, pexps) -> begin
-      catch (step exp) >>= fun exp' ->
-      match exp' with
-      | Error exn -> wrap (E_match (exp_of_value exn, pexps @ [fallthrough]))
-      | Ok exp' -> wrap (E_try (exp', pexps))
-    end
-  | E_for (id, exp_from, exp_to, exp_step, ord, body) when is_value exp_from && is_value exp_to && is_value exp_step ->
-      let v_from = value_of_exp exp_from in
-      let v_to = value_of_exp exp_to in
-      let v_step = value_of_exp exp_step in
-      begin
-        match ord with
-        | Ord_aux (Ord_inc, _) -> begin
-            match value_gt [v_from; v_to] with
-            | V_bool true -> wrap (E_lit (L_aux (L_unit, Parse_ast.Unknown)))
-            | V_bool false ->
-                wrap
-                  (E_block
-                     [
-                       subst id v_from body;
-                       E_aux
-                         (E_for (id, exp_of_value (value_add_int [v_from; v_step]), exp_to, exp_step, ord, body), annot);
-                     ]
-                  )
-            | _ -> assert false
-          end
-        | Ord_aux (Ord_dec, _) -> begin
-            match value_lt [v_from; v_to] with
-            | V_bool true -> wrap (E_lit (L_aux (L_unit, Parse_ast.Unknown)))
-            | V_bool false ->
-                wrap
-                  (E_block
-                     [
-                       subst id v_from body;
-                       E_aux
-                         (E_for (id, exp_of_value (value_sub_int [v_from; v_step]), exp_to, exp_step, ord, body), annot);
-                     ]
-                  )
-            | _ -> assert false
-          end
-      end
-  | E_for (id, exp_from, exp_to, exp_step, ord, body) when is_value exp_to && is_value exp_step ->
-      step exp_from >>= fun exp_from' -> wrap (E_for (id, exp_from', exp_to, exp_step, ord, body))
-  | E_for (id, exp_from, exp_to, exp_step, ord, body) when is_value exp_step ->
-      step exp_to >>= fun exp_to' -> wrap (E_for (id, exp_from, exp_to', exp_step, ord, body))
-  | E_for (id, exp_from, exp_to, exp_step, ord, body) ->
-      step exp_step >>= fun exp_step' -> wrap (E_for (id, exp_from, exp_to, exp_step', ord, body))
-  | E_sizeof nexp -> begin
-      match Type_check.big_int_of_nexp nexp with
-      | Some n -> return (exp_of_value (V_int n))
-      | None -> fail "Sizeof unevaluable nexp"
-    end
-  | E_cons (hd, tl) when is_value hd && is_value tl ->
-      let hd = value_of_exp hd in
-      let tl = coerce_listlike (value_of_exp tl) in
-      return (exp_of_value (V_list (hd :: tl)))
-  | E_cons (hd, tl) when is_value hd -> step tl >>= fun tl' -> wrap (E_cons (hd, tl'))
-  | E_cons (hd, tl) -> step hd >>= fun hd' -> wrap (E_cons (hd', tl))
-  | _ -> raise (Invalid_argument ("Unimplemented " ^ string_of_exp orig_exp))
-
- *)
-
-let rec exp_of_lexp (LE_aux (lexp_aux, _)) =
-  match lexp_aux with
-  | LE_id id -> mk_exp (E_id id)
-  | LE_app (f, args) -> mk_exp (E_app (f, args))
-  | LE_typ (typ, id) -> mk_exp (E_typ (typ, mk_exp (E_id id)))
-  | LE_deref exp -> mk_exp (E_app (mk_id "_reg_deref", [exp]))
-  | LE_tuple lexps -> mk_exp (E_tuple (List.map exp_of_lexp lexps))
-  | LE_vector (lexp, exp) -> mk_exp (E_vector_access (exp_of_lexp lexp, exp))
-  | LE_vector_range (lexp, exp1, exp2) -> mk_exp (E_vector_subrange (exp_of_lexp lexp, exp1, exp2))
-  | LE_vector_concat [] -> failwith "Empty LE_vector_concat node in exp_of_lexp"
-  | LE_vector_concat [lexp] -> exp_of_lexp lexp
-  | LE_vector_concat (lexp :: lexps) ->
-      mk_exp (E_vector_append (exp_of_lexp lexp, exp_of_lexp (mk_lexp (LE_vector_concat lexps))))
-  | LE_field (lexp, id) -> mk_exp (E_field (exp_of_lexp lexp, id))
 
 let rec pattern_match env (P_aux (p_aux, (l, _))) value =
   match p_aux with

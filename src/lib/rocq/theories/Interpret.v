@@ -3,6 +3,8 @@ Require Extraction.
 Set Extraction KeepSingleton.
 Set Extraction Output Directory ".".
 
+From Stdlib Require Import Bool.
+From Stdlib Require Import FMapList.
 From Stdlib Require Import FunctionalExtensionality.
 From Stdlib Require Import Lia.
 From Stdlib Require Import Lists.List.
@@ -13,6 +15,132 @@ Require Import Ast.
 Require Import AstInduction.
 
 Import ListNotations.
+
+Module IdMiniOrdered <: OrderedType.MiniOrderedType.
+  Definition t := Ast.id.
+
+  Definition eq (id1 : id) (id2 : id) : Prop :=
+    match (id1, id2) with
+    | (Id_aux (Id s1) _, Id_aux (Id s2) _) => Is_true (eq_string s1 s2)
+    | (Id_aux (Operator s1) _, Id_aux (Operator s2) _) => Is_true (eq_string s1 s2)
+    | _ => False
+    end.
+
+  Definition lt (id1 : id) (id2 : id) : Prop :=
+    match (id1, id2) with
+    | (Id_aux (Id s1) _, Id_aux (Id s2) _) => Is_true (lt_string s1 s2)
+    | (Id_aux (Operator s1) _, Id_aux (Operator s2) _) => Is_true (lt_string s1 s2)
+    | (Id_aux (Id _) _, Id_aux (Operator _) _) => True
+    | _ => False
+    end.
+
+  Theorem eq_refl : forall x, eq x x.
+  Proof.
+    destruct x as [aux ?].
+    destruct aux; cbn; apply eq_string_refl.
+  Qed.
+
+  Theorem eq_sym : forall x y, eq x y -> eq y x.
+  Proof.
+    destruct x as [x_aux ?].
+    destruct y as [y_aux ?].
+    destruct x_aux as [x_s | x_s]; destruct y_aux as [y_s | y_s]; cbn; trivial; apply eq_string_sym.
+  Qed.
+
+  Theorem eq_trans : forall x y z, eq x y -> eq y z -> eq x z.
+  Proof.
+    destruct x as [x_aux ?].
+    destruct y as [y_aux ?].
+    destruct z as [z_aux ?].
+    destruct x_aux as [x_s | x_s]; destruct y_aux as [y_s | y_s]; destruct z_aux as [z_s | z_s].
+    all: cbn.
+    all: try easy.
+    all: apply eq_string_trans.
+  Qed.
+
+  Theorem lt_trans : forall x y z, lt x y -> lt y z -> lt x z.
+  Proof.
+    destruct x as [x_aux ?].
+    destruct y as [y_aux ?].
+    destruct z as [z_aux ?].
+    destruct x_aux as [x_s | x_s]; destruct y_aux as [y_s | y_s]; destruct z_aux as [z_s | z_s].
+    all: cbn.
+    all: try easy.
+    all: apply lt_string_trans.
+  Qed.
+
+  Theorem lt_not_eq : forall x y, lt x y -> ~ eq x y.
+  Proof.
+    destruct x as [x_aux ?].
+    destruct y as [y_aux ?].
+    destruct x_aux as [x_s | x_s]; destruct y_aux as [y_s | y_s].
+    all: cbn.
+    all: try easy.
+    all: apply lt_string_not_eq_string.
+  Qed.
+
+  Definition compare : forall (x y : id), OrderedType.Compare lt eq x y.
+  Proof.
+    intros x y.
+    destruct x as [x_aux ?].
+    destruct y as [y_aux ?].
+    destruct x_aux as [x_s | x_s]; destruct y_aux as [y_s | y_s].
+    - {
+      case_eq (lt_string x_s y_s); intros.
+      - apply OrderedType.LT. cbn. rewrite H. reflexivity.
+      - {
+        case_eq (eq_string x_s y_s); intros.
+        - apply OrderedType.EQ. cbn. rewrite H0. reflexivity.
+        - apply OrderedType.GT.
+          cbn.
+          apply lt_string_as_gt.
+          rewrite H. unfold Is_true. easy.
+          rewrite H0. unfold Is_true. easy.
+      }
+    }
+    - apply OrderedType.LT. reflexivity.
+    - apply OrderedType.GT. reflexivity.
+    - {
+      case_eq (lt_string x_s y_s); intros.
+      - apply OrderedType.LT. cbn. rewrite H. reflexivity.
+      - {
+        case_eq (eq_string x_s y_s); intros.
+        - apply OrderedType.EQ. cbn. rewrite H0. reflexivity.
+        - apply OrderedType.GT.
+          cbn.
+          apply lt_string_as_gt.
+          rewrite H. unfold Is_true. easy.
+          rewrite H0. unfold Is_true. easy.
+      }
+    }
+  Defined.
+End IdMiniOrdered.
+
+Module IdOrdered := OrderedType.MOT_to_OT(IdMiniOrdered).
+
+Module IdMap := FMapList.Raw(IdOrdered).
+
+Inductive binding :=
+| Complete : value -> binding
+| Partial : list (value * num * num) -> binding.
+
+Definition combine_binding (l r : option binding) : option binding :=
+  match (l, r) with
+  | (None, None) => None
+  | (Some b, None) => Some b
+  | (None, Some b) => Some b
+  | (Some lb, Some rb) =>
+      match (lb, rb) with
+      | (Complete v, _) => Some (Complete v)
+      | (_, Complete v) => Some (Complete v)
+      | (Partial lv, Partial rv) => Some (Partial (lv ++ rv))
+      end
+  end.
+
+Definition merge_bindings (l r : IdMap.t binding) : IdMap.t binding :=
+  IdMap.map2 combine_binding l r.
+
+Infix "⋈" := merge_bindings (right associativity, at level 60).
 
 Definition is_value {A : Set} (exp : exp A) : bool :=
   match exp with
@@ -191,6 +319,12 @@ Definition is_string {A : Set} (exp : exp A) : t (evaluated string) :=
   | _ => pure Unevaluated
   end.
 
+Definition get_value {A : Set} (exp : exp A) : evaluated value :=
+  match exp with
+  | E_aux (E_internal_value v) annot => Evaluated v
+  | _ => Unevaluated
+  end.
+
 Fixpoint all_evaluated {A : Set} (xs : list (exp A)) : list value :=
   match xs with
   | [] => []
@@ -367,23 +501,6 @@ Proof.
     lia.
 Qed.
 
-Fixpoint take_drop {A : Set} (n : nat) (xs : list A) : list A * list A :=
-  match (n, xs) with
-  | (0, xs) => ([], xs)
-  | (S m, []) => ([], [])
-  | (S m, x :: xs) =>
-      let '(ys, zs) := take_drop m xs in
-      (x :: ys, zs)
-  end.
-
-Lemma take_drop_all : forall (A : Set) (xs : list A),
-    take_drop (length xs) xs = (xs, []).
-Proof.
-  induction xs.
-  - cbn. reflexivity.
-  - cbn. rewrite IHxs. reflexivity.
-Qed.
-
 Inductive vector_concat_split :=
 | No_split : vector_concat_split
 | Split : nat -> vector_concat_split.
@@ -428,6 +545,12 @@ Module Type TANNOT.
   Parameter value_add_int : value -> value -> value.
 
   Parameter value_sub_int : value -> value -> value.
+
+  Parameter complete_value : list (value * num * num) -> value.
+
+  Parameter is_and_bool : id -> bool.
+
+  Parameter is_or_bool : id -> bool.
 End TANNOT.
 
 Module Semantics (T : TANNOT).
@@ -550,8 +673,6 @@ Module Semantics (T : TANNOT).
     | L_undef => get_undefined typ
     end.
 
-  Definition no_match : bool * list (id * value) := (false, nil).
-
   Definition same_bits (bs : list bit) (vs : list value) : bool :=
     fst (fold_left
            (fun match_info b =>
@@ -619,7 +740,21 @@ Module Semantics (T : TANNOT).
     | [] => V_unit
     end.
 
-  Fixpoint pattern_match (p : Ast.pat T.tannot) (v : value) {struct p} : bool * list (id * value) :=
+  Definition no_match : bool * IdMap.t binding := (false, @IdMap.empty binding).
+
+  Definition empty_bindings : IdMap.t binding := @IdMap.empty binding.
+
+  Definition complete_bindings (m : IdMap.t binding) : IdMap.t value :=
+    IdMap.map
+      (fun b =>
+         match b with
+         | Complete v => v
+         | Partial vs => T.complete_value vs
+         end
+      )
+      m.
+
+  Fixpoint pattern_match (p : Ast.pat T.tannot) (v : value) {struct p} : bool * IdMap.t binding :=
     let 'P_aux aux annot := p in
     match aux with
     | P_wild => (true, [])
@@ -628,17 +763,17 @@ Module Semantics (T : TANNOT).
         | Enum_member =>
             match v with
             | V_member m =>
-                (T.id_equal_string n m, [])
+                (T.id_equal_string n m, empty_bindings)
             | _ => no_match
             end
         | _ =>
-            (true, [(n, v)])
+            (true, IdMap.add n (Complete v) empty_bindings)
         end
     | P_typ _ p => pattern_match p v
-    | P_lit l => (pattern_match_literal l v, [])
+    | P_lit l => (pattern_match_literal l v, empty_bindings)
     | P_as p n =>
         let '(matched, bindings) := pattern_match p v in
-        (matched, (n, v) :: bindings)
+        (matched, IdMap.add n (Complete v) bindings)
     | P_app ctor ps =>
         match v with
         | V_ctor v_ctor vs =>
@@ -652,7 +787,7 @@ Module Semantics (T : TANNOT).
                         | ((false, _), v :: vs) => (no_match, vs)
                         | ((true, vars), v :: vs) =>
                             let '(matched, more_vars) := pattern_match p v in
-                            ((matched, vars ++ more_vars), vs)
+                            ((matched, vars ⋈ more_vars), vs)
                         end
                      )
                      ps
@@ -678,7 +813,7 @@ Module Semantics (T : TANNOT).
                       | ((false, _), v :: vs) => (no_match, vs)
                       | ((true, vars), v :: vs) =>
                           let '(matched, more_vars) := pattern_match p v in
-                          ((matched, vars ++ more_vars), vs)
+                          ((matched, vars ⋈ more_vars), vs)
                       end
                    )
                    ps
@@ -698,7 +833,7 @@ Module Semantics (T : TANNOT).
                         | ((false, _), v :: vs) => (no_match, vs)
                         | ((true, vars), v :: vs) =>
                             let '(matched, more_vars) := pattern_match p v in
-                            ((matched, vars ++ more_vars), vs)
+                            ((matched, vars ⋈ more_vars), vs)
                         end
                      )
                      ps
@@ -720,7 +855,7 @@ Module Semantics (T : TANNOT).
                       | ((false, _), v :: vs) => (no_match, vs)
                       | ((true, vars), v :: vs) =>
                           let '(matched, more_vars) := pattern_match p v in
-                     ((matched, vars ++ more_vars), vs)
+                     ((matched, vars ⋈ more_vars), vs)
                       end
                    )
                    ps
@@ -742,7 +877,7 @@ Module Semantics (T : TANNOT).
                         | ((true, bound), vs) =>
                             let '(vs_take, vs_drop) := take_drop s vs in
                             let '(matched, more_bound) := pattern_match p (V_vector vs_take) in
-                            ((matched, bound ++ more_bound), vs_drop)
+                            ((matched, bound ⋈ more_bound), vs_drop)
                         end
                     | No_split => (no_match, [])
                     end)
@@ -756,7 +891,7 @@ Module Semantics (T : TANNOT).
         | V_list (v :: vs) =>
             let '(hd_matched, hd_bound) := pattern_match p v in
             let '(tl_matched, tl_bound) := pattern_match ps (V_list vs) in
-            (andb hd_matched tl_matched, hd_bound ++ tl_bound)
+            (andb hd_matched tl_matched, hd_bound ⋈ tl_bound)
         | _ => no_match
         end
     | P_or lhs_p rhs_p =>
@@ -781,15 +916,15 @@ Module Semantics (T : TANNOT).
                  let '(name, p) := fp in
                  let v := get_struct_field (T.string_of_id name) fields in
                  let '(matched, bound) := pattern_match p v in
-                 (andb prev_matched matched, prev_bound ++ bound)
+                 (andb prev_matched matched, prev_bound ⋈ bound)
               )
               field_patterns
               (true, [])
         | _ => no_match
         end
+    | P_vector_subrange id n m => (true, IdMap.add id (Partial [(v, n, m)]) empty_bindings)
     (* TODO *)
-    | P_vector_subrange _ _ _ => (true, [])
-    | P_string_append _ => (true, [])
+    | P_string_append _ => (true, empty_bindings)
     end.
 
   Fixpoint lookup_field (l : Ast.loc) (name : string) (fields : list (string * value)) {struct fields} : t value :=
@@ -834,30 +969,9 @@ Module Semantics (T : TANNOT).
     | LE_app _ args => Exists (fun arg => x = arg) args
     end.
 
-  Lemma max_rhs_plus_1 : forall x y z, x < z + 1 -> x < max y z + 1.
-  Proof.
-    lia.
-  Qed.
-
   Lemma max_lhs_plus_1_le : forall x y z, x <= y -> x < max y z + 1.
   Proof.
     lia.
-  Qed.
-
-  Lemma test : forall (x : exp T.tannot) (xs : list (exp T.tannot)),
-    Exists (fun arg => x = arg) xs ->
-    depth x < fold_right Nat.max 0 (map depth xs) + 1.
-  Proof.
-    induction xs.
-    - cbn. easy.
-    - cbn.
-      intros.
-      destruct H.
-      rewrite H.
-      lia.
-      apply max_rhs_plus_1.
-      apply IHxs.
-      assumption.
   Qed.
 
   Lemma fold_max_app : forall xs ys, fold_right max 0 (xs ++ ys) = max (fold_right max 0 xs) (fold_right max 0 ys).
@@ -1084,62 +1198,6 @@ Module Semantics (T : TANNOT).
     - cbn; reflexivity.
   Qed.
 
-  Fixpoint update_lexp_subexps (xs : list (exp T.tannot)) (l : lexp T.tannot) : lexp T.tannot * list (exp T.tannot) :=
-    let 'LE_aux aux annot := l in
-    match aux with
-    | LE_id _ | LE_typ _ _ => (l, xs)
-    | LE_deref _ =>
-        match xs with
-        | y :: ys =>
-            (LE_aux (LE_deref y) annot, ys)
-        | _ => (l, xs)
-        end
-    | LE_field l f =>
-        let '(l', ys) := update_lexp_subexps xs l in
-        (LE_aux (LE_field l' f) annot, ys)
-    | LE_app id args =>
-        let '(ys, zs) := take_drop (length args) xs in
-        (LE_aux (LE_app id ys) annot, zs)
-    | LE_tuple ls =>
-        let '(ls, xs) :=
-          fold_left
-            (fun acc l =>
-               let '(ls, xs) := acc in
-               let '(l, xs) := update_lexp_subexps xs l in
-               (ls ++ [l], xs)
-            )
-            ls
-            ([], xs)
-        in
-        (LE_aux (LE_tuple ls) annot, xs)
-    | LE_vector_concat ls =>
-        let '(ls, xs) :=
-          fold_left
-            (fun acc l =>
-               let '(ls, xs) := acc in
-               let '(l, xs) := update_lexp_subexps xs l in
-               (ls ++ [l], xs)
-            )
-            ls
-            ([], xs)
-        in
-        (LE_aux (LE_tuple ls) annot, xs)
-    | LE_vector l n =>
-        match update_lexp_subexps xs l with
-        | (l, n :: xs) =>
-            (LE_aux (LE_vector l n) annot, xs)
-        | _ =>
-            (l, [])
-        end
-    | LE_vector_range l n m =>
-        match update_lexp_subexps xs l with
-        | (l, n :: m :: xs) =>
-            (LE_aux (LE_vector_range l n m) annot, xs)
-        | _ =>
-            (l, [])
-        end
-    end.
-
   Fixpoint destructuring_assignment (annot : Ast.annot T.tannot) (d : destructure) (v : value) : t unit :=
     match d with
     | DL_place p =>
@@ -1259,27 +1317,29 @@ Module Semantics (T : TANNOT).
             wrap (E_internal_value (V_member (T.string_of_id id)))
         end
     | E_return x =>
-        match x with
-        | E_aux (E_internal_value v) annot => Early_return v
-        | _ => bind (step x) (fun x' => wrap (E_return x'))
+        match get_value x with
+        | Evaluated v => Early_return v
+        | Unevaluated =>
+            x' ← step x;
+            wrap (E_return x')
         end
-    | E_assign l x =>
-        let lxs := lexp_subexps l in
-        let '(evaluated, unevaluated) := left_to_right lxs in
+    | E_assign lx x =>
+        let subexps := lexp_subexps lx in
+        let '(evaluated, unevaluated) := left_to_right subexps in
         match unevaluated with
-        | lx :: lxs =>
-            lx' ← step lx;
-            let '(l', _) := update_lexp_subexps (evaluated ++ (lx' :: lxs)) l in
+        | u :: us =>
+            u' ← step u;
+            let '(l', _) := update_lexp_subexps (evaluated ++ (u' :: us)) lx in
             wrap (E_assign l' x)
         | [] =>
-            match x with
-            | E_aux (E_internal_value v) _ =>
-                d ← lexp_to_destructure l;
+            match get_value x with
+            | Evaluated v =>
+                d ← lexp_to_destructure lx;
                 _ ← destructuring_assignment annot d v;
                 wrap (E_internal_value V_unit)
-            | _ =>
+            | Unevaluated =>
                 x' ← step x;
-                wrap (E_assign l x')
+                wrap (E_assign lx x')
             end
         end
     | E_var l x body => wrap (E_block (E_aux (E_assign l x) annot :: [body]))
@@ -1290,20 +1350,20 @@ Module Semantics (T : TANNOT).
             | Pat_aux (Pat_exp pat body) _ :: next_arms =>
                 let '(matched, arm_substs) := pattern_match pat v in
                 if matched then
-                  pure (fold_right (fun s body => substitute (fst s) (snd s) body) body arm_substs)
+                  pure (fold_right (fun s body => substitute (fst s) (snd s) body) body (complete_bindings arm_substs))
                 else
                   wrap (E_match head_exp next_arms)
             | Pat_aux (Pat_when pat guard body) pexp_annot :: next_arms =>
                 let '(matched, arm_substs) := pattern_match pat v in
                 if matched then
-                  let guard := fold_right (fun s g => substitute (fst s) (snd s) g)  guard arm_substs in
+                  let guard := fold_right (fun s g => substitute (fst s) (snd s) g)  guard (complete_bindings arm_substs) in
                   match guard with
                   | E_aux (E_internal_value v_guard) _ =>
                       match v_guard with
                       | V_bool true =>
                           let '(matched, arm_substs) := pattern_match pat v in
                           if matched then
-                            pure (fold_right (fun s body => substitute (fst s) (snd s) body) body arm_substs)
+                            pure (fold_right (fun s body => substitute (fst s) (snd s) body) body (complete_bindings arm_substs))
                           else
                             wrap (E_match head_exp next_arms)
                       | V_bool false =>
@@ -1311,24 +1371,23 @@ Module Semantics (T : TANNOT).
                       | _ => Runtime_type_error (fst pexp_annot)
                       end
                   | _ =>
-                      bind
-                        (step guard)
-                        (fun guard' =>
-                           wrap (E_match head_exp (Pat_aux (Pat_when pat guard' body) pexp_annot :: next_arms)))
+                      guard' ← step guard;
+                      wrap (E_match head_exp (Pat_aux (Pat_when pat guard' body) pexp_annot :: next_arms))
                   end
                 else
                   wrap (E_match head_exp next_arms)
             | [] => Match_failure (fst annot)
             end
         | _ =>
-            bind (step head_exp) (fun head_exp' => wrap (E_match head_exp' arms))
+            head_exp' ← step head_exp;
+            wrap (E_match head_exp' arms)
         end
     | E_let (LB_aux (LB_val pat x) lb_annot) body =>
         match x with
         | E_aux (E_internal_value v) _ =>
             let '(matched, body_substs) := pattern_match pat v in
             if matched then
-              pure (fold_left (fun body s => substitute (fst s) (snd s) body) body_substs body)
+              pure (fold_left (fun body s => substitute (fst s) (snd s) body) (complete_bindings body_substs) body)
             else
               Match_failure (fst annot)
         | _ =>
@@ -1348,18 +1407,45 @@ Module Semantics (T : TANNOT).
         end
     | E_typ _ x => step x
     | E_app id args =>
-        let '(evaluated, unevaluated) := left_to_right args in
-        match unevaluated with
-        | u :: us =>
-            u' ← step u;
-            wrap (E_app id (evaluated ++ (u' :: us)))
-        | [] =>
-            r ← Call id (all_evaluated evaluated) pure;
-            match r with
-            | Return_ok v => wrap (E_internal_value v)
-            | Return_exception exn => wrap (E_throw (E_aux (E_internal_value exn) annot))
-            end
-        end
+        if T.is_or_bool id then
+          match args with
+          | [lhs; rhs] =>
+              b ← is_bool lhs;
+              match b with
+              | Evaluated true => wrap (E_internal_value (V_bool true))
+              | Evaluated false => pure rhs
+              | Unevaluated =>
+                  lhs' ← step lhs;
+                  wrap (E_app id [lhs'; rhs])
+              end
+          | _ => Runtime_type_error (fst annot)
+          end
+        else if T.is_and_bool id then
+          match args with
+          | [lhs; rhs] =>
+              b ← is_bool lhs;
+              match b with
+              | Evaluated true => pure rhs
+              | Evaluated false => wrap (E_internal_value (V_bool false))
+              | Unevaluated =>
+                  lhs' ← step lhs;
+                  wrap (E_app id [lhs'; rhs])
+              end
+          | _ => Runtime_type_error (fst annot)
+          end
+        else
+          let '(evaluated, unevaluated) := left_to_right args in
+          match unevaluated with
+          | u :: us =>
+              u' ← step u;
+              wrap (E_app id (evaluated ++ (u' :: us)))
+          | [] =>
+              r ← Call id (all_evaluated evaluated) pure;
+              match r with
+              | Return_ok v => wrap (E_internal_value v)
+              | Return_exception exn => wrap (E_throw (E_aux (E_internal_value exn) annot))
+              end
+          end
     | E_app_infix arg1 id arg2 =>
         match left_to_right2 arg1 arg2 with
         | LTR2_0 _ _ =>
@@ -1376,15 +1462,14 @@ Module Semantics (T : TANNOT).
               )
         end
     | E_if i t e =>
-        bind (is_bool i)
-          (fun b =>
-             match b with
-             | Unevaluated =>
-                 bind (step i) (fun i' => wrap (E_if i' t e))
-             | Evaluated true => pure t
-             | Evaluated false => pure e
-             end
-          )
+        b ← is_bool i;
+        match b with
+        | Unevaluated =>
+            i' ← step i;
+            wrap (E_if i' t e)
+        | Evaluated true => pure t
+        | Evaluated false => pure e
+        end
     | E_assert x msg =>
         bind (is_bool x)
           (fun b =>
@@ -1563,8 +1648,8 @@ Module Semantics (T : TANNOT).
     cbn.
     rewrite ltr_tuple in Heq_anonymous.
     apply max_lhs_plus_1_le.
-    apply (PeanoNat.Nat.le_trans _ (fold_right max 0 (map depth (lexp_subexps l))) _).
-    rewrite <- (take_drop_evaluated_concat T.tannot (lexp_subexps l)).
+    apply (PeanoNat.Nat.le_trans _ (fold_right max 0 (map depth (lexp_subexps lx))) _).
+    rewrite <- (take_drop_evaluated_concat T.tannot (lexp_subexps lx)).
     inversion Heq_anonymous.
     rewrite map_app.
     rewrite fold_right_app.
@@ -1578,7 +1663,8 @@ Module Semantics (T : TANNOT).
     clear n.
     induction arm_substs.
     - cbn; lia.
-    - cbn.
+    - destruct a.
+      cbn.
       apply (PeanoNat.Nat.le_lt_trans _ _ _ (depth_subst _ _ _)).
       apply IHarm_substs.
   Defined.
@@ -1662,4 +1748,4 @@ End Semantics.
 
 Extraction Blacklist List.
 
-Separate Extraction l attribute_data def impldef opt_default Semantics.
+Separate Extraction l attribute_data def impldef opt_default Semantics IdMap.
