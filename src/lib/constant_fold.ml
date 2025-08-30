@@ -272,19 +272,19 @@ let rw_exp fixed target ok not_ok istate =
 
 let rewrite_exp_once target = rw_exp no_fixed target (fun _ -> ()) (fun _ -> ())
 
-let rec rewrite_constant_function_calls' fixed target ast =
+let rec rewrite_constant_function_calls' fixed target env ast =
   let rewrite_count = ref 0 in
   let ok () = incr rewrite_count in
   let not_ok () = decr rewrite_count in
-  let istate = initial_state ast Type_check.initial_env in
+  let istate = initial_state ast env in
 
   let rw_defs = { rewriters_base with rewrite_exp = (fun _ -> rw_exp fixed target ok not_ok istate) } in
   let ast = rewrite_ast_base rw_defs ast in
   (* We keep iterating until we have no more re-writes to do *)
-  if !rewrite_count > 0 then rewrite_constant_function_calls' fixed target ast else ast
+  if !rewrite_count > 0 then rewrite_constant_function_calls' fixed target env ast else ast
 
-let rewrite_constant_function_calls fixed target ast =
-  if !optimize_constant_fold then rewrite_constant_function_calls' fixed target ast else ast
+let rewrite_constant_function_calls fixed target env ast =
+  if !optimize_constant_fold then rewrite_constant_function_calls' fixed target env ast else ast
 
 type to_constant = Register of id * typ * tannot exp | Register_field of id * id * typ * tannot exp
 
@@ -360,7 +360,7 @@ let () =
                   in
                   let assignments = List.fold_left update_fixed no_fixed assignments in
 
-                  { istate with ast = rewrite_constant_function_calls' assignments target istate.ast }
+                  { istate with ast = rewrite_constant_function_calls' assignments target istate.env istate.ast }
                 )
           )
     )

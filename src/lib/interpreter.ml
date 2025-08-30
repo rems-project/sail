@@ -397,7 +397,7 @@ let rec adapt env = function
       let undef_exp = Ast_util.undefined_of_typ false Parse_ast.Unknown (fun _ -> empty_uannot) typ in
       let undef_exp = Type_check.check_exp env undef_exp typ in
       return undef_exp
-  | Interpret.Monad.Runtime_type_error l -> Reporting.unreachable l __POS__ "Runtime type error in interpreter"
+  | Interpret.Monad.Runtime_type_error l -> fail "Runtime type error in interpreter"
 
 and read_var env place cont =
   let open Interpret in
@@ -694,18 +694,20 @@ let rec initialize_registers allow_registers undef_registers gstate =
             { gstate with registers = Bindings.add id (eval_exp (initial_lstate, gstate) exp) gstate.registers }
         | None -> gstate
         | Some exp ->
-            (* prerr_endline ("EVAL " ^ string_of_exp exp); *)
             let evaluated = eval_exp (initial_lstate, gstate) exp in
-            (* prerr_endline ("GOT " ^ string_of_value evaluated); *)
             { gstate with registers = Bindings.add id evaluated gstate.registers }
       end
-    | DEF_aux (DEF_let (LB_aux (LB_val (pat, exp), annot)), def_annot) ->
-        let evaluated = eval_exp (initial_lstate, gstate) exp in
-        let _, bindings = pattern_match def_annot.env pat evaluated in
-        {
-          gstate with
-          letbinds = Bindings.fold (fun id v lbs -> Bindings.add id v lbs) (complete_bindings bindings) gstate.letbinds;
-        }
+    | DEF_aux (DEF_let (LB_aux (LB_val (pat, exp), annot)), def_annot) -> (
+        try
+          let evaluated = eval_exp (initial_lstate, gstate) exp in
+          let _, bindings = pattern_match def_annot.env pat evaluated in
+          {
+            gstate with
+            letbinds =
+              Bindings.fold (fun id v lbs -> Bindings.add id v lbs) (complete_bindings bindings) gstate.letbinds;
+          }
+        with _ -> gstate
+      )
     | _ -> gstate
   in
   function def :: defs -> initialize_registers allow_registers undef_registers (process_def def) defs | [] -> gstate
