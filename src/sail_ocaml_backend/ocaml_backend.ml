@@ -1090,6 +1090,7 @@ let ocaml_ast ast generator_info =
     | Some (types, req) -> ocaml_pp_generators ctx ast.defs types (List.map mk_id req)
   in
   (string "open Sail_lib;;" ^^ hardline)
+  ^^ (string "open Value_type;;" ^^ hardline)
   ^^ (string "module Big_int = Nat_big_num" ^^ ocaml_def_end)
   ^^ concat (List.map (ocaml_def ctx) ast.defs)
   ^^ empty_reg_init ^^ gen_pp
@@ -1140,6 +1141,7 @@ let ocaml_compile default_sail_dir spec ast generator_types =
   let _ = Unix.system ("cp -r " ^ Filename.quote (sail_dir ^ "/src/lib/elf_loader.ml") ^ " .") in
   let _ = Unix.system ("cp -r " ^ Filename.quote (sail_dir ^ "/src/lib/sail_lib.ml") ^ " .") in
   let _ = Unix.system ("cp -r " ^ Filename.quote (sail_dir ^ "/src/lib/util.ml") ^ " .") in
+  let _ = Unix.system ("cp -r " ^ Filename.quote (sail_dir ^ "/src/lib/extraction/Value_type.ml") ^ " .") in
   let tags_file = if !opt_ocaml_coverage then "_tags_coverage" else "_tags" in
   let _ = Unix.system ("cp -r " ^ Filename.quote (sail_dir ^ "/lib/" ^ tags_file) ^ " _tags") in
   let out_chan = open_out (spec ^ ".ml") in
