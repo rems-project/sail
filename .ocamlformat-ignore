@@ -1,2 +1,3 @@
 lib/**
-
+src/lib/rocq/**
+src/lib/extraction/**
