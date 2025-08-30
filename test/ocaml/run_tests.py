@@ -19,8 +19,6 @@ print("Sail is {}".format(sail))
 print("Sail dir is {}".format(sail_dir))
 print("Targets: {}".format(targets))
 
-xml = '<testsuites>\n'
-
 def test_ocaml(name, opts):
     banner(f'{name} with options: "{opts}"')
     results = Results(name)
@@ -29,7 +27,7 @@ def test_ocaml(name, opts):
         for dir in dirs:
             tests[dir] = os.fork()
             if tests[dir] == 0:
-                step(f'{sail} --no-warn -o out --ocaml {opts} ../prelude.sail *.sail', cwd=dir)
+                step(f'{sail} --strict-bitvector --no-warn -o out --ocaml {opts} ../prelude.sail *.sail', cwd=dir)
                 step('./out > result 2> /dev/null', cwd=dir)
                 step('diff expect result', cwd=dir)
                 step('rm out', cwd=dir)
@@ -39,11 +37,14 @@ def test_ocaml(name, opts):
                 sys.exit()
         results.collect(tests)
     return results.finish()
+
+xml = '<testsuites>\n'
+
 if 'ocaml' in targets:
-    test_ocaml('Ocaml testing', '')
+    xml += test_ocaml('Ocaml testing', '')
 
 if 'ocaml_trace' in targets:
-    test_ocaml('Ocaml trace testing', '--ocaml-trace')
+    xml += test_ocaml('Ocaml trace testing', '--ocaml-trace')
 
 xml += '</testsuites>\n'
 
