@@ -94,8 +94,8 @@ jobs:
     - name: Collect coverage
       run: |
         eval $(opam env)
-        bisect-ppx-report html --coverage-path=.
-        bisect-ppx-report summary --per-file --coverage-path=. > coverage_summary.txt
+        bisect-ppx-report html --coverage-path=. --ignore-missing-files
+        bisect-ppx-report summary --per-file --coverage-path=. --ignore-missing-files > coverage_summary.txt
 
     - name: Archive coverage
       uses: actions/upload-artifact@v4
