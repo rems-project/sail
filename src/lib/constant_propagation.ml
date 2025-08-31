@@ -263,7 +263,7 @@ module StringMap = Map.Make (String)
 (* This is set up so that a partially applied version can be used multiple
    times, reducing start up time. *)
 
-let const_props target ast =
+let const_props target env ast =
   (* Constant-fold function applications with constant arguments *)
   let interpreter_istate =
     (* Do not interpret undefined_X functions *)
@@ -271,7 +271,7 @@ let const_props target ast =
     let undefined_builtin_ids = ids_of_defs (Initial_check.undefined_builtin_val_specs ()) in
     let remove_primop id = StringMap.remove (string_of_id id) in
     let remove_undefined_primops = IdSet.fold remove_primop undefined_builtin_ids in
-    let lstate, gstate = Constant_fold.initial_state ast Type_check.initial_env in
+    let lstate, gstate = Constant_fold.initial_state ast env in
     (lstate, { gstate with primops = remove_undefined_primops gstate.primops })
   in
   let const_fold exp =
@@ -849,8 +849,8 @@ let const_props target ast =
 
     (const_prop_exp, const_prop_pexp)
 
-let const_prop target d =
-  let f = const_props target d in
+let const_prop target env d =
+  let f = const_props target env d in
   fun r -> fst (f r)
 
 let referenced_vars exp =

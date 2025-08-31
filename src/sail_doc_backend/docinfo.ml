@@ -494,7 +494,9 @@ module Generator (Converter : Markdown.CONVERTER) (Config : CONFIG) = struct
                 (fun splits member ->
                   let checked_member = Type_check.check_exp env (mk_exp (E_id member)) enum_typ in
                   let substs = (Bindings.singleton split_id checked_member, KBindings.empty) in
-                  let propagated, _ = Constant_propagation.const_prop "doc" ast IdSet.empty substs Bindings.empty exp in
+                  let propagated, _ =
+                    Constant_propagation.const_prop "doc" env ast IdSet.empty substs Bindings.empty exp
+                  in
                   let propagated_doc =
                     Raw (pretty_printer (Type_check.strip_exp propagated) |> Document.to_string |> encode)
                   in

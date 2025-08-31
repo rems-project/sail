@@ -688,7 +688,7 @@ let split_defs target all_errors (splits : split_req list) env ast =
   let refinements, defs' = split_constructors ast.defs in
 
   (* This will perform the initialisation just once, and share it across all defs *)
-  let const_prop = Constant_propagation.const_prop target ast in
+  let const_prop = Constant_propagation.const_prop target env ast in
 
   let subst_exp ref_vars substs ksubsts exp =
     let substs = (bindings_from_list substs, KBindings.map fst ksubsts) in
@@ -1390,7 +1390,7 @@ module AtomToItself = struct
       let ref_vars = Constant_propagation.referenced_vars exp in
       let substs = (Bindings.empty, KBindings.empty) in
       let assigns = Bindings.empty in
-      fst (Constant_propagation.const_prop target ast ref_vars substs assigns exp)
+      fst (Constant_propagation.const_prop target type_env ast ref_vars substs assigns exp)
     in
     let const_prop_pexp pexp =
       let pat, guard, exp, a = destruct_pexp pexp in
