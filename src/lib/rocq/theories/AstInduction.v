@@ -11,7 +11,7 @@ Import ListNotations.
    many of the theorems we wish to prove, so we are required to prove
    our own.
 
-   All though this is tedious we do gain one additional benefit - each
+   Allthough this is tedious we do gain one additional benefit - each
    Sail AST constructor [X_whatever] is wrapped in an [X_aux] constructor
    that stores additional annotation data, and we can make our custom induction
    rules work around this. *)
@@ -37,18 +37,14 @@ Section lexp_ind_g.
     - apply H_deref.
     - apply H_app.
     - apply H_typ.
-    - {
-      apply H_tuple.
+    - apply H_tuple.
       induction l.
-      - trivial.
-      - apply Forall_cons. trivial. assumption.
-    }
-    - {
-      apply H_vector_concat.
+      + trivial.
+      + apply Forall_cons. trivial. assumption.
+    - apply H_vector_concat.
       induction l.
-      - trivial.
-      - apply Forall_cons. trivial. assumption.
-    }
+      + trivial.
+      + apply Forall_cons. trivial. assumption.
     - apply H_vector. trivial.
     - apply H_vector_range. trivial.
     - apply H_field. trivial.
@@ -101,7 +97,7 @@ Lemma take_drop_all : forall (A : Set) (xs : list A),
     take_drop (length xs) xs = (xs, []).
 Proof.
   induction xs.
-  - cbn. reflexivity.
+  - reflexivity.
   - cbn. rewrite IHxs. reflexivity.
 Qed.
 
@@ -246,85 +242,63 @@ Section exp_ind_g.
       H_vector_update_subrange.
     destruct x as [aux ann].
     destruct aux.
-    - {
-      apply H_block.
+    - apply H_block.
       induction l.
-      - trivial.
-      - rewrite Forall_cons_iff. easy.
-    }
+      + trivial.
+      + rewrite Forall_cons_iff. easy.
     - apply H_id.
     - apply H_lit.
     - apply H_typ. trivial.
-    - {
-      apply H_app.
+    - apply H_app.
       induction l.
-      - trivial.
-      - rewrite Forall_cons_iff. easy.
-    }
+      + trivial.
+      + rewrite Forall_cons_iff. easy.
     - apply H_app_infix; trivial.
-    - {
-      apply H_tuple.
+    - apply H_tuple.
       induction l.
-      - trivial.
-      - rewrite Forall_cons_iff. easy.
-    }
+      + trivial.
+      + rewrite Forall_cons_iff. easy.
     - apply H_if; trivial.
     - apply H_loop; trivial.
     - apply H_for; trivial.
-    - {
-      apply H_vector.
+    - apply H_vector.
       induction l.
-      - trivial.
-      - rewrite Forall_cons_iff. easy.
-    }
+      + trivial.
+      + rewrite Forall_cons_iff. easy.
     - apply H_vector_access; trivial.
     - apply H_vector_subrange; trivial.
     - apply H_vector_update; trivial.
     - apply H_vector_update_subrange; trivial.
     - apply H_vector_append; trivial.
-    - {
-      apply H_list.
+    - apply H_list.
       induction l.
-      - trivial.
-      - rewrite Forall_cons_iff. easy.
-    }
+      + trivial.
+      + rewrite Forall_cons_iff. easy.
     - apply H_cons; trivial.
-    - {
-      apply H_struct.
+    - apply H_struct.
       induction l.
-      - trivial.
-      - rewrite Forall_cons_iff. easy.
-    }
-    - {
-      apply H_struct_update.
-      - trivial.
-      - {
-        induction l.
-        - trivial.
-        - rewrite Forall_cons_iff. easy.
-      }
-    }
+      + trivial.
+      + rewrite Forall_cons_iff. easy.
+    - apply H_struct_update.
+      + trivial.
+      + induction l.
+        * trivial.
+        * rewrite Forall_cons_iff. easy.
     - apply H_field; trivial.
-    - {
-      apply H_match.
-      - trivial.
-      - {
-        induction l.
-        - trivial.
-        - rewrite Forall_cons_iff.
+    - apply H_match.
+      + trivial.
+      + induction l.
+        * trivial.
+        * rewrite Forall_cons_iff.
           split.
           destruct a as [pat_aux].
           destruct pat_aux.
           unfold MatchArm; trivial.
           unfold MatchArm; split; trivial.
           assumption.
-      }
-    }
-    - {
-      destruct l as [lb_aux ?].
+    - destruct l as [lb_aux ?].
       destruct lb_aux.
       apply H_let; trivial.
-    }
     - apply H_assign; trivial.
     - apply H_sizeof.
     - apply H_return; trivial.
@@ -332,21 +306,17 @@ Section exp_ind_g.
     - apply H_config.
     - apply H_ref.
     - apply H_throw; trivial.
-    - {
-      apply H_try.
-      - trivial.
-      - {
-        induction l.
-        - trivial.
-        - rewrite Forall_cons_iff.
+    - apply H_try.
+      + trivial.
+      + induction l.
+        * trivial.
+        * rewrite Forall_cons_iff.
           split.
           destruct a as [pat_aux].
           destruct pat_aux.
           unfold MatchArm; trivial.
           unfold MatchArm; split; trivial.
           assumption.
-      }
-    }
     - apply H_assert; trivial.
     - apply H_var; trivial.
     - apply H_internal_plet; trivial.
@@ -463,85 +433,63 @@ Section exp_and_lexp_ind_g.
     - {
       destruct x as [aux ann].
       destruct aux.
-      - {
-        apply H_block.
+      - apply H_block.
         induction l.
-        - trivial.
-        - rewrite Forall_cons_iff. easy.
-      }
+        + trivial.
+        + rewrite Forall_cons_iff. easy.
       - apply H_id.
       - apply H_lit.
       - apply H_typ. trivial.
-      - {
-        apply H_app.
+      - apply H_app.
         induction l.
-        - trivial.
-        - rewrite Forall_cons_iff. easy.
-      }
+        + trivial.
+        + rewrite Forall_cons_iff. easy.
       - apply H_app_infix; trivial.
-      - {
-        apply H_tuple.
+      - apply H_tuple.
         induction l.
-        - trivial.
-        - rewrite Forall_cons_iff. easy.
-      }
+        + trivial.
+        + rewrite Forall_cons_iff. easy.
       - apply H_if; trivial.
       - apply H_loop; trivial.
       - apply H_for; trivial.
-      - {
-        apply H_vector.
+      - apply H_vector.
         induction l.
-        - trivial.
-        - rewrite Forall_cons_iff. easy.
-      }
+        + trivial.
+        + rewrite Forall_cons_iff. easy.
       - apply H_vector_access; trivial.
       - apply H_vector_subrange; trivial.
       - apply H_vector_update; trivial.
       - apply H_vector_update_subrange; trivial.
       - apply H_vector_append; trivial.
-      - {
-        apply H_list.
+      - apply H_list.
         induction l.
-        - trivial.
-        - rewrite Forall_cons_iff. easy.
-      }
+        + trivial.
+        + rewrite Forall_cons_iff. easy.
       - apply H_cons; trivial.
-      - {
-        apply H_struct.
+      - apply H_struct.
         induction l.
-        - trivial.
-        - rewrite Forall_cons_iff. easy.
-      }
-      - {
-        apply H_struct_update.
-        - trivial.
-        - {
-          induction l.
-          - trivial.
-          - rewrite Forall_cons_iff. easy.
-        }
-      }
+        + trivial.
+        + rewrite Forall_cons_iff. easy.
+      - apply H_struct_update.
+        + trivial.
+        + induction l.
+          * trivial.
+          * rewrite Forall_cons_iff. easy.
       - apply H_field; trivial.
-      - {
-        apply H_match.
-        - trivial.
-        - {
-          induction l.
-          - trivial.
-          - rewrite Forall_cons_iff.
+      - apply H_match.
+        + trivial.
+        + induction l.
+          * trivial.
+          * rewrite Forall_cons_iff.
             split.
             destruct a as [pat_aux].
             destruct pat_aux.
             unfold MatchArm; trivial.
             unfold MatchArm; split; trivial.
             assumption.
-        }
-      }
-      - {
-        destruct l as [lb_aux ?].
+      - destruct l as [lb_aux ?].
         destruct lb_aux.
         apply H_let; trivial.
-      }
       - apply H_assign; trivial.
       - apply H_sizeof.
       - apply H_return; trivial.
@@ -549,21 +497,17 @@ Section exp_and_lexp_ind_g.
       - apply H_config.
       - apply H_ref.
       - apply H_throw; trivial.
-      - {
-        apply H_try.
-        - trivial.
-        - {
-          induction l.
-          - trivial.
-          - rewrite Forall_cons_iff.
+      - apply H_try.
+        + trivial.
+        + induction l.
+          * trivial.
+          * rewrite Forall_cons_iff.
             split.
             destruct a as [pat_aux].
             destruct pat_aux.
             unfold MatchArm; trivial.
             unfold MatchArm; split; trivial.
             assumption.
-        }
-      }
       - apply H_assert; trivial.
       - apply H_var; trivial.
       - apply H_internal_plet; trivial.
@@ -577,34 +521,22 @@ Section exp_and_lexp_ind_g.
       destruct aux.
       - apply HL_id.
       - apply HL_deref. trivial.
-      - {
-        apply HL_app.
+      - apply HL_app.
         induction l.
-        - trivial.
-        - rewrite Forall_cons_iff.
-          split.
-          trivial.
-          assumption.
-      }
+        + trivial.
+        + rewrite Forall_cons_iff.
+          easy.
       - apply HL_typ.
-      - {
-        apply HL_tuple.
+      - apply HL_tuple.
         induction l.
-        - trivial.
-        - rewrite Forall_cons_iff.
-          split.
-          trivial.
-          assumption.
-      }
-      - {
-        apply HL_vector_concat.
+        + trivial.
+        + rewrite Forall_cons_iff.
+          easy.
+      - apply HL_vector_concat.
         induction l.
-        - trivial.
-        - rewrite Forall_cons_iff.
-          split.
-          trivial.
-          assumption.
-      }
+        + trivial.
+        + rewrite Forall_cons_iff.
+          easy.
       - apply HL_vector; trivial.
       - apply HL_vector_range; trivial.
       - apply HL_field; trivial.
@@ -690,7 +622,7 @@ with lexp_depth {A : Set} (l : lexp A) {struct l} : nat :=
 Lemma fold_max_app : forall xs ys, fold_right max 0 (xs ++ ys) = max (fold_right max 0 xs) (fold_right max 0 ys).
 Proof.
   induction xs.
-  - cbn. reflexivity.
+  - reflexivity.
   - cbn.
     intros.
     rewrite (IHxs ys).
@@ -702,14 +634,13 @@ Theorem lexp_subexps_depth : forall (A : Set) (l : lexp A),
 Proof.
    intros.
    induction l using lexp_ind_g.
-   - cbn. reflexivity.
+   - reflexivity.
    - cbn. lia.
    - cbn. lia.
-   - cbn. reflexivity.
-   - {
-     induction ls.
-     - cbn. lia.
-     - cbn.
+   - reflexivity.
+   - induction ls.
+     + cbn. lia.
+     + cbn.
        cbn in IHls.
        rewrite map_app.
        rewrite Forall_cons_iff in H.
@@ -717,11 +648,9 @@ Proof.
        apply IHls in H1.
        rewrite fold_max_app.
        lia.
-   }
-   - {
-     induction ls.
-     - cbn. lia.
-     - cbn.
+   - induction ls.
+     + cbn. lia.
+     + cbn.
        cbn in IHls.
        rewrite map_app.
        rewrite Forall_cons_iff in H.
@@ -729,7 +658,6 @@ Proof.
        apply IHls in H1.
        rewrite fold_max_app.
        lia.
-   }
    - cbn.
      rewrite map_app.
      rewrite fold_max_app.

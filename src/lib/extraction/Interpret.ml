@@ -1288,9 +1288,9 @@ module Semantics =
          (match unevaluated with
           | [] ->
             wrap (E_internal_value (V_vector (all_evaluated evaluated0)))
-          | y :: ys ->
-            Monad.bind (step0 y) (fun y' ->
-              wrap (E_vector (app evaluated0 (y' :: ys)))))
+          | u :: us ->
+            Monad.bind (step0 u) (fun u' ->
+              wrap (E_vector (app evaluated0 (u' :: us)))))
        | E_vector_access (_, _) -> Monad.Runtime_type_error (fst annot0)
        | E_vector_subrange (_, _, _) -> Monad.Runtime_type_error (fst annot0)
        | E_vector_update (_, _, _) -> Monad.Runtime_type_error (fst annot0)
@@ -1302,9 +1302,9 @@ module Semantics =
          let (evaluated0, unevaluated) = filtered_var in
          (match unevaluated with
           | [] -> wrap (E_internal_value (V_list (all_evaluated evaluated0)))
-          | y :: ys ->
-            Monad.bind (step0 y) (fun y' ->
-              wrap (E_list (app evaluated0 (y' :: ys)))))
+          | u :: us ->
+            Monad.bind (step0 u) (fun u' ->
+              wrap (E_list (app evaluated0 (u' :: us)))))
        | E_cons (x, xs) ->
          let filtered_var = left_to_right2 x xs in
          (match filtered_var with
@@ -1358,16 +1358,17 @@ module Semantics =
           | _ ->
             Monad.bind (step0 x) (fun x' -> wrap (E_struct_update (x', fs))))
        | E_field (x, f) ->
-         let E_aux (e, _) = x in
-         (match e with
-          | E_internal_value v ->
+         let filtered_var = get_value x in
+         (match filtered_var with
+          | Evaluated v ->
             (match v with
              | V_record fields ->
                Monad.bind
                  (lookup_field (fst annot0) (T.string_of_id f) fields)
-                 (fun v0 -> wrap (E_internal_value v0))
+                 (fun v_field -> wrap (E_internal_value v_field))
              | _ -> Monad.Runtime_type_error (fst annot0))
-          | _ -> Monad.bind (step0 x) (fun x' -> wrap (E_field (x', f))))
+          | Unevaluated ->
+            Monad.bind (step0 x) (fun x' -> wrap (E_field (x', f))))
        | E_match (head_exp, arms) ->
          let E_aux (e, _) = head_exp in
          (match e with
@@ -1469,10 +1470,10 @@ module Semantics =
        | E_ref register_name ->
          wrap (E_internal_value (V_ref (T.string_of_id register_name)))
        | E_throw x ->
-         let E_aux (e, _) = x in
-         (match e with
-          | E_internal_value v -> Monad.throw v
-          | _ -> Monad.bind (step0 x) (fun x' -> wrap (E_throw x')))
+         let filtered_var = get_value x in
+         (match filtered_var with
+          | Evaluated v -> Monad.throw v
+          | Unevaluated -> Monad.bind (step0 x) (fun x' -> wrap (E_throw x')))
        | E_try (x, arms) ->
          let E_aux (e, annot1) = x in
          (match e with

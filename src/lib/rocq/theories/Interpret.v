@@ -1307,8 +1307,8 @@ Module Semantics (T : TANNOT).
             wrap (E_let (LB_aux (LB_val pat x') lb_annot) body)
         end
     | E_lit lit =>
-        bind (value_of_lit lit (T.get_type (snd annot)))
-             (fun v => wrap (E_internal_value v))
+        v ← value_of_lit lit (T.get_type (snd annot));
+        wrap (E_internal_value v)
     | E_tuple xs =>
         let '(evaluated, unevaluated) := left_to_right xs in
         match unevaluated with
@@ -1402,16 +1402,17 @@ Module Semantics (T : TANNOT).
             end
         end
     | E_field x f =>
-        match x with
-        | E_aux (E_internal_value v) _ =>
+        match get_value x with
+        | Evaluated v =>
             match v with
             | V_record fields =>
-                bind (lookup_field (fst annot) (T.string_of_id f) fields)
-                  (fun v => wrap (E_internal_value v))
+                v_field ← lookup_field (fst annot) (T.string_of_id f) fields;
+                wrap (E_internal_value v_field)
             | _ => Runtime_type_error (fst annot)
             end
-        | _ =>
-            bind (step x) (fun x' => wrap (E_field x' f))
+        | Unevaluated =>
+            x' ← step x;
+            wrap (E_field x' f)
         end
     | E_struct struct_id fs =>
         let '(evaluated, unevaluated) := left_to_right_fields fs in
@@ -1444,9 +1445,10 @@ Module Semantics (T : TANNOT).
         (
           let '(evaluated, unevaluated) := left_to_right xs in
           match unevaluated with
-          | cons y ys =>
-              bind (step y) (fun y' => wrap (E_vector (evaluated ++ (y' :: ys))))
-          | nil =>
+          | u :: us =>
+              u' ← step u;
+              wrap (E_vector (evaluated ++ (u' :: us)))
+          | [] =>
               wrap (E_internal_value (V_vector (all_evaluated evaluated)))
           end
         )
@@ -1454,52 +1456,50 @@ Module Semantics (T : TANNOT).
         (
           let '(evaluated, unevaluated) := left_to_right xs in
           match unevaluated with
-          | cons y ys =>
-              bind (step y) (fun y' => wrap (E_list (evaluated ++ (y' :: ys))))
-          | nil =>
+          | u :: us =>
+              u' ← step u;
+              wrap (E_list (evaluated ++ (u' :: us)))
+          | [] =>
               wrap (E_internal_value (V_list (all_evaluated evaluated)))
           end
         )
     | E_cons x xs =>
-        (
-          match left_to_right2 x xs with
-          | LTR2_0 _ _ =>
-              bind (step x) (fun x' => wrap (E_cons x' xs))
-          | LTR2_1 _ _ =>
-              bind (step xs) (fun xs' => wrap (E_cons x xs'))
-          | LTR2_2 vx vxs =>
-              match vxs with
-              | V_list elems =>
-                  wrap (E_internal_value (V_list (vx :: elems)))
-              | _ =>
-                  Runtime_type_error (fst annot)
-              end
-          end
-        )
+        match left_to_right2 x xs with
+        | LTR2_0 _ _ =>
+            x' ← step x;
+            wrap (E_cons x' xs)
+        | LTR2_1 _ _ =>
+            xs' ← step xs;
+            wrap (E_cons x xs')
+        | LTR2_2 vx vxs =>
+            match vxs with
+            | V_list elems =>
+                wrap (E_internal_value (V_list (vx :: elems)))
+            | _ =>
+                Runtime_type_error (fst annot)
+            end
+        end
     | E_throw x =>
-        match x with
-        | E_aux (E_internal_value v) _ =>
+        match get_value x with
+        | Evaluated v =>
             throw v
-        | _ =>
-            bind (step x) (fun x' => wrap (E_throw x'))
+        | Unevaluated =>
+            x' ← step x;
+            wrap (E_throw x')
         end
     | E_try x arms =>
         match x with
         | E_aux (E_internal_value v) annot => pure (E_aux (E_internal_value v) annot)
         | _ =>
-            bind
-              (catch (step x))
-              (fun x' =>
-                 match x' with
-                 | Caught exn => wrap (E_match (E_aux (E_internal_value exn) annot) (arms ++ [T.fallthrough]))
-                 | Continue x'' => wrap (E_try x'' arms)
-                 end
-              )
+            x' ← catch (step x);
+            match x' with
+            | Caught exn => wrap (E_match (E_aux (E_internal_value exn) annot) (arms ++ [T.fallthrough]))
+            | Continue x'' => wrap (E_try x'' arms)
+            end
         end
     | E_internal_value v => wrap (E_internal_value v)
     | E_ref register_name =>
         wrap (E_internal_value (V_ref (T.string_of_id register_name)))
-    (* TODO: *)
     | E_loop While measure cond body =>
         wrap (E_if cond (E_aux (E_block [body; orig_exp]) annot) (E_aux (E_internal_value V_unit) annot))
     | E_loop Until measure cond body =>
@@ -1507,11 +1507,14 @@ Module Semantics (T : TANNOT).
     | E_for loop_var from to amount ord body =>
         match left_to_right3 from to amount with
         | LTR3_0 _ _ _ =>
-            bind (step from) (fun from' => wrap (E_for loop_var from' to amount ord body))
+            from' ← step from;
+            wrap (E_for loop_var from' to amount ord body)
         | LTR3_1 _ _ _ =>
-            bind (step to) (fun to' => wrap (E_for loop_var from to' amount ord body))
+            to' ← step to;
+            wrap (E_for loop_var from to' amount ord body)
         | LTR3_2 _ _ _ =>
-            bind (step amount) (fun amount' => wrap (E_for loop_var from to amount' ord body))
+            amount' ← step amount;
+            wrap (E_for loop_var from to amount' ord body)
         | LTR3_3 v_from v_to v_amount =>
             match ord with
             | Ord_aux Ord_inc _ =>
