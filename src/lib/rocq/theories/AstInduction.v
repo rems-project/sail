@@ -30,7 +30,7 @@ Section lexp_ind_g.
             (H_field : forall (l : lexp A) f ann, P l -> P (LE_aux (LE_field l f) ann)).
 
   Fixpoint lexp_ind_g l : P l.
-  Proof using H_app H_deref H_field H_id H_tuple H_typ H_vector H_vector_concat H_vector_range.
+  Proof using All.
     destruct l as [aux ann].
     destruct aux.
     - apply H_id.
@@ -201,45 +201,7 @@ Section exp_ind_g.
     (H_constraint : forall c ann, P (E_aux (E_constraint c) ann)).
 
   Fixpoint exp_ind_g x : P x.
-  Proof using
-      H_app
-      H_app_infix
-      H_assert
-      H_assign
-      H_block
-      H_config
-      H_cons
-      H_constraint
-      H_exit
-      H_field
-      H_for
-      H_id
-      H_if
-      H_internal_assume
-      H_internal_plet
-      H_internal_return
-      H_internal_value
-      H_let
-      H_list
-      H_lit
-      H_loop
-      H_match
-      H_ref
-      H_return
-      H_sizeof
-      H_struct
-      H_struct_update
-      H_throw
-      H_try
-      H_tuple
-      H_typ
-      H_var
-      H_vector
-      H_vector_access
-      H_vector_append
-      H_vector_subrange
-      H_vector_update
-      H_vector_update_subrange.
+  Proof using All.
     destruct x as [aux ann].
     destruct aux.
     - apply H_block.
@@ -382,54 +344,7 @@ Section exp_and_lexp_ind_g.
 
   Fixpoint exp_ind_mutual_g x : P x
   with lexp_ind_mutual_g lx : Q lx.
-  Proof using
-      H_app
-      H_app_infix
-      H_assert
-      H_assign
-      H_block
-      H_config
-      H_cons
-      H_constraint
-      H_exit
-      H_field
-      H_for
-      H_id
-      H_if
-      H_internal_assume
-      H_internal_plet
-      H_internal_return
-      H_internal_value
-      H_let
-      H_list
-      H_lit
-      H_loop
-      H_match
-      H_ref
-      H_return
-      H_sizeof
-      H_struct
-      H_struct_update
-      H_throw
-      H_try
-      H_tuple
-      H_typ
-      H_var
-      H_vector
-      H_vector_access
-      H_vector_append
-      H_vector_subrange
-      H_vector_update
-      H_vector_update_subrange
-      HL_vector_range
-      HL_vector_concat
-      HL_vector
-      HL_typ
-      HL_tuple
-      HL_id
-      HL_field
-      HL_deref
-      HL_app.
+  Proof using All.
     - {
       destruct x as [aux ann].
       destruct aux.

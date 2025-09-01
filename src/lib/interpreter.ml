@@ -70,38 +70,7 @@ type lstate = { locals : value Bindings.t }
 
 type state = lstate * gstate
 
-let value_of_lit (L_aux (l_aux, _)) =
-  match l_aux with
-  | L_unit -> V_unit
-  | L_zero -> V_bit B0
-  | L_one -> V_bit B1
-  | L_true -> V_bool true
-  | L_false -> V_bool false
-  | L_string str -> V_string str
-  | L_num n -> V_int n
-  | L_hex str ->
-      Util.string_to_list str |> List.map (fun c -> List.map (fun b -> V_bit b) (Sail_lib.hex_char c)) |> List.concat
-      |> fun v -> V_vector v
-  | L_bin str -> Util.string_to_list str |> List.map (fun c -> V_bit (Sail_lib.bin_char c)) |> fun v -> V_vector v
-  | L_real str -> begin
-      match Util.split_on_char '.' str with
-      | [whole; frac] ->
-          let whole = Rational.of_big_int (Big_int.of_string whole) in
-          let frac =
-            Rational.div
-              (Rational.of_big_int (Big_int.of_string frac))
-              (Rational.of_int (Util.power 10 (String.length frac)))
-          in
-          V_real (Rational.add whole frac)
-      | _ -> failwith "could not parse real literal"
-    end
-  | L_undef -> failwith "value_of_lit of undefined"
-
 let is_value = function E_aux (E_internal_value _, _) -> true | _ -> false
-
-let is_true = function E_aux (E_internal_value (V_bool b), annot) -> b | _ -> false
-
-let is_false = function E_aux (E_internal_value (V_bool b), _) -> not b | _ -> false
 
 let exp_of_value v = E_aux (E_internal_value v, (Parse_ast.Unknown, Type_check.empty_tannot))
 let value_of_exp = function E_aux (E_internal_value v, _) -> v | _ -> failwith "value_of_exp coerction failed"
@@ -199,26 +168,9 @@ end
 
 open Monad
 
-let letbind_pat_ids (LB_aux (LB_val (pat, _), _)) = pat_ids pat
-
-let subst id value exp = Ast_util.subst id (exp_of_value value) exp
-
 (**************************************************************************)
 (* 2. Expression Evaluation                                               *)
 (**************************************************************************)
-
-let unit_exp = E_lit (L_aux (L_unit, Parse_ast.Unknown))
-
-let is_value_fexp (FE_aux (FE_fexp (id, exp), _)) = is_value exp
-let value_of_fexp (FE_aux (FE_fexp (id, exp), _)) = (string_of_id id, value_of_exp exp)
-
-let rec build_letchain id lbs (E_aux (_, annot) as exp) =
-  match lbs with
-  | [] -> exp
-  | lb :: lbs when IdSet.mem id (letbind_pat_ids lb) ->
-      let exp = E_aux (E_let (lb, exp), annot) in
-      build_letchain id lbs exp
-  | _ :: lbs -> build_letchain id lbs exp
 
 let is_interpreter_extern id env =
   let open Type_check in
@@ -227,17 +179,6 @@ let is_interpreter_extern id env =
 let get_interpreter_extern id env =
   let open Type_check in
   Env.get_extern id env "interpreter"
-
-type partial_binding = Complete_binding of value | Partial_binding of (value * Big_int.num * Big_int.num) list
-
-let combine _ v1 v2 =
-  match (v1, v2) with
-  | None, None -> None
-  | Some v1, None -> Some v1
-  | None, Some v2 -> Some v2
-  | Some (Partial_binding p1), Some (Partial_binding p2) -> Some (Partial_binding (p1 @ p2))
-  | Some (Complete_binding _), Some (Complete_binding _) -> failwith "Tried to bind same identifier twice!"
-  | Some _, Some _ -> failwith "Tried to mix partial and complete binding!"
 
 let complete_value = function
   | ((v1, n1), m1) :: partial_values ->
@@ -252,47 +193,6 @@ let complete_value = function
         (value_zeros [V_int len])
         (((v1, n1), m1) :: partial_values)
   | [] -> Reporting.unreachable Parse_ast.Unknown __POS__ "Empty partial binding set"
-
-let complete_bindings =
-  Bindings.map (function
-    | Complete_binding v -> v
-    | Partial_binding ((v1, n1, m1) :: partial_values) ->
-        let max, min =
-          List.fold_left
-            (fun (max, min) (_, n, m) -> (Big_int.max max (Big_int.max n m), Big_int.min min (Big_int.min n m)))
-            (n1, m1) partial_values
-        in
-        let len = Big_int.sub (Big_int.succ max) min in
-        List.fold_left
-          (fun bv (slice, n, m) -> value_update_subrange [bv; V_int n; V_int m; slice])
-          (value_zeros [V_int len]) ((v1, n1, m1) :: partial_values)
-    | Partial_binding [] -> Reporting.unreachable Parse_ast.Unknown __POS__ "Empty partial binding set"
-    )
-
-let rec split_list_exact acc ns xs =
-  match (ns, xs) with
-  | [], [] -> Some []
-  | [], _ -> None
-  | n :: ns, _ when Big_int.equal n Big_int.zero -> (
-      match split_list_exact [] ns xs with Some split -> Some (List.rev acc :: split) | None -> None
-    )
-  | n :: ns, x :: xs -> split_list_exact (x :: acc) (Big_int.pred n :: ns) xs
-  | _, [] -> None
-
-let lexp_vector_concat_widths env lexps =
-  let open Type_check in
-  let get_length lexp =
-    let l = lexp_loc lexp in
-    let typ = typ_of_lexp lexp in
-    match destruct_vector env typ with
-    | Some (nexp, _) -> Option.to_result ~none:l (solve_unique env nexp)
-    | None -> (
-        match destruct_bitvector env typ with
-        | Some nexp -> Option.to_result ~none:l (solve_unique env nexp)
-        | None -> Error l
-      )
-  in
-  Util.result_all (List.map get_length lexps)
 
 let rec to_rocq_nat n =
   match Big_int.compare n Big_int.zero with
@@ -423,114 +323,13 @@ and write_var env place value cont =
 
 let step env exp = adapt env (RocqSemantics.step exp)
 
-let rec pattern_match env (P_aux (p_aux, (l, _))) value =
-  match p_aux with
-  | P_lit lit -> (eq_value (value_of_lit lit) value, Bindings.empty)
-  | P_wild -> (true, Bindings.empty)
-  | P_or (pat1, pat2) ->
-      let m1, b1 = pattern_match env pat1 value in
-      let m2, b2 = pattern_match env pat2 value in
-      (* todo: maybe add assertion that bindings are consistent or empty? *)
-      (m1 || m2, Bindings.merge combine b1 b2)
-  | P_not pat ->
-      let m, b = pattern_match env pat value in
-      (* todo: maybe add assertion that binding is empty *)
-      (not m, b)
-  | P_as (pat, id) ->
-      let matched, bindings = pattern_match env pat value in
-      (matched, Bindings.add id (Complete_binding value) bindings)
-  | P_typ (_, pat) -> pattern_match env pat value
-  | P_id id ->
-      let open Type_check in
-      begin
-        match Env.lookup_id id env with
-        | Enum _ ->
-            if is_member value && string_of_id id = coerce_member value then (true, Bindings.empty)
-            else (false, Bindings.empty)
-        | _ -> (true, Bindings.singleton id (Complete_binding value))
-      end
-  | P_vector_subrange (id, n, m) -> (true, Bindings.singleton id (Partial_binding [(value, n, m)]))
-  | P_var (pat, _) -> pattern_match env pat value
-  | P_app (id, pats) ->
-      let ctor, vals = coerce_ctor value in
-      if Id.compare id (mk_id ctor) = 0 then (
-        let matches = List.map2 (pattern_match env) pats vals in
-        (List.for_all fst matches, List.fold_left (Bindings.merge combine) Bindings.empty (List.map snd matches))
-      )
-      else (false, Bindings.empty)
-  | P_vector pats ->
-      let matches = List.map2 (pattern_match env) pats (coerce_gv value) in
-      (List.for_all fst matches, List.fold_left (Bindings.merge combine) Bindings.empty (List.map snd matches))
-  | P_vector_concat [] -> (eq_value (V_vector []) value, Bindings.empty)
-  | P_vector_concat (pat :: pats) ->
-      (* We have to use the annotation on each member of the
-         vector_concat pattern to figure out its length. Due to the
-         recursive call that has an empty_tannot we must not use the
-         annotation in the whole vector_concat pattern. *)
-      let open Type_check in
-      let vector_concat_match n =
-        let init, rest =
-          (Util.take (Big_int.to_int n) (coerce_gv value), Util.drop (Big_int.to_int n) (coerce_gv value))
-        in
-        let init_match, init_bind = pattern_match env pat (V_vector init) in
-        let rest_match, rest_bind =
-          pattern_match env (P_aux (P_vector_concat pats, (l, empty_tannot))) (V_vector rest)
-        in
-        (init_match && rest_match, Bindings.merge combine init_bind rest_bind)
-      in
-      begin
-        match destruct_vector (env_of_pat pat) (typ_of_pat pat) with
-        | Some (Nexp_aux (Nexp_constant n, _), _) -> vector_concat_match n
-        | None -> begin
-            match destruct_bitvector (env_of_pat pat) (typ_of_pat pat) with
-            | Some (Nexp_aux (Nexp_constant n, _)) -> vector_concat_match n
-            | _ ->
-                failwith
-                  ("Bad bitvector annotation for bitvector concatenation pattern "
-                  ^ string_of_typ (Type_check.typ_of_pat pat)
-                  )
-          end
-        | _ ->
-            failwith
-              ("Bad vector annotation for vector concatenation pattern " ^ string_of_typ (Type_check.typ_of_pat pat))
-      end
-  | P_tuple [pat] -> pattern_match env pat value
-  | P_tuple pats | P_list pats ->
-      let values = coerce_listlike value in
-      if List.compare_lengths pats values = 0 then (
-        let matches = List.map2 (pattern_match env) pats values in
-        (List.for_all fst matches, List.fold_left (Bindings.merge combine) Bindings.empty (List.map snd matches))
-      )
-      else (false, Bindings.empty)
-  | P_cons (hd_pat, tl_pat) -> begin
-      match coerce_cons value with
-      | Some (hd_value, tl_values) ->
-          let hd_match, hd_bind = pattern_match env hd_pat hd_value in
-          let tl_match, tl_bind = pattern_match env tl_pat (V_list tl_values) in
-          (hd_match && tl_match, Bindings.merge combine hd_bind tl_bind)
-      | None -> (false, Bindings.empty)
-    end
-  | P_struct (_, fpats, _) ->
-      List.fold_left
-        (fun (matches, binds) (field, pat) ->
-          match StringMap.find_opt (string_of_id field) (coerce_record value) with
-          | Some value ->
-              let field_match, field_binds = pattern_match env pat value in
-              (matches && field_match, Bindings.merge combine field_binds binds)
-          | None -> (false, Bindings.empty)
-        )
-        (true, Bindings.empty) fpats
-  | P_string_append _ -> assert false (* TODO *)
+let pattern_match pat value = RocqSemantics.pattern_match pat value
+
+let complete_bindings bindings = RocqSemantics.complete_bindings bindings
 
 let exp_of_fundef (FD_aux (FD_function (_, _, funcls), annot)) value =
   let pexp_of_funcl (FCL_aux (FCL_funcl (_, pexp), _)) = pexp in
   E_aux (E_match (exp_of_value value, List.map pexp_of_funcl funcls), annot)
-
-let rec defs_letbinds defs =
-  match defs with
-  | [] -> []
-  | DEF_aux (DEF_let lb, _) :: defs -> lb :: defs_letbinds defs
-  | _ :: defs -> defs_letbinds defs
 
 let initial_lstate = { locals = Bindings.empty }
 
@@ -700,11 +499,11 @@ let rec initialize_registers allow_registers undef_registers gstate =
     | DEF_aux (DEF_let (LB_aux (LB_val (pat, exp), annot)), def_annot) -> (
         try
           let evaluated = eval_exp (initial_lstate, gstate) exp in
-          let _, bindings = pattern_match def_annot.env pat evaluated in
+          let _, bindings = pattern_match pat evaluated in
           {
             gstate with
             letbinds =
-              Bindings.fold (fun id v lbs -> Bindings.add id v lbs) (complete_bindings bindings) gstate.letbinds;
+              List.fold_left (fun lbs (id, v) -> Bindings.add id v lbs) gstate.letbinds (complete_bindings bindings);
           }
         with _ -> gstate
       )
