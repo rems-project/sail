@@ -85,7 +85,7 @@ let fallthrough =
       unit_typ
   with Type_error (l, err) -> Reporting.unreachable l __POS__ (fst (string_of_type_error err))
 
-type return_value = Interpret.return_value
+type return_value = Semantics.return_value
 
 let is_interpreter_extern id env =
   let open Type_check in
@@ -115,7 +115,7 @@ let rec to_rocq_nat n =
   | 0 -> Datatypes.O
   | _ -> Datatypes.S (to_rocq_nat (Big_int.pred n))
 
-module RocqSemantics = Interpret.Semantics (struct
+module RocqSemantics = Semantics.Make (struct
   type tannot = Type_check.tannot
 
   let get_type tannot =
@@ -125,26 +125,22 @@ module RocqSemantics = Interpret.Semantics (struct
   let get_id_type tannot id =
     let env = Type_check.env_of_tannot tannot in
     match Type_check.Env.lookup_id id env with
-    | Register _ -> Interpret.Global_register
-    | Local _ | Unbound _ -> Interpret.Local_variable
-    | Enum _ -> Interpret.Enum_member
+    | Register _ -> Semantics.Global_register
+    | Local _ | Unbound _ -> Semantics.Local_variable
+    | Enum _ -> Semantics.Enum_member
 
   let get_split tannot =
     let env = Type_check.env_of_tannot tannot in
     let typ = Type_check.typ_of_tannot tannot in
     match Type_check.destruct_vector env typ with
-    | Some (Nexp_aux (Nexp_constant n, _), _) -> Interpret.Split (to_rocq_nat n)
+    | Some (Nexp_aux (Nexp_constant n, _), _) -> Semantics.Split (to_rocq_nat n)
     | _ -> (
         match Type_check.destruct_bitvector env typ with
-        | Some (Nexp_aux (Nexp_constant n, _)) -> Interpret.Split (to_rocq_nat n)
-        | _ -> Interpret.No_split
+        | Some (Nexp_aux (Nexp_constant n, _)) -> Semantics.Split (to_rocq_nat n)
+        | _ -> Semantics.No_split
       )
 
-  let id_equal x y = Id.compare x y = 0
-
   let num_equal x y = Big_int.compare x y = 0
-
-  let string_equal x y = String.compare x y = 0
 
   let rational_equal x y = Rational.equal x y
 
@@ -175,7 +171,7 @@ module RocqSemantics = Interpret.Semantics (struct
   let is_or_bool id = String.equal (string_of_id id) "or_bool"
 end)
 
-module Monad = Interpret.Monad
+module Monad = Semantics.Monad
 
 let step env exp = RocqSemantics.step exp
 
@@ -199,24 +195,24 @@ type frame =
       string Lazy.t
       * state
       * Type_check.tannot exp Monad.t
-      * (string Lazy.t * lstate * (Interpret.return_value -> Type_check.tannot exp Monad.t)) list
+      * (string Lazy.t * lstate * (Semantics.return_value -> Type_check.tannot exp Monad.t)) list
   | Break of frame
   | Effect_request of
       string Lazy.t
       * state
-      * (string Lazy.t * lstate * (Interpret.return_value -> Type_check.tannot exp Monad.t)) list
+      * (string Lazy.t * lstate * (Semantics.return_value -> Type_check.tannot exp Monad.t)) list
       * effect_request
   | Fail of
       string Lazy.t
       * state
       * Type_check.tannot exp Monad.t
-      * (string Lazy.t * lstate * (Interpret.return_value -> Type_check.tannot exp Monad.t)) list
+      * (string Lazy.t * lstate * (Semantics.return_value -> Type_check.tannot exp Monad.t)) list
       * string
 
 and effect_request =
   | Read_reg of string * (value -> state -> frame)
   | Write_reg of string * value * (unit -> state -> frame)
-  | Outcome of id * value list * (Interpret.return_value -> Type_check.tannot exp Monad.t)
+  | Outcome of id * value list * (Semantics.return_value -> Type_check.tannot exp Monad.t)
 
 let read_variable id lstate gstate =
   match Bindings.find_opt id lstate.locals with
@@ -253,7 +249,7 @@ let rec eval_frame' = function
           let env = gstate.typecheck_env in
           if Type_check.Env.is_outcome id env then Effect_request (out, state, stack, Outcome (id, args, cont))
           else if Type_check.Env.is_union_constructor id env then
-            Step (lazy "", state, cont (Interpret.Return_ok (V_ctor (string_of_id id, args))), stack)
+            Step (lazy "", state, cont (Semantics.Return_ok (V_ctor (string_of_id id, args))), stack)
           else if is_interpreter_extern id env then (
             let extern = get_interpreter_extern id env in
             if extern = "reg_deref" then (
@@ -263,7 +259,7 @@ let rec eval_frame' = function
                   state,
                   stack,
                   Read_reg
-                    (regname, fun v state' -> eval_frame' (Step (out, state', cont (Interpret.Return_ok v), stack)))
+                    (regname, fun v state' -> eval_frame' (Step (out, state', cont (Semantics.Return_ok v), stack)))
                 )
             )
             else (
@@ -275,7 +271,7 @@ let rec eval_frame' = function
                     try Ok (op args)
                     with exn -> Error ("Exception calling primop '" ^ extern ^ "': " ^ Printexc.to_string exn)
                   with
-                  | Ok v -> Step (lazy "", state, cont (Interpret.Return_ok v), stack)
+                  | Ok v -> Step (lazy "", state, cont (Semantics.Return_ok v), stack)
                   | Error msg -> Fail (out, state, m, stack, msg)
                 )
               | None -> Fail (out, state, m, stack, "No such primop: " ^ string_of_id id)

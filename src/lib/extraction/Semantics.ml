@@ -9,6 +9,22 @@ open Specif
 open Value_type
 open Wf
 
+(** val id_eqb : id -> id -> bool **)
+
+let id_eqb id1 id2 =
+  let Id_aux (i1, _) = id1 in
+  (match i1 with
+   | Id s1 ->
+     let Id_aux (i2, _) = id2 in
+     (match i2 with
+      | Id s2 -> String.equal s1 s2
+      | Operator _ -> false)
+   | Operator s1 ->
+     let Id_aux (i2, _) = id2 in
+     (match i2 with
+      | Id _ -> false
+      | Operator s2 -> String.equal s1 s2))
+
 module IdMiniOrdered =
  struct
   type t = id
@@ -323,7 +339,7 @@ type vector_concat_split =
 | No_split
 | Split of nat
 
-module type TANNOT =
+module type SemanticExt =
  sig
   type tannot
 
@@ -333,11 +349,7 @@ module type TANNOT =
 
   val get_split : tannot -> vector_concat_split
 
-  val id_equal : id -> id -> bool
-
   val num_equal : Nat_big_num.num -> Nat_big_num.num -> bool
-
-  val string_equal : string -> string -> bool
 
   val rational_equal : Rational.t -> Rational.t -> bool
 
@@ -369,8 +381,8 @@ module type TANNOT =
   val is_or_bool : id -> bool
  end
 
-module Semantics =
- functor (T:TANNOT) ->
+module Make =
+ functor (T:SemanticExt) ->
  struct
   (** val binds_id : id -> 'a1 pat -> bool **)
 
@@ -378,14 +390,14 @@ module Semantics =
   | P_aux (aux, _) ->
     (match aux with
      | P_or (p1, p2) -> (||) (binds_id n p1) (binds_id n p2)
-     | P_as (pat0, m) -> (||) (binds_id n pat0) (T.id_equal n m)
+     | P_as (pat0, m) -> (||) (binds_id n pat0) (id_eqb n m)
      | P_typ (_, p0) -> binds_id n p0
-     | P_id m -> T.id_equal n m
+     | P_id m -> id_eqb n m
      | P_var (p0, _) -> binds_id n p0
      | P_app (_, ps) -> fold_left (||) (map (binds_id n) ps) false
      | P_vector ps -> fold_left (||) (map (binds_id n) ps) false
      | P_vector_concat ps -> fold_left (||) (map (binds_id n) ps) false
-     | P_vector_subrange (m, _, _) -> T.id_equal n m
+     | P_vector_subrange (m, _, _) -> id_eqb n m
      | P_tuple ps -> fold_left (||) (map (binds_id n) ps) false
      | P_list ps -> fold_left (||) (map (binds_id n) ps) false
      | P_cons (p1, p2) -> (||) (binds_id n p1) (binds_id n p2)
@@ -401,7 +413,7 @@ module Semantics =
     (match aux with
      | E_block xs -> E_aux ((E_block (map (substitute n v) xs)), annot0)
      | E_id m ->
-       if T.id_equal n m
+       if id_eqb n m
        then E_aux ((E_internal_value v), annot0)
        else E_aux ((E_id m), annot0)
      | E_typ (typ0, x0) -> E_aux ((E_typ (typ0, (substitute n v x0))), annot0)
@@ -418,7 +430,7 @@ module Semantics =
        E_aux ((E_loop (loop_kind, measure, (substitute n v cond),
          (substitute n v body))), annot0)
      | E_for (loop_var, from, to0, amount, ord, body) ->
-       if T.id_equal n loop_var
+       if id_eqb n loop_var
        then E_aux ((E_for (loop_var, (substitute n v from),
               (substitute n v to0), (substitute n v amount), ord, body)),
               annot0)
@@ -576,7 +588,7 @@ module Semantics =
         | _ -> false)
      | L_string s1 ->
        (match v with
-        | V_string s2 -> T.string_equal s1 s2
+        | V_string s2 -> String.equal s1 s2
         | _ -> false)
      | L_undef -> false
      | L_real r1 ->
@@ -590,7 +602,7 @@ module Semantics =
   | [] -> V_unit
   | p :: rest_fields ->
     let (name', v) = p in
-    if T.string_equal name name' then v else get_struct_field name rest_fields
+    if String.equal name name' then v else get_struct_field name rest_fields
 
   (** val no_match : bool * binding IdMap.t **)
 
@@ -777,7 +789,7 @@ module Semantics =
   | [] -> Monad.Runtime_type_error l
   | p :: fields0 ->
     let (name', v) = p in
-    if T.string_equal name name'
+    if String.equal name name'
     then Monad.pure v
     else lookup_field l name fields0
 
@@ -880,7 +892,7 @@ module Semantics =
   | [] -> []
   | p :: rest ->
     let (name', old_v) = p in
-    if T.string_equal name name'
+    if String.equal name name'
     then (name, v) :: rest
     else (name', old_v) :: (update_field name v rest)
 

@@ -16,6 +16,13 @@ Require Import AstInduction.
 
 Import ListNotations.
 
+Definition id_eqb (id1 : id) (id2 : id) : bool :=
+  match (id1, id2) with
+  | (Id_aux (Id s1) _, Id_aux (Id s2) _) => eq_string s1 s2
+  | (Id_aux (Operator s1) _, Id_aux (Operator s2) _) => eq_string s1 s2
+  | _ => false
+  end.
+
 Module IdMiniOrdered <: OrderedType.MiniOrderedType.
   Definition t := Ast.id.
 
@@ -507,9 +514,9 @@ Inductive vector_concat_split :=
 
 (** Sail annotates terms with custom type annotation data, which we
     don't have access to here. Instead use a functor parameterised by
-    the following TANNOT signature, which can provide the methods we
+    the following SemanticExt signature, which can provide the methods we
     need. *)
-Module Type TANNOT.
+Module Type SemanticExt.
   Parameter tannot : Set.
 
   Parameter get_type : tannot -> typ.
@@ -518,11 +525,7 @@ Module Type TANNOT.
 
   Parameter get_split : tannot -> vector_concat_split.
 
-  Parameter id_equal : id -> id -> bool.
-
   Parameter num_equal : num -> num -> bool.
-
-  Parameter string_equal : string -> string -> bool.
 
   Parameter rational_equal : rational -> rational -> bool.
 
@@ -551,28 +554,28 @@ Module Type TANNOT.
   Parameter is_and_bool : id -> bool.
 
   Parameter is_or_bool : id -> bool.
-End TANNOT.
+End SemanticExt.
 
-Module Semantics (T : TANNOT).
+Module Make (T : SemanticExt).
   Fixpoint binds_id {A} (n : Ast.id) (p : Ast.pat A) : bool :=
     let 'P_aux aux annot := p in
     match aux with
     | P_lit _ | P_wild | P_not _ => false
-    | P_id m => T.id_equal n m
+    | P_id m => id_eqb n m
     | P_typ _ p | P_var p _ => binds_id n p
-    | P_as pat m => binds_id n pat || T.id_equal n m
+    | P_as pat m => binds_id n pat || id_eqb n m
     | P_tuple ps | P_list ps | P_vector ps | P_app _ ps | P_vector_concat ps | P_string_append ps =>
         fold_left orb (map (binds_id n) ps) false
     | P_or p1 p2 | P_cons p1 p2 => binds_id n p1 || binds_id n p2
     | P_struct _ ps _ => fold_left orb (map (fun fp => binds_id n (snd fp)) ps) false
-    | P_vector_subrange m _ _ => T.id_equal n m
+    | P_vector_subrange m _ _ => id_eqb n m
     end.
 
   Fixpoint substitute {A} (n : Ast.id) (v : Value_type.value) (x : exp A) : exp A :=
     let 'E_aux aux annot := x in
     match aux with
     | E_id m =>
-        if T.id_equal n m then E_aux (E_internal_value v) annot else E_aux (E_id m) annot
+        if id_eqb n m then E_aux (E_internal_value v) annot else E_aux (E_id m) annot
     | E_block xs => E_aux (E_block (map (substitute n v) xs)) annot
     | E_app_infix x f y => E_aux (E_app_infix (substitute n v x) f (substitute n v y)) annot
     | E_app f args => E_aux (E_app f (map (substitute n v) args)) annot
@@ -606,7 +609,7 @@ Module Semantics (T : TANNOT).
         E_aux (E_field (substitute n v x) f) annot
     | E_loop loop_kind measure cond body => E_aux (E_loop loop_kind measure (substitute n v cond) (substitute n v body)) annot
     | E_for loop_var from to amount ord body =>
-        if T.id_equal n loop_var then
+        if id_eqb n loop_var then
           E_aux (E_for loop_var (substitute n v from) (substitute n v to) (substitute n v amount) ord body) annot
         else
           E_aux (E_for loop_var (substitute n v from) (substitute n v to) (substitute n v amount) ord (substitute n v body)) annot
@@ -725,7 +728,7 @@ Module Semantics (T : TANNOT).
     | (L_num n, V_int m) => T.num_equal n m
     | (L_hex s, V_vector vs) => same_bits (T.bits_of_hex_string s) vs
     | (L_bin s, V_vector vs) => same_bits (T.bits_of_bin_string s) vs
-    | (L_string s1, V_string s2) => T.string_equal s1 s2
+    | (L_string s1, V_string s2) => eq_string s1 s2
     | (L_real r1, V_real r2) => T.rational_equal (T.rational_of_string r1) r2
     | _ => false
     end.
@@ -733,7 +736,7 @@ Module Semantics (T : TANNOT).
   Fixpoint get_struct_field (name : string) (fields : list (string * value)) {struct fields} : value :=
     match fields with
     | (name', v) :: rest_fields =>
-        if T.string_equal name name' then
+        if eq_string name name' then
           v
         else
           get_struct_field name rest_fields
@@ -931,7 +934,7 @@ Module Semantics (T : TANNOT).
       match fields with
       | [] => Runtime_type_error l
       | (name', v) :: fields =>
-          if T.string_equal name name' then
+          if eq_string name name' then
             pure v
           else
             lookup_field l name fields
@@ -1193,7 +1196,7 @@ Module Semantics (T : TANNOT).
   Fixpoint update_field (name : string) (v : value) (fields : list (string * value)) : list (string * value) :=
     match fields with
     | (name', old_v) :: rest =>
-        if T.string_equal name name' then
+        if eq_string name name' then
           (name, v) :: rest
         else
           (name', old_v) :: update_field name v rest
@@ -1658,8 +1661,8 @@ Module Semantics (T : TANNOT).
     apply fold_right_max_acc.
     lia.
   Defined.
-End Semantics.
+End Make.
 
 Extraction Blacklist List.
 
-Separate Extraction l attribute_data def impldef opt_default Semantics IdMap.
+Separate Extraction l attribute_data def impldef opt_default Make IdMap.

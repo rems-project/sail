@@ -64,7 +64,7 @@ type lstate = { locals : value Bindings.t }
 
 type state = lstate * gstate
 
-type return_value = Interpret.return_value
+type return_value = Semantics.return_value
 
 module Monad : sig
   type 'a t

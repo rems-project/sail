@@ -9,6 +9,8 @@ open Specif
 open Value_type
 open Wf
 
+val id_eqb : id -> id -> bool
+
 module IdMiniOrdered :
  sig
   type t = id
@@ -235,7 +237,7 @@ type vector_concat_split =
 | No_split
 | Split of nat
 
-module type TANNOT =
+module type SemanticExt =
  sig
   type tannot
 
@@ -245,11 +247,7 @@ module type TANNOT =
 
   val get_split : tannot -> vector_concat_split
 
-  val id_equal : id -> id -> bool
-
   val num_equal : Nat_big_num.num -> Nat_big_num.num -> bool
-
-  val string_equal : string -> string -> bool
 
   val rational_equal : Rational.t -> Rational.t -> bool
 
@@ -281,8 +279,8 @@ module type TANNOT =
   val is_or_bool : id -> bool
  end
 
-module Semantics :
- functor (T:TANNOT) ->
+module Make :
+ functor (T:SemanticExt) ->
  sig
   val binds_id : id -> 'a1 pat -> bool
 
