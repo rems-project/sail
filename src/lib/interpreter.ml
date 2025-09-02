@@ -85,92 +85,7 @@ let fallthrough =
       unit_typ
   with Type_error (l, err) -> Reporting.unreachable l __POS__ (fst (string_of_type_error err))
 
-(**************************************************************************)
-(* 1. Interpreter Monad                                                   *)
-(**************************************************************************)
-
-type return_value = Return_ok of value | Return_exception of value
-
-module Monad = struct
-  (* when changing effect arms remember to also update effect_request type below *)
-  type 'a response =
-    | Early_return of value
-    | Exception of value
-    | Assertion_failed of string
-    | Call of id * value list * (return_value -> 'a)
-    | Fail of string
-    | Read_reg of string * (value -> 'a)
-    | Write_reg of string * value * (unit -> 'a)
-    | Get_primop of string * ((value list -> value) -> 'a)
-    | Get_local of string * (value -> 'a)
-    | Put_local of string * value * (unit -> 'a)
-
-  and 'a t = Pure of 'a | Yield of 'a t response
-
-  let map_response f = function
-    | Early_return v -> Early_return v
-    | Exception v -> Exception v
-    | Assertion_failed str -> Assertion_failed str
-    | Call (id, vals, cont) -> Call (id, vals, fun v -> f (cont v))
-    | Fail s -> Fail s
-    | Read_reg (name, cont) -> Read_reg (name, fun v -> f (cont v))
-    | Write_reg (name, v, cont) -> Write_reg (name, v, fun () -> f (cont ()))
-    | Get_primop (name, cont) -> Get_primop (name, fun op -> f (cont op))
-    | Get_local (name, cont) -> Get_local (name, fun v -> f (cont v))
-    | Put_local (name, v, cont) -> Put_local (name, v, fun () -> f (cont ()))
-
-  let rec liftM f = function Pure x -> Pure (f x) | Yield g -> Yield (map_response (liftM f) g)
-
-  let ( let+ ) = liftM
-
-  let return x = Pure x
-
-  let rec bind m f = match m with Pure x -> f x | Yield m -> Yield (map_response (fun m -> bind m f) m)
-
-  let ( >>= ) m f = bind m f
-
-  let ( let* ) = bind
-
-  let ( >> ) m1 m2 = bind m1 (function () -> m2)
-
-  (* Support for interpreting exceptions *)
-
-  let catch m =
-    match m with
-    | Pure x -> Pure (Ok x)
-    | Yield (Exception v) -> Pure (Error v)
-    | Yield resp -> Yield (map_response (fun m -> liftM (fun r -> Ok r) m) resp)
-
-  let throw v = Yield (Exception v)
-
-  let call f args = Yield (Call (f, args, fun v -> Pure v))
-
-  let read_reg name = Yield (Read_reg (name, fun v -> Pure v))
-
-  let write_reg name v = Yield (Write_reg (name, v, fun () -> Pure ()))
-
-  let fail s = Yield (Fail s)
-
-  let get_primop name = Yield (Get_primop (name, fun op -> Pure op))
-
-  let get_local name = Yield (Get_local (name, fun v -> Pure v))
-
-  let put_local name v = Yield (Put_local (name, v, fun () -> Pure ()))
-
-  let early_return v = Yield (Early_return v)
-
-  let assertion_failed msg = Yield (Assertion_failed msg)
-
-  let expect_ok ~error = function Ok v -> Pure v | Error e -> Yield (Fail (error e))
-
-  let expect_some ~none = function Some v -> Pure v | None -> Yield (Fail none)
-end
-
-open Monad
-
-(**************************************************************************)
-(* 2. Expression Evaluation                                               *)
-(**************************************************************************)
+type return_value = Interpret.return_value
 
 let is_interpreter_extern id env =
   let open Type_check in
@@ -260,68 +175,9 @@ module RocqSemantics = Interpret.Semantics (struct
   let is_or_bool id = String.equal (string_of_id id) "or_bool"
 end)
 
-let rec adapt env = function
-  | Interpret.Monad.Pure exp -> Pure exp
-  | Interpret.Monad.Early_return v -> Yield (Early_return v)
-  | Interpret.Monad.Exception v -> Yield (Exception v)
-  | Interpret.Monad.Match_failure l -> fail "Pattern match failure"
-  | Interpret.Monad.Assertion_failed s -> Yield (Assertion_failed s)
-  | Interpret.Monad.Read_var (place, cont) -> read_var env place cont
-  | Interpret.Monad.Write_var (place, value, cont) -> write_var env place value cont
-  | Interpret.Monad.Call (id, args, cont) ->
-      if Type_check.Env.is_union_constructor id env then
-        adapt env (cont (Interpret.Return_ok (V_ctor (string_of_id id, args))))
-      else if is_interpreter_extern id env then (
-        let extern = get_interpreter_extern id env in
-        if extern = "reg_deref" then (
-          let regname = coerce_ref (List.hd args) in
-          let* v = read_reg regname in
-          adapt env (cont (Interpret.Return_ok v))
-        )
-        else
-          get_primop extern >>= fun op ->
-          try adapt env (cont (Interpret.Return_ok (op args)))
-          with _ as exc -> fail ("Exception calling primop '" ^ extern ^ "': " ^ Printexc.to_string exc)
-      )
-      else
-        Yield
-          (Call
-             ( id,
-               args,
-               function
-               | Return_ok v -> adapt env (cont (Interpret.Return_ok v))
-               | Return_exception v -> adapt env (cont (Interpret.Return_exception v))
-             )
-          )
-  | Interpret.Monad.Get_undefined (typ, cont) ->
-      let undef_exp = Ast_util.undefined_of_typ false Parse_ast.Unknown (fun _ -> empty_uannot) typ in
-      let undef_exp = Type_check.check_exp env undef_exp typ in
-      return undef_exp
-  | Interpret.Monad.Runtime_type_error l -> fail "Runtime type error in interpreter"
+module Monad = Interpret.Monad
 
-and read_var env place cont =
-  let open Interpret in
-  match place with
-  | PL_id (name, var_type) -> (
-      match var_type with
-      | Var_register -> Yield (Read_reg (string_of_id name, fun v -> adapt env (cont v)))
-      | Var_local -> Yield (Get_local (string_of_id name, fun v -> adapt env (cont v)))
-    )
-  | PL_register name -> Yield (Read_reg (name, fun v -> adapt env (cont v)))
-  | _ -> failwith "Unsupported read"
-
-and write_var env place value cont =
-  let open Interpret in
-  match place with
-  | PL_id (name, var_type) -> (
-      match var_type with
-      | Var_register -> Yield (Write_reg (string_of_id name, value, fun () -> adapt env (cont ())))
-      | Var_local -> Yield (Put_local (string_of_id name, value, fun () -> adapt env (cont ())))
-    )
-  | PL_register name -> Yield (Write_reg (name, value, fun () -> adapt env (cont ())))
-  | _ -> failwith "Unsupported write"
-
-let step env exp = adapt env (RocqSemantics.step exp)
+let step env exp = RocqSemantics.step exp
 
 let pattern_match pat value = RocqSemantics.pattern_match pat value
 
@@ -343,24 +199,24 @@ type frame =
       string Lazy.t
       * state
       * Type_check.tannot exp Monad.t
-      * (string Lazy.t * lstate * (return_value -> Type_check.tannot exp Monad.t)) list
+      * (string Lazy.t * lstate * (Interpret.return_value -> Type_check.tannot exp Monad.t)) list
   | Break of frame
   | Effect_request of
       string Lazy.t
       * state
-      * (string Lazy.t * lstate * (return_value -> Type_check.tannot exp Monad.t)) list
+      * (string Lazy.t * lstate * (Interpret.return_value -> Type_check.tannot exp Monad.t)) list
       * effect_request
   | Fail of
       string Lazy.t
       * state
       * Type_check.tannot exp Monad.t
-      * (string Lazy.t * lstate * (return_value -> Type_check.tannot exp Monad.t)) list
+      * (string Lazy.t * lstate * (Interpret.return_value -> Type_check.tannot exp Monad.t)) list
       * string
 
 and effect_request =
   | Read_reg of string * (value -> state -> frame)
   | Write_reg of string * value * (unit -> state -> frame)
-  | Outcome of id * value list * (return_value -> Type_check.tannot exp Monad.t)
+  | Outcome of id * value list * (Interpret.return_value -> Type_check.tannot exp Monad.t)
 
 let read_variable id lstate gstate =
   match Bindings.find_opt id lstate.locals with
@@ -383,50 +239,105 @@ let rec eval_frame' = function
       | Pure exp', _ ->
           let out' = lazy (Document.to_string (Printer.doc_exp (Type_check.strip_exp exp'))) in
           Step (out', state, step gstate.typecheck_env exp', stack)
-      | Yield (Call (id, vals, cont)), _ when string_of_id id = "break" -> begin
-          let arg = if List.length vals != 1 then tuple_value vals else List.hd vals in
-          try
-            let body = exp_of_fundef (Bindings.find id gstate.fundefs) arg in
-            Break (Step (lazy (string_of_exp body), (initial_lstate, gstate), return body, (out, lstate, cont) :: stack))
-          with Not_found -> Step (out, state, fail ("Fundef not found: " ^ string_of_id id), stack)
-        end
-      | Yield (Call (id, vals, cont)), _ when Type_check.Env.is_outcome id gstate.typecheck_env -> begin
-          Effect_request (out, state, stack, Outcome (id, vals, cont))
-        end
-      | Yield (Call (id, vals, cont)), _ -> begin
-          let arg = if List.length vals != 1 then tuple_value vals else List.hd vals in
-          try
-            let body = exp_of_fundef (Bindings.find id gstate.fundefs) arg in
-            Step (lazy (string_of_exp body), (initial_lstate, gstate), return body, (out, lstate, cont) :: stack)
-          with Not_found -> Step (out, state, fail ("Fundef not found: " ^ string_of_id id), stack)
-        end
-      | Yield (Read_reg (name, cont)), _ ->
-          Effect_request
-            (out, state, stack, Read_reg (name, fun v state' -> eval_frame' (Step (out, state', cont v, stack))))
-      | Yield (Write_reg (name, v, cont)), _ ->
-          Effect_request
-            (out, state, stack, Write_reg (name, v, fun () state' -> eval_frame' (Step (out, state', cont (), stack))))
-      | Yield (Get_primop (name, cont)), _ -> begin
-          try
-            (* If we are in the toplevel interactive interpreter allow the set of primops to be changed dynamically *)
-            let op = StringMap.find name (if !Interactive.opt_interactive then !Value.primops else gstate.primops) in
-            eval_frame' (Step (out, state, cont op, stack))
-          with Not_found -> eval_frame' (Step (out, state, fail ("No such primop: " ^ name), stack))
-        end
-      | Yield (Get_local (name, cont)), _ -> begin
-          try eval_frame' (Step (out, state, cont (read_variable (mk_id name) lstate gstate), stack))
-          with Not_found -> eval_frame' (Step (out, state, fail ("Local not found: " ^ name), stack))
-        end
-      | Yield (Put_local (name, v, cont)), _ ->
-          let state' = ({ locals = Bindings.add (mk_id name) v lstate.locals }, gstate) in
-          eval_frame' (Step (out, state', cont (), stack))
-      | Yield (Early_return v), [] -> Done (state, v)
-      | Yield (Early_return v), head :: stack' ->
+      | Early_return v, [] -> Done (state, v)
+      | Early_return v, head :: stack' ->
           Step (stack_string head, (stack_state head, gstate), stack_cont head (Return_ok v), stack')
-      | Yield (Assertion_failed msg), _ | Yield (Fail msg), _ -> Fail (out, state, m, stack, msg)
-      | Yield (Exception v), [] -> Fail (out, state, m, stack, "Uncaught exception: " ^ string_of_value v)
-      | Yield (Exception v), head :: stack' ->
+      | Exception v, [] -> Fail (out, state, m, stack, "Uncaught exception: " ^ string_of_value v)
+      | Exception v, head :: stack' ->
           Step (stack_string head, (stack_state head, gstate), stack_cont head (Return_exception v), stack')
+      | Match_failure l, _ -> Fail (out, state, m, stack, "Pattern match failure at " ^ Reporting.short_loc_to_string l)
+      | Runtime_type_error l, _ ->
+          Fail (out, state, m, stack, "Runtime type error at " ^ Reporting.short_loc_to_string l)
+      | Assertion_failed s, _ -> Fail (out, state, m, stack, "Assertion failed: " ^ s)
+      | Call (id, args, cont), _ ->
+          let env = gstate.typecheck_env in
+          if Type_check.Env.is_outcome id env then Effect_request (out, state, stack, Outcome (id, args, cont))
+          else if Type_check.Env.is_union_constructor id env then
+            Step (lazy "", state, cont (Interpret.Return_ok (V_ctor (string_of_id id, args))), stack)
+          else if is_interpreter_extern id env then (
+            let extern = get_interpreter_extern id env in
+            if extern = "reg_deref" then (
+              let regname = coerce_ref (List.hd args) in
+              Effect_request
+                ( out,
+                  state,
+                  stack,
+                  Read_reg
+                    (regname, fun v state' -> eval_frame' (Step (out, state', cont (Interpret.Return_ok v), stack)))
+                )
+            )
+            else (
+              match
+                StringMap.find_opt extern (if !Interactive.opt_interactive then !Value.primops else gstate.primops)
+              with
+              | Some op -> (
+                  match
+                    try Ok (op args)
+                    with exn -> Error ("Exception calling primop '" ^ extern ^ "': " ^ Printexc.to_string exn)
+                  with
+                  | Ok v -> Step (lazy "", state, cont (Interpret.Return_ok v), stack)
+                  | Error msg -> Fail (out, state, m, stack, msg)
+                )
+              | None -> Fail (out, state, m, stack, "No such primop: " ^ string_of_id id)
+            )
+          )
+          else (
+            let arg = if List.length args != 1 then tuple_value args else List.hd args in
+            try
+              let body = exp_of_fundef (Bindings.find id gstate.fundefs) arg in
+              Step (lazy (string_of_exp body), (initial_lstate, gstate), Monad.pure body, (out, lstate, cont) :: stack)
+            with Not_found -> Fail (out, state, m, stack, "Fundef not found: " ^ string_of_id id)
+          )
+      | Read_var (place, cont), _ -> (
+          match place with
+          | PL_id (name, var_type) -> (
+              match var_type with
+              | Var_register ->
+                  Effect_request
+                    ( out,
+                      state,
+                      stack,
+                      Read_reg (string_of_id name, fun v state' -> eval_frame' (Step (out, state', cont v, stack)))
+                    )
+              | Var_local -> (
+                  try eval_frame' (Step (out, state, cont (read_variable name lstate gstate), stack))
+                  with Not_found -> Fail (out, state, m, stack, "Local not found: " ^ string_of_id name)
+                )
+            )
+          | PL_register name ->
+              Effect_request
+                (out, state, stack, Read_reg (name, fun v state' -> eval_frame' (Step (out, state', cont v, stack))))
+          | _ -> Fail (out, state, m, stack, "Unsupported read")
+        )
+      | Write_var (place, value, cont), _ -> (
+          match place with
+          | PL_id (name, var_type) -> (
+              match var_type with
+              | Var_register ->
+                  Effect_request
+                    ( out,
+                      state,
+                      stack,
+                      Write_reg
+                        (string_of_id name, value, fun () state' -> eval_frame' (Step (out, state', cont (), stack)))
+                    )
+              | Var_local ->
+                  let state' = ({ locals = Bindings.add name value lstate.locals }, gstate) in
+                  eval_frame' (Step (out, state', cont (), stack))
+            )
+          | PL_register name ->
+              Effect_request
+                ( out,
+                  state,
+                  stack,
+                  Write_reg (name, value, fun () state' -> eval_frame' (Step (out, state', cont (), stack)))
+                )
+          | _ -> Fail (out, state, m, stack, "Unsupported write")
+        )
+      | Get_undefined (typ, cont), _ ->
+          let undef_exp = Ast_util.undefined_of_typ false Parse_ast.Unknown (fun _ -> empty_uannot) typ in
+          let undef_exp = Type_check.check_exp gstate.typecheck_env undef_exp typ in
+          Step (lazy "", state, Monad.pure undef_exp, stack)
     )
 
 let eval_frame frame =
@@ -455,7 +366,7 @@ let default_effect_interp out state stack eff =
       match Bindings.find_opt id gstate.fundefs with
       | Some fundef ->
           let body = exp_of_fundef fundef arg in
-          Step (lazy "", (initial_lstate, gstate), return body, (out, lstate, cont) :: stack)
+          Step (lazy "", (initial_lstate, gstate), Monad.pure body, (out, lstate, cont) :: stack)
       | None -> failwith ("Outcome implementation not found: " ^ string_of_id id)
     )
 
@@ -469,7 +380,7 @@ let rec run_frame frame =
   | Break frame -> run_frame (eval_frame frame)
   | Effect_request (out, state, stack, eff) -> run_frame (!effect_interp out state stack eff)
 
-let eval_exp state exp = run_frame (Step (lazy "", state, return exp, []))
+let eval_exp state exp = run_frame (Step (lazy "", state, Monad.pure exp, []))
 
 let initial_gstate primops defs env =
   {

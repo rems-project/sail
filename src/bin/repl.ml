@@ -681,7 +681,7 @@ let handle_input' istate input =
           let exp = Type_check.infer_exp istate.env (Initial_check.exp_of_string ~inline:pos str) in
           let istate = setup_interpreter_state istate in
           let istate =
-            { istate with mode = Evaluation (eval_frame (Step (lazy "", istate.state, Monad.return exp, []))) }
+            { istate with mode = Evaluation (eval_frame (Step (lazy "", istate.state, Monad.pure exp, []))) }
           in
           print_program istate;
           istate

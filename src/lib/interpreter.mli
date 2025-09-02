@@ -64,24 +64,12 @@ type lstate = { locals : value Bindings.t }
 
 type state = lstate * gstate
 
-type return_value = Return_ok of value | Return_exception of value
+type return_value = Interpret.return_value
 
 module Monad : sig
   type 'a t
 
-  val return : 'a -> 'a t
-
-  val ( let+ ) : ('a -> 'b) -> 'a t -> 'b t
-
-  val ( >>= ) : 'a t -> ('a -> 'b t) -> 'b t
-  val ( let* ) : 'a t -> ('a -> 'b t) -> 'b t
-
-  val ( >> ) : unit t -> 'a t -> 'a t
-
-  val catch : 'a t -> ('a, value) Result.t t
-  val throw : value -> 'a t
-
-  val call : id -> value list -> return_value t
+  val pure : 'a -> 'a t
 end
 
 type frame =

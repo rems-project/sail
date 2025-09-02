@@ -1235,7 +1235,7 @@ module Counterexample (Config : COUNTEREXAMPLE_CONFIG) = struct
                 annot
               )
           in
-          let result = run (Step (lazy "", istate, Monad.return call, [])) in
+          let result = run (Step (lazy "", istate, Monad.pure call, [])) in
           begin
             match result with
             | Result.Ok (V_bool false) | Result.Ok V_unit ->
