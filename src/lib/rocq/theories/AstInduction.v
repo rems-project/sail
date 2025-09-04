@@ -101,6 +101,14 @@ Proof.
   - cbn. rewrite IHxs. reflexivity.
 Qed.
 
+Lemma take_drop_app : forall (A : Set) (xs ys : list A),
+    take_drop (length xs) (xs ++ ys) = (xs, ys).
+Proof.
+  induction xs.
+  - reflexivity.
+  - cbn. intros. rewrite IHxs. reflexivity.
+Qed.
+
 Fixpoint update_lexp_subexps {A : Set} (xs : list (exp A)) (l : lexp A) : lexp A * list (exp A) :=
   let 'LE_aux aux annot := l in
   match aux with
@@ -156,6 +164,179 @@ Fixpoint update_lexp_subexps {A : Set} (xs : list (exp A)) (l : lexp A) : lexp A
           (l, [])
       end
   end.
+
+Lemma fst_let_fx : forall A B C (P : A * B) (f : A -> C), fst (let '(x, y) := P in (f x, y)) = f (fst P).
+Proof.
+  intros.
+  destruct P.
+  reflexivity.
+Qed.
+
+Lemma snd_let_fx : forall A B C (P : A * B) (f : A -> C), snd (let '(x, y) := P in (f x, y)) = snd P.
+Proof.
+  intros.
+  destruct P.
+  reflexivity.
+Qed.
+
+Lemma foldl_acc_h1 : forall A B C (xs : list A) (y : B) (ys : list B) (zs : list C) (f : list C -> A -> B * list C),
+  y ::
+  fst
+    (fold_left
+       (fun (acc : list B * list C) (x0 : A) =>
+        let
+        '(ys0, zs0) := acc in let '(y0, zs1) := f zs0 x0 in (ys0 ++ [y0], zs1))
+       xs (ys, zs)) =
+  fst
+    (fold_left
+       (fun (acc : list B * list C) (x0 : A) =>
+        let
+        '(ys0, zs0) := acc in let '(y0, zs1) := f zs0 x0 in (ys0 ++ [y0], zs1))
+       xs (y :: ys, zs)).
+Proof.
+  induction xs.
+  - reflexivity.
+  - intros.
+    cbn.
+    destruct (f zs a).
+    rewrite IHxs.
+    reflexivity.
+Qed.
+
+Lemma foldl_acc_h2 : forall A B C (xs : list A) (ys1 ys2 : list B) (zs : list C) (f : list C -> A -> B * list C),
+  snd
+    (fold_left
+       (fun (acc : list B * list C) (x0 : A) =>
+        let
+        '(ys0, zs0) := acc in let '(y0, zs1) := f zs0 x0 in (ys0 ++ [y0], zs1))
+       xs (ys1, zs)) =
+  snd
+    (fold_left
+       (fun (acc : list B * list C) (x0 : A) =>
+        let
+        '(ys0, zs0) := acc in let '(y0, zs1) := f zs0 x0 in (ys0 ++ [y0], zs1))
+       xs (ys2, zs)).
+Proof.
+  induction xs.
+  - reflexivity.
+  - intros.
+    cbn.
+    destruct (f zs a).
+    rewrite (IHxs (ys1 ++ [b]) (ys2 ++ [b])).
+    reflexivity.
+Qed.
+
+Lemma foldl_acc : forall A B C (xs : list A) (ys : list B) (zs : list C) (f : list C -> A -> B * list C),
+  fold_left
+    (fun acc x =>
+       let '(ys, zs) := acc in
+       let '(y, zs) := f zs x in
+       (ys ++ [y], zs))
+    xs
+    (ys, zs)
+  =
+  let '(a, b) := fold_left
+    (fun acc x =>
+       let '(ys, zs) := acc in
+       let '(y, zs) := f zs x in
+       (ys ++ [y], zs))
+    xs
+    ([], zs)
+  in
+  (ys ++ a, b).
+Proof.
+  induction xs as [| x xs].
+  - intros.
+    cbn.
+    rewrite app_nil_r.
+    reflexivity.
+  - intros.
+    cbn.
+    destruct (f zs x) as [y zs'].
+    rewrite IHxs.
+    apply injective_projections.
+    + rewrite fst_let_fx.
+      rewrite fst_let_fx.
+      rewrite <- app_assoc.
+      rewrite app_inv_head_iff.
+      cbn.
+      apply foldl_acc_h1.
+    + rewrite snd_let_fx.
+      rewrite snd_let_fx.
+      apply foldl_acc_h2.
+Qed.
+
+Definition cons_lexp {A : Set} (lx : lexp A) (acc : lexp A * list (exp A)) : lexp A * list (exp A) :=
+  let '(LE_aux aux ann, xs) := acc in
+  match aux with
+  | (LE_tuple lxs) => (LE_aux (LE_tuple (lx :: lxs)) ann, xs)
+  | (LE_vector_concat lxs) => (LE_aux (LE_vector_concat (lx :: lxs)) ann, xs)
+  | _ => acc
+  end.
+
+Lemma cons_lexp_tuple : forall (A : Set) (P : list (lexp A) * list (exp A)) (a : lexp A) ann,
+  (let '(ls0, xs) := let '(a0, b) := P in (a :: a0, b) in (LE_aux (LE_tuple ls0) ann, xs))
+  = cons_lexp a (let '(a0, b) := P in (LE_aux (LE_tuple a0) ann, b)).
+Proof.
+  destruct P.
+  reflexivity.
+Qed.
+
+Lemma cons_lexp_vector_concat : forall (A : Set) (P : list (lexp A) * list (exp A)) (a : lexp A) ann,
+  (let '(ls0, xs) := let '(a0, b) := P in (a :: a0, b) in (LE_aux (LE_vector_concat ls0) ann, xs))
+  = cons_lexp a (let '(a0, b) := P in (LE_aux (LE_vector_concat a0) ann, b)).
+Proof.
+  destruct P.
+  cbn. reflexivity.
+Qed.
+
+Lemma lexp_subexps_identity_g : forall (A : Set) (l : lexp A) (es : list (exp A)), update_lexp_subexps (lexp_subexps l ++ es) l = (l, es).
+Proof.
+  induction l using lexp_ind_g.
+  all: try reflexivity.
+  - cbn. intros. rewrite take_drop_app. reflexivity.
+  - induction ls.
+    + reflexivity.
+    + rewrite Forall_cons_iff in H.
+      inversion H as [Hhd Htl].
+      pose proof (IHls Htl) as Htl2.
+      intros.
+      cbn.
+      rewrite <- app_assoc.
+      rewrite Hhd.
+      cbn in Htl2.
+      rewrite foldl_acc.
+      cbn.
+      rewrite cons_lexp_tuple.
+      rewrite Htl2.
+      reflexivity.
+  - induction ls.
+    + reflexivity.
+    + rewrite Forall_cons_iff in H.
+      inversion H as [Hhd Htl].
+      pose proof (IHls Htl) as Htl2.
+      intros.
+      cbn.
+      rewrite <- app_assoc.
+      rewrite Hhd.
+      cbn in Htl2.
+      rewrite foldl_acc.
+      cbn.
+      rewrite cons_lexp_vector_concat.
+      rewrite Htl2.
+      reflexivity.
+  - cbn. intros. rewrite <- app_assoc. rewrite IHl. reflexivity.
+  - cbn. intros. rewrite <- app_assoc. rewrite IHl. reflexivity.
+  - cbn. intros. rewrite IHl. reflexivity.
+Qed.
+
+Lemma lexp_subexps_identity : forall (A : Set) (l : lexp A), update_lexp_subexps (lexp_subexps l) l = (l, []).
+Proof.
+  intros A l.
+  pose proof (lexp_subexps_identity_g A l []) as H.
+  rewrite app_nil_r in H.
+  assumption.
+Qed.
 
 Section exp_ind_g.
   Variables
