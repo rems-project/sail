@@ -154,7 +154,7 @@ let rec run frame =
       assert false
   | Interpreter.Step (lazy_str, _, _, _) -> run (Interpreter.eval_frame frame)
   | Interpreter.Break frame -> run (Interpreter.eval_frame frame)
-  | Interpreter.Effect_request (out, st, stack, Interpreter.Read_reg (reg, cont)) ->
+  | Interpreter.Effect_request (out, st, stack, Interpreter.Read_reg (reg, [], cont)) ->
       (* return a dummy value to read_reg requests which we handle above
          if an expression finally evals to it, but the interpreter
          will fail if it tries to actually use. See value.ml *)

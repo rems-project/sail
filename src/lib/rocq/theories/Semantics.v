@@ -175,10 +175,14 @@ Inductive place : Set :=
 | PL_vector_range : place -> num -> num -> place
 | PL_field : place -> id -> place.
 
+Inductive vector_concat_split :=
+| No_split : vector_concat_split
+| Split : nat -> vector_concat_split.
+
 Inductive destructure : Set :=
 | DL_app : id -> list value -> destructure
 | DL_tuple : list destructure -> destructure
-| DL_vector_concat : list destructure -> destructure
+| DL_vector_concat : list (vector_concat_split * destructure) -> destructure
 | DL_place : place -> destructure.
 
 Module Monad.
@@ -508,10 +512,6 @@ Proof.
     lia.
 Qed.
 
-Inductive vector_concat_split :=
-| No_split : vector_concat_split
-| Split : nat -> vector_concat_split.
-
 (** Sail annotates terms with custom type annotation data, which we
     don't have access to here. Instead use a functor parameterised by
     the following SemanticExt signature, which can provide the methods we
@@ -656,6 +656,12 @@ Module Make (T : SemanticExt).
     let 'LE_aux aux annot := l in
     match aux with
     | LE_deref x => LE_aux (LE_deref (substitute n v x)) annot
+    | LE_vector lx x => LE_aux (LE_vector (substitute_lexp n v lx) (substitute n v x)) annot
+    | LE_vector_range lx x y =>
+        LE_aux (LE_vector_range (substitute_lexp n v lx) (substitute n v x) (substitute n v y)) annot
+    | LE_field lx f => LE_aux (LE_field (substitute_lexp n v lx) f) annot
+    | LE_vector_concat lxs => LE_aux (LE_vector_concat (map (substitute_lexp n v) lxs)) annot
+    | LE_tuple lxs => LE_aux (LE_tuple (map (substitute_lexp n v) lxs)) annot
     | _ => l
     end.
 
@@ -1106,11 +1112,29 @@ Module Make (T : SemanticExt).
     - cbn; try assumption; lia.
     - cbn; reflexivity.
     - cbn; reflexivity.
-    - cbn; reflexivity.
-    - cbn; reflexivity.
-    - cbn; reflexivity.
-    - cbn; reflexivity.
-    - cbn; reflexivity.
+    - cbn.
+      induction lxs.
+      + reflexivity.
+      + rewrite Forall_cons_iff in H.
+        inversion H as [Hhd Htl].
+        cbn.
+        apply depth_subst_helper.
+        assumption.
+        apply IHlxs in Htl.
+        assumption.
+    - cbn.
+      induction lxs.
+      + reflexivity.
+      + rewrite Forall_cons_iff in H.
+        inversion H as [Hhd Htl].
+        cbn.
+        apply depth_subst_helper.
+        assumption.
+        apply IHlxs in Htl.
+        assumption.
+    - cbn. cbn in IHe. lia.
+    - cbn. cbn in IHe1. lia.
+    - cbn. cbn in IHe. lia.
   Qed.
 
   Fixpoint destructuring_assignment (annot : Ast.annot T.tannot) (d : destructure) (v : value) : t unit :=
@@ -1138,6 +1162,30 @@ Module Make (T : SemanticExt).
               Runtime_type_error (fst annot)
         | _ =>
             Runtime_type_error (fst annot)
+        end
+    | DL_vector_concat ds =>
+        match v with
+        | V_vector vs =>
+            let '(assignment, _) :=
+              fold_left
+                (fun acc d =>
+                   let '(s, d) := d in
+                   match s with
+                   | Split s =>
+                       match acc with
+                       | (prev, []) => (prev, [])
+                       | (prev, vs) =>
+                           let '(vs_take, vs_drop) := take_drop s vs in
+                           (bind prev (fun _ => destructuring_assignment annot d (V_vector vs_take)), vs_drop)
+                       end
+                   | No_split => (Runtime_type_error (fst annot), [])
+                   end
+                )
+                ds
+                (pure tt, vs)
+            in
+            assignment
+        | _ => Runtime_type_error (fst annot)
         end
     | _ =>
         Runtime_type_error (fst annot)
@@ -1170,7 +1218,7 @@ Module Make (T : SemanticExt).
         ds ← sequence (map lexp_to_destructure ls);
         pure (DL_tuple ds)
     | LE_vector_concat ls =>
-        ds ← sequence (map lexp_to_destructure ls);
+        ds ← sequence (map (fun '((LE_aux _ annot) as l) => d ← lexp_to_destructure l; pure (T.get_split (snd annot), d)) ls);
         pure (DL_vector_concat ds)
     | LE_field l f =>
         p ← bind (lexp_to_destructure l) (@coerce_place T.tannot (fst annot));
@@ -1187,7 +1235,7 @@ Module Make (T : SemanticExt).
         p ← bind (lexp_to_destructure l) (@coerce_place T.tannot (fst annot));
         match (n, m) with
         | (E_aux (E_internal_value (V_int n)) _, E_aux (E_internal_value (V_int m)) _) =>
-            pure (DL_place (PL_vector p n))
+            pure (DL_place (PL_vector_range p n m))
         | _ =>
             Runtime_type_error (fst annot)
         end

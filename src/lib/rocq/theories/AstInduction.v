@@ -140,7 +140,7 @@ Fixpoint update_lexp_subexps {A : Set} (xs : list (exp A)) (l : lexp A) : lexp A
           ls
           ([], xs)
       in
-      (LE_aux (LE_tuple ls) annot, xs)
+      (LE_aux (LE_vector_concat ls) annot, xs)
   | LE_vector l n =>
       match update_lexp_subexps xs l with
       | (l, n :: xs) =>
@@ -339,7 +339,7 @@ Section exp_and_lexp_ind_g.
     (HL_tuple : forall lxs ann, Forall Q lxs -> Q (LE_aux (LE_tuple lxs) ann))
     (HL_vector_concat : forall lxs ann, Forall Q lxs -> Q (LE_aux (LE_vector_concat lxs) ann))
     (HL_vector : forall lx x ann, Q lx -> P x -> Q (LE_aux (LE_vector lx x) ann))
-    (HL_vector_range : forall lx x y ann, Q lx -> P x -> Q (LE_aux (LE_vector_range lx x y) ann))
+    (HL_vector_range : forall lx x y ann, Q lx -> P x -> P y -> Q (LE_aux (LE_vector_range lx x y) ann))
     (HL_field : forall lx f ann, Q lx -> Q (LE_aux (LE_field lx f) ann)).
 
   Fixpoint exp_ind_mutual_g x : P x

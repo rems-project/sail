@@ -49,6 +49,8 @@ open Ast_defs
 open Ast_util
 open Value_type
 open Value
+
+module Big_int = Nat_big_num
 module Document = Pretty_print_sail.Document
 
 module Printer = Pretty_print_sail.Printer (struct
@@ -65,6 +67,127 @@ type gstate = {
   fundefs : Type_check.tannot fundef Bindings.t;
   typecheck_env : Type_check.Env.t;
 }
+
+let is_increasing gstate =
+  match Type_check.Env.get_default_order_opt gstate.typecheck_env with
+  | Some (Ord_aux (Ord_inc, _)) -> true
+  | _ -> false
+
+module VariableUpdate = struct
+  open Semantics
+  open Util.Option_monad
+
+  type root = Register of string | Var of id * Semantics.var_type
+
+  type accessor = Vector of Big_int.num | Vector_range of Big_int.num * Big_int.num | Field of id
+
+  let rec split_place = function
+    | PL_id (id, ty) -> (Var (id, ty), [])
+    | PL_register name -> (Register name, [])
+    | PL_vector (p, n) ->
+        let root, accessors = split_place p in
+        (root, accessors @ [Vector n])
+    | PL_vector_range (p, n, m) ->
+        let root, accessors = split_place p in
+        (root, accessors @ [Vector_range (n, m)])
+    | PL_field (p, field) ->
+        let root, accessors = split_place p in
+        (root, accessors @ [Field field])
+
+  let rec access v = function
+    | [] -> Some v
+    | a :: accessors -> (
+        match a with
+        | Field field -> (
+            match v with
+            | V_record fields ->
+                let* v = List.assoc_opt (string_of_id field) fields in
+                access v accessors
+            | _ -> None
+          )
+        | Vector n -> (
+            match v with
+            | V_vector vs ->
+                let* v = List.nth_opt (List.rev vs) (Big_int.to_int n) in
+                access v accessors
+            | _ -> None
+          )
+        | Vector_range (n, m) -> (
+            match v with
+            | V_vector vs ->
+                let vs = Sail_lib.subrange (vs, n, m) in
+                access (V_vector vs) accessors
+            | _ -> None
+          )
+      )
+
+  let rec vector_update f n xs =
+    match (n, xs) with
+    | _, [] -> Some []
+    | 0, x :: xs ->
+        let* y = f x in
+        Some (y :: xs)
+    | n, x :: xs ->
+        let* ys = vector_update f (n - 1) xs in
+        Some (x :: ys)
+
+  let rec vector_update_subrange f n m xs =
+    match (m, xs) with
+    | _, [] -> Some []
+    | 0, xs -> (
+        let* ys = f (V_vector (List.rev (Util.take (n + 1) xs))) in
+        match ys with V_vector ys -> Some (List.rev ys @ Util.drop (n + 1) xs) | _ -> None
+      )
+    | m, x :: xs ->
+        let* ys = vector_update_subrange f (n - 1) (m - 1) xs in
+        Some (x :: ys)
+
+  let rec update is_inc v v' = function
+    | [] -> Some v'
+    | a :: accessors -> (
+        match a with
+        | Field field -> (
+            let field = string_of_id field in
+            match v with
+            | V_record fields ->
+                let* v = List.assoc_opt field fields in
+                let fields = List.remove_assoc field fields in
+                let* updated = update is_inc v v' accessors in
+                Some (V_record ((field, updated) :: fields))
+            | _ -> None
+          )
+        | Vector n -> (
+            match v with
+            | V_vector vs ->
+                if is_inc then
+                  let* vs = vector_update (fun v -> update is_inc v v' accessors) (Big_int.to_int n) vs in
+                  Some (V_vector vs)
+                else
+                  let* vs = vector_update (fun v -> update is_inc v v' accessors) (Big_int.to_int n) (List.rev vs) in
+                  Some (V_vector (List.rev vs))
+            | _ -> None
+          )
+        | Vector_range (n, m) -> (
+            match v with
+            | V_vector vs ->
+                if is_inc then
+                  let* vs =
+                    vector_update_subrange
+                      (fun v -> update is_inc v v' accessors)
+                      (Big_int.to_int m) (Big_int.to_int n) vs
+                  in
+                  Some (V_vector vs)
+                else
+                  let* vs =
+                    vector_update_subrange
+                      (fun v -> update is_inc v v' accessors)
+                      (Big_int.to_int n) (Big_int.to_int m) (List.rev vs)
+                  in
+                  Some (V_vector (List.rev vs))
+            | _ -> None
+          )
+      )
+end
 
 type lstate = { locals : value Bindings.t }
 
@@ -210,8 +333,8 @@ type frame =
       * string
 
 and effect_request =
-  | Read_reg of string * (value -> state -> frame)
-  | Write_reg of string * value * (unit -> state -> frame)
+  | Read_reg of string * VariableUpdate.accessor list * (value -> state -> frame)
+  | Write_reg of string * VariableUpdate.accessor list * value * (unit -> state -> frame)
   | Outcome of id * value list * (Semantics.return_value -> Type_check.tannot exp Monad.t)
 
 let read_variable id lstate gstate =
@@ -259,7 +382,7 @@ let rec eval_frame' = function
                   state,
                   stack,
                   Read_reg
-                    (regname, fun v state' -> eval_frame' (Step (out, state', cont (Semantics.Return_ok v), stack)))
+                    (regname, [], fun v state' -> eval_frame' (Step (out, state', cont (Semantics.Return_ok v), stack)))
                 )
             )
             else (
@@ -285,29 +408,31 @@ let rec eval_frame' = function
             with Not_found -> Fail (out, state, m, stack, "Fundef not found: " ^ string_of_id id)
           )
       | Read_var (place, cont), _ -> (
-          match place with
-          | PL_id (name, var_type) -> (
+          let root, accessors = VariableUpdate.split_place place in
+          let do_update v state =
+            match VariableUpdate.access v accessors with
+            | Some v -> eval_frame' (Step (out, state, cont v, stack))
+            | None -> Fail (out, state, m, stack, "Variable update failed")
+          in
+          match root with
+          | VariableUpdate.Var (name, var_type) -> (
               match var_type with
-              | Var_register ->
-                  Effect_request
-                    ( out,
-                      state,
-                      stack,
-                      Read_reg (string_of_id name, fun v state' -> eval_frame' (Step (out, state', cont v, stack)))
-                    )
+              | Var_register -> Effect_request (out, state, stack, Read_reg (string_of_id name, [], do_update))
               | Var_local -> (
                   try eval_frame' (Step (out, state, cont (read_variable name lstate gstate), stack))
                   with Not_found -> Fail (out, state, m, stack, "Local not found: " ^ string_of_id name)
                 )
             )
-          | PL_register name ->
-              Effect_request
-                (out, state, stack, Read_reg (name, fun v state' -> eval_frame' (Step (out, state', cont v, stack))))
-          | _ -> Fail (out, state, m, stack, "Unsupported read")
+          | VariableUpdate.Register name -> Effect_request (out, state, stack, Read_reg (name, [], do_update))
         )
       | Write_var (place, value, cont), _ -> (
-          match place with
-          | PL_id (name, var_type) -> (
+          let root, accessors = VariableUpdate.split_place place in
+          let do_update = function
+            | None -> Some value
+            | Some old_value -> VariableUpdate.update (is_increasing gstate) old_value value accessors
+          in
+          match root with
+          | VariableUpdate.Var (name, var_type) -> (
               match var_type with
               | Var_register ->
                   Effect_request
@@ -315,20 +440,23 @@ let rec eval_frame' = function
                       state,
                       stack,
                       Write_reg
-                        (string_of_id name, value, fun () state' -> eval_frame' (Step (out, state', cont (), stack)))
+                        ( string_of_id name,
+                          accessors,
+                          value,
+                          fun () state' -> eval_frame' (Step (out, state', cont (), stack))
+                        )
                     )
               | Var_local ->
-                  let state' = ({ locals = Bindings.add name value lstate.locals }, gstate) in
+                  let state' = ({ locals = Bindings.update name do_update lstate.locals }, gstate) in
                   eval_frame' (Step (out, state', cont (), stack))
             )
-          | PL_register name ->
+          | VariableUpdate.Register name ->
               Effect_request
                 ( out,
                   state,
                   stack,
-                  Write_reg (name, value, fun () state' -> eval_frame' (Step (out, state', cont (), stack)))
+                  Write_reg (name, accessors, value, fun () state' -> eval_frame' (Step (out, state', cont (), stack)))
                 )
-          | _ -> Fail (out, state, m, stack, "Unsupported write")
         )
       | Get_undefined (typ, cont), _ ->
           let undef_exp = Ast_util.undefined_of_typ false Parse_ast.Unknown (fun _ -> empty_uannot) typ in
@@ -342,17 +470,21 @@ let eval_frame frame =
 let default_effect_interp out state stack eff =
   let lstate, gstate = state in
   match eff with
-  | Read_reg (name, cont) ->
+  | Read_reg (name, _, cont) ->
       if gstate.allow_registers then (
         try cont (Bindings.find (mk_id name) gstate.registers) state
         with Not_found -> failwith ("Read of nonexistent register: " ^ name)
       )
       else failwith ("Register read disallowed by allow_registers setting: " ^ name)
-  | Write_reg (name, v, cont) ->
+  | Write_reg (name, accessors, v, cont) ->
       let id = mk_id name in
+      let do_update = function
+        | None -> Some v
+        | Some old_value -> VariableUpdate.update (is_increasing gstate) old_value v accessors
+      in
       if gstate.allow_registers then
         if Bindings.mem id gstate.registers then (
-          let state' = (lstate, { gstate with registers = Bindings.add id v gstate.registers }) in
+          let state' = (lstate, { gstate with registers = Bindings.update id do_update gstate.registers }) in
           cont () state'
         )
         else failwith ("Write of nonexistent register: " ^ name)

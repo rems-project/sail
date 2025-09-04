@@ -158,10 +158,14 @@ type place =
 | PL_vector_range of place * Nat_big_num.num * Nat_big_num.num
 | PL_field of place * id
 
+type vector_concat_split =
+| No_split
+| Split of nat
+
 type destructure =
 | DL_app of id * value list
 | DL_tuple of destructure list
-| DL_vector_concat of destructure list
+| DL_vector_concat of (vector_concat_split * destructure) list
 | DL_place of place
 
 module Monad :
@@ -232,10 +236,6 @@ type 'a ltr3 =
 | LTR3_3 of value * value * value
 
 val left_to_right3 : 'a1 exp -> 'a1 exp -> 'a1 exp -> 'a1 ltr3
-
-type vector_concat_split =
-| No_split
-| Split of nat
 
 module type SemanticExt =
  sig

@@ -109,10 +109,14 @@ type place =
 | PL_vector_range of place * Nat_big_num.num * Nat_big_num.num
 | PL_field of place * id
 
+type vector_concat_split =
+| No_split
+| Split of nat
+
 type destructure =
 | DL_app of id * value list
 | DL_tuple of destructure list
-| DL_vector_concat of destructure list
+| DL_vector_concat of (vector_concat_split * destructure) list
 | DL_place of place
 
 module Monad =
@@ -335,10 +339,6 @@ let left_to_right3 x y z =
       | _ -> LTR3_1 (v1, y, z))
    | _ -> LTR3_0 (x, y, z))
 
-type vector_concat_split =
-| No_split
-| Split of nat
-
 module type SemanticExt =
  sig
   type tannot
@@ -503,6 +503,18 @@ module Make =
   | LE_aux (aux, annot0) ->
     (match aux with
      | LE_deref x -> LE_aux ((LE_deref (substitute n v x)), annot0)
+     | LE_tuple lxs ->
+       LE_aux ((LE_tuple (map (substitute_lexp n v) lxs)), annot0)
+     | LE_vector_concat lxs ->
+       LE_aux ((LE_vector_concat (map (substitute_lexp n v) lxs)), annot0)
+     | LE_vector (lx, x) ->
+       LE_aux ((LE_vector ((substitute_lexp n v lx), (substitute n v x))),
+         annot0)
+     | LE_vector_range (lx, x, y) ->
+       LE_aux ((LE_vector_range ((substitute_lexp n v lx),
+         (substitute n v x), (substitute n v y))), annot0)
+     | LE_field (lx, f) ->
+       LE_aux ((LE_field ((substitute_lexp n v lx), f)), annot0)
      | _ -> l)
 
   (** val value_of_lit : lit -> typ -> value Monad.t **)
@@ -798,6 +810,7 @@ module Make =
 
   let rec destructuring_assignment annot0 d v =
     match d with
+    | DL_app (_, _) -> Monad.Runtime_type_error (fst annot0)
     | DL_tuple ds ->
       (match v with
        | V_tuple vs ->
@@ -816,8 +829,28 @@ module Make =
               assignment
          else Monad.Runtime_type_error (fst annot0)
        | _ -> Monad.Runtime_type_error (fst annot0))
+    | DL_vector_concat ds ->
+      (match v with
+       | V_vector vs ->
+         let (assignment, _) =
+           fold_left (fun acc d0 ->
+             let (s, d1) = d0 in
+             (match s with
+              | No_split -> ((Monad.Runtime_type_error (fst annot0)), [])
+              | Split s0 ->
+                let (prev, vs0) = acc in
+                (match vs0 with
+                 | [] -> (prev, [])
+                 | _ :: _ ->
+                   let (vs_take, vs_drop) = take_drop s0 vs0 in
+                   ((Monad.bind prev (fun _ ->
+                      destructuring_assignment annot0 d1 (V_vector vs_take))),
+                   vs_drop))))
+             ds ((Monad.pure ()), vs)
+         in
+         assignment
+       | _ -> Monad.Runtime_type_error (fst annot0))
     | DL_place p -> Monad.Write_var (p, v, (fun _ -> Monad.pure ()))
-    | _ -> Monad.Runtime_type_error (fst annot0)
 
   (** val lexp_to_destructure : T.tannot lexp -> destructure Monad.t **)
 
@@ -849,8 +882,14 @@ module Make =
        Monad.bind (Monad.sequence (map lexp_to_destructure ls)) (fun ds ->
          Monad.pure (DL_tuple ds))
      | LE_vector_concat ls ->
-       Monad.bind (Monad.sequence (map lexp_to_destructure ls)) (fun ds ->
-         Monad.pure (DL_vector_concat ds))
+       Monad.bind
+         (Monad.sequence
+           (map (fun l0 ->
+             let LE_aux (_, annot1) = l0 in
+             Monad.bind (lexp_to_destructure l0) (fun d ->
+               Monad.pure ((T.get_split (snd annot1)), d)))
+             ls))
+         (fun ds -> Monad.pure (DL_vector_concat ds))
      | LE_vector (l0, n) ->
        Monad.bind
          (Monad.bind (lexp_to_destructure l0) (coerce_place (fst annot0)))
@@ -875,7 +914,8 @@ module Make =
                (match e2 with
                 | E_internal_value v0 ->
                   (match v0 with
-                   | V_int _ -> Monad.pure (DL_place (PL_vector (p, n0)))
+                   | V_int m0 ->
+                     Monad.pure (DL_place (PL_vector_range (p, n0, m0)))
                    | _ -> Monad.Runtime_type_error (fst annot0))
                 | _ -> Monad.Runtime_type_error (fst annot0))
              | _ -> Monad.Runtime_type_error (fst annot0))

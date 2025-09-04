@@ -55,7 +55,7 @@ let rec update_lexp_subexps xs l = match l with
          let (l1, xs1) = update_lexp_subexps xs0 l0 in
          ((app ls0 (l1 :: [])), xs1)) ls ([], xs)
      in
-     ((LE_aux ((LE_tuple ls0), annot)), xs0)
+     ((LE_aux ((LE_vector_concat ls0), annot)), xs0)
    | LE_vector (l0, _) ->
      let (l1, l2) = update_lexp_subexps xs l0 in
      (match l2 with
