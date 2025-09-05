@@ -66,6 +66,12 @@ val opt_memo_cache : bool ref
 
 (** {2 Jib context} *)
 
+(* For an abstract type like `type xlen : Int`, is it initialised?
+   Yes: `type xlen : Int = config xlen`
+   No: `type xlen : Int`
+*)
+type abstract_type_initialised = Initialised | Uninitialised
+
 (** Dynamic context for compiling Sail to Jib. We need to pass a (global) typechecking environment given by checking the
     full AST. *)
 type ctx = {
@@ -73,7 +79,7 @@ type ctx = {
   records : (kid list * ctyp Bindings.t) Bindings.t;
   enums : IdSet.t Bindings.t;
   variants : (kid list * ctyp Bindings.t) Bindings.t;
-  abstracts : ctyp Bindings.t;
+  abstracts : (ctyp * abstract_type_initialised) Bindings.t;
   valspecs : (string option * ctyp list * ctyp * uannot) Bindings.t;
   quants : ctyp KBindings.t;
   local_env : Env.t;

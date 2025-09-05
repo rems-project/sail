@@ -2455,6 +2455,17 @@ module Codegen (Config : CODEGEN_CONFIG) = struct
         List.map (fun n -> Printf.sprintf "  create_letbind_%d();" n) (List.rev ctx.letbinds)
       in
       let letbind_finalizers = List.map (fun n -> Printf.sprintf "  kill_letbind_%d();" n) ctx.letbinds in
+
+      let set_abstract_types =
+        Bindings.bindings ctx.abstracts
+        |> List.filter_map (fun (id, (_, initialised)) ->
+               match initialised with
+               | Initialised -> Some (Printf.sprintf "  sail_set_abstract_%s();" (Ast_util.string_of_id id))
+               (* Skip abstract types that haven't been initialised; we can't initialise them automatically. *)
+               | Uninitialised -> None
+           )
+      in
+
       let startup cdefs = List.map sgen_startup (List.filter is_cdef_startup cdefs) in
       let finish cdefs = List.map sgen_finish (List.filter is_cdef_finish cdefs) in
 
@@ -2478,7 +2489,7 @@ module Codegen (Config : CODEGEN_CONFIG) = struct
              ([Printf.sprintf "%svoid model_init(void)" (static ()); "{"; "  setup_rts();"]
              @ fst exn_boilerplate
              @ List.concat (List.map (fun r -> fst (register_init_clear r)) early_regs)
-             @ startup cdefs @ letbind_initializers
+             @ set_abstract_types @ startup cdefs @ letbind_initializers
              @ List.concat (List.map (fun r -> fst (register_init_clear r)) regs)
              @ ( if regs = [] then []
                  else [Printf.sprintf "  %s(UNIT);" (sgen_function_id (mk_id "initialize_registers"))]
