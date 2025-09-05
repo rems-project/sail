@@ -102,6 +102,8 @@ let is_ct_enum = function CT_enum _ -> true | _ -> false
 
 let iblock1 = function [instr] -> instr | instrs -> iblock instrs
 
+type abstract_type_initialised = Initialised | Uninitialised
+
 (** The context type contains two type-checking environments. ctx.local_env contains the closest typechecking
     environment, usually from the expression we are compiling, whereas ctx.tc_env is the global type checking
     environment from type-checking the entire AST. We also keep track of local variables in ctx.locals, so we know when
@@ -111,7 +113,7 @@ type ctx = {
   records : (kid list * ctyp Bindings.t) Bindings.t;
   enums : IdSet.t Bindings.t;
   variants : (kid list * ctyp Bindings.t) Bindings.t;
-  abstracts : ctyp Bindings.t;
+  abstracts : (ctyp * abstract_type_initialised) Bindings.t;
   valspecs : (string option * ctyp list * ctyp * uannot) Bindings.t;
   quants : ctyp KBindings.t;
   local_env : Env.t;
@@ -132,7 +134,7 @@ let ctx_map_ctyps f ctx =
     ctx with
     records = Bindings.map (fun (params, fields) -> (params, Bindings.map f fields)) ctx.records;
     variants = Bindings.map (fun (params, fields) -> (params, Bindings.map f fields)) ctx.variants;
-    abstracts = Bindings.map f ctx.abstracts;
+    abstracts = Bindings.map (fun (ctyp, initialised) -> (f ctyp, initialised)) ctx.abstracts;
     valspecs =
       Bindings.map
         (fun (extern, param_ctyps, ret_ctyp, uannot) -> (extern, List.map f param_ctyps, f ret_ctyp, uannot))
@@ -771,7 +773,7 @@ module Make (C : CONFIG) = struct
                  (mk_id "sail_config_bits_abstract_len", [])
                  [V_id (json, CT_json)];
              ]
-            @ select_abstract l ctx abstract_name (fun id abstract_ctyp ->
+            @ select_abstract l ctx abstract_name (fun id (abstract_ctyp, _) ->
                   match abstract_ctyp with
                   | CT_fint 64 ->
                       [
@@ -1808,14 +1810,19 @@ module Make (C : CONFIG) = struct
               CTDI_instrs (setup @ [call (CL_id (Abstract id, ctyp))] @ cleanup)
           | TDC_none -> CTDI_none
         in
+        let is_initialised = function CTDI_instrs _ -> Initialised | CTDI_none -> Uninitialised in
         match kind with
         | K_int ->
             let ctyp = ctyp_of_typ ctx (atom_typ (nid id)) in
             let inst = compile_inst ctyp inst in
-            (Some (CTD_abstract (id, ctyp, inst)), { ctx with abstracts = Bindings.add id ctyp ctx.abstracts })
+            ( Some (CTD_abstract (id, ctyp, inst)),
+              { ctx with abstracts = Bindings.add id (ctyp, is_initialised inst) ctx.abstracts }
+            )
         | K_bool ->
             let inst = compile_inst CT_bool inst in
-            (Some (CTD_abstract (id, CT_bool, inst)), { ctx with abstracts = Bindings.add id CT_bool ctx.abstracts })
+            ( Some (CTD_abstract (id, CT_bool, inst)),
+              { ctx with abstracts = Bindings.add id (CT_bool, is_initialised inst) ctx.abstracts }
+            )
         | _ -> Reporting.unreachable l __POS__ "Found abstract type that was neither an integer nor a boolean"
       )
     (* Will be re-written before here, see bitfield.ml *)

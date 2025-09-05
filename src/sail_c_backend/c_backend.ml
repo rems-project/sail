@@ -2458,7 +2458,12 @@ module Codegen (Config : CODEGEN_CONFIG) = struct
 
       let set_abstract_types =
         Bindings.bindings ctx.abstracts
-        |> List.map (fun (id, _) -> Printf.sprintf "  sail_set_abstract_%s();" (Ast_util.string_of_id id))
+        |> List.filter_map (fun (id, (_, initialised)) ->
+               match initialised with
+               | Initialised -> Some (Printf.sprintf "  sail_set_abstract_%s();" (Ast_util.string_of_id id))
+               (* Skip abstract types that haven't been initialised; we can't initialise them automatically. *)
+               | Uninitialised -> None
+           )
       in
 
       let startup cdefs = List.map sgen_startup (List.filter is_cdef_startup cdefs) in
