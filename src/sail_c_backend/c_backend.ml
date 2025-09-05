@@ -2201,52 +2201,60 @@ module Codegen (Config : CODEGEN_CONFIG) = struct
               );
           ]
     | CDEF_fundef (id, ret_arg, args, instrs) ->
-        let _, arg_ctyps, ret_ctyp, _ =
-          match Bindings.find_opt id ctx.valspecs with
-          | Some vs -> vs
-          | None -> c_error ~loc:(id_loc id) ("No valspec found for " ^ string_of_id id)
-        in
+        (* We can skip the Sail version of a function if we're going to call the
+          externally defined version anyway. *)
+        if ctx_is_extern id ctx then []
+        else begin
+          let _, arg_ctyps, ret_ctyp, _ =
+            match Bindings.find_opt id ctx.valspecs with
+            | Some vs -> vs
+            | None -> c_error ~loc:(id_loc id) ("No valspec found for " ^ string_of_id id)
+          in
 
-        (* Check that the function has the correct arity at this point. *)
-        if List.length arg_ctyps <> List.length args then
-          c_error ~loc:(id_loc id)
-            ("function arguments "
-            ^ Util.string_of_list ", " string_of_name args
-            ^ " matched against type "
-            ^ Util.string_of_list ", " string_of_ctyp arg_ctyps
-            )
-        else ();
+          (* Check that the function has the correct arity at this point. *)
+          if List.length arg_ctyps <> List.length args then
+            c_error ~loc:(id_loc id)
+              ("function arguments "
+              ^ Util.string_of_list ", " string_of_name args
+              ^ " matched against type "
+              ^ Util.string_of_list ", " string_of_ctyp arg_ctyps
+              )
+          else ();
 
-        let instrs = add_local_labels instrs in
-        let args =
-          Util.string_of_list ", "
-            (fun x -> x)
-            (List.map2 (fun ctyp arg -> sgen_const_ctyp ctyp ^ " " ^ sgen_name arg) arg_ctyps args)
-        in
-        let function_header =
-          match ret_arg with
-          | Return_plain ->
-              assert (is_stack_ctyp ctx ret_ctyp);
-              (if !opt_static then string "static " else empty)
-              ^^ string (sgen_ctyp ret_ctyp)
-              ^^ space ^^ codegen_function_id id
-              ^^ parens (string (extra_params ()) ^^ string args)
-              ^^ hardline
-          | Return_via gs ->
-              assert (not (is_stack_ctyp ctx ret_ctyp));
-              (if !opt_static then string "static " else empty)
-              ^^ string "void" ^^ space ^^ codegen_function_id id
-              ^^ parens
-                   (string (extra_params ()) ^^ string (sgen_ctyp ret_ctyp ^ " *" ^ sgen_name gs ^ ", ") ^^ string args)
-              ^^ hardline
-        in
-        [
-          Impl
-            (function_header ^^ string "{"
-            ^^ jump 0 2 (separate_map hardline (codegen_instr id ctx) instrs)
-            ^^ hardline ^^ string "}"
-            );
-        ]
+          let instrs = add_local_labels instrs in
+          let args =
+            Util.string_of_list ", "
+              (fun x -> x)
+              (List.map2 (fun ctyp arg -> sgen_const_ctyp ctyp ^ " " ^ sgen_name arg) arg_ctyps args)
+          in
+          let function_header =
+            match ret_arg with
+            | Return_plain ->
+                assert (is_stack_ctyp ctx ret_ctyp);
+                (if !opt_static then string "static " else empty)
+                ^^ string (sgen_ctyp ret_ctyp)
+                ^^ space ^^ codegen_function_id id
+                ^^ parens (string (extra_params ()) ^^ string args)
+                ^^ hardline
+            | Return_via gs ->
+                assert (not (is_stack_ctyp ctx ret_ctyp));
+                (if !opt_static then string "static " else empty)
+                ^^ string "void" ^^ space ^^ codegen_function_id id
+                ^^ parens
+                     (string (extra_params ())
+                     ^^ string (sgen_ctyp ret_ctyp ^ " *" ^ sgen_name gs ^ ", ")
+                     ^^ string args
+                     )
+                ^^ hardline
+          in
+          [
+            Impl
+              (function_header ^^ string "{"
+              ^^ jump 0 2 (separate_map hardline (codegen_instr id ctx) instrs)
+              ^^ hardline ^^ string "}"
+              );
+          ]
+        end
     | CDEF_type ctype_def -> codegen_type_def ctx ctype_def
     | CDEF_startup (id, instrs) ->
         let startup_header = string (Printf.sprintf "%svoid startup_%s(void)" (static ()) (sgen_function_id id)) in
