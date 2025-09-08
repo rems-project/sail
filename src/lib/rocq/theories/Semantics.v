@@ -1713,4 +1713,4 @@ End Make.
 
 Extraction Blacklist List.
 
-Separate Extraction l attribute_data def impldef opt_default Make IdMap.
+Separate Extraction comparison l attribute_data def impldef opt_default Make IdMap.
