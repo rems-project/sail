@@ -373,6 +373,8 @@ let split_src_type all_errors env id ty (TypQ_aux (q, ql)) =
       else (
         let wrap =
           match id with
+          | Id_aux (And_bool, l) -> fun _ -> Id_aux (And_bool, l)
+          | Id_aux (Or_bool, l) -> fun _ -> Id_aux (Or_bool, l)
           | Id_aux (Id i, l) -> fun f -> Id_aux (Id (f i), Generated l)
           | Id_aux (Operator i, l) -> fun f -> Id_aux (Operator (f i), l)
         in
@@ -474,6 +476,8 @@ let freshen_id =
     let n = !counter in
     let () = counter := n + 1 in
     match id with
+    | Id_aux (And_bool, l) -> Id_aux (And_bool, l)
+    | Id_aux (Or_bool, l) -> Id_aux (Or_bool, l)
     | Id_aux (Id x, l) -> Id_aux (Id (x ^ "#m" ^ string_of_int n), Generated l)
     | Id_aux (Operator x, l) -> Id_aux (Operator (x ^ "#m" ^ string_of_int n), Generated l)
 
@@ -552,7 +556,7 @@ let stop_at_false_assertions e =
     match e with
     | E_constraint nc -> nc_false nc
     | E_lit (L_aux (L_false, _)) -> true
-    | E_app (Id_aux (Id "and_bool", _), [e1; e2]) -> exp_false e1 || exp_false e2
+    | E_app (f, [e1; e2]) when is_and_bool f -> exp_false e1 || exp_false e2
     | _ -> false
   in
   let rec exp (E_aux (e, ann) as ea) =
@@ -622,8 +626,8 @@ let apply_pat_choices choices =
     | exception Not_found -> (
         match e with
         | E_constraint nc -> E_aux (E_constraint (rewrite_ncs nc), (l, ann))
-        | E_app (Id_aux (Id "and_bool", andl), [e1; e2]) ->
-            E_aux (E_app (Id_aux (Id "and_bool", andl), [rewrite_assert_cond e1; rewrite_assert_cond e2]), (l, ann))
+        | E_app (Id_aux (And_bool, andl), [e1; e2]) ->
+            E_aux (E_app (Id_aux (And_bool, andl), [rewrite_assert_cond e1; rewrite_assert_cond e2]), (l, ann))
         | _ -> exp
       )
   in
@@ -842,6 +846,7 @@ let split_defs target all_errors (splits : split_req list) env ast =
         | Id_aux (Operator x, _) -> (
             try Some (List.assoc x vars) with Not_found -> None
           )
+        | _ -> None
       in
 
       let rec list f = function
@@ -2718,7 +2723,7 @@ module Analysis = struct
       in
       let rec aux (E_aux (e, _)) =
         match e with
-        | E_app (Id_aux (Id "or_bool", _), [e1; e2]) -> aux e1 @ aux e2
+        | E_app (Id_aux (Or_bool, _), [e1; e2]) -> aux e1 @ aux e2
         | E_app
             ( Id_aux (Id "eq_int", _),
               [E_aux (E_sizeof (Nexp_aux (Nexp_var kid, _)), _); E_aux (E_lit (L_aux (L_num i, _)), _)]
@@ -2772,7 +2777,7 @@ module Analysis = struct
       | _ -> KBindings.empty
     in
     match e with
-    | E_aux (E_app (Id_aux (Id "and_bool", _), [e1; e2]), _) ->
+    | E_aux (E_app (Id_aux (And_bool, _), [e1; e2]), _) ->
         merge_set_asserts_by_kid (sets_from_assert e1) (sets_from_assert e2)
     | E_aux (E_constraint nc, _) -> sets_from_nc nc
     | _ -> set_from_or_exps e
@@ -4037,7 +4042,7 @@ module BitvectorSizeCasts = struct
         )
       when string_of_id op = "eq_int" && Id.compare var var' == 0 ->
         Some i
-    | E_app (op, [e1; e2]) when string_of_id op = "and_bool" -> (
+    | E_app (op, [e1; e2]) when is_and_bool op -> (
         match extract_value_from_guard var e1 with Some i -> Some i | None -> extract_value_from_guard var e2
       )
     | _ -> None
@@ -4076,7 +4081,7 @@ module BitvectorSizeCasts = struct
             [(kid, i)]
         | _ -> []
       )
-    | E_app (op, [x; y]) when string_of_id op = "and_bool" -> extract x @ extract y
+    | E_app (op, [x; y]) when is_and_bool op -> extract x @ extract y
     | _ -> []
 
   (* TODO: top-level patterns *)

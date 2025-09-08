@@ -157,6 +157,7 @@ let frominterp_typedef (TD_aux (td_aux, (l, _))) =
   match td_aux with
   | TD_variant (id, typq, arms, _) -> begin
       match id with
+      | Id_aux ((And_bool | Or_bool), _) -> empty
       | Id_aux (Id "read_kind", _) -> empty
       | Id_aux (Id "write_kind", _) -> empty
       | Id_aux (Id "a64_barrier_domain", _) -> empty
@@ -408,6 +409,7 @@ let tointerp_typedef (TD_aux (td_aux, (l, _))) =
   match td_aux with
   | TD_variant (id, typq, arms, _) -> begin
       match id with
+      | Id_aux ((And_bool | Or_bool), _) -> empty
       | Id_aux (Id "read_kind", _) -> empty
       | Id_aux (Id "write_kind", _) -> empty
       | Id_aux (Id "a64_barrier_domain", _) -> empty

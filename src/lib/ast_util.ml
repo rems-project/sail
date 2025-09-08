@@ -158,7 +158,11 @@ let is_order_inc = function Ord_aux (Ord_inc, _) -> true | Ord_aux (Ord_dec, _) 
 
 let is_order_dec o = not (is_order_inc o)
 
-let string_of_id = function Id_aux (Id v, _) -> v | Id_aux (Operator v, _) -> "(operator " ^ v ^ ")"
+let string_of_id = function
+  | Id_aux (And_bool, _) -> "and_bool"
+  | Id_aux (Or_bool, _) -> "or_bool"
+  | Id_aux (Id v, _) -> v
+  | Id_aux (Operator v, _) -> "(operator " ^ v ^ ")"
 
 let lvar_typ ?loc:(l = Parse_ast.Unknown) = function
   | Local (_, typ) -> typ
@@ -196,6 +200,13 @@ let rec is_gen_loc = function
   | Parse_ast.Generated _ -> true
   | Parse_ast.Hint (_, l1, l2) -> is_gen_loc l1 || is_gen_loc l2
   | Parse_ast.Range _ -> false
+
+let mk_and_bool ?loc:(l = Parse_ast.Unknown) () = Id_aux (And_bool, l)
+let mk_or_bool ?loc:(l = Parse_ast.Unknown) () = Id_aux (Or_bool, l)
+
+let is_and_bool = function Id_aux (And_bool, _) -> true | _ -> false
+
+let is_or_bool = function Id_aux (Or_bool, _) -> true | _ -> false
 
 let mk_id ?loc:(l = Parse_ast.Unknown) str = Id_aux (Id str, l)
 
@@ -306,10 +317,16 @@ module Id = struct
   type t = id
   let compare id1 id2 =
     match (id1, id2) with
+    | Id_aux (And_bool, _), Id_aux (And_bool, _) -> 0
+    | Id_aux (Or_bool, _), Id_aux (Or_bool, _) -> 0
     | Id_aux (Id x, _), Id_aux (Id y, _) -> String.compare x y
     | Id_aux (Operator x, _), Id_aux (Operator y, _) -> String.compare x y
-    | Id_aux (Id _, _), Id_aux (Operator _, _) -> -1
-    | Id_aux (Operator _, _), Id_aux (Id _, _) -> 1
+    | Id_aux (Id _, _), _ -> -1
+    | _, Id_aux (Id _, _) -> 1
+    | Id_aux (Operator _, _), _ -> -1
+    | _, Id_aux (Operator _, _) -> 1
+    | Id_aux (And_bool, _), _ -> -1
+    | _, Id_aux (And_bool, _) -> 1
 end
 
 let lex_ord f g x1 x2 y1 y2 = match f x1 x2 with 0 -> g y1 y2 | n -> n
@@ -1102,6 +1119,8 @@ type id_chunk = Id_chunk_int of int | Id_chunk_string of string
 let split_id =
   let open Ast in
   function
+  | Id_aux (And_bool, _) -> [Id_chunk_string "and_bool"]
+  | Id_aux (Or_bool, _) -> [Id_chunk_string "or_bool"]
   | Id_aux (Id id, _) ->
       let pos = ref 0 in
       let is_number = ref false in
@@ -1156,25 +1175,35 @@ let natural_sort_ids ids =
   let ids = List.stable_sort (fun (n1, _) (n2, _) -> split_id_compare n1 n2) ids in
   List.map snd ids
 
-let deinfix = function Id_aux (Id v, l) -> Id_aux (Operator v, l) | Id_aux (Operator v, l) -> Id_aux (Operator v, l)
+let deinfix = function Id_aux (Id v, l) -> Id_aux (Operator v, l) | id -> id
 
-let infix_swap = function Id_aux (Id v, l) -> Id_aux (Operator v, l) | Id_aux (Operator v, l) -> Id_aux (Id v, l)
+let infix_swap = function Id_aux (Operator v, l) -> Id_aux (Id v, l) | id -> deinfix id
 
 let id_of_kid = function Kid_aux (Var v, l) -> Id_aux (Id (String.sub v 1 (String.length v - 1)), l)
 
-let kid_of_id = function Id_aux (Id v, l) -> Kid_aux (Var ("'" ^ v), l) | Id_aux (Operator _, _) -> assert false
+let kid_of_id = function Id_aux (Id v, l) -> Kid_aux (Var ("'" ^ v), l) | _ -> assert false
 
 let prepend_id str = function
   | Id_aux (Id v, l) -> Id_aux (Id (str ^ v), l)
   | Id_aux (Operator v, l) -> Id_aux (Operator (str ^ v), l)
+  | Id_aux ((And_bool | Or_bool), l) ->
+      Reporting.unreachable l __POS__
+        "Attempted to construct prepended identifier from short-circuiting boolean operator"
 
 let append_id id str =
-  match id with Id_aux (Id v, l) -> Id_aux (Id (v ^ str), l) | Id_aux (Operator v, l) -> Id_aux (Operator (v ^ str), l)
+  match id with
+  | Id_aux (Id v, l) -> Id_aux (Id (v ^ str), l)
+  | Id_aux (Operator v, l) -> Id_aux (Operator (v ^ str), l)
+  | Id_aux ((And_bool | Or_bool), l) ->
+      Reporting.unreachable l __POS__
+        "Attempted to construct appended identifier from short-circuiting boolean operator"
 
 let remove_id_suffix id str =
   match id with
   | Id_aux (Id v, l) -> remove_suffix v str |> Option.map (fun s -> Id_aux (Id s, l))
   | Id_aux (Operator v, l) -> remove_suffix v str |> Option.map (fun s -> Id_aux (Operator s, l))
+  | Id_aux ((And_bool | Or_bool), l) ->
+      Reporting.unreachable l __POS__ "Attempted to remove suffix from short-circuiting boolean operator"
 
 let prepend_kid str = function
   | Kid_aux (Var v, l) -> Kid_aux (Var ("'" ^ str ^ String.sub v 1 (String.length v - 1)), l)

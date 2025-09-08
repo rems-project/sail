@@ -1554,9 +1554,9 @@ let rec assert_constraint env b (E_aux (exp_aux, _) as exp) =
       | E_lit (L_aux (L_true, _)) -> Some nc_true
       | E_lit (L_aux (L_false, _)) -> Some nc_false
       | E_let (_, e) -> assert_constraint env b e (* TODO: beware of fresh type vars *)
-      | E_app (op, [x; y]) when string_of_id op = "or_bool" ->
+      | E_app (op, [x; y]) when is_or_bool op ->
           combine_constraint (not b) nc_or (assert_constraint env b x) (assert_constraint env b y)
-      | E_app (op, [x; y]) when string_of_id op = "and_bool" ->
+      | E_app (op, [x; y]) when is_and_bool op ->
           combine_constraint b nc_and (assert_constraint env b x) (assert_constraint env b y)
       | E_app (op, [x; y]) when string_of_id op = "gteq_int" ->
           option_binop nc_gteq (assert_nexp env x) (assert_nexp env y)
@@ -1912,7 +1912,13 @@ let rec filter_overload_tree env =
 
 let add_overload_attribute l f =
   let l = gen_loc l in
-  let name, is_infix = match f with Id_aux (Id v, _) -> (v, false) | Id_aux (Operator v, _) -> (v, true) in
+  let name, is_infix =
+    match f with
+    | Id_aux (And_bool, _) -> ("and_bool", false)
+    | Id_aux (Or_bool, _) -> ("or_bool", false)
+    | Id_aux (Id v, _) -> (v, false)
+    | Id_aux (Operator v, _) -> (v, true)
+  in
   add_attribute l "overloaded"
     (Some (AD_aux (AD_object [("name", AD_aux (AD_string name, l)); ("is_infix", AD_aux (AD_bool is_infix, l))], l)))
 
@@ -2326,7 +2332,7 @@ let rec check_exp env (E_aux (exp_aux, (l, uannot)) as exp : uannot exp) (Typ_au
       let tree, _ = filter_overload_tree env tree in
       let exp, env = overload_tree_to_exp env tree in
       check_exp env exp typ
-  | E_app (f, [x; y]), _ when string_of_id f = "and_bool" || string_of_id f = "or_bool" -> begin
+  | E_app (f, [x; y]), _ when is_and_bool f || is_or_bool f -> begin
       (* We have to ensure that the type of y in (x || y) and (x && y)
          is non-empty, otherwise it could force the entire type of the
          expression to become empty even when unevaluted due to
@@ -3748,7 +3754,7 @@ and infer_exp env (E_aux (exp_aux, (l, uannot)) as exp) =
       let tree, _ = filter_overload_tree env tree in
       let exp, env = overload_tree_to_exp env tree in
       infer_exp env exp
-  | E_app (f, [x; y]) when string_of_id f = "and_bool" || string_of_id f = "or_bool" -> begin
+  | E_app (f, [x; y]) when is_and_bool f || is_or_bool f -> begin
       match destruct_exist (typ_of (irule infer_exp env y)) with
       | None | Some (_, NC_aux (NC_true, _), _) -> infer_funapp l env f [x; y] uannot None
       | Some _ -> infer_funapp l env f [x; mk_exp (E_typ (bool_typ, y))] uannot None

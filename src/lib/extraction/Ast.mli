@@ -52,6 +52,8 @@ type kinded_id_aux =
 | KOpt_kind of kind * kid
 
 type id_aux =
+| And_bool
+| Or_bool
 | Id of string
 | Operator of string
 

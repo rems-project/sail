@@ -725,8 +725,7 @@ let rec anf (E_aux (e_aux, (l, tannot)) as exp) =
       let then_aexp = anf then_exp in
       let else_aexp = anf else_exp in
       wrap (mk_aexp (AE_if (cond_val, then_aexp, else_aexp, typ_of exp)))
-  | E_app_infix (x, Id_aux (Id op, l), y) -> anf (E_aux (E_app (Id_aux (Operator op, l), [x; y]), (l, tannot)))
-  | E_app_infix (x, Id_aux (Operator op, l), y) -> anf (E_aux (E_app (Id_aux (Id op, l), [x; y]), (l, tannot)))
+  | E_app_infix (x, id, y) -> anf (E_aux (E_app (deinfix id, [x; y]), (l, tannot)))
   | E_vector exps ->
       let aexps = List.map anf exps in
       let avals = List.map to_aval aexps in
@@ -750,12 +749,12 @@ let rec anf (E_aux (e_aux, (l, tannot)) as exp) =
       let wrap = List.fold_left (fun f g x -> f (g x)) (fun x -> x) (List.map snd fexps) in
       let record = List.fold_left (fun r (id, aval) -> Bindings.add id aval r) Bindings.empty (List.map fst fexps) in
       exp_wrap (wrap (mk_aexp (AE_struct_update (aval, record, typ_of exp))))
-  | E_app (id, [exp1; exp2]) when string_of_id id = "and_bool" ->
+  | E_app (id, [exp1; exp2]) when is_and_bool id ->
       let aexp1 = anf exp1 in
       let aexp2 = anf exp2 in
       let aval1, wrap = to_aval aexp1 in
       wrap (mk_aexp (AE_short_circuit (SC_and, aval1, aexp2)))
-  | E_app (id, [exp1; exp2]) when string_of_id id = "or_bool" ->
+  | E_app (id, [exp1; exp2]) when is_or_bool id ->
       let aexp1 = anf exp1 in
       let aexp2 = anf exp2 in
       let aval1, wrap = to_aval aexp1 in

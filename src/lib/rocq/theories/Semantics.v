@@ -30,6 +30,8 @@ Module IdMiniOrdered <: OrderedType.MiniOrderedType.
     match (id1, id2) with
     | (Id_aux (Id s1) _, Id_aux (Id s2) _) => Is_true (eq_string s1 s2)
     | (Id_aux (Operator s1) _, Id_aux (Operator s2) _) => Is_true (eq_string s1 s2)
+    | (Id_aux And_bool _, Id_aux And_bool _) => True
+    | (Id_aux Or_bool _, Id_aux Or_bool _) => True
     | _ => False
     end.
 
@@ -38,20 +40,24 @@ Module IdMiniOrdered <: OrderedType.MiniOrderedType.
     | (Id_aux (Id s1) _, Id_aux (Id s2) _) => Is_true (lt_string s1 s2)
     | (Id_aux (Operator s1) _, Id_aux (Operator s2) _) => Is_true (lt_string s1 s2)
     | (Id_aux (Id _) _, Id_aux (Operator _) _) => True
-    | _ => False
+    | (Id_aux (Operator _) _, Id_aux (Id _) _) => False
+    | (Id_aux And_bool _, _) => False
+    | (_, Id_aux And_bool _) => True
+    | (Id_aux Or_bool _, _) => False
+    | (_, Id_aux Or_bool _) => True
     end.
 
   Theorem eq_refl : forall x, eq x x.
   Proof.
     destruct x as [aux ?].
-    destruct aux; cbn; apply eq_string_refl.
+    destruct aux; cbn; try trivial; apply eq_string_refl.
   Qed.
 
   Theorem eq_sym : forall x y, eq x y -> eq y x.
   Proof.
     destruct x as [x_aux ?].
     destruct y as [y_aux ?].
-    destruct x_aux as [x_s | x_s]; destruct y_aux as [y_s | y_s]; cbn; trivial; apply eq_string_sym.
+    destruct x_aux as [| | x_s | x_s]; destruct y_aux as [| | y_s | y_s]; cbn; try trivial; apply eq_string_sym.
   Qed.
 
   Theorem eq_trans : forall x y z, eq x y -> eq y z -> eq x z.
@@ -59,7 +65,7 @@ Module IdMiniOrdered <: OrderedType.MiniOrderedType.
     destruct x as [x_aux ?].
     destruct y as [y_aux ?].
     destruct z as [z_aux ?].
-    destruct x_aux as [x_s | x_s]; destruct y_aux as [y_s | y_s]; destruct z_aux as [z_s | z_s].
+    destruct x_aux as [| | x_s | x_s]; destruct y_aux as [| | y_s | y_s]; destruct z_aux as [| | z_s | z_s].
     all: cbn.
     all: try easy.
     all: apply eq_string_trans.
@@ -70,7 +76,7 @@ Module IdMiniOrdered <: OrderedType.MiniOrderedType.
     destruct x as [x_aux ?].
     destruct y as [y_aux ?].
     destruct z as [z_aux ?].
-    destruct x_aux as [x_s | x_s]; destruct y_aux as [y_s | y_s]; destruct z_aux as [z_s | z_s].
+    destruct x_aux as [| | x_s | x_s]; destruct y_aux as [| | y_s | y_s]; destruct z_aux as [| | z_s | z_s].
     all: cbn.
     all: try easy.
     all: apply lt_string_trans.
@@ -80,7 +86,7 @@ Module IdMiniOrdered <: OrderedType.MiniOrderedType.
   Proof.
     destruct x as [x_aux ?].
     destruct y as [y_aux ?].
-    destruct x_aux as [x_s | x_s]; destruct y_aux as [y_s | y_s].
+    destruct x_aux as [| | x_s | x_s]; destruct y_aux as [| | y_s | y_s].
     all: cbn.
     all: try easy.
     all: apply lt_string_not_eq_string.
@@ -91,35 +97,28 @@ Module IdMiniOrdered <: OrderedType.MiniOrderedType.
     intros x y.
     destruct x as [x_aux ?].
     destruct y as [y_aux ?].
-    destruct x_aux as [x_s | x_s]; destruct y_aux as [y_s | y_s].
-    - {
-      case_eq (lt_string x_s y_s); intros.
-      - apply OrderedType.LT. cbn. rewrite H. reflexivity.
-      - {
-        case_eq (eq_string x_s y_s); intros.
-        - apply OrderedType.EQ. cbn. rewrite H0. reflexivity.
-        - apply OrderedType.GT.
+    destruct x_aux as [| | x_s | x_s]; destruct y_aux as [| | y_s | y_s].
+    all: try (apply OrderedType.LT; reflexivity).
+    all: try (apply OrderedType.EQ; reflexivity).
+    all: try (apply OrderedType.GT; reflexivity).
+    - case_eq (lt_string x_s y_s); intros.
+      + apply OrderedType.LT. cbn. rewrite H. reflexivity.
+      + case_eq (eq_string x_s y_s); intros.
+        * apply OrderedType.EQ. cbn. rewrite H0. reflexivity.
+        * apply OrderedType.GT.
           cbn.
           apply lt_string_as_gt.
           rewrite H. unfold Is_true. easy.
           rewrite H0. unfold Is_true. easy.
-      }
-    }
-    - apply OrderedType.LT. reflexivity.
-    - apply OrderedType.GT. reflexivity.
-    - {
-      case_eq (lt_string x_s y_s); intros.
-      - apply OrderedType.LT. cbn. rewrite H. reflexivity.
-      - {
-        case_eq (eq_string x_s y_s); intros.
-        - apply OrderedType.EQ. cbn. rewrite H0. reflexivity.
-        - apply OrderedType.GT.
+    - case_eq (lt_string x_s y_s); intros.
+      + apply OrderedType.LT. cbn. rewrite H. reflexivity.
+      + case_eq (eq_string x_s y_s); intros.
+        * apply OrderedType.EQ. cbn. rewrite H0. reflexivity.
+        * apply OrderedType.GT.
           cbn.
           apply lt_string_as_gt.
           rewrite H. unfold Is_true. easy.
           rewrite H0. unfold Is_true. easy.
-      }
-    }
   Defined.
 End IdMiniOrdered.
 
@@ -550,10 +549,6 @@ Module Type SemanticExt.
   Parameter value_sub_int : value -> value -> value.
 
   Parameter complete_value : list (value * num * num) -> value.
-
-  Parameter is_and_bool : id -> bool.
-
-  Parameter is_or_bool : id -> bool.
 End SemanticExt.
 
 Module Make (T : SemanticExt).
@@ -1370,45 +1365,47 @@ Module Make (T : SemanticExt).
         end
     | E_typ _ x => step x
     | E_app id args =>
-        if T.is_or_bool id then
-          match args with
-          | [lhs; rhs] =>
-              b ← get_bool lhs;
-              match b with
-              | Evaluated true => wrap (E_internal_value (V_bool true))
-              | Evaluated false => pure rhs
-              | Unevaluated =>
-                  lhs' ← step lhs;
-                  wrap (E_app id [lhs'; rhs])
-              end
-          | _ => Runtime_type_error (fst annot)
-          end
-        else if T.is_and_bool id then
-          match args with
-          | [lhs; rhs] =>
-              b ← get_bool lhs;
-              match b with
-              | Evaluated true => pure rhs
-              | Evaluated false => wrap (E_internal_value (V_bool false))
-              | Unevaluated =>
-                  lhs' ← step lhs;
-                  wrap (E_app id [lhs'; rhs])
-              end
-          | _ => Runtime_type_error (fst annot)
-          end
-        else
-          let '(evaluated, unevaluated) := left_to_right args in
-          match unevaluated with
-          | u :: us =>
-              u' ← step u;
-              wrap (E_app id (evaluated ++ (u' :: us)))
-          | [] =>
-              r ← Call id (all_evaluated evaluated) pure;
-              match r with
-              | Return_ok v => wrap (E_internal_value v)
-              | Return_exception exn => wrap (E_throw (E_aux (E_internal_value exn) annot))
-              end
-          end
+        match id with
+        | Id_aux Or_bool _ =>
+            match args with
+            | [lhs; rhs] =>
+                b ← get_bool lhs;
+                match b with
+                | Evaluated true => wrap (E_internal_value (V_bool true))
+                | Evaluated false => pure rhs
+                | Unevaluated =>
+                    lhs' ← step lhs;
+                    wrap (E_app id [lhs'; rhs])
+                end
+            | _ => Runtime_type_error (fst annot)
+            end
+        | Id_aux And_bool _ =>
+            match args with
+            | [lhs; rhs] =>
+                b ← get_bool lhs;
+                match b with
+                | Evaluated true => pure rhs
+                | Evaluated false => wrap (E_internal_value (V_bool false))
+                | Unevaluated =>
+                    lhs' ← step lhs;
+                    wrap (E_app id [lhs'; rhs])
+                end
+            | _ => Runtime_type_error (fst annot)
+            end
+        | _ =>
+            let '(evaluated, unevaluated) := left_to_right args in
+            match unevaluated with
+            | u :: us =>
+                u' ← step u;
+                wrap (E_app id (evaluated ++ (u' :: us)))
+            | [] =>
+                r ← Call id (all_evaluated evaluated) pure;
+                match r with
+                | Return_ok v => wrap (E_internal_value v)
+                | Return_exception exn => wrap (E_throw (E_aux (E_internal_value exn) annot))
+                end
+            end
+        end
     | E_app_infix lhs id rhs =>
         match left_to_right2 lhs rhs with
         | LTR2_0 _ _ =>
@@ -1651,8 +1648,8 @@ Module Make (T : SemanticExt).
     rewrite ltr_tuple in Heq_anonymous.
     inversion Heq_anonymous.
     rewrite <- (take_drop_evaluated_concat T.tannot args).
-    rewrite <- H1.
-    rewrite <- H0.
+    rewrite <- H3.
+    rewrite <- H2.
     rewrite map_app.
     rewrite fold_right_app.
     cbn.

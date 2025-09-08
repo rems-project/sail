@@ -15,8 +15,8 @@ libsail_coverage:
 
 extraction:
 	$(MAKE) -C src/lib/rocq
-	cp src/lib/rocq/*.mli src/lib/extraction
-	cp src/lib/rocq/*.ml src/lib/extraction
+	mv src/lib/rocq/*.mli src/lib/extraction
+	mv src/lib/rocq/*.ml src/lib/extraction
 
 # Build binary tarball. The lib directory is very large and not needed
 # for running the compiler. TARBALL_EXTRA_BIN can be used to bundle z3.

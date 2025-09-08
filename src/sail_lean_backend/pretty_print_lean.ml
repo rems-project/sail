@@ -102,7 +102,11 @@ let rec fix_id name =
   | _ -> if String.contains name '#' then fix_id (String.concat "_" (Util.split_on_char '#' name)) else name
 
 let doc_id_ctor (Id_aux (i, _)) =
-  match i with Id i -> string (fix_id i) | Operator x -> string (Util.zencode_string ("op " ^ x))
+  match i with
+  | And_bool -> string "and_bool"
+  | Or_bool -> string "or_bool"
+  | Id i -> string (fix_id i)
+  | Operator x -> string (Util.zencode_string ("op " ^ x))
 
 let doc_kid ctx (Kid_aux (Var x, _) as ki) =
   match KBindings.find_opt ki ctx.kid_id_renames with

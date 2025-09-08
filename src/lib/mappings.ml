@@ -265,7 +265,7 @@ let mapping_guard mapping direction = append_id mapping ("_" ^ direction_to_stri
 let rec conj_exp = function
   | [] -> mk_lit_exp L_true
   | [exp] -> exp
-  | exp :: exps -> mk_exp (E_app (mk_id "and_bool", [exp; conj_exp exps]))
+  | exp :: exps -> mk_exp (E_app (mk_and_bool ~loc:(exp_loc exp) (), [exp; conj_exp exps]))
 
 let tuple_exp = function [exp] -> exp | exps -> mk_exp (E_tuple exps)
 
