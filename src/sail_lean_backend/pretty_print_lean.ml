@@ -1392,7 +1392,7 @@ let rec collect_imports_rec (cg : Callgraph.callgraph) (defs : (tannot, env) def
       if should_print_function_def d then failwith "this case of collect_imports_rec should be unreachable"
       else collect_imports_rec cg defs' map accs acc idx nonempty_print
 
-let rec collect_imports (cg : Callgraph.callgraph) (defs : (tannot, env) def list) =
+let collect_imports (cg : Callgraph.callgraph) (defs : (tannot, env) def list) =
   collect_imports_rec cg defs Bindings.empty [] IntSet.empty 0 false
 
 (* Remove all imports for now, they will be printed in other files. Probably just for testing. *)

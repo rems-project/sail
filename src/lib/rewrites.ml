@@ -52,6 +52,8 @@ open Type_check
 open Spec_analysis
 open Rewriter
 
+open Coq_def_annot
+
 let fresh_name_counter = ref 0
 
 let fresh_name () =
@@ -4836,8 +4838,7 @@ let all_rewriters =
     );
     ("top_sort_defs", basic_rewriter (fun _ -> Callgraph.top_sort_defs));
     ( "constant_fold",
-      String_rewriter
-        (fun target -> basic_rewriter (fun _ -> Constant_fold.(rewrite_constant_function_calls no_fixed target)))
+      String_rewriter (fun target -> basic_rewriter Constant_fold.(rewrite_constant_function_calls no_fixed target))
     );
     ("split", String_rewriter (fun str -> base_rewriter (rewrite_split_fun_ctor_pats str)));
     ("properties", basic_rewriter (fun _ -> Property.rewrite));
@@ -4875,9 +4876,6 @@ let rewrites_interpreter =
     ("pat_string_append", []);
     ("mapping_patterns", []);
     ("undefined", [Bool_arg false]);
-    ("tuple_assignments", []);
-    ("vector_concat_assignments", []);
-    ("simple_assignments", []);
   ]
 
 type rewrite_sequence =

@@ -138,7 +138,7 @@ let generate_val_spec env id args l annot =
       (mk_val_spec (VS_val_spec (typschm, generate_fun_id id args, None)), ksubsts)
   | _, Typ_aux (_, l) -> raise (Reporting.err_unreachable l __POS__ "Function val spec is not a function type")
 
-let const_prop target defs substs ksubsts exp =
+let const_prop target env defs substs ksubsts exp =
   (* Constant_propagation currently only supports nexps for kid substitutions *)
   let nexp_substs =
     KBindings.bindings ksubsts
@@ -146,13 +146,13 @@ let const_prop target defs substs ksubsts exp =
     |> List.concat
     |> List.fold_left (fun s (v, i) -> KBindings.add v i s) KBindings.empty
   in
-  Constant_propagation.const_prop target defs
+  Constant_propagation.const_prop target env defs
     (Constant_propagation.referenced_vars exp)
     (substs, nexp_substs) Bindings.empty exp
   |> fst
 
 (* Propagate constant arguments into function clause pexp *)
-let prop_args_pexp target ast ksubsts args pexp =
+let prop_args_pexp target env ast ksubsts args pexp =
   let pat, guard, exp, annot = destruct_pexp pexp in
   let pats = match pat with P_aux (P_tuple pats, _) -> pats | _ -> [pat] in
   let match_arg (E_aux (_, (l, _)) as arg) pat (pats, substs) =
@@ -170,7 +170,7 @@ let prop_args_pexp target ast ksubsts args pexp =
     else (pat :: pats, substs)
   in
   let pats, substs = List.fold_right2 match_arg args pats ([], Bindings.empty) in
-  let exp' = const_prop target ast substs ksubsts exp in
+  let exp' = const_prop target env ast substs ksubsts exp in
   let pat' = match pats with [pat] -> pat | _ -> P_aux (P_tuple pats, (Parse_ast.Unknown, empty_tannot)) in
   construct_pexp (pat', guard, exp', annot)
 
@@ -199,7 +199,7 @@ let rewrite_ast target effect_info env ({ defs; _ } as ast) =
               in
               let valspec, ksubsts = generate_val_spec env id args l annot in
               let const_prop_funcl (FCL_aux (FCL_funcl (_, pexp), (fcl_def_annot, _))) =
-                let pexp' = prop_args_pexp target ast ksubsts args pexp |> rewrite_pexp |> strip_pexp in
+                let pexp' = prop_args_pexp target env ast ksubsts args pexp |> rewrite_pexp |> strip_pexp in
                 FCL_aux (FCL_funcl (id', pexp'), (def_annot_map_loc gen_loc fcl_def_annot, empty_uannot))
               in
               valspecs := valspec :: !valspecs;
@@ -217,7 +217,7 @@ let rewrite_ast target effect_info env ({ defs; _ } as ast) =
           let pexp' =
             if List.exists (fun id' -> Id.compare id id' = 0) !targets then (
               let pat, guard, body, annot = destruct_pexp pexp in
-              let body' = const_prop target ast Bindings.empty KBindings.empty body in
+              let body' = const_prop target env ast Bindings.empty KBindings.empty body in
               rewrite_pexp (construct_pexp (pat, guard, recheck_exp body', annot))
             )
             else pexp

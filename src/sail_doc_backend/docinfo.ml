@@ -54,6 +54,8 @@ open Ast_defs
 open Ast_util
 open Parse_ast.Attribute_data
 
+open Coq_def_annot
+
 module Reformatter = Pretty_print_sail.Printer (struct
   let insert_braces = true
   let resugar = true
@@ -143,8 +145,6 @@ let json_of_hyperlink = function
           ("file", `String file);
           ("loc", `List [`Int c1; `Int c2]);
         ]
-
-let json_of_hyperlinks = function [] -> `Null | links -> `List (List.map json_of_hyperlink links)
 
 let hyperlinks_from_def files def =
   let open Rewriter in
@@ -452,7 +452,7 @@ module Generator (Converter : Markdown.CONVERTER) (Config : CONFIG) = struct
     {
       source = doc_loc (fst vs_annot) Type_check.strip_val_spec Reformatter.doc_spec vs;
       type_source = doc_loc ts_l (fun ts -> ts) Reformatter.doc_typschm ts;
-      attributes = List.map (fun (_, attr, data) -> (attr, data)) def_annot.attrs;
+      attributes = List.map (fun (_, attr_info) -> attr_info) def_annot.attrs;
     }
 
   let docinfo_for_type_def (TD_aux (_, annot) as td) =
@@ -464,14 +464,14 @@ module Generator (Converter : Markdown.CONVERTER) (Config : CONFIG) = struct
       type_source = doc_loc typ_l (fun typ -> typ) Reformatter.doc_typ typ;
       exp_source =
         Option.map (fun (E_aux (_, (l, _)) as exp) -> doc_loc l Type_check.strip_exp Reformatter.doc_exp exp) exp;
-      attributes = List.map (fun (_, attr, data) -> (attr, data)) def_annot.attrs;
+      attributes = List.map (fun (_, attr_info) -> attr_info) def_annot.attrs;
     }
 
   let docinfo_for_let def_annot (LB_aux (LB_val (_, exp), annot) as lbind) =
     {
       source = doc_loc (fst annot) Type_check.strip_letbind Reformatter.doc_letbind lbind;
       exp_source = doc_loc (exp_loc exp) Type_check.strip_exp Reformatter.doc_exp exp;
-      attributes = List.map (fun (_, attr, data) -> (attr, data)) def_annot.attrs;
+      attributes = List.map (fun (_, attr_info) -> attr_info) def_annot.attrs;
     }
 
   let funcl_splits ~ast ~error_loc:l attrs exp =
@@ -494,7 +494,9 @@ module Generator (Converter : Markdown.CONVERTER) (Config : CONFIG) = struct
                 (fun splits member ->
                   let checked_member = Type_check.check_exp env (mk_exp (E_id member)) enum_typ in
                   let substs = (Bindings.singleton split_id checked_member, KBindings.empty) in
-                  let propagated, _ = Constant_propagation.const_prop "doc" ast IdSet.empty substs Bindings.empty exp in
+                  let propagated, _ =
+                    Constant_propagation.const_prop "doc" env ast IdSet.empty substs Bindings.empty exp
+                  in
                   let propagated_doc =
                     Raw (pretty_printer (Type_check.strip_exp propagated) |> Document.to_string |> encode)
                   in
@@ -516,7 +518,7 @@ module Generator (Converter : Markdown.CONVERTER) (Config : CONFIG) = struct
     let comment = match comment with None -> get_doc_comment (fst annot) | comment -> comment in
 
     (* Try to use the inner attributes if we have no outer attributes. *)
-    let attrs = match outer_annot with None -> (fst annot).attrs | Some outer -> (fst outer).attrs in
+    let attrs = get_def_attributes @@ fst @@ match outer_annot with None -> annot | Some outer -> outer in
 
     let source = doc_loc (fst annot).loc Type_check.strip_funcl Reformatter.doc_funcl clause in
     let pat, guard, exp =
@@ -583,7 +585,9 @@ module Generator (Converter : Markdown.CONVERTER) (Config : CONFIG) = struct
   let docinfo_for_mapcl n (MCL_aux (aux, (def_annot, _)) as clause) =
     let source = doc_loc def_annot.loc Type_check.strip_mapcl Reformatter.doc_mapcl clause in
     let parse_wavedrom_attr = function _, Some (AD_aux (AD_string s, _)) -> Some s | _, Some _ | _, None -> None in
-    let wavedrom_attr = Option.bind (find_attribute_opt "wavedrom" def_annot.attrs) parse_wavedrom_attr in
+    let wavedrom_attr =
+      Option.bind (find_attribute_opt "wavedrom" @@ get_def_attributes def_annot) parse_wavedrom_attr
+    in
 
     let left, left_wavedrom, right, right_wavedrom, body =
       match aux with
@@ -613,7 +617,7 @@ module Generator (Converter : Markdown.CONVERTER) (Config : CONFIG) = struct
       right;
       right_wavedrom = Option.map encode right_wavedrom;
       body;
-      attributes = List.map (fun (_, attr, data) -> (attr, data)) def_annot.attrs;
+      attributes = List.map (fun (_, attr_info) -> attr_info) def_annot.attrs;
     }
 
   let included_mapping_clause files (MCL_aux (_, (def_annot, _))) = included_loc files def_annot.loc

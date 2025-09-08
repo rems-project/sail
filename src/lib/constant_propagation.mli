@@ -55,6 +55,7 @@ open Type_check
 
 val const_prop :
   string ->
+  Env.t ->
   typed_ast ->
   IdSet.t ->
   tannot exp Bindings.t * nexp KBindings.t ->

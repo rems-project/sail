@@ -55,6 +55,7 @@ open Parse_ast.Attribute_data
 module Big_int = Nat_big_num
 
 open Type_internal
+open Coq_def_annot
 
 let set_tc_debug level = opt_tc_debug := level
 
@@ -3200,7 +3201,7 @@ and bind_vector_concat_generic :
 
     (* Now we have two similar cases for ordinary vectors and bitvectors *)
     match elem_typ with
-    | Some elem_typ ->
+    | Some elem_typ -> (
         let fold_len len pat =
           let l = funcs.get_loc_typed pat in
           let len', elem_typ' = destruct_vector_typ l env (funcs.typ_of pat) in
@@ -3211,19 +3212,18 @@ and bind_vector_concat_generic :
         let before_len = List.fold_left fold_len (nint 0) before_uninferred in
         let after_len = List.fold_left fold_len (nint 0) after_uninferred in
         let inferred_len = nexp_simp (nsum before_len after_len) in
-        begin
-          match uninferred with
-          | Some (total_len, uninferred_pat) ->
-              let total_len = nconstant total_len in
-              let uninferred_len = nexp_simp (nminus total_len inferred_len) in
-              let checked_pat, env, guards' = funcs.bind env uninferred_pat (vector_typ uninferred_len elem_typ) in
-              ( annotate (before_uninferred @ [checked_pat] @ after_uninferred) (vector_typ total_len elem_typ),
-                env,
-                guards' @ guards
-              )
-          | None -> (annotate before_uninferred (dvector_typ env inferred_len elem_typ), env, guards)
-        end
-    | None ->
+        match uninferred with
+        | Some (total_len, uninferred_pat) ->
+            let total_len = nconstant total_len in
+            let uninferred_len = nexp_simp (nminus total_len inferred_len) in
+            let checked_pat, env, guards' = funcs.bind env uninferred_pat (vector_typ uninferred_len elem_typ) in
+            ( annotate (before_uninferred @ [checked_pat] @ after_uninferred) (vector_typ total_len elem_typ),
+              env,
+              guards' @ guards
+            )
+        | None -> (annotate before_uninferred (dvector_typ env inferred_len elem_typ), env, guards)
+      )
+    | None -> (
         let fold_len len pat =
           let l = funcs.get_loc_typed pat in
           let len' = destruct_bitvector_typ l env (funcs.typ_of pat) in
@@ -3233,19 +3233,18 @@ and bind_vector_concat_generic :
         let before_len = List.fold_left fold_len (nint 0) before_uninferred in
         let after_len = List.fold_left fold_len (nint 0) after_uninferred in
         let inferred_len = nexp_simp (nsum before_len after_len) in
-        begin
-          match uninferred with
-          | Some (total_len, uninferred_pat) ->
-              let total_len = nconstant total_len in
-              let uninferred_len = nexp_simp (nminus total_len inferred_len) in
-              let uninferred_len = check_constant_len (funcs.get_loc uninferred_pat) uninferred_len in
-              let checked_pat, env, guards' = funcs.bind env uninferred_pat (bitvector_typ uninferred_len) in
-              ( annotate (before_uninferred @ [checked_pat] @ after_uninferred) (bitvector_typ total_len),
-                env,
-                guards' @ guards
-              )
-          | None -> (annotate before_uninferred (bitvector_typ inferred_len), env, guards)
-        end
+        match uninferred with
+        | Some (total_len, uninferred_pat) ->
+            let total_len = nconstant total_len in
+            let uninferred_len = nexp_simp (nminus total_len inferred_len) in
+            let uninferred_len = check_constant_len (funcs.get_loc uninferred_pat) uninferred_len in
+            let checked_pat, env, guards' = funcs.bind env uninferred_pat (bitvector_typ uninferred_len) in
+            ( annotate (before_uninferred @ [checked_pat] @ after_uninferred) (bitvector_typ total_len),
+              env,
+              guards' @ guards
+            )
+        | None -> (annotate before_uninferred (bitvector_typ inferred_len), env, guards)
+      )
   )
 
 and bind_vector_concat_pat l env uannot pat pats typ_opt =
@@ -4883,7 +4882,7 @@ let check_mapdef env def_annot (MD_aux (MD_mapping (id, tannot_opt, mapcls), (l,
   end;
   (* If we have a val spec, then the mapping itself shouldn't be marked as private *)
   let fix_body_visibility =
-    match (have_val_spec, def_annot.visibility) with
+    match (have_val_spec, def_annot.Coq_def_annot.visibility) with
     | Some vs_l, Private priv_l ->
         raise
           (Reporting.err_general
@@ -5184,16 +5183,16 @@ and check_scattered : Env.t -> env def_annot -> uannot scattered_def -> typed_de
   match sdef with
   | SD_function (id, tannot_opt) ->
       ( [DEF_aux (DEF_scattered (SD_aux (SD_function (id, tannot_opt), (l, empty_tannot))), def_annot)],
-        Env.add_scattered_id id def_annot.attrs env
+        Env.add_scattered_id id (get_def_attributes def_annot) env
       )
   | SD_mapping (id, tannot_opt) ->
       ( [DEF_aux (DEF_scattered (SD_aux (SD_mapping (id, tannot_opt), (l, empty_tannot))), def_annot)],
-        Env.add_scattered_id id def_annot.attrs env
+        Env.add_scattered_id id (get_def_attributes def_annot) env
       )
   | SD_end id -> ([], Env.end_scattered_id ~at:l id env)
   | SD_enum id ->
       ( [DEF_aux (DEF_scattered (SD_aux (SD_enum id, (l, empty_tannot))), def_annot)],
-        Env.add_scattered_enum id def_annot.attrs env
+        Env.add_scattered_enum id (get_def_attributes def_annot) env
       )
   | SD_enumcl (id, member) ->
       ( [DEF_aux (DEF_scattered (SD_aux (SD_enumcl (id, member), (l, empty_tannot))), def_annot)],
@@ -5234,14 +5233,14 @@ and check_scattered : Env.t -> env def_annot -> uannot scattered_def -> typed_de
       let funcl_env = Env.add_typquant fcl_def_annot.loc typq env in
       let funcl = check_funcl funcl_env funcl typ in
       ( [DEF_aux (DEF_scattered (SD_aux (SD_funcl funcl, (l, mk_tannot ~uannot funcl_env typ))), def_annot)],
-        Env.add_scattered_id id def_annot.attrs env
+        Env.add_scattered_id id (get_def_attributes def_annot) env
       )
   | SD_mapcl (id, mapcl) ->
       let typq, typ = Env.get_val_spec id env in
       let mapcl_env = Env.add_typquant l typq env in
       let mapcl = check_mapcl mapcl_env mapcl typ in
       ( [DEF_aux (DEF_scattered (SD_aux (SD_mapcl (id, mapcl), (l, empty_tannot))), def_annot)],
-        Env.add_scattered_id id def_annot.attrs env
+        Env.add_scattered_id id (get_def_attributes def_annot) env
       )
 
 and check_outcome : Env.t -> outcome_spec -> untyped_def list -> outcome_spec * typed_def list * Env.t =

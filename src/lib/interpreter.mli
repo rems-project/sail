@@ -48,39 +48,32 @@ open Ast
 open Ast_util
 open Ast_defs
 open Type_check
+open Value_type
 open Value
 
 type gstate = {
   registers : value Bindings.t;
   allow_registers : bool; (* For some uses we want to forbid touching any registers. *)
   primops : (value list -> value) StringMap.t;
-  letbinds : tannot letbind list;
+  letbinds : value Bindings.t;
   fundefs : tannot fundef Bindings.t;
   typecheck_env : Env.t;
 }
+
+module VariableUpdate : sig
+  type accessor
+end
 
 type lstate = { locals : value Bindings.t }
 
 type state = lstate * gstate
 
-type return_value = Return_ok of value | Return_exception of value
+type return_value = Semantics.return_value
 
 module Monad : sig
   type 'a t
 
-  val return : 'a -> 'a t
-
-  val ( let+ ) : ('a -> 'b) -> 'a t -> 'b t
-
-  val ( >>= ) : 'a t -> ('a -> 'b t) -> 'b t
-  val ( let* ) : 'a t -> ('a -> 'b t) -> 'b t
-
-  val ( >> ) : unit t -> 'a t -> 'a t
-
-  val catch : 'a t -> ('a, value) Result.t t
-  val throw : value -> 'a t
-
-  val call : id -> value list -> return_value t
+  val pure : 'a -> 'a t
 end
 
 type frame =
@@ -98,8 +91,8 @@ type frame =
       * string
 
 and effect_request =
-  | Read_reg of string * (value -> state -> frame)
-  | Write_reg of string * value * (unit -> state -> frame)
+  | Read_reg of string * VariableUpdate.accessor list * (value -> state -> frame)
+  | Write_reg of string * VariableUpdate.accessor list * value * (unit -> state -> frame)
   | Outcome of id * value list * (return_value -> tannot exp Monad.t)
 
 val stack_string : string Lazy.t * lstate * (return_value -> tannot exp Monad.t) -> string Lazy.t

@@ -64,7 +64,7 @@ def test_interpreter(name):
             basename = os.path.splitext(os.path.basename(filename))[0]
             tests[filename] = os.fork()
             if tests[filename] == 0:
-                step('\'{}\' -undefined_gen -is execute.isail -iout {}.iresult {}'.format(sail, basename, filename))
+                step('timeout 10s \'{}\' -undefined_gen -is execute.isail -iout {}.iresult {}'.format(sail, basename, filename))
                 step('diff {}.iresult {}.expect'.format(basename, basename))
                 step('rm {}.iresult'.format(basename))
                 print_ok(filename)

@@ -50,6 +50,9 @@ open Parse_ast.Attribute_data
 open Util
 module Big_int = Nat_big_num
 
+open Coq_def_annot
+open Coq_extern
+
 (* The type of annotations for untyped AST nodes *)
 type uannot = { attrs : (l * string * attribute_data option) list }
 
@@ -110,7 +113,7 @@ let find_attribute_opt attr1 attrs =
   List.find_opt (fun (_, attr2, _) -> attr1 = attr2) attrs |> Option.map (fun (l, _, arg) -> (l, arg))
 
 let mk_def_annot ?doc ?(attrs = []) ?(visibility = Public) l env =
-  { doc_comment = doc; attrs; visibility; loc = l; env }
+  { doc_comment = doc; attrs = List.map (fun (x, y, z) -> (x, (y, z))) attrs; visibility; loc = l; env }
 
 let map_clause_annot f (def_annot, annot) =
   let l, annot' = f (def_annot.loc, annot) in
@@ -121,7 +124,8 @@ let is_public = function Public -> true | _ -> false
 
 let visibility_loc = function Private l -> l | Public -> Parse_ast.Unknown
 
-let uannot_of_def_annot (def_annot : 'a def_annot) : uannot = { attrs = def_annot.attrs }
+let uannot_of_def_annot (def_annot : 'a def_annot) : uannot =
+  { attrs = List.map (fun (x, (y, z)) -> (x, y, z)) def_annot.attrs }
 
 let def_annot_map_loc f (annot : 'a def_annot) = { annot with loc = f annot.loc }
 
@@ -134,13 +138,15 @@ let def_annot_map_env (f : 'a -> 'b) (annot : 'a def_annot) =
     env = f annot.env;
   }
 
-let add_def_attribute l attr arg (annot : 'a def_annot) = { annot with attrs = (l, attr, arg) :: annot.attrs }
+let add_def_attribute l attr arg (annot : 'a def_annot) = { annot with attrs = (l, (attr, arg)) :: annot.attrs }
 
 let get_def_attribute attr (annot : 'a def_annot) =
-  List.find_opt (fun (_, attr', _) -> attr = attr') annot.attrs |> Option.map (fun (l, _, arg) -> (l, arg))
+  List.find_opt (fun (_, (attr', _)) -> attr = attr') annot.attrs |> Option.map (fun (l, (_, arg)) -> (l, arg))
+
+let get_def_attributes (annot : 'a def_annot) = List.map (fun (x, (y, z)) -> (x, y, z)) annot.attrs
 
 let remove_def_attribute attr (annot : 'a def_annot) =
-  { annot with attrs = List.filter (fun (_, attr', _) -> attr <> attr') annot.attrs }
+  { annot with attrs = List.filter (fun (_, (attr', _)) -> attr <> attr') annot.attrs }
 
 type mut = Immutable | Mutable
 

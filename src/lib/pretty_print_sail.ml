@@ -67,10 +67,13 @@ module Printer (Config : PRINT_CONFIG) = struct
   let doc_attr attr arg = string (string_of_attribute attr arg) ^^ space
 
   let doc_def_annot def_annot =
-    (match def_annot.doc_comment with Some str -> string "/*!" ^^ string str ^^ string "*/" ^^ hardline | _ -> empty)
+    ( match def_annot.Coq_def_annot.doc_comment with
+    | Some str -> string "/*!" ^^ string str ^^ string "*/" ^^ hardline
+    | _ -> empty
+    )
     ^^ ( match def_annot.attrs with
        | [] -> empty
-       | attrs -> separate_map hardline (fun (_, attr, arg) -> doc_attr attr arg) attrs ^^ hardline
+       | attrs -> separate_map hardline (fun (_, (attr, arg)) -> doc_attr attr arg) attrs ^^ hardline
        )
     ^^ match def_annot.visibility with Private _ -> string "private" ^^ space | Public -> empty
 
@@ -788,7 +791,7 @@ module Printer (Config : PRINT_CONFIG) = struct
     let doc_extern ext =
       match ext with
       | Some ext ->
-          let purity = if ext.pure then string "pure" ^^ space else string "monadic" ^^ space in
+          let purity = if ext.Coq_extern.pure then string "pure" ^^ space else string "monadic" ^^ space in
           let docs =
             List.map
               (fun (backend, rep) -> string (backend ^ ":") ^^ space ^^ utf8string ("\"" ^ String.escaped rep ^ "\""))
