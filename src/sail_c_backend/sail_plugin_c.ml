@@ -84,7 +84,8 @@ let c_options =
       Arg.String (fun prefix -> C_backend.opt_prefix := prefix),
       "prefix generated C functions"
     );
-    (Flag.create ~prefix:["c"] "generate_header", Arg.Set opt_generate_header, "generate a separate header file");
+    (* This flag is deprecated and will be removed in future. A header is always generated. *)
+    (Flag.create ~prefix:["c"] "generate_header", Arg.Set opt_generate_header, "");
     ( Flag.create ~prefix:["c"] ~arg:"parameters" "extra_params",
       Arg.String (fun params -> C_backend.opt_extra_params := Some params),
       "generate C functions with additional parameters"
@@ -191,7 +192,6 @@ let c_target out_file { ast; effect_info; env; default_sail_dir; _ } =
   let reserveds, overrides = collect_c_name_info ast in
 
   let module Codegen = C_backend.Codegen (struct
-    let generate_header = !opt_generate_header
     let includes = !opt_includes_c
     let header_includes = !opt_includes_h
     let no_main = !opt_no_main
@@ -205,24 +205,25 @@ let c_target out_file { ast; effect_info; env; default_sail_dir; _ } =
     let preserve_types = !opt_preserve_types
   end) in
   Reporting.opt_warnings := true;
+
+  if !opt_generate_header then
+    Reporting.warn "Deprecated" Parse_ast.Unknown
+      "--c-generate-header is deprecated and has no effect; headers are now always generated";
+
   let echo_output, out_file = match out_file with Some f -> (false, f) | None -> (true, "out") in
   let basename = Filename.basename out_file in
 
-  let header_opt, impl = Codegen.compile_ast env effect_info basename ast in
+  let header, impl = Codegen.compile_ast env effect_info basename ast in
 
   let impl_out = Util.open_output_with_check (out_file ^ ".c") in
   output_string impl_out.channel impl;
   flush impl_out.channel;
   Util.close_output_with_check impl_out;
 
-  ( match header_opt with
-  | None -> ()
-  | Some header ->
-      let header_out = Util.open_output_with_check (out_file ^ ".h") in
-      output_string header_out.channel header;
-      flush header_out.channel;
-      Util.close_output_with_check header_out
-  );
+  let header_out = Util.open_output_with_check (out_file ^ ".h") in
+  output_string header_out.channel header;
+  flush header_out.channel;
+  Util.close_output_with_check header_out;
 
   if echo_output then (
     Reporting.warn "Deprecated" Parse_ast.Unknown
