@@ -8,13 +8,10 @@ open Parse_ast
 
 let loc n m = Range (n, m)
 
-let mk_id id n m = Id_aux (id, loc n m)
+let mk_id id n m = Id_aux (Id id, loc n m)
+let mk_op op n m = Id_aux (Operator op, loc n m)
 let mk_typ t n m = ATyp_aux (t, loc n m)
 let mk_exp e n m = E_aux (e, loc n m)
-
-let deinfix = function
-  | (Id_aux (Id v, l)) -> Id_aux (Operator v, l)
-  | (Id_aux (Operator v, l)) -> Id_aux (Id v, l)
 
 type lchain =
   LC_lt
@@ -78,158 +75,158 @@ typ_eof:
     { t }
 
 typ0:
-  | typ1 Op0 typ1 { mk_typ (ATyp_app (deinfix $2, [$1; $3])) $startpos $endpos }
-  | typ0l Op0l typ1 { mk_typ (ATyp_app (deinfix $2, [$1; $3])) $startpos $endpos }
-  | typ1 Op0r typ0r { mk_typ (ATyp_app (deinfix $2, [$1; $3])) $startpos $endpos }
+  | typ1 Op0 typ1 { mk_typ (ATyp_app ($2, [$1; $3])) $startpos $endpos }
+  | typ0l Op0l typ1 { mk_typ (ATyp_app ($2, [$1; $3])) $startpos $endpos }
+  | typ1 Op0r typ0r { mk_typ (ATyp_app ($2, [$1; $3])) $startpos $endpos }
   | typ1 { $1 }
 typ0l:
-  | typ1 Op0 typ1 { mk_typ (ATyp_app (deinfix $2, [$1; $3])) $startpos $endpos }
-  | typ0l Op0l typ1 { mk_typ (ATyp_app (deinfix $2, [$1; $3])) $startpos $endpos }
+  | typ1 Op0 typ1 { mk_typ (ATyp_app ($2, [$1; $3])) $startpos $endpos }
+  | typ0l Op0l typ1 { mk_typ (ATyp_app ($2, [$1; $3])) $startpos $endpos }
   | typ1 { $1 }
 typ0r:
-  | typ1 Op0 typ1 { mk_typ (ATyp_app (deinfix $2, [$1; $3])) $startpos $endpos }
-  | typ1 Op0r typ0r { mk_typ (ATyp_app (deinfix $2, [$1; $3])) $startpos $endpos }
+  | typ1 Op0 typ1 { mk_typ (ATyp_app ($2, [$1; $3])) $startpos $endpos }
+  | typ1 Op0r typ0r { mk_typ (ATyp_app ($2, [$1; $3])) $startpos $endpos }
   | typ1 { $1 }
 
 typ1:
-  | typ2 Op1 typ2 { mk_typ (ATyp_app (deinfix $2, [$1; $3])) $startpos $endpos }
-  | typ1l Op1l typ2 { mk_typ (ATyp_app (deinfix $2, [$1; $3])) $startpos $endpos }
-  | typ2 Op1r typ1r { mk_typ (ATyp_app (deinfix $2, [$1; $3])) $startpos $endpos }
+  | typ2 Op1 typ2 { mk_typ (ATyp_app ($2, [$1; $3])) $startpos $endpos }
+  | typ1l Op1l typ2 { mk_typ (ATyp_app ($2, [$1; $3])) $startpos $endpos }
+  | typ2 Op1r typ1r { mk_typ (ATyp_app ($2, [$1; $3])) $startpos $endpos }
   | typ2 { $1 }
 typ1l:
-  | typ2 Op1 typ2 { mk_typ (ATyp_app (deinfix $2, [$1; $3])) $startpos $endpos }
-  | typ1l Op1l typ2 { mk_typ (ATyp_app (deinfix $2, [$1; $3])) $startpos $endpos }
+  | typ2 Op1 typ2 { mk_typ (ATyp_app ($2, [$1; $3])) $startpos $endpos }
+  | typ1l Op1l typ2 { mk_typ (ATyp_app ($2, [$1; $3])) $startpos $endpos }
   | typ2 { $1 }
 typ1r:
-  | typ2 Op1 typ2 { mk_typ (ATyp_app (deinfix $2, [$1; $3])) $startpos $endpos }
-  | typ2 Op1r typ1r { mk_typ (ATyp_app (deinfix $2, [$1; $3])) $startpos $endpos }
+  | typ2 Op1 typ2 { mk_typ (ATyp_app ($2, [$1; $3])) $startpos $endpos }
+  | typ2 Op1r typ1r { mk_typ (ATyp_app ($2, [$1; $3])) $startpos $endpos }
   | typ2 { $1 }
 
 typ2:
-  | typ3 Op2 typ3 { mk_typ (ATyp_app (deinfix $2, [$1; $3])) $startpos $endpos }
-  | typ2l Op2l typ3 { mk_typ (ATyp_app (deinfix $2, [$1; $3])) $startpos $endpos }
-  | typ3 Op2r typ2r { mk_typ (ATyp_app (deinfix $2, [$1; $3])) $startpos $endpos }
+  | typ3 Op2 typ3 { mk_typ (ATyp_app ($2, [$1; $3])) $startpos $endpos }
+  | typ2l Op2l typ3 { mk_typ (ATyp_app ($2, [$1; $3])) $startpos $endpos }
+  | typ3 Op2r typ2r { mk_typ (ATyp_app ($2, [$1; $3])) $startpos $endpos }
   | typ3 { $1 }
 typ2l:
-  | typ3 Op2 typ3 { mk_typ (ATyp_app (deinfix $2, [$1; $3])) $startpos $endpos }
-  | typ2l Op2l typ3 { mk_typ (ATyp_app (deinfix $2, [$1; $3])) $startpos $endpos }
+  | typ3 Op2 typ3 { mk_typ (ATyp_app ($2, [$1; $3])) $startpos $endpos }
+  | typ2l Op2l typ3 { mk_typ (ATyp_app ($2, [$1; $3])) $startpos $endpos }
   | typ3 { $1 }
 typ2r:
-  | typ3 Op2 typ3 { mk_typ (ATyp_app (deinfix $2, [$1; $3])) $startpos $endpos }
-  | typ3 Op2r typ2r { mk_typ (ATyp_app (deinfix $2, [$1; $3])) $startpos $endpos }
+  | typ3 Op2 typ3 { mk_typ (ATyp_app ($2, [$1; $3])) $startpos $endpos }
+  | typ3 Op2r typ2r { mk_typ (ATyp_app ($2, [$1; $3])) $startpos $endpos }
   | typ3 { $1 }
 
 typ3:
-  | typ4 Op3 typ4 { mk_typ (ATyp_app (deinfix $2, [$1; $3])) $startpos $endpos }
-  | typ3l Op3l typ4 { mk_typ (ATyp_app (deinfix $2, [$1; $3])) $startpos $endpos }
-  | typ4 Op3r typ3r { mk_typ (ATyp_app (deinfix $2, [$1; $3])) $startpos $endpos }
+  | typ4 Op3 typ4 { mk_typ (ATyp_app ($2, [$1; $3])) $startpos $endpos }
+  | typ3l Op3l typ4 { mk_typ (ATyp_app ($2, [$1; $3])) $startpos $endpos }
+  | typ4 Op3r typ3r { mk_typ (ATyp_app ($2, [$1; $3])) $startpos $endpos }
   | typ4 { $1 }
 typ3l:
-  | typ4 Op3 typ4 { mk_typ (ATyp_app (deinfix $2, [$1; $3])) $startpos $endpos }
-  | typ3l Op3l typ4 { mk_typ (ATyp_app (deinfix $2, [$1; $3])) $startpos $endpos }
+  | typ4 Op3 typ4 { mk_typ (ATyp_app ($2, [$1; $3])) $startpos $endpos }
+  | typ3l Op3l typ4 { mk_typ (ATyp_app ($2, [$1; $3])) $startpos $endpos }
   | typ4 { $1 }
 typ3r:
-  | typ4 Op3 typ4 { mk_typ (ATyp_app (deinfix $2, [$1; $3])) $startpos $endpos }
-  | typ4 Op3r typ3r { mk_typ (ATyp_app (deinfix $2, [$1; $3])) $startpos $endpos }
+  | typ4 Op3 typ4 { mk_typ (ATyp_app ($2, [$1; $3])) $startpos $endpos }
+  | typ4 Op3r typ3r { mk_typ (ATyp_app ($2, [$1; $3])) $startpos $endpos }
   | typ4 { $1 }
 
 typ4:
-  | typ5 Op4 typ5 { mk_typ (ATyp_app (deinfix $2, [$1; $3])) $startpos $endpos }
-  | typ4l Op4l typ5 { mk_typ (ATyp_app (deinfix $2, [$1; $3])) $startpos $endpos }
-  | typ5 Op4r typ4r { mk_typ (ATyp_app (deinfix $2, [$1; $3])) $startpos $endpos }
+  | typ5 Op4 typ5 { mk_typ (ATyp_app ($2, [$1; $3])) $startpos $endpos }
+  | typ4l Op4l typ5 { mk_typ (ATyp_app ($2, [$1; $3])) $startpos $endpos }
+  | typ5 Op4r typ4r { mk_typ (ATyp_app ($2, [$1; $3])) $startpos $endpos }
   | lchain { desugar_lchain $1 $startpos $endpos }
   | rchain { desugar_rchain $1 $startpos $endpos }
   | typ5 { $1 }
 typ4l:
-  | typ5 Op4 typ5 { mk_typ (ATyp_app (deinfix $2, [$1; $3])) $startpos $endpos }
-  | typ4l Op4l typ5 { mk_typ (ATyp_app (deinfix $2, [$1; $3])) $startpos $endpos }
+  | typ5 Op4 typ5 { mk_typ (ATyp_app ($2, [$1; $3])) $startpos $endpos }
+  | typ4l Op4l typ5 { mk_typ (ATyp_app ($2, [$1; $3])) $startpos $endpos }
   | typ5 { $1 }
 typ4r:
-  | typ5 Op4 typ5 { mk_typ (ATyp_app (deinfix $2, [$1; $3])) $startpos $endpos }
-  | typ5 Op4r typ4r { mk_typ (ATyp_app (deinfix $2, [$1; $3])) $startpos $endpos }
+  | typ5 Op4 typ5 { mk_typ (ATyp_app ($2, [$1; $3])) $startpos $endpos }
+  | typ5 Op4r typ4r { mk_typ (ATyp_app ($2, [$1; $3])) $startpos $endpos }
   | typ5 { $1 }
 
 typ5:
   | typ6 In typ6 { mk_typ (ATyp_in ($1, $3)) $startpos $endpos }
-  | typ6 Op5 typ6 { mk_typ (ATyp_app (deinfix $2, [$1; $3])) $startpos $endpos }
-  | typ5l Op5l typ6 { mk_typ (ATyp_app (deinfix $2, [$1; $3])) $startpos $endpos }
-  | typ6 Op5r typ5r { mk_typ (ATyp_app (deinfix $2, [$1; $3])) $startpos $endpos }
+  | typ6 Op5 typ6 { mk_typ (ATyp_app ($2, [$1; $3])) $startpos $endpos }
+  | typ5l Op5l typ6 { mk_typ (ATyp_app ($2, [$1; $3])) $startpos $endpos }
+  | typ6 Op5r typ5r { mk_typ (ATyp_app ($2, [$1; $3])) $startpos $endpos }
   | typ6 { $1 }
 typ5l:
-  | typ6 Op5 typ6 { mk_typ (ATyp_app (deinfix $2, [$1; $3])) $startpos $endpos }
-  | typ5l Op5l typ6 { mk_typ (ATyp_app (deinfix $2, [$1; $3])) $startpos $endpos }
+  | typ6 Op5 typ6 { mk_typ (ATyp_app ($2, [$1; $3])) $startpos $endpos }
+  | typ5l Op5l typ6 { mk_typ (ATyp_app ($2, [$1; $3])) $startpos $endpos }
   | typ6 { $1 }
 typ5r:
-  | typ6 Op5 typ6 { mk_typ (ATyp_app (deinfix $2, [$1; $3])) $startpos $endpos }
-  | typ6 Op5r typ5 { mk_typ (ATyp_app (deinfix $2, [$1; $3])) $startpos $endpos }
+  | typ6 Op5 typ6 { mk_typ (ATyp_app ($2, [$1; $3])) $startpos $endpos }
+  | typ6 Op5r typ5 { mk_typ (ATyp_app ($2, [$1; $3])) $startpos $endpos }
   | typ6 { $1 }
 
 typ6:
-  | typ7 Op6 typ7 { mk_typ (ATyp_app (deinfix $2, [$1; $3])) $startpos $endpos }
-  | typ6l Op6l typ7 { mk_typ (ATyp_app (deinfix $2, [$1; $3])) $startpos $endpos }
-  | typ7 Op6r typ6r { mk_typ (ATyp_app (deinfix $2, [$1; $3])) $startpos $endpos }
+  | typ7 Op6 typ7 { mk_typ (ATyp_app ($2, [$1; $3])) $startpos $endpos }
+  | typ6l Op6l typ7 { mk_typ (ATyp_app ($2, [$1; $3])) $startpos $endpos }
+  | typ7 Op6r typ6r { mk_typ (ATyp_app ($2, [$1; $3])) $startpos $endpos }
   | typ6l Plus typ7 { mk_typ (ATyp_sum ($1, $3)) $startpos $endpos }
   | typ6l Minus typ7 { mk_typ (ATyp_minus ($1, $3)) $startpos $endpos }
   | typ7 { $1 }
 typ6l:
-  | typ7 Op6 typ7 { mk_typ (ATyp_app (deinfix $2, [$1; $3])) $startpos $endpos }
-  | typ6l Op6l typ7 { mk_typ (ATyp_app (deinfix $2, [$1; $3])) $startpos $endpos }
+  | typ7 Op6 typ7 { mk_typ (ATyp_app ($2, [$1; $3])) $startpos $endpos }
+  | typ6l Op6l typ7 { mk_typ (ATyp_app ($2, [$1; $3])) $startpos $endpos }
   | typ6l Plus typ7 { mk_typ (ATyp_sum ($1, $3)) $startpos $endpos }
   | typ6l Minus typ7 { mk_typ (ATyp_minus ($1, $3)) $startpos $endpos }
   | typ7 { $1 }
 typ6r:
-  | typ7 Op6 typ7 { mk_typ (ATyp_app (deinfix $2, [$1; $3])) $startpos $endpos }
-  | typ7 Op6r typ6r { mk_typ (ATyp_app (deinfix $2, [$1; $3])) $startpos $endpos }
+  | typ7 Op6 typ7 { mk_typ (ATyp_app ($2, [$1; $3])) $startpos $endpos }
+  | typ7 Op6r typ6r { mk_typ (ATyp_app ($2, [$1; $3])) $startpos $endpos }
   | typ7 { $1 }
 
 typ7:
-  | typ8 Op7 typ8 { mk_typ (ATyp_app (deinfix $2, [$1; $3])) $startpos $endpos }
-  | typ7l Op7l typ8 { mk_typ (ATyp_app (deinfix $2, [$1; $3])) $startpos $endpos }
-  | typ8 Op7r typ7r { mk_typ (ATyp_app (deinfix $2, [$1; $3])) $startpos $endpos }
+  | typ8 Op7 typ8 { mk_typ (ATyp_app ($2, [$1; $3])) $startpos $endpos }
+  | typ7l Op7l typ8 { mk_typ (ATyp_app ($2, [$1; $3])) $startpos $endpos }
+  | typ8 Op7r typ7r { mk_typ (ATyp_app ($2, [$1; $3])) $startpos $endpos }
   | typ7l Star typ8 { mk_typ (ATyp_times ($1, $3)) $startpos $endpos }
   | typ8 { $1 }
 typ7l:
-  | typ8 Op7 typ8 { mk_typ (ATyp_app (deinfix $2, [$1; $3])) $startpos $endpos }
-  | typ7l Op7l typ8 { mk_typ (ATyp_app (deinfix $2, [$1; $3])) $startpos $endpos }
+  | typ8 Op7 typ8 { mk_typ (ATyp_app ($2, [$1; $3])) $startpos $endpos }
+  | typ7l Op7l typ8 { mk_typ (ATyp_app ($2, [$1; $3])) $startpos $endpos }
   | typ7l Star typ8 { mk_typ (ATyp_times ($1, $3)) $startpos $endpos }
   | typ8 { $1 }
 typ7r:
-  | typ8 Op7 typ8 { mk_typ (ATyp_app (deinfix $2, [$1; $3])) $startpos $endpos }
-  | typ8 Op7r typ7r { mk_typ (ATyp_app (deinfix $2, [$1; $3])) $startpos $endpos }
+  | typ8 Op7 typ8 { mk_typ (ATyp_app ($2, [$1; $3])) $startpos $endpos }
+  | typ8 Op7r typ7r { mk_typ (ATyp_app ($2, [$1; $3])) $startpos $endpos }
   | typ8 { $1 }
 
 typ8:
-  | typ9 Op8 typ9 { mk_typ (ATyp_app (deinfix $2, [$1; $3])) $startpos $endpos }
-  | typ8l Op8l typ9 { mk_typ (ATyp_app (deinfix $2, [$1; $3])) $startpos $endpos }
-  | typ9 Op8r typ8r { mk_typ (ATyp_app (deinfix $2, [$1; $3])) $startpos $endpos }
+  | typ9 Op8 typ9 { mk_typ (ATyp_app ($2, [$1; $3])) $startpos $endpos }
+  | typ8l Op8l typ9 { mk_typ (ATyp_app ($2, [$1; $3])) $startpos $endpos }
+  | typ9 Op8r typ8r { mk_typ (ATyp_app ($2, [$1; $3])) $startpos $endpos }
   | TwoCaret typ9 { mk_typ (ATyp_exp $2) $startpos $endpos }
   | Minus typ9 { mk_typ (ATyp_neg $2) $startpos $endpos}
   | typ9 { $1 }
 typ8l:
-  | typ9 Op8 typ9 { mk_typ (ATyp_app (deinfix $2, [$1; $3])) $startpos $endpos }
-  | typ8l Op8l typ9 { mk_typ (ATyp_app (deinfix $2, [$1; $3])) $startpos $endpos }
+  | typ9 Op8 typ9 { mk_typ (ATyp_app ($2, [$1; $3])) $startpos $endpos }
+  | typ8l Op8l typ9 { mk_typ (ATyp_app ($2, [$1; $3])) $startpos $endpos }
   | TwoCaret typ9 { mk_typ (ATyp_exp $2) $startpos $endpos }
   | Minus typ9 { mk_typ (ATyp_neg $2) $startpos $endpos}
   | typ9 { $1 }
 typ8r:
-  | typ9 Op8 typ9 { mk_typ (ATyp_app (deinfix $2, [$1; $3])) $startpos $endpos }
-  | typ9 Op8r typ8r { mk_typ (ATyp_app (deinfix $2, [$1; $3])) $startpos $endpos }
+  | typ9 Op8 typ9 { mk_typ (ATyp_app ($2, [$1; $3])) $startpos $endpos }
+  | typ9 Op8r typ8r { mk_typ (ATyp_app ($2, [$1; $3])) $startpos $endpos }
   | TwoCaret typ9 { mk_typ (ATyp_exp $2) $startpos $endpos }
   | Minus typ9 { mk_typ (ATyp_neg $2) $startpos $endpos}
   | typ9 { $1 }
 
 typ9:
-  | atomic_typ Op9 atomic_typ { mk_typ (ATyp_app (deinfix $2, [$1; $3])) $startpos $endpos }
-  | typ9l Op9l atomic_typ { mk_typ (ATyp_app (deinfix $2, [$1; $3])) $startpos $endpos }
-  | atomic_typ Op9r typ9r { mk_typ (ATyp_app (deinfix $2, [$1; $3])) $startpos $endpos }
+  | atomic_typ Op9 atomic_typ { mk_typ (ATyp_app ($2, [$1; $3])) $startpos $endpos }
+  | typ9l Op9l atomic_typ { mk_typ (ATyp_app ($2, [$1; $3])) $startpos $endpos }
+  | atomic_typ Op9r typ9r { mk_typ (ATyp_app ($2, [$1; $3])) $startpos $endpos }
   | atomic_typ { $1 }
 typ9l:
-  | atomic_typ Op9 atomic_typ { mk_typ (ATyp_app (deinfix $2, [$1; $3])) $startpos $endpos }
-  | typ9l Op9l atomic_typ { mk_typ (ATyp_app (deinfix $2, [$1; $3])) $startpos $endpos }
+  | atomic_typ Op9 atomic_typ { mk_typ (ATyp_app ($2, [$1; $3])) $startpos $endpos }
+  | typ9l Op9l atomic_typ { mk_typ (ATyp_app ($2, [$1; $3])) $startpos $endpos }
   | atomic_typ { $1 }
 typ9r:
-  | atomic_typ Op9 atomic_typ { mk_typ (ATyp_app (deinfix $2, [$1; $3])) $startpos $endpos }
-  | atomic_typ Op9r typ9r { mk_typ (ATyp_app (deinfix $2, [$1; $3])) $startpos $endpos }
+  | atomic_typ Op9 atomic_typ { mk_typ (ATyp_app ($2, [$1; $3])) $startpos $endpos }
+  | atomic_typ Op9r typ9r { mk_typ (ATyp_app ($2, [$1; $3])) $startpos $endpos }
   | atomic_typ { $1 }
 
 lchain:
@@ -318,10 +315,10 @@ exp3r:
 
 exp4:
   | exp5 Op4 exp5 { mk_exp (E_app_infix ($1, $2, $3)) $startpos $endpos }
-  | exp5 Lt exp5 { mk_exp (E_app_infix ($1, mk_id (Id "<") $startpos($2) $endpos($2), $3)) $startpos $endpos }
-  | exp5 Gt exp5 { mk_exp (E_app_infix ($1, mk_id (Id ">") $startpos($2) $endpos($2), $3)) $startpos $endpos }
-  | exp5 LtEq exp5 { mk_exp (E_app_infix ($1, mk_id (Id "<=") $startpos($2) $endpos($2), $3)) $startpos $endpos }
-  | exp5 GtEq exp5 { mk_exp (E_app_infix ($1, mk_id (Id ">=") $startpos($2) $endpos($2), $3)) $startpos $endpos }
+  | exp5 Lt exp5 { mk_exp (E_app_infix ($1, mk_op "<" $startpos($2) $endpos($2), $3)) $startpos $endpos }
+  | exp5 Gt exp5 { mk_exp (E_app_infix ($1, mk_op ">" $startpos($2) $endpos($2), $3)) $startpos $endpos }
+  | exp5 LtEq exp5 { mk_exp (E_app_infix ($1, mk_op "<=" $startpos($2) $endpos($2), $3)) $startpos $endpos }
+  | exp5 GtEq exp5 { mk_exp (E_app_infix ($1, mk_op ">=" $startpos($2) $endpos($2), $3)) $startpos $endpos }
   | exp4l Op4l exp5 { mk_exp (E_app_infix ($1, $2, $3)) $startpos $endpos }
   | exp5 Op4r exp4r { mk_exp (E_app_infix ($1, $2, $3)) $startpos $endpos }
   | exp5 { $1 }
@@ -356,14 +353,14 @@ exp6:
   | exp7 Op6 exp7 { mk_exp (E_app_infix ($1, $2, $3)) $startpos $endpos }
   | exp6l Op6l exp7 { mk_exp (E_app_infix ($1, $2, $3)) $startpos $endpos }
   | exp7 Op6r exp6r { mk_exp (E_app_infix ($1, $2, $3)) $startpos $endpos }
-  | exp6l Plus exp7 { mk_exp (E_app_infix ($1, mk_id (Id "+") $startpos($2) $endpos($2), $3)) $startpos $endpos }
-  | exp6l Minus exp7 { mk_exp (E_app_infix ($1, mk_id (Id "-") $startpos($2) $endpos($2), $3)) $startpos $endpos }
+  | exp6l Plus exp7 { mk_exp (E_app_infix ($1, mk_op "+" $startpos($2) $endpos($2), $3)) $startpos $endpos }
+  | exp6l Minus exp7 { mk_exp (E_app_infix ($1, mk_op "-" $startpos($2) $endpos($2), $3)) $startpos $endpos }
   | exp7 { $1 }
 exp6l:
   | exp7 Op6 exp7 { mk_exp (E_app_infix ($1, $2, $3)) $startpos $endpos }
   | exp6l Op6l exp7 { mk_exp (E_app_infix ($1, $2, $3)) $startpos $endpos }
-  | exp6l Plus exp7 { mk_exp (E_app_infix ($1, mk_id (Id "+") $startpos($2) $endpos($2), $3)) $startpos $endpos }
-  | exp6l Minus exp7 { mk_exp (E_app_infix ($1, mk_id (Id "-") $startpos($2) $endpos($2), $3)) $startpos $endpos }
+  | exp6l Plus exp7 { mk_exp (E_app_infix ($1, mk_op "+" $startpos($2) $endpos($2), $3)) $startpos $endpos }
+  | exp6l Minus exp7 { mk_exp (E_app_infix ($1, mk_op "-" $startpos($2) $endpos($2), $3)) $startpos $endpos }
   | exp7 { $1 }
 exp6r:
   | exp7 Op6 exp7 { mk_exp (E_app_infix ($1, $2, $3)) $startpos $endpos }
@@ -374,12 +371,12 @@ exp7:
   | exp8 Op7 exp8 { mk_exp (E_app_infix ($1, $2, $3)) $startpos $endpos }
   | exp7l Op7l exp8 { mk_exp (E_app_infix ($1, $2, $3)) $startpos $endpos }
   | exp8 Op7r exp7r { mk_exp (E_app_infix ($1, $2, $3)) $startpos $endpos }
-  | exp7l Star exp8 { mk_exp (E_app_infix ($1, mk_id (Id "*") $startpos($2) $endpos($2), $3)) $startpos $endpos }
+  | exp7l Star exp8 { mk_exp (E_app_infix ($1, mk_op "*" $startpos($2) $endpos($2), $3)) $startpos $endpos }
   | exp8 { $1 }
 exp7l:
   | exp8 Op7 exp8 { mk_exp (E_app_infix ($1, $2, $3)) $startpos $endpos }
   | exp7l Op7l exp8 { mk_exp (E_app_infix ($1, $2, $3)) $startpos $endpos }
-  | exp7l Star exp8 { mk_exp (E_app_infix ($1, mk_id (Id "*") $startpos($2) $endpos($2), $3)) $startpos $endpos }
+  | exp7l Star exp8 { mk_exp (E_app_infix ($1, mk_op "*" $startpos($2) $endpos($2), $3)) $startpos $endpos }
   | exp8 { $1 }
 exp7r:
   | exp8 Op7 exp8 { mk_exp (E_app_infix ($1, $2, $3)) $startpos $endpos }
@@ -390,17 +387,17 @@ exp8:
   | exp9 Op8 exp9 { mk_exp (E_app_infix ($1, $2, $3)) $startpos $endpos }
   | exp8l Op8l exp9 { mk_exp (E_app_infix ($1, $2, $3)) $startpos $endpos }
   | exp9 Op8r exp8r { mk_exp (E_app_infix ($1, $2, $3)) $startpos $endpos }
-  | TwoCaret exp9 { mk_exp (E_app (mk_id (Id "pow2") $startpos($1) $endpos($1), [$2])) $startpos $endpos }
+  | TwoCaret exp9 { mk_exp (E_app (mk_id "pow2" $startpos($1) $endpos($1), [$2])) $startpos $endpos }
   | exp9 { $1 }
 exp8l:
   | exp9 Op8 exp9 { mk_exp (E_app_infix ($1, $2, $3)) $startpos $endpos }
   | exp8l Op8l exp9 { mk_exp (E_app_infix ($1, $2, $3)) $startpos $endpos }
-  | TwoCaret exp9 { mk_exp (E_app (mk_id (Id "pow2") $startpos($1) $endpos($1), [$2])) $startpos $endpos }
+  | TwoCaret exp9 { mk_exp (E_app (mk_id "pow2" $startpos($1) $endpos($1), [$2])) $startpos $endpos }
   | exp9 { $1 }
 exp8r:
   | exp9 Op8 exp9 { mk_exp (E_app_infix ($1, $2, $3)) $startpos $endpos }
   | exp9 Op8r exp8r { mk_exp (E_app_infix ($1, $2, $3)) $startpos $endpos }
-  | TwoCaret exp9 { mk_exp (E_app (mk_id (Id "pow2") $startpos($1) $endpos($1), [$2])) $startpos $endpos }
+  | TwoCaret exp9 { mk_exp (E_app (mk_id "pow2" $startpos($1) $endpos($1), [$2])) $startpos $endpos }
   | exp9 { $1 }
 
 exp9:

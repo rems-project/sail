@@ -163,6 +163,7 @@ val is_or_bool : id -> bool
 val mk_and_bool : ?loc:l -> unit -> id
 val mk_or_bool : ?loc:l -> unit -> id
 val mk_id : ?loc:l -> string -> id
+val mk_operator : ?loc:l -> string -> id
 val mk_kid : ?loc:l -> string -> kid
 val mk_nc : ?loc:l -> n_constraint_aux -> n_constraint
 val mk_nexp : ?loc:l -> nexp_aux -> nexp
@@ -496,9 +497,6 @@ val id_of_dec_spec : 'a dec_spec -> id
 
 val natural_id_compare : id -> id -> int
 val natural_sort_ids : id list -> id list
-
-val deinfix : id -> id
-val infix_swap : id -> id
 
 val id_of_kid : kid -> id
 val kid_of_id : id -> kid

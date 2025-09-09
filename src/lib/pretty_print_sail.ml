@@ -337,20 +337,20 @@ module Printer (Config : PRINT_CONFIG) = struct
         (fun r (x, y) -> Bindings.add x y r)
         Bindings.empty
         [
-          (mk_id "^", (InfixR, 8));
-          (mk_id "*", (InfixL, 7));
-          (mk_id "/", (InfixL, 7));
-          (mk_id "%", (InfixL, 7));
-          (mk_id "+", (InfixL, 6));
-          (mk_id "-", (InfixL, 6));
-          (mk_id "!=", (Infix, 4));
-          (mk_id ">", (Infix, 4));
-          (mk_id "<", (Infix, 4));
-          (mk_id ">=", (Infix, 4));
-          (mk_id "<=", (Infix, 4));
-          (mk_id "==", (Infix, 4));
-          (mk_id "&", (InfixR, 3));
-          (mk_id "|", (InfixR, 2));
+          (mk_operator "^", (InfixR, 8));
+          (mk_operator "*", (InfixL, 7));
+          (mk_operator "/", (InfixL, 7));
+          (mk_operator "%", (InfixL, 7));
+          (mk_operator "+", (InfixL, 6));
+          (mk_operator "-", (InfixL, 6));
+          (mk_operator "!=", (Infix, 4));
+          (mk_operator ">", (Infix, 4));
+          (mk_operator "<", (Infix, 4));
+          (mk_operator ">=", (Infix, 4));
+          (mk_operator "<=", (Infix, 4));
+          (mk_operator "==", (Infix, 4));
+          (mk_operator "&", (InfixR, 3));
+          (mk_operator "|", (InfixR, 2));
         ]
     in
     ref (fixities' : (prec * int) Bindings.t)
@@ -502,7 +502,7 @@ module Printer (Config : PRINT_CONFIG) = struct
         | Some (name, false), _ ->
             handle_setter (mk_id name) (lazy (doc_exp (E_aux (E_app (mk_id name, exps), (l, uannot)))))
         | None, [x; y] when Config.resugar && match id with Id_aux (Operator _, _) -> true | _ -> false ->
-            doc_exp (E_aux (E_app_infix (x, infix_swap id, y), (l, uannot)))
+            doc_exp (E_aux (E_app_infix (x, id, y), (l, uannot)))
         | None, [v; n] when Config.resugar && Id.compare id (mk_id "vector_access") = 0 ->
             doc_atomic_exp v ^^ char '[' ^^ doc_exp n ^^ char ']'
         | None, [v; n; m] when Config.resugar && Id.compare id (mk_id "vector_subrange") = 0 ->

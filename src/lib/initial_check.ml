@@ -302,7 +302,7 @@ let parse_infix :
                | _ -> (
                    match StringMap.find_opt op ctx.fixities with
                    | Some (prec, level) ->
-                       let id = P.Id_aux (P.Id op, P.Range (s, e)) in
+                       let id = P.Id_aux (P.Operator op, P.Range (s, e)) in
                        (to_infix_parser_op (prec, level, id), s, e)
                    | None -> raise (Reporting.err_general (P.Range (s, e)) ("Undeclared fixity for operator " ^ op))
                  )
@@ -1461,9 +1461,9 @@ and to_ast_record_try ctx (P.E_aux (exp, l) : P.exp) : uannot fexp option * (l *
   match exp with
   | P.E_app_infix (left, op, r) -> (
       match (left, op) with
-      | P.E_aux (P.E_id id, li), P.Id_aux (P.Id "=", leq) ->
+      | P.E_aux (P.E_id id, li), P.Id_aux (P.Operator "=", leq) ->
           (Some (FE_aux (FE_fexp (to_ast_id ctx id, to_ast_exp ctx r), (l, empty_uannot))), None)
-      | P.E_aux (_, li), P.Id_aux (P.Id "=", leq) ->
+      | P.E_aux (_, li), P.Id_aux (P.Operator "=", leq) ->
           (None, Some (li, "Expected an identifier to begin this field assignment"))
       | P.E_aux (P.E_id id, li), P.Id_aux (_, leq) ->
           (None, Some (leq, "Expected a field assignment to be identifier = expression"))

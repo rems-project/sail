@@ -800,9 +800,9 @@ atomic_exp:
 
 fexp_exp:
   | atomic_exp Eq exp
-    { mk_exp (E_app_infix ($1, mk_id (Id "=") $startpos($2) $endpos($2), $3)) $startpos $endpos }
+    { mk_exp (E_app_infix ($1, mk_id (Operator "=") $startpos($2) $endpos($2), $3)) $startpos $endpos }
   | id
-    { mk_exp (E_app_infix (mk_exp (E_id $1) $startpos $endpos, mk_id (Id "=") $startpos $endpos, mk_exp (E_id $1) $startpos $endpos)) $startpos $endpos }
+    { mk_exp (E_app_infix (mk_exp (E_id $1) $startpos $endpos, mk_id (Operator "=") $startpos $endpos, mk_exp (E_id $1) $startpos $endpos)) $startpos $endpos }
 
 fexp_exp_list:
   | fexp_exp
