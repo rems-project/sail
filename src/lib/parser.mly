@@ -88,16 +88,14 @@ let simp_infix_typ = function
   | ATyp_aux (ATyp_infix [(IT_primary typ, _, _)], _) -> typ
   | typ -> typ
 
-let rec same_pat_ops (Id_aux (_, l) as op) = function
-  | ((Id_aux (_, l') as op'), _) :: ops ->
-     if string_of_id op = string_of_id op' then
-       same_pat_ops op ops
+let rec same_pat_ops op l = function
+  | (op', l', _) :: ops ->
+     if op = op' then
+       same_pat_ops op l ops
      else
        raise (Reporting.err_syntax_loc
-                (Parse_ast.Hint (string_of_id op ^ " here", l, l'))
-                (Printf.sprintf "Use parenthesis to group operators in pattern. Operators %s and %s found at same level."
-                                (string_of_id op)
-                                (string_of_id op')))
+                (Parse_ast.Hint (op ^ " here", l, l'))
+                (Printf.sprintf "Use parenthesis to group operators in pattern. Operators %s and %s found at same level." op op'))
   | [] -> ()
 
 let mk_typ t n m = ATyp_aux (t, loc n m)
@@ -298,9 +296,9 @@ exp_op:
   | Star       { "*" }
 
 pat_op:
-  | At         { mk_id (Id "@") $startpos $endpos }
-  | ColonColon { mk_id (Id "::") $startpos $endpos }
-  | Caret      { mk_id (Id "^") $startpos $endpos }
+  | At         { "@" }
+  | ColonColon { "::" }
+  | Caret      { "^" }
 
 id_list:
   | id
@@ -488,26 +486,26 @@ typschm_eof:
     { $1 }
 
 pat1:
-  | p = atomic_pat; ps = list(op = pat_op; q = atomic_pat { (op, q) })
+  | p = atomic_pat; ps = list(op = pat_op; q = atomic_pat { (op, loc $startpos(op) $endpos(op), q) })
     { match ps with
       | [] -> p
-      | (op, _) :: rest ->
-         same_pat_ops op rest;
-         match string_of_id op with
+      | (op, l, _) :: rest ->
+         same_pat_ops op l rest;
+         match op with
          | "@" ->
-            mk_pat (P_vector_concat (p :: List.map snd ps)) $startpos $endpos
+            mk_pat (P_vector_concat (p :: List.map (fun (_, _, x) -> x) ps)) $startpos $endpos
          | "::" ->
             let rec cons_list = function
-              | [(_, x)] -> x
-              | ((_, x) :: xs) -> mk_pat (P_cons (x, cons_list xs)) (first_pat_range $startpos x) $endpos
+              | [(_, _, x)] -> x
+              | ((_, _, x) :: xs) -> mk_pat (P_cons (x, cons_list xs)) (first_pat_range $startpos x) $endpos
               | _ -> assert false in
             mk_pat (P_cons (p, cons_list ps)) $startpos $endpos
          | "^" ->
-            mk_pat (P_string_append (p :: List.map snd ps)) $startpos $endpos
+            mk_pat (P_string_append (p :: List.map (fun (_, _, x) -> x) ps)) $startpos $endpos
          | _ ->
             raise (Reporting.err_syntax_loc
                      (loc $startpos $endpos)
-                     ("Unrecognised operator " ^ string_of_id op ^ " in pattern."))
+                     ("Unrecognised operator " ^ op ^ " in pattern."))
     }
 
 pat:
@@ -1086,26 +1084,25 @@ fun_def_list:
     { $1 :: $2 }
 
 mpat:
-  | p = atomic_mpat; ps = list(op = pat_op; q = atomic_mpat { (op, q) })
+  | p = atomic_mpat; ps = list(op = pat_op; q = atomic_mpat { (op, loc $startpos(op) $endpos(op), q) })
     { match ps with
       | [] -> p
-      | (op, _) :: rest ->
-         same_pat_ops op rest;
-         match string_of_id op with
+      | (op, l, _) :: rest ->
+         same_pat_ops op l rest;
+         match op with
          | "@" ->
-            mk_mpat (MP_vector_concat (p :: List.map snd ps)) $startpos $endpos
+            mk_mpat (MP_vector_concat (p :: List.map (fun (_, _, x) -> x) ps)) $startpos $endpos
          | "::" ->
             let rec cons_list = function
-              | [(_, x)] -> x
-              | ((_, x) :: xs) -> mk_mpat (MP_cons (x, cons_list xs)) (first_mpat_range $startpos x) $endpos
+              | [(_, _, x)] -> x
+              | ((_, _, x) :: xs) -> mk_mpat (MP_cons (x, cons_list xs)) (first_mpat_range $startpos x) $endpos
               | _ -> assert false in
             mk_mpat (MP_cons (p, cons_list ps)) $startpos $endpos
          | "^" ->
-            mk_mpat (MP_string_append (p :: List.map snd ps)) $startpos $endpos
+            mk_mpat (MP_string_append (p :: List.map (fun (_, _, x) -> x) ps)) $startpos $endpos
          | _ ->
-            raise (Reporting.err_syntax_loc
-                     (loc $startpos $endpos)
-                     ("Unrecognised operator " ^ string_of_id op ^ " in mapping pattern."))
+            let l = loc $startpos $endpos in
+            raise (Reporting.err_syntax_loc l ("Unrecognised operator " ^ op ^ " in mapping pattern."))
     }
   | p = atomic_mpat; As; id = id
     { mk_mpat (MP_as (p, id)) $startpos $endpos }
