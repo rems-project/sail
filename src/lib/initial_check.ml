@@ -1307,7 +1307,7 @@ and to_ast_exp ctx exp =
             | [] -> E_app (to_ast_id ctx f, [])
             | exps -> E_app (to_ast_id ctx f, exps)
           )
-        | P.E_app_infix (left, op, right) -> E_app_infix (to_ast_exp ctx left, to_ast_id ctx op, to_ast_exp ctx right)
+        | P.E_app_infix (left, op, right) -> E_app (to_ast_id ctx op, [to_ast_exp ctx left; to_ast_exp ctx right])
         | P.E_tuple exps -> E_tuple (List.map (to_ast_exp ctx) exps)
         | P.E_if (e1, e2, e3, _) -> E_if (to_ast_exp ctx e1, to_ast_exp ctx e2, to_ast_exp ctx e3)
         | P.E_for (id, e1, e2, e3, atyp, e4) ->

@@ -2182,8 +2182,6 @@ let doc_exp, doc_let =
     | E_assert (e1, e2) ->
         let epp = liftR (separate space [string "assert_exp"; expY e1; expY e2]) in
         if aexp_needed then parens (align epp) else align epp
-    | E_app_infix (e1, id, e2) ->
-        raise (Reporting.err_unreachable l __POS__ "E_app_infix should have been rewritten before pretty-printing")
     | E_var (lexp, eq_exp, in_exp) -> raise (report l __POS__ "E_vars should have been removed before pretty-printing")
     | E_internal_plet (pat, e1, e2) -> begin
         let () =
@@ -3270,7 +3268,6 @@ let all_ids pexp =
       e_id = (fun id -> IdSet.singleton id);
       e_ref = (fun id -> IdSet.singleton id);
       e_app = (fun (id, ids) -> List.fold_left IdSet.union (IdSet.singleton id) ids);
-      e_app_infix = (fun (ids1, id, ids2) -> IdSet.add id (IdSet.union ids1 ids2));
       e_for =
         (fun (id, ids1, ids2, ids3, _, ids4) ->
           IdSet.add id (IdSet.union ids1 (IdSet.union ids2 (IdSet.union ids3 ids4)))

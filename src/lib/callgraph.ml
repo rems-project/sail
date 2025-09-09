@@ -710,13 +710,7 @@ let function_call_graph ast =
   let module G = Graph.Make (Id) in
   let scan_funcl graph (FCL_aux (FCL_funcl (id, pexp), _)) =
     let callees =
-      fold_pexp
-        {
-          (pure_exp_alg [] ( @ )) with
-          e_app = (fun (id', args) -> id' :: List.concat args);
-          e_app_infix = (fun (arg1, id', arg2) -> (id' :: arg1) @ arg2);
-        }
-        pexp
+      fold_pexp { (pure_exp_alg [] ( @ )) with e_app = (fun (id', args) -> id' :: List.concat args) } pexp
     in
     FCG.add_edges id callees graph
   in

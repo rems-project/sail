@@ -347,7 +347,6 @@ Section exp_ind_g.
     (H_lit : forall lit ann, P (E_aux (E_lit lit) ann))
     (H_typ : forall t x ann, P x -> P (E_aux (E_typ t x) ann))
     (H_app : forall f xs ann, Forall P xs -> P (E_aux (E_app f xs) ann))
-    (H_app_infix : forall x f y ann, P x -> P y -> P (E_aux (E_app_infix x f y) ann))
     (H_tuple : forall xs ann, Forall P xs -> P (E_aux (E_tuple xs) ann))
     (H_if : forall i t e ann, P i -> P t -> P e -> P (E_aux (E_if i t e) ann))
     (H_loop : forall lt measure cond body ann, P cond -> P body -> P (E_aux (E_loop lt measure cond body) ann))
@@ -396,7 +395,6 @@ Section exp_ind_g.
       induction l.
       + trivial.
       + rewrite Forall_cons_iff. easy.
-    - apply H_app_infix; trivial.
     - apply H_tuple.
       induction l.
       + trivial.
@@ -480,7 +478,6 @@ Section exp_and_lexp_ind_g.
     (H_lit : forall lit ann, P (E_aux (E_lit lit) ann))
     (H_typ : forall t x ann, P x -> P (E_aux (E_typ t x) ann))
     (H_app : forall f xs ann, Forall P xs -> P (E_aux (E_app f xs) ann))
-    (H_app_infix : forall x f y ann, P x -> P y -> P (E_aux (E_app_infix x f y) ann))
     (H_tuple : forall xs ann, Forall P xs -> P (E_aux (E_tuple xs) ann))
     (H_if : forall i t e ann, P i -> P t -> P e -> P (E_aux (E_if i t e) ann))
     (H_loop : forall lt measure cond body ann, P cond -> P body -> P (E_aux (E_loop lt measure cond body) ann))
@@ -540,7 +537,6 @@ Section exp_and_lexp_ind_g.
         induction l.
         + trivial.
         + rewrite Forall_cons_iff. easy.
-      - apply H_app_infix; trivial.
       - apply H_tuple.
         induction l.
         + trivial.
@@ -678,7 +674,7 @@ Fixpoint depth {A : Set} (x : exp A) {struct x} : nat :=
       in
       max (depth x) (fold_right max 0 field_depths) + 1
   | E_let (LB_aux (LB_val _ y) _) body => max (depth y) (depth body) + 1
-  | E_app_infix x _ y | E_cons x y => max (depth x) (depth y) + 1
+  | E_cons x y => max (depth x) (depth y) + 1
   | E_if i t e => max (depth i) (max (depth t) (depth e)) + 1
   | E_assert x msg => max (depth x) (depth msg) + 1
   | E_for _ from to amount _ body =>

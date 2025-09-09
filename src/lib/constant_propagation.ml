@@ -597,7 +597,7 @@ let const_props target env ast =
       | E_internal_assume (nc, e) ->
           let e', _ = const_prop_exp substs assigns e in
           re (E_internal_assume (nc, e')) assigns
-      | E_app_infix _ | E_internal_plet _ | E_internal_return _ | E_internal_value _ ->
+      | E_internal_plet _ | E_internal_return _ | E_internal_value _ ->
           raise
             (Reporting.err_unreachable l __POS__
                ("Unexpected expression encountered in monomorphisation: " ^ string_of_exp exp)

@@ -426,9 +426,6 @@ module Make =
      | E_typ (typ0, x0) -> E_aux ((E_typ (typ0, (substitute n v x0))), annot0)
      | E_app (f, args) ->
        E_aux ((E_app (f, (map (substitute n v) args))), annot0)
-     | E_app_infix (x0, f, y) ->
-       E_aux ((E_app_infix ((substitute n v x0), f, (substitute n v y))),
-         annot0)
      | E_tuple xs -> E_aux ((E_tuple (map (substitute n v) xs)), annot0)
      | E_if (i, t0, e) ->
        E_aux ((E_if ((substitute n v i), (substitute n v t0),
@@ -991,12 +988,6 @@ module Make =
                then wrap (E_block xs0)
                else Monad.bind (step0 x0) (fun x' ->
                       wrap (E_block (x' :: xs0)))
-             | E_app_infix (e0, i, e1) ->
-               let x0 = E_aux ((E_app_infix (e0, i, e1)), annot1) in
-               if is_value x0
-               then wrap (E_block xs0)
-               else Monad.bind (step0 x0) (fun x' ->
-                      wrap (E_block (x' :: xs0)))
              | E_tuple l ->
                let x0 = E_aux ((E_tuple l), annot1) in
                if is_value x0
@@ -1265,22 +1256,6 @@ module Make =
              | u :: us ->
                Monad.bind (step0 u) (fun u' ->
                  wrap (E_app (id0, (app evaluated0 (u' :: us)))))))
-       | E_app_infix (lhs, id0, rhs) ->
-         let filtered_var = left_to_right2 lhs rhs in
-         (match filtered_var with
-          | LTR2_0 (_, _) ->
-            Monad.bind (step0 lhs) (fun lhs' ->
-              wrap (E_app_infix (lhs', id0, rhs)))
-          | LTR2_1 (_, _) ->
-            Monad.bind (step0 rhs) (fun rhs' ->
-              wrap (E_app_infix (lhs, id0, rhs')))
-          | LTR2_2 (v1, v2) ->
-            Monad.bind (Monad.Call (id0, (v1 :: (v2 :: [])), Monad.pure))
-              (fun r ->
-              match r with
-              | Return_ok v -> wrap (E_internal_value v)
-              | Return_exception exn ->
-                wrap (E_throw (E_aux ((E_internal_value exn), annot0)))))
        | E_tuple xs ->
          let filtered_var = left_to_right xs in
          let (evaluated0, unevaluated) = filtered_var in
