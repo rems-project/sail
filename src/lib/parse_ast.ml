@@ -101,7 +101,7 @@ type kid = Kid_aux of kid_aux * l
 
 type id = Id_aux of id_aux * l
 
-type 'a infix_token = IT_primary of 'a | IT_op of id | IT_prefix of id
+type 'a infix_token = IT_primary of 'a | IT_op of string | IT_prefix of string
 
 type lit_aux =
   | (* Literal constant *)
@@ -451,7 +451,7 @@ type def_aux =
   | DEF_impl of funcl (* impl definition *)
   | DEF_let of letbind (* value definition *)
   | DEF_overload of id * id list (* operator overload specifications *)
-  | DEF_fixity of prec * Big_int.num * id (* fixity declaration *)
+  | DEF_fixity of prec * Big_int.num * string (* fixity declaration *)
   | DEF_val of val_spec (* top-level type constraint *)
   | DEF_outcome of outcome_spec * def list (* top-level outcome definition *)
   | DEF_instantiation of id * subst list (* instantiation *)

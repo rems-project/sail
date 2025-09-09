@@ -79,7 +79,7 @@ type ctx = {
   outcome_names : IdSet.t;
   outcome_variables : kind_aux KBindings.t;
   scattereds : (P.typquant * ctx) Bindings.t;
-  fixities : (prec * int) Bindings.t;
+  fixities : (prec * int) StringMap.t;
   internal_files : StringSet.t;
   target_sets : string list StringMap.t;
 }
@@ -98,7 +98,7 @@ let rec equal_ctx ctx1 ctx2 =
   && Bindings.equal
        (fun (typq1, ctx1) (typq2, ctx2) -> typq1 = typq2 && equal_ctx ctx1 ctx2)
        ctx1.scattereds ctx2.scattereds
-  && Bindings.equal ( = ) ctx1.fixities ctx2.fixities
+  && StringMap.equal ( = ) ctx1.fixities ctx2.fixities
   && StringSet.equal ctx1.internal_files ctx2.internal_files
   && StringMap.equal ( = ) ctx1.target_sets ctx2.target_sets
 
@@ -139,8 +139,8 @@ let merge_ctx l ctx1 ctx2 =
         )
         ctx1.scattereds ctx2.scattereds;
     fixities =
-      Bindings.merge
-        (compatible ( = ) (fun id -> "Operator " ^ string_of_id id ^ " declared with multiple fixities"))
+      StringMap.merge
+        (compatible ( = ) (fun op -> "Operator " ^ op ^ " declared with multiple fixities"))
         ctx1.fixities ctx2.fixities;
     internal_files = StringSet.union ctx1.internal_files ctx2.internal_files;
     target_sets =
@@ -282,32 +282,29 @@ let parse_infix :
            | P.IT_primary x, s, e -> (mk_primary x, s, e)
            | P.IT_prefix id, s, e -> (
                match id with
-               | Id_aux (Id "pow2", _) -> (TwoCaret, s, e)
-               | Id_aux (Id "negate", _) -> (Minus, s, e)
-               | Id_aux (Id "__deref", _) -> (Star, s, e)
+               | "pow2" -> (TwoCaret, s, e)
+               | "negate" -> (Minus, s, e)
+               | "__deref" -> (Star, s, e)
                | _ -> raise (Reporting.err_general (P.Range (s, e)) "Unknown prefix operator")
              )
-           | P.IT_op id, s, e -> (
-               match id with
-               | Id_aux (Id "+", _) -> (Plus, s, e)
-               | Id_aux (Id "-", _) -> (Minus, s, e)
-               | Id_aux (Id "*", _) -> (Star, s, e)
-               | Id_aux (Id "<", _) -> (Lt, s, e)
-               | Id_aux (Id ">", _) -> (Gt, s, e)
-               | Id_aux (Id "<=", _) -> (LtEq, s, e)
-               | Id_aux (Id ">=", _) -> (GtEq, s, e)
-               | Id_aux (Id "::", _) -> (ColonColon, s, e)
-               | Id_aux (Id "@", _) -> (At, s, e)
-               | Id_aux (Id "in", _) -> (In, s, e)
+           | P.IT_op op, s, e -> (
+               match op with
+               | "+" -> (Plus, s, e)
+               | "-" -> (Minus, s, e)
+               | "*" -> (Star, s, e)
+               | "<" -> (Lt, s, e)
+               | ">" -> (Gt, s, e)
+               | "<=" -> (LtEq, s, e)
+               | ">=" -> (GtEq, s, e)
+               | "::" -> (ColonColon, s, e)
+               | "@" -> (At, s, e)
+               | "in" -> (In, s, e)
                | _ -> (
-                   match Bindings.find_opt (to_ast_id ctx id) ctx.fixities with
-                   | Some (prec, level) -> (to_infix_parser_op (prec, level, id), s, e)
-                   | None ->
-                       raise
-                         (Reporting.err_general
-                            (P.Range (s, e))
-                            ("Undeclared fixity for operator " ^ string_of_parse_id id)
-                         )
+                   match StringMap.find_opt op ctx.fixities with
+                   | Some (prec, level) ->
+                       let id = P.Id_aux (P.Id op, P.Range (s, e)) in
+                       (to_infix_parser_op (prec, level, id), s, e)
+                   | None -> raise (Reporting.err_general (P.Range (s, e)) ("Undeclared fixity for operator " ^ op))
                  )
              )
            )
@@ -2068,10 +2065,10 @@ let rec to_ast_def doc attrs vis ctx (P.DEF_aux (def, l)) : untyped_def list ctx
     end
   | P.DEF_overload (id, ids) -> ([DEF_aux (DEF_overload (to_ast_id ctx id, List.map (to_ast_id ctx) ids), annot)], ctx)
   | P.DEF_fixity (prec, n, op) ->
-      let op = to_ast_id ctx op in
+      let id = mk_id ~loc:l op in
       let prec = to_ast_prec prec in
-      ( [DEF_aux (DEF_fixity (prec, n, op), annot)],
-        { ctx with fixities = Bindings.add op (prec, Big_int.to_int n) ctx.fixities }
+      ( [DEF_aux (DEF_fixity (prec, n, id), annot)],
+        { ctx with fixities = StringMap.add op (prec, Big_int.to_int n) ctx.fixities }
       )
   | P.DEF_type t_def -> to_ast_typedef ctx annot t_def
   | P.DEF_fundef f_def ->
@@ -2237,8 +2234,8 @@ let initial_ctx =
     scattereds = Bindings.empty;
     fixities =
       List.fold_left
-        (fun m (k, prec, level) -> Bindings.add (mk_id k) (prec, level) m)
-        Bindings.empty
+        (fun m (k, prec, level) -> StringMap.add k (prec, level) m)
+        StringMap.empty
         [
           ("^", InfixR, 8);
           ("|", InfixR, 2);
