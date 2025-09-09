@@ -82,6 +82,8 @@ Inductive kinded_id_aux : Set :=
 | KOpt_kind : kind -> kid -> kinded_id_aux.
 
 Inductive id_aux : Set :=
+| And_bool : id_aux
+| Or_bool : id_aux
 | Id : string -> id_aux
 | Operator : string -> id_aux.
 

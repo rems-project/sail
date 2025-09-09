@@ -109,13 +109,11 @@ let string_of_bind (typquant, typ) = string_of_typquant typquant ^ ". " ^ string
 
 (* unloc_X functions remove location information from AST nodes, so we can use structural equality *)
 
-let rec unloc_id = function
-  | Id_aux (Id x, _) -> Id_aux (Id x, Parse_ast.Unknown)
-  | Id_aux (Operator x, _) -> Id_aux (Operator x, Parse_ast.Unknown)
+let unloc_id (Id_aux (aux, _)) = Id_aux (aux, Parse_ast.Unknown)
 
-and unloc_kid = function Kid_aux (Var x, _) -> Kid_aux (Var x, Parse_ast.Unknown)
+let unloc_kid (Kid_aux (Var x, _)) = Kid_aux (Var x, Parse_ast.Unknown)
 
-and unloc_nexp_aux = function
+let rec unloc_nexp_aux = function
   | Nexp_id id -> Nexp_id (unloc_id id)
   | Nexp_var kid -> Nexp_var (unloc_kid kid)
   | Nexp_constant n -> Nexp_constant n

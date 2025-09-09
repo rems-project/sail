@@ -153,10 +153,15 @@ val lvar_typ : ?loc:l -> 'a lvar -> 'a
 val is_order_inc : order -> bool
 val is_order_dec : order -> bool
 
+val is_and_bool : id -> bool
+val is_or_bool : id -> bool
+
 (** {1 Functions for building and destructuring untyped AST elements} *)
 
 (** {2 Functions for building untyped AST elements} *)
 
+val mk_and_bool : ?loc:l -> unit -> id
+val mk_or_bool : ?loc:l -> unit -> id
 val mk_id : ?loc:l -> string -> id
 val mk_kid : ?loc:l -> string -> kid
 val mk_nc : ?loc:l -> n_constraint_aux -> n_constraint

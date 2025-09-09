@@ -1043,7 +1043,7 @@ let mk_rethrow_pexp l env pat_typ typ =
 
 let bitwise_and_exp exp1 exp2 =
   let (E_aux (_, (l, _))) = exp1 in
-  let andid = Id_aux (Id "and_bool", gen_loc l) in
+  let andid = Id_aux (And_bool, gen_loc l) in
   annot_exp (E_app (andid, [exp1; exp2])) l (env_of exp1) bool_typ
 
 let compose_guard_opt g1 g2 =
@@ -2363,7 +2363,7 @@ let rewrite_ast_letbind_effects effect_info env =
     | E_lit _ -> k exp
     | E_config _ -> k exp
     | E_typ (typ, exp') -> n_exp_name exp' (fun exp' -> k (pure_rewrap (E_typ (typ, exp'))))
-    | E_app (op_bool, [l; r]) when string_of_id op_bool = "and_bool" || string_of_id op_bool = "or_bool" ->
+    | E_app (op_bool, [l; r]) when is_and_bool op_bool || is_or_bool op_bool ->
         (* Leave effectful operands of Boolean "and"/"or" in place to allow
            short-circuiting. *)
         let newreturn = needs_monad l || needs_monad r in
@@ -2621,7 +2621,7 @@ let rewrite_ast_pat_lits rewrite_lit env ast =
             let guard_annot = (fst annot, mk_tannot (env_of exp) bool_typ) in
             Pat_aux
               ( Pat_when
-                  (pat, List.fold_left (fun g g' -> E_aux (E_app (mk_id "and_bool", [g; g']), guard_annot)) g gs, exp),
+                  (pat, List.fold_left (fun g g' -> E_aux (E_app (mk_and_bool (), [g; g']), guard_annot)) g gs, exp),
                 annot
               )
       end
@@ -2630,10 +2630,7 @@ let rewrite_ast_pat_lits rewrite_lit env ast =
         let guard_annot = (fst annot, mk_tannot (env_of exp) bool_typ) in
         Pat_aux
           ( Pat_when
-              ( pat,
-                List.fold_left (fun g g' -> E_aux (E_app (mk_id "and_bool", [g; g']), guard_annot)) guard !guards,
-                exp
-              ),
+              (pat, List.fold_left (fun g g' -> E_aux (E_app (mk_and_bool (), [g; g']), guard_annot)) guard !guards, exp),
             annot
           )
       end
@@ -4153,7 +4150,11 @@ let rewrite_explicit_measure effect_info env ast =
   in
   let measures = List.fold_left scan_def Bindings.empty ast.defs in
   (* NB: the Coq backend relies on recognising the #rec# prefix *)
-  let rec_id = function Id_aux (Id id, l) | Id_aux (Operator id, l) -> Id_aux (Id ("#rec#" ^ id), Generated l) in
+  let rec_id = function
+    | Id_aux (Id id, l) | Id_aux (Operator id, l) -> Id_aux (Id ("#rec#" ^ id), Generated l)
+    | Id_aux ((And_bool | Or_bool), l) ->
+        Reporting.unreachable l __POS__ "Attempting to construct rec identifier for short-circuiting boolean"
+  in
   let limit = mk_id "#reclimit" in
   (* Add helper function with extra argument to spec *)
   let rewrite_spec (VS_aux (VS_val_spec (typsch, id, extern), ann) as vs) =

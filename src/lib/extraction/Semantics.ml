@@ -18,12 +18,13 @@ let id_eqb id1 id2 =
      let Id_aux (i2, _) = id2 in
      (match i2 with
       | Id s2 -> String.equal s1 s2
-      | Operator _ -> false)
+      | _ -> false)
    | Operator s1 ->
      let Id_aux (i2, _) = id2 in
      (match i2 with
-      | Id _ -> false
-      | Operator s2 -> String.equal s1 s2))
+      | Operator s2 -> String.equal s1 s2
+      | _ -> false)
+   | _ -> false)
 
 module IdMiniOrdered =
  struct
@@ -35,20 +36,30 @@ module IdMiniOrdered =
     let Id_aux (i, _) = x in
     let Id_aux (i0, _) = y in
     (match i with
+     | And_bool ->
+       (match i0 with
+        | And_bool -> OrderedType.EQ
+        | _ -> OrderedType.GT)
+     | Or_bool ->
+       (match i0 with
+        | And_bool -> OrderedType.LT
+        | Or_bool -> OrderedType.EQ
+        | _ -> OrderedType.GT)
      | Id s ->
        (match i0 with
         | Id s0 ->
           if (fun s1 s2 -> String.compare s1 s2 < 0) s s0
           then OrderedType.LT
           else if String.equal s s0 then OrderedType.EQ else OrderedType.GT
-        | Operator _ -> OrderedType.LT)
+        | _ -> OrderedType.LT)
      | Operator s ->
        (match i0 with
         | Id _ -> OrderedType.GT
         | Operator s0 ->
           if (fun s1 s2 -> String.compare s1 s2 < 0) s s0
           then OrderedType.LT
-          else if String.equal s s0 then OrderedType.EQ else OrderedType.GT))
+          else if String.equal s s0 then OrderedType.EQ else OrderedType.GT
+        | _ -> OrderedType.LT))
  end
 
 module IdOrdered = OrderedType.MOT_to_OT(IdMiniOrdered)
@@ -375,10 +386,6 @@ module type SemanticExt =
 
   val complete_value :
     ((value * Nat_big_num.num) * Nat_big_num.num) list -> value
-
-  val is_and_bool : id -> bool
-
-  val is_or_bool : id -> bool
  end
 
 module Make =
@@ -1204,58 +1211,60 @@ module Make =
            wrap (E_internal_value v))
        | E_typ (_, x) -> step0 x
        | E_app (id0, args) ->
-         if T.is_or_bool id0
-         then (match args with
-               | [] -> Monad.Runtime_type_error (fst annot0)
-               | lhs :: l ->
-                 (match l with
-                  | [] -> Monad.Runtime_type_error (fst annot0)
-                  | rhs :: l0 ->
-                    (match l0 with
-                     | [] ->
-                       Monad.bind (get_bool lhs) (fun b ->
-                         match b with
-                         | Evaluated b0 ->
-                           if b0
-                           then wrap (E_internal_value (V_bool true))
-                           else Monad.pure rhs
-                         | Unevaluated ->
-                           Monad.bind (step0 lhs) (fun lhs' ->
-                             wrap (E_app (id0, (lhs' :: (rhs :: []))))))
-                     | _ :: _ -> Monad.Runtime_type_error (fst annot0))))
-         else if T.is_and_bool id0
-              then (match args with
-                    | [] -> Monad.Runtime_type_error (fst annot0)
-                    | lhs :: l ->
-                      (match l with
-                       | [] -> Monad.Runtime_type_error (fst annot0)
-                       | rhs :: l0 ->
-                         (match l0 with
-                          | [] ->
-                            Monad.bind (get_bool lhs) (fun b ->
-                              match b with
-                              | Evaluated b0 ->
-                                if b0
-                                then Monad.pure rhs
-                                else wrap (E_internal_value (V_bool false))
-                              | Unevaluated ->
-                                Monad.bind (step0 lhs) (fun lhs' ->
-                                  wrap (E_app (id0, (lhs' :: (rhs :: []))))))
-                          | _ :: _ -> Monad.Runtime_type_error (fst annot0))))
-              else let filtered_var = left_to_right args in
-                   let (evaluated0, unevaluated) = filtered_var in
-                   (match unevaluated with
-                    | [] ->
-                      Monad.bind (Monad.Call (id0,
-                        (all_evaluated evaluated0), Monad.pure)) (fun r ->
-                        match r with
-                        | Return_ok v -> wrap (E_internal_value v)
-                        | Return_exception exn ->
-                          wrap (E_throw (E_aux ((E_internal_value exn),
-                            annot0))))
-                    | u :: us ->
-                      Monad.bind (step0 u) (fun u' ->
-                        wrap (E_app (id0, (app evaluated0 (u' :: us))))))
+         let Id_aux (i, _) = id0 in
+         (match i with
+          | And_bool ->
+            (match args with
+             | [] -> Monad.Runtime_type_error (fst annot0)
+             | lhs :: l ->
+               (match l with
+                | [] -> Monad.Runtime_type_error (fst annot0)
+                | rhs :: l0 ->
+                  (match l0 with
+                   | [] ->
+                     Monad.bind (get_bool lhs) (fun b ->
+                       match b with
+                       | Evaluated b0 ->
+                         if b0
+                         then Monad.pure rhs
+                         else wrap (E_internal_value (V_bool false))
+                       | Unevaluated ->
+                         Monad.bind (step0 lhs) (fun lhs' ->
+                           wrap (E_app (id0, (lhs' :: (rhs :: []))))))
+                   | _ :: _ -> Monad.Runtime_type_error (fst annot0))))
+          | Or_bool ->
+            (match args with
+             | [] -> Monad.Runtime_type_error (fst annot0)
+             | lhs :: l ->
+               (match l with
+                | [] -> Monad.Runtime_type_error (fst annot0)
+                | rhs :: l0 ->
+                  (match l0 with
+                   | [] ->
+                     Monad.bind (get_bool lhs) (fun b ->
+                       match b with
+                       | Evaluated b0 ->
+                         if b0
+                         then wrap (E_internal_value (V_bool true))
+                         else Monad.pure rhs
+                       | Unevaluated ->
+                         Monad.bind (step0 lhs) (fun lhs' ->
+                           wrap (E_app (id0, (lhs' :: (rhs :: []))))))
+                   | _ :: _ -> Monad.Runtime_type_error (fst annot0))))
+          | _ ->
+            let filtered_var = left_to_right args in
+            let (evaluated0, unevaluated) = filtered_var in
+            (match unevaluated with
+             | [] ->
+               Monad.bind (Monad.Call (id0, (all_evaluated evaluated0),
+                 Monad.pure)) (fun r ->
+                 match r with
+                 | Return_ok v -> wrap (E_internal_value v)
+                 | Return_exception exn ->
+                   wrap (E_throw (E_aux ((E_internal_value exn), annot0))))
+             | u :: us ->
+               Monad.bind (step0 u) (fun u' ->
+                 wrap (E_app (id0, (app evaluated0 (u' :: us)))))))
        | E_app_infix (lhs, id0, rhs) ->
          let filtered_var = left_to_right2 lhs rhs in
          (match filtered_var with

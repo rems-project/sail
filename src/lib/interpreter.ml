@@ -288,10 +288,6 @@ module RocqSemantics = Semantics.Make (struct
   let value_sub_int x y = value_sub_int [x; y]
 
   let complete_value vs = complete_value vs
-
-  let is_and_bool id = String.equal (string_of_id id) "and_bool"
-
-  let is_or_bool id = String.equal (string_of_id id) "or_bool"
 end)
 
 module Monad = Semantics.Monad

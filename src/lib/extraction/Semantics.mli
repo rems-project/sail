@@ -273,10 +273,6 @@ module type SemanticExt =
 
   val complete_value :
     ((value * Nat_big_num.num) * Nat_big_num.num) list -> value
-
-  val is_and_bool : id -> bool
-
-  val is_or_bool : id -> bool
  end
 
 module Make :

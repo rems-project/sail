@@ -60,7 +60,9 @@ end
 module Printer (Config : PRINT_CONFIG) = struct
   let doc_op symb a b = infix 2 1 symb a b
 
-  let doc_id (Id_aux (id_aux, _)) = string (match id_aux with Id v -> v | Operator op -> "operator " ^ op)
+  let doc_id (Id_aux (id_aux, _)) =
+    string
+      (match id_aux with And_bool -> "and_bool" | Or_bool -> "or_bool" | Id v -> v | Operator op -> "operator " ^ op)
 
   let doc_kid kid = string (Ast_util.string_of_kid kid)
 

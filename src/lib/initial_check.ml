@@ -211,7 +211,17 @@ let to_parse_kind = function
 let unaux_parse_kind (P.K_aux (aux, _)) = aux
 
 let to_ast_id ctx (P.Id_aux (id, l)) =
-  let to_ast_id' id = Id_aux ((match id with P.Id x -> Id x | P.Operator x -> Operator x), l) in
+  let to_ast_id' id =
+    Id_aux
+      ( ( match id with
+        | P.Id "and_bool" -> And_bool
+        | P.Id "or_bool" -> Or_bool
+        | P.Id x -> Id x
+        | P.Operator x -> Operator x
+        ),
+        l
+      )
+  in
   if string_contains (string_of_parse_id_aux id) '#' then begin
     match Reporting.loc_file l with
     | Some file when !opt_magic_hash || StringSet.mem file ctx.internal_files -> to_ast_id' id
