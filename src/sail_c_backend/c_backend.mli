@@ -80,14 +80,10 @@ val optimize_fixed_int : bool ref
 val optimize_fixed_bits : bool ref
 
 module type CODEGEN_CONFIG = sig
-  (** If this is true, then we will generate a separate header file, otherwise a single C file will be generated without
-      a header file. *)
-  val generate_header : bool
-
   (** A list of includes for the generated C file *)
   val includes : string list
 
-  (** A list of includes for the generated header (if it is created). *)
+  (** A list of includes for the generated header. *)
   val header_includes : string list
 
   (** Do not generate a main function *)
@@ -118,5 +114,5 @@ end
 
 module Codegen (Config : CODEGEN_CONFIG) : sig
   val jib_of_ast : Env.t -> Effects.side_effect_info -> typed_ast -> cdef list * Jib_compile.ctx
-  val compile_ast : Env.t -> Effects.side_effect_info -> string -> typed_ast -> string option * string
+  val compile_ast : Env.t -> Effects.side_effect_info -> string -> typed_ast -> string * string
 end

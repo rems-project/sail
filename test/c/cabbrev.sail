@@ -2,9 +2,6 @@ default Order dec
 
 $include <prelude.sail>
 
-// We need to generate a separate header
-$option --c-generate-header
-
 // Make sure the my_pair type is included in the C output
 $option --c-preserve-type my_pair
 

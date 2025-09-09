@@ -939,20 +939,18 @@ let valid_c_identifier = mk_regexp_check "^[A-Za-z_][A-Za-z0-9_]*$"
 let c_int_type_name = mk_regexp_check "^[u]?int[0-9]+_t$"
 
 (* The code generator produces a list of C definitions, some of
-   which should be in the header (if we generate one), and some in
+   which should be in the header, and some in
    the implementation. There are also definitions that are only
    included in the header provided we generate one.
 
-   * Header - goes in header, or implemention if no header generated
-   * HeaderOnly - goes in header, omitted if no header generated
+   * Header - goes in header
    * Impl - goes in implemention
 *)
-type file_doc = Header of document | HeaderOnly of document | Impl of document
+type file_doc = Header of document | Impl of document
 
 let to_impl doc = [Impl doc]
 
 module type CODEGEN_CONFIG = sig
-  val generate_header : bool
   val includes : string list
   val header_includes : string list
   val no_main : bool
@@ -1600,7 +1598,7 @@ module Codegen (Config : CODEGEN_CONFIG) = struct
               )
         in
         [
-          HeaderOnly setter_prototype;
+          Header setter_prototype;
           Impl (ksprintf string "%s %s;" (sgen_ctyp ctyp) (NameGen.to_string ~prefix:"abstract_" () id));
           Impl setter;
         ]
@@ -1813,11 +1811,11 @@ module Codegen (Config : CODEGEN_CONFIG) = struct
         @
         if string_of_id id = "exception" then
           [
-            HeaderOnly (ksprintf string "extern struct %s *current_exception;" (sgen_id id));
+            Header (ksprintf string "extern struct %s *current_exception;" (sgen_id id));
             Impl (ksprintf string "struct %s *current_exception = NULL;" (sgen_id id));
-            HeaderOnly (string "extern bool have_exception;");
+            Header (string "extern bool have_exception;");
             Impl (string "bool have_exception = false;");
-            HeaderOnly (string "extern sail_string *throw_location;");
+            Header (string "extern sail_string *throw_location;");
             Impl (string "sail_string *throw_location = NULL;");
           ]
         else []
@@ -2167,7 +2165,7 @@ module Codegen (Config : CODEGEN_CONFIG) = struct
     match aux with
     | CDEF_register (id, ctyp, _) ->
         [
-          HeaderOnly
+          Header
             (string (Printf.sprintf "// register %s" (string_of_name id))
             ^^ hardline
             ^^ string (Printf.sprintf "extern %s%s %s;" (static ()) (sgen_ctyp ctyp) (sgen_name id))
@@ -2313,23 +2311,15 @@ module Codegen (Config : CODEGEN_CONFIG) = struct
     | CTG_tup ctyps -> codegen_tup ctx ctyps
     | CTG_list ctyp -> codegen_list ctx ctyp
 
+  (* Take a single list of `Header doc` and `Impl doc`s, and extract them
+     into two lists - one for the header `doc`s and one for the impl `doc`s. *)
   let merge_file_docs docs =
-    let rec no_header impl = function
-      | [] -> impl
-      | Header doc :: docs -> no_header (impl ^^ doc ^^ twice hardline) docs
-      | HeaderOnly _ :: docs -> no_header impl docs
-      | Impl doc :: docs -> no_header (impl ^^ doc ^^ twice hardline) docs
-    in
-    let rec with_header hdr impl = function
+    let rec collect_file_docs hdr impl = function
       | [] -> (hdr, impl)
-      | (Header doc | HeaderOnly doc) :: docs -> with_header (hdr ^^ doc ^^ twice hardline) impl docs
-      | Impl doc :: docs -> with_header hdr (impl ^^ doc ^^ twice hardline) docs
+      | Header doc :: docs -> collect_file_docs (hdr ^^ doc ^^ twice hardline) impl docs
+      | Impl doc :: docs -> collect_file_docs hdr (impl ^^ doc ^^ twice hardline) docs
     in
-    if not Config.generate_header then (None, no_header empty docs)
-    else (
-      let hdr, impl = with_header empty empty docs in
-      (Some hdr, impl)
-    )
+    collect_file_docs empty empty docs
 
   (** When we generate code for a definition, we need to first generate any auxillary type definitions that are
       required. *)
@@ -2410,7 +2400,7 @@ module Codegen (Config : CODEGEN_CONFIG) = struct
          some value < 256 (100 seems reasonable). *)
       let cdefs = List.map (Jib_optimize.flatten_cdef ~max_depth:100) cdefs in
 
-      let header_doc_opt, docs = List.map (codegen_def ctx) cdefs |> List.concat |> merge_file_docs in
+      let header_doc, docs = List.map (codegen_def ctx) cdefs |> List.concat |> merge_file_docs in
 
       let coverage_include, coverage_hook_header, coverage_hook =
         let header = string "#include \"sail_coverage.h\"" in
@@ -2613,17 +2603,13 @@ module Codegen (Config : CODEGEN_CONFIG) = struct
       let hlhl = twice hardline in
 
       let header =
-        Option.map
-          (fun header ->
-            string "#pragma once" ^^ hlhl ^^ preamble true ^^ hlhl ^^ header ^^ hardline ^^ end_extern_cpp ^^ hardline
-            |> Document.to_string
-          )
-          header_doc_opt
+        string "#pragma once" ^^ hlhl ^^ preamble true ^^ hlhl ^^ header_doc ^^ hardline ^^ end_extern_cpp ^^ hardline
+        |> Document.to_string
       in
       ( header,
         Document.to_string
-          (preamble false
-          ^^ (if Config.generate_header then hardline ^^ Printf.ksprintf string "#include \"%s.h\"" basename else empty)
+          (preamble false ^^ hardline
+          ^^ Printf.ksprintf string "#include \"%s.h\"" basename
           ^^ hlhl ^^ docs ^^ hlhl
           ^^ ( if not Config.no_rts then
                  model_init ^^ hlhl ^^ model_fini ^^ hlhl ^^ model_pre_exit ^^ hlhl ^^ model_main ^^ hlhl
