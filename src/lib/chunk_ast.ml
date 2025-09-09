@@ -542,13 +542,13 @@ let chunk_delimit ?delim ~get_loc ~chunk comments xs =
 
 let chunk_infix_token comments chunk_primary (infix_token, _, _) =
   match infix_token with
-  | IT_op id -> Infix_op (string_of_id id)
-  | IT_prefix id -> (
-      match id with
-      | Id_aux (Id "__deref", _) -> Infix_prefix "*"
-      | Id_aux (Id "pow2", _) -> Infix_prefix "2 ^"
-      | Id_aux (Id "negate", _) -> Infix_prefix "-"
-      | _ -> Infix_prefix (string_of_id id)
+  | IT_op op -> Infix_op op
+  | IT_prefix op -> (
+      match op with
+      | "__deref" -> Infix_prefix "*"
+      | "pow2" -> Infix_prefix "2 ^"
+      | "negate" -> Infix_prefix "-"
+      | _ -> Infix_prefix op
     )
   | IT_primary exp ->
       let chunks = Queue.create () in
@@ -572,7 +572,7 @@ let rec chunk_atyp comments chunks (ATyp_aux (aux, l)) =
       let lhs_chunks = rec_chunk_atyp lhs in
       let rhs_chunks = rec_chunk_atyp rhs in
       Queue.add (Binary (lhs_chunks, "in", rhs_chunks)) chunks
-  | ATyp_infix [(IT_primary lhs, _, _); (IT_op (Id_aux (Id op, _)), _, _); (IT_primary rhs, _, _)] ->
+  | ATyp_infix [(IT_primary lhs, _, _); (IT_op op, _, _); (IT_primary rhs, _, _)] ->
       let lhs_chunks = rec_chunk_atyp lhs in
       let rhs_chunks = rec_chunk_atyp rhs in
       Queue.add (Binary (lhs_chunks, op, rhs_chunks)) chunks
@@ -806,7 +806,7 @@ let rec chunk_exp comments chunks (E_aux (aux, l)) =
   | E_exit exp ->
       let exp_chunks = rec_chunk_exp exp in
       Queue.add (App (Id_aux (Id "exit", Unknown), [exp_chunks])) chunks
-  | E_infix [(IT_primary lhs, _, _); (IT_op (Id_aux (Id op, _)), _, _); (IT_primary rhs, _, _)] ->
+  | E_infix [(IT_primary lhs, _, _); (IT_op op, _, _); (IT_primary rhs, _, _)] ->
       let lhs_chunks = rec_chunk_exp lhs in
       let rhs_chunks = rec_chunk_exp rhs in
       Queue.add (Binary (lhs_chunks, op, rhs_chunks)) chunks
@@ -1316,12 +1316,10 @@ let rec chunk_def source last_line_span comments chunks (DEF_aux (def, l)) =
               (Pragma (pragma, Ast_util.string_of_attribute_data (AD_aux (AD_object data, Parse_ast.Unknown))))
               chunks
         | DEF_default dts -> chunk_default_typing_spec comments chunks dts
-        | DEF_fixity (prec, n, id) ->
-            pop_comments comments chunks (id_loc id);
+        | DEF_fixity (prec, n, op) ->
+            pop_comments comments chunks l;
             let string_of_prec = function Infix -> "infix" | InfixL -> "infixl" | InfixR -> "infixr" in
-            Queue.add
-              (Atom (Printf.sprintf "%s %s %s" (string_of_prec prec) (Big_int.to_string n) (string_of_id id)))
-              chunks;
+            Queue.add (Atom (Printf.sprintf "%s %s %s" (string_of_prec prec) (Big_int.to_string n) op)) chunks;
             Queue.add (Spacer (true, 1)) chunks
         | DEF_register reg -> chunk_register comments chunks reg
         | DEF_let lb -> chunk_toplevel_let l comments chunks lb

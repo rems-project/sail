@@ -266,63 +266,41 @@ separated_nonempty_list_trailing(SEP, ELEM):
     { x :: xs }
 
 id:
-  | Id { mk_id (Id $1) $startpos $endpos }
-
-  | Op OpId { mk_id (Operator $2) $startpos $endpos }
+  | Id       { mk_id (Id $1) $startpos $endpos }
+  | Op OpId  { mk_id (Operator $2) $startpos $endpos }
   | Op Minus { mk_id (Operator "-") $startpos $endpos }
-  | Op Bar { mk_id (Operator "|") $startpos $endpos }
+  | Op Bar   { mk_id (Operator "|") $startpos $endpos }
   | Op Caret { mk_id (Operator "^") $startpos $endpos }
-  | Op Star { mk_id (Operator "*") $startpos $endpos }
+  | Op Star  { mk_id (Operator "*") $startpos $endpos }
 
 op_no_caret:
-  | OpId
-    { mk_id (Id $1) $startpos $endpos }
-  | Minus
-    { mk_id (Id "-") $startpos $endpos }
-  | Bar
-    { mk_id (Id "|") $startpos $endpos }
-  | Star
-    { mk_id (Id "*") $startpos $endpos }
-  | In
-    { mk_id (Id "in") $startpos $endpos }
+  | OpId  { $1 }
+  | Minus { "-" }
+  | Bar   { "|" }
+  | Star  { "*" }
+  | In    { "in" }
 
 op:
-  | OpId
-    { mk_id (Id $1) $startpos $endpos }
-  | Minus
-    { mk_id (Id "-") $startpos $endpos }
-  | Bar
-    { mk_id (Id "|") $startpos $endpos }
-  | Caret
-    { mk_id (Id "^") $startpos $endpos }
-  | Star
-    { mk_id (Id "*") $startpos $endpos }
-  | In
-    { mk_id (Id "in") $startpos $endpos }
+  | OpId  { $1 }
+  | Minus { "-" }
+  | Bar   { "|" }
+  | Star  { "*" }
+  | In    { "in" }
+  | Caret { "^" }
 
 exp_op:
-  | OpId
-    { mk_id (Id $1) $startpos $endpos }
-  | Minus
-    { mk_id (Id "-") $startpos $endpos }
-  | Bar
-    { mk_id (Id "|") $startpos $endpos }
-  | At
-    { mk_id (Id "@") $startpos $endpos }
-  | ColonColon
-    { mk_id (Id "::") $startpos $endpos }
-  | Caret
-    { mk_id (Id "^") $startpos $endpos }
-  | Star
-    { mk_id (Id "*") $startpos $endpos }
+  | OpId       { $1 }
+  | Minus      { "-" }
+  | Bar        { "|" }
+  | At         { "@" }
+  | ColonColon { "::" }
+  | Caret      { "^" }
+  | Star       { "*" }
 
 pat_op:
-  | At
-    { mk_id (Id "@") $startpos $endpos }
-  | ColonColon
-    { mk_id (Id "::") $startpos $endpos }
-  | Caret
-    { mk_id (Id "^") $startpos $endpos }
+  | At         { mk_id (Id "@") $startpos $endpos }
+  | ColonColon { mk_id (Id "::") $startpos $endpos }
+  | Caret      { mk_id (Id "^") $startpos $endpos }
 
 id_list:
   | id
@@ -352,11 +330,11 @@ typ_eof:
   |
     { [] }
   | TwoCaret
-    { [(IT_prefix (mk_id (Id "pow2") $startpos $endpos), $startpos, $endpos)] }
+    { [(IT_prefix "pow2", $startpos, $endpos)] }
   | Minus
-    { [(IT_prefix (mk_id (Id "negate") $startpos $endpos), $startpos, $endpos)] }
+    { [(IT_prefix "negate", $startpos, $endpos)] }
   | Star
-    { [(IT_prefix (mk_id (Id "__deref") $startpos $endpos), $startpos, $endpos)] }
+    { [(IT_prefix "__deref", $startpos, $endpos)] }
 
 postfix_typ:
   | t = atomic_typ
@@ -706,11 +684,11 @@ operators in expressions, with both left, right and non-associative operators */
   |
     { [] }
   | TwoCaret
-    { [(IT_prefix (mk_id (Id "pow2") $startpos $endpos), $startpos, $endpos)] }
+    { [(IT_prefix "pow2", $startpos, $endpos)] }
   | Minus
-    { [(IT_prefix (mk_id (Id "negate") $startpos $endpos), $startpos, $endpos)] }
+    { [(IT_prefix "negate", $startpos, $endpos)] }
   | Star
-    { [(IT_prefix (mk_id (Id "__deref") $startpos $endpos), $startpos, $endpos)] }
+    { [(IT_prefix "__deref", $startpos, $endpos)] }
 
 exp0:
   | prefix = prefix_op;
@@ -1358,7 +1336,7 @@ def_aux:
   | Impl funcl
     { DEF_impl $2 }
   | Fixity
-    { let (prec, n, op) = $1 in DEF_fixity (prec, n, Id_aux (Id op, loc $startpos $endpos)) }
+    { let (prec, n, op) = $1 in DEF_fixity (prec, n, op) }
   | val_spec_def
     { DEF_val $1 }
   | outcome_spec_def Eq Lcurly defs_list Rcurly
