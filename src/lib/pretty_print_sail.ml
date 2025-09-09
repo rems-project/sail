@@ -383,7 +383,12 @@ module Printer (Config : PRINT_CONFIG) = struct
     | P_aux (P_id _, _), E_aux (E_typ (typ, exp), annot) when Config.resugar -> (P_aux (P_typ (typ, pat), annot), exp)
     | _, _ -> (pat, binding)
 
-  let rec doc_exp (E_aux (e_aux, (l, uannot)) as exp) =
+  type uannot_fmt = { overloaded : (string * bool) option; is_setter : bool; doc : document }
+
+  (* This function consumes the uannot attached to an expression and
+     renders its printable form. To prevent bugs, this function
+     should always be used to shadow the consumed expression. *)
+  let consume_exp_uannot (E_aux (aux, (l, uannot))) =
     let uannot, overloaded =
       if Config.resugar then (
         match get_overloaded_info uannot with
@@ -396,16 +401,22 @@ module Printer (Config : PRINT_CONFIG) = struct
       if Config.resugar && Option.is_some (get_attribute "setter" uannot) then (remove_attribute "setter" uannot, true)
       else (uannot, false)
     in
-    let uannot = if Config.hide_attributes then empty_uannot else uannot in
-    concat_map (fun (_, attr, arg) -> doc_attr attr arg) (get_attributes uannot)
+    let doc =
+      if Config.hide_attributes then empty
+      else concat_map (fun (_, attr, arg) -> doc_attr attr arg) (get_attributes uannot)
+    in
+    (* Once we've extracted all the printing information from a
+       uannot, we want to make sure we never print it again, so return
+       the expression with a stripped uannot. *)
+    (E_aux (aux, (l, empty_uannot)), { overloaded; is_setter; doc })
+
+  let rec doc_exp exp =
+    let (E_aux (e_aux, (l, _)) as exp), uannot_fmt = consume_exp_uannot exp in
+    uannot_fmt.doc
     ^^
     match e_aux with
     | E_block [] -> string "()"
     | E_block exps -> group (lbrace ^^ nest 4 (hardline ^^ doc_block exps) ^^ hardline ^^ rbrace)
-    (* This is mostly for the -convert option *)
-    | E_app_infix (x, id, y) when Id.compare (mk_id "quot") id == 0 ->
-        separate space [doc_atomic_exp x; string "/"; doc_atomic_exp y]
-    | E_app_infix _ -> doc_infix 0 exp
     | E_tuple exps -> parens (separate_map (comma ^^ space) doc_exp exps)
     | E_if (if_exp, then_exp, (E_aux (E_if (_, _, _), _) as else_exp)) when Config.insert_braces ->
         separate space [string "if"; doc_exp if_exp; string "then"]
@@ -491,18 +502,18 @@ module Printer (Config : PRINT_CONFIG) = struct
     | E_internal_assume (nc, exp) -> doc_let_style_general "internal_assume" (parens (doc_nc nc)) None exp
     | E_app (id, exps) -> begin
         let handle_setter id otherwise =
-          if is_setter && List.length exps >= 2 then (
+          if uannot_fmt.is_setter && List.length exps >= 2 then (
             let lexp = doc_id id ^^ parens (separate_map (comma ^^ space) doc_exp (Util.butlast exps)) in
             separate space [lexp; equals; doc_exp (Util.last exps)]
           )
           else Lazy.force otherwise
         in
-        match (overloaded, exps) with
-        | Some (name, true), [x; y] -> doc_exp (E_aux (E_app_infix (x, mk_id name, y), (l, uannot)))
+        match (uannot_fmt.overloaded, exps) with
+        | Some (name, true), [x; y] -> doc_exp (E_aux (E_app (mk_operator name, [x; y]), (l, empty_uannot)))
         | Some (name, false), _ ->
-            handle_setter (mk_id name) (lazy (doc_exp (E_aux (E_app (mk_id name, exps), (l, uannot)))))
+            handle_setter (mk_id name) (lazy (doc_exp (E_aux (E_app (mk_id name, exps), (l, empty_uannot)))))
         | None, [x; y] when Config.resugar && match id with Id_aux (Operator _, _) -> true | _ -> false ->
-            doc_exp (E_aux (E_app_infix (x, id, y), (l, uannot)))
+            doc_infix 0 exp
         | None, [v; n] when Config.resugar && Id.compare id (mk_id "vector_access") = 0 ->
             doc_atomic_exp v ^^ char '[' ^^ doc_exp n ^^ char ']'
         | None, [v; n; m] when Config.resugar && Id.compare id (mk_id "vector_subrange") = 0 ->
@@ -525,19 +536,25 @@ module Printer (Config : PRINT_CONFIG) = struct
   and doc_measure (Measure_aux (m_aux, _)) =
     match m_aux with Measure_none -> [] | Measure_some exp -> [string "termination_measure"; braces (doc_exp exp)]
 
-  and doc_infix n (E_aux (e_aux, _) as exp) =
+  and doc_infix n exp =
+    let (E_aux (e_aux, (l, _)) as exp), uannot_fmt = consume_exp_uannot exp in
+    uannot_fmt.doc
+    ^^
     match e_aux with
-    | E_app_infix (l, op, r) when n < 10 -> begin
-        try
-          match Bindings.find op !fixities with
-          | Infix, m when m >= n -> separate space [doc_infix (m + 1) l; doc_id op; doc_infix (m + 1) r]
-          | Infix, m -> parens (separate space [doc_infix (m + 1) l; doc_id op; doc_infix (m + 1) r])
-          | InfixL, m when m >= n -> separate space [doc_infix m l; doc_id op; doc_infix (m + 1) r]
-          | InfixL, m -> parens (separate space [doc_infix m l; doc_id op; doc_infix (m + 1) r])
-          | InfixR, m when m >= n -> separate space [doc_infix (m + 1) l; doc_id op; doc_infix m r]
-          | InfixR, m -> parens (separate space [doc_infix (m + 1) l; doc_id op; doc_infix m r])
-        with Not_found -> parens (separate space [doc_atomic_exp l; doc_id op; doc_atomic_exp r])
-      end
+    | E_app (id, exps) when Option.is_some uannot_fmt.overloaded ->
+        let name, is_infix = Option.get uannot_fmt.overloaded in
+        if is_infix then doc_infix n (E_aux (E_app (mk_operator name, exps), (l, empty_uannot)))
+        else doc_atomic_exp (E_aux (E_app (mk_id name, exps), (l, empty_uannot)))
+    | E_app ((Id_aux (Operator s, _) as op), [x; y]) when n < 10 -> (
+        match Bindings.find_opt op !fixities with
+        | Some (Infix, m) when m >= n -> separate space [doc_infix (m + 1) x; string s; doc_infix (m + 1) y]
+        | Some (Infix, m) -> parens (separate space [doc_infix (m + 1) x; string s; doc_infix (m + 1) y])
+        | Some (InfixL, m) when m >= n -> separate space [doc_infix m x; string s; doc_infix (m + 1) y]
+        | Some (InfixL, m) -> parens (separate space [doc_infix m x; string s; doc_infix (m + 1) y])
+        | Some (InfixR, m) when m >= n -> separate space [doc_infix (m + 1) x; string s; doc_infix m y]
+        | Some (InfixR, m) -> parens (separate space [doc_infix (m + 1) x; string s; doc_infix m y])
+        | None -> parens (separate space [doc_atomic_exp x; string s; doc_atomic_exp y])
+      )
     | _ -> doc_atomic_exp exp
 
   and doc_atomic_exp (E_aux (e_aux, (_, uannot)) as exp) =

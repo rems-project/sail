@@ -572,7 +572,6 @@ Module Make (T : SemanticExt).
     | E_id m =>
         if id_eqb n m then E_aux (E_internal_value v) annot else E_aux (E_id m) annot
     | E_block xs => E_aux (E_block (map (substitute n v) xs)) annot
-    | E_app_infix x f y => E_aux (E_app_infix (substitute n v x) f (substitute n v y)) annot
     | E_app f args => E_aux (E_app f (map (substitute n v) args)) annot
     | E_tuple xs => E_aux (E_tuple (map (substitute n v) xs)) annot
     | E_vector xs => E_aux (E_vector (map (substitute n v) xs)) annot
@@ -970,106 +969,91 @@ Module Make (T : SemanticExt).
   Proof.
     intros n v.
     einduction x using exp_ind_mutual_g.
-    19: {
-      induction fields.
-      - reflexivity.
-      - rewrite Forall_cons_iff in H.
-        inversion H as [Hhd Htl].
-        apply IHfields in Htl.
-        cbn.
-        rewrite map_map.
-        setoid_rewrite fexp_subst.
-        cbn in Htl.
-        rewrite map_map in Htl.
-        setoid_rewrite fexp_subst in Htl.
-        apply depth_subst_helper.
-        apply (PeanoNat.Nat.le_trans _ _ _ Hhd).
-        destruct a.
-        destruct f.
-        reflexivity.
-        lia.
-    }
-    19: {
-      cbn.
-      apply depth_subst_helper.
-      assumption.
-      induction fields.
-      - reflexivity.
-      - rewrite Forall_cons_iff in H.
-        inversion H as [Hhd Htl].
-        apply IHfields in Htl.
-        cbn.
-        rewrite map_map.
-        setoid_rewrite fexp_subst.
-        cbn in Htl.
-        rewrite map_map in Htl.
-        setoid_rewrite fexp_subst in Htl.
-        apply depth_subst_helper.
-        apply (PeanoNat.Nat.le_trans _ _ _ Hhd).
-        destruct a.
-        destruct f.
-        reflexivity.
-        lia.
-    }
     all: (cbn; try easy; try lia).
-    - {
-      induction xs.
-      - reflexivity.
-      - cbn.
+    - induction xs.
+      + reflexivity.
+      + cbn.
         rewrite Forall_cons_iff in H.
         inversion H as [Hhd Htl].
         apply IHxs in Htl.
         lia.
-    }
     - cbn.
       apply (PeanoNat.Nat.le_trans _ _ _ (depth_if _ _ _)).
       reflexivity.
-    - {
-      induction xs.
-      - reflexivity.
-      - cbn.
+    - induction xs.
+      + reflexivity.
+      + cbn.
         rewrite Forall_cons_iff in H.
         inversion H as [Hhd Htl].
         apply IHxs in Htl.
         lia.
-    }
-    - {
-      induction xs.
-      - reflexivity.
-      - cbn.
+    - induction xs.
+      + reflexivity.
+      + cbn.
         rewrite Forall_cons_iff in H.
         inversion H as [Hhd Htl].
         apply IHxs in Htl.
         lia.
-    }
     - cbn.
       apply (PeanoNat.Nat.le_trans _ _ _ (depth_if _ _ _)).
       cbn.
       lia.
-    - {
-      induction xs.
-      - reflexivity.
-      - cbn.
+    - induction xs.
+      + reflexivity.
+      + cbn.
         rewrite Forall_cons_iff in H.
         inversion H as [Hhd Htl].
         apply IHxs in Htl.
         lia.
-    }
-    - {
-      induction xs.
-      - reflexivity.
-      - cbn.
+    - induction xs.
+      + reflexivity.
+      + cbn.
         rewrite Forall_cons_iff in H.
         inversion H as [Hhd Htl].
         apply IHxs in Htl.
         lia.
-    }
-    - {
+    - induction fields.
+      + reflexivity.
+      + rewrite Forall_cons_iff in H.
+        inversion H as [Hhd Htl].
+        apply IHfields in Htl.
+        cbn.
+        rewrite map_map.
+        setoid_rewrite fexp_subst.
+        cbn in Htl.
+        rewrite map_map in Htl.
+        setoid_rewrite fexp_subst in Htl.
+        apply depth_subst_helper.
+        apply (PeanoNat.Nat.le_trans _ _ _ Hhd).
+        destruct a.
+        destruct f.
+        reflexivity.
+        lia.
+    - cbn.
       apply depth_subst_helper.
       assumption.
+      induction fields.
+      + reflexivity.
+      + rewrite Forall_cons_iff in H.
+        inversion H as [Hhd Htl].
+        apply IHfields in Htl.
+        cbn.
+        rewrite map_map.
+        setoid_rewrite fexp_subst.
+        cbn in Htl.
+        rewrite map_map in Htl.
+        setoid_rewrite fexp_subst in Htl.
+        apply depth_subst_helper.
+        apply (PeanoNat.Nat.le_trans _ _ _ Hhd).
+        destruct a.
+        destruct f.
+        reflexivity.
+        lia.
+    - apply depth_subst_helper.
+      assumption.
       induction arms.
-      - reflexivity.
-      - rewrite Forall_cons_iff in H.
+      + reflexivity.
+      + rewrite Forall_cons_iff in H.
         inversion H as [Hhd Htl].
         apply IHarms in Htl.
         cbn.
@@ -1080,17 +1064,15 @@ Module Make (T : SemanticExt).
         cbn in Hhd.
         lia.
         assumption.
-    }
     - destruct (binds_id n p); cbn; lia.
     - apply depth_subst_helper.
       apply IHe.
       lia.
-    - {
-      apply depth_subst_helper.
+    - apply depth_subst_helper.
       assumption.
       induction arms.
-      - reflexivity.
-      - rewrite Forall_cons_iff in H.
+      + reflexivity.
+      + rewrite Forall_cons_iff in H.
         inversion H as [Hhd Htl].
         apply IHarms in Htl.
         cbn.
@@ -1101,7 +1083,6 @@ Module Make (T : SemanticExt).
         cbn in Hhd.
         lia.
         assumption.
-    }
     - cbn in IHe1; lia.
     - cbn; reflexivity.
     - cbn; try assumption; lia.
@@ -1404,21 +1385,6 @@ Module Make (T : SemanticExt).
                 | Return_ok v => wrap (E_internal_value v)
                 | Return_exception exn => wrap (E_throw (E_aux (E_internal_value exn) annot))
                 end
-            end
-        end
-    | E_app_infix lhs id rhs =>
-        match left_to_right2 lhs rhs with
-        | LTR2_0 _ _ =>
-            lhs' ← step lhs;
-            wrap (E_app_infix lhs' id rhs)
-        | LTR2_1 _ _ =>
-            rhs' ← step rhs;
-            wrap (E_app_infix lhs id rhs')
-        | LTR2_2 v1 v2 =>
-            r ← Call id [v1; v2] pure;
-            match r with
-            | Return_ok v => wrap (E_internal_value v)
-            | Return_exception exn => wrap (E_throw (E_aux (E_internal_value exn) annot))
             end
         end
     | E_if i t e =>

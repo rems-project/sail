@@ -226,6 +226,8 @@ let mk_pat ?loc:(l = Parse_ast.Unknown) pat_aux = P_aux (pat_aux, (l, empty_uann
 let unaux_pat (P_aux (pat_aux, _)) = pat_aux
 let untyp_pat = function P_aux (P_typ (typ, pat), _) -> (pat, Some typ) | pat -> (pat, None)
 
+let mk_infix_exp ?loc:(l = Parse_ast.Unknown) lhs op rhs = E_aux (E_app (op, [lhs; rhs]), (l, empty_uannot))
+
 let mk_pexp ?loc:(l = Parse_ast.Unknown) pexp_aux = Pat_aux (pexp_aux, (l, empty_uannot))
 
 let mk_mpat ?loc:(l = Parse_ast.Unknown) mpat_aux = MP_aux (mpat_aux, (l, empty_uannot))
@@ -895,7 +897,6 @@ and map_exp_annot_aux f = function
   | E_config key -> E_config key
   | E_typ (typ, exp) -> E_typ (typ, map_exp_annot f exp)
   | E_app (id, xs) -> E_app (id, List.map (map_exp_annot f) xs)
-  | E_app_infix (x, op, y) -> E_app_infix (map_exp_annot f x, op, map_exp_annot f y)
   | E_tuple xs -> E_tuple (List.map (map_exp_annot f) xs)
   | E_if (cond, t, e) -> E_if (map_exp_annot f cond, map_exp_annot f t, map_exp_annot f e)
   | E_for (v, e1, e2, e3, o, e4) ->
@@ -1314,7 +1315,6 @@ let rec string_of_exp (E_aux (exp, _)) =
   | E_return exp -> "return " ^ string_of_exp exp
   | E_app (f, [E_aux (E_lit (L_aux (L_unit, _)), _)]) -> string_of_id f ^ "()"
   | E_app (f, args) -> string_of_id f ^ "(" ^ string_of_list ", " string_of_exp args ^ ")"
-  | E_app_infix (x, op, y) -> "(" ^ string_of_exp x ^ " " ^ string_of_id op ^ " " ^ string_of_exp y ^ ")"
   | E_tuple exps -> "(" ^ string_of_list ", " string_of_exp exps ^ ")"
   | E_match (exp, cases) -> "match " ^ string_of_exp exp ^ " { " ^ string_of_list ", " string_of_pexp cases ^ " }"
   | E_try (exp, cases) ->
@@ -1855,7 +1855,6 @@ let rec subst id value (E_aux (e_aux, annot) as exp) =
     | E_config parts -> E_config parts
     | E_typ (typ, exp) -> E_typ (typ, subst id value exp)
     | E_app (fn, exps) -> E_app (fn, List.map (subst id value) exps)
-    | E_app_infix (exp1, op, exp2) -> E_app_infix (subst id value exp1, op, subst id value exp2)
     | E_tuple exps -> E_tuple (List.map (subst id value) exps)
     | E_if (cond, then_exp, else_exp) -> E_if (subst id value cond, subst id value then_exp, subst id value else_exp)
     | E_loop (loop, measure, cond, body) ->
@@ -2095,7 +2094,6 @@ let rec locate : 'a. (l -> l) -> 'a exp -> 'a exp =
     | E_config parts -> E_config parts
     | E_typ (typ, exp) -> E_typ (locate_typ f typ, locate f exp)
     | E_app (id, exps) -> E_app (locate_id f id, List.map (locate f) exps)
-    | E_app_infix (exp1, op, exp2) -> E_app_infix (locate f exp1, locate_id f op, locate f exp2)
     | E_tuple exps -> E_tuple (List.map (locate f) exps)
     | E_if (cond_exp, then_exp, else_exp) -> E_if (locate f cond_exp, locate f then_exp, locate f else_exp)
     | E_loop (loop, measure, cond, body) -> E_loop (loop, locate_measure f measure, locate f cond, locate f body)

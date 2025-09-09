@@ -267,7 +267,6 @@ with exp_aux (a : Set) : Set :=
 | E_lit : lit -> exp_aux a
 | E_typ : typ -> exp a -> exp_aux a
 | E_app : id -> list (exp a) -> exp_aux a
-| E_app_infix : exp a -> id -> exp a -> exp_aux a
 | E_tuple : list (exp a) -> exp_aux a
 | E_if : exp a -> exp a -> exp a -> exp_aux a
 | E_loop : loop -> internal_loop_measure a -> exp a -> exp a -> exp_aux a
@@ -342,7 +341,6 @@ Arguments E_id {_}.
 Arguments E_lit {_}.
 Arguments E_typ {_}.
 Arguments E_app {_}.
-Arguments E_app_infix {_}.
 Arguments E_tuple {_}.
 Arguments E_if {_}.
 Arguments E_loop {_}.

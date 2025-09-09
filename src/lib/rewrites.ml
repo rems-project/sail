@@ -1126,7 +1126,7 @@ let remove_bitvector_pat (P_aux (_, (l, _)) as pat) =
   let mk_exp e_aux = E_aux (e_aux, (l, empty_uannot)) in
   let mk_num_exp i = mk_lit_exp (L_num i) in
   let check_eq_exp l r =
-    let exp = mk_exp (E_app_infix (l, Id_aux (Operator "==", Parse_ast.Unknown), r)) in
+    let exp = mk_infix_exp l (mk_operator "==") r in
     check_exp env exp bool_typ
   in
 
@@ -1378,7 +1378,7 @@ let rewrite_ast_remove_numeral_pats env =
     | L_aux (L_num n, l) ->
         let id = fresh_id "l__" Parse_ast.Unknown in
         let typ = atom_typ (nconstant n) in
-        let guard = mk_exp (E_app_infix (mk_exp (E_id id), mk_operator "==", mk_lit_exp (L_num n))) in
+        let guard = mk_infix_exp (mk_exp (E_id id)) (mk_operator "==") (mk_lit_exp (L_num n)) in
         (* Check expression in reasonable approx of environment to resolve overriding *)
         let env = Env.add_local id (Immutable, typ) outer_env in
         let checked_guard = check_exp env guard bool_typ in
@@ -1795,7 +1795,6 @@ let is_funcl_rec rec_fns (FCL_aux (FCL_funcl (id, pexp), _)) =
     {
       (pure_exp_alg false ( || )) with
       e_app = (fun (id', args) -> List.exists (fun id -> Id.compare id id' == 0) ids || List.exists (fun x -> x) args);
-      e_app_infix = (fun (arg1, id', arg2) -> arg1 || arg2 || List.exists (fun id -> Id.compare id id' == 0) ids);
     }
     pexp
 
@@ -2128,12 +2127,12 @@ let rewrite_vector_concat_assignments env defs =
   let sub m n =
     match (m, n) with
     | E_aux (E_lit (L_aux (L_num m, _)), _), E_aux (E_lit (L_aux (L_num n, _)), _) -> lit_int (Big_int.sub m n)
-    | _, _ -> mk_exp (E_app_infix (m, mk_operator "-", n))
+    | _, _ -> mk_infix_exp m (mk_operator "-") n
   in
   let add m n =
     match (m, n) with
     | E_aux (E_lit (L_aux (L_num m, _)), _), E_aux (E_lit (L_aux (L_num n, _)), _) -> lit_int (Big_int.add m n)
-    | _, _ -> mk_exp (E_app_infix (m, mk_operator "+", n))
+    | _, _ -> mk_infix_exp m (mk_operator "+") n
   in
 
   let assign_tuple e_aux annot =
@@ -2373,9 +2372,6 @@ let rewrite_ast_letbind_effects effect_info env =
     | E_app (id, exps) ->
         let fix_eff = if Effects.function_is_pure id effect_info then purify else fun exp -> exp in
         n_exp_nameL exps (fun exps -> k (fix_eff (rewrap (E_app (id, exps)))))
-    | E_app_infix (exp1, id, exp2) ->
-        let fix_eff = if Effects.function_is_pure id effect_info then purify else fun exp -> exp in
-        n_exp_name exp1 (fun exp1 -> n_exp_name exp2 (fun exp2 -> k (fix_eff (rewrap (E_app_infix (exp1, id, exp2))))))
     | E_tuple exps -> n_exp_nameL exps (fun exps -> k (pure_rewrap (E_tuple exps)))
     | E_if (exp1, exp2, exp3) ->
         let e_if exp1 =
@@ -2604,7 +2600,7 @@ let rewrite_ast_pat_lits rewrite_lit env ast =
           let env = env_of_annot p_annot in
           let typ = typ_of_annot p_annot in
           let id = mk_id ("p" ^ string_of_int !counter ^ "#") in
-          let guard = mk_exp (E_app_infix (mk_exp (E_id id), mk_operator "==", mk_exp (E_lit lit))) in
+          let guard = mk_infix_exp (mk_exp (E_id id)) (mk_operator "==") (mk_exp (E_lit lit)) in
           let guard = check_exp (Env.add_local id (Immutable, typ) env) guard bool_typ in
           guards := guard :: !guards;
           incr counter;
@@ -3175,13 +3171,9 @@ let rewrite_ast_not_pats env =
             let guard_exp =
               match (orig_guard, guards) with
               | Some guard, _ ->
-                  List.fold_left
-                    (fun exp1 (_, _, exp2) -> mk_exp (E_app_infix (exp1, mk_operator "&", exp2)))
-                    guard guards
+                  List.fold_left (fun exp1 (_, _, exp2) -> mk_infix_exp exp1 (mk_operator "&") exp2) guard guards
               | None, (_, _, guard) :: guards ->
-                  List.fold_left
-                    (fun exp1 (_, _, exp2) -> mk_exp (E_app_infix (exp1, mk_operator "&", exp2)))
-                    guard guards
+                  List.fold_left (fun exp1 (_, _, exp2) -> mk_infix_exp exp1 (mk_operator "&") exp2) guard guards
               | _ ->
                   raise
                     (Reporting.err_unreachable (fst annot) __POS__
@@ -4066,13 +4058,7 @@ let move_loop_measures ast =
   { ast with defs = List.rev rev_defs }
 
 let called_fns_in_exp exp =
-  fold_exp
-    {
-      (pure_exp_alg [] ( @ )) with
-      e_app = (fun (id', args) -> id' :: List.concat args);
-      e_app_infix = (fun (arg1, id', arg2) -> (id' :: arg1) @ arg2);
-    }
-    exp
+  fold_exp { (pure_exp_alg [] ( @ )) with e_app = (fun (id', args) -> id' :: List.concat args) } exp
 
 (* Move recursive function termination measures into the function definitions. *)
 let move_termination_measures env ast =

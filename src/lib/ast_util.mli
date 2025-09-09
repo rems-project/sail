@@ -168,6 +168,7 @@ val mk_kid : ?loc:l -> string -> kid
 val mk_nc : ?loc:l -> n_constraint_aux -> n_constraint
 val mk_nexp : ?loc:l -> nexp_aux -> nexp
 val mk_exp : ?loc:l -> uannot exp_aux -> uannot exp
+val mk_infix_exp : ?loc:l -> uannot exp -> id -> uannot exp -> uannot exp
 val mk_pat : ?loc:l -> uannot pat_aux -> uannot pat
 val mk_mpat : ?loc:l -> uannot mpat_aux -> uannot mpat
 val mk_pexp : ?loc:l -> uannot pexp_aux -> uannot pexp

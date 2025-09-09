@@ -396,7 +396,6 @@ let string_of_exp_con (E_aux (e, _)) =
   match e with
   | E_block _ -> "E_block"
   | E_ref _ -> "E_ref"
-  | E_app_infix _ -> "E_app_infix"
   | E_if _ -> "E_if"
   | E_loop _ -> "E_loop"
   | E_for _ -> "E_for"

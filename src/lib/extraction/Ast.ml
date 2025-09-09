@@ -205,7 +205,6 @@ and 'a exp_aux =
 | E_lit of lit
 | E_typ of typ * 'a exp
 | E_app of id * 'a exp list
-| E_app_infix of 'a exp * id * 'a exp
 | E_tuple of 'a exp list
 | E_if of 'a exp * 'a exp * 'a exp
 | E_loop of loop * 'a internal_loop_measure * 'a exp * 'a exp

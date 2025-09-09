@@ -1236,14 +1236,14 @@ and rewrite_arg l env = function
 and rewrite_nc_aux l env =
   let op s = Id_aux (Operator s, l) in
   function
-  | NC_ge (n1, n2) -> E_app_infix (rewrite_sizeof l env n1, op ">=", rewrite_sizeof l env n2)
-  | NC_gt (n1, n2) -> E_app_infix (rewrite_sizeof l env n1, op ">", rewrite_sizeof l env n2)
-  | NC_le (n1, n2) -> E_app_infix (rewrite_sizeof l env n1, op "<=", rewrite_sizeof l env n2)
-  | NC_lt (n1, n2) -> E_app_infix (rewrite_sizeof l env n1, op "<", rewrite_sizeof l env n2)
-  | NC_equal (arg1, arg2) -> E_app_infix (rewrite_arg l env arg1, op "==", rewrite_arg l env arg2)
-  | NC_not_equal (arg1, arg2) -> E_app_infix (rewrite_arg l env arg1, op "!=", rewrite_arg l env arg2)
-  | NC_and (nc1, nc2) -> E_app_infix (rewrite_nc env nc1, op "&", rewrite_nc env nc2)
-  | NC_or (nc1, nc2) -> E_app_infix (rewrite_nc env nc1, op "|", rewrite_nc env nc2)
+  | NC_ge (n1, n2) -> E_app (op ">=", [rewrite_sizeof l env n1; rewrite_sizeof l env n2])
+  | NC_gt (n1, n2) -> E_app (op ">", [rewrite_sizeof l env n1; rewrite_sizeof l env n2])
+  | NC_le (n1, n2) -> E_app (op "<=", [rewrite_sizeof l env n1; rewrite_sizeof l env n2])
+  | NC_lt (n1, n2) -> E_app (op "<", [rewrite_sizeof l env n1; rewrite_sizeof l env n2])
+  | NC_equal (arg1, arg2) -> E_app (op "==", [rewrite_arg l env arg1; rewrite_arg l env arg2])
+  | NC_not_equal (arg1, arg2) -> E_app (op "!=", [rewrite_arg l env arg1; rewrite_arg l env arg2])
+  | NC_and (nc1, nc2) -> E_app (op "&", [rewrite_nc env nc1; rewrite_nc env nc2])
+  | NC_or (nc1, nc2) -> E_app (op "|", [rewrite_nc env nc1; rewrite_nc env nc2])
   | NC_false -> E_lit (mk_lit L_false)
   | NC_true -> E_lit (mk_lit L_true)
   | NC_set (_, []) -> E_lit (mk_lit L_false)
@@ -1809,7 +1809,6 @@ let rec build_overload_tree env f xs annot =
 
 and build_overload_tree_arg env (E_aux (aux, annot) as exp) =
   match aux with
-  | E_app_infix (x, op, y) when Env.is_overload op env -> build_overload_tree env op [x; y] annot
   | E_app (f, xs) when Env.is_overload f env -> build_overload_tree env f xs annot
   | E_id v -> begin
       match Env.lookup_id v env with
@@ -2263,7 +2262,6 @@ let rec check_exp env (E_aux (exp_aux, (l, uannot)) as exp : uannot exp) (Typ_au
     end
   | E_vector_append (v1, E_aux (E_vector [], _)), _ -> check_exp env v1 typ
   | E_vector_append (v1, v2), _ -> check_exp env (E_aux (E_app (mk_id "append", [v1; v2]), (l, uannot))) typ
-  | E_app_infix (x, op, y), _ -> check_exp env (E_aux (E_app (op, [x; y]), (l, uannot))) typ
   | E_app (f, [E_aux (E_constraint nc, _)]), _ when string_of_id f = "_prove" ->
       Env.wf_constraint ~at:l env nc;
       if prove __POS__ env nc then annot_exp (E_lit (L_aux (L_unit, Parse_ast.Unknown))) unit_typ
@@ -2703,7 +2701,7 @@ and check_case env pat_typ pexp typ =
         | Some (h, t) ->
             Some
               (List.fold_left
-                 (fun acc guard -> mk_exp ~loc:(hint_loc (exp_loc guard)) (E_app_infix (acc, mk_operator "&", guard)))
+                 (fun acc guard -> mk_infix_exp ~loc:(hint_loc (exp_loc guard)) acc (mk_operator "&") guard)
                  h t
               )
         | None -> None
@@ -2721,10 +2719,8 @@ and check_case env pat_typ pexp typ =
   | exception (Type_error _ as typ_exn) -> (
       match pat with
       | P_aux (P_lit lit, (l, _)) ->
-          let guard' = mk_exp (E_app_infix (mk_exp (E_id (mk_id "p#")), mk_operator "==", mk_exp (E_lit lit))) in
-          let guard =
-            match guard with None -> guard' | Some guard -> mk_exp (E_app_infix (guard, mk_operator "&", guard'))
-          in
+          let guard' = mk_infix_exp (mk_exp (E_id (mk_id "p#"))) (mk_operator "==") (mk_exp (E_lit lit)) in
+          let guard = match guard with None -> guard' | Some guard -> mk_infix_exp guard (mk_operator "&") guard' in
           check_case env pat_typ (Pat_aux (Pat_when (mk_pat ~loc:l (P_id (mk_id "p#")), guard, case), (l, uannot))) typ
       | _ -> raise typ_exn
     )
@@ -2738,7 +2734,7 @@ and check_mpexp other_env env mpexp typ =
       in
       let guard =
         match guard with
-        | Some (h, t) -> Some (List.fold_left (fun acc guard -> mk_exp (E_app_infix (acc, mk_operator "&", guard))) h t)
+        | Some (h, t) -> Some (List.fold_left (fun acc guard -> mk_infix_exp acc (mk_operator "&") guard) h t)
         | None -> None
       in
       let checked_guard, _ =
@@ -3018,7 +3014,7 @@ and bind_pat env (P_aux (pat_aux, (l, uannot)) as pat) typ =
           | P_lit lit ->
               let var = fresh_var () in
               let guard =
-                locate (fun _ -> l) (mk_exp (E_app_infix (mk_exp (E_id var), mk_operator "==", mk_exp (E_lit lit))))
+                locate (fun _ -> l) (mk_infix_exp (mk_exp (E_id var)) (mk_operator "==") (mk_exp (E_lit lit)))
               in
               let typed_pat, env, guards = bind_pat env (mk_pat ~loc:l (P_id var)) typ in
               (typed_pat, env, guard :: guards)
@@ -3705,7 +3701,6 @@ and infer_exp env (E_aux (exp_aux, (l, uannot)) as exp) =
   | E_typ (typ, exp) ->
       let checked_exp = crule check_exp env exp typ in
       annot_exp (E_typ (typ, checked_exp)) typ
-  | E_app_infix (x, op, y) -> infer_exp env (E_aux (E_app (op, [x; y]), (l, uannot)))
   (* Treat a multiple argument constructor as a single argument constructor taking a tuple, Ctor(x, y) -> Ctor((x, y)). *)
   | E_app (ctor, x :: y :: zs) when Env.is_union_constructor ctor env ->
       typ_print (lazy ("Inferring multiple argument constructor: " ^ string_of_id ctor));
@@ -4437,7 +4432,7 @@ and bind_mpat allow_unknown other_env env (MP_aux (mpat_aux, (l, uannot)) as mpa
           match mpat_aux with
           | MP_lit lit ->
               let var = fresh_var () in
-              let guard = mk_exp ~loc:l (E_app_infix (mk_exp (E_id var), mk_operator "==", mk_exp (E_lit lit))) in
+              let guard = mk_infix_exp ~loc:l (mk_exp (E_id var)) (mk_operator "==") (mk_exp (E_lit lit)) in
               let typed_mpat, env, guards = bind_mpat allow_unknown other_env env (mk_mpat (MP_id var)) typ in
               (typed_mpat, env, guard :: guards)
           | _ -> raise typ_exn

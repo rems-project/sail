@@ -138,7 +138,6 @@ type ( 'a,
   e_lit : lit -> 'exp_aux;
   e_typ : Ast.typ * 'exp -> 'exp_aux;
   e_app : id * 'exp list -> 'exp_aux;
-  e_app_infix : 'exp * id * 'exp -> 'exp_aux;
   e_tuple : 'exp list -> 'exp_aux;
   e_if : 'exp * 'exp * 'exp -> 'exp_aux;
   e_for : id * 'exp * 'exp * 'exp * Ast.order * 'exp -> 'exp_aux;

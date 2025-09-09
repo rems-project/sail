@@ -191,7 +191,6 @@ let nexp_subst_fns substs =
     | E_constraint nc -> re (E_constraint (subst_kids_nc substs nc))
     | E_typ (t, e') -> re (E_typ (s_t t, s_exp e'))
     | E_app (id, es) -> re (E_app (id, List.map s_exp es))
-    | E_app_infix (e1, id, e2) -> re (E_app_infix (s_exp e1, id, s_exp e2))
     | E_tuple es -> re (E_tuple (List.map s_exp es))
     | E_if (e1, e2, e3) -> re (E_if (s_exp e1, s_exp e2, s_exp e3))
     | E_for (id, e1, e2, e3, ord, e4) -> re (E_for (id, s_exp e1, s_exp e2, s_exp e3, ord, s_exp e4))

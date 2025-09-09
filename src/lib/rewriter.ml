@@ -199,7 +199,6 @@ let rewrite_exp rewriters (E_aux (exp, (l, annot))) =
   | E_id _ | E_lit _ | E_config _ -> rewrap exp
   | E_typ (typ, exp) -> rewrap (E_typ (typ, rewrite exp))
   | E_app (id, exps) -> rewrap (E_app (id, List.map rewrite exps))
-  | E_app_infix (el, id, er) -> rewrap (E_app_infix (rewrite el, id, rewrite er))
   | E_tuple exps -> rewrap (E_tuple (List.map rewrite exps))
   | E_if (c, t, e) -> rewrap (E_if (rewrite c, rewrite t, rewrite e))
   | E_for (id, e1, e2, e3, o, body) -> rewrap (E_for (id, rewrite e1, rewrite e2, rewrite e3, o, rewrite body))
@@ -520,7 +519,6 @@ type ( 'a,
   e_lit : lit -> 'exp_aux;
   e_typ : Ast.typ * 'exp -> 'exp_aux;
   e_app : id * 'exp list -> 'exp_aux;
-  e_app_infix : 'exp * id * 'exp -> 'exp_aux;
   e_tuple : 'exp list -> 'exp_aux;
   e_if : 'exp * 'exp * 'exp -> 'exp_aux;
   e_for : id * 'exp * 'exp * 'exp * Ast.order * 'exp -> 'exp_aux;
@@ -583,7 +581,6 @@ let rec fold_exp_aux alg = function
   | E_lit lit -> alg.e_lit lit
   | E_typ (typ, e) -> alg.e_typ (typ, fold_exp alg e)
   | E_app (id, es) -> alg.e_app (id, List.map (fold_exp alg) es)
-  | E_app_infix (e1, id, e2) -> alg.e_app_infix (fold_exp alg e1, id, fold_exp alg e2)
   | E_tuple es -> alg.e_tuple (List.map (fold_exp alg) es)
   | E_if (e1, e2, e3) -> alg.e_if (fold_exp alg e1, fold_exp alg e2, fold_exp alg e3)
   | E_for (id, e1, e2, e3, order, e4) ->
@@ -666,7 +663,6 @@ let id_exp_alg =
     e_lit = (fun lit -> E_lit lit);
     e_typ = (fun (typ, e) -> E_typ (typ, e));
     e_app = (fun (id, es) -> E_app (id, es));
-    e_app_infix = (fun (e1, id, e2) -> E_app_infix (e1, id, e2));
     e_tuple = (fun es -> E_tuple es);
     e_if = (fun (e1, e2, e3) -> E_if (e1, e2, e3));
     e_for = (fun (id, e1, e2, e3, order, e4) -> E_for (id, e1, e2, e3, order, e4));
@@ -776,7 +772,6 @@ let compute_exp_alg bot join =
     e_lit = (fun lit -> (bot, E_lit lit));
     e_typ = (fun (typ, (v, e)) -> (v, E_typ (typ, e)));
     e_app = (fun (id, es) -> split_join (fun es -> E_app (id, es)) es);
-    e_app_infix = (fun ((v1, e1), id, (v2, e2)) -> (join v1 v2, E_app_infix (e1, id, e2)));
     e_tuple = split_join (fun es -> E_tuple es);
     e_if = (fun ((v1, e1), (v2, e2), (v3, e3)) -> (join_list [v1; v2; v3], E_if (e1, e2, e3)));
     e_for =
@@ -898,7 +893,6 @@ let pure_exp_alg bot join =
     e_lit = (fun lit -> bot);
     e_typ = (fun (typ, v) -> v);
     e_app = (fun (id, es) -> join_list es);
-    e_app_infix = (fun (v1, id, v2) -> join v1 v2);
     e_tuple = join_list;
     e_if = (fun (v1, v2, v3) -> join_list [v1; v2; v3]);
     e_for = (fun (id, v1, v2, v3, order, v4) -> join_list [v1; v2; v3; v4]);
@@ -1056,10 +1050,6 @@ let default_fold_exp f x (E_aux (e, ann) as exp) =
           (x, []) es
       in
       (x, re (E_app (id, List.rev es)))
-  | E_app_infix (e1, id, e2) ->
-      let x, e1 = f x e1 in
-      let x, e2 = f x e2 in
-      (x, re (E_app_infix (e1, id, e2)))
   | E_tuple es ->
       let x, es =
         List.fold_left
