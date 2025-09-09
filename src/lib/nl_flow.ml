@@ -86,11 +86,15 @@ let modify_unsigned id value (E_aux (aux, annot) as exp) =
       | Some uid ->
           E_aux
             ( E_let
-                (lb, add_assert (mk_exp (E_app_infix (mk_exp (E_id uid), mk_id "!=", mk_lit_exp (L_num value)))) exp'),
+                ( lb,
+                  add_assert (mk_exp (E_app_infix (mk_exp (E_id uid), mk_operator "!=", mk_lit_exp (L_num value)))) exp'
+                ),
               annot
             )
     end
   | _ -> exp
+
+let is_equals = function Id_aux (Operator "==", _) -> true | _ -> false
 
 let analyze' exps =
   match exps with
@@ -98,7 +102,7 @@ let analyze' exps =
       match cond with
       | E_aux (E_app_infix (E_aux (E_id id, _), op, E_aux (E_lit lit, _)), _)
       | E_aux (E_app_infix (E_aux (E_lit lit, _), op, E_aux (E_id id, _)), _)
-        when string_of_id op = "==" && is_bitvector_literal lit ->
+        when is_equals op && is_bitvector_literal lit ->
           let value = bitvector_unsigned lit in
           List.map (modify_unsigned id value) exps
       | _ -> exps

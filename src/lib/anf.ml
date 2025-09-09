@@ -725,7 +725,7 @@ let rec anf (E_aux (e_aux, (l, tannot)) as exp) =
       let then_aexp = anf then_exp in
       let else_aexp = anf else_exp in
       wrap (mk_aexp (AE_if (cond_val, then_aexp, else_aexp, typ_of exp)))
-  | E_app_infix (x, id, y) -> anf (E_aux (E_app (deinfix id, [x; y]), (l, tannot)))
+  | E_app_infix (x, id, y) -> anf (E_aux (E_app (id, [x; y]), (l, tannot)))
   | E_vector exps ->
       let aexps = List.map anf exps in
       let avals = List.map to_aval aexps in

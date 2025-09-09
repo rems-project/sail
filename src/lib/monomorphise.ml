@@ -1306,7 +1306,7 @@ module AtomToItself = struct
           E_aux
             ( E_app_infix
                 ( E_aux (E_app (mk_id "size_itself_int", [E_aux (E_id var, annot)]), annot),
-                  mk_id "==",
+                  mk_operator "==",
                   E_aux (E_lit lit, annot)
                 ),
               annot
@@ -1530,7 +1530,7 @@ module AtomToItself = struct
             let vars, new_guards = (List.concat vars, List.concat new_guards) in
             let body = List.fold_left (add_var_rebind true) body vars in
             let merge_guards g1 g2 : tannot exp =
-              E_aux (E_app_infix (g1, mk_id "&", g2), (Generated Unknown, empty_tannot))
+              E_aux (E_app_infix (g1, mk_operator "&", g2), (Generated Unknown, empty_tannot))
             in
             let guard =
               match (guard, new_guards) with
@@ -3194,7 +3194,7 @@ module MonoRewrites = struct
           | Some zlen ->
               (* Give the length explicitly rather than relying on the context;
                  it might not be sufficiently constrained. *)
-              let total = mk_exp (E_app_infix (zlen, mk_id "+", len1)) in
+              let total = mk_exp (E_app_infix (zlen, mk_operator "+", len1)) in
               try_cast_to_typ (mk_exp (E_app (mk_id "slice_mask", [total; zlen; len1])))
           | None -> E_app (id, args)
         end
@@ -3205,7 +3205,7 @@ module MonoRewrites = struct
               (* Give the length explicitly rather than relying on the context;
                  it might not be sufficiently constrained. *)
               let len1 = mk_exp (E_lit (L_aux (L_num (Nat_big_num.of_int (String.length lit)), Unknown))) in
-              let total = mk_exp (E_app_infix (zlen, mk_id "+", len1)) in
+              let total = mk_exp (E_app_infix (zlen, mk_operator "+", len1)) in
               try_cast_to_typ (mk_exp (E_app (mk_id "slice_mask", [total; zlen; len1])))
           | None -> E_app (id, args)
         end
@@ -3217,7 +3217,7 @@ module MonoRewrites = struct
           | Some zlen ->
               (* Give the length explicitly rather than relying on the context;
                  it might not be sufficiently constrained. *)
-              let total = mk_exp (E_app_infix (zlen, mk_id "+", len2)) in
+              let total = mk_exp (E_app_infix (zlen, mk_operator "+", len2)) in
               let zero = mk_exp (E_lit (mk_lit (L_num Nat_big_num.zero))) in
               try_cast_to_typ (mk_exp (E_app (mk_id "slice_mask", [total; zero; len2])))
           | None -> E_app (id, args)
@@ -3229,7 +3229,7 @@ module MonoRewrites = struct
               (* Give the length explicitly rather than relying on the context;
                  it might not be sufficiently constrained. *)
               let len2 = mk_exp (E_lit (L_aux (L_num (Nat_big_num.of_int (String.length lit)), Unknown))) in
-              let total = mk_exp (E_app_infix (zlen, mk_id "+", len2)) in
+              let total = mk_exp (E_app_infix (zlen, mk_operator "+", len2)) in
               let zero = mk_exp (E_lit (mk_lit (L_num Nat_big_num.zero))) in
               try_cast_to_typ (mk_exp (E_app (mk_id "slice_mask", [total; zero; len2])))
           | None -> E_app (id, args)
@@ -3239,14 +3239,14 @@ module MonoRewrites = struct
         ->
           let one = mk_exp (E_lit (mk_lit (L_num (Big_int.of_int 1)))) in
           let len2 = mk_exp (E_app (mk_id "length", [vector2])) in
-          let total = mk_exp (E_app_infix (len1, mk_id "+", len2)) in
+          let total = mk_exp (E_app_infix (len1, mk_operator "+", len2)) in
           try_cast_to_typ
             (E_aux
                ( E_app
                    ( mk_id "update_subrange_bits",
                      [
                        E_aux (E_app (ones1, [total]), (Unknown, empty_tannot));
-                       mk_exp (E_app_infix (len2, mk_id "-", one));
+                       mk_exp (E_app_infix (len2, mk_operator "-", one));
                        mk_exp (E_lit (mk_lit (L_num Big_int.zero)));
                        vector2;
                      ]
@@ -3291,7 +3291,7 @@ module MonoRewrites = struct
           let one = mk_exp (E_lit (mk_lit (L_num (Big_int.of_int 1)))) in
           let length2 = mk_exp (E_app (mk_id "length", [vector2])) in
           let indices2 =
-            if is_subrange op then [mk_exp (E_app_infix (length2, mk_id "-", one)); zero] else [zero; length2]
+            if is_subrange op then [mk_exp (E_app_infix (length2, mk_operator "-", one)); zero] else [zero; length2]
           in
           try_cast_to_typ
             (E_aux (E_app (mk_id op', [vector1; start1; length1; vector2] @ indices2), (Unknown, empty_tannot)))
@@ -3388,8 +3388,8 @@ module MonoRewrites = struct
             mk_exp
               (E_app_infix
                  ( start,
-                   mk_id "+",
-                   mk_exp (E_app_infix (len, mk_id "-", mk_exp (E_lit (mk_lit (L_num (Big_int.of_int 1))))))
+                   mk_operator "+",
+                   mk_exp (E_app_infix (len, mk_operator "-", mk_exp (E_lit (mk_lit (L_num (Big_int.of_int 1))))))
                  )
               )
           in
@@ -3719,10 +3719,10 @@ module MonoRewrites = struct
         let new_annot = (Generated l, empty_tannot) in
         let vector = List.find (fun exp -> is_bitvector_typ (typ_of exp)) zero_extend_args in
         let len = E_aux (E_app (mk_id "length", [vector]), new_annot) in
-        let mid_point_high = E_aux (E_app_infix (end1, mk_id "+", len), new_annot) in
+        let mid_point_high = E_aux (E_app_infix (end1, mk_operator "+", len), new_annot) in
         let mid_point_low =
           E_aux
-            ( E_app_infix (mid_point_high, mk_id "-", E_aux (E_lit (mk_lit (L_num (Big_int.of_int 1))), new_annot)),
+            ( E_app_infix (mid_point_high, mk_operator "-", E_aux (E_lit (mk_lit (L_num (Big_int.of_int 1))), new_annot)),
               new_annot
             )
         in

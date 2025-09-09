@@ -209,6 +209,7 @@ let is_and_bool = function Id_aux (And_bool, _) -> true | _ -> false
 let is_or_bool = function Id_aux (Or_bool, _) -> true | _ -> false
 
 let mk_id ?loc:(l = Parse_ast.Unknown) str = Id_aux (Id str, l)
+let mk_operator ?loc:(l = Parse_ast.Unknown) str = Id_aux (Operator str, l)
 
 let mk_nc ?loc:(l = Parse_ast.Unknown) nc_aux = NC_aux (nc_aux, l)
 
@@ -1174,10 +1175,6 @@ let natural_sort_ids ids =
   let ids = List.map (fun id -> (split_id id, id)) ids in
   let ids = List.stable_sort (fun (n1, _) (n2, _) -> split_id_compare n1 n2) ids in
   List.map snd ids
-
-let deinfix = function Id_aux (Id v, l) -> Id_aux (Operator v, l) | id -> id
-
-let infix_swap = function Id_aux (Operator v, l) -> Id_aux (Id v, l) | id -> deinfix id
 
 let id_of_kid = function Kid_aux (Var v, l) -> Id_aux (Id (String.sub v 1 (String.length v - 1)), l)
 
