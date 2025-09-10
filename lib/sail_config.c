@@ -78,17 +78,22 @@ void sail_config_set_string(const char *json)
 void sail_config_set_file(const char *path)
 {
   FILE *f = fopen(path, "rb");
-  fseek(f, 0, SEEK_END);
+  sail_assert(f != NULL, "Failed to open configuration file");
+
+  int rc = fseek(f, 0, SEEK_END);
+  sail_assert(rc != -1, "Failed to seek to end of configuration file");
+
   long fsize = ftell(f);
-  fseek(f, 0, SEEK_SET);
+  sail_assert(fsize != -1, "Failed to get size of configuration file");
+
+  rc = fseek(f, 0, SEEK_SET);
+  sail_assert(rc != -1, "Failed to seek to start of configuration file");
 
   char *buffer = (char *)sail_malloc(fsize + 1);
 
   size_t ret_size = fread(buffer, fsize, 1, f);
 
-  if (ret_size != 1) {
-    sail_assert(false, "Failed to read configuration");
-  }
+  sail_assert(ret_size == 1, "Failed to read configuration");
 
   buffer[fsize] = 0;
   fclose(f);
