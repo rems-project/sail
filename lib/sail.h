@@ -83,14 +83,35 @@ void cleanup_library(void);
  * convention for allocation, deallocation, and (deep)-copying. These
  * macros implement this naming convention.
  */
+
+/* Allocate a new instance of the type. */
 #define CREATE(type) create_ ## type
+/* Deallocate an instance of the type (it must be valid) and then
+   allocate a new one. Equivalent to KILL(type); CREATE(type);
+   except it can be more efficient because it is allowed to
+   reuse allocations. */
 #define RECREATE(type) recreate_ ## type
+/* Allocate a new instance of the type and set its value to type2.
+   Equivalent to CREATE(type1); CONVERT_OF(type1, type2); but
+   it can be more efficient. */
 #define CREATE_OF(type1, type2) create_ ## type1 ## _of_ ## type2
+/* Equivalent to KILL(type1); CREATE(type1); CONVERT_OF(type1; type2);
+   but more efficient. */
 #define RECREATE_OF(type1, type2) recreate_ ## type1 ## _of_ ## type2
+/* Set type1 = type2. Both must have already been CREATE()ed.
+   The types can be different, and a conversion will be performed. */
 #define CONVERT_OF(type1, type2) convert_ ## type1 ## _of_ ## type2
+/* Like CONVERT_OF() but the types must be the same and it is just
+   copied without any conversion. */
 #define COPY(type) copy_ ## type
+/* Deallocate an instance of the type. It is not safe to call KILL()
+   on a value that has already been KILL()ed or has never been CREATE()ed. */
 #define KILL(type) kill_ ## type
+/* Set a value to the `undefined` Sail value (it can be anything).
+   The instance must have been CREATE()ed. */
 #define UNDEFINED(type) undefined_ ## type
+/* Return true if two instances of the type are semantically equal
+   (e.g. two strings are compared by values, not by their addresses). */
 #define EQUAL(type) eq_ ## type
 
 #define SAIL_BUILTIN_TYPE_IMPL(type, const_type)\
