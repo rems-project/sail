@@ -2352,6 +2352,9 @@ let rec check_exp env (E_aux (exp_aux, (l, uannot)) as exp : uannot exp) (Typ_au
           in
           expect_subtype env inferred_exp typ
     end
+  | E_app (f, xs), _ when is_vector_syntax f ->
+      let inferred_exp = irule infer_exp env exp in
+      expect_subtype env inferred_exp typ
   | E_app (f, xs), _ ->
       let inferred_exp = infer_funapp l env f xs uannot (Some typ) in
       expect_subtype env inferred_exp typ
@@ -3757,6 +3760,25 @@ and infer_exp env (E_aux (exp_aux, (l, uannot)) as exp) =
       | Some _ -> infer_funapp l env f [x; mk_exp (E_typ (bool_typ, y))] uannot None
       | exception Type_error _ -> infer_funapp l env f [x; mk_exp (E_typ (bool_typ, y))] uannot None
     end
+  | E_app (Id_aux (Id "vector_access#", _), [v; n]) -> (
+      try infer_exp env (E_aux (E_app (mk_id "vector_access", [v; n]), (l, uannot))) with
+      | Type_error (err_l, err) -> (
+          try
+            let inferred_v = infer_exp env v in
+            match (typ_of inferred_v, n) with
+            | Typ_aux (Typ_id id, _), E_aux (E_id field, _) ->
+                let access_id = (Bitfield.field_accessor_ids id field).get in
+                infer_exp env (mk_exp ~loc:l (E_app (access_id, [v])))
+            | _, _ -> typ_error l "Vector access could not be interpreted as a bitfield access"
+          with Type_error (err_l', err') -> typ_raise err_l (err_because (err, err_l', err'))
+        )
+      | exn -> raise exn
+    )
+  | E_app (Id_aux (Id "vector_subrange#", _), [v; n; m]) ->
+      infer_exp env (E_aux (E_app (mk_id "vector_subrange", [v; n; m]), (l, uannot)))
+  | E_app (Id_aux (Id "vector_update#", _), [v; n; exp]) -> infer_vector_update l env v n exp
+  | E_app (Id_aux (Id "vector_update_subrange#", _), [v; n; m; exp]) ->
+      infer_exp env (E_aux (E_app (mk_id "vector_update_subrange", [v; n; m; exp]), (l, uannot)))
   | E_app (f, xs) -> infer_funapp l env f xs uannot None
   | E_loop (loop_type, measure, cond, body) ->
       let checked_cond = crule check_exp env cond bool_typ in
@@ -3856,28 +3878,8 @@ and infer_exp env (E_aux (exp_aux, (l, uannot)) as exp) =
                )
             )
     end
-  | E_vector_access (v, n) -> begin
-      try infer_exp env (E_aux (E_app (mk_id "vector_access", [v; n]), (l, uannot))) with
-      | Type_error (err_l, err) -> (
-          try
-            let inferred_v = infer_exp env v in
-            begin
-              match (typ_of inferred_v, n) with
-              | Typ_aux (Typ_id id, _), E_aux (E_id field, _) ->
-                  let access_id = (Bitfield.field_accessor_ids id field).get in
-                  infer_exp env (mk_exp ~loc:l (E_app (access_id, [v])))
-              | _, _ -> typ_error l "Vector access could not be interpreted as a bitfield access"
-            end
-          with Type_error (err_l', err') -> typ_raise err_l (err_because (err, err_l', err'))
-        )
-      | exn -> raise exn
-    end
-  | E_vector_update (v, n, exp) -> infer_vector_update l env v n exp
-  | E_vector_update_subrange (v, n, m, exp) ->
-      infer_exp env (E_aux (E_app (mk_id "vector_update_subrange", [v; n; m; exp]), (l, uannot)))
   | E_vector_append (v1, E_aux (E_vector [], _)) -> infer_exp env v1
   | E_vector_append (v1, v2) -> infer_exp env (E_aux (E_app (mk_id "append", [v1; v2]), (l, uannot)))
-  | E_vector_subrange (v, n, m) -> infer_exp env (E_aux (E_app (mk_id "vector_subrange", [v; n; m]), (l, uannot)))
   | E_vector [] -> typ_error l "Cannot infer type of empty vector"
   | E_vector (item :: items as vec) ->
       let inferred_item = irule infer_exp env item in
@@ -3963,7 +3965,7 @@ and infer_funapp l env f xs uannot ret_ctx_typ = infer_funapp' l env f (Env.get_
 
 and infer_vector_update l env v n exp =
   let rec nested_updates acc = function
-    | E_aux (E_vector_update (v, n, exp), (l, _)) -> nested_updates ((n, exp, l) :: acc) v
+    | E_aux (E_app (Id_aux (Id "vector_update#", _), [v; n; exp]), (l, _)) -> nested_updates ((n, exp, l) :: acc) v
     | v -> (v, List.rev acc)
   in
   let v, updates = nested_updates [(n, exp, l)] v in

@@ -143,10 +143,6 @@ type ( 'a,
   e_for : id * 'exp * 'exp * 'exp * Ast.order * 'exp -> 'exp_aux;
   e_loop : loop * ('exp option * Parse_ast.l) * 'exp * 'exp -> 'exp_aux;
   e_vector : 'exp list -> 'exp_aux;
-  e_vector_access : 'exp * 'exp -> 'exp_aux;
-  e_vector_subrange : 'exp * 'exp * 'exp -> 'exp_aux;
-  e_vector_update : 'exp * 'exp * 'exp -> 'exp_aux;
-  e_vector_update_subrange : 'exp * 'exp * 'exp * 'exp -> 'exp_aux;
   e_vector_append : 'exp * 'exp -> 'exp_aux;
   e_list : 'exp list -> 'exp_aux;
   e_cons : 'exp * 'exp -> 'exp_aux;

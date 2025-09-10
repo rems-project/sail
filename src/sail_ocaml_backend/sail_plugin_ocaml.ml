@@ -100,6 +100,7 @@ let ocaml_rewrites =
     ("remove_numeral_pats", []);
     ("exp_lift_assign", []);
     ("top_sort_defs", []);
+    ("recheck_defs", []);
     ("simple_types", []);
   ]
 

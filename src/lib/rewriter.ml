@@ -210,11 +210,6 @@ let rewrite_exp rewriters (E_aux (exp, (l, annot))) =
       in
       rewrap (E_loop (loop, m, rewrite e1, rewrite e2))
   | E_vector exps -> rewrap (E_vector (List.map rewrite exps))
-  | E_vector_access (vec, index) -> rewrap (E_vector_access (rewrite vec, rewrite index))
-  | E_vector_subrange (vec, i1, i2) -> rewrap (E_vector_subrange (rewrite vec, rewrite i1, rewrite i2))
-  | E_vector_update (vec, index, new_v) -> rewrap (E_vector_update (rewrite vec, rewrite index, rewrite new_v))
-  | E_vector_update_subrange (vec, i1, i2, new_v) ->
-      rewrap (E_vector_update_subrange (rewrite vec, rewrite i1, rewrite i2, rewrite new_v))
   | E_vector_append (v1, v2) -> rewrap (E_vector_append (rewrite v1, rewrite v2))
   | E_list exps -> rewrap (E_list (List.map rewrite exps))
   | E_cons (h, t) -> rewrap (E_cons (rewrite h, rewrite t))
@@ -524,10 +519,6 @@ type ( 'a,
   e_for : id * 'exp * 'exp * 'exp * Ast.order * 'exp -> 'exp_aux;
   e_loop : loop * ('exp option * Parse_ast.l) * 'exp * 'exp -> 'exp_aux;
   e_vector : 'exp list -> 'exp_aux;
-  e_vector_access : 'exp * 'exp -> 'exp_aux;
-  e_vector_subrange : 'exp * 'exp * 'exp -> 'exp_aux;
-  e_vector_update : 'exp * 'exp * 'exp -> 'exp_aux;
-  e_vector_update_subrange : 'exp * 'exp * 'exp * 'exp -> 'exp_aux;
   e_vector_append : 'exp * 'exp -> 'exp_aux;
   e_list : 'exp list -> 'exp_aux;
   e_cons : 'exp * 'exp -> 'exp_aux;
@@ -593,11 +584,6 @@ let rec fold_exp_aux alg = function
       in
       alg.e_loop (loop_type, m, fold_exp alg e1, fold_exp alg e2)
   | E_vector es -> alg.e_vector (List.map (fold_exp alg) es)
-  | E_vector_access (e1, e2) -> alg.e_vector_access (fold_exp alg e1, fold_exp alg e2)
-  | E_vector_subrange (e1, e2, e3) -> alg.e_vector_subrange (fold_exp alg e1, fold_exp alg e2, fold_exp alg e3)
-  | E_vector_update (e1, e2, e3) -> alg.e_vector_update (fold_exp alg e1, fold_exp alg e2, fold_exp alg e3)
-  | E_vector_update_subrange (e1, e2, e3, e4) ->
-      alg.e_vector_update_subrange (fold_exp alg e1, fold_exp alg e2, fold_exp alg e3, fold_exp alg e4)
   | E_vector_append (e1, e2) -> alg.e_vector_append (fold_exp alg e1, fold_exp alg e2)
   | E_list es -> alg.e_list (List.map (fold_exp alg) es)
   | E_cons (e1, e2) -> alg.e_cons (fold_exp alg e1, fold_exp alg e2)
@@ -672,10 +658,6 @@ let id_exp_alg =
         E_loop (lt, Measure_aux (m, l), e1, e2)
       );
     e_vector = (fun es -> E_vector es);
-    e_vector_access = (fun (e1, e2) -> E_vector_access (e1, e2));
-    e_vector_subrange = (fun (e1, e2, e3) -> E_vector_subrange (e1, e2, e3));
-    e_vector_update = (fun (e1, e2, e3) -> E_vector_update (e1, e2, e3));
-    e_vector_update_subrange = (fun (e1, e2, e3, e4) -> E_vector_update_subrange (e1, e2, e3, e4));
     e_vector_append = (fun (e1, e2) -> E_vector_append (e1, e2));
     e_list = (fun es -> E_list es);
     e_cons = (fun (e1, e2) -> E_cons (e1, e2));
@@ -784,13 +766,6 @@ let compute_exp_alg bot join =
         (join_list (vs @ [v1; v2]), E_loop (lt, Measure_aux (m, l), e1, e2))
       );
     e_vector = split_join (fun es -> E_vector es);
-    e_vector_access = (fun ((v1, e1), (v2, e2)) -> (join v1 v2, E_vector_access (e1, e2)));
-    e_vector_subrange = (fun ((v1, e1), (v2, e2), (v3, e3)) -> (join_list [v1; v2; v3], E_vector_subrange (e1, e2, e3)));
-    e_vector_update = (fun ((v1, e1), (v2, e2), (v3, e3)) -> (join_list [v1; v2; v3], E_vector_update (e1, e2, e3)));
-    e_vector_update_subrange =
-      (fun ((v1, e1), (v2, e2), (v3, e3), (v4, e4)) ->
-        (join_list [v1; v2; v3; v4], E_vector_update_subrange (e1, e2, e3, e4))
-      );
     e_vector_append = (fun ((v1, e1), (v2, e2)) -> (join v1 v2, E_vector_append (e1, e2)));
     e_list = split_join (fun es -> E_list es);
     e_cons = (fun ((v1, e1), (v2, e2)) -> (join v1 v2, E_cons (e1, e2)));
@@ -902,10 +877,6 @@ let pure_exp_alg bot join =
         match m with None -> v | Some v' -> join v v'
       );
     e_vector = join_list;
-    e_vector_access = (fun (v1, v2) -> join v1 v2);
-    e_vector_subrange = (fun (v1, v2, v3) -> join_list [v1; v2; v3]);
-    e_vector_update = (fun (v1, v2, v3) -> join_list [v1; v2; v3]);
-    e_vector_update_subrange = (fun (v1, v2, v3, v4) -> join_list [v1; v2; v3; v4]);
     e_vector_append = (fun (v1, v2) -> join v1 v2);
     e_list = join_list;
     e_cons = (fun (v1, v2) -> join v1 v2);
@@ -1092,26 +1063,6 @@ let default_fold_exp f x (E_aux (e, ann) as exp) =
           (x, []) es
       in
       (x, re (E_vector (List.rev es)))
-  | E_vector_access (e1, e2) ->
-      let x, e1 = f x e1 in
-      let x, e2 = f x e2 in
-      (x, re (E_vector_access (e1, e2)))
-  | E_vector_subrange (e1, e2, e3) ->
-      let x, e1 = f x e1 in
-      let x, e2 = f x e2 in
-      let x, e3 = f x e3 in
-      (x, re (E_vector_subrange (e1, e2, e3)))
-  | E_vector_update (e1, e2, e3) ->
-      let x, e1 = f x e1 in
-      let x, e2 = f x e2 in
-      let x, e3 = f x e3 in
-      (x, re (E_vector_update (e1, e2, e3)))
-  | E_vector_update_subrange (e1, e2, e3, e4) ->
-      let x, e1 = f x e1 in
-      let x, e2 = f x e2 in
-      let x, e3 = f x e3 in
-      let x, e4 = f x e4 in
-      (x, re (E_vector_update_subrange (e1, e2, e3, e4)))
   | E_vector_append (e1, e2) ->
       let x, e1 = f x e1 in
       let x, e2 = f x e2 in

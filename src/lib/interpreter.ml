@@ -55,7 +55,7 @@ module Document = Pretty_print_sail.Document
 
 module Printer = Pretty_print_sail.Printer (struct
   let insert_braces = false
-  let resugar = false
+  let resugar = true
   let hide_attributes = true
 end)
 

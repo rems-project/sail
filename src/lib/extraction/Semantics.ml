@@ -1018,32 +1018,6 @@ module Make =
                then wrap (E_block xs0)
                else Monad.bind (step0 x0) (fun x' ->
                       wrap (E_block (x' :: xs0)))
-             | E_vector_access (e0, e1) ->
-               let x0 = E_aux ((E_vector_access (e0, e1)), annot1) in
-               if is_value x0
-               then wrap (E_block xs0)
-               else Monad.bind (step0 x0) (fun x' ->
-                      wrap (E_block (x' :: xs0)))
-             | E_vector_subrange (e0, e1, e2) ->
-               let x0 = E_aux ((E_vector_subrange (e0, e1, e2)), annot1) in
-               if is_value x0
-               then wrap (E_block xs0)
-               else Monad.bind (step0 x0) (fun x' ->
-                      wrap (E_block (x' :: xs0)))
-             | E_vector_update (e0, e1, e2) ->
-               let x0 = E_aux ((E_vector_update (e0, e1, e2)), annot1) in
-               if is_value x0
-               then wrap (E_block xs0)
-               else Monad.bind (step0 x0) (fun x' ->
-                      wrap (E_block (x' :: xs0)))
-             | E_vector_update_subrange (e0, e1, e2, e3) ->
-               let x0 = E_aux ((E_vector_update_subrange (e0, e1, e2, e3)),
-                 annot1)
-               in
-               if is_value x0
-               then wrap (E_block xs0)
-               else Monad.bind (step0 x0) (fun x' ->
-                      wrap (E_block (x' :: xs0)))
              | E_vector_append (e0, e1) ->
                let x0 = E_aux ((E_vector_append (e0, e1)), annot1) in
                if is_value x0
@@ -1327,11 +1301,6 @@ module Make =
           | u :: us ->
             Monad.bind (step0 u) (fun u' ->
               wrap (E_vector (app evaluated0 (u' :: us)))))
-       | E_vector_access (_, _) -> Monad.Runtime_type_error (fst annot0)
-       | E_vector_subrange (_, _, _) -> Monad.Runtime_type_error (fst annot0)
-       | E_vector_update (_, _, _) -> Monad.Runtime_type_error (fst annot0)
-       | E_vector_update_subrange (_, _, _, _) ->
-         Monad.Runtime_type_error (fst annot0)
        | E_vector_append (_, _) -> Monad.Runtime_type_error (fst annot0)
        | E_list xs ->
          let filtered_var = left_to_right xs in

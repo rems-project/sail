@@ -352,10 +352,6 @@ Section exp_ind_g.
     (H_loop : forall lt measure cond body ann, P cond -> P body -> P (E_aux (E_loop lt measure cond body) ann))
     (H_for : forall id from to amount ord body ann, P from -> P to -> P amount -> P body -> P (E_aux (E_for id from to amount ord body) ann))
     (H_vector : forall xs ann, Forall P xs -> P (E_aux (E_vector xs) ann))
-    (H_vector_access : forall x n ann, P x -> P n -> P (E_aux (E_vector_access x n) ann))
-    (H_vector_subrange : forall x n m ann, P x -> P n -> P (E_aux (E_vector_subrange x n m) ann))
-    (H_vector_update : forall x n y ann, P x -> P n -> P y -> P (E_aux (E_vector_update x n y) ann))
-    (H_vector_update_subrange : forall x n m y ann, P x -> P n -> P m -> P y -> P (E_aux (E_vector_update_subrange x n m y) ann))
     (H_vector_append : forall x y ann, P x -> P y -> P (E_aux (E_vector_append x y) ann))
     (H_list : forall xs ann, Forall P xs -> P (E_aux (E_list xs) ann))
     (H_cons : forall x xs ann, P x -> P xs -> P (E_aux (E_cons x xs) ann))
@@ -406,10 +402,6 @@ Section exp_ind_g.
       induction l.
       + trivial.
       + rewrite Forall_cons_iff. easy.
-    - apply H_vector_access; trivial.
-    - apply H_vector_subrange; trivial.
-    - apply H_vector_update; trivial.
-    - apply H_vector_update_subrange; trivial.
     - apply H_vector_append; trivial.
     - apply H_list.
       induction l.
@@ -483,10 +475,6 @@ Section exp_and_lexp_ind_g.
     (H_loop : forall lt measure cond body ann, P cond -> P body -> P (E_aux (E_loop lt measure cond body) ann))
     (H_for : forall id from to amount ord body ann, P from -> P to -> P amount -> P body -> P (E_aux (E_for id from to amount ord body) ann))
     (H_vector : forall xs ann, Forall P xs -> P (E_aux (E_vector xs) ann))
-    (H_vector_access : forall x n ann, P x -> P n -> P (E_aux (E_vector_access x n) ann))
-    (H_vector_subrange : forall x n m ann, P x -> P n -> P (E_aux (E_vector_subrange x n m) ann))
-    (H_vector_update : forall x n y ann, P x -> P n -> P y -> P (E_aux (E_vector_update x n y) ann))
-    (H_vector_update_subrange : forall x n m y ann, P x -> P n -> P m -> P y -> P (E_aux (E_vector_update_subrange x n m y) ann))
     (H_vector_append : forall x y ann, P x -> P y -> P (E_aux (E_vector_append x y) ann))
     (H_list : forall xs ann, Forall P xs -> P (E_aux (E_list xs) ann))
     (H_cons : forall x xs ann, P x -> P xs -> P (E_aux (E_cons x xs) ann))
@@ -548,10 +536,6 @@ Section exp_and_lexp_ind_g.
         induction l.
         + trivial.
         + rewrite Forall_cons_iff. easy.
-      - apply H_vector_access; trivial.
-      - apply H_vector_subrange; trivial.
-      - apply H_vector_update; trivial.
-      - apply H_vector_update_subrange; trivial.
       - apply H_vector_append; trivial.
       - apply H_list.
         induction l.
@@ -685,10 +669,6 @@ Fixpoint depth {A : Set} (x : exp A) {struct x} : nat :=
       fold_right max 0 [f; t; a; b] + 1
   | E_typ _ x => depth x + 1
   | E_loop _ _ cond body => max (depth cond) (depth body) + 1
-  | E_vector_access x n => max (depth x) (depth n) + 1
-  | E_vector_subrange x n m => max (depth x) (max (depth n) (depth m)) + 1
-  | E_vector_update x n y => max (depth x) (max (depth n) (depth y)) + 1
-  | E_vector_update_subrange x n m y => max (depth x) (max (depth n) (max (depth m) (depth y))) + 1
   | E_vector_append x y => max (depth x) (depth y) + 1
   | E_exit x => depth x + 1
   | E_var l x y => max (lexp_depth l) (max (depth x) (depth y)) + 1

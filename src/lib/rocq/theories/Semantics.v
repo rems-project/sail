@@ -1559,10 +1559,6 @@ Module Make (T : SemanticExt).
                 end
             end
         end
-    | E_vector_access _ _ => Runtime_type_error (fst annot)
-    | E_vector_subrange _ _ _ => Runtime_type_error (fst annot)
-    | E_vector_update _ _ _ => Runtime_type_error (fst annot)
-    | E_vector_update_subrange _ _ _ _ => Runtime_type_error (fst annot)
     | E_vector_append _ _ => Runtime_type_error (fst annot)
     | E_sizeof _ => Runtime_type_error (fst annot)
     | E_constraint _ => Runtime_type_error (fst annot)

@@ -412,7 +412,7 @@ let remove_vector_concat_pat pat =
       let index_i = simple_num l i in
       let index_j = simple_num l j in
 
-      let subv = E_aux (E_vector_subrange (root, index_i, index_j), cannot) in
+      let subv = E_aux (vector_subrange ~loc:l root index_i index_j, cannot) in
 
       let id_pat =
         match typ_opt with
@@ -860,7 +860,7 @@ let rec pat_to_exp env (P_aux (pat, (l, annot)) as p_aux) =
   | P_typ (_, pat) -> pat_to_exp pat
   | P_id id -> rewrap (E_id id)
   | P_vector_subrange (id, n, m) ->
-      let subrange = mk_exp (E_vector_subrange (mk_exp (E_id id), mk_lit_exp (L_num n), mk_lit_exp (L_num m))) in
+      let subrange = mk_exp (vector_subrange ~loc:l (mk_id_exp id) (mk_lit_exp (L_num n)) (mk_lit_exp (L_num m))) in
       check_exp env subrange typ
   | P_app (id, pats) -> rewrap (E_app (id, List.map pat_to_exp pats))
   | P_vector pats -> rewrap (E_vector (List.map pat_to_exp pats))
@@ -1131,8 +1131,8 @@ let remove_bitvector_pat (P_aux (_, (l, _)) as pat) =
   in
 
   let access_bit_exp rootid l typ idx =
-    let access_aux = E_vector_access (mk_exp (E_id rootid), mk_num_exp idx) in
-    check_exp env (mk_exp access_aux) bit_typ
+    let access = mk_exp (vector_access ~loc:l (mk_id_exp rootid) (mk_num_exp idx)) in
+    check_exp env access bit_typ
   in
 
   let test_subvec_exp rootid l typ i j lits =
@@ -1143,7 +1143,7 @@ let remove_bitvector_pat (P_aux (_, (l, _)) as pat) =
       | Nexp_aux (Nexp_constant s, _), Nexp_aux (Nexp_constant l, _)
         when Big_int.equal s i && Big_int.equal l (Big_int.of_int (List.length lits)) ->
           mk_exp (E_id rootid)
-      | _ -> mk_exp (E_vector_subrange (mk_exp (E_id rootid), mk_num_exp i, mk_num_exp j))
+      | _ -> mk_exp (vector_subrange ~loc:l (mk_id_exp rootid) (mk_num_exp i) (mk_num_exp j))
     in
     check_eq_exp subvec_exp (mk_exp (E_vector (List.map strip_exp lits)))
   in
@@ -1545,10 +1545,10 @@ let rec rewrite_lexp_to_rhs (LE_aux (lexp, ((l, _) as annot)) as le) =
   | LE_id _ | LE_typ (_, _) | LE_tuple _ | LE_deref _ -> (le, fun exp -> exp)
   | LE_vector (lexp, e) ->
       let lhs, rhs = rewrite_lexp_to_rhs lexp in
-      (lhs, fun exp -> rhs (E_aux (E_vector_update (lexp_to_exp lexp, e, exp), annot)))
+      (lhs, fun exp -> rhs (E_aux (vector_update ~loc:l (lexp_to_exp lexp) e exp, annot)))
   | LE_vector_range (lexp, e1, e2) ->
       let lhs, rhs = rewrite_lexp_to_rhs lexp in
-      (lhs, fun exp -> rhs (E_aux (E_vector_update_subrange (lexp_to_exp lexp, e1, e2, exp), annot)))
+      (lhs, fun exp -> rhs (E_aux (vector_update_subrange ~loc:l (lexp_to_exp lexp) e1 e2 exp, annot)))
   | LE_field (lexp, id) -> begin
       let lhs, rhs = rewrite_lexp_to_rhs lexp in
       let (LE_aux (_, lannot)) = lexp in
@@ -2167,7 +2167,7 @@ let rewrite_vector_concat_assignments env defs =
           let exp' = if small exp then strip_exp exp else mk_exp (E_id vec_id) in
           let lexp_to_exp (i, exps) lexp =
             let j, i' = next i (len lexp) in
-            let sub = mk_exp (E_vector_subrange (exp', i, j)) in
+            let sub = mk_exp (vector_subrange exp' i j) in
             (i', exps @ [sub])
           in
           let _, exps = List.fold_left lexp_to_exp (i, []) lexps in
@@ -2400,28 +2400,6 @@ let rewrite_ast_letbind_effects effect_info env =
         let body = n_exp_term (needs_monad body) body in
         k (rewrap (E_loop (loop, measure, cond, body)))
     | E_vector exps -> n_exp_nameL exps (fun exps -> k (pure_rewrap (E_vector exps)))
-    | E_vector_access (exp1, exp2) ->
-        n_exp_name exp1 (fun exp1 -> n_exp_name exp2 (fun exp2 -> k (pure_rewrap (E_vector_access (exp1, exp2)))))
-    | E_vector_subrange (exp1, exp2, exp3) ->
-        n_exp_name exp1 (fun exp1 ->
-            n_exp_name exp2 (fun exp2 ->
-                n_exp_name exp3 (fun exp3 -> k (pure_rewrap (E_vector_subrange (exp1, exp2, exp3))))
-            )
-        )
-    | E_vector_update (exp1, exp2, exp3) ->
-        n_exp_name exp1 (fun exp1 ->
-            n_exp_name exp2 (fun exp2 ->
-                n_exp_name exp3 (fun exp3 -> k (pure_rewrap (E_vector_update (exp1, exp2, exp3))))
-            )
-        )
-    | E_vector_update_subrange (exp1, exp2, exp3, exp4) ->
-        n_exp_name exp1 (fun exp1 ->
-            n_exp_name exp2 (fun exp2 ->
-                n_exp_name exp3 (fun exp3 ->
-                    n_exp_name exp4 (fun exp4 -> k (pure_rewrap (E_vector_update_subrange (exp1, exp2, exp3, exp4))))
-                )
-            )
-        )
     | E_vector_append (exp1, exp2) ->
         n_exp_name exp1 (fun exp1 -> n_exp_name exp2 (fun exp2 -> k (pure_rewrap (E_vector_append (exp1, exp2)))))
     | E_list exps -> n_exp_nameL exps (fun exps -> k (pure_rewrap (E_list exps)))
@@ -2908,12 +2886,12 @@ let rec rewrite_var_updates (E_aux (expaux, ((l, _) as annot)) as exp) =
               Added_vars (vexp, pat)
           | LE_aux (LE_vector (LE_aux (LE_id id, ((l2, _) as annot2)), i), ((l1, _) as annot)) ->
               let eid = annot_exp (E_id id) l2 env (typ_of_annot annot2) in
-              let vexp = annot_exp (E_vector_update (eid, i, vexp)) l1 env (typ_of_annot annot) in
+              let vexp = annot_exp (vector_update eid i vexp) l1 env (typ_of_annot annot) in
               let pat = annot_pat (P_id id) pl env (typ_of vexp) in
               Added_vars (vexp, pat)
           | LE_aux (LE_vector_range (LE_aux (LE_id id, ((l2, _) as annot2)), i, j), ((l, _) as annot)) ->
               let eid = annot_exp (E_id id) l2 env (typ_of_annot annot2) in
-              let vexp = annot_exp (E_vector_update_subrange (eid, i, j, vexp)) l env (typ_of_annot annot) in
+              let vexp = annot_exp (vector_update_subrange eid i j vexp) l env (typ_of_annot annot) in
               let pat = annot_pat (P_id id) pl env (typ_of vexp) in
               Added_vars (vexp, pat)
           | _ -> Same_vars (E_aux (E_assign (lexp, vexp), annot))
@@ -3323,8 +3301,7 @@ let rec exp_of_mpat (MP_aux (mpat, (l, annot))) =
   | MP_vector mpats -> E_aux (E_vector (List.map exp_of_mpat mpats), (l, annot))
   | MP_vector_concat mpats -> List.fold_right concat_vectors (List.map (fun m -> exp_of_mpat m) mpats) empty_vec
   | MP_vector_subrange (id, n, m) ->
-      E_aux
-        (E_vector_subrange (mk_exp ~loc:(id_loc id) (E_id id), mk_lit_exp (L_num n), mk_lit_exp (L_num m)), (l, annot))
+      E_aux (vector_subrange (mk_id_exp id) (mk_lit_exp (L_num n)) (mk_lit_exp (L_num m)), (l, annot))
   | MP_tuple mpats -> E_aux (E_tuple (List.map exp_of_mpat mpats), (l, annot))
   | MP_list mpats -> E_aux (E_list (List.map exp_of_mpat mpats), (l, annot))
   | MP_cons (mpat1, mpat2) -> E_aux (E_cons (exp_of_mpat mpat1, exp_of_mpat mpat2), (l, annot))
@@ -4556,17 +4533,23 @@ let remove_bitfield_records type_env =
   let unsupported_exp e = unsupported (exp_loc e) (string_of_exp e) in
   let unsupported_lexp (LE_aux (_, (l, _)) as le) = unsupported l (string_of_lexp le) in
   let rewrite_exp _rewriters =
-    let e_vector_access (exp, field) =
-      if is_bitfield_exp exp then (
-        match field with E_aux (E_id f, _) when string_of_id f = "bits" -> unaux_exp exp | _ -> unsupported_exp exp
-      )
-      else E_vector_access (exp, field)
-    in
-    let e_vector_update (exp, field, exp') =
-      if is_bitfield_exp exp then (
-        match field with E_aux (E_id f, _) when string_of_id f = "bits" -> unaux_exp exp' | _ -> unsupported_exp exp
-      )
-      else E_vector_update (exp, field, exp')
+    let e_app (id, exps) =
+      match (string_of_id id, exps) with
+      | "vector_access#", [exp; field] ->
+          if is_bitfield_exp exp then (
+            match field with
+            | E_aux (E_id f, _) when string_of_id f = "bits" -> unaux_exp exp
+            | _ -> unsupported_exp exp
+          )
+          else vector_access exp field
+      | "vector_update#", [exp; field; exp'] ->
+          if is_bitfield_exp exp then (
+            match field with
+            | E_aux (E_id f, _) when string_of_id f = "bits" -> unaux_exp exp'
+            | _ -> unsupported_exp exp
+          )
+          else vector_update exp field exp'
+      | _ -> E_app (id, exps)
     in
     let e_struct_update (exp, fexps) =
       if is_bitfield_exp exp then (
@@ -4592,7 +4575,7 @@ let remove_bitfield_records type_env =
       )
       else LE_vector (lexp, field)
     in
-    fold_exp { id_exp_alg with e_vector_access; e_vector_update; e_struct_update; e_field; e_aux; le_vector }
+    fold_exp { id_exp_alg with e_app; e_struct_update; e_field; e_aux; le_vector }
   in
   rewrite_ast_base { rewriters_base with rewrite_exp; rewrite_def }
 

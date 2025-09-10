@@ -210,10 +210,6 @@ and 'a exp_aux =
 | E_loop of loop * 'a internal_loop_measure * 'a exp * 'a exp
 | E_for of id * 'a exp * 'a exp * 'a exp * order * 'a exp
 | E_vector of 'a exp list
-| E_vector_access of 'a exp * 'a exp
-| E_vector_subrange of 'a exp * 'a exp * 'a exp
-| E_vector_update of 'a exp * 'a exp * 'a exp
-| E_vector_update_subrange of 'a exp * 'a exp * 'a exp * 'a exp
 | E_vector_append of 'a exp * 'a exp
 | E_list of 'a exp list
 | E_cons of 'a exp * 'a exp

@@ -326,17 +326,6 @@ let const_props target env ast =
         let e3', _ = const_prop_exp substs assigns e3 in
         (e1', e2', e3', assigns)
       in
-      let non_det_exp_4 e1 e2 e3 e4 =
-        let assigned_in_e12 = IdSet.union (assigned_vars e1) (assigned_vars e2) in
-        let assigned_in_e123 = IdSet.union assigned_in_e12 (assigned_vars e3) in
-        let assigned_in_e1234 = IdSet.union assigned_in_e123 (assigned_vars e4) in
-        let assigns = isubst_minus_set assigns assigned_in_e1234 in
-        let e1', _ = const_prop_exp substs assigns e1 in
-        let e2', _ = const_prop_exp substs assigns e2 in
-        let e3', _ = const_prop_exp substs assigns e3 in
-        let e4', _ = const_prop_exp substs assigns e4 in
-        (e1', e2', e3', e4', assigns)
-      in
       let rewrap e = E_aux (e, (l, annot)) in
       let re e assigns = (rewrap e, assigns) in
       match e with
@@ -436,18 +425,6 @@ let const_props target env ast =
           begin
             match construct_lit_vector es' with None -> re (E_vector es') assigns | Some lit -> re (E_lit lit) assigns
           end
-      | E_vector_access (e1, e2) ->
-          let e1', e2', assigns = non_det_exp_2 e1 e2 in
-          re (E_vector_access (e1', e2')) assigns
-      | E_vector_subrange (e1, e2, e3) ->
-          let e1', e2', e3', assigns = non_det_exp_3 e1 e2 e3 in
-          re (E_vector_subrange (e1', e2', e3')) assigns
-      | E_vector_update (e1, e2, e3) ->
-          let e1', e2', e3', assigns = non_det_exp_3 e1 e2 e3 in
-          re (E_vector_update (e1', e2', e3')) assigns
-      | E_vector_update_subrange (e1, e2, e3, e4) ->
-          let e1', e2', e3', e4', assigns = non_det_exp_4 e1 e2 e3 e4 in
-          re (E_vector_update_subrange (e1', e2', e3', e4')) assigns
       | E_vector_append (e1, e2) ->
           let e1', e2', assigns = non_det_exp_2 e1 e2 in
           re (E_vector_append (e1', e2')) assigns
