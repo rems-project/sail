@@ -1070,11 +1070,6 @@ let split_defs target all_errors (splits : split_req list) env ast =
         | E_for (id, e1, e2, e3, ord, e4) -> re (E_for (id, map_exp e1, map_exp e2, map_exp e3, ord, map_exp e4))
         | E_loop (loop, m, e1, e2) -> re (E_loop (loop, m, map_exp e1, map_exp e2))
         | E_vector es -> re (E_vector (List.map map_exp es))
-        | E_vector_access (e1, e2) -> re (E_vector_access (map_exp e1, map_exp e2))
-        | E_vector_subrange (e1, e2, e3) -> re (E_vector_subrange (map_exp e1, map_exp e2, map_exp e3))
-        | E_vector_update (e1, e2, e3) -> re (E_vector_update (map_exp e1, map_exp e2, map_exp e3))
-        | E_vector_update_subrange (e1, e2, e3, e4) ->
-            re (E_vector_update_subrange (map_exp e1, map_exp e2, map_exp e3, map_exp e4))
         | E_vector_append (e1, e2) -> re (E_vector_append (map_exp e1, map_exp e2))
         | E_list es -> re (E_list (List.map map_exp es))
         | E_cons (e1, e2) -> re (E_cons (map_exp e1, map_exp e2))
@@ -2332,14 +2327,8 @@ module Analysis = struct
       | E_vector es ->
           let ds, assigns, r = non_det es in
           (merge_deps ds, assigns, r)
-      | E_vector_access (e1, e2) | E_vector_append (e1, e2) | E_cons (e1, e2) ->
+      | E_vector_append (e1, e2) | E_cons (e1, e2) ->
           let ds, assigns, r = non_det [e1; e2] in
-          (merge_deps ds, assigns, r)
-      | E_vector_subrange (e1, e2, e3) | E_vector_update (e1, e2, e3) ->
-          let ds, assigns, r = non_det [e1; e2; e3] in
-          (merge_deps ds, assigns, r)
-      | E_vector_update_subrange (e1, e2, e3, e4) ->
-          let ds, assigns, r = non_det [e1; e2; e3; e4] in
           (merge_deps ds, assigns, r)
       | E_struct (_, fexps) ->
           let es = List.map (function FE_aux (FE_fexp (_, e), _) -> e) fexps in

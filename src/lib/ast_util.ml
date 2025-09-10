@@ -222,6 +222,8 @@ let uncast_exp = function
   | E_aux (E_typ (typ, exp), _) -> (exp, Some typ)
   | exp -> (exp, None)
 
+let mk_id_exp ?loc id = match loc with None -> mk_exp ~loc:(id_loc id) (E_id id) | Some l -> mk_exp ~loc:l (E_id id)
+
 let mk_pat ?loc:(l = Parse_ast.Unknown) pat_aux = P_aux (pat_aux, (l, empty_uannot))
 let unaux_pat (P_aux (pat_aux, _)) = pat_aux
 let untyp_pat = function P_aux (P_typ (typ, pat), _) -> (pat, Some typ) | pat -> (pat, None)
@@ -262,6 +264,17 @@ let mk_letbind ?loc:(l = Parse_ast.Unknown) pat exp = LB_aux (LB_val (pat, exp),
 let mk_val_spec ?loc:(l = Parse_ast.Unknown) vs_aux = DEF_aux (DEF_val (VS_aux (vs_aux, no_annot)), mk_def_annot l ())
 
 let mk_def ?loc:(l = Parse_ast.Unknown) def env = DEF_aux (def, mk_def_annot l env)
+
+let is_vector_syntax (Id_aux (aux, _)) =
+  match aux with
+  | Id "vector_access#" | Id "vector_subrange#" | Id "vector_update#" | Id "vector_update_subrange#" -> true
+  | _ -> false
+
+let vector_access ?(loc = Parse_ast.Unknown) vexp ix = E_app (mk_id ~loc "vector_access#", [vexp; ix])
+let vector_subrange ?(loc = Parse_ast.Unknown) vexp n m = E_app (mk_id ~loc "vector_subrange#", [vexp; n; m])
+let vector_update ?(loc = Parse_ast.Unknown) vexp ix exp = E_app (mk_id ~loc "vector_update#", [vexp; ix; exp])
+let vector_update_subrange ?(loc = Parse_ast.Unknown) vexp n m exp =
+  E_app (mk_id ~loc "vector_update_subrange#", [vexp; n; m; exp])
 
 let rec pat_of_mpat (MP_aux (mpat, annot)) =
   match mpat with
@@ -904,13 +917,6 @@ and map_exp_annot_aux f = function
   | E_loop (loop_type, measure, e1, e2) ->
       E_loop (loop_type, map_measure_annot f measure, map_exp_annot f e1, map_exp_annot f e2)
   | E_vector exps -> E_vector (List.map (map_exp_annot f) exps)
-  | E_vector_access (exp1, exp2) -> E_vector_access (map_exp_annot f exp1, map_exp_annot f exp2)
-  | E_vector_subrange (exp1, exp2, exp3) ->
-      E_vector_subrange (map_exp_annot f exp1, map_exp_annot f exp2, map_exp_annot f exp3)
-  | E_vector_update (exp1, exp2, exp3) ->
-      E_vector_update (map_exp_annot f exp1, map_exp_annot f exp2, map_exp_annot f exp3)
-  | E_vector_update_subrange (exp1, exp2, exp3, exp4) ->
-      E_vector_update_subrange (map_exp_annot f exp1, map_exp_annot f exp2, map_exp_annot f exp3, map_exp_annot f exp4)
   | E_vector_append (exp1, exp2) -> E_vector_append (map_exp_annot f exp1, map_exp_annot f exp2)
   | E_list xs -> E_list (List.map (map_exp_annot f) xs)
   | E_cons (exp1, exp2) -> E_cons (map_exp_annot f exp1, map_exp_annot f exp2)
@@ -1323,11 +1329,6 @@ let rec string_of_exp (E_aux (exp, _)) =
   | E_assign (lexp, bind) -> string_of_lexp lexp ^ " = " ^ string_of_exp bind
   | E_typ (typ, exp) -> string_of_exp exp ^ " : " ^ string_of_typ typ
   | E_vector vec -> "[" ^ string_of_list ", " string_of_exp vec ^ "]"
-  | E_vector_access (v, n) -> string_of_exp v ^ "[" ^ string_of_exp n ^ "]"
-  | E_vector_update (v, n, exp) -> "[" ^ string_of_exp v ^ " with " ^ string_of_exp n ^ " = " ^ string_of_exp exp ^ "]"
-  | E_vector_update_subrange (v, n, m, exp) ->
-      "[" ^ string_of_exp v ^ " with " ^ string_of_exp n ^ " .. " ^ string_of_exp m ^ " = " ^ string_of_exp exp ^ "]"
-  | E_vector_subrange (v, n1, n2) -> string_of_exp v ^ "[" ^ string_of_exp n1 ^ " .. " ^ string_of_exp n2 ^ "]"
   | E_vector_append (v1, v2) -> string_of_exp v1 ^ " @ " ^ string_of_exp v2
   | E_if (cond, then_branch, else_branch) ->
       "if " ^ string_of_exp cond ^ " then " ^ string_of_exp then_branch ^ " else " ^ string_of_exp else_branch
@@ -1588,8 +1589,8 @@ let rec lexp_to_exp (LE_aux (lexp_aux, annot)) =
         | _ -> raise (Reporting.err_unreachable l __POS__ ("Unsupported sub-lexp " ^ string_of_lexp le ^ " in tuple"))
       in
       rewrap (E_tuple (List.map get_id les))
-  | LE_vector (lexp, e) -> rewrap (E_vector_access (lexp_to_exp lexp, e))
-  | LE_vector_range (lexp, e1, e2) -> rewrap (E_vector_subrange (lexp_to_exp lexp, e1, e2))
+  | LE_vector (lexp, e) -> rewrap (vector_access ~loc:(fst annot) (lexp_to_exp lexp) e)
+  | LE_vector_range (lexp, e1, e2) -> rewrap (vector_subrange ~loc:(fst annot) (lexp_to_exp lexp) e1 e2)
   | LE_field (lexp, id) -> rewrap (E_field (lexp_to_exp lexp, id))
   | LE_app (id, exps) -> rewrap (E_app (id, exps))
   | LE_vector_concat [] -> rewrap (E_vector [])
@@ -1863,13 +1864,6 @@ let rec subst id value (E_aux (e_aux, annot) as exp) =
     | E_for (id', exp1, exp2, exp3, order, body) ->
         E_for (id', subst id value exp1, subst id value exp2, subst id value exp3, order, subst id value body)
     | E_vector exps -> E_vector (List.map (subst id value) exps)
-    | E_vector_access (exp1, exp2) -> E_vector_access (subst id value exp1, subst id value exp2)
-    | E_vector_subrange (exp1, exp2, exp3) ->
-        E_vector_subrange (subst id value exp1, subst id value exp2, subst id value exp3)
-    | E_vector_update (exp1, exp2, exp3) ->
-        E_vector_update (subst id value exp1, subst id value exp2, subst id value exp3)
-    | E_vector_update_subrange (exp1, exp2, exp3, exp4) ->
-        E_vector_update_subrange (subst id value exp1, subst id value exp2, subst id value exp3, subst id value exp4)
     | E_vector_append (exp1, exp2) -> E_vector_append (subst id value exp1, subst id value exp2)
     | E_list exps -> E_list (List.map (subst id value) exps)
     | E_cons (exp1, exp2) -> E_cons (subst id value exp1, subst id value exp2)
@@ -2100,11 +2094,6 @@ let rec locate : 'a. (l -> l) -> 'a exp -> 'a exp =
     | E_for (id, exp1, exp2, exp3, ord, exp4) ->
         E_for (locate_id f id, locate f exp1, locate f exp2, locate f exp3, ord, locate f exp4)
     | E_vector exps -> E_vector (List.map (locate f) exps)
-    | E_vector_access (exp1, exp2) -> E_vector_access (locate f exp1, locate f exp2)
-    | E_vector_subrange (exp1, exp2, exp3) -> E_vector_subrange (locate f exp1, locate f exp2, locate f exp3)
-    | E_vector_update (exp1, exp2, exp3) -> E_vector_update (locate f exp1, locate f exp2, locate f exp3)
-    | E_vector_update_subrange (exp1, exp2, exp3, exp4) ->
-        E_vector_update_subrange (locate f exp1, locate f exp2, locate f exp3, locate f exp4)
     | E_vector_append (exp1, exp2) -> E_vector_append (locate f exp1, locate f exp2)
     | E_list exps -> E_list (List.map (locate f) exps)
     | E_cons (exp1, exp2) -> E_cons (locate f exp1, locate f exp2)

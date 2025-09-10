@@ -860,7 +860,7 @@ let rec anf (E_aux (e_aux, (l, tannot)) as exp) =
   | E_internal_assume (_nc, exp) -> anf exp
   | E_sizeof (Nexp_aux (Nexp_id id, _)) | E_constraint (NC_aux (NC_id id, _)) ->
       mk_aexp (AE_val (AV_abstract (id, typ_of exp)))
-  | E_vector_access _ | E_vector_subrange _ | E_vector_update _ | E_vector_update_subrange _ | E_vector_append _ ->
+  | E_vector_append _ ->
       (* Should be re-written by type checker *)
       Reporting.unreachable l __POS__ "encountered raw vector operation when converting to ANF" [@coverage off]
   | E_internal_value _ ->

@@ -357,16 +357,6 @@ module Printer (Config : PRINT_CONFIG) = struct
 
   type 'a vector_update = VU_single of 'a exp * 'a exp | VU_range of 'a exp * 'a exp * 'a exp
 
-  let rec get_vector_updates (E_aux (e_aux, _) as exp) =
-    match e_aux with
-    | E_vector_update (exp1, exp2, exp3) ->
-        let input, updates = get_vector_updates exp1 in
-        (input, updates @ [VU_single (exp2, exp3)])
-    | E_vector_update_subrange (exp1, exp2, exp3, exp4) ->
-        let input, updates = get_vector_updates exp1 in
-        (input, updates @ [VU_range (exp2, exp3, exp4)])
-    | _ -> (exp, [])
-
   let get_overloaded_info uannot =
     let open Util.Option_monad in
     match get_attribute "overloaded" uannot with
@@ -574,14 +564,7 @@ module Printer (Config : PRINT_CONFIG) = struct
     | E_assert (exp1, E_aux (E_lit (L_aux (L_string "", _)), _)) -> string "assert" ^^ parens (doc_exp exp1)
     | E_assert (exp1, exp2) -> string "assert" ^^ parens (doc_exp exp1 ^^ comma ^^ space ^^ doc_exp exp2)
     | E_exit exp -> string "exit" ^^ parens (doc_exp exp)
-    | E_vector_access (exp1, exp2) -> doc_atomic_exp exp1 ^^ brackets (doc_exp exp2)
-    | E_vector_subrange (exp1, exp2, exp3) ->
-        doc_atomic_exp exp1 ^^ brackets (separate space [doc_exp exp2; string ".."; doc_exp exp3])
     | E_vector exps -> brackets (separate_map (comma ^^ space) doc_exp exps)
-    | E_vector_update _ | E_vector_update_subrange _ ->
-        let input, updates = get_vector_updates exp in
-        let updates_doc = separate_map (comma ^^ space) doc_vector_update updates in
-        brackets (separate space [doc_exp input; string "with"; updates_doc])
     | E_internal_value v ->
         if !Interactive.opt_interactive then string (Value.string_of_value v |> Util.green |> Util.clear)
         else string (Value.string_of_value v)

@@ -272,10 +272,6 @@ with exp_aux (a : Set) : Set :=
 | E_loop : loop -> internal_loop_measure a -> exp a -> exp a -> exp_aux a
 | E_for : id -> exp a -> exp a -> exp a -> order -> exp a -> exp_aux a
 | E_vector : list (exp a) -> exp_aux a
-| E_vector_access : exp a -> exp a -> exp_aux a
-| E_vector_subrange : exp a -> exp a -> exp a -> exp_aux a
-| E_vector_update : exp a -> exp a -> exp a -> exp_aux a
-| E_vector_update_subrange : exp a -> exp a -> exp a -> exp a -> exp_aux a
 | E_vector_append : exp a -> exp a -> exp_aux a
 | E_list : list (exp a) -> exp_aux a
 | E_cons : exp a -> exp a -> exp_aux a
@@ -346,10 +342,6 @@ Arguments E_if {_}.
 Arguments E_loop {_}.
 Arguments E_for {_}.
 Arguments E_vector {_}.
-Arguments E_vector_access {_}.
-Arguments E_vector_subrange {_}.
-Arguments E_vector_update {_}.
-Arguments E_vector_update_subrange {_}.
 Arguments E_vector_append {_}.
 Arguments E_list {_}.
 Arguments E_cons {_}.

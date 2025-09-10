@@ -1322,13 +1322,14 @@ and to_ast_exp ctx exp =
         | P.E_loop (P.While, m, e1, e2) -> E_loop (While, to_ast_measure ctx m, to_ast_exp ctx e1, to_ast_exp ctx e2)
         | P.E_loop (P.Until, m, e1, e2) -> E_loop (Until, to_ast_measure ctx m, to_ast_exp ctx e1, to_ast_exp ctx e2)
         | P.E_vector exps -> E_vector (List.map (to_ast_exp ctx) exps)
-        | P.E_vector_access (vexp, exp) -> E_vector_access (to_ast_exp ctx vexp, to_ast_exp ctx exp)
+        | P.E_vector_access (vexp, exp) -> vector_access ~loc:l (to_ast_exp ctx vexp) (to_ast_exp ctx exp)
         | P.E_vector_subrange (vex, exp1, exp2) ->
-            E_vector_subrange (to_ast_exp ctx vex, to_ast_exp ctx exp1, to_ast_exp ctx exp2)
+            vector_subrange ~loc:l (to_ast_exp ctx vex) (to_ast_exp ctx exp1) (to_ast_exp ctx exp2)
         | P.E_vector_update (vex, exp1, exp2) ->
-            E_vector_update (to_ast_exp ctx vex, to_ast_exp ctx exp1, to_ast_exp ctx exp2)
+            vector_update ~loc:l (to_ast_exp ctx vex) (to_ast_exp ctx exp1) (to_ast_exp ctx exp2)
         | P.E_vector_update_subrange (vex, e1, e2, e3) ->
-            E_vector_update_subrange (to_ast_exp ctx vex, to_ast_exp ctx e1, to_ast_exp ctx e2, to_ast_exp ctx e3)
+            vector_update_subrange ~loc:l (to_ast_exp ctx vex) (to_ast_exp ctx e1) (to_ast_exp ctx e2)
+              (to_ast_exp ctx e3)
         | P.E_vector_append (e1, e2) -> E_vector_append (to_ast_exp ctx e1, to_ast_exp ctx e2)
         | P.E_list exps -> E_list (List.map (to_ast_exp ctx) exps)
         | P.E_cons (e1, e2) -> E_cons (to_ast_exp ctx e1, to_ast_exp ctx e2)

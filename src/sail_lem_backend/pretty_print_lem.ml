@@ -1001,10 +1001,6 @@ let doc_exp_lem, doc_let_lem =
                 liftR (if aexp_needed then parens (align taepp) else taepp)
           end
       end
-    | E_vector_access (v, e) ->
-        raise (Reporting.err_unreachable l __POS__ "E_vector_access should have been rewritten before pretty-printing")
-    | E_vector_subrange (v, e1, e2) ->
-        raise (Reporting.err_unreachable l __POS__ "E_vector_subrange should have been rewritten before pretty-printing")
     | E_field ((E_aux (_, (l, fannot)) as fexp), id) -> (
         match destruct_tannot fannot with
         | (Some (env, Typ_aux (Typ_id tid, _)) | Some (env, Typ_aux (Typ_app (tid, _), _))) when Env.is_record tid env
@@ -1084,10 +1080,6 @@ let doc_exp_lem, doc_let_lem =
           else (epp, aexp_needed)
         in
         if aexp_needed then parens (align epp) else epp
-    | E_vector_update (v, e1, e2) ->
-        raise (Reporting.err_unreachable l __POS__ "E_vector_update should have been rewritten before pretty-printing")
-    | E_vector_update_subrange (v, e1, e2, e3) ->
-        raise (Reporting.err_unreachable l __POS__ "E_vector_update should have been rewritten before pretty-printing")
     | E_list exps -> brackets (separate_map semi expN exps)
     | E_match (e, pexps) ->
         let only_integers e = expY e in
