@@ -70,7 +70,7 @@ let c_options =
       "provide additional include for C output"
     );
     ( Flag.create ~prefix:["c"] ~arg:"filename" "header_include",
-      Arg.String (fun i -> opt_includes_c := i :: !opt_includes_h),
+      Arg.String (fun i -> opt_includes_h := i :: !opt_includes_h),
       "provide additional include for C header output"
     );
     (Flag.create ~prefix:["c"] "no_mangle", Arg.Set opt_no_mangle, "produce readable names");
