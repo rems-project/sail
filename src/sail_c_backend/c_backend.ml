@@ -2429,9 +2429,9 @@ module Codegen (Config : CODEGEN_CONFIG) = struct
           ((if Config.no_lib then [] else [string "#include \"sail.h\""; string "#include \"sail_config.h\""])
           @ (if Config.no_rts then [] else [string "#include \"rts.h\""; string "#include \"elf.h\""])
           @ coverage_include
-          @ ( if in_header then List.map (fun h -> string (Printf.sprintf "#include \"%s\"" h)) Config.header_includes
-              else List.map (fun h -> string (Printf.sprintf "#include \"%s\"" h)) Config.includes
-            )
+          @ List.map
+              (fun h -> string (Printf.sprintf "#include \"%s\"" h))
+              (if in_header then Config.header_includes else Config.includes)
           @ [string "#ifdef __cplusplus"; string "extern \"C\" {"; string "#endif"]
           @ if in_header then coverage_hook_header else coverage_hook
           )
