@@ -3859,8 +3859,10 @@ and infer_exp env (E_aux (exp_aux, (l, uannot)) as exp) =
       | Left (_, Some _), Left (_, None) | Left (_, None), Left (_, Some _) ->
           typ_error l ("Incompatible types: " ^ string_of_exp then_branch ^ " vs " ^ string_of_exp else_branch)
       (* One branch is a simple numeric type but the type of the other branch couldn't be inferred. *)
-      | Left (_, Some _), _ -> typ_error l ("Could not infer type of " ^ string_of_exp else_branch)
-      | _, Left (_, Some _) -> typ_error l ("Could not infer type of " ^ string_of_exp then_branch)
+      | Left (_, Some _), Right (l', err) ->
+          typ_raise l (err_because (Err_other ("Could not infer type of " ^ string_of_exp else_branch), l', err))
+      | Right (l', err), Left (_, Some _) ->
+          typ_raise l (err_because (Err_other ("Could not infer type of " ^ string_of_exp then_branch), l', err))
       (* Neither branch is a simple numeric type, but we inferred the `then` branch. *)
       | Left (then_branch', None), _ ->
           let other_branch, inferred_typ = one_branch_inferred then_branch' else_branch else_env in
