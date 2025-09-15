@@ -85,9 +85,6 @@ There are several Sail options that affect the C output:
 
 * `--c-no-main` Do not generate a `main()` function.
 
-* `--static` Mark generated C functions as static where possible. This
-    is useful for measuring code coverage.
-
 <<<
 === SystemVerilog compilation (Experimental)
 
