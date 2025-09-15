@@ -3147,10 +3147,6 @@ generated C.</p>
 <li>
 <p><code>--c-no-main</code> Do not generate a <code>main()</code> function.</p>
 </li>
-<li>
-<p><code>--static</code> Mark generated C functions as static where possible. This
-is useful for measuring code coverage.</p>
-</li>
 </ul>
 </div>
 <div style="page-break-after: always;"></div>
@@ -4598,7 +4594,7 @@ concrete value for it during type-checking. This would look like:</p>
 4 |    X1 = 0xFFFF_FFFF
   |         ^---------^
   | Failed to prove constraint: 32 == xlen
-  | 
+  |
   | constraint from ../examples/abstract_xlen.sail:10.19-23:
   | 10 |register X1 : bits(xlen)
   |    |                   ^--^ This type argument</code></pre>
@@ -5014,7 +5010,7 @@ wildcard cannot be inserted.</p>
 <pre class="rouge highlight"><code>Warning: Required literal ../examples/cannot_wildcard.sail:17.14-17:
 17 |        (Some(0b1), _)         =&gt; print_endline("3"),
    |              ^-^
-   | 
+   |
 Sail cannot simplify the above pattern match:
 This bitvector pattern literal must be kept, as it is required for Sail to show that the surrounding pattern match is complete.
 When translated into prover targets (e.g. Lem, Coq) without native bitvector patterns, they may be unable to verify that the match covers all possible cases.</code></pre>
@@ -6448,7 +6444,7 @@ would get the following error:</p>
 6 |    let x = alfa();
   |            ^--^
   | Not in scope
-  | 
+  |
   | Try requiring module A to bring the following into scope for module B:
   | ../examples/amod.sail:6.4-8:
   | 6 |val alfa : unit -&gt; int

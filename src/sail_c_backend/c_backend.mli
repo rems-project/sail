@@ -51,9 +51,6 @@ open Type_check
 
 (** Global compilation options *)
 
-(** Define generated functions as static *)
-val opt_static : bool ref
-
 (** Ordinarily we use plain z-encoding to name-mangle generated Sail identifiers into a form suitable for C. If
     opt_prefix is set, then the "z" which is added on the front of each generated C function will be replaced by
     opt_prefix. E.g. opt_prefix := "sail_" would give sail_my_function rather than zmy_function. *)

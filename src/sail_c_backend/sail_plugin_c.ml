@@ -53,6 +53,7 @@ let opt_assert_to_exception = ref false
 let opt_branch_coverage = ref None
 let opt_build = ref false
 let opt_generate_header = ref false
+let opt_static = ref false
 let opt_includes_c : string list ref = ref []
 let opt_includes_h : string list ref = ref []
 let opt_no_lib = ref false
@@ -130,10 +131,8 @@ let c_options =
       Arg.Set C_backend.optimize_fixed_bits,
       "assume fixed size bitvectors rather than arbitrary precision bitvectors"
     );
-    ( Flag.create ~prefix:["c"] ~hide_prefix:true "static",
-      Arg.Set C_backend.opt_static,
-      "make generated C functions static"
-    );
+    (* This flag is deprecated and will be removed in future. *)
+    (Flag.create ~prefix:["c"] ~hide_prefix:true "static", Arg.Set opt_static, "");
   ]
 
 let c_rewrites =
@@ -209,6 +208,9 @@ let c_target out_file { ast; effect_info; env; default_sail_dir; _ } =
   if !opt_generate_header then
     Reporting.warn "Deprecated" Parse_ast.Unknown
       "--c-generate-header is deprecated and has no effect; headers are now always generated";
+
+  if !opt_static then
+    Reporting.warn "Deprecated" Parse_ast.Unknown "--static is deprecated and no longer has any effect";
 
   let echo_output, out_file = match out_file with Some f -> (false, f) | None -> (true, "out") in
   let basename = Filename.basename out_file in

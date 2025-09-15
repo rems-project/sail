@@ -61,8 +61,6 @@ open Anf
 
 module Big_int = Nat_big_num
 
-let opt_static = ref false
-let static () = if !opt_static then "static " else ""
 let opt_prefix = ref "z"
 let opt_extra_params = ref None
 let opt_extra_arguments = ref None
@@ -2168,12 +2166,12 @@ module Codegen (Config : CODEGEN_CONFIG) = struct
           Header
             (string (Printf.sprintf "// register %s" (string_of_name id))
             ^^ hardline
-            ^^ string (Printf.sprintf "extern %s%s %s;" (static ()) (sgen_ctyp ctyp) (sgen_name id))
+            ^^ string (Printf.sprintf "extern %s %s;" (sgen_ctyp ctyp) (sgen_name id))
             );
           Impl
             (string (Printf.sprintf "// register %s" (string_of_name id))
             ^^ hardline
-            ^^ string (Printf.sprintf "%s%s %s;" (static ()) (sgen_ctyp ctyp) (sgen_name id))
+            ^^ string (Printf.sprintf "%s %s;" (sgen_ctyp ctyp) (sgen_name id))
             );
         ]
     | CDEF_val (id, _, arg_ctyps, ret_ctyp, _) ->
@@ -2182,8 +2180,7 @@ module Codegen (Config : CODEGEN_CONFIG) = struct
           [
             Header
               (string
-                 (Printf.sprintf "%s%s %s(%s%s);" (static ()) (sgen_ctyp ret_ctyp) (sgen_function_id id)
-                    (extra_params ())
+                 (Printf.sprintf "%s %s(%s%s);" (sgen_ctyp ret_ctyp) (sgen_function_id id) (extra_params ())
                     (Util.string_of_list ", " sgen_const_ctyp arg_ctyps)
                  )
               );
@@ -2192,8 +2189,7 @@ module Codegen (Config : CODEGEN_CONFIG) = struct
           [
             Header
               (string
-                 (Printf.sprintf "%svoid %s(%s%s *rop, %s);" (static ()) (sgen_function_id id) (extra_params ())
-                    (sgen_ctyp ret_ctyp)
+                 (Printf.sprintf "void %s(%s%s *rop, %s);" (sgen_function_id id) (extra_params ()) (sgen_ctyp ret_ctyp)
                     (Util.string_of_list ", " sgen_const_ctyp arg_ctyps)
                  )
               );
@@ -2229,15 +2225,13 @@ module Codegen (Config : CODEGEN_CONFIG) = struct
             match ret_arg with
             | Return_plain ->
                 assert (is_stack_ctyp ctx ret_ctyp);
-                (if !opt_static then string "static " else empty)
-                ^^ string (sgen_ctyp ret_ctyp)
+                string (sgen_ctyp ret_ctyp)
                 ^^ space ^^ codegen_function_id id
                 ^^ parens (string (extra_params ()) ^^ string args)
                 ^^ hardline
             | Return_via gs ->
                 assert (not (is_stack_ctyp ctx ret_ctyp));
-                (if !opt_static then string "static " else empty)
-                ^^ string "void" ^^ space ^^ codegen_function_id id
+                string "void" ^^ space ^^ codegen_function_id id
                 ^^ parens
                      (string (extra_params ())
                      ^^ string (sgen_ctyp ret_ctyp ^ " *" ^ sgen_name gs ^ ", ")
@@ -2255,14 +2249,14 @@ module Codegen (Config : CODEGEN_CONFIG) = struct
         end
     | CDEF_type ctype_def -> codegen_type_def ctx ctype_def
     | CDEF_startup (id, instrs) ->
-        let startup_header = string (Printf.sprintf "%svoid startup_%s(void)" (static ()) (sgen_function_id id)) in
+        let startup_header = string (Printf.sprintf "void startup_%s(void)" (sgen_function_id id)) in
         separate_map hardline codegen_decl instrs
         ^^ twice hardline ^^ startup_header ^^ hardline ^^ string "{"
         ^^ jump 0 2 (separate_map hardline (codegen_alloc ctx) instrs)
         ^^ hardline ^^ string "}"
         |> to_impl
     | CDEF_finish (id, instrs) ->
-        let finish_header = string (Printf.sprintf "%svoid finish_%s(void)" (static ()) (sgen_function_id id)) in
+        let finish_header = string (Printf.sprintf "void finish_%s(void)" (sgen_function_id id)) in
         separate_map hardline codegen_decl (List.filter is_decl instrs)
         ^^ twice hardline ^^ finish_header ^^ hardline ^^ string "{"
         ^^ jump 0 2 (separate_map hardline (codegen_instr id ctx) instrs)
@@ -2273,7 +2267,7 @@ module Codegen (Config : CODEGEN_CONFIG) = struct
         let setup = List.concat (List.map (fun (id, ctyp) -> [idecl (id_loc id) ctyp (name id)]) bindings) in
         let cleanup = List.concat (List.map (fun (id, ctyp) -> [iclear ~loc:(id_loc id) ctyp (name id)]) bindings) in
         separate_map hardline
-          (fun (id, ctyp) -> string (Printf.sprintf "%s%s %s;" (static ()) (sgen_ctyp ctyp) (sgen_id id)))
+          (fun (id, ctyp) -> string (Printf.sprintf "%s %s;" (sgen_ctyp ctyp) (sgen_id id)))
           bindings
         ^^ hardline
         ^^ string (Printf.sprintf "static void create_letbind_%d(void) " number)
@@ -2484,7 +2478,7 @@ module Codegen (Config : CODEGEN_CONFIG) = struct
       let model_init =
         separate hardline
           (List.map string
-             ([Printf.sprintf "%svoid model_init(void)" (static ()); "{"; "  setup_rts();"]
+             (["void model_init(void)"; "{"; "  setup_rts();"]
              @ fst exn_boilerplate
              @ List.concat (List.map (fun r -> fst (register_init_clear r)) early_regs)
              @ set_abstract_types @ startup cdefs @ letbind_initializers
@@ -2504,7 +2498,7 @@ module Codegen (Config : CODEGEN_CONFIG) = struct
       let model_fini =
         separate hardline
           (List.map string
-             ([Printf.sprintf "%svoid model_fini(void)" (static ()); "{"]
+             (["void model_fini(void)"; "{"]
              @ List.concat (List.map (fun r -> snd (register_init_clear r)) regs)
              @ letbind_finalizers
              @ List.concat (List.map (fun r -> snd (register_init_clear r)) early_regs)
@@ -2531,7 +2525,7 @@ module Codegen (Config : CODEGEN_CONFIG) = struct
 
       let model_main =
         [
-          Printf.sprintf "%sint model_main(int argc, char *argv[])" (static ());
+          "int model_main(int argc, char *argv[])";
           "{";
           "  model_init();";
           "  if (process_arguments(argc, argv)) exit(EXIT_FAILURE);";
@@ -2565,7 +2559,7 @@ module Codegen (Config : CODEGEN_CONFIG) = struct
          in your own custom test runner. *)
       let model_test =
         [
-          Printf.sprintf "%svoid model_test(void)" (static ());
+          "void model_test(void)";
           "{";
           "  for (size_t i = 0; i < SAIL_TEST_COUNT; ++i) {";
           "    model_init();";
