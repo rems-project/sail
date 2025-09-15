@@ -166,6 +166,12 @@ let get_argv_position ~plus =
       let* char_offset = List.nth_opt offsets n in
       Some { p with pos_cnum = p.pos_cnum + char_offset }
 
+(* Check if an `$iftarget c ocaml` directive contains the given `target`.
+  `target_set` is the space-separated list of targets ("c ocaml" in this
+   example). *)
+let target_set_contains (target_set : string) (target : string) : bool =
+  String.split_on_char ' ' target_set |> List.mem target
+
 let preprocess dir target opts =
   let module P = Parse_ast in
   let rec aux includes acc = function
@@ -220,7 +226,7 @@ let preprocess dir target opts =
         let then_defs, else_defs, defs = cond_pragma l defs in
         begin
           match target with
-          | Some t' when t = t' -> aux includes acc (then_defs @ defs)
+          | Some t' when target_set_contains t t' -> aux includes acc (then_defs @ defs)
           | _ -> aux includes acc (else_defs @ defs)
         end
     | DEF_aux (DEF_pragma ("include", Pragma_line (file, _)), l) :: defs ->
