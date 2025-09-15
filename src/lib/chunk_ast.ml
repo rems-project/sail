@@ -949,19 +949,12 @@ let rec chunk_exp comments chunks (E_aux (aux, l)) =
       let aligned = is_aligned cases in
       let cases = List.map (chunk_pexp ~delim:"," comments chunks) cases in
       Match { kind; exp = exp_chunks; aligned; cases } |> add_chunk chunks
-  | E_vector_update _ | E_vector_update_subrange _ ->
+  | E_vector_update _ ->
       let vec_chunks, updates = chunk_vector_update comments (E_aux (aux, l)) in
       Queue.add (Vector_updates (vec_chunks, List.rev updates)) chunks
   | E_vector_access (exp, ix) ->
       let exp_chunks = rec_chunk_exp exp in
-      let ix_chunks = rec_chunk_exp ix in
-      Queue.add (Index (exp_chunks, ix_chunks)) chunks
-  | E_vector_subrange (exp, ix1, ix2) ->
-      let exp_chunks = rec_chunk_exp exp in
-      let ix1_chunks = rec_chunk_exp ix1 in
-      let ix2_chunks = rec_chunk_exp ix2 in
-      let ix_chunks = Queue.create () in
-      Queue.add (Binary (ix1_chunks, "..", ix2_chunks)) ix_chunks;
+      let ix_chunks = chunk_vector_index comments ix in
       Queue.add (Index (exp_chunks, ix_chunks)) chunks
   | E_for (var, from_index, to_index, step, order, body) ->
       let decreasing =
@@ -1031,6 +1024,23 @@ let rec chunk_exp comments chunks (E_aux (aux, l)) =
       let exp_chunks = rec_chunk_exp exp in
       Queue.add (App (Id_aux (Id "internal_assume", l), [nc_chunks; exp_chunks])) chunks
 
+and chunk_vector_index comments (VA_aux (aux, l)) =
+  let chunks = Queue.create () in
+  let ix_binop op n m =
+    let n_chunks = Queue.create () in
+    chunk_exp comments n_chunks n;
+    let m_chunks = Queue.create () in
+    chunk_exp comments m_chunks m;
+    Queue.add (Binary (n_chunks, op, m_chunks)) chunks
+  in
+  ( match aux with
+  | VA_index ix -> chunk_exp comments chunks ix
+  | VA_subrange (n, m) -> ix_binop ".." n m
+  | VA_indexed_add (n, m) -> ix_binop "+:" n m
+  | VA_indexed_sub (n, m) -> ix_binop "-:" n m
+  );
+  chunks
+
 and chunk_vector_update comments (E_aux (aux, l) as exp) =
   let rec_chunk_exp exp =
     let chunks = Queue.create () in
@@ -1040,15 +1050,9 @@ and chunk_vector_update comments (E_aux (aux, l) as exp) =
   match aux with
   | E_vector_update (vec, ix, exp) ->
       let vec_chunks, update = chunk_vector_update comments vec in
-      let ix = rec_chunk_exp ix in
+      let ix = chunk_vector_index comments ix in
       let exp = rec_chunk_exp exp in
       (vec_chunks, Binary (ix, "=", exp) :: update)
-  | E_vector_update_subrange (vec, ix1, ix2, exp) ->
-      let vec_chunks, update = chunk_vector_update comments vec in
-      let ix1 = rec_chunk_exp ix1 in
-      let ix2 = rec_chunk_exp ix2 in
-      let exp = rec_chunk_exp exp in
-      (vec_chunks, Ternary (ix1, "..", ix2, "=", exp) :: update)
   | _ ->
       let exp_chunks = Queue.create () in
       chunk_exp comments exp_chunks exp;

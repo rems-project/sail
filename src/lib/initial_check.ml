@@ -1264,8 +1264,34 @@ let rec is_config (P.E_aux (aux, _)) =
   | P.E_config root -> Some [root]
   | _ -> None
 
+let sv_vector_indexing_syntax =
+  "Reserved vector indexing syntax.\n\n\
+   This syntax is not currently implemented, but is reserved for future syntax extensions."
+
 let rec to_ast_letbind ctx (P.LB_aux (lb, l) : P.letbind) : uannot letbind =
   LB_aux ((match lb with P.LB_val (pat, exp) -> LB_val (to_ast_pat ctx pat, to_ast_exp ctx exp)), (l, empty_uannot))
+
+and to_ast_vector_access ctx vexp = function
+  | P.VA_aux (P.VA_index exp, _) ->
+      let exp = to_ast_exp ctx exp in
+      E_vector_access (vexp, exp)
+  | P.VA_aux (P.VA_subrange (n, m), _) ->
+      let n = to_ast_exp ctx n in
+      let m = to_ast_exp ctx m in
+      E_vector_subrange (vexp, n, m)
+  | P.VA_aux (_, l) -> raise (Reporting.err_syntax_loc l sv_vector_indexing_syntax)
+
+and to_ast_vector_update ctx vexp exp = function
+  | P.VA_aux (P.VA_index ix, _) ->
+      let ix = to_ast_exp ctx ix in
+      let exp = to_ast_exp ctx exp in
+      E_vector_update (vexp, ix, exp)
+  | P.VA_aux (P.VA_subrange (n, m), _) ->
+      let n = to_ast_exp ctx n in
+      let m = to_ast_exp ctx m in
+      let exp = to_ast_exp ctx exp in
+      E_vector_update_subrange (vexp, n, m, exp)
+  | P.VA_aux (_, l) -> raise (Reporting.err_syntax_loc l sv_vector_indexing_syntax)
 
 and to_ast_exp ctx exp =
   let (P.E_aux (exp, l)) = parse_infix_exp ctx exp in
@@ -1322,13 +1348,12 @@ and to_ast_exp ctx exp =
         | P.E_loop (P.While, m, e1, e2) -> E_loop (While, to_ast_measure ctx m, to_ast_exp ctx e1, to_ast_exp ctx e2)
         | P.E_loop (P.Until, m, e1, e2) -> E_loop (Until, to_ast_measure ctx m, to_ast_exp ctx e1, to_ast_exp ctx e2)
         | P.E_vector exps -> E_vector (List.map (to_ast_exp ctx) exps)
-        | P.E_vector_access (vexp, exp) -> E_vector_access (to_ast_exp ctx vexp, to_ast_exp ctx exp)
-        | P.E_vector_subrange (vex, exp1, exp2) ->
-            E_vector_subrange (to_ast_exp ctx vex, to_ast_exp ctx exp1, to_ast_exp ctx exp2)
-        | P.E_vector_update (vex, exp1, exp2) ->
-            E_vector_update (to_ast_exp ctx vex, to_ast_exp ctx exp1, to_ast_exp ctx exp2)
-        | P.E_vector_update_subrange (vex, e1, e2, e3) ->
-            E_vector_update_subrange (to_ast_exp ctx vex, to_ast_exp ctx e1, to_ast_exp ctx e2, to_ast_exp ctx e3)
+        | P.E_vector_access (vexp, va) ->
+            let vexp = to_ast_exp ctx vexp in
+            to_ast_vector_access ctx vexp va
+        | P.E_vector_update (vexp, va, exp) ->
+            let vexp = to_ast_exp ctx vexp in
+            to_ast_vector_update ctx vexp exp va
         | P.E_vector_append (e1, e2) -> E_vector_append (to_ast_exp ctx e1, to_ast_exp ctx e2)
         | P.E_list exps -> E_list (List.map (to_ast_exp ctx) exps)
         | P.E_cons (e1, e2) -> E_cons (to_ast_exp ctx e1, to_ast_exp ctx e2)
@@ -1388,6 +1413,16 @@ and to_ast_measure ctx (P.Measure_aux (m, l)) : uannot internal_loop_measure =
   in
   Measure_aux (m, l)
 
+and to_ast_vector_lexp ctx vexp = function
+  | P.VA_aux (P.VA_index ix, _) ->
+      let ix = to_ast_exp ctx ix in
+      LE_vector (vexp, ix)
+  | P.VA_aux (P.VA_subrange (n, m), _) ->
+      let n = to_ast_exp ctx n in
+      let m = to_ast_exp ctx m in
+      LE_vector_range (vexp, n, m)
+  | P.VA_aux (_, l) -> raise (Reporting.err_syntax_loc l sv_vector_indexing_syntax)
+
 and to_ast_lexp ctx exp =
   let (P.E_aux (exp, l)) = parse_infix_exp ctx exp in
   let lexp =
@@ -1416,9 +1451,9 @@ and to_ast_lexp ctx exp =
         | _ -> raise (Reporting.err_typ l' "memory call on lefthand side of assignment must begin with an id")
       end
     | P.E_vector_append (exp1, exp2) -> LE_vector_concat (to_ast_lexp ctx exp1 :: to_ast_lexp_vector_concat ctx exp2)
-    | P.E_vector_access (vexp, exp) -> LE_vector (to_ast_lexp ctx vexp, to_ast_exp ctx exp)
-    | P.E_vector_subrange (vexp, exp1, exp2) ->
-        LE_vector_range (to_ast_lexp ctx vexp, to_ast_exp ctx exp1, to_ast_exp ctx exp2)
+    | P.E_vector_access (vexp, va) ->
+        let vexp = to_ast_lexp ctx vexp in
+        to_ast_vector_lexp ctx vexp va
     | P.E_field (fexp, id) -> LE_field (to_ast_lexp ctx fexp, to_ast_id ctx id)
     | _ ->
         raise

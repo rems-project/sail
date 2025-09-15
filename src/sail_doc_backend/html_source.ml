@@ -109,7 +109,8 @@ let highlights ~filename ~contents =
         mark Highlight.TyVar;
         go ()
     | Under | Colon _ | Lcurly | Rcurly | LcurlyBar | RcurlyBar | Lsquare | Rsquare | LsquareBar | RsquareBar | Lparen
-    | Rparen | Dot | DotDot | EqGt _ | At | Unit _ | Bidir | Semi | Comma | Eq _ | TwoCaret | MinusGt ->
+    | Rparen | Dot | DotDot | EqGt _ | At | Unit _ | Bidir | Semi | Comma | Eq _ | TwoCaret | MinusGt | MinusColon
+    | PlusColon ->
         go ()
   in
   go ();
