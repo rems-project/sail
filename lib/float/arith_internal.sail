@@ -276,11 +276,59 @@ function float_add_internal (op_0, op_1) = {
     float_add_diff_exp (op_0, op_1)
 }
 
+val      float_sub_same_exp_internal : forall 'n, 'n in {16, 32, 64, 128}. (bits('n), bits('n))
+  -> (bits('n), fp_exception_flags)
+function float_sub_same_exp_internal (op_0, op_1) = {
+  let fp_0 = float_decompose (op_0);
+  let fp_1 = float_decompose (op_1);
+
+  let mantissa = sub_bits (fp_0.mantissa, fp_1.mantissa);
+  let shift_bitsize = count_leading_zeros (mantissa) + 1;
+  let mantissa_shift = sail_shiftleft (mantissa, shift_bitsize);
+  let exp = sub_bits_int (fp_0.exp, shift_bitsize);
+
+  (fp_0.sign @ exp @ mantissa_shift, fp_eflag_none)
+}
+
+val      float_sub_same_exp: forall 'n, 'n in {16, 32, 64, 128}.
+  (bits('n), bits('n)) -> (bits('n), fp_exception_flags)
+function float_sub_same_exp (op_0, op_1) = {
+  let bitsize = length (op_0);
+  let fp_0 = float_decompose (op_0);
+  let fp_1 = float_decompose (op_1);
+
+  assert (fp_0.exp == fp_1.exp, "The exp of floating point must be same.");
+  if is_all_ones(fp_0.exp) then {
+    assert(false, "Not implemented yet.");
+    (sail_zeros ('n), fp_eflag_none);
+  }
+  else {
+    if unsigned (fp_0.mantissa) > unsigned (fp_1.mantissa) then
+      float_sub_same_exp_internal (op_0, op_1)
+    else if unsigned (fp_0.mantissa) < unsigned (fp_1.mantissa) then
+      float_sub_same_exp_internal (not_vec(fp_1.sign) @ fp_1.exp @ fp_1.mantissa, op_0)
+    else {
+      assert (false, "Not implemented yet.");
+      (sail_zeros ('n), fp_eflag_none);
+    }
+  }
+}
+
 val      float_sub_internal : forall 'n, 'n in {16, 32, 64, 128}.
   (bits('n), bits('n)) -> (bits('n), fp_exception_flags)
 function float_sub_internal (op_0, op_1) = {
-  assert (false, "Not implemented yet.");
-  (sail_zeros ('n), fp_eflag_none);
+  let fp_0 = float_decompose (op_0);
+  let fp_1 = float_decompose (op_1);
+  
+  assert (xor_vec (fp_0.sign, fp_1.sign) == [bitzero],
+    "The sign of float sub operand 0 and operand 1 must be the same.");
+
+  if fp_0.exp == fp_1.exp then
+    float_sub_same_exp (op_0, op_1)
+  else {
+    assert (false, "Not implemented yet.");
+    (sail_zeros ('n), fp_eflag_none);
+  }
 }
 
 $endif

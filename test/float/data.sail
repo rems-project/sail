@@ -119,6 +119,10 @@ let fp16_neg_normal_add_13_sum_rdn  = 0xfb81
 let fp16_neg_normal_add_13_sum_rup  = 0xfb80
 let fp16_neg_normal_add_13_sum_rtz  = 0xfb80
 
+let fp16_pos_normal_add_14_op_0  = 0x4980
+let fp16_neg_normal_add_14_op_1  = 0xCA00
+let fp16_pos_normal_add_14_sum   = 0xBC00
+
 let fp16_pos_denormal_add_0_op_0 = 0x00ff
 let fp16_pos_denormal_add_0_op_1 = 0x0021
 let fp16_pos_denormal_add_0_sum  = 0x0120
@@ -259,6 +263,10 @@ let fp32_neg_normal_add_13_sum_rna  = 0xff7ff878
 let fp32_neg_normal_add_13_sum_rdn  = 0xff7ff878
 let fp32_neg_normal_add_13_sum_rup  = 0xff7ff877
 let fp32_neg_normal_add_13_sum_rtz  = 0xff7ff877
+
+let fp32_pos_normal_add_14_op_0  = 0x42600000
+let fp32_neg_normal_add_14_op_1  = 0xC2400000
+let fp32_pos_normal_add_14_sum   = 0x41000000
 
 let fp32_pos_denormal_add_0_op_0 = 0x000fffff
 let fp32_pos_denormal_add_0_op_1 = 0x00000021
@@ -401,6 +409,10 @@ let fp64_neg_normal_add_13_sum_rdn  = 0xffe00107fffffffe
 let fp64_neg_normal_add_13_sum_rup  = 0xffe00107fffffffd
 let fp64_neg_normal_add_13_sum_rtz  = 0xffe00107fffffffd
 
+let fp64_pos_normal_add_14_op_0  = 0x41D8000000000000
+let fp64_neg_normal_add_14_op_1  = 0xC1D4000000000000	
+let fp64_pos_normal_add_14_sum   = 0x41B0000000000000
+
 let fp64_pos_denormal_add_0_op_0 = 0x0000ffffffffffff
 let fp64_pos_denormal_add_0_op_1 = 0x0000000000000041
 let fp64_pos_denormal_add_0_sum  = 0x0001000000000040
@@ -541,6 +553,10 @@ let fp128_neg_normal_add_13_sum_rna  = 0xfffe000000068ff892110a7feeef1d3e
 let fp128_neg_normal_add_13_sum_rdn  = 0xfffe000000068ff892110a7feeef1d3e
 let fp128_neg_normal_add_13_sum_rup  = 0xfffe000000068ff892110a7feeef1d3d
 let fp128_neg_normal_add_13_sum_rtz  = 0xfffe000000068ff892110a7feeef1d3d
+
+let fp128_pos_normal_add_14_op_0  = 0x43E79000000000000000000000000000
+let fp128_neg_normal_add_14_op_1  = 0xC3E78800000000000000000000000000
+let fp128_pos_normal_add_14_sum   = 0x43E20000000000000000000000000000
 
 let fp128_pos_denormal_add_0_op_0 = 0x00000fffffffffffffffffffffffffff
 let fp128_pos_denormal_add_0_op_1 = 0x00000000000000000000000000000091
