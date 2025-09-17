@@ -1,59 +1,64 @@
-open BinNums
 
 module Pos =
  struct
-  (** val succ : positive -> positive **)
+  (** val succ : Big_int_Z.big_int -> Big_int_Z.big_int **)
 
-  let rec succ = function
-  | Coq_xI p -> Coq_xO (succ p)
-  | Coq_xO p -> Coq_xI p
-  | Coq_xH -> Coq_xO Coq_xH
+  let rec succ = Big_int_Z.succ_big_int
 
-  (** val add : positive -> positive -> positive **)
+  (** val add :
+      Big_int_Z.big_int -> Big_int_Z.big_int -> Big_int_Z.big_int **)
 
-  let rec add x y =
-    match x with
-    | Coq_xI p ->
-      (match y with
-       | Coq_xI q -> Coq_xO (add_carry p q)
-       | Coq_xO q -> Coq_xI (add p q)
-       | Coq_xH -> Coq_xO (succ p))
-    | Coq_xO p ->
-      (match y with
-       | Coq_xI q -> Coq_xI (add p q)
-       | Coq_xO q -> Coq_xO (add p q)
-       | Coq_xH -> Coq_xI p)
-    | Coq_xH ->
-      (match y with
-       | Coq_xI q -> Coq_xO (succ q)
-       | Coq_xO q -> Coq_xI q
-       | Coq_xH -> Coq_xO Coq_xH)
+  let rec add = Big_int_Z.add_big_int
 
-  (** val add_carry : positive -> positive -> positive **)
+  (** val add_carry :
+      Big_int_Z.big_int -> Big_int_Z.big_int -> Big_int_Z.big_int **)
 
   and add_carry x y =
-    match x with
-    | Coq_xI p ->
-      (match y with
-       | Coq_xI q -> Coq_xI (add_carry p q)
-       | Coq_xO q -> Coq_xO (add_carry p q)
-       | Coq_xH -> Coq_xI (succ p))
-    | Coq_xO p ->
-      (match y with
-       | Coq_xI q -> Coq_xO (add_carry p q)
-       | Coq_xO q -> Coq_xI (add p q)
-       | Coq_xH -> Coq_xO (succ p))
-    | Coq_xH ->
-      (match y with
-       | Coq_xI q -> Coq_xI (succ q)
-       | Coq_xO q -> Coq_xO (succ q)
-       | Coq_xH -> Coq_xI Coq_xH)
+    (fun f2p1 f2p f1 p ->
+  if Big_int_Z.le_big_int p Big_int_Z.unit_big_int then f1 () else
+  let (q,r) = Big_int_Z.quomod_big_int p (Big_int_Z.big_int_of_int 2) in
+  if Big_int_Z.eq_big_int r Big_int_Z.zero_big_int then f2p q else f2p1 q)
+      (fun p ->
+      (fun f2p1 f2p f1 p ->
+  if Big_int_Z.le_big_int p Big_int_Z.unit_big_int then f1 () else
+  let (q,r) = Big_int_Z.quomod_big_int p (Big_int_Z.big_int_of_int 2) in
+  if Big_int_Z.eq_big_int r Big_int_Z.zero_big_int then f2p q else f2p1 q)
+        (fun q ->
+        (fun x -> Big_int_Z.succ_big_int (Big_int_Z.mult_int_big_int 2 x))
+        (add_carry p q))
+        (fun q -> Big_int_Z.mult_int_big_int 2 (add_carry p q))
+        (fun _ ->
+        (fun x -> Big_int_Z.succ_big_int (Big_int_Z.mult_int_big_int 2 x))
+        (succ p))
+        y)
+      (fun p ->
+      (fun f2p1 f2p f1 p ->
+  if Big_int_Z.le_big_int p Big_int_Z.unit_big_int then f1 () else
+  let (q,r) = Big_int_Z.quomod_big_int p (Big_int_Z.big_int_of_int 2) in
+  if Big_int_Z.eq_big_int r Big_int_Z.zero_big_int then f2p q else f2p1 q)
+        (fun q -> Big_int_Z.mult_int_big_int 2 (add_carry p q))
+        (fun q ->
+        (fun x -> Big_int_Z.succ_big_int (Big_int_Z.mult_int_big_int 2 x))
+        (add p q))
+        (fun _ -> Big_int_Z.mult_int_big_int 2 (succ p))
+        y)
+      (fun _ ->
+      (fun f2p1 f2p f1 p ->
+  if Big_int_Z.le_big_int p Big_int_Z.unit_big_int then f1 () else
+  let (q,r) = Big_int_Z.quomod_big_int p (Big_int_Z.big_int_of_int 2) in
+  if Big_int_Z.eq_big_int r Big_int_Z.zero_big_int then f2p q else f2p1 q)
+        (fun q ->
+        (fun x -> Big_int_Z.succ_big_int (Big_int_Z.mult_int_big_int 2 x))
+        (succ q))
+        (fun q -> Big_int_Z.mult_int_big_int 2 (succ q))
+        (fun _ ->
+        (fun x -> Big_int_Z.succ_big_int (Big_int_Z.mult_int_big_int 2 x))
+        Big_int_Z.unit_big_int)
+        y)
+      x
 
-  (** val mul : positive -> positive -> positive **)
+  (** val mul :
+      Big_int_Z.big_int -> Big_int_Z.big_int -> Big_int_Z.big_int **)
 
-  let rec mul x y =
-    match x with
-    | Coq_xI p -> add y (Coq_xO (mul p y))
-    | Coq_xO p -> Coq_xO (mul p y)
-    | Coq_xH -> y
+  let rec mul = Big_int_Z.mult_big_int
  end

@@ -5,10 +5,6 @@ let negb = function
 | true -> false
 | false -> true
 
-type nat =
-| O
-| S of nat
-
 (** val fst : ('a1 * 'a2) -> 'a1 **)
 
 let fst = function
@@ -19,11 +15,11 @@ let fst = function
 let snd = function
 | (_, y) -> y
 
-(** val length : 'a1 list -> nat **)
+(** val length : 'a1 list -> Big_int_Z.big_int **)
 
 let rec length = function
-| [] -> O
-| _ :: l' -> S (length l')
+| [] -> Big_int_Z.zero_big_int
+| _ :: l' -> Big_int_Z.succ_big_int (length l')
 
 (** val app : 'a1 list -> 'a1 list -> 'a1 list **)
 

@@ -17,15 +17,17 @@ let rec lexp_subexps = function
    | LE_field (l0, _) -> lexp_subexps l0
    | _ -> [])
 
-(** val take_drop : nat -> 'a1 list -> 'a1 list * 'a1 list **)
+(** val take_drop : Big_int_Z.big_int -> 'a1 list -> 'a1 list * 'a1 list **)
 
 let rec take_drop n xs =
-  match n with
-  | O -> ([], xs)
-  | S m ->
-    (match xs with
-     | [] -> ([], [])
-     | x :: xs0 -> let (ys, zs) = take_drop m xs0 in ((x :: ys), zs))
+  (fun fO fS n -> if Big_int_Z.sign_big_int n <= 0 then fO ()
+  else fS (Big_int_Z.pred_big_int n))
+    (fun _ -> ([], xs))
+    (fun m ->
+    match xs with
+    | [] -> ([], [])
+    | x :: xs0 -> let (ys, zs) = take_drop m xs0 in ((x :: ys), zs))
+    n
 
 (** val update_lexp_subexps :
     'a1 exp list -> 'a1 lexp -> 'a1 lexp * 'a1 exp list **)

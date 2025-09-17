@@ -1,12 +1,11 @@
-open BinNums
 
 module Pos :
  sig
-  val succ : positive -> positive
+  val succ : Big_int_Z.big_int -> Big_int_Z.big_int
 
-  val add : positive -> positive -> positive
+  val add : Big_int_Z.big_int -> Big_int_Z.big_int -> Big_int_Z.big_int
 
-  val add_carry : positive -> positive -> positive
+  val add_carry : Big_int_Z.big_int -> Big_int_Z.big_int -> Big_int_Z.big_int
 
-  val mul : positive -> positive -> positive
+  val mul : Big_int_Z.big_int -> Big_int_Z.big_int -> Big_int_Z.big_int
  end

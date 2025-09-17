@@ -4,6 +4,7 @@ Set Extraction KeepSingleton.
 Set Extraction Output Directory ".".
 
 From Stdlib Require Import String.
+From Stdlib Require Import ZArith.
 
 Require Import Value_type.
 
@@ -101,7 +102,7 @@ Inductive lit_aux : Set :=
 | L_one : lit_aux
 | L_true : lit_aux
 | L_false : lit_aux
-| L_num : num -> lit_aux
+| L_num : Z -> lit_aux
 | L_hex : string -> lit_aux
 | L_bin : string -> lit_aux
 | L_string : string -> lit_aux
@@ -111,7 +112,7 @@ Inductive lit_aux : Set :=
 Inductive nexp_aux : Set :=
 | Nexp_id : id -> nexp_aux
 | Nexp_var : kid -> nexp_aux
-| Nexp_constant : num -> nexp_aux
+| Nexp_constant : Z -> nexp_aux
 | Nexp_app : id -> list nexp -> nexp_aux
 | Nexp_if : n_constraint -> nexp -> nexp -> nexp_aux
 | Nexp_times : nexp -> nexp -> nexp_aux
@@ -151,7 +152,7 @@ with n_constraint_aux : Set :=
 | NC_gt : nexp -> nexp -> n_constraint_aux
 | NC_le : nexp -> nexp -> n_constraint_aux
 | NC_lt : nexp -> nexp -> n_constraint_aux
-| NC_set : nexp -> list num -> n_constraint_aux
+| NC_set : nexp -> list Z -> n_constraint_aux
 | NC_and : n_constraint -> n_constraint -> n_constraint_aux
 | NC_or : n_constraint -> n_constraint -> n_constraint_aux
 | NC_app : id -> list typ_arg -> n_constraint_aux
@@ -205,7 +206,7 @@ Inductive pat_aux (a : Set) : Set :=
 | P_app : id -> list (pat a) -> pat_aux a
 | P_vector : list (pat a) -> pat_aux a
 | P_vector_concat : list (pat a) -> pat_aux a
-| P_vector_subrange : id -> num -> num -> pat_aux a
+| P_vector_subrange : id -> Z -> Z -> pat_aux a
 | P_tuple : list (pat a) -> pat_aux a
 | P_list : list (pat a) -> pat_aux a
 | P_cons : pat a -> pat a -> pat_aux a
@@ -244,7 +245,7 @@ Inductive mpat_aux (a : Set) : Set :=
 | MP_app : id -> list (mpat a) -> mpat_aux a
 | MP_vector : list (mpat a) -> mpat_aux a
 | MP_vector_concat : list (mpat a) -> mpat_aux a
-| MP_vector_subrange : id -> num -> num -> mpat_aux a
+| MP_vector_subrange : id -> Z -> Z -> mpat_aux a
 | MP_tuple : list (mpat a) -> mpat_aux a
 | MP_list : list (mpat a) -> mpat_aux a
 | MP_cons : mpat a -> mpat a -> mpat_aux a
@@ -563,7 +564,7 @@ Inductive def_aux (a b : Set) : Set :=
 | DEF_val : val_spec a -> def_aux a b
 | DEF_outcome : outcome_spec -> list (def a b) -> def_aux a b
 | DEF_instantiation : instantiation_spec a -> list subst -> def_aux a b
-| DEF_fixity : prec -> num -> id -> def_aux a b
+| DEF_fixity : prec -> Z -> id -> def_aux a b
 | DEF_overload : id -> list id -> def_aux a b
 | DEF_default : default_spec -> def_aux a b
 | DEF_scattered : scattered_def a -> def_aux a b

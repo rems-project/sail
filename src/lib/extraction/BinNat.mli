@@ -1,13 +1,10 @@
-open BinNums
-open BinPos
 open Datatypes
-open PosDef
 
 module N :
  sig
-  val compare : coq_N -> coq_N -> comparison
+  val compare : Big_int_Z.big_int -> Big_int_Z.big_int -> comparison
 
-  val add : coq_N -> coq_N -> coq_N
+  val add : Big_int_Z.big_int -> Big_int_Z.big_int -> Big_int_Z.big_int
 
-  val mul : coq_N -> coq_N -> coq_N
+  val mul : Big_int_Z.big_int -> Big_int_Z.big_int -> Big_int_Z.big_int
  end
