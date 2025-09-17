@@ -3,6 +3,8 @@ Require Extraction.
 Set Extraction KeepSingleton.
 Set Extraction Output Directory ".".
 
+From Stdlib Require Import String.
+
 Require Import Value_type.
 
 Parameter loc : Set.

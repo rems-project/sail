@@ -9,122 +9,14 @@ From Stdlib Require Import FunctionalExtensionality.
 From Stdlib Require Import Lia.
 From Stdlib Require Import Lists.List.
 From Stdlib Require Import Program.
+From Stdlib Require Import String.
 
 Require Import Value_type.
 Require Import Ast.
 Require Import AstInduction.
+Require Import IdUtil.
 
 Import ListNotations.
-
-Definition id_eqb (id1 : id) (id2 : id) : bool :=
-  match (id1, id2) with
-  | (Id_aux (Id s1) _, Id_aux (Id s2) _) => eq_string s1 s2
-  | (Id_aux (Operator s1) _, Id_aux (Operator s2) _) => eq_string s1 s2
-  | _ => false
-  end.
-
-Module IdMiniOrdered <: OrderedType.MiniOrderedType.
-  Definition t := Ast.id.
-
-  Definition eq (id1 : id) (id2 : id) : Prop :=
-    match (id1, id2) with
-    | (Id_aux (Id s1) _, Id_aux (Id s2) _) => Is_true (eq_string s1 s2)
-    | (Id_aux (Operator s1) _, Id_aux (Operator s2) _) => Is_true (eq_string s1 s2)
-    | (Id_aux And_bool _, Id_aux And_bool _) => True
-    | (Id_aux Or_bool _, Id_aux Or_bool _) => True
-    | _ => False
-    end.
-
-  Definition lt (id1 : id) (id2 : id) : Prop :=
-    match (id1, id2) with
-    | (Id_aux (Id s1) _, Id_aux (Id s2) _) => Is_true (lt_string s1 s2)
-    | (Id_aux (Operator s1) _, Id_aux (Operator s2) _) => Is_true (lt_string s1 s2)
-    | (Id_aux (Id _) _, Id_aux (Operator _) _) => True
-    | (Id_aux (Operator _) _, Id_aux (Id _) _) => False
-    | (Id_aux And_bool _, _) => False
-    | (_, Id_aux And_bool _) => True
-    | (Id_aux Or_bool _, _) => False
-    | (_, Id_aux Or_bool _) => True
-    end.
-
-  Theorem eq_refl : forall x, eq x x.
-  Proof.
-    destruct x as [aux ?].
-    destruct aux; cbn; try trivial; apply eq_string_refl.
-  Qed.
-
-  Theorem eq_sym : forall x y, eq x y -> eq y x.
-  Proof.
-    destruct x as [x_aux ?].
-    destruct y as [y_aux ?].
-    destruct x_aux as [| | x_s | x_s]; destruct y_aux as [| | y_s | y_s]; cbn; try trivial; apply eq_string_sym.
-  Qed.
-
-  Theorem eq_trans : forall x y z, eq x y -> eq y z -> eq x z.
-  Proof.
-    destruct x as [x_aux ?].
-    destruct y as [y_aux ?].
-    destruct z as [z_aux ?].
-    destruct x_aux as [| | x_s | x_s]; destruct y_aux as [| | y_s | y_s]; destruct z_aux as [| | z_s | z_s].
-    all: cbn.
-    all: try easy.
-    all: apply eq_string_trans.
-  Qed.
-
-  Theorem lt_trans : forall x y z, lt x y -> lt y z -> lt x z.
-  Proof.
-    destruct x as [x_aux ?].
-    destruct y as [y_aux ?].
-    destruct z as [z_aux ?].
-    destruct x_aux as [| | x_s | x_s]; destruct y_aux as [| | y_s | y_s]; destruct z_aux as [| | z_s | z_s].
-    all: cbn.
-    all: try easy.
-    all: apply lt_string_trans.
-  Qed.
-
-  Theorem lt_not_eq : forall x y, lt x y -> ~ eq x y.
-  Proof.
-    destruct x as [x_aux ?].
-    destruct y as [y_aux ?].
-    destruct x_aux as [| | x_s | x_s]; destruct y_aux as [| | y_s | y_s].
-    all: cbn.
-    all: try easy.
-    all: apply lt_string_not_eq_string.
-  Qed.
-
-  Definition compare : forall (x y : id), OrderedType.Compare lt eq x y.
-  Proof.
-    intros x y.
-    destruct x as [x_aux ?].
-    destruct y as [y_aux ?].
-    destruct x_aux as [| | x_s | x_s]; destruct y_aux as [| | y_s | y_s].
-    all: try (apply OrderedType.LT; reflexivity).
-    all: try (apply OrderedType.EQ; reflexivity).
-    all: try (apply OrderedType.GT; reflexivity).
-    - case_eq (lt_string x_s y_s); intros.
-      + apply OrderedType.LT. cbn. rewrite H. reflexivity.
-      + case_eq (eq_string x_s y_s); intros.
-        * apply OrderedType.EQ. cbn. rewrite H0. reflexivity.
-        * apply OrderedType.GT.
-          cbn.
-          apply lt_string_as_gt.
-          rewrite H. unfold Is_true. easy.
-          rewrite H0. unfold Is_true. easy.
-    - case_eq (lt_string x_s y_s); intros.
-      + apply OrderedType.LT. cbn. rewrite H. reflexivity.
-      + case_eq (eq_string x_s y_s); intros.
-        * apply OrderedType.EQ. cbn. rewrite H0. reflexivity.
-        * apply OrderedType.GT.
-          cbn.
-          apply lt_string_as_gt.
-          rewrite H. unfold Is_true. easy.
-          rewrite H0. unfold Is_true. easy.
-  Defined.
-End IdMiniOrdered.
-
-Module IdOrdered := OrderedType.MOT_to_OT(IdMiniOrdered).
-
-Module IdMap := FMapList.Raw(IdOrdered).
 
 Inductive binding :=
 | Complete : value -> binding
@@ -728,7 +620,7 @@ Module Make (T : SemanticExt).
     | (L_num n, V_int m) => T.num_equal n m
     | (L_hex s, V_vector vs) => same_bits (T.bits_of_hex_string s) vs
     | (L_bin s, V_vector vs) => same_bits (T.bits_of_bin_string s) vs
-    | (L_string s1, V_string s2) => eq_string s1 s2
+    | (L_string s1, V_string s2) => String.eqb s1 s2
     | (L_real r1, V_real r2) => T.rational_equal (T.rational_of_string r1) r2
     | _ => false
     end.
@@ -736,7 +628,7 @@ Module Make (T : SemanticExt).
   Fixpoint get_struct_field (name : string) (fields : list (string * value)) {struct fields} : value :=
     match fields with
     | (name', v) :: rest_fields =>
-        if eq_string name name' then
+        if String.eqb name name' then
           v
         else
           get_struct_field name rest_fields
@@ -826,7 +718,7 @@ Module Make (T : SemanticExt).
     | P_list ps =>
         match v with
         | V_list vs =>
-            if Nat.eqb (length ps) (length vs) then
+            if Nat.eqb (List.length ps) (List.length vs) then
               fst (fold_left
                      (fun match_info p =>
                         match match_info with
@@ -934,7 +826,7 @@ Module Make (T : SemanticExt).
       match fields with
       | [] => Runtime_type_error l
       | (name', v) :: fields =>
-          if eq_string name name' then
+          if String.eqb name name' then
             pure v
           else
             lookup_field l name fields
@@ -1120,7 +1012,7 @@ Module Make (T : SemanticExt).
     | DL_tuple ds =>
         match v with
         | V_tuple vs =>
-            if Nat.eqb (length ds) (length vs) then
+            if Nat.eqb (List.length ds) (List.length vs) then
               let '(assignment, _) :=
                 fold_left
                   (fun acc d =>
@@ -1220,12 +1112,12 @@ Module Make (T : SemanticExt).
   Fixpoint update_field (name : string) (v : value) (fields : list (string * value)) : list (string * value) :=
     match fields with
     | (name', old_v) :: rest =>
-        if eq_string name name' then
+        if String.eqb name name' then
           (name, v) :: rest
         else
           (name', old_v) :: update_field name v rest
-   | [] => []
-   end.
+    | [] => []
+    end.
 
   #[local]
   Obligation Tactic := (program_simpl; try easy; cbn; try lia).
@@ -1456,27 +1348,23 @@ Module Make (T : SemanticExt).
             wrap (E_struct_update x' fs)
         end
     | E_vector xs =>
-        (
-          let '(evaluated, unevaluated) := left_to_right xs in
-          match unevaluated with
-          | u :: us =>
-              u' ← step u;
-              wrap (E_vector (evaluated ++ (u' :: us)))
-          | [] =>
-              wrap (E_internal_value (V_vector (all_evaluated evaluated)))
-          end
-        )
+        let '(evaluated, unevaluated) := left_to_right xs in
+        match unevaluated with
+        | u :: us =>
+            u' ← step u;
+            wrap (E_vector (evaluated ++ (u' :: us)))
+        | [] =>
+            wrap (E_internal_value (V_vector (all_evaluated evaluated)))
+        end
     | E_list xs =>
-        (
-          let '(evaluated, unevaluated) := left_to_right xs in
-          match unevaluated with
-          | u :: us =>
-              u' ← step u;
-              wrap (E_list (evaluated ++ (u' :: us)))
-          | [] =>
-              wrap (E_internal_value (V_list (all_evaluated evaluated)))
-          end
-        )
+        let '(evaluated, unevaluated) := left_to_right xs in
+        match unevaluated with
+        | u :: us =>
+            u' ← step u;
+            wrap (E_list (evaluated ++ (u' :: us)))
+        | [] =>
+            wrap (E_internal_value (V_list (all_evaluated evaluated)))
+        end
     | E_cons x xs =>
         match left_to_right2 x xs with
         | LTR2_0 _ _ =>
@@ -1670,6 +1558,6 @@ Module Make (T : SemanticExt).
   Defined.
 End Make.
 
-Extraction Blacklist List.
+Extraction Blacklist List String.
 
 Separate Extraction l attribute_data def impldef opt_default Make IdMap.
