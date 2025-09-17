@@ -69,7 +69,7 @@ type lit_aux =
 | L_one
 | L_true
 | L_false
-| L_num of Nat_big_num.num
+| L_num of Big_int_Z.big_int
 | L_hex of string
 | L_bin of string
 | L_string of string
@@ -79,7 +79,7 @@ type lit_aux =
 type nexp_aux =
 | Nexp_id of id
 | Nexp_var of kid
-| Nexp_constant of Nat_big_num.num
+| Nexp_constant of Big_int_Z.big_int
 | Nexp_app of id * nexp list
 | Nexp_if of n_constraint * nexp * nexp
 | Nexp_times of nexp * nexp
@@ -113,7 +113,7 @@ and n_constraint_aux =
 | NC_gt of nexp * nexp
 | NC_le of nexp * nexp
 | NC_lt of nexp * nexp
-| NC_set of nexp * Nat_big_num.num list
+| NC_set of nexp * Big_int_Z.big_int list
 | NC_and of n_constraint * n_constraint
 | NC_or of n_constraint * n_constraint
 | NC_app of id * typ_arg list
@@ -165,7 +165,7 @@ type 'a pat_aux =
 | P_app of id * 'a pat list
 | P_vector of 'a pat list
 | P_vector_concat of 'a pat list
-| P_vector_subrange of id * Nat_big_num.num * Nat_big_num.num
+| P_vector_subrange of id * Big_int_Z.big_int * Big_int_Z.big_int
 | P_tuple of 'a pat list
 | P_list of 'a pat list
 | P_cons of 'a pat * 'a pat
@@ -183,7 +183,7 @@ type 'a mpat_aux =
 | MP_app of id * 'a mpat list
 | MP_vector of 'a mpat list
 | MP_vector_concat of 'a mpat list
-| MP_vector_subrange of id * Nat_big_num.num * Nat_big_num.num
+| MP_vector_subrange of id * Big_int_Z.big_int * Big_int_Z.big_int
 | MP_tuple of 'a mpat list
 | MP_list of 'a mpat list
 | MP_cons of 'a mpat * 'a mpat
@@ -432,7 +432,7 @@ type ('a, 'b) def_aux =
 | DEF_val of 'a val_spec
 | DEF_outcome of outcome_spec * ('a, 'b) def list
 | DEF_instantiation of 'a instantiation_spec * subst list
-| DEF_fixity of prec * Nat_big_num.num * id
+| DEF_fixity of prec * Big_int_Z.big_int * id
 | DEF_overload of id * id list
 | DEF_default of default_spec
 | DEF_scattered of 'a scattered_def

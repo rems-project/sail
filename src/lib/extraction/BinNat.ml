@@ -1,36 +1,19 @@
-open BinNums
-open BinPos
 open Datatypes
-open PosDef
 
 module N =
  struct
-  (** val compare : coq_N -> coq_N -> comparison **)
+  (** val compare : Big_int_Z.big_int -> Big_int_Z.big_int -> comparison **)
 
-  let compare n m =
-    match n with
-    | N0 -> (match m with
-             | N0 -> Eq
-             | Npos _ -> Lt)
-    | Npos n' -> (match m with
-                  | N0 -> Gt
-                  | Npos m' -> Pos.compare n' m')
+  let compare = (fun x y -> let s = Big_int_Z.compare_big_int x y in
+  if s = 0 then Eq else if s < 0 then Lt else Gt)
 
-  (** val add : coq_N -> coq_N -> coq_N **)
+  (** val add :
+      Big_int_Z.big_int -> Big_int_Z.big_int -> Big_int_Z.big_int **)
 
-  let add n m =
-    match n with
-    | N0 -> m
-    | Npos p -> (match m with
-                 | N0 -> n
-                 | Npos q -> Npos (BinPos.Pos.add p q))
+  let add = Big_int_Z.add_big_int
 
-  (** val mul : coq_N -> coq_N -> coq_N **)
+  (** val mul :
+      Big_int_Z.big_int -> Big_int_Z.big_int -> Big_int_Z.big_int **)
 
-  let mul n m =
-    match n with
-    | N0 -> N0
-    | Npos p -> (match m with
-                 | N0 -> N0
-                 | Npos q -> Npos (BinPos.Pos.mul p q))
+  let mul = Big_int_Z.mult_big_int
  end

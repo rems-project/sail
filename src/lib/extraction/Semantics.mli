@@ -4,14 +4,14 @@ open Datatypes
 open IdUtil
 open List0
 open ListDef
-open Nat
+open PeanoNat
 open Specif
 open Value_type
 open Wf
 
 type binding =
 | Complete of value
-| Partial of ((value * Nat_big_num.num) * Nat_big_num.num) list
+| Partial of ((value * Big_int_Z.big_int) * Big_int_Z.big_int) list
 
 val combine_binding : binding option -> binding option -> binding option
 
@@ -35,13 +35,13 @@ type id_type =
 type place =
 | PL_id of id * var_type
 | PL_register of string
-| PL_vector of place * Nat_big_num.num
-| PL_vector_range of place * Nat_big_num.num * Nat_big_num.num
+| PL_vector of place * Big_int_Z.big_int
+| PL_vector_range of place * Big_int_Z.big_int * Big_int_Z.big_int
 | PL_field of place * id
 
 type vector_concat_split =
 | No_split
-| Split of nat
+| Split of Big_int_Z.big_int
 
 type destructure =
 | DL_app of id * value list
@@ -68,6 +68,8 @@ module Monad :
   val fmap : ('a1 -> 'a2) -> 'a1 t -> 'a2 t
 
   val pure : 'a1 -> 'a1 t
+
+  val lift_option : Parse_ast.l -> 'a1 option -> 'a1 t
 
   val sequence : 'a1 t list -> 'a1 list t
 
@@ -128,7 +130,7 @@ module type SemanticExt =
 
   val get_split : tannot -> vector_concat_split
 
-  val num_equal : Nat_big_num.num -> Nat_big_num.num -> bool
+  val num_equal : Big_int_Z.big_int -> Big_int_Z.big_int -> bool
 
   val rational_equal : Rational.t -> Rational.t -> bool
 
@@ -144,16 +146,8 @@ module type SemanticExt =
 
   val fallthrough : tannot pexp
 
-  val value_gt : value -> value -> value
-
-  val value_lt : value -> value -> value
-
-  val value_add_int : value -> value -> value
-
-  val value_sub_int : value -> value -> value
-
   val complete_value :
-    ((value * Nat_big_num.num) * Nat_big_num.num) list -> value
+    ((value * Big_int_Z.big_int) * Big_int_Z.big_int) list -> value
  end
 
 module Make :

@@ -232,12 +232,6 @@ let complete_value = function
         (((v1, n1), m1) :: partial_values)
   | [] -> Reporting.unreachable Parse_ast.Unknown __POS__ "Empty partial binding set"
 
-let rec to_rocq_nat n =
-  match Big_int.compare n Big_int.zero with
-  | -1 -> raise (Reporting.err_unreachable Parse_ast.Unknown __POS__ "Invalid integer to rocq nat conversion")
-  | 0 -> Datatypes.O
-  | _ -> Datatypes.S (to_rocq_nat (Big_int.pred n))
-
 module RocqSemantics = Semantics.Make (struct
   type tannot = Type_check.tannot
 
@@ -256,10 +250,10 @@ module RocqSemantics = Semantics.Make (struct
     let env = Type_check.env_of_tannot tannot in
     let typ = Type_check.typ_of_tannot tannot in
     match Type_check.destruct_vector env typ with
-    | Some (Nexp_aux (Nexp_constant n, _), _) -> Semantics.Split (to_rocq_nat n)
+    | Some (Nexp_aux (Nexp_constant n, _), _) -> Semantics.Split n
     | _ -> (
         match Type_check.destruct_bitvector env typ with
-        | Some (Nexp_aux (Nexp_constant n, _)) -> Semantics.Split (to_rocq_nat n)
+        | Some (Nexp_aux (Nexp_constant n, _)) -> Semantics.Split n
         | _ -> Semantics.No_split
       )
 
@@ -278,14 +272,6 @@ module RocqSemantics = Semantics.Make (struct
   let rational_of_string = Sail_lib.real_of_string
 
   let fallthrough = fallthrough
-
-  let value_gt x y = value_gt [x; y]
-
-  let value_lt x y = value_lt [x; y]
-
-  let value_add_int x y = value_add_int [x; y]
-
-  let value_sub_int x y = value_sub_int [x; y]
 
   let complete_value vs = complete_value vs
 end)

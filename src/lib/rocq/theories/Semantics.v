@@ -10,6 +10,7 @@ From Stdlib Require Import Lia.
 From Stdlib Require Import Lists.List.
 From Stdlib Require Import Program.
 From Stdlib Require Import String.
+From Stdlib Require Import ZArith.
 
 Require Import Value_type.
 Require Import Ast.
@@ -20,7 +21,7 @@ Import ListNotations.
 
 Inductive binding :=
 | Complete : value -> binding
-| Partial : list (value * num * num) -> binding.
+| Partial : list (value * Z * Z) -> binding.
 
 Definition combine_binding (l r : option binding) : option binding :=
   match (l, r) with
@@ -62,8 +63,8 @@ Inductive id_type :=
 Inductive place : Set :=
 | PL_id : id -> var_type -> place
 | PL_register : string -> place
-| PL_vector : place -> num -> place
-| PL_vector_range : place -> num -> num -> place
+| PL_vector : place -> Z -> place
+| PL_vector_range : place -> Z -> Z -> place
 | PL_field : place -> id -> place.
 
 Inductive vector_concat_split :=
@@ -131,6 +132,12 @@ Module Monad.
     end.
 
   Definition pure {A : Set} (x : A) : t A := Pure x.
+
+  Definition lift_option {A : Set} (l : loc) (x : option A) : t A :=
+    match x with
+    | Some y => Pure y
+    | None => Runtime_type_error l
+    end.
 
   Fixpoint sequence {A : Set} (ls : list (t A)) : t (list A) :=
   match ls with
@@ -416,7 +423,7 @@ Module Type SemanticExt.
 
   Parameter get_split : tannot -> vector_concat_split.
 
-  Parameter num_equal : num -> num -> bool.
+  Parameter num_equal : Z -> Z -> bool.
 
   Parameter rational_equal : rational -> rational -> bool.
 
@@ -432,15 +439,7 @@ Module Type SemanticExt.
 
   Parameter fallthrough : Ast.pexp tannot.
 
-  Parameter value_gt : value -> value -> value.
-
-  Parameter value_lt : value -> value -> value.
-
-  Parameter value_add_int : value -> value -> value.
-
-  Parameter value_sub_int : value -> value -> value.
-
-  Parameter complete_value : list (value * num * num) -> value.
+  Parameter complete_value : list (value * Z * Z) -> value.
 End SemanticExt.
 
 Module Make (T : SemanticExt).
@@ -1129,8 +1128,8 @@ Module Make (T : SemanticExt).
     | E_block xs =>
         match xs with
         | [] => wrap (E_internal_value V_unit)
-        | [E_aux (E_internal_value v) annot] => pure (E_aux (E_internal_value v) annot)
-        | [E_aux (E_block ys) annot] => pure (E_aux (E_block ys) annot)
+        | [E_aux (E_internal_value v) annot] => wrap (E_internal_value v)
+        | [E_aux (E_block ys) annot] => wrap (E_block ys)
         | x :: xs =>
             if is_value x then
               wrap (E_block xs)
@@ -1420,27 +1419,31 @@ Module Make (T : SemanticExt).
         | LTR3_3 v_from v_to v_amount =>
             match ord with
             | Ord_aux Ord_inc _ =>
-                match T.value_gt v_from v_to with
+                cmp ← lift_option (fst annot) (Primops.gt_int v_from v_to);
+                match cmp with
                 | V_bool true => wrap (E_internal_value V_unit)
                 | V_bool false =>
+                    next ← lift_option (fst annot) (Primops.add_int v_from v_amount);
                     wrap
                       (E_block
                          [
                            substitute loop_var v_from body;
-                           E_aux (E_for loop_var (E_aux (E_internal_value (T.value_add_int v_from v_amount)) annot) to amount ord body) annot
+                           E_aux (E_for loop_var (E_aux (E_internal_value next) annot) to amount ord body) annot
                          ]
                       )
                 | _ => Runtime_type_error (fst annot)
                 end
             | Ord_aux Ord_dec _ =>
-                match T.value_lt v_from v_to with
+                cmp ← lift_option (fst annot) (Primops.lt_int v_from v_to);
+                match cmp with
                 | V_bool true => wrap (E_internal_value V_unit)
                 | V_bool false =>
+                    next ← lift_option (fst annot) (Primops.sub_int v_from v_amount);
                     wrap
                       (E_block
                          [
                            substitute loop_var v_from body;
-                           E_aux (E_for loop_var (E_aux (E_internal_value (T.value_sub_int v_from v_amount)) annot) to amount ord body) annot
+                           E_aux (E_for loop_var (E_aux (E_internal_value next) annot) to amount ord body) annot
                          ]
                       )
                 | _ => Runtime_type_error (fst annot)

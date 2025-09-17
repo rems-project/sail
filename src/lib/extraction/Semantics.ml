@@ -4,14 +4,14 @@ open Datatypes
 open IdUtil
 open List0
 open ListDef
-open Nat
+open PeanoNat
 open Specif
 open Value_type
 open Wf
 
 type binding =
 | Complete of value
-| Partial of ((value * Nat_big_num.num) * Nat_big_num.num) list
+| Partial of ((value * Big_int_Z.big_int) * Big_int_Z.big_int) list
 
 (** val combine_binding :
     binding option -> binding option -> binding option **)
@@ -59,13 +59,13 @@ type id_type =
 type place =
 | PL_id of id * var_type
 | PL_register of string
-| PL_vector of place * Nat_big_num.num
-| PL_vector_range of place * Nat_big_num.num * Nat_big_num.num
+| PL_vector of place * Big_int_Z.big_int
+| PL_vector_range of place * Big_int_Z.big_int * Big_int_Z.big_int
 | PL_field of place * id
 
 type vector_concat_split =
 | No_split
-| Split of nat
+| Split of Big_int_Z.big_int
 
 type destructure =
 | DL_app of id * value list
@@ -121,6 +121,12 @@ module Monad =
 
   let pure x =
     Pure x
+
+  (** val lift_option : Parse_ast.l -> 'a1 option -> 'a1 t **)
+
+  let lift_option l = function
+  | Some y -> Pure y
+  | None -> Runtime_type_error l
 
   (** val sequence : 'a1 t list -> 'a1 list t **)
 
@@ -303,7 +309,7 @@ module type SemanticExt =
 
   val get_split : tannot -> vector_concat_split
 
-  val num_equal : Nat_big_num.num -> Nat_big_num.num -> bool
+  val num_equal : Big_int_Z.big_int -> Big_int_Z.big_int -> bool
 
   val rational_equal : Rational.t -> Rational.t -> bool
 
@@ -319,16 +325,8 @@ module type SemanticExt =
 
   val fallthrough : tannot pexp
 
-  val value_gt : value -> value -> value
-
-  val value_lt : value -> value -> value
-
-  val value_add_int : value -> value -> value
-
-  val value_sub_int : value -> value -> value
-
   val complete_value :
-    ((value * Nat_big_num.num) * Nat_big_num.num) list -> value
+    ((value * Big_int_Z.big_int) * Big_int_Z.big_int) list -> value
  end
 
 module Make =
@@ -699,7 +697,7 @@ module Make =
      | P_list ps ->
        (match v with
         | V_list vs ->
-          if eqb (length ps) (length vs)
+          if Nat.eqb (length ps) (length vs)
           then fst
                  (fold_left (fun match_info p0 ->
                    let (y, y0) = match_info in
@@ -758,7 +756,7 @@ module Make =
     | DL_tuple ds ->
       (match v with
        | V_tuple vs ->
-         if eqb (length ds) (length vs)
+         if Nat.eqb (length ds) (length vs)
          then let (assignment, _) =
                 fold_left (fun acc d0 ->
                   let (prev, y) = acc in
@@ -896,7 +894,7 @@ module Make =
             (match e with
              | E_block ys ->
                (match xs0 with
-                | [] -> Monad.pure (E_aux ((E_block ys), annot1))
+                | [] -> wrap (E_block ys)
                 | e0 :: l ->
                   let x0 = E_aux ((E_block ys), annot1) in
                   let xs1 = e0 :: l in
@@ -1080,7 +1078,7 @@ module Make =
                       wrap (E_block (x' :: xs0)))
              | E_internal_value v ->
                (match xs0 with
-                | [] -> Monad.pure (E_aux ((E_internal_value v), annot1))
+                | [] -> wrap (E_internal_value v)
                 | e0 :: l ->
                   let x0 = E_aux ((E_internal_value v), annot1) in
                   let xs1 = e0 :: l in
@@ -1209,29 +1207,41 @@ module Make =
             let Ord_aux (o, _) = ord in
             (match o with
              | Ord_inc ->
-               let filtered_var0 = T.value_gt v_from v_to in
-               (match filtered_var0 with
-                | V_bool b ->
-                  if b
-                  then wrap (E_internal_value V_unit)
-                  else wrap (E_block
-                         ((substitute loop_var v_from body) :: ((E_aux
-                         ((E_for (loop_var, (E_aux ((E_internal_value
-                         (T.value_add_int v_from v_amount)), annot0)), to0,
-                         amount, ord, body)), annot0)) :: [])))
-                | _ -> Monad.Runtime_type_error (fst annot0))
+               Monad.bind
+                 (Monad.lift_option (fst annot0) (Primops.gt_int v_from v_to))
+                 (fun cmp ->
+                 match cmp with
+                 | V_bool b ->
+                   if b
+                   then wrap (E_internal_value V_unit)
+                   else Monad.bind
+                          (Monad.lift_option (fst annot0)
+                            (Primops.add_int v_from v_amount))
+                          (fun next ->
+                          wrap (E_block
+                            ((substitute loop_var v_from body) :: ((E_aux
+                            ((E_for (loop_var, (E_aux ((E_internal_value
+                            next), annot0)), to0, amount, ord, body)),
+                            annot0)) :: []))))
+                 | _ -> Monad.Runtime_type_error (fst annot0))
              | Ord_dec ->
-               let filtered_var0 = T.value_lt v_from v_to in
-               (match filtered_var0 with
-                | V_bool b ->
-                  if b
-                  then wrap (E_internal_value V_unit)
-                  else wrap (E_block
-                         ((substitute loop_var v_from body) :: ((E_aux
-                         ((E_for (loop_var, (E_aux ((E_internal_value
-                         (T.value_sub_int v_from v_amount)), annot0)), to0,
-                         amount, ord, body)), annot0)) :: [])))
-                | _ -> Monad.Runtime_type_error (fst annot0))))
+               Monad.bind
+                 (Monad.lift_option (fst annot0) (Primops.lt_int v_from v_to))
+                 (fun cmp ->
+                 match cmp with
+                 | V_bool b ->
+                   if b
+                   then wrap (E_internal_value V_unit)
+                   else Monad.bind
+                          (Monad.lift_option (fst annot0)
+                            (Primops.sub_int v_from v_amount))
+                          (fun next ->
+                          wrap (E_block
+                            ((substitute loop_var v_from body) :: ((E_aux
+                            ((E_for (loop_var, (E_aux ((E_internal_value
+                            next), annot0)), to0, amount, ord, body)),
+                            annot0)) :: []))))
+                 | _ -> Monad.Runtime_type_error (fst annot0))))
        | E_vector xs ->
          let filtered_var = left_to_right xs in
          let (evaluated0, unevaluated) = filtered_var in
