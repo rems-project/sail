@@ -9,9 +9,8 @@ constraint xlen in {32, 64}
 
 // This test is similar to abstract_type.sail, but instantiating the
 // type from the configuration file rather than the command line.
-$iftarget c
+$iftarget c cpp
 $c_in_main sail_config_set_file("config_abstract_type.json");
-$c_in_main sail_set_abstract_xlen();
 $c_in_main_post sail_config_cleanup();
 $else
 $option --config ../c/config_abstract_type.json

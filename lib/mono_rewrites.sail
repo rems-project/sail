@@ -225,6 +225,7 @@ val _builtin_unsigned = pure {
   lem: "uint",
   interpreter: "uint",
   c: "sail_unsigned",
+  cpp: "sail_unsigned",
   coq: "uint",
   lean: "BitVec.toNat"
 } : forall 'n. bits('n) -> {'m, 0 <= 'm < 2 ^ 'n. int('m)}
@@ -238,6 +239,7 @@ val _builtin_mod_nat = pure {
   ocaml: "modulus",
   lem: "integerMod",
   c: "tmod_int",
+  cpp: "tmod_int",
   coq: "Z.rem",
   lean: "Nat.mod"
 } : forall 'n 'm, 'n >= 0 & 'm >= 0. (int('n), int('m)) -> {'r, 0 <= 'r < 'm. int('r)}

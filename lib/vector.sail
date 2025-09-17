@@ -71,6 +71,7 @@ val neq_bits = pure {
   lem: "neq_vec",
   coq: "neq_vec",
   c: "neq_bits",
+  cpp: "neq_bits",
   lean: "_lean_bne"
 } : forall 'n. (bits('n), bits('n)) -> bool
 

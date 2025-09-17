@@ -28,7 +28,7 @@ $c_override {
 }
 
 // Just so this test works in non-C backends
-$iftarget c
+$iftarget c cpp
 val mk_pair = pure "mk_pair" : unit -> my_pair
 $else
 val mk_pair : unit -> my_pair

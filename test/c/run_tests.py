@@ -26,20 +26,40 @@ def no_valgrind():
     except FileNotFoundError:
         return True
 
-def test_c(name, c_opts, sail_opts, valgrind, compiler='cc'):
+def test_c(name, c_opts, sail_opts, valgrind, compiler='cc', actually_cpp=False):
     banner('Testing {} with C options: {} Sail options: {} valgrind: {}'.format(name, c_opts, sail_opts, valgrind))
     results = Results(name)
     if valgrind and no_valgrind():
         print('skipping because no valgrind found')
         return results.finish()
+
+    if actually_cpp:
+        extension = "cpp"
+        target_opt = "--cpp"
+        # TODO: This is awkward because we compile the C and C++ code in C++ mode, so you can't
+        # use #ifdef __cplusplus to decide whether to `use model::my_pair_in_c`. Probably the
+        # best fix is to add a #define like `-DSAIL_TEST_COMPILING_C_AS_CPP` or something.
+        results.expect_failure("cabbrev.sail", "my_pair_in_c is declared in a namespace in C++")
+        # This tests access to a global variable `zxlen_val` which doesn't exist in C++ mode.
+        # It's now a struct member variable.
+        results.expect_failure("xlen_val.sail", "assumes variables are still global")
+        # TODO: These use `$c_in_main` to add a call to `sail_set_abstract_xlen(32)` to `main()`
+        # but for C++ it needs to go in `model_main()` and be `model.sail_set_abstract_xlen(32)`.
+        results.expect_failure("abstract_sizeof_no_use.sail", "difficult to call model.sail_set_abstract_... in the right place")
+        results.expect_failure("abstract_type.sail", "difficult to call model.sail_set_abstract_... in the right place")
+
+    else:
+        extension = "c"
+        target_opt = "-c"
+
     for filenames in chunks(os.listdir('.'), parallel()):
         tests = {}
         for filename in filenames:
             basename = os.path.splitext(os.path.basename(filename))[0]
             tests[filename] = os.fork()
             if tests[filename] == 0:
-                step('\'{}\' --no-warn -c {} {} -o {}'.format(sail, sail_opts, filename, basename))
-                step('{} {} {}.c \'{}\'/lib/*.c -lgmp -I \'{}\'/lib -o {}.bin'.format(compiler, c_opts, basename, sail_dir, sail_dir, basename))
+                step('\'{}\' --no-warn {} {} {} -o {}'.format(sail, target_opt, sail_opts, filename, basename))
+                step('{} {} {}.{} \'{}\'/lib/*.c -lgmp -I \'{}\'/lib -o {}.bin'.format(compiler, c_opts, basename, extension, sail_dir, sail_dir, basename))
                 step('./{}.bin > {}.result 2> {}.err_result'.format(basename, basename, basename),
                      expected_status = 1 if basename.startswith('fail') else 0,
                      stderr_file='{}.err_result'.format(basename))
@@ -49,7 +69,7 @@ def test_c(name, c_opts, sail_opts, valgrind, compiler='cc'):
                 if valgrind and not basename.startswith('fail'):
                     step("valgrind --leak-check=full --track-origins=yes --errors-for-leak-kinds=all --error-exitcode=2 ./{}.bin".format(basename),
                          expected_status = 1 if basename.startswith('fail') else 0)
-                step('rm {}.c {}.bin {}.result'.format(basename, basename, basename))
+                step('rm {}.{} {}.bin {}.result'.format(basename, extension, basename, basename))
                 print_ok(filename)
                 sys.exit()
         results.collect(tests)
@@ -157,6 +177,7 @@ def test_coq(name):
     results.expect_failure("simple_while.sail", "Loop without termination measure")
     results.expect_failure("simple_while2.sail", "Loop without termination measure")
     results.expect_failure("simple_while3.sail", "Loop without termination measure")
+    results.expect_failure("struct.sail", "bug: codegen can't handle a struct with a field that has the same name as the struct")
     for filenames in chunks(os.listdir('.'), parallel()):
         tests = {}
         for filename in filenames:
@@ -199,8 +220,13 @@ if 'c' in targets:
     xml += test_c('address sanitised', '-O2 -fsanitize=address -g', '-O', False)
 
 if 'cpp' in targets:
+    # Compiling the C as if it was C++.
     xml += test_c('unoptimized C with C++ compiler', '-xc++', '', False, compiler='c++')
     xml += test_c('optimized C with C++ compiler', '-xc++ -O2', '-O', True, compiler='c++')
+
+    # Actual C++ output.
+    xml += test_c('unoptimized C++', '', '', False, compiler='c++', actually_cpp=True)
+    xml += test_c('optimized C++', '-O2', '-O', True, compiler='c++', actually_cpp=True)
 
 if 'interpreter' in targets:
     xml += test_interpreter('interpreter')
