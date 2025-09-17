@@ -23,7 +23,7 @@ function test_2() -> unit = {
 
 $c_in_main_post model_test();
 
-$iftarget c
+$iftarget c cpp
 
 function main() -> unit = {
   print_endline("ok");

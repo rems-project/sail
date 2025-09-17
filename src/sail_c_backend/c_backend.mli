@@ -107,6 +107,18 @@ module type CODEGEN_CONFIG = sig
   val assert_to_exception : bool
 
   val preserve_types : Ast_util.IdSet.t
+
+  (** If set generate a C++ class for the model instead of global C functions/variables. *)
+  val cpp : bool
+
+  (** Name of the C++ class. *)
+  val cpp_class_name : string
+
+  (* C++ namespace name. *)
+  val cpp_namespace : string
+
+  (* Optional classes/structs to derive from. *)
+  val cpp_derive_from : string option
 end
 
 module Codegen (Config : CODEGEN_CONFIG) : sig

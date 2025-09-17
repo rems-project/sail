@@ -11,6 +11,7 @@ val shiftl = pure "shiftl" : forall 'm. (bits('m), int) -> bits('m)
 val operator >> = pure {
   ocaml: "shiftr_ocaml",
   c: "shiftr_c",
+  cpp: "shiftr_c",
   lem: "shiftr_lem",
   _: "shiftr"
 } : forall 'm. (bits('m), int) -> bits('m)

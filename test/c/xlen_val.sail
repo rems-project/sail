@@ -16,7 +16,7 @@ $c_override {
 
 let xlen_val = sizeof(xlen)
 
-val test = { c: "test" } : int(32) -> int(64)
+val test = { c: "test", cpp: "test" } : int(32) -> int(64)
 
 function test(_) = 64
 

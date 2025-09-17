@@ -72,6 +72,7 @@ val string_append = pure {
   coq: "String.append",
   lean: "String.append",
   c: "concat_str",
+  cpp: "concat_str",
   _: "string_append"
 } : (string, string) -> string
 

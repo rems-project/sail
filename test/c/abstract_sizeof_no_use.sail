@@ -6,7 +6,7 @@ type xlen : Int
 
 constraint xlen in {32, 64}
 
-$iftarget c
+$iftarget c cpp
 $c_in_main sail_set_abstract_xlen(32);
 $else
 $option --instantiate xlen=32

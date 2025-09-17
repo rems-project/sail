@@ -6,14 +6,18 @@ val "print_bits" : forall 'n. (string, bitvector('n, dec)) -> unit
 struct test = {
   A : bitvector(4, dec),
   B : bitvector(2, dec),
+  // Same name as struct can cause issues without careful codegen.
+  test : bitvector(1, dec),
 }
 
 $[jib_debug]
 function main (() : unit) -> unit = {
-  x : test = struct { A = 0b1010, B = 0b11 };
+  x : test = struct { A = 0b1010, B = 0b11, test = 0b1 };
   x.A = 0b1000;
   print_bits("x.A = ", x.A);
   x.A = 0b1111;
   print_bits("x.A = ", x.A);
-  print_bits("(struct {A = 0b1111, B = 0b11} : test).B = ", (struct {A = 0b1111, B = 0b11} : test).B);
+  print_bits("(struct {A = 0b1111, B = 0b11, test = 0b1} : test).B = ",
+              (struct {A = 0b1111, B = 0b11, test = 0b1} : test).B);
+  print_bits("x.test = ", x.test);
 }

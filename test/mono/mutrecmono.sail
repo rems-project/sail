@@ -7,7 +7,8 @@ val UInt = pure {
   ocaml: "uint",
   lem: "uint",
   interpreter: "uint",
-  c: "sail_uint"
+  c: "sail_uint",
+  cpp: "sail_uint"
 } : forall 'n. bits('n) -> range(0, 2 ^ 'n - 1)
 
 

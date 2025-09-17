@@ -1,3 +1,4 @@
 x.A = 0x8
 x.A = 0xF
-(struct {A = 0b1111, B = 0b11} : test).B = 0b11
+(struct {A = 0b1111, B = 0b11, test = 0b1} : test).B = 0b11
+x.test = 0b1

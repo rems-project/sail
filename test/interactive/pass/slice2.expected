@@ -28,13 +28,13 @@ default Order dec
 
 
 
-val add_atom = pure {ocaml: "add_int", interpreter: "add_int", lem: "integerAdd", c: "add_int", coq: "Z.add"}: forall 'n 'm.
+val add_atom = pure {ocaml: "add_int", interpreter: "add_int", lem: "integerAdd", c: "add_int", cpp: "add_int", coq: "Z.add"}: forall 'n 'm.
   (int('n), int('m)) -> int('n + 'm)
 
 
 
 
-val mult_atom = pure {ocaml: "mult", interpreter: "mult", lem: "integerMult", c: "mult_int", coq: "Z.mul"}: forall 'n 'm.
+val mult_atom = pure {ocaml: "mult", interpreter: "mult", lem: "integerMult", c: "mult_int", cpp: "mult_int", coq: "Z.mul"}: forall 'n 'm.
   (int('n), int('m)) -> int('n * 'm)
 
 
@@ -44,7 +44,7 @@ val mult_atom = pure {ocaml: "mult", interpreter: "mult", lem: "integerMult", c:
 
 
 
-$sail_internal 
+$sail_internal
 
 
 
