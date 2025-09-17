@@ -1,70 +1,13 @@
 open Ast
 open AstInduction
 open Datatypes
-open FMapList
+open IdUtil
 open List0
 open ListDef
 open Nat
 open Specif
 open Value_type
 open Wf
-
-(** val id_eqb : id -> id -> bool **)
-
-let id_eqb id1 id2 =
-  let Id_aux (i1, _) = id1 in
-  (match i1 with
-   | Id s1 ->
-     let Id_aux (i2, _) = id2 in
-     (match i2 with
-      | Id s2 -> String.equal s1 s2
-      | _ -> false)
-   | Operator s1 ->
-     let Id_aux (i2, _) = id2 in
-     (match i2 with
-      | Operator s2 -> String.equal s1 s2
-      | _ -> false)
-   | _ -> false)
-
-module IdMiniOrdered =
- struct
-  type t = id
-
-  (** val compare : id -> id -> id OrderedType.coq_Compare **)
-
-  let compare x y =
-    let Id_aux (i, _) = x in
-    let Id_aux (i0, _) = y in
-    (match i with
-     | And_bool ->
-       (match i0 with
-        | And_bool -> OrderedType.EQ
-        | _ -> OrderedType.GT)
-     | Or_bool ->
-       (match i0 with
-        | And_bool -> OrderedType.LT
-        | Or_bool -> OrderedType.EQ
-        | _ -> OrderedType.GT)
-     | Id s ->
-       (match i0 with
-        | Id s0 ->
-          if (fun s1 s2 -> String.compare s1 s2 < 0) s s0
-          then OrderedType.LT
-          else if String.equal s s0 then OrderedType.EQ else OrderedType.GT
-        | _ -> OrderedType.LT)
-     | Operator s ->
-       (match i0 with
-        | Id _ -> OrderedType.GT
-        | Operator s0 ->
-          if (fun s1 s2 -> String.compare s1 s2 < 0) s s0
-          then OrderedType.LT
-          else if String.equal s s0 then OrderedType.EQ else OrderedType.GT
-        | _ -> OrderedType.LT))
- end
-
-module IdOrdered = OrderedType.MOT_to_OT(IdMiniOrdered)
-
-module IdMap = Raw(IdOrdered)
 
 type binding =
 | Complete of value
@@ -602,10 +545,9 @@ module Make =
        (match v with
         | V_vector vs -> same_bits (T.bits_of_bin_string s) vs
         | _ -> false)
-     | L_string s1 ->
-       (match v with
-        | V_string s2 -> String.equal s1 s2
-        | _ -> false)
+     | L_string s1 -> (match v with
+                       | V_string s2 -> (=) s1 s2
+                       | _ -> false)
      | L_undef -> false
      | L_real r1 ->
        (match v with
@@ -618,7 +560,7 @@ module Make =
   | [] -> V_unit
   | p :: rest_fields ->
     let (name', v) = p in
-    if String.equal name name' then v else get_struct_field name rest_fields
+    if (=) name name' then v else get_struct_field name rest_fields
 
   (** val no_match : bool * binding IdMap.t **)
 
@@ -805,9 +747,7 @@ module Make =
   | [] -> Monad.Runtime_type_error l
   | p :: fields0 ->
     let (name', v) = p in
-    if String.equal name name'
-    then Monad.pure v
-    else lookup_field l name fields0
+    if (=) name name' then Monad.pure v else lookup_field l name fields0
 
   (** val destructuring_assignment :
       T.tannot annot -> destructure -> value -> unit Monad.t **)
@@ -936,7 +876,7 @@ module Make =
   | [] -> []
   | p :: rest ->
     let (name', old_v) = p in
-    if String.equal name name'
+    if (=) name name'
     then (name, v) :: rest
     else (name', old_v) :: (update_field name v rest)
 
