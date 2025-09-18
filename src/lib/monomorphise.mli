@@ -56,12 +56,14 @@ type options = {
   continue_anyway : bool;
 }
 
+type split_loc = Line of string * int | Exact of Parse_ast.l | Arg of Ast.id
+
 val monomorphise :
   string ->
   (* Target backend *)
   Effects.side_effect_info ->
   options ->
-  ((string * int) * string) list ->
+  (split_loc * string) list ->
   (* List of splits from the command line *)
   Type_check.typed_ast ->
   Type_check.typed_ast

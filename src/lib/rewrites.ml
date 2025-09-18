@@ -4655,7 +4655,7 @@ let rewrite_toplevel_nexps env defs = if !opt_mono_complex_nexps then Monomorphi
 let rewrite_complete_record_params env defs =
   if !opt_mono_complex_nexps then Monomorphise.rewrite_complete_record_params env defs else defs
 
-let opt_mono_split = ref ([] : ((string * int) * string) list)
+let opt_mono_split = ref ([] : (Monomorphise.split_loc * string) list)
 let opt_dmono_analysis = ref 0
 let opt_auto_mono = ref false
 let opt_dall_split_errors = ref false

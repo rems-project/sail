@@ -62,7 +62,7 @@ let opt_mwords = ref false
 
 (* From the command line we take vague file/line locations, but from
    the analysis we can use exact locations. *)
-type split_loc = Line of string * int | Exact of Parse_ast.l
+type split_loc = Line of string * int | Exact of Parse_ast.l | Arg of id
 
 (* Returns the set of type variables that will appear in the Lem output,
    which may be smaller than those in the Sail type.  May need to be
@@ -829,10 +829,14 @@ let split_defs target all_errors (splits : split_req list) env ast =
       in
       aux
     in
-    let match_l l =
+    let match_l ?f l =
       let matches =
         List.filter
-          (function Exact l', _, _ -> l = l' | Line (filename, line), _, _ -> match_file_line filename line l)
+          (function
+            | Exact l', _, _ -> l = l'
+            | Line (filename, line), _, _ -> match_file_line filename line l
+            | Arg f', _, _ -> Option.fold ~none:false ~some:(fun f -> Id.compare f f' == 0) f
+            )
           ls
       in
       List.map (fun (_, var, optpats) -> (var, optpats)) matches
@@ -981,9 +985,11 @@ let split_defs target all_errors (splits : split_req list) env ast =
       spl p
     in
 
-    let map_pat_by_loc (P_aux (p, (l, _)) as pat) = match match_l l with [] -> None | vars -> split_pat vars pat in
-    let map_pat (P_aux (p, (l, tannot)) as pat) =
-      let try_by_location () = match map_pat_by_loc pat with Some l -> VarSplit l | None -> NoSplit in
+    let map_pat_by_loc ?f (P_aux (p, (l, _)) as pat) =
+      match match_l ?f l with [] -> None | vars -> split_pat vars pat
+    in
+    let map_pat ?f (P_aux (p, (l, tannot)) as pat) =
+      let try_by_location () = match map_pat_by_loc ?f pat with Some l -> VarSplit l | None -> NoSplit in
       match p with
       | P_app (id, args) -> begin
           match List.find (fun (id', _) -> Id.compare id id' = 0) refinements with
@@ -1123,10 +1129,10 @@ let split_defs target all_errors (splits : split_req list) env ast =
         | E_internal_return e -> re (E_internal_return (map_exp e))
         | E_internal_assume (nc, e) -> re (E_internal_assume (nc, map_exp e))
       and map_fexp (FE_aux (FE_fexp (id, e), annot)) = FE_aux (FE_fexp (id, map_exp e), annot)
-      and map_pexp = function
+      and map_pexp ?(f : id option) : tannot pexp -> tannot pexp list = function
         | Pat_aux (Pat_exp (p, e), l) -> (
             let nosplit = lazy [Pat_aux (Pat_exp (p, map_exp e), l)] in
-            match map_pat p with
+            match map_pat ?f p with
             | NoSplit -> Lazy.force nosplit
             | VarSplit patsubsts ->
                 if check_split_size patsubsts (pat_loc p) then
@@ -1201,9 +1207,9 @@ let split_defs target all_errors (splits : split_req list) env ast =
       let f, _, _ = map_fns r in
       f
     in
-    let map_pexp r =
-      let _, f, _ = map_fns r in
-      f
+    let map_pexp ?f r =
+      let _, f', _ = map_fns r in
+      f' ?f
     in
     let map_letbind r =
       let _, _, f = map_fns r in
@@ -1213,13 +1219,13 @@ let split_defs target all_errors (splits : split_req list) env ast =
       let ref_vars = Constant_propagation.referenced_vars exp in
       map_exp ref_vars exp
     in
-    let map_pexp top_pexp =
+    let map_pexp ?f top_pexp =
       (* Construct the set of referenced variables so that we don't accidentally
          make false assumptions about them during constant propagation.  Note that
          we assume there aren't any in the guard. *)
       let _, _, body, _ = destruct_pexp top_pexp in
       let ref_vars = Constant_propagation.referenced_vars body in
-      map_pexp ref_vars top_pexp
+      map_pexp ?f ref_vars top_pexp
     in
     let map_letbind (LB_aux (LB_val (_, e), _) as lb) =
       let ref_vars = Constant_propagation.referenced_vars e in
@@ -1227,7 +1233,7 @@ let split_defs target all_errors (splits : split_req list) env ast =
     in
 
     let map_funcl (FCL_aux (FCL_funcl (id, pexp), annot)) =
-      List.map (fun pexp -> FCL_aux (FCL_funcl (id, pexp), annot)) (map_pexp pexp)
+      List.map (fun pexp -> FCL_aux (FCL_funcl (id, pexp), annot)) (map_pexp ~f:id pexp)
     in
 
     let map_fundef (FD_aux (FD_function (r, t, fcls), annot)) =
@@ -4704,7 +4710,7 @@ let monomorphise target effect_info opts splits ast =
     )
     else (true, [], Analysis.ExtraSplits.empty)
   in
-  let splits = new_splits @ List.map (fun ((file, line), id) -> (Line (file, line), id, None)) splits in
+  let splits = new_splits @ List.map (fun (loc, id) -> (loc, id, None)) splits in
   let ok_extras, defs, extra_splits = add_extra_splits extra_splits ast.defs in
   let ast = { ast with defs } in
   let splits = splits @ extra_splits in
