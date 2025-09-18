@@ -341,9 +341,10 @@ let rec options =
           (fun s ->
             let l = Util.split_on_char ':' s in
             match l with
-            | [fname; line; var] ->
-                Rewrites.opt_mono_split := ((fname, int_of_string line), var) :: !Rewrites.opt_mono_split
-            | _ -> raise (Arg.Bad (s ^ " not of form <filename>:<line>:<variable>"))
+            | [fn; var] -> Rewrites.opt_mono_split := (Arg (Ast_util.mk_id fn), var) :: !Rewrites.opt_mono_split
+            | [filename; line; var] ->
+                Rewrites.opt_mono_split := (Line (filename, int_of_string line), var) :: !Rewrites.opt_mono_split
+            | _ -> raise (Arg.Bad (s ^ " not of form <filename>:<line>:<variable> or <function>:<variable>"))
           ),
         "<filename>:<line>:<variable> manually gives a case split for monomorphisation"
       );
