@@ -95,6 +95,8 @@ module Printer (Config : PRINT_CONFIG) : sig
   val doc_register : uannot dec_spec -> PPrint.document
 
   val doc_def : untyped_def -> PPrint.document
+
+  val doc_ast : untyped_ast -> PPrint.document
 end
 
 (** This function is intended to reformat machine-generated Sail into something a bit more readable, it is not intended
