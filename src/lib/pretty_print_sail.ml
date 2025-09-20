@@ -502,7 +502,8 @@ module Printer (Config : PRINT_CONFIG) = struct
         | Some (name, true), [x; y] -> doc_exp (E_aux (E_app (mk_operator name, [x; y]), (l, empty_uannot)))
         | Some (name, false), _ ->
             handle_setter (mk_id name) (lazy (doc_exp (E_aux (E_app (mk_id name, exps), (l, empty_uannot)))))
-        | None, [x; y] when Config.resugar && match id with Id_aux (Operator _, _) -> true | _ -> false ->
+        | None, [x; y]
+          when Config.resugar && match id with Id_aux ((Operator _ | And_bool | Or_bool), _) -> true | _ -> false ->
             doc_infix 0 exp
         | None, [v; n]
           when Config.resugar
@@ -571,7 +572,9 @@ module Printer (Config : PRINT_CONFIG) = struct
       when Config.resugar
            && (Id.compare id (mk_id "vector_subrange") = 0 || Id.compare id (mk_id "vector_subrange#") == 0) ->
         doc_atomic_exp v ^^ char '[' ^^ doc_exp n ^^ space ^^ string ".." ^^ space ^^ doc_exp m ^^ char ']'
-    | E_app (id, exps) -> doc_id id ^^ parens (separate_map (comma ^^ space) doc_exp exps)
+    | E_app ((Id_aux (Id _, _) as id), exps) -> doc_id id ^^ parens (separate_map (comma ^^ space) doc_exp exps)
+    | E_app (id, exps) when not Config.resugar -> doc_id id ^^ parens (separate_map (comma ^^ space) doc_exp exps)
+    | E_app (id, exps) when List.length exps != 2 -> doc_id id ^^ parens (separate_map (comma ^^ space) doc_exp exps)
     | E_constraint nc -> string "constraint" ^^ parens (doc_nc nc)
     | E_assert (exp1, E_aux (E_lit (L_aux (L_string "", _)), _)) -> string "assert" ^^ parens (doc_exp exp1)
     | E_assert (exp1, exp2) -> string "assert" ^^ parens (doc_exp exp1 ^^ comma ^^ space ^^ doc_exp exp2)
