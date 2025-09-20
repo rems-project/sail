@@ -357,6 +357,16 @@ module Printer (Config : PRINT_CONFIG) = struct
 
   type 'a vector_update = VU_single of 'a exp * 'a exp | VU_range of 'a exp * 'a exp * 'a exp
 
+  let rec get_vector_updates (E_aux (e_aux, _) as exp) =
+    match e_aux with
+    | E_app (id, [exp1; exp2; exp3]) when Id.compare id (mk_id "vector_update#") == 0 ->
+        let input, updates = get_vector_updates exp1 in
+        (input, updates @ [VU_single (exp2, exp3)])
+    | E_app (id, [exp1; exp2; exp3; exp4]) when Id.compare id (mk_id "vector_update_subrange#") == 0 ->
+        let input, updates = get_vector_updates exp1 in
+        (input, updates @ [VU_range (exp2, exp3, exp4)])
+    | _ -> (exp, [])
+
   let get_overloaded_info uannot =
     let open Util.Option_monad in
     match get_attribute "overloaded" uannot with
@@ -513,6 +523,12 @@ module Printer (Config : PRINT_CONFIG) = struct
           when Config.resugar
                && (Id.compare id (mk_id "vector_subrange") = 0 || Id.compare id (mk_id "vector_subrange#") == 0) ->
             doc_atomic_exp v ^^ char '[' ^^ doc_exp n ^^ space ^^ string ".." ^^ space ^^ doc_exp m ^^ char ']'
+        | None, _
+          when (Config.resugar && Id.compare id (mk_id "vector_update#") = 0)
+               || Id.compare id (mk_id "vector_update_subrange#") == 0 ->
+            let input, updates = get_vector_updates exp in
+            let updates_doc = separate_map (comma ^^ space) doc_vector_update updates in
+            brackets (separate space [doc_exp input; string "with"; updates_doc])
         | _, _ -> handle_setter id (lazy (doc_atomic_exp exp))
       end
     | _ -> doc_atomic_exp exp
