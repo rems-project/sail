@@ -563,6 +563,14 @@ module Printer (Config : PRINT_CONFIG) = struct
     | E_sizeof nexp -> string "sizeof" ^^ parens (doc_nexp nexp)
     (* Format a function with a unit argument as f() rather than f(()) *)
     | E_app (id, [E_aux (E_lit (L_aux (L_unit, _)), _)]) -> doc_id id ^^ string "()"
+    | E_app (id, [v; n])
+      when Config.resugar && (Id.compare id (mk_id "vector_access") = 0 || Id.compare id (mk_id "vector_access#") == 0)
+      ->
+        doc_atomic_exp v ^^ char '[' ^^ doc_exp n ^^ char ']'
+    | E_app (id, [v; n; m])
+      when Config.resugar
+           && (Id.compare id (mk_id "vector_subrange") = 0 || Id.compare id (mk_id "vector_subrange#") == 0) ->
+        doc_atomic_exp v ^^ char '[' ^^ doc_exp n ^^ space ^^ string ".." ^^ space ^^ doc_exp m ^^ char ']'
     | E_app (id, exps) -> doc_id id ^^ parens (separate_map (comma ^^ space) doc_exp exps)
     | E_constraint nc -> string "constraint" ^^ parens (doc_nc nc)
     | E_assert (exp1, E_aux (E_lit (L_aux (L_string "", _)), _)) -> string "assert" ^^ parens (doc_exp exp1)
