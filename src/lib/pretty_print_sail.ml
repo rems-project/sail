@@ -504,9 +504,13 @@ module Printer (Config : PRINT_CONFIG) = struct
             handle_setter (mk_id name) (lazy (doc_exp (E_aux (E_app (mk_id name, exps), (l, empty_uannot)))))
         | None, [x; y] when Config.resugar && match id with Id_aux (Operator _, _) -> true | _ -> false ->
             doc_infix 0 exp
-        | None, [v; n] when Config.resugar && Id.compare id (mk_id "vector_access") = 0 ->
+        | None, [v; n]
+          when Config.resugar
+               && (Id.compare id (mk_id "vector_access") = 0 || Id.compare id (mk_id "vector_access#") == 0) ->
             doc_atomic_exp v ^^ char '[' ^^ doc_exp n ^^ char ']'
-        | None, [v; n; m] when Config.resugar && Id.compare id (mk_id "vector_subrange") = 0 ->
+        | None, [v; n; m]
+          when Config.resugar
+               && (Id.compare id (mk_id "vector_subrange") = 0 || Id.compare id (mk_id "vector_subrange#") == 0) ->
             doc_atomic_exp v ^^ char '[' ^^ doc_exp n ^^ space ^^ string ".." ^^ space ^^ doc_exp m ^^ char ']'
         | _, _ -> handle_setter id (lazy (doc_atomic_exp exp))
       end
