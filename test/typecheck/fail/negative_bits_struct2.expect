@@ -14,4 +14,4 @@
  [91m |[0m  [91m |[0m [93mCaused by [0m[96mfail/negative_bits_struct2.sail[0m:6.8-12:
  [91m |[0m  [91m |[0m 6[96m |[0m    xs: bits(-3)
  [91m |[0m  [91m |[0m  [91m |[0m        [91m^--^[0m
- [91m |[0m  [91m |[0m  [91m |[0m Could not prove -3 >= 0 for type constructor bits
+ [91m |[0m  [91m |[0m  [91m |[0m Could not prove - 3 >= 0 for type constructor bits

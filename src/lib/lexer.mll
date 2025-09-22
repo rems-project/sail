@@ -128,6 +128,9 @@ let kw_table =
      ("termination_measure",     (fun _ -> TerminationMeasure));
      ("forwards",                (fun _ -> Forwards));
      ("backwards",               (fun _ -> Backwards));
+     ("from",                    (fun _ -> From));
+     ("to",                      (fun _ -> To));
+     ("downto",                  (fun _ -> Downto));
      ("internal_plet",           (fun _ -> InternalPLet));
      ("internal_return",         (fun _ -> InternalReturn));
      ("internal_assume",         (fun _ -> InternalAssume));
@@ -227,9 +230,7 @@ rule token comments = parse
                                             else
                                               Id i }
   | (digit+ as i1) "." (digit+ as i2)     { Real (i1 ^ "." ^ i2) }
-  | "-" (digit* as i1) "." (digit+ as i2) { Real ("-" ^ i1 ^ "." ^ i2) }
   | digit+ as i                           { Num (Big_int.of_string i) }
-  | "-" digit+ as i                       { Num (Big_int.of_string i) }
   | "0b" (binarydigit+ as i)              { Bin (Util.string_of_list "" (fun s -> s) (Util.split_on_char '_' i)) }
   | "0x" (hexdigit+ as i)                 { Hex (Util.string_of_list "" (fun s -> s) (Util.split_on_char '_' i)) }
   | '"'                                   { let startpos = Lexing.lexeme_start_p lexbuf in

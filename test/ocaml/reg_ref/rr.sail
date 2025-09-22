@@ -44,12 +44,12 @@ function slice_bits MkSlice(_, xs) = xs
 val vector_slice : forall 'n 'm 'o, 0 <= 'm <= 'o < 'n.
   (bits('n), atom('o), atom('m)) -> slice('m, 'o - ('m - 1))
 
-function vector_slice (v, to, from) = MkSlice(from, v[to .. from])
+function vector_slice (v, t, f) = MkSlice(f, v[t .. f])
 
 val slice_slice : forall 'n 'm 'o 'p, 0 <= 'p <= 'm <= 'o & 'o - 'p < 'n.
   (slice('p, 'n), atom('o), atom('m)) -> slice('m, 'o - ('m - 1))
 
-function slice_slice (MkSlice(start, v), to, from) = MkSlice(from, v[to - start .. from - start])
+function slice_slice (MkSlice(s, v), t, f) = MkSlice(f, v[t - s .. f - s])
 
 /* We can update a bitvector from another bitvector or a slice */
 val _set_slice : forall 'n 'm 'o, 0 <= 'm <= 'o < 'n.

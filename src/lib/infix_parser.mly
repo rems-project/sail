@@ -388,16 +388,19 @@ exp8:
   | exp8l Op8l exp9 { mk_exp (E_app_infix ($1, $2, $3)) $startpos $endpos }
   | exp9 Op8r exp8r { mk_exp (E_app_infix ($1, $2, $3)) $startpos $endpos }
   | TwoCaret exp9 { mk_exp (E_app (mk_id "pow2" $startpos($1) $endpos($1), [$2])) $startpos $endpos }
+  | Minus exp9 { mk_exp (E_app (mk_id "negate" $startpos($1) $endpos($1), [$2])) $startpos $endpos }
   | exp9 { $1 }
 exp8l:
   | exp9 Op8 exp9 { mk_exp (E_app_infix ($1, $2, $3)) $startpos $endpos }
   | exp8l Op8l exp9 { mk_exp (E_app_infix ($1, $2, $3)) $startpos $endpos }
   | TwoCaret exp9 { mk_exp (E_app (mk_id "pow2" $startpos($1) $endpos($1), [$2])) $startpos $endpos }
+  | Minus exp9 { mk_exp (E_app (mk_id "negate" $startpos($1) $endpos($1), [$2])) $startpos $endpos }
   | exp9 { $1 }
 exp8r:
   | exp9 Op8 exp9 { mk_exp (E_app_infix ($1, $2, $3)) $startpos $endpos }
   | exp9 Op8r exp8r { mk_exp (E_app_infix ($1, $2, $3)) $startpos $endpos }
   | TwoCaret exp9 { mk_exp (E_app (mk_id "pow2" $startpos($1) $endpos($1), [$2])) $startpos $endpos }
+  | Minus exp9 { mk_exp (E_app (mk_id "negate" $startpos($1) $endpos($1), [$2])) $startpos $endpos }
   | exp9 { $1 }
 
 exp9:
