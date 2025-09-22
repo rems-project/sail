@@ -242,6 +242,7 @@ module SailHandler : FILE_HANDLER = struct
   let process ~default_sail_dir ~target_name ~options ctx (filename, comments, defs) =
     let defs = Preprocess.preprocess default_sail_dir target_name options defs in
     let ast, ctx = Initial_check.process_ast ctx (Parse_ast.Defs [(Some filename, defs)]) in
+    if !opt_ddump_initial_ast then Pretty_print_sail.output_ast stdout ast;
     ({ ast with comments = [(filename, comments)] }, ctx)
 
   let check env ast = Type_error.check env ast
