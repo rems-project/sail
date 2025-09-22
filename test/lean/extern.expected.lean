@@ -200,7 +200,7 @@ def extern_add (_ : Unit) : Int :=
   (5 +i 4)
 
 def extern_sub (_ : Unit) : Int :=
-  (5 -i (-4))
+  (5 -i (Neg.neg 4))
 
 def extern_sub_nat (_ : Unit) : Nat :=
   (5 -i 4)
@@ -245,7 +245,7 @@ def extern_min (_ : Unit) : Int :=
   (Min.min 5 4)
 
 def extern_abs_int_plain (_ : Unit) : Int :=
-  let x : Int := (-5)
+  let x : Int := (Neg.neg 5)
   (Sail.Int.intAbs x)
 
 def extern_eq_unit (_ : Unit) : Bool :=

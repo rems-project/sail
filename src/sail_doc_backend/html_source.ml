@@ -90,7 +90,7 @@ let highlights ~filename ~contents =
     | Foreach | Function_ | Mapping | Overload | Throw | Try | Catch | If_ | In | Inc | Var | Ref | Pure | Impure
     | Monadic | Register | Return | Scattered | Sizeof | Constraint | Constant | Struct | Then | Typedef | Union
     | Newtype | With | Val | Outcome | Instantiation | Impl | Private | Repeat | Until | While | Do | Mutual | Config
-    | Configuration | TerminationMeasure | Forwards | Backwards | Let_ | Bitfield | When ->
+    | Configuration | TerminationMeasure | Forwards | Backwards | Let_ | Bitfield | When | To | Downto | From ->
         mark Highlight.Keyword;
         go ()
     | StructuredPragma _ | Pragma _ | Attribute _ | Fixity _ ->

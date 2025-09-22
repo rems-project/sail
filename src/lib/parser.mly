@@ -216,6 +216,7 @@ let set_syntax_deprecated l =
 %token Repeat Until While Do Mutual Var Ref Configuration TerminationMeasure Instantiation Impl Private
 %token InternalPLet InternalReturn InternalAssume
 %token Forwards Backwards
+%token From To Downto
 
 %nonassoc Then
 %nonassoc Else
@@ -527,7 +528,7 @@ pat_list:
 atomic_pat:
   | Under
     { mk_pat (P_wild) $startpos $endpos }
-  | lit
+  | negative_lit
     { mk_pat (P_lit $1) $startpos $endpos }
   | id
     { mk_pat (P_id $1) $startpos $endpos }
@@ -589,6 +590,12 @@ lit:
   | Real
     { mk_lit (L_real $1) $startpos $endpos }
 
+negative_lit:
+  | Minus Num
+    { mk_lit (L_num (Big_int.negate $2)) $startpos $endpos }
+  | lit
+    { $1 }
+
 exp_eof:
   | exp Eof
     { $1 }
@@ -599,6 +606,36 @@ internal_loop_measure:
     { mk_measure Measure_none $startpos $endpos }
   | TerminationMeasure Lcurly exp Rcurly
     { mk_measure (Measure_some $3) $startpos $endpos }
+
+%inline to_or_downto:
+  | To
+    { "to" }
+  | Downto
+    { "downto" }
+
+loop_exp:
+  | v=id; From; f=exp; To; t=exp; By; step=exp; In; order=typ
+    { (v, f, t, step, order ) }
+  | v=id; From; f=exp; ord=to_or_downto; t=exp; By; step=exp
+    { let order =
+        if ord = "to" then
+          ATyp_aux (ATyp_inc, loc $startpos(ord) $endpos(ord))
+        else
+          ATyp_aux (ATyp_dec, loc $startpos(ord) $endpos(ord))
+      in
+      (v, f, t, step, order)
+    }
+  | v=id; From; f=exp; ord=to_or_downto; t=exp
+    {
+      let step = mk_lit_exp (L_num (Big_int.of_int 1)) $startpos $endpos in
+      let order =
+        if ord = "to" then
+          ATyp_aux (ATyp_inc, loc $startpos(ord) $endpos(ord))
+        else
+          ATyp_aux (ATyp_dec, loc $startpos(ord) $endpos(ord))
+      in
+      (v, f, t, step, order)
+    }
 
 exp:
   | exp0
@@ -633,35 +670,9 @@ exp:
     { mk_exp (E_match ($2, $4)) $startpos $endpos }
   | Try exp Catch Lcurly case_list Rcurly
     { mk_exp (E_try ($2, $5)) $startpos $endpos }
-  | Foreach Lparen id Id atomic_exp Id atomic_exp By atomic_exp In typ Rparen exp
-    { if $4 <> "from" then
-       raise (Reporting.err_syntax_loc (loc $startpos $endpos) ("Missing \"from\" in foreach loop"));
-      if $6 <> "to" then
-       raise (Reporting.err_syntax_loc (loc $startpos $endpos) ("Missing \"to\" in foreach loop"));
-      mk_exp (E_for ($3, $5, $7, $9, $11, $13)) $startpos $endpos }
-  | Foreach Lparen id Id atomic_exp Id atomic_exp By atomic_exp Rparen exp
-    { if $4 <> "from" then
-       raise (Reporting.err_syntax_loc (loc $startpos $endpos) ("Missing \"from\" in foreach loop"));
-      if $6 <> "to" && $6 <> "downto" then
-       raise (Reporting.err_syntax_loc (loc $startpos $endpos) ("Missing \"to\" or \"downto\" in foreach loop"));
-      let order =
-        if $6 = "to"
-        then ATyp_aux(ATyp_inc,loc $startpos($6) $endpos($6))
-        else ATyp_aux(ATyp_dec,loc $startpos($6) $endpos($6))
-      in
-      mk_exp (E_for ($3, $5, $7, $9, order, $11)) $startpos $endpos }
-  | Foreach Lparen id Id atomic_exp Id atomic_exp Rparen exp
-    { if $4 <> "from" then
-       raise (Reporting.err_syntax_loc (loc $startpos $endpos) ("Missing \"from\" in foreach loop"));
-      if $6 <> "to" && $6 <> "downto" then
-       raise (Reporting.err_syntax_loc (loc $startpos $endpos) ("Missing \"to\" or \"downto\" in foreach loop"));
-      let step = mk_lit_exp (L_num (Big_int.of_int 1)) $startpos $endpos in
-      let ord =
-        if $6 = "to"
-        then ATyp_aux(ATyp_inc,loc $startpos($6) $endpos($6))
-        else ATyp_aux(ATyp_dec,loc $startpos($6) $endpos($6))
-      in
-      mk_exp (E_for ($3, $5, $7, step, ord, $9)) $startpos $endpos }
+  | Foreach Lparen loop_exp Rparen exp
+    { let (v, f, t, step, order) = $3 in
+      mk_exp (E_for (v, f, t, step, order, $5)) $startpos $endpos }
   | Repeat internal_loop_measure exp Until exp
     { mk_exp (E_loop (Until, $2, $5, $3)) $startpos $endpos }
   | While internal_loop_measure exp Do exp
@@ -1114,7 +1125,7 @@ mpat_list:
     { $1 :: $3 }
 
 atomic_mpat:
-  | lit
+  | negative_lit
     { mk_mpat (MP_lit $1) $startpos $endpos }
   | id
     { mk_mpat (MP_id $1) $startpos $endpos }
