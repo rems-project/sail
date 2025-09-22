@@ -23,7 +23,7 @@ jobs:
     steps:
     - uses: actions/checkout@v4
       with:
-        ref: ${{ github.event.workflow_run.head_branch }}
+        ref: ${{ github.event.workflow_run.head_sha }}
 
     - name: System dependencies
       run: |
@@ -97,7 +97,7 @@ jobs:
       run: |
         eval $(opam env)
         bisect-ppx-report html --coverage-path=. --ignore-missing-files
-        bisect-ppx-report summary --per-file --coverage-path=. --ignore-missing-files > coverage_summary.txt
+        bisect-ppx-report summary --per-file --coverage-path=. > coverage_summary.txt
 
     - name: Archive coverage
       uses: actions/upload-artifact@v4
