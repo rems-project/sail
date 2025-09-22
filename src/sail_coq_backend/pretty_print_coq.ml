@@ -2607,7 +2607,7 @@ let rec doc_range ctxt (BF_aux(r,_)) = match r with
 (* Setup code for record field update notations, either directly or
    using the coq-record-updates package. *)
 let doc_field_updates ctxt typq record_id fields =
-  let type_id_pp = doc_id ctxt record_id in
+  let type_id_pp = doc_id_type ctxt.global None record_id in
   let typq_pps = doc_typquant_items ctxt Env.empty braces typq in
   let match_parameters =
     match quant_kopts typq with [] -> empty | l -> space ^^ separate_map space (fun _ -> underscore) l

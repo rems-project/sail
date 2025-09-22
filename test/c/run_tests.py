@@ -177,7 +177,6 @@ def test_coq(name):
     results.expect_failure("simple_while.sail", "Loop without termination measure")
     results.expect_failure("simple_while2.sail", "Loop without termination measure")
     results.expect_failure("simple_while3.sail", "Loop without termination measure")
-    results.expect_failure("struct.sail", "bug: codegen can't handle a struct with a field that has the same name as the struct")
     for filenames in chunks(os.listdir('.'), parallel()):
         tests = {}
         for filename in filenames:
