@@ -1,6 +1,38 @@
 Changelog
 =========
 
+Sail 0.20.0
+-----------
+
+##### Rocq Semantics
+
+The core stepwise semantics of Sail that are currently used by the
+interactive REPL and during optimisation passes like constant-folding
+are now implemented in Rocq and extracted to OCaml.
+
+##### Improved C++ support
+
+New C++ `--cpp` backend that is a variant of the Sail C backend. It
+wraps the generated model in a struct, so when using C++ multiple
+instances can be created.
+PR: https://github.com/rems-project/sail/pull/1437
+
+As part of the above work, Sail always generates a separate header
+file for C or C++, meaning the `--c-generate-header` option is
+redundant and deprecated.
+
+The `--c-static` option has been removed.
+
+Small fixes to the parsing of `-` and foreach loops. Slightly breaking
+as `from`, `to`, and `downto` are now treated as proper keywords and
+cannot be used as identifiers.
+
+##### Other changes
+
+Arguments can now be passed via the `SAIL_FLAGS` environment variable,
+or via `SAIL_ENCODED_FLAGS`.
+PR: https://github.com/rems-project/sail/pull/1374
+
 Sail 0.19.1
 -----------
 
