@@ -1395,7 +1395,10 @@ let rewrite_ast_remove_numeral_pats env =
   in
   let exp_alg = { id_exp_alg with pat_aux } in
   let rewrite_exp _ = fold_exp exp_alg in
-  let rewrite_funcl (FCL_aux (FCL_funcl (id, pexp), annot)) = FCL_aux (FCL_funcl (id, fold_pexp exp_alg pexp), annot) in
+  let rewrite_funcl (FCL_aux (FCL_funcl (id, pexp), annot)) =
+    let () = reset_fresh_name_counter () in
+    FCL_aux (FCL_funcl (id, fold_pexp exp_alg pexp), annot)
+  in
   let rewrite_fun _ (FD_aux (FD_function (r_o, t_o, funcls), a)) =
     FD_aux (FD_function (r_o, t_o, List.map rewrite_funcl funcls), a)
   in
