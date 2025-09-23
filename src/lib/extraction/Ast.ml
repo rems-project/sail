@@ -20,7 +20,7 @@ module Coq_def_annot =
   type 'a record = { doc_comment : string option;
                      attrs : (Parse_ast.l * (string * attribute_data option))
                              list;
-                     visibility : visibility; loc : Parse_ast.l; env : 
+                     visibility : visibility; loc : Parse_ast.l; env :
                      'a }
  end
 
@@ -226,7 +226,7 @@ and 'a exp_aux =
 | E_ref of id
 | E_throw of 'a exp
 | E_try of 'a exp * 'a pexp list
-| E_assert of 'a exp * 'a exp
+| E_assert of 'a exp * 'a exp * 'a exp
 | E_var of 'a lexp * 'a exp * 'a exp
 | E_internal_plet of 'a pat * 'a exp * 'a exp
 | E_internal_return of 'a exp

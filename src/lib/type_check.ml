@@ -2425,7 +2425,7 @@ let rec check_exp env (E_aux (exp_aux, (l, uannot)) as exp : uannot exp) (Typ_au
       (* Propagate constraint assertions on the lhs of monadic binds to the rhs *)
       let inner_env =
         match bind_exp with
-        | E_aux (E_assert (constr_exp, _), _) -> begin
+        | E_aux (E_assert (constr_exp, _, _), _) -> begin
             match assert_constraint inner_env true constr_exp with
             | Some nc ->
                 typ_print (lazy ("Adding constraint " ^ string_of_n_constraint nc ^ " for assert"));
@@ -2636,9 +2636,10 @@ and check_block' f_p env exps ret_typ =
           in
           let _, exps = check_block' f_p env exps ret_typ in
           (s_p, annotated_exp :: exps)
-      | E_aux (E_assert (constr_exp, msg), (assert_l, _)), _ ->
+      | E_aux (E_assert (constr_exp, msg, loc), (assert_l, _)), _ ->
           let constr_exp = crule check_exp env constr_exp bool_typ in
           let checked_msg = crule check_exp env msg string_typ in
+          let checked_loc = crule check_exp env loc string_typ in
           let env, added_constraint =
             match assert_constraint env true constr_exp with
             | Some nc ->
@@ -2646,7 +2647,7 @@ and check_block' f_p env exps ret_typ =
                 (Env.add_constraint ~reason:(assert_l, "assertion") nc env, true)
             | None -> (env, false)
           in
-          let texp = annot_exp assert_l (E_assert (constr_exp, checked_msg)) unit_typ (Some unit_typ) in
+          let texp = annot_exp assert_l (E_assert (constr_exp, checked_msg, checked_loc)) unit_typ (Some unit_typ) in
           let _, checked_exps = check_block' f_p env exps ret_typ in
           (* If we can prove false, then any code after the assertion
              is dead. In this inconsistent typing environment we can
@@ -3892,10 +3893,11 @@ and infer_exp env (E_aux (exp_aux, (l, uannot)) as exp) =
       | Some (xs, elem_typ) -> annot_exp (E_list xs) (list_typ elem_typ)
       | None -> typ_error l "Could not infer type of list literal"
     end
-  | E_assert (test, msg) ->
+  | E_assert (test, msg, loc) ->
       let checked_test = crule check_exp env test bool_typ in
       let checked_msg = crule check_exp env msg string_typ in
-      annot_exp (E_assert (checked_test, checked_msg)) unit_typ
+      let checked_loc = crule check_exp env loc string_typ in
+      annot_exp (E_assert (checked_test, checked_msg, checked_loc)) unit_typ
   | E_internal_return exp ->
       let inferred_exp = irule infer_exp env exp in
       annot_exp (E_internal_return inferred_exp) (typ_of inferred_exp)
@@ -3914,7 +3916,7 @@ and infer_exp env (E_aux (exp_aux, (l, uannot)) as exp) =
       (* Propagate constraint assertions on the lhs of monadic binds to the rhs *)
       let inner_env =
         match bind_exp with
-        | E_aux (E_assert (constr_exp, _), _) -> begin
+        | E_aux (E_assert (constr_exp, _, _), _) -> begin
             match assert_constraint env true constr_exp with
             | Some nc ->
                 typ_print (lazy ("Adding constraint " ^ string_of_n_constraint nc ^ " for assert"));

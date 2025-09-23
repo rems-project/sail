@@ -592,8 +592,8 @@ module Printer (Config : PRINT_CONFIG) = struct
     | E_app (id, exps) when not Config.resugar -> doc_id id ^^ parens (separate_map (comma ^^ space) doc_exp exps)
     | E_app (id, exps) when List.length exps != 2 -> doc_id id ^^ parens (separate_map (comma ^^ space) doc_exp exps)
     | E_constraint nc -> string "constraint" ^^ parens (doc_nc nc)
-    | E_assert (exp1, E_aux (E_lit (L_aux (L_string "", _)), _)) -> string "assert" ^^ parens (doc_exp exp1)
-    | E_assert (exp1, exp2) -> string "assert" ^^ parens (doc_exp exp1 ^^ comma ^^ space ^^ doc_exp exp2)
+    | E_assert (exp1, E_aux (E_lit (L_aux (L_string "", _)), _), _) -> string "assert" ^^ parens (doc_exp exp1)
+    | E_assert (exp1, exp2, _) -> string "assert" ^^ parens (doc_exp exp1 ^^ comma ^^ space ^^ doc_exp exp2)
     | E_exit exp -> string "exit" ^^ parens (doc_exp exp)
     | E_vector exps -> brackets (separate_map (comma ^^ space) doc_exp exps)
     | E_internal_value v ->

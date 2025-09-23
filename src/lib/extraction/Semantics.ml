@@ -420,8 +420,8 @@ module Make =
      | E_try (head_exp, arms) ->
        E_aux ((E_try ((substitute n v head_exp),
          (map (substitute_arm n v) arms))), annot0)
-     | E_assert (x0, msg) ->
-       E_aux ((E_assert ((substitute n v x0), (substitute n v msg))), annot0)
+     | E_assert (x0, msg, loc) ->
+       E_aux ((E_assert ((substitute n v x0), (substitute n v msg), (substitute n v loc))), annot0)
      | E_var (l, x0, body) ->
        E_aux ((E_var ((substitute_lexp n v l), (substitute n v x0),
          (substitute n v body))), annot0)
@@ -1052,8 +1052,8 @@ module Make =
                then wrap (E_block xs0)
                else Monad.bind (step0 x0) (fun x' ->
                       wrap (E_block (x' :: xs0)))
-             | E_assert (e0, e1) ->
-               let x0 = E_aux ((E_assert (e0, e1)), annot1) in
+             | E_assert (e0, e1, e2) ->
+               let x0 = E_aux ((E_assert (e0, e1, e2)), annot1) in
                if is_value x0
                then wrap (E_block xs0)
                else Monad.bind (step0 x0) (fun x' ->
@@ -1441,7 +1441,7 @@ module Make =
               | Monad.Caught exn ->
                 wrap (E_match ((E_aux ((E_internal_value exn), annot0)),
                   (app arms (T.fallthrough :: []))))))
-       | E_assert (x, msg) ->
+       | E_assert (x, msg, loc) ->
          Monad.bind (get_bool x) (fun b ->
            match b with
            | Evaluated b0 ->
@@ -1453,9 +1453,9 @@ module Make =
                  else Monad.Assertion_failed s0
                | Unevaluated ->
                  Monad.bind (step0 msg) (fun msg' ->
-                   wrap (E_assert (x, msg'))))
+                   wrap (E_assert (x, msg', loc))))
            | Unevaluated ->
-             Monad.bind (step0 x) (fun x' -> wrap (E_assert (x', msg))))
+             Monad.bind (step0 x) (fun x' -> wrap (E_assert (x', msg, loc))))
        | E_var (l, x, body) ->
          wrap (E_block ((E_aux ((E_assign (l, x)), annot0)) :: (body :: [])))
        | E_internal_plet (_, _, _) -> Monad.Runtime_type_error (fst annot0)

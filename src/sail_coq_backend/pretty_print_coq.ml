@@ -1644,7 +1644,8 @@ let doc_exp, doc_let =
                             E_aux
                               ( E_assert
                                   ( E_aux (E_lit (L_aux (L_true, _)), _),
-                                    E_aux (E_lit (L_aux (L_string "loop dummy assert", _)), _)
+                                    E_aux (E_lit (L_aux (L_string "loop dummy assert", _)), _),
+                                    E_aux (E_lit (L_aux (L_string "loop dummy location", _)), _)
                                   ),
                                 _
                               ),
@@ -2171,7 +2172,7 @@ let doc_exp, doc_let =
         let epp = liftR (separate space [string "throw"; expY e]) in
         if aexp_needed then parens (align epp) else align epp
     | E_exit e -> liftR (separate space [string "exit"; expY e])
-    | E_assert (e1, e2) ->
+    | E_assert (e1, e2, _e3) ->
         let epp = liftR (separate space [string "assert_exp"; expY e1; expY e2]) in
         if aexp_needed then parens (align epp) else align epp
     | E_var (lexp, eq_exp, in_exp) -> raise (report l __POS__ "E_vars should have been removed before pretty-printing")
@@ -2183,7 +2184,7 @@ let doc_exp, doc_let =
         let outer_env = env_of_annot (l, annot) in
         let new_ctxt = merge_new_tyvars ctxt outer_env pat (env_of e2) in
         match (pat, e1, e2) with
-        | (P_aux (P_wild, _) | P_aux (P_typ (_, P_aux (P_wild, _)), _)), E_aux (E_assert (assert_e1, assert_e2), _), _
+        | (P_aux (P_wild, _) | P_aux (P_typ (_, P_aux (P_wild, _)), _)), E_aux (E_assert (assert_e1, assert_e2, _assert_e3), _), _
           ->
             let assert_fn, mid =
               match assert_constraint outer_env true assert_e1 with

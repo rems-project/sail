@@ -159,7 +159,7 @@ type ( 'a,
   e_throw : 'exp -> 'exp_aux;
   e_config : string list -> 'exp_aux;
   e_return : 'exp -> 'exp_aux;
-  e_assert : 'exp * 'exp -> 'exp_aux;
+  e_assert : 'exp * 'exp * 'exp -> 'exp_aux;
   e_var : 'lexp * 'exp * 'exp -> 'exp_aux;
   e_internal_plet : 'pat * 'exp * 'exp -> 'exp_aux;
   e_internal_return : 'exp -> 'exp_aux;

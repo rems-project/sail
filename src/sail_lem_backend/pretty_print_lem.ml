@@ -1104,7 +1104,7 @@ let doc_exp_lem, doc_let_lem =
         else raise (Reporting.err_todo l "Warning: try-block around pure expression")
     | E_throw e -> align (liftR (separate space [string "throw"; expY e]))
     | E_exit e -> liftR (separate space [string "exit"; expY e])
-    | E_assert (e1, e2) -> align (liftR (separate space [string "assert_exp"; expY e1; expY e2]))
+    | E_assert (e1, e2, e3) -> align (liftR (separate space [string "assert_exp"; expY e1; expY e2; expY e3]))
     | E_var (lexp, eq_exp, in_exp) -> raise (report l __POS__ "E_vars should have been removed before pretty-printing")
     | E_internal_plet (pat, e1, e2) ->
         let bind, bind_unit = if ctxt.monadic then (">>=", ">>") else (">>$=", ">>$") in

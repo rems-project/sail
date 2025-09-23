@@ -740,7 +740,7 @@ and doc_loop l as_monadic ctx loop_kind args =
             ( P_aux ((P_wild | P_typ (_, P_aux (P_wild, _))), _),
               E_aux
                 ( E_assert
-                    (E_aux (E_lit (L_aux (L_true, _)), _), E_aux (E_lit (L_aux (L_string "loop dummy assert", _)), _)),
+                    (E_aux (E_lit (L_aux (L_true, _)), _), E_aux (E_lit (L_aux (L_string "loop dummy assert", _)), _), E_aux (E_lit (L_aux (L_string "loop dummy location", _)), _)),
                   _
                 ),
               body'
@@ -1040,7 +1040,7 @@ and doc_exp (as_monadic : bool) ctx (E_aux (e, (l, annot)) as full_exp) =
         ^^ space
         ^^ parens (string "fun the_exception => " ^^ hardline ^^ cases)
         )
-  | E_assert (e1, e2) -> string "assert " ^^ d_of_arg ctx e1 ^^ space ^^ d_of_arg ctx e2
+  | E_assert (e1, e2, e3) -> string "assert " ^^ d_of_arg ctx e1 ^^ space ^^ d_of_arg ctx e2 ^^ space ^^ d_of_arg ctx e3
   | E_list es -> brackets (separate_map comma_sp (doc_exp as_monadic ctx) es)
   | E_cons (hd_e, tl_e) -> parens (separate space [doc_exp false ctx hd_e; string "::"; doc_exp false ctx tl_e])
   | _ -> failwith ("Expression " ^ string_of_exp_con full_exp ^ " " ^ string_of_exp full_exp ^ " not translatable yet.")

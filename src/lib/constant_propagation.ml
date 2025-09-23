@@ -568,9 +568,9 @@ let const_props target env ast =
       | E_return e ->
           let e', _ = const_prop_exp substs assigns e in
           re (E_return e') Bindings.empty
-      | E_assert (e1, e2) ->
-          let e1', e2', assigns = non_det_exp_2 e1 e2 in
-          re (E_assert (e1', e2')) assigns
+      | E_assert (e1, e2, e3) ->
+          let e1', e2', e3', assigns = non_det_exp_3 e1 e2 e3 in
+          re (E_assert (e1', e2', e3')) assigns
       | E_internal_assume (nc, e) ->
           let e', _ = const_prop_exp substs assigns e in
           re (E_internal_assume (nc, e')) assigns
