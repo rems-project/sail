@@ -122,12 +122,15 @@ type ctx = {
   locals : (mut * ctyp) NameMap.t;
   registers : ctyp Bindings.t;
   letbinds : int list;
-  letbind_ids : NameSet.t;
+  letbind_ctyps : ctyp Bindings.t;
   no_raw : bool;
   no_static : bool;
   coverage_override : bool;
   def_annot : unit def_annot option;
 }
+
+let letbind_ids ctx =
+  List.fold_left (fun ids (id, _) -> NameSet.add (name id) ids) NameSet.empty (Bindings.bindings ctx.letbind_ctyps)
 
 let ctx_map_ctyps f ctx =
   {
@@ -184,7 +187,7 @@ let initial_ctx ?for_target env effect_info =
     locals = NameMap.empty;
     registers = Bindings.empty;
     letbinds = [];
-    letbind_ids = NameSet.empty;
+    letbind_ctyps = Bindings.empty;
     no_raw = false;
     no_static = false;
     coverage_override = true;
@@ -406,7 +409,11 @@ module Make (C : CONFIG) = struct
     | None -> (
         match id with
         | Name (id, _) -> (
-            match Bindings.find_opt id ctx.registers with Some ctyp -> Some (Mutable, ctyp) | None -> None
+            match Bindings.find_opt id ctx.registers with
+            | Some ctyp -> Some (Mutable, ctyp)
+            | None -> (
+                match Bindings.find_opt id ctx.letbind_ctyps with Some ctyp -> Some (Immutable, ctyp) | None -> None
+              )
           )
         | _ -> None
       )
@@ -2179,7 +2186,7 @@ module Make (C : CONFIG) = struct
         ctx compiled_args arg_ctyps
     in
 
-    let known_ids = IdSet.fold (fun id -> NameSet.add (name id)) (pat_ids pat) ctx.letbind_ids in
+    let known_ids = IdSet.fold (fun id -> NameSet.add (name id)) (pat_ids pat) (letbind_ids ctx) in
     let guard_bindings = ref NameSet.empty in
     let guard_instrs =
       match guard with
@@ -2316,7 +2323,7 @@ module Make (C : CONFIG) = struct
         )
     | DEF_register (DEC_aux (DEC_reg (typ, id, Some exp), _)) ->
         let ctyp = ctyp_of_typ ctx typ in
-        let aexp = C.optimize_anf ctx (no_shadow ctx.letbind_ids (anf exp)) in
+        let aexp = C.optimize_anf ctx (no_shadow (letbind_ids ctx) (anf exp)) in
         let setup, call, cleanup = compile_aexp ctx aexp in
         let instrs = setup @ [call (CL_id (name id, ctyp))] @ cleanup in
         let instrs = unique_names instrs in
@@ -2360,7 +2367,7 @@ module Make (C : CONFIG) = struct
         (List.map (fun tdef -> CDEF_aux (CDEF_type tdef, def_annot)) (Option.to_list tdef_opt), ctx)
     | DEF_let (LB_aux (LB_val (pat, exp), _)) ->
         let ctyp = ctyp_of_typ ctx (typ_of_pat pat) in
-        let aexp = C.optimize_anf ctx (no_shadow ctx.letbind_ids (anf exp)) in
+        let aexp = C.optimize_anf ctx (no_shadow (letbind_ids ctx) (anf exp)) in
         let setup, call, cleanup = compile_aexp ctx aexp in
         let apat = anf_pat ~global:true pat in
         let gs = ngensym () in
@@ -2383,7 +2390,7 @@ module Make (C : CONFIG) = struct
           {
             ctx with
             letbinds = n :: ctx.letbinds;
-            letbind_ids = IdSet.fold (fun id -> NameSet.add (name id)) (pat_ids pat) ctx.letbind_ids;
+            letbind_ctyps = List.fold_left (fun ids (id, ctyp) -> Bindings.add id ctyp ids) ctx.letbind_ctyps bindings;
           }
         )
     (* Only DEF_default that matters is default Order, but all order

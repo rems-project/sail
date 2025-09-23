@@ -328,20 +328,27 @@ end) : CONFIG = struct
         match lvar with
         | Local (_, typ) ->
             let ctyp = convert_typ ctx typ in
-            if is_stack_ctyp ctx ctyp && not (never_optimize ctyp) then begin
-              try
-                (* We need to check that id's type hasn't changed due to flow typing *)
-                let _, ctyp' = NameMap.find id ctx.locals in
-                if ctyp_equal ctyp ctyp' then AV_cval (V_id (id, ctyp), typ)
-                else
-                  (* id's type changed due to flow typing, so it's
-                     really still heap allocated! *)
-                  v
-              with
-              (* Hack: Assuming global letbindings don't change from flow typing... *)
-              | Not_found ->
-                AV_cval (V_id (id, ctyp), typ)
-            end
+            if is_stack_ctyp ctx ctyp && not (never_optimize ctyp) then (
+              (* We need to check that id's type hasn't changed due to flow typing *)
+              match NameMap.find_opt id ctx.locals with
+              | Some (_, ctyp') ->
+                  if ctyp_equal ctyp ctyp' then AV_cval (V_id (id, ctyp), typ)
+                  else
+                    (* id's type changed due to flow typing, so it's
+                      really still heap allocated! *)
+                    v
+              | None -> (
+                  (* We need to take special care around global
+                     letbindings, to not refine their types. *)
+                  match id with
+                  | Name (id', _) -> (
+                      match Bindings.find_opt id' ctx.letbind_ctyps with
+                      | Some ctyp' -> if ctyp_equal ctyp ctyp' then AV_cval (V_id (id, ctyp), typ) else v
+                      | None -> AV_cval (V_id (id, ctyp), typ)
+                    )
+                  | _ -> AV_cval (V_id (id, ctyp), typ)
+                )
+            )
             else v
         | Register typ ->
             let ctyp = convert_typ ctx typ in
