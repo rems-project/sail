@@ -47,6 +47,7 @@ def test_c(name, c_opts, sail_opts, valgrind, compiler='cc', actually_cpp=False)
         # but for C++ it needs to go in `model_main()` and be `model.sail_set_abstract_xlen(32)`.
         results.expect_failure("abstract_sizeof_no_use.sail", "difficult to call model.sail_set_abstract_... in the right place")
         results.expect_failure("abstract_type.sail", "difficult to call model.sail_set_abstract_... in the right place")
+        results.expect_failure("tl_let_flow_change.sail", "difficult to call model.sail_set_abstract_... in the right place")
 
     else:
         extension = "c"

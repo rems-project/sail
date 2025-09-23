@@ -88,7 +88,7 @@ type ctx = {
   locals : (mut * ctyp) NameMap.t;
   registers : ctyp Bindings.t;
   letbinds : int list;
-  letbind_ids : NameSet.t;
+  letbind_ctyps : ctyp Bindings.t;
   no_raw : bool;
   no_static : bool;
   coverage_override : bool;
