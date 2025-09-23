@@ -1206,7 +1206,8 @@ module Make (C : CONFIG) = struct
         let str = string_of_id id in
         if str = "sail_assert" && C.assert_to_exception then (
           match args with
-          | [cond; msg] ->
+          | [cond; msg; _loc] ->
+              (* TODO: Should we include the location in the assertion message? *)
               let cond_setup, cond_cval, cond_cleanup = compile_aval l ctx cond in
               let msg_setup, msg_cval, _ = compile_aval l ctx msg in
               let exn_setup, exn_cval = assert_exception l msg_cval in

@@ -16,11 +16,14 @@ void sail_match_failure(const_sail_string msg)
   exit(EXIT_FAILURE);
 }
 
-unit sail_assert(bool b, const_sail_string msg)
+unit sail_assert(bool b, const_sail_string msg, const_sail_string loc)
 {
   if (b) return UNIT;
-  fprintf(stderr, "Assertion failed: %s\n", msg);
-  exit(EXIT_FAILURE);
+  if (msg[0] == '\0') {
+    fprintf(stderr, "Assertion failed at %s\n", loc);
+  } else {
+    fprintf(stderr, "Assertion failed at %s: %s\n", loc, msg);
+  }  exit(EXIT_FAILURE);
 }
 
 unit sail_exit(unit u)
@@ -244,7 +247,7 @@ bool write_ram(const sail_int addr_size,     // Either 32 or 64
       // Then shift buf 8 bits right.
       mpz_fdiv_q_2exp(write_buf, write_buf, 8);
     }
-    
+
     return true;
   }
 }
@@ -253,7 +256,7 @@ sbits fast_read_ram(const int64_t data_size,
 		    const uint64_t addr)
 {
   uint64_t r = 0;
-  
+
   uint64_t byte;
   for(uint64_t i = (uint64_t) data_size; i > 0; --i) {
     byte = read_mem(addr + (i - 1));

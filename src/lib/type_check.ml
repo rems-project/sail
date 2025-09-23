@@ -1974,13 +1974,6 @@ let irule r env exp =
     let bt = Printexc.get_raw_backtrace () in
     Printexc.raise_with_backtrace (Type_error (l, err)) bt
 
-(* This function adds useful assertion messages to asserts missing them *)
-let assert_msg = function
-  | E_aux (E_lit (L_aux (L_string "", _)), (l, _)) ->
-      let open Reporting in
-      locate (fun _ -> l) (mk_lit_exp (L_string (short_loc_to_string l)))
-  | msg -> msg
-
 let strip_exp exp = map_exp_annot (fun (l, tannot) -> (l, untyped_annot tannot)) exp
 let strip_pat pat = map_pat_annot (fun (l, tannot) -> (l, untyped_annot tannot)) pat
 let strip_pexp pexp = map_pexp_annot (fun (l, tannot) -> (l, untyped_annot tannot)) pexp
@@ -2644,7 +2637,6 @@ and check_block' f_p env exps ret_typ =
           let _, exps = check_block' f_p env exps ret_typ in
           (s_p, annotated_exp :: exps)
       | E_aux (E_assert (constr_exp, msg), (assert_l, _)), _ ->
-          let msg = assert_msg msg in
           let constr_exp = crule check_exp env constr_exp bool_typ in
           let checked_msg = crule check_exp env msg string_typ in
           let env, added_constraint =
@@ -3901,7 +3893,6 @@ and infer_exp env (E_aux (exp_aux, (l, uannot)) as exp) =
       | None -> typ_error l "Could not infer type of list literal"
     end
   | E_assert (test, msg) ->
-      let msg = assert_msg msg in
       let checked_test = crule check_exp env test bool_typ in
       let checked_msg = crule check_exp env msg string_typ in
       annot_exp (E_assert (checked_test, checked_msg)) unit_typ

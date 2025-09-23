@@ -132,7 +132,7 @@ and sv_statement_aux =
   | SVS_case of { head_exp : smt_exp; cases : (smt_exp * sv_statement) list; fallthrough : sv_statement option }
   | SVS_if of smt_exp * sv_statement option * sv_statement option
   | SVS_block of sv_statement list
-  | SVS_assert of Jib.name * smt_exp * smt_exp
+  | SVS_assert of Jib.name * (* condition *) smt_exp * (* message *) smt_exp * (* location string *) smt_exp
   | SVS_foreach of sv_name * smt_exp * sv_statement
   | SVS_for of sv_for * sv_statement
   | SVS_raw of string * Jib.name list * Jib.name list

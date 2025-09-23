@@ -25,7 +25,9 @@ function automatic sail_unit sail_prerr(sail_unit s);
    return SAIL_UNIT;
 endfunction // sail_prerr
 
-function automatic sail_unit sail_assert(bit b, sail_unit msg);
+// TODO: Is this actually used? It looks like asserts actually get written to
+// if (not condition) then $fatal(msg);
+function automatic sail_unit sail_assert(bit b, sail_unit loc, sail_unit msg);
    return SAIL_UNIT;
 endfunction // sail_assert
 
@@ -55,9 +57,9 @@ function automatic sail_unit sail_prerr(string s);
    return SAIL_UNIT;
 endfunction // sail_prerr
 
-function automatic sail_unit sail_assert(bit b, string msg);
+function automatic sail_unit sail_assert(bit b, string loc, string msg);
    if (!b) begin
-      $display("%s", msg);
+      $error("Assertion failed at %s: %s", loc, msg);
    end;
    return SAIL_UNIT;
 endfunction // sail_assert

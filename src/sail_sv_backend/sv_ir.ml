@@ -136,7 +136,7 @@ and sv_statement_aux =
   | SVS_case of { head_exp : smt_exp; cases : (smt_exp * sv_statement) list; fallthrough : sv_statement option }
   | SVS_if of smt_exp * sv_statement option * sv_statement option
   | SVS_block of sv_statement list
-  | SVS_assert of Jib.name * smt_exp * smt_exp
+  | SVS_assert of Jib.name * smt_exp * smt_exp * smt_exp
   | SVS_foreach of sv_name * smt_exp * sv_statement
   | SVS_for of sv_for * sv_statement
   | SVS_raw of string * Jib.name list * Jib.name list
@@ -285,10 +285,10 @@ let rec visit_sv_statement (vis : svir_visitor) outer_statement =
         let fallthrough' = map_no_copy_opt (visit_sv_statement vis) fallthrough in
         if head_exp == head_exp' && cases == cases' && fallthrough == fallthrough' then no_change
         else SVS_aux (SVS_case { head_exp = head_exp'; cases = cases'; fallthrough = fallthrough' }, l)
-    | SVS_assert (name, cond, msg) ->
+    | SVS_assert (name, cond, msg, loc) ->
         let cond' = visit_smt_exp vis cond in
         let msg' = visit_smt_exp vis msg in
-        if cond == cond' && msg == msg' then no_change else SVS_aux (SVS_assert (name, cond', msg'), l)
+        if cond == cond' && msg == msg' then no_change else SVS_aux (SVS_assert (name, cond', msg', loc), l)
     | SVS_foreach (i, exp, stmt) ->
         let exp' = visit_smt_exp vis exp in
         let stmt' = visit_sv_statement vis stmt in
