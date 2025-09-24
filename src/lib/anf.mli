@@ -165,7 +165,7 @@ val is_pure_case : Effects.side_effect_info -> 'a apat * 'a aexp * 'a aexp * uan
 (** Remove all variable shadowing in an ANF expression *)
 val no_shadow : NameSet.t -> 'a aexp -> 'a aexp
 
-val apat_globals : 'a apat -> (id * 'a) list
+val apat_globals : 'a apat -> (id * Env.t * 'a) list
 val apat_types : 'a apat -> 'a NameMap.t
 
 (** Returns true if an ANF expression is dead due to flow typing implying it is unreachable. Note: This function calls

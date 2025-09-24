@@ -641,10 +641,10 @@ let rec anf_pat ?(global = false) (P_aux (p_aux, (l, tannot)) as pat) =
       mk_apat (AP_struct (List.map (fun (field, pat) -> (field, anf_pat ~global pat)) fpats, typ_of_pat pat))
   | _ -> Reporting.unreachable l __POS__ ("Could not convert pattern to ANF: " ^ string_of_pat pat) [@coverage off]
 
-let rec apat_globals (AP_aux (aux, _)) =
+let rec apat_globals (AP_aux (aux, { env; _ })) =
   match aux with
   | AP_nil _ | AP_wild _ | AP_id _ -> []
-  | AP_global (id, typ) -> [(id, typ)]
+  | AP_global (id, typ) -> [(id, env, typ)]
   | AP_tuple apats -> List.concat (List.map apat_globals apats)
   | AP_app (_, apat, _) -> apat_globals apat
   | AP_cons (hd_apat, tl_apat) -> apat_globals hd_apat @ apat_globals tl_apat
