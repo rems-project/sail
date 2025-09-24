@@ -210,13 +210,9 @@ let fallthrough =
 
 type return_value = Semantics.return_value
 
-let is_interpreter_extern id env =
-  let open Type_check in
-  Env.is_extern id env "interpreter"
+let is_interpreter_extern id env = Type_check.Env.is_extern id env "interpreter"
 
-let get_interpreter_extern id env =
-  let open Type_check in
-  Env.get_extern id env "interpreter"
+let get_interpreter_extern id env = Type_check.Env.get_extern id env "interpreter"
 
 let complete_value = function
   | ((v1, n1), m1) :: partial_values ->

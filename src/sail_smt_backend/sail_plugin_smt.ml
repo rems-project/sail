@@ -134,7 +134,7 @@ let smt_rewrites =
     ("properties", []);
   ]
 
-let smt_target out_file { ast; effect_info; env; _ } =
+let smt_target out_file { ast; effect_info; env = orig_env; _ } =
   let open Ast_util in
   let properties = Property.find_properties ast in
   let prop_ids = Bindings.bindings properties |> List.map fst |> IdSet.of_list in
@@ -142,10 +142,10 @@ let smt_target out_file { ast; effect_info; env; _ } =
   Specialize.add_initial_calls prop_ids;
   let ast_smt, env, effect_info =
     if !opt_smt_specialize then (
-      let ast_smt, env, effect_info = Specialize.(specialize typ_specialization env ast effect_info) in
+      let ast_smt, env, effect_info = Specialize.(specialize typ_specialization orig_env ast effect_info) in
       Specialize.(specialize_passes 2 int_specialization_with_externs env ast_smt effect_info)
     )
-    else (ast, env, effect_info)
+    else (ast, orig_env, effect_info)
   in
   let name_file =
     match out_file with Some f -> fun str -> f ^ "_" ^ str ^ ".smt2" | None -> fun str -> str ^ ".smt2"
@@ -169,8 +169,8 @@ let smt_target out_file { ast; effect_info; env; _ } =
     let unsats =
       List.map
         (fun ({ loc; file_name; function_id; args; arg_ctyps; arg_smt_names } : SMTGen.generated_smt_info) ->
-          ( Counterexample.check ~loc ~ctx ~env:ctx.tc_env ~ast ~solver:!opt_smt_auto_solver ~file_name ~function_id
-              ~args ~arg_ctyps ~arg_smt_names,
+          ( Counterexample.check ~loc ~ctx ~env:orig_env ~ast ~solver:!opt_smt_auto_solver ~file_name ~function_id ~args
+              ~arg_ctyps ~arg_smt_names,
             function_id
           )
         )
