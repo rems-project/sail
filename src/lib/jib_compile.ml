@@ -2314,7 +2314,7 @@ module Make (C : CONFIG) = struct
   and compile_def' n total ctx (DEF_aux (aux, def_annot) as def) =
     let def_env = def_annot.env in
     let def_annot = strip_def_annot def_annot in
-    let ctx = { ctx with def_annot = Some def_annot } in
+    let ctx = { ctx with local_env = def_env; def_annot = Some def_annot } in
     match aux with
     | DEF_register (DEC_aux (DEC_reg (typ, id, None), _)) ->
         let ctyp = ctyp_of_typ ctx typ in
@@ -2366,6 +2366,7 @@ module Make (C : CONFIG) = struct
         let tdef_opt, ctx = compile_type_def ctx type_def in
         (List.map (fun tdef -> CDEF_aux (CDEF_type tdef, def_annot)) (Option.to_list tdef_opt), ctx)
     | DEF_let (LB_aux (LB_val (pat, exp), _)) ->
+        let debug_attr = get_def_attribute "jib_debug" def_annot in
         let ctyp = ctyp_of_typ ctx (typ_of_pat pat) in
         let aexp = C.optimize_anf ctx (no_shadow (letbind_ids ctx) (anf exp)) in
         let setup, call, cleanup = compile_aexp ctx aexp in
@@ -2376,7 +2377,9 @@ module Make (C : CONFIG) = struct
           compile_match ctx apat (V_id (gs, ctyp)) (fun l b -> ijump l b end_label)
         in
         let gs_setup, gs_cleanup = ([idecl (exp_loc exp) ctyp gs], [iclear ctyp gs]) in
-        let bindings = List.map (fun (id, typ) -> (id, ctyp_of_typ ctx typ)) (apat_globals apat) in
+        let bindings =
+          List.map (fun (id, env, typ) -> (id, ctyp_of_typ { ctx with local_env = env } typ)) (apat_globals apat)
+        in
         let n = !letdef_count in
         incr letdef_count;
         let instrs =
@@ -2386,6 +2389,12 @@ module Make (C : CONFIG) = struct
           @ [ilabel end_label]
         in
         let instrs = unique_names instrs in
+        if Option.is_some debug_attr then (
+          prerr_endline Util.("IR for letbind " ^ string_of_int n |> yellow |> bold |> clear);
+          prerr_endline
+            (Util.string_of_list ", " (fun (id, ctyp) -> string_of_id id ^ " : " ^ string_of_ctyp ctyp) bindings);
+          List.iter (fun instr -> prerr_endline (string_of_instr instr)) instrs
+        );
         ( [CDEF_aux (CDEF_let (n, bindings, instrs), def_annot)],
           {
             ctx with
@@ -2969,6 +2978,32 @@ module Make (C : CONFIG) = struct
       cdefs
     |> List.concat
 
+  let is_def_constraint = function DEF_aux (DEF_constraint _, _) -> true | _ -> false
+
+  let first_env final_env = function [] -> final_env | DEF_aux (_, def_annot) :: _ -> def_annot.env
+
+  (* This function helps optimise abstract types in the following way,
+     if we see:
+
+     {@sail[
+       type x = ...
+       constraint ...
+       constraint ...
+     ]}
+
+     Then we move the typing environment from after the final
+     constraint up to the [type], ensuring we pick the most optimised
+     representation for that type declaration we safely can. *)
+  let rec move_constraint_contexts final_env acc = function
+    | DEF_aux (DEF_type tdef, def_annot) :: defs ->
+        let constraints, rest = Util.take_drop is_def_constraint defs in
+        let env = first_env final_env rest in
+        move_constraint_contexts final_env
+          (List.rev constraints @ [DEF_aux (DEF_type tdef, { def_annot with env })] @ acc)
+          rest
+    | def :: defs -> move_constraint_contexts final_env (def :: acc) defs
+    | [] -> List.rev acc
+
   let compile_ast ctx ast =
     let module G = Graph.Make (Callgraph.Node) in
     let g = Callgraph.graph_of_ast ast in
@@ -3008,7 +3043,8 @@ module Make (C : CONFIG) = struct
           let defs, ctx = compile_def n total ctx def in
           (n + 1, defs :: chunks, ctx)
         )
-        (1, [], ctx) ast.defs
+        (1, [], ctx)
+        (move_constraint_contexts ctx.tc_env [] ast.defs)
     in
     let cdefs = List.concat (List.rev chunks) in
 
