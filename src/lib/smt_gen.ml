@@ -1052,9 +1052,13 @@ module Make (Config : CONFIG) (Primop_gen : PRIMOP_GEN) = struct
 
   let builtin_vector_subrange vec i j ret_ctyp =
     match (cval_ctyp vec, cval_ctyp i, cval_ctyp j, ret_ctyp) with
-    | CT_fbits n, CT_constant i, CT_constant j, CT_fbits _ ->
-        let* vec = smt_cval vec in
-        return (Extract (Big_int.to_int i, Big_int.to_int j, n, vec))
+    | CT_fbits n, CT_constant i, CT_constant j, CT_fbits m ->
+        if m <= n then
+          let* vec = smt_cval vec in
+          return (Extract (Big_int.to_int i, Big_int.to_int j, n, vec))
+        else
+          (* We need this nonsensical case due to flow typing *)
+          return (bvzero m)
     | CT_lbits, CT_constant i, CT_constant j, CT_fbits _ ->
         let* vec = smt_cval vec in
         return (Extract (Big_int.to_int i, Big_int.to_int j, lbits_size, Fn ("contents", [vec])))

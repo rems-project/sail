@@ -1609,8 +1609,7 @@ let get_register id env =
 
 let get_registers env = filter_items env env.global.registers
 
-let is_extern id env backend =
-  try not (Ast_util.extern_assoc backend (Bindings.find_opt id env.global.externs) = None) with Not_found -> false
+let is_extern id env backend = Option.is_some (Ast_util.extern_assoc backend (Bindings.find_opt id env.global.externs))
 
 let add_extern id ext env =
   update_global (fun global -> { global with externs = Bindings.add id ext global.externs }) env
