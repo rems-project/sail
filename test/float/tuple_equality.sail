@@ -13,7 +13,7 @@ $define _FLOAT_TUPLE_EQUALITY
 $include <float/common.sail>
 
 /* Floating point related tuple implementations for test */
-val      bool_and_flags_eq : (fp_bool_and_flags, fp_bool_and_flags) -> bool
+val      bool_and_flags_eq : ((bool, fp_exception_flags), (bool, fp_exception_flags)) -> bool
 function bool_and_flags_eq ((bool_0, flags_0), (bool_1, flags_1)) = {
   let is_eq = (bool_0 == bool_1) & (flags_0 == flags_1);
 
