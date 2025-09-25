@@ -15,8 +15,8 @@ $include <float/zero.sail>
 $include <float/nan.sail>
 $include <float/rounding.sail>
 
-val      float_is_lt_internal : fp_bits_x2 -> bool
-function float_is_lt_internal ((op_0, op_1)) = {
+val      float_is_lt_internal : forall 'n, is_fp_bits('n) . (bits('n), bits('n)) -> bool
+function float_is_lt_internal (op_0, op_1) = {
   let fp_0 = float_decompose (op_0);
   let fp_1 = float_decompose (op_1);
 
@@ -35,29 +35,29 @@ function float_is_lt_internal ((op_0, op_1)) = {
   is_lt;
 }
 
-val      float_is_eq_internal : fp_bits_x2 -> bool
-function float_is_eq_internal ((op_0, op_1)) = {
+val      float_is_eq_internal : forall 'n, is_fp_bits('n) . (bits('n), bits('n)) -> bool
+function float_is_eq_internal (op_0, op_1) = {
   let is_zero = float_is_zero (op_0) & float_is_zero (op_1);
   let is_eq   = (op_0 == op_1) | is_zero;
 
   is_eq;
 }
 
-val      float_is_ne_internal : fp_bits_x2 -> bool
-function float_is_ne_internal ((op_0, op_1))
-  = not (float_is_eq_internal ((op_0, op_1)))
+val      float_is_ne_internal : forall 'n, is_fp_bits('n) . (bits('n), bits('n)) -> bool
+function float_is_ne_internal (op_0, op_1)
+  = not (float_is_eq_internal (op_0, op_1))
 
-val      float_is_le_internal : fp_bits_x2 -> bool
-function float_is_le_internal ((op_0, op_1))
-  = float_is_eq_internal ((op_0, op_1)) | float_is_lt_internal ((op_0, op_1))
+val      float_is_le_internal : forall 'n, is_fp_bits('n) . (bits('n), bits('n)) -> bool
+function float_is_le_internal (op_0, op_1)
+  = float_is_eq_internal (op_0, op_1) | float_is_lt_internal (op_0, op_1)
 
-val      float_is_gt_internal : fp_bits_x2 -> bool
-function float_is_gt_internal ((op_0, op_1))
-  = not (float_is_le_internal ((op_0, op_1)))
+val      float_is_gt_internal : forall 'n, is_fp_bits('n) . (bits('n), bits('n)) -> bool
+function float_is_gt_internal (op_0, op_1)
+  = not (float_is_le_internal (op_0, op_1))
 
-val      float_is_ge_internal : fp_bits_x2 -> bool
-function float_is_ge_internal ((op_0, op_1))
-  = not (float_is_lt_internal ((op_0, op_1)))
+val      float_is_ge_internal : forall 'n, is_fp_bits('n) . (bits('n), bits('n)) -> bool
+function float_is_ge_internal (op_0, op_1)
+  = not (float_is_lt_internal (op_0, op_1))
 
 val      float_propagate_nan : forall 'n, 'n in {16, 32, 64, 128}.
   (bits('n), bits('n)) -> (bits('n), fp_exception_flags)

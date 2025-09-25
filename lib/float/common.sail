@@ -13,9 +13,10 @@ $define _FLOAT_COMMON
 /* Floating point types definition */
 type fp_exception_flags = bits(5) /* Floating-point exception flags. */
 type fp_rounding_modes = bits(5) /* Floating-point rounding modes. */
-type fp_bits = { 'n, 'n in {16, 32, 64, 128}. bits('n) } /* Floating-point in bits. */
-type fp_bits_x2 = { 'n, 'n in {16, 32, 64, 128}. (bits('n), bits('n)) } /* Floating point x2 tuple */
-type fp_bool_and_flags = (bool, fp_exception_flags) /* Floating point bool and exception flags tuple */
+// Floating point in bits.
+type fp_bits = {8, 16, 32, 64, 128}
+// Type alias for use in `forall`s.
+type is_fp_bits('n) -> Bool = 'n in {8, 16, 32, 64, 128}
 
 /* Floating point constants */
 let fp_eflag_none           : fp_exception_flags = 0b00000
