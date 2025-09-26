@@ -70,7 +70,7 @@ def test_c(name, c_opts, sail_opts, valgrind, compiler='cc', actually_cpp=False)
                 if valgrind and not basename.startswith('fail'):
                     step("valgrind --leak-check=full --track-origins=yes --errors-for-leak-kinds=all --error-exitcode=2 ./{}.bin".format(basename),
                          expected_status = 1 if basename.startswith('fail') else 0)
-                step('rm {}.{} {}.bin {}.result'.format(basename, extension, basename, basename))
+                step('rm {}.{} {}.h {}.bin {}.result'.format(basename, extension, basename, basename, basename))
                 print_ok(filename)
                 sys.exit()
         results.collect(tests)
