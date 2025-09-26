@@ -194,6 +194,7 @@
   (%{workspace_root}/lib/float/ge_quiet.sail as lib/float/ge_quiet.sail)
   (%{workspace_root}/lib/float/add.sail as lib/float/add.sail)
   (%{workspace_root}/lib/float/rounding.sail as lib/float/rounding.sail)
+  (%{workspace_root}/lib/float/classify.sail as lib/float/classify.sail)
   (%{workspace_root}/lib/float/interface.sail as lib/float/interface.sail)
   (%{workspace_root}/lib/reverse_endianness.sail
    as
