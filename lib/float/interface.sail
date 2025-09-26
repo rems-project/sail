@@ -26,5 +26,6 @@ $include <float/gt.sail>
 $include <float/gt_quiet.sail>
 $include <float/ge.sail>
 $include <float/ge_quiet.sail>
+$include <float/classify.sail>
 
 $endif
