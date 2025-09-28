@@ -69,8 +69,9 @@ module type Config = sig
 end
 
 module Make (C : Config) : sig
-  val is_complete_wildcarded : ?keyword:string -> Parse_ast.l -> ctx -> C.t pexp list -> typ -> C.t pexp list option
+  val is_complete_wildcarded :
+    ?keyword:string -> ?remove_redundant:bool -> Parse_ast.l -> ctx -> C.t pexp list -> typ -> C.t pexp list option
   val is_complete_funcls_wildcarded :
-    ?keyword:string -> Parse_ast.l -> ctx -> C.t funcl list -> typ -> C.t funcl list option
+    ?keyword:string -> ?remove_redundant:bool -> Parse_ast.l -> ctx -> C.t funcl list -> typ -> C.t funcl list option
   val is_complete : ?keyword:string -> Parse_ast.l -> ctx -> C.t pexp list -> typ -> bool
 end

@@ -162,6 +162,7 @@ let coq_rewrites =
        introduce new wildcard clauses *)
     ("recheck_defs", []);
     ("make_cases_exhaustive", []);
+    ("remove_redundant_pats", []);
     (* merge funcls before adding the measure argument so that it doesn't
        disappear into an internal pattern match *)
     ("merge_function_clauses", []);
