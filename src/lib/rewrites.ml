@@ -3886,7 +3886,7 @@ module MakeExhaustive = struct
             in
 
             let l = Parse_ast.Generated Parse_ast.Unknown in
-            let p = P_aux (P_wild, (l, empty_tannot)) in
+            let p = P_aux (P_wild, (l, mk_tannot env (typ_of e1))) in
             let l_ann = mk_tannot env unit_typ in
             let ann' = mk_tannot env (typ_of_annot ann) in
             (* TODO: use an expression that specifically indicates a failed pattern match *)
@@ -3906,7 +3906,7 @@ module MakeExhaustive = struct
                 Reporting.print_err (fst ann) "Non-exhaustive let" ("Example: " ^ string_of_rp example)
             in
             let l = Parse_ast.Generated Parse_ast.Unknown in
-            let p = P_aux (P_wild, (l, empty_tannot)) in
+            let p = P_aux (P_wild, (l, mk_tannot env (typ_of e1))) in
             let l_ann = mk_tannot env unit_typ in
             let ann' = mk_tannot env (typ_of_annot ann) in
             (* TODO: use an expression that specifically indicates a failed pattern match *)
@@ -3939,10 +3939,11 @@ module MakeExhaustive = struct
         in
 
         let l = Parse_ast.Generated Parse_ast.Unknown in
-        let p = P_aux (P_wild, (l, empty_tannot)) in
-        let ann' = mk_tannot env (typ_of_tannot (snd fcl_ann)) in
+        let arg_ty, ret_ty, env' = bind_funcl_arg_typ l env (typ_of_tannot (snd fcl_ann)) in
+        let p = P_aux (P_wild, (l, mk_tannot env' arg_ty)) in
+        let ret_ann = mk_tannot env ret_ty in
         (* TODO: use an expression that specifically indicates a failed pattern match *)
-        let b = E_aux (E_exit (E_aux (E_lit (L_aux (L_unit, l)), (l, empty_tannot))), (l, ann')) in
+        let b = E_aux (E_exit (E_aux (E_lit (L_aux (L_unit, l)), (l, empty_tannot))), (l, ret_ann)) in
         let default = FCL_aux (FCL_funcl (id, Pat_aux (Pat_exp (p, b), (l, empty_tannot))), fcl_ann) in
 
         FD_aux (FD_function (r, t, fcls' @ [default]), f_ann)
@@ -3974,6 +3975,46 @@ module MakeExhaustive = struct
     in
     (ast', effect_info', env)
 end
+
+(* Remove redundant patterns because Rocq doesn't like them.  Assumes that all
+   patterns are exhaustive (e.g., by the above rewrite) so that the pattern
+   completeness checker will always work. *)
+let remove_redundant_pats _env ast =
+  let remove_redundant l env pexps typ =
+    let ctx =
+      {
+        Pattern_completeness.abstract = Env.get_abstract_typs env;
+        Pattern_completeness.variants = Env.get_variants env;
+        Pattern_completeness.structs = Env.get_records env;
+        Pattern_completeness.enums = Env.get_enums env;
+        Pattern_completeness.is_open = (fun id -> Env.is_scattered_open id env);
+        Pattern_completeness.constraints = Env.get_constraints env;
+        Pattern_completeness.is_mapping = (fun id -> Env.is_mapping id env);
+      }
+    in
+    match PC.is_complete_wildcarded ~remove_redundant:true l ctx pexps typ with
+    | Some r -> r
+    | None ->
+        Reporting.unreachable l __POS__
+          ("Redundant pattern removal failed due to incomplete patterns:\n"
+          ^ String.concat "\n" (List.map string_of_pexp pexps)
+          )
+  in
+  let rw_exp rws (E_aux (e, (l, ann)) as exp) =
+    match e with
+    | E_match (e1, pexps) ->
+        let e1 = rewrite_exp rws e1 in
+        let pexps = List.map (rewrite_pexp rws) pexps in
+        let pexps = remove_redundant l (env_of_annot (l, ann)) pexps (typ_of e1) in
+        E_aux (E_match (e1, pexps), (l, ann))
+    | E_try (e1, pexps) ->
+        let e1 = rewrite_exp rws e1 in
+        let pexps = List.map (rewrite_pexp rws) pexps in
+        let pexps = remove_redundant l (env_of_annot (l, ann)) pexps exc_typ in
+        E_aux (E_try (e1, pexps), (l, ann))
+    | _ -> exp
+  in
+  rewrite_ast_base { rewriters_base with rewrite_exp = rw_exp } ast
 
 (* Splitting a function (e.g., an execute function on an AST) can produce
    new functions that appear to be recursive but are not.  This checks to
@@ -4798,6 +4839,7 @@ let all_rewriters =
     ("remove_impossible_int_cases", basic_rewriter Constant_propagation.remove_impossible_int_cases);
     ("const_prop_mutrec", String_rewriter (fun target -> base_rewriter (Constant_propagation_mutrec.rewrite_ast target)));
     ("make_cases_exhaustive", base_rewriter MakeExhaustive.rewrite);
+    ("remove_redundant_pats", basic_rewriter remove_redundant_pats);
     ("undefined", Bool_rewriter (fun b -> basic_rewriter (rewrite_undefined_if_gen b)));
     ("vector_string_pats_to_bit_list", basic_rewriter rewrite_ast_vector_string_pats_to_bit_list);
     ("remove_not_pats", basic_rewriter rewrite_ast_not_pats);

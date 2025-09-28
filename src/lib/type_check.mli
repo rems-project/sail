@@ -376,6 +376,9 @@ val bind_pat : Env.t -> uannot pat -> typ -> tannot pat * Env.t * uannot Ast.exp
     be safe to use on patterns that have previously been type checked. *)
 val bind_pat_no_guard : Env.t -> uannot pat -> typ -> tannot pat * Env.t
 
+(** Extract the argument and return types for a function clause *)
+val bind_funcl_arg_typ : Parse_ast.l -> Env.t -> typ -> typ * typ * Env.t
+
 val tc_assume : n_constraint -> tannot exp -> tannot exp
 
 (** {2 Destructuring type annotations}
