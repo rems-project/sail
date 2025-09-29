@@ -29,10 +29,10 @@ let fp16_neg_inf         = 0xfc00
 let fp16_pos_zero        = 0x0000
 let fp16_neg_zero        = 0x8000
 
-let fp16_pos_denormal_0  = 0x0200
-let fp16_pos_denormal_1  = 0x02f0
-let fp16_neg_denormal_0  = 0x8200
-let fp16_neg_denormal_1  = 0x82f0
+let fp16_pos_subnormal_0  = 0x0200
+let fp16_pos_subnormal_1  = 0x02f0
+let fp16_neg_subnormal_0  = 0x8200
+let fp16_neg_subnormal_1  = 0x82f0
 
 let fp16_pos_normal_0    = 0x7a00
 let fp16_pos_normal_1    = 0x71ff
@@ -119,21 +119,21 @@ let fp16_neg_normal_add_13_sum_rdn  = 0xfb81
 let fp16_neg_normal_add_13_sum_rup  = 0xfb80
 let fp16_neg_normal_add_13_sum_rtz  = 0xfb80
 
-let fp16_pos_denormal_add_0_op_0 = 0x00ff
-let fp16_pos_denormal_add_0_op_1 = 0x0021
-let fp16_pos_denormal_add_0_sum  = 0x0120
+let fp16_pos_subnormal_add_0_op_0 = 0x00ff
+let fp16_pos_subnormal_add_0_op_1 = 0x0021
+let fp16_pos_subnormal_add_0_sum  = 0x0120
 
-let fp16_pos_denormal_add_1_op_0 = 0x03ff
-let fp16_pos_denormal_add_1_op_1 = 0x0002
-let fp16_pos_denormal_add_1_sum  = 0x0401
+let fp16_pos_subnormal_add_1_op_0 = 0x03ff
+let fp16_pos_subnormal_add_1_op_1 = 0x0002
+let fp16_pos_subnormal_add_1_sum  = 0x0401
 
-let fp16_neg_denormal_add_0_op_0 = 0x80ff
-let fp16_neg_denormal_add_0_op_1 = 0x8021
-let fp16_neg_denormal_add_0_sum  = 0x8120
+let fp16_neg_subnormal_add_0_op_0 = 0x80ff
+let fp16_neg_subnormal_add_0_op_1 = 0x8021
+let fp16_neg_subnormal_add_0_sum  = 0x8120
 
-let fp16_neg_denormal_add_1_op_0 = 0x83ff
-let fp16_neg_denormal_add_1_op_1 = 0x8002
-let fp16_neg_denormal_add_1_sum  = 0x8401
+let fp16_neg_subnormal_add_1_op_0 = 0x83ff
+let fp16_neg_subnormal_add_1_op_1 = 0x8002
+let fp16_neg_subnormal_add_1_sum  = 0x8401
 
 let fp16_pos_diff_exp_add_0_op_0 = 0x7b23
 let fp16_pos_diff_exp_add_0_op_1 = 0x7cf1
@@ -170,10 +170,10 @@ let fp32_neg_inf         = 0xff800000
 let fp32_pos_zero        = 0x00000000
 let fp32_neg_zero        = 0x80000000
 
-let fp32_pos_denormal_0  = 0x00700000
-let fp32_pos_denormal_1  = 0x0010ff01
-let fp32_neg_denormal_0  = 0x80700000
-let fp32_neg_denormal_1  = 0x8010ff01
+let fp32_pos_subnormal_0  = 0x00700000
+let fp32_pos_subnormal_1  = 0x0010ff01
+let fp32_neg_subnormal_0  = 0x80700000
+let fp32_neg_subnormal_1  = 0x8010ff01
 
 let fp32_pos_normal_0    = 0x1a000000
 let fp32_pos_normal_1    = 0x0100002f
@@ -260,21 +260,21 @@ let fp32_neg_normal_add_13_sum_rdn  = 0xff7ff878
 let fp32_neg_normal_add_13_sum_rup  = 0xff7ff877
 let fp32_neg_normal_add_13_sum_rtz  = 0xff7ff877
 
-let fp32_pos_denormal_add_0_op_0 = 0x000fffff
-let fp32_pos_denormal_add_0_op_1 = 0x00000021
-let fp32_pos_denormal_add_0_sum  = 0x00100020
+let fp32_pos_subnormal_add_0_op_0 = 0x000fffff
+let fp32_pos_subnormal_add_0_op_1 = 0x00000021
+let fp32_pos_subnormal_add_0_sum  = 0x00100020
 
-let fp32_pos_denormal_add_1_op_0 = 0x007fffff
-let fp32_pos_denormal_add_1_op_1 = 0x00000002
-let fp32_pos_denormal_add_1_sum  = 0x00800001
+let fp32_pos_subnormal_add_1_op_0 = 0x007fffff
+let fp32_pos_subnormal_add_1_op_1 = 0x00000002
+let fp32_pos_subnormal_add_1_sum  = 0x00800001
 
-let fp32_neg_denormal_add_0_op_0 = 0x800fffff
-let fp32_neg_denormal_add_0_op_1 = 0x80000021
-let fp32_neg_denormal_add_0_sum  = 0x80100020
+let fp32_neg_subnormal_add_0_op_0 = 0x800fffff
+let fp32_neg_subnormal_add_0_op_1 = 0x80000021
+let fp32_neg_subnormal_add_0_sum  = 0x80100020
 
-let fp32_neg_denormal_add_1_op_0 = 0x807fffff
-let fp32_neg_denormal_add_1_op_1 = 0x80000002
-let fp32_neg_denormal_add_1_sum  = 0x80800001
+let fp32_neg_subnormal_add_1_op_0 = 0x807fffff
+let fp32_neg_subnormal_add_1_op_1 = 0x80000002
+let fp32_neg_subnormal_add_1_sum  = 0x80800001
 
 let fp32_pos_diff_exp_add_0_op_0 = 0x7c01293d
 let fp32_pos_diff_exp_add_0_op_1 = 0x7f8f0001
@@ -311,10 +311,10 @@ let fp64_neg_inf         = 0xfff0000000000000
 let fp64_pos_zero        = 0x0000000000000000
 let fp64_neg_zero        = 0x8000000000000000
 
-let fp64_pos_denormal_0  = 0x000f000000000000
-let fp64_pos_denormal_1  = 0x0000000fff000000
-let fp64_neg_denormal_0  = 0x800f000000000000
-let fp64_neg_denormal_1  = 0x8000000fff000000
+let fp64_pos_subnormal_0  = 0x000f000000000000
+let fp64_pos_subnormal_1  = 0x0000000fff000000
+let fp64_neg_subnormal_0  = 0x800f000000000000
+let fp64_neg_subnormal_1  = 0x8000000fff000000
 
 let fp64_pos_normal_0    = 0x1000000000000000
 let fp64_pos_normal_1    = 0x0100001111000000
@@ -401,21 +401,21 @@ let fp64_neg_normal_add_13_sum_rdn  = 0xffe00107fffffffe
 let fp64_neg_normal_add_13_sum_rup  = 0xffe00107fffffffd
 let fp64_neg_normal_add_13_sum_rtz  = 0xffe00107fffffffd
 
-let fp64_pos_denormal_add_0_op_0 = 0x0000ffffffffffff
-let fp64_pos_denormal_add_0_op_1 = 0x0000000000000041
-let fp64_pos_denormal_add_0_sum  = 0x0001000000000040
+let fp64_pos_subnormal_add_0_op_0 = 0x0000ffffffffffff
+let fp64_pos_subnormal_add_0_op_1 = 0x0000000000000041
+let fp64_pos_subnormal_add_0_sum  = 0x0001000000000040
 
-let fp64_pos_denormal_add_1_op_0 = 0x000fffffffffffff
-let fp64_pos_denormal_add_1_op_1 = 0x0000000000000002
-let fp64_pos_denormal_add_1_sum  = 0x0010000000000001
+let fp64_pos_subnormal_add_1_op_0 = 0x000fffffffffffff
+let fp64_pos_subnormal_add_1_op_1 = 0x0000000000000002
+let fp64_pos_subnormal_add_1_sum  = 0x0010000000000001
 
-let fp64_neg_denormal_add_0_op_0 = 0x8000ffffffffffff
-let fp64_neg_denormal_add_0_op_1 = 0x8000000000000041
-let fp64_neg_denormal_add_0_sum  = 0x8001000000000040
+let fp64_neg_subnormal_add_0_op_0 = 0x8000ffffffffffff
+let fp64_neg_subnormal_add_0_op_1 = 0x8000000000000041
+let fp64_neg_subnormal_add_0_sum  = 0x8001000000000040
 
-let fp64_neg_denormal_add_1_op_0 = 0x800fffffffffffff
-let fp64_neg_denormal_add_1_op_1 = 0x8000000000000002
-let fp64_neg_denormal_add_1_sum  = 0x8010000000000001
+let fp64_neg_subnormal_add_1_op_0 = 0x800fffffffffffff
+let fp64_neg_subnormal_add_1_op_1 = 0x8000000000000002
+let fp64_neg_subnormal_add_1_sum  = 0x8010000000000001
 
 let fp64_pos_diff_exp_add_0_op_0 = 0x7c0abe312d21293d
 let fp64_pos_diff_exp_add_0_op_1 = 0x7ff7700000000001
@@ -452,10 +452,10 @@ let fp128_neg_inf        = 0xffff0000000000000000000000000000
 let fp128_pos_zero       = 0x00000000000000000000000000000000
 let fp128_neg_zero       = 0x80000000000000000000000000000000
 
-let fp128_pos_denormal_0 = 0x0000f000000000000000000000000000
-let fp128_pos_denormal_1 = 0x0000000fff0000000000000000000000
-let fp128_neg_denormal_0 = 0x8000f000000000000000000000000000
-let fp128_neg_denormal_1 = 0x8000000fff0000000000000000000000
+let fp128_pos_subnormal_0 = 0x0000f000000000000000000000000000
+let fp128_pos_subnormal_1 = 0x0000000fff0000000000000000000000
+let fp128_neg_subnormal_0 = 0x8000f000000000000000000000000000
+let fp128_neg_subnormal_1 = 0x8000000fff0000000000000000000000
 
 let fp128_pos_normal_0   = 0x10000000000000000000000000000000
 let fp128_pos_normal_1   = 0x01000011110000000000000000000000
@@ -542,21 +542,21 @@ let fp128_neg_normal_add_13_sum_rdn  = 0xfffe000000068ff892110a7feeef1d3e
 let fp128_neg_normal_add_13_sum_rup  = 0xfffe000000068ff892110a7feeef1d3d
 let fp128_neg_normal_add_13_sum_rtz  = 0xfffe000000068ff892110a7feeef1d3d
 
-let fp128_pos_denormal_add_0_op_0 = 0x00000fffffffffffffffffffffffffff
-let fp128_pos_denormal_add_0_op_1 = 0x00000000000000000000000000000091
-let fp128_pos_denormal_add_0_sum  = 0x00001000000000000000000000000090
+let fp128_pos_subnormal_add_0_op_0 = 0x00000fffffffffffffffffffffffffff
+let fp128_pos_subnormal_add_0_op_1 = 0x00000000000000000000000000000091
+let fp128_pos_subnormal_add_0_sum  = 0x00001000000000000000000000000090
 
-let fp128_pos_denormal_add_1_op_0 = 0x0000ffffffffffffffffffffffffffff
-let fp128_pos_denormal_add_1_op_1 = 0x00000000000000000000000000000003
-let fp128_pos_denormal_add_1_sum  = 0x00010000000000000000000000000002
+let fp128_pos_subnormal_add_1_op_0 = 0x0000ffffffffffffffffffffffffffff
+let fp128_pos_subnormal_add_1_op_1 = 0x00000000000000000000000000000003
+let fp128_pos_subnormal_add_1_sum  = 0x00010000000000000000000000000002
 
-let fp128_neg_denormal_add_0_op_0 = 0x80000fffffffffffffffffffffffffff
-let fp128_neg_denormal_add_0_op_1 = 0x80000000000000000000000000000091
-let fp128_neg_denormal_add_0_sum  = 0x80001000000000000000000000000090
+let fp128_neg_subnormal_add_0_op_0 = 0x80000fffffffffffffffffffffffffff
+let fp128_neg_subnormal_add_0_op_1 = 0x80000000000000000000000000000091
+let fp128_neg_subnormal_add_0_sum  = 0x80001000000000000000000000000090
 
-let fp128_neg_denormal_add_1_op_0 = 0x8000ffffffffffffffffffffffffffff
-let fp128_neg_denormal_add_1_op_1 = 0x80000000000000000000000000000003
-let fp128_neg_denormal_add_1_sum  = 0x80010000000000000000000000000002
+let fp128_neg_subnormal_add_1_op_0 = 0x8000ffffffffffffffffffffffffffff
+let fp128_neg_subnormal_add_1_op_1 = 0x80000000000000000000000000000003
+let fp128_neg_subnormal_add_1_sum  = 0x80010000000000000000000000000002
 
 let fp128_pos_diff_exp_add_0_op_0 = 0x7c0abe312282812dedacd9212d21293d
 let fp128_pos_diff_exp_add_0_op_1 = 0x7fff700000000000ddde000000000001
