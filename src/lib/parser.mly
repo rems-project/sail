@@ -958,8 +958,12 @@ atomic_index_range:
     { mk_ir (BF_range ($2, $4)) $startpos $endpos }
 
 r_id_def:
-  | id Colon index_range
-    { $1, $3 }
+  | doc = doc_comment; r = r_id_def
+    { Ann_doc (doc, r, loc $startpos(doc) $endpos(doc)) }
+  | attr = attribute; r = r_id_def
+    { Ann_attribute (fst attr, snd attr, r, loc $startpos(attr) $endpos(attr)) }
+  | n = id; Colon; r = index_range
+    { Ann_item (n, r) }
 
 r_def_body:
   | r_id_def
@@ -1055,8 +1059,12 @@ enum:
     { ($1, Some $3) :: $5 }
 
 struct_field:
-  | id Colon typ
-    { ($3, $1) }
+  | doc = doc_comment; f = struct_field
+    { Ann_doc (doc, f, loc $startpos(doc) $endpos(doc)) }
+  | attr = attribute; f = struct_field
+    { Ann_attribute (fst attr, snd attr, f, loc $startpos(attr) $endpos(attr)) }
+  | n = id; Colon; t = typ
+    { Ann_item (n, t) }
 
 struct_fields:
   | struct_field

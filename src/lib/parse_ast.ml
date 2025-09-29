@@ -77,6 +77,11 @@ open Attribute_data
 
 type 'a annot = l * 'a
 
+type 'a field_annot =
+  | Ann_attribute of string * attribute_data option * 'a field_annot * l
+  | Ann_doc of doc_comment * 'a field_annot * l
+  | Ann_item of 'a
+
 type extern = { pure : bool; bindings : (string * string) list }
 
 type x = text (* identifier *)
@@ -316,7 +321,7 @@ and type_union_aux =
   | Tu_attribute of string * attribute_data option * type_union
   | Tu_doc of doc_comment * type_union
   | Tu_ty_id of atyp * id
-  | Tu_ty_anon_rec of (atyp * id) list * id
+  | Tu_ty_anon_rec of (id * atyp) field_annot list * id
 
 type tannot_opt = Typ_annot_opt_aux of tannot_opt_aux * l
 
@@ -396,11 +401,11 @@ type fundef_aux =
 type type_def_aux =
   (* Type definition body *)
   | TD_abbrev of id * typquant * kind option * atyp (* type abbreviation *)
-  | TD_record of id * typquant * (atyp * id) list (* struct type definition *)
+  | TD_record of id * typquant * (id * atyp) field_annot list (* struct type definition *)
   | TD_variant of id * typquant * type_union list * bool (* union type definition *)
   | TD_enum of id * (id * atyp) list * (id * exp option) list (* enumeration type definition *)
   | TD_abstract of id * kind * string list option
-  | TD_bitfield of id * atyp * (id * index_range) list (* register mutable bitfield type definition *)
+  | TD_bitfield of id * atyp * (id * index_range) field_annot list (* register mutable bitfield type definition *)
 
 type val_spec_aux =
   (* Value type specification *)

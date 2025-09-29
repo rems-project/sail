@@ -275,8 +275,8 @@ and pragma comments pos b after_block = parse
   | eof                                 { raise (Reporting.err_lex pos "File ended before newline in directive") }
 
 and doc_line_comment pos b = parse
-  | "\n" wsc* "///"                     { Buffer.add_char b '\n'; doc_line_comment pos b lexbuf }
-  | "\n"                                { Buffer.contents b }
+  | "\n" wsc* "///"                     { Lexing.new_line lexbuf; Buffer.add_char b '\n'; doc_line_comment pos b lexbuf }
+  | "\n"                                { Lexing.new_line lexbuf; Buffer.contents b }
   | _ as c                              { Buffer.add_char b c; doc_line_comment pos b lexbuf }
   | eof                                 { raise (Reporting.err_lex pos "File ended before newline in documentation comment") }
 
