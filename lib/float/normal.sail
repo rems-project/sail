@@ -20,12 +20,12 @@ function float_is_normal (op) = {
   is_normal
 }
 
-val      float_is_denormal : fp_bits -> bool
-function float_is_denormal (op) = {
+val      float_is_subnormal : fp_bits -> bool
+function float_is_subnormal (op) = {
   let struct {_, exp, mantissa} = float_decompose(op);
-  let is_denormal               = is_all_zeros (exp) & not (is_all_zeros (mantissa));
+  let is_subnormal               = is_all_zeros (exp) & not (is_all_zeros (mantissa));
 
-  is_denormal
+  is_subnormal
 }
 
 $endif

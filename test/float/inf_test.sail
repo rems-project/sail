@@ -22,7 +22,7 @@ function test_float_is_inf () -> unit = {
   assert(float_is_inf(fp16_neg_qnan_0) == false);
   assert(float_is_inf(fp16_pos_zero) == false);
   assert(float_is_inf(fp16_neg_zero) == false);
-  assert(float_is_inf(fp16_pos_denormal_0) == false);
+  assert(float_is_inf(fp16_pos_subnormal_0) == false);
   assert(float_is_inf(fp16_neg_normal_0) == false);
 
   /* Single floating point */
@@ -33,7 +33,7 @@ function test_float_is_inf () -> unit = {
   assert(float_is_inf(fp32_neg_qnan_0) == false);
   assert(float_is_inf(fp32_pos_zero) == false);
   assert(float_is_inf(fp32_neg_zero) == false);
-  assert(float_is_inf(fp32_pos_denormal_0) == false);
+  assert(float_is_inf(fp32_pos_subnormal_0) == false);
   assert(float_is_inf(fp32_neg_normal_0) == false);
 
   /* Double floating point */
@@ -44,7 +44,7 @@ function test_float_is_inf () -> unit = {
   assert(float_is_inf(fp64_neg_qnan_0) == false);
   assert(float_is_inf(fp64_pos_zero) == false);
   assert(float_is_inf(fp64_neg_zero) == false);
-  assert(float_is_inf(fp64_pos_denormal_0) == false);
+  assert(float_is_inf(fp64_pos_subnormal_0) == false);
   assert(float_is_inf(fp64_neg_normal_0) == false);
 
     /* Quad floating point */
@@ -55,7 +55,7 @@ function test_float_is_inf () -> unit = {
   assert(float_is_inf(fp128_neg_qnan_0) == false);
   assert(float_is_inf(fp128_pos_zero) == false);
   assert(float_is_inf(fp128_neg_zero) == false);
-  assert(float_is_inf(fp128_pos_denormal_0) == false);
+  assert(float_is_inf(fp128_pos_subnormal_0) == false);
   assert(float_is_inf(fp128_neg_normal_0) == false);
 }
 
