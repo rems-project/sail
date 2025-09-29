@@ -100,7 +100,12 @@ val get_attributes : uannot -> (l * string * attribute_data option) list
 val find_attribute_opt : string -> (l * string * attribute_data option) list -> (l * attribute_data option) option
 
 val mk_def_annot :
-  ?doc:string -> ?attrs:(l * string * attribute_data option) list -> ?visibility:visibility -> l -> 'a -> 'a def_annot
+  ?doc:Parse_ast.doc_comment ->
+  ?attrs:(l * string * attribute_data option) list ->
+  ?visibility:visibility ->
+  l ->
+  'a ->
+  'a def_annot
 
 val uannot_of_def_annot : 'a def_annot -> uannot
 

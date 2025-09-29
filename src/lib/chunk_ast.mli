@@ -60,13 +60,13 @@ type match_kind = Try_match | Match_match
 
 val match_keywords : match_kind -> string * string option
 
-val comment_type_delimiters : Lexer.comment_type -> string * string
+val comment_type_delimiters : Parse_ast.comment_type -> string * string
 
 type infix_chunk = Infix_prefix of string | Infix_op of string | Infix_chunks of chunks
 
 and chunk =
-  | Comment of Lexer.comment_type * int * int * string * bool
-  | Doc_comment of string
+  | Comment of Parse_ast.comment_type * int * int * string * bool
+  | Doc_comment of Parse_ast.doc_comment
   | Spacer of bool * int
   | Function of {
       id : Parse_ast.id;

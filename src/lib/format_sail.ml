@@ -350,7 +350,7 @@ let unary_operator_precedence = function
 let can_hang chunks =
   match Queue.peek_opt chunks with
   | Some (Comment (t, _, _, contents, _)) -> (
-      match t with Lexer.Comment_block -> is_single_line_block_comment contents | _ -> false
+      match t with Comment_block -> is_single_line_block_comment contents | _ -> false
     )
   | _ -> true
 
@@ -575,8 +575,8 @@ module Make (Config : CONFIG) = struct
           (char '}')
     | Comment (comment_type, n, col, contents, _) -> begin
         match comment_type with
-        | Lexer.Comment_line -> blank n ^^ string "//" ^^ string contents ^^ require_hardline
-        | Lexer.Comment_block -> (
+        | Comment_line -> blank n ^^ string "//" ^^ string contents ^^ require_hardline
+        | Comment_block -> (
             (* Allow a linebreak after a block comment with newlines. This prevents formatting like:
                /* comment line 1
                   comment line 2 */exp
@@ -587,9 +587,15 @@ module Make (Config : CONFIG) = struct
             | ls -> blank n ^^ group (align (string "/*" ^^ separate hardline ls ^^ string "*/")) ^^ require_hardline
           )
       end
-    | Doc_comment contents ->
-        let ls = block_comment_lines 0 contents in
-        align (string "/*!" ^^ separate hardline ls ^^ string "*/") ^^ require_hardline
+    | Doc_comment { contents; comment_type } -> (
+        match comment_type with
+        | Comment_block ->
+            let ls = block_comment_lines 0 contents in
+            align (string "/*!" ^^ separate hardline ls ^^ string "*/") ^^ require_hardline
+        | Comment_line ->
+            let ls = String.split_on_char '\n' contents in
+            align (string "///" ^^ separate_map (hardline ^^ string "///") string ls) ^^ require_hardline
+      )
     | Function f ->
         let sep = hardline ^^ string "and" ^^ space in
         let clauses =

@@ -69,13 +69,13 @@ let match_keywords = function Try_match -> ("try", Some "catch") | Match_match -
 
 let binder_keyword = function Var_binder -> "var" | Let_binder -> "let" | Internal_plet_binder -> "internal_plet"
 
-let comment_type_delimiters = function Lexer.Comment_line -> ("//", "") | Lexer.Comment_block -> ("/*", "*/")
+let comment_type_delimiters = function Comment_line -> ("//", "") | Comment_block -> ("/*", "*/")
 
 type infix_chunk = Infix_prefix of string | Infix_op of string | Infix_chunks of chunks
 
 and chunk =
-  | Comment of Lexer.comment_type * int * int * string * bool
-  | Doc_comment of string
+  | Comment of comment_type * int * int * string * bool
+  | Doc_comment of doc_comment
   | Spacer of bool * int
   | Function of {
       id : id;
@@ -135,7 +135,7 @@ let rec prerr_chunk indent = function
   | Comment (comment_type, n, col, contents, trailing) ->
       let s, e = comment_type_delimiters comment_type in
       Printf.eprintf "%sComment: blank=%d col=%d trailing=%b %s%s%s\n" indent n col trailing s contents e
-  | Doc_comment contents -> Printf.eprintf "%sDoc_comment: /*!%s*/\n" indent contents
+  | Doc_comment { contents; _ } -> Printf.eprintf "%sDoc_comment: /*!%s*/\n" indent contents
   | Spacer (line, w) -> Printf.eprintf "%sSpacer:%b %d\n" indent line w
   | Atom str -> Printf.eprintf "%sAtom:%s\n" indent str
   | String_literal str -> Printf.eprintf "%sString_literal:%s\n" indent str
@@ -450,12 +450,11 @@ let pop_trailing_comment ?space:(n = 0) comments chunks line_num =
   | None -> false
   | Some lnum -> begin
       match Stack.top_opt comments with
-      | Some (Lexer.Comment (comment_type, s, _, contents)) when s.pos_lnum = lnum ->
+      | Some (Lexer.Comment (comment_type, s, _, contents)) when s.pos_lnum = lnum -> (
           let _ = Stack.pop comments in
           Queue.add (Comment (comment_type, n, s.pos_cnum - s.pos_bol, contents, true)) chunks;
-          begin
-            match comment_type with Lexer.Comment_line -> true | _ -> false
-          end
+          match comment_type with Comment_line -> true | _ -> false
+        )
       | _ -> false
     end
 

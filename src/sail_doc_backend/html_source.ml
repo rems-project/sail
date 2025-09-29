@@ -83,7 +83,7 @@ let highlights ~filename ~contents =
     | String _ ->
         mark Highlight.String;
         go ()
-    | Doc _ ->
+    | DocLine _ | DocBlock _ ->
         mark Highlight.Comment;
         go ()
     | And | As | Assert | By | Match | Clause | Dec | Op | Default | Effect | End | Enum | Else | Exit | Cast | Forall

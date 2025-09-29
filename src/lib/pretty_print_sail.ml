@@ -70,7 +70,13 @@ module Printer (Config : PRINT_CONFIG) = struct
 
   let doc_def_annot def_annot =
     ( match def_annot.Coq_def_annot.doc_comment with
-    | Some str -> string "/*!" ^^ string str ^^ string "*/" ^^ hardline
+    | Some { contents; comment_type } -> (
+        match comment_type with
+        | Comment_block -> string "/*!" ^^ string contents ^^ string "*/" ^^ hardline
+        | Comment_line ->
+            let ls = String.split_on_char '\n' contents in
+            string "///" ^^ separate_map (hardline ^^ string "///") string ls ^^ hardline
+      )
     | _ -> empty
     )
     ^^ ( match def_annot.attrs with

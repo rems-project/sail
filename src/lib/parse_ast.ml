@@ -55,6 +55,10 @@ type l =
   | Hint of string * l * l
   | Range of Lexing.position * Lexing.position
 
+type comment_type = Comment_block | Comment_line
+
+type doc_comment = { contents : string; comment_type : comment_type }
+
 (** We put the attribute data type in it's own module, so other modules can import it unqualified. The parse AST and the
     main AST share this type, so modules that wouldn't normally import this module will want to use it. *)
 module Attribute_data = struct
@@ -301,7 +305,7 @@ and funcl_aux =
   (* Function clause *)
   | FCL_private of funcl
   | FCL_attribute of string * attribute_data option * funcl
-  | FCL_doc of string * funcl
+  | FCL_doc of doc_comment * funcl
   | FCL_funcl of id * pexp
 
 type type_union = Tu_aux of type_union_aux * l
@@ -310,7 +314,7 @@ and type_union_aux =
   (* Type union constructors *)
   | Tu_private of type_union
   | Tu_attribute of string * attribute_data option * type_union
-  | Tu_doc of string * type_union
+  | Tu_doc of doc_comment * type_union
   | Tu_ty_id of atyp * id
   | Tu_ty_anon_rec of (atyp * id) list * id
 
@@ -366,7 +370,7 @@ type mapcl = MCL_aux of mapcl_aux * l
 and mapcl_aux =
   (* mapping clause (bidirectional pattern-match) *)
   | MCL_attribute of string * attribute_data option * mapcl
-  | MCL_doc of string * mapcl
+  | MCL_doc of doc_comment * mapcl
   | MCL_bidir of mpexp * mpexp
   | MCL_forwards_deprecated of mpexp * exp
   | MCL_forwards of pexp
@@ -463,7 +467,7 @@ type def_aux =
   | DEF_pragma of string * pragma
   | DEF_private of def
   | DEF_attribute of string * attribute_data option * def
-  | DEF_doc of string * def
+  | DEF_doc of doc_comment * def
   | DEF_internal_mutrec of fundef list
 
 and def = DEF_aux of def_aux * l
