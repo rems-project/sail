@@ -136,8 +136,6 @@ let kw_table =
      ("internal_assume",         (fun _ -> InternalAssume));
    ]
 
-type comment_type = Comment_block | Comment_line
-
 type comment =
   | Comment of comment_type * Lexing.position * Lexing.position * string
 
@@ -201,12 +199,20 @@ rule token comments = parse
   | "=>"                                { EqGt "=>" }
   | "/*!"
     { let startpos = Lexing.lexeme_start_p lexbuf in
-      let arg = doc_comment (Lexing.lexeme_start_p lexbuf) (Buffer.create 10) 0 false lexbuf in
+      let arg = doc_comment startpos (Buffer.create 10) 0 false lexbuf in
       lexbuf.lex_start_p <- startpos;
-      Doc arg }
-  | "//"        { line_comment comments (Lexing.lexeme_start_p lexbuf) (Buffer.create 10) lexbuf; token comments lexbuf }
-  | "/*"        { block_comment comments (Lexing.lexeme_start_p lexbuf) (Buffer.create 10) 0 lexbuf; token comments lexbuf }
-  | "*/"        { raise (Reporting.err_lex (Lexing.lexeme_start_p lexbuf) "Unbalanced comment") }
+      DocBlock arg }
+  | "///"
+    { let startpos = Lexing.lexeme_start_p lexbuf in
+      let arg = doc_line_comment startpos (Buffer.create 10) lexbuf in
+      lexbuf.lex_start_p <- startpos;
+      DocLine arg }
+  | "//"
+    { line_comment comments (Lexing.lexeme_start_p lexbuf) (Buffer.create 10) lexbuf; token comments lexbuf }
+  | "/*"
+    { block_comment comments (Lexing.lexeme_start_p lexbuf) (Buffer.create 10) 0 lexbuf; token comments lexbuf }
+  | "*/"
+    { raise (Reporting.err_lex (Lexing.lexeme_start_p lexbuf) "Unbalanced comment") }
   | "$[" (ident+ as i)
     { Attribute i }
   | "$" (ident+ as i) wsc* "{"
@@ -238,9 +244,8 @@ rule token comments = parse
                                             lexbuf.lex_start_p <- startpos;
                                             String(contents) }
   | eof                                   { Eof }
-  | _  as c                               { raise (Reporting.err_lex
-                                              (Lexing.lexeme_start_p lexbuf)
-                                              (Printf.sprintf "Unexpected character: %s" (Char.escaped c))) }
+  | _  as c
+    { raise (Reporting.err_lex (Lexing.lexeme_start_p lexbuf) (Printf.sprintf "Unexpected character: %s" (Char.escaped c))) }
 
 and attribute depth pos b = parse
   | "["                                 { Buffer.add_char b '['; attribute (depth + 1) pos b lexbuf }
@@ -269,10 +274,16 @@ and pragma comments pos b after_block = parse
                                           ) }
   | eof                                 { raise (Reporting.err_lex pos "File ended before newline in directive") }
 
+and doc_line_comment pos b = parse
+  | "\n" wsc* "///"                     { Buffer.add_char b '\n'; doc_line_comment pos b lexbuf }
+  | "\n"                                { Buffer.contents b }
+  | _ as c                              { Buffer.add_char b c; doc_line_comment pos b lexbuf }
+  | eof                                 { raise (Reporting.err_lex pos "File ended before newline in documentation comment") }
+
 and line_comment comments pos b = parse
   | "\n"                                { Lexing.new_line lexbuf;
                                           comments := Comment (Comment_line, pos, Lexing.lexeme_end_p lexbuf, Buffer.contents b) :: !comments }
-  | _ as c                              { Buffer.add_string b (String.make 1 c); line_comment comments pos b lexbuf }
+  | _ as c                              { Buffer.add_char b c; line_comment comments pos b lexbuf }
   | eof                                 { raise (Reporting.err_lex pos "File ended before newline in comment") }
 
 and doc_comment pos b depth lstart = parse

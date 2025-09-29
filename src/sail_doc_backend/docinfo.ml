@@ -243,7 +243,7 @@ type 'a function_clause_doc = {
   guard_source : location_or_raw option;
   body_source : location_or_raw;
   module_path : string list option;
-  comment : string option;
+  comment : Parse_ast.doc_comment option;
   splits : location_or_raw Bindings.t option;
   attributes : (string * attribute_data option) list;
 }
@@ -256,7 +256,7 @@ let json_of_function_clause_doc docinfo =
        ("pattern", json_of_pat docinfo.pat);
      ]
     @ (match docinfo.wavedrom with Some w -> [("wavedrom", `String w)] | None -> [])
-    @ (match docinfo.comment with Some s -> [("comment", `String s)] | None -> [])
+    @ (match docinfo.comment with Some { contents; _ } -> [("comment", `String contents)] | None -> [])
     @ (match docinfo.guard_source with Some s -> [("guard", json_of_location_or_raw s)] | None -> [])
     @ [("body", json_of_location_or_raw docinfo.body_source)]
     @ (match docinfo.module_path with Some mods -> [("path", `List (List.map (fun m -> `String m) mods))] | None -> [])
@@ -338,12 +338,12 @@ let json_of_let_doc docinfo =
     @ json_of_attributes docinfo.attributes
     )
 
-type anchor_doc = { source : location_or_raw; comment : string option }
+type anchor_doc = { source : location_or_raw; comment : Parse_ast.doc_comment option }
 
 let json_of_anchor_doc docinfo =
   `Assoc
     ([("source", json_of_location_or_raw docinfo.source)]
-    @ match docinfo.comment with Some c -> [("comment", `String c)] | None -> []
+    @ match docinfo.comment with Some { contents; _ } -> [("comment", `String contents)] | None -> []
     )
 
 type 'a linkable = { doc : 'a; links : hyperlink list; module_path : string list option }
@@ -442,9 +442,9 @@ module Generator (Converter : Markdown.CONVERTER) (Config : CONFIG) = struct
 
   let get_doc_comment def_annot =
     Option.map
-      (fun comment ->
+      (fun ({ contents; comment_type } : Parse_ast.doc_comment) ->
         let conf = Converter.default_config ~loc:def_annot.loc in
-        Converter.convert conf comment
+        ({ contents = encode (Converter.convert conf contents); comment_type } : Parse_ast.doc_comment)
       )
       def_annot.doc_comment
 
@@ -559,7 +559,7 @@ module Generator (Converter : Markdown.CONVERTER) (Config : CONFIG) = struct
       guard_source;
       body_source;
       module_path;
-      comment = Option.map encode comment;
+      comment;
       splits;
       attributes = List.map (fun (_, attr, data) -> (attr, data)) attrs;
     }

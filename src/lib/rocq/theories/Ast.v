@@ -14,6 +14,10 @@ Definition l := loc.
 
 Extract Inlined Constant loc => "Parse_ast.l".
 
+Parameter ext_doc_comment : Set.
+
+Extract Inlined Constant ext_doc_comment => "Parse_ast.doc_comment".
+
 Parameter ext_attribute_data : Set.
 
 Extract Inlined Constant ext_attribute_data => "Parse_ast.Attribute_data.attribute_data".
@@ -38,7 +42,7 @@ Definition extern := extern.record.
 
 Module def_annot.
   Record record {a : Set} : Set := Build {
-    doc_comment : option string;
+    doc_comment : option ext_doc_comment;
     attrs : list (loc * (string * option attribute_data));
     visibility : visibility;
     loc : loc;

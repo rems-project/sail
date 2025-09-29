@@ -233,7 +233,7 @@ let set_syntax_deprecated l =
 
 %token <string> Eq EqGt Unit Colon
 
-%token <string> Doc
+%token <string> DocBlock DocLine
 
 %token <string> OpId
 
@@ -875,12 +875,18 @@ attribute_data_eof:
   | d = attribute_data; Eof
     { d }
 
+doc_comment:
+  | str = DocBlock
+    { { contents = str; comment_type = Comment_block } }
+  | str = DocLine
+    { { contents = str; comment_type = Comment_line } }
+
 funcl_annotation:
   | visibility = Private
     { (fun funcl -> FCL_aux (FCL_private funcl, loc $startpos(visibility) $endpos(visibility))) }
   | attr = attribute
     { (fun funcl -> FCL_aux (FCL_attribute (fst attr, snd attr, funcl), loc $startpos(attr) $endpos(attr))) }
-  | doc = Doc
+  | doc = doc_comment
     { (fun funcl -> FCL_aux (FCL_doc (doc, funcl), loc $startpos(doc) $endpos(doc))) }
 
 funcl_patexp:
@@ -1065,7 +1071,7 @@ type_union:
     { Tu_aux (Tu_private tu, loc $startpos(visibility) $endpos(visibility)) }
   | attr = attribute; tu = type_union
     { Tu_aux (Tu_attribute (fst attr, snd attr, tu), loc $startpos(attr) $endpos(attr)) }
-  | doc = Doc; tu = type_union
+  | doc = doc_comment; tu = type_union
     { Tu_aux (Tu_doc (doc, tu), loc $startpos(doc) $endpos(doc)) }
   | id Colon typ
     { Tu_aux (Tu_ty_id ($3, $1), loc $startpos $endpos) }
@@ -1167,7 +1173,7 @@ fmpat:
 mapcl:
   | attr = attribute; mcl = mapcl
     { MCL_aux (MCL_attribute (fst attr, snd attr, mcl), loc $startpos(attr) $endpos(attr)) }
-  | doc = Doc; mcl = mapcl
+  | doc = doc_comment; mcl = mapcl
     { MCL_aux (MCL_doc (doc, mcl), loc $startpos(doc) $endpos(doc)) }
   | mcl = mapcl0
     { mcl }
@@ -1381,7 +1387,7 @@ def(AUX):
     { DEF_aux (DEF_private def, loc $startpos(visibility) $endpos(visibility)) }
   | attr = attribute; def = def(AUX)
     { DEF_aux (DEF_attribute (fst attr, snd attr, def), loc $startpos(attr) $endpos(attr)) }
-  | doc = Doc; def = def(AUX)
+  | doc = doc_comment; def = def(AUX)
     { DEF_aux (DEF_doc (doc, def), loc $startpos(doc) $endpos(doc)) }
   | d = AUX
     { DEF_aux (d, loc $startpos(d) $endpos(d)) }

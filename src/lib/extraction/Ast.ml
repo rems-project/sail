@@ -17,7 +17,7 @@ type extern = Coq_extern.record
 
 module Coq_def_annot =
  struct
-  type 'a record = { doc_comment : string option;
+  type 'a record = { doc_comment : Parse_ast.doc_comment option;
                      attrs : (Parse_ast.l * (string * attribute_data option))
                              list;
                      visibility : visibility; loc : Parse_ast.l; env : 

@@ -392,7 +392,7 @@ let latex_command ~docstring cat id no_loc l =
   end
 
 let latex_docstring (def_annot : 'a Ast.def_annot) =
-  match def_annot.doc_comment with Some contents -> string (latex_of_markdown contents) | None -> empty
+  match def_annot.doc_comment with Some { contents; _ } -> string (latex_of_markdown contents) | None -> empty
 
 let latex_funcls def =
   let module StringMap = Map.Make (String) in
