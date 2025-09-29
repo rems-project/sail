@@ -236,7 +236,7 @@ let c_target is_cpp out_file { ast; effect_info; env; default_sail_dir; _ } =
   if !opt_static then
     Reporting.warn "Deprecated" Parse_ast.Unknown "--static is deprecated and no longer has any effect";
 
-  let echo_output, out_file = match out_file with Some f -> (false, f) | None -> (true, "out") in
+  let out_file = Option.value out_file ~default:"out" in
   let basename = Filename.basename out_file in
 
   let header, impl = Codegen.compile_ast env effect_info basename ast in
@@ -252,14 +252,6 @@ let c_target is_cpp out_file { ast; effect_info; env; default_sail_dir; _ } =
   output_string header_out.channel header;
   flush header_out.channel;
   Util.close_output_with_check header_out;
-
-  if echo_output then (
-    Reporting.warn "Deprecated" Parse_ast.Unknown
-      "The default behaviour of printing C output to stdout when no output file is specified is deprecated. use the -o \
-       option to specify a file name";
-    output_string stdout impl;
-    flush stdout
-  );
 
   if !opt_build then (
     let sail_dir = Reporting.get_sail_dir default_sail_dir in
