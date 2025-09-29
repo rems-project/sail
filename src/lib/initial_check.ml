@@ -371,6 +371,17 @@ module KindInference = struct
     type t = env
   end)
 
+  let rec mapM_field_item f = function
+    | P.Ann_doc (doc, x, l) ->
+        let* y = mapM_field_item f x in
+        return (P.Ann_doc (doc, y, l))
+    | P.Ann_attribute (attr, arg, x, l) ->
+        let* y = mapM_field_item f x in
+        return (P.Ann_attribute (attr, arg, y, l))
+    | P.Ann_item x ->
+        let* y = f x in
+        return (P.Ann_item y)
+
   let get_var v env =
     let rec go = function
       | [] -> (None, env)
@@ -774,9 +785,10 @@ module KindInference = struct
     | P.Tu_ty_anon_rec (fields, id) ->
         let* fields =
           mapM
-            (fun (atyp, field) ->
-              let* atyp = check ctx atyp (Kind (P.K_type, atyp_loc atyp)) in
-              return (atyp, field)
+            (mapM_field_item (fun (field, atyp) ->
+                 let* atyp = check ctx atyp (Kind (P.K_type, atyp_loc atyp)) in
+                 return (field, atyp)
+             )
             )
             fields
         in
@@ -1672,6 +1684,15 @@ let to_ast_reserved_type_id ctx id =
   end
   else id
 
+let rec to_ast_field f doc attrs = function
+  | P.Ann_attribute (attr, arg, x, l) -> to_ast_field f doc (attrs @ [(l, attr, arg)]) x
+  | P.Ann_doc (doc_comment, x, l) -> (
+      match doc with
+      | Some _ -> raise (Reporting.err_general l "Field has multiple documentation comments")
+      | None -> to_ast_field f (Some doc_comment) attrs x
+    )
+  | P.Ann_item x -> f doc attrs x
+
 let to_ast_record ctx id typq fields =
   let id = to_ast_reserved_type_id ctx id in
   let infer typq fields =
@@ -1679,9 +1700,10 @@ let to_ast_record ctx id typq fields =
     let* typq = infer_typquant ctx typq in
     let* fields =
       mapM
-        (fun ((P.ATyp_aux (_, l) as atyp), id) ->
-          let* atyp = check ctx atyp (Kind (P.K_type, l)) in
-          return (atyp, id)
+        (KindInference.mapM_field_item (fun (id, (P.ATyp_aux (_, l) as atyp)) ->
+             let* atyp = check ctx atyp (Kind (P.K_type, l)) in
+             return (id, atyp)
+         )
         )
         fields
     in
@@ -1689,7 +1711,11 @@ let to_ast_record ctx id typq fields =
   in
   let (typq, fields), kenv = infer typq fields KindInference.initial_env in
   let typq, typq_ctx = ConvertType.to_ast_typquant kenv ctx typq in
-  let fields = List.map (fun (atyp, id) -> (ConvertType.to_ast_typ kenv typq_ctx atyp, to_ast_id ctx id)) fields in
+  let fields =
+    List.map
+      (to_ast_field (fun _ _ (id, atyp) -> (ConvertType.to_ast_typ kenv typq_ctx atyp, to_ast_id ctx id)) None [])
+      fields
+  in
   (id, typq, fields, add_constructor id typq K_type ctx)
 
 let check_duplicate_enum_ids ids =
@@ -1789,7 +1815,9 @@ let rec to_ast_typedef ctx def_annot (P.TD_aux (aux, l) : P.type_def) : untyped_
   | P.TD_bitfield (id, typ, ranges) ->
       let id = to_ast_reserved_type_id ctx id in
       let typ = to_ast_typ ctx typ in
-      let ranges = List.map (fun (id, range) -> (to_ast_id ctx id, to_ast_range ctx range)) ranges in
+      let ranges =
+        List.map (to_ast_field (fun _ _ (id, range) -> (to_ast_id ctx id, to_ast_range ctx range)) None []) ranges
+      in
       ( [DEF_aux (DEF_type (TD_aux (TD_bitfield (id, typ, ranges), (l, empty_uannot))), def_annot)],
         { ctx with type_constructors = Bindings.add id ([], P.K_type) ctx.type_constructors }
       )
