@@ -1774,7 +1774,7 @@ module Make (C : CONFIG) = struct
         let record_ctx = { ctx with local_env = Env.add_typquant l typq ctx.local_env } in
         let ctors =
           List.fold_left
-            (fun ctors (typ, id) -> Bindings.add id (fast_int (ctyp_of_typ record_ctx typ)) ctors)
+            (fun ctors ((id, typ), _) -> Bindings.add id (fast_int (ctyp_of_typ record_ctx typ)) ctors)
             Bindings.empty ctors
         in
         let params = quant_kopts typq |> List.filter is_typ_kopt |> List.map kopt_kid in

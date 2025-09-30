@@ -289,7 +289,7 @@ let frominterp_typedef (TD_aux (td_aux, (l, _))) =
       in
       fromInterpValue ^^ twice hardline
   | TD_record (record_id, typq, fields, _) ->
-      let fromInterpField (typ, id) =
+      let fromInterpField ((id, typ), _) =
         separate space
           [
             string (maybe_zencode ((if !lem_mode then string_of_id record_id ^ "_" else "") ^ string_of_id id));
@@ -519,7 +519,7 @@ let tointerp_typedef (TD_aux (td_aux, (l, _))) =
       in
       toInterpValue ^^ twice hardline
   | TD_record (record_id, typq, fields, _) ->
-      let toInterpField (typ, id) =
+      let toInterpField ((id, typ), _) =
         parens
           (separate comma_sp
              [

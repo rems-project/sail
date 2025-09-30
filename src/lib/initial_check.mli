@@ -80,7 +80,7 @@ val get_uninitialized_registers : untyped_def list -> (id * typ) list
 
 val generate_undefined_record_context : typquant -> (id * typ) list
 
-val generate_undefined_record : id -> typquant -> (typ * id) list -> untyped_def list
+val generate_undefined_record : id -> typquant -> ((id * typ) * unit def_annot) list -> untyped_def list
 
 val generate_undefined_enum : id -> id list -> untyped_def list
 

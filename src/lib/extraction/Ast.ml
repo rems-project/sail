@@ -346,7 +346,8 @@ type 'a scattered_def_aux =
 | SD_funcl of 'a funcl
 | SD_variant of id * typquant
 | SD_unioncl of id * type_union
-| SD_internal_unioncl_record of id * id * typquant * (typ * id) list
+| SD_internal_unioncl_record of id * id * typquant
+   * ((id * typ) * unit def_annot) list
 | SD_mapping of id * tannot_opt
 | SD_mapcl of id * 'a mapcl
 | SD_enum of id
@@ -368,11 +369,11 @@ type 'a fundef_aux =
 
 type type_def_aux =
 | TD_abbrev of id * typquant * typ_arg
-| TD_record of id * typquant * (typ * id) list * bool
+| TD_record of id * typquant * ((id * typ) * unit def_annot) list * bool
 | TD_variant of id * typquant * type_union list * bool
 | TD_enum of id * id list * bool
 | TD_abstract of id * kind * opt_abstract_config
-| TD_bitfield of id * typ * (id * index_range) list
+| TD_bitfield of id * typ * ((id * index_range) * unit def_annot) list
 
 type outcome_spec =
 | OV_aux of outcome_spec_aux * Parse_ast.l

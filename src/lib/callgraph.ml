@@ -287,7 +287,7 @@ let add_def_to_graph graph (DEF_aux (def, def_annot)) =
         scan_typquant (Type id) typq
     | TD_record (id, typq, fields, _) ->
         let field_nodes =
-          List.map (fun (typ, _) -> typ_ids typ) fields
+          List.map (fun ((_, typ), _) -> typ_ids typ) fields
           |> List.fold_left IdSet.union IdSet.empty |> IdSet.elements
           |> List.map (fun id -> Type id)
         in

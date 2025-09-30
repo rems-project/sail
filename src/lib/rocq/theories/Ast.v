@@ -482,7 +482,7 @@ Inductive scattered_def_aux (a : Set) : Set :=
 | SD_variant : id -> typquant -> scattered_def_aux a
 | SD_unioncl : id -> type_union -> scattered_def_aux a
 | SD_internal_unioncl_record :
-  id -> id -> typquant -> list (typ * id) -> scattered_def_aux a
+  id -> id -> typquant -> list (id * typ * def_annot unit) -> scattered_def_aux a
 | SD_mapping : id -> tannot_opt -> scattered_def_aux a
 | SD_mapcl : id -> mapcl a -> scattered_def_aux a
 | SD_enum : id -> scattered_def_aux a
@@ -504,11 +504,11 @@ Inductive fundef_aux (a : Set) : Set :=
 
 Inductive type_def_aux : Set :=
 | TD_abbrev : id -> typquant -> typ_arg -> type_def_aux
-| TD_record : id -> typquant -> list (typ * id) -> bool -> type_def_aux
+| TD_record : id -> typquant -> list (id * typ * def_annot unit) -> bool -> type_def_aux
 | TD_variant : id -> typquant -> list type_union -> bool -> type_def_aux
 | TD_enum : id -> list id -> bool -> type_def_aux
 | TD_abstract : id -> kind -> opt_abstract_config -> type_def_aux
-| TD_bitfield : id -> typ -> list (id * index_range) -> type_def_aux.
+| TD_bitfield : id -> typ -> list (id * index_range * def_annot unit) -> type_def_aux.
 
 Inductive outcome_spec : Set :=
 | OV_aux : outcome_spec_aux -> loc -> outcome_spec.

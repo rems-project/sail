@@ -4992,14 +4992,14 @@ let check_type_union u_l non_rec_env env variant typq (Tu_aux (Tu_ty_id (arg_typ
 
 let check_record l env def_annot id typq fields =
   forbid_recursive_types l (fun () ->
-      List.iter (fun ((Typ_aux (_, l) as field), _) -> wf_binding l env (typq, field)) fields
+      List.iter (fun ((_, (Typ_aux (_, l) as field)), _) -> wf_binding l env (typq, field)) fields
   );
   let env =
     try
       match get_def_attribute "bitfield" def_annot with
       | Some _ when not (Env.is_bitfield id env) -> begin
           match fields with
-          | [(typ, Id_aux (Id "bits", _))] -> Env.add_bitfield id typ Bindings.empty env
+          | [((Id_aux (Id "bits", _), typ), _)] -> Env.add_bitfield id typ Bindings.empty env
           | _ -> typ_raise l (Err_other "bitfield record has wrong fields")
         end
       | _ -> env
@@ -5050,7 +5050,7 @@ let rec check_typedef : Env.t -> env def_annot -> uannot type_def -> typed_def l
                 (Initial_check.generate_undefined_record_context typq)
             in
             let gen_undefined =
-              List.for_all (fun (typ, field_id) -> can_be_undefined ~at:(id_loc field_id) field_env typ) fields
+              List.for_all (fun ((field_id, typ), _) -> can_be_undefined ~at:(id_loc field_id) field_env typ) fields
             in
             if (not gen_undefined) && Option.is_none attr then (
               (* If we cannot generate an undefined value, and we weren't explicitly asked to *)
@@ -5154,9 +5154,9 @@ let rec check_typedef : Env.t -> env def_annot -> uannot type_def -> typed_def l
               | BF_aux (BF_concat (r1, r2), l) ->
                   BF_aux (BF_concat (expand_range_synonyms r1, expand_range_synonyms r2), l)
             in
-            let record_tdef = TD_record (id, mk_typquant [], [(typ, mk_id "bits")], false) in
+            let record_tdef = TD_record (id, mk_typquant [], [((mk_id "bits", typ), mk_def_annot l ())], false) in
             let ranges =
-              List.map (fun (f, r) -> (f, expand_range_synonyms r)) ranges |> List.to_seq |> Bindings.of_seq
+              List.map (fun ((f, r), _) -> (f, expand_range_synonyms r)) ranges |> List.to_seq |> Bindings.of_seq
             in
             (* This would cause us to fail later, but with a potentially confusing error message *)
             Bindings.iter

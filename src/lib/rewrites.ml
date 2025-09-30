@@ -221,7 +221,7 @@ let rewrite_ast_nexp_ids, _rewrite_typ_nexp_ids =
     | DEF_aux (DEF_type (TD_aux (TD_abbrev (id, typq, typ_arg), a)), def_annot) ->
         DEF_aux (DEF_type (TD_aux (TD_abbrev (id, typq, rewrite_typ_arg env typ_arg), a)), def_annot)
     | DEF_aux (DEF_type (TD_aux (TD_record (id, typq, fields, b), a)), def_annot) ->
-        let fields' = List.map (fun (t, id) -> (rewrite_typ env t, id)) fields in
+        let fields' = List.map (fun ((id, t), def_annot) -> ((id, rewrite_typ env t), def_annot)) fields in
         DEF_aux (DEF_type (TD_aux (TD_record (id, typq, fields', b), a)), def_annot)
     | DEF_aux (DEF_type (TD_aux (TD_variant (id, typq, constrs, b), a)), def_annot) ->
         let constrs' =
@@ -2025,7 +2025,11 @@ let rewrite_type_def_typs rw_typ rw_typquant (TD_aux (td, annot)) =
       TD_aux (TD_abbrev (id, rw_typquant typq, A_aux (A_typ (rw_typ typ), l)), annot)
   | TD_abbrev (id, typq, typ_arg) -> TD_aux (TD_abbrev (id, rw_typquant typq, typ_arg), annot)
   | TD_record (id, typq, typ_ids, flag) ->
-      TD_aux (TD_record (id, rw_typquant typq, List.map (fun (typ, id) -> (rw_typ typ, id)) typ_ids, flag), annot)
+      TD_aux
+        ( TD_record
+            (id, rw_typquant typq, List.map (fun ((id, typ), def_annot) -> ((id, rw_typ typ), def_annot)) typ_ids, flag),
+          annot
+        )
   | TD_variant (id, typq, tus, flag) ->
       TD_aux (TD_variant (id, rw_typquant typq, List.map (rewrite_type_union_typs rw_typ) tus, flag), annot)
   | TD_enum (id, ids, flag) -> TD_aux (TD_enum (id, ids, flag), annot)
@@ -4521,7 +4525,7 @@ let rewrite_unroll_constant_loops _type_env defs =
 let remove_bitfield_records type_env =
   let rewrite_def rewriters = function
     (* Avoid using Env.get_bitfield in case the typing environment is out of date (e.g., due to nexp_ids) *)
-    | DEF_aux (DEF_type (TD_aux (TD_record (id, tq, [(typ, _)], _), t_annot)), def_annot)
+    | DEF_aux (DEF_type (TD_aux (TD_record (id, tq, [((_, typ), _)], _), t_annot)), def_annot)
       when Env.is_bitfield id type_env ->
         DEF_aux (DEF_type (TD_aux (TD_abbrev (id, tq, mk_typ_arg (A_typ typ)), t_annot)), def_annot)
     | d -> rewriters_base.rewrite_def rewriters d

@@ -1,0 +1,7 @@
+[93mError[0m:
+[96mline_doc_comment.sail[0m:26.2-27.0:
+26[96m |[0m  /// Second doc comment!
+  [91m |[0m  [91m^----------------------[0m
+27[96m |[0m  some_field : 31 .. 16
+  [91m |[0m[91m^[0m
+  [91m |[0m Field has multiple documentation comments

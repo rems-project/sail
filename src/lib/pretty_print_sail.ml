@@ -751,7 +751,7 @@ module Printer (Config : PRINT_CONFIG) = struct
         | Some exp -> separate space [string "register"; doc_id id; colon; doc_typ typ; equals; doc_exp exp]
       )
 
-  let doc_field (typ, id) = separate space [doc_id id; colon; doc_typ typ]
+  let doc_field ((id, typ), def_annot) = doc_def_annot def_annot ^^ separate space [doc_id id; colon; doc_typ typ]
 
   let doc_union (Tu_aux (Tu_ty_id (typ, id), def_annot)) =
     doc_def_annot def_annot ^^ separate space [doc_id id; colon; doc_typ typ]
@@ -821,7 +821,9 @@ module Printer (Config : PRINT_CONFIG) = struct
         in
         separate space [string (if is_newtype then "newtype" else "union"); doc_id id ^^ quant_doc; equals; body]
     | TD_bitfield (id, typ, fields) ->
-        let doc_field (id, range) = separate space [doc_id id; colon; doc_index_range range] in
+        let doc_field ((id, range), def_annot) =
+          doc_def_annot def_annot ^^ separate space [doc_id id; colon; doc_index_range range]
+        in
         doc_op equals
           (separate space [string "bitfield"; doc_id id; colon; doc_typ typ])
           (surround 2 0 lbrace (separate_map (comma ^^ break 1) doc_field fields) rbrace)

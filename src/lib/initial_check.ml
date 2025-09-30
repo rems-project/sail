@@ -1713,7 +1713,13 @@ let to_ast_record ctx id typq fields =
   let typq, typq_ctx = ConvertType.to_ast_typquant kenv ctx typq in
   let fields =
     List.map
-      (to_ast_field (fun _ _ (id, atyp) -> (ConvertType.to_ast_typ kenv typq_ctx atyp, to_ast_id ctx id)) None [])
+      (to_ast_field
+         (fun doc attrs (id, atyp) ->
+           let id = to_ast_id ctx id in
+           ((id, ConvertType.to_ast_typ kenv typq_ctx atyp), mk_def_annot ?doc ~attrs (id_loc id) ())
+         )
+         None []
+      )
       fields
   in
   (id, typq, fields, add_constructor id typq K_type ctx)
@@ -1816,7 +1822,15 @@ let rec to_ast_typedef ctx def_annot (P.TD_aux (aux, l) : P.type_def) : untyped_
       let id = to_ast_reserved_type_id ctx id in
       let typ = to_ast_typ ctx typ in
       let ranges =
-        List.map (to_ast_field (fun _ _ (id, range) -> (to_ast_id ctx id, to_ast_range ctx range)) None []) ranges
+        List.map
+          (to_ast_field
+             (fun doc attrs (id, range) ->
+               let id = to_ast_id ctx id in
+               ((id, to_ast_range ctx range), mk_def_annot ?doc ~attrs (id_loc id) ())
+             )
+             None []
+          )
+          ranges
       in
       ( [DEF_aux (DEF_type (TD_aux (TD_bitfield (id, typ, ranges), (l, empty_uannot))), def_annot)],
         { ctx with type_constructors = Bindings.add id ([], P.K_type) ctx.type_constructors }
@@ -2365,7 +2379,7 @@ let generate_undefined_record id typq fields =
     mk_fundef
       [
         mk_funcl (prepend_id "undefined_" id) pat
-          (mk_exp (E_struct (SN_anon, List.map (fun (_, id) -> mk_fexp id (mk_lit_exp L_undef)) fields)));
+          (mk_exp (E_struct (SN_anon, List.map (fun ((id, _), _) -> mk_fexp id (mk_lit_exp L_undef)) fields)));
       ];
   ]
 
