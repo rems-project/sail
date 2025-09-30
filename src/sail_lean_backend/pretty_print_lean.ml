@@ -328,7 +328,7 @@ let captured_typ_var ((i, Typ_aux (t, _)) as typ) =
       Some (i, ki)
   | _ -> None
 
-let doc_typ_id ctx (typ, fid) = flow (break 1) [doc_id_ctor fid; colon; doc_typ ctx typ]
+let doc_typ_id ctx ((fid, typ), _) = flow (break 1) [doc_id_ctor fid; colon; doc_typ ctx typ]
 
 let doc_kind ctx (kid : kid) (K_aux (k, _)) =
   match k with

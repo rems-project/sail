@@ -156,7 +156,7 @@ val is_newtype : id -> t -> bool
 
 val is_mapping : id -> t -> bool
 
-val add_record : id -> typquant -> (typ * id) list -> t -> t
+val add_record : id -> typquant -> ((id * typ) * unit def_annot) list -> t -> t
 val is_record : id -> t -> bool
 val get_record : id -> t -> typquant * (typ * id) list
 val get_records : t -> (typquant * (typ * id) list) Bindings.t

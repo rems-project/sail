@@ -2426,7 +2426,7 @@ let type_dependencies defs =
         let new_def =
           match td with
           | TD_abbrev (id, tq, arg) -> Some (id, typs_of_arg arg)
-          | TD_record (id, tq, fields, _) -> Some (id, List.map fst fields)
+          | TD_record (id, tq, fields, _) -> Some (id, List.map (fun ((_, typ), _) -> typ) fields)
           | TD_variant (id, tq, branches, _) -> Some (id, List.map (fun (Tu_aux (Tu_ty_id (typ, _), _)) -> typ) branches)
           | TD_enum (id, _, _) -> Some (id, [])
           | TD_abstract _ -> None
@@ -2528,7 +2528,7 @@ let countable_types defs =
         let new_def =
           match td with
           | TD_abbrev (id, tq, arg) -> Some (id, typs_of_arg arg)
-          | TD_record (id, tq, fields, _) -> Some (id, List.map fst fields)
+          | TD_record (id, tq, fields, _) -> Some (id, List.map (fun ((_, typ), _) -> typ) fields)
           | TD_variant (id, tq, branches, _) -> Some (id, List.map (fun (Tu_aux (Tu_ty_id (typ, _), _)) -> typ) branches)
           | TD_enum (id, _, _) -> Some (id, [])
           | TD_abstract _ -> None
@@ -2616,9 +2616,9 @@ let doc_field_updates ctxt typq record_id fields =
     let kopts, _ = quant_split typq in
     match kopts with [] -> empty | _ -> space ^^ separate_map space (fun _ -> underscore) kopts
   in
-  let doc_update_field (_, fid) =
+  let doc_update_field ((fid, _), _) =
     let idpp = doc_field_name ctxt record_id fid in
-    let pp_field bind alt i (_, fid') =
+    let pp_field bind alt i ((fid', _), _) =
       if Id.compare fid fid' == 0 then string alt
       else (
         let id = "f" ^ string_of_int i in
@@ -2649,7 +2649,7 @@ let doc_field_updates ctxt typq record_id fields =
         string "#[export] Instance eta_" ^^ type_id_pp
         ^^ separate space (empty :: typq_pps)
         ^^ string " : Settable _ := settable! " ^^ constructor ^^ string " <"
-        ^^ separate_map (string "; ") (fun (_, fid) -> doc_field_name ctxt record_id fid) fields
+        ^^ separate_map (string "; ") (fun ((fid, _), _) -> doc_field_name ctxt record_id fid) fields
         ^^ string ">."
   )
   else separate hardline (List.map doc_update_field fields)
@@ -2760,7 +2760,7 @@ let doc_typdef global generic_eq_types countable_types enum_number_defs (TD_aux 
   | TD_bitfield _ -> empty (* TODO? *)
   | TD_record (id, typq, fs, _) ->
       let fname fid = doc_field_name bare_ctxt id fid in
-      let f_pp (typ, fid) = concat [fname fid; space; colon; space; doc_typ bare_ctxt Env.empty typ; semi] in
+      let f_pp ((fid, typ), _) = concat [fname fid; space; colon; space; doc_typ bare_ctxt Env.empty typ; semi] in
       let rectyp =
         match typq with
         | TypQ_aux (TypQ_tq qs, _) ->
@@ -2828,7 +2828,7 @@ let doc_typdef global generic_eq_types countable_types enum_number_defs (TD_aux 
                         );
                       string "refine {|";
                       string "  encode x := encode ("
-                      ^^ separate_map (string ", ") (fun (_typ, fid) -> fname fid ^^ space ^^ string "x") fs
+                      ^^ separate_map (string ", ") (fun ((fid, _), _) -> fname fid ^^ space ^^ string "x") fs
                       ^^ string ");";
                       string "  decode x := '(" ^^ separate (string ", ") tmp_vars ^^ string ") ← decode x;";
                       string "              mret (Build_" ^^ full_type_pp ^^ space ^^ separate space tmp_vars
@@ -2862,7 +2862,7 @@ let doc_typdef global generic_eq_types countable_types enum_number_defs (TD_aux 
       in
       let inhabited_pp =
         let req_pps = List.filter_map doc_inhabited_req (quant_items typq) in
-        let field_pp (_, fid) = fname fid ^^ string " := inhabitant" in
+        let field_pp ((fid, _), _) = fname fid ^^ string " := inhabitant" in
         string "#[export]" ^^ hardline
         ^^ group
              (prefix 2 1
@@ -3904,7 +3904,7 @@ let doc_isla_typ global (TD_aux (td, _)) =
           string "  fun v => match v with";
           string "  | RegVal_Struct fields =>";
           separate_map hardline
-            (fun (_, f) ->
+            (fun ((f, _), _) ->
               string "    " ^^ fname f ^^ utf8string " ← get_field "
               ^^ dquotes (fname f)
               ^^ utf8string " fields ≫= from_isla;"
@@ -3914,7 +3914,7 @@ let doc_isla_typ global (TD_aux (td, _)) =
             (surround_separate_map 2 1 (string "    mret {| |}") (string "    mret {|")
                (string ";" ^^ break 1)
                (string "|}")
-               (fun (_, f) -> full_fname f ^^ string " := " ^^ fname f)
+               (fun ((f, _), _) -> full_fname f ^^ string " := " ^^ fname f)
                fs
             );
           string "  | _ => mthrow \"get_isla_" ^^ type_id_pp id ^^ string ": unexpected isla value\"";
@@ -4407,7 +4407,7 @@ end = struct
           type_map;
         string "}.";
         doc_field_updates ctxt (mk_typquant []) (mk_id "regstate")
-          (List.map (fun (typ_id, typ) -> (typ, state_field_name typ_id)) type_map);
+          (List.map (fun (typ_id, typ) -> ((state_field_name typ_id, typ), mk_def_annot (id_loc typ_id) ())) type_map);
         empty;
         (* A record literal can cause problems with record type inference (e.g., if there are no registers) *)
         string "Definition init_regstate : regstate := Build_regstate";

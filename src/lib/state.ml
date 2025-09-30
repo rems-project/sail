@@ -131,12 +131,13 @@ let generate_regstate env registers =
         if !opt_type_grouped_regstate then (
           let type_field (typ, id, has_init) =
             let base_typ = regval_base_typ env typ in
-            (function_typ [string_typ] base_typ, regstate_field base_typ)
+            let field_name = regstate_field base_typ in
+            ((field_name, function_typ [string_typ] base_typ), mk_def_annot (id_loc field_name) ())
           in
-          let cmp_id (_, id1) (_, id2) = Id.compare id1 id2 in
+          let cmp_id ((id1, _), _) ((id2, _), _) = Id.compare id1 id2 in
           List.map type_field registers |> List.sort_uniq cmp_id
         )
-        else List.map (fun (t, i, _) -> (t, i)) registers
+        else List.map (fun (t, i, _) -> ((i, t), mk_def_annot (id_loc i) ())) registers
       in
       TD_record (mk_id "regstate", mk_typquant [], fields, false)
     )
@@ -236,7 +237,7 @@ let generate_initial_regstate ctx env ast =
             (defs', Bindings.add id init_val vals)
         | TD_record (id, tq, fields, _) ->
             let init_val args =
-              let init_field (typ, id) =
+              let init_field ((id, typ), _) =
                 let typ = typ_subst_typquant tq args typ in
                 string_of_id id ^ " = " ^ lookup_init_val vals typ
               in

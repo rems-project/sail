@@ -256,7 +256,7 @@ let type_parameters_to_print env defs : Util.IntSet.t Bindings.t =
     match def with
     | DEF_type (TD_aux (TD_record (id, typq, fs, _), _)) ->
         let env = Env.add_typquant Unknown typq env in
-        make_type_size_map env id typq (List.map fst fs) type_size_map
+        make_type_size_map env id typq (List.map (fun ((_, t), _) -> t) fs) type_size_map
     | DEF_type (TD_aux (TD_variant (id, typq, tus, _), _)) ->
         let env = Env.add_typquant Unknown typq env in
         make_type_size_map env id typq (List.map (fun (Tu_aux (Tu_ty_id (t, _), _)) -> t) tus) type_size_map
@@ -1270,7 +1270,7 @@ let doc_typdef_lem params_to_print env (TD_aux (td, (l, annot))) =
       ^^ hardline ^^ sorts_pp
   | TD_abbrev _ -> empty
   | TD_record (id, typq, fs, _) ->
-      let f_pp (typ, fid) =
+      let f_pp ((fid, typ), _) =
         let field_env = Env.add_typquant (id_loc id) typq env in
         concat [doc_fieldname_lem id fid; space; colon; space; doc_typ_lem params_to_print field_env typ; semi]
       in

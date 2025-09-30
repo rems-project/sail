@@ -697,8 +697,8 @@ let ocaml_fundef ctx (FD_aux (FD_function (_, _, funcls), _)) = ocaml_funcls ctx
 let rec ocaml_fields ctx =
   let ocaml_field typ id = separate space [zencode ctx id; colon; ocaml_typ ctx typ] in
   function
-  | [(typ, id)] -> ocaml_field typ id
-  | (typ, id) :: fields -> ocaml_field typ id ^^ semi ^/^ ocaml_fields ctx fields
+  | [((id, typ), _)] -> ocaml_field typ id
+  | ((id, typ), _) :: fields -> ocaml_field typ id ^^ semi ^/^ ocaml_fields ctx fields
   | [] -> empty
 
 let rec ocaml_cases polymorphic_variant ctx =
@@ -737,7 +737,7 @@ let ocaml_struct_type ctx id = zencode_upper ctx id ^^ dot ^^ zencode ctx id
 
 let ocaml_string_of_struct ctx struct_id typq fields =
   let arg = gensym () in
-  let ocaml_field (typ, id) =
+  let ocaml_field ((id, typ), _) =
     separate space
       [
         string (string_of_id id ^ " = \"");
@@ -890,7 +890,7 @@ let ocaml_pp_generators ctx defs orig_types required =
     | TD_abbrev (_, _, A_aux (A_typ typ, _)) -> add_req_from_typ required typ
     | TD_abbrev _ -> required
     | TD_abstract _ -> required
-    | TD_record (_, _, fields, _) -> List.fold_left (fun req (typ, _) -> add_req_from_typ req typ) required fields
+    | TD_record (_, _, fields, _) -> List.fold_left (fun req ((_, typ), _) -> add_req_from_typ req typ) required fields
     | TD_variant (_, _, variants, _) ->
         List.fold_left (fun req (Tu_aux (Tu_ty_id (typ, _), _)) -> add_req_from_typ req typ) required variants
     | TD_enum _ -> required
@@ -984,7 +984,7 @@ let ocaml_pp_generators ctx defs orig_types required =
       let build_enum_constructor id =
         separate space [bar; dquotes (string (string_of_id id)); string "->"; zencode_upper ctx id]
       in
-      let rand_field (typ, id) = zencode ctx id ^^ space ^^ equals ^^ space ^^ make_subgen typ in
+      let rand_field ((id, typ), _) = zencode ctx id ^^ space ^^ equals ^^ space ^^ make_subgen typ in
       let make_args tqs =
         string "g"
         ^^

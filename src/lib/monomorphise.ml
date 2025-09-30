@@ -4585,9 +4585,9 @@ module ToplevelNexpRewrites = struct
           let env = Env.add_typquant tq_l tyqs env in
           let nexp_map, fields' =
             List.fold_right
-              (fun (typ, id) (nexp_map, t) ->
+              (fun ((id, typ), def_annot) (nexp_map, t) ->
                 let nexp_map, typ = rewrite_typ_in_spec env nexp_map typ in
-                (nexp_map, (typ, id) :: t)
+                (nexp_map, ((id, typ), def_annot) :: t)
               )
               fields ([], [])
           in
@@ -4666,7 +4666,11 @@ module ToplevelNexpRewrites = struct
       | TD_abbrev (id, typq, typ_arg) -> TD_aux (TD_abbrev (id, typq, typ_arg), annot)
       | TD_abstract (id, kind, instantiation) -> TD_aux (TD_abstract (id, kind, instantiation), annot)
       | TD_record (id, typq, typ_ids, flag) ->
-          TD_aux (TD_record (id, typq, List.map (fun (typ, id) -> (expand_type typ, id)) typ_ids, flag), annot)
+          TD_aux
+            ( TD_record
+                (id, typq, List.map (fun ((id, typ), def_annot) -> ((id, expand_type typ), def_annot)) typ_ids, flag),
+              annot
+            )
       | TD_variant (id, typq, tus, flag) -> TD_aux (TD_variant (id, typq, List.map rw_union tus, flag), annot)
       | TD_enum (id, ids, flag) -> TD_aux (TD_enum (id, ids, flag), annot)
       | TD_bitfield _ -> assert false (* Processed before re-writing *)
