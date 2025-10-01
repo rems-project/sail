@@ -80,14 +80,14 @@ $include <concurrency_interface/common.sail>
 */
 
 
-/* This type represent a Request to read a section of memory. It requests
-   reading 'n bytes of data and 'nt capabilities tags (if CHERI is off, 'nt must
-   be 0) The actual footprint read is max('n, 'cap_size * 'nt). If 'n is smaller
+/* This type represent a Request to access a section of memory. It requests
+   accessing 'n bytes of data and 'nt capabilities tags (if CHERI is off, 'nt must
+   be 0). The actual footprint accessed is max('n, 'cap_size * 'nt). If 'n is smaller
    than this value, the extra bytes are discarded. */
-$option -lem_extern_type Mem_read_request
-$option -coq_extern_type Mem_read_request
-$option -lean_extern_type Mem_read_request
-struct Mem_read_request('n : Int, 'nt : Int, 'addr_size : Int, 'addr_space : Type,
+$option -lem_extern_type Mem_request
+$option -coq_extern_type Mem_request
+$option -lean_extern_type Mem_request
+struct Mem_request('n : Int, 'nt : Int, 'addr_size : Int, 'addr_space : Type,
     'mem_acc : Type), 'n >= 0 & 'nt >= 0 & 'addr_size > 0 = {
   access_kind : 'mem_acc,
   address : bits('addr_size),
@@ -110,7 +110,7 @@ $endif
 
 /* Requests a memory read. Return 'n bytes and 'nt tags */
 outcome sail_mem_read : forall 'n 'nt, 'n >= 0 & (if 'CHERI then 'nt >= 0 else 'nt == 0).
-  Mem_read_request('n, 'nt, 'addr_size, 'addr_space, 'mem_acc)
+  Mem_request('n, 'nt, 'addr_size, 'addr_space, 'mem_acc)
       -> result((vector('n, bits(8)), vector('nt, bool)), 'abort)
 with
   'addr_size : Int,
@@ -202,29 +202,12 @@ constraint 'addr_size > 0 & 'cap_size_log >= 0
     }
 }
 
-/* This type represent a request to write a range of memory. It requests
-   writing 'n bytes of data and 'nt capabilities tags (if CHERI is off, 'nt must
-   be 0). 'n can be 0 to write only CHERI tags */
-$option -lem_extern_type Mem_write_request
-$option -coq_extern_type Mem_write_request
-$option -lean_extern_type Mem_write_request
-struct Mem_write_request('n : Int, 'nt : Int, 'addr_size : Int, 'addr_space : Type,
-    'mem_acc : Type), 'n >= 0 & 'nt >= 0 & 'addr_size > 0 = {
-  access_kind : 'mem_acc,
-  address : bits('addr_size),
-  address_space : 'addr_space,
-  size : int('n),
-  num_tag : int('nt),
-  value : vector('n, bits(8)),
-  tags : vector('nt, bool),
-}
-
 /* Requests a memory write. If the write cannot happen due to
    atomicity/exclusive constraints, then the execution path is discarded as
    impossible (size-0 non deterministic choice). Is the responsability of the
    Sail model to do the proper non-determinitic choices beforehand */
 outcome sail_mem_write : forall 'n 'nt, 'n >= 0 & (if 'CHERI then 'nt >= 0 else 'nt == 0).
-  Mem_write_request('n, 'nt, 'addr_size, 'addr_space, 'mem_acc)
+  (Mem_request('n, 'nt, 'addr_size, 'addr_space, 'mem_acc), vector('n, bits(8)), vector('nt, bool))
       -> result(unit, 'abort)
 with
   'addr_size : Int,
@@ -246,7 +229,7 @@ constraint 'addr_size > 0 & 'cap_size_log >= 0
     val mem_acc_is_exclusive : 'mem_acc -> bool
     val mem_acc_is_atomic_rmw : 'mem_acc -> bool
 
-    impl emulator_or_isla(request) = {
+    impl emulator_or_isla(request, value, tags) = {
         let address : {'as, 'as in {32, 64}. bits('as)} =
             if length(request.address) <= 32
             then sail_zero_extend(request.address, 32)
@@ -260,7 +243,7 @@ constraint 'addr_size > 0 & 'cap_size_log >= 0
             let tag_address = address & sail_shiftleft(sail_ones(length(address)), 'cap_size_log);
             let tag_footprint = max_int(tdiv_int(request.size + cap_size - 1, cap_size), request.num_tag);
             foreach(i from 0 to (tag_footprint - 1)) {
-                let tag_val = if (i >= request.num_tag) then false else request.tags[i];
+                let tag_val = if (i >= request.num_tag) then false else tags[i];
                 if length(address) == 32 then {
                     write_tag#(32, tag_address + i * cap_size, tag_val)
                 } else {
@@ -269,18 +252,18 @@ constraint 'addr_size > 0 & 'cap_size_log >= 0
             };
         };
         if request.size > 0 then {
-            let value = from_bytes_le(request.size, request.value);
+            let value_bits = from_bytes_le(request.size, value);
             if mem_acc_is_exclusive(request.access_kind) then {
                 if length(address) == 32 then {
-                    let _ = write_mem_exclusive#(request, 32, address, request.size, value)
+                    let _ = write_mem_exclusive#(request, 32, address, request.size, value_bits)
                 } else {
-                    let _ = write_mem_exclusive#(request, 64, address, request.size, value)
+                    let _ = write_mem_exclusive#(request, 64, address, request.size, value_bits)
                 }
             } else {
                 if length(address) == 32 then {
-                    let _ = write_mem#(request, 32, address, request.size, value)
+                    let _ = write_mem#(request, 32, address, request.size, value_bits)
                 } else {
-                    let _ = write_mem#(request, 64, address, request.size, value);
+                    let _ = write_mem#(request, 64, address, request.size, value_bits);
                 }
             }
         };
@@ -288,29 +271,12 @@ constraint 'addr_size > 0 & 'cap_size_log >= 0
     }
 }
 
-/* This type represent an announcement of an address that will be read or written.
-   All the parameters must match up with the content of the later access.  We assume
-   that the access kind identifies whether the operation is a read, write, or rmw
-   operation.
- */
-$option -lem_extern_type Mem_address_announce
-$option -coq_extern_type Mem_address_announce
-$option -lean_extern_type Mem_address_announce
-struct Mem_address_announce('n : Int, 'nt : Int, 'addr_size : Int, 'addr_space : Type,
-    'mem_acc : Type), 'n >= 0 & 'nt >= 0 & 'addr_size > 0 = {
-  access_kind : 'mem_acc,
-  address : bits('addr_size),
-  address_space : 'addr_space,
-  size : int('n),
-  num_tag : int('nt),
-}
-
 /* Requests a memory write. If the write cannot happen due to
    atomicity/exclusive constraints, then the execution path is discarded as
    impossible (size-0 non deterministic choice). Is the responsability of the
    Sail model to do the proper non-determinitic choices beforehand */
 outcome sail_mem_address_announce : forall 'n 'nt, 'n >= 0 & (if 'CHERI then 'nt >= 0 else 'nt == 0).
-  Mem_address_announce('n, 'nt, 'addr_size, 'addr_space, 'mem_acc)
+  Mem_request('n, 'nt, 'addr_size, 'addr_space, 'mem_acc)
       -> unit
 with
   'addr_size : Int,
