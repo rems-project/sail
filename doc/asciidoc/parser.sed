@@ -14,6 +14,7 @@
 /Monadic/d
 
 s/Pragma/$LINE_DIRECTIVE/g
+s/Private/private/g
 s/Fixity/FIXITY_DEF/g
 s/Overload/overload/g
 s/Clause/clause/g
