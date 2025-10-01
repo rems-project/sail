@@ -374,8 +374,6 @@ let lean_escape_string s = Str.global_replace (Str.regexp "\"") "\\\"" s
 let doc_lit (L_aux (lit, l)) =
   match lit with
   | L_unit -> string "()"
-  | L_zero -> string "0#1"
-  | L_one -> string "1#1"
   | L_false -> string "false"
   | L_true -> string "true"
   | L_num i -> doc_big_int i
@@ -388,8 +386,8 @@ let doc_lit (L_aux (lit, l)) =
 
 let doc_vec_lit (L_aux (lit, _) as l) =
   match lit with
-  | L_zero -> string "0"
-  | L_one -> string "1"
+  | L_bin [Non_empty (Bin_0, [])] -> string "0"
+  | L_bin [Non_empty (Bin_1, [])] -> string "1"
   | _ -> failwith "Unexpected litteral found in vector: " ^^ doc_lit l
 
 let string_of_exp_con (E_aux (e, _)) =

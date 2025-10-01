@@ -291,7 +291,6 @@ module Verilog_config (C : JIB_CONFIG) : Jib_compile.CONFIG = struct
   let rec convert_typ ctx typ =
     let (Typ_aux (typ_aux, l) as typ) = Env.expand_synonyms ctx.local_env typ in
     match typ_aux with
-    | Typ_id id when string_of_id id = "bit" -> CT_bit
     | Typ_id id when string_of_id id = "bool" -> CT_bool
     | Typ_id id when string_of_id id = "int" -> CT_lint
     | Typ_id id when string_of_id id = "nat" -> CT_lint

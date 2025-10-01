@@ -504,8 +504,6 @@ let max_int32 = Big_int.of_int64 (Int64.of_int32 Int32.max_int)
 let rec doc_lit_lem (L_aux (lit, l)) =
   match lit with
   | L_unit -> utf8string "()"
-  | L_zero -> utf8string "B0"
-  | L_one -> utf8string "B1"
   | L_false -> utf8string "false"
   | L_true -> utf8string "true"
   | L_num i ->

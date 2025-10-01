@@ -1,11 +1,9 @@
 default Order dec
 
-/* this is here because if we don't have it before including vector_dec
-   we get infinite loops caused by interaction with bool/bit casts */
+$include <vector_dec.sail>
+
 val eq_bit2 = pure "eq_bit" : (bit, bit) -> bool
 overload operator == = {eq_bit2}
-
-$include <vector_dec.sail>
 
 val reg_deref = impure "reg_deref": forall ('a : Type). register('a) -> 'a
 

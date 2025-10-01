@@ -36,6 +36,12 @@ let combine_binding l r =
 let merge_bindings l r =
   IdMap.map2 combine_binding l r
 
+(** val to_gvector : value -> value **)
+
+let to_gvector v = match v with
+| V_bitvector bs -> V_vector (map (fun b -> V_bitvector (b :: [])) bs)
+| _ -> v
+
 (** val is_value : 'a1 exp -> bool **)
 
 let is_value = function
@@ -411,6 +417,8 @@ module type SemanticExt =
 
   val get_split : tannot -> vector_concat_split
 
+  val is_bitvector : tannot -> bool
+
   val num_equal : Big_int_Z.big_int -> Big_int_Z.big_int -> bool
 
   val rational_equal : Rational.t -> Rational.t -> bool
@@ -454,7 +462,7 @@ module Make =
 
   (** val substitute : id -> value -> 'a1 exp -> 'a1 exp **)
 
-  let rec substitute n v = function
+  let rec substitute n v x = match x with
   | E_aux (aux, annot0) ->
     (match aux with
      | E_block xs -> E_aux ((E_block (map (substitute n v) xs)), annot0)
@@ -462,6 +470,7 @@ module Make =
        if id_eqb n m
        then E_aux ((E_internal_value v), annot0)
        else E_aux ((E_id m), annot0)
+     | E_lit _ -> E_aux (aux, annot0)
      | E_typ (typ0, x0) -> E_aux ((E_typ (typ0, (substitute n v x0))), annot0)
      | E_app (f, args) ->
        E_aux ((E_app (f, (map (substitute n v) args))), annot0)
@@ -481,6 +490,9 @@ module Make =
               (substitute n v to0), (substitute n v amount), ord,
               (substitute n v body))), annot0)
      | E_vector xs -> E_aux ((E_vector (map (substitute n v) xs)), annot0)
+     | E_vector_append (x0, y) ->
+       E_aux ((E_vector_append ((substitute n v x0), (substitute n v y))),
+         annot0)
      | E_list xs -> E_aux ((E_list (map (substitute n v) xs)), annot0)
      | E_cons (x0, xs) ->
        E_aux ((E_cons ((substitute n v x0), (substitute n v xs))), annot0)
@@ -523,7 +535,7 @@ module Make =
      | E_var (l, x0, body) ->
        E_aux ((E_var ((substitute_lexp n v l), (substitute n v x0),
          (substitute n v body))), annot0)
-     | _ -> E_aux (aux, annot0))
+     | _ -> x)
 
   (** val substitute_arm : id -> value -> 'a1 pexp -> 'a1 pexp **)
 
@@ -560,26 +572,32 @@ module Make =
        LE_aux ((LE_field ((substitute_lexp n v lx), f)), annot0)
      | _ -> l)
 
+  (** val bv_concat : Parse_ast.l -> value list -> bit list Monad.t **)
+
+  let rec bv_concat l = function
+  | [] -> Monad.pure []
+  | v :: rest ->
+    (match v with
+     | V_bitvector bs ->
+       Monad.bind (bv_concat l rest) (fun rest' -> Monad.pure (app bs rest'))
+     | _ -> Monad.Runtime_type_error l)
+
   (** val value_of_lit : lit -> typ -> value Monad.t **)
 
   let value_of_lit lit0 typ0 =
     let L_aux (aux, _) = lit0 in
     (match aux with
      | L_unit -> Monad.pure V_unit
-     | L_zero -> Monad.pure (V_bit B0)
-     | L_one -> Monad.pure (V_bit B1)
      | L_true -> Monad.pure (V_bool true)
      | L_false -> Monad.pure (V_bool false)
      | L_num n -> Monad.pure (V_int n)
-     | L_hex h ->
-       Monad.pure (V_vector (map (fun x -> V_bit x) (bitlist_of_hex_lit h)))
-     | L_bin b ->
-       Monad.pure (V_vector (map (fun x -> V_bit x) (bitlist_of_bin_lit b)))
+     | L_hex h -> Monad.pure (V_bitvector (bitlist_of_hex_lit h))
+     | L_bin b -> Monad.pure (V_bitvector (bitlist_of_bin_lit b))
      | L_string s -> Monad.pure (V_string s)
      | L_undef -> Monad.get_undefined typ0
      | L_real r -> Monad.pure (V_real (T.rational_of_string r)))
 
-  (** val same_bits : bit list -> value list -> bool **)
+  (** val same_bits : bit list -> bit list -> bool **)
 
   let same_bits bs vs =
     fst
@@ -590,17 +608,12 @@ module Make =
               | [] -> (false, [])
               | y1 :: vs0 ->
                 (match y1 with
-                 | V_bit b0 ->
-                   (match b0 with
-                    | B0 ->
-                      (match b with
-                       | B0 -> (true, vs0)
-                       | B1 -> (false, []))
-                    | B1 ->
-                      (match b with
-                       | B0 -> (false, [])
-                       | B1 -> (true, vs0)))
-                 | _ -> (false, [])))
+                 | B0 -> (match b with
+                          | B0 -> (true, vs0)
+                          | B1 -> (false, []))
+                 | B1 -> (match b with
+                          | B0 -> (false, [])
+                          | B1 -> (true, vs0))))
         else (false, [])) bs (true, vs))
 
   (** val pattern_match_literal : lit -> value -> bool **)
@@ -611,18 +624,6 @@ module Make =
      | L_unit -> (match v with
                   | V_unit -> true
                   | _ -> false)
-     | L_zero ->
-       (match v with
-        | V_bit b -> (match b with
-                      | B0 -> true
-                      | B1 -> false)
-        | _ -> false)
-     | L_one ->
-       (match v with
-        | V_bit b -> (match b with
-                      | B0 -> false
-                      | B1 -> true)
-        | _ -> false)
      | L_true -> (match v with
                   | V_bool b -> b
                   | _ -> false)
@@ -635,11 +636,11 @@ module Make =
                    | _ -> false)
      | L_hex s ->
        (match v with
-        | V_vector vs -> same_bits (bitlist_of_hex_lit s) vs
+        | V_bitvector vs -> same_bits (bitlist_of_hex_lit s) vs
         | _ -> false)
      | L_bin s ->
        (match v with
-        | V_vector vs -> same_bits (bitlist_of_bin_lit s) vs
+        | V_bitvector vs -> same_bits (bitlist_of_bin_lit s) vs
         | _ -> false)
      | L_string s1 -> (match v with
                        | V_string s2 -> (=) s1 s2
@@ -724,7 +725,7 @@ module Make =
           else no_match
         | _ -> no_match)
      | P_vector ps ->
-       (match v with
+       (match to_gvector v with
         | V_vector vs ->
           fst
             (fold_left (fun match_info p0 ->
@@ -742,7 +743,7 @@ module Make =
               ps ((true, []), vs))
         | _ -> no_match)
      | P_vector_concat ps ->
-       (match v with
+       (match to_gvector v with
         | V_vector vs ->
           fst
             (fold_left (fun match_info p0 ->
@@ -870,7 +871,7 @@ module Make =
          else Monad.Runtime_type_error (fst annot0)
        | _ -> Monad.Runtime_type_error (fst annot0))
     | DL_vector_concat ds ->
-      (match v with
+      (match to_gvector v with
        | V_vector vs ->
          let (assignment, _) =
            fold_left (fun acc d0 ->
@@ -1345,7 +1346,11 @@ module Make =
          let (evaluated0, unevaluated) = filtered_var in
          (match unevaluated with
           | [] ->
-            wrap (E_internal_value (V_vector (all_evaluated evaluated0)))
+            if T.is_bitvector (snd annot0)
+            then Monad.bind
+                   (bv_concat (fst annot0) (all_evaluated evaluated0))
+                   (fun bits -> wrap (E_internal_value (V_bitvector bits)))
+            else wrap (E_internal_value (V_vector (all_evaluated evaluated0)))
           | u :: us ->
             Monad.bind (step0 u) (fun u' ->
               wrap (E_vector (app evaluated0 (u' :: us)))))

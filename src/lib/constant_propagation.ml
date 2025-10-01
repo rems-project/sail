@@ -112,8 +112,8 @@ let threaded_map f state l =
 
 (* Attempt simple pattern matches *)
 let lit_match = function
-  | (L_zero | L_false), (L_zero | L_false) -> true
-  | (L_one | L_true), (L_one | L_true) -> true
+  | (L_bin [Non_empty (Bin_0, [])] | L_false), (L_bin [Non_empty (Bin_0, [])] | L_false) -> true
+  | (L_bin [Non_empty (Bin_1, [])] | L_true), (L_bin [Non_empty (Bin_1, [])] | L_true) -> true
   | L_num i1, L_num i2 -> Big_int.equal i1 i2
   | l1, l2 -> l1 = l2
 
@@ -219,8 +219,7 @@ let rec drop_casts = function E_aux (E_typ (_, e), _) -> drop_casts e | exp -> e
 let construct_lit_vector args =
   let rec aux l = function
     | [] -> Some (L_aux (L_bin (non_empty_singleton (List.rev l)), Unknown))
-    | E_aux (E_lit (L_aux (((L_zero | L_one) as lit), _)), _) :: t ->
-        aux ((if lit = L_zero then Bin_0 else Bin_1) :: l) t
+    | E_aux (E_lit (L_aux (L_bin [Non_empty (b, [])], _)), _) :: t -> aux (b :: l) t
     | _ -> None
   in
   aux [] args

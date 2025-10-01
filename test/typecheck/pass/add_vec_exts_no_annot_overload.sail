@@ -1,5 +1,7 @@
 default Order dec
 
+type bit = bitvector(1)
+
 val exts : forall ('n : Int) ('m : Int) ('ord : Order).
   vector('n, 'ord, bit) -> vector('m, 'ord, bit)
 

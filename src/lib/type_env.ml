@@ -367,7 +367,6 @@ let builtin_typs =
       ("vector", [K_int; K_type], K_type);
       ("bitvector", [K_int], K_type);
       ("register", [K_type], K_type);
-      ("bit", [], K_type);
       ("unit", [], K_type);
       ("int", [], K_type);
       ("nat", [], K_type);

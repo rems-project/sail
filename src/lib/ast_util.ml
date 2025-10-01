@@ -761,7 +761,6 @@ let unknown_typ = mk_typ Typ_internal_unknown
 let int_typ = mk_id_typ (mk_id "int")
 let nat_typ = mk_id_typ (mk_id "nat")
 let unit_typ = mk_id_typ (mk_id "unit")
-let bit_typ = mk_id_typ (mk_id "bit")
 let real_typ = mk_id_typ (mk_id "real")
 let app_typ id = function [] -> mk_typ (Typ_id id) | args -> mk_typ (Typ_app (id, args))
 let register_typ typ = mk_typ (Typ_app (mk_id "register", [mk_typ_arg (A_typ typ)]))
@@ -780,6 +779,8 @@ let function_typ arg_typs ret_typ = mk_typ (Typ_fn (arg_typs, ret_typ))
 let vector_typ n typ = mk_typ (Typ_app (mk_id "vector", [mk_typ_arg (A_nexp (nexp_simp n)); mk_typ_arg (A_typ typ)]))
 
 let bitvector_typ n = mk_typ (Typ_app (mk_id "bitvector", [mk_typ_arg (A_nexp (nexp_simp n))]))
+
+let bit_typ = bitvector_typ (Nexp_aux (Nexp_constant (Big_int.of_int 1), Parse_ast.Unknown))
 
 let exc_typ = mk_id_typ (mk_id "exception")
 
@@ -1342,8 +1343,6 @@ let string_of_bin_lit ?(group_separator = "_") bin =
 let string_of_lit (L_aux (lit, _)) =
   match lit with
   | L_unit -> "()"
-  | L_zero -> "bitzero"
-  | L_one -> "bitone"
   | L_true -> "true"
   | L_false -> "false"
   | L_num n -> Big_int.to_string n
@@ -1988,7 +1987,12 @@ let vector_string_to_bit_list (L_aux (lit, l)) =
     | L_bin bin -> Semantics.bitlist_of_bin_lit bin
     | _ -> raise (Reporting.err_unreachable l __POS__ "s_bin given non vector literal")
   in
-  List.map (function Value_type.B0 -> L_aux (L_zero, gen_loc l) | Value_type.B1 -> L_aux (L_one, gen_loc l)) s_bin
+  List.map
+    (function
+      | Value_type.B0 -> L_aux (L_bin [Non_empty (Bin_0, [])], gen_loc l)
+      | Value_type.B1 -> L_aux (L_bin [Non_empty (Bin_1, [])], gen_loc l)
+      )
+    s_bin
 
 (* Functions for working with locations *)
 

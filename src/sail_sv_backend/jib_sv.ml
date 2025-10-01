@@ -181,7 +181,7 @@ module Make (Config : CONFIG) = struct
   let sv_type_id id = string (sv_type_id_string id)
 
   let rec bit_width ctx = function
-    | CT_unit | CT_bit | CT_bool -> Some 1
+    | CT_unit | CT_bool -> Some 1
     | CT_fbits len -> Some len
     | CT_lbits -> Some Config.max_unknown_bitvector_width
     | CT_enum enum_id ->
@@ -202,10 +202,10 @@ module Make (Config : CONFIG) = struct
 
   let rec sv_ctyp ?(two_state = false) = function
     | CT_bool -> simple_type "bit"
-    | CT_bit when two_state -> simple_type "bit"
-    | CT_bit -> simple_type "logic"
     | CT_fbits 0 -> simple_type "sail_zwbv"
+    | CT_fbits 1 when two_state -> simple_type "bit"
     | CT_fbits width when two_state -> ksprintf simple_type "bit [%d:0]" (width - 1)
+    | CT_fbits 1 -> simple_type "logic"
     | CT_fbits width -> ksprintf simple_type "logic [%d:0]" (width - 1)
     | CT_sbits max_width ->
         let logic = sprintf "logic [%d:0]" (max_width - 1) in
@@ -2029,7 +2029,8 @@ module Make (Config : CONFIG) = struct
       recursive = false;
       input_ports =
         ( if clk then
-            [mk_port (name (mk_id "clk")) CT_bit; mk_port (name (mk_id "reset")) CT_bit] @ arg_ports @ register_resets
+            [mk_port (name (mk_id "clk")) (CT_fbits 1); mk_port (name (mk_id "reset")) (CT_fbits 1)]
+            @ arg_ports @ register_resets
           else arg_ports
         )
         @ (if inout_regs then List.map (fun (name, ctyp) -> mk_port name ctyp) register_inputs else [])

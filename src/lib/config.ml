@@ -365,7 +365,6 @@ end = struct
           match string_of_id id with
           | "string" -> Some (`Assoc [("type", `String "string")])
           | "unit" -> Some (`Assoc [("type", `String "null")])
-          | "bit" -> Some (`Assoc [("type", `String "boolean")])
           | _ -> None
         )
       | _ -> None
@@ -524,9 +523,8 @@ let bin_digit_to_bit = function Bin_0 -> Value_type.B0 | Bin_1 -> Value_type.B1
 
 let fix_length ~at:l ~len bitlist =
   let open Value_type in
-  let coerce_bit = function V_bit b -> b | _ -> assert false in
-  match Primops.zero_extend (V_vector (List.map (fun b -> V_bit b) bitlist)) (V_int (Big_int.of_int len)) with
-  | Some (V_vector bitlist) -> List.map coerce_bit bitlist
+  match Primops.zero_extend (V_bitvector bitlist) (V_int (Big_int.of_int len)) with
+  | Some (V_bitvector bitlist) -> bitlist
   | _ ->
       Reporting.warn ~force_show:true "Configuration" l "Forced to truncate configuration bitvector literal";
       let d = len - List.length bitlist in
@@ -588,16 +586,8 @@ let rec sail_exp_from_json ~at:l env typ =
       if Option.is_some (Type_check.destruct_numeric typ) then mk_lit_exp ~loc:l (L_num (Big_int.of_string s))
       else if typ_is_enum env typ then mk_exp ~loc:l (E_id (mk_id ~loc:l s))
       else mk_lit_exp ~loc:l (L_string s)
-  | `Bool true -> (
-      match typ with
-      | Typ_aux (Typ_id id, _) when string_of_id id = "bit" -> mk_lit_exp ~loc:l L_one
-      | _ -> mk_lit_exp ~loc:l L_true
-    )
-  | `Bool false -> (
-      match typ with
-      | Typ_aux (Typ_id id, _) when string_of_id id = "bit" -> mk_lit_exp ~loc:l L_zero
-      | _ -> mk_lit_exp ~loc:l L_false
-    )
+  | `Bool true -> mk_lit_exp ~loc:l L_true
+  | `Bool false -> mk_lit_exp ~loc:l L_false
   | `Null -> mk_lit_exp ~loc:l L_unit
   | `List jsons -> (
       let base_typ = match destruct_exist typ with None -> typ | Some (_, _, typ) -> typ in

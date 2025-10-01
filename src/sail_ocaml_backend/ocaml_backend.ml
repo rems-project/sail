@@ -171,8 +171,6 @@ let string_lit str = dquotes (string (String.escaped str))
 let ocaml_lit (L_aux (lit_aux, _)) =
   match lit_aux with
   | L_unit -> string "()"
-  | L_zero -> string "B0"
-  | L_one -> string "B1"
   | L_true -> string "true"
   | L_false -> string "false"
   | L_num n ->

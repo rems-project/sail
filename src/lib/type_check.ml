@@ -1284,8 +1284,8 @@ let can_be_undefined ~at:l env typ =
     match aux with
     | Typ_fn _ | Typ_bidir _ | Typ_exist _ | Typ_var _ -> false
     | Typ_id (Id_aux (Id name, _) as id) ->
-        name = "bool" || name = "bit" || name = "nat" || name = "int" || name = "real" || name = "string"
-        || name = "unit" || Env.is_bitfield id env || Env.is_user_undefined id env
+        name = "bool" || name = "nat" || name = "int" || name = "real" || name = "string" || name = "unit"
+        || Env.is_bitfield id env || Env.is_user_undefined id env
     | Typ_id _ -> false
     | Typ_app ((Id_aux (Id name, _) as id), args) ->
         (name = "bitvector" || name = "vector" || name = "range" || Env.is_user_undefined id env)
@@ -1375,8 +1375,6 @@ let rec get_implicits typs =
 let infer_lit (L_aux (lit_aux, l)) =
   match lit_aux with
   | L_unit -> unit_typ
-  | L_zero -> bit_typ
-  | L_one -> bit_typ
   | L_num n -> atom_typ (nconstant n)
   | L_true -> atom_bool_typ nc_true
   | L_false -> atom_bool_typ nc_false
@@ -2197,7 +2195,7 @@ let rec check_exp env (E_aux (exp_aux, (l, uannot)) as exp : uannot exp) (Typ_au
         else irule infer_exp env exp
       in
       let inferred_typ = typ_of inferred_exp in
-      let checked_cases = List.map (fun case -> check_case env inferred_typ case typ) cases in
+      let checked_cases = List.filter_map (fun case -> check_case env inferred_typ case typ) cases in
       let checked_cases, attr_update =
         if Option.is_some (get_attribute "complete" uannot) || Option.is_some (get_attribute "incomplete" uannot) then
           (checked_cases, fun attrs -> attrs)
@@ -2212,7 +2210,7 @@ let rec check_exp env (E_aux (exp_aux, (l, uannot)) as exp : uannot exp) (Typ_au
       annot_exp (E_match (inferred_exp, checked_cases)) typ |> update_uannot attr_update
   | E_try (exp, cases), _ ->
       let checked_exp = crule check_exp env exp typ in
-      annot_exp (E_try (checked_exp, List.map (fun case -> check_case env exc_typ case typ) cases)) typ
+      annot_exp (E_try (checked_exp, List.filter_map (fun case -> check_case env exc_typ case typ) cases)) typ
   | E_struct_update (exp, fexps), _ ->
       let checked_exp = crule check_exp env exp typ in
       let rectyp_id =
@@ -2707,33 +2705,36 @@ and check_case env pat_typ pexp typ =
   let env = bind_pattern_vector_subranges pat env in
   match bind_pat env pat pat_typ with
   | tpat, env, guards ->
-      let hint_loc l =
-        match guard with
-        | None -> Parse_ast.Hint ("guard created for this pattern", pat_loc pat, l)
-        | Some exp -> Parse_ast.Hint ("combining pattern with guard", exp_loc exp, l)
-      in
-      let guard =
-        match (guard, guards) with None, h :: t -> Some (h, t) | Some x, l -> Some (x, l) | None, [] -> None
-      in
-      let guard =
-        match guard with
-        | Some (h, t) ->
-            Some
-              (List.fold_left
-                 (fun acc guard -> mk_infix_exp ~loc:(hint_loc (exp_loc guard)) acc (mk_operator "&") guard)
-                 h t
-              )
-        | None -> None
-      in
-      let checked_guard, env' =
-        match guard with
-        | None -> (None, env)
-        | Some guard ->
-            let checked_guard = check_exp env guard bool_typ in
-            (Some checked_guard, add_opt_constraint l "guard pattern" (assert_constraint env true checked_guard) env)
-      in
-      let checked_case = crule check_exp env' case typ in
-      construct_pexp (tpat, checked_guard, checked_case, (l, (None, uannot)))
+      if prove __POS__ env nc_false then None
+      else (
+        let hint_loc l =
+          match guard with
+          | None -> Parse_ast.Hint ("guard created for this pattern", pat_loc pat, l)
+          | Some exp -> Parse_ast.Hint ("combining pattern with guard", exp_loc exp, l)
+        in
+        let guard =
+          match (guard, guards) with None, h :: t -> Some (h, t) | Some x, l -> Some (x, l) | None, [] -> None
+        in
+        let guard =
+          match guard with
+          | Some (h, t) ->
+              Some
+                (List.fold_left
+                   (fun acc guard -> mk_infix_exp ~loc:(hint_loc (exp_loc guard)) acc (mk_operator "&") guard)
+                   h t
+                )
+          | None -> None
+        in
+        let checked_guard, env' =
+          match guard with
+          | None -> (None, env)
+          | Some guard ->
+              let checked_guard = check_exp env guard bool_typ in
+              (Some checked_guard, add_opt_constraint l "guard pattern" (assert_constraint env true checked_guard) env)
+        in
+        let checked_case = crule check_exp env' case typ in
+        Some (construct_pexp (tpat, checked_guard, checked_case, (l, (None, uannot))))
+      )
   (* AA: Not sure if we still need this *)
   | exception (Type_error _ as typ_exn) -> (
       match pat with
@@ -3911,7 +3912,8 @@ and infer_exp env (E_aux (exp_aux, (l, uannot)) as exp) =
       let checked_items = List.map (fun i -> crule check_exp env i (typ_of inferred_item)) items in
       begin
         match typ_of inferred_item with
-        | Typ_aux (Typ_id id, _) when string_of_id id = "bit" ->
+        | Typ_aux (Typ_app (id, [A_aux (A_nexp n, _)]), _)
+          when string_of_id id = "bitvector" && prove __POS__ env (nc_eq n (nint 1)) ->
             let bitvec_typ = bitvector_typ (nint (List.length vec)) in
             annot_exp (E_vector (inferred_item :: checked_items)) bitvec_typ
         | _ ->
@@ -4638,8 +4640,10 @@ let bind_funcl_arg_typ l env typ =
 let check_funcl env (FCL_aux (FCL_funcl (id, pexp), (def_annot, _))) typ =
   let l = def_annot.loc in
   let typ_arg, typ_ret, env = bind_funcl_arg_typ l env typ in
-  let typed_pexp = check_case env typ_arg pexp typ_ret in
-  FCL_aux (FCL_funcl (id, typed_pexp), (def_annot, mk_expected_tannot env typ (Some typ)))
+  let typed_pexp_opt = check_case env typ_arg pexp typ_ret in
+  match typed_pexp_opt with
+  | Some typed_pexp -> FCL_aux (FCL_funcl (id, typed_pexp), (def_annot, mk_expected_tannot env typ (Some typ)))
+  | None -> typ_error l "Function clause has impossible constraints"
 
 let check_mapcl env (MCL_aux (cl, (def_annot, _))) typ =
   let ignore_errors ~default f = try f () with Type_error _ -> default in
@@ -4668,12 +4672,16 @@ let check_mapcl env (MCL_aux (cl, (def_annot, _))) typ =
           MCL_aux (MCL_bidir (typed_left_mpexp, typed_right_mpexp), (def_annot, mk_expected_tannot env typ (Some typ)))
         end
       | MCL_forwards pexp -> begin
-          let typed_pexp = check_case env typ1 pexp typ2 in
-          MCL_aux (MCL_forwards typed_pexp, (def_annot, mk_expected_tannot env typ (Some typ)))
+          let typed_pexp_opt = check_case env typ1 pexp typ2 in
+          match typed_pexp_opt with
+          | Some typed_pexp -> MCL_aux (MCL_forwards typed_pexp, (def_annot, mk_expected_tannot env typ (Some typ)))
+          | None -> typ_error def_annot.loc "Mapping has impossible constraints"
         end
       | MCL_backwards pexp -> begin
-          let typed_pexp = check_case env typ2 pexp typ1 in
-          MCL_aux (MCL_backwards typed_pexp, (def_annot, mk_expected_tannot env typ (Some typ)))
+          let typed_pexp_opt = check_case env typ2 pexp typ1 in
+          match typed_pexp_opt with
+          | Some typed_pexp -> MCL_aux (MCL_backwards typed_pexp, (def_annot, mk_expected_tannot env typ (Some typ)))
+          | None -> typ_error def_annot.loc "Mapping has impossible constraints"
         end
     end
   | _ ->

@@ -332,7 +332,7 @@ val infer_pat : Env.t -> uannot pat -> tannot pat * Env.t * uannot exp list
 
 val infer_lexp : Env.t -> uannot lexp -> tannot lexp
 
-val check_case : Env.t -> typ -> uannot pexp -> typ -> tannot pexp
+val check_case : Env.t -> typ -> uannot pexp -> typ -> tannot pexp option
 
 val check_funcl : Env.t -> uannot funcl -> typ -> tannot funcl
 

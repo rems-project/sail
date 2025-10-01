@@ -17,6 +17,8 @@ val combine_binding : binding option -> binding option -> binding option
 
 val merge_bindings : binding IdMap.t -> binding IdMap.t -> binding IdMap.t
 
+val to_gvector : value -> value
+
 val is_value : 'a1 exp -> bool
 
 type return_value =
@@ -142,6 +144,8 @@ module type SemanticExt =
 
   val get_split : tannot -> vector_concat_split
 
+  val is_bitvector : tannot -> bool
+
   val num_equal : Big_int_Z.big_int -> Big_int_Z.big_int -> bool
 
   val rational_equal : Rational.t -> Rational.t -> bool
@@ -169,9 +173,11 @@ module Make :
 
   val substitute_lexp : id -> value -> 'a1 lexp -> 'a1 lexp
 
+  val bv_concat : Parse_ast.l -> value list -> bit list Monad.t
+
   val value_of_lit : lit -> typ -> value Monad.t
 
-  val same_bits : bit list -> value list -> bool
+  val same_bits : bit list -> bit list -> bool
 
   val pattern_match_literal : lit -> value -> bool
 

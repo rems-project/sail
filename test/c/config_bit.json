@@ -1,5 +1,5 @@
 {
     "some" : {
-        "single_bit" : true
+        "single_bit" : [true]
     }
 }

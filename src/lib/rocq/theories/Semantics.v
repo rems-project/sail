@@ -41,6 +41,12 @@ Definition merge_bindings (l r : IdMap.t binding) : IdMap.t binding :=
 
 Infix "⋈" := merge_bindings (right associativity, at level 60).
 
+Definition to_gvector (v : value) : value :=
+  match v with
+  | V_bitvector bs => V_vector (List.map (fun b => V_bitvector [b]) bs)
+  | v => v
+  end.
+
 Definition is_value {A : Set} (exp : exp A) : bool :=
   match exp with
   | E_aux (E_internal_value _) _ => true
@@ -498,6 +504,8 @@ Module Type SemanticExt.
 
   Parameter get_split : tannot -> vector_concat_split.
 
+  Parameter is_bitvector : tannot -> bool.
+
   Parameter num_equal : Z -> Z -> bool.
 
   Parameter rational_equal : rational -> rational -> bool.
@@ -537,6 +545,7 @@ Module Make (T : SemanticExt).
     | E_app f args => E_aux (E_app f (map (substitute n v) args)) annot
     | E_tuple xs => E_aux (E_tuple (map (substitute n v) xs)) annot
     | E_vector xs => E_aux (E_vector (map (substitute n v) xs)) annot
+    | E_vector_append x y => E_aux (E_vector_append (substitute n v x) (substitute n v y)) annot
     | E_if i t e =>
         E_aux (E_if (substitute n v i) (substitute n v t) (substitute n v e)) annot
     | E_let (LB_aux (LB_val pat y) lb_annot) body =>
@@ -592,7 +601,7 @@ Module Make (T : SemanticExt).
                 fields))
           annot
     | E_return x => E_aux (E_return (substitute n v x)) annot
-    | _ => E_aux aux annot
+    | _ => x
     end
   with substitute_arm {A} (n : Ast.id) (v : Value_type.value) (arm : pexp A) : pexp A :=
     let 'Pat_aux aux annot := arm in
@@ -621,46 +630,52 @@ Module Make (T : SemanticExt).
     | _ => l
     end.
 
+  Fixpoint bv_concat (l : loc) (vs : list value) : t (list bit) :=
+    match vs with
+    | [] => pure []
+    | V_bitvector bs :: rest =>
+        rest' ← bv_concat l rest;
+        pure (bs ++ rest')
+    | _ :: _ => Runtime_type_error l
+    end.
+
   Definition value_of_lit (lit : Ast.lit) (typ : Ast.typ) : t value :=
     let 'L_aux aux _ := lit in
     match aux with
     | L_unit => pure V_unit
-    | L_zero => pure (V_bit B0)
-    | L_one => pure (V_bit B1)
     | L_true => pure (V_bool true)
     | L_false => pure (V_bool false)
     | L_num n => pure (V_int n)
-    | L_hex h => pure (V_vector (map V_bit (bitlist_of_hex_lit h)))
-    | L_bin b => pure (V_vector (map V_bit (bitlist_of_bin_lit b)))
+    | L_hex h => pure (V_bitvector (bitlist_of_hex_lit h))
+    | L_bin b => pure (V_bitvector (bitlist_of_bin_lit b))
     | L_real r => pure (V_real (T.rational_of_string r))
     | L_string s => pure (V_string s)
     | L_undef => get_undefined typ
     end.
 
-  Definition same_bits (bs : list bit) (vs : list value) : bool :=
+  Definition same_bits (bs : list bit) (vs : list bit) : bool :=
     fst (fold_left
            (fun match_info b =>
               match match_info with
               | (_, []) => (false, [])
               | (false, _) => (false, [])
-              | (true, V_bit B0 :: vs) =>
+              | (true, B0 :: vs) =>
                 match b with
                 | B0 => (true, vs)
                 | B1 => (false, [])
                 end
-              | (true, V_bit B1 :: vs) =>
+              | (true, B1 :: vs) =>
                 match b with
                 | B1 => (true, vs)
                 | B0 => (false, [])
                 end
-              | (_, _ :: _) => (false, [])
               end
            )
            bs
            (true, vs)).
 
   Lemma same_bits_cons : forall (b : bit) (bs : list bit),
-      same_bits (b :: bs) (V_bit b :: map V_bit bs) = same_bits bs (map V_bit bs).
+      same_bits (b :: bs) (b :: bs) = same_bits bs bs.
   Proof.
     intros.
     destruct b.
@@ -670,7 +685,7 @@ Module Make (T : SemanticExt).
   Qed.
 
   Lemma same_bits_refl : forall (bs : list bit),
-      same_bits bs (map V_bit bs) = true.
+      same_bits bs bs = true.
   Proof.
     induction bs.
     easy.
@@ -682,13 +697,11 @@ Module Make (T : SemanticExt).
     let 'L_aux aux annot := l in
     match (aux, v) with
     | (L_unit, V_unit) => true
-    | (L_zero, V_bit B0) => true
-    | (L_one, V_bit B1) => true
     | (L_true, V_bool true) => true
     | (L_false, V_bool false) => true
     | (L_num n, V_int m) => T.num_equal n m
-    | (L_hex s, V_vector vs) => same_bits (bitlist_of_hex_lit s) vs
-    | (L_bin s, V_vector vs) => same_bits (bitlist_of_bin_lit s) vs
+    | (L_hex s, V_bitvector vs) => same_bits (bitlist_of_hex_lit s) vs
+    | (L_bin s, V_bitvector vs) => same_bits (bitlist_of_bin_lit s) vs
     | (L_string s1, V_string s2) => String.eqb s1 s2
     | (L_real r1, V_real r2) => T.rational_equal (T.rational_of_string r1) r2
     | _ => false
@@ -808,7 +821,7 @@ Module Make (T : SemanticExt).
         | _ => no_match
         end
     | P_vector ps =>
-        match v with
+        match to_gvector v with
         | V_vector vs =>
             fst (fold_left
                    (fun match_info p =>
@@ -828,7 +841,7 @@ Module Make (T : SemanticExt).
         | _ => no_match
         end
     | P_vector_concat ps =>
-        match v with
+        match to_gvector v with
         | V_vector vs =>
             fst (fold_left
                    (fun match_info p =>
@@ -1101,7 +1114,7 @@ Module Make (T : SemanticExt).
             Runtime_type_error (fst annot)
         end
     | DL_vector_concat ds =>
-        match v with
+        match to_gvector v with
         | V_vector vs =>
             let '(assignment, _) :=
               fold_left
@@ -1423,7 +1436,11 @@ Module Make (T : SemanticExt).
             u' ← step u;
             wrap (E_vector (evaluated ++ (u' :: us)))
         | [] =>
-            wrap (E_internal_value (V_vector (all_evaluated evaluated)))
+            if T.is_bitvector (snd annot) then
+              bits ← bv_concat (fst annot) (all_evaluated evaluated);
+              wrap (E_internal_value (V_bitvector bits))
+            else
+              wrap (E_internal_value (V_vector (all_evaluated evaluated)))
         end
     | E_list xs =>
         let '(evaluated, unevaluated) := left_to_right xs in

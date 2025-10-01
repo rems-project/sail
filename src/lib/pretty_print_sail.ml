@@ -279,8 +279,6 @@ module Printer (Config : PRINT_CONFIG) = struct
     utf8string
       ( match l with
       | L_unit -> "()"
-      | L_zero -> "bitzero"
-      | L_one -> "bitone"
       | L_true -> "true"
       | L_false -> "false"
       | L_num i -> Big_int.to_string i

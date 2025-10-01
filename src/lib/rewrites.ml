@@ -1430,8 +1430,7 @@ let rewrite_bit_lists_to_lits env =
   (* TODO Make all rewriting passes support bitvector literals instead of
      converting back and forth *)
   let bit_of_lit = function
-    | L_aux (L_zero, _) -> Some Value_type.B0
-    | L_aux (L_one, _) -> Some Value_type.B1
+    | L_aux (L_bin [Non_empty (b, [])], _) -> Some (match b with Bin_0 -> Value_type.B0 | Bin_1 -> Value_type.B1)
     | _ -> None
   in
   let bit_of_exp = function E_aux (E_lit lit, _) -> bit_of_lit lit | _ -> None in
@@ -3580,8 +3579,6 @@ module MakeExhaustive = struct
   let rlit_of_lit (L_aux (l, _)) =
     match l with
     | L_unit -> RL_unit
-    | L_zero -> RL_inf
-    | L_one -> RL_inf
     | L_true -> RL_true
     | L_false -> RL_false
     | L_num _ | L_hex _ | L_bin _ | L_string _ | L_real _ -> RL_inf
@@ -3590,8 +3587,6 @@ module MakeExhaustive = struct
   let inv_rlit_of_lit (L_aux (l, _)) =
     match l with
     | L_unit -> []
-    | L_zero -> [RL_inf]
-    | L_one -> [RL_inf]
     | L_true -> [RL_false]
     | L_false -> [RL_true]
     | L_num _ | L_hex _ | L_bin _ | L_string _ | L_real _ -> [RL_inf]

@@ -89,13 +89,13 @@ let min_int n = Big_int.negate (Big_int.pow_int_positive 2 (n - 1))
 
 let rec is_bitvector = function
   | [] -> true
-  | AV_lit (L_aux (L_zero, _), _) :: avals -> is_bitvector avals
-  | AV_lit (L_aux (L_one, _), _) :: avals -> is_bitvector avals
+  | AV_lit (L_aux (L_bin [Non_empty (_, [])], _), _) :: avals -> is_bitvector avals
   | _ :: _ -> false
 
 let value_of_aval_bit = function
-  | AV_lit (L_aux (L_zero, _), _) -> Sail2_values.B0
-  | AV_lit (L_aux (L_one, _), _) -> Sail2_values.B1
+  | AV_lit (L_aux (L_bin [Non_empty (b, [])], _), _) -> (
+      match b with Bin_0 -> Sail2_values.B0 | Bin_1 -> Sail2_values.B1
+    )
   | _ -> assert false
 
 let is_ct_enum = function CT_enum _ -> true | _ -> false
@@ -255,7 +255,6 @@ let rec mangle_string_of_ctyp ctx = function
   | CT_sbits n -> "S" ^ string_of_int n
   | CT_fbits n -> "B" ^ string_of_int n
   | CT_constant n -> "C" ^ Big_int.to_string n
-  | CT_bit -> "t"
   | CT_unit -> "u"
   | CT_bool -> "o"
   | CT_real -> "r"
@@ -451,8 +450,8 @@ module Make (C : CONFIG) = struct
           V_id (gs, CT_lint),
           [iclear CT_lint gs]
         )
-    | AV_lit (L_aux (L_zero, _), _) -> ([], V_lit (VL_bit Sail2_values.B0, CT_bit), [])
-    | AV_lit (L_aux (L_one, _), _) -> ([], V_lit (VL_bit Sail2_values.B1, CT_bit), [])
+    | AV_lit (L_aux (L_bin [Non_empty (Bin_0, [])], _), _) -> ([], V_lit (VL_bits [Sail2_values.B0], CT_fbits 1), [])
+    | AV_lit (L_aux (L_bin [Non_empty (Bin_1, [])], _), _) -> ([], V_lit (VL_bits [Sail2_values.B1], CT_fbits 1), [])
     | AV_lit (L_aux (L_true, _), _) -> ([], V_lit (VL_bool true, CT_bool), [])
     | AV_lit (L_aux (L_false, _), _) -> ([], V_lit (VL_bool false, CT_bool), [])
     | AV_lit (L_aux (L_real str, _), _) ->
@@ -567,8 +566,8 @@ module Make (C : CONFIG) = struct
         let aval_mask i aval =
           let setup, cval, cleanup = compile_aval l ctx aval in
           match cval with
-          | V_lit (VL_bit Sail2_values.B0, _) -> []
-          | V_lit (VL_bit Sail2_values.B1, _) ->
+          | V_lit (VL_bits [Sail2_values.B0], _) -> []
+          | V_lit (VL_bits [Sail2_values.B1], _) ->
               [icopy l (CL_id (gs, ctyp)) (V_call (Bvor, [V_id (gs, ctyp); V_lit (mask i, ctyp)]))]
           | _ ->
               setup
@@ -823,7 +822,6 @@ module Make (C : CONFIG) = struct
       | CT_lbits -> config_extract_bits CT_lbits json
       | CT_sbits _ -> config_extract_bits CT_lbits json
       | CT_fbits _ -> config_extract_bits CT_lbits json
-      | CT_bit -> config_extract CT_lbits json ~validate:("sail_config_is_bool", []) ~extract:"sail_config_unwrap_bit"
       | CT_bool -> config_extract CT_bool json ~validate:("sail_config_is_bool", []) ~extract:"sail_config_unwrap_bool"
       | CT_enum enum_id as enum_ctyp ->
           assert (Bindings.mem enum_id ctx.enums);

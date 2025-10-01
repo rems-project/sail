@@ -8,12 +8,12 @@ type bit =
 | B1
 
 type value =
+| V_bitvector of bit list
 | V_vector of value list
 | V_list of value list
 | V_int of Big_int_Z.big_int
 | V_real of Rational.t
 | V_bool of bool
-| V_bit of bit
 | V_tuple of value list
 | V_unit
 | V_string of string

@@ -837,8 +837,6 @@ let coq_escape_string s = Str.global_replace (Str.regexp "\"") "\"\"" s
 let doc_lit (L_aux (lit, l)) =
   match lit with
   | L_unit -> utf8string "tt"
-  | L_zero -> utf8string "B0"
-  | L_one -> utf8string "B1"
   | L_false -> utf8string "false"
   | L_true -> utf8string "true"
   | L_num i ->

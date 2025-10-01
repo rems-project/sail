@@ -1133,7 +1133,7 @@ module Counterexample (Config : COUNTEREXAMPLE_CONFIG) = struct
     function
     | CT_fbits width -> begin
         match parse_sexpr_int width sexpr with
-        | Some value -> mk_vector (Sail_lib.get_slice_int' (width, value, 0))
+        | Some value -> V_bitvector (Sail_lib.get_slice_int' (width, value, 0))
         | None -> raise (Reporting.err_general l ("Cannot parse sexpr as bitvector: " ^ string_of_sexpr sexpr))
       end
     | CT_struct _ as ctyp -> begin

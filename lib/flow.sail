@@ -55,6 +55,8 @@ therefore be included in just about every Sail specification.
 
 */
 
+type bit = bitvector(1)
+
 val eq_unit = pure { lean : "_lean_beq", _ : "eq_unit" } : (unit, unit) -> bool(true)
 function eq_unit(_, _) = true
 

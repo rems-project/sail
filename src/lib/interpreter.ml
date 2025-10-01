@@ -106,14 +106,14 @@ module VariableUpdate = struct
             | _ -> None
           )
         | Vector n -> (
-            match v with
+            match Semantics.to_gvector v with
             | V_vector vs ->
                 let* v = List.nth_opt (List.rev vs) (Big_int.to_int n) in
                 access v accessors
             | _ -> None
           )
         | Vector_range (n, m) -> (
-            match v with
+            match Semantics.to_gvector v with
             | V_vector vs ->
                 let vs = Sail_lib.subrange (vs, n, m) in
                 access (V_vector vs) accessors
@@ -206,6 +206,7 @@ let fallthrough =
     check_case env exc_typ
       (mk_pexp (Pat_exp (mk_pat (P_id (mk_id "exn")), mk_exp (E_throw (mk_exp (E_id (mk_id "exn")))))))
       unit_typ
+    |> Option.get
   with Type_error (l, err) -> Reporting.unreachable l __POS__ (fst (string_of_type_error err))
 
 type return_value = Semantics.return_value
@@ -252,6 +253,8 @@ module RocqSemantics = Semantics.Make (struct
         | Some (Nexp_aux (Nexp_constant n, _)) -> Semantics.Split n
         | _ -> Semantics.No_split
       )
+
+  let is_bitvector tannot = is_bitvector_typ (Type_check.typ_of_tannot tannot)
 
   let num_equal x y = Big_int.compare x y = 0
 

@@ -1,5 +1,7 @@
 default Order dec
 
+type bit = bitvector(1)
+
 val vector_access = pure {ocaml: "access", lem: "access_vec_dec", coq: "access_vec_dec"}: forall 'n.
   (bitvector('n, dec), int) -> bit
 

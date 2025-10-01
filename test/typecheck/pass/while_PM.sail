@@ -1,5 +1,7 @@
 default Order dec
 
+type bit = bitvector(1)
+
 val lt_range_atom = pure {ocaml: "lt", lem: "lt"}: forall ('n : Int) ('m : Int) ('o : Int).
   (range('n, 'm), atom('o)) -> bool
 

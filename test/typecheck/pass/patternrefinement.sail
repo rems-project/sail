@@ -1,5 +1,7 @@
 default Order dec
 
+type bit = bitvector(1)
+
 infix 4 ==
 
 val extz = pure {ocaml: "extz", lem: "extz_vec"}: forall ('n : Int) ('m : Int) ('ord : Order).

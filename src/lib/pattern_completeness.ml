@@ -372,8 +372,8 @@ module Make (C : Config) = struct
             (fun (mask, bits) (P_aux (pat, _)) ->
               let rec go pat =
                 match pat with
-                | P_lit (L_aux (L_one, _)) -> (mask ^ "1", bits ^ "1")
-                | P_lit (L_aux (L_zero, _)) -> (mask ^ "1", bits ^ "0")
+                | P_lit (L_aux (L_bin [Non_empty (Bin_1, [])], _)) -> (mask ^ "1", bits ^ "1")
+                | P_lit (L_aux (L_bin [Non_empty (Bin_0, [])], _)) -> (mask ^ "1", bits ^ "0")
                 | P_wild | P_id _ -> (mask ^ "0", bits ^ "0")
                 | P_typ (_, P_aux (pat, _)) -> go pat
                 | _ ->

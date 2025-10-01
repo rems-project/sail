@@ -67,17 +67,11 @@ let output_endline str =
   output_string !print_chan (str ^ "\n");
   flush !print_chan
 
-let coerce_bit = function V_bit b -> b | _ -> assert false
-
-let is_bit = function V_bit _ -> true | _ -> false
-
 let rec string_of_value = function
-  | V_vector vs when List.for_all is_bit vs -> Sail_lib.string_of_bits (List.map coerce_bit vs)
+  | V_bitvector vs -> Sail_lib.string_of_bits vs
   | V_vector vs -> "[" ^ Util.string_of_list ", " string_of_value vs ^ "]"
   | V_bool true -> "true"
   | V_bool false -> "false"
-  | V_bit B0 -> "bitzero"
-  | V_bit B1 -> "bitone"
   | V_int n -> Big_int.to_string n
   | V_tuple vals -> "(" ^ Util.string_of_list ", " string_of_value vals ^ ")"
   | V_list vals -> "[|" ^ Util.string_of_list ", " string_of_value vals ^ "|]"
@@ -93,12 +87,12 @@ let rec string_of_value = function
 
 let rec eq_value v1 v2 =
   match (v1, v2) with
+  | V_bitvector b1s, V_bitvector b2s when List.length b1s = List.length b2s -> List.for_all2 ( = ) b1s b2s
   | V_vector v1s, V_vector v2s when List.length v1s = List.length v2s -> List.for_all2 eq_value v1s v2s
   | V_list v1s, V_list v2s when List.length v1s = List.length v2s -> List.for_all2 eq_value v1s v2s
   | V_int n, V_int m -> Big_int.equal n m
   | V_real n, V_real m -> Rational.equal n m
   | V_bool b1, V_bool b2 -> b1 = b2
-  | V_bit b1, V_bit b2 -> b1 = b2
   | V_tuple v1s, V_tuple v2s when List.length v1s = List.length v2s -> List.for_all2 eq_value v1s v2s
   | V_unit, V_unit -> true
   | V_string str1, V_string str2 -> str1 = str2
@@ -124,10 +118,6 @@ let or_bool = function [v1; v2] -> V_bool (coerce_bool v1 || coerce_bool v2) | _
 
 let tuple_value (vs : value list) : value = V_tuple vs
 
-let mk_vector (bits : bit list) : value = V_vector (List.map (fun bit -> V_bit bit) bits)
-
-let coerce_bit = function V_bit b -> b | _ -> assert false
-
 let coerce_tuple = function V_tuple vs -> vs | _ -> assert false
 
 let coerce_list = function V_list vs -> vs | _ -> assert false
@@ -140,9 +130,7 @@ let coerce_real = function V_real r -> r | _ -> assert false
 
 let coerce_cons = function V_list (v :: vs) -> Some (v, vs) | V_list [] -> None | _ -> assert false
 
-let coerce_gv = function V_vector vs -> vs | _ -> assert false
-
-let coerce_bv = function V_vector vs -> List.map coerce_bit vs | _ -> assert false
+let coerce_bv = function V_bitvector vs -> vs | _ -> assert false
 
 let coerce_string = function V_string str -> str | _ -> assert false
 
@@ -193,71 +181,84 @@ let value_string_take = function
 let value_string_length = function
   | [v] -> V_int (coerce_string v |> Sail_lib.string_length)
   | _ -> failwith "value string_length"
-let value_eq_bit = function
-  | [v1; v2] -> V_bool (Sail_lib.eq_bit (coerce_bit v1, coerce_bit v2))
-  | _ -> failwith "value eq_bit"
 
-let value_length = function [v] -> V_int (coerce_gv v |> List.length |> Big_int.of_int) | _ -> failwith "value length"
+let value_eq_bit = function [v1; v2] -> V_bool (eq_value v1 v2) | _ -> failwith "value eq_bit"
+
+let value_length = function
+  | [V_bitvector bits] -> V_int (Big_int.of_int (List.length bits))
+  | [V_vector vs] -> V_int (Big_int.of_int (List.length vs))
+  | _ -> failwith "value length"
 
 let value_subrange = function
-  | [v1; v2; v3] -> mk_vector (Sail_lib.subrange (coerce_bv v1, coerce_int v2, coerce_int v3))
+  | [v1; v2; v3] -> V_bitvector (Sail_lib.subrange (coerce_bv v1, coerce_int v2, coerce_int v3))
   | _ -> failwith "value subrange"
 
 let value_subrange_inc = function
-  | [v1; v2; v3] -> mk_vector (Sail_lib.subrange_inc (coerce_bv v1, coerce_int v2, coerce_int v3))
+  | [v1; v2; v3] -> V_bitvector (Sail_lib.subrange_inc (coerce_bv v1, coerce_int v2, coerce_int v3))
   | _ -> failwith "value subrange_inc"
 
-let value_access = function [v1; v2] -> Sail_lib.access (coerce_gv v1, coerce_int v2) | _ -> failwith "value access"
+let value_access = function
+  | [V_bitvector bits; n] -> V_bitvector [Sail_lib.access (bits, coerce_int n)]
+  | [V_vector vs; n] -> Sail_lib.access (vs, coerce_int n)
+  | _ -> failwith "value access"
 
 let value_access_inc = function
-  | [v1; v2] -> Sail_lib.access_inc (coerce_gv v1, coerce_int v2)
-  | _ -> failwith "value access_inc"
+  | [V_bitvector bits; n] -> V_bitvector [Sail_lib.access_inc (bits, coerce_int n)]
+  | [V_vector vs; n] -> Sail_lib.access_inc (vs, coerce_int n)
+  | _ -> failwith "value access"
 
 let value_update = function
-  | [v1; v2; v3] -> V_vector (Sail_lib.update (coerce_gv v1, coerce_int v2, v3))
+  | [V_bitvector bits; n; V_bitvector [bit]] -> V_bitvector (Sail_lib.update (bits, coerce_int n, bit))
+  | [V_vector vs; n; v] -> V_vector (Sail_lib.update (vs, coerce_int n, v))
   | _ -> failwith "value update"
 
 let value_update_inc = function
-  | [v1; v2; v3] -> V_vector (Sail_lib.update_inc (coerce_gv v1, coerce_int v2, v3))
+  | [V_bitvector bits; n; V_bitvector [bit]] -> V_bitvector (Sail_lib.update_inc (bits, coerce_int n, bit))
+  | [V_vector vs; n; v] -> V_vector (Sail_lib.update_inc (vs, coerce_int n, v))
   | _ -> failwith "value update_inc"
 
 let value_update_subrange = function
-  | [v1; v2; v3; v4] -> mk_vector (Sail_lib.update_subrange (coerce_bv v1, coerce_int v2, coerce_int v3, coerce_bv v4))
+  | [v1; v2; v3; v4] -> V_bitvector (Sail_lib.update_subrange (coerce_bv v1, coerce_int v2, coerce_int v3, coerce_bv v4))
   | _ -> failwith "value update_subrange"
 
 let value_update_subrange_inc = function
   | [v1; v2; v3; v4] ->
-      mk_vector (Sail_lib.update_subrange_inc (coerce_bv v1, coerce_int v2, coerce_int v3, coerce_bv v4))
+      V_bitvector (Sail_lib.update_subrange_inc (coerce_bv v1, coerce_int v2, coerce_int v3, coerce_bv v4))
   | _ -> failwith "value update_subrange_inc"
 
-let value_append = function [v1; v2] -> V_vector (coerce_gv v1 @ coerce_gv v2) | _ -> failwith "value append"
+let value_append = function
+  | [V_bitvector bv1; V_bitvector bv2] -> V_bitvector (bv2 @ bv2)
+  | [V_vector v1; V_vector v2] -> V_vector (v1 @ v2)
+  | _ -> failwith "value append"
 
 let value_append_list = function
   | [v1; v2] -> V_list (coerce_list v1 @ coerce_list v2)
   | _ -> failwith "value_append_list"
 
 let value_slice = function
-  | [v1; v2; v3] -> V_vector (Sail_lib.slice (coerce_gv v1, coerce_int v2, coerce_int v3))
+  | [V_bitvector bits; n; m] -> V_bitvector (Sail_lib.slice (bits, coerce_int n, coerce_int m))
+  | [V_vector vs; n; m] -> V_vector (Sail_lib.slice (vs, coerce_int n, coerce_int m))
   | _ -> failwith "value slice"
 
 let value_slice_inc = function
-  | [v1; v2; v3] -> V_vector (Sail_lib.slice_inc (coerce_gv v1, coerce_int v2, coerce_int v3))
+  | [V_bitvector bits; n; m] -> V_bitvector (Sail_lib.slice_inc (bits, coerce_int n, coerce_int m))
+  | [V_vector vs; n; m] -> V_vector (Sail_lib.slice_inc (vs, coerce_int n, coerce_int m))
   | _ -> failwith "value slice_inc"
 
 let value_not = function [v] -> V_bool (not (coerce_bool v)) | _ -> failwith "value not"
 
-let value_not_vec = function [v] -> mk_vector (Sail_lib.not_vec (coerce_bv v)) | _ -> failwith "value not_vec"
+let value_not_vec = function [v] -> V_bitvector (Sail_lib.not_vec (coerce_bv v)) | _ -> failwith "value not_vec"
 
 let value_and_vec = function
-  | [v1; v2] -> mk_vector (Sail_lib.and_vec (coerce_bv v1, coerce_bv v2))
+  | [v1; v2] -> V_bitvector (Sail_lib.and_vec (coerce_bv v1, coerce_bv v2))
   | _ -> failwith "value not_vec"
 
 let value_or_vec = function
-  | [v1; v2] -> mk_vector (Sail_lib.or_vec (coerce_bv v1, coerce_bv v2))
+  | [v1; v2] -> V_bitvector (Sail_lib.or_vec (coerce_bv v1, coerce_bv v2))
   | _ -> failwith "value not_vec"
 
 let value_xor_vec = function
-  | [v1; v2] -> mk_vector (Sail_lib.xor_vec (coerce_bv v1, coerce_bv v2))
+  | [v1; v2] -> V_bitvector (Sail_lib.xor_vec (coerce_bv v1, coerce_bv v2))
   | _ -> failwith "value xor_vec"
 
 let value_uint = function [v] -> V_int (Sail_lib.uint (coerce_bv v)) | _ -> failwith "value uint"
@@ -265,7 +266,7 @@ let value_uint = function [v] -> V_int (Sail_lib.uint (coerce_bv v)) | _ -> fail
 let value_sint = function [v] -> V_int (Sail_lib.sint (coerce_bv v)) | _ -> failwith "value sint"
 
 let value_get_slice_int = function
-  | [v1; v2; v3] -> mk_vector (Sail_lib.get_slice_int (coerce_int v1, coerce_int v2, coerce_int v3))
+  | [v1; v2; v3] -> V_bitvector (Sail_lib.get_slice_int (coerce_int v1, coerce_int v2, coerce_int v3))
   | _ -> failwith "value get_slice_int"
 
 let value_set_slice_int = function
@@ -274,11 +275,11 @@ let value_set_slice_int = function
 
 let value_set_slice = function
   | [v1; v2; v3; v4; v5] ->
-      mk_vector (Sail_lib.set_slice (coerce_int v1, coerce_int v2, coerce_bv v3, coerce_int v4, coerce_bv v5))
+      V_bitvector (Sail_lib.set_slice (coerce_int v1, coerce_int v2, coerce_bv v3, coerce_int v4, coerce_bv v5))
   | _ -> failwith "value set_slice"
 
 let value_hex_slice = function
-  | [v1; v2; v3] -> mk_vector (Sail_lib.hex_slice (coerce_string v1, coerce_int v2, coerce_int v3))
+  | [v1; v2; v3] -> V_bitvector (Sail_lib.hex_slice (coerce_string v1, coerce_int v2, coerce_int v3))
   | _ -> failwith "value hex_slice"
 
 let value_add_int = function
@@ -324,19 +325,19 @@ let value_modulus = function
 let value_abs_int = function [v] -> V_int (Big_int.abs (coerce_int v)) | _ -> failwith "value abs_int"
 
 let value_add_vec_int = function
-  | [v1; v2] -> mk_vector (Sail_lib.add_vec_int (coerce_bv v1, coerce_int v2))
+  | [v1; v2] -> V_bitvector (Sail_lib.add_vec_int (coerce_bv v1, coerce_int v2))
   | _ -> failwith "value add_vec_int"
 
 let value_sub_vec_int = function
-  | [v1; v2] -> mk_vector (Sail_lib.sub_vec_int (coerce_bv v1, coerce_int v2))
+  | [v1; v2] -> V_bitvector (Sail_lib.sub_vec_int (coerce_bv v1, coerce_int v2))
   | _ -> failwith "value sub_vec_int"
 
 let value_add_vec = function
-  | [v1; v2] -> mk_vector (Sail_lib.add_vec (coerce_bv v1, coerce_bv v2))
+  | [v1; v2] -> V_bitvector (Sail_lib.add_vec (coerce_bv v1, coerce_bv v2))
   | _ -> failwith "value add_vec"
 
 let value_sub_vec = function
-  | [v1; v2] -> mk_vector (Sail_lib.sub_vec (coerce_bv v1, coerce_bv v2))
+  | [v1; v2] -> V_bitvector (Sail_lib.sub_vec (coerce_bv v1, coerce_bv v2))
   | _ -> failwith "value sub_vec"
 
 let value_shl_int = function
@@ -356,7 +357,7 @@ let value_min_int = function
   | _ -> failwith "value min_int"
 
 let value_replicate_bits = function
-  | [v1; v2] -> mk_vector (Sail_lib.replicate_bits (coerce_bv v1, coerce_int v2))
+  | [v1; v2] -> V_bitvector (Sail_lib.replicate_bits (coerce_bv v1, coerce_int v2))
   | _ -> failwith "value replicate_bits"
 
 let value_count_leading_zeros = function
@@ -372,35 +373,35 @@ let is_member = function V_member _ -> true | _ -> false
 let is_ctor = function V_ctor _ -> true | _ -> false
 
 let value_sign_extend = function
-  | [v1; v2] -> mk_vector (Sail_lib.sign_extend (coerce_bv v1, coerce_int v2))
+  | [v1; v2] -> V_bitvector (Sail_lib.sign_extend (coerce_bv v1, coerce_int v2))
   | _ -> failwith "value sign_extend"
 
 let value_zero_extend = function
-  | [v1; v2] -> mk_vector (Sail_lib.zero_extend (coerce_bv v1, coerce_int v2))
+  | [v1; v2] -> V_bitvector (Sail_lib.zero_extend (coerce_bv v1, coerce_int v2))
   | _ -> failwith "value zero_extend"
 
-let value_zeros = function [v] -> mk_vector (Sail_lib.zeros (coerce_int v)) | _ -> failwith "value zeros"
+let value_zeros = function [v] -> V_bitvector (Sail_lib.zeros (coerce_int v)) | _ -> failwith "value zeros"
 
-let value_ones = function [v] -> mk_vector (Sail_lib.ones (coerce_int v)) | _ -> failwith "value ones"
+let value_ones = function [v] -> V_bitvector (Sail_lib.ones (coerce_int v)) | _ -> failwith "value ones"
 
 let value_shiftl = function
-  | [v1; v2] -> mk_vector (Sail_lib.shiftl (coerce_bv v1, coerce_int v2))
+  | [v1; v2] -> V_bitvector (Sail_lib.shiftl (coerce_bv v1, coerce_int v2))
   | _ -> failwith "value shiftl"
 
 let value_shiftr = function
-  | [v1; v2] -> mk_vector (Sail_lib.shiftr (coerce_bv v1, coerce_int v2))
+  | [v1; v2] -> V_bitvector (Sail_lib.shiftr (coerce_bv v1, coerce_int v2))
   | _ -> failwith "value shiftr"
 
 let value_arith_shiftr = function
-  | [v1; v2] -> mk_vector (Sail_lib.arith_shiftr (coerce_bv v1, coerce_int v2))
+  | [v1; v2] -> V_bitvector (Sail_lib.arith_shiftr (coerce_bv v1, coerce_int v2))
   | _ -> failwith "value arith_shiftr"
 
 let value_shift_bits_left = function
-  | [v1; v2] -> mk_vector (Sail_lib.shift_bits_left (coerce_bv v1, coerce_bv v2))
+  | [v1; v2] -> V_bitvector (Sail_lib.shift_bits_left (coerce_bv v1, coerce_bv v2))
   | _ -> failwith "value shift_bits_left"
 
 let value_shift_bits_right = function
-  | [v1; v2] -> mk_vector (Sail_lib.shift_bits_right (coerce_bv v1, coerce_bv v2))
+  | [v1; v2] -> V_bitvector (Sail_lib.shift_bits_right (coerce_bv v1, coerce_bv v2))
   | _ -> failwith "value shift_bits_right"
 
 let value_vector_init = function
@@ -408,11 +409,11 @@ let value_vector_init = function
   | _ -> failwith "value vector_init"
 
 let value_vector_truncate = function
-  | [v1; v2] -> mk_vector (Sail_lib.vector_truncate (coerce_bv v1, coerce_int v2))
+  | [v1; v2] -> V_bitvector (Sail_lib.vector_truncate (coerce_bv v1, coerce_int v2))
   | _ -> failwith "value vector_truncate"
 
 let value_vector_truncateLSB = function
-  | [v1; v2] -> mk_vector (Sail_lib.vector_truncateLSB (coerce_bv v1, coerce_int v2))
+  | [v1; v2] -> V_bitvector (Sail_lib.vector_truncateLSB (coerce_bv v1, coerce_int v2))
   | _ -> failwith "value vector_truncateLSB"
 
 let value_eq_anything = function [v1; v2] -> V_bool (eq_value v1 v2) | _ -> failwith "value eq_anything"
@@ -446,11 +447,11 @@ let value_undefined_range = function [v; _] -> v | _ -> failwith "value undefine
 let value_undefined_list = function [_] -> V_list [] | _ -> failwith "value undefined_list"
 
 let value_undefined_bitvector = function
-  | [v] -> V_vector (Sail_lib.undefined_vector (coerce_int v, V_bit B0))
+  | [v] -> V_bitvector (Sail_lib.undefined_vector (coerce_int v, B0))
   | _ -> failwith "value undefined_bitvector"
 
 let value_read_ram = function
-  | [v1; v2; v3; v4] -> mk_vector (Sail_lib.read_ram (coerce_int v1, coerce_int v2, coerce_bv v3, coerce_bv v4))
+  | [v1; v2; v3; v4] -> V_bitvector (Sail_lib.read_ram (coerce_int v1, coerce_int v2, coerce_bv v3, coerce_bv v4))
   | _ -> failwith "value read_ram"
 
 let value_write_ram = function
@@ -599,7 +600,7 @@ let value_valid_hex_bits = function
   | _ -> failwith "value valid_hex_bits"
 
 let value_parse_hex_bits = function
-  | [v1; v2] -> mk_vector (Sail_lib.parse_hex_bits (coerce_int v1, coerce_string v2))
+  | [v1; v2] -> V_bitvector (Sail_lib.parse_hex_bits (coerce_int v1, coerce_string v2))
   | _ -> failwith "value parse_hex_bits"
 
 let value_valid_dec_bits = function
@@ -607,19 +608,19 @@ let value_valid_dec_bits = function
   | _ -> failwith "value valid_dec_bits"
 
 let value_parse_dec_bits = function
-  | [v1; v2] -> mk_vector (Sail_lib.parse_dec_bits (coerce_int v1, coerce_string v2))
+  | [v1; v2] -> V_bitvector (Sail_lib.parse_dec_bits (coerce_int v1, coerce_string v2))
   | _ -> failwith "value parse_dec_bits"
 
 let value_emulator_read_mem = function
-  | [v1; v2; v3] -> mk_vector (Sail_lib.emulator_read_mem (coerce_int v1, coerce_bv v2, coerce_int v3))
+  | [v1; v2; v3] -> V_bitvector (Sail_lib.emulator_read_mem (coerce_int v1, coerce_bv v2, coerce_int v3))
   | _ -> failwith "value emulator_read_mem"
 
 let value_emulator_read_mem_ifetch = function
-  | [v1; v2; v3] -> mk_vector (Sail_lib.emulator_read_mem_ifetch (coerce_int v1, coerce_bv v2, coerce_int v3))
+  | [v1; v2; v3] -> V_bitvector (Sail_lib.emulator_read_mem_ifetch (coerce_int v1, coerce_bv v2, coerce_int v3))
   | _ -> failwith "value emulator_read_mem_ifetch"
 
 let value_emulator_read_mem_exclusive = function
-  | [v1; v2; v3] -> mk_vector (Sail_lib.emulator_read_mem_exclusive (coerce_int v1, coerce_bv v2, coerce_int v3))
+  | [v1; v2; v3] -> V_bitvector (Sail_lib.emulator_read_mem_exclusive (coerce_int v1, coerce_bv v2, coerce_int v3))
   | _ -> failwith "value emulator_read_mem_exclusive"
 
 let value_emulator_write_mem = function
@@ -787,7 +788,7 @@ let primops =
          ("print_real", value_print_real);
          ("random_real", value_random_real);
          ("undefined_unit", fun _ -> V_unit);
-         ("undefined_bit", fun _ -> V_bit B0);
+         ("undefined_bit", fun _ -> V_bitvector [B0]);
          ("undefined_int", fun _ -> V_int Big_int.zero);
          ("undefined_range", value_undefined_range);
          ("undefined_nat", fun _ -> V_int Big_int.zero);

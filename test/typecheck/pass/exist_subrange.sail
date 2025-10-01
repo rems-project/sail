@@ -1,5 +1,7 @@
 default Order dec
 
+type bit = bitvector(1)
+
 val vector_subrange : forall ('n : Int) ('m : Int) ('o : Int).
   (vector('n, dec, bit), atom('m), atom('o)) -> vector('m - ('o - 1), dec, bit)
 

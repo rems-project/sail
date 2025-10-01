@@ -129,8 +129,6 @@ Inductive id : Set :=
 
 Inductive lit_aux : Set :=
 | L_unit : lit_aux
-| L_zero : lit_aux
-| L_one : lit_aux
 | L_true : lit_aux
 | L_false : lit_aux
 | L_num : Z -> lit_aux

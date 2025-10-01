@@ -1,4 +1,6 @@
 
+type bit = bitvector(1)
+
 val mk_vector : unit -> {'n, 'n in {32, 64}. vector('n, dec, bit)}
 
 val mk_square : unit -> {'n 'm, 'n == 'm. vector('n, dec, vector('m, dec, bit))}

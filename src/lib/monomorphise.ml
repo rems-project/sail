@@ -754,20 +754,7 @@ let split_defs target all_errors (splits : split_req list) env ast =
               )
             )
             ns
-        with Type_error _ -> (
-          match id with
-          | Id_aux (Id "bit", _) ->
-              List.map
-                (fun b ->
-                  ( P_aux (P_lit (L_aux (b, new_l)), (l, annot)),
-                    [(var, E_aux (E_lit (L_aux (b, new_l)), (new_l, annot)))],
-                    [],
-                    KBindings.empty
-                  )
-                )
-                [L_zero; L_one]
-          | _ -> cannot ("don't know about type " ^ string_of_id id)
-        )
+        with Type_error _ -> cannot ("don't know about type " ^ string_of_id id)
       )
     | Typ_app (Id_aux (Id "bitvector", _), [A_aux (A_nexp len, _)]) -> (
         match len with

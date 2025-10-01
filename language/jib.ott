@@ -162,7 +162,6 @@ ctyp :: 'CT_' ::=
 % Other Sail types
   | unit                      :: :: unit
   | bool_t                    :: :: bool
-  | bit                       :: :: bit
   | string_t                  :: :: string
 
 % The real type in sail. Abstract here, so the code generator can
