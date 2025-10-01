@@ -959,29 +959,39 @@ let rewrite_toplevel_guarded_clauses fun_only mk_fallthrough l env pat_typ typ
   else (
     let rec group fallthrough clauses =
       let add_clause (pat, cls, annot) c = (pat, cls @ [c], annot) in
-      let rec group_aux current acc = function
+      let rec group_aux acc = function
         | ((pat, guard, body, annot) as c) :: cs -> (
-            let current_pat, _, _ = current in
-            match subsumes_pat current_pat pat with
-            | Some substs ->
-                let pat' = List.fold_left subst_id_pat pat substs in
-                let guard' =
-                  match guard with Some exp -> Some (List.fold_left subst_id_exp exp substs) | None -> None
-                in
-                let body' = List.fold_left subst_id_exp body substs in
-                let c' = (pat', guard', body', annot) in
-                group_aux (add_clause current c') acc cs
+            let rec find_group = function
+              | [] -> None
+              | current :: t -> (
+                  let current_pat, _, _ = current in
+                  match subsumes_pat current_pat pat with
+                  | Some substs ->
+                      let pat' = List.fold_left subst_id_pat pat substs in
+                      let guard' =
+                        match guard with Some exp -> Some (List.fold_left subst_id_exp exp substs) | None -> None
+                      in
+                      let body' = List.fold_left subst_id_exp body substs in
+                      let c' = (pat', guard', body', annot) in
+                      Some (add_clause current c' :: t)
+                  | None ->
+                      if disjoint_pat env current_pat pat then Option.map (fun t -> current :: t) (find_group t)
+                      else None
+                )
+            in
+            match find_group acc with
+            | Some acc' -> group_aux acc' cs
             | None ->
                 let pat = match cs with _ :: _ -> remove_wildcards "g__" pat | _ -> pat in
-                group_aux (pat, [c], annot_from_clause annot) (acc @ [current]) cs
+                group_aux ((pat, [c], annot_from_clause annot) :: acc) cs
           )
-        | [] -> acc @ [current]
+        | [] -> List.rev acc
       in
       let groups =
         match clauses with
         | [((pat, guard, body, annot) as c)] -> [(pat, [c], annot_from_clause annot)]
         | ((pat, guard, body, annot) as c) :: cs ->
-            group_aux (remove_wildcards "g__" pat, [c], annot_from_clause annot) [] cs
+            group_aux [(remove_wildcards "g__" pat, [c], annot_from_clause annot)] cs
         | _ -> raise (Reporting.err_unreachable l __POS__ "group given empty list in rewrite_guarded_clauses")
       in
       let add_group cs groups = if_pexp (groups @ fallthrough) cs :: groups in
