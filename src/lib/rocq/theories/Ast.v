@@ -61,6 +61,11 @@ Module def_annot.
     Build t_a r.(doc_comment) r.(attrs) r.(visibility) r.(loc) env.
 End def_annot.
 
+Inductive non_empty (a : Set) : Set :=
+| Non_empty : a -> list a -> non_empty a.
+
+Arguments Non_empty {_}.
+
 Definition def_annot := def_annot.record.
 
 Definition clause_annot (a : Set) : Set := def_annot unit * a.
@@ -70,6 +75,28 @@ Definition annot (a : Set) : Set := loc * a.
 Inductive loop : Set :=
 | While : loop
 | Until : loop.
+
+Inductive hex_digit : Set :=
+| Hex_0 : hex_digit
+| Hex_1 : hex_digit
+| Hex_2 : hex_digit
+| Hex_3 : hex_digit
+| Hex_4 : hex_digit
+| Hex_5 : hex_digit
+| Hex_6 : hex_digit
+| Hex_7 : hex_digit
+| Hex_8 : hex_digit
+| Hex_9 : hex_digit
+| Hex_A : hex_digit
+| Hex_B : hex_digit
+| Hex_C : hex_digit
+| Hex_D : hex_digit
+| Hex_E : hex_digit
+| Hex_F : hex_digit.
+
+Inductive bin_digit : Set :=
+| Bin_0
+| Bin_1.
 
 Inductive kind_aux : Set :=
 | K_type : kind_aux
@@ -107,8 +134,8 @@ Inductive lit_aux : Set :=
 | L_true : lit_aux
 | L_false : lit_aux
 | L_num : Z -> lit_aux
-| L_hex : string -> lit_aux
-| L_bin : string -> lit_aux
+| L_hex : list (non_empty hex_digit) -> lit_aux
+| L_bin : list (non_empty bin_digit) -> lit_aux
 | L_string : string -> lit_aux
 | L_undef : lit_aux
 | L_real : string -> lit_aux.

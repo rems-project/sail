@@ -142,11 +142,16 @@ let literal_to_fragment (L_aux (l_aux, _)) =
   match l_aux with
   | L_num n when Big_int.less_equal (min_int 64) n && Big_int.less_equal n (max_int 64) ->
       Some (V_lit (VL_int n, CT_fint 64))
-  | L_hex str when String.length str <= 16 ->
-      let padding = 16 - String.length str in
-      let padding = Util.list_init padding (fun _ -> Sail2_values.B0) in
-      let content = Util.string_to_list str |> List.map hex_char |> List.concat in
-      Some (V_lit (VL_bits (padding @ content), CT_fbits (String.length str * 4)))
+  | L_hex hex ->
+      let len = hex_lit_length hex in
+      if len <= 64 then (
+        let content =
+          Semantics.bitlist_of_hex_lit hex
+          |> List.map (function Value_type.B0 -> Sail2_values.B0 | Value_type.B1 -> Sail2_values.B1)
+        in
+        Some (V_lit (VL_bits content, CT_fbits len))
+      )
+      else None
   | L_unit -> Some (V_lit (VL_unit, CT_unit))
   | L_true -> Some (V_lit (VL_bool true, CT_bool))
   | L_false -> Some (V_lit (VL_bool false, CT_bool))

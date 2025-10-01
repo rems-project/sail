@@ -379,9 +379,9 @@ let doc_lit (L_aux (lit, l)) =
   | L_false -> string "false"
   | L_true -> string "true"
   | L_num i -> doc_big_int i
-  | L_hex "" | L_bin "" -> string "BitVec.nil"
-  | L_hex n -> utf8string ("0x" ^ n)
-  | L_bin n -> utf8string ("0b" ^ n)
+  | L_hex [] | L_bin [] -> string "BitVec.nil"
+  | L_hex hex -> utf8string ("0x" ^ string_of_hex_lit ~group_separator:"" ~case:Uppercase hex)
+  | L_bin bin -> utf8string ("0b" ^ string_of_bin_lit ~group_separator:"" bin)
   | L_undef -> utf8string "(Fail \"undefined value of unsupported type\")"
   | L_string s -> utf8string ("\"" ^ lean_escape_string s ^ "\"")
   | L_real s -> utf8string s (* TODO test if this is really working *)

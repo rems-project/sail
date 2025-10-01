@@ -511,8 +511,9 @@ let rec doc_lit_lem (L_aux (lit, l)) =
   | L_num i ->
       let ipp = Big_int.to_string i in
       utf8string (if Big_int.less i Big_int.zero then "((0" ^ ipp ^ "):ii)" else "(" ^ ipp ^ ":ii)")
-  | L_hex n when !Monomorphise.opt_mwords -> utf8string ("0x" ^ n)
-  | L_bin n when !Monomorphise.opt_mwords -> utf8string ("0b" ^ n)
+  | L_hex hex when !Monomorphise.opt_mwords ->
+      utf8string ("0x" ^ string_of_hex_lit ~group_separator:"" ~case:Uppercase hex)
+  | L_bin bin when !Monomorphise.opt_mwords -> utf8string ("0b" ^ string_of_bin_lit ~group_separator:"" bin)
   | L_hex _ | L_bin _ ->
       vector_string_to_bit_list (L_aux (lit, l)) |> flow_map (semi ^^ break 0) doc_lit_lem |> group |> align |> brackets
   | L_undef -> utf8string "(return (failwith \"undefined value of unsupported type\"))"

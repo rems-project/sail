@@ -847,8 +847,8 @@ let doc_lit (L_aux (lit, l)) =
       if Big_int.less i Big_int.zero then parens ipp else ipp
   (* Not a typo, the bbv hex notation uses the letter O *)
   (* These need parens because of the 'sz 'b "..."' variants :( *)
-  | L_hex n -> utf8string ("(Ox\"" ^ n ^ "\")")
-  | L_bin n -> utf8string ("('b\"" ^ n ^ "\")")
+  | L_hex hex -> utf8string ("(Ox\"" ^ string_of_hex_lit ~group_separator:"" ~case:Uppercase hex ^ "\")")
+  | L_bin bin -> utf8string ("('b\"" ^ string_of_bin_lit ~group_separator:"" bin ^ "\")")
   | L_undef -> utf8string "(Fail \"undefined value of unsupported type\")"
   | L_string s -> utf8string ("\"" ^ coq_escape_string s ^ "\"")
   | L_real s ->

@@ -354,8 +354,14 @@ module Make (C : Config) = struct
         (* Unit pattern always matches on unit, so generalize to wildcard *)
         GP_wild
     | P_lit (L_aux (L_hex hex, _)) ->
-        GP_bitvector (pnum, String.length hex * 4, fun x -> BVC_eq (x, BVC_lit ("#x" ^ hex)))
-    | P_lit (L_aux (L_bin bin, _)) -> GP_bitvector (pnum, String.length bin, fun x -> BVC_eq (x, BVC_lit ("#b" ^ bin)))
+        GP_bitvector
+          ( pnum,
+            hex_lit_length hex,
+            fun x -> BVC_eq (x, BVC_lit ("#x" ^ string_of_hex_lit ~group_separator:"" ~case:Uppercase hex))
+          )
+    | P_lit (L_aux (L_bin bin, _)) ->
+        GP_bitvector
+          (pnum, bin_lit_length bin, fun x -> BVC_eq (x, BVC_lit ("#b" ^ string_of_bin_lit ~group_separator:"" bin)))
     | P_vector pats when is_bitvector_typ typ ->
         let mask, bits =
           List.fold_left

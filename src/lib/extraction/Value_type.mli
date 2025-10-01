@@ -1,4 +1,7 @@
 open BinInt
+open Datatypes
+open ListDef
+open Nat0
 
 type bit =
 | B0
@@ -29,4 +32,6 @@ module Primops :
   val add_int : value -> value -> value option
 
   val sub_int : value -> value -> value option
+
+  val zero_extend : value -> value -> value option
  end

@@ -218,8 +218,9 @@ let rec drop_casts = function E_aux (E_typ (_, e), _) -> drop_casts e | exp -> e
 
 let construct_lit_vector args =
   let rec aux l = function
-    | [] -> Some (L_aux (L_bin (String.concat "" (List.rev l)), Unknown))
-    | E_aux (E_lit (L_aux (((L_zero | L_one) as lit), _)), _) :: t -> aux ((if lit = L_zero then "0" else "1") :: l) t
+    | [] -> Some (L_aux (L_bin (non_empty_singleton (List.rev l)), Unknown))
+    | E_aux (E_lit (L_aux (((L_zero | L_one) as lit), _)), _) :: t ->
+        aux ((if lit = L_zero then Bin_0 else Bin_1) :: l) t
     | _ -> None
   in
   aux [] args

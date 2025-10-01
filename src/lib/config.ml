@@ -502,13 +502,13 @@ let find_json ~at:l full_parts json =
   go full_parts json
 
 let json_bit ~at:l = function
-  | `Bool true -> '1'
-  | `Bool false -> '0'
+  | `Bool true -> Bin_1
+  | `Bool false -> Bin_0
   | json -> raise (Reporting.err_general l (Printf.sprintf "Failed to interpret %s as a bit" (J.to_string json)))
 
 let json_to_string = function `String s -> Some s | _ -> None
 
-let valid_bin_char c = match c with '_' -> None | ('0' | '1') as c -> Some (Some c) | _ -> Some None
+let valid_bin_char c = match c with '_' -> None | '0' -> Some (Some Bin_0) | '1' -> Some (Some Bin_1) | _ -> Some None
 
 let valid_dec_char c =
   match c with
@@ -517,53 +517,48 @@ let valid_dec_char c =
   | _ -> Some None
 
 let valid_hex_char c =
-  match Char.uppercase_ascii c with
-  | '_' -> None
-  | ('0' | '1' | '2' | '3' | '4' | '5' | '6' | '7' | '8' | '9' | 'A' | 'B' | 'C' | 'D' | 'E' | 'F') as c -> Some (Some c)
-  | _ -> Some None
+  if c = '_' then None
+  else (match Initial_check.hex_digit_of_char c with Some (digit, _) -> Some (Some digit) | None -> Some None)
 
-let hex_char_to_bits c =
-  match Sail2_values.nibble_of_char c with Some (b1, b2, b3, b4) -> [b1; b2; b3; b4] | None -> []
-
-let bin_char_to_bit c = match c with '0' -> Sail2_values.B0 | '1' -> Sail2_values.B1 | _ -> Sail2_values.BU
+let bin_digit_to_bit = function Bin_0 -> Value_type.B0 | Bin_1 -> Value_type.B1
 
 let fix_length ~at:l ~len bitlist =
-  let d = len - List.length bitlist in
-  if d = 0 then bitlist
-  else if d > 0 then Sail2_operators_bitlists.zero_extend bitlist (Big_int.of_int len)
-  else (
-    Reporting.warn ~force_show:true "Configuration" l "Forced to truncate configuration bitvector literal";
-    Util.drop (abs d) bitlist
-  )
+  let open Value_type in
+  let coerce_bit = function V_bit b -> b | _ -> assert false in
+  match Primops.zero_extend (V_vector (List.map (fun b -> V_bit b) bitlist)) (V_int (Big_int.of_int len)) with
+  | Some (V_vector bitlist) -> List.map coerce_bit bitlist
+  | _ ->
+      Reporting.warn ~force_show:true "Configuration" l "Forced to truncate configuration bitvector literal";
+      let d = len - List.length bitlist in
+      Util.drop (abs d) bitlist
 
-let bitlist_to_string bitlist = List.map Sail2_values.bitU_char bitlist |> List.to_seq |> String.of_seq
+let bitlist_to_literal bitlist =
+  non_empty_singleton (List.map (function Value_type.B0 -> Bin_0 | Value_type.B1 -> Bin_1) bitlist)
 
 let parse_json_string_to_bits ~at:l ~len str =
   let open Util.Option_monad in
-  let open Sail2_operators_bitlists in
   let str_len = String.length str in
   let chars = str |> String.to_seq |> List.of_seq in
   let* bitlist =
     if str_len > 2 && String.sub str 0 2 = "0b" then
-      let* bin_chars = Util.drop 2 chars |> List.filter_map valid_bin_char |> Util.option_all in
-      Some (List.map bin_char_to_bit bin_chars |> fix_length ~at:l ~len)
+      let* bin_digits = Util.drop 2 chars |> List.filter_map valid_bin_char |> Util.option_all in
+      Some (List.map bin_digit_to_bit bin_digits |> fix_length ~at:l ~len)
     else if str_len > 2 && String.sub str 0 2 = "0x" then
-      let* hex_chars = Util.drop 2 chars |> List.filter_map valid_hex_char |> Util.option_all in
-      Some (List.map hex_char_to_bits hex_chars |> List.concat |> fix_length ~at:l ~len)
+      let* hex_digits = Util.drop 2 chars |> List.filter_map valid_hex_char |> Util.option_all in
+      Some (List.map Semantics.bitlist_of_hex_digit hex_digits |> List.concat |> fix_length ~at:l ~len)
     else
       let* dec_chars = List.filter_map valid_dec_char chars |> Util.option_all in
       let n = List.to_seq dec_chars |> String.of_seq |> Big_int.of_string in
-      Some (get_slice_int (Big_int.of_int len) n Big_int.zero)
+      Some (Sail_lib.get_slice_int (Big_int.of_int len, n, Big_int.zero))
   in
-  Some (mk_lit_exp ~loc:l (L_bin (bitlist_to_string bitlist)))
+  Some (mk_lit_exp ~loc:l (L_bin (bitlist_to_literal bitlist)))
 
 let parse_json_string_to_abstract_bits ~at:l ~len str =
   let open Util.Option_monad in
-  let open Sail2_operators_bitlists in
   let str_len = String.length str in
   let chars = str |> String.to_seq |> List.of_seq in
   let mask bitlist =
-    mk_exp (E_app (mk_id "sail_mask", [mk_exp (E_sizeof (nid len)); mk_lit_exp (L_bin (bitlist_to_string bitlist))]))
+    mk_exp (E_app (mk_id "sail_mask", [mk_exp (E_sizeof (nid len)); mk_lit_exp (L_bin (bitlist_to_literal bitlist))]))
     |> locate (fun _ -> l)
   in
   let slice_int n =
@@ -574,11 +569,11 @@ let parse_json_string_to_abstract_bits ~at:l ~len str =
     |> locate (fun _ -> l)
   in
   if str_len > 2 && String.sub str 0 2 = "0b" then
-    let* bin_chars = Util.drop 2 chars |> List.filter_map valid_bin_char |> Util.option_all in
-    Some (List.map bin_char_to_bit bin_chars |> mask)
+    let* bin_digits = Util.drop 2 chars |> List.filter_map valid_bin_char |> Util.option_all in
+    Some (List.map bin_digit_to_bit bin_digits |> mask)
   else if str_len > 2 && String.sub str 0 2 = "0x" then
-    let* hex_chars = Util.drop 2 chars |> List.filter_map valid_hex_char |> Util.option_all in
-    Some (List.map hex_char_to_bits hex_chars |> List.concat |> mask)
+    let* hex_digits = Util.drop 2 chars |> List.filter_map valid_hex_char |> Util.option_all in
+    Some (List.map Semantics.bitlist_of_hex_digit hex_digits |> List.concat |> mask)
   else
     let* dec_chars = List.filter_map valid_dec_char chars |> Util.option_all in
     let n = List.to_seq dec_chars |> String.of_seq |> Big_int.of_string in
@@ -609,8 +604,7 @@ let rec sail_exp_from_json ~at:l env typ =
       match base_typ with
       | Typ_aux (Typ_app (id, args), _) -> (
           match (string_of_id id, args) with
-          | "bitvector", _ ->
-              L_bin (List.map (json_bit ~at:l) jsons |> List.to_seq |> String.of_seq) |> mk_lit_exp ~loc:l
+          | "bitvector", _ -> L_bin (non_empty_singleton (List.map (json_bit ~at:l) jsons)) |> mk_lit_exp ~loc:l
           | "vector", [_; A_aux (A_typ item_typ, _)] ->
               let items = List.map (sail_exp_from_json ~at:l env item_typ) jsons in
               mk_exp ~loc:l (E_vector items)

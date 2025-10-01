@@ -1150,33 +1150,19 @@ end) : Jib_compile.CONFIG = struct
     | Typ_var kid -> CT_poly kid
     | _ -> raise (Reporting.err_unreachable l __POS__ ("No SMT type for type " ^ string_of_typ typ))
 
-  let hex_char =
-    let open Sail2_values in
-    function
-    | '0' -> [B0; B0; B0; B0]
-    | '1' -> [B0; B0; B0; B1]
-    | '2' -> [B0; B0; B1; B0]
-    | '3' -> [B0; B0; B1; B1]
-    | '4' -> [B0; B1; B0; B0]
-    | '5' -> [B0; B1; B0; B1]
-    | '6' -> [B0; B1; B1; B0]
-    | '7' -> [B0; B1; B1; B1]
-    | '8' -> [B1; B0; B0; B0]
-    | '9' -> [B1; B0; B0; B1]
-    | 'A' | 'a' -> [B1; B0; B1; B0]
-    | 'B' | 'b' -> [B1; B0; B1; B1]
-    | 'C' | 'c' -> [B1; B1; B0; B0]
-    | 'D' | 'd' -> [B1; B1; B0; B1]
-    | 'E' | 'e' -> [B1; B1; B1; B0]
-    | 'F' | 'f' -> [B1; B1; B1; B1]
-    | _ -> failwith "Invalid hex character"
-
   let literal_to_cval (L_aux (l_aux, _) as lit) =
     match l_aux with
     | L_num n -> Some (V_lit (VL_int n, CT_constant n))
-    | L_hex str when String.length str <= 16 ->
-        let content = Util.string_to_list str |> List.map hex_char |> List.concat in
-        Some (V_lit (VL_bits content, CT_fbits (String.length str * 4)))
+    | L_hex hex ->
+        let len = hex_lit_length hex in
+        if len <= 64 then (
+          let content =
+            Semantics.bitlist_of_hex_lit hex
+            |> List.map (function Value_type.B0 -> Sail2_values.B0 | Value_type.B1 -> Sail2_values.B1)
+          in
+          Some (V_lit (VL_bits content, CT_fbits len))
+        )
+        else None
     | L_unit -> Some (V_lit (VL_unit, CT_unit))
     | L_true -> Some (V_lit (VL_bool true, CT_bool))
     | L_false -> Some (V_lit (VL_bool false, CT_bool))

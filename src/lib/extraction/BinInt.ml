@@ -103,6 +103,26 @@ module Z =
     | Lt -> true
     | _ -> false
 
+  (** val to_nat : Big_int_Z.big_int -> Big_int_Z.big_int **)
+
+  let to_nat z =
+    (fun fO fp fn z -> let s = Big_int_Z.sign_big_int z in
+  if s = 0 then fO () else if s > 0 then fp z
+  else fn (Big_int_Z.minus_big_int z))
+      (fun _ -> Big_int_Z.zero_big_int)
+      (fun p -> Pos.to_nat p)
+      (fun _ -> Big_int_Z.zero_big_int)
+      z
+
+  (** val of_nat : Big_int_Z.big_int -> Big_int_Z.big_int **)
+
+  let of_nat n =
+    (fun fO fS n -> if Big_int_Z.sign_big_int n <= 0 then fO ()
+  else fS (Big_int_Z.pred_big_int n))
+      (fun _ -> Big_int_Z.zero_big_int)
+      (fun n0 -> (Pos.of_succ_nat n0))
+      n
+
   (** val gtb : Big_int_Z.big_int -> Big_int_Z.big_int -> bool **)
 
   let gtb x y =

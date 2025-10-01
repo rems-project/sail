@@ -410,6 +410,81 @@ Proof.
     lia.
 Qed.
 
+Definition bitlist_of_hex_digit (h : hex_digit) : list bit :=
+  match h with
+  | Hex_0 => [B0; B0; B0; B0]
+  | Hex_1 => [B0; B0; B0; B1]
+  | Hex_2 => [B0; B0; B1; B0]
+  | Hex_3 => [B0; B0; B1; B1]
+  | Hex_4 => [B0; B1; B0; B0]
+  | Hex_5 => [B0; B1; B0; B1]
+  | Hex_6 => [B0; B1; B1; B0]
+  | Hex_7 => [B0; B1; B1; B1]
+  | Hex_8 => [B1; B0; B0; B0]
+  | Hex_9 => [B1; B0; B0; B1]
+  | Hex_A => [B1; B0; B1; B0]
+  | Hex_B => [B1; B0; B1; B1]
+  | Hex_C => [B1; B1; B0; B0]
+  | Hex_D => [B1; B1; B0; B1]
+  | Hex_E => [B1; B1; B1; B0]
+  | Hex_F => [B1; B1; B1; B1]
+  end.
+
+Definition hex_digit_of_nibble (b1 b2 b3 b4 : bit) : hex_digit :=
+  match (b1, b2, b3, b4) with
+  | (B0, B0, B0, B0) => Hex_0
+  | (B0, B0, B0, B1) => Hex_1
+  | (B0, B0, B1, B0) => Hex_2
+  | (B0, B0, B1, B1) => Hex_3
+  | (B0, B1, B0, B0) => Hex_4
+  | (B0, B1, B0, B1) => Hex_5
+  | (B0, B1, B1, B0) => Hex_6
+  | (B0, B1, B1, B1) => Hex_7
+  | (B1, B0, B0, B0) => Hex_8
+  | (B1, B0, B0, B1) => Hex_9
+  | (B1, B0, B1, B0) => Hex_A
+  | (B1, B0, B1, B1) => Hex_B
+  | (B1, B1, B0, B0) => Hex_C
+  | (B1, B1, B0, B1) => Hex_D
+  | (B1, B1, B1, B0) => Hex_E
+  | (B1, B1, B1, B1) => Hex_F
+  end.
+
+Fixpoint hex_digits_of_bitlist (bits : list bit) : option (list hex_digit) :=
+  match bits with
+  | b1 :: b2 :: b3 :: b4 :: rest =>
+      let digit := hex_digit_of_nibble b1 b2 b3 b4 in
+      match hex_digits_of_bitlist rest with
+      | None => None
+      | Some digits => Some (digit :: digits)
+      end
+  | [] => Some []
+  | _ => None
+  end.
+
+Definition non_empty_to_list {A : Set} (xs : non_empty A) : list A :=
+  let 'Non_empty y ys := xs in y :: ys.
+
+Definition bitlist_of_hex_lit (hex : list (non_empty hex_digit)) : list bit :=
+  let digits := List.concat (List.map non_empty_to_list hex) in
+  List.concat (List.map bitlist_of_hex_digit digits).
+
+Lemma hex_lit_bitlist_rt : forall (d : hex_digit), hex_digits_of_bitlist (bitlist_of_hex_lit [Non_empty d []]) = Some [d].
+Proof.
+  induction d.
+  all: cbn.
+  all: reflexivity.
+Qed.
+
+Definition bitlist_of_bin_lit (bin : list (non_empty bin_digit)) : list bit :=
+  let digits := List.concat (List.map non_empty_to_list bin) in
+  List.map (fun b =>
+      match b with
+      | Bin_0 => B0
+      | Bin_1 => B1
+      end
+    ) digits.
+
 (** Sail annotates terms with custom type annotation data, which we
     don't have access to here. Instead use a functor parameterised by
     the following SemanticExt signature, which can provide the methods we
@@ -430,10 +505,6 @@ Module Type SemanticExt.
   Parameter id_equal_string : id -> string -> bool.
 
   Parameter string_of_id : id -> string.
-
-  Parameter bits_of_hex_string : string -> list bit.
-
-  Parameter bits_of_bin_string : string -> list bit.
 
   Parameter rational_of_string : string -> rational.
 
@@ -559,9 +630,8 @@ Module Make (T : SemanticExt).
     | L_true => pure (V_bool true)
     | L_false => pure (V_bool false)
     | L_num n => pure (V_int n)
-    (* Fix the representation of these internally, so they work nicely... *)
-    | L_hex h => pure (V_vector (map V_bit (T.bits_of_hex_string h)))
-    | L_bin b => pure (V_vector (map V_bit (T.bits_of_bin_string b)))
+    | L_hex h => pure (V_vector (map V_bit (bitlist_of_hex_lit h)))
+    | L_bin b => pure (V_vector (map V_bit (bitlist_of_bin_lit b)))
     | L_real r => pure (V_real (T.rational_of_string r))
     | L_string s => pure (V_string s)
     | L_undef => get_undefined typ
@@ -617,8 +687,8 @@ Module Make (T : SemanticExt).
     | (L_true, V_bool true) => true
     | (L_false, V_bool false) => true
     | (L_num n, V_int m) => T.num_equal n m
-    | (L_hex s, V_vector vs) => same_bits (T.bits_of_hex_string s) vs
-    | (L_bin s, V_vector vs) => same_bits (T.bits_of_bin_string s) vs
+    | (L_hex s, V_vector vs) => same_bits (bitlist_of_hex_lit s) vs
+    | (L_bin s, V_vector vs) => same_bits (bitlist_of_bin_lit s) vs
     | (L_string s1, V_string s2) => String.eqb s1 s2
     | (L_real r1, V_real r2) => T.rational_equal (T.rational_of_string r1) r2
     | _ => false
@@ -1561,6 +1631,6 @@ Module Make (T : SemanticExt).
   Defined.
 End Make.
 
-Extraction Blacklist List String.
+Extraction Blacklist Nat List String.
 
-Separate Extraction l attribute_data def impldef opt_default Make IdMap.
+Separate Extraction Primops l attribute_data hex_digits_of_bitlist def impldef opt_default Make IdMap.

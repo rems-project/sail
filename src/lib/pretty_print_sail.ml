@@ -284,8 +284,8 @@ module Printer (Config : PRINT_CONFIG) = struct
       | L_true -> "true"
       | L_false -> "false"
       | L_num i -> Big_int.to_string i
-      | L_hex n -> "0x" ^ n
-      | L_bin n -> "0b" ^ n
+      | L_hex hex -> "0x" ^ string_of_hex_lit ~case:Uppercase hex
+      | L_bin bin -> "0b" ^ string_of_bin_lit bin
       | L_real r -> r
       | L_undef -> "undefined"
       | L_string s -> "\"" ^ String.escaped s ^ "\""

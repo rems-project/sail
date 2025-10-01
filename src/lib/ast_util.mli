@@ -474,8 +474,9 @@ val def_loc : ('a, 'b) def -> Parse_ast.l
     Note: For debugging and error messages only - not guaranteed to produce parseable Sail, or even print all language
     constructs! *)
 
-val string_of_order : order -> string
+type digit_case = Lowercase | Uppercase
 
+val string_of_order : order -> string
 val string_of_id : id -> string
 val string_of_kid : kid -> string
 val string_of_kind_aux : kind_aux -> string
@@ -489,6 +490,8 @@ val string_of_kinded_id : kinded_id -> string
 val string_of_quant_item : quant_item -> string
 val string_of_typquant : typquant -> string
 val string_of_typschm : typschm -> string
+val string_of_hex_lit : ?group_separator:string -> case:digit_case -> hex_digit non_empty list -> string
+val string_of_bin_lit : ?group_separator:string -> bin_digit non_empty list -> string
 val string_of_lit : lit -> string
 val string_of_exp : 'a exp -> string
 val string_of_pexp : 'a pexp -> string
@@ -521,6 +524,12 @@ val remove_id_suffix : id -> string -> id option
 val prepend_kid : string -> kid -> kid
 
 (** {1 Misc functions} *)
+
+val non_empty_singleton : 'a list -> 'a non_empty list
+val non_empty_for_all : ('a -> bool) -> 'a non_empty -> bool
+
+val hex_lit_length : hex_digit non_empty list -> int
+val bin_lit_length : bin_digit non_empty list -> int
 
 val nexp_identical : nexp -> nexp -> bool
 val is_nexp_constant : nexp -> bool

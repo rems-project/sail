@@ -1,4 +1,5 @@
 open Datatypes
+open Nat0
 
 module Pos =
  struct
@@ -164,4 +165,30 @@ module Pos =
 
   let compare =
     compare_cont Eq
+
+  (** val iter_op : ('a1 -> 'a1 -> 'a1) -> Big_int_Z.big_int -> 'a1 -> 'a1 **)
+
+  let rec iter_op op p a =
+    (fun f2p1 f2p f1 p ->
+  if Big_int_Z.le_big_int p Big_int_Z.unit_big_int then f1 () else
+  let (q,r) = Big_int_Z.quomod_big_int p (Big_int_Z.big_int_of_int 2) in
+  if Big_int_Z.eq_big_int r Big_int_Z.zero_big_int then f2p q else f2p1 q)
+      (fun p0 -> op a (iter_op op p0 (op a a)))
+      (fun p0 -> iter_op op p0 (op a a))
+      (fun _ -> a)
+      p
+
+  (** val to_nat : Big_int_Z.big_int -> Big_int_Z.big_int **)
+
+  let to_nat x =
+    iter_op Nat0.add x (Big_int_Z.succ_big_int Big_int_Z.zero_big_int)
+
+  (** val of_succ_nat : Big_int_Z.big_int -> Big_int_Z.big_int **)
+
+  let rec of_succ_nat n =
+    (fun fO fS n -> if Big_int_Z.sign_big_int n <= 0 then fO ()
+  else fS (Big_int_Z.pred_big_int n))
+      (fun _ -> Big_int_Z.unit_big_int)
+      (fun x -> succ (of_succ_nat x))
+      n
  end

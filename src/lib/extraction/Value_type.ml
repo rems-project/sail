@@ -1,4 +1,7 @@
 open BinInt
+open Datatypes
+open ListDef
+open Nat0
 
 type bit =
 | B0
@@ -59,6 +62,21 @@ module Primops =
     | V_int v3 ->
       (match v2 with
        | V_int v4 -> Some (V_int (Z.sub v3 v4))
+       | _ -> None)
+    | _ -> None
+
+  (** val zero_extend : value -> value -> value option **)
+
+  let zero_extend bits n =
+    match bits with
+    | V_vector bitlist ->
+      (match n with
+       | V_int n0 ->
+         let len = length bitlist in
+         if Z.ltb n0 (Z.of_nat len)
+         then None
+         else let extend = sub (Z.to_nat n0) len in
+              Some (V_vector (app (repeat (V_bit B0) extend) bitlist))
        | _ -> None)
     | _ -> None
  end

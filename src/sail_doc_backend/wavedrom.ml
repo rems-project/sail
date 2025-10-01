@@ -70,8 +70,9 @@ let wavedrom_label size = function
   | None -> Printf.sprintf ", attr: '%d'" size
   | Some label -> Printf.sprintf ", attr: ['%d', '%s']" size label
 
-let binary_to_hex str =
+let binary_to_hex bin =
   let open Sail2_values in
+  let str = string_of_bin_lit ~group_separator:"" bin in
   let padded = match String.length str mod 4 with 0 -> str | 1 -> "000" ^ str | 2 -> "00" ^ str | _ -> "0" ^ str in
   Util.string_to_list padded
   |> List.map (function '0' -> B0 | _ -> B1)
@@ -88,7 +89,8 @@ let rec wavedrom_elem_string size label (P_aux (aux, _)) =
   | P_lit (L_aux (L_bin bin, _)) ->
       Printf.sprintf "    { bits: %d, name: 0x%s%s, type: 8 }" size (binary_to_hex bin) (wavedrom_label size label)
   | P_lit (L_aux (L_hex hex, _)) ->
-      Printf.sprintf "    { bits: %d, name: 0x%s%s, type: 8 }" size hex (wavedrom_label size label)
+      let hexstr = string_of_hex_lit ~group_separator:"" ~case:Uppercase hex in
+      Printf.sprintf "    { bits: %d, name: 0x%s%s, type: 8 }" size hexstr (wavedrom_label size label)
   | P_vector_subrange (_, n, m) when Big_int.equal n m ->
       Printf.sprintf "    { bits: %d, name: '[%s]'%s, type: 3 }" size (Big_int.to_string n) (wavedrom_label size label)
   | P_vector_subrange (id, n, m) ->

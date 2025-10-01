@@ -27,7 +27,7 @@ function baz () = {
 
 scattered function /* comment */ quux
 
-function clause quux 0b00000000 = ()
+function clause quux 0b0000_0000 = ()
 
 end /* comment */ quux
 
