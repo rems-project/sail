@@ -120,6 +120,18 @@ type 'a ltr3 =
 
 val left_to_right3 : 'a1 exp -> 'a1 exp -> 'a1 exp -> 'a1 ltr3
 
+val bitlist_of_hex_digit : hex_digit -> bit list
+
+val hex_digit_of_nibble : bit -> bit -> bit -> bit -> hex_digit
+
+val hex_digits_of_bitlist : bit list -> hex_digit list option
+
+val non_empty_to_list : 'a1 non_empty -> 'a1 list
+
+val bitlist_of_hex_lit : hex_digit non_empty list -> bit list
+
+val bitlist_of_bin_lit : bin_digit non_empty list -> bit list
+
 module type SemanticExt =
  sig
   type tannot
@@ -137,10 +149,6 @@ module type SemanticExt =
   val id_equal_string : id -> string -> bool
 
   val string_of_id : id -> string
-
-  val bits_of_hex_string : string -> bit list
-
-  val bits_of_bin_string : string -> bit list
 
   val rational_of_string : string -> Rational.t
 

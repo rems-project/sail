@@ -237,8 +237,8 @@ rule token comments = parse
                                               Id i }
   | (digit+ as i1) "." (digit+ as i2)     { Real (i1 ^ "." ^ i2) }
   | digit+ as i                           { Num (Big_int.of_string i) }
-  | "0b" (binarydigit+ as i)              { Bin (Util.string_of_list "" (fun s -> s) (Util.split_on_char '_' i)) }
-  | "0x" (hexdigit+ as i)                 { Hex (Util.string_of_list "" (fun s -> s) (Util.split_on_char '_' i)) }
+  | "0b" (binarydigit+ as b)              { Bin b }
+  | "0x" (hexdigit+ as h)                 { Hex h }
   | '"'                                   { let startpos = Lexing.lexeme_start_p lexbuf in
                                             let contents = string startpos (Buffer.create 10) lexbuf in
                                             lexbuf.lex_start_p <- startpos;

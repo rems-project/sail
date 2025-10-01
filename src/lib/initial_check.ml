@@ -1168,6 +1168,97 @@ let to_ast_typschm_opt ctx (P.TypSchm_opt_aux (aux, l)) : tannot_opt ctx_out =
       let tq, ctx = ConvertType.to_ast_typquant kenv ctx tq in
       (Typ_annot_opt_aux (Typ_annot_opt_some (tq, ConvertType.to_ast_typ kenv ctx typ), l), ctx)
 
+let hex_digit_of_char c =
+  let open Util.Option_monad in
+  let* digit =
+    match c with
+    | '0' -> Some Hex_0
+    | '1' -> Some Hex_1
+    | '2' -> Some Hex_2
+    | '3' -> Some Hex_3
+    | '4' -> Some Hex_4
+    | '5' -> Some Hex_5
+    | '6' -> Some Hex_6
+    | '7' -> Some Hex_7
+    | '8' -> Some Hex_8
+    | '9' -> Some Hex_9
+    | 'a' | 'A' -> Some Hex_A
+    | 'b' | 'B' -> Some Hex_B
+    | 'c' | 'C' -> Some Hex_C
+    | 'd' | 'D' -> Some Hex_D
+    | 'e' | 'E' -> Some Hex_E
+    | 'f' | 'F' -> Some Hex_F
+    | _ -> None
+  in
+  let n = Char.code c in
+  let case = if 65 <= n && n <= 70 then Some Uppercase else if 97 <= n && n <= 102 then Some Lowercase else None in
+  Some (digit, case)
+
+let rec filter_non_empty = function
+  | [] -> []
+  | [] :: xs -> filter_non_empty xs
+  | (y :: ys) :: xs -> Non_empty (y, ys) :: filter_non_empty xs
+
+let parse_hex_lit ?warn_inconsistent_case str =
+  let groups = String.split_on_char '_' str in
+  let failed = ref false in
+  let seen_case = ref None in
+  let check_consistent_case = function
+    | None -> ()
+    | Some case -> (
+        match !seen_case with
+        | None -> seen_case := Some case
+        | Some previous ->
+            if case = previous then ()
+            else (
+              match warn_inconsistent_case with
+              | None -> ()
+              | Some l ->
+                  Reporting.warn "Inconsistent hexadecimal casing" l
+                    "This hexadecimal bitvector literal contains both lowercase and uppercase digits."
+            )
+      )
+  in
+  let hex =
+    List.map
+      (fun group ->
+        String.to_seq group
+        |> Seq.map (fun c ->
+               match hex_digit_of_char c with
+               | Some (digit, case) ->
+                   check_consistent_case case;
+                   digit
+               | None ->
+                   failed := true;
+                   Hex_0
+           )
+        |> List.of_seq
+      )
+      groups
+  in
+  if not !failed then Some (filter_non_empty hex) else None
+
+let parse_bin_lit str =
+  let groups = String.split_on_char '_' str in
+  let failed = ref false in
+  let bin =
+    List.map
+      (fun group ->
+        String.to_seq group
+        |> Seq.map (fun c ->
+               match c with
+               | '0' -> Bin_0
+               | '1' -> Bin_1
+               | _ ->
+                   failed := true;
+                   Bin_0
+           )
+        |> List.of_seq
+      )
+      groups
+  in
+  if not !failed then Some (filter_non_empty bin) else None
+
 let to_ast_lit (P.L_aux (lit, l)) =
   L_aux
     ( ( match lit with
@@ -1178,8 +1269,16 @@ let to_ast_lit (P.L_aux (lit, l)) =
       | P.L_false -> L_false
       | P.L_undef -> L_undef
       | P.L_num i -> L_num i
-      | P.L_hex h -> L_hex h
-      | P.L_bin b -> L_bin b
+      | P.L_hex h -> (
+          match parse_hex_lit ~warn_inconsistent_case:l h with
+          | Some h -> L_hex h
+          | None -> raise (Reporting.err_syntax_loc l "Failed to parse hexadecimal bitvector literal")
+        )
+      | P.L_bin b -> (
+          match parse_bin_lit b with
+          | Some b -> L_bin b
+          | None -> raise (Reporting.err_syntax_loc l "Failed to parse binary bitvector literal")
+        )
       | P.L_real r -> L_real r
       | P.L_string s -> L_string s
       ),

@@ -61,8 +61,8 @@ let is_bitvector_literal (L_aux (aux, _)) = match aux with L_bin _ | L_hex _ -> 
 let bitvector_unsigned (L_aux (aux, _)) =
   let open Sail_lib in
   match aux with
-  | L_bin str -> uint (List.map bin_char (Util.string_to_list str))
-  | L_hex str -> uint (bits_of_string str)
+  | L_bin bin -> uint (Semantics.bitlist_of_bin_lit bin)
+  | L_hex hex -> uint (Semantics.bitlist_of_hex_lit hex)
   | _ -> assert false
 
 let rec pat_id (P_aux (aux, _)) =

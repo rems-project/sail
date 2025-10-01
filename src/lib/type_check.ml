@@ -1383,8 +1383,8 @@ let infer_lit (L_aux (lit_aux, l)) =
   | L_string _ when !Type_env.opt_string_literal_type -> string_literal_typ
   | L_string _ -> string_typ
   | L_real _ -> real_typ
-  | L_bin str -> bitvector_typ (nint (String.length str))
-  | L_hex str -> bitvector_typ (nint (String.length str * 4))
+  | L_bin bin -> bitvector_typ (nint (bin_lit_length bin))
+  | L_hex hex -> bitvector_typ (nint (hex_lit_length hex))
   | L_undef -> typ_error l "Cannot infer the type of undefined"
 
 let instantiate_simple_equations =

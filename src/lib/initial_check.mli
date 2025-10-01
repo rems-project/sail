@@ -100,6 +100,11 @@ val process_ast : ctx -> Parse_ast.defs -> untyped_ast * ctx
 
 (** {2 Parsing expressions and definitions from strings} *)
 
+val hex_digit_of_char : char -> (hex_digit * digit_case option) option
+
+val parse_hex_lit : ?warn_inconsistent_case:Parse_ast.l -> string -> hex_digit non_empty list option
+val parse_bin_lit : string -> bin_digit non_empty list option
+
 val extern_of_string : ?pure:bool -> id -> string -> untyped_def
 
 val val_spec_of_string : id -> string -> untyped_def

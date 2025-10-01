@@ -299,6 +299,108 @@ let left_to_right3 x y z =
       | _ -> LTR3_1 (v1, y, z))
    | _ -> LTR3_0 (x, y, z))
 
+(** val bitlist_of_hex_digit : hex_digit -> bit list **)
+
+let bitlist_of_hex_digit = function
+| Hex_0 -> B0 :: (B0 :: (B0 :: (B0 :: [])))
+| Hex_1 -> B0 :: (B0 :: (B0 :: (B1 :: [])))
+| Hex_2 -> B0 :: (B0 :: (B1 :: (B0 :: [])))
+| Hex_3 -> B0 :: (B0 :: (B1 :: (B1 :: [])))
+| Hex_4 -> B0 :: (B1 :: (B0 :: (B0 :: [])))
+| Hex_5 -> B0 :: (B1 :: (B0 :: (B1 :: [])))
+| Hex_6 -> B0 :: (B1 :: (B1 :: (B0 :: [])))
+| Hex_7 -> B0 :: (B1 :: (B1 :: (B1 :: [])))
+| Hex_8 -> B1 :: (B0 :: (B0 :: (B0 :: [])))
+| Hex_9 -> B1 :: (B0 :: (B0 :: (B1 :: [])))
+| Hex_A -> B1 :: (B0 :: (B1 :: (B0 :: [])))
+| Hex_B -> B1 :: (B0 :: (B1 :: (B1 :: [])))
+| Hex_C -> B1 :: (B1 :: (B0 :: (B0 :: [])))
+| Hex_D -> B1 :: (B1 :: (B0 :: (B1 :: [])))
+| Hex_E -> B1 :: (B1 :: (B1 :: (B0 :: [])))
+| Hex_F -> B1 :: (B1 :: (B1 :: (B1 :: [])))
+
+(** val hex_digit_of_nibble : bit -> bit -> bit -> bit -> hex_digit **)
+
+let hex_digit_of_nibble b1 b2 b3 b4 =
+  let p = ((b1, b2), b3) in
+  let (p0, b0) = p in
+  let (b5, b6) = p0 in
+  (match b5 with
+   | B0 ->
+     (match b6 with
+      | B0 ->
+        (match b0 with
+         | B0 -> (match b4 with
+                  | B0 -> Hex_0
+                  | B1 -> Hex_1)
+         | B1 -> (match b4 with
+                  | B0 -> Hex_2
+                  | B1 -> Hex_3))
+      | B1 ->
+        (match b0 with
+         | B0 -> (match b4 with
+                  | B0 -> Hex_4
+                  | B1 -> Hex_5)
+         | B1 -> (match b4 with
+                  | B0 -> Hex_6
+                  | B1 -> Hex_7)))
+   | B1 ->
+     (match b6 with
+      | B0 ->
+        (match b0 with
+         | B0 -> (match b4 with
+                  | B0 -> Hex_8
+                  | B1 -> Hex_9)
+         | B1 -> (match b4 with
+                  | B0 -> Hex_A
+                  | B1 -> Hex_B))
+      | B1 ->
+        (match b0 with
+         | B0 -> (match b4 with
+                  | B0 -> Hex_C
+                  | B1 -> Hex_D)
+         | B1 -> (match b4 with
+                  | B0 -> Hex_E
+                  | B1 -> Hex_F))))
+
+(** val hex_digits_of_bitlist : bit list -> hex_digit list option **)
+
+let rec hex_digits_of_bitlist = function
+| [] -> Some []
+| b1 :: l ->
+  (match l with
+   | [] -> None
+   | b2 :: l0 ->
+     (match l0 with
+      | [] -> None
+      | b3 :: l1 ->
+        (match l1 with
+         | [] -> None
+         | b4 :: rest ->
+           let digit = hex_digit_of_nibble b1 b2 b3 b4 in
+           (match hex_digits_of_bitlist rest with
+            | Some digits -> Some (digit :: digits)
+            | None -> None))))
+
+(** val non_empty_to_list : 'a1 non_empty -> 'a1 list **)
+
+let non_empty_to_list = function
+| Non_empty (y, ys) -> y :: ys
+
+(** val bitlist_of_hex_lit : hex_digit non_empty list -> bit list **)
+
+let bitlist_of_hex_lit hex =
+  let digits = concat (map non_empty_to_list hex) in
+  concat (map bitlist_of_hex_digit digits)
+
+(** val bitlist_of_bin_lit : bin_digit non_empty list -> bit list **)
+
+let bitlist_of_bin_lit bin =
+  let digits = concat (map non_empty_to_list bin) in
+  map (fun b -> match b with
+                | Bin_0 -> B0
+                | Bin_1 -> B1) digits
+
 module type SemanticExt =
  sig
   type tannot
@@ -316,10 +418,6 @@ module type SemanticExt =
   val id_equal_string : id -> string -> bool
 
   val string_of_id : id -> string
-
-  val bits_of_hex_string : string -> bit list
-
-  val bits_of_bin_string : string -> bit list
 
   val rational_of_string : string -> Rational.t
 
@@ -474,9 +572,9 @@ module Make =
      | L_false -> Monad.pure (V_bool false)
      | L_num n -> Monad.pure (V_int n)
      | L_hex h ->
-       Monad.pure (V_vector (map (fun x -> V_bit x) (T.bits_of_hex_string h)))
+       Monad.pure (V_vector (map (fun x -> V_bit x) (bitlist_of_hex_lit h)))
      | L_bin b ->
-       Monad.pure (V_vector (map (fun x -> V_bit x) (T.bits_of_bin_string b)))
+       Monad.pure (V_vector (map (fun x -> V_bit x) (bitlist_of_bin_lit b)))
      | L_string s -> Monad.pure (V_string s)
      | L_undef -> Monad.get_undefined typ0
      | L_real r -> Monad.pure (V_real (T.rational_of_string r)))
@@ -537,11 +635,11 @@ module Make =
                    | _ -> false)
      | L_hex s ->
        (match v with
-        | V_vector vs -> same_bits (T.bits_of_hex_string s) vs
+        | V_vector vs -> same_bits (bitlist_of_hex_lit s) vs
         | _ -> false)
      | L_bin s ->
        (match v with
-        | V_vector vs -> same_bits (T.bits_of_bin_string s) vs
+        | V_vector vs -> same_bits (bitlist_of_bin_lit s) vs
         | _ -> false)
      | L_string s1 -> (match v with
                        | V_string s2 -> (=) s1 s2

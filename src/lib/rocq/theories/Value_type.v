@@ -61,4 +61,16 @@ Module Primops.
     | (V_int v1, V_int v2) => Some (V_int (Z.sub v1 v2))
     | _ => None
     end.
+
+  Definition zero_extend (bits : value) (n : value) : option value :=
+    match (bits, n) with
+    | (V_vector bitlist, V_int n) =>
+      let len := List.length bitlist in
+      if Z.ltb n (Z.of_nat len) then
+        None
+      else
+        let extend := (Z.to_nat n) - len in
+        Some (V_vector (List.repeat (V_bit B0) extend ++ bitlist))
+    | _ => None
+    end.
 End Primops.

@@ -1419,14 +1419,16 @@ let rewrite_ast_vector_string_pats_to_bit_list env =
 let rewrite_bit_lists_to_lits env =
   (* TODO Make all rewriting passes support bitvector literals instead of
      converting back and forth *)
-  let open Sail2_values in
-  let bit_of_lit = function L_aux (L_zero, _) -> Some B0 | L_aux (L_one, _) -> Some B1 | _ -> None in
+  let bit_of_lit = function
+    | L_aux (L_zero, _) -> Some Value_type.B0
+    | L_aux (L_one, _) -> Some Value_type.B1
+    | _ -> None
+  in
   let bit_of_exp = function E_aux (E_lit lit, _) -> bit_of_lit lit | _ -> None in
-  let string_of_chars cs = String.concat "" (List.map (String.make 1) cs) in
   let lit_of_bits bits =
-    match hexstring_of_bits bits with
-    | Some h -> L_hex (string_of_chars h)
-    | None -> L_bin (string_of_chars (List.map bitU_char bits))
+    match Semantics.hex_digits_of_bitlist bits with
+    | Some h -> L_hex (non_empty_singleton h)
+    | None -> L_bin (non_empty_singleton (List.map (function Value_type.B0 -> Bin_0 | Value_type.B1 -> Bin_1) bits))
   in
   let e_aux (e, (l, annot)) =
     let rewrap e = E_aux (e, (l, annot)) in
@@ -1435,7 +1437,7 @@ let rewrite_bit_lists_to_lits env =
       let typ = typ_of_annot (l, annot) in
       match e with
       | E_vector es when is_bitvector_typ typ -> (
-          match just_list (List.map bit_of_exp es) with
+          match Util.option_all (List.map bit_of_exp es) with
           | Some bits -> check_exp env (mk_exp (E_typ (typ, mk_lit_exp (lit_of_bits bits)))) typ
           | None -> rewrap e
         )
@@ -4385,10 +4387,12 @@ let rewrite_truncate_hex_literals _type_env defs =
         ( Id_aux (Id "truncate", _),
           [E_aux (E_lit (L_aux (L_hex hex, l_ann)), _); E_aux (E_lit (L_aux (L_num len, _)), _)]
         ) ->
-        let bin = hex_to_bin hex in
+        let bin =
+          Semantics.bitlist_of_hex_lit hex |> List.map (function Value_type.B0 -> Bin_0 | Value_type.B1 -> Bin_1)
+        in
         let len = Nat_big_num.to_int len in
-        let truncation = String.sub bin (String.length bin - len) len in
-        E_aux (E_lit (L_aux (L_bin truncation, l_ann)), annot)
+        let truncation = Util.drop (List.length bin - len) bin in
+        E_aux (E_lit (L_aux (L_bin (non_empty_singleton truncation), l_ann)), annot)
     | _ -> E_aux (e, annot)
   in
   rewrite_ast_base

@@ -137,11 +137,11 @@ let ids_in_exp exp =
 
 let make_vector_lit sz i =
   let f j =
-    if Big_int.equal (Big_int.modulus (Big_int.shift_right i (sz - j - 1)) (Big_int.of_int 2)) Big_int.zero then '0'
-    else '1'
+    if Big_int.equal (Big_int.modulus (Big_int.shift_right i (sz - j - 1)) (Big_int.of_int 2)) Big_int.zero then Bin_0
+    else Bin_1
   in
-  let s = String.init sz f in
-  L_aux (L_bin s, Generated Unknown)
+  let s = List.init sz f in
+  L_aux (L_bin (non_empty_singleton s), Generated Unknown)
 
 let tabulate f n =
   let rec aux acc n =
@@ -3034,12 +3034,7 @@ module MonoRewrites = struct
     let is_slice = is_id env (Id "slice") in
     let is_zeros id = is_zeros env id in
     let is_ones id = is_id env (Id "Ones") id || is_id env (Id "ones") id || is_id env (Id "sail_ones") id in
-    let is_ones_lit str =
-      (* String.for_all requires a newer version of OCaml than our current minimum *)
-      let rec aux i = if str.[i] = '1' then if i = 0 then true else aux (i - 1) else false in
-      let len = String.length str in
-      if len = 0 then false else aux (len - 1)
-    in
+    let is_ones_lit = function [] -> false | bin -> List.for_all (non_empty_for_all (fun b -> b = Bin_1)) bin in
     let is_zero_extend = is_zero_extend env id in
     let is_sign_extend =
       is_id env (Id "SignExtend") id || is_id env (Id "sign_extend") id || is_id env (Id "sail_sign_extend") id
@@ -3051,7 +3046,8 @@ module MonoRewrites = struct
     let rec is_zeros_exp e =
       match unaux_exp e with
       | E_app (zeros, [_]) when is_zeros zeros -> true
-      | E_lit (L_aux ((L_bin s | L_hex s), _)) -> List.for_all (fun c -> c = '0') (Util.string_to_list s)
+      | E_lit (L_aux (L_bin bin, _)) -> List.for_all (non_empty_for_all (fun b -> b = Bin_0)) bin
+      | E_lit (L_aux (L_hex hex, _)) -> List.for_all (non_empty_for_all (fun n -> n = Hex_0)) hex
       | E_typ (_, e) -> is_zeros_exp e
       | _ -> false
     in
@@ -3198,7 +3194,7 @@ module MonoRewrites = struct
           | Some zlen ->
               (* Give the length explicitly rather than relying on the context;
                  it might not be sufficiently constrained. *)
-              let len1 = mk_exp (E_lit (L_aux (L_num (Nat_big_num.of_int (String.length lit)), Unknown))) in
+              let len1 = mk_exp (E_lit (L_aux (L_num (Nat_big_num.of_int (bin_lit_length lit)), Unknown))) in
               let total = mk_infix_exp zlen (mk_operator "+") len1 in
               try_cast_to_typ (mk_exp (E_app (mk_id "slice_mask", [total; zlen; len1])))
           | None -> E_app (id, args)
@@ -3222,7 +3218,7 @@ module MonoRewrites = struct
           | Some zlen ->
               (* Give the length explicitly rather than relying on the context;
                  it might not be sufficiently constrained. *)
-              let len2 = mk_exp (E_lit (L_aux (L_num (Nat_big_num.of_int (String.length lit)), Unknown))) in
+              let len2 = mk_exp (E_lit (L_aux (L_num (Nat_big_num.of_int (bin_lit_length lit)), Unknown))) in
               let total = mk_infix_exp zlen (mk_operator "+") len2 in
               let zero = mk_exp (E_lit (mk_lit (L_num Nat_big_num.zero))) in
               try_cast_to_typ (mk_exp (E_app (mk_id "slice_mask", [total; zero; len2])))
@@ -3523,7 +3519,7 @@ module MonoRewrites = struct
           try_cast_to_typ (rewrap (E_app (mk_id "zext_subrange", length_arg @ [vector1; hi1; lo1])))
       | [E_aux (E_app (ones, [len1]), _)] when is_ones ones ->
           try_cast_to_typ (rewrap (E_app (mk_id "zext_ones", length_arg @ [len1])))
-      | [E_aux (E_app (replicate_bits, [E_aux (E_lit (L_aux (L_bin "1", _)), _); len1]), _)]
+      | [E_aux (E_app (replicate_bits, [E_aux (E_lit (L_aux (L_bin [Non_empty (Bin_1, [])], _)), _); len1]), _)]
         when is_id env (Id "replicate_bits") replicate_bits ->
           let start1 = mk_exp (E_lit (mk_lit (L_num Big_int.zero))) in
           try_cast_to_typ (rewrap (E_app (mk_id "slice_mask", length_arg @ [start1; len1])))
@@ -3608,8 +3604,8 @@ module MonoRewrites = struct
     else if is_id env (Id "Replicate") id then (
       let length_arg = List.filter (fun arg -> is_number (typ_of arg)) args in
       match List.filter (fun arg -> not (is_number (typ_of arg))) args with
-      | [E_aux (E_lit (L_aux (L_bin "0", _)), _)] -> E_app (mk_id "sail_zeros", length_arg)
-      | [E_aux (E_lit (L_aux (L_bin "1", _)), _)] -> E_app (mk_id "sail_ones", length_arg)
+      | [E_aux (E_lit (L_aux (L_bin [Non_empty (Bin_0, [])], _)), _)] -> E_app (mk_id "sail_zeros", length_arg)
+      | [E_aux (E_lit (L_aux (L_bin [Non_empty (Bin_1, [])], _)), _)] -> E_app (mk_id "sail_ones", length_arg)
       | _ -> E_app (id, args)
       (* Turn constant-length subranges into slices, making the constant length more explicit,
          e.g. turning x[i+1 .. i] into slice(x, i, 2) *)

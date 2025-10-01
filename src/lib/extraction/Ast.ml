@@ -24,6 +24,9 @@ module Coq_def_annot =
                      'a }
  end
 
+type 'a non_empty =
+| Non_empty of 'a * 'a list
+
 type 'a def_annot = 'a Coq_def_annot.record
 
 type 'a clause_annot = unit def_annot * 'a
@@ -33,6 +36,28 @@ type 'a annot = Parse_ast.l * 'a
 type loop =
 | While
 | Until
+
+type hex_digit =
+| Hex_0
+| Hex_1
+| Hex_2
+| Hex_3
+| Hex_4
+| Hex_5
+| Hex_6
+| Hex_7
+| Hex_8
+| Hex_9
+| Hex_A
+| Hex_B
+| Hex_C
+| Hex_D
+| Hex_E
+| Hex_F
+
+type bin_digit =
+| Bin_0
+| Bin_1
 
 type kind_aux =
 | K_type
@@ -70,8 +95,8 @@ type lit_aux =
 | L_true
 | L_false
 | L_num of Big_int_Z.big_int
-| L_hex of string
-| L_bin of string
+| L_hex of hex_digit non_empty list
+| L_bin of bin_digit non_empty list
 | L_string of string
 | L_undef
 | L_real of string

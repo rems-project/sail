@@ -497,6 +497,14 @@ let unaux_typ (Typ_aux (typ, _)) = typ
 let unaux_kind (K_aux (k, _)) = k
 let unaux_constraint (NC_aux (nc, _)) = nc
 
+let non_empty_singleton = function [] -> [] | x :: xs -> [Non_empty (x, xs)]
+
+let non_empty_for_all p (Non_empty (x, xs)) = p x && List.for_all p xs
+
+let hex_lit_length hex = List.fold_left (fun acc (Non_empty (_, ds)) -> acc + ((List.length ds + 1) * 4)) 0 hex
+
+let bin_lit_length bin = List.fold_left (fun acc (Non_empty (_, ds)) -> acc + List.length ds + 1) 0 bin
+
 let nexp_identical nexp1 nexp2 = Nexp.compare nexp1 nexp2 = 0
 
 let rec is_nexp_constant (Nexp_aux (nexp, _)) =
@@ -1294,6 +1302,41 @@ let string_of_typquant_aux = function
 let string_of_typquant = function TypQ_aux (quant, _) -> string_of_typquant_aux quant
 
 let string_of_typschm (TypSchm_aux (TypSchm_ts (quant, typ), _)) = string_of_typquant quant ^ ". " ^ string_of_typ typ
+
+type digit_case = Lowercase | Uppercase
+
+let string_of_hex_digit ~case digit =
+  let c =
+    match digit with
+    | Hex_0 -> "0"
+    | Hex_1 -> "1"
+    | Hex_2 -> "2"
+    | Hex_3 -> "3"
+    | Hex_4 -> "4"
+    | Hex_5 -> "5"
+    | Hex_6 -> "6"
+    | Hex_7 -> "7"
+    | Hex_8 -> "8"
+    | Hex_9 -> "9"
+    | Hex_A -> "A"
+    | Hex_B -> "B"
+    | Hex_C -> "C"
+    | Hex_D -> "D"
+    | Hex_E -> "E"
+    | Hex_F -> "F"
+  in
+  match case with Uppercase -> c | Lowercase -> String.lowercase_ascii c
+
+let string_of_hex_lit ?(group_separator = "_") ~case hex =
+  List.map (function Non_empty (d, ds) -> List.map (string_of_hex_digit ~case) (d :: ds) |> String.concat "") hex
+  |> String.concat group_separator
+
+let string_of_bin_lit ?(group_separator = "_") bin =
+  List.map
+    (function Non_empty (d, ds) -> List.map (function Bin_0 -> "0" | Bin_1 -> "1") (d :: ds) |> String.concat "")
+    bin
+  |> String.concat group_separator
+
 let string_of_lit (L_aux (lit, _)) =
   match lit with
   | L_unit -> "()"
@@ -1302,8 +1345,8 @@ let string_of_lit (L_aux (lit, _)) =
   | L_true -> "true"
   | L_false -> "false"
   | L_num n -> Big_int.to_string n
-  | L_hex n -> "0x" ^ n
-  | L_bin n -> "0b" ^ n
+  | L_hex hex -> "0x" ^ string_of_hex_lit ~case:Uppercase hex
+  | L_bin bin -> "0b" ^ string_of_bin_lit bin
   | L_undef -> "undefined"
   | L_real r -> r
   | L_string str -> "\"" ^ str ^ "\""
@@ -1937,40 +1980,13 @@ let explode s =
   exp (String.length s - 1) []
 
 let vector_string_to_bit_list (L_aux (lit, l)) =
-  let hexchar_to_binlist = function
-    | '0' -> ['0'; '0'; '0'; '0']
-    | '1' -> ['0'; '0'; '0'; '1']
-    | '2' -> ['0'; '0'; '1'; '0']
-    | '3' -> ['0'; '0'; '1'; '1']
-    | '4' -> ['0'; '1'; '0'; '0']
-    | '5' -> ['0'; '1'; '0'; '1']
-    | '6' -> ['0'; '1'; '1'; '0']
-    | '7' -> ['0'; '1'; '1'; '1']
-    | '8' -> ['1'; '0'; '0'; '0']
-    | '9' -> ['1'; '0'; '0'; '1']
-    | 'A' -> ['1'; '0'; '1'; '0']
-    | 'B' -> ['1'; '0'; '1'; '1']
-    | 'C' -> ['1'; '1'; '0'; '0']
-    | 'D' -> ['1'; '1'; '0'; '1']
-    | 'E' -> ['1'; '1'; '1'; '0']
-    | 'F' -> ['1'; '1'; '1'; '1']
-    | _ -> raise (Reporting.err_unreachable l __POS__ "hexchar_to_binlist given unrecognized character")
-  in
-
   let s_bin =
     match lit with
-    | L_hex s_hex -> List.flatten (List.map hexchar_to_binlist (explode (String.uppercase_ascii s_hex)))
-    | L_bin s_bin -> explode s_bin
+    | L_hex hex -> Semantics.bitlist_of_hex_lit hex
+    | L_bin bin -> Semantics.bitlist_of_bin_lit bin
     | _ -> raise (Reporting.err_unreachable l __POS__ "s_bin given non vector literal")
   in
-
-  List.map
-    (function
-      | '0' -> L_aux (L_zero, gen_loc l)
-      | '1' -> L_aux (L_one, gen_loc l)
-      | _ -> raise (Reporting.err_unreachable (gen_loc l) __POS__ "binary had non-zero or one")
-      )
-    s_bin
+  List.map (function Value_type.B0 -> L_aux (L_zero, gen_loc l) | Value_type.B1 -> L_aux (L_one, gen_loc l)) s_bin
 
 (* Functions for working with locations *)
 
