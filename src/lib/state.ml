@@ -920,4 +920,11 @@ let add_register_init_function ctx env ast =
   let fundef = mk_fundef [funcl] in
   let val_spec = mk_val_spec (VS_val_spec (mk_typschm (mk_typquant []) (function_typ [unit_typ] unit_typ), id, None)) in
   let new_defs, env = Type_error.check_defs env [val_spec; fundef] in
+  let drop_init = function
+    | DEF_aux (DEF_register (DEC_aux (DEC_reg (typ, id, Some exp), an)), def_annot) ->
+        let def_annot = add_def_attribute def_annot.loc "initialized_elsewhere" None def_annot in
+        DEF_aux (DEF_register (DEC_aux (DEC_reg (typ, id, None), an)), def_annot)
+    | d -> d
+  in
+  let ast = { ast with defs = List.map drop_init ast.defs } in
   (append_ast_defs ast new_defs, ctx, env)
