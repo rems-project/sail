@@ -263,11 +263,11 @@ bool write_ram(const mpz_t addr_size,     // Either 32 or 64
 	       const lbits addr_bv,
 	       const lbits data)
 {
-  uint64_t addr = mpz_get_ui(*addr_bv.bits);
+  uint64_t addr = mpz_get_ui(addr_bv.bits);
   uint64_t data_size = mpz_get_ui(data_size_mpz);
 
   mpz_t buf;
-  mpz_init_set(buf, *data.bits);
+  mpz_init_set(buf, data.bits);
 
   uint64_t byte;
   for(uint64_t i = 0; i < data_size; ++i) {
@@ -304,18 +304,18 @@ void read_ram(lbits *data,
 	      const lbits hex_ram,
 	      const lbits addr_bv)
 {
-  uint64_t addr = mpz_get_ui(*addr_bv.bits);
+  uint64_t addr = mpz_get_ui(addr_bv.bits);
   uint64_t data_size = mpz_get_ui(data_size_mpz);
 
-  mpz_set_ui(*data->bits, 0);
+  mpz_set_ui(data->bits, 0);
   data->len = data_size * 8;
 
   mpz_t byte;
   mpz_init(byte);
   for(uint64_t i = data_size; i > 0; --i) {
     mpz_set_ui(byte, read_mem(addr + (i - 1)));
-    mpz_mul_2exp(*data->bits, *data->bits, 8);
-    mpz_add(*data->bits, *data->bits, byte);
+    mpz_mul_2exp(data->bits, data->bits, 8);
+    mpz_add(data->bits, data->bits, byte);
   }
 
   mpz_clear(byte);
@@ -337,12 +337,13 @@ void platform_read_mem(lbits *data,
     mpz_t mpz_addr_size;
     mpz_init(mpz_addr_size);
     mpz_set_ui(mpz_addr_size, addr_size);
-    mpz_t addr_bv;
-    mpz_init(addr_bv);
-    mpz_set_ui(addr_bv, addr.bits);
-    read_ram(data, mpz_addr_size, n, (lbits){.len=0, .bits=NULL}, (lbits){.len=addr.len, .bits=&addr_bv});
+    lbits addr_bv = {
+      .len=addr.len,
+    };
+    mpz_init_set_ui(addr_bv.bits, addr.bits);
+    read_ram(data, mpz_addr_size, n, (lbits){.len=0, .bits={}}, addr_bv);
     mpz_clear(mpz_addr_size);
-    mpz_clear(addr_bv);
+    mpz_clear(addr_bv.bits);
   }
 }
 
@@ -363,12 +364,13 @@ bool platform_write_mem(const int write_kind,
     mpz_t mpz_addr_size;
     mpz_init(mpz_addr_size);
     mpz_set_ui(mpz_addr_size, addr_size);
-    mpz_t addr_bv;
-    mpz_init(addr_bv);
-    mpz_set_ui(addr_bv, addr.bits);
-    bool res = write_ram(mpz_addr_size, n, (lbits){.len=0, .bits=NULL}, (lbits){.len=addr.len, .bits=&addr_bv}, data);
+    lbits addr_bv = {
+      .len=addr.len,
+    };
+    mpz_init_set_ui(addr_bv.bits, addr.bits);
+    bool res = write_ram(mpz_addr_size, n, (lbits){.len=0, .bits={}}, addr_bv, data);
     mpz_clear(mpz_addr_size);
-    mpz_clear(addr_bv);
+    mpz_clear(addr_bv.bits);
     return res;
 }
 

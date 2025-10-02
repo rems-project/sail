@@ -300,7 +300,7 @@ void sail_config_truncate(lbits *rop) {
   mpz_set_ui(tmp, 1);
   mpz_mul_2exp(tmp, tmp, rop->len);
   mpz_sub_ui(tmp, tmp, 1);
-  mpz_and(*rop->bits, *rop->bits, tmp);
+  mpz_and(rop->bits, rop->bits, tmp);
 
   mpz_clear(tmp);
 }
@@ -311,9 +311,9 @@ void sail_config_unwrap_bit(lbits *bv, const sail_config_json config)
 
   bv->len = 1;
   if (cJSON_IsTrue(json)) {
-    mpz_set_ui(*bv->bits, 1);
+    mpz_set_ui(bv->bits, 1);
   } else {
-    mpz_set_ui(*bv->bits, 0);
+    mpz_set_ui(bv->bits, 0);
   }
 }
 
@@ -335,7 +335,7 @@ void sail_config_set_bits_value(lbits *bv, char *v)
     i--;
     do {
       if (v[i] == '1') {
-        mpz_setbit(*bv->bits, b);
+        mpz_setbit(bv->bits, b);
       }
       b++;
       i--;
@@ -365,13 +365,13 @@ void sail_config_unwrap_bits(lbits *bv, const sail_config_json config)
   if (cJSON_IsArray(json)) {
     mp_bitcnt_t len = (mp_bitcnt_t)cJSON_GetArraySize(json);
     bv->len = len;
-    mpz_set_ui(*bv->bits, 0);
+    mpz_set_ui(bv->bits, 0);
 
     mp_bitcnt_t i = 0;
     cJSON *bit;
     cJSON_ArrayForEach(bit, json) {
       if (cJSON_IsTrue(bit)) {
-        mpz_setbit(*bv->bits, len - i - 1);
+        mpz_setbit(bv->bits, len - i - 1);
       }
       i++;
     }

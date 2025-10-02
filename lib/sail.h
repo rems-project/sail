@@ -274,7 +274,7 @@ typedef struct {
 
 typedef struct {
   mp_bitcnt_t len;
-  mpz_t *bits;
+  mpz_t bits;
 } lbits;
 
 // For backwards compatibility
