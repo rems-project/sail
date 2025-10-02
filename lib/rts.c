@@ -518,7 +518,7 @@ void trace_sail_int(const sail_int op) {
   if (g_trace_enabled) mpz_out_str(stderr, 10, op);
 }
 
-void trace_lbits(const lbits op) {
+void trace_lbits(const lbits *op) {
   if (g_trace_enabled) fprint_bits("", op, "", stderr);
 }
 
