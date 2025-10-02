@@ -5431,6 +5431,15 @@ and check_def : Env.t -> untyped_def -> typed_def list * Env.t =
   | DEF_instantiation (ispec, substs) -> check_outcome_instantiation env def_annot ispec substs
   | DEF_default default -> check_default env def_annot default
   | DEF_overload (id, ids) -> ([DEF_aux (DEF_overload (id, ids), def_annot)], Env.add_overloads def_annot.loc id ids env)
+  | DEF_register (DEC_aux (DEC_reg (typ, id, None), (l, uannot)))
+    when Option.is_some (get_def_attribute "initialized_elsewhere" def_annot) ->
+      let env = Env.add_register id typ env in
+      ( [
+          DEF_aux
+            (DEF_register (DEC_aux (DEC_reg (typ, id, None), (l, mk_expected_tannot env typ (Some typ)))), def_annot);
+        ],
+        env
+      )
   | DEF_register (DEC_aux (DEC_reg (typ, id, None), (l, uannot))) -> begin
       Env.wf_typ ~at:l env typ;
       match typ with
