@@ -61,14 +61,16 @@ EOF
 EOF
   else
   cat <<EOF >> "$OUT"
-  Definition write_mem (st : state) n nt (req : Interface.WriteReq.t n nt) :=
-    let base_addr := mword_to_N req.(Interface.WriteReq.address) in
+  Definition write_mem (st : state) (req : Interface.MemReq.t) (value : definitions.bv (8 * Interface.MemReq.size req)) (tags : definitions.bv (Interface.MemReq.num_tag req)) :=
+    let n := req.(Interface.MemReq.size) in
+    let nt := req.(Interface.MemReq.num_tag) in
+    let base_addr := mword_to_N req.(Interface.MemReq.address) in
     let addrs := State_monad.genlist (fun i => base_addr + N.of_nat i)%N (N.to_nat n) in
-    let write_byte i m := NMap.add (base_addr + i)%N (definitions.bv_extract (8 * i) 8 req.(Interface.WriteReq.value)) m in
+    let write_byte i m := NMap.add (base_addr + i)%N (definitions.bv_extract (8 * i) 8 value) m in
     let cap_size := N.pow 2 Arch.cap_size_log in
-    let write_tag i m := NMap.add (base_addr + i * cap_size)%N (MachineWord.MachineWord.get_bit req.(Interface.WriteReq.tags) i) m in
+    let write_tag i m := NMap.add (base_addr + i * cap_size)%N (MachineWord.MachineWord.get_bit tags i) m in
     let new_tags :=
-      if Z.of_N nt >? 0 then N.recursion st.(state_tags) write_tag nt else NMap.add (mword_to_N (definitions.bv_and req.(Interface.WriteReq.address) (definitions.bv_opp (definitions.Z_to_bv _ (Z.of_N cap_size))))) false st.(state_tags)
+      if Z.of_N nt >? 0 then N.recursion st.(state_tags) write_tag nt else NMap.add (mword_to_N (definitions.bv_and req.(Interface.MemReq.address) (definitions.bv_opp (definitions.Z_to_bv _ (Z.of_N cap_size))))) false st.(state_tags)
     in
     {| state_memory := N.recursion st.(state_memory) write_byte n;
        state_tags := new_tags;
@@ -77,8 +79,10 @@ EOF
        state_output := st.(state_output)
     |}.
   
-  Definition read_mem (st : state) n nt (req : Interface.ReadReq.t n nt) : definitions.bv (8 * n) * definitions.bv nt :=
-    let base_addr := mword_to_N req.(Interface.ReadReq.address) in
+  Definition read_mem (st : state) (req : Interface.MemReq.t) : definitions.bv (8 * (Interface.MemReq.size req)) * definitions.bv (Interface.MemReq.num_tag req) :=
+    let n := req.(Interface.MemReq.size) in
+    let nt := req.(Interface.MemReq.num_tag) in
+    let base_addr := mword_to_N req.(Interface.MemReq.address) in
     let read_byte i v := definitions.bv_or (definitions.bv_shiftl (definitions.bv_zero_extend (8 * n) (opt_def (definitions.bv_0 8) (NMap.find (base_addr + i)%N st.(state_memory)))) (definitions.Z_to_bv (8 * n)%N (Z.of_N (8 * i)))) v in
     let cap_size := N.pow 2 Arch.cap_size_log in
     let read_tag i v := MachineWord.MachineWord.set_bit v i (opt_def false (NMap.find (base_addr + i * cap_size)%N st.(state_tags))) in
@@ -118,8 +122,8 @@ EOF
 EOF
   else
   cat <<EOF >> "$OUT"
-      | Interface.MemWrite n nt req => fun k => run (k (inl None)) (write_mem st n nt req)
-      | Interface.MemRead n nt req => fun k => run (k (inl (read_mem st n nt req))) st
+      | Interface.MemWrite req v tags => fun k => run (k (inl None)) (write_mem st req v tags)
+      | Interface.MemRead req => fun k => run (k (inl (read_mem st req))) st
       | Interface.TakeException _ => fun k => run (k tt) st
       | Interface.ReturnException => fun k => run (k tt) st
 EOF
