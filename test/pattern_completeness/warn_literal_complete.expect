@@ -2,5 +2,6 @@
 9[96m |[0m    match x {
  [91m |[0m    [91m^---^[0m
  [91m |[0m 
-The following expression is unmatched: [93m2[0m
+No expression of type [93mint(2)[0m can be matched.
+This is the type of the expression being matched on.
 

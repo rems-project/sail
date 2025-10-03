@@ -995,11 +995,29 @@ module Make (C : Config) = struct
     | _, (Pat_aux (Pat_when _, _) as case) :: cases -> case :: update_cases l new_pats cases
     | _, _ -> Reporting.unreachable l __POS__ "Impossible case in update_cases" [@coverage off]
 
+  let guard_info ~terminator ~have_guard ~have_mapping =
+    ( if have_guard && have_mapping then " by unguarded or mapping-free patterns"
+      else if have_guard then " by unguarded patterns"
+      else if have_mapping then " by mapping-free patterns"
+      else ""
+    )
+    ^ terminator
+
   let is_complete_wildcarded ?(keyword = "match") ?(remove_redundant = false) l ctx cases head_exp_typ =
     try
       match cases_to_pats ctx 0 ~have_guard:false ~have_mapping:false cases with
-      | _, _, [] -> None
-      | have_guard, have_mapping, pats ->
+      (* The type-checker can prune some case armms early, if it determines the pattern would introduce a
+         false/impossible flow typing constraint. If this happens we can get an empty list here. *)
+      | have_guard, have_mapping, [] ->
+          Reporting.warn "Incomplete pattern match statement at" (shrink_loc keyword l)
+            ("No expression of type "
+            ^ Util.(string_of_typ head_exp_typ |> yellow |> clear)
+            ^ " can be matched"
+            ^ guard_info ~terminator:"." ~have_guard ~have_mapping
+            ^ "\nThis is the type of the expression being matched on."
+            );
+          None
+      | have_guard, have_mapping, pats -> (
           let matrix =
             Rows
               (List.mapi
@@ -1007,34 +1025,28 @@ module Make (C : Config) = struct
                  pats
               )
           in
-          begin
-            match matrix_is_complete l ctx matrix with
-            | Incomplete (unmatched :: _) ->
-                let guard_info =
-                  if have_guard && have_mapping then " by unguarded or mapping-free patterns"
-                  else if have_guard then " by unguarded patterns"
-                  else if have_mapping then " by mapping-free patterns"
-                  else ""
-                in
-                Reporting.warn "Incomplete pattern match statement at" (shrink_loc keyword l)
-                  ("The following expression is unmatched" ^ guard_info ^ ": "
-                  ^ (string_of_exp unmatched |> Util.yellow |> Util.clear)
-                  );
-                None
-            | Incomplete [] ->
-                Reporting.unreachable l __POS__ "Got unmatched pattern matrix without witness" [@coverage off]
-            | Complete cinfo ->
-                let wildcarded_pats = List.map (fun (_, pat) -> insert_wildcards cinfo pat) pats in
-                List.iter
-                  (fun (idx, _) ->
-                    if IntSet.mem idx.num cinfo.redundant then
-                      Reporting.warn "Redundant case" idx.loc "This match case is never used"
-                  )
-                  (rows_to_list matrix);
-                let result = update_cases l wildcarded_pats cases in
-                if remove_redundant then Some (filter_out cinfo.redundant result) else Some result
-            | Completeness_unknown -> None
-          end
+          match matrix_is_complete l ctx matrix with
+          | Incomplete (unmatched :: _) ->
+              Reporting.warn "Incomplete pattern match statement at" (shrink_loc keyword l)
+                ("The following expression is unmatched"
+                ^ guard_info ~terminator:": " ~have_guard ~have_mapping
+                ^ Util.(string_of_exp unmatched |> yellow |> clear)
+                );
+              None
+          | Incomplete [] ->
+              Reporting.unreachable l __POS__ "Got unmatched pattern matrix without witness" [@coverage off]
+          | Complete cinfo ->
+              let wildcarded_pats = List.map (fun (_, pat) -> insert_wildcards cinfo pat) pats in
+              List.iter
+                (fun (idx, _) ->
+                  if IntSet.mem idx.num cinfo.redundant then
+                    Reporting.warn "Redundant case" idx.loc "This match case is never used"
+                )
+                (rows_to_list matrix);
+              let result = update_cases l wildcarded_pats cases in
+              if remove_redundant then Some (filter_out cinfo.redundant result) else Some result
+          | Completeness_unknown -> None
+        )
     with
     (* For now, if any error occurs just report the pattern match is incomplete *)
     | _ ->
