@@ -76,7 +76,7 @@ let rec lem_nexps_of_typ (Typ_aux (t, l)) =
   | Typ_tuple ts -> List.fold_left (fun s t -> NexpSet.union s (trec t)) NexpSet.empty ts
   | Typ_app (Id_aux (Id "bitvector", _), [A_aux (A_nexp m, _)]) ->
       let m = nexp_simp m in
-      if !opt_mwords && not (is_nexp_constant m) then NexpSet.singleton (orig_nexp m) else trec bit_typ
+      if !opt_mwords && not (is_nexp_constant m) then NexpSet.singleton (orig_nexp m) else NexpSet.empty
   | Typ_app (Id_aux (Id "vector", _), [A_aux (A_nexp m, _); A_aux (A_typ elem_typ, _)]) -> trec elem_typ
   | Typ_app (Id_aux (Id "register", _), [A_aux (A_typ etyp, _)]) -> trec etyp
   | Typ_app (Id_aux (Id "range", _), _) | Typ_app (Id_aux (Id "implicit", _), _) | Typ_app (Id_aux (Id "atom", _), _) ->

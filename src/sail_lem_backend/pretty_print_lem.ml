@@ -132,7 +132,6 @@ let doc_id_lem_ctor (Id_aux (i, _)) =
   match i with
   | And_bool -> string "and_bool"
   | Or_bool -> string "or_bool"
-  | Id "bit" -> string "bitU"
   | Id "int" -> string "integer"
   | Id "nat" -> string "integer"
   | Id "Some" -> string "Just"
@@ -297,7 +296,7 @@ let rec lem_nexps_of_typ params_to_print (Typ_aux (t, l)) =
   | Typ_tuple ts -> List.fold_left (fun s t -> NexpSet.union s (trec t)) NexpSet.empty ts
   | Typ_app (Id_aux (Id "bitvector", _), [A_aux (A_nexp m, _)]) ->
       let m = nexp_simp m in
-      if !Monomorphise.opt_mwords && not (is_nexp_constant m) then NexpSet.singleton (orig_nexp m) else trec bit_typ
+      if !Monomorphise.opt_mwords && not (is_nexp_constant m) then NexpSet.singleton (orig_nexp m) else NexpSet.empty
   | Typ_app (Id_aux (Id "vector", _), [A_aux (A_nexp m, _); A_aux (A_typ elem_typ, _)]) -> trec elem_typ
   | Typ_app (Id_aux (Id "register", _), [A_aux (A_typ etyp, _)]) -> trec etyp
   | Typ_app (Id_aux (Id "range", _), _) | Typ_app (Id_aux (Id "implicit", _), _) | Typ_app (Id_aux (Id "atom", _), _) ->
@@ -356,7 +355,7 @@ let doc_typ_lem, doc_typ_lem_brackets, doc_atomic_typ_lem =
     | Typ_app (Id_aux (Id "bitvector", _), [A_aux (A_nexp m, _)]) ->
         let tpp =
           if !Monomorphise.opt_mwords then string "mword " ^^ doc_nexp_lem (nexp_simp m)
-          else string "list" ^^ space ^^ typ params_to_print true bit_typ
+          else string "list" ^^ space ^^ string "bitU"
         in
         if atyp_needed then parens tpp else tpp
     | Typ_app (Id_aux (Id "register", _), [A_aux (A_typ etyp, _)]) ->
@@ -385,7 +384,6 @@ let doc_typ_lem, doc_typ_lem_brackets, doc_atomic_typ_lem =
     match t with
     | Typ_id (Id_aux (Id "string_literal", _)) -> string "string"
     | Typ_id (Id_aux (Id "bool", _)) -> string "bool"
-    | Typ_id (Id_aux (Id "bit", _)) -> string "bitU"
     | Typ_id id ->
         (*if List.exists ((=) (string_of_id id)) regtypes
           then string "register"
@@ -501,6 +499,8 @@ let doc_tannot_lem ctxt env eff typ =
 let min_int32 = Big_int.of_int64 (Int64.of_int32 Int32.min_int)
 let max_int32 = Big_int.of_int64 (Int64.of_int32 Int32.max_int)
 
+let doc_bit = function Value_type.B0 -> string "B0" | Value_type.B1 -> string "B1"
+
 let rec doc_lit_lem (L_aux (lit, l)) =
   match lit with
   | L_unit -> utf8string "()"
@@ -512,8 +512,8 @@ let rec doc_lit_lem (L_aux (lit, l)) =
   | L_hex hex when !Monomorphise.opt_mwords ->
       utf8string ("0x" ^ string_of_hex_lit ~group_separator:"" ~case:Uppercase hex)
   | L_bin bin when !Monomorphise.opt_mwords -> utf8string ("0b" ^ string_of_bin_lit ~group_separator:"" bin)
-  | L_hex _ | L_bin _ ->
-      vector_string_to_bit_list (L_aux (lit, l)) |> flow_map (semi ^^ break 0) doc_lit_lem |> group |> align |> brackets
+  | L_hex hex -> Semantics.bitlist_of_hex_lit hex |> flow_map (semi ^^ break 0) doc_bit |> group |> align |> brackets
+  | L_bin bin -> Semantics.bitlist_of_bin_lit bin |> flow_map (semi ^^ break 0) doc_bit |> group |> align |> brackets
   | L_undef -> utf8string "(return (failwith \"undefined value of unsupported type\"))"
   | L_string s -> utf8string ("\"" ^ String.escaped s ^ "\"")
   | L_real s ->
