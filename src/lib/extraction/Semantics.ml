@@ -743,7 +743,30 @@ module Make =
               ps ((true, []), vs))
         | _ -> no_match)
      | P_vector_concat ps ->
-       (match to_gvector v with
+       (match v with
+        | V_bitvector bs ->
+          fst
+            (fold_left (fun match_info p0 ->
+              let P_aux (_, annot1) = p0 in
+              (match T.get_split (snd annot1) with
+               | No_split -> (no_match, [])
+               | Split s ->
+                 let (p1, bs0) = match_info in
+                 let (b, bound) = p1 in
+                 if b
+                 then (match bs0 with
+                       | [] -> (no_match, [])
+                       | _ :: _ ->
+                         let (bs_take, bs_drop) = take_drop s bs0 in
+                         let (matched, more_bound) =
+                           pattern_match p0 (V_bitvector bs_take)
+                         in
+                         ((matched, (merge_bindings bound more_bound)),
+                         bs_drop))
+                 else (match bs0 with
+                       | [] -> (no_match, [])
+                       | _ :: _ -> (no_match, bs0))))
+              ps ((true, []), bs))
         | V_vector vs ->
           fst
             (fold_left (fun match_info p0 ->
@@ -871,7 +894,25 @@ module Make =
          else Monad.Runtime_type_error (fst annot0)
        | _ -> Monad.Runtime_type_error (fst annot0))
     | DL_vector_concat ds ->
-      (match to_gvector v with
+      (match v with
+       | V_bitvector bs ->
+         let (assignment, _) =
+           fold_left (fun acc d0 ->
+             let (s, d1) = d0 in
+             (match s with
+              | No_split -> ((Monad.Runtime_type_error (fst annot0)), [])
+              | Split s0 ->
+                let (prev, bs0) = acc in
+                (match bs0 with
+                 | [] -> (prev, [])
+                 | _ :: _ ->
+                   let (bs_take, bs_drop) = take_drop s0 bs0 in
+                   ((Monad.bind prev (fun _ ->
+                      destructuring_assignment annot0 d1 (V_bitvector bs_take))),
+                   bs_drop))))
+             ds ((Monad.pure ()), bs)
+         in
+         assignment
        | V_vector vs ->
          let (assignment, _) =
            fold_left (fun acc d0 ->

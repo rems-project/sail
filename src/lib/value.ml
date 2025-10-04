@@ -227,7 +227,7 @@ let value_update_subrange_inc = function
   | _ -> failwith "value update_subrange_inc"
 
 let value_append = function
-  | [V_bitvector bv1; V_bitvector bv2] -> V_bitvector (bv2 @ bv2)
+  | [V_bitvector bv1; V_bitvector bv2] -> V_bitvector (bv1 @ bv2)
   | [V_vector v1; V_vector v2] -> V_vector (v1 @ v2)
   | _ -> failwith "value append"
 

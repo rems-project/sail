@@ -131,6 +131,17 @@ module VariableUpdate = struct
         let* ys = vector_update f (n - 1) xs in
         Some (x :: ys)
 
+  let rec bitvector_update_subrange f n m xs =
+    match (m, xs) with
+    | _, [] -> Some []
+    | 0, xs -> (
+        let* ys = f (V_bitvector (List.rev (Util.take (n + 1) xs))) in
+        match ys with V_bitvector ys -> Some (List.rev ys @ Util.drop (n + 1) xs) | _ -> None
+      )
+    | m, x :: xs ->
+        let* ys = bitvector_update_subrange f (n - 1) (m - 1) xs in
+        Some (x :: ys)
+
   let rec vector_update_subrange f n m xs =
     match (m, xs) with
     | _, [] -> Some []
@@ -157,18 +168,40 @@ module VariableUpdate = struct
             | _ -> None
           )
         | Vector n -> (
-            match v with
+            let mk_vector vs =
+              match v with
+              | V_bitvector _ ->
+                  let* bs = Util.option_all @@ List.map (function V_bitvector [b] -> Some b | _ -> None) vs in
+                  Some (V_bitvector bs)
+              | _ -> Some (V_vector vs)
+            in
+            match Semantics.to_gvector v with
             | V_vector vs ->
                 if is_inc then
                   let* vs = vector_update (fun v -> update is_inc v v' accessors) (Big_int.to_int n) vs in
-                  Some (V_vector vs)
+                  mk_vector vs
                 else
                   let* vs = vector_update (fun v -> update is_inc v v' accessors) (Big_int.to_int n) (List.rev vs) in
-                  Some (V_vector (List.rev vs))
+                  mk_vector (List.rev vs)
             | _ -> None
           )
         | Vector_range (n, m) -> (
             match v with
+            | V_bitvector bs ->
+                if is_inc then
+                  let* bs =
+                    bitvector_update_subrange
+                      (fun v -> update is_inc v v' accessors)
+                      (Big_int.to_int m) (Big_int.to_int n) bs
+                  in
+                  Some (V_bitvector bs)
+                else
+                  let* bs =
+                    bitvector_update_subrange
+                      (fun v -> update is_inc v v' accessors)
+                      (Big_int.to_int n) (Big_int.to_int m) (List.rev bs)
+                  in
+                  Some (V_bitvector (List.rev bs))
             | V_vector vs ->
                 if is_inc then
                   let* vs =
@@ -461,7 +494,11 @@ let default_effect_interp out state stack eff =
       let id = mk_id name in
       let do_update = function
         | None -> Some v
-        | Some old_value -> VariableUpdate.update (is_increasing gstate) old_value v accessors
+        | Some old_value -> (
+            match VariableUpdate.update (is_increasing gstate) old_value v accessors with
+            | Some v -> Some v
+            | None -> failwith "Register variable update failed"
+          )
       in
       if gstate.allow_registers then
         if Bindings.mem id gstate.registers then (

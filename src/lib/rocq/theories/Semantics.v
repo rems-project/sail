@@ -841,7 +841,25 @@ Module Make (T : SemanticExt).
         | _ => no_match
         end
     | P_vector_concat ps =>
-        match to_gvector v with
+        match v with
+        | V_bitvector bs =>
+            fst (fold_left
+                   (fun match_info p =>
+                    let '(P_aux _ annot) := p in
+                    match T.get_split (snd annot) with
+                    | Split s =>
+                        match match_info with
+                        | (_, []) => (no_match, [])
+                        | ((false, _), bs) => (no_match, bs)
+                        | ((true, bound), bs) =>
+                            let '(bs_take, bs_drop) := take_drop s bs in
+                            let '(matched, more_bound) := pattern_match p (V_bitvector bs_take) in
+                            ((matched, bound ⋈ more_bound), bs_drop)
+                        end
+                    | No_split => (no_match, [])
+                    end)
+                   ps
+                   ((true, []), bs))
         | V_vector vs =>
             fst (fold_left
                    (fun match_info p =>
@@ -1114,7 +1132,27 @@ Module Make (T : SemanticExt).
             Runtime_type_error (fst annot)
         end
     | DL_vector_concat ds =>
-        match to_gvector v with
+        match v with
+        | V_bitvector bs =>
+            let '(assignment, _) :=
+              fold_left
+                (fun acc d =>
+                   let '(s, d) := d in
+                   match s with
+                   | Split s =>
+                       match acc with
+                       | (prev, []) => (prev, [])
+                       | (prev, bs) =>
+                           let '(bs_take, bs_drop) := take_drop s bs in
+                           (bind prev (fun _ => destructuring_assignment annot d (V_bitvector bs_take)), bs_drop)
+                       end
+                   | No_split => (Runtime_type_error (fst annot), [])
+                   end
+                )
+                ds
+                (pure tt, bs)
+            in
+            assignment
         | V_vector vs =>
             let '(assignment, _) :=
               fold_left
