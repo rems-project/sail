@@ -87,17 +87,6 @@ type funwire = Arg of int | Ret | Invoke
 let max_int n = Big_int.pred (Big_int.pow_int_positive 2 (n - 1))
 let min_int n = Big_int.negate (Big_int.pow_int_positive 2 (n - 1))
 
-let rec is_bitvector = function
-  | [] -> true
-  | AV_lit (L_aux (L_bin [Non_empty (_, [])], _), _) :: avals -> is_bitvector avals
-  | _ :: _ -> false
-
-let value_of_aval_bit = function
-  | AV_lit (L_aux (L_bin [Non_empty (b, [])], _), _) -> (
-      match b with Bin_0 -> Sail2_values.B0 | Bin_1 -> Sail2_values.B1
-    )
-  | _ -> assert false
-
 let is_ct_enum = function CT_enum _ -> true | _ -> false
 
 let iblock1 = function [instr] -> instr | instrs -> iblock instrs
@@ -450,8 +439,32 @@ module Make (C : CONFIG) = struct
           V_id (gs, CT_lint),
           [iclear CT_lint gs]
         )
-    | AV_lit (L_aux (L_bin [Non_empty (Bin_0, [])], _), _) -> ([], V_lit (VL_bits [Sail2_values.B0], CT_fbits 1), [])
-    | AV_lit (L_aux (L_bin [Non_empty (Bin_1, [])], _), _) -> ([], V_lit (VL_bits [Sail2_values.B1], CT_fbits 1), [])
+    | AV_lit (L_aux (((L_hex _ | L_bin _) as l_aux), _), _) ->
+        let bitlist =
+          ( match l_aux with
+          | L_hex hex -> Semantics.bitlist_of_hex_lit hex
+          | L_bin bin -> Semantics.bitlist_of_bin_lit bin
+          | _ -> assert false
+          )
+          |> List.map (function Value_type.B0 -> Sail2_values.B0 | Value_type.B1 -> Sail2_values.B1)
+        in
+        let len = List.length bitlist in
+        (* For small bitvectors, or when we permit arbitrary-length literals > 64 we can emit a literal directly,
+           otherwise we use the special append_64 builtin to construct a literal from 64-bit chunks. *)
+        if len <= 64 || C.ignore_64 then ([], V_lit (VL_bits bitlist, CT_fbits len), [])
+        else (
+          let bv_literal len bits = V_lit (VL_bits bits, CT_fbits len) in
+          let first_chunk = Util.take (len mod 64) bitlist |> bv_literal (len mod 64) in
+          let chunks = Util.drop (len mod 64) bitlist |> chunkify 64 |> List.map (bv_literal 64) in
+          let gs = ngensym () in
+          ( [iinit l CT_lbits gs first_chunk]
+            @ List.map
+                (fun chunk -> ifuncall l (CL_id (gs, CT_lbits)) (mk_id "append_64", []) [V_id (gs, CT_lbits); chunk])
+                chunks,
+            V_id (gs, CT_lbits),
+            [iclear CT_lbits gs]
+          )
+        )
     | AV_lit (L_aux (L_true, _), _) -> ([], V_lit (VL_bool true, CT_bool), [])
     | AV_lit (L_aux (L_false, _), _) -> ([], V_lit (VL_bool false, CT_bool), [])
     | AV_lit (L_aux (L_real str, _), _) ->
@@ -464,11 +477,6 @@ module Make (C : CONFIG) = struct
     | AV_lit (L_aux (L_undef, _), typ) ->
         let ctyp = ctyp_of_typ ctx typ in
         ([], V_lit (VL_undefined, ctyp), [])
-    | AV_lit ((L_aux (_, l) as lit), _) ->
-        raise
-          (Reporting.err_general l
-             ("Encountered unexpected literal " ^ string_of_lit lit ^ " when converting ANF represention into IR")
-          )
     | AV_tuple avals ->
         let elements = List.map (compile_aval l ctx) avals in
         let cvals = List.map (fun (_, cval, _) -> cval) elements in
@@ -525,32 +533,6 @@ module Make (C : CONFIG) = struct
                 [iclear vector_ctyp gs]
               )
         end
-    (* Convert a small bitvector to a uint64_t literal. *)
-    | AV_vector (avals, typ) when is_bitvector avals && (List.length avals <= 64 || C.ignore_64) -> begin
-        let bitstring = List.map value_of_aval_bit avals in
-        let len = List.length avals in
-        ([], V_lit (VL_bits bitstring, CT_fbits len), [])
-      end
-    (* Convert a bitvector literal that is larger than 64-bits to a
-       variable size bitvector, converting it in 64-bit chunks. *)
-    | AV_vector (avals, typ) when is_bitvector avals ->
-        let len = List.length avals in
-        let bitstring avals = VL_bits (List.map value_of_aval_bit avals) in
-        let first_chunk = bitstring (Util.take (len mod 64) avals) in
-        let chunks = Util.drop (len mod 64) avals |> chunkify 64 |> List.map bitstring in
-        let gs = ngensym () in
-        ( [iinit l CT_lbits gs (V_lit (first_chunk, CT_fbits (len mod 64)))]
-          @ List.map
-              (fun chunk ->
-                ifuncall l
-                  (CL_id (gs, CT_lbits))
-                  (mk_id "append_64", [])
-                  [V_id (gs, CT_lbits); V_lit (chunk, CT_fbits 64)]
-              )
-              chunks,
-          V_id (gs, CT_lbits),
-          [iclear CT_lbits gs]
-        )
     (* If we have a bitvector value, that isn't a literal then we need to set bits individually. *)
     | AV_vector (avals, Typ_aux (Typ_app (id, _), _)) when string_of_id id = "bitvector" && List.length avals <= 64 ->
         let len = List.length avals in
@@ -1146,6 +1128,26 @@ module Make (C : CONFIG) = struct
         | _ -> raise (Reporting.err_general l "Tried to pattern match cons on non list type")
       end
     | AP_nil _ -> ([on_failure l (V_call (Bnot, [V_call (List_is_empty, [cval])]))], [], [], ctx)
+    | AP_vector_concat (vc_apats, typ) ->
+        let vc_apats =
+          List.fold_right
+            (fun (width, apat) (result, offset) -> ((width, offset, apat) :: result, width + offset))
+            vc_apats ([], 0)
+          |> fst
+        in
+        List.fold_left
+          (fun (pre, instrs, cleanup, ctx) (width, offset, apat) ->
+            if width <= 64 || C.ignore_64 then (
+              let pre', instrs', cleanup', ctx =
+                compile_match ctx apat
+                  (V_call (Slice width, [cval; V_lit (VL_int (Big_int.of_int offset), CT_fint 64)]))
+                  on_failure
+              in
+              (pre @ pre', instrs @ instrs', cleanup' @ cleanup, ctx)
+            )
+            else (* TODO *) assert false
+          )
+          ([], [], [], ctx) vc_apats
 
   let rec compile_alexp ctx alexp =
     match alexp with

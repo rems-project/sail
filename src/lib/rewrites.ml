@@ -793,6 +793,7 @@ let vector_string_to_bits_pat (L_aux (lit, _) as l_aux) (l, tannot) =
   let bit_annot = match destruct_tannot tannot with Some (env, _) -> mk_tannot env bit_typ | None -> empty_tannot in
   begin
     match lit with
+    | L_bin [Non_empty (_, [])] -> P_aux (P_lit l_aux, (l, tannot))
     | L_hex _ | L_bin _ ->
         P_aux
           (P_vector (List.map (fun p -> P_aux (P_lit p, (l, bit_annot))) (vector_string_to_bit_list l_aux)), (l, tannot))
@@ -1416,7 +1417,7 @@ let rewrite_ast_remove_numeral_pats env =
 
 let rewrite_ast_vector_string_pats_to_bit_list env =
   let rewrite_p_aux (pat, (annot : tannot annot)) =
-    match pat with P_lit lit -> vector_string_to_bits_pat lit annot | pat -> P_aux (pat, annot)
+    match pat with P_lit lit -> vector_string_to_bits_pat lit annot | _ -> P_aux (pat, annot)
   in
   let rewrite_e_aux (exp, (annot : tannot annot)) =
     match exp with E_lit lit -> vector_string_to_bits_exp lit annot | exp -> E_aux (exp, annot)
@@ -2584,7 +2585,9 @@ let rewrite_lit_lem (L_aux (lit, _)) =
 let rewrite_lit_ocaml (L_aux (lit, _)) =
   match lit with L_num _ | L_string _ | L_hex _ | L_bin _ | L_real _ | L_unit -> false | _ -> true
 
-let rewrite_ast_pat_lits rewrite_lit env ast =
+let is_bitvector_lit (L_aux (lit, _)) = match lit with L_bin _ | L_hex _ -> true | _ -> false
+
+let rewrite_ast_pat_lits add_types rewrite_lit env ast =
   let rewrite_pexp (Pat_aux (pexp_aux, annot)) =
     let guards = ref [] in
     let counter = ref 0 in
@@ -2600,7 +2603,14 @@ let rewrite_ast_pat_lits rewrite_lit env ast =
           let guard = check_exp (Env.add_local id (Immutable, typ) env) guard bool_typ in
           guards := guard :: !guards;
           incr counter;
-          P_aux (P_id id, p_annot)
+          (* For bitvector literals appearing directly under a vector concat pattern `... @ literal @ ...`,
+             it must be possible to infer the type of whatever we replace it with.
+
+             We ensure the type-checker actually needs the type by ensuring there was no expected type, which
+             would imply the bi-directionality was in checking mode. *)
+          if add_types && is_bitvector_lit lit && Option.is_none (expected_typ_of p_annot) then
+            P_aux (P_typ (infer_lit lit, P_aux (P_id id, p_annot)), p_annot)
+          else P_aux (P_id id, p_annot)
       | p_aux, p_annot -> P_aux (p_aux, p_annot)
     in
 
@@ -4838,7 +4848,8 @@ let all_rewriters =
     ("undefined", Bool_rewriter (fun b -> basic_rewriter (rewrite_undefined_if_gen b)));
     ("vector_string_pats_to_bit_list", basic_rewriter rewrite_ast_vector_string_pats_to_bit_list);
     ("remove_not_pats", basic_rewriter rewrite_ast_not_pats);
-    ("pattern_literals", Literal_rewriter (fun f -> basic_rewriter (rewrite_ast_pat_lits f)));
+    ("pattern_literals", Literal_rewriter (fun f -> basic_rewriter (rewrite_ast_pat_lits false f)));
+    ("pattern_literals_typed", Literal_rewriter (fun f -> basic_rewriter (rewrite_ast_pat_lits true f)));
     ("vector_concat_assignments", basic_rewriter rewrite_vector_concat_assignments);
     ("tuple_assignments", basic_rewriter rewrite_tuple_assignments);
     ("simple_assignments", basic_rewriter (rewrite_simple_assignments false));

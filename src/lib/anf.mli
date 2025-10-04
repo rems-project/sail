@@ -120,6 +120,7 @@ and 'a apat_aux =
   | AP_cons of 'a apat * 'a apat
   | AP_as of 'a apat * name * 'a
   | AP_struct of (id * 'a apat) list * 'a
+  | AP_vector_concat of (int * 'a apat) list * 'a
   | AP_nil of 'a
   | AP_wild of 'a
 
@@ -181,4 +182,5 @@ val anf : tannot exp -> typ aexp
 (** {2 Pretty printing ANF expressions} *)
 
 val pp_aval : typ aval -> PPrint.document
+val pp_apat : typ apat -> PPrint.document
 val pp_aexp : typ aexp -> PPrint.document

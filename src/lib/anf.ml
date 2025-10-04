@@ -100,6 +100,7 @@ and 'a apat_aux =
   | AP_cons of 'a apat * 'a apat
   | AP_as of 'a apat * name * 'a
   | AP_struct of (id * 'a apat) list * 'a
+  | AP_vector_concat of (int * 'a apat) list * 'a
   | AP_nil of 'a
   | AP_wild of 'a
 
@@ -132,6 +133,8 @@ let rec apat_bindings (AP_aux (apat_aux, _)) =
   | AP_wild _ -> NameSet.empty
   | AP_struct (afpats, _) ->
       List.fold_left NameSet.union NameSet.empty (List.map (fun (_, apat) -> apat_bindings apat) afpats)
+  | AP_vector_concat (vc_apats, _) ->
+      List.fold_left NameSet.union NameSet.empty (List.map (fun (_, apat) -> apat_bindings apat) vc_apats)
 
 (** This function returns the types of all bound variables in a pattern. It ignores AP_global, apat_globals is used for
     that. *)
@@ -156,6 +159,8 @@ let rec apat_types (AP_aux (apat_aux, { env; _ })) =
   | AP_wild _ -> NameMap.empty
   | AP_struct (afpats, _) ->
       List.fold_left (NameMap.merge merge) NameMap.empty (List.map (fun (_, apat) -> apat_types apat) afpats)
+  | AP_vector_concat (vc_apats, _) ->
+      List.fold_left (NameMap.merge merge) NameMap.empty (List.map (fun (_, apat) -> apat_types apat) vc_apats)
 
 let rec apat_rename from_id to_id (AP_aux (apat_aux, annot)) =
   let apat_aux =
@@ -172,6 +177,8 @@ let rec apat_rename from_id to_id (AP_aux (apat_aux, annot)) =
     | AP_wild typ -> AP_wild typ
     | AP_struct (afpats, typ) ->
         AP_struct (List.map (fun (field, apat) -> (field, apat_rename from_id to_id apat)) afpats, typ)
+    | AP_vector_concat (vc_apats, typ) ->
+        AP_vector_concat (List.map (fun (width, apat) -> (width, apat_rename from_id to_id apat)) vc_apats, typ)
   in
   AP_aux (apat_aux, annot)
 
@@ -566,6 +573,11 @@ and pp_apat (AP_aux (apat_aux, annot)) =
           separate_map (comma ^^ space) (fun (id, apat) -> separate space [pp_id id; equals; pp_apat apat]) afpats;
           rbrace;
         ]
+  | AP_vector_concat (vc_apats, _) ->
+      separate_map
+        (space ^^ char '@' ^^ space)
+        (fun (width, apat) -> separate space [string (string_of_int width); char '#'; pp_apat apat])
+        vc_apats
 
 and pp_cases cases = surround 2 0 lbrace (separate_map (comma ^^ hardline) pp_case cases) rbrace
 
@@ -639,6 +651,28 @@ let rec anf_pat ?(global = false) (P_aux (p_aux, (l, tannot)) as pat) =
   | P_as (pat, id) -> mk_apat (AP_as (anf_pat ~global pat, name id, typ_of_pat pat))
   | P_struct (_, fpats, FP_no_wild) ->
       mk_apat (AP_struct (List.map (fun (field, pat) -> (field, anf_pat ~global pat)) fpats, typ_of_pat pat))
+  | P_vector_concat pats ->
+      let vc_apats =
+        List.map
+          (fun pat ->
+            let open Type_check in
+            let typ = typ_of_pat pat in
+            let env = env_of_pat pat in
+            match destruct_bitvector env typ with
+            | Some (Nexp_aux (Nexp_constant n, _)) -> (Big_int.to_int n, anf_pat ~global pat)
+            | _ ->
+                Reporting.unreachable l __POS__
+                  ("No width information for vector concat subpattern during ANF conversion: " ^ string_of_pat pat)
+                [@coverage off]
+          )
+          pats
+      in
+      mk_apat (AP_vector_concat (vc_apats, typ_of_pat pat))
+  | P_vector pats when is_bitvector_typ (typ_of_pat pat) -> (
+      match pats with
+      | [pat] -> anf_pat ~global pat
+      | _ -> mk_apat (AP_vector_concat (List.map (fun pat -> (1, anf_pat ~global pat)) pats, typ_of_pat pat))
+    )
   | _ -> Reporting.unreachable l __POS__ ("Could not convert pattern to ANF: " ^ string_of_pat pat) [@coverage off]
 
 let rec apat_globals (AP_aux (aux, { env; _ })) =
@@ -650,6 +684,7 @@ let rec apat_globals (AP_aux (aux, { env; _ })) =
   | AP_cons (hd_apat, tl_apat) -> apat_globals hd_apat @ apat_globals tl_apat
   | AP_as (apat, _, _) -> apat_globals apat
   | AP_struct (afpats, _) -> List.concat (List.map (fun (_, apat) -> apat_globals apat) afpats)
+  | AP_vector_concat (vc_apats, _) -> List.concat (List.map (fun (_, apat) -> apat_globals apat) vc_apats)
 
 let rec anf (E_aux (e_aux, (l, tannot)) as exp) =
   let mk_aexp aexp = AE_aux (aexp, { loc = l; env = env_of_tannot tannot; uannot = untyped_annot tannot }) in
