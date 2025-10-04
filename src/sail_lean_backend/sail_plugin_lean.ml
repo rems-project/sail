@@ -228,6 +228,7 @@ type lean_context = {
   funcs_file : out_channel;
   import_files : out_channel list;
   lakefile : out_channel;
+  lakemanifest : out_channel;
 }
 
 let file_to_module (filename : string) =
@@ -315,6 +316,7 @@ let start_lean_output (out_name : string) (import_names : string list) (import_r
   output_string types_file file_prelude;
   let funcs_file = open_out (Filename.concat project_dir (out_name_camel ^ ".lean")) in
   let lakefile = open_out (Filename.concat project_dir "lakefile.toml") in
+  let lakemanifest = open_out (Filename.concat project_dir "lake-manifest.json") in
   let import_files =
     List.map (fun name -> open_out (Filename.concat lean_src_dir (name ^ ".lean"))) import_names_camel
   in
@@ -330,12 +332,13 @@ let start_lean_output (out_name : string) (import_names : string list) (import_r
   in
   let funcs_file_imports = main_import_refs_camel @ last_import_name in
   print_function_file_prelude funcs_file out_name_camel funcs_file_imports;
-  { out_name; out_name_camel; sail_dir; types_file; funcs_file; import_files; lakefile }
+  { out_name; out_name_camel; sail_dir; types_file; funcs_file; import_files; lakefile; lakemanifest }
 
 let close_context ctx =
   close_out ctx.types_file;
   close_out ctx.funcs_file;
-  close_out ctx.lakefile
+  close_out ctx.lakefile;
+  close_out ctx.lakemanifest
 
 let create_lake_project (ctx : lean_context) executable =
   (* Change the base directory if the option '--lean-output-dir' is set *)
@@ -354,7 +357,11 @@ let create_lake_project (ctx : lean_context) executable =
     output_string ctx.lakefile "\n\n[[lean_exe]]\n";
     output_string ctx.lakefile "name = \"run\"\n";
     output_string ctx.lakefile ("root = \"" ^ ctx.out_name_camel ^ "\"\n")
-  )
+  );
+  output_string ctx.lakemanifest
+    ("{\"version\": \"1.1.0\",\n \"packagesDir\": \".lake/packages\",\n \"packages\": [],\n \"name\": \"" ^ ctx.out_name
+   ^ "\",\n \"lakeDir\": \".lake\"}\n"
+    )
 
 let rec dedup_files (files : string list) (acc : string list) =
   match files with
