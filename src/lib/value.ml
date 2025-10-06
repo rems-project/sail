@@ -198,23 +198,23 @@ let value_subrange_inc = function
   | _ -> failwith "value subrange_inc"
 
 let value_access = function
-  | [V_bitvector bits; n] -> V_bitvector [Sail_lib.access (bits, coerce_int n)]
-  | [V_vector vs; n] -> Sail_lib.access (vs, coerce_int n)
+  | [V_bitvector bits; n] -> V_bitvector (Sail_lib.access (bits, coerce_int n))
+  | [V_vector vs; n] -> Sail_lib.access_list (vs, coerce_int n)
   | _ -> failwith "value access"
 
 let value_access_inc = function
-  | [V_bitvector bits; n] -> V_bitvector [Sail_lib.access_inc (bits, coerce_int n)]
-  | [V_vector vs; n] -> Sail_lib.access_inc (vs, coerce_int n)
+  | [V_bitvector bits; n] -> V_bitvector (Sail_lib.access_inc (bits, coerce_int n))
+  | [V_vector vs; n] -> Sail_lib.access_list_inc (vs, coerce_int n)
   | _ -> failwith "value access"
 
 let value_update = function
-  | [V_bitvector bits; n; V_bitvector [bit]] -> V_bitvector (Sail_lib.update (bits, coerce_int n, bit))
-  | [V_vector vs; n; v] -> V_vector (Sail_lib.update (vs, coerce_int n, v))
+  | [V_bitvector bits; n; V_bitvector [bit]] -> V_bitvector (Sail_lib.update_list (bits, coerce_int n, bit))
+  | [V_vector vs; n; v] -> V_vector (Sail_lib.update_list (vs, coerce_int n, v))
   | _ -> failwith "value update"
 
 let value_update_inc = function
-  | [V_bitvector bits; n; V_bitvector [bit]] -> V_bitvector (Sail_lib.update_inc (bits, coerce_int n, bit))
-  | [V_vector vs; n; v] -> V_vector (Sail_lib.update_inc (vs, coerce_int n, v))
+  | [V_bitvector bits; n; V_bitvector [bit]] -> V_bitvector (Sail_lib.update_list_inc (bits, coerce_int n, bit))
+  | [V_vector vs; n; v] -> V_vector (Sail_lib.update_list_inc (vs, coerce_int n, v))
   | _ -> failwith "value update_inc"
 
 let value_update_subrange = function

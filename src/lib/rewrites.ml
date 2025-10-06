@@ -592,8 +592,14 @@ let remove_vector_concat_pat pat =
         let typ = Env.base_typ_of env (typ_of_annot annot) in
         let l, _ = annot in
         let wild _ = P_aux (P_wild, (gen_loc l, mk_tannot env bit_typ)) in
+        let bit b =
+          let b = match b with Value_type.B0 -> Bin_0 | Value_type.B1 -> Bin_1 in
+          P_aux (P_lit (L_aux (L_bin [Non_empty (b, [])], gen_loc l)), (gen_loc l, mk_tannot env bit_typ))
+        in
         if is_vector_typ typ || is_bitvector_typ typ then (
           match (p, vector_typ_args_of typ) with
+          | P_lit (L_aux (L_bin bin, _)), _ -> acc @ List.map bit (Semantics.bitlist_of_bin_lit bin)
+          | P_lit (L_aux (L_hex hex, _)), _ -> acc @ List.map bit (Semantics.bitlist_of_hex_lit hex)
           | P_vector ps, _ -> acc @ ps
           | _, (nexp, _) -> begin
               match Type_check.solve_unique env nexp with
@@ -793,7 +799,6 @@ let vector_string_to_bits_pat (L_aux (lit, _) as l_aux) (l, tannot) =
   let bit_annot = match destruct_tannot tannot with Some (env, _) -> mk_tannot env bit_typ | None -> empty_tannot in
   begin
     match lit with
-    | L_bin [Non_empty (_, [])] -> P_aux (P_lit l_aux, (l, tannot))
     | L_hex _ | L_bin _ ->
         P_aux
           (P_vector (List.map (fun p -> P_aux (P_lit p, (l, bit_annot))) (vector_string_to_bit_list l_aux)), (l, tannot))
@@ -2072,8 +2077,7 @@ and simple_typ_aux l = function
   | Typ_id id -> Typ_id id
   | Typ_app (id, [_; A_aux (A_typ typ, l)]) when Id.compare id (mk_id "vector") = 0 ->
       Typ_app (mk_id "list", [A_aux (A_typ (simple_typ typ), l)])
-  | Typ_app (id, [_]) when Id.compare id (mk_id "bitvector") = 0 ->
-      Typ_app (mk_id "list", [A_aux (A_typ bit_typ, gen_loc l)])
+  | Typ_app (id, [_]) when Id.compare id (mk_id "bitvector") = 0 -> Typ_id id
   | Typ_app (id, [_]) when Id.compare id (mk_id "atom") = 0 -> Typ_id (mk_id "int")
   | Typ_app (id, [_; _]) when Id.compare id (mk_id "range") = 0 -> Typ_id (mk_id "int")
   | Typ_app (id, [_]) when Id.compare id (mk_id "atom_bool") = 0 -> Typ_id (mk_id "bool")
@@ -2100,12 +2104,6 @@ let rewrite_simple_types env ast =
   let simple_vs (VS_aux (vs_aux, annot)) =
     match vs_aux with VS_val_spec (typschm, id, ext) -> VS_aux (VS_val_spec (simple_typschm typschm, id, ext), annot)
   in
-  let simple_lit (L_aux (lit_aux, l) as lit) =
-    match lit_aux with
-    | L_bin _ | L_hex _ ->
-        E_list (List.map (fun b -> E_aux (E_lit b, simple_annot l bit_typ)) (vector_string_to_bit_list lit))
-    | _ -> E_lit lit
-  in
   let simple_def (DEF_aux (aux, def_annot)) =
     let aux =
       match aux with
@@ -2127,11 +2125,14 @@ let rewrite_simple_types env ast =
   let simple_exp =
     {
       id_exp_alg with
-      e_lit = simple_lit;
-      e_vector = (fun exps -> E_list exps);
       e_typ = (fun (typ, exp) -> E_typ (simple_typ typ, exp));
-      (* e_assert = (fun (E_aux (_, annot), str) -> E_assert (E_aux (E_lit (mk_lit L_true), annot), str)); *)
       le_typ = (fun (typ, lexp) -> LE_typ (simple_typ typ, lexp));
+      e_aux =
+        (fun (aux, annot) ->
+          match aux with
+          | E_vector exps when not (is_bitvector_typ (typ_of_annot annot)) -> E_aux (E_list exps, annot)
+          | _ -> E_aux (aux, annot)
+        );
       pat_alg = simple_pat;
     }
   in

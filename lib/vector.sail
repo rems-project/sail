@@ -207,7 +207,7 @@ val bitvector_access = pure {
 $endif
 
 val plain_vector_access = pure {
-  ocaml: "access",
+  ocaml: "access_list",
   interpreter: "access",
   lem: "access_list_dec",
   coq: "vec_access_dec",
@@ -238,7 +238,7 @@ val bitvector_update = pure {
 $endif
 
 val plain_vector_update = pure {
-  ocaml: "update",
+  ocaml: "update_list",
   interpreter: "update",
   lem: "update_list_dec",
   coq: "vec_update_dec",
