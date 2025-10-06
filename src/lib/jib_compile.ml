@@ -1129,15 +1129,14 @@ module Make (C : CONFIG) = struct
       end
     | AP_nil _ -> ([on_failure l (V_call (Bnot, [V_call (List_is_empty, [cval])]))], [], [], ctx)
     | AP_vector_concat (vc_apats, typ) ->
-        let vc_apats =
+        let vc_apats, total_width =
           List.fold_right
             (fun (width, apat) (result, offset) -> ((width, offset, apat) :: result, width + offset))
             vc_apats ([], 0)
-          |> fst
         in
         List.fold_left
           (fun (pre, instrs, cleanup, ctx) (width, offset, apat) ->
-            if width <= 64 || C.ignore_64 then (
+            if (width <= 64 && total_width <= 64) || C.ignore_64 then (
               let pre', instrs', cleanup', ctx =
                 compile_match ctx apat
                   (V_call (Slice width, [cval; V_lit (VL_int (Big_int.of_int offset), CT_fint 64)]))
@@ -1145,7 +1144,26 @@ module Make (C : CONFIG) = struct
               in
               (pre @ pre', instrs @ instrs', cleanup' @ cleanup, ctx)
             )
-            else (* TODO *) assert false
+            else (
+              let sliced = ngensym () in
+              let offset_id = ngensym () in
+              let width_id = ngensym () in
+              let mk_slice =
+                [
+                  idecl l CT_lbits sliced;
+                  iinit l CT_lint offset_id (V_lit (VL_int (Big_int.of_int offset), CT_fint 64));
+                  iinit l CT_lint width_id (V_lit (VL_int (Big_int.of_int width), CT_fint 64));
+                  iextern l
+                    (CL_id (sliced, CT_lbits))
+                    (mk_id "slice", [])
+                    [cval; V_id (offset_id, CT_lint); V_id (width_id, CT_lint)];
+                  iclear CT_lint width_id;
+                  iclear CT_lint offset_id;
+                ]
+              in
+              let pre', instrs', cleanup', ctx = compile_match ctx apat (V_id (sliced, CT_lbits)) on_failure in
+              (pre @ pre', instrs @ mk_slice @ instrs', cleanup' @ [iclear CT_lbits sliced] @ cleanup, ctx)
+            )
           )
           ([], [], [], ctx) vc_apats
 
