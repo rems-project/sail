@@ -259,11 +259,8 @@ let verilog_rewrites =
     ("atoms_to_singletons", [String_arg "systemverilog"; If_mono_arg]);
     ("recheck_defs", [If_mono_arg]);
     ("undefined", [Bool_arg false]);
-    ("vector_string_pats_to_bit_list", []);
     ("remove_not_pats", []);
-    ("remove_vector_concat", []);
-    ("remove_bitvector_pats", []);
-    ("pattern_literals", [Literal_arg "all"]);
+    ("pattern_literals_typed", [Literal_arg "all"]);
     ("tuple_assignments", []);
     ("vector_concat_assignments", []);
     ("simple_struct_assignments", []);

@@ -400,9 +400,18 @@ module Make (Config : CONFIG) (Primop_gen : PRIMOP_GEN) = struct
                 return (Fn ("select", [vec; i]))
             | _ -> Reporting.unreachable l __POS__ "Index for non-fixed-vector type found"
           )
-        | V_call (op, args) ->
-            let* args = mapM smt_cval args in
-            return (smt_cval_call op args)
+        | V_call (op, args) -> (
+            match (op, args) with
+            | Slice width, [vec; offset] ->
+                let* vec_smt = smt_cval vec in
+                let sz = bv_size (cval_ctyp vec) in
+                let* offset_smt = smt_cval offset in
+                let* offset_ext = unsigned_size ~into:sz ~from:(int_size (cval_ctyp offset)) offset_smt in
+                return (Extract (width - 1, 0, sz, bvlshr vec_smt offset_ext))
+            | _ ->
+                let* args = mapM smt_cval args in
+                return (smt_cval_call op args)
+          )
         | V_ctor_kind (union, (ctor, _)) ->
             let* union = smt_cval union in
             return (Fn ("not", [Tester (ctor, union)]))
