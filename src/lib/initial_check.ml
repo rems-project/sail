@@ -1476,7 +1476,9 @@ and to_ast_exp ctx exp =
         | P.E_throw exp -> E_throw (to_ast_exp ctx exp)
         | P.E_config key -> E_config [key]
         | P.E_return exp -> E_return (to_ast_exp ctx exp)
-        | P.E_assert (cond, msg) -> E_assert (to_ast_exp ctx cond, to_ast_exp ctx msg)
+        | P.E_assert (cond, msg) ->
+            let loc = E_lit (L_aux (L_string (Reporting.short_loc_to_string l), l)) in
+            E_assert (to_ast_exp ctx cond, to_ast_exp ctx msg, mk_exp loc)
         | P.E_internal_plet (pat, exp1, exp2) ->
             if !opt_magic_hash then E_internal_plet (to_ast_pat ctx pat, to_ast_exp ctx exp1, to_ast_exp ctx exp2)
             else raise (Reporting.err_general l "Internal plet construct found without -dmagic_hash")

@@ -595,7 +595,7 @@ let stop_at_false_assertions e =
               let e2, stop = exp e2 in
               (E_aux (E_let (LB_aux (LB_val (p, e1), lbann), e2), ann), stop)
         end
-    | E_assert (e1, _) when exp_false e1 -> (ea, Some (typ_of_annot ann))
+    | E_assert (e1, _, _) when exp_false e1 -> (ea, Some (typ_of_annot ann))
     | E_throw e -> (ea, Some (typ_of_annot ann))
     | _ -> (ea, None)
   in
@@ -631,7 +631,7 @@ let apply_pat_choices choices =
         | _ -> exp
       )
   in
-  let rewrite_assert (e1, e2) = E_assert (rewrite_assert_cond e1, e2) in
+  let rewrite_assert (e1, e2, e3) = E_assert (rewrite_assert_cond e1, e2, e3) in
   let rewrite_case (e, cases) =
     match List.assoc (exp_loc e) choices with
     | choice, max, subst -> (
@@ -1123,7 +1123,7 @@ let split_defs target all_errors (splits : split_req list) env ast =
         | E_throw e -> re (E_throw e)
         | E_try (e, cases) -> re (E_try (map_exp e, List.concat (List.map map_pexp cases)))
         | E_return e -> re (E_return (map_exp e))
-        | E_assert (e1, e2) -> re (E_assert (map_exp e1, map_exp e2))
+        | E_assert (e1, e2, e3) -> re (E_assert (map_exp e1, map_exp e2, map_exp e3))
         | E_var (le, e1, e2) -> re (E_var (map_lexp le, map_exp e1, map_exp e2))
         | E_internal_plet (p, e1, e2) -> re (E_internal_plet (check_single_pat p, map_exp e1, map_exp e2))
         | E_internal_return e -> re (E_internal_return (map_exp e))
@@ -2458,7 +2458,7 @@ module Analysis = struct
           in
           let ds, assigns, rs = split3 (List.map analyse_handler cases) in
           (merge_deps (deps :: ds), List.fold_left dep_bindings_merge Bindings.empty assigns, List.fold_left merge r rs)
-      | E_assert (e1, _) -> analyse_sub env assigns e1
+      | E_assert (e1, _, _) -> analyse_sub env assigns e1
       | E_internal_assume (nc, e1) -> analyse_sub env assigns e1
       | E_internal_plet _ | E_internal_return _ | E_internal_value _ ->
           raise
@@ -2788,7 +2788,7 @@ module Analysis = struct
         let kbound = kids_bound_by_pat p in
         let sets2 = KBindings.filter (fun kid _ -> not (KidSet.mem kid kbound)) sets2 in
         merge_set_asserts_by_kid sets1 sets2
-    | E_assert (exp1, _) -> sets_from_assert exp1
+    | E_assert (exp1, _, _) -> sets_from_assert exp1
     | _ -> KBindings.empty
 
   let print_set_assertions set_assertions =
@@ -4214,7 +4214,7 @@ module BitvectorSizeCasts = struct
             let result_typ = Env.base_typ_of env (typ_of_annot ann) in
             let rec aux = function
               | [] -> []
-              | (E_aux (E_assert (assert_exp, msg), _) as h) :: t ->
+              | (E_aux (E_assert (assert_exp, _msg, _loc), _) as h) :: t ->
                   (* Check the assertion for constraints that instantiate kids *)
                   let is_known_kid kid = KBindings.mem kid (Env.get_typ_vars env) in
                   begin

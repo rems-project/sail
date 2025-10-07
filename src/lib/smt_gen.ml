@@ -1530,6 +1530,8 @@ module Make (Config : CONFIG) (Primop_gen : PRIMOP_GEN) = struct
   let ternary_primop f =
     Some (fun args ret_ctyp -> match args with [v1; v2; v3] -> f v1 v2 v3 ret_ctyp | _ -> arity_error)
 
+  let ternary_primop_simple f = Some (fun args _ -> match args with [v1; v2; v3] -> f v1 v2 v3 | _ -> arity_error)
+
   let builtin ?(allow_io = true) ?(undefined = Undefined_disable) = function
     | "eq_bit" -> binary_primop (binary_smt "=")
     | "eq_bool" -> binary_primop (binary_smt "=")
@@ -1655,10 +1657,11 @@ module Make (Config : CONFIG) (Primop_gen : PRIMOP_GEN) = struct
             return (Fn (op, [bv]))
         )
     | "sail_assert" when allow_io ->
-        binary_primop_simple (fun b msg ->
+        ternary_primop_simple (fun b msg loc ->
             let* b = smt_cval b in
             let* msg = smt_cval msg in
-            return (Fn ("sail_assert", [b; msg]))
+            let* loc = smt_cval loc in
+            return (Fn ("sail_assert", [b; msg; loc]))
         )
     | "reg_deref" when allow_io ->
         unary_primop_simple (fun reg_ref ->

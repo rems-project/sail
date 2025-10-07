@@ -70,7 +70,8 @@ let rec pat_id (P_aux (aux, _)) =
 
 let add_assert cond (E_aux (aux, (l, uannot)) as exp) =
   let msg = mk_lit_exp (L_string "") in
-  let assertion = locate (fun _ -> gen_loc l) (mk_exp (E_assert (cond, msg))) in
+  let loc = E_lit (L_aux (L_string (Reporting.short_loc_to_string l), l)) in
+  let assertion = locate (fun _ -> gen_loc l) (mk_exp (E_assert (cond, msg, mk_exp loc))) in
   match aux with
   | E_block exps -> E_aux (E_block (assertion :: exps), (l, empty_uannot))
   | _ -> E_aux (E_block (assertion :: [exp]), (l, uannot))

@@ -16,7 +16,7 @@ void sail_match_failure(const_sail_string msg);
  * sail_assert implements the assert construct in Sail. If any
  * assertion fails we immediately exit the model.
  */
-unit sail_assert(bool b, const_sail_string msg);
+unit sail_assert(bool b, const_sail_string msg, const_sail_string loc);
 
 unit sail_exit(unit);
 

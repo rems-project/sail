@@ -1040,8 +1040,9 @@ let rewrite_guarded_clauses fun_only mk_fallthrough l env pat_typ typ
 
 let mk_pattern_match_failure_pexp l env pat_typ typ =
   let p = P_aux (P_wild, (gen_loc l, mk_tannot env pat_typ)) in
-  let msg = "Pattern match failure at " ^ Reporting.short_loc_to_string l in
-  let a = mk_exp ~loc:(gen_loc l) (E_assert (mk_lit_exp L_false, mk_lit_exp (L_string msg))) in
+  let msg = "Pattern match failure"  in
+  let loc = Reporting.short_loc_to_string l in
+  let a = mk_exp ~loc:(gen_loc l) (E_assert (mk_lit_exp L_false, mk_lit_exp (L_string msg), mk_lit_exp (L_string loc))) in
   let b = mk_exp ~loc:(gen_loc l) (E_exit (mk_lit_exp L_unit)) in
   let (E_aux (_, (_, ann)) as e) = check_exp env (mk_exp ~loc:(gen_loc l) (E_block [a; b])) typ in
   construct_pexp (p, None, e, (gen_loc l, ann))
@@ -2440,8 +2441,8 @@ let rewrite_ast_letbind_effects effect_info env =
     | E_constraint nc -> k (rewrap (E_constraint nc))
     | E_assign (lexp, exp1) -> n_lexp lexp (fun lexp -> n_exp_name exp1 (fun exp1 -> k (rewrap (E_assign (lexp, exp1)))))
     | E_exit exp' -> k (E_aux (E_exit (n_exp_term (needs_monad exp') exp'), annot))
-    | E_assert (exp1, exp2) ->
-        n_exp_name exp1 (fun exp1 -> n_exp_name exp2 (fun exp2 -> k (rewrap (E_assert (exp1, exp2)))))
+    | E_assert (exp1, exp2, exp3) ->
+        n_exp_name exp1 (fun exp1 -> n_exp_name exp2 (fun exp2 -> n_exp_name exp3 (fun exp3 -> k (rewrap (E_assert (exp1, exp2, exp3))))))
     | E_var (lexp, exp1, exp2) ->
         n_lexp lexp (fun lexp -> n_exp exp1 (fun exp1 -> rewrap (E_var (lexp, exp1, n_exp exp2 k))))
     | E_internal_return exp1 ->
@@ -3107,7 +3108,7 @@ let rewrite_ast_remove_superfluous_letbinds env =
             let (E_aux (_, e1annot)) = exp1 in
             E_aux (E_internal_return exp1, e1annot)
         | _, (E_aux (E_throw e, a), _), _ -> E_aux (E_throw e, a)
-        | (pat, _), ((E_aux (E_assert (c, msg), a) as assert_exp), _), _ -> begin
+        | (pat, _), ((E_aux (E_assert (c, _msg, _loc), a) as assert_exp), _), _ -> begin
             match typ_of c with
             | Typ_aux (Typ_app (Id_aux (Id "atom_bool", _), [A_aux (A_bool nc, _)]), _)
               when prove __POS__ (env_of c) (nc_not nc) ->
@@ -4227,7 +4228,9 @@ let rewrite_explicit_measure effect_info env ast =
                     ),
                   (loc, empty_tannot)
                 ),
-              E_aux (E_lit (L_aux (L_string "recursion limit reached", loc)), (loc, empty_tannot))
+              E_aux (E_lit (L_aux (L_string "recursion limit reached", loc)), (loc, empty_tannot)),
+              (* TODO: Where is this? *)
+              E_aux (E_lit (L_aux (L_string "generated code", loc)), (loc, empty_tannot))
             ),
           (loc, empty_tannot)
         )
@@ -4343,7 +4346,8 @@ let rewrite_loops_with_escape_effect env defs =
     E_aux
       ( E_assert
           ( E_aux (E_lit (L_aux (L_true, Unknown)), dummy_ann),
-            E_aux (E_lit (L_aux (L_string "loop dummy assert", Unknown)), dummy_ann)
+            E_aux (E_lit (L_aux (L_string "loop dummy assert", Unknown)), dummy_ann),
+            E_aux (E_lit (L_aux (L_string "loop dummy location", Unknown)), dummy_ann)
           ),
         dummy_ann
       )

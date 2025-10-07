@@ -261,7 +261,7 @@ let rec ocaml_exp ctx (E_aux (exp_aux, (l, _)) as exp) =
         end
     end
   | E_return exp -> separate space [string "r.return"; ocaml_atomic_exp ctx exp]
-  | E_assert (exp, _) -> separate space [string "assert"; ocaml_atomic_exp ctx exp]
+  | E_assert (exp, _, _) -> separate space [string "assert"; ocaml_atomic_exp ctx exp]
   | E_typ (_, exp) -> ocaml_exp ctx exp
   | E_block [exp] -> ocaml_exp ctx exp
   | E_block [] -> string "()"

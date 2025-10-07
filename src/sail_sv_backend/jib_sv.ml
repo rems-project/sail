@@ -898,9 +898,10 @@ module Make (Config : CONFIG) = struct
           else (
             let _, ret = svir_creturn l ctx creturn in
             match args with
-            | [cond; msg] ->
+            | [cond; msg; loc] ->
                 let* cond = Smt.smt_cval cond in
                 let* msg = Smt.smt_cval msg in
+                let* loc = Smt.smt_cval loc in
                 (* If the assert is only reachable under some path-condition, then the assert should pass
                    whenever the path-condition is not true. *)
                 let cond =
@@ -909,7 +910,10 @@ module Make (Config : CONFIG) = struct
                       Fn ("or", [Fn ("not", [pathcond]); Fn ("not", [Var (Name (mk_id "assert_reachable#", -1))]); cond])
                   | None -> cond
                 in
-                wrap (SVS_block [SVS_aux (SVS_assert (ngen_asrt (), cond, msg), l); SVS_aux (SVS_assign (ret, Unit), l)])
+                wrap
+                  (SVS_block
+                     [SVS_aux (SVS_assert (ngen_asrt (), cond, msg, loc), l); SVS_aux (SVS_assign (ret, Unit), l)]
+                  )
             | _ -> Reporting.unreachable l __POS__ "Invalid arguments for sail_assert"
           )
         else if Id.compare id (mk_id "sail_cons") = 0 then extern_generate l ctx creturn id "sail_cons" args
@@ -1009,10 +1013,27 @@ module Make (Config : CONFIG) = struct
     match aux with
     | SVS_comment str -> concat_map string ["/* "; str; " */"]
     | SVS_split_comb -> string "/* split comb */"
-    | SVS_assert (name, cond, msg) ->
+    | SVS_assert (name, cond, msg, loc) ->
         ( if not Config.no_assert_fatal then
             separate space
-              [string "if"; parens (pp_smt cond) ^^ semi; string "else"; string "$fatal" ^^ parens (pp_smt msg)]
+              [
+                string "if";
+                parens (pp_smt cond) ^^ semi;
+                string "else";
+                string "$fatal"
+                ^^ parens
+                     (separate (comma ^^ space)
+                        [
+                          (* The 'finish_number' parameter. 1 prints the time and location. *)
+                          string "1";
+                          (* Use a couple of spaces as a separate so it doesn't look so weird
+                  if the assertion string is empty. *)
+                          string "Assertion failed at %s  %s";
+                          pp_smt loc;
+                          pp_smt msg;
+                        ]
+                     );
+              ]
             ^^ terminator
           else empty
         )
@@ -2057,7 +2078,7 @@ module Make (Config : CONFIG) = struct
 
       method! vstatement s =
         match s with
-        | SVS_aux (SVS_assert (name, _, _), _) ->
+        | SVS_aux (SVS_assert (name, _, _, _), _) ->
             names := name :: !names;
             DoChildren
         | _ -> DoChildren

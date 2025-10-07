@@ -207,7 +207,7 @@ let nexp_subst_fns substs =
     | E_assign (le, e) -> re (E_assign (s_lexp le, s_exp e))
     | E_exit e -> re (E_exit (s_exp e))
     | E_return e -> re (E_return (s_exp e))
-    | E_assert (e1, e2) -> re (E_assert (s_exp e1, s_exp e2))
+    | E_assert (e1, e2, e3) -> re (E_assert (s_exp e1, s_exp e2, s_exp e3))
     | E_var (le, e1, e2) -> re (E_var (s_lexp le, s_exp e1, s_exp e2))
     | E_internal_plet (p, e1, e2) -> re (E_internal_plet (s_pat p, s_exp e1, s_exp e2))
     | E_internal_return e -> re (E_internal_return (s_exp e))

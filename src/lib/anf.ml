@@ -780,12 +780,14 @@ let rec anf (E_aux (e_aux, (l, tannot)) as exp) =
       let aexp = anf ret_exp in
       let aval, wrap = to_aval aexp in
       wrap (mk_aexp (AE_return (aval, typ_of exp)))
-  | E_assert (exp1, exp2) ->
+  | E_assert (exp1, exp2, exp3) ->
       let aexp1 = anf exp1 in
       let aexp2 = anf exp2 in
+      let aexp3 = anf exp3 in
       let aval1, wrap1 = to_aval aexp1 in
       let aval2, wrap2 = to_aval aexp2 in
-      wrap1 (wrap2 (mk_aexp (AE_app (Extern (mk_id "sail_assert", None), [aval1; aval2], unit_typ))))
+      let aval3, wrap3 = to_aval aexp3 in
+      wrap1 (wrap2 ( wrap3(mk_aexp (AE_app (Extern (mk_id "sail_assert", None), [aval1; aval2; aval3], unit_typ)))))
   | E_cons (exp1, exp2) ->
       let aexp1 = anf exp1 in
       let aexp2 = anf exp2 in

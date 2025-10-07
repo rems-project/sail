@@ -56,10 +56,14 @@ void sail_match_failure(const_sail_string msg)
   exit(EXIT_FAILURE);
 }
 
-unit sail_assert(bool b, const_sail_string msg)
+unit sail_assert(bool b, const_sail_string msg, const_sail_string loc)
 {
   if (b) return UNIT;
-  fprintf(stderr, "Assertion failed: %s\n", msg);
+  if (msg[0] == '\0') {
+    fprintf(stderr, "Assertion failed at %s\n", loc);
+  } else {
+    fprintf(stderr, "Assertion failed at %s: %s\n", loc, msg);
+  }
   exit(EXIT_FAILURE);
 }
 

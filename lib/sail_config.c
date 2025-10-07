@@ -71,29 +71,29 @@ void sail_config_set_string(const char *json)
     else {
         snprintf(error_message, sizeof error_message, "Failed to parse JSON configuration at offset %ld", parse_end - json);
     }
-    sail_assert(false, error_message);
+    sail_assert(false, error_message, "sail_config_set_string()");
   }
 }
 
 void sail_config_set_file(const char *path)
 {
   FILE *f = fopen(path, "rb");
-  sail_assert(f != NULL, "Failed to open configuration file");
+  sail_assert(f != NULL, "Failed to open configuration file", path);
 
   int rc = fseek(f, 0, SEEK_END);
-  sail_assert(rc != -1, "Failed to seek to end of configuration file");
+  sail_assert(rc != -1, "Failed to seek to end of configuration file", path);
 
   long fsize = ftell(f);
-  sail_assert(fsize != -1, "Failed to get size of configuration file");
+  sail_assert(fsize != -1, "Failed to get size of configuration file", path);
 
   rc = fseek(f, 0, SEEK_SET);
-  sail_assert(rc != -1, "Failed to seek to start of configuration file");
+  sail_assert(rc != -1, "Failed to seek to start of configuration file", path);
 
   char *buffer = (char *)sail_malloc(fsize + 1);
 
   size_t ret_size = fread(buffer, fsize, 1, f);
 
-  sail_assert(ret_size == 1, "Failed to read configuration");
+  sail_assert(ret_size == 1, "Failed to read configuration", path);
 
   buffer[fsize] = 0;
   fclose(f);
@@ -102,7 +102,7 @@ void sail_config_set_file(const char *path)
   // sail_config_set_string() relies on null termination
   // to find the end of the string.
   for (size_t i = 0; i < fsize; ++i) {
-    sail_assert(buffer[i] != 0, "Null byte in JSON configuration");
+    sail_assert(buffer[i] != 0, "Null byte in JSON configuration", path);
   }
 
   sail_config_set_string(buffer);
@@ -289,7 +289,7 @@ void sail_config_unwrap_int(sail_int *n, const sail_config_json config)
 {
   cJSON *json = (cJSON *)config;
   if (mpz_set_str(*n, json->valuestring, 10) == -1) {
-    sail_assert(false, "Failed to parse integer from configuration");
+    sail_assert(false, "Failed to parse integer from configuration", "sail_config_unwrap_int()");
   }
 }
 

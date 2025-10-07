@@ -940,7 +940,7 @@ and map_exp_annot_aux f = function
   | E_exit exp -> E_exit (map_exp_annot f exp)
   | E_throw exp -> E_throw (map_exp_annot f exp)
   | E_return exp -> E_return (map_exp_annot f exp)
-  | E_assert (test, msg) -> E_assert (map_exp_annot f test, map_exp_annot f msg)
+  | E_assert (test, msg, loc) -> E_assert (map_exp_annot f test, map_exp_annot f msg, map_exp_annot f loc)
   | E_internal_value v -> E_internal_value v
   | E_var (lexp, exp1, exp2) -> E_var (map_lexp_annot f lexp, map_exp_annot f exp1, map_exp_annot f exp2)
   | E_internal_plet (pat, exp1, exp2) ->
@@ -1383,7 +1383,7 @@ let rec string_of_exp (E_aux (exp, _)) =
       "while " ^ string_of_measure measure ^ string_of_exp cond ^ " do " ^ string_of_exp body
   | E_loop (Until, measure, cond, body) ->
       "repeat " ^ string_of_measure measure ^ string_of_exp body ^ " until " ^ string_of_exp cond
-  | E_assert (test, msg) -> "assert(" ^ string_of_exp test ^ ", " ^ string_of_exp msg ^ ")"
+  | E_assert (test, msg, _loc) -> "assert(" ^ string_of_exp test ^ ", " ^ string_of_exp msg ^ ")"
   | E_exit exp -> "exit " ^ string_of_exp exp
   | E_throw exp -> "throw " ^ string_of_exp exp
   | E_cons (x, xs) -> string_of_exp x ^ " :: " ^ string_of_exp xs
@@ -1929,7 +1929,7 @@ let rec subst id value (E_aux (e_aux, annot) as exp) =
     | E_ref id' -> E_ref id'
     | E_throw exp -> E_throw (subst id value exp)
     | E_try (exp, pexps) -> E_try (subst id value exp, List.map (subst_pexp id value) pexps)
-    | E_assert (exp1, exp2) -> E_assert (subst id value exp1, subst id value exp2)
+    | E_assert (exp1, exp2, exp3) -> E_assert (subst id value exp1, subst id value exp2, subst id value exp3)
     | E_internal_value v -> E_internal_value v
     | E_var (lexp, exp1, exp2) -> E_var (subst_lexp id value lexp, subst id value exp1, subst id value exp2)
     | E_internal_assume (nc, exp) -> E_internal_assume (nc, subst id value exp)
@@ -2125,7 +2125,7 @@ let rec locate : 'a. (l -> l) -> 'a exp -> 'a exp =
     | E_ref id -> E_ref (locate_id f id)
     | E_throw exp -> E_throw (locate f exp)
     | E_try (exp, cases) -> E_try (locate f exp, List.map (locate_pexp f) cases)
-    | E_assert (exp, message) -> E_assert (locate f exp, locate f message)
+    | E_assert (exp, message, loc) -> E_assert (locate f exp, locate f message, locate f loc)
     | E_constraint constr -> E_constraint (locate_nc f constr)
     | E_var (lexp, exp1, exp2) -> E_var (locate_lexp f lexp, locate f exp1, locate f exp2)
     | E_internal_plet (pat, exp1, exp2) -> E_internal_plet (locate_pat f pat, locate f exp1, locate f exp2)
