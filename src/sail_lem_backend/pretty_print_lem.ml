@@ -997,7 +997,7 @@ let doc_exp_lem, doc_let_lem =
                     else (align (group (prefix 0 1 epp (doc_tannot_lem ctxt ctxt.top_env (effectful eff) t))), true)
                   else (epp, aexp_needed)
                 in
-                liftR (if aexp_needed then parens (align taepp) else taepp)
+                liftR (if aexp_needed then parens (align taepp) else parens taepp)
           end
       end
     | E_field ((E_aux (_, (l, fannot)) as fexp), id) -> (
@@ -1065,20 +1065,27 @@ let doc_exp_lem, doc_let_lem =
           (space ^^ doc_op (string "with") (expY e) (separate_map semi_sp (doc_fexp ctxt recordtyp) fexps) ^^ space)
     | E_vector exps ->
         let t = Env.base_typ_of (env_of full_exp) (typ_of full_exp) in
-        let _, etyp =
-          if is_vector_typ t || is_bitvector_typ t then vector_typ_args_of t
-          else raise (Reporting.err_unreachable l __POS__ "E_vector of non-vector type")
-        in
-        let expspp = align (group (flow_map (semi ^^ break 0) expN exps)) in
-        let epp = brackets expspp in
-        let epp, aexp_needed =
-          if is_bit_typ etyp && !Monomorphise.opt_mwords then (
-            let bepp = string "vec_of_bits" ^^ space ^^ align epp in
-            (align (group (prefix 0 1 bepp (doc_tannot_lem ctxt (env_of full_exp) false t))), true)
-          )
-          else (epp, aexp_needed)
-        in
-        if aexp_needed then parens (align epp) else epp
+        if is_bitvector_typ t then (
+          match exps with
+          | [exp] -> expN exp
+          | _ ->
+              let expspp = align (group (flow_map (semi ^^ break 0) expN exps)) in
+              let epp = brackets expspp in
+              let epp, aexp_needed =
+                if !Monomorphise.opt_mwords then (
+                  let bepp = string "vec_of_bits" ^^ space ^^ align epp in
+                  (align (group (prefix 0 1 bepp (doc_tannot_lem ctxt (env_of full_exp) false t))), true)
+                )
+                else (string "List.concat" ^^ space ^^ epp, aexp_needed)
+              in
+              if aexp_needed then parens (align epp) else epp
+        )
+        else if is_vector_typ t then (
+          let expspp = align (group (flow_map (semi ^^ break 0) expN exps)) in
+          let epp = brackets expspp in
+          if aexp_needed then parens (align epp) else epp
+        )
+        else raise (Reporting.err_unreachable l __POS__ "E_vector of non-vector type")
     | E_list exps -> brackets (separate_map semi expN exps)
     | E_match (e, pexps) ->
         let only_integers e = expY e in

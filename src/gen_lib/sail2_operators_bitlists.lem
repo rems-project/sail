@@ -59,23 +59,29 @@ let inline vec_of_bits_maybe bits = Just bits
 let inline vec_of_bits_nondet bits = return bits*)
 let inline vec_of_bits_failwith bits = bits
 
-val access_vec_inc : list bitU -> integer -> bitU
-let access_vec_inc = access_bv_inc
+val access_vec_inc : list bitU -> integer -> list bitU
+let access_vec_inc xs n = [access_bv_inc xs n]
 
-val access_vec_dec : list bitU -> integer -> bitU
-let access_vec_dec = access_bv_dec
+val access_vec_dec : list bitU -> integer -> list bitU
+let access_vec_dec xs n = [access_bv_dec xs n]
 
-val update_vec_inc : list bitU -> integer -> bitU -> list bitU
-let update_vec_inc = update_bv_inc
+val update_vec_inc : list bitU -> integer -> list bitU -> list bitU
+let update_vec_inc v i b =
+  match b with
+  | [b] -> update_bv_inc v i b
+  | _ -> v
+  end
+
 let update_vec_inc_maybe v i b = Just (update_vec_inc v i b)
-(*let update_vec_inc_fail v i b = return (update_vec_inc v i b)
-let update_vec_inc_nondet v i b = return (update_vec_inc v i b)*)
 
-val update_vec_dec : list bitU -> integer -> bitU -> list bitU
-let update_vec_dec = update_bv_dec
+val update_vec_dec : list bitU -> integer -> list bitU -> list bitU
+let update_vec_dec v i b =
+  match b with
+  | [b] -> update_bv_dec v i b
+  | _ -> v
+  end
+
 let update_vec_dec_maybe v i b = Just (update_vec_dec v i b)
-(*let update_vec_dec_fail v i b = return (update_vec_dec v i b)
-let update_vec_dec_nondet v i b = return (update_vec_dec v i b)*)
 
 val subrange_vec_inc : list bitU -> integer -> integer -> list bitU
 let subrange_vec_inc = subrange_bv_inc
