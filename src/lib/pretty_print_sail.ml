@@ -389,17 +389,52 @@ module Printer (Config : PRINT_CONFIG) = struct
     | P_aux (P_id _, _), E_aux (E_typ (typ, exp), annot) when Config.resugar -> (P_aux (P_typ (typ, pat), annot), exp)
     | _, _ -> (pat, binding)
 
-  type uannot_fmt = { overloaded : (string * bool) option; is_setter : bool; doc : document }
+  type 'a notation_part = Hole of int * 'a | Part of document
+
+  let parse_notation_attr (_, attr_data_opt) =
+    let open Util.Option_monad in
+    let open Parse_ast.Attribute_data in
+    let* attr_data = attr_data_opt in
+    let* obj = attribute_data_object attr_data in
+    let* level = Option.bind (List.assoc_opt "level" obj) attribute_data_num in
+    let* parts = Option.bind (List.assoc_opt "syntax" obj) attribute_data_list in
+    let parse_part = function
+      | AD_aux (AD_num n, _) -> Some (Hole (Big_int.to_int n, ()))
+      | AD_aux (AD_string str, _) -> Some (Part (separate_map space string (String.split_on_char ' ' str)))
+      | _ -> None
+    in
+    let* parts = Util.option_all (List.map parse_part parts) in
+    Some (Big_int.to_int level, parts)
+
+  let attach_to_holes exps parts =
+    let append p = function Some ps -> Some (ps @ [p]) | None -> None in
+    List.fold_left
+      (fun (exps, result) part ->
+        match part with
+        | Part d -> (exps, append (Part d) result)
+        | Hole (n, _) -> (
+            match exps with [] -> ([], None) | e :: es -> (es, append (Hole (n, e)) result)
+          )
+      )
+      (exps, Some []) parts
+    |> snd
+
+  type uannot_fmt = {
+    overloaded : (string * bool) option;
+    is_setter : bool;
+    doc : document -> document;
+    notation : (int * unit notation_part list) option;
+  }
 
   (* This function consumes the uannot attached to an expression and
      renders its printable form. To prevent bugs, this function
      should always be used to shadow the consumed expression. *)
-  let consume_exp_uannot (E_aux (aux, (l, uannot))) =
+  let consume_exp_uannot ~atomic (E_aux (aux, (l, uannot))) =
     let uannot, overloaded =
       if Config.resugar then (
         match get_overloaded_info uannot with
         | Some overloaded -> (remove_attribute "overloaded" uannot, Some overloaded)
-        | _ -> (uannot, None)
+        | None -> (uannot, None)
       )
       else (uannot, None)
     in
@@ -407,19 +442,33 @@ module Printer (Config : PRINT_CONFIG) = struct
       if Config.resugar && Option.is_some (get_attribute "setter" uannot) then (remove_attribute "setter" uannot, true)
       else (uannot, false)
     in
+    let uannot, notation =
+      if Config.resugar then (
+        match get_attribute "notation" uannot with
+        | Some notation -> (remove_attribute "notation" uannot, parse_notation_attr notation)
+        | None -> (uannot, None)
+      )
+      else (uannot, None)
+    in
     let doc =
-      if Config.hide_attributes then empty
-      else concat_map (fun (_, attr, arg) -> doc_attr attr arg) (get_attributes uannot)
+      if Config.hide_attributes then fun d -> d
+      else (
+        match get_attributes uannot with
+        | [] -> fun d -> d
+        | attrs ->
+            let attrs_doc = concat_map (fun (_, attr, arg) -> doc_attr attr arg) (get_attributes uannot) in
+            fun d -> if atomic then parens (attrs_doc ^^ d) else attrs_doc ^^ d
+      )
     in
     (* Once we've extracted all the printing information from a
        uannot, we want to make sure we never print it again, so return
        the expression with a stripped uannot. *)
-    (E_aux (aux, (l, empty_uannot)), { overloaded; is_setter; doc })
+    (E_aux (aux, (l, empty_uannot)), { overloaded; is_setter; doc; notation })
 
   let rec doc_exp exp =
-    let (E_aux (e_aux, (l, _)) as exp), uannot_fmt = consume_exp_uannot exp in
+    let (E_aux (e_aux, (l, _)) as exp), uannot_fmt = consume_exp_uannot ~atomic:false exp in
     uannot_fmt.doc
-    ^^
+    @@
     match e_aux with
     | E_block [] -> string "()"
     | E_block exps -> group (lbrace ^^ nest 4 (hardline ^^ doc_block exps) ^^ hardline ^^ rbrace)
@@ -514,30 +563,24 @@ module Printer (Config : PRINT_CONFIG) = struct
           )
           else Lazy.force otherwise
         in
-        match (uannot_fmt.overloaded, exps) with
-        | Some (name, true), [x; y] -> doc_exp (E_aux (E_app (mk_operator name, [x; y]), (l, empty_uannot)))
-        | Some (name, false), _ ->
-            handle_setter (mk_id name) (lazy (doc_exp (E_aux (E_app (mk_id name, exps), (l, empty_uannot)))))
-        | None, [x; y]
-          when Config.resugar && match id with Id_aux ((Operator _ | And_bool | Or_bool), _) -> true | _ -> false ->
-            doc_infix 0 exp
-        | None, [v; n]
-          when Config.resugar
-               && (Id.compare id (mk_id "vector_access") = 0 || Id.compare id (mk_id "vector_access#") == 0) ->
-            doc_atomic_exp v ^^ char '[' ^^ doc_exp n ^^ char ']'
-        | None, [v; n; m]
-          when Config.resugar
-               && (Id.compare id (mk_id "vector_subrange") = 0 || Id.compare id (mk_id "vector_subrange#") == 0) ->
-            doc_atomic_exp v ^^ char '[' ^^ doc_exp n ^^ space ^^ string ".." ^^ space ^^ doc_exp m ^^ char ']'
-        | None, _
-          when (Config.resugar && Id.compare id (mk_id "vector_update#") = 0)
-               || Id.compare id (mk_id "vector_update_subrange#") == 0 ->
-            let input, updates = get_vector_updates exp in
-            let updates_doc = separate_map (comma ^^ space) doc_vector_update updates in
-            brackets (separate space [doc_exp input; string "with"; updates_doc])
-        | _, _ -> handle_setter id (lazy (doc_atomic_exp exp))
+        match uannot_fmt.notation with
+        | Some (level, parts) -> (
+            match attach_to_holes exps parts with Some parts -> concat_map doc_part parts | None -> doc_atomic_exp exp
+          )
+        | None -> (
+            match (uannot_fmt.overloaded, exps) with
+            | Some (name, true), [x; y] -> doc_exp (E_aux (E_app (mk_operator name, [x; y]), (l, empty_uannot)))
+            | Some (name, false), _ ->
+                handle_setter (mk_id name) (lazy (doc_exp (E_aux (E_app (mk_id name, exps), (l, empty_uannot)))))
+            | None, [x; y]
+              when Config.resugar && match id with Id_aux ((Operator _ | And_bool | Or_bool), _) -> true | _ -> false ->
+                doc_infix 0 exp
+            | _, _ -> handle_setter id (lazy (doc_atomic_exp exp))
+          )
       end
     | _ -> doc_atomic_exp exp
+
+  and doc_part = function Part d -> d | Hole (0, exp) -> doc_exp exp | Hole (n, exp) -> doc_infix n exp
 
   and doc_let_style keyword lhs rhs body = doc_let_style_general keyword lhs (Some rhs) body
 
@@ -554,9 +597,9 @@ module Printer (Config : PRINT_CONFIG) = struct
     match m_aux with Measure_none -> [] | Measure_some exp -> [string "termination_measure"; braces (doc_exp exp)]
 
   and doc_infix n exp =
-    let (E_aux (e_aux, (l, _)) as exp), uannot_fmt = consume_exp_uannot exp in
+    let (E_aux (e_aux, (l, _)) as exp), uannot_fmt = consume_exp_uannot ~atomic:false exp in
     uannot_fmt.doc
-    ^^
+    @@
     match e_aux with
     | E_app (id, exps) when Option.is_some uannot_fmt.overloaded ->
         let name, is_infix = Option.get uannot_fmt.overloaded in
@@ -575,6 +618,9 @@ module Printer (Config : PRINT_CONFIG) = struct
     | _ -> doc_atomic_exp exp
 
   and doc_atomic_exp (E_aux (e_aux, (_, uannot)) as exp) =
+    let (E_aux (e_aux, (l, _)) as exp), uannot_fmt = consume_exp_uannot ~atomic:true exp in
+    uannot_fmt.doc
+    @@
     match e_aux with
     | E_typ (typ, exp) -> separate space [doc_atomic_exp exp; colon; doc_typ typ]
     | E_lit lit -> doc_lit lit
@@ -586,17 +632,18 @@ module Printer (Config : PRINT_CONFIG) = struct
     | E_sizeof nexp -> string "sizeof" ^^ parens (doc_nexp nexp)
     (* Format a function with a unit argument as f() rather than f(()) *)
     | E_app (id, [E_aux (E_lit (L_aux (L_unit, _)), _)]) -> doc_id id ^^ string "()"
-    | E_app (id, [v; n])
-      when Config.resugar && (Id.compare id (mk_id "vector_access") = 0 || Id.compare id (mk_id "vector_access#") == 0)
-      ->
-        doc_atomic_exp v ^^ char '[' ^^ doc_exp n ^^ char ']'
-    | E_app (id, [v; n; m])
-      when Config.resugar
-           && (Id.compare id (mk_id "vector_subrange") = 0 || Id.compare id (mk_id "vector_subrange#") == 0) ->
-        doc_atomic_exp v ^^ char '[' ^^ doc_exp n ^^ space ^^ string ".." ^^ space ^^ doc_exp m ^^ char ']'
-    | E_app ((Id_aux (Id _, _) as id), exps) -> doc_id id ^^ parens (separate_map (comma ^^ space) doc_exp exps)
-    | E_app (id, exps) when not Config.resugar -> doc_id id ^^ parens (separate_map (comma ^^ space) doc_exp exps)
-    | E_app (id, exps) when List.length exps != 2 -> doc_id id ^^ parens (separate_map (comma ^^ space) doc_exp exps)
+    | E_app (id, exps) -> (
+        let as_function () = doc_id id ^^ parens (separate_map (comma ^^ space) doc_exp exps) in
+        match uannot_fmt.notation with
+        | Some (level, parts) -> (
+            match attach_to_holes exps parts with
+            | Some parts ->
+                let doc = concat_map doc_part parts in
+                if level >= 10 then doc else parens doc
+            | None -> as_function ()
+          )
+        | None -> as_function ()
+      )
     | E_constraint nc -> string "constraint" ^^ parens (doc_nc nc)
     | E_assert (exp1, E_aux (E_lit (L_aux (L_string "", _)), _)) -> string "assert" ^^ parens (doc_exp exp1)
     | E_assert (exp1, exp2) -> string "assert" ^^ parens (doc_exp exp1 ^^ comma ^^ space ^^ doc_exp exp2)

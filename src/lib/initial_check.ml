@@ -1375,120 +1375,146 @@ let rec is_config (P.E_aux (aux, _)) =
   | P.E_config root -> Some [root]
   | _ -> None
 
+let notation_attr l level strs =
+  let open P.Attribute_data in
+  let is_ascii_digit c =
+    let n = Char.code c in
+    48 <= n && n <= 57
+  in
+  let parts =
+    List.map
+      (fun str ->
+        if Util.string_for_all is_ascii_digit str then AD_aux (AD_num (Big_int.of_string str), l)
+        else AD_aux (AD_string str, l)
+      )
+      strs
+  in
+  add_attribute l "notation"
+    (Some
+       (AD_aux
+          (AD_object [("level", AD_aux (AD_num (Big_int.of_int level), l)); ("syntax", AD_aux (AD_list parts, l))], l)
+       )
+    )
+
 let rec to_ast_letbind ctx (P.LB_aux (lb, l) : P.letbind) : uannot letbind =
   LB_aux ((match lb with P.LB_val (pat, exp) -> LB_val (to_ast_pat ctx pat, to_ast_exp ctx exp)), (l, empty_uannot))
 
 and to_ast_exp ctx exp =
   let (P.E_aux (exp, l)) = parse_infix_exp ctx exp in
+  let wrap exp = E_aux (exp, (l, empty_uannot)) in
   match exp with
+  (* Will have just been removed by parse_infix_exp *)
+  | P.E_infix _ -> assert false
   | P.E_attribute (attr, arg, exp) ->
       let (E_aux (exp, (exp_l, annot))) = to_ast_exp ctx exp in
       (* The location of an E_attribute node is just the attribute itself *)
       let annot = add_attribute l attr arg annot in
       E_aux (exp, (exp_l, annot))
-  | _ ->
-      let aux =
-        match exp with
-        | P.E_attribute _ | P.E_infix _ -> assert false
-        | P.E_block exps -> (
-            match to_ast_fexps false ctx exps with
-            | Some fexps -> E_struct (SN_anon, fexps)
-            | None -> E_block (List.map (to_ast_exp ctx) exps)
-          )
-        | P.E_id id ->
-            (* We support identifiers the same as __LOC__, __FILE__ and
-               __LINE__ in the OCaml standard library, and similar
-               constructs in C *)
-            let id_str = string_of_parse_id id in
-            if id_str = "__LOC__" then E_lit (L_aux (L_string (Reporting.short_loc_to_string l), l))
-            else if id_str = "__FILE__" then (
-              let file = match Reporting.simp_loc l with Some (p, _) -> p.pos_fname | None -> "unknown file" in
-              E_lit (L_aux (L_string file, l))
-            )
-            else if id_str = "__LINE__" then (
-              let lnum = match Reporting.simp_loc l with Some (p, _) -> p.pos_lnum | None -> -1 in
-              E_lit (L_aux (L_num (Big_int.of_int lnum), l))
-            )
-            else E_id (to_ast_id ctx id)
-        | P.E_ref id -> E_ref (to_ast_id ctx id)
-        | P.E_lit lit -> E_lit (to_ast_lit lit)
-        | P.E_typ (typ, exp) -> E_typ (to_ast_typ ctx typ, to_ast_exp ctx exp)
-        | P.E_app (f, args) -> (
-            match List.map (to_ast_exp ctx) args with
-            | [] -> E_app (to_ast_id ctx f, [])
-            | exps -> E_app (to_ast_id ctx f, exps)
-          )
-        | P.E_app_infix (left, op, right) -> E_app (to_ast_id ctx op, [to_ast_exp ctx left; to_ast_exp ctx right])
-        | P.E_tuple exps -> E_tuple (List.map (to_ast_exp ctx) exps)
-        | P.E_if (e1, e2, e3, _) -> E_if (to_ast_exp ctx e1, to_ast_exp ctx e2, to_ast_exp ctx e3)
-        | P.E_for (id, e1, e2, e3, atyp, e4) ->
-            E_for
-              ( to_ast_id ctx id,
-                to_ast_exp ctx e1,
-                to_ast_exp ctx e2,
-                to_ast_exp ctx e3,
-                to_ast_order ctx atyp,
-                to_ast_exp ctx e4
-              )
-        | P.E_loop (P.While, m, e1, e2) -> E_loop (While, to_ast_measure ctx m, to_ast_exp ctx e1, to_ast_exp ctx e2)
-        | P.E_loop (P.Until, m, e1, e2) -> E_loop (Until, to_ast_measure ctx m, to_ast_exp ctx e1, to_ast_exp ctx e2)
-        | P.E_vector exps -> E_vector (List.map (to_ast_exp ctx) exps)
-        | P.E_vector_access (vexp, exp) -> vector_access ~loc:l (to_ast_exp ctx vexp) (to_ast_exp ctx exp)
-        | P.E_vector_subrange (vex, exp1, exp2) ->
-            vector_subrange ~loc:l (to_ast_exp ctx vex) (to_ast_exp ctx exp1) (to_ast_exp ctx exp2)
-        | P.E_vector_update (vex, exp1, exp2) ->
-            vector_update ~loc:l (to_ast_exp ctx vex) (to_ast_exp ctx exp1) (to_ast_exp ctx exp2)
-        | P.E_vector_update_subrange (vex, e1, e2, e3) ->
-            vector_update_subrange ~loc:l (to_ast_exp ctx vex) (to_ast_exp ctx e1) (to_ast_exp ctx e2)
-              (to_ast_exp ctx e3)
-        | P.E_vector_append (e1, e2) -> E_vector_append (to_ast_exp ctx e1, to_ast_exp ctx e2)
-        | P.E_list exps -> E_list (List.map (to_ast_exp ctx) exps)
-        | P.E_cons (e1, e2) -> E_cons (to_ast_exp ctx e1, to_ast_exp ctx e2)
-        | P.E_struct (struct_name, fexps) -> (
-            let struct_name = match struct_name with None -> SN_anon | Some id -> SN_id (to_ast_id ctx id) in
-            match to_ast_fexps true ctx fexps with
-            | Some fexps -> E_struct (struct_name, fexps)
-            | None -> raise (Reporting.err_unreachable l __POS__ "to_ast_fexps with true returned none")
-          )
-        | P.E_struct_update (exp, fexps) -> (
-            match to_ast_fexps true ctx fexps with
-            | Some fexps ->
-                check_duplicate_fields
-                  ~error:(fun f -> Printf.sprintf "Duplicate field '%s' in struct update" f)
-                  ~field_id:(fun (FE_aux (FE_fexp (id, _), _)) -> id)
-                  fexps;
-                E_struct_update (to_ast_exp ctx exp, fexps)
-            | _ -> raise (Reporting.err_unreachable l __POS__ "to_ast_fexps with true returned none")
-          )
-        | P.E_field (exp, field) -> (
-            match is_config exp with
-            | None -> E_field (to_ast_exp ctx exp, to_ast_id ctx field)
-            | Some key -> E_config (List.rev (string_of_parse_id field :: key))
-          )
-        | P.E_match (exp, pexps) -> E_match (to_ast_exp ctx exp, List.map (to_ast_case ctx) pexps)
-        | P.E_try (exp, pexps) -> E_try (to_ast_exp ctx exp, List.map (to_ast_case ctx) pexps)
-        | P.E_let (leb, exp) -> E_let (to_ast_letbind ctx leb, to_ast_exp ctx exp)
-        | P.E_assign (lexp, exp) -> E_assign (to_ast_lexp ctx lexp, to_ast_exp ctx exp)
-        | P.E_var (lexp, exp1, exp2) -> E_var (to_ast_lexp ctx lexp, to_ast_exp ctx exp1, to_ast_exp ctx exp2)
-        | P.E_sizeof nexp -> E_sizeof (to_ast_nexp ctx nexp)
-        | P.E_constraint nc -> E_constraint (to_ast_constraint ctx nc)
-        | P.E_exit exp -> E_exit (to_ast_exp ctx exp)
-        | P.E_throw exp -> E_throw (to_ast_exp ctx exp)
-        | P.E_config key -> E_config [key]
-        | P.E_return exp -> E_return (to_ast_exp ctx exp)
-        | P.E_assert (cond, msg) -> E_assert (to_ast_exp ctx cond, to_ast_exp ctx msg)
-        | P.E_internal_plet (pat, exp1, exp2) ->
-            if !opt_magic_hash then E_internal_plet (to_ast_pat ctx pat, to_ast_exp ctx exp1, to_ast_exp ctx exp2)
-            else raise (Reporting.err_general l "Internal plet construct found without -dmagic_hash")
-        | P.E_internal_return exp ->
-            if !opt_magic_hash then E_internal_return (to_ast_exp ctx exp)
-            else raise (Reporting.err_general l "Internal return construct found without -dmagic_hash")
-        | P.E_internal_assume (nc, exp) ->
-            if !opt_magic_hash then E_internal_assume (to_ast_constraint ctx nc, to_ast_exp ctx exp)
-            else raise (Reporting.err_general l "Internal assume construct found without -dmagic_hash")
-        | P.E_deref exp -> E_app (Id_aux (Id "__deref", l), [to_ast_exp ctx exp])
-      in
-      E_aux (aux, (l, empty_uannot))
+  | P.E_block exps -> (
+      match to_ast_fexps false ctx exps with
+      | Some fexps -> wrap (E_struct (SN_anon, fexps))
+      | None -> wrap (E_block (List.map (to_ast_exp ctx) exps))
+    )
+  | P.E_id id ->
+      (* We support identifiers the same as __LOC__, __FILE__ and __LINE__ in the OCaml standard
+        library, and similar constructs in C *)
+      let id_str = string_of_parse_id id in
+      if id_str = "__LOC__" then wrap (E_lit (L_aux (L_string (Reporting.short_loc_to_string l), l)))
+      else if id_str = "__FILE__" then (
+        let file = match Reporting.simp_loc l with Some (p, _) -> p.pos_fname | None -> "unknown file" in
+        wrap (E_lit (L_aux (L_string file, l)))
+      )
+      else if id_str = "__LINE__" then (
+        let lnum = match Reporting.simp_loc l with Some (p, _) -> p.pos_lnum | None -> -1 in
+        wrap (E_lit (L_aux (L_num (Big_int.of_int lnum), l)))
+      )
+      else wrap (E_id (to_ast_id ctx id))
+  | P.E_ref id -> wrap (E_ref (to_ast_id ctx id))
+  | P.E_lit lit -> wrap (E_lit (to_ast_lit lit))
+  | P.E_typ (typ, exp) -> wrap (E_typ (to_ast_typ ctx typ, to_ast_exp ctx exp))
+  | P.E_app (f, args) -> (
+      match List.map (to_ast_exp ctx) args with
+      | [] -> wrap (E_app (to_ast_id ctx f, []))
+      | exps -> wrap (E_app (to_ast_id ctx f, exps))
+    )
+  | P.E_app_infix (left, op, right) -> wrap (E_app (to_ast_id ctx op, [to_ast_exp ctx left; to_ast_exp ctx right]))
+  | P.E_tuple exps -> wrap (E_tuple (List.map (to_ast_exp ctx) exps))
+  | P.E_if (e1, e2, e3, _) -> wrap (E_if (to_ast_exp ctx e1, to_ast_exp ctx e2, to_ast_exp ctx e3))
+  | P.E_for (id, e1, e2, e3, atyp, e4) ->
+      wrap
+        (E_for
+           ( to_ast_id ctx id,
+             to_ast_exp ctx e1,
+             to_ast_exp ctx e2,
+             to_ast_exp ctx e3,
+             to_ast_order ctx atyp,
+             to_ast_exp ctx e4
+           )
+        )
+  | P.E_loop (P.While, m, e1, e2) -> wrap (E_loop (While, to_ast_measure ctx m, to_ast_exp ctx e1, to_ast_exp ctx e2))
+  | P.E_loop (P.Until, m, e1, e2) -> wrap (E_loop (Until, to_ast_measure ctx m, to_ast_exp ctx e1, to_ast_exp ctx e2))
+  | P.E_vector exps -> wrap (E_vector (List.map (to_ast_exp ctx) exps))
+  | P.E_vector_access (vexp, exp) ->
+      let attr = notation_attr l 0 ["10"; "["; "0"; "]"] empty_uannot in
+      E_aux (vector_access ~loc:l (to_ast_exp ctx vexp) (to_ast_exp ctx exp), (l, attr))
+  | P.E_vector_subrange (vex, exp1, exp2) ->
+      let attr = notation_attr l 0 ["10"; "["; "0"; " .. "; "0"; "]"] empty_uannot in
+      E_aux (vector_subrange ~loc:l (to_ast_exp ctx vex) (to_ast_exp ctx exp1) (to_ast_exp ctx exp2), (l, attr))
+  | P.E_vector_update (vex, exp1, exp2) ->
+      let attr = notation_attr l 0 ["["; "0"; " with "; "10"; " = "; "0"; "]"] empty_uannot in
+      E_aux (vector_update ~loc:l (to_ast_exp ctx vex) (to_ast_exp ctx exp1) (to_ast_exp ctx exp2), (l, attr))
+  | P.E_vector_update_subrange (vex, e1, e2, e3) ->
+      let attr = notation_attr l 0 ["["; "0"; " with "; "10"; " .. "; "10"; " = "; "0"; "]"] empty_uannot in
+      E_aux
+        ( vector_update_subrange ~loc:l (to_ast_exp ctx vex) (to_ast_exp ctx e1) (to_ast_exp ctx e2) (to_ast_exp ctx e3),
+          (l, attr)
+        )
+  | P.E_vector_append (e1, e2) -> wrap (E_vector_append (to_ast_exp ctx e1, to_ast_exp ctx e2))
+  | P.E_list exps -> wrap (E_list (List.map (to_ast_exp ctx) exps))
+  | P.E_cons (e1, e2) -> wrap (E_cons (to_ast_exp ctx e1, to_ast_exp ctx e2))
+  | P.E_struct (struct_name, fexps) -> (
+      let struct_name = match struct_name with None -> SN_anon | Some id -> SN_id (to_ast_id ctx id) in
+      match to_ast_fexps true ctx fexps with
+      | Some fexps -> wrap (E_struct (struct_name, fexps))
+      | None -> raise (Reporting.err_unreachable l __POS__ "to_ast_fexps with true returned none")
+    )
+  | P.E_struct_update (exp, fexps) -> (
+      match to_ast_fexps true ctx fexps with
+      | Some fexps ->
+          check_duplicate_fields
+            ~error:(fun f -> Printf.sprintf "Duplicate field '%s' in struct update" f)
+            ~field_id:(fun (FE_aux (FE_fexp (id, _), _)) -> id)
+            fexps;
+          wrap (E_struct_update (to_ast_exp ctx exp, fexps))
+      | _ -> raise (Reporting.err_unreachable l __POS__ "to_ast_fexps with true returned none")
+    )
+  | P.E_field (exp, field) -> (
+      match is_config exp with
+      | None -> wrap (E_field (to_ast_exp ctx exp, to_ast_id ctx field))
+      | Some key -> wrap (E_config (List.rev (string_of_parse_id field :: key)))
+    )
+  | P.E_match (exp, pexps) -> wrap (E_match (to_ast_exp ctx exp, List.map (to_ast_case ctx) pexps))
+  | P.E_try (exp, pexps) -> wrap (E_try (to_ast_exp ctx exp, List.map (to_ast_case ctx) pexps))
+  | P.E_let (leb, exp) -> wrap (E_let (to_ast_letbind ctx leb, to_ast_exp ctx exp))
+  | P.E_assign (lexp, exp) -> wrap (E_assign (to_ast_lexp ctx lexp, to_ast_exp ctx exp))
+  | P.E_var (lexp, exp1, exp2) -> wrap (E_var (to_ast_lexp ctx lexp, to_ast_exp ctx exp1, to_ast_exp ctx exp2))
+  | P.E_sizeof nexp -> wrap (E_sizeof (to_ast_nexp ctx nexp))
+  | P.E_constraint nc -> wrap (E_constraint (to_ast_constraint ctx nc))
+  | P.E_exit exp -> wrap (E_exit (to_ast_exp ctx exp))
+  | P.E_throw exp -> wrap (E_throw (to_ast_exp ctx exp))
+  | P.E_config key -> wrap (E_config [key])
+  | P.E_return exp -> wrap (E_return (to_ast_exp ctx exp))
+  | P.E_assert (cond, msg) -> wrap (E_assert (to_ast_exp ctx cond, to_ast_exp ctx msg))
+  | P.E_internal_plet (pat, exp1, exp2) ->
+      if !opt_magic_hash then wrap (E_internal_plet (to_ast_pat ctx pat, to_ast_exp ctx exp1, to_ast_exp ctx exp2))
+      else raise (Reporting.err_general l "Internal plet construct found without --dmagic-hash")
+  | P.E_internal_return exp ->
+      if !opt_magic_hash then wrap (E_internal_return (to_ast_exp ctx exp))
+      else raise (Reporting.err_general l "Internal return construct found without --dmagic-hash")
+  | P.E_internal_assume (nc, exp) ->
+      if !opt_magic_hash then wrap (E_internal_assume (to_ast_constraint ctx nc, to_ast_exp ctx exp))
+      else raise (Reporting.err_general l "Internal assume construct found without --dmagic-hash")
+  | P.E_deref exp -> wrap (E_app (Id_aux (Id "__deref", l), [to_ast_exp ctx exp]))
 
 and to_ast_measure ctx (P.Measure_aux (m, l)) : uannot internal_loop_measure =
   let m =

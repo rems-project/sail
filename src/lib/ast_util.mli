@@ -78,6 +78,8 @@ val attribute_data_object : attribute_data -> (string * attribute_data) list opt
 
 val attribute_data_bool : attribute_data -> bool option
 
+val attribute_data_num : attribute_data -> Big_int.num option
+
 val attribute_data_string : attribute_data -> string option
 
 val attribute_data_string_with_loc : attribute_data -> (string * Parse_ast.l) option
