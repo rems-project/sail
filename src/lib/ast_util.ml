@@ -88,6 +88,8 @@ let attribute_data_object = function AD_aux (AD_object kvs, _) -> Some kvs | _ -
 
 let attribute_data_bool = function AD_aux (AD_bool b, _) -> Some b | _ -> None
 
+let attribute_data_num = function AD_aux (AD_num n, _) -> Some n | _ -> None
+
 let attribute_data_string = function AD_aux (AD_string s, _) -> Some s | _ -> None
 
 let attribute_data_string_with_loc = function AD_aux (AD_string s, l) -> Some (s, l) | _ -> None

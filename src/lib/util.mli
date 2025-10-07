@@ -215,6 +215,9 @@ val remove_suffix : string -> string -> string option
     the optimal string alignment distance, which is similar but allows swaps as a single action. *)
 val levenshtein_distance : ?osa:bool -> string -> string -> int
 
+(** Check if all characters in a string satisfy a predicate. String.for_all for OCaml < 4.13. *)
+val string_for_all : (char -> bool) -> string -> bool
+
 (** {2 Files} *)
 
 (** [copy_file src dst] copies file [src] to file [dst]. Only files are supported, no directories. *)

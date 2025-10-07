@@ -493,6 +493,11 @@ let levenshtein_distance ?(osa = false) str1 str2 =
 
   dist.(String.length str1).(String.length str2)
 
+let string_for_all p str =
+  let acc = ref true in
+  String.iter (fun c -> acc := !acc && p c) str;
+  !acc
+
 let termcode n = if !opt_colors then "\x1B[" ^ string_of_int n ^ "m" else ""
 
 let bold str = termcode 1 ^ str

@@ -3776,7 +3776,7 @@ and infer_exp env (E_aux (exp_aux, (l, uannot)) as exp) =
     )
   | E_app (Id_aux (Id "vector_subrange#", _), [v; n; m]) ->
       infer_exp env (E_aux (E_app (mk_id "vector_subrange", [v; n; m]), (l, uannot)))
-  | E_app (Id_aux (Id "vector_update#", _), [v; n; exp]) -> infer_vector_update l env v n exp
+  | E_app (Id_aux (Id "vector_update#", _), [v; n; exp]) -> infer_vector_update env v n exp l uannot
   | E_app (Id_aux (Id "vector_update_subrange#", _), [v; n; m; exp]) ->
       infer_exp env (E_aux (E_app (mk_id "vector_update_subrange", [v; n; m; exp]), (l, uannot)))
   | E_app (f, xs) -> infer_funapp l env f xs uannot None
@@ -3965,22 +3965,23 @@ and infer_exp env (E_aux (exp_aux, (l, uannot)) as exp) =
 
 and infer_funapp l env f xs uannot ret_ctx_typ = infer_funapp' l env f (Env.get_val_spec f env) xs uannot ret_ctx_typ
 
-and infer_vector_update l env v n exp =
+and infer_vector_update env v n exp l uannot =
   let rec nested_updates acc = function
-    | E_aux (E_app (Id_aux (Id "vector_update#", _), [v; n; exp]), (l, _)) -> nested_updates ((n, exp, l) :: acc) v
+    | E_aux (E_app (Id_aux (Id "vector_update#", _), [v; n; exp]), (l, uannot)) ->
+        nested_updates ((n, exp, l, uannot) :: acc) v
     | v -> (v, List.rev acc)
   in
-  let v, updates = nested_updates [(n, exp, l)] v in
+  let v, updates = nested_updates [(n, exp, l, uannot)] v in
   let inferred_v = infer_exp env v in
   match typ_of inferred_v with
   | Typ_aux (Typ_id id, _) when Env.is_bitfield id env ->
       let update_exp =
         List.fold_left
-          (fun v (field, exp, l) ->
+          (fun v (field, exp, l, uannot) ->
             match field with
             | E_aux (E_id field_id, (field_id_loc, _)) ->
                 let (Id_aux (update_name, _)) = (Bitfield.field_accessor_ids id field_id).update in
-                mk_exp ~loc:l (E_app (Id_aux (update_name, field_id_loc), [v; exp]))
+                E_aux (E_app (Id_aux (update_name, field_id_loc), [v; exp]), (l, uannot))
             | _ -> typ_error l "Vector update could not be interpreted as a bitfield update"
           )
           v (List.rev updates)
@@ -3989,7 +3990,7 @@ and infer_vector_update l env v n exp =
   | _ ->
       let update_exp =
         List.fold_left
-          (fun v (n, exp, l) -> mk_exp ~loc:l (E_app (mk_id "vector_update", [v; n; exp])))
+          (fun v (n, exp, l, uannot) -> E_aux (E_app (mk_id "vector_update", [v; n; exp]), (l, uannot)))
           v (List.rev updates)
       in
       infer_exp env update_exp
