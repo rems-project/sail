@@ -702,7 +702,10 @@ let partition_instantiation_definitions include_types defs =
     |> List.concat |> NS.of_list
   in
   let g = G.prune roots NS.empty g in
-  List.partition (fun def -> NS.exists (fun n -> NodeMap.mem n g) (nodes_of_def def)) defs
+  let not_type = function DEF_aux (DEF_type _, _) -> false | _ -> true in
+  List.partition
+    (fun def -> (include_types || not_type def) && NS.exists (fun n -> NodeMap.mem n g) (nodes_of_def def))
+    defs
 
 module FCG = Graph.Make (Id)
 
