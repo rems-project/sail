@@ -48,7 +48,7 @@ open Ast
 open Ast_util
 open Ast_defs
 
-module StringMap = Map.Make (String)
+module StringMap = Util.StringMap
 
 let opt_ddump_initial_ast = ref false
 let opt_ddump_side_effect = ref false
@@ -404,6 +404,49 @@ let load_files ?target default_sail_dir options env files =
   Profile.finish "type checking" t;
 
   finalize_ast asserts_termination ctx env (concat_ast checked)
+
+let file_to_string filename =
+  let chan = open_in filename in
+  let buf = Buffer.create 4096 in
+  try
+    let rec loop () =
+      let line = input_line chan in
+      Buffer.add_string buf line;
+      Buffer.add_char buf '\n';
+      loop ()
+    in
+    loop ()
+  with End_of_file ->
+    close_in chan;
+    Buffer.contents buf
+
+let load_project ?target ?modules ?(options = []) ?(variables = []) default_sail_dir project_files =
+  let defs =
+    List.map
+      (fun project_file ->
+        let root_directory = Filename.dirname project_file in
+        let contents = file_to_string project_file in
+        Project.mk_root root_directory :: Initial_check.parse_project ~filename:project_file ~contents ()
+      )
+      project_files
+    |> List.concat
+  in
+  let variables = ref (StringMap.of_seq @@ List.to_seq @@ variables) in
+  let proj = Project.initialize_project_structure ~variables defs in
+  let mod_ids =
+    match modules with
+    | None -> Project.all_modules proj
+    | Some modules ->
+        List.map
+          (fun mod_name ->
+            match Project.get_module_id proj mod_name with
+            | Some id -> id
+            | None -> raise (Reporting.err_general Parse_ast.Unknown ("Unknown module " ^ mod_name))
+          )
+          modules
+  in
+  let env = Type_check.initial_env_with_modules proj in
+  load_modules ?target default_sail_dir options env proj mod_ids
 
 let rewrite_ast_initial effect_info env =
   Rewrites.rewrite Initial_check.initial_ctx effect_info env

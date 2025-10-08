@@ -136,6 +136,18 @@ val load_files :
   string list ->
   Initial_check.ctx * Type_check.typed_ast * Type_check.Env.t * Effects.side_effect_info
 
+(** Load a list of sail_project files.
+
+    Must also be provided with a default location to use as SAIL_DIR if the environment variable is unset. *)
+val load_project :
+  ?target:Target.target ->
+  ?modules:string list ->
+  ?options:(Arg.key * Arg.spec * Arg.doc) list ->
+  ?variables:(string * Project.value) list ->
+  string ->
+  string list ->
+  Initial_check.ctx * Type_check.typed_ast * Type_check.Env.t * Effects.side_effect_info
+
 val finalize_ast :
   bool ->
   Initial_check.ctx ->
