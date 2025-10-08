@@ -10,6 +10,8 @@ set_option match.ignoreUnusedAlts true
 
 open Sail
 
+abbrev bit := (BitVec 1)
+
 abbrev bits k_n := (BitVec k_n)
 
 /-- Type quantifiers: k_a : Type -/
@@ -110,7 +112,7 @@ def slice_mask {n : _} (i : Int) (l : Int) : (BitVec n) :=
   if ((l ≥b n) : Bool)
   then ((sail_ones n) <<< i)
   else
-    (let one : (BitVec n) := (sail_mask n (0b1 : (BitVec 1)))
+    (let one : (BitVec n) := (sail_mask n (1#1 : (BitVec 1)))
     (((one <<< l) - one) <<< i))
 
 /-- Type quantifiers: n : Nat, n > 0 -/
@@ -205,10 +207,10 @@ def match_read (x : E) : SailM Unit := do
     | C => readReg r_C)
 
 def const16 (_ : Unit) : ((BitVec 16) × Bool) :=
-  ((0xFFFF : (BitVec 16)), true)
+  (0xFFFF#16, true)
 
 def const32 (_ : Unit) : ((BitVec 32) × Bool) :=
-  ((0xEEEEEEEE : (BitVec 32)), false)
+  (0xEEEEEEEE#32, false)
 
 /-- Type quantifiers: k_n : Nat, k_n ≥ 0 -/
 def match_width (x : (BitVec k_n)) : (BitVec (2 * k_n)) :=
@@ -221,7 +223,7 @@ def match_width (x : (BitVec k_n)) : (BitVec (2 * k_n)) :=
 
 def match_option_bitvec (x : (Option (BitVec 16))) : Int :=
   match x with
-  | .some 0b1111111111111111 => 1
+  | .some 0xFFFF => 1
   | _ => 0
 
 def initialize_registers (_ : Unit) : SailM Unit := do

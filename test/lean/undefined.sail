@@ -1,3 +1,4 @@
+type bit = bitvector(1)
 
 val foo : int -> (bool, bit, int, nat, bitvector(3))
 function foo(n) = {

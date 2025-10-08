@@ -10,6 +10,8 @@ set_option match.ignoreUnusedAlts true
 
 open Sail
 
+abbrev bit := (BitVec 1)
+
 abbrev bits k_n := (BitVec k_n)
 
 /-- Type quantifiers: k_a : Type -/
@@ -126,7 +128,7 @@ def slice_mask {n : _} (i : Int) (l : Int) : (BitVec n) :=
   if ((l ≥b n) : Bool)
   then ((sail_ones n) <<< i)
   else
-    (let one : (BitVec n) := (sail_mask n (0b1 : (BitVec 1)))
+    (let one : (BitVec n) := (sail_mask n (1#1 : (BitVec 1)))
     (((one <<< l) - one) <<< i))
 
 /-- Type quantifiers: n : Nat, n > 0 -/
@@ -181,21 +183,21 @@ def EXTZ {m : _} (v : (BitVec k_n)) : (BitVec m) :=
 
 /-- Type quantifiers: n : Nat, n ≥ 0 -/
 def zeros (n : Nat) : (BitVec n) :=
-  (BitVec.replicateBits (0b0 : (BitVec 1)) n)
+  (BitVec.replicateBits 0#1 n)
 
 def rX (r : (BitVec 5)) : SailM (BitVec 64) := do
-  match_bv r with
-  | 00000 => do (pure (EXTZ (m := 64) (0x0 : (BitVec 4))))
-  | _ => do (pure (GetElem?.getElem! (← readReg Xs) (BitVec.toNatInt r)))
+  match r with
+  | 0b00000 => (pure (EXTZ (m := 64) 0x0#4))
+  | _ => (pure (GetElem?.getElem! (← readReg Xs) (BitVec.toNatInt r)))
 
 def wX (r : (BitVec 5)) (v : (BitVec 64)) : SailM Unit := do
-  if ((r != (0b00000 : (BitVec 5))) : Bool)
+  if ((r != 0b00000#5) : Bool)
   then writeReg Xs (vectorUpdate (← readReg Xs) (BitVec.toNatInt r) v)
   else (pure ())
 
 /-- Type quantifiers: width : Nat, width ≥ 0 -/
 def read_mem (addr : (BitVec 64)) (width : Nat) : SailM (BitVec (8 * width)) := do
-  (read_ram 64 width (EXTZ (m := 64) (0x0 : (BitVec 4))) addr)
+  (read_ram 64 width (EXTZ (m := 64) 0x0#4) addr)
 
 def undefined_iop (_ : Unit) : SailM iop := do
   (internal_pick [RISCV_ADDI, RISCV_SLTI, RISCV_SLTIU, RISCV_XORI, RISCV_ORI, RISCV_ANDI])
@@ -241,8 +243,8 @@ def execute (merge_var : ast) : SailM Unit := do
 
 def decode (merge_var : (BitVec 32)) : (Option ast) :=
   match_bv merge_var with
-  | [imm:12,rs1:regbits,000,rd:regbits,0010011] => (some (ITYPE (imm, rs1, rd, RISCV_ADDI)))
-  | [imm:12,rs1:regbits,011,rd:regbits,0000011] => (some (LOAD (imm, rs1, rd)))
+  | [imm:12,rs1:5,000,rd:5,0010011] => (some (ITYPE (imm, rs1, rd, RISCV_ADDI)))
+  | [imm:12,rs1:5,011,rd:5,0000011] => (some (LOAD (imm, rs1, rd)))
   | _ => none
 
 def initialize_registers (_ : Unit) : SailM Unit := do

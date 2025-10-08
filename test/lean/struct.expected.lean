@@ -10,6 +10,8 @@ set_option match.ignoreUnusedAlts true
 
 open Sail
 
+abbrev bit := (BitVec 1)
+
 abbrev bits k_n := (BitVec k_n)
 
 /-- Type quantifiers: k_a : Type -/
@@ -111,7 +113,7 @@ def slice_mask {n : _} (i : Int) (l : Int) : (BitVec n) :=
   if ((l ≥b n) : Bool)
   then ((sail_ones n) <<< i)
   else
-    (let one : (BitVec n) := (sail_mask n (0b1 : (BitVec 1)))
+    (let one : (BitVec n) := (sail_mask n (1#1 : (BitVec 1)))
     (((one <<< l) - one) <<< i))
 
 /-- Type quantifiers: n : Nat, n > 0 -/
@@ -158,7 +160,7 @@ def concat_str_dec (str : String) (x : Int) : String :=
 
 def undefined_My_struct (_ : Unit) : SailM My_struct := do
   (pure { field1 := (← (undefined_int ()))
-          field2 := (← (undefined_bit ())) })
+          field2 := (← (undefined_bitvector 1)) })
 
 def struct_field2 (s : My_struct) : (BitVec 1) :=
   s.field2
@@ -178,14 +180,10 @@ def mk_struct (i : Int) (b : (BitVec 1)) : My_struct :=
 def undef_struct (x : (BitVec 1)) : SailM My_struct := do
   (undefined_My_struct ())
 
-def match_struct (value : My_struct) : SailM Int := do
+def match_struct (value : My_struct) : Int :=
   match value with
-  | { field2 := 0#1, field1 := g__0 } => (pure 0)
-  | { field1 := field1, field2 := 1#1 } => (pure field1)
-  | _ =>
-    (do
-      assert false "Pattern match failure at struct.sail:39.4-42.5"
-      throw Error.Exit)
+  | { field2 := 0, field1 := g__0 } => 0
+  | { field1 := field1, field2 := _ } => field1
 
 def initialize_registers (_ : Unit) : Unit :=
   ()

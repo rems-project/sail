@@ -10,6 +10,8 @@ set_option match.ignoreUnusedAlts true
 
 open Sail
 
+abbrev bit := (BitVec 1)
+
 abbrev bits k_n := (BitVec k_n)
 
 /-- Type quantifiers: k_a : Type -/
@@ -94,7 +96,7 @@ def slice_mask {n : _} (i : Int) (l : Int) : (BitVec n) :=
   if ((l ≥b n) : Bool)
   then ((sail_ones n) <<< i)
   else
-    (let one : (BitVec n) := (sail_mask n (0b1 : (BitVec 1)))
+    (let one : (BitVec n) := (sail_mask n (1#1 : (BitVec 1)))
     (((one <<< l) - one) <<< i))
 
 /-- Type quantifiers: n : Nat, n > 0 -/
@@ -140,13 +142,13 @@ def concat_str_dec (str : String) (x : Int) : String :=
   (HAppend.hAppend str (Int.repr x))
 
 def extern_const (_ : Unit) : (BitVec 64) :=
-  (0xFFFF000012340000 : (BitVec 64))
+  0xFFFF000012340000#64
 
 def extern_add (_ : Unit) : (BitVec 16) :=
-  ((0xFFFF : (BitVec 16)) + (0x1234 : (BitVec 16)))
+  (0xFFFF#16 + 0x1234#16)
 
 def extern_replicate_bits (_ : Unit) : (BitVec 64) :=
-  (BitVec.replicateBits (0x1234 : (BitVec 16)) 4)
+  (BitVec.replicateBits 0x1234#16 4)
 
 def extern_slice (x : (BitVec 16)) : (BitVec 4) :=
   (BitVec.slice x 2 4)
@@ -155,13 +157,13 @@ def extern_vector_length (x : (Vector Int 3)) : Int :=
   (Vector.length x)
 
 def extern_count_leading_zeros (_ : Unit) : Int :=
-  (BitVec.countLeadingZeros (0x00FF0FF0 : (BitVec 32)))
+  (BitVec.countLeadingZeros 0x00FF0FF0#32)
 
 def extern_count_trailing_zeros (_ : Unit) : Int :=
-  (BitVec.countTrailingZeros (0x00FF0FF0 : (BitVec 32)))
+  (BitVec.countTrailingZeros 0x00FF0FF0#32)
 
 def extern_arith_shiftright (_ : Unit) : (BitVec 32) :=
-  (BitVec.rotateRight (0xDEADBEEF : (BitVec 32)) 4)
+  (BitVec.rotateRight 0xDEADBEEF#32 4)
 
 def initialize_registers (_ : Unit) : Unit :=
   ()

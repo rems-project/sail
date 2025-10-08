@@ -518,9 +518,7 @@ let rec doc_pat ?(need_parens = false) ?(in_vector = false) ctx in_match_bv (P_a
     when List.for_all (fun p -> match p with P_aux (P_lit _, _) -> true | _ -> false) pats && not in_match_bv ->
       string "0b" ^^ concat (List.map (doc_pat ~in_vector:true ctx in_match_bv) pats)
   | P_vector pats -> concat (List.map (doc_pat ~in_vector:true ctx in_match_bv) pats)
-  | P_vector_concat pats when in_vector ->
-      separate (string ",") (List.map (doc_pat ~in_vector:true ctx in_match_bv) pats)
-  | P_vector_concat pats -> separate (string ",") (List.map (doc_pat ~in_vector:true ctx in_match_bv) pats) |> brackets
+  | P_vector_concat pats -> doc_vector_concat pats
   | P_app (Id_aux (Id "None", _), p) -> string "none"
   | P_app (cons, pats) ->
       opt_parens
@@ -539,6 +537,27 @@ let rec doc_pat ?(need_parens = false) ?(in_vector = false) ctx in_match_bv (P_a
   | P_cons (hd_pat, tl_pat) ->
       parens (separate space [doc_pat ctx in_match_bv hd_pat; string "::"; doc_pat ctx in_match_bv tl_pat])
   | _ -> failwith ("Doc Pattern " ^ string_of_pat_con pat ^ " " ^ string_of_pat pat ^ " not translatable yet.")
+
+and doc_vector_concat pats =
+  let rec doc_part (P_aux (aux, (l, _)) as pat) =
+    match aux with
+    | P_lit (L_aux (L_bin bin, _)) ->
+        let bits = Semantics.bitlist_of_bin_lit bin in
+        concat_map (function Value_type.B0 -> char '0' | Value_type.B1 -> char '1') bits
+    | P_lit (L_aux (L_hex hex, _)) ->
+        let bits = Semantics.bitlist_of_hex_lit hex in
+        concat_map (function Value_type.B0 -> char '0' | Value_type.B1 -> char '1') bits
+    | P_id id -> (
+        match destruct_bitvector (env_of_pat pat) (typ_of_pat pat) with
+        | Some (Nexp_aux (Nexp_constant n, _)) ->
+            doc_id_ctor (fixup_match_id id) ^^ char ':' ^^ string (Big_int.to_string n)
+        | _ -> Reporting.unreachable l __POS__ "Found subpattern with unclear width in bitvector pattern"
+      )
+    | P_typ (_, pat) -> doc_part pat
+    | P_vector pats -> separate_map comma doc_part pats
+    | _ -> Reporting.unreachable l __POS__ ("Unexpected pattern in match_bv vector_concat pattern " ^ string_of_pat pat)
+  in
+  brackets (separate_map comma doc_part pats)
 
 let doc_pat_typ_ascription ctx (P_aux (p, (l, annot)) as pat) =
   match p with P_typ (ptyp, p) -> Some (doc_typ ctx ptyp) | _ -> None
