@@ -828,6 +828,14 @@ let rec disjoint_pat env (P_aux (p1, annot1) as pat1) (P_aux (p2, annot2) as pat
   | P_id id, _ when id_is_unbound id env -> false
   | _, P_id id when id_is_unbound id env -> false
   | P_id id1, P_id id2 -> Id.compare id1 id2 <> 0
+  | P_lit (L_aux (L_bin bin1, _)), P_lit (L_aux (L_bin bin2, _)) ->
+      Semantics.(bitlist_of_bin_lit bin1 <> bitlist_of_bin_lit bin2)
+  | P_lit (L_aux (L_bin bin1, _)), P_lit (L_aux (L_hex hex2, _)) ->
+      Semantics.(bitlist_of_bin_lit bin1 <> bitlist_of_hex_lit hex2)
+  | P_lit (L_aux (L_hex hex1, _)), P_lit (L_aux (L_bin bin2, _)) ->
+      Semantics.(bitlist_of_hex_lit hex1 <> bitlist_of_bin_lit bin2)
+  | P_lit (L_aux (L_hex hex1, _)), P_lit (L_aux (L_hex hex2, _)) ->
+      Semantics.(bitlist_of_hex_lit hex1 <> bitlist_of_hex_lit hex2)
   | P_lit (L_aux ((L_bin _ | L_hex _), _) as lit), _ ->
       disjoint_pat env (vector_string_to_bits_pat lit (Unknown, empty_tannot)) pat2
   | _, P_lit (L_aux ((L_bin _ | L_hex _), _) as lit) ->
@@ -4976,8 +4984,8 @@ let rewrite ctx effect_info env rewriters ast =
       Printexc.print_backtrace stderr;
       raise (Type_error.to_reporting_exn l err)
   | e ->
-      Printexc.print_backtrace stderr;
-      raise e
+      let bt = Printexc.get_raw_backtrace () in
+      Printexc.raise_with_backtrace e bt
 
 let () =
   let open Interactive in

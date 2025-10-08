@@ -3785,18 +3785,17 @@ and infer_exp env (E_aux (exp_aux, (l, uannot)) as exp) =
       | exception Type_error _ -> infer_funapp l env f [x; mk_exp (E_typ (bool_typ, y))] uannot None
     end
   | E_app (Id_aux (Id "vector_access#", _), [v; n]) -> (
-      try infer_exp env (E_aux (E_app (mk_id "vector_access", [v; n]), (l, uannot))) with
-      | Type_error (err_l, err) -> (
-          try
-            let inferred_v = infer_exp env v in
-            match (typ_of inferred_v, n) with
-            | Typ_aux (Typ_id id, _), E_aux (E_id field, _) ->
-                let access_id = (Bitfield.field_accessor_ids id field).get in
-                infer_exp env (mk_exp ~loc:l (E_app (access_id, [v])))
-            | _, _ -> typ_error l "Vector access could not be interpreted as a bitfield access"
-          with Type_error (err_l', err') -> typ_raise err_l (err_because (err, err_l', err'))
-        )
-      | exn -> raise exn
+      try infer_exp env (E_aux (E_app (mk_id "vector_access", [v; n]), (l, uannot)))
+      with Type_error (err_l, err) -> (
+        try
+          let inferred_v = infer_exp env v in
+          match (typ_of inferred_v, n) with
+          | Typ_aux (Typ_id id, _), E_aux (E_id field, _) ->
+              let access_id = (Bitfield.field_accessor_ids id field).get in
+              infer_exp env (mk_exp ~loc:l (E_app (access_id, [v])))
+          | _, _ -> typ_error l "Vector access could not be interpreted as a bitfield access"
+        with Type_error (err_l', err') -> typ_raise err_l (err_because (err, err_l', err'))
+      )
     )
   | E_app (Id_aux (Id "vector_subrange#", _), [v; n; m]) ->
       infer_exp env (E_aux (E_app (mk_id "vector_subrange", [v; n; m]), (l, uannot)))
