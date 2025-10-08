@@ -210,7 +210,8 @@ let preprocess dir target opts =
             Arg.parse_argv ~current (Array.of_list ("sail" :: args)) opts file_arg ""
           with
           | Arg.Help msg -> raise (Reporting.err_general l "-help flag passed to $option directive")
-          | Arg.Bad msg -> raise (Reporting.err_general l ("Invalid flag passed to $option directive" ^ first_line msg))
+          | Arg.Bad msg ->
+              Reporting.warn "Invalid option" l ("Invalid flag passed to $option directive" ^ first_line msg)
         end;
         reset ();
         aux includes (opt_pragma :: acc) defs
