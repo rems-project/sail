@@ -805,16 +805,6 @@ let vector_string_to_bits_pat (L_aux (lit, _) as l_aux) (l, tannot) =
     | lit -> P_aux (P_lit l_aux, (l, tannot))
   end
 
-let vector_string_to_bits_exp (L_aux (lit, _) as l_aux) (l, tannot) =
-  let bit_annot = match destruct_tannot tannot with Some (env, _) -> mk_tannot env bit_typ | None -> empty_tannot in
-  begin
-    match lit with
-    | L_hex _ | L_bin _ ->
-        E_aux
-          (E_vector (List.map (fun p -> E_aux (E_lit p, (l, bit_annot))) (vector_string_to_bit_list l_aux)), (l, tannot))
-    | lit -> E_aux (E_lit l_aux, (l, tannot))
-  end
-
 (* A simple check for pattern disjointness; used for optimisation in the
    guarded pattern rewrite step *)
 let rec disjoint_pat env (P_aux (p1, annot1) as pat1) (P_aux (p2, annot2) as pat2) =
@@ -1427,18 +1417,6 @@ let rewrite_ast_remove_numeral_pats env =
     FD_aux (FD_function (r_o, t_o, List.map rewrite_funcl funcls), a)
   in
   rewrite_ast_base { rewriters_base with rewrite_exp; rewrite_fun }
-
-let rewrite_ast_vector_string_pats_to_bit_list env =
-  let rewrite_p_aux (pat, (annot : tannot annot)) =
-    match pat with P_lit lit -> vector_string_to_bits_pat lit annot | _ -> P_aux (pat, annot)
-  in
-  let rewrite_e_aux (exp, (annot : tannot annot)) =
-    match exp with E_lit lit -> vector_string_to_bits_exp lit annot | exp -> E_aux (exp, annot)
-  in
-  let pat_alg = { id_pat_alg with p_aux = rewrite_p_aux } in
-  let rewrite_pat rw pat = fold_pat pat_alg pat in
-  let rewrite_exp rw exp = fold_exp { id_exp_alg with e_aux = rewrite_e_aux; pat_alg } exp in
-  rewrite_ast_base { rewriters_base with rewrite_pat; rewrite_exp }
 
 let rewrite_bit_lists_to_lits env =
   (* TODO Make all rewriting passes support bitvector literals instead of
@@ -4855,7 +4833,6 @@ let all_rewriters =
     ("make_cases_exhaustive", base_rewriter MakeExhaustive.rewrite);
     ("remove_redundant_pats", basic_rewriter remove_redundant_pats);
     ("undefined", Bool_rewriter (fun b -> basic_rewriter (rewrite_undefined_if_gen b)));
-    ("vector_string_pats_to_bit_list", basic_rewriter rewrite_ast_vector_string_pats_to_bit_list);
     ("remove_not_pats", basic_rewriter rewrite_ast_not_pats);
     ("pattern_literals", Literal_rewriter (fun f -> basic_rewriter (rewrite_ast_pat_lits false f)));
     ("pattern_literals_typed", Literal_rewriter (fun f -> basic_rewriter (rewrite_ast_pat_lits true f)));
