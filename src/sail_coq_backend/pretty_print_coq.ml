@@ -631,7 +631,6 @@ let rec doc_typ_fns ctx env =
     | Typ_id (Id_aux (Id "nat", _)) -> string "Z"
     | Typ_id (Id_aux (Id "string_literal", _)) -> string "string"
     | Typ_id (Id_aux (Id "bool", _)) -> string "bool"
-    | Typ_id (Id_aux (Id "bit", _)) -> string "bitU"
     | Typ_id id ->
         (*if List.exists ((=) (string_of_id id)) regtypes
           then string "register"
@@ -1368,6 +1367,13 @@ let autocast_req ctxt env ?existentials typ1 typ2 typ1_expanded typ2_expanded =
       match complex_autocast ctxt env ?existentials typ1 typ2 with false, _ -> No | true, s -> Complex s
     )
 
+let shim_bit1 = function
+  | "access_vec_dec" -> "(fun v i => vec_of_bits [access_vec_dec v i])"
+  | "update_vec_dec" -> "(fun v i b => update_vec_dec v i (access_vec_dec b 0))"
+  | "access_vec_inc" -> "(fun v i => vec_of_bits [access_vec_inc v i])"
+  | "update_vec_inc" -> "(fun v i b => update_vec_inc v i (access_vec_inc b 0))"
+  | name -> name
+
 let report = Reporting.err_unreachable
 let doc_exp, doc_let =
   let rec top_exp (ctxt : context) (aexp_needed : bool) (tail_position : bool) (E_aux (e, (l, annot)) as full_exp) =
@@ -1699,7 +1705,8 @@ let doc_exp, doc_let =
               let () = debug ctxt (lazy ("Function application " ^ string_of_id f)) in
               let call, is_extern, is_ctor, is_rec =
                 if Env.is_union_constructor f env then (doc_id_ctor ctxt f, false, true, None)
-                else if Env.is_extern f env "coq" then (string (Env.get_extern f env "coq"), true, false, None)
+                else if Env.is_extern f env "coq" then
+                  (string (shim_bit1 (Env.get_extern f env "coq")), true, false, None)
                 else (doc_id ctxt f, false, false, Bindings.find_opt f ctxt.recursive_fns)
               in
               let tqs, fn_ty = if is_ctor then Env.get_union_id f env else Env.get_val_spec f env in
