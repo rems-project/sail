@@ -2139,7 +2139,8 @@ let doc_exp, doc_let =
         let epp = brackets expspp in
         let epp, aexp_needed =
           if is_bitvector_typ t then (
-            let bepp = string "vec_of_bits" ^^ space ^^ align epp in
+            let map_f = string "(fun b => access_vec_dec b 0)" in
+            let bepp = string "vec_of_bits" ^^ space ^^ parens (separate space [string "List.map"; map_f; align epp]) in
             (align (group (prefix 0 1 bepp (doc_tannot ctxt (env_of full_exp) tail_position false t))), true)
           )
           else (
