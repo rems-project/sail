@@ -148,7 +148,7 @@ let rec prerr_chunk indent = function
         )
         args
   | Tuple (s, e, n, args) ->
-      Printf.eprintf "%sTuple:%s %s %d\n" indent s e n;
+      Printf.eprintf "%sTuple: start='%s' end='%s' spacing=%d\n" indent s e n;
       List.iteri
         (fun i arg ->
           Printf.eprintf "%s  %d:\n" indent i;
@@ -204,7 +204,30 @@ let rec prerr_chunk indent = function
           Queue.iter (prerr_chunk (indent ^ "    ")) funcl.body
         )
         fn.funcls
-  | Val vs -> Printf.eprintf "%sVal:%s has_extern=%b\n" indent (string_of_id vs.id) (Option.is_some vs.extern_opt)
+  | Val vs ->
+      Printf.eprintf "%sVal:%s has_extern=%b has_typq=%b\n" indent (string_of_id vs.id) (Option.is_some vs.extern_opt)
+        (Option.is_some vs.typq_opt);
+      begin
+        match vs.extern_opt with
+        | Some extern ->
+            Printf.eprintf "%s  extern: pure=%b\n" indent extern.pure;
+            List.iter
+              (fun (target, name) ->
+                Printf.eprintf "%s    name  : %s\n" indent target;
+                Printf.eprintf "%s    target: %s\n" indent name
+              )
+              extern.bindings
+        | None -> Printf.eprintf "%s  extern: None\n" indent
+      end;
+      begin
+        match vs.typq_opt with
+        | Some typq ->
+            Printf.eprintf "%s  typq:\n" indent;
+            Queue.iter (prerr_chunk (indent ^ "    ")) typq
+        | None -> Printf.eprintf "%s  typq: None\n" indent
+      end;
+      Printf.eprintf "%s  typ:\n" indent;
+      Queue.iter (prerr_chunk (indent ^ "    ")) vs.typ
   | Enum e ->
       Printf.eprintf "%sEnum:%s\n" indent (string_of_id e.id);
       begin
@@ -333,7 +356,14 @@ let rec prerr_chunk indent = function
           Queue.iter (prerr_chunk (indent ^ "    ")) arg
         )
         [("vars", ex.vars); ("constr", ex.constr); ("typ", ex.typ)]
-  | Binder _ -> ()
+  | Binder (binder, x, y, z) ->
+      Printf.eprintf "%sBinder:%s\n" indent (binder_keyword binder);
+      List.iteri
+        (fun i arg ->
+          Printf.eprintf "%s  %d:\n" indent i;
+          Queue.iter (prerr_chunk (indent ^ "    ")) arg
+        )
+        [x; y; z]
   | Block_binder (binder, binding, exp) ->
       Printf.eprintf "%sBlock_binder:%s\n" indent (binder_keyword binder);
       List.iter
@@ -366,7 +396,11 @@ let rec prerr_chunk indent = function
       Queue.iter (prerr_chunk (indent ^ "    ")) exp;
       Printf.eprintf "%s  with:" indent;
       List.iter (fun exp -> Queue.iter (prerr_chunk (indent ^ "    ")) exp) exps
-  | Vector_updates (_exp, _updates) -> Printf.eprintf "%sVector_updates:\n" indent
+  | Vector_updates (exp, updates) ->
+      Printf.eprintf "%sVector_updates:\n" indent;
+      Queue.iter (prerr_chunk (indent ^ "  ")) exp;
+      Printf.eprintf "%s  with:\n" indent;
+      List.iter (prerr_chunk (indent ^ "    ")) updates
   | Index (exp, ix) ->
       Printf.eprintf "%sIndex:\n" indent;
       List.iter
