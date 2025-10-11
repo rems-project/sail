@@ -247,8 +247,14 @@ open Sail
 
 let path_to_static_library sail_dir str = Filename.quote (sail_dir ^ "/src/sail_lean_backend/Sail/" ^ str ^ ".lean")
 
-let copy_from_static_library sail_dir lean_sail_dir str =
-  Unix.system ("cp " ^ path_to_static_library sail_dir str ^ " " ^ Filename.quote lean_sail_dir)
+let copy_from_static_library out_name_camel sail_dir lean_sail_dir str =
+  Unix.system
+    (Printf.sprintf "sed 's/THE_MODULE_NAME/%s/g' %s > %s.lean" out_name_camel (path_to_static_library sail_dir str)
+       (lean_sail_dir ^ "/" ^ str |> Filename.quote)
+    )
+  |> ignore
+
+(* Unix.system ("cp " ^ path_to_static_library sail_dir str ^ " " ^ Filename.quote lean_sail_dir) *)
 
 let print_function_file_prelude file out_name_camel (imp_refs : string list) =
   let _ =
@@ -292,9 +298,10 @@ let start_lean_output (out_name : string) (import_names : string list) (import_r
   if not (Sys.file_exists lean_src_dir) then Unix.mkdir lean_src_dir 0o775;
   let lean_sail_dir = lean_src_dir ^ "/Sail/" in
   Unix.mkdir lean_sail_dir 0o775;
-  let _ = copy_from_static_library sail_dir lean_sail_dir "BitVec" in
-  let _ = copy_from_static_library sail_dir lean_sail_dir "IntRange" in
-  let _ = copy_from_static_library sail_dir lean_sail_dir "Sail" in
+  let _ = copy_from_static_library out_name_camel sail_dir lean_sail_dir "Attr" in
+  let _ = copy_from_static_library out_name_camel sail_dir lean_sail_dir "BitVec" in
+  let _ = copy_from_static_library out_name_camel sail_dir lean_sail_dir "IntRange" in
+  let _ = copy_from_static_library out_name_camel sail_dir lean_sail_dir "Sail" in
   let real_numbers_file =
     if !opt_lean_real_numbers then "/src/sail_lean_backend/Sail/Real.lean"
     else "/src/sail_lean_backend/Sail/FakeReal.lean"
