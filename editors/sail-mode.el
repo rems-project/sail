@@ -32,7 +32,7 @@
 
 (defconst sail-keywords
   '("val" "outcome" "function" "type" "struct" "union" "enum" "let" "var" "if" "then" "by"
-    "else" "match" "in" "return" "register" "ref" "forall" "operator" "effect"
+    "else" "match" "in" "return" "register" "ref" "forall" "operator" "effect" "config"
     "overload" "cast" "sizeof" "constant" "constraint" "default" "assert" "newtype" "from"
     "pure" "impure" "monadic" "infixl" "infixr" "infix" "scattered" "end" "try" "catch" "and" "to" "private"
     "throw" "clause" "as" "repeat" "until" "while" "do" "foreach" "bitfield"
@@ -88,7 +88,7 @@
     (modify-syntax-entry ?> "." st)
     (modify-syntax-entry ?_ "w" st)
     (modify-syntax-entry ?' "w" st)
-    (modify-syntax-entry ?* ". 23" st)
+    (modify-syntax-entry ?* ". 23n" st)
     (modify-syntax-entry ?/ ". 124b" st)
     (modify-syntax-entry ?\n "> b" st)
     st)
@@ -102,9 +102,9 @@
   (use-local-map sail-mode-map)
   (sail-build-menu)
   (setq font-lock-defaults '(sail-font-lock-keywords))
-  (setq comment-start-skip "\\(//+\\|/\\*+\\)\\s *")
-  (setq comment-start "/*")
-  (setq comment-end "*/")
+  (setq-local comment-start-skip "\\(//+\\|/\\*+\\)\\s *")
+  (setq-local comment-start "/*")
+  (setq-local comment-end "*/")
   (setq major-mode 'sail-mode)
   (setq mode-name "Sail")
   (add-hook 'sail-mode-hook
@@ -126,9 +126,9 @@
   (set-syntax-table sail-mode-syntax-table)
   (use-local-map sail-mode-map)
   (setq font-lock-defaults '(sail-project-font-lock-keywords))
-  (setq comment-start-skip "\\(//+\\|/\\*+\\)\\s *")
-  (setq comment-start "/*")
-  (setq comment-end "*/")
+  (setq-local comment-start-skip "\\(//+\\|/\\*+\\)\\s *")
+  (setq-local comment-start "/*")
+  (setq-local comment-end "*/")
   (setq major-mode 'sail-project-mode)
   (setq mode-name "Sail project")
   (run-hooks 'sail-project-mode-hook))

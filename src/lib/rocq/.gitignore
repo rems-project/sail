@@ -1,0 +1,4 @@
+CoqMakefile
+CoqMakefile.conf
+.CoqMakefile.d
+**/.lia.cache

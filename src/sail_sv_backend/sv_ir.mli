@@ -45,11 +45,9 @@
 (*  SPDX-License-Identifier: BSD-2-Clause                                   *)
 (****************************************************************************)
 
-(** This file defines an intermediate representation that is roughly
-    equivalent to the subset of SystemVerilog that we target. This
-    enables us to perform SystemVerilog to SystemVerilog rewrites -
-    for this purpose we also define a vistor-pattern rewriter
-    [svir_visitor], much like it's [jib_visitor] equivalent. *)
+(** This file defines an intermediate representation that is roughly equivalent to the subset of SystemVerilog that we
+    target. This enables us to perform SystemVerilog to SystemVerilog rewrites - for this purpose we also define a
+    vistor-pattern rewriter [svir_visitor], much like it's [jib_visitor] equivalent. *)
 
 open Libsail
 
@@ -86,7 +84,7 @@ type sv_module = {
 and sv_function = {
   function_name : sv_name;
   return_type : Jib.ctyp option;
-  params : (Ast.id * Jib.ctyp) list;
+  params : (Jib.name * Jib.ctyp) list;
   body : sv_statement;
 }
 
@@ -134,7 +132,7 @@ and sv_statement_aux =
   | SVS_case of { head_exp : smt_exp; cases : (smt_exp * sv_statement) list; fallthrough : sv_statement option }
   | SVS_if of smt_exp * sv_statement option * sv_statement option
   | SVS_block of sv_statement list
-  | SVS_assert of smt_exp * smt_exp
+  | SVS_assert of Jib.name * smt_exp * smt_exp
   | SVS_foreach of sv_name * smt_exp * sv_statement
   | SVS_for of sv_for * sv_statement
   | SVS_raw of string * Jib.name list * Jib.name list
@@ -158,9 +156,8 @@ val mk_statement : ?loc:Parse_ast.l -> sv_statement_aux -> sv_statement
 val is_typedef : sv_def -> bool
 
 class type svir_visitor = object
-  (** Note that despite inheriting from common_visitor, we don't use
-      [vid]. Instead specific types of identifiers should be
-      re-written by matching on their containing node. *)
+  (** Note that despite inheriting from common_visitor, we don't use [vid]. Instead specific types of identifiers should
+      be re-written by matching on their containing node. *)
   inherit common_visitor
 
   method vsmt_exp : smt_exp -> smt_exp visit_action

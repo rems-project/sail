@@ -47,6 +47,8 @@
 $ifndef _EXN_BASIC
 $define _EXN_BASIC
 
-newtype exception = Exception : unit
+// Note this can't be a newtype, because the exception type is special
+// and we don't want to erase it like we would for a newtype.
+union exception = { Exception : unit }
 
 $endif

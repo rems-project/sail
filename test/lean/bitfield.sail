@@ -9,3 +9,5 @@ bitfield cr_type : bits(8) = {
   CR1 : 3 .. 2,
   CR3 : 1 .. 0
 }
+
+register R : cr_type

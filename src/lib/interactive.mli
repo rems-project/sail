@@ -50,9 +50,8 @@ open Type_check
 
 val opt_interactive : bool ref
 
-(** Each interactive command is passed this struct, containing the
-   abstract syntax tree, effect info and the type-checking
-    environment. Also contains the default Sail directory *)
+(** Each interactive command is passed this struct, containing the abstract syntax tree, effect info and the
+    type-checking environment. Also contains the default Sail directory *)
 module State : sig
   type istate = {
     ctx : Initial_check.ctx;
@@ -60,10 +59,10 @@ module State : sig
     effect_info : Effects.side_effect_info;
     env : Type_check.Env.t;
     default_sail_dir : string;
-    config : Yojson.Basic.t option;
+    config : Yojson.Safe.t option;
   }
 
-  val initial_istate : Yojson.Basic.t option -> string -> istate
+  val initial_istate : Yojson.Safe.t option -> string -> istate
 end
 
 val arg : string -> string

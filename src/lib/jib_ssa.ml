@@ -55,7 +55,9 @@ module IntMap = Map.Make (struct
 end)
 
 let ssa_name i = function
+  | Gen (v1, v2, _) -> Gen (v1, v2, i)
   | Name (id, _) -> Name (id, i)
+  | Abstract id -> Abstract id
   | Have_exception _ -> Have_exception i
   | Current_exception _ -> Current_exception i
   | Throw_location _ -> Throw_location i
@@ -64,7 +66,9 @@ let ssa_name i = function
   | Return _ -> Return i
 
 let unssa_name = function
+  | Gen (v1, v2, n) -> (Gen (v1, v2, -1), n)
   | Name (id, n) -> (Name (id, -1), n)
+  | Abstract id -> (Abstract id, -1)
   | Have_exception n -> (Have_exception (-1), n)
   | Current_exception n -> (Current_exception (-1), n)
   | Throw_location n -> (Throw_location (-1), n)
@@ -112,8 +116,7 @@ let add_vertex data graph =
   graph.next <- n + 1;
   n
 
-(** Add an edge between two existing vertices. Raises Invalid_argument
-   if either of the vertices do not exist. *)
+(** Add an edge between two existing vertices. Raises Invalid_argument if either of the vertices do not exist. *)
 let add_edge n m graph =
   begin
     match graph.nodes.(n) with
@@ -296,12 +299,10 @@ let control_flow_graph instrs =
    swap the graph ordering. *)
 let graph_order ~post predecessors successors = if post then (successors, predecessors) else (predecessors, successors)
 
-(** Calculate the (immediate) dominators of a graph using the
-   Lengauer-Tarjan algorithm. This is the slightly less sophisticated
-   version from Appel's book 'Modern compiler implementation in ML'
-   which runs in O(n log(n)) time.
+(** Calculate the (immediate) dominators of a graph using the Lengauer-Tarjan algorithm. This is the slightly less
+    sophisticated version from Appel's book 'Modern compiler implementation in ML' which runs in O(n log(n)) time.
 
-   If the post flag is set this computes the post-dominators. *)
+    If the post flag is set this computes the post-dominators. *)
 let immediate_dominators ?(post = false) graph root =
   let none = -1 in
   let vertex = Array.make (cardinal graph) 0 in
@@ -380,8 +381,7 @@ let immediate_dominators ?(post = false) graph root =
   done;
   idom
 
-(** [(dominator_children idoms).(n)] are the nodes whose immediate dominator
-   (idom) is n. *)
+(** [(dominator_children idoms).(n)] are the nodes whose immediate dominator (idom) is n. *)
 let dominator_children idom =
   let none = -1 in
   let children = Array.make (Array.length idom) IntSet.empty in
@@ -392,8 +392,7 @@ let dominator_children idom =
   done;
   children
 
-(** [dominate idom n w] is true if n dominates w in the tree of
-   immediate dominators idom. *)
+(** [dominate idom n w] is true if n dominates w in the tree of immediate dominators idom. *)
 let rec dominate idom n w =
   let none = -1 in
   let p = idom.(n) in
@@ -542,12 +541,18 @@ let rename_variables globals graph root children =
     | V_member (id, ctyp) -> V_member (id, ctyp)
     | V_lit (vl, ctyp) -> V_lit (vl, ctyp)
     | V_call (id, fs) -> V_call (id, List.map fold_cval fs)
-    | V_field (f, field) -> V_field (fold_cval f, field)
+    | V_field (f, field, ctyp) -> V_field (fold_cval f, field, ctyp)
     | V_tuple_member (f, len, n) -> V_tuple_member (fold_cval f, len, n)
-    | V_ctor_kind (f, ctor, ctyp) -> V_ctor_kind (fold_cval f, ctor, ctyp)
+    | V_ctor_kind (f, ctor) -> V_ctor_kind (fold_cval f, ctor)
     | V_ctor_unwrap (f, ctor, ctyp) -> V_ctor_unwrap (fold_cval f, ctor, ctyp)
     | V_struct (fields, ctyp) -> V_struct (List.map (fun (field, cval) -> (field, fold_cval cval)) fields, ctyp)
-    | V_tuple (members, ctyp) -> V_tuple (List.map fold_cval members, ctyp)
+    | V_tuple members -> V_tuple (List.map fold_cval members)
+  in
+
+  let fold_init = function
+    | Init_cval cval -> Init_cval (fold_cval cval)
+    | Init_static vl -> Init_static vl
+    | Init_json_key parts -> Init_json_key parts
   in
 
   let rec fold_clexp rmw = function
@@ -563,7 +568,7 @@ let rename_variables globals graph root children =
         push_stack id i;
         CL_id (ssa_name i id, ctyp)
     | CL_rmw _ -> assert false
-    | CL_field (clexp, field) -> CL_field (fold_clexp true clexp, field)
+    | CL_field (clexp, field, ctyp) -> CL_field (fold_clexp true clexp, field, ctyp)
     | CL_addr clexp -> CL_addr (fold_clexp false clexp)
     | CL_tuple (clexp, n) -> CL_tuple (fold_clexp true clexp, n)
     | CL_void ctyp -> CL_void ctyp
@@ -587,12 +592,12 @@ let rename_variables globals graph root children =
           counts := NameMap.add id i !counts;
           push_stack id i;
           I_decl (ctyp, ssa_name i id)
-      | I_init (ctyp, id, cval) ->
-          let cval = fold_cval cval in
+      | I_init (ctyp, id, init) ->
+          let init = fold_init init in
           let i = get_count id + 1 in
           counts := NameMap.add id i !counts;
           push_stack id i;
-          I_init (ctyp, ssa_name i id, cval)
+          I_init (ctyp, ssa_name i id, init)
       | instr -> instr
     in
     I_aux (aux, annot)

@@ -54,15 +54,7 @@ $else
 $include <vector_inc.sail>
 $endif
 
-$iftarget c
-$define _EMULATOR_MEMORY_PRIMOPS
-$endif
-
-$iftarget ocaml
-$define _EMULATOR_MEMORY_PRIMOPS
-$endif
-
-$iftarget systemverilog
+$iftarget c cpp ocaml systemverilog
 $define _EMULATOR_MEMORY_PRIMOPS
 $endif
 

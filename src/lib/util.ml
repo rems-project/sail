@@ -237,6 +237,13 @@ let rec option_all = function
   | None :: _ -> None
   | Some x :: xs -> begin match option_all xs with None -> None | Some xs -> Some (x :: xs) end
 
+let rec result_all = function
+  | [] -> Ok []
+  | Error e :: _ -> Error e
+  | Ok x :: xs -> (
+      match result_all xs with Error e -> Error e | Ok xs -> Ok (x :: xs)
+    )
+
 let rec map_all (f : 'a -> 'b option) (l : 'a list) : 'b list option =
   match l with
   | [] -> Some []
@@ -342,8 +349,9 @@ let copy_file src dst =
 
 let move_file src dst =
   if Sys.file_exists dst then Sys.remove dst;
-  try (* try efficient version *)
-      Sys.rename src dst
+  try
+    (* try efficient version *)
+    Sys.rename src dst
   with Sys_error _ ->
     (* OK, do it the the hard way *)
     copy_file src dst;
@@ -484,6 +492,11 @@ let levenshtein_distance ?(osa = false) str1 str2 =
   done;
 
   dist.(String.length str1).(String.length str2)
+
+let string_for_all p str =
+  let acc = ref true in
+  String.iter (fun c -> acc := !acc && p c) str;
+  !acc
 
 let termcode n = if !opt_colors then "\x1B[" ^ string_of_int n ^ "m" else ""
 

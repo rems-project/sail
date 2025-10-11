@@ -84,7 +84,7 @@ let constructor name size =
 
 (* Helper functions to generate different kinds of field accessor exps and lexps *)
 let get_field_exp range inner_exp =
-  let mk_slice (i, j) = mk_exp (E_vector_subrange (inner_exp, mk_sizeof_exp i, mk_sizeof_exp j)) in
+  let mk_slice (i, j) = mk_exp (vector_subrange inner_exp (mk_sizeof_exp i) (mk_sizeof_exp j)) in
   let rec aux = function
     | [e] -> e
     | e :: es -> mk_exp (E_vector_append (e, aux es))
@@ -92,7 +92,7 @@ let get_field_exp range inner_exp =
   in
   aux (List.map mk_slice (indices_of_range range))
 
-let construct_bitfield_struct _ exp = mk_exp (E_struct [mk_fexp (mk_id "bits") exp])
+let construct_bitfield_struct _ exp = mk_exp (E_struct (SN_anon, [mk_fexp (mk_id "bits") exp]))
 
 let construct_bitfield_exp name exp = mk_exp (E_app (prepend_id "Mk_" name, [exp]))
 
@@ -116,10 +116,10 @@ let update_field_exp range order inner_exp new_value =
           if single then new_value
           else begin
             let vj = if is_order_inc order then nminus vi' (nint 1) else nsum vi' (nint 1) in
-            mk_exp (E_vector_subrange (new_value, mk_sizeof_exp vi, mk_sizeof_exp vj))
+            mk_exp (vector_subrange new_value (mk_sizeof_exp vi) (mk_sizeof_exp vj))
           end
         in
-        let update = mk_exp (E_vector_update_subrange (e, mk_sizeof_exp i, mk_sizeof_exp j, rhs)) in
+        let update = mk_exp (vector_update_subrange e (mk_sizeof_exp i) (mk_sizeof_exp j) rhs) in
         aux update vi' is
     | [] -> e
   in

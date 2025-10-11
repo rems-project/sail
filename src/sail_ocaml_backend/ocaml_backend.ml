@@ -214,7 +214,7 @@ let rec ocaml_pat ctx (P_aux (pat_aux, (l, _)) as pat) =
       | _ -> zencode_upper ctx id ^^ space ^^ parens (separate_map (comma ^^ space) (ocaml_pat ctx) pats)
     end
   | P_cons (hd_pat, tl_pat) -> ocaml_pat ctx hd_pat ^^ string " :: " ^^ ocaml_pat ctx tl_pat
-  | P_struct (fpats, FP_no_wild) ->
+  | P_struct (_, fpats, FP_no_wild) ->
       lbrace ^^ space
       ^^ separate_map (semi ^^ space) (fun (field, p) -> ocaml_fpat (pat_record_id l pat) ctx field p) fpats
       ^^ space ^^ rbrace
@@ -260,14 +260,6 @@ let rec ocaml_exp ctx (E_aux (exp_aux, (l, _)) as exp) =
           | xs -> zencode ctx f ^^ space ^^ parens (separate_map (comma ^^ space) (ocaml_atomic_exp ctx) xs)
         end
     end
-  | E_vector_subrange (exp1, exp2, exp3) -> begin
-      match Env.get_default_order_opt (env_of exp) with
-      | Some (Ord_aux (Ord_inc, _)) ->
-          string "subrange_inc" ^^ space
-          ^^ parens (separate_map (comma ^^ space) (ocaml_atomic_exp ctx) [exp1; exp2; exp3])
-      | _ ->
-          string "subrange" ^^ space ^^ parens (separate_map (comma ^^ space) (ocaml_atomic_exp ctx) [exp1; exp2; exp3])
-    end
   | E_return exp -> separate space [string "r.return"; ocaml_atomic_exp ctx exp]
   | E_assert (exp, _) -> separate space [string "assert"; ocaml_atomic_exp ctx exp]
   | E_typ (_, exp) -> ocaml_exp ctx exp
@@ -281,18 +273,20 @@ let rec ocaml_exp ctx (E_aux (exp_aux, (l, _)) as exp) =
       begin_end (separate space [string "match"; ocaml_atomic_exp ctx exp; string "with"] ^/^ ocaml_pexps ctx pexps)
   | E_try (exp, pexps) ->
       begin_end (separate space [string "try"; ocaml_atomic_exp ctx exp; string "with"] ^/^ ocaml_pexps ctx pexps)
-  | E_assign (lexp, exp) -> ocaml_assignment ctx lexp exp
+  | E_assign (lexp, exp) -> parens (ocaml_assignment ctx lexp exp)
   | E_if (c, t, e) ->
-      separate space
-        [
-          string "if";
-          ocaml_atomic_exp ctx c;
-          string "then";
-          ocaml_atomic_exp ctx t;
-          string "else";
-          ocaml_atomic_exp ctx e;
-        ]
-  | E_struct fexps ->
+      parens
+        (separate space
+           [
+             string "if";
+             ocaml_atomic_exp ctx c;
+             string "then";
+             ocaml_atomic_exp ctx t;
+             string "else";
+             ocaml_atomic_exp ctx e;
+           ]
+        )
+  | E_struct (_, fexps) ->
       enclose lbrace rbrace (group (separate_map (semi ^^ break 1) (ocaml_fexp (record_id l exp) ctx) fexps))
   | E_struct_update (exp, fexps) ->
       enclose lbrace rbrace
@@ -419,7 +413,19 @@ and ocaml_atomic_exp ctx (E_aux (exp_aux, _) as exp) =
       | Local (Mutable, _) -> bang ^^ zencode ctx id
     end
   | E_list exps -> enclose lbracket rbracket (separate_map (semi ^^ space) (ocaml_exp ctx) exps)
-  | E_tuple exps -> parens (separate_map (comma ^^ space) (ocaml_exp ctx) exps)
+  | E_tuple exps ->
+      let len = List.length exps in
+      let flip =
+        separate space
+          [
+            string "fun";
+            parens (separate (comma ^^ space) (List.init len (fun n -> string ("v" ^ string_of_int n))));
+            string "->";
+            parens (separate (comma ^^ space) (List.init len (fun n -> string ("v" ^ string_of_int (len - (n + 1))))));
+          ]
+        |> parens
+      in
+      parens (flip ^^ space ^^ parens (separate_map (comma ^^ space) (ocaml_exp ctx) (List.rev exps)))
   | _ -> parens (ocaml_exp ctx exp)
 
 and ocaml_assignment ctx (LE_aux (lexp_aux, _) as lexp) exp =
@@ -466,7 +472,7 @@ let rec get_initialize_registers = function
   | DEF_aux
       ( DEF_fundef
           (FD_aux
-            (FD_function (_, _, [FCL_aux (FCL_funcl (id, Pat_aux (Pat_exp (_, E_aux (E_block inits, _)), _)), _)]), _)
+             (FD_function (_, _, [FCL_aux (FCL_funcl (id, Pat_aux (Pat_exp (_, E_aux (E_block inits, _)), _)), _)]), _)
             ),
         _
       )
@@ -691,8 +697,8 @@ let ocaml_fundef ctx (FD_aux (FD_function (_, _, funcls), _)) = ocaml_funcls ctx
 let rec ocaml_fields ctx =
   let ocaml_field typ id = separate space [zencode ctx id; colon; ocaml_typ ctx typ] in
   function
-  | [(typ, id)] -> ocaml_field typ id
-  | (typ, id) :: fields -> ocaml_field typ id ^^ semi ^/^ ocaml_fields ctx fields
+  | [((id, typ), _)] -> ocaml_field typ id
+  | ((id, typ), _) :: fields -> ocaml_field typ id ^^ semi ^/^ ocaml_fields ctx fields
   | [] -> empty
 
 let rec ocaml_cases polymorphic_variant ctx =
@@ -701,7 +707,9 @@ let rec ocaml_cases polymorphic_variant ctx =
     separate space [bar; name; string "of"; ocaml_typ ctx typ]
   in
   function
-  | [tu] -> ocaml_case tu | tu :: tus -> ocaml_case tu ^/^ ocaml_cases polymorphic_variant ctx tus | [] -> empty
+  | [tu] -> ocaml_case tu
+  | tu :: tus -> ocaml_case tu ^/^ ocaml_cases polymorphic_variant ctx tus
+  | [] -> empty
 
 let rec ocaml_exceptions ctx =
   let ocaml_exception (Tu_aux (Tu_ty_id (typ, id), _)) =
@@ -729,7 +737,7 @@ let ocaml_struct_type ctx id = zencode_upper ctx id ^^ dot ^^ zencode ctx id
 
 let ocaml_string_of_struct ctx struct_id typq fields =
   let arg = gensym () in
-  let ocaml_field (typ, id) =
+  let ocaml_field ((id, typ), _) =
     separate space
       [
         string (string_of_id id ^ " = \"");
@@ -750,7 +758,13 @@ let ocaml_string_of_struct ctx struct_id typq fields =
 
 let ocaml_string_of_abbrev ctx id typq typ =
   let arg = gensym () in
-  separate space [string "let"; ocaml_string_of id; parens (arg ^^ space ^^ colon ^^ space ^^ zencode ctx id); equals]
+  separate space
+    [
+      string "let";
+      ocaml_string_of id;
+      parens (arg ^^ space ^^ colon ^^ space ^^ ocaml_typquant typq ^^ space ^^ zencode ctx id);
+      equals;
+    ]
   ^//^ ocaml_string_typ typ arg
 
 let ocaml_string_of_variant ctx id typq cases =
@@ -876,7 +890,7 @@ let ocaml_pp_generators ctx defs orig_types required =
     | TD_abbrev (_, _, A_aux (A_typ typ, _)) -> add_req_from_typ required typ
     | TD_abbrev _ -> required
     | TD_abstract _ -> required
-    | TD_record (_, _, fields, _) -> List.fold_left (fun req (typ, _) -> add_req_from_typ req typ) required fields
+    | TD_record (_, _, fields, _) -> List.fold_left (fun req ((_, typ), _) -> add_req_from_typ req typ) required fields
     | TD_variant (_, _, variants, _) ->
         List.fold_left (fun req (Tu_aux (Tu_ty_id (typ, _), _)) -> add_req_from_typ req typ) required variants
     | TD_enum _ -> required
@@ -970,7 +984,7 @@ let ocaml_pp_generators ctx defs orig_types required =
       let build_enum_constructor id =
         separate space [bar; dquotes (string (string_of_id id)); string "->"; zencode_upper ctx id]
       in
-      let rand_field (typ, id) = zencode ctx id ^^ space ^^ equals ^^ space ^^ make_subgen typ in
+      let rand_field ((id, typ), _) = zencode ctx id ^^ space ^^ equals ^^ space ^^ make_subgen typ in
       let make_args tqs =
         string "g"
         ^^
@@ -1068,6 +1082,7 @@ let ocaml_ast ast generator_info =
     | Some (types, req) -> ocaml_pp_generators ctx ast.defs types (List.map mk_id req)
   in
   (string "open Sail_lib;;" ^^ hardline)
+  ^^ (string "open Value_type;;" ^^ hardline)
   ^^ (string "module Big_int = Nat_big_num" ^^ ocaml_def_end)
   ^^ concat (List.map (ocaml_def ctx) ast.defs)
   ^^ empty_reg_init ^^ gen_pp
@@ -1118,6 +1133,7 @@ let ocaml_compile default_sail_dir spec ast generator_types =
   let _ = Unix.system ("cp -r " ^ Filename.quote (sail_dir ^ "/src/lib/elf_loader.ml") ^ " .") in
   let _ = Unix.system ("cp -r " ^ Filename.quote (sail_dir ^ "/src/lib/sail_lib.ml") ^ " .") in
   let _ = Unix.system ("cp -r " ^ Filename.quote (sail_dir ^ "/src/lib/util.ml") ^ " .") in
+  let _ = Unix.system ("cp -r " ^ Filename.quote (sail_dir ^ "/src/lib/extraction/.") ^ " .") in
   let tags_file = if !opt_ocaml_coverage then "_tags_coverage" else "_tags" in
   let _ = Unix.system ("cp -r " ^ Filename.quote (sail_dir ^ "/lib/" ^ tags_file) ^ " _tags") in
   let out_chan = open_out (spec ^ ".ml") in

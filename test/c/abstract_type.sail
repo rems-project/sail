@@ -1,8 +1,6 @@
 default Order dec
 $include <prelude.sail>
 
-$option --abstract-types
-
 type xlen : Int
 
 constraint xlen in {32, 64}
@@ -12,7 +10,7 @@ constraint xlen in {32, 64}
 // here to make this work as a single file test case).
 //
 // Otherwise, use the --instantiate flag to set it at build time.
-$iftarget c
+$iftarget c cpp
 $c_in_main sail_set_abstract_xlen(32);
 $else
 $option --instantiate xlen=32

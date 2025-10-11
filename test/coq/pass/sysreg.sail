@@ -14,8 +14,8 @@ instantiation sail_mem_read with
   'abort = unit,
   pa_bits = pa_bits
 
-instantiation sail_sys_reg_read with 'id = (bits(2), bits(3))
-instantiation sail_sys_reg_write with 'id = (bits(2), bits(3))
+instantiation sail_sys_reg_read with 'sys_reg_id = (bits(2), bits(3))
+instantiation sail_sys_reg_write with 'sys_reg_id = (bits(2), bits(3))
 
 register ABC : bits(64)
 

@@ -277,8 +277,8 @@ module DigestMap = Map.Make (Digest)
 let known_problems = ref DigestMap.empty
 let known_uniques = ref DigestMap.empty
 
-let load_digests_err () =
-  let in_chan = open_in_bin "z3_problems" in
+let load_digests_err path =
+  let in_chan = open_in_bin path in
   let rec load () =
     let digest = Digest.input in_chan in
     let result = input_byte in_chan in
@@ -302,10 +302,10 @@ let load_digests_err () =
   in
   try load () with End_of_file -> close_in in_chan
 
-let load_digests () = try load_digests_err () with Sys_error _ -> ()
+let load_digests path = try load_digests_err path with Sys_error _ -> ()
 
-let save_digests () =
-  let out_chan = open_out_bin "z3_problems" in
+let save_digests path =
+  let out_chan = open_out_bin path in
   let output_problem digest result =
     Digest.output out_chan digest;
     match result with
@@ -542,8 +542,8 @@ let call_smt_solve_bitvector l smt_file smt_vars =
           let prefix = Str.matched_group 1 smt_output in
           let result = Str.matched_group 2 smt_output in
           match prefix with
-          | "#b" -> Some (smt_var, mk_lit (L_bin result))
-          | "#x" -> Some (smt_var, mk_lit (L_hex result))
+          | "#b" -> Some (smt_var, mk_lit (L_bin (Option.get @@ Initial_check.parse_bin_lit result)))
+          | "#x" -> Some (smt_var, mk_lit (L_hex (Option.get @@ Initial_check.parse_hex_lit result)))
           | _ -> raise (Reporting.err_general l "Could not parse bitvector value from SMT solver")
         )
       with Not_found -> None

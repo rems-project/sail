@@ -49,14 +49,13 @@ open Ast_defs
 open Ast_util
 open Type_check
 
-(** [const_prop target ast ref_vars substs assigns exp] performs constant propagation
-    on [exp] where [substs] is a pair of substitutions on immutable variables
-    and type variables, [assigns] is a substitution on mutable variables, and
-    [ref_vars] is the set of variable which may have had a reference taken
-    (and hence we cannot reliably track). *)
+(** [const_prop target ast ref_vars substs assigns exp] performs constant propagation on [exp] where [substs] is a pair
+    of substitutions on immutable variables and type variables, [assigns] is a substitution on mutable variables, and
+    [ref_vars] is the set of variable which may have had a reference taken (and hence we cannot reliably track). *)
 
 val const_prop :
   string ->
+  Env.t ->
   typed_ast ->
   IdSet.t ->
   tannot exp Bindings.t * nexp KBindings.t ->

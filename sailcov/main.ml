@@ -186,10 +186,8 @@ let read_more_coverage filename spans =
 
 let read_coverage filename = read_more_coverage filename StringMap.empty
 
-(** We color the source either red (bad) or green (good) if it's
-   covered vs uncovered. If we have nested uncovered branches, they
-   will be increasingly bad, whereas nested covered branches will be
-   increasingly good. *)
+(** We color the source either red (bad) or green (good) if it's covered vs uncovered. If we have nested uncovered
+    branches, they will be increasingly bad, whereas nested covered branches will be increasingly good. *)
 type source_char = { mutable badness : int; mutable goodness : int; mutable bad_zero_width : bool; char : char }
 
 let zero_width span = span.l1 = span.l2 && span.c1 = span.c2

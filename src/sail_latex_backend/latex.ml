@@ -370,7 +370,6 @@ let doc_spec_simple (VS_aux (VS_val_spec (ts, id, ext), _)) =
   Pretty_print_sail.doc_id id ^^ space ^^ colon ^^ space ^^ Pretty_print_sail.doc_typschm ts
 
 let latex_command ~docstring cat id no_loc l =
-  state.this <- Some id;
   (* To avoid problems with verbatim environments in commands, we have
      to put the sail code for each command in a separate file. *)
   let code_file = category_name cat ^ Util.file_encode_string (string_of_id id) ^ ".tex" in
@@ -393,7 +392,7 @@ let latex_command ~docstring cat id no_loc l =
   end
 
 let latex_docstring (def_annot : 'a Ast.def_annot) =
-  match def_annot.doc_comment with Some contents -> string (latex_of_markdown contents) | None -> empty
+  match def_annot.doc_comment with Some { contents; _ } -> string (latex_of_markdown contents) | None -> empty
 
 let latex_funcls def =
   let module StringMap = Map.Make (String) in
@@ -451,14 +450,6 @@ let process_pragma l command =
       Reporting.warn "Bad latex pragma at" l "";
       None
 
-let tdef_id = function
-  | TD_abstract (id, _) -> id
-  | TD_abbrev (id, _, _) -> id
-  | TD_record (id, _, _, _) -> id
-  | TD_variant (id, _, _, _) -> id
-  | TD_enum (id, _, _) -> id
-  | TD_bitfield (id, _, _) -> id
-
 let defs { defs; _ } =
   reset_state state;
 
@@ -485,6 +476,7 @@ let defs { defs; _ } =
   let outcomedefs = ref Bindings.empty in
 
   let latex_def (DEF_aux (aux, def_annot) as def) =
+    state.this <- (match ids_of_def def |> IdSet.elements with [id] -> Some id | _ -> None);
     let docstring = latex_docstring def_annot in
     match aux with
     | DEF_overload (id, ids) ->
@@ -510,12 +502,12 @@ let defs { defs; _ } =
               letdefs := IdSet.fold (fun id -> Bindings.add id base_id) ids !letdefs;
               Some (latex_command ~docstring Let base_id (Pretty_print_sail.doc_def def) (fst annot))
         end
-    | DEF_type (TD_aux (tdef, annot)) ->
-        let id = tdef_id tdef in
+    | DEF_type (TD_aux (_, annot) as tdef) ->
+        let id = id_of_type_def tdef in
         typedefs := Bindings.add id id !typedefs;
         Some (latex_command ~docstring Type id (Pretty_print_sail.doc_def def) (fst annot))
     | DEF_fundef (FD_aux (FD_function (_, _, funcls), annot)) as def -> Some (latex_funcls def funcls)
-    | DEF_pragma ("latex", command, l) -> process_pragma l command
+    | DEF_pragma ("latex", Pragma_line (command, l)) -> process_pragma l command
     | DEF_register (DEC_aux (_, annot) as dec) ->
         let id = id_of_dec_spec dec in
         regdefs := Bindings.add id id !regdefs;

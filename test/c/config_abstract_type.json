@@ -1,0 +1,10 @@
+{
+    "arch"  : {
+        "xlen" : 32
+    },
+    "registers" : {
+        "R" : {
+            "init" : { "len" : "xlen", "value" : "0x3232_3232" }
+        }
+    }
+}

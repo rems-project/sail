@@ -79,6 +79,7 @@ union diafp = {
 }
 
 $option --coq-extern-type read_kind
+$option --lem-extern-type read_kind
 enum read_kind = {
   Read_plain,
   Read_reserve,
@@ -96,6 +97,7 @@ enum read_kind = {
 }
 
 $option --coq-extern-type write_kind
+$option --lem-extern-type write_kind
 enum write_kind = {
   Write_plain,
   Write_conditional,
@@ -111,6 +113,7 @@ enum write_kind = {
 }
 
 $option --coq-extern-type barrier_kind
+$option --lem-extern-type barrier_kind
 $ifdef ARM_SPEC
 enum barrier_kind = {
   Barrier_DMB_SY,
@@ -141,6 +144,7 @@ enum barrier_kind = {
 }
 $else
 $option --coq-extern-type a64_barrier_domain
+$option --lem-extern-type a64_barrier_domain
 enum a64_barrier_domain = {
   A64_FullShare,
   A64_InnerShare,
@@ -149,6 +153,7 @@ enum a64_barrier_domain = {
 }
 
 $option --coq-extern-type a64_barrier_type
+$option --lem-extern-type a64_barrier_type
 enum a64_barrier_type = {
   A64_barrier_all,
   A64_barrier_LD,
@@ -180,6 +185,7 @@ union barrier_kind = {
 $endif
 
 $option --coq-extern-type trans_kind
+$option --lem-extern-type trans_kind
 enum trans_kind = {
   Transaction_start,
   Transaction_commit,
@@ -188,6 +194,7 @@ enum trans_kind = {
 
 /* cache maintenance instructions */
 $option --coq-extern-type cache_op_kind
+$option --lem-extern-type cache_op_kind
 enum cache_op_kind = {
   /* AArch64 DC */
   Cache_op_D_IVAC, Cache_op_D_ISW,  Cache_op_D_CSW,  Cache_op_D_CISW,
@@ -198,6 +205,7 @@ enum cache_op_kind = {
 
 
 $option --coq-extern-type instruction_kind
+$option --lem-extern-type instruction_kind
 union instruction_kind = {
   IK_barrier : barrier_kind,
   IK_mem_read : read_kind,
@@ -210,55 +218,55 @@ union instruction_kind = {
 }
 
 val __read_mem
-  = impure { ocaml: "Platform.read_mem", c: "platform_read_mem", _: "read_mem" }
+  = impure { ocaml: "Platform.read_mem", c: "platform_read_mem", cpp: "platform_read_mem", _: "read_mem" }
   : forall 'n 'addrsize, 'n > 0 & 'addrsize in {32, 64}.
   (read_kind, int('addrsize), bits('addrsize), int('n)) -> bits(8 * 'n)
 
 val __read_memt
-  = impure { ocaml: "Platform.read_memt", c: "platform_read_memt", _: "read_memt" }
+  = impure { ocaml: "Platform.read_memt", c: "platform_read_memt", cpp: "platform_read_memt", _: "read_memt" }
   : forall 'n 'addrsize, 'n > 0 & 'addrsize in {32, 64}.
   (read_kind, bits('addrsize), int('n)) -> (bits(8 * 'n), bit)
 
 val __write_mem_ea
-  = impure { ocaml: "Platform.write_mem_ea", c: "platform_write_mem_ea", _: "write_mem_ea" }
+  = impure { ocaml: "Platform.write_mem_ea", c: "platform_write_mem_ea", cpp: "platform_write_mem_ea", _: "write_mem_ea" }
   : forall 'n 'addrsize, 'n > 0 & 'addrsize in {32, 64}.
   (write_kind, int('addrsize), bits('addrsize), int('n)) -> unit
 
 val __write_mem
-  = impure { ocaml: "Platform.write_mem", c: "platform_write_mem", _: "write_mem" }
+  = impure { ocaml: "Platform.write_mem", c: "platform_write_mem", cpp: "platform_write_mem", _: "write_mem" }
   : forall 'n 'addrsize, 'n > 0 & 'addrsize in {32, 64}.
   (write_kind, int('addrsize), bits('addrsize), int('n), bits(8 * 'n)) -> bool
 
 val __write_memt
-  = impure { ocaml: "Platform.write_memt", c: "platform_write_memt", _: "write_memt" }
+  = impure { ocaml: "Platform.write_memt", c: "platform_write_memt", cpp: "platform_write_memt", _: "write_memt" }
   : forall 'n 'addrsize, 'n > 0 & 'addrsize in {32, 64}.
   (write_kind, bits('addrsize), int('n), bits(8 * 'n), bit) -> bool
 
 val __write_tag
-  = impure { ocaml: "Platform.write_tag", c: "platform_write_tag", _: "write_tag" }
+  = impure { ocaml: "Platform.write_tag", c: "platform_write_tag", cpp: "platform_write_tag", _: "write_tag" }
   : forall 'addrsize, 'addrsize in {32, 64}.
   (write_kind, bits('addrsize), bit) -> bool
 
 val __excl_res
-  = impure { ocaml: "Platform.excl_res", c: "platform_excl_res", _: "excl_result" }
+  = impure { ocaml: "Platform.excl_res", c: "platform_excl_res", cpp: "platform_excl_res", _: "excl_result" }
   : unit -> bool
 
 val __barrier
-  = impure { ocaml: "Platform.barrier", c: "platform_barrier", _: "barrier" }
+  = impure { ocaml: "Platform.barrier", c: "platform_barrier", cpp: "platform_barrier", _: "barrier" }
   : barrier_kind -> unit
 
 val __branch_announce
-  = impure { ocaml: "Platform.branch_announce", c: "platform_branch_announce", _ : "branch_announce" }
+  = impure { ocaml: "Platform.branch_announce", c: "platform_branch_announce", cpp: "platform_branch_announce", _ : "branch_announce" }
   : forall 'addrsize, 'addrsize in {32, 64}.
   (int('addrsize), bits('addrsize)) -> unit
 
 val __cache_maintenance
-  = impure { ocaml: "Platform.cache_maintenance", c: "platform_cache_maintenance", _ : "cache_maintenance" }
+  = impure { ocaml: "Platform.cache_maintenance", c: "platform_cache_maintenance", cpp: "platform_cache_maintenance", _ : "cache_maintenance" }
   : forall 'addrsize, 'addrsize in {32, 64}.
   (cache_op_kind, int('addrsize), bits('addrsize)) -> unit
 
 val __instr_announce
-  = impure { ocaml: "Platform.instr_announce", c: "platform_instr_announce", _: "instr_announce" }
+  = impure { ocaml: "Platform.instr_announce", c: "platform_instr_announce", cpp: "platform_instr_announce", _: "instr_announce" }
   : forall 'n, 'n > 0.
   bits('n) -> unit
 

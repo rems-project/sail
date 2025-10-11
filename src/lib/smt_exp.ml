@@ -256,12 +256,19 @@ module SimpSet = struct
   let add_var_inequality v exp simpset =
     match to_simp_var v with
     | None -> simpset
-    | Some v ->
-        {
-          simpset with
-          inequalities =
-            SimpVarMap.update v (function None -> Some [exp] | Some exps -> Some (exp :: exps)) simpset.inequalities;
-        }
+    | Some simp_v -> (
+        match exp with
+        | Bitvec_lit [Sail2_values.B0] -> add_var v (Bitvec_lit [Sail2_values.B1]) simpset
+        | Bitvec_lit [Sail2_values.B1] -> add_var v (Bitvec_lit [Sail2_values.B0]) simpset
+        | _ ->
+            {
+              simpset with
+              inequalities =
+                SimpVarMap.update simp_v
+                  (function None -> Some [exp] | Some exps -> Some (exp :: exps))
+                  simpset.inequalities;
+            }
+      )
 
   let add_var_is_ctor v ctor simpset = { simpset with is_ctor = NameMap.add v ctor simpset.is_ctor }
 
@@ -679,7 +686,14 @@ module Simplifier = struct
     | Fn ("and", (Fn ("not", [Fn ("=", [lit; v])]) as x) :: xs) when is_literal lit && SimpSet.is_simp_var v ->
         Reconstruct (0, SimpSet.add_var_inequality v lit simpset, smt_conj xs, add_to_and x)
     | Fn ("and", (Tester (ctor, Var v) as x) :: xs) ->
-        Reconstruct (0, SimpSet.add_var_is_ctor v ctor simpset, smt_conj xs, add_to_and x) | _ -> NoChange
+        Reconstruct (0, SimpSet.add_var_is_ctor v ctor simpset, smt_conj xs, add_to_and x)
+    | _ -> NoChange
+
+  let rule_ite_assume =
+    mk_rule __LOC__ @@ fun simpset -> function
+    | Ite ((Fn ("=", [v; lit]) as i), t, e) when is_literal lit && SimpSet.is_simp_var v ->
+        Reconstruct (0, SimpSet.add_var_inequality v lit simpset, e, fun e -> Ite (i, t, e))
+    | _ -> NoChange
 
   let is_equality = function
     | Fn ("=", [v; lit]) when is_literal lit && SimpSet.is_simp_var v -> Some (v, lit)
@@ -728,19 +742,22 @@ module Simplifier = struct
   let rule_or_assume =
     mk_rule __LOC__ @@ fun simpset -> function
     | Fn ("or", v :: xs) when SimpSet.is_simp_var v ->
-        Reconstruct (0, SimpSet.add_var v (Bool_lit false) simpset, smt_disj xs, add_to_or v) | _ -> NoChange
+        Reconstruct (0, SimpSet.add_var v (Bool_lit false) simpset, smt_disj xs, add_to_or v)
+    | _ -> NoChange
 
   let rule_var =
     mk_rule __LOC__ @@ fun simpset -> function
     | v when SimpSet.is_simp_var v -> (
         match SimpSet.find_opt v simpset with Some exp -> change exp | None -> NoChange
-      ) | _ -> NoChange
+      )
+    | _ -> NoChange
 
   let rule_tester =
     mk_rule __LOC__ @@ fun simpset -> function
     | Tester (ctor, Var v) -> (
         match SimpSet.is_ctor v ctor simpset with Some b -> change (Bool_lit b) | _ -> NoChange
-      ) | _ -> NoChange
+      )
+    | _ -> NoChange
 
   let rule_access_ite =
     mk_simple_rule __LOC__ @@ function
@@ -765,7 +782,8 @@ module Simplifier = struct
             (fun exp -> match simp_eq lit exp with Some true -> true | _ -> false)
             (SimpSet.inequalities v simpset)
         then change (Bool_lit true)
-        else NoChange | _ -> NoChange
+        else NoChange
+    | _ -> NoChange
 
   let rule_not_not = mk_simple_rule __LOC__ @@ function Fn ("not", [Fn ("not", [exp])]) -> change exp | _ -> NoChange
 
@@ -782,10 +800,13 @@ module Simplifier = struct
     | _ -> NoChange
 
   let is_bvfunction = function
-    | "bvnot" | "bvand" | "bvor" | "bvxor" | "bvshl" | "bvlshr" | "bvashr" | "bvadd" | "bvsub" -> true
+    | "bvnot" | "bvand" | "bvor" | "bvxor" | "bvshl" | "bvlshr" | "bvashr" | "bvadd" | "bvsub" | "bvslt" | "bvsle"
+    | "bvsgt" | "bvsge" ->
+        true
     | _ -> false
 
   let rule_bvfunction_literal =
+    let open Sail2_values in
     let open Sail2_operators_bitlists in
     mk_simple_rule __LOC__ @@ function
     | Fn (f, args) -> (
@@ -808,6 +829,26 @@ module Simplifier = struct
         | "bvashr", [Bitvec_lit lhs; Bitvec_lit rhs] -> begin
             match sint_maybe rhs with Some shift -> change (Bitvec_lit (arith_shiftr lhs shift)) | None -> NoChange
           end
+        | "bvslt", [Bitvec_lit lhs; Bitvec_lit rhs] -> (
+            match (sint_maybe lhs, sint_maybe rhs) with
+            | Some lhs, Some rhs -> change (Bool_lit (Big_int.less lhs rhs))
+            | _ -> NoChange
+          )
+        | "bvsle", [Bitvec_lit lhs; Bitvec_lit rhs] -> (
+            match (sint_maybe lhs, sint_maybe rhs) with
+            | Some lhs, Some rhs -> change (Bool_lit (Big_int.less_equal lhs rhs))
+            | _ -> NoChange
+          )
+        | "bvsgt", [Bitvec_lit lhs; Bitvec_lit rhs] -> (
+            match (sint_maybe lhs, sint_maybe rhs) with
+            | Some lhs, Some rhs -> change (Bool_lit (Big_int.greater lhs rhs))
+            | _ -> NoChange
+          )
+        | "bvsge", [Bitvec_lit lhs; Bitvec_lit rhs] -> (
+            match (sint_maybe lhs, sint_maybe rhs) with
+            | Some lhs, Some rhs -> change (Bool_lit (Big_int.greater_equal lhs rhs))
+            | _ -> NoChange
+          )
         | _ -> NoChange
       )
     | _ -> NoChange
@@ -818,6 +859,18 @@ module Simplifier = struct
         change (Bitvec_lit (Sail2_operators_bitlists.zero_extend bv (Big_int.of_int to_len)))
     | SignExtend (to_len, by_len, Bitvec_lit bv) ->
         change (Bitvec_lit (Sail2_operators_bitlists.sign_extend bv (Big_int.of_int to_len)))
+    | _ -> NoChange
+
+  let rule_extract_shift =
+    let open Sail2_operators_bitlists in
+    mk_simple_rule __LOC__ @@ function
+    | Extract (n, m, len, Fn ("bvlshr", [bv; Bitvec_lit shift])) -> (
+        match sint_maybe shift with
+        | Some shift when Big_int.less (Big_int.add (Big_int.of_int n) shift) (Big_int.of_int len) ->
+            let shift = Big_int.to_int shift in
+            change (Extract (n + shift, m + shift, len, bv))
+        | _ -> NoChange
+      )
     | _ -> NoChange
 
   let rule_extract =
@@ -901,7 +954,11 @@ let simp simpset exp =
     match exp with
     | Ite _ ->
         run_strategy simpset exp
-          (Then [rule_same_ite; Repeat rule_squash_ite; rule_or_ite; rule_ite_lit; rule_ite_literal])
+          (Then
+             [
+               rule_same_ite; Repeat rule_squash_ite; rule_or_ite; rule_ite_lit; rule_ite_literal; Repeat rule_ite_assume;
+             ]
+          )
     | Fn ("and", _) ->
         run_strategy simpset exp
           (Then
@@ -938,7 +995,7 @@ let simp simpset exp =
     | Fn (bvf, _) when is_bvfunction bvf -> run_strategy simpset exp rule_bvfunction_literal
     | ZeroExtend _ -> run_strategy simpset exp rule_extend_literal
     | SignExtend _ -> run_strategy simpset exp rule_extend_literal
-    | Extract _ -> run_strategy simpset exp rule_extract
+    | Extract _ -> run_strategy simpset exp (Then [rule_extract_shift; rule_extract])
     | Field _ -> run_strategy simpset exp (Then [rule_var; rule_access_ite])
     | Unwrap _ -> run_strategy simpset exp rule_access_ite
     | Tester _ -> run_strategy simpset exp (Then [rule_tester; rule_access_ite])
@@ -1017,7 +1074,7 @@ let string_of_smt_def def = Pretty_print_sail.Document.to_string (pp_smt_def def
 
 type counterexample_solver = Cvc5 | Cvc4 | Z3
 
-let counterexample_command = function Cvc5 -> "cvc5 --lang=smt2.6" | Cvc4 -> "cvc4 --lang=smt2.6" | Z3 -> "z3"
+let counterexample_command = function Cvc5 -> "cvc5 --lang=smt2.6" | Cvc4 -> "cvc4 --lang=smt2.6" | Z3 -> "z3 -model"
 
 let counterexample_solver_from_name name =
   match String.lowercase_ascii name with "cvc4" -> Some Cvc4 | "cvc5" -> Some Cvc5 | "z3" -> Some Z3 | _ -> None
@@ -1069,26 +1126,32 @@ module Counterexample (Config : COUNTEREXAMPLE_CONFIG) = struct
         Some (Big_int.of_string ("0x" ^ v))
     | _ -> None
 
-  let rec value_of_sexpr sexpr =
+  let rec value_of_sexpr l ctx sexpr =
     let open Jib in
+    let open Value_type in
     let open Value in
     function
     | CT_fbits width -> begin
         match parse_sexpr_int width sexpr with
         | Some value -> mk_vector (Sail_lib.get_slice_int' (width, value, 0))
-        | None -> failwith ("Cannot parse sexpr as bitvector: " ^ string_of_sexpr sexpr)
+        | None -> raise (Reporting.err_general l ("Cannot parse sexpr as bitvector: " ^ string_of_sexpr sexpr))
       end
-    | CT_struct (_, fields) -> begin
+    | CT_struct _ as ctyp -> begin
+        let fields = Jib_compile.struct_field_bindings l ctx ctyp |> snd |> Bindings.bindings in
         match sexpr with
         | List (Atom name :: smt_fields) ->
             V_record
               (List.fold_left2
-                 (fun m (field_id, ctyp) sexpr -> StringMap.add (string_of_id field_id) (value_of_sexpr sexpr ctyp) m)
+                 (fun m (field_id, ctyp) sexpr ->
+                   StringMap.add (string_of_id field_id) (value_of_sexpr l ctx sexpr ctyp) m
+                 )
                  StringMap.empty fields smt_fields
+              |> StringMap.bindings
               )
-        | _ -> failwith ("Cannot parse sexpr as struct " ^ string_of_sexpr sexpr)
+        | _ -> raise (Reporting.err_general l ("Cannot parse sexpr as struct " ^ string_of_sexpr sexpr))
       end
-    | CT_enum (_, members) -> begin
+    | CT_enum enum_id -> begin
+        let members = Jib_compile.enum_members l ctx enum_id |> IdSet.elements in
         match sexpr with
         | Atom name -> begin
             match List.find_opt (fun member -> Util.zencode_string (string_of_id member) = name) members with
@@ -1117,15 +1180,15 @@ module Counterexample (Config : COUNTEREXAMPLE_CONFIG) = struct
       end
     | ctyp -> failwith ("Unsupported type in sexpr: " ^ Jib_util.string_of_ctyp ctyp)
 
-  let rec find_arg id ctyp arg_smt_names = function
+  let rec find_arg l ctx id ctyp arg_smt_names = function
     | List [Atom "define-fun"; Atom str; List []; _; value] :: _
-      when Util.assoc_compare_opt Id.compare id arg_smt_names = Some (Some str) ->
-        (id, value_of_sexpr value ctyp)
-    | _ :: sexps -> find_arg id ctyp arg_smt_names sexps
+      when Util.assoc_compare_opt Name.compare id arg_smt_names = Some (Some str) ->
+        (id, value_of_sexpr l ctx value ctyp)
+    | _ :: sexps -> find_arg l ctx id ctyp arg_smt_names sexps
     | [] -> (id, V_unit)
 
-  let build_counterexample args arg_ctyps arg_smt_names model =
-    List.map2 (fun id ctyp -> find_arg id ctyp arg_smt_names model) args arg_ctyps
+  let build_counterexample l ctx args arg_ctyps arg_smt_names model =
+    List.map2 (fun id ctyp -> find_arg l ctx id ctyp arg_smt_names model) args arg_ctyps
 
   let rec run frame =
     match frame with
@@ -1133,9 +1196,9 @@ module Counterexample (Config : COUNTEREXAMPLE_CONFIG) = struct
     | Interpreter.Step (lazy_str, _, _, _) -> run (Interpreter.eval_frame frame)
     | Interpreter.Break frame -> run (Interpreter.eval_frame frame)
     | Interpreter.Fail (_, _, _, _, msg) -> Result.Error msg
-    | Interpreter.Effect_request (out, state, stack, eff) -> run (Interpreter.default_effect_interp state eff)
+    | Interpreter.Effect_request (out, state, stack, eff) -> run (Interpreter.default_effect_interp out state stack eff)
 
-  let check ~env ~ast ~solver ~file_name ~function_id ~args ~arg_ctyps ~arg_smt_names =
+  let check ~loc ~ctx ~env ~ast ~solver ~file_name ~function_id ~args ~arg_ctyps ~arg_smt_names =
     let open Printf in
     let open Ast in
     print_endline ("Checking counterexample: " ^ file_name);
@@ -1149,14 +1212,16 @@ module Counterexample (Config : COUNTEREXAMPLE_CONFIG) = struct
       with End_of_file -> ()
     end;
     let solver_output = List.rev !lines |> String.concat "\n" in
-    begin
+    let unsat =
       match parse_sexps solver_output with
       | Some (Atom "sat" :: (List (Atom "model" :: model) | List model) :: _) ->
           let open Value in
           let open Interpreter in
           print_endline (sprintf "Solver found counterexample: %s" Util.("ok" |> green |> clear));
-          let counterexample = build_counterexample args arg_ctyps arg_smt_names model in
-          List.iter (fun (id, v) -> print_endline ("  " ^ string_of_id id ^ " -> " ^ string_of_value v)) counterexample;
+          let counterexample = build_counterexample loc ctx args arg_ctyps arg_smt_names model in
+          List.iter
+            (fun (id, v) -> print_endline ("  " ^ string_of_name id ^ " -> " ^ string_of_value v))
+            counterexample;
           let istate = initial_state ast env !primops in
           let annot = (Parse_ast.Unknown, Type_check.mk_tannot env bool_typ) in
           let call =
@@ -1170,7 +1235,7 @@ module Counterexample (Config : COUNTEREXAMPLE_CONFIG) = struct
                 annot
               )
           in
-          let result = run (Step (lazy "", istate, return call, [])) in
+          let result = run (Step (lazy "", istate, Monad.pure call, [])) in
           begin
             match result with
             | Result.Ok (V_bool false) | Result.Ok V_unit ->
@@ -1181,15 +1246,23 @@ module Counterexample (Config : COUNTEREXAMPLE_CONFIG) = struct
             | Result.Error msg ->
                 ksprintf print_endline "Failed to replay counterexample: %s\n  %s" Util.("error" |> red |> clear) msg
             | _ -> ()
-          end
+          end;
+          false
       | Some (Atom "unsat" :: _) ->
           print_endline "Solver could not find counterexample";
           print_endline "Solver output:";
-          print_endline solver_output
+          print_endline solver_output;
+          true
+      | Some (Atom "sat" :: _) ->
+          print_endline (sprintf "Solver found counterexample: %s" Util.("ok" |> green |> clear));
+          print_endline "Solver output:";
+          print_endline solver_output;
+          false
       | _ ->
           print_endline "Unexpected solver output:";
-          print_endline solver_output
-    end;
+          print_endline solver_output;
+          false
+    in
     let _ = Unix.close_process_in in_chan in
-    ()
+    unsat
 end

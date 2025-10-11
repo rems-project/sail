@@ -1,0 +1,10 @@
+[93mError[0m:
+[96mfail/config_subkey.sail[0m:9.18-28:
+9[96m |[0m    print_endline(config a.b : string);
+ [91m |[0m                  [91m^--------^[0m
+ [91m |[0m Attempting to access key a.b, but various subkeys have already been used
+ [91m |[0m 
+ [91m |[0m For example:
+ [91m |[0m [96mfail/config_subkey.sail[0m:8.18-30:
+ [91m |[0m 8[96m |[0m    print_endline(config a.b.c : string);
+ [91m |[0m  [91m |[0m                  [91m^----------^[0m [91mused here[0m

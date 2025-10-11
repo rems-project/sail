@@ -51,19 +51,15 @@ open Ast_defs
 open Ast_util
 module Big_int = Nat_big_num
 
-(** [set_tc_debug] controls the verbosity of the type checker. 0 is
-   silent, 1 prints a tree of the type derivation and 2 is like 1 but
-   with much more debugging information. 3 is the highest level, and
-   is even more verbose still. *)
+(** [set_tc_debug] controls the verbosity of the type checker. 0 is silent, 1 prints a tree of the type derivation and 2
+    is like 1 but with much more debugging information. 3 is the highest level, and is even more verbose still. *)
 val set_tc_debug : int -> unit
 
-(** [opt_no_lexp_bounds_check] turns off the bounds checking in vector
-   assignments in l-expressions. *)
+(** [opt_no_lexp_bounds_check] turns off the bounds checking in vector assignments in l-expressions. *)
 val opt_no_lexp_bounds_check : bool ref
 
-(** [opt_expand_valspec] expands typedefs in valspecs during type
-   checking. We prefer not to do it for latex output but it is
-   otherwise a good idea. *)
+(** [opt_expand_valspec] expands typedefs in valspecs during type checking. We prefer not to do it for latex output but
+    it is otherwise a good idea. *)
 val opt_expand_valspec : bool ref
 
 (** Don't expand bitfields (when using old syntax), used for LaTeX output *)
@@ -76,8 +72,7 @@ val opt_strict_var : bool ref
 
 type env
 
-(** The env module defines the internal type checking environment, and
-   contains functions that operate on that state. *)
+(** The env module defines the internal type checking environment, and contains functions that operate on that state. *)
 module Env : sig
   (** Env.t is the type of environments *)
   type t = env
@@ -85,19 +80,20 @@ module Env : sig
   (** This effectively disables all module related access control *)
   val open_all_modules : t -> t
 
-  (** Note: Most get_ functions assume the identifiers exist, and throw
-     type errors if they don't. *)
+  val get_current_module : t -> Project.mod_id
+  val get_modules : t -> Project.project_structure option
 
-  (** Get the quantifier and type for a function identifier, freshening
-      type variables. *)
+  (** Note: Most get_ functions assume the identifiers exist, and throw type errors if they don't. *)
+
+  (** Get the quantifier and type for a function identifier, freshening type variables. *)
   val get_val_spec : id -> t -> typquant * typ
 
   val get_val_specs : t -> (typquant * typ) Bindings.t
 
   val get_defined_val_specs : t -> IdSet.t
 
-  (** Like get_val_spec, except that the original type variables are used.
-      Useful when processing the body of the function. *)
+  (** Like get_val_spec, except that the original type variables are used. Useful when processing the body of the
+      function. *)
   val get_val_spec_orig : id -> t -> typquant * typ
 
   val update_val_spec : ?in_module:Project.mod_id -> id -> typquant * typ -> t -> t
@@ -105,8 +101,7 @@ module Env : sig
   val get_register : id -> t -> typ
   val get_registers : t -> typ Bindings.t
 
-  (** Return all the identifiers in an enumeration. Throws a type
-     error if the enumeration doesn't exist. *)
+  (** Return all the identifiers in an enumeration. Throws a type error if the enumeration doesn't exist. *)
   val get_enum : id -> t -> id list
 
   val get_enums : t -> IdSet.t Bindings.t
@@ -121,9 +116,16 @@ module Env : sig
 
   val add_scattered_variant : id -> typquant -> t -> t
 
-  (** Check if a local variable is mutable. Throws Type_error if it
-     isn't a local variable. Probably best to use Env.lookup_id
-     instead *)
+  val add_typ_synonym : id -> typquant -> typ_arg -> t -> t
+
+  val is_abstract_typ : id -> t -> bool
+
+  val get_abstract_typs : t -> kind Bindings.t
+
+  val remove_abstract_typ : id -> t -> t
+
+  (** Check if a local variable is mutable. Throws Type_error if it isn't a local variable. Probably best to use
+      Env.lookup_id instead *)
   val is_mutable : id -> t -> bool
 
   (** Get the current set of constraints. *)
@@ -131,9 +133,8 @@ module Env : sig
 
   val add_constraint : ?global:bool -> ?reason:Ast.l * string -> n_constraint -> t -> t
 
-  (** Push all the type variables and constraints from a typquant into
-      an environment *)
-  val add_typquant : Ast.l -> typquant -> t -> t
+  (** Push all the type variables and constraints from a typquant into an environment *)
+  val add_typquant : ?from_outcome:bool -> Ast.l -> typquant -> t -> t
 
   val get_typ_var : kid -> t -> kind_aux
 
@@ -149,9 +150,15 @@ module Env : sig
   (** Check whether the identifier is a type name *)
   val bound_typ_id : t -> id -> bool
 
-  val add_typ_var : Ast.l -> kinded_id -> t -> t
+  val add_typ_var : ?from_outcome:bool -> Ast.l -> kinded_id -> t -> t
+
+  val is_variant : id -> t -> bool
+
+  val is_newtype : id -> t -> bool
 
   val is_record : id -> t -> bool
+
+  val is_enum : id -> t -> bool
 
   (** Returns record quantifiers and fields *)
   val get_record : id -> t -> typquant * (typ * id) list
@@ -163,10 +170,8 @@ module Env : sig
   (** Return type is: quantifier, argument type, return type *)
   val get_accessor : id -> id -> t -> typquant * typ * typ
 
-  (** If the environment is checking a function, then this will get
-     the expected return type of the function. It's useful for
-     checking or inserting early returns. Returns an option type and
-     won't throw any exceptions. *)
+  (** If the environment is checking a function, then this will get the expected return type of the function. It's
+      useful for checking or inserting early returns. Returns an option type and won't throw any exceptions. *)
   val get_ret_typ : t -> typ option
 
   val get_overloads : id -> t -> id list
@@ -175,32 +180,29 @@ module Env : sig
 
   val get_extern : id -> t -> string -> string
 
-  (** Lookup id searchs for a specified id in the environment, and
-     returns its type and what kind of identifier it is, using the
-     lvar type. Returns Unbound if the identifier is unbound, and
-     won't throw any exceptions. *)
+  (** Lookup id searchs for a specified id in the environment, and returns its type and what kind of identifier it is,
+      using the lvar type. Returns Unbound if the identifier is unbound, and won't throw any exceptions. *)
   val lookup_id : id -> t -> typ lvar
 
   val get_toplevel_lets : t -> IdSet.t
 
-  val get_outcome_instantiation : t -> (Ast.l * typ) KBindings.t
+  val is_outcome : id -> t -> bool
 
-  (** Check if id is a constructor, then if it is return a (n, m,
-     id, type_union) triple where the values represent its position (n) in the
-     list of (m) constructors, the union name, and the type_union entry itself *)
+  val get_outcome_instantiation : t -> (Ast.l * typ_arg) KBindings.t
+
+  (** Check if id is a constructor, then if it is return a (n, m, id, type_union) triple where the values represent its
+      position (n) in the list of (m) constructors, the union name, and the type_union entry itself *)
   val union_constructor_info : id -> t -> (int * int * id * type_union) option
 
   val is_union_constructor : id -> t -> bool
 
-  (** Check if the id is both a constructor, and the only constructor of that
-      type. *)
+  (** Check if the id is both a constructor, and the only constructor of that type. *)
   val is_singleton_union_constructor : id -> t -> bool
 
   val is_mapping : id -> t -> bool
 
-  (** A scattered definition is open if it can have new clauses added to
-      it, i.e. it exists and has not been closed by the [end]
-      keyword. *)
+  (** A scattered definition is open if it can have new clauses added to it, i.e. it exists and has not been closed by
+      the [end] keyword. *)
   val is_scattered_open : id -> t -> bool
 
   val is_register : id -> t -> bool
@@ -216,11 +218,12 @@ module Env : sig
 
   val expand_synonyms : t -> typ -> typ
 
+  val simplify_constraints : t -> t
+
   (** Expand type synonyms and remove register annotations (i.e. register<t> -> t)) *)
   val base_typ_of : t -> typ -> typ
 
-  (** Note: Likely want use Type_check.initial_env instead. The empty
-     environment is lacking even basic builtins. *)
+  (** Note: Likely want use Type_check.initial_env instead. The empty environment is lacking even basic builtins. *)
   val empty : t
 
   val builtin_typs : (typquant * kind_aux) Bindings.t
@@ -233,21 +236,18 @@ end
 (** {4 Environment helper functions} *)
 val add_existential : Ast.l -> kinded_id list -> n_constraint -> Env.t -> Env.t
 
-(** [get_bitfield_ranges id env] returns the index ranges of bitfield type [id],
-    or raises [Not_found] if [id] is not a bitfield type. *)
+(** [get_bitfield_ranges id env] returns the index ranges of bitfield type [id], or raises [Not_found] if [id] is not a
+    bitfield type. *)
 val get_bitfield_ranges : id -> Env.t -> index_range Bindings.t
 
-(** [get_bitfield_range id field env] returns the [index_range] of [field]
-    in bitfield type [id], or [None] if the field does not exist. *)
+(** [get_bitfield_range id field env] returns the [index_range] of [field] in bitfield type [id], or [None] if the field
+    does not exist. *)
 val get_bitfield_range : id -> id -> Env.t -> index_range option
 
-(** When the typechecker creates new type variables it gives them
-   fresh names of the form 'fvXXX#name, where XXX is a number (not
-   necessarily three digits), and name is the original name when the
-   type variable was created by renaming an exisiting type variable to
-   avoid shadowing. orig_kid takes such a type variable and strips out
-   the 'fvXXX# part. It returns the type variable unmodified if it is
-   not of this form. *)
+(** When the typechecker creates new type variables it gives them fresh names of the form 'fvXXX#name, where XXX is a
+    number (not necessarily three digits), and name is the original name when the type variable was created by renaming
+    an exisiting type variable to avoid shadowing. orig_kid takes such a type variable and strips out the 'fvXXX# part.
+    It returns the type variable unmodified if it is not of this form. *)
 val orig_kid : kid -> kid
 
 val orig_nexp : nexp -> nexp
@@ -269,12 +269,10 @@ type typed_ast = (tannot, env) ast
 
 type typed_lazy_ast = (tannot, env) lazy_ast
 
-(** The canonical view of a type annotation is that it is a tuple
-   containing an environment (env), a type (typ), such that check_X
-   env (strip_X X) typ succeeds, where X is typically exp (i.e an
-   expression). Note that it is specifically not guaranteed that
-   calling destruct_tannot followed by mk_tannot returns an identical
-   type annotation. *)
+(** The canonical view of a type annotation is that it is a tuple containing an environment (env), a type (typ), such
+    that check_X env (strip_X X) typ succeeds, where X is typically exp (i.e an expression). Note that it is
+    specifically not guaranteed that calling destruct_tannot followed by mk_tannot returns an identical type annotation.
+*)
 val destruct_tannot : tannot -> (Env.t * typ) option
 
 val mk_tannot : ?uannot:uannot -> Env.t -> typ -> tannot
@@ -321,12 +319,9 @@ val strip_ast : typed_ast -> untyped_ast
 
 (** {2 Checking expressions and patterns} *)
 
-(** Check an expression has some type. Returns a fully annotated
-   version of the expression, where each subexpression is annotated
-   with its type and the Environment used while checking it. The can
-   be used to re-start the typechecking process on any
-   sub-expression. so local modifications to the AST can be
-   re-checked. *)
+(** Check an expression has some type. Returns a fully annotated version of the expression, where each subexpression is
+    annotated with its type and the Environment used while checking it. The can be used to re-start the typechecking
+    process on any sub-expression. so local modifications to the AST can be re-checked. *)
 val check_exp : Env.t -> uannot exp -> typ -> tannot exp
 
 val infer_exp : Env.t -> uannot exp -> tannot exp
@@ -345,22 +340,25 @@ val check_val_spec : Env.t -> env def_annot -> uannot val_spec -> typed_def list
 
 val assert_constraint : Env.t -> bool -> tannot exp -> n_constraint option
 
-(** Use the pattern completeness checker to check completeness of a
-   list of function clauses. This takes care of setting up the
-   environment in the correct way. The type passed is the type of the
-   function (Typ_fn), and the environment should be that attached to
-   either the SD_funcl clause or the FD_function clause. Note that
-   this is only exposed so that it can be used during descattering to
-   check completeness of scattered functions, and should not be called
-   otherwise. *)
-val check_funcls_complete :
-  Parse_ast.l -> Env.t -> tannot funcl list -> typ -> tannot funcl list * ('a def_annot -> 'a def_annot)
+(** Use the pattern completeness checker to check completeness of a list of function clauses. This takes care of setting
+    up the environment in the correct way. The type passed is the type of the function ([Typ_fn]), and the environment
+    should be that attached to either the [SD_funcl] clause or the [FD_function] clause.
 
-(** Attempt to prove a constraint using z3. Returns true if z3 can
-   prove that the constraint is true, returns false if z3 cannot prove
-   the constraint true. Note that this does not guarantee that the
-   constraint is actually false, as the constraint solver is somewhat
-   untrustworthy. *)
+    If the optional [global_env] option is used, then information about other types will be taken from the global
+    environment - for example this can be used to provide a view of all the enumeration clauses of a scattered enum,
+    whereas the function local environment would contain only those imported before the final clause. Furthermore, all
+    type definitions will be considered as closed. *)
+val check_funcls_complete :
+  ?global_env:Env.t ->
+  Parse_ast.l ->
+  Env.t ->
+  tannot funcl list ->
+  typ ->
+  tannot funcl list * ('a def_annot -> 'a def_annot)
+
+(** Attempt to prove a constraint using z3. Returns true if z3 can prove that the constraint is true, returns false if
+    z3 cannot prove the constraint true. Note that this does not guarantee that the constraint is actually false, as the
+    constraint solver is somewhat untrustworthy. *)
 val prove : string * int * int * int -> Env.t -> n_constraint -> bool
 
 (** Returns Some c if there is a unique c such that nexp = c *)
@@ -374,18 +372,19 @@ val is_enum_member : id -> Env.t -> bool
 
 val bind_pat : Env.t -> uannot pat -> typ -> tannot pat * Env.t * uannot Ast.exp list
 
-(** Variant that doesn't introduce new guards for literal patterns,
-   but raises a type error instead.  This should always be safe to use
-   on patterns that have previously been type checked. *)
+(** Variant that doesn't introduce new guards for literal patterns, but raises a type error instead. This should always
+    be safe to use on patterns that have previously been type checked. *)
 val bind_pat_no_guard : Env.t -> uannot pat -> typ -> tannot pat * Env.t
+
+(** Extract the argument and return types for a function clause *)
+val bind_funcl_arg_typ : Parse_ast.l -> Env.t -> typ -> typ * typ * Env.t
 
 val tc_assume : n_constraint -> tannot exp -> tannot exp
 
 (** {2 Destructuring type annotations}
 
-   Partial functions: The expressions and patterns passed to these
-   functions must be guaranteed to have tannots of the form Some (env,
-   typ) for these to work. *)
+    Partial functions: The expressions and patterns passed to these functions must be guaranteed to have tannots of the
+    form Some (env, typ) for these to work. *)
 
 val env_of : tannot exp -> Env.t
 val env_of_annot : Ast.l * tannot -> Env.t
@@ -401,29 +400,30 @@ val env_of_pat : tannot pat -> Env.t
 val typ_of_pexp : tannot pexp -> typ
 val env_of_pexp : tannot pexp -> Env.t
 
+val typ_of_lexp : tannot lexp -> typ
+val env_of_lexp : tannot lexp -> Env.t
+
 val typ_of_mpat : tannot mpat -> typ
 val env_of_mpat : tannot mpat -> Env.t
 
 val typ_of_mpexp : tannot mpexp -> typ
 val env_of_mpexp : tannot mpexp -> Env.t
 
-val effect_of : tannot exp -> effect
-val effect_of_pat : tannot pat -> effect
-val effect_of_annot : tannot -> effect
-val add_effect_annot : tannot -> effect -> tannot
+val effect_of : tannot exp -> effects
+val effect_of_pat : tannot pat -> effects
+val effect_of_annot : tannot -> effects
+val add_effect_annot : tannot -> effects -> tannot
 
-(** Returns the type that an expression was checked against, if any.
-    Note that these may be removed if an expression is rewritten. *)
+(** Returns the type that an expression was checked against, if any. Note that these may be removed if an expression is
+    rewritten. *)
 val expected_typ_of : Ast.l * tannot -> typ option
 
-(** {2 Utilities } *)
+(** {2 Utilities} *)
 
-(** Safely destructure an existential type. Returns None if the type
-   is not existential. This function will pick a fresh name for the
-   existential to ensure that no name-collisions occur, although we
-   can optionally suggest a name for the case where it would not cause
-   a collision. The "plain" version does not treat numeric types
-   (i.e. range, int, nat) as existentials. *)
+(** Safely destructure an existential type. Returns None if the type is not existential. This function will pick a fresh
+    name for the existential to ensure that no name-collisions occur, although we can optionally suggest a name for the
+    case where it would not cause a collision. The "plain" version does not treat numeric types (i.e. range, int, nat)
+    as existentials. *)
 val destruct_exist_plain : ?name:string option -> typ -> (kinded_id list * n_constraint * typ) option
 
 val destruct_exist : ?name:string option -> typ -> (kinded_id list * n_constraint * typ) option
@@ -444,18 +444,19 @@ val destruct_boolean : ?name:string option -> typ -> (kid * n_constraint) option
 
 val vector_start_index : Env.t -> typ -> nexp
 
-(** Construct an existential type with a guaranteed fresh
-   identifier. *)
+(** Construct an existential type with a guaranteed fresh identifier. *)
 val exist_typ : Parse_ast.l -> (kid -> n_constraint) -> (kid -> typ) -> typ
 
 val subst_unifiers : typ_arg KBindings.t -> typ -> typ
 
-(** [unify l env goals typ1 typ2] returns set of typ_arg bindings such
-   that substituting those bindings using every type variable in goals
-   will make typ1 and typ2 equal. Will throw a Unification_error if
-   typ1 and typ2 cannot unification (although unification in Sail is
-   not complete). Will throw a type error if any goals appear in in
-   typ2 (occurs check). *)
+val instantiate_record : env -> id -> typ_arg list -> (typ * id) list
+
+val instantiate_variant : env -> id -> typ_arg list -> (id * typ) list
+
+(** [unify l env goals typ1 typ2] returns set of typ_arg bindings such that substituting those bindings using every type
+    variable in goals will make typ1 and typ2 equal. Will throw a Unification_error if typ1 and typ2 cannot unification
+    (although unification in Sail is not complete). Will throw a type error if any goals appear in in typ2 (occurs
+    check). *)
 val unify : l -> Env.t -> KidSet.t -> typ -> typ -> typ_arg KBindings.t
 
 (** Check if two types are alpha equivalent *)
@@ -464,8 +465,8 @@ val alpha_equivalent : Env.t -> typ -> typ -> bool
 (** Throws Invalid_argument if the argument is not a E_app expression *)
 val instantiation_of : tannot exp -> typ_arg KBindings.t
 
-(** Doesn't use the type of the expression when calculating instantiations.
-    May fail if the arguments aren't sufficient to calculate all unifiers. *)
+(** Doesn't use the type of the expression when calculating instantiations. May fail if the arguments aren't sufficient
+    to calculate all unifiers. *)
 val instantiation_of_without_type : tannot exp -> typ_arg KBindings.t
 
 (** Type variable instantiations that inference will extract from constraints *)
@@ -477,33 +478,30 @@ val big_int_of_nexp : nexp -> Big_int.num option
 
 (** Fully type-check an AST
 
-Some invariants that will hold of a fully checked AST are:
+    Some invariants that will hold of a fully checked AST are:
 
- - No internal nodes, such as E_internal_exp, or E_comment nodes.
+    - No internal nodes, such as E_internal_exp, or E_comment nodes.
 
- - E_vector_access nodes and similar will be replaced by function
-   calls E_app to vector access functions. This is different to the
-   old type checker.
+    - E_vector_access nodes and similar will be replaced by function calls E_app to vector access functions. This is
+      different to the old type checker.
 
- - Every expressions type annotation [tannot] will be Some (typ, env).
+    - Every expressions type annotation [tannot] will be Some (typ, env).
 
- - Also every pattern will be annotated with the type it matches.
+    - Also every pattern will be annotated with the type it matches.
 
- - Toplevel expressions such as typedefs and some subexpressions such
-   as letbinds may have None as their tannots if it doesn't make sense
-   for them to have type annotations.
+    - Toplevel expressions such as typedefs and some subexpressions such as letbinds may have None as their tannots if
+      it doesn't make sense for them to have type annotations.
 
-   check throws type_errors rather than Sail generic errors from
-   Reporting. For a function that uses generic errors, use
-   Type_error.check *)
+    check throws type_errors rather than Sail generic errors from Reporting. For a function that uses generic errors,
+    use Type_error.check *)
 val check : Env.t -> untyped_ast -> typed_ast * Env.t
 
 val check_lazy : Env.t -> untyped_ast -> typed_lazy_ast * Env.t
 
 val check_defs : Env.t -> untyped_def list -> typed_def list * Env.t
 
-(** The same as [check], but exposes the intermediate type-checking
-   environments so we don't have to always re-check the entire AST *)
+(** The same as [check], but exposes the intermediate type-checking environments so we don't have to always re-check the
+    entire AST *)
 val check_with_envs : Env.t -> untyped_def list -> (typed_def list * Env.t) list
 
 (** The initial type checking environment *)

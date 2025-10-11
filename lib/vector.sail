@@ -52,6 +52,7 @@ $include_error A default order must be set (using `default Order dec` or `defaul
 $endif
 
 $include <flow.sail>
+$include <arith.sail>
 
 type bits('n) = bitvector('n)
 
@@ -60,7 +61,7 @@ val eq_bits = pure {
   interpreter: "eq_list",
   lem: "eq_vec",
   coq: "eq_vec",
-  lean: "Eq",
+  lean: "_lean_beq",
   _: "eq_bits"
 } : forall 'n. (bits('n), bits('n)) -> bool
 
@@ -70,7 +71,8 @@ val neq_bits = pure {
   lem: "neq_vec",
   coq: "neq_vec",
   c: "neq_bits",
-  lean: "Ne"
+  cpp: "neq_bits",
+  lean: "_lean_bne"
 } : forall 'n. (bits('n), bits('n)) -> bool
 
 function neq_bits(x, y) = not_bool(eq_bits(x, y))
@@ -88,15 +90,26 @@ val vector_length = pure {
   interpreter: "length",
   lem: "length_list",
   coq: "vec_length",
+  lean: "Vector.length",
   _: "length"
 } : forall 'n ('a : Type). vector('n, 'a) -> int('n)
 
-val vector_init = pure "vector_init" : forall 'n ('a : Type), 'n >= 0. (implicit('n), 'a) -> vector('n, 'a)
+val vector_init = pure {
+  lean: "vectorInit",
+  _: "vector_init"
+} : forall 'n ('a : Type), 'n >= 0. (implicit('n), 'a) -> vector('n, 'a)
 
 overload length = {bitvector_length, vector_length}
 
-val count_leading_zeros = pure "count_leading_zeros" : forall 'N , 'N >= 1. bits('N) -> {'n, 0 <= 'n <= 'N . atom('n)}
-val count_trailing_zeros = pure "count_trailing_zeros" : forall 'N , 'N >= 1. bits('N) -> {'n, 0 <= 'n <= 'N . atom('n)}
+val count_leading_zeros = pure {
+  lean: "BitVec.countLeadingZeros",
+  _: "count_leading_zeros"
+} : forall 'N , 'N >= 1. bits('N) -> {'n, 0 <= 'n <= 'N . atom('n)}
+
+val count_trailing_zeros = pure {
+  lean: "BitVec.countTrailingZeros",
+  _: "count_trailing_zeros"
+} : forall 'N , 'N >= 1. bits('N) -> {'n, 0 <= 'n <= 'N . atom('n)}
 
 $ifndef PRINT_EFFECTS
 
@@ -152,14 +165,18 @@ val sail_mask : forall 'len 'v, 'len >= 0 & 'v >= 0. (int('len), bits('v)) -> bi
 
 function sail_mask(len, v) = if len <= length(v) then truncate(v, len) else sail_zero_extend(v, len)
 
+/* Note: the old ^ operator won't work for lengths ending in 2 because the special lexing for
+   power-of-two exponentials will override it. */
 overload operator ^ = {sail_mask}
+infix 8 =^
+overload operator =^ = {sail_mask}
 
 val bitvector_concat = pure {
   ocaml: "append",
   interpreter: "append",
   lem: "concat_vec",
   coq: "concat_vec",
-  lean: "BitVec.append",
+  lean: "_lean_app",
    _: "append"
 } : forall 'n 'm.
   (bits('n), bits('m)) -> bits('n + 'm)
@@ -175,6 +192,7 @@ val bitvector_access = pure {
   interpreter: "access",
   lem: "access_vec_dec",
   coq: "access_vec_dec",
+  lean: "BitVec.access",
   _: "vector_access"
 } : forall ('n : Int) ('m : Int), 0 <= 'm < 'n . (bits('n), int('m)) -> bit
 $else
@@ -183,6 +201,7 @@ val bitvector_access = pure {
   interpreter: "access_inc",
   lem: "access_vec_inc",
   coq: "access_vec_inc",
+  lean: "BitVec.accessBE",
   _: "vector_access_inc"
 } : forall ('n : Int) ('m : Int), 0 <= 'm < 'n . (bits('n), int('m)) -> bit
 $endif
@@ -192,6 +211,7 @@ val plain_vector_access = pure {
   interpreter: "access",
   lem: "access_list_dec",
   coq: "vec_access_dec",
+  lean: "GetElem?.getElem!",
   _: "vector_access"
 } : forall ('n : Int) ('m : Int) ('a : Type), 0 <= 'm < 'n. (vector('n, dec, 'a), int('m)) -> 'a
 
@@ -203,6 +223,7 @@ val bitvector_update = pure {
   interpreter: "update",
   lem: "update_vec_dec",
   coq: "update_vec_dec",
+  lean: "BitVec.update",
   _: "vector_update"
 } : forall 'n 'm, 0 <= 'm < 'n. (bits('n), int('m), bit) -> bits('n)
 $else
@@ -211,6 +232,7 @@ val bitvector_update = pure {
   interpreter: "update_inc",
   lem: "update_vec_inc",
   coq: "update_vec_inc",
+  lean: "BitVec.updateBE",
   _: "vector_update_inc"
 } : forall 'n 'm, 0 <= 'm < 'n. (bits('n), int('m), bit) -> bits('n)
 $endif
@@ -220,6 +242,7 @@ val plain_vector_update = pure {
   interpreter: "update",
   lem: "update_list_dec",
   coq: "vec_update_dec",
+  lean: "vectorUpdate",
   _: "vector_update"
 } : forall 'n 'm ('a : Type), 0 <= 'm < 'n. (vector('n, dec, 'a), int('m), 'a) -> vector('n, dec, 'a)
 
@@ -230,7 +253,7 @@ val add_bits = pure {
   interpreter: "add_vec",
   lem: "add_vec",
   coq: "add_vec",
-  lean: "HAdd.hAdd",
+  lean: "_lean_add",
   _: "add_bits"
 } : forall 'n. (bits('n), bits('n)) -> bits('n)
 
@@ -239,6 +262,7 @@ val add_bits_int = pure {
   interpreter: "add_vec_int",
   lem: "add_vec_int",
   coq: "add_vec_int",
+  lean: "BitVec.addInt",
   _: "add_bits_int"
 } : forall 'n. (bits('n), int) -> bits('n)
 
@@ -249,12 +273,12 @@ val sub_bits = pure {
   interpreter: "sub_vec",
   lem: "sub_vec",
   coq: "sub_vec",
-  lean: "HSub.hSub",
+  lean: "_lean_sub",
   _: "sub_bits"
 } : forall 'n. (bits('n), bits('n)) -> bits('n)
 
 val not_vec = pure {
-  ocaml: "not_vec", 
+  ocaml: "not_vec",
   lem: "not_vec",
   coq: "not_vec",
   interpreter: "not_vec",
@@ -267,7 +291,7 @@ val and_vec = pure {
   coq: "and_vec",
   ocaml: "and_vec",
   interpreter: "and_vec",
-  lean: "HAnd.hAnd",
+  lean: "_lean_bvand",
   _: "and_bits"
 } : forall 'n. (bits('n), bits('n)) -> bits('n)
 
@@ -278,7 +302,7 @@ val or_vec = pure {
   coq: "or_vec",
   ocaml: "or_vec",
   interpreter: "or_vec",
-  lean: "HOr.hOr",
+  lean: "_lean_bvor",
   _: "or_bits"
 } : forall 'n. (bits('n), bits('n)) -> bits('n)
 
@@ -289,7 +313,7 @@ val xor_vec = pure {
   coq: "xor_vec",
   ocaml: "xor_vec",
   interpreter: "xor_vec",
-  lean: "HXor.hXor",
+  lean: "_lean_bvxor",
   _: "xor_bits"
 } : forall 'n. (bits('n), bits('n)) -> bits('n)
 
@@ -307,8 +331,9 @@ $else
 val subrange_bits = pure {
   ocaml: "subrange_inc",
   interpreter: "subrange_inc",
-  lem: "subrange_vec_Inc",
-  coq: "subrange_vec_Inc",
+  lem: "subrange_vec_inc",
+  coq: "subrange_vec_inc",
+  lean: "BitVec.subrangeBE",
   _: "vector_subrange_inc"
 } : forall ('n : Int) ('m : Int) ('o : Int), 0 <= 'm <= 'o < 'n.
   (bits('n), int('m), int('o)) -> bits('o - 'm + 1)
@@ -331,22 +356,31 @@ val update_subrange_bits = pure {
   interpreter: "update_subrange_inc",
   lem: "update_subrange_vec_inc",
   coq: "update_subrange_vec_inc",
+  lean: "Sail.BitVec.updateSubrangeBE",
   _: "vector_update_subrange_inc"
 } : forall 'n 'm 'o, 0 <= 'm <= 'o < 'n. (bits('n), int('m), int('o), bits('o - ('m - 1))) -> bits('n)
 $endif
 
 overload vector_update_subrange = {update_subrange_bits}
 
-val sail_shiftleft = pure "shiftl" : forall 'n ('ord : Order).
+val sail_shiftleft = pure {
+  lean: "_lean_shiftl",
+  _: "shiftl"} : forall 'n ('ord : Order).
     (bitvector('n, 'ord), int) -> bitvector('n, 'ord)
 
-val sail_shiftright = pure "shiftr" : forall 'n ('ord : Order).
+val sail_shiftright = pure {
+  lean: "_lean_shiftr",
+  _: "shiftr"} : forall 'n ('ord : Order).
     (bitvector('n, 'ord), int) -> bitvector('n, 'ord)
 
-val sail_arith_shiftright = pure "arith_shiftr" : forall 'n ('ord : Order).
+val sail_arith_shiftright = pure {
+  lean: "BitVec.rotateRight",
+  _: "arith_shiftr"} : forall 'n ('ord : Order).
     (bitvector('n, 'ord), int) -> bitvector('n, 'ord)
 
-val sail_zeros = pure "zeros" : forall 'n, 'n >= 0. int('n) -> bits('n)
+val sail_zeros = pure {
+  lean: "BitVec.zero",
+  _: "zeros" }: forall 'n, 'n >= 0. int('n) -> bits('n)
 
 val sail_ones : forall 'n, 'n >= 0. int('n) -> bits('n)
 
@@ -355,14 +389,20 @@ function sail_ones(n) = not_vec(sail_zeros(n))
 // Some ARM specific builtins
 
 $ifdef _DEFAULT_DEC
-val slice = pure "slice" : forall 'n 'm 'o, 0 <= 'm & 0 <= 'n.
+val slice = pure {
+  lean: "BitVec.slice",
+  _: "slice"} : forall 'n 'm 'o, 0 <= 'm & 0 <= 'n.
   (bits('m), int('o), int('n)) -> bits('n)
 $else
-val slice = pure "slice_inc" : forall 'n 'm 'o, 0 <= 'o < 'm & 'o + 'n <= 'm.
+val slice = pure {
+  lean: "BitVec.sliceBE",
+  _: "slice_inc"} : forall 'n 'm 'o, 0 <= 'o < 'm & 'o + 'n <= 'm.
   (bits('m), int('o), int('n)) -> bits('n)
 $endif
 
-val replicate_bits = pure "replicate_bits" : forall 'n 'm, 'm >= 0. (bits('n), int('m)) -> bits('n * 'm)
+val replicate_bits = pure {
+  lean: "BitVec.replicateBits",
+  _: "replicate_bits" } : forall 'n 'm, 'm >= 0. (bits('n), int('m)) -> bits('n * 'm)
 
 val slice_mask : forall 'n, 'n >= 0. (implicit('n), int, int) -> bits('n)
 function slice_mask(n,i,l) =
@@ -410,5 +450,46 @@ val signed = pure {
 $endif
 
 overload __size = {__id, bitvector_length, vector_length}
+
+// Little endian bytes conversion, least significant byte ends up at index 0 in the vector
+val to_bytes_le : forall 'n, 'n > 0. (implicit('n), bits (8 * 'n)) -> vector('n, bits(8))
+
+$ifdef _DEFAULT_DEC
+function to_bytes_le(n, b) = {
+    var res = vector_init(n, sail_zeros(8));
+    foreach (i from 0 to (n - 1)) {
+        res[i] = b[(8 * i + 7) .. (8 * i)]
+    };
+    res
+}
+$else
+function to_bytes_le(n, b) = {
+    var res = vector_init(n, sail_zeros(8));
+    foreach (i from 0 to (n - 1)) {
+        res[i] = b[(8 * (n - 1 - i)) .. (8 * (n - 1 - i) + 7)]
+    };
+    res
+}
+$endif
+
+val from_bytes_le : forall 'n, 'n > 0. (implicit('n), vector('n, bits(8))) -> bits(8 * 'n)
+
+$ifdef _DEFAULT_DEC
+function from_bytes_le(n, v) = {
+    var res = sail_zeros(8 * n);
+    foreach (i from 0 to (n - 1)) {
+        res[(8 * i + 7) .. (8 * i)] = v[i]
+    };
+    res
+}
+$else
+function from_bytes_le(n, v) = {
+    var res = sail_zeros(8 * n);
+    foreach (i from 0 to (n - 1)) {
+        res[(8 * (n - 1 - i)) .. (8 * (n - 1 - i) + 7)] = v[i]
+    };
+    res
+}
+$endif
 
 $endif

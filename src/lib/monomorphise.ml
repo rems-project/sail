@@ -62,7 +62,7 @@ let opt_mwords = ref false
 
 (* From the command line we take vague file/line locations, but from
    the analysis we can use exact locations. *)
-type split_loc = Line of string * int | Exact of Parse_ast.l
+type split_loc = Line of string * int | Exact of Parse_ast.l | Arg of id
 
 (* Returns the set of type variables that will appear in the Lem output,
    which may be smaller than those in the Sail type.  May need to be
@@ -137,11 +137,11 @@ let ids_in_exp exp =
 
 let make_vector_lit sz i =
   let f j =
-    if Big_int.equal (Big_int.modulus (Big_int.shift_right i (sz - j - 1)) (Big_int.of_int 2)) Big_int.zero then '0'
-    else '1'
+    if Big_int.equal (Big_int.modulus (Big_int.shift_right i (sz - j - 1)) (Big_int.of_int 2)) Big_int.zero then Bin_0
+    else Bin_1
   in
-  let s = String.init sz f in
-  L_aux (L_bin s, Generated Unknown)
+  let s = List.init sz f in
+  L_aux (L_bin (non_empty_singleton s), Generated Unknown)
 
 let tabulate f n =
   let rec aux acc n =
@@ -335,7 +335,9 @@ let split_src_type all_errors env id ty (TypQ_aux (q, ql)) =
           let kopts, nc', ty = apply_kid_insts inst nc' ty in
           let ty =
             (* Typ_exist is not allowed an empty list of kids *)
-            match kopts with [] -> ty | _ -> Typ_aux (Typ_exist (kopts, nc', ty), l)
+            match kopts with
+            | [] -> ty
+            | _ -> Typ_aux (Typ_exist (kopts, nc', ty), l)
           in
           (inst @ inst0, ty)
         in
@@ -371,6 +373,8 @@ let split_src_type all_errors env id ty (TypQ_aux (q, ql)) =
       else (
         let wrap =
           match id with
+          | Id_aux (And_bool, l) -> fun _ -> Id_aux (And_bool, l)
+          | Id_aux (Or_bool, l) -> fun _ -> Id_aux (Or_bool, l)
           | Id_aux (Id i, l) -> fun f -> Id_aux (Id (f i), Generated l)
           | Id_aux (Operator i, l) -> fun f -> Id_aux (Operator (f i), l)
         in
@@ -472,6 +476,8 @@ let freshen_id =
     let n = !counter in
     let () = counter := n + 1 in
     match id with
+    | Id_aux (And_bool, l) -> Id_aux (And_bool, l)
+    | Id_aux (Or_bool, l) -> Id_aux (Or_bool, l)
     | Id_aux (Id x, l) -> Id_aux (Id (x ^ "#m" ^ string_of_int n), Generated l)
     | Id_aux (Operator x, l) -> Id_aux (Operator (x ^ "#m" ^ string_of_int n), Generated l)
 
@@ -511,7 +517,7 @@ let freshen_pat_bindings p =
     | P_tuple ps ->
         let ps, vs = List.split (List.map aux ps) in
         (mkp (P_tuple ps), List.concat vs)
-    | P_struct (fps, fwild) ->
+    | P_struct (struct_name, fps, fwild) ->
         let fps, vs =
           List.split
             (List.map
@@ -522,7 +528,7 @@ let freshen_pat_bindings p =
                fps
             )
         in
-        (mkp (P_struct (fps, fwild)), List.concat vs)
+        (mkp (P_struct (struct_name, fps, fwild)), List.concat vs)
     | P_list ps ->
         let ps, vs = List.split (List.map aux ps) in
         (mkp (P_list ps), List.concat vs)
@@ -550,7 +556,7 @@ let stop_at_false_assertions e =
     match e with
     | E_constraint nc -> nc_false nc
     | E_lit (L_aux (L_false, _)) -> true
-    | E_app (Id_aux (Id "and_bool", _), [e1; e2]) -> exp_false e1 || exp_false e2
+    | E_app (f, [e1; e2]) when is_and_bool f -> exp_false e1 || exp_false e2
     | _ -> false
   in
   let rec exp (E_aux (e, ann) as ea) =
@@ -620,8 +626,8 @@ let apply_pat_choices choices =
     | exception Not_found -> (
         match e with
         | E_constraint nc -> E_aux (E_constraint (rewrite_ncs nc), (l, ann))
-        | E_app (Id_aux (Id "and_bool", andl), [e1; e2]) ->
-            E_aux (E_app (Id_aux (Id "and_bool", andl), [rewrite_assert_cond e1; rewrite_assert_cond e2]), (l, ann))
+        | E_app (Id_aux (And_bool, andl), [e1; e2]) ->
+            E_aux (E_app (Id_aux (And_bool, andl), [rewrite_assert_cond e1; rewrite_assert_cond e2]), (l, ann))
         | _ -> exp
       )
   in
@@ -686,7 +692,7 @@ let split_defs target all_errors (splits : split_req list) env ast =
   let refinements, defs' = split_constructors ast.defs in
 
   (* This will perform the initialisation just once, and share it across all defs *)
-  let const_prop = Constant_propagation.const_prop target ast in
+  let const_prop = Constant_propagation.const_prop target env ast in
 
   let subst_exp ref_vars substs ksubsts exp =
     let substs = (bindings_from_list substs, KBindings.map fst ksubsts) in
@@ -823,10 +829,14 @@ let split_defs target all_errors (splits : split_req list) env ast =
       in
       aux
     in
-    let match_l l =
+    let match_l ?f l =
       let matches =
         List.filter
-          (function Exact l', _, _ -> l = l' | Line (filename, line), _, _ -> match_file_line filename line l)
+          (function
+            | Exact l', _, _ -> l = l'
+            | Line (filename, line), _, _ -> match_file_line filename line l
+            | Arg f', _, _ -> Option.fold ~none:false ~some:(fun f -> Id.compare f f' == 0) f
+            )
           ls
       in
       List.map (fun (_, var, optpats) -> (var, optpats)) matches
@@ -840,6 +850,7 @@ let split_defs target all_errors (splits : split_req list) env ast =
         | Id_aux (Operator x, _) -> (
             try Some (List.assoc x vars) with Not_found -> None
           )
+        | _ -> None
       in
 
       let rec list f = function
@@ -963,9 +974,9 @@ let split_defs target all_errors (splits : split_req list) env ast =
         | P_vector_concat ps -> relist spl (fun ps -> P_vector_concat ps) ps
         | P_string_append ps -> relist spl (fun ps -> P_string_append ps) ps
         | P_tuple ps -> relist spl (fun ps -> P_tuple ps) ps
-        | P_struct (fps, fwild) ->
+        | P_struct (struct_name, fps, fwild) ->
             let fields, ps = List.split fps in
-            relist spl (fun ps -> P_struct (List.combine fields ps, fwild)) ps
+            relist spl (fun ps -> P_struct (struct_name, List.combine fields ps, fwild)) ps
         | P_list ps -> relist spl (fun ps -> P_list ps) ps
         | P_cons (p1, p2) -> re2 spl (fun p1' p2' -> P_cons (p1', p2')) p1 p2
         | P_vector_subrange _ ->
@@ -974,9 +985,11 @@ let split_defs target all_errors (splits : split_req list) env ast =
       spl p
     in
 
-    let map_pat_by_loc (P_aux (p, (l, _)) as pat) = match match_l l with [] -> None | vars -> split_pat vars pat in
-    let map_pat (P_aux (p, (l, tannot)) as pat) =
-      let try_by_location () = match map_pat_by_loc pat with Some l -> VarSplit l | None -> NoSplit in
+    let map_pat_by_loc ?f (P_aux (p, (l, _)) as pat) =
+      match match_l ?f l with [] -> None | vars -> split_pat vars pat
+    in
+    let map_pat ?f (P_aux (p, (l, tannot)) as pat) =
+      let try_by_location () = match map_pat_by_loc ?f pat with Some l -> VarSplit l | None -> NoSplit in
       match p with
       | P_app (id, args) -> begin
           match List.find (fun (id', _) -> Id.compare id id' = 0) refinements with
@@ -1048,7 +1061,7 @@ let split_defs target all_errors (splits : split_req list) env ast =
         let re e = E_aux (e, annot) in
         match e with
         | E_block es -> re (E_block (List.map map_exp es))
-        | E_id _ | E_lit _ | E_sizeof _ | E_constraint _ | E_ref _ | E_internal_value _ -> ea
+        | E_id _ | E_lit _ | E_sizeof _ | E_constraint _ | E_ref _ | E_internal_value _ | E_config _ -> ea
         | E_typ (t, e') -> re (E_typ (t, map_exp e'))
         | E_app (id, es) ->
             let es' = List.map map_exp es in
@@ -1058,21 +1071,15 @@ let split_defs target all_errors (splits : split_req list) env ast =
               | true, Some exp -> re exp
               | _, _ -> re (E_app (id, es'))
             end
-        | E_app_infix (e1, id, e2) -> re (E_app_infix (map_exp e1, id, map_exp e2))
         | E_tuple es -> re (E_tuple (List.map map_exp es))
         | E_if (e1, e2, e3) -> re (E_if (map_exp e1, map_exp e2, map_exp e3))
         | E_for (id, e1, e2, e3, ord, e4) -> re (E_for (id, map_exp e1, map_exp e2, map_exp e3, ord, map_exp e4))
         | E_loop (loop, m, e1, e2) -> re (E_loop (loop, m, map_exp e1, map_exp e2))
         | E_vector es -> re (E_vector (List.map map_exp es))
-        | E_vector_access (e1, e2) -> re (E_vector_access (map_exp e1, map_exp e2))
-        | E_vector_subrange (e1, e2, e3) -> re (E_vector_subrange (map_exp e1, map_exp e2, map_exp e3))
-        | E_vector_update (e1, e2, e3) -> re (E_vector_update (map_exp e1, map_exp e2, map_exp e3))
-        | E_vector_update_subrange (e1, e2, e3, e4) ->
-            re (E_vector_update_subrange (map_exp e1, map_exp e2, map_exp e3, map_exp e4))
         | E_vector_append (e1, e2) -> re (E_vector_append (map_exp e1, map_exp e2))
         | E_list es -> re (E_list (List.map map_exp es))
         | E_cons (e1, e2) -> re (E_cons (map_exp e1, map_exp e2))
-        | E_struct fes -> re (E_struct (List.map map_fexp fes))
+        | E_struct (struct_name, fes) -> re (E_struct (struct_name, List.map map_fexp fes))
         | E_struct_update (e, fes) -> re (E_struct_update (map_exp e, List.map map_fexp fes))
         | E_field (e, id) -> re (E_field (map_exp e, id))
         | E_match (e, cases) -> re (E_match (map_exp e, List.concat (List.map map_pexp cases)))
@@ -1090,7 +1097,10 @@ let split_defs target all_errors (splits : split_req list) env ast =
                   let match_exp = E_aux (E_id id, (l', binding_exp_annot)) in
                   let pat_to_split = P_aux (P_id id, (l', binding_exp_annot)) in
                   let patsubsts = split_pat [(id_string, splits)] pat_to_split in
-                  let patsubsts = match patsubsts with Some x -> x | None -> assert false (* TODO *) in
+                  let patsubsts =
+                    match patsubsts with Some x -> x | None -> assert false
+                    (* TODO *)
+                  in
                   let pexps =
                     List.map
                       (fun (pat', substs, pchoices, ksubsts) ->
@@ -1119,10 +1129,10 @@ let split_defs target all_errors (splits : split_req list) env ast =
         | E_internal_return e -> re (E_internal_return (map_exp e))
         | E_internal_assume (nc, e) -> re (E_internal_assume (nc, map_exp e))
       and map_fexp (FE_aux (FE_fexp (id, e), annot)) = FE_aux (FE_fexp (id, map_exp e), annot)
-      and map_pexp = function
+      and map_pexp ?(f : id option) : tannot pexp -> tannot pexp list = function
         | Pat_aux (Pat_exp (p, e), l) -> (
             let nosplit = lazy [Pat_aux (Pat_exp (p, map_exp e), l)] in
-            match map_pat p with
+            match map_pat ?f p with
             | NoSplit -> Lazy.force nosplit
             | VarSplit patsubsts ->
                 if check_split_size patsubsts (pat_loc p) then
@@ -1197,9 +1207,9 @@ let split_defs target all_errors (splits : split_req list) env ast =
       let f, _, _ = map_fns r in
       f
     in
-    let map_pexp r =
-      let _, f, _ = map_fns r in
-      f
+    let map_pexp ?f r =
+      let _, f', _ = map_fns r in
+      f' ?f
     in
     let map_letbind r =
       let _, _, f = map_fns r in
@@ -1209,13 +1219,13 @@ let split_defs target all_errors (splits : split_req list) env ast =
       let ref_vars = Constant_propagation.referenced_vars exp in
       map_exp ref_vars exp
     in
-    let map_pexp top_pexp =
+    let map_pexp ?f top_pexp =
       (* Construct the set of referenced variables so that we don't accidentally
          make false assumptions about them during constant propagation.  Note that
          we assume there aren't any in the guard. *)
       let _, _, body, _ = destruct_pexp top_pexp in
       let ref_vars = Constant_propagation.referenced_vars body in
-      map_pexp ref_vars top_pexp
+      map_pexp ?f ref_vars top_pexp
     in
     let map_letbind (LB_aux (LB_val (_, e), _) as lb) =
       let ref_vars = Constant_propagation.referenced_vars e in
@@ -1223,7 +1233,7 @@ let split_defs target all_errors (splits : split_req list) env ast =
     in
 
     let map_funcl (FCL_aux (FCL_funcl (id, pexp), annot)) =
-      List.map (fun pexp -> FCL_aux (FCL_funcl (id, pexp), annot)) (map_pexp pexp)
+      List.map (fun pexp -> FCL_aux (FCL_funcl (id, pexp), annot)) (map_pexp ~f:id pexp)
     in
 
     let map_fundef (FD_aux (FD_function (r, t, fcls), annot)) =
@@ -1294,10 +1304,9 @@ module AtomToItself = struct
         let annot = (Generated l, empty_tannot) in
         let test : tannot exp =
           E_aux
-            ( E_app_infix
-                ( E_aux (E_app (mk_id "size_itself_int", [E_aux (E_id var, annot)]), annot),
-                  mk_id "==",
-                  E_aux (E_lit lit, annot)
+            ( E_app
+                ( mk_operator "==",
+                  [E_aux (E_app (mk_id "size_itself_int", [E_aux (E_id var, annot)]), annot); E_aux (E_lit lit, annot)]
                 ),
               annot
             )
@@ -1385,7 +1394,7 @@ module AtomToItself = struct
       let ref_vars = Constant_propagation.referenced_vars exp in
       let substs = (Bindings.empty, KBindings.empty) in
       let assigns = Bindings.empty in
-      fst (Constant_propagation.const_prop target ast ref_vars substs assigns exp)
+      fst (Constant_propagation.const_prop target type_env ast ref_vars substs assigns exp)
     in
     let const_prop_pexp pexp =
       let pat, guard, exp, a = destruct_pexp pexp in
@@ -1520,7 +1529,7 @@ module AtomToItself = struct
             let vars, new_guards = (List.concat vars, List.concat new_guards) in
             let body = List.fold_left (add_var_rebind true) body vars in
             let merge_guards g1 g2 : tannot exp =
-              E_aux (E_app_infix (g1, mk_id "&", g2), (Generated Unknown, empty_tannot))
+              E_aux (E_app (mk_operator "&", [g1; g2]), (Generated pl, empty_tannot))
             in
             let guard =
               match (guard, new_guards) with
@@ -2257,6 +2266,7 @@ module Analysis = struct
             )
         end
       | E_lit _ -> (dempty, assigns, empty)
+      | E_config _ -> (dempty, assigns, empty)
       | E_typ (_, e) -> analyse_sub env assigns e
       | E_app (id, args) when string_of_id id = "bitvector_length" -> begin
           match destruct_atom_nexp (env_of_annot (l, annot)) (typ_of_annot (l, annot)) with
@@ -2323,16 +2333,10 @@ module Analysis = struct
       | E_vector es ->
           let ds, assigns, r = non_det es in
           (merge_deps ds, assigns, r)
-      | E_vector_access (e1, e2) | E_vector_append (e1, e2) | E_cons (e1, e2) ->
+      | E_vector_append (e1, e2) | E_cons (e1, e2) ->
           let ds, assigns, r = non_det [e1; e2] in
           (merge_deps ds, assigns, r)
-      | E_vector_subrange (e1, e2, e3) | E_vector_update (e1, e2, e3) ->
-          let ds, assigns, r = non_det [e1; e2; e3] in
-          (merge_deps ds, assigns, r)
-      | E_vector_update_subrange (e1, e2, e3, e4) ->
-          let ds, assigns, r = non_det [e1; e2; e3; e4] in
-          (merge_deps ds, assigns, r)
-      | E_struct fexps ->
+      | E_struct (_, fexps) ->
           let es = List.map (function FE_aux (FE_fexp (_, e), _) -> e) fexps in
           let ds, assigns, r = non_det es in
           (merge_deps ds, assigns, r)
@@ -2456,7 +2460,7 @@ module Analysis = struct
           (merge_deps (deps :: ds), List.fold_left dep_bindings_merge Bindings.empty assigns, List.fold_left merge r rs)
       | E_assert (e1, _) -> analyse_sub env assigns e1
       | E_internal_assume (nc, e1) -> analyse_sub env assigns e1
-      | E_app_infix _ | E_internal_plet _ | E_internal_return _ | E_internal_value _ ->
+      | E_internal_plet _ | E_internal_return _ | E_internal_value _ ->
           raise
             (Reporting.err_unreachable l __POS__
                ("Unexpected expression encountered in monomorphisation: " ^ string_of_exp exp)
@@ -2652,7 +2656,7 @@ module Analysis = struct
             (s, v, KidSet.fold (fun kid k -> KBindings.add kid (Have (s, ExtraSplits.empty, LetSplits.empty)) k) kids k)
         | P_app (_, pats) -> of_list pats
         | P_vector pats | P_vector_concat pats | P_string_append pats | P_tuple pats | P_list pats -> of_list pats
-        | P_struct (fpats, _) -> List.map snd fpats |> of_list
+        | P_struct (_, fpats, _) -> List.map snd fpats |> of_list
         | P_cons (p1, p2) -> of_list [p1; p2]
         | P_vector_subrange _ ->
             Reporting.unreachable l __POS__ "vector subrange pattern should be removed before monomorphisation"
@@ -2685,7 +2689,7 @@ module Analysis = struct
           Some
             (KidSet.fold
                (* Allow failures for non-Int type variables *)
-                 (fun kid deps -> try dmerge deps (KBindings.find kid kid_deps) with Not_found -> deps
+               (fun kid deps -> try dmerge deps (KBindings.find kid kid_deps) with Not_found -> deps
                )
                kids dempty
             )
@@ -2712,7 +2716,7 @@ module Analysis = struct
       in
       let rec aux (E_aux (e, _)) =
         match e with
-        | E_app (Id_aux (Id "or_bool", _), [e1; e2]) -> aux e1 @ aux e2
+        | E_app (Id_aux (Or_bool, _), [e1; e2]) -> aux e1 @ aux e2
         | E_app
             ( Id_aux (Id "eq_int", _),
               [E_aux (E_sizeof (Nexp_aux (Nexp_var kid, _)), _); E_aux (E_lit (L_aux (L_num i, _)), _)]
@@ -2766,7 +2770,7 @@ module Analysis = struct
       | _ -> KBindings.empty
     in
     match e with
-    | E_aux (E_app (Id_aux (Id "and_bool", _), [e1; e2]), _) ->
+    | E_aux (E_app (Id_aux (And_bool, _), [e1; e2]), _) ->
         merge_set_asserts_by_kid (sets_from_assert e1) (sets_from_assert e2)
     | E_aux (E_constraint nc, _) -> sets_from_nc nc
     | _ -> set_from_or_exps e
@@ -3030,12 +3034,7 @@ module MonoRewrites = struct
     let is_slice = is_id env (Id "slice") in
     let is_zeros id = is_zeros env id in
     let is_ones id = is_id env (Id "Ones") id || is_id env (Id "ones") id || is_id env (Id "sail_ones") id in
-    let is_ones_lit str =
-      (* String.for_all requires a newer version of OCaml than our current minimum *)
-      let rec aux i = if str.[i] = '1' then if i = 0 then true else aux (i - 1) else false in
-      let len = String.length str in
-      if len = 0 then false else aux (len - 1)
-    in
+    let is_ones_lit = function [] -> false | bin -> List.for_all (non_empty_for_all (fun b -> b = Bin_1)) bin in
     let is_zero_extend = is_zero_extend env id in
     let is_sign_extend =
       is_id env (Id "SignExtend") id || is_id env (Id "sign_extend") id || is_id env (Id "sail_sign_extend") id
@@ -3043,10 +3042,12 @@ module MonoRewrites = struct
     in
     let is_truncate = is_id env (Id "truncate") id in
     let mk_exp e = E_aux (e, (Unknown, empty_tannot)) in
+    let mk_infix_exp l op r = mk_exp (E_app (op, [l; r])) in
     let rec is_zeros_exp e =
       match unaux_exp e with
       | E_app (zeros, [_]) when is_zeros zeros -> true
-      | E_lit (L_aux ((L_bin s | L_hex s), _)) -> List.for_all (fun c -> c = '0') (Util.string_to_list s)
+      | E_lit (L_aux (L_bin bin, _)) -> List.for_all (non_empty_for_all (fun b -> b = Bin_0)) bin
+      | E_lit (L_aux (L_hex hex, _)) -> List.for_all (non_empty_for_all (fun n -> n = Hex_0)) hex
       | E_typ (_, e) -> is_zeros_exp e
       | _ -> false
     in
@@ -3183,7 +3184,7 @@ module MonoRewrites = struct
           | Some zlen ->
               (* Give the length explicitly rather than relying on the context;
                  it might not be sufficiently constrained. *)
-              let total = mk_exp (E_app_infix (zlen, mk_id "+", len1)) in
+              let total = mk_infix_exp zlen (mk_operator "+") len1 in
               try_cast_to_typ (mk_exp (E_app (mk_id "slice_mask", [total; zlen; len1])))
           | None -> E_app (id, args)
         end
@@ -3193,8 +3194,8 @@ module MonoRewrites = struct
           | Some zlen ->
               (* Give the length explicitly rather than relying on the context;
                  it might not be sufficiently constrained. *)
-              let len1 = mk_exp (E_lit (L_aux (L_num (Nat_big_num.of_int (String.length lit)), Unknown))) in
-              let total = mk_exp (E_app_infix (zlen, mk_id "+", len1)) in
+              let len1 = mk_exp (E_lit (L_aux (L_num (Nat_big_num.of_int (bin_lit_length lit)), Unknown))) in
+              let total = mk_infix_exp zlen (mk_operator "+") len1 in
               try_cast_to_typ (mk_exp (E_app (mk_id "slice_mask", [total; zlen; len1])))
           | None -> E_app (id, args)
         end
@@ -3206,7 +3207,7 @@ module MonoRewrites = struct
           | Some zlen ->
               (* Give the length explicitly rather than relying on the context;
                  it might not be sufficiently constrained. *)
-              let total = mk_exp (E_app_infix (zlen, mk_id "+", len2)) in
+              let total = mk_infix_exp zlen (mk_operator "+") len2 in
               let zero = mk_exp (E_lit (mk_lit (L_num Nat_big_num.zero))) in
               try_cast_to_typ (mk_exp (E_app (mk_id "slice_mask", [total; zero; len2])))
           | None -> E_app (id, args)
@@ -3217,8 +3218,8 @@ module MonoRewrites = struct
           | Some zlen ->
               (* Give the length explicitly rather than relying on the context;
                  it might not be sufficiently constrained. *)
-              let len2 = mk_exp (E_lit (L_aux (L_num (Nat_big_num.of_int (String.length lit)), Unknown))) in
-              let total = mk_exp (E_app_infix (zlen, mk_id "+", len2)) in
+              let len2 = mk_exp (E_lit (L_aux (L_num (Nat_big_num.of_int (bin_lit_length lit)), Unknown))) in
+              let total = mk_infix_exp zlen (mk_operator "+") len2 in
               let zero = mk_exp (E_lit (mk_lit (L_num Nat_big_num.zero))) in
               try_cast_to_typ (mk_exp (E_app (mk_id "slice_mask", [total; zero; len2])))
           | None -> E_app (id, args)
@@ -3228,14 +3229,14 @@ module MonoRewrites = struct
         ->
           let one = mk_exp (E_lit (mk_lit (L_num (Big_int.of_int 1)))) in
           let len2 = mk_exp (E_app (mk_id "length", [vector2])) in
-          let total = mk_exp (E_app_infix (len1, mk_id "+", len2)) in
+          let total = mk_infix_exp len1 (mk_operator "+") len2 in
           try_cast_to_typ
             (E_aux
                ( E_app
                    ( mk_id "update_subrange_bits",
                      [
                        E_aux (E_app (ones1, [total]), (Unknown, empty_tannot));
-                       mk_exp (E_app_infix (len2, mk_id "-", one));
+                       mk_infix_exp len2 (mk_operator "-") one;
                        mk_exp (E_lit (mk_lit (L_num Big_int.zero)));
                        vector2;
                      ]
@@ -3280,7 +3281,7 @@ module MonoRewrites = struct
           let one = mk_exp (E_lit (mk_lit (L_num (Big_int.of_int 1)))) in
           let length2 = mk_exp (E_app (mk_id "length", [vector2])) in
           let indices2 =
-            if is_subrange op then [mk_exp (E_app_infix (length2, mk_id "-", one)); zero] else [zero; length2]
+            if is_subrange op then [mk_infix_exp length2 (mk_operator "-") one; zero] else [zero; length2]
           in
           try_cast_to_typ
             (E_aux (E_app (mk_id op', [vector1; start1; length1; vector2] @ indices2), (Unknown, empty_tannot)))
@@ -3374,13 +3375,8 @@ module MonoRewrites = struct
              && is_bitvector_typ (typ_of vector2)
              && not (is_constant len1 && is_constant start1 && is_constant len2 && is_constant start2) ->
           let upper start len =
-            mk_exp
-              (E_app_infix
-                 ( start,
-                   mk_id "+",
-                   mk_exp (E_app_infix (len, mk_id "-", mk_exp (E_lit (mk_lit (L_num (Big_int.of_int 1))))))
-                 )
-              )
+            mk_infix_exp start (mk_operator "+")
+              (mk_infix_exp len (mk_operator "-") (mk_exp (E_lit (mk_lit (L_num (Big_int.of_int 1))))))
           in
           wrap
             (E_app
@@ -3523,7 +3519,7 @@ module MonoRewrites = struct
           try_cast_to_typ (rewrap (E_app (mk_id "zext_subrange", length_arg @ [vector1; hi1; lo1])))
       | [E_aux (E_app (ones, [len1]), _)] when is_ones ones ->
           try_cast_to_typ (rewrap (E_app (mk_id "zext_ones", length_arg @ [len1])))
-      | [E_aux (E_app (replicate_bits, [E_aux (E_lit (L_aux (L_bin "1", _)), _); len1]), _)]
+      | [E_aux (E_app (replicate_bits, [E_aux (E_lit (L_aux (L_bin [Non_empty (Bin_1, [])], _)), _); len1]), _)]
         when is_id env (Id "replicate_bits") replicate_bits ->
           let start1 = mk_exp (E_lit (mk_lit (L_num Big_int.zero))) in
           try_cast_to_typ (rewrap (E_app (mk_id "slice_mask", length_arg @ [start1; len1])))
@@ -3608,8 +3604,8 @@ module MonoRewrites = struct
     else if is_id env (Id "Replicate") id then (
       let length_arg = List.filter (fun arg -> is_number (typ_of arg)) args in
       match List.filter (fun arg -> not (is_number (typ_of arg))) args with
-      | [E_aux (E_lit (L_aux (L_bin "0", _)), _)] -> E_app (mk_id "sail_zeros", length_arg)
-      | [E_aux (E_lit (L_aux (L_bin "1", _)), _)] -> E_app (mk_id "sail_ones", length_arg)
+      | [E_aux (E_lit (L_aux (L_bin [Non_empty (Bin_0, [])], _)), _)] -> E_app (mk_id "sail_zeros", length_arg)
+      | [E_aux (E_lit (L_aux (L_bin [Non_empty (Bin_1, [])], _)), _)] -> E_app (mk_id "sail_ones", length_arg)
       | _ -> E_app (id, args)
       (* Turn constant-length subranges into slices, making the constant length more explicit,
          e.g. turning x[i+1 .. i] into slice(x, i, 2) *)
@@ -3708,10 +3704,10 @@ module MonoRewrites = struct
         let new_annot = (Generated l, empty_tannot) in
         let vector = List.find (fun exp -> is_bitvector_typ (typ_of exp)) zero_extend_args in
         let len = E_aux (E_app (mk_id "length", [vector]), new_annot) in
-        let mid_point_high = E_aux (E_app_infix (end1, mk_id "+", len), new_annot) in
+        let mid_point_high = E_aux (E_app (mk_operator "+", [end1; len]), new_annot) in
         let mid_point_low =
           E_aux
-            ( E_app_infix (mid_point_high, mk_id "-", E_aux (E_lit (mk_lit (L_num (Big_int.of_int 1))), new_annot)),
+            ( E_app (mk_operator "-", [mid_point_high; E_aux (E_lit (mk_lit (L_num (Big_int.of_int 1))), new_annot)]),
               new_annot
             )
         in
@@ -4031,7 +4027,7 @@ module BitvectorSizeCasts = struct
         )
       when string_of_id op = "eq_int" && Id.compare var var' == 0 ->
         Some i
-    | E_app (op, [e1; e2]) when string_of_id op = "and_bool" -> (
+    | E_app (op, [e1; e2]) when is_and_bool op -> (
         match extract_value_from_guard var e1 with Some i -> Some i | None -> extract_value_from_guard var e2
       )
     | _ -> None
@@ -4070,7 +4066,7 @@ module BitvectorSizeCasts = struct
             [(kid, i)]
         | _ -> []
       )
-    | E_app (op, [x; y]) when string_of_id op = "and_bool" -> extract x @ extract y
+    | E_app (op, [x; y]) when is_and_bool op -> extract x @ extract y
     | _ -> []
 
   (* TODO: top-level patterns *)
@@ -4585,9 +4581,9 @@ module ToplevelNexpRewrites = struct
           let env = Env.add_typquant tq_l tyqs env in
           let nexp_map, fields' =
             List.fold_right
-              (fun (typ, id) (nexp_map, t) ->
+              (fun ((id, typ), def_annot) (nexp_map, t) ->
                 let nexp_map, typ = rewrite_typ_in_spec env nexp_map typ in
-                (nexp_map, (typ, id) :: t)
+                (nexp_map, ((id, typ), def_annot) :: t)
               )
               fields ([], [])
           in
@@ -4664,9 +4660,13 @@ module ToplevelNexpRewrites = struct
       | TD_abbrev (id, typq, A_aux (A_typ typ, l)) ->
           TD_aux (TD_abbrev (id, typq, A_aux (A_typ (expand_type typ), l)), annot)
       | TD_abbrev (id, typq, typ_arg) -> TD_aux (TD_abbrev (id, typq, typ_arg), annot)
-      | TD_abstract (id, kind) -> TD_aux (TD_abstract (id, kind), annot)
+      | TD_abstract (id, kind, instantiation) -> TD_aux (TD_abstract (id, kind, instantiation), annot)
       | TD_record (id, typq, typ_ids, flag) ->
-          TD_aux (TD_record (id, typq, List.map (fun (typ, id) -> (expand_type typ, id)) typ_ids, flag), annot)
+          TD_aux
+            ( TD_record
+                (id, typq, List.map (fun ((id, typ), def_annot) -> ((id, expand_type typ), def_annot)) typ_ids, flag),
+              annot
+            )
       | TD_variant (id, typq, tus, flag) -> TD_aux (TD_variant (id, typq, List.map rw_union tus, flag), annot)
       | TD_enum (id, ids, flag) -> TD_aux (TD_enum (id, ids, flag), annot)
       | TD_bitfield _ -> assert false (* Processed before re-writing *)
@@ -4710,7 +4710,7 @@ let monomorphise target effect_info opts splits ast =
     )
     else (true, [], Analysis.ExtraSplits.empty)
   in
-  let splits = new_splits @ List.map (fun ((file, line), id) -> (Line (file, line), id, None)) splits in
+  let splits = new_splits @ List.map (fun (loc, id) -> (loc, id, None)) splits in
   let ok_extras, defs, extra_splits = add_extra_splits extra_splits ast.defs in
   let ast = { ast with defs } in
   let splits = splits @ extra_splits in

@@ -14,10 +14,24 @@ jobs:
     strategy:
       matrix:
         include:
-          - os: ubuntu-latest
+          - name: Linux-x86_64
+            os: ubuntu-latest
             container: rockylinux:8
-            ocaml_version: 5.0.0
-            opam_cache_key: rocky8-5.0.0
+            ocaml_version: 5.2.1
+            opam_arch: i686
+            opam_cache_key: rocky8-5.2.1
+          - name: Linux-aarch64
+            os: ubuntu-24.04-arm
+            container: rockylinux:8
+            ocaml_version: 5.2.1
+            opam_arch: arm64
+            opam_cache_key: rocky8-5.2.1-arm
+          # MacOS disabled for now due to code signing and notarisation requirements
+          # - name: mac-arm64 */
+          #   os: macos-latest */
+          #   container: "" */
+          #   ocaml_version: 5.2.1 */
+          #   opam_cache_key: macos-latest-5.2.1 */
 
     runs-on: ${{ matrix.os }}
     container: ${{ matrix.container }}
@@ -29,7 +43,8 @@ jobs:
     steps:
     # This must be before checkout otherwise Github will use a zip of the
     # code instead of git clone.
-    - name: System dependencies
+    - name: System dependencies (Linux)
+      if: startsWith(matrix.os, 'ubuntu')
       run: |
         dnf install --assumeyes \
           gmp-devel \
@@ -48,24 +63,31 @@ jobs:
           findutils \
           diffutils \
           rsync \
-          which
+          which \
+          cargo
+        curl -L -o /usr/local/bin/opam https://github.com/ocaml/opam/releases/download/2.1.5/opam-2.1.5-${{ matrix.opam_arch }}-linux
+        chmod +x /usr/local/bin/opam
+
+    - name: System dependencies (Mac)
+      if: startsWith(matrix.os, 'macos')
+      run: |
+        brew install --force --overwrite gpatch gmp z3 pkgconf opam git rust
 
     - uses: actions/checkout@v4
 
-    # Retreive git history (but not files) so that `git desribe` works. This is
+    # Retreive git history (but not files) so that `git describe` works. This is
     # used to set the version info in the compiler (printed by `sail --version`).
+    #
     # The safe.directory command is needed because the current user does not
     # own the git repo directory and that can be a security issue in some case
     # (but not this one).
+    #
+    # `git fetch --unshallow --filter=tree:0` can be used on Ubuntu to reduce
+    # the download size but unfortunately that causes `opam pin` to fail on Mac.
     - name: Unshallow git history
       run: |
         git config --global --add safe.directory '*'
-        git fetch --unshallow --filter=tree:0
-
-    - name: Download OPAM
-      run: |
-        curl -L -o /usr/local/bin/opam https://github.com/ocaml/opam/releases/download/2.1.5/opam-2.1.5-i686-linux
-        chmod +x /usr/local/bin/opam
+        git fetch --unshallow
 
     - name: Restore cached ~/.opam
       id: cache-opam-restore
@@ -99,6 +121,7 @@ jobs:
     # Build Z3 from source since the binary releases only support glibc 2.31
     # and old distros like RHEL 8 have 2.28.
     - name: Build Z3
+      if: startsWith(matrix.os, 'ubuntu')
       run: |
         git clone --depth 1 --branch z3-4.13.0 https://github.com/Z3Prover/z3.git
         mkdir z3/build
@@ -110,14 +133,14 @@ jobs:
     - name: Make release tarball
       run: |
         eval $(opam env)
-        make tarball TARBALL_EXTRA_BIN=$(which z3)
+        make tarball TARBALL_EXTRA_BIN=z3/build/z3
 
     - uses: actions/attest-build-provenance@v1
       with:
-        subject-path: _build/sail.tar.gz
+        subject-path: _build/sail-${{ matrix.name }}.tar.gz
 
     - name: Upload tarball
       uses: actions/upload-artifact@v4
       with:
-        name: sail
-        path: _build/sail.tar.gz
+        name: sail-${{ matrix.name }}
+        path: _build/sail-${{ matrix.name }}.tar.gz

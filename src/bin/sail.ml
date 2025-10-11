@@ -52,7 +52,7 @@ open Sail_options
 type version = { major : int; minor : int; patch : int }
 
 (* Current version of Sail. Must be updated manually. *)
-let version = { major = 0; minor = 18; patch = 0 }
+let version = { major = 0; minor = 19; patch = 1 }
 
 let opt_new_cli = ref false
 let opt_free_arguments : string list ref = ref []
@@ -65,17 +65,23 @@ let opt_splice : string list ref = ref []
 let opt_print_version = ref false
 let opt_require_version : string option ref = ref None
 let opt_memo_z3 = ref true
+let opt_memo_z3_path = ref "z3_problems"
 let opt_have_feature = ref None
 let opt_all_modules = ref false
 let opt_show_sail_dir = ref false
 let opt_project_files : string list ref = ref []
 let opt_variable_assignments : string list ref = ref []
-let opt_config_file : string option ref = ref None
+let opt_model_config_file : string option ref = ref None
+let opt_sail_config_file : string option ref = ref None
 let opt_format = ref false
 let opt_format_backup : string option ref = ref None
 let opt_format_only : string list ref = ref []
+let opt_format_emit : string ref = ref "file"
 let opt_format_skip : string list ref = ref []
+let opt_format_debug : bool ref = ref false
 let opt_slice_instantiation_types : bool ref = ref false
+let opt_output_schema_file : string option ref = ref None
+
 let is_bytecode = Sys.backend_type = Bytecode
 
 (* Allow calling all options as either -foo_bar, -foo-bar, or
@@ -200,7 +206,7 @@ let version_check ~required =
   || (required.major = version.major && required.minor < version.minor)
   || (required.major = version.major && required.minor = version.minor && required.patch <= version.patch)
 
-let usage_msg = version_string ^ "\nusage: sail <options> <file1.sail> ... <fileN.sail>\n"
+let usage_msg = "Sail " ^ version_string ^ "\nusage: sail <options> <file1.sail> ... <fileN.sail>\n"
 
 let help options = raise (Arg.Help (Arg.usage_string options usage_msg))
 
@@ -250,19 +256,32 @@ let rec options =
         " <type variable=value> instantiate an abstract type variable"
       );
       ("-all_modules", Arg.Set opt_all_modules, " use all modules in project file");
-      ("-list_files", Arg.Set Frontend.opt_list_files, " list files used in all project files");
-      ("-config", Arg.String (fun file -> opt_config_file := Some file), "<file> configuration file");
-      ("-abstract_types", Arg.Set Initial_check.opt_abstract_types, " (experimental) allow abstract types");
+      ("-list_files", Arg.Unit (fun () -> Frontend.opt_list_files := Some " "), " list files used in all project files");
+      ( "-list_files_separated",
+        Arg.String (fun sep -> Frontend.opt_list_files := Some sep),
+        " list files used in all project files, with a provided separator"
+      );
+      ("-config", Arg.String (fun file -> opt_model_config_file := Some file), "<file> model configuration file");
+      ("-sail_config", Arg.String (fun file -> opt_sail_config_file := Some file), "<file> sail configuration file");
+      ( "-output-schema",
+        Arg.String (fun file -> opt_output_schema_file := Some file),
+        "<file> output configuration schema"
+      );
       ("-fmt", Arg.Set opt_format, " format input source code");
       ( "-fmt_backup",
         Arg.String (fun suffix -> opt_format_backup := Some suffix),
         "<suffix> create backups of formatted files as 'file.suffix'"
       );
       ("-fmt_only", Arg.String (fun file -> opt_format_only := file :: !opt_format_only), "<file> format only this file");
+      ( "-fmt_emit",
+        Arg.String (fun output -> opt_format_emit := output),
+        "[file(default)|stdout] update target file or just output to stdout"
+      );
       ( "-fmt_skip",
         Arg.String (fun file -> opt_format_skip := file :: !opt_format_skip),
         "<file> skip formatting this file"
       );
+      ("-fmt_debug", Arg.Bool (fun debug -> opt_format_debug := debug), "<bool> debug mode");
       ( "-slice_instantiation_types",
         Arg.Tuple [Arg.Set Type_check.opt_no_bitfield_expansion; Arg.Set opt_slice_instantiation_types],
         " (experimental) produce a Sail file containing all of the types that are used in instantiations"
@@ -273,12 +292,28 @@ let rec options =
       );
       ("-no_warn", Arg.Clear Reporting.opt_warnings, " do not print warnings");
       ("-all_warnings", Arg.Set Reporting.opt_all_warnings, " print all warning messages");
-      ("-strict_var", Arg.Set Type_check.opt_strict_var, " require var expressions for variable declarations");
-      ("-strict_bitvector", Arg.Set Initial_check.opt_strict_bitvector, " require bitvectors to be indexed by naturals");
+      ( "-strict_var",
+        Arg.Tuple [Arg.Unit (fun () -> Preprocess.add_symbol "STRICT_VAR"); Arg.Set Type_check.opt_strict_var],
+        " require var expressions for variable declarations"
+      );
+      ( "-strict_bitvector",
+        Arg.Tuple
+          [Arg.Unit (fun () -> Preprocess.add_symbol "STRICT_BITVECTOR"); Arg.Set Initial_check.opt_strict_bitvector],
+        " require bitvectors to be indexed by naturals"
+      );
+      ( "-strict_exponentials",
+        Arg.Tuple
+          [Arg.Unit (fun () -> Preprocess.add_symbol "STRICT_EXPONENTIALS"); Arg.Set Type_env.opt_strict_exponentials],
+        " type level exponentials must have a non-negative argument"
+      );
       ("-plugin", Arg.String (fun plugin -> load_plugin options plugin), "<file> load a Sail plugin");
       ("-just_check", Arg.Set opt_just_check, " terminate immediately after typechecking");
-      ("-memo_z3", Arg.Set opt_memo_z3, " memoize calls to z3, improving performance when typechecking repeatedly");
-      ("-no_memo_z3", Arg.Clear opt_memo_z3, " do not memoize calls to z3 (default)");
+      ( "-memo_z3",
+        Arg.Set opt_memo_z3,
+        " memoize calls to z3, improving performance when typechecking repeatedly (default)"
+      );
+      ("-no_memo_z3", Arg.Clear opt_memo_z3, " do not memoize calls to z3");
+      ("-memo_z3_path", Arg.String (fun f -> opt_memo_z3_path := f), "path to cache z3 results (default 'z3_problems')");
       ( "-have_feature",
         Arg.String (fun symbol -> opt_have_feature := Some symbol),
         "<symbol> check if a feature symbol is set by default"
@@ -306,9 +341,10 @@ let rec options =
           (fun s ->
             let l = Util.split_on_char ':' s in
             match l with
-            | [fname; line; var] ->
-                Rewrites.opt_mono_split := ((fname, int_of_string line), var) :: !Rewrites.opt_mono_split
-            | _ -> raise (Arg.Bad (s ^ " not of form <filename>:<line>:<variable>"))
+            | [fn; var] -> Rewrites.opt_mono_split := (Arg (Ast_util.mk_id fn), var) :: !Rewrites.opt_mono_split
+            | [filename; line; var] ->
+                Rewrites.opt_mono_split := (Line (filename, int_of_string line), var) :: !Rewrites.opt_mono_split
+            | _ -> raise (Arg.Bad (s ^ " not of form <filename>:<line>:<variable> or <function>:<variable>"))
           ),
         "<filename>:<line>:<variable> manually gives a case split for monomorphisation"
       );
@@ -337,11 +373,28 @@ let rec options =
           ),
         " unroll function in a set of mutually recursive functions"
       );
+      ( "-ddump_project_depgraph",
+        Arg.String (fun file -> Project.opt_ddump_depgraph := Some file),
+        " (debug) dump module dependency graph to a file"
+      );
+      ("-ddump_project_depgraph_reduced", Arg.Set Project.opt_ddump_depgraph_reduced, " (debug) dump reduced depgraph");
+      ( "-ddump_project_depgraph_skip_deps",
+        Arg.Set Project.opt_ddump_depgraph_skip_deps,
+        " (debug) skip dependencies in depgraph"
+      );
+      ( "-ddump_project_depgraph_skip_reqs",
+        Arg.Set Project.opt_ddump_depgraph_skip_reqs,
+        " (debug) skip requires in depgraph"
+      );
       ("-ddump_initial_ast", Arg.Set Frontend.opt_ddump_initial_ast, " (debug) dump the initial ast to stdout");
       ("-ddump_tc_ast", Arg.Set Frontend.opt_ddump_tc_ast, " (debug) dump the typechecked ast to stdout");
       ("-ddump_side_effect", Arg.Set Frontend.opt_ddump_side_effect, " (debug) dump side effect info");
       ("-dtc_verbose", Arg.Int Type_check.set_tc_debug, "<verbosity> (debug) verbose typechecker output: 0 is silent");
       ("-dsmt_verbose", Arg.Set Constraint.opt_smt_verbose, " (debug) print SMTLIB constraints sent to SMT solver");
+      ( "-dcallgraph",
+        Arg.String (fun str -> Callgraph.opt_debug_callgraph := Some str),
+        "<file> (debug) dump callgraph to file"
+      );
       ("-dmagic_hash", Arg.Set Initial_check.opt_magic_hash, " (debug) allow special character # in identifiers");
       ("-dno_error_filenames", Arg.Set Error_format.opt_debug_no_filenames, " (debug) do not print filenames in errors");
       ( "-dprofile",
@@ -413,7 +466,8 @@ let rec options =
       ("--help", Arg.Unit (fun () -> help !options), " display this list of options");
     ]
 
-let register_default_target () = Target.register ~name:"default" ~supports_abstract_types:true Target.empty_action
+let register_default_target () =
+  Target.register ~name:"default" ~supports_abstract_types:true ~supports_runtime_config:true Target.empty_action
 
 let file_to_string filename =
   let chan = open_in filename in
@@ -430,7 +484,22 @@ let file_to_string filename =
     close_in chan;
     Buffer.contents buf
 
-let run_sail (config : Yojson.Basic.t option) tgt =
+let parse_json_config_file file =
+  if Sys.file_exists file then (
+    let json =
+      try Yojson.Safe.from_file ~fname:file ~lnum:0 file
+      with Yojson.Json_error message ->
+        raise
+          (Reporting.err_general Parse_ast.Unknown (Printf.sprintf "Failed to parse configuration file:\n%s" message))
+    in
+    json
+  )
+  else raise (Reporting.err_general Parse_ast.Unknown (Printf.sprintf "Configuration file %s does not exist" file))
+
+let get_model_config () =
+  match !opt_model_config_file with Some file -> parse_json_config_file file | None -> `Assoc []
+
+let run_sail (config : Yojson.Safe.t option) tgt =
   Target.run_pre_parse_hook tgt ();
 
   let project_files, frees =
@@ -488,10 +557,20 @@ let run_sail (config : Yojson.Basic.t option) tgt =
               arguments with the appropriate extension, but not both!"
           )
   in
-  let ast = Frontend.instantiate_abstract_types (Some tgt) !opt_instantiations ast in
-  let ast, env = Frontend.initial_rewrite effect_info env ast in
+  let config_json = get_model_config () in
+  let ast, instantiation = Frontend.instantiate_abstract_types (Some tgt) config_json !opt_instantiations ast in
+  let schema, ast = Config.rewrite_ast tgt env instantiation config_json ast in
+  let ast, env = if Target.skip_initial_rewrite tgt then (ast, env) else Frontend.initial_rewrite effect_info env ast in
   let ast, env = match !opt_splice with [] -> (ast, env) | files -> Splice.splice_files ctx ast (List.rev files) in
   let effect_info = Effects.infer_side_effects (Target.asserts_termination tgt) ast in
+
+  ( match !opt_output_schema_file with
+  | None -> ()
+  | Some file ->
+      let out = Util.open_output_with_check file in
+      Yojson.Safe.pretty_to_channel ~std:true out.channel schema;
+      Util.close_output_with_check out
+  );
 
   (* Don't show warnings during re-writing for now *)
   Reporting.suppressed_warning_info ();
@@ -504,7 +583,7 @@ let run_sail (config : Yojson.Basic.t option) tgt =
 
   (ctx, ast, env, effect_info)
 
-let run_sail_format (config : Yojson.Basic.t option) =
+let run_sail_format (config : Yojson.Safe.t option) =
   let is_format_file f = match !opt_format_only with [] -> true | files -> List.exists (fun f' -> f = f') files in
   let is_skipped_file f = match !opt_format_skip with [] -> false | files -> List.exists (fun f' -> f = f') files in
   let module Config = struct
@@ -522,7 +601,7 @@ let run_sail_format (config : Yojson.Basic.t option) =
     (fun (f, (comments, parse_ast)) ->
       let source = file_to_string f in
       if is_format_file f && not (is_skipped_file f) then (
-        let formatted = Formatter.format_defs ~debug:true f source comments parse_ast in
+        let formatted = Formatter.format_defs ~debug:!opt_format_debug f source comments parse_ast in
         begin
           match !opt_format_backup with
           | Some suffix ->
@@ -531,9 +610,15 @@ let run_sail_format (config : Yojson.Basic.t option) =
               close_out out_chan
           | None -> ()
         end;
-        let file_info = Util.open_output_with_check f in
-        output_string file_info.channel formatted;
-        Util.close_output_with_check file_info
+        match !opt_format_emit with
+        | "file" ->
+            let file_info = Util.open_output_with_check f in
+            output_string file_info.channel formatted;
+            Util.close_output_with_check file_info
+        | "stdout" ->
+            output_string stdout formatted;
+            flush stdout
+        | _ -> raise (Failure "unknown format_emit option")
       )
     )
     parsed_files
@@ -557,7 +642,7 @@ let rec find_file_above ?prev_inode_opt dir file =
     else None
   with Unix.Unix_error _ -> None
 
-let get_config_file () =
+let get_implicit_config_file override_file =
   let check_exists file =
     if Sys.file_exists file then Some file
     else (
@@ -565,7 +650,7 @@ let get_config_file () =
       None
     )
   in
-  match !opt_config_file with
+  match override_file with
   | Some file -> check_exists file
   | None -> (
       match Sys.getenv_opt "SAIL_CONFIG" with
@@ -573,13 +658,8 @@ let get_config_file () =
       | None -> find_file_above (Sys.getcwd ()) "sail_config.json"
     )
 
-let parse_config_file file =
-  try Some (Yojson.Basic.from_file ~fname:file ~lnum:0 file)
-  with Yojson.Json_error message ->
-    Reporting.warn "" Parse_ast.Unknown (Printf.sprintf "Failed to parse configuration file: %s" message);
-    None
-
 let main () =
+  (* let _ = Memtrace.start_tracing ~context:None ~sampling_rate:1e-6 ~filename:"trace.ctf" in *)
   if Option.is_some (Sys.getenv_opt "SAIL_NEW_CLI") then opt_new_cli := true;
 
   options := Arg.align (fix_options !options);
@@ -601,9 +681,18 @@ let main () =
       )
   end;
 
-  Arg.parse_dynamic options (fun s -> opt_free_arguments := !opt_free_arguments @ [s]) usage_msg;
+  let argv = Sail_file.sail_argv () in
+  ( try Arg.parse_argv_dynamic argv options (fun s -> opt_free_arguments := !opt_free_arguments @ [s]) usage_msg with
+  | Arg.Bad _ ->
+      prerr_endline usage_msg;
+      prerr_endline "Use 'sail --help' for a list of available arguments.";
+      exit 1
+  | Arg.Help msg ->
+      prerr_endline msg;
+      exit 0
+  );
 
-  let config = Option.bind (get_config_file ()) parse_config_file in
+  let config = Option.map parse_json_config_file (get_implicit_config_file !opt_sail_config_file) in
 
   feature_check ();
 
@@ -626,6 +715,7 @@ let main () =
     print_endline version_full;
     exit 0
   );
+
   if !opt_show_sail_dir then (
     print_endline (Reporting.get_sail_dir Locations.sail_dir);
     exit 0
@@ -638,7 +728,7 @@ let main () =
 
   let default_target = register_default_target () in
 
-  if !opt_memo_z3 then Constraint.load_digests ();
+  if !opt_memo_z3 then Constraint.load_digests !opt_memo_z3_path;
 
   let ctx, ast, env, effect_info =
     match Target.get_the_target () with
@@ -646,7 +736,7 @@ let main () =
     | _ -> run_sail config default_target
   in
 
-  if !opt_memo_z3 then Constraint.save_digests ();
+  if !opt_memo_z3 then Constraint.save_digests !opt_memo_z3_path;
 
   if !opt_slice_instantiation_types then (
     let sail_dir = Reporting.get_sail_dir Locations.sail_dir in
@@ -684,5 +774,5 @@ let () =
     | Failure s -> raise (Reporting.err_general Parse_ast.Unknown s)
   with Reporting.Fatal_error e ->
     Reporting.print_error e;
-    if !opt_memo_z3 then Constraint.save_digests () else ();
+    if !opt_memo_z3 then Constraint.save_digests !opt_memo_z3_path else ();
     exit 1

@@ -61,15 +61,15 @@ let rec fexp_of_ctor (field, value) = FE_aux (FE_fexp (mk_id field, exp_of_value
    we must convert that back to expression to re-insert it in the AST
 *)
 and exp_of_value =
-  let open Value in
+  let open Value_type in
   function
   | V_int n -> mk_lit_exp (L_num n)
-  | V_bit Sail_lib.B0 -> mk_lit_exp L_zero
-  | V_bit Sail_lib.B1 -> mk_lit_exp L_one
+  | V_bit B0 -> mk_lit_exp L_zero
+  | V_bit B1 -> mk_lit_exp L_one
   | V_bool true -> mk_lit_exp L_true
   | V_bool false -> mk_lit_exp L_false
   | V_string str -> mk_lit_exp (L_string str)
-  | V_record fields -> mk_exp (E_struct (List.map fexp_of_ctor (StringMap.bindings fields)))
+  | V_record fields -> mk_exp (E_struct (SN_anon, List.map fexp_of_ctor fields))
   | V_vector vs -> mk_exp (E_vector (List.map exp_of_value vs))
   | V_tuple vs -> mk_exp (E_tuple (List.map exp_of_value vs))
   | V_unit -> mk_lit_exp L_unit
@@ -80,11 +80,11 @@ and exp_of_value =
    that we avoid traversing through every element of vectors and
    lists, so a list of large lists could still sneak through *)
 let rec is_too_large =
-  let open Value in
+  let open Value_type in
   function
   | V_int _ | V_bit _ | V_bool _ | V_string _ | V_unit | V_attempted_read _ | V_real _ | V_ref _ | V_member _ -> false
   | V_vector vs | V_tuple vs | V_list vs -> List.compare_length_with vs 256 > 0
-  | V_record fields -> StringMap.exists (fun _ v -> is_too_large v) fields
+  | V_record fields -> List.exists (fun (_, v) -> is_too_large v) fields
   | V_ctor (_, vs) -> List.exists is_too_large vs
 
 (* We want to avoid evaluating things like print statements at compile
@@ -114,22 +114,17 @@ let safe_primops =
       "Elf_loader.elf_tohost";
     ]
 
-(** We can specify a list of identifiers that we want to remove from
-   the final AST here. This is useful for removing tracing features in
-   optimized builds, e.g. for booting an OS as fast as possible.
+(** We can specify a list of identifiers that we want to remove from the final AST here. This is useful for removing
+    tracing features in optimized builds, e.g. for booting an OS as fast as possible.
 
-   Basically we just do this by mapping
+    Basically we just do this by mapping
 
-   f(x, y, z) -> ()
+    f(x, y, z) -> ()
 
-   when f is in the list of identifiers to be mapped to unit. The
-   advantage of doing it like this is if x, y, and z are
-   computationally expensive then we remove them also. String
-   concatenation is very expensive at runtime so this is something we
-   really want when cutting out tracing features. Obviously it's
-   important that they don't have any meaningful side effects, and
-   that f does actually have type unit.
-*)
+    when f is in the list of identifiers to be mapped to unit. The advantage of doing it like this is if x, y, and z are
+    computationally expensive then we remove them also. String concatenation is very expensive at runtime so this is
+    something we really want when cutting out tracing features. Obviously it's important that they don't have any
+    meaningful side effects, and that f does actually have type unit. *)
 let opt_fold_to_unit = ref []
 
 let fold_to_unit id =
@@ -140,7 +135,7 @@ let rec is_constant (E_aux (e_aux, _) as exp) =
   match e_aux with
   | E_lit _ -> true
   | E_vector exps -> List.for_all is_constant exps
-  | E_struct fexps -> List.for_all is_constant_fexp fexps
+  | E_struct (_, fexps) -> List.for_all is_constant_fexp fexps
   | E_typ (_, exp) -> is_constant exp
   | E_tuple exps -> List.for_all is_constant exps
   | E_id id -> (
@@ -159,29 +154,24 @@ let rec run frame =
       assert false
   | Interpreter.Step (lazy_str, _, _, _) -> run (Interpreter.eval_frame frame)
   | Interpreter.Break frame -> run (Interpreter.eval_frame frame)
-  | Interpreter.Effect_request (out, st, stack, Interpreter.Read_reg (reg, cont)) ->
+  | Interpreter.Effect_request (out, st, stack, Interpreter.Read_reg (reg, [], cont)) ->
       (* return a dummy value to read_reg requests which we handle above
          if an expression finally evals to it, but the interpreter
          will fail if it tries to actually use. See value.ml *)
-      run (cont (Value.V_attempted_read reg) st)
+      run (cont (Value_type.V_attempted_read reg) st)
   | Interpreter.Effect_request _ -> assert false (* effectful, raise exception to abort constant folding *)
 
-(** This rewriting pass looks for function applications (E_app)
-   expressions where every argument is a literal. It passes these
-   expressions to the OCaml interpreter in interpreter.ml, and
-   reconstructs the values returned back into expressions which are
-   then re-typechecked and re-inserted back into the AST.
+(** This rewriting pass looks for function applications (E_app) expressions where every argument is a literal. It passes
+    these expressions to the OCaml interpreter in interpreter.ml, and reconstructs the values returned back into
+    expressions which are then re-typechecked and re-inserted back into the AST.
 
-   We don't use the effect system to decide if expressions are safe to
-   evaluate, because this ignores I/O, and would force us to ignore
-   functions that maybe throw exceptions internally but as called are
-   totally safe. Instead any exceptions during evaluation are caught,
-   and the original expression is kept. Some causes of this could be:
+    We don't use the effect system to decide if expressions are safe to evaluate, because this ignores I/O, and would
+    force us to ignore functions that maybe throw exceptions internally but as called are totally safe. Instead any
+    exceptions during evaluation are caught, and the original expression is kept. Some causes of this could be:
 
-   - Function tries to read/write register.
-   - Calls an unsafe primop.
-   - Throws an exception that isn't caught.
- *)
+    - Function tries to read/write register.
+    - Calls an unsafe primop.
+    - Throws an exception that isn't caught. *)
 
 let initial_state ast env = Interpreter.initial_state ~registers:false ast env safe_primops
 
@@ -191,7 +181,7 @@ let no_fixed = { registers = Bindings.empty; fields = Bindings.empty }
 
 let rw_exp fixed target ok not_ok istate =
   let evaluate e_aux annot =
-    let initial_monad = Interpreter.return (E_aux (e_aux, annot)) in
+    let initial_monad = Interpreter.Monad.pure (E_aux (e_aux, annot)) in
     try
       begin
         let v = run (Interpreter.Step (lazy "", istate, initial_monad, [])) in
@@ -244,10 +234,10 @@ let rw_exp fixed target ok not_ok istate =
         | None -> E_aux (e_aux, annot)
       end
     (* Short-circuit boolean operators with constants *)
-    | E_app (id, [(E_aux (E_lit (L_aux (L_false, _)), _) as false_exp); _]) when string_of_id id = "and_bool" ->
+    | E_app (id, [(E_aux (E_lit (L_aux (L_false, _)), _) as false_exp); _]) when is_and_bool id ->
         ok ();
         false_exp
-    | E_app (id, [(E_aux (E_lit (L_aux (L_true, _)), _) as true_exp); _]) when string_of_id id = "or_bool" ->
+    | E_app (id, [(E_aux (E_lit (L_aux (L_true, _)), _) as true_exp); _]) when is_or_bool id ->
         ok ();
         true_exp
     | E_app (id, args) when List.for_all is_constant args ->
@@ -282,19 +272,19 @@ let rw_exp fixed target ok not_ok istate =
 
 let rewrite_exp_once target = rw_exp no_fixed target (fun _ -> ()) (fun _ -> ())
 
-let rec rewrite_constant_function_calls' fixed target ast =
+let rec rewrite_constant_function_calls' fixed target env ast =
   let rewrite_count = ref 0 in
   let ok () = incr rewrite_count in
   let not_ok () = decr rewrite_count in
-  let istate = initial_state ast Type_check.initial_env in
+  let istate = initial_state ast env in
 
   let rw_defs = { rewriters_base with rewrite_exp = (fun _ -> rw_exp fixed target ok not_ok istate) } in
   let ast = rewrite_ast_base rw_defs ast in
   (* We keep iterating until we have no more re-writes to do *)
-  if !rewrite_count > 0 then rewrite_constant_function_calls' fixed target ast else ast
+  if !rewrite_count > 0 then rewrite_constant_function_calls' fixed target env ast else ast
 
-let rewrite_constant_function_calls fixed target ast =
-  if !optimize_constant_fold then rewrite_constant_function_calls' fixed target ast else ast
+let rewrite_constant_function_calls fixed target env ast =
+  if !optimize_constant_fold then rewrite_constant_function_calls' fixed target env ast else ast
 
 type to_constant = Register of id * typ * tannot exp | Register_field of id * id * typ * tannot exp
 
@@ -370,7 +360,7 @@ let () =
                   in
                   let assignments = List.fold_left update_fixed no_fixed assignments in
 
-                  { istate with ast = rewrite_constant_function_calls' assignments target istate.ast }
+                  { istate with ast = rewrite_constant_function_calls' assignments target istate.env istate.ast }
                 )
           )
     )

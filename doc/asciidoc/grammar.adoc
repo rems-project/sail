@@ -23,17 +23,23 @@ First, we need some lexical conventions:
 
 * `STRING_LITERAL` is a Sail string literal.
 
-`$[ATTRIBUTE]` and `$LINE_DIRECTIVE` represent attributes and single
-line directives. Examples of line directives would be things like
-`$include`, `$ifdef` and so on. These start with a leading `$`, are
-followed by the directive name (which follows the same lexical rules
-as a Sail identifier), is followed by one or more spaces, then
-proceeds to the end of the line, with everything between the
-identifier and the line ending being the line directive's argument
-(with leading and trailing whitespace removed). An attribute starts
-with `$[` and ends with `]`, and in between consists of an attribute
-name, followed by at least one whitespace character, then any
-arbitrary sequence of characters that does not contain `]`.
+`$[ATTRIBUTE]` and `$LINE_DIRECTIVE` represent attributes and line
+directives. Examples of line directives would be things like
+`$include`, `$ifdef` and so on.
+
+An attribute starts with `$[` and ends with `]`, and in between
+consists of an attribute name, optionally followed by some structured
+_attribute data_. This attribute data is similar in structure to JSON
+(except without null).
+
+Line directives start with a leading `$`, followed by the directive
+name (following the same lexical rules as Sail identifiers), then one
+or more spaces, before proceeding to the end of the line. Everything
+between the identifier and the line ending is the line directive's
+argument (with leading and trailing whitespace removed). If a line
+directive identifier is followed by a `{` it is a _structured line
+directive_, and can span multiple lines. It contains the same
+JSON-like attribute data as for attributes.
 
 [source,sail]
 ----

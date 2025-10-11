@@ -111,6 +111,12 @@ let non_exec = EffectSet.mem NonExec
 
 let pure = EffectSet.is_empty
 
+let terminal_effects = EffectSet.of_list [Exit; IncompleteMatch]
+
+(* Are there no effects (pure) or all effects causes immediate termination.
+  This includes assertion failures and pattern match failures. *)
+let pure_or_terminal effs = EffectSet.subset effs terminal_effects
+
 let effectful set = not (pure set)
 
 let has_outcome id = EffectSet.mem (Outcome id)
@@ -392,12 +398,12 @@ let check_side_effects effect_info ast =
   List.iter
     (fun (DEF_aux (aux, _) as def) ->
       match aux with
-      | DEF_pragma ("non_exec", name, _) -> allowed_nonexec := IdSet.add (mk_id name) !allowed_nonexec
+      | DEF_pragma ("non_exec", Pragma_line (name, _)) -> allowed_nonexec := IdSet.add (mk_id name) !allowed_nonexec
       | DEF_let _ ->
           IdSet.iter
             (fun id ->
               match Bindings.find_opt id effect_info.letbinds with
-              | Some eff when not (pure eff) ->
+              | Some eff when not (pure_or_terminal eff) ->
                   raise
                     (Reporting.err_general (id_loc id)
                        ("Top-level let statement must not have any side effects. Found side effects: "

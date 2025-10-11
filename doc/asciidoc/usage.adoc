@@ -85,9 +85,6 @@ There are several Sail options that affect the C output:
 
 * `--c-no-main` Do not generate a `main()` function.
 
-* `--static` Mark generated C functions as static where possible. This
-    is useful for measuring code coverage.
-
 <<<
 === SystemVerilog compilation (Experimental)
 
@@ -286,3 +283,16 @@ plugins. These options are all prefixed with `d`.
   of the various other debugging options to be fed back into Sail. The
   name comes from the GHC option with the same purpose:
   https://ghc.gitlab.haskell.org/ghc/doc/users_guide/exts/magic_hash.html
+
+=== Passing options via SAIL_FLAGS
+
+The `SAIL_FLAGS` environment variable can be used to pass additional
+flags to Sail without passing them directly on the command line. The
+arguments contained in this variable are separated by spaces (multiple
+spaces will be treated as a single separator). For more robust
+splitting of arguments, the `SAIL_ENCODED_FLAGS` environment variable
+can be used instead. Here, arguments are separated by the ASCII unit
+separator control character `0x1f`, and are then passed unmodified
+without any trimming of whitespace. If set the `SAIL_ENCODED_FLAGS`
+variable will take precedence and the `SAIL_FLAGS` variable will be
+ignored.

@@ -57,7 +57,7 @@ def test():
     return results.finish()
 
 xml = '<testsuites>\n'
-xml = test()
+xml += test()
 xml += '</testsuites>\n'
 
 output = open('tests.xml', 'w')

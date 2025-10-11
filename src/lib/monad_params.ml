@@ -49,6 +49,8 @@ open Ast_defs
 open Ast_util
 open Type_check
 
+(* For v1 of the concurrency interface, this extracts a fixed set of types. *)
+
 type parameters = {
   abort_type : typ;
   barrier_type : typ;
@@ -57,6 +59,8 @@ type parameters = {
   pa_type : typ;
   tlbi_type : typ;
   translation_summary_type : typ;
+  trans_start_type : typ;
+  trans_end_type : typ;
   arch_ak_type : typ;
   sys_reg_id_type : typ;
 }
@@ -101,6 +105,8 @@ let find_monad_parameters type_env =
       let cache_op_type = extract_arg_typ "sail_cache_op" in
       let fault_type = extract_arg_typ "sail_take_exception" in
       let tlbi_type = extract_arg_typ "sail_tlbi" in
+      let trans_start_type = extract_arg_typ "sail_translation_start" in
+      let trans_end_type = extract_arg_typ "sail_translation_end" in
       let sys_reg_id_type = extract_arg_typ "sail_sys_reg_read" in
       Some
         {
@@ -111,6 +117,27 @@ let find_monad_parameters type_env =
           pa_type;
           tlbi_type;
           translation_summary_type;
+          trans_start_type;
+          trans_end_type;
           arch_ak_type;
           sys_reg_id_type;
         }
+
+(* For later versions, find_instantiations pulls out mappings for
+   instantiated types and identifiers. *)
+
+let find_instantiations defs =
+  List.fold_left
+    (fun (type_substs, id_substs) def ->
+      match def with
+      | DEF_aux (DEF_instantiation (_, substs), _) ->
+          List.fold_left
+            (fun (type_substs, id_substs) (IS_aux (is, _)) ->
+              match is with
+              | IS_typ (kid, ty_arg) -> (KBindings.add kid ty_arg type_substs, id_substs)
+              | IS_id (id_from, id_to) -> (type_substs, Bindings.add id_from id_to id_substs)
+            )
+            (type_substs, id_substs) substs
+      | _ -> (type_substs, id_substs)
+    )
+    (KBindings.empty, Bindings.empty) defs

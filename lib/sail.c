@@ -205,10 +205,36 @@ void undefined_string(sail_string *str, const unit u) {}
 
 void concat_str(sail_string *stro, const_sail_string str1, const_sail_string str2)
 {
-  *stro = (sail_string)realloc(*stro, strlen(str1) + strlen(str2) + 1);
+  sail_string in1;
+  sail_string in2;
+  size_t in1_len = strlen(str1);
+  size_t in2_len = strlen(str2);
+  bool in1_free = false;
+  bool in2_free = false;
+
+  if (*stro == str1) {
+    in1 = (sail_string)sail_malloc(in1_len + 1);
+    strcpy(in1, str1);
+    in1_free = true;
+  } else {
+    in1 = (sail_string)str1;
+  }
+
+  if (*stro == str2) {
+    in2 = (sail_string)sail_malloc(in2_len + 1);
+    strcpy(in2, str2);
+    in2_free = true;
+  } else {
+    in2 = (sail_string)str2;
+  }
+
+  *stro = (sail_string)realloc(*stro, in1_len + in2_len + 1);
   (*stro)[0] = '\0';
-  strcat(*stro, str1);
-  strcat(*stro, str2);
+  strcat(*stro, in1);
+  strcat(*stro, in2);
+
+  if (in1_free) sail_free(in1);
+  if (in2_free) sail_free(in2);
 }
 
 bool string_startswith(const_sail_string s, const_sail_string prefix)
@@ -1659,6 +1685,58 @@ void decimal_string_of_lbits(sail_string *str, const lbits op)
   gmp_asprintf(str, "%Z", *op.bits);
 }
 
+void parse_dec_bits(lbits *res, const mpz_t n, const_sail_string dec)
+{
+    if (!valid_dec_bits(n, dec)) {
+        goto failure;
+    }
+
+    mpz_t value;
+    mpz_init(value);
+    
+    if (mpz_set_str(value, dec, 10) == 0) {
+        res->len = mpz_get_ui(n);
+        mpz_set(*(res->bits), value);
+        mpz_clear(value);
+        return;
+    }
+    mpz_clear(value);
+
+failure:
+    res->len = mpz_get_ui(n);
+    mpz_set_ui(*(res->bits), 0);
+}
+
+bool valid_dec_bits(const mpz_t n, const_sail_string dec)
+{
+    size_t len = strlen(dec);
+
+    if (len < 1) {
+        return false;
+    }
+
+    for (size_t i = 0; i < len; i++) {
+        if (!('0' <= dec[i] && dec[i] <= '9')) {
+            return false;
+        }
+    }
+
+    mpz_t value;
+    mpz_init(value);
+
+    if (mpz_set_str(value, dec, 10) != 0) {
+        mpz_clear(value);
+        return false;
+    }
+
+    size_t bit_width = mpz_sizeinbase(value, 2);
+
+    bool valid = (bit_width <= mpz_get_ui(n));
+
+    mpz_clear(value);
+    return valid;
+}
+
 void parse_hex_bits(lbits *res, const mpz_t n, const_sail_string hex)
 {
   if (!valid_hex_bits(n, hex)) {
@@ -1810,6 +1888,12 @@ unit print_int(const_sail_string str, const sail_int op)
   fputs(str, stdout);
   mpz_out_str(stdout, 10, op);
   putchar('\n');
+  return UNIT;
+}
+
+unit fast_print_int(const_sail_string str, const int64_t op)
+{
+  printf("%s%" PRId64 "\n", str, op);
   return UNIT;
 }
 

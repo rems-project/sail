@@ -3,4 +3,4 @@
 12[96m |[0m    foo(sizeof(xlen))
   [91m |[0m        [91m^----------^[0m [91mchecking function argument has type int(32)[0m
   [91m |[0m int(64) is not a subtype of int(32)
-  [91m |[0m as 64 == 32 could not be proven
+  [91m |[0m as false could not be proven

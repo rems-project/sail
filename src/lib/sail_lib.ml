@@ -44,6 +44,8 @@
 (*  SPDX-License-Identifier: BSD-2-Clause                                   *)
 (****************************************************************************)
 
+open Value_type
+
 module Big_int = Nat_big_num
 
 (* for ToFromInterp_lib_foo *)
@@ -107,8 +109,6 @@ let sail_trace_call (type t) (name : string) (in_string : string) (string_of_out
 let trace_call str =
   trace str;
   incr trace_depth
-
-type bit = B0 | B1
 
 let eq_anything (a, b) = a = b
 
@@ -1137,6 +1137,28 @@ let parse_hex_bits (n, s) =
     |> Util.take (Big_int.to_int n)
     |> List.rev
 
+let valid_dec_bits (n, s) =
+  if String.length s > 0 && s.[0] = '-' then false
+  else (
+    let is_valid = ref true in
+    String.iter (fun c -> is_valid := !is_valid && '0' <= c && c <= '9') s;
+    if not !is_valid then false
+    else (
+      let rec count_bits n = if Big_int.equal n Big_int.zero then 0 else 1 + count_bits (Big_int.shift_right n 1) in
+      let dec_value = Big_int.of_string s in
+      count_bits dec_value <= Big_int.to_int n
+    )
+  )
+
+let parse_dec_bits (n, s) =
+  let padding = zeros n in
+  if not (valid_dec_bits (n, s)) then padding
+  else (
+    let dec_value = Big_int.of_string s in
+    let bits = bits_of_big_int (Big_int.to_int n) dec_value in
+    padding @ bits |> List.rev |> Util.take (Big_int.to_int n) |> List.rev
+  )
+
 let trace_memory_write (_, _, _) = ()
 let trace_memory_read (_, _, _) = ()
 
@@ -1162,8 +1184,7 @@ let rand_zvector (g : 'generators) (size : int) (_order : bool) (elem_gen : 'gen
 
 let rand_zbit (_ : 'generators) : bit = bit_of_bool (Random.bool ())
 
-let rand_zbitvector (g : 'generators) (size : int) (_order : bool) : bit list =
-  Util.list_init size (fun _ -> rand_zbit g)
+let rand_zbitvector (g : 'generators) (size : int) : bit list = Util.list_init size (fun _ -> rand_zbit g)
 
 let rand_zbool (_ : 'generators) : bool = Random.bool ()
 

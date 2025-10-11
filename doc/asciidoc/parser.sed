@@ -13,7 +13,16 @@
 /LcurlyBar/d
 /Monadic/d
 
-s/Pragma/$LINE_DIRECTIVE/g
+s/NAT/Nat/g
+s/BOOL/Bool/g
+s/INT/Int/g
+s/ORDER/Order/g
+s/StructuredPragma/$LINE_DIRECTIVE {/g
+s/Pragma/$LINE_DIRECTIVE .../g
+s/From/from/g
+s/To/to/g
+s/Private/private/g
+s/Config/config/g
 s/Fixity/FIXITY_DEF/g
 s/Overload/overload/g
 s/Clause/clause/g
@@ -35,7 +44,7 @@ s/TYPE/Type/g
 s/TyVar/TYPE_VARIABLE/g
 s/And/and/g
 s/As/as/g
-s/Attribute/$[ATTRIBUTE]/g
+s/Attribute/$[ATTRIBUTE/g
 s/Bidir/<->/g
 s/Forall/forall/g
 s/Bitzero/bitzero/g

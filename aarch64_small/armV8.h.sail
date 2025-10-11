@@ -11,7 +11,7 @@
 /*  SPDX-License-Identifier: BSD-2-Clause                                 */
 /*========================================================================*/
 
-type boolean = bit
+type boolean = bool
 type integer = int
 type uinteger = nat /* ARM ARM does not have nat/uint type */
 type reg_size = bits(5)

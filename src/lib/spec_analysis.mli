@@ -66,8 +66,8 @@ val bound_vars : 'a exp -> IdSet.t
 val equal_kids_ncs : kid -> n_constraint list -> KidSet.t
 val equal_kids : env -> kid -> KidSet.t
 
-(** Type-level substitutions into patterns and expressions.  Also attempts to
-    update type annotations, but not the associated environments. *)
+(** Type-level substitutions into patterns and expressions. Also attempts to update type annotations, but not the
+    associated environments. *)
 val nexp_subst_pat : nexp KBindings.t -> tannot pat -> tannot pat
 
 val nexp_subst_exp : nexp KBindings.t -> tannot exp -> tannot exp

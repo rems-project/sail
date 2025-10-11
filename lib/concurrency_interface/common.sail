@@ -46,9 +46,9 @@
 
 $sail_internal
 
-$target_set emulator_or_isla isla c ocaml interpreter systemverilog
-$target_set emulator c ocaml interpreter systemverilog
-$target_set prover lem coq
+$target_set emulator_or_isla isla c cpp ocaml interpreter systemverilog
+$target_set emulator c cpp ocaml interpreter systemverilog
+$target_set prover lem coq lean
 
 $ifndef _CONCURRENCY_INTERFACE_COMMON
 $define _CONCURRENCY_INTERFACE_COMMON
@@ -174,10 +174,16 @@ function sail_pick_dependency(reg) = sail_mark_register(reg, "pick")
 
 $ifdef SYMBOLIC
 val __monomorphize = pure "monomorphize" : forall 'n, 'n >= 0. bits('n) -> bits('n)
+val __monomorphize_int = pure "monomorphize" : forall 'n. int('n) -> int('n)
+val __monomorphize_bool = pure "monomorphize" : forall 'b. bool('b) -> bool('b)
 $else
 val __monomorphize : forall 'n, 'n >= 0. bits('n) -> bits('n)
+val __monomorphize_int : forall 'n. int('n) -> int('n)
+val __monomorphize_bool : forall 'b. bool('b) -> bool('b)
 
 function __monomorphize(bv) = bv
+function __monomorphize_int(n) = n
+function __monomorphize_bool(b) = b
 $endif
 
 $endif

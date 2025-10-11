@@ -210,7 +210,7 @@ let simp_typ =
     | A_aux (A_nexp nexp, l) -> A_aux (A_nexp (nexp_simp nexp), l)
     | A_aux (A_bool nc, l) -> A_aux (A_bool (constraint_simp nc), l)
     | arg -> arg
-  )
+    )
 
 (* If we have a sequence of overloading errors this function rates
    them based on a heuristic score stored in the
@@ -292,7 +292,7 @@ let message_of_type_error type_error =
               [
                 Line ("Identifier " ^ name ^ " is unbound" ^ hint_msg);
                 Line "";
-                Line ("There is a also a function " ^ name ^ " in scope.");
+                Line ("There is also a function " ^ name ^ " in scope.");
               ],
             None
           )
@@ -400,7 +400,7 @@ let message_of_type_error type_error =
         (* Variables appearing in the types and constraint *)
         let appear_vars =
           KBindings.bindings tyvars.vars
-          |> List.map (fun (v, (l, _)) -> (v, l))
+          |> List.map (fun (v, (l, _, _)) -> (v, l))
           |> List.filter (fun (v, _) ->
                  KidSet.mem v (KidSet.union nc_vars (KidSet.union (tyvars_of_typ typ1) (tyvars_of_typ typ2)))
              )

@@ -48,6 +48,8 @@ module Big_int = Nat_big_num
 
 module StringMap = Map.Make (String)
 
+open Value_type
+
 let print_chan = ref stdout
 let print_redirected = ref false
 
@@ -65,27 +67,6 @@ let output_endline str =
   output_string !print_chan (str ^ "\n");
   flush !print_chan
 
-type value =
-  | V_vector of value list
-  | V_list of value list
-  | V_int of Big_int.num
-  | V_real of Rational.t
-  | V_bool of bool
-  | V_bit of Sail_lib.bit
-  | V_tuple of value list
-  | V_unit
-  | V_string of string
-  | V_ref of string
-  | V_member of string
-  | V_ctor of string * value list
-  | V_record of value StringMap.t
-  (* When constant folding we disable reading registers, so a register
-     read will return a V_attempted_read value. If we try to do
-     anything with this value, we'll get an exception - but if all we
-     do is return it then we can replace the expression we are folding
-     with a direct register read. *)
-  | V_attempted_read of string
-
 let coerce_bit = function V_bit b -> b | _ -> assert false
 
 let is_bit = function V_bit _ -> true | _ -> false
@@ -95,8 +76,8 @@ let rec string_of_value = function
   | V_vector vs -> "[" ^ Util.string_of_list ", " string_of_value vs ^ "]"
   | V_bool true -> "true"
   | V_bool false -> "false"
-  | V_bit Sail_lib.B0 -> "bitzero"
-  | V_bit Sail_lib.B1 -> "bitone"
+  | V_bit B0 -> "bitzero"
+  | V_bit B1 -> "bitone"
   | V_int n -> Big_int.to_string n
   | V_tuple vals -> "(" ^ Util.string_of_list ", " string_of_value vals ^ ")"
   | V_list vals -> "[|" ^ Util.string_of_list ", " string_of_value vals ^ "|]"
@@ -107,9 +88,7 @@ let rec string_of_value = function
   | V_member str -> str
   | V_ctor (str, vals) -> str ^ "(" ^ Util.string_of_list ", " string_of_value vals ^ ")"
   | V_record record ->
-      "struct {"
-      ^ Util.string_of_list ", " (fun (field, v) -> field ^ " = " ^ string_of_value v) (StringMap.bindings record)
-      ^ "}"
+      "struct {" ^ Util.string_of_list ", " (fun (field, v) -> field ^ " = " ^ string_of_value v) record ^ "}"
   | V_attempted_read _ -> assert false
 
 let rec eq_value v1 v2 =
@@ -127,7 +106,8 @@ let rec eq_value v1 v2 =
   | V_member name1, V_member name2 -> name1 = name2
   | V_ctor (name1, fields1), V_ctor (name2, fields2) when List.length fields1 = List.length fields2 ->
       name1 = name2 && List.for_all2 eq_value fields1 fields2
-  | V_record fields1, V_record fields2 -> StringMap.equal eq_value fields1 fields2
+  | V_record fields1, V_record fields2 ->
+      List.compare_lengths fields1 fields2 = 0 && List.for_all2 (fun (_, f1) (_, f2) -> eq_value f1 f2) fields1 fields2
   | _, _ -> false
 
 let coerce_member = function V_member str -> str | _ -> assert false
@@ -136,7 +116,7 @@ let coerce_ctor = function V_ctor (str, vals) -> (str, vals) | _ -> assert false
 
 let coerce_bool = function V_bool b -> b | _ -> assert false
 
-let coerce_record = function V_record record -> record | _ -> assert false
+let coerce_record = function V_record record -> StringMap.of_seq @@ List.to_seq record | _ -> assert false
 
 let and_bool = function [v1; v2] -> V_bool (coerce_bool v1 && coerce_bool v2) | _ -> assert false
 
@@ -144,7 +124,7 @@ let or_bool = function [v1; v2] -> V_bool (coerce_bool v1 || coerce_bool v2) | _
 
 let tuple_value (vs : value list) : value = V_tuple vs
 
-let mk_vector (bits : Sail_lib.bit list) : value = V_vector (List.map (fun bit -> V_bit bit) bits)
+let mk_vector (bits : bit list) : value = V_vector (List.map (fun bit -> V_bit bit) bits)
 
 let coerce_bit = function V_bit b -> b | _ -> assert false
 
@@ -466,7 +446,7 @@ let value_undefined_range = function [v; _] -> v | _ -> failwith "value undefine
 let value_undefined_list = function [_] -> V_list [] | _ -> failwith "value undefined_list"
 
 let value_undefined_bitvector = function
-  | [v] -> V_vector (Sail_lib.undefined_vector (coerce_int v, V_bit Sail_lib.B0))
+  | [v] -> V_vector (Sail_lib.undefined_vector (coerce_int v, V_bit B0))
   | _ -> failwith "value undefined_bitvector"
 
 let value_read_ram = function
@@ -621,6 +601,14 @@ let value_valid_hex_bits = function
 let value_parse_hex_bits = function
   | [v1; v2] -> mk_vector (Sail_lib.parse_hex_bits (coerce_int v1, coerce_string v2))
   | _ -> failwith "value parse_hex_bits"
+
+let value_valid_dec_bits = function
+  | [v1; v2] -> V_bool (Sail_lib.valid_dec_bits (coerce_int v1, coerce_string v2))
+  | _ -> failwith "value valid_dec_bits"
+
+let value_parse_dec_bits = function
+  | [v1; v2] -> mk_vector (Sail_lib.parse_dec_bits (coerce_int v1, coerce_string v2))
+  | _ -> failwith "value parse_dec_bits"
 
 let value_emulator_read_mem = function
   | [v1; v2; v3] -> mk_vector (Sail_lib.emulator_read_mem (coerce_int v1, coerce_bv v2, coerce_int v3))
@@ -799,7 +787,7 @@ let primops =
          ("print_real", value_print_real);
          ("random_real", value_random_real);
          ("undefined_unit", fun _ -> V_unit);
-         ("undefined_bit", fun _ -> V_bit Sail_lib.B0);
+         ("undefined_bit", fun _ -> V_bit B0);
          ("undefined_int", fun _ -> V_int Big_int.zero);
          ("undefined_range", value_undefined_range);
          ("undefined_nat", fun _ -> V_int Big_int.zero);
@@ -822,6 +810,8 @@ let primops =
          ("hex_str_upper", value_hex_str_upper);
          ("parse_hex_bits", value_parse_hex_bits);
          ("valid_hex_bits", value_valid_hex_bits);
+         ("parse_dec_bits", value_parse_dec_bits);
+         ("valid_dec_bits", value_valid_dec_bits);
          ("skip", fun _ -> V_unit);
        ]
     )

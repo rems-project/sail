@@ -87,19 +87,39 @@ let generate_register_id_enum = function
       let reg (typ, id) = string_of_id id in
       ["type register_id = " ^ String.concat " | " (List.map reg registers)]
 
+(* A reasonably printable version of an nexp that we can use in identifiers.  Generally we should
+   just have a constant here, but if not we should try something sensible (e.g., at the time of
+   writing nexp_simp chickens out for powers of two above seven...). *)
+
+let rec id_of_nexp = function Nexp_aux (nexp, _) -> id_of_nexp_aux nexp
+
+and id_of_nexp_aux = function
+  | Nexp_id id -> string_of_id id
+  | Nexp_var kid -> string_of_kid kid
+  | Nexp_constant c -> Big_int.to_string c
+  | Nexp_times (n1, n2) -> id_of_nexp n1 ^ "_times_" ^ id_of_nexp n2
+  | Nexp_sum (n1, n2) -> id_of_nexp n1 ^ "_plus_" ^ id_of_nexp n2
+  | Nexp_minus (n1, n2) -> id_of_nexp n1 ^ "_minus_" ^ id_of_nexp n2
+  | Nexp_app (id, nexps) -> string_of_id id ^ "_" ^ Util.string_of_list "_" id_of_nexp nexps
+  | Nexp_exp n -> "exp_" ^ id_of_nexp n
+  | Nexp_neg n -> "neg_" ^ id_of_nexp n
+  | Nexp_if (i, t, e) ->
+      (* TODO: include constraints if necessary... *)
+      "if_" (* ^ string_of_n_constraint i*) ^ "_then_" ^ id_of_nexp t ^ "_else_" ^ id_of_nexp e
+
 let rec id_of_regtyp builtins (Typ_aux (t, l) as typ) =
   match t with
   | Typ_id id -> id
   | Typ_app (id, args) ->
-      let name_arg (A_aux (targ, _)) =
+      let name_arg (A_aux (targ, l)) =
         match targ with
         | A_typ targ -> string_of_id (id_of_regtyp builtins targ)
-        | A_nexp nexp when is_nexp_constant (nexp_simp nexp) -> string_of_nexp (nexp_simp nexp)
-        | _ -> raise (Reporting.err_typ l "Unsupported register type")
+        | A_nexp nexp when is_nexp_constant (nexp_simp nexp) -> id_of_nexp (nexp_simp nexp)
+        | _ -> raise (Reporting.err_typ l ("Unsupported register type " ^ string_of_typ typ))
       in
       if IdSet.mem id builtins && not (is_bitvector_typ typ) then id
       else append_id id (String.concat "_" ("" :: List.map name_arg args))
-  | _ -> raise (Reporting.err_typ l "Unsupported register type")
+  | _ -> raise (Reporting.err_typ l ("Unsupported register type " ^ string_of_typ typ))
 
 let regstate_field typ = append_id (id_of_regtyp IdSet.empty typ) "_reg"
 
@@ -111,12 +131,13 @@ let generate_regstate env registers =
         if !opt_type_grouped_regstate then (
           let type_field (typ, id, has_init) =
             let base_typ = regval_base_typ env typ in
-            (function_typ [string_typ] base_typ, regstate_field base_typ)
+            let field_name = regstate_field base_typ in
+            ((field_name, function_typ [string_typ] base_typ), mk_def_annot (id_loc field_name) ())
           in
-          let cmp_id (_, id1) (_, id2) = Id.compare id1 id2 in
+          let cmp_id ((id1, _), _) ((id2, _), _) = Id.compare id1 id2 in
           List.map type_field registers |> List.sort_uniq cmp_id
         )
-        else List.map (fun (t, i, _) -> (t, i)) registers
+        else List.map (fun (t, i, _) -> ((i, t), mk_def_annot (id_loc i) ())) registers
       in
       TD_record (mk_id "regstate", mk_typquant [], fields, false)
     )
@@ -133,10 +154,15 @@ let generate_initial_regstate ctx env ast =
     (* We need to turn off intialisation of registers without an
        initialiser to avoid calling undefined_* functions that might
        not exist (when -undefined_gen is off). *)
-    let _, initial_state =
-      Interpreter.initial_state ~registers:true ~undef_registers:false ast env Constant_fold.safe_primops
-    in
-    initial_state.Interpreter.registers
+    try
+      let _, initial_state =
+        Interpreter.initial_state ~registers:true ~undef_registers:false ast env Constant_fold.safe_primops
+      in
+      initial_state.Interpreter.registers
+    with e ->
+      Reporting.warn ~force_show:true "Unable to evaluate initial state, using default values only" Parse_ast.Unknown
+        (Printexc.to_string e);
+      Bindings.empty
   in
   let defs = ast.defs in
   let registers = find_registers defs in
@@ -211,7 +237,7 @@ let generate_initial_regstate ctx env ast =
             (defs', Bindings.add id init_val vals)
         | TD_record (id, tq, fields, _) ->
             let init_val args =
-              let init_field (typ, id) =
+              let init_field ((id, typ), _) =
                 let typ = typ_subst_typquant tq args typ in
                 string_of_id id ^ " = " ^ lookup_init_val vals typ
               in
@@ -326,7 +352,7 @@ let regval_base_convs typ =
 
 let add_regval_conv ctx env id typ defs =
   let typ_str = Document.to_string (doc_typ typ) in
-  let v_exp = mk_exp (E_id (mk_id "v")) in
+  let v_exp = mk_exp (E_id (mk_id "v#")) in
   let base_typ = regval_base_typ env typ in
   (* Create a function that converts from regval to the target type. *)
   let from_name, to_name = regval_base_convs typ in
@@ -338,13 +364,13 @@ let add_regval_conv ctx env id typ defs =
     | Some id ->
         let base_exp = mk_exp (E_app (mk_id from_base, [v_exp])) in
         let result_exp = Bitfield.construct_bitfield_struct id v_exp in
-        let some_clause = "Some(v) => Some(" ^ string_of_exp result_exp ^ ")" in
+        let some_clause = "Some(v#) => Some(" ^ string_of_exp result_exp ^ ")" in
         let clauses = " { " ^ some_clause ^ ", None() => None() }" in
-        "function " ^ from_name ^ " v = match " ^ string_of_exp base_exp ^ clauses
+        "function " ^ from_name ^ " v# = match " ^ string_of_exp base_exp ^ clauses
     | _ ->
         String.concat "\n"
           [
-            Printf.sprintf "function %s Regval_%s(v) = Some(v)" from_name constr_name;
+            Printf.sprintf "function %s Regval_%s(v#) = Some(v#)" from_name constr_name;
             Printf.sprintf "and %s _ = None()" from_name;
           ]
   in
@@ -355,7 +381,7 @@ let add_regval_conv ctx env id typ defs =
     if is_bitfield_typ env typ then mk_exp (E_app (mk_id to_base, [Bitfield.get_bits_field v_exp]))
     else mk_exp (E_app (mk_id ("Regval_" ^ constr_name), [v_exp]))
   in
-  let to_function = Printf.sprintf "function %s v = %s" to_name (string_of_exp to_exp) in
+  let to_function = Printf.sprintf "function %s v# = %s" to_name (string_of_exp to_exp) in
   let to_defs = if is_defined defs to_name then [] else [to_val; to_function] in
   let cdefs = List.concat (List.map (fun s -> fst (defs_of_string __POS__ ctx s)) (from_defs @ to_defs)) in
   defs @ cdefs
@@ -871,3 +897,34 @@ let add_regstate_defs mwords ctx env ast =
   let defs, ctx = generate_regstate_defs ctx env ast in
   let reg_defs, env = Type_error.check_defs env defs in
   (ctx, env, append_ast_defs ast reg_defs)
+
+(* To suport register initialization without using the above, this
+   produces a new function that assigns registers their initializer.
+   It's intended to be a prover-backend counterpart to the function
+   that the model_init function that the C backend generates.
+
+   If the ast has been sorted, it will also respect register
+   initialisation order.  However, we probably want to ban
+   inter-register dependencies anyway... *)
+let add_register_init_function ctx env ast =
+  let init_exp = function
+    | DEF_aux (DEF_register (DEC_aux (DEC_reg (_typ, id, Some exp), _)), _) ->
+        let loc = gen_loc (exp_loc exp) in
+        Some (mk_exp ~loc (E_assign (mk_lexp ~loc (LE_id id), strip_exp exp)))
+    | _ -> None
+  in
+  let init_exps = List.filter_map init_exp ast.defs in
+  let uninit = mk_exp (E_app (mk_id "initialize_registers", [mk_exp (E_lit (mk_lit L_unit))])) in
+  let id = mk_id "sail_model_init" in
+  let funcl = mk_exp (E_block (init_exps @ [uninit])) |> mk_funcl id (mk_pat P_wild) in
+  let fundef = mk_fundef [funcl] in
+  let val_spec = mk_val_spec (VS_val_spec (mk_typschm (mk_typquant []) (function_typ [unit_typ] unit_typ), id, None)) in
+  let new_defs, env = Type_error.check_defs env [val_spec; fundef] in
+  let drop_init = function
+    | DEF_aux (DEF_register (DEC_aux (DEC_reg (typ, id, Some exp), an)), def_annot) ->
+        let def_annot = add_def_attribute def_annot.loc "initialized_elsewhere" None def_annot in
+        DEF_aux (DEF_register (DEC_aux (DEC_reg (typ, id, None), an)), def_annot)
+    | d -> d
+  in
+  let ast = { ast with defs = List.map drop_init ast.defs } in
+  (append_ast_defs ast new_defs, ctx, env)

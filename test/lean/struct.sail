@@ -29,3 +29,25 @@ function mk_struct(i, b) = {
     field2 = b
   }
 }
+
+val undef_struct : bit -> My_struct
+function undef_struct (x) = {
+  (undefined_My_struct(): My_struct)
+}
+
+function match_struct(value : My_struct) -> int = {
+    match value {
+        struct { _, field2 = bitzero } => 0,
+        struct { field1, field2 = bitone } => field1
+    }
+}
+
+struct My_mem_write_request('n : Int, 'vasize : Int, 'pa : Type, 'ts : Type,
+                           'arch_ak : Type), 'n > 0 & 'vasize >= 0 = {
+  va : option(bits('vasize)),
+  pa : 'pa,
+  translation : 'ts,
+  size : int('n),
+  value : option(bits(8 * 'n)),
+  tag : option(bool),
+}

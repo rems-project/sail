@@ -46,11 +46,9 @@
 
 (** Infrastructure for plugins to register Sail targets.
 
-   A {e target} is essentially a custom backend for the Sail compiler,
-   along with various hooks and options that toggle various frontend
-   behaviours. A target therefore specifies what kind of output Sail
-   will produce. For example, we provide default plugins that define
-   targets to output Lem, C, OCaml, Coq, and so on. *)
+    A {e target} is essentially a custom backend for the Sail compiler, along with various hooks and options that toggle
+    various frontend behaviours. A target therefore specifies what kind of output Sail will produce. For example, we
+    provide default plugins that define targets to output Lem, C, OCaml, Coq, and so on. *)
 
 open Ast_defs
 open Type_check
@@ -73,35 +71,39 @@ val action : target -> string option -> Interactive.State.istate -> unit
 
 val asserts_termination : target -> bool
 
-(** If a target does not support abstract types, then the user must
-    provide a concrete instantiation for Sail. *)
+(** If a target does not support abstract types, then the user must provide a concrete instantiation for Sail. *)
 val supports_abstract_types : target -> bool
+
+(** If a target does not support runtime configuration, then the configuration must be provided statically at build
+    time. *)
+val supports_runtime_config : target -> bool
+
+val skip_initial_rewrite : target -> bool
 
 (** {2 Target registration} *)
 
 (** Used for plugins to register custom Sail targets/backends.
 
-   [register_target ~name:"foo" action] will create an option -foo,
-   that will run the provided action on the Sail abstract syntax tree
-   after performing common frontend processing.
+    [register_target ~name:"foo" action] will create an option -foo, that will run the provided action on the Sail
+    abstract syntax tree after performing common frontend processing.
 
-   The various arguments can be used to further control the
-   behavior of the target:
+    The various arguments can be used to further control the behavior of the target:
 
-   @param ~name The name of the target
-   @param ?flag A custom command line flag to invoke the target. By default it will use the name parameter
-   @param ?description A custom description for the command line flag
-   @param ?options Additional options for the Sail executable
-   @param ?pre_parse_hook A function to call right at the start, before parsing
-   @param ?pre_initial_check_hook A function to call after parsing, but before de-sugaring
-   @param ?pre_rewrites_hook A function to call before doing any rewrites
-   @param ?rewrites A sequence of Sail to Sail rewrite passes for the target
-   @param ?asserts_termination Whether termination measures are enforced by assertions in the target
-   @param ?supports_abstract_types Whether the target supports abstract types to be passed to the target
+    @param ~name The name of the target
+    @param ?flag A custom command line flag to invoke the target. By default it will use the name parameter
+    @param ?description A custom description for the command line flag
+    @param ?options Additional options for the Sail executable
+    @param ?pre_parse_hook A function to call right at the start, before parsing
+    @param ?pre_initial_check_hook A function to call after parsing, but before de-sugaring
+    @param ?pre_rewrites_hook A function to call before doing any rewrites
+    @param ?skip_initial_rewrite Skips the initial rewriting pass
+    @param ?rewrites A sequence of Sail to Sail rewrite passes for the target
+    @param ?asserts_termination Whether termination measures are enforced by assertions in the target
+    @param ?supports_abstract_types Whether the target supports abstract types to be passed to the target
+    @param ?supports_runtime_config Whether the target supports runtime configuration
 
-   The final unnamed parameter is the main backend function that is called after the frontend
-   has finished processing the input.
- *)
+    The final unnamed parameter is the main backend function that is called after the frontend has finished processing
+    the input. *)
 val register :
   name:string ->
   ?flag:string ->
@@ -110,18 +112,19 @@ val register :
   ?pre_parse_hook:(unit -> unit) ->
   ?pre_initial_check_hook:(string list -> unit) ->
   ?pre_rewrites_hook:(typed_ast -> Effects.side_effect_info -> Env.t -> unit) ->
+  ?skip_initial_rewrite:bool ->
   ?rewrites:(string * Rewrites.rewriter_arg list) list ->
   ?asserts_termination:bool ->
   ?supports_abstract_types:bool ->
+  ?supports_runtime_config:bool ->
   (string option -> Interactive.State.istate -> unit) ->
   target
 
 (** Use if you want to register a target that does nothing *)
 val empty_action : string option -> Interactive.State.istate -> unit
 
-(** Return the current target. For example, if we register a 'coq'
-   target, and Sail is invoked with `sail -coq`, then this function
-   will return the coq target. *)
+(** Return the current target. For example, if we register a 'coq' target, and Sail is invoked with `sail -coq`, then
+    this function will return the coq target. *)
 val get_the_target : unit -> target option
 
 val get : name:string -> target option

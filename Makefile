@@ -1,4 +1,4 @@
-.PHONY: all isail sail install coverage clean asciidoc docker test core-tests c-tests
+.PHONY: all isail sail install coverage clean asciidoc docker test core-tests c-tests extraction
 
 all: sail
 
@@ -10,16 +10,27 @@ sail:
 install: sail
 	dune install
 
+libsail_coverage:
+	$(MAKE) -C lib/coverage
+
+extraction:
+	$(MAKE) -C src/lib/rocq
+	mv src/lib/rocq/*.mli src/lib/extraction
+	mv src/lib/rocq/*.ml src/lib/extraction
 
 # Build binary tarball. The lib directory is very large and not needed
 # for running the compiler. TARBALL_EXTRA_BIN can be used to bundle z3.
-tarball: sail
+tarball: sail libsail_coverage
 	dune install --relocatable --prefix=_build/tarball/sail
 	rm -rf _build/tarball/sail/lib
+	cp LICENSE _build/tarball/sail
+	cp THIRD_PARTY_FILES.md _build/tarball/sail
+	cp -a etc/tarball_extra/. _build/tarball/sail
 ifdef TARBALL_EXTRA_BIN
 	cp $(TARBALL_EXTRA_BIN) _build/tarball/sail/bin/
 endif
-	tar czvf _build/sail.tar.gz -C _build/tarball sail
+	cp lib/coverage/libsail_coverage.a _build/tarball/sail/share/sail/lib/coverage/
+	tar czvf _build/sail-$(shell uname -s)-$(shell uname -m).tar.gz -C _build/tarball sail
 
 coverage:
 	dune build --release --instrument-with bisect_ppx

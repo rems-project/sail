@@ -74,7 +74,9 @@ let adding = Util.("Adding " |> darkgray |> clear)
 
 type constraint_reason = (Ast.l * string) option
 
-type type_variables = { vars : (Ast.l * kind_aux) KBindings.t; shadows : int KBindings.t }
+type type_var_origin = Normal | Outcome
+
+type type_variables = { vars : (Ast.l * kind_aux * type_var_origin) KBindings.t; shadows : int KBindings.t }
 
 type type_error =
   | Err_no_overloading of id * (id * Parse_ast.l * type_error) list
@@ -107,13 +109,11 @@ let string_of_bind (typquant, typ) = string_of_typquant typquant ^ ". " ^ string
 
 (* unloc_X functions remove location information from AST nodes, so we can use structural equality *)
 
-let rec unloc_id = function
-  | Id_aux (Id x, _) -> Id_aux (Id x, Parse_ast.Unknown)
-  | Id_aux (Operator x, _) -> Id_aux (Operator x, Parse_ast.Unknown)
+let unloc_id (Id_aux (aux, _)) = Id_aux (aux, Parse_ast.Unknown)
 
-and unloc_kid = function Kid_aux (Var x, _) -> Kid_aux (Var x, Parse_ast.Unknown)
+let unloc_kid (Kid_aux (Var x, _)) = Kid_aux (Var x, Parse_ast.Unknown)
 
-and unloc_nexp_aux = function
+let rec unloc_nexp_aux = function
   | Nexp_id id -> Nexp_id (unloc_id id)
   | Nexp_var kid -> Nexp_var (unloc_kid kid)
   | Nexp_constant n -> Nexp_constant n
@@ -251,14 +251,12 @@ let destruct_exist_plain ?(name = None) typ =
       Some (List.map snd fresh_kopts, nc, typ)
   | _ -> None
 
-(** Destructure and canonicalise a numeric type into a list of type
-   variables, a constraint on those type variables, and an
-   N-expression that represents that numeric type in the
-   environment. For example:
-   - {'n, 'n <= 10. atom('n)} => ['n], 'n <= 10, 'n
-   - int => ['n], true, 'n (where 'n is fresh)
-   - atom('n) => [], true, 'n
-**)
+(** Destructure and canonicalise a numeric type into a list of type variables, a constraint on those type variables, and
+    an N-expression that represents that numeric type in the environment. For example:
+
+    - [{'n, 'n <= 10. atom('n)}] to [['n], 'n <= 10, 'n v]
+    - [int] to [['n], true, 'n] (where ['n] is fresh)
+    - [atom('n)] to [[], true, 'n] **)
 let destruct_numeric ?(name = None) typ =
   match (destruct_exist_plain ~name typ, typ) with
   | Some (kids, nc, Typ_aux (Typ_app (id, [A_aux (A_nexp nexp, _)]), _)), _ when string_of_id id = "atom" ->

@@ -1,43 +1,329 @@
 import Out.Sail.Sail
+import Out.Sail.BitVec
+
+open PreSail
+
+set_option maxHeartbeats 1_000_000_000
+set_option maxRecDepth 1_000_000
+set_option linter.unusedVariables false
+set_option match.ignoreUnusedAlts true
 
 open Sail
 
-def extern_add : Int :=
-  (Int.add 5 4)
+abbrev bits k_n := (BitVec k_n)
 
-def extern_sub : Int :=
-  (Int.sub 5 4)
+/-- Type quantifiers: k_a : Type -/
+inductive option (k_a : Type) where
+  | Some (_ : k_a)
+  | None (_ : Unit)
+  deriving Inhabited, BEq, Repr
 
-def extern_tdiv : Int :=
-  (Int.tdiv 5 4)
+abbrev Register := PEmpty
+abbrev RegisterType : Register -> Type := PEmpty.elim
 
-def extern_tmod : Int :=
-  (Int.tmod 5 4)
+abbrev exception := Unit
 
-def extern_tmod_positive : Int :=
-  (Int.tmod 5 4)
+abbrev SailM := PreSailM RegisterType trivialChoiceSource exception
 
-def extern_negate : Int :=
-  (Int.neg 5)
 
-def extern_mult : Int :=
-  (Int.mul 5 4)
+XXXXXXXXX
 
-def extern_and : Bool :=
-  (Bool.and true false)
+import Out.Sail.Sail
+import Out.Sail.BitVec
+import Out.Sail.IntRange
+import Out.Defs
+import Out.Specialization
+import Out.FakeReal
 
-def extern_and_no_flow : Bool :=
-  (Bool.and true false)
+set_option maxHeartbeats 1_000_000_000
+set_option maxRecDepth 1_000_000
+set_option linter.unusedVariables false
+set_option match.ignoreUnusedAlts true
 
-def extern_or : Bool :=
-  (Bool.or true false)
+open Sail
 
-def extern_eq_bool : Bool :=
-  (Eq true false)
+namespace Out.Functions
 
-def extern_eq_bit : Bool :=
-  (Eq 0#1 1#1)
+open option
 
-def initialize_registers : Unit :=
+/-- Type quantifiers: k_ex1170# : Bool, k_ex1169# : Bool -/
+def neq_bool (x : Bool) (y : Bool) : Bool :=
+  (! (x == y))
+
+/-- Type quantifiers: x : Int -/
+def __id (x : Int) : Int :=
+  x
+
+/-- Type quantifiers: n : Int, m : Int -/
+def _shl_int_general (m : Int) (n : Int) : Int :=
+  if ((n ≥b 0) : Bool)
+  then (Int.shiftl m n)
+  else (Int.shiftr m (Neg.neg n))
+
+/-- Type quantifiers: n : Int, m : Int -/
+def _shr_int_general (m : Int) (n : Int) : Int :=
+  if ((n ≥b 0) : Bool)
+  then (Int.shiftr m n)
+  else (Int.shiftl m (Neg.neg n))
+
+/-- Type quantifiers: m : Int, n : Int -/
+def fdiv_int (n : Int) (m : Int) : Int :=
+  if (((n <b 0) && (m >b 0)) : Bool)
+  then ((Int.tdiv (n +i 1) m) -i 1)
+  else
+    (if (((n >b 0) && (m <b 0)) : Bool)
+    then ((Int.tdiv (n -i 1) m) -i 1)
+    else (Int.tdiv n m))
+
+/-- Type quantifiers: m : Int, n : Int -/
+def fmod_int (n : Int) (m : Int) : Int :=
+  (n -i (m *i (fdiv_int n m)))
+
+/-- Type quantifiers: len : Nat, k_v : Nat, len ≥ 0 ∧ k_v ≥ 0 -/
+def sail_mask (len : Nat) (v : (BitVec k_v)) : (BitVec len) :=
+  if ((len ≤b (Sail.BitVec.length v)) : Bool)
+  then (Sail.BitVec.truncate v len)
+  else (Sail.BitVec.zeroExtend v len)
+
+/-- Type quantifiers: n : Nat, n ≥ 0 -/
+def sail_ones (n : Nat) : (BitVec n) :=
+  (Complement.complement (BitVec.zero n))
+
+/-- Type quantifiers: l : Int, i : Int, n : Nat, n ≥ 0 -/
+def slice_mask {n : _} (i : Int) (l : Int) : (BitVec n) :=
+  if ((l ≥b n) : Bool)
+  then ((sail_ones n) <<< i)
+  else
+    (let one : (BitVec n) := (sail_mask n (0b1 : (BitVec 1)))
+    (((one <<< l) - one) <<< i))
+
+/-- Type quantifiers: n : Nat, n > 0 -/
+def to_bytes_le {n : _} (b : (BitVec (8 * n))) : (Vector (BitVec 8) n) := Id.run do
+  let res := (vectorInit (BitVec.zero 8))
+  let loop_i_lower := 0
+  let loop_i_upper := (n -i 1)
+  let mut loop_vars := res
+  for i in [loop_i_lower:loop_i_upper:1]i do
+    let res := loop_vars
+    loop_vars := (vectorUpdate res i (Sail.BitVec.extractLsb b ((8 *i i) +i 7) (8 *i i)))
+  (pure loop_vars)
+
+/-- Type quantifiers: n : Nat, n > 0 -/
+def from_bytes_le {n : _} (v : (Vector (BitVec 8) n)) : (BitVec (8 * n)) := Id.run do
+  let res := (BitVec.zero (8 *i n))
+  let loop_i_lower := 0
+  let loop_i_upper := (n -i 1)
+  let mut loop_vars := res
+  for i in [loop_i_lower:loop_i_upper:1]i do
+    let res := loop_vars
+    loop_vars := (Sail.BitVec.updateSubrange res ((8 *i i) +i 7) (8 *i i) (GetElem?.getElem! v i))
+  (pure loop_vars)
+
+/-- Type quantifiers: k_a : Type -/
+def is_none (opt : (Option k_a)) : Bool :=
+  match opt with
+  | .some _ => false
+  | none => true
+
+/-- Type quantifiers: k_a : Type -/
+def is_some (opt : (Option k_a)) : Bool :=
+  match opt with
+  | .some _ => true
+  | none => false
+
+/-- Type quantifiers: k_n : Int -/
+def concat_str_bits (str : String) (x : (BitVec k_n)) : String :=
+  (HAppend.hAppend str (BitVec.toFormatted x))
+
+/-- Type quantifiers: x : Int -/
+def concat_str_dec (str : String) (x : Int) : String :=
+  (HAppend.hAppend str (Int.repr x))
+
+def spc_forwards (_ : Unit) : String :=
+  " "
+
+def spc_forwards_matches (_ : Unit) : Bool :=
+  true
+
+def spc_backwards (x_0 : String) : Unit :=
   ()
 
+def spc_backwards_matches (s : String) : Bool :=
+  let len := (String.length s)
+  (((String.leadingSpaces s) == len) && (len >b 0))
+
+def opt_spc_forwards (_ : Unit) : String :=
+  ""
+
+def opt_spc_forwards_matches (_ : Unit) : Bool :=
+  true
+
+def opt_spc_backwards (x_0 : String) : Unit :=
+  ()
+
+def opt_spc_backwards_matches (s : String) : Bool :=
+  ((String.leadingSpaces s) == (String.length s))
+
+def def_spc_forwards (_ : Unit) : String :=
+  " "
+
+def def_spc_forwards_matches (_ : Unit) : Bool :=
+  true
+
+def def_spc_backwards (x_0 : String) : Unit :=
+  ()
+
+def def_spc_backwards_matches (s : String) : Bool :=
+  ((String.leadingSpaces s) == (String.length s))
+
+def sep_forwards (arg_ : Unit) : String :=
+  match arg_ with
+  | () =>
+    (String.append (opt_spc_forwards ())
+      (String.append "," (String.append (def_spc_forwards ()) "")))
+
+def sep_backwards (arg_ : String) : SailM Unit := do
+  match arg_ with
+  | _ => throw Error.Exit
+
+def sep_forwards_matches (arg_ : Unit) : Bool :=
+  match arg_ with
+  | () => true
+  | _ => false
+
+def sep_backwards_matches (arg_ : String) : SailM Bool := do
+  match arg_ with
+  | _ => throw Error.Exit
+  | _ => (pure false)
+
+def extern_add (_ : Unit) : Int :=
+  (5 +i 4)
+
+def extern_sub (_ : Unit) : Int :=
+  (5 -i (Neg.neg 4))
+
+def extern_sub_nat (_ : Unit) : Nat :=
+  (5 -i 4)
+
+def extern_negate (_ : Unit) : Int :=
+  (Neg.neg 5)
+
+def extern_mult (_ : Unit) : Int :=
+  (5 *i 4)
+
+def extern__shl8 (_ : Unit) : Int :=
+  (Int.shiftl 8 2)
+
+def extern__shl32 (_ : Unit) : Int :=
+  (Int.shiftl 32 1)
+
+def extern__shl1 (_ : Unit) : Int :=
+  (Int.shiftl 1 2)
+
+def extern__shl_int (_ : Unit) : Int :=
+  (Int.shiftl 4 2)
+
+def extern__shr32 (_ : Unit) : Int :=
+  (Int.shiftl 30 1)
+
+def extern__shr_int (_ : Unit) : Int :=
+  (Int.shiftr 8 2)
+
+def extern_tdiv (_ : Unit) : Int :=
+  (Int.tdiv 5 4)
+
+def extern_tmod (_ : Unit) : Int :=
+  (Int.tmod 5 4)
+
+def extern_tmod_positive (_ : Unit) : Int :=
+  (Int.tmod 5 4)
+
+def extern_max (_ : Unit) : Int :=
+  (Max.max 5 4)
+
+def extern_min (_ : Unit) : Int :=
+  (Min.min 5 4)
+
+def extern_abs_int_plain (_ : Unit) : Int :=
+  let x : Int := (Neg.neg 5)
+  (Sail.Int.intAbs x)
+
+def extern_eq_unit (_ : Unit) : Bool :=
+  (() == ())
+
+def extern_eq_bit (_ : Unit) : Bool :=
+  (0#1 == 1#1)
+
+def extern_not (_ : Unit) : Bool :=
+  (! true)
+
+def extern_and (_ : Unit) : Bool :=
+  (true && false)
+
+def extern_and_no_flow (_ : Unit) : Bool :=
+  (true && false)
+
+def extern_or (_ : Unit) : Bool :=
+  (true || false)
+
+def extern_eq_bool (_ : Unit) : Bool :=
+  (true == false)
+
+def extern_eq_int (_ : Unit) : Bool :=
+  (5 == 4)
+
+def extern_lteq_int (_ : Unit) : Bool :=
+  (5 ≤b 4)
+
+def extern_gteq_int (_ : Unit) : Bool :=
+  (5 ≥b 4)
+
+def extern_lt_int (_ : Unit) : Bool :=
+  (5 <b 4)
+
+def extern_gt_int (_ : Unit) : Bool :=
+  (5 >b 4)
+
+def extern_eq_anything (_ : Unit) : Bool :=
+  (true == true)
+
+def extern_vector_update (_ : Unit) : (Vector Int 5) :=
+  (vectorUpdate #v[23, 23, 23, 23, 23] 2 42)
+
+def extern_string_take (_ : Unit) : String :=
+  (String.take "Hello, world" 5)
+
+def extern_string_drop (_ : Unit) : String :=
+  (String.drop "Hello, world" 5)
+
+def extern_string_length (_ : Unit) : Int :=
+  (String.length "Hello, world")
+
+def extern_string_append (_ : Unit) : String :=
+  (String.append "Hello, " "world")
+
+def extern_string_startswith (_ : Unit) : Bool :=
+  (String.startsWith "Hello, world" "Hello")
+
+def extern_eq_string (_ : Unit) : Bool :=
+  ("Hello" == "world")
+
+def extern_concat_str (_ : Unit) : String :=
+  (HAppend.hAppend "Hello, " "world")
+
+def extern_n_leading_spaces (_ : Unit) : Nat :=
+  (String.leadingSpaces "   Belated Hello world!")
+
+def extern_hex_str (_ : Unit) : String :=
+  (Int.toHex 123)
+
+def extern_hex_str_upper (_ : Unit) : String :=
+  (Int.toHexUpper 123)
+
+def initialize_registers (_ : Unit) : Unit :=
+  ()
+
+def sail_model_init (x_0 : Unit) : Unit :=
+  (initialize_registers ())
+
+end Out.Functions

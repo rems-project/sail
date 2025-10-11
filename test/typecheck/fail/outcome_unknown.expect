@@ -1,0 +1,5 @@
+[93mType error[0m:
+[96mfail/outcome_unknown.sail[0m:1.14-17:
+1[96m |[0minstantiation foo with
+ [91m |[0m              [91m^-^[0m
+ [91m |[0m Unknown outcome foo

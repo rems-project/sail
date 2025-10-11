@@ -52,26 +52,16 @@ open Ast_util
 
 (** {2 Options} *)
 
-(** Enable abstract types in the AST. If unset, will report an error
-    if they are encountered. *)
-val opt_abstract_types : bool ref
-
-(** If enabled, bitvector types are only well-formed if their
-    arguments are natural numbers. *)
+(** If enabled, bitvector types are only well-formed if their arguments are natural numbers. *)
 val opt_strict_bitvector : bool ref
 
-(** Generate faster undefined_T functions. Rather than generating
-   functions that allow for the undefined values of enums and variants
-   to be picked at runtime using a RNG or similar, this creates
-   undefined_T functions for those types that simply return a specific
-   member of the type chosen at compile time, which is much
-   faster. These functions don't have the right effects, so the
-   -no_effects flag may be needed if this is true. False by
-   default. *)
+(** Generate faster undefined_T functions. Rather than generating functions that allow for the undefined values of enums
+    and variants to be picked at runtime using a RNG or similar, this creates undefined_T functions for those types that
+    simply return a specific member of the type chosen at compile time, which is much faster. These functions don't have
+    the right effects, so the -no_effects flag may be needed if this is true. False by default. *)
 val opt_fast_undefined : bool ref
 
-(** Allow # in identifiers when set, much like the GHC option of the same
-   name *)
+(** Allow # in identifiers when set, much like the GHC option of the same name *)
 val opt_magic_hash : bool ref
 
 (** {2 Contexts} *)
@@ -82,7 +72,7 @@ val merge_ctx : Parse_ast.l -> ctx -> ctx -> ctx
 
 val initial_ctx : ctx
 
-(** {2 Desugar and process AST } *)
+(** {2 Desugar and process AST} *)
 
 val to_ast_typ_arg : kind_aux -> ctx -> Parse_ast.atyp -> typ_arg
 
@@ -90,13 +80,12 @@ val get_uninitialized_registers : untyped_def list -> (id * typ) list
 
 val generate_undefined_record_context : typquant -> (id * typ) list
 
-val generate_undefined_record : id -> typquant -> (typ * id) list -> untyped_def list
+val generate_undefined_record : id -> typquant -> ((id * typ) * unit def_annot) list -> untyped_def list
 
 val generate_undefined_enum : id -> id list -> untyped_def list
 
-(** Val specs of undefined functions for builtin types that get added
-    to the AST by generate_undefinds (minus those functions that
-    already exist in the AST). *)
+(** Val specs of undefined functions for builtin types that get added to the AST by generate_undefinds (minus those
+    functions that already exist in the AST). *)
 val undefined_builtin_val_specs : unit -> untyped_def list
 
 val generate_undefineds : IdSet.t -> untyped_def list
@@ -110,6 +99,11 @@ val generate : untyped_ast -> untyped_ast
 val process_ast : ctx -> Parse_ast.defs -> untyped_ast * ctx
 
 (** {2 Parsing expressions and definitions from strings} *)
+
+val hex_digit_of_char : char -> (hex_digit * digit_case option) option
+
+val parse_hex_lit : ?warn_inconsistent_case:Parse_ast.l -> string -> hex_digit non_empty list option
+val parse_bin_lit : string -> bin_digit non_empty list option
 
 val extern_of_string : ?pure:bool -> id -> string -> untyped_def
 
@@ -135,11 +129,11 @@ val constraint_of_string : ?inline:Lexing.position -> string -> n_constraint
 
 val parse_from_string : (Lexing.lexbuf -> 'a) -> ?inline:Lexing.position -> string -> 'a
 
-(** {2 Parsing files } *)
+(** {2 Parsing files} *)
 
 (** Parse a file into a sequence of comments and a parse AST
 
-   @param ?loc If we get an error reading the file, report the error at this location *)
+    @param ?loc If we get an error reading the file, report the error at this location *)
 val parse_file : ?loc:Parse_ast.l -> string -> Lexer.comment list * Parse_ast.def list
 
 val get_lexbuf_from_string : filename:string -> contents:string -> Lexing.lexbuf

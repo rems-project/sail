@@ -23,18 +23,23 @@
  (section share)
  (package sail)
  (files
+  (%{workspace_root}/LICENSE as LICENSE)
+  (%{workspace_root}/THIRD_PARTY_FILES.md as THIRD_PARTY_FILES.md)
   (%{workspace_root}/src/lib/util.ml as src/lib/util.ml)
   (%{workspace_root}/src/lib/sail_lib.ml as src/lib/sail_lib.ml)
   (%{workspace_root}/src/lib/elf_loader.ml as src/lib/elf_loader.ml)
+  (glob_files
+   (%{workspace_root}/src/lib/extraction/*.ml with_prefix src/lib/extraction))
+  (glob_files
+   (%{workspace_root}/src/lib/extraction/*.mli
+    with_prefix
+    src/lib/extraction))
   (%{workspace_root}/lib/_tags as lib/_tags)
   (%{workspace_root}/lib/_tags_coverage as lib/_tags_coverage)
   (%{workspace_root}/lib/arith.sail as lib/arith.sail)
   (%{workspace_root}/lib/concurrency_interface.sail
    as
    lib/concurrency_interface.sail)
-  (%{workspace_root}/lib/concurrency_interface/v1.sail
-   as
-   lib/concurrency_interface/v1.sail)
   (%{workspace_root}/lib/concurrency_interface/emulator_memory.sail
    as
    lib/concurrency_interface/emulator_memory.sail)
@@ -56,9 +61,18 @@
   (%{workspace_root}/lib/concurrency_interface/read_write.sail
    as
    lib/concurrency_interface/read_write.sail)
+  (%{workspace_root}/lib/concurrency_interface/read_write_v1.sail
+   as
+   lib/concurrency_interface/read_write_v1.sail)
+  (%{workspace_root}/lib/concurrency_interface/read_write_v2.sail
+   as
+   lib/concurrency_interface/read_write_v2.sail)
   (%{workspace_root}/lib/concurrency_interface/sysreg.sail
    as
    lib/concurrency_interface/sysreg.sail)
+  (%{workspace_root}/lib/concurrency_interface/translation.sail
+   as
+   lib/concurrency_interface/translation.sail)
   (%{workspace_root}/lib/coverage/Cargo.toml as lib/coverage/Cargo.toml)
   (%{workspace_root}/lib/coverage/Makefile as lib/coverage/Makefile)
   (%{workspace_root}/lib/coverage/src/lib.rs as lib/coverage/src/lib.rs)
@@ -135,6 +149,7 @@
   (%{workspace_root}/lib/isla.sail as lib/isla.sail)
   (%{workspace_root}/lib/main.ml as lib/main.ml)
   (%{workspace_root}/lib/mapping.sail as lib/mapping.sail)
+  (%{workspace_root}/lib/dec_bits.sail as lib/dec_bits.sail)
   (%{workspace_root}/lib/hex_bits.sail as lib/hex_bits.sail)
   (%{workspace_root}/lib/hex_bits_signed.sail as lib/hex_bits_signed.sail)
   (%{workspace_root}/lib/mono_rewrites.sail as lib/mono_rewrites.sail)
@@ -178,20 +193,26 @@
   (%{workspace_root}/lib/float/ge.sail as lib/float/ge.sail)
   (%{workspace_root}/lib/float/ge_quiet.sail as lib/float/ge_quiet.sail)
   (%{workspace_root}/lib/float/add.sail as lib/float/add.sail)
+  (%{workspace_root}/lib/float/rounding.sail as lib/float/rounding.sail)
+  (%{workspace_root}/lib/float/classify.sail as lib/float/classify.sail)
   (%{workspace_root}/lib/float/interface.sail as lib/float/interface.sail)
   (%{workspace_root}/lib/reverse_endianness.sail
    as
    lib/reverse_endianness.sail)
   (%{workspace_root}/lib/sv/sail_modules.sv as lib/sv/sail_modules.sv)
+  (%{workspace_root}/lib/sv/sail_memory.sv as lib/sv/sail_memory.sv)
   (%{workspace_root}/lib/rts.c as lib/rts.c)
   (%{workspace_root}/lib/rts.h as lib/rts.h)
   (%{workspace_root}/lib/sail.c as lib/sail.c)
   (%{workspace_root}/lib/sail.h as lib/sail.h)
   (%{workspace_root}/lib/sail.tex as lib/sail.tex)
+  (%{workspace_root}/lib/cJSON.c as lib/cJSON.c)
+  (%{workspace_root}/lib/cJSON.h as lib/cJSON.h)
+  (%{workspace_root}/lib/sail_config.c as lib/sail_config.c)
+  (%{workspace_root}/lib/sail_config.h as lib/sail_config.h)
   (%{workspace_root}/lib/sail_coverage.h as lib/sail_coverage.h)
   (%{workspace_root}/lib/sail_failure.c as lib/sail_failure.c)
   (%{workspace_root}/lib/sail_failure.h as lib/sail_failure.h)
-  (%{workspace_root}/lib/sail_state.h as lib/sail_state.h)
   (%{workspace_root}/lib/smt.sail as lib/smt.sail)
   (%{workspace_root}/lib/string.sail as lib/string.sail)
   (%{workspace_root}/lib/trace.sail as lib/trace.sail)
@@ -201,6 +222,12 @@
   (%{workspace_root}/src/gen_lib/sail2_concurrency_interface.lem
    as
    src/gen_lib/sail2_concurrency_interface.lem)
+  (%{workspace_root}/src/gen_lib/sail2_concurrency_interface_mwords.lem
+   as
+   src/gen_lib/sail2_concurrency_interface_mwords.lem)
+  (%{workspace_root}/src/gen_lib/sail2_concurrency_interface_bitlists.lem
+   as
+   src/gen_lib/sail2_concurrency_interface_bitlists.lem)
   (%{workspace_root}/src/gen_lib/sail2_deep_shallow_convert.lem
    as
    src/gen_lib/sail2_deep_shallow_convert.lem)
@@ -248,4 +275,19 @@
    src/gen_lib/sail2_values.lem)
   (%{workspace_root}/src/sail_lean_backend/Sail/Sail.lean
    as
-   src/sail_lean_backend/Sail/Sail.lean)))
+   src/sail_lean_backend/Sail/Sail.lean)
+  (%{workspace_root}/src/sail_lean_backend/Sail/BitVec.lean
+   as
+   src/sail_lean_backend/Sail/BitVec.lean)
+  (%{workspace_root}/src/sail_lean_backend/Sail/IntRange.lean
+   as
+   src/sail_lean_backend/Sail/IntRange.lean)
+  (%{workspace_root}/src/sail_lean_backend/Sail/Real.lean
+   as
+   src/sail_lean_backend/Sail/Real.lean)
+  (%{workspace_root}/src/sail_lean_backend/Sail/FakeReal.lean
+   as
+   src/sail_lean_backend/Sail/FakeReal.lean)
+  (%{workspace_root}/src/sail_lean_backend/Sail/Specialization.lean
+   as
+   src/sail_lean_backend/Sail/Specialization.lean)))

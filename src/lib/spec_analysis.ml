@@ -114,7 +114,7 @@ let bindings_from_pat p =
     | P_vector ps | P_vector_concat ps | P_string_append ps | P_app (_, ps) | P_tuple ps | P_list ps ->
         List.concat (List.map aux_pat ps)
     | P_cons (p1, p2) -> aux_pat p1 @ aux_pat p2
-    | P_struct (fps, _) -> List.map snd fps |> List.map aux_pat |> List.concat
+    | P_struct (_, fps, _) -> List.map snd fps |> List.map aux_pat |> List.concat
   in
   aux_pat p
 
@@ -176,13 +176,14 @@ let nexp_subst_fns substs =
     | P_tuple ps -> re (P_tuple (List.map s_pat ps))
     | P_list ps -> re (P_list (List.map s_pat ps))
     | P_cons (p1, p2) -> re (P_cons (s_pat p1, s_pat p2))
-    | P_struct (fps, fwild) -> re (P_struct (List.map (fun (field, p) -> (field, s_pat p)) fps, fwild))
+    | P_struct (struct_name, fps, fwild) ->
+        re (P_struct (struct_name, List.map (fun (field, p) -> (field, s_pat p)) fps, fwild))
   in
   let rec s_exp (E_aux (e, (l, annot))) =
     let re e = E_aux (e, (l, s_tannot annot)) in
     match e with
     | E_block es -> re (E_block (List.map s_exp es))
-    | E_id _ | E_ref _ | E_lit _ | E_internal_value _ -> re e
+    | E_id _ | E_ref _ | E_lit _ | E_internal_value _ | E_config _ -> re e
     | E_sizeof ne -> begin
         let ne' = subst_kids_nexp substs ne in
         match ne' with Nexp_aux (Nexp_constant i, l) -> re (E_lit (L_aux (L_num i, l))) | _ -> re (E_sizeof ne')
@@ -190,20 +191,15 @@ let nexp_subst_fns substs =
     | E_constraint nc -> re (E_constraint (subst_kids_nc substs nc))
     | E_typ (t, e') -> re (E_typ (s_t t, s_exp e'))
     | E_app (id, es) -> re (E_app (id, List.map s_exp es))
-    | E_app_infix (e1, id, e2) -> re (E_app_infix (s_exp e1, id, s_exp e2))
     | E_tuple es -> re (E_tuple (List.map s_exp es))
     | E_if (e1, e2, e3) -> re (E_if (s_exp e1, s_exp e2, s_exp e3))
     | E_for (id, e1, e2, e3, ord, e4) -> re (E_for (id, s_exp e1, s_exp e2, s_exp e3, ord, s_exp e4))
     | E_loop (loop, m, e1, e2) -> re (E_loop (loop, s_measure m, s_exp e1, s_exp e2))
     | E_vector es -> re (E_vector (List.map s_exp es))
-    | E_vector_access (e1, e2) -> re (E_vector_access (s_exp e1, s_exp e2))
-    | E_vector_subrange (e1, e2, e3) -> re (E_vector_subrange (s_exp e1, s_exp e2, s_exp e3))
-    | E_vector_update (e1, e2, e3) -> re (E_vector_update (s_exp e1, s_exp e2, s_exp e3))
-    | E_vector_update_subrange (e1, e2, e3, e4) -> re (E_vector_update_subrange (s_exp e1, s_exp e2, s_exp e3, s_exp e4))
     | E_vector_append (e1, e2) -> re (E_vector_append (s_exp e1, s_exp e2))
     | E_list es -> re (E_list (List.map s_exp es))
     | E_cons (e1, e2) -> re (E_cons (s_exp e1, s_exp e2))
-    | E_struct fes -> re (E_struct (List.map s_fexp fes))
+    | E_struct (struct_name, fes) -> re (E_struct (struct_name, List.map s_fexp fes))
     | E_struct_update (e, fes) -> re (E_struct_update (s_exp e, List.map s_fexp fes))
     | E_field (e, id) -> re (E_field (s_exp e, id))
     | E_match (e, cases) -> re (E_match (s_exp e, List.map s_pexp cases))

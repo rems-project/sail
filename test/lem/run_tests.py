@@ -26,6 +26,11 @@ skip_tests = {
     'concurrency_interface_inc',
     # Requires types that aren't currently in the library
     'float_prelude',
+    # No possible configuration
+    'config_mismatch',
+    # Custom outcome
+    'outcome_int',
+    'outcome_impl_int',
 }
 skip_tests_mwords = {
     'phantom_option',
@@ -43,6 +48,7 @@ skip_tests_mwords = {
     'negative_bits_list',
     'patternrefinement',
     'abstract_extend',
+    'issue984',
     # Due to an incompatibility between -auto_mono and -smt_linearize
     'pow_32_64',
     # The Lem backend needs sail_mem_read to be instantiated at a minimum
@@ -62,6 +68,13 @@ skip_tests_mwords = {
     'ex_cons_infer',
     # Requires types that aren't currently in the library
     'float_prelude',
+    # Needs smarter monomorphisation
+    'bits_alias_cast',
+    # No possible configuration
+    'config_mismatch',
+    # Custom outcome
+    'outcome_int',
+    'outcome_impl_int',
 }
 
 print('Sail is {}'.format(sail))

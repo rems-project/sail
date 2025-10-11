@@ -56,10 +56,7 @@ module P = Parse_ast
 (* See mli file for details on what these flags do *)
 let opt_fast_undefined = ref false
 let opt_magic_hash = ref false
-let opt_abstract_types = ref false
 let opt_strict_bitvector = ref false
-
-let abstract_type_error = "Abstract types are currently experimental, use the --abstract-types flag to enable"
 
 module StringSet = Set.Make (String)
 module StringMap = Map.Make (String)
@@ -69,19 +66,30 @@ module StringMap = Map.Make (String)
    $sail_internal marked files in the prelude. *)
 let reserved_type_ids = IdSet.of_list [mk_id "result"; mk_id "option"]
 
-type type_constructor = P.kind_aux list * P.kind_aux
+type type_constructor_arg = Vector_len | Kind of P.kind_aux
+
+let arg_to_kind = function Vector_len -> if !opt_strict_bitvector then P.K_nat else P.K_int | Kind k -> k
+
+type type_constructor = type_constructor_arg list * P.kind_aux
 
 type ctx = {
   kinds : (kind_aux * P.l) KBindings.t;
   function_type_variables : (kind_aux * P.l) KBindings.t Bindings.t;
   type_constructors : type_constructor Bindings.t;
+  outcome_names : IdSet.t;
+  outcome_variables : kind_aux KBindings.t;
   scattereds : (P.typquant * ctx) Bindings.t;
-  fixities : (prec * int) Bindings.t;
+  fixities : (prec * int) StringMap.t;
   internal_files : StringSet.t;
   target_sets : string list StringMap.t;
 }
 
 type 'a ctx_out = 'a * ctx
+
+let get_type_constructor id ctx =
+  match Bindings.find_opt id ctx.type_constructors with
+  | None -> None
+  | Some (arg_kinds, ret_kind) -> Some (List.map arg_to_kind arg_kinds, ret_kind)
 
 let rec equal_ctx ctx1 ctx2 =
   KBindings.equal ( = ) ctx1.kinds ctx2.kinds
@@ -90,7 +98,7 @@ let rec equal_ctx ctx1 ctx2 =
   && Bindings.equal
        (fun (typq1, ctx1) (typq2, ctx2) -> typq1 = typq2 && equal_ctx ctx1 ctx2)
        ctx1.scattereds ctx2.scattereds
-  && Bindings.equal ( = ) ctx1.fixities ctx2.fixities
+  && StringMap.equal ( = ) ctx1.fixities ctx2.fixities
   && StringSet.equal ctx1.internal_files ctx2.internal_files
   && StringMap.equal ( = ) ctx1.target_sets ctx2.target_sets
 
@@ -114,6 +122,11 @@ let merge_ctx l ctx1 ctx2 =
          )
         )
         ctx1.function_type_variables ctx2.function_type_variables;
+    outcome_names = IdSet.union ctx1.outcome_names ctx2.outcome_names;
+    outcome_variables =
+      KBindings.merge
+        (compatible ( = ) (fun v -> "Outcome definitions have different kinds for type variable " ^ string_of_kid v))
+        ctx1.outcome_variables ctx2.outcome_variables;
     type_constructors =
       Bindings.merge
         (compatible ( = ) (fun id -> "Different definitions for type constructor " ^ string_of_id id ^ " found"))
@@ -126,8 +139,8 @@ let merge_ctx l ctx1 ctx2 =
         )
         ctx1.scattereds ctx2.scattereds;
     fixities =
-      Bindings.merge
-        (compatible ( = ) (fun id -> "Operator " ^ string_of_id id ^ " declared with multiple fixities"))
+      StringMap.merge
+        (compatible ( = ) (fun op -> "Operator " ^ op ^ " declared with multiple fixities"))
         ctx1.fixities ctx2.fixities;
     internal_files = StringSet.union ctx1.internal_files ctx2.internal_files;
     target_sets =
@@ -164,7 +177,7 @@ let to_ast_kind (P.K_aux (k, l)) =
   | P.K_bool -> Some (K_aux (K_bool, l))
 
 let parse_kind_constraint l v = function
-  | P.K_nat when !opt_strict_bitvector ->
+  | P.K_nat ->
       let v = Nexp_aux (Nexp_var v, kid_loc v) in
       Some (NC_aux (NC_ge (v, Nexp_aux (Nexp_constant Big_int.zero, l)), l))
   | _ -> None
@@ -176,7 +189,7 @@ let filter_order_kinds kinds = List.filter not_order_kind kinds
 let string_of_parse_kind_aux = function
   | P.K_order -> "Order"
   | P.K_int -> "Int"
-  | P.K_nat -> if !opt_strict_bitvector then "Nat" else "Int"
+  | P.K_nat -> "Nat"
   | P.K_bool -> "Bool"
   | P.K_type -> "Type"
 
@@ -198,7 +211,17 @@ let to_parse_kind = function
 let unaux_parse_kind (P.K_aux (aux, _)) = aux
 
 let to_ast_id ctx (P.Id_aux (id, l)) =
-  let to_ast_id' id = Id_aux ((match id with P.Id x -> Id x | P.Operator x -> Operator x), l) in
+  let to_ast_id' id =
+    Id_aux
+      ( ( match id with
+        | P.Id "and_bool" -> And_bool
+        | P.Id "or_bool" -> Or_bool
+        | P.Id x -> Id x
+        | P.Operator x -> Operator x
+        ),
+        l
+      )
+  in
   if string_contains (string_of_parse_id_aux id) '#' then begin
     match Reporting.loc_file l with
     | Some file when !opt_magic_hash || StringSet.mem file ctx.internal_files -> to_ast_id' id
@@ -243,13 +266,13 @@ let to_infix_parser_op =
   | _ -> Reporting.unreachable P.Unknown __POS__ "Invalid fixity"
 
 let parse_infix :
-      'a 'b.
-      P.l ->
-      ctx ->
-      ('a P.infix_token * Lexing.position * Lexing.position) list ->
-      ('a -> Infix_parser.token) ->
-      'b Infix_parser.MenhirInterpreter.checkpoint ->
-      'b =
+    'a 'b.
+    P.l ->
+    ctx ->
+    ('a P.infix_token * Lexing.position * Lexing.position) list ->
+    ('a -> Infix_parser.token) ->
+    'b Infix_parser.MenhirInterpreter.checkpoint ->
+    'b =
  fun l ctx infix_tokens mk_primary checkpoint ->
   let open Infix_parser in
   let tokens =
@@ -259,32 +282,29 @@ let parse_infix :
            | P.IT_primary x, s, e -> (mk_primary x, s, e)
            | P.IT_prefix id, s, e -> (
                match id with
-               | Id_aux (Id "pow2", _) -> (TwoCaret, s, e)
-               | Id_aux (Id "negate", _) -> (Minus, s, e)
-               | Id_aux (Id "__deref", _) -> (Star, s, e)
+               | "pow2" -> (TwoCaret, s, e)
+               | "negate" -> (Minus, s, e)
+               | "__deref" -> (Star, s, e)
                | _ -> raise (Reporting.err_general (P.Range (s, e)) "Unknown prefix operator")
              )
-           | P.IT_op id, s, e -> (
-               match id with
-               | Id_aux (Id "+", _) -> (Plus, s, e)
-               | Id_aux (Id "-", _) -> (Minus, s, e)
-               | Id_aux (Id "*", _) -> (Star, s, e)
-               | Id_aux (Id "<", _) -> (Lt, s, e)
-               | Id_aux (Id ">", _) -> (Gt, s, e)
-               | Id_aux (Id "<=", _) -> (LtEq, s, e)
-               | Id_aux (Id ">=", _) -> (GtEq, s, e)
-               | Id_aux (Id "::", _) -> (ColonColon, s, e)
-               | Id_aux (Id "@", _) -> (At, s, e)
-               | Id_aux (Id "in", _) -> (In, s, e)
+           | P.IT_op op, s, e -> (
+               match op with
+               | "+" -> (Plus, s, e)
+               | "-" -> (Minus, s, e)
+               | "*" -> (Star, s, e)
+               | "<" -> (Lt, s, e)
+               | ">" -> (Gt, s, e)
+               | "<=" -> (LtEq, s, e)
+               | ">=" -> (GtEq, s, e)
+               | "::" -> (ColonColon, s, e)
+               | "@" -> (At, s, e)
+               | "in" -> (In, s, e)
                | _ -> (
-                   match Bindings.find_opt (to_ast_id ctx id) ctx.fixities with
-                   | Some (prec, level) -> (to_infix_parser_op (prec, level, id), s, e)
-                   | None ->
-                       raise
-                         (Reporting.err_general
-                            (P.Range (s, e))
-                            ("Undeclared fixity for operator " ^ string_of_parse_id id)
-                         )
+                   match StringMap.find_opt op ctx.fixities with
+                   | Some (prec, level) ->
+                       let id = P.Id_aux (P.Operator op, P.Range (s, e)) in
+                       (to_infix_parser_op (prec, level, id), s, e)
+                   | None -> raise (Reporting.err_general (P.Range (s, e)) ("Undeclared fixity for operator " ^ op))
                  )
              )
            )
@@ -324,26 +344,21 @@ let parse_infix_atyp ctx = function
 
 let to_ast_var (P.Kid_aux (P.Var v, l)) = Kid_aux (Var v, l)
 
-(** The [KindInference] module implements a type-inference module for
-    kind (types of types).
+(** The [KindInference] module implements a type-inference module for kind (types of types).
 
-    The algorithm used is essentially Hindley-Milner style, athough
-    because the language of types is very simple, some things can be
-    simple. *)
+    The algorithm used is essentially Hindley-Milner style, athough because the language of types is very simple, some
+    things can be simple. *)
 module KindInference = struct
-  (** This is the kind for a variable during kind inference. Either it
-      can be [Unknown], or it can be a [Known] kind. *)
+  (** This is the kind for a variable during kind inference. Either it can be [Unknown], or it can be a [Known] kind. *)
   type unification_kind = Unknown | Known of P.kind_aux * l
 
-  (** This type is similar to the [unification_kind] type, but the
-      [Unknown] kinds are represented as variables. When checking a
-      kind-polymorphic type constructor (e.g. operator ==) in types we
-      want to have something like:
+  (** This type is similar to the [unification_kind] type, but the [Unknown] kinds are represented as variables. When
+      checking a kind-polymorphic type constructor (e.g. operator ==) in types we want to have something like:
       {v
       ∀α. (α, α) -> Bool
       v}
-      To do this we create a new fresh variable for [α], which would
-      be a [Kind_var], and [Bool] would be an explicit [Kind]. *)
+      To do this we create a new fresh variable for [α], which would be a [Kind_var], and [Bool] would be an explicit
+      [Kind]. *)
   type inference_kind = Kind_var of int | Kind of P.kind_aux * l
 
   (* This is the typing environment for the kind-inference
@@ -355,6 +370,17 @@ module KindInference = struct
   include Util.State_monad (struct
     type t = env
   end)
+
+  let rec mapM_field_item f = function
+    | P.Ann_doc (doc, x, l) ->
+        let* y = mapM_field_item f x in
+        return (P.Ann_doc (doc, y, l))
+    | P.Ann_attribute (attr, arg, x, l) ->
+        let* y = mapM_field_item f x in
+        return (P.Ann_attribute (attr, arg, y, l))
+    | P.Ann_item x ->
+        let* y = f x in
+        return (P.Ann_item y)
 
   let get_var v env =
     let rec go = function
@@ -549,7 +575,7 @@ module KindInference = struct
     | P.ATyp_app (id, args) ->
         let id' = to_ast_id ctx id in
         let* args =
-          match Bindings.find_opt id' ctx.type_constructors with
+          match get_type_constructor id' ctx with
           | None ->
               raise (ksprintf (Reporting.err_typ l) "Unknown type level operator or function %s" (string_of_id id'))
           | Some (kinds, ret_kind) ->
@@ -690,7 +716,7 @@ module KindInference = struct
     | P.P_string_append pats ->
         let* pats = mapM (infer_pat ctx) pats in
         wrap (P.P_string_append pats)
-    | P.P_struct fpats ->
+    | P.P_struct (struct_name, fpats) ->
         let* fpats =
           mapM
             (fun (P.FP_aux (aux, l)) ->
@@ -702,7 +728,7 @@ module KindInference = struct
             )
             fpats
         in
-        wrap (P.P_struct fpats)
+        wrap (P.P_struct (struct_name, fpats))
     | P.P_attribute (attr, arg, pat) ->
         let* pat = infer_pat ctx pat in
         wrap (P.P_attribute (attr, arg, pat))
@@ -759,9 +785,10 @@ module KindInference = struct
     | P.Tu_ty_anon_rec (fields, id) ->
         let* fields =
           mapM
-            (fun (atyp, field) ->
-              let* atyp = check ctx atyp (Kind (P.K_type, atyp_loc atyp)) in
-              return (atyp, field)
+            (mapM_field_item (fun (field, atyp) ->
+                 let* atyp = check ctx atyp (Kind (P.K_type, atyp_loc atyp)) in
+                 return (field, atyp)
+             )
             )
             fields
         in
@@ -795,6 +822,12 @@ module KindInference = struct
         )
     in
     return (typq, typ, kind)
+
+  let check_outcome ctx typq (P.ATyp_aux (_, l) as typ) args =
+    let* args = infer_typquant ctx args in
+    let* typq = infer_typquant ctx typq in
+    let* typ = check ctx typ (Kind (K_type, l)) in
+    return (typq, typ, args)
 
   let initial_env = { sets = []; next_unknown = 0; vars = [] }
 end
@@ -873,7 +906,7 @@ module ConvertType = struct
     | P.ATyp_app (id, args) ->
         let id = to_ast_id ctx id in
         begin
-          match Bindings.find_opt id ctx.type_constructors with
+          match get_type_constructor id ctx with
           | None -> raise (Reporting.err_typ l (sprintf "Could not find type constructor %s" (string_of_id id)))
           | Some (kinds, _) ->
               let non_order_kinds = List.filter_map to_ast_kind_aux kinds in
@@ -979,7 +1012,7 @@ module ConvertType = struct
               | "|" -> NC_or (to_ast_constraint kenv ctx t1, to_ast_constraint kenv ctx t2)
               | _ -> (
                   let id = to_ast_id ctx id in
-                  match Bindings.find_opt id ctx.type_constructors with
+                  match get_type_constructor id ctx with
                   | None -> raise (Reporting.err_typ l (sprintf "Could not find type constructor %s" (string_of_id id)))
                   | Some (kinds, _) ->
                       let non_order_kinds = List.filter_map to_ast_kind_aux kinds in
@@ -997,7 +1030,7 @@ module ConvertType = struct
           | P.ATyp_app (id, args) ->
               let id = to_ast_id ctx id in
               begin
-                match Bindings.find_opt id ctx.type_constructors with
+                match get_type_constructor id ctx with
                 | None -> raise (Reporting.err_typ l (sprintf "Could not find type constructor %s" (string_of_id id)))
                 | Some (kinds, _) ->
                     let non_order_kinds = List.filter_map to_ast_kind_aux kinds in
@@ -1016,6 +1049,15 @@ module ConvertType = struct
           | P.ATyp_lit (P.L_aux (P.L_true, _)) -> NC_true
           | P.ATyp_lit (P.L_aux (P.L_false, _)) -> NC_false
           | P.ATyp_in (n, P.ATyp_aux (P.ATyp_nset bounds, _)) -> NC_set (to_ast_nexp kenv ctx n, bounds)
+          | P.ATyp_if (i, t, e) ->
+              let i = to_ast_constraint kenv ctx i in
+              let i_loc = constraint_loc i in
+              let t = to_ast_constraint kenv ctx t in
+              let e = to_ast_constraint kenv ctx e in
+              NC_or
+                ( NC_aux (NC_and (i, t), l),
+                  NC_aux (NC_and (NC_aux (NC_app (mk_id ~loc:i_loc "not", [A_aux (A_bool i, i_loc)]), i_loc), e), l)
+                )
           | _ -> raise (Reporting.err_typ l "Invalid constraint")
         in
         NC_aux (aux, l)
@@ -1093,8 +1135,6 @@ let to_ast_nexp = ConvertType.to_ast_nexp KindInference.initial_env
 
 let to_ast_bitfield_index_nexp = ConvertType.to_ast_bitfield_index_nexp
 
-let to_ast_kopts = ConvertType.to_ast_kopts KindInference.initial_env
-
 let to_ast_typquant = ConvertType.to_ast_typquant KindInference.initial_env
 
 let to_ast_type_union = ConvertType.to_ast_type_union KindInference.initial_env
@@ -1128,6 +1168,97 @@ let to_ast_typschm_opt ctx (P.TypSchm_opt_aux (aux, l)) : tannot_opt ctx_out =
       let tq, ctx = ConvertType.to_ast_typquant kenv ctx tq in
       (Typ_annot_opt_aux (Typ_annot_opt_some (tq, ConvertType.to_ast_typ kenv ctx typ), l), ctx)
 
+let hex_digit_of_char c =
+  let open Util.Option_monad in
+  let* digit =
+    match c with
+    | '0' -> Some Hex_0
+    | '1' -> Some Hex_1
+    | '2' -> Some Hex_2
+    | '3' -> Some Hex_3
+    | '4' -> Some Hex_4
+    | '5' -> Some Hex_5
+    | '6' -> Some Hex_6
+    | '7' -> Some Hex_7
+    | '8' -> Some Hex_8
+    | '9' -> Some Hex_9
+    | 'a' | 'A' -> Some Hex_A
+    | 'b' | 'B' -> Some Hex_B
+    | 'c' | 'C' -> Some Hex_C
+    | 'd' | 'D' -> Some Hex_D
+    | 'e' | 'E' -> Some Hex_E
+    | 'f' | 'F' -> Some Hex_F
+    | _ -> None
+  in
+  let n = Char.code c in
+  let case = if 65 <= n && n <= 70 then Some Uppercase else if 97 <= n && n <= 102 then Some Lowercase else None in
+  Some (digit, case)
+
+let rec filter_non_empty = function
+  | [] -> []
+  | [] :: xs -> filter_non_empty xs
+  | (y :: ys) :: xs -> Non_empty (y, ys) :: filter_non_empty xs
+
+let parse_hex_lit ?warn_inconsistent_case str =
+  let groups = String.split_on_char '_' str in
+  let failed = ref false in
+  let seen_case = ref None in
+  let check_consistent_case = function
+    | None -> ()
+    | Some case -> (
+        match !seen_case with
+        | None -> seen_case := Some case
+        | Some previous ->
+            if case = previous then ()
+            else (
+              match warn_inconsistent_case with
+              | None -> ()
+              | Some l ->
+                  Reporting.warn "Inconsistent hexadecimal casing" l
+                    "This hexadecimal bitvector literal contains both lowercase and uppercase digits."
+            )
+      )
+  in
+  let hex =
+    List.map
+      (fun group ->
+        String.to_seq group
+        |> Seq.map (fun c ->
+               match hex_digit_of_char c with
+               | Some (digit, case) ->
+                   check_consistent_case case;
+                   digit
+               | None ->
+                   failed := true;
+                   Hex_0
+           )
+        |> List.of_seq
+      )
+      groups
+  in
+  if not !failed then Some (filter_non_empty hex) else None
+
+let parse_bin_lit str =
+  let groups = String.split_on_char '_' str in
+  let failed = ref false in
+  let bin =
+    List.map
+      (fun group ->
+        String.to_seq group
+        |> Seq.map (fun c ->
+               match c with
+               | '0' -> Bin_0
+               | '1' -> Bin_1
+               | _ ->
+                   failed := true;
+                   Bin_0
+           )
+        |> List.of_seq
+      )
+      groups
+  in
+  if not !failed then Some (filter_non_empty bin) else None
+
 let to_ast_lit (P.L_aux (lit, l)) =
   L_aux
     ( ( match lit with
@@ -1138,8 +1269,16 @@ let to_ast_lit (P.L_aux (lit, l)) =
       | P.L_false -> L_false
       | P.L_undef -> L_undef
       | P.L_num i -> L_num i
-      | P.L_hex h -> L_hex h
-      | P.L_bin b -> L_bin b
+      | P.L_hex h -> (
+          match parse_hex_lit ~warn_inconsistent_case:l h with
+          | Some h -> L_hex h
+          | None -> raise (Reporting.err_syntax_loc l "Failed to parse hexadecimal bitvector literal")
+        )
+      | P.L_bin b -> (
+          match parse_bin_lit b with
+          | Some b -> L_bin b
+          | None -> raise (Reporting.err_syntax_loc l "Failed to parse binary bitvector literal")
+        )
       | P.L_real r -> L_real r
       | P.L_string s -> L_string s
       ),
@@ -1167,7 +1306,7 @@ let check_duplicate_fields ~error ~field_id fields =
       match IdSet.find_opt id seen with
       | Some seen_id ->
           raise
-            (Reporting.err_general (Hint ("Previous field here", id_loc seen_id, id_loc id)) (error (string_of_id id)))
+            (Reporting.err_general (Hint ("previous field here", id_loc seen_id, id_loc id)) (error (string_of_id id)))
       | None -> IdSet.add id seen
     )
     IdSet.empty fields
@@ -1201,7 +1340,8 @@ let rec to_ast_pat ctx (P.P_aux (aux, l)) =
         | P.P_list pats -> P_list (List.map (to_ast_pat ctx) pats)
         | P.P_cons (pat1, pat2) -> P_cons (to_ast_pat ctx pat1, to_ast_pat ctx pat2)
         | P.P_string_append pats -> P_string_append (List.map (to_ast_pat ctx) pats)
-        | P.P_struct fpats ->
+        | P.P_struct (struct_name, fpats) ->
+            let struct_name = match struct_name with None -> SN_anon | Some id -> SN_id (to_ast_id ctx id) in
             let wild_fpats, fpats = List.partition is_wild_fpat fpats in
             let field_wildcard =
               match wild_fpats with
@@ -1215,8 +1355,10 @@ let rec to_ast_pat ctx (P.P_aux (aux, l)) =
               | [] -> FP_no_wild
             in
             let fpats = List.map (to_ast_fpat ctx) fpats in
-            check_duplicate_fields ~error:(fun f -> "Duplicate field " ^ f ^ " in struct pattern") ~field_id:fst fpats;
-            P_struct (fpats, field_wildcard)
+            check_duplicate_fields
+              ~error:(fun f -> Printf.sprintf "Duplicate field '%s' in struct pattern" f)
+              ~field_id:fst fpats;
+            P_struct (struct_name, fpats, field_wildcard)
       in
       P_aux (aux, (l, empty_uannot))
 
@@ -1225,108 +1367,154 @@ and to_ast_fpat ctx (P.FP_aux (aux, l)) =
   | FP_field (field, pat) -> (to_ast_id ctx field, to_ast_pat ctx pat)
   | FP_wild -> Reporting.unreachable l __POS__ "Unexpected field wildcard"
 
+let rec is_config (P.E_aux (aux, _)) =
+  match aux with
+  | P.E_field (exp, field) -> begin
+      match is_config exp with None -> None | Some key -> Some (string_of_parse_id field :: key)
+    end
+  | P.E_config root -> Some [root]
+  | _ -> None
+
+let notation_attr l level strs =
+  let open P.Attribute_data in
+  let is_ascii_digit c =
+    let n = Char.code c in
+    48 <= n && n <= 57
+  in
+  let parts =
+    List.map
+      (fun str ->
+        if Util.string_for_all is_ascii_digit str then AD_aux (AD_num (Big_int.of_string str), l)
+        else AD_aux (AD_string str, l)
+      )
+      strs
+  in
+  add_attribute l "notation"
+    (Some
+       (AD_aux
+          (AD_object [("level", AD_aux (AD_num (Big_int.of_int level), l)); ("syntax", AD_aux (AD_list parts, l))], l)
+       )
+    )
+
 let rec to_ast_letbind ctx (P.LB_aux (lb, l) : P.letbind) : uannot letbind =
   LB_aux ((match lb with P.LB_val (pat, exp) -> LB_val (to_ast_pat ctx pat, to_ast_exp ctx exp)), (l, empty_uannot))
 
 and to_ast_exp ctx exp =
   let (P.E_aux (exp, l)) = parse_infix_exp ctx exp in
+  let wrap exp = E_aux (exp, (l, empty_uannot)) in
   match exp with
+  (* Will have just been removed by parse_infix_exp *)
+  | P.E_infix _ -> assert false
   | P.E_attribute (attr, arg, exp) ->
       let (E_aux (exp, (exp_l, annot))) = to_ast_exp ctx exp in
       (* The location of an E_attribute node is just the attribute itself *)
       let annot = add_attribute l attr arg annot in
       E_aux (exp, (exp_l, annot))
-  | _ ->
-      let aux =
-        match exp with
-        | P.E_attribute _ | P.E_infix _ -> assert false
-        | P.E_block exps -> (
-            match to_ast_fexps false ctx exps with
-            | Some fexps -> E_struct fexps
-            | None -> E_block (List.map (to_ast_exp ctx) exps)
-          )
-        | P.E_id id ->
-            (* We support identifiers the same as __LOC__, __FILE__ and
-               __LINE__ in the OCaml standard library, and similar
-               constructs in C *)
-            let id_str = string_of_parse_id id in
-            if id_str = "__LOC__" then E_lit (L_aux (L_string (Reporting.short_loc_to_string l), l))
-            else if id_str = "__FILE__" then (
-              let file = match Reporting.simp_loc l with Some (p, _) -> p.pos_fname | None -> "unknown file" in
-              E_lit (L_aux (L_string file, l))
-            )
-            else if id_str = "__LINE__" then (
-              let lnum = match Reporting.simp_loc l with Some (p, _) -> p.pos_lnum | None -> -1 in
-              E_lit (L_aux (L_num (Big_int.of_int lnum), l))
-            )
-            else E_id (to_ast_id ctx id)
-        | P.E_ref id -> E_ref (to_ast_id ctx id)
-        | P.E_lit lit -> E_lit (to_ast_lit lit)
-        | P.E_typ (typ, exp) -> E_typ (to_ast_typ ctx typ, to_ast_exp ctx exp)
-        | P.E_app (f, args) -> (
-            match List.map (to_ast_exp ctx) args with
-            | [] -> E_app (to_ast_id ctx f, [])
-            | exps -> E_app (to_ast_id ctx f, exps)
-          )
-        | P.E_app_infix (left, op, right) -> E_app_infix (to_ast_exp ctx left, to_ast_id ctx op, to_ast_exp ctx right)
-        | P.E_tuple exps -> E_tuple (List.map (to_ast_exp ctx) exps)
-        | P.E_if (e1, e2, e3, _) -> E_if (to_ast_exp ctx e1, to_ast_exp ctx e2, to_ast_exp ctx e3)
-        | P.E_for (id, e1, e2, e3, atyp, e4) ->
-            E_for
-              ( to_ast_id ctx id,
-                to_ast_exp ctx e1,
-                to_ast_exp ctx e2,
-                to_ast_exp ctx e3,
-                to_ast_order ctx atyp,
-                to_ast_exp ctx e4
-              )
-        | P.E_loop (P.While, m, e1, e2) -> E_loop (While, to_ast_measure ctx m, to_ast_exp ctx e1, to_ast_exp ctx e2)
-        | P.E_loop (P.Until, m, e1, e2) -> E_loop (Until, to_ast_measure ctx m, to_ast_exp ctx e1, to_ast_exp ctx e2)
-        | P.E_vector exps -> E_vector (List.map (to_ast_exp ctx) exps)
-        | P.E_vector_access (vexp, exp) -> E_vector_access (to_ast_exp ctx vexp, to_ast_exp ctx exp)
-        | P.E_vector_subrange (vex, exp1, exp2) ->
-            E_vector_subrange (to_ast_exp ctx vex, to_ast_exp ctx exp1, to_ast_exp ctx exp2)
-        | P.E_vector_update (vex, exp1, exp2) ->
-            E_vector_update (to_ast_exp ctx vex, to_ast_exp ctx exp1, to_ast_exp ctx exp2)
-        | P.E_vector_update_subrange (vex, e1, e2, e3) ->
-            E_vector_update_subrange (to_ast_exp ctx vex, to_ast_exp ctx e1, to_ast_exp ctx e2, to_ast_exp ctx e3)
-        | P.E_vector_append (e1, e2) -> E_vector_append (to_ast_exp ctx e1, to_ast_exp ctx e2)
-        | P.E_list exps -> E_list (List.map (to_ast_exp ctx) exps)
-        | P.E_cons (e1, e2) -> E_cons (to_ast_exp ctx e1, to_ast_exp ctx e2)
-        | P.E_struct fexps -> (
-            match to_ast_fexps true ctx fexps with
-            | Some fexps -> E_struct fexps
-            | None -> raise (Reporting.err_unreachable l __POS__ "to_ast_fexps with true returned none")
-          )
-        | P.E_struct_update (exp, fexps) -> (
-            match to_ast_fexps true ctx fexps with
-            | Some fexps -> E_struct_update (to_ast_exp ctx exp, fexps)
-            | _ -> raise (Reporting.err_unreachable l __POS__ "to_ast_fexps with true returned none")
-          )
-        | P.E_field (exp, id) -> E_field (to_ast_exp ctx exp, to_ast_id ctx id)
-        | P.E_match (exp, pexps) -> E_match (to_ast_exp ctx exp, List.map (to_ast_case ctx) pexps)
-        | P.E_try (exp, pexps) -> E_try (to_ast_exp ctx exp, List.map (to_ast_case ctx) pexps)
-        | P.E_let (leb, exp) -> E_let (to_ast_letbind ctx leb, to_ast_exp ctx exp)
-        | P.E_assign (lexp, exp) -> E_assign (to_ast_lexp ctx lexp, to_ast_exp ctx exp)
-        | P.E_var (lexp, exp1, exp2) -> E_var (to_ast_lexp ctx lexp, to_ast_exp ctx exp1, to_ast_exp ctx exp2)
-        | P.E_sizeof nexp -> E_sizeof (to_ast_nexp ctx nexp)
-        | P.E_constraint nc -> E_constraint (to_ast_constraint ctx nc)
-        | P.E_exit exp -> E_exit (to_ast_exp ctx exp)
-        | P.E_throw exp -> E_throw (to_ast_exp ctx exp)
-        | P.E_return exp -> E_return (to_ast_exp ctx exp)
-        | P.E_assert (cond, msg) -> E_assert (to_ast_exp ctx cond, to_ast_exp ctx msg)
-        | P.E_internal_plet (pat, exp1, exp2) ->
-            if !opt_magic_hash then E_internal_plet (to_ast_pat ctx pat, to_ast_exp ctx exp1, to_ast_exp ctx exp2)
-            else raise (Reporting.err_general l "Internal plet construct found without -dmagic_hash")
-        | P.E_internal_return exp ->
-            if !opt_magic_hash then E_internal_return (to_ast_exp ctx exp)
-            else raise (Reporting.err_general l "Internal return construct found without -dmagic_hash")
-        | P.E_internal_assume (nc, exp) ->
-            if !opt_magic_hash then E_internal_assume (to_ast_constraint ctx nc, to_ast_exp ctx exp)
-            else raise (Reporting.err_general l "Internal assume construct found without -dmagic_hash")
-        | P.E_deref exp -> E_app (Id_aux (Id "__deref", l), [to_ast_exp ctx exp])
-      in
-      E_aux (aux, (l, empty_uannot))
+  | P.E_block exps -> (
+      match to_ast_fexps false ctx exps with
+      | Some fexps -> wrap (E_struct (SN_anon, fexps))
+      | None -> wrap (E_block (List.map (to_ast_exp ctx) exps))
+    )
+  | P.E_id id ->
+      (* We support identifiers the same as __LOC__, __FILE__ and __LINE__ in the OCaml standard
+        library, and similar constructs in C *)
+      let id_str = string_of_parse_id id in
+      if id_str = "__LOC__" then wrap (E_lit (L_aux (L_string (Reporting.short_loc_to_string l), l)))
+      else if id_str = "__FILE__" then (
+        let file = match Reporting.simp_loc l with Some (p, _) -> p.pos_fname | None -> "unknown file" in
+        wrap (E_lit (L_aux (L_string file, l)))
+      )
+      else if id_str = "__LINE__" then (
+        let lnum = match Reporting.simp_loc l with Some (p, _) -> p.pos_lnum | None -> -1 in
+        wrap (E_lit (L_aux (L_num (Big_int.of_int lnum), l)))
+      )
+      else wrap (E_id (to_ast_id ctx id))
+  | P.E_ref id -> wrap (E_ref (to_ast_id ctx id))
+  | P.E_lit lit -> wrap (E_lit (to_ast_lit lit))
+  | P.E_typ (typ, exp) -> wrap (E_typ (to_ast_typ ctx typ, to_ast_exp ctx exp))
+  | P.E_app (f, args) -> (
+      match List.map (to_ast_exp ctx) args with
+      | [] -> wrap (E_app (to_ast_id ctx f, []))
+      | exps -> wrap (E_app (to_ast_id ctx f, exps))
+    )
+  | P.E_app_infix (left, op, right) -> wrap (E_app (to_ast_id ctx op, [to_ast_exp ctx left; to_ast_exp ctx right]))
+  | P.E_tuple exps -> wrap (E_tuple (List.map (to_ast_exp ctx) exps))
+  | P.E_if (e1, e2, e3, _) -> wrap (E_if (to_ast_exp ctx e1, to_ast_exp ctx e2, to_ast_exp ctx e3))
+  | P.E_for (id, e1, e2, e3, atyp, e4) ->
+      wrap
+        (E_for
+           ( to_ast_id ctx id,
+             to_ast_exp ctx e1,
+             to_ast_exp ctx e2,
+             to_ast_exp ctx e3,
+             to_ast_order ctx atyp,
+             to_ast_exp ctx e4
+           )
+        )
+  | P.E_loop (P.While, m, e1, e2) -> wrap (E_loop (While, to_ast_measure ctx m, to_ast_exp ctx e1, to_ast_exp ctx e2))
+  | P.E_loop (P.Until, m, e1, e2) -> wrap (E_loop (Until, to_ast_measure ctx m, to_ast_exp ctx e1, to_ast_exp ctx e2))
+  | P.E_vector exps -> wrap (E_vector (List.map (to_ast_exp ctx) exps))
+  | P.E_vector_access (vexp, exp) ->
+      let attr = notation_attr l 0 ["10"; "["; "0"; "]"] empty_uannot in
+      E_aux (vector_access ~loc:l (to_ast_exp ctx vexp) (to_ast_exp ctx exp), (l, attr))
+  | P.E_vector_subrange (vex, exp1, exp2) ->
+      let attr = notation_attr l 0 ["10"; "["; "0"; " .. "; "0"; "]"] empty_uannot in
+      E_aux (vector_subrange ~loc:l (to_ast_exp ctx vex) (to_ast_exp ctx exp1) (to_ast_exp ctx exp2), (l, attr))
+  | P.E_vector_update (vex, exp1, exp2) ->
+      let attr = notation_attr l 0 ["["; "0"; " with "; "10"; " = "; "0"; "]"] empty_uannot in
+      E_aux (vector_update ~loc:l (to_ast_exp ctx vex) (to_ast_exp ctx exp1) (to_ast_exp ctx exp2), (l, attr))
+  | P.E_vector_update_subrange (vex, e1, e2, e3) ->
+      let attr = notation_attr l 0 ["["; "0"; " with "; "10"; " .. "; "10"; " = "; "0"; "]"] empty_uannot in
+      E_aux
+        ( vector_update_subrange ~loc:l (to_ast_exp ctx vex) (to_ast_exp ctx e1) (to_ast_exp ctx e2) (to_ast_exp ctx e3),
+          (l, attr)
+        )
+  | P.E_vector_append (e1, e2) -> wrap (E_vector_append (to_ast_exp ctx e1, to_ast_exp ctx e2))
+  | P.E_list exps -> wrap (E_list (List.map (to_ast_exp ctx) exps))
+  | P.E_cons (e1, e2) -> wrap (E_cons (to_ast_exp ctx e1, to_ast_exp ctx e2))
+  | P.E_struct (struct_name, fexps) -> (
+      let struct_name = match struct_name with None -> SN_anon | Some id -> SN_id (to_ast_id ctx id) in
+      match to_ast_fexps true ctx fexps with
+      | Some fexps -> wrap (E_struct (struct_name, fexps))
+      | None -> raise (Reporting.err_unreachable l __POS__ "to_ast_fexps with true returned none")
+    )
+  | P.E_struct_update (exp, fexps) -> (
+      match to_ast_fexps true ctx fexps with
+      | Some fexps ->
+          check_duplicate_fields
+            ~error:(fun f -> Printf.sprintf "Duplicate field '%s' in struct update" f)
+            ~field_id:(fun (FE_aux (FE_fexp (id, _), _)) -> id)
+            fexps;
+          wrap (E_struct_update (to_ast_exp ctx exp, fexps))
+      | _ -> raise (Reporting.err_unreachable l __POS__ "to_ast_fexps with true returned none")
+    )
+  | P.E_field (exp, field) -> (
+      match is_config exp with
+      | None -> wrap (E_field (to_ast_exp ctx exp, to_ast_id ctx field))
+      | Some key -> wrap (E_config (List.rev (string_of_parse_id field :: key)))
+    )
+  | P.E_match (exp, pexps) -> wrap (E_match (to_ast_exp ctx exp, List.map (to_ast_case ctx) pexps))
+  | P.E_try (exp, pexps) -> wrap (E_try (to_ast_exp ctx exp, List.map (to_ast_case ctx) pexps))
+  | P.E_let (leb, exp) -> wrap (E_let (to_ast_letbind ctx leb, to_ast_exp ctx exp))
+  | P.E_assign (lexp, exp) -> wrap (E_assign (to_ast_lexp ctx lexp, to_ast_exp ctx exp))
+  | P.E_var (lexp, exp1, exp2) -> wrap (E_var (to_ast_lexp ctx lexp, to_ast_exp ctx exp1, to_ast_exp ctx exp2))
+  | P.E_sizeof nexp -> wrap (E_sizeof (to_ast_nexp ctx nexp))
+  | P.E_constraint nc -> wrap (E_constraint (to_ast_constraint ctx nc))
+  | P.E_exit exp -> wrap (E_exit (to_ast_exp ctx exp))
+  | P.E_throw exp -> wrap (E_throw (to_ast_exp ctx exp))
+  | P.E_config key -> wrap (E_config [key])
+  | P.E_return exp -> wrap (E_return (to_ast_exp ctx exp))
+  | P.E_assert (cond, msg) -> wrap (E_assert (to_ast_exp ctx cond, to_ast_exp ctx msg))
+  | P.E_internal_plet (pat, exp1, exp2) ->
+      if !opt_magic_hash then wrap (E_internal_plet (to_ast_pat ctx pat, to_ast_exp ctx exp1, to_ast_exp ctx exp2))
+      else raise (Reporting.err_general l "Internal plet construct found without --dmagic-hash")
+  | P.E_internal_return exp ->
+      if !opt_magic_hash then wrap (E_internal_return (to_ast_exp ctx exp))
+      else raise (Reporting.err_general l "Internal return construct found without --dmagic-hash")
+  | P.E_internal_assume (nc, exp) ->
+      if !opt_magic_hash then wrap (E_internal_assume (to_ast_constraint ctx nc, to_ast_exp ctx exp))
+      else raise (Reporting.err_general l "Internal assume construct found without --dmagic-hash")
+  | P.E_deref exp -> wrap (E_app (Id_aux (Id "__deref", l), [to_ast_exp ctx exp]))
 
 and to_ast_measure ctx (P.Measure_aux (m, l)) : uannot internal_loop_measure =
   let m =
@@ -1411,9 +1599,9 @@ and to_ast_record_try ctx (P.E_aux (exp, l) : P.exp) : uannot fexp option * (l *
   match exp with
   | P.E_app_infix (left, op, r) -> (
       match (left, op) with
-      | P.E_aux (P.E_id id, li), P.Id_aux (P.Id "=", leq) ->
+      | P.E_aux (P.E_id id, li), P.Id_aux (P.Operator "=", leq) ->
           (Some (FE_aux (FE_fexp (to_ast_id ctx id, to_ast_exp ctx r), (l, empty_uannot))), None)
-      | P.E_aux (_, li), P.Id_aux (P.Id "=", leq) ->
+      | P.E_aux (_, li), P.Id_aux (P.Operator "=", leq) ->
           (None, Some (li, "Expected an identifier to begin this field assignment"))
       | P.E_aux (P.E_id id, li), P.Id_aux (_, leq) ->
           (None, Some (leq, "Expected a field assignment to be identifier = expression"))
@@ -1445,19 +1633,43 @@ let to_ast_spec ctx (P.VS_aux (P.VS_val_spec (ts, id, ext), l)) =
   let ctx = { ctx with function_type_variables = Bindings.add id ts_ctx.kinds ctx.function_type_variables } in
   (VS_aux (VS_val_spec (typschm, id, ext), (l, empty_uannot)), ctx)
 
-let to_ast_outcome ctx (ev : P.outcome_spec) : outcome_spec ctx_out =
+let to_ast_outcome ctx (ev : P.outcome_spec) : outcome_spec * ctx * ctx =
   match ev with
-  | P.OV_aux (P.OV_outcome (id, typschm, outcome_args), l) ->
-      let outcome_args, inner_ctx =
+  | P.OV_aux (P.OV_outcome (id, P.TypSchm_aux (P.TypSchm_ts (typq, typ), ts_l), outcome_args), l) ->
+      let id = to_ast_id ctx id in
+      let open KindInference in
+      let (typq, typ, outcome_args), kenv = check_outcome ctx typq typ outcome_args initial_env in
+      let outcome_args, inner_ctx = ConvertType.to_ast_typquant kenv ctx outcome_args in
+      let typq, ts_ctx = ConvertType.to_ast_typquant kenv inner_ctx typq in
+      let typ = ConvertType.to_ast_typ kenv ts_ctx typ in
+      let ctx = { ctx with outcome_names = IdSet.add id ctx.outcome_names } in
+      let ctx =
         List.fold_left
-          (fun (args, ctx) arg ->
-            let (arg, _, ctx), _ = to_ast_kopts ctx arg in
-            (arg @ args, ctx)
+          (fun ctx kopt ->
+            let v = kopt_kid kopt in
+            let k = unaux_kind (kopt_kind kopt) in
+            {
+              ctx with
+              outcome_variables =
+                KBindings.update v
+                  (function
+                    | None -> Some k
+                    | Some k' when k = k' -> Some k'
+                    | Some k' ->
+                        let v', _ =
+                          List.find (fun (v', _) -> Kid.compare v v' = 0) (KBindings.bindings ctx.outcome_variables)
+                        in
+                        Printf.sprintf "Outcome variable %s has kind %s here, but previously used with kind %s"
+                          (string_of_kid v) (string_of_kind_aux k) (string_of_kind_aux k')
+                        |> Reporting.err_typ (Hint ("previous use here", kid_loc v', kid_loc v))
+                        |> raise
+                    )
+                  ctx.outcome_variables;
+            }
           )
-          ([], ctx) outcome_args
+          ctx (quant_kopts outcome_args)
       in
-      let typschm, _ = to_ast_typschm inner_ctx typschm in
-      (OV_aux (OV_outcome (to_ast_id ctx id, typschm, List.rev outcome_args), l), inner_ctx)
+      (OV_aux (OV_outcome (id, TypSchm_aux (TypSchm_ts (typq, typ), ts_l), outcome_args), l), inner_ctx, ctx)
 
 let rec to_ast_range ctx (P.BF_aux (r, l)) =
   (* TODO add check that ranges are sensible for some definition of sensible *)
@@ -1471,7 +1683,7 @@ let rec to_ast_range ctx (P.BF_aux (r, l)) =
     )
 
 let add_constructor id typq kind ctx =
-  let kinds = List.map (fun kopt -> to_parse_kind (Some (unaux_kind (kopt_kind kopt)))) (quant_kopts typq) in
+  let kinds = List.map (fun kopt -> Kind (to_parse_kind (Some (unaux_kind (kopt_kind kopt))))) (quant_kopts typq) in
   { ctx with type_constructors = Bindings.add id (kinds, to_parse_kind (Some kind)) ctx.type_constructors }
 
 let anon_rec_constructor_typ record_id = function
@@ -1513,7 +1725,7 @@ let realize_union_anon_rec_arm union_id typq (P.Tu_aux (_, l) as tu) =
 
 let rec realize_union_anon_rec_types orig_union arms =
   match orig_union with
-  | P.TD_variant (union_id, typq, _) -> begin
+  | P.TD_variant (union_id, typq, _, _) -> begin
       match arms with
       | [] -> []
       | arm :: arms ->
@@ -1548,7 +1760,8 @@ let generate_enum_functions l ctx enum_id fns exps =
           (Reporting.err_general l
              (sprintf
                 "Each enumeration clause for %s must define exactly %d expressions for the functions %s\n\
-                 %s expressions have been given here" (string_of_id enum_id) num_fns
+                 %s expressions have been given here"
+                (string_of_id enum_id) num_fns
                 (string_of_list ", " string_of_parse_id (List.map fst fns))
                 (if n = 0 then "No" else if n > num_fns then "Too many" else "Too few")
              )
@@ -1596,6 +1809,15 @@ let to_ast_reserved_type_id ctx id =
   end
   else id
 
+let rec to_ast_field f doc attrs = function
+  | P.Ann_attribute (attr, arg, x, l) -> to_ast_field f doc (attrs @ [(l, attr, arg)]) x
+  | P.Ann_doc (doc_comment, x, l) -> (
+      match doc with
+      | Some _ -> raise (Reporting.err_general l "Field has multiple documentation comments")
+      | None -> to_ast_field f (Some doc_comment) attrs x
+    )
+  | P.Ann_item x -> f doc attrs x
+
 let to_ast_record ctx id typq fields =
   let id = to_ast_reserved_type_id ctx id in
   let infer typq fields =
@@ -1603,9 +1825,10 @@ let to_ast_record ctx id typq fields =
     let* typq = infer_typquant ctx typq in
     let* fields =
       mapM
-        (fun ((P.ATyp_aux (_, l) as atyp), id) ->
-          let* atyp = check ctx atyp (Kind (P.K_type, l)) in
-          return (atyp, id)
+        (KindInference.mapM_field_item (fun (id, (P.ATyp_aux (_, l) as atyp)) ->
+             let* atyp = check ctx atyp (Kind (P.K_type, l)) in
+             return (id, atyp)
+         )
         )
         fields
     in
@@ -1613,8 +1836,36 @@ let to_ast_record ctx id typq fields =
   in
   let (typq, fields), kenv = infer typq fields KindInference.initial_env in
   let typq, typq_ctx = ConvertType.to_ast_typquant kenv ctx typq in
-  let fields = List.map (fun (atyp, id) -> (ConvertType.to_ast_typ kenv typq_ctx atyp, to_ast_id ctx id)) fields in
+  let fields =
+    List.map
+      (to_ast_field
+         (fun doc attrs (id, atyp) ->
+           let id = to_ast_id ctx id in
+           ((id, ConvertType.to_ast_typ kenv typq_ctx atyp), mk_def_annot ?doc ~attrs (id_loc id) ())
+         )
+         None []
+      )
+      fields
+  in
   (id, typq, fields, add_constructor id typq K_type ctx)
+
+let check_duplicate_enum_ids ids =
+  let _ =
+    List.fold_left
+      (fun seen id ->
+        let l = id_loc id in
+        match Bindings.find_opt id seen with
+        | Some previous ->
+            raise
+              (Reporting.err_general
+                 (Hint ("previous occurrence here", previous, l))
+                 (Printf.sprintf "Enumeration member '%s' occurs twice in enum declaration" (string_of_id id))
+              )
+        | None -> Bindings.add id (id_loc id) seen
+      )
+      Bindings.empty ids
+  in
+  ()
 
 let rec to_ast_typedef ctx def_annot (P.TD_aux (aux, l) : P.type_def) : untyped_def list ctx_out =
   match aux with
@@ -1627,7 +1878,9 @@ let rec to_ast_typedef ctx def_annot (P.TD_aux (aux, l) : P.type_def) : untyped_
               {
                 ctx with
                 type_constructors =
-                  Bindings.add id (inference_kinds, to_parse_kind (Some (unaux_kind kind))) ctx.type_constructors;
+                  Bindings.add id
+                    (List.map (fun k -> Kind k) inference_kinds, to_parse_kind (Some (unaux_kind kind)))
+                    ctx.type_constructors;
               }
             )
         | None ->
@@ -1639,7 +1892,7 @@ let rec to_ast_typedef ctx def_annot (P.TD_aux (aux, l) : P.type_def) : untyped_
   | P.TD_record (id, typq, fields) ->
       let id, typq, fields, ctx = to_ast_record ctx id typq fields in
       ([DEF_aux (DEF_type (TD_aux (TD_record (id, typq, fields, false), (l, empty_uannot))), def_annot)], ctx)
-  | P.TD_variant (id, typq, arms) as union ->
+  | P.TD_variant (id, typq, arms, is_newtype) as union ->
       let (typq, arms), kenv = KindInference.infer_union ctx typq arms KindInference.initial_env in
       (* First generate auxilliary record types for anonymous records in constructors *)
       let records_and_arms = realize_union_anon_rec_types union arms in
@@ -1664,36 +1917,46 @@ let rec to_ast_typedef ctx def_annot (P.TD_aux (aux, l) : P.type_def) : untyped_
       let arms =
         List.map (ConvertType.to_ast_type_union kenv None [] None (add_constructor id typq K_type typq_ctx)) arms
       in
-      ( [DEF_aux (DEF_type (TD_aux (TD_variant (id, typq, arms, false), (l, empty_uannot))), def_annot)]
+      ( [DEF_aux (DEF_type (TD_aux (TD_variant (id, typq, arms, is_newtype), (l, empty_uannot))), def_annot)]
         @ generated_records,
         add_constructor id typq K_type ctx
       )
-  | P.TD_enum (id, fns, enums) ->
+  | P.TD_enum (id, fns, members) ->
       let id = to_ast_reserved_type_id ctx id in
       let ctx = { ctx with type_constructors = Bindings.add id ([], P.K_type) ctx.type_constructors } in
-      let fns = generate_enum_functions l ctx id fns enums in
-      let enums = List.map (fun e -> to_ast_id ctx (fst e)) enums in
-      ( fns @ [DEF_aux (DEF_type (TD_aux (TD_enum (id, enums, false), (l, empty_uannot))), def_annot)],
+      let fns = generate_enum_functions l ctx id fns members in
+      let members = List.map (fun e -> to_ast_id ctx (fst e)) members in
+      check_duplicate_enum_ids members;
+      ( fns @ [DEF_aux (DEF_type (TD_aux (TD_enum (id, members, false), (l, empty_uannot))), def_annot)],
         { ctx with type_constructors = Bindings.add id ([], P.K_type) ctx.type_constructors }
       )
-  | P.TD_abstract (id, kind) ->
-      if not !opt_abstract_types then raise (Reporting.err_general l abstract_type_error);
+  | P.TD_abstract (id, kind, instantiation) -> (
       let id = to_ast_reserved_type_id ctx id in
-      begin
-        match to_ast_kind kind with
-        | Some kind ->
-            ( [DEF_aux (DEF_type (TD_aux (TD_abstract (id, kind), (l, empty_uannot))), def_annot)],
-              {
-                ctx with
-                type_constructors = Bindings.add id ([], to_parse_kind (Some (unaux_kind kind))) ctx.type_constructors;
-              }
-            )
-        | None -> raise (Reporting.err_general l "Abstract type cannot have Order kind")
-      end
+      let instantiation = match instantiation with Some key -> TDC_key key | None -> TDC_none in
+      match to_ast_kind kind with
+      | Some kind ->
+          ( [DEF_aux (DEF_type (TD_aux (TD_abstract (id, kind, instantiation), (l, empty_uannot))), def_annot)],
+            {
+              ctx with
+              type_constructors = Bindings.add id ([], to_parse_kind (Some (unaux_kind kind))) ctx.type_constructors;
+            }
+          )
+      | None -> raise (Reporting.err_general l "Abstract type cannot have Order kind")
+    )
   | P.TD_bitfield (id, typ, ranges) ->
       let id = to_ast_reserved_type_id ctx id in
       let typ = to_ast_typ ctx typ in
-      let ranges = List.map (fun (id, range) -> (to_ast_id ctx id, to_ast_range ctx range)) ranges in
+      let ranges =
+        List.map
+          (to_ast_field
+             (fun doc attrs (id, range) ->
+               let id = to_ast_id ctx id in
+               ((id, to_ast_range ctx range), mk_def_annot ?doc ~attrs (id_loc id) ())
+             )
+             None []
+          )
+          ranges
+      in
       ( [DEF_aux (DEF_type (TD_aux (TD_bitfield (id, typ, ranges), (l, empty_uannot))), def_annot)],
         { ctx with type_constructors = Bindings.add id ([], P.K_type) ctx.type_constructors }
       )
@@ -1791,8 +2054,9 @@ let rec to_ast_mpat ctx (P.MP_aux (mpat, l)) =
       | P.MP_cons (pat1, pat2) -> MP_cons (to_ast_mpat ctx pat1, to_ast_mpat ctx pat2)
       | P.MP_string_append pats -> MP_string_append (List.map (to_ast_mpat ctx) pats)
       | P.MP_typ (mpat, typ) -> MP_typ (to_ast_mpat ctx mpat, to_ast_typ ctx typ)
-      | P.MP_struct fmpats ->
-          MP_struct (List.map (fun (field, mpat) -> (to_ast_id ctx field, to_ast_mpat ctx mpat)) fmpats)
+      | P.MP_struct (struct_name, fmpats) ->
+          let struct_name = match struct_name with None -> SN_anon | Some id -> SN_id (to_ast_id ctx id) in
+          MP_struct (struct_name, List.map (fun (field, mpat) -> (to_ast_id ctx field, to_ast_mpat ctx mpat)) fmpats)
       ),
       (l, empty_uannot)
     )
@@ -1807,14 +2071,39 @@ let pexp_of_mpexp (MPat_aux (aux, annot)) exp =
   | MPat_pat mpat -> Pat_aux (Pat_exp (pat_of_mpat mpat, exp), annot)
   | MPat_when (mpat, guard) -> Pat_aux (Pat_when (pat_of_mpat mpat, guard, exp), annot)
 
-let rec to_ast_mapcl doc attrs ctx (P.MCL_aux (mapcl, l)) =
-  match mapcl with
+let apply_when_guard guard (MCL_aux (mcl, annot)) =
+  match mcl with
+  | MCL_bidir (MPat_aux (MPat_pat mpat1, pexp_annot1), MPat_aux (MPat_pat mpat2, pexp_annot2)) ->
+      MCL_aux
+        ( MCL_bidir (MPat_aux (MPat_when (mpat1, guard), pexp_annot1), MPat_aux (MPat_when (mpat2, guard), pexp_annot2)),
+          annot
+        )
+  | MCL_forwards (Pat_aux (Pat_exp (pat, exp), pexp_annot)) ->
+      MCL_aux (MCL_forwards (Pat_aux (Pat_when (pat, guard, exp), pexp_annot)), annot)
+  | MCL_backwards (Pat_aux (Pat_exp (pat, exp), pexp_annot)) ->
+      MCL_aux (MCL_backwards (Pat_aux (Pat_when (pat, guard, exp), pexp_annot)), annot)
+  | MCL_bidir (MPat_aux (MPat_when (_, if_guard), _), _)
+  | MCL_bidir (_, MPat_aux (MPat_when (_, if_guard), _))
+  | MCL_forwards (Pat_aux (Pat_when (_, if_guard, _), _))
+  | MCL_backwards (Pat_aux (Pat_when (_, if_guard, _), _)) ->
+      raise
+        (Reporting.err_general
+           (Hint ("'if' clause here", exp_loc if_guard, exp_loc guard))
+           "Mapping clause has both a 'when' guard and an 'if' clause"
+        )
+
+let rec to_ast_mapcl doc attrs ctx (P.MCL_aux (mcl, l)) =
+  match mcl with
   | P.MCL_attribute (attr, arg, mcl) -> to_ast_mapcl doc (attrs @ [(l, attr, arg)]) ctx mcl
-  | P.MCL_doc (doc_comment, mcl) -> begin
+  | P.MCL_doc (doc_comment, mcl) -> (
       match doc with
       | Some _ -> raise (Reporting.err_general l "Function clause has multiple documentation comments")
       | None -> to_ast_mapcl (Some doc_comment) attrs ctx mcl
-    end
+    )
+  | P.MCL_when (mcl, guard) ->
+      let mcl = to_ast_mapcl doc attrs ctx mcl in
+      let guard = to_ast_exp ctx guard in
+      apply_when_guard guard mcl
   | P.MCL_bidir (mpexp1, mpexp2) ->
       MCL_aux
         (MCL_bidir (to_ast_mpexp ctx mpexp1, to_ast_mpexp ctx mpexp2), (mk_def_annot ?doc ~attrs l (), empty_uannot))
@@ -1905,7 +2194,12 @@ let to_ast_prec = function P.Infix -> Infix | P.InfixL -> InfixL | P.InfixR -> I
 
 let to_ast_subst ctx = function
   | P.IS_aux (P.IS_id (id_from, id_to), l) -> IS_aux (IS_id (to_ast_id ctx id_from, to_ast_id ctx id_to), l)
-  | P.IS_aux (P.IS_typ (kid, typ), l) -> IS_aux (IS_typ (to_ast_var kid, to_ast_typ ctx typ), l)
+  | P.IS_aux (P.IS_typ (v, arg), l) -> (
+      let v = to_ast_var v in
+      match KBindings.find_opt v ctx.outcome_variables with
+      | Some k -> IS_aux (IS_typ (v, to_ast_typ_arg k ctx arg), l)
+      | None -> raise (Reporting.err_typ l ("Unknown outcome variable " ^ string_of_kid v ^ " in instantiation"))
+    )
 
 (* To avoid awkward dependencies, loop measures don't have any annotations except locations. *)
 let to_ast_loop_measure ctx = function
@@ -1939,10 +2233,10 @@ let rec to_ast_def doc attrs vis ctx (P.DEF_aux (def, l)) : untyped_def list ctx
     end
   | P.DEF_overload (id, ids) -> ([DEF_aux (DEF_overload (to_ast_id ctx id, List.map (to_ast_id ctx) ids), annot)], ctx)
   | P.DEF_fixity (prec, n, op) ->
-      let op = to_ast_id ctx op in
+      let id = mk_id ~loc:l op in
       let prec = to_ast_prec prec in
-      ( [DEF_aux (DEF_fixity (prec, n, op), annot)],
-        { ctx with fixities = Bindings.add op (prec, Big_int.to_int n) ctx.fixities }
+      ( [DEF_aux (DEF_fixity (prec, n, id), annot)],
+        { ctx with fixities = StringMap.add op (prec, Big_int.to_int n) ctx.fixities }
       )
   | P.DEF_type t_def -> to_ast_typedef ctx annot t_def
   | P.DEF_fundef f_def ->
@@ -1961,7 +2255,7 @@ let rec to_ast_def doc attrs vis ctx (P.DEF_aux (def, l)) : untyped_def list ctx
       let vs, ctx = to_ast_spec ctx val_spec in
       ([DEF_aux (DEF_val vs, annot)], ctx)
   | P.DEF_outcome (outcome_spec, defs) ->
-      let outcome_spec, inner_ctx = to_ast_outcome ctx outcome_spec in
+      let outcome_spec, inner_ctx, ctx = to_ast_outcome ctx outcome_spec in
       let defs, _ =
         List.fold_left
           (fun (defs, ctx) def ->
@@ -1973,12 +2267,16 @@ let rec to_ast_def doc attrs vis ctx (P.DEF_aux (def, l)) : untyped_def list ctx
       ([DEF_aux (DEF_outcome (outcome_spec, List.rev defs), annot)], ctx)
   | P.DEF_instantiation (id, substs) ->
       let id = to_ast_id ctx id in
-      ( [
-          DEF_aux
-            (DEF_instantiation (IN_aux (IN_id id, (id_loc id, empty_uannot)), List.map (to_ast_subst ctx) substs), annot);
-        ],
-        ctx
-      )
+      if IdSet.mem id ctx.outcome_names then
+        ( [
+            DEF_aux
+              ( DEF_instantiation (IN_aux (IN_id id, (id_loc id, empty_uannot)), List.map (to_ast_subst ctx) substs),
+                annot
+              );
+          ],
+          ctx
+        )
+      else raise (Reporting.err_typ (id_loc id) ("Unknown outcome " ^ string_of_id id))
   | P.DEF_default typ_spec ->
       let default, ctx = to_ast_default ctx typ_spec in
       ([DEF_aux (DEF_default default, annot)], ctx)
@@ -1986,33 +2284,34 @@ let rec to_ast_def doc attrs vis ctx (P.DEF_aux (def, l)) : untyped_def list ctx
       let d = to_ast_dec ctx dec in
       ([DEF_aux (DEF_register d, annot)], ctx)
   | P.DEF_constraint nc ->
-      if not !opt_abstract_types then raise (Reporting.err_general l abstract_type_error);
       let nc = to_ast_constraint ctx nc in
       ([DEF_aux (DEF_constraint nc, annot)], ctx)
-  | P.DEF_pragma (pragma, arg, ltrim) ->
+  | P.DEF_pragma (pragma, P.Pragma_line (arg, ltrim)) ->
       let l = pragma_arg_loc pragma ltrim l in
       begin
         match pragma with
         | "sail_internal" -> begin
             match Reporting.loc_file l with
             | Some file ->
-                ( [DEF_aux (DEF_pragma ("sail_internal", arg, l), annot)],
+                ( [DEF_aux (DEF_pragma ("sail_internal", Pragma_line (arg, l)), annot)],
                   { ctx with internal_files = StringSet.add file ctx.internal_files }
                 )
-            | None -> ([DEF_aux (DEF_pragma ("sail_internal", arg, l), annot)], ctx)
+            | None -> ([DEF_aux (DEF_pragma ("sail_internal", Pragma_line (arg, l)), annot)], ctx)
           end
         | "target_set" ->
             let args = String.split_on_char ' ' arg |> List.filter (fun s -> String.length s > 0) in
             begin
               match args with
               | set :: targets ->
-                  ( [DEF_aux (DEF_pragma ("target_set", arg, l), annot)],
+                  ( [DEF_aux (DEF_pragma ("target_set", Pragma_line (arg, l)), annot)],
                     { ctx with target_sets = StringMap.add set targets ctx.target_sets }
                   )
               | [] -> raise (Reporting.err_general l "No arguments provided to target set directive")
             end
-        | _ -> ([DEF_aux (DEF_pragma (pragma, arg, l), annot)], ctx)
+        | _ -> ([DEF_aux (DEF_pragma (pragma, Pragma_line (arg, l)), annot)], ctx)
       end
+  | P.DEF_pragma (pragma, P.Pragma_structured data) ->
+      ([DEF_aux (DEF_pragma (pragma, Pragma_structured data), annot)], ctx)
   | P.DEF_internal_mutrec _ ->
       (* Should never occur because of remove_mutrec *)
       raise (Reporting.err_unreachable l __POS__ "Internal mutual block found when processing scattered defs")
@@ -2044,9 +2343,12 @@ let to_ast ctx (P.Defs files) =
     (List.rev defs, ctx)
   in
   let wrap_file file defs =
-    [mk_def (DEF_pragma ("file_start", file, P.Unknown)) ()]
-    @ defs
-    @ [mk_def (DEF_pragma ("file_end", file, P.Unknown)) ()]
+    match file with
+    | None -> defs
+    | Some file ->
+        [mk_def (DEF_pragma ("file_start", Pragma_line (file, P.Unknown))) ()]
+        @ defs
+        @ [mk_def (DEF_pragma ("file_end", Pragma_line (file, P.Unknown))) ()]
   in
   let defs, ctx =
     List.fold_left
@@ -2073,33 +2375,35 @@ let initial_ctx =
           ("string", ([], P.K_type));
           ("string_literal", ([], P.K_type));
           ("real", ([], P.K_type));
-          ("list", ([P.K_type], P.K_type));
-          ("register", ([P.K_type], P.K_type));
-          ("range", ([P.K_int; P.K_int], P.K_type));
-          ("bitvector", ([P.K_nat; P.K_order], P.K_type));
-          ("vector", ([P.K_nat; P.K_order; P.K_type], P.K_type));
-          ("atom", ([P.K_int], P.K_type));
-          ("atom_bool", ([P.K_bool], P.K_type));
-          ("implicit", ([P.K_int], P.K_type));
-          ("itself", ([P.K_int], P.K_type));
-          ("not", ([P.K_bool], P.K_bool));
-          ("ite", ([P.K_bool; P.K_int; P.K_int], P.K_int));
-          ("abs", ([P.K_int], P.K_int));
-          ("mod", ([P.K_int; P.K_int], P.K_int));
-          ("div", ([P.K_int; P.K_int], P.K_int));
+          ("list", ([Kind P.K_type], P.K_type));
+          ("register", ([Kind P.K_type], P.K_type));
+          ("range", ([Kind P.K_int; Kind P.K_int], P.K_type));
+          ("bitvector", ([Vector_len; Kind P.K_order], P.K_type));
+          ("vector", ([Vector_len; Kind P.K_order; Kind P.K_type], P.K_type));
+          ("atom", ([Kind P.K_int], P.K_type));
+          ("atom_bool", ([Kind P.K_bool], P.K_type));
+          ("implicit", ([Kind P.K_int], P.K_type));
+          ("itself", ([Kind P.K_int], P.K_type));
+          ("not", ([Kind P.K_bool], P.K_bool));
+          ("ite", ([Kind P.K_bool; Kind P.K_int; Kind P.K_int], P.K_int));
+          ("abs", ([Kind P.K_int], P.K_int));
+          ("mod", ([Kind P.K_int; Kind P.K_int], P.K_int));
+          ("div", ([Kind P.K_int; Kind P.K_int], P.K_int));
           ("float16", ([], P.K_type));
           ("float32", ([], P.K_type));
           ("float64", ([], P.K_type));
           ("float128", ([], P.K_type));
           ("float_rounding_mode", ([], P.K_type));
         ];
+    outcome_names = IdSet.empty;
+    outcome_variables = KBindings.empty;
     function_type_variables = Bindings.empty;
     kinds = KBindings.empty;
     scattereds = Bindings.empty;
     fixities =
       List.fold_left
-        (fun m (k, prec, level) -> Bindings.add (mk_id k) (prec, level) m)
-        Bindings.empty
+        (fun m (k, prec, level) -> StringMap.add k (prec, level) m)
+        StringMap.empty
         [
           ("^", InfixR, 8);
           ("|", InfixR, 2);
@@ -2200,7 +2504,7 @@ let generate_undefined_record id typq fields =
     mk_fundef
       [
         mk_funcl (prepend_id "undefined_" id) pat
-          (mk_exp (E_struct (List.map (fun (_, id) -> mk_fexp id (mk_lit_exp L_undef)) fields)));
+          (mk_exp (E_struct (SN_anon, List.map (fun ((id, _), _) -> mk_fexp id (mk_lit_exp L_undef)) fields)));
       ];
   ]
 
@@ -2399,7 +2703,7 @@ let ast_of_def_string_with ?inline ocaml_pos ctx f str =
       let tok = Lexing.lexeme lexbuf in
       raise (Reporting.err_syntax pos ("current token: " ^ tok))
   in
-  let ast, ctx = Reporting.forbid_errors ocaml_pos (fun ast -> process_ast ctx ast) (P.Defs [("", f [def])]) in
+  let ast, ctx = Reporting.forbid_errors ocaml_pos (fun ast -> process_ast ctx ast) (P.Defs [(None, f [def])]) in
   opt_magic_hash := internal;
   (ast, ctx)
 

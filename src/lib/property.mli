@@ -44,45 +44,37 @@
 (*  SPDX-License-Identifier: BSD-2-Clause                                   *)
 (****************************************************************************)
 
-(** This file implements utilities for dealing with $property and
-   $counterexample pragmas. *)
+(** This file implements utilities for dealing with $property and $counterexample pragmas. *)
 
 open Ast
 open Ast_defs
 open Ast_util
 open Type_check
 
-(** [find_properties defs] returns a mapping from ids to of 4-tuples of the form
-   (prop_type, command, loc, val_spec), which contains the information
-   from any pragmas of the form
+(** [find_properties defs] returns a mapping from ids to of 4-tuples of the form (prop_type, command, loc, val_spec),
+    which contains the information from any pragmas of the form
 
-   $prop_type command
-   ...
-   val <val_spec>
+    $prop_type command ... val <val_spec>
 
-   where prop_type is either "counterexample" or "property" and the
-   location loc is the location that was attached to the pragma
-*)
+    where prop_type is either "counterexample" or "property" and the location loc is the location that was attached to
+    the pragma *)
 val find_properties : ('a, 'b) ast -> (string * string * l * 'a val_spec) Bindings.t
 
 (** For a property
 
-   $prop_type val f : forall X, C. T -> bool
+    $prop_type val f : forall X, C. T -> bool
 
-   find the function body for id:
+    find the function body for id:
 
-   function f(args) = exp
+    function f(args) = exp
 
-   and rewrite the function body to
+    and rewrite the function body to
 
-   function f(args) = if constraint(not(C)) then true else exp
+    function f(args) = if constraint(not(C)) then true else exp
 
-   The reason we do this is that the type information in T constrained
-   by C might be lost when translating to Jib, as Jib types are
-   simpler and less precise. If we then do random test
-   generation/proving we want to ensure that inputs outside the
-   constraints of the function are ignored.
-*)
+    The reason we do this is that the type information in T constrained by C might be lost when translating to Jib, as
+    Jib types are simpler and less precise. If we then do random test generation/proving we want to ensure that inputs
+    outside the constraints of the function are ignored. *)
 val rewrite : typed_ast -> typed_ast
 
 type event = Overflow | Assertion | Assumption | Match | Return

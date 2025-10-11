@@ -46,17 +46,17 @@
 
 open Jib
 
-(** Remove redundant assignments and variables of type
-   unit. unit-typed identifiers that are assigned to are replaced with
-   CL_void, and cvals (which should be pure!) are replaced with unit
-   types are replaced by unit-literals. *)
+(** Remove redundant assignments and variables of type unit. unit-typed identifiers that are assigned to are replaced
+    with CL_void, and cvals (which should be pure!) are replaced with unit types are replaced by unit-literals. *)
 val optimize_unit : instr list -> instr list
 
-(** Remove all instructions that can contain other nested
-   instructions, prodcing a flat list of instructions. *)
+(** Remove all instructions that can contain other nested instructions, prodcing a flat list of instructions. *)
 val flatten_instrs : instr list -> instr list
 
-val flatten_cdef : cdef -> cdef
+(** Flatten all instructions within a cdef. If max_depth is provided, will only flatten definitions exceding a certain
+    depth (computed by counting nested block and if-then-else instructions). *)
+val flatten_cdef : ?max_depth:int -> cdef -> cdef
+
 val reset_flat_counter : unit -> unit
 
 val unique_per_function_ids : cdef list -> cdef list

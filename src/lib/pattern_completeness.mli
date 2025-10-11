@@ -47,14 +47,13 @@
 open Ast
 open Ast_util
 
-(** For testing, we don't want our tests to print exact literals in
-    warnings, otherwise they would be overly brittle. This is because
-    we use an SMT solver to find counterexamples to complex
-    constrained patterns, and it's not guaranteed to find the same one
-    each run, or between different versions of the solver. *)
+(** For testing, we don't want our tests to print exact literals in warnings, otherwise they would be overly brittle.
+    This is because we use an SMT solver to find counterexamples to complex constrained patterns, and it's not
+    guaranteed to find the same one each run, or between different versions of the solver. *)
 val opt_debug_no_literals : bool ref
 
 type ctx = {
+  abstract : kind Bindings.t;
   variants : (typquant * type_union list) Bindings.t;
   structs : (typquant * (typ * id) list) Bindings.t;
   enums : IdSet.t Bindings.t;
@@ -70,8 +69,9 @@ module type Config = sig
 end
 
 module Make (C : Config) : sig
-  val is_complete_wildcarded : ?keyword:string -> Parse_ast.l -> ctx -> C.t pexp list -> typ -> C.t pexp list option
+  val is_complete_wildcarded :
+    ?keyword:string -> ?remove_redundant:bool -> Parse_ast.l -> ctx -> C.t pexp list -> typ -> C.t pexp list option
   val is_complete_funcls_wildcarded :
-    ?keyword:string -> Parse_ast.l -> ctx -> C.t funcl list -> typ -> C.t funcl list option
+    ?keyword:string -> ?remove_redundant:bool -> Parse_ast.l -> ctx -> C.t funcl list -> typ -> C.t funcl list option
   val is_complete : ?keyword:string -> Parse_ast.l -> ctx -> C.t pexp list -> typ -> bool
 end

@@ -83,14 +83,35 @@ void cleanup_library(void);
  * convention for allocation, deallocation, and (deep)-copying. These
  * macros implement this naming convention.
  */
+
+/* Allocate a new instance of the type. */
 #define CREATE(type) create_ ## type
+/* Deallocate an instance of the type (it must be valid) and then
+   allocate a new one. Equivalent to KILL(type); CREATE(type);
+   except it can be more efficient because it is allowed to
+   reuse allocations. */
 #define RECREATE(type) recreate_ ## type
+/* Allocate a new instance of the type and set its value to type2.
+   Equivalent to CREATE(type1); CONVERT_OF(type1, type2); but
+   it can be more efficient. */
 #define CREATE_OF(type1, type2) create_ ## type1 ## _of_ ## type2
+/* Equivalent to KILL(type1); CREATE(type1); CONVERT_OF(type1; type2);
+   but more efficient. */
 #define RECREATE_OF(type1, type2) recreate_ ## type1 ## _of_ ## type2
+/* Set type1 = type2. Both must have already been CREATE()ed.
+   The types can be different, and a conversion will be performed. */
 #define CONVERT_OF(type1, type2) convert_ ## type1 ## _of_ ## type2
+/* Like CONVERT_OF() but the types must be the same and it is just
+   copied without any conversion. */
 #define COPY(type) copy_ ## type
+/* Deallocate an instance of the type. It is not safe to call KILL()
+   on a value that has already been KILL()ed or has never been CREATE()ed. */
 #define KILL(type) kill_ ## type
+/* Set a value to the `undefined` Sail value (it can be anything).
+   The instance must have been CREATE()ed. */
 #define UNDEFINED(type) undefined_ ## type
+/* Return true if two instances of the type are semantically equal
+   (e.g. two strings are compared by values, not by their addresses). */
 #define EQUAL(type) eq_ ## type
 
 #define SAIL_BUILTIN_TYPE_IMPL(type, const_type)\
@@ -147,7 +168,6 @@ bool EQUAL(sail_string)(const_sail_string, const_sail_string);
 void concat_str(sail_string *stro, const_sail_string str1, const_sail_string str2);
 bool string_startswith(const_sail_string s, const_sail_string prefix);
 
-                       
 /* ***** Sail integers ***** */
 
 typedef int64_t mach_int;
@@ -352,7 +372,7 @@ void vector_subrange_inc_lbits(lbits *rop,
 			       const lbits op,
 			       const sail_int n_mpz,
 			       const sail_int m_mpz);
-                     
+
 void sail_truncate(lbits *rop, const lbits op, const sail_int len);
 void sail_truncateLSB(lbits *rop, const lbits op, const sail_int len);
 
@@ -492,6 +512,10 @@ void decimal_string_of_fbits(sail_string *str, const fbits op);
 
 /* ***** Mapping support ***** */
 
+void parse_dec_bits(lbits *res, const mpz_t n, const char *dec);
+
+bool valid_dec_bits(const mpz_t n, const char *dec);
+
 void parse_hex_bits(lbits *stro, const mpz_t n, const_sail_string str);
 
 bool valid_hex_bits(const mpz_t n, const_sail_string str);
@@ -514,6 +538,7 @@ unit prerr(const_sail_string str);
 unit prerr_endline(const_sail_string str);
 
 unit print_int(const_sail_string str, const sail_int op);
+unit fast_print_int(const_sail_string str, const int64_t op);
 unit prerr_int(const_sail_string str, const sail_int op);
 
 unit sail_putchar(const sail_int op);

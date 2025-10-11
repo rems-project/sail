@@ -46,15 +46,12 @@
 
 (** Sail error reporting
 
-  [Reporting] contains functions to report errors and warnings.
-  It contains functions to print locations ([Parse_ast.l] and [Ast.l]) and lexing positions.
+    [Reporting] contains functions to report errors and warnings. It contains functions to print locations
+    ([Parse_ast.l] and [Ast.l]) and lexing positions.
 
-  The main functionality is reporting errors. This is done by raising a
-  [Fatal_error] exception. This is caught internally and reported via [report_error].
-  There are several predefined types of errors which all cause different error
-  messages. If none of these fit, [Err_general] can be used.
-
-*)
+    The main functionality is reporting errors. This is done by raising a [Fatal_error] exception. This is caught
+    internally and reported via [report_error]. There are several predefined types of errors which all cause different
+    error messages. If none of these fit, [Err_general] can be used. *)
 
 (** If this is false, Sail will never generate any warnings *)
 val opt_warnings : bool ref
@@ -65,7 +62,7 @@ val opt_all_warnings : bool ref
 (** How many backtrace entries to show for unreachable code errors *)
 val opt_backtrace_length : int ref
 
-(** {2 Auxiliary Functions } *)
+(** {2 Auxiliary Functions} *)
 
 (** [loc_to_string] prints a location as a string, including source code *)
 val loc_to_string : Parse_ast.l -> string
@@ -73,18 +70,23 @@ val loc_to_string : Parse_ast.l -> string
 (** [loc_file] returns the file for a location *)
 val loc_file : Parse_ast.l -> string option
 
+(** Extend the span of a location to include the provided lexing position as it's second position. *)
+val extend_loc : Lexing.position -> Ast.l -> Ast.l
+
+val start_pos : Ast.l -> Lexing.position option
+
+val range : Lexing.position option -> Lexing.position option -> Ast.l
+
 (** Reduce a location to a pair of positions if possible *)
 val simp_loc : Ast.l -> (Lexing.position * Lexing.position) option
 
-(** Returns true if a loc is [Unknown]. In the case of [Hint] location
-    only checks the base location. *)
+(** Returns true if a loc is [Unknown]. In the case of [Hint] location only checks the base location. *)
 val is_unknown_loc : Ast.l -> bool
 
 (** [loc_range_to_src] returns the source code text of a range **)
 val loc_range_to_src : Lexing.position -> Lexing.position -> string
 
-(** Adjust the range of a location. Note that only the primary
-    location is adjusted. Hint locations are unaffected. *)
+(** Adjust the range of a location. Note that only the primary location is adjusted. Hint locations are unaffected. *)
 val map_loc_range :
   (Lexing.position -> Lexing.position -> Lexing.position * Lexing.position) -> Parse_ast.l -> Parse_ast.l
 
@@ -97,11 +99,11 @@ val print_err : Parse_ast.l -> string -> string -> unit
 (** Reduce all spans in a location to just their starting characters *)
 val start_loc : Parse_ast.l -> Parse_ast.l
 
-(** {2 The error type } *)
+(** {2 The error type} *)
 
 (** Errors stop execution and print a message; they typically have a location and message.
 
-Note that all these errors are intended to be fatal, so should not be caught other than by the top-level function.
+    Note that all these errors are intended to be fatal, so should not be caught other than by the top-level function.
 *)
 type error = private
   | Err_general of Parse_ast.l * string  (** General errors, used for multi purpose. If you are unsure, use this one. *)
@@ -126,14 +128,15 @@ val err_lex : Lexing.position -> string -> exn
 
 (** Raise an unreachable exception.
 
-This should always be used over an assert false or a generic OCaml failwith exception when appropriate. *)
+    This should always be used over an assert false or a generic OCaml failwith exception when appropriate. *)
 val unreachable : Parse_ast.l -> string * int * int * int -> string -> 'a
 
 (** Print an error to stdout.
 
-@param interactive If this is true (default false) then unreachable errors are reported as general errors.
-This is used by the interactive read-eval-print loop. The interactive mode exposes a lot of internal features, so
-it's possible to excute code paths from the interactive mode that would otherwise be unreachable during normal execution. *)
+    @param interactive
+      If this is true (default false) then unreachable errors are reported as general errors. This is used by the
+      interactive read-eval-print loop. The interactive mode exposes a lot of internal features, so it's possible to
+      excute code paths from the interactive mode that would otherwise be unreachable during normal execution. *)
 val print_error : ?interactive:bool -> error -> unit
 
 val print_type_error : ?hint:string -> Parse_ast.l -> string -> unit
@@ -141,8 +144,7 @@ val print_type_error : ?hint:string -> Parse_ast.l -> string -> unit
 (** This function transforms all errors raised by the provided function into internal [Err_unreachable] errors *)
 val forbid_errors : string * int * int * int -> ('a -> 'b) -> 'a -> 'b
 
-(** Print a warning message. The first string is printed before the
-   location, the second after. *)
+(** Print a warning message. The first string is printed before the location, the second after. *)
 val warn : ?once_from:string * int * int * int -> ?force_show:bool -> string -> Parse_ast.l -> string -> unit
 
 val format_warn : ?once_from:string * int * int * int -> string -> Parse_ast.l -> Error_format.message -> unit
@@ -153,30 +155,25 @@ val suppressed_warning_info : unit -> unit
 (** Print a simple one-line warning without a location. *)
 val simple_warn : string -> unit
 
-(** Will suppress all warnings for a given (Sail) file name. Used by
-   $suppress_warnings directive in process_file.ml *)
+(** Will suppress all warnings for a given (Sail) file name. Used by $suppress_warnings directive in process_file.ml *)
 val suppress_warnings_for_file : string -> unit
 
 val get_sail_dir : string -> string
 
-(** Run a command using Unix.system, but raise a Reporting exception if the command fails or is stopped/killed by a signal *)
+(** Run a command using Unix.system, but raise a Reporting exception if the command fails or is stopped/killed by a
+    signal *)
 val system_checked : ?loc:Parse_ast.l -> string -> unit
 
 module Position : sig
-  (** Assuming a position is at the start of a string, move it to the
-     position of the first character that would not get removed by
-     String.trim *)
+  (** Assuming a position is at the start of a string, move it to the position of the first character that would not get
+      removed by String.trim *)
   val trim_position : string -> Lexing.position -> Lexing.position
 
-  (** Assuming a position represents the start of a string, advance it
-     to the end of the string, plus 'after' characters (default 0). If
-     trim is true, then the position is moved to the last
-     non-whitespace character. *)
+  (** Assuming a position represents the start of a string, advance it to the end of the string, plus 'after' characters
+      (default 0). If trim is true, then the position is moved to the last non-whitespace character. *)
   val advance_position : ?after:int -> trim:bool -> string -> Lexing.position -> Lexing.position
 
-  (** Assuming a position represents the start of a string, create a
-     location representing the contents of the string. If trim is
-     true, whitespace at the start and end is not included in the
-     location. *)
+  (** Assuming a position represents the start of a string, create a location representing the contents of the string.
+      If trim is true, whitespace at the start and end is not included in the location. *)
   val string_location : trim:bool -> start:Lexing.position -> string -> Parse_ast.l
 end

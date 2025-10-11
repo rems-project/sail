@@ -47,12 +47,13 @@
 open Ast
 open Ast_util
 
-(** Linearize cases involving power where we would otherwise require
-   the SMT solver to use non-linear arithmetic. *)
+(** Linearize cases involving power where we would otherwise require the SMT solver to use non-linear arithmetic. *)
 val opt_smt_linearize : bool ref
 
 (** Val use a separate string literal type *)
 val opt_string_literal_type : bool ref
+
+val opt_strict_exponentials : bool ref
 
 type global_env
 
@@ -60,22 +61,23 @@ type env
 
 type t = env
 
-(** Set the modules in the environment. Note that calling this twice
-    on an environment with different arguments will invalidate all
-    module identifiers! *)
+(** Set the modules in the environment. Note that calling this twice on an environment with different arguments will
+    invalidate all module identifiers! *)
 val set_modules : Project.project_structure -> t -> t
+
+val get_modules : t -> Project.project_structure option
 
 val get_module_id_opt : t -> string -> Project.mod_id option
 val get_module_id : at:l -> t -> string -> Project.mod_id
 
-(** Start typechecking within a module context. The module id must be
-    a valid module created via the set_modules call, otherwise we will
-    fail with an internal error. *)
+(** Start typechecking within a module context. The module id must be a valid module created via the set_modules call,
+    otherwise we will fail with an internal error. *)
 val start_module : at:l -> Project.mod_id -> t -> t
 
-(** End the current module context, returning us to type-checking in
-    the global scope. *)
+(** End the current module context, returning us to type-checking in the global scope. *)
 val end_module : t -> t
+
+val get_current_module : t -> Project.mod_id
 
 (** This effectively disables all module related access control *)
 val open_all_modules : t -> t
@@ -87,8 +89,7 @@ val get_current_visibility : t -> visibility
 
 type module_state
 
-(** This is the same as end_module and open_all_modules, except it
-    returns the module state so it can be restored with
+(** This is the same as end_module and open_all_modules, except it returns the module state so it can be restored with
     restore_scope. *)
 val with_global_scope : t -> t * module_state
 
@@ -101,7 +102,16 @@ val get_default_order : t -> order
 val get_default_order_opt : t -> order option
 val set_default_order : order -> t -> t
 
-val add_val_spec : ?in_module:Project.mod_id -> ?ignore_duplicate:bool -> id -> typquant * typ -> t -> t
+(** Add a function type (val spec) to the global typing environment.
+
+    If already_bound = true, we can add a val_spec for something that is already bound as a global identifier in the
+    typing environment. This is used for union constructors.
+
+    For legacy reasons, function declarations can be duplicated. This will typically produce a warning. If
+    ignore_duplicate is true, this warning is supressed. *)
+val add_val_spec :
+  ?in_module:Project.mod_id -> ?already_bound:bool -> ?ignore_duplicate:bool -> id -> typquant * typ -> t -> t
+
 val update_val_spec : ?in_module:Project.mod_id -> id -> typquant * typ -> t -> t
 val define_val_spec : id -> t -> t
 val get_defined_val_specs : t -> IdSet.t
@@ -110,15 +120,16 @@ val get_val_spec : id -> t -> typquant * typ
 val get_val_specs : t -> (typquant * typ) Bindings.t
 val get_val_spec_orig : id -> t -> typquant * typ
 
-val add_outcome : id -> typquant * typ * kinded_id list * id list * t -> t -> t
-val get_outcome : l -> id -> t -> typquant * typ * kinded_id list * id list * t
-val get_outcome_instantiation : t -> (Ast.l * typ) KBindings.t
-val add_outcome_variable : l -> kid -> typ -> t -> t
+val is_outcome : id -> t -> bool
+val add_outcome : id -> typquant * typ * typquant * id list * t -> t -> t
+val get_outcome : l -> id -> t -> typquant * typ * typquant * id list * t
+val get_outcome_instantiation : t -> (Ast.l * typ_arg) KBindings.t
+val add_outcome_variable : l -> kid -> typ_arg -> t -> t
 val set_outcome_typschm : outcome_loc:l -> typquant * typ -> t -> t
 val get_outcome_typschm_opt : t -> (typquant * typ) option
 
-(** For a user-defined type identifier we can control whether it is
-   allowed to be created with the undefined literal in Sail *)
+(** For a user-defined type identifier we can control whether it is allowed to be created with the undefined literal in
+    Sail *)
 val is_user_undefined : id -> t -> bool
 
 val allow_user_undefined : id -> t -> t
@@ -126,9 +137,10 @@ val allow_user_undefined : id -> t -> t
 val add_abstract_typ : id -> kind -> t -> t
 val is_abstract_typ : id -> t -> bool
 val get_abstract_typs : t -> kind Bindings.t
+val remove_abstract_typ : id -> t -> t
 
 val is_variant : id -> t -> bool
-val add_variant : id -> typquant * type_union list -> t -> t
+val add_variant : ?is_newtype:bool -> id -> typquant * type_union list -> t -> t
 val add_scattered_variant : id -> typquant -> t -> t
 val add_variant_clause : id -> type_union -> t -> t
 val get_variant : id -> t -> typquant * type_union list
@@ -140,10 +152,11 @@ val is_union_constructor : id -> t -> bool
 val is_singleton_union_constructor : id -> t -> bool
 val add_union_id : ?in_module:Project.mod_id -> id -> typquant * typ -> t -> t
 val get_union_id : id -> t -> typquant * typ
+val is_newtype : id -> t -> bool
 
 val is_mapping : id -> t -> bool
 
-val add_record : id -> typquant -> (typ * id) list -> t -> t
+val add_record : id -> typquant -> ((id * typ) * unit def_annot) list -> t -> t
 val is_record : id -> t -> bool
 val get_record : id -> t -> typquant * (typ * id) list
 val get_records : t -> (typquant * (typ * id) list) Bindings.t
@@ -167,9 +180,11 @@ val get_global_constraints : t -> n_constraint list
 val get_constraint_reasons : t -> ((Ast.l * string) option * n_constraint) list
 val add_constraint : ?global:bool -> ?reason:Ast.l * string -> n_constraint -> t -> t
 
-val add_typquant : l -> typquant -> t -> t
+val add_typquant : ?from_outcome:bool -> l -> typquant -> t -> t
 
+val is_outcome_typ_var : kid -> t -> bool
 val get_typ_var : kid -> t -> kind_aux
+val get_typ_var_opt : kid -> t -> (Ast.l * kind_aux) option
 val get_typ_var_loc_opt : kid -> t -> Ast.l option
 val get_typ_vars : t -> kind_aux KBindings.t
 val get_typ_var_locs : t -> Ast.l KBindings.t
@@ -181,8 +196,8 @@ val lookup_typ_var : kid -> type_variables -> (Ast.l * kind_aux) option
 val is_shadowed : kid -> type_variables -> bool
 
 val shadows : kid -> t -> int
-val add_typ_var_shadow : l -> kinded_id -> t -> t * kid option
-val add_typ_var : l -> kinded_id -> t -> t
+val add_typ_var_shadow : ?from_outcome:bool -> l -> kinded_id -> t -> t * kid option
+val add_typ_var : ?from_outcome:bool -> l -> kinded_id -> t -> t
 
 val get_ret_typ : t -> typ option
 val add_ret_typ : typ -> t -> t
@@ -212,6 +227,7 @@ val add_enum_clause : id -> id -> t -> t
 val get_enum_opt : id -> t -> id list option
 val get_enum : id -> t -> id list
 val get_enums : t -> IdSet.t Bindings.t
+val is_enum : id -> t -> bool
 
 val lookup_id : id -> t -> typ lvar
 
@@ -223,6 +239,8 @@ val end_scattered_id : at:Ast.l -> id -> t -> t
 val expand_synonyms : t -> typ -> typ
 val expand_nexp_synonyms : t -> nexp -> nexp
 val expand_constraint_synonyms : t -> n_constraint -> n_constraint
+
+val simplify_constraints : t -> t
 
 val base_typ_of : t -> typ -> typ
 
@@ -239,16 +257,15 @@ val is_toplevel : t -> l option
 
 (* Well formedness-checks *)
 val wf_typ : at:l -> t -> typ -> unit
+val wf_typ_arg : at:l -> t -> typ_arg -> unit
 val wf_constraint : at:l -> t -> n_constraint -> unit
 
-(** Some of the code in the environment needs to use the smt solver,
-   which is defined below. To break the circularity this would cause
-   (as the prove code depends on the environment), we add a reference
-   to the prover to the initial environment. *)
+(** Some of the code in the environment needs to use the smt solver, which is defined below. To break the circularity
+    this would cause (as the prove code depends on the environment), we add a reference to the prover to the initial
+    environment. *)
 val set_prover : (t -> n_constraint -> bool) option -> t -> t
 
-(** This should not be used outside the type checker, as initial_env
-   sets up a correct initial environment. *)
+(** This should not be used outside the type checker, as initial_env sets up a correct initial environment. *)
 val empty : t
 
 val builtin_typs : (typquant * kind_aux) Bindings.t

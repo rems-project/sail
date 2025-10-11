@@ -198,7 +198,8 @@ function Align (x, y) =
 val CountLeadingSignBits : forall 'N, 'N >= 2. bits('N) -> range(0,'N - 1)
 function CountLeadingSignBits(x) =
   CountLeadingZeroBits( (x[(length(x) - 1)..1]) ^ 
-                        (x[(length(x) - 2)..0]) )
+                        (x[(length(x) - 2)..0]) : bits('N - 1) )
+// The type annotation is a work around for a bug in the Rocq backend
 
 /** FUNCTION:integer CountLeadingZeroBits(bits(N) x) */
 
@@ -209,7 +210,7 @@ function CountLeadingZeroBits(x) =
   }
 /** FUNCTION:bits(N) Extend(bits(M) x, integer N, boolean unsigned) */
 
-val Extend : forall 'N 'M, 1 <= 'M & 'M < 'N. (implicit('N),bits('M),bit) -> bits('N) effect {escape}
+val Extend : forall 'N 'M, 1 <= 'M & 'M < 'N. (implicit('N),bits('M),bool) -> bits('N) effect {escape}
 function Extend (n, x, _unsigned) =
   if _unsigned then ZeroExtend(n,x) else SignExtend(n,x)
 
@@ -321,7 +322,7 @@ val NOT : forall 'N, 'N >= 0. bits('N) -> bits('N)
 function NOT(x) = ~(x)
 
 val NOT' : bit -> bit
-function NOT'(x) = ~(x)
+function NOT'(x) = if x == b0 then b1 else b0
 
 /** FUNCTION:shared/functions/common/Ones */
 
@@ -527,6 +528,8 @@ function BigEndian() = {
 }
 
 /** FUNCTION:shared/functions/memory/BigEndianReverse */
+overload BigEndianReverse = reverse_endianness
+/*
 val BigEndianReverse : forall 'W, 'W in {8,16,32,64,128}. bits('W) -> bits('W) effect pure
 function BigEndianReverse (value) = {
     let 'half = 'W / 2;
@@ -539,6 +542,7 @@ function BigEndianReverse (value) = {
       a @ b;
     }
 }
+*/
 
 /** FUNCTION:shared/functions/memory/DataMemoryBarrier */
 

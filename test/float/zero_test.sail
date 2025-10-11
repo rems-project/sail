@@ -21,7 +21,7 @@ function test_float_is_zero () -> unit = {
   assert(float_is_zero(fp16_pos_snan_0) == false);
   assert(float_is_zero(fp16_neg_qnan_0) == false);
   assert(float_is_zero(fp16_pos_inf) == false);
-  assert(float_is_zero(fp16_pos_denormal_0) == false);
+  assert(float_is_zero(fp16_pos_subnormal_0) == false);
   assert(float_is_zero(fp16_neg_normal_0) == false);
 
   /* Single floating point */
@@ -31,7 +31,7 @@ function test_float_is_zero () -> unit = {
   assert(float_is_zero(fp32_pos_snan_0) == false);
   assert(float_is_zero(fp32_neg_qnan_0) == false);
   assert(float_is_zero(fp32_pos_inf) == false);
-  assert(float_is_zero(fp32_pos_denormal_0) == false);
+  assert(float_is_zero(fp32_pos_subnormal_0) == false);
   assert(float_is_zero(fp32_neg_normal_0) == false);
 
   /* Double floating point */
@@ -41,7 +41,7 @@ function test_float_is_zero () -> unit = {
   assert(float_is_zero(fp64_pos_snan_0) == false);
   assert(float_is_zero(fp64_neg_qnan_0) == false);
   assert(float_is_zero(fp64_pos_inf) == false);
-  assert(float_is_zero(fp64_pos_denormal_0) == false);
+  assert(float_is_zero(fp64_pos_subnormal_0) == false);
   assert(float_is_zero(fp64_neg_normal_0) == false);
 
   /* Quad floating point */
@@ -51,7 +51,7 @@ function test_float_is_zero () -> unit = {
   assert(float_is_zero(fp128_pos_snan_0) == false);
   assert(float_is_zero(fp128_neg_qnan_0) == false);
   assert(float_is_zero(fp128_pos_inf) == false);
-  assert(float_is_zero(fp128_pos_denormal_0) == false);
+  assert(float_is_zero(fp128_pos_subnormal_0) == false);
   assert(float_is_zero(fp128_neg_normal_0) == false);
 }
 

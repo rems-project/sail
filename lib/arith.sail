@@ -51,19 +51,19 @@ $include <flow.sail>
 
 // ***** Addition *****
 
-val add_atom = pure {ocaml: "add_int", interpreter: "add_int", lem: "integerAdd", coq: "Z.add", lean: "HAdd.hAdd", _: "add_int"} : forall 'n 'm.
+val add_atom = pure {ocaml: "add_int", interpreter: "add_int", lem: "integerAdd", coq: "Z.add", lean: "_lean_addi", _: "add_int"} : forall 'n 'm.
   (int('n), int('m)) -> int('n + 'm)
 
-val add_int = pure {ocaml: "add_int", interpreter: "add_int", lem: "integerAdd", coq: "Z.add", lean: "Int.add",  _: "add_int"} : (int, int) -> int
+val add_int = pure {ocaml: "add_int", interpreter: "add_int", lem: "integerAdd", coq: "Z.add", lean: "_lean_addi", _: "add_int"} : (int, int) -> int
 
 overload operator + = {add_atom, add_int}
 
 // ***** Subtraction *****
 
-val sub_atom = pure {ocaml: "sub_int", interpreter: "sub_int", lem: "integerMinus", coq: "Z.sub", lean: "HSub.hSub", _: "sub_int"} : forall 'n 'm.
+val sub_atom = pure {ocaml: "sub_int", interpreter: "sub_int", lem: "integerMinus", coq: "Z.sub", lean: "_lean_subi", _: "sub_int"} : forall 'n 'm.
   (int('n), int('m)) -> int('n - 'm)
 
-val sub_int = pure {ocaml: "sub_int", interpreter: "sub_int", lem: "integerMinus", coq: "Z.sub", lean: "Int.sub", _: "sub_int"} : (int, int) -> int
+val sub_int = pure {ocaml: "sub_int", interpreter: "sub_int", lem: "integerMinus", coq: "Z.sub", lean: "_lean_subi", _: "sub_int"} : (int, int) -> int
 
 overload operator - = {sub_atom, sub_int}
 
@@ -71,24 +71,24 @@ val sub_nat = pure {
   ocaml: "(fun (x,y) -> let n = sub_int (x,y) in if Big_int.less_equal n Big_int.zero then Big_int.zero else n)",
   lem: "integerMinus",
   coq: "Z.sub",
-  lean: "HSub.hSub",
+  lean: "_lean_subi",
   _: "sub_nat"
 } : (nat, nat) -> nat
 
 // ***** Negation *****
 
-val negate_atom = pure {ocaml: "negate", interpreter: "negate", lem: "integerNegate", coq: "Z.opp", _: "neg_int"} : forall 'n. int('n) -> int(- 'n)
+val negate_atom = pure {ocaml: "negate", interpreter: "negate", lem: "integerNegate", coq: "Z.opp", lean: "Neg.neg", _: "neg_int"} : forall 'n. int('n) -> int(- 'n)
 
-val negate_int = pure {ocaml: "negate", interpreter: "negate", lem: "integerNegate", coq: "Z.opp", lean: "Int.neg", _: "neg_int"} : int -> int
+val negate_int = pure {ocaml: "negate", interpreter: "negate", lem: "integerNegate", coq: "Z.opp", lean: "Neg.neg", _: "neg_int"} : int -> int
 
 overload negate = {negate_atom, negate_int}
 
 // ***** Multiplication *****
 
-val mult_atom = pure {ocaml: "mult", interpreter: "mult", lem: "integerMult", coq: "Z.mul", _: "mult_int"} : forall 'n 'm.
+val mult_atom = pure {ocaml: "mult", interpreter: "mult", lem: "integerMult", coq: "Z.mul", lean: "_lean_muli", _: "mult_int"} : forall 'n 'm.
   (int('n), int('m)) -> int('n * 'm)
 
-val mult_int = pure {ocaml: "mult", interpreter: "mult", lem: "integerMult", coq: "Z.mul", lean: "Int.mul", _: "mult_int"} : (int, int) -> int
+val mult_int = pure {ocaml: "mult", interpreter: "mult", lem: "integerMult", coq: "Z.mul", lean: "_lean_muli", _: "mult_int"} : (int, int) -> int
 
 overload operator * = {mult_atom, mult_int}
 
@@ -108,10 +108,18 @@ val prerr_int = impure "prerr_int_effect" : (string, int) -> unit
 
 $endif
 
+$ifdef STRICT_EXPONENTIALS
+
+val pow2 = pure {lean : "_lean_pow2i", _:"pow2"} : forall 'n, 'n >= 0. int('n) -> int(2 ^ 'n)
+
+$else
+
 /*!
 We have special support for raising values to the power of two. Any Sail expression `2 ^ x` will be compiled to this builtin.
 */
-val pow2 = pure "pow2" : forall 'n. int('n) -> int(2 ^ 'n)
+val pow2 = pure {lean : "_lean_pow2i", _:"pow2"} : forall 'n. int('n) -> int(2 ^ 'n)
+
+$endif
 
 // ***** Integer shifts *****
 
@@ -126,20 +134,30 @@ Similarly, we define shifts of 32 and 1 (i.e., powers of two).
 
 The most general shift operations also allow negative shifts which go in the opposite direction, for compatibility with ASL.
 */
-val _shl8 = pure {c: "shl_mach_int", _: "shl_int"} :
+val _shl8 = pure {c: "shl_mach_int", cpp: "shl_mach_int", lean: "Int.shiftl", _: "shl_int"} :
   forall 'n, 0 <= 'n <= 3. (int(8), int('n)) -> {'m, 'm in {8, 16, 32, 64}. int('m)}
 
-val _shl32 = pure {c: "shl_mach_int", _: "shl_int"} :
+val _shl32 = pure {c: "shl_mach_int", cpp: "shl_mach_int", lean: "Int.shiftl", _: "shl_int"} :
   forall 'n, 'n in {0, 1}. (int(32), int('n)) -> {'m, 'm in {32, 64}. int('m)}
 
-val _shl1 = pure {c: "shl_mach_int", _: "shl_int"} :
+val _shl1 = pure {c: "shl_mach_int", cpp: "shl_mach_int", lean: "Int.shiftl", _: "shl_int"} :
   forall 'n, 0 <= 'n <= 3. (int(1), int('n)) -> {'m, 'm in {1, 2, 4, 8}. int('m)}
 
-val _shl_int = pure "shl_int" : forall 'n, 0 <= 'n. (int, int('n)) -> int
+val _shl_int = pure {
+  lean: "Int.shiftl",
+  _: "shl_int"
+} : forall 'n, 0 <= 'n. (int, int('n)) -> int
 
-val _shr32 = pure {c: "shr_mach_int", _: "shr_int"} : forall 'n, 0 <= 'n <= 31. (int('n), int(1)) -> {'m, 0 <= 'm <= 15. int('m)}
+val _shr32 = pure {
+  c: "shr_mach_int", cpp: "shr_mach_int",
+  lean: "Int.shiftl",
+  _: "shr_int"
+} : forall 'n, 0 <= 'n <= 31. (int('n), int(1)) -> {'m, 0 <= 'm <= 15. int('m)}
 
-val _shr_int = pure "shr_int" : forall 'n, 0 <= 'n. (int, int('n)) -> int
+val _shr_int = pure {
+  lean: "Int.shiftr",
+  _: "shr_int"
+} : forall 'n, 0 <= 'n. (int, int('n)) -> int
 
 function _shl_int_general(m: int, n: int) -> int = if n >= 0 then _shl_int(m, n) else _shr_int(m, negate(n))
 function _shr_int_general(m: int, n: int) -> int = if n >= 0 then _shr_int(m, n) else _shl_int(m, negate(n))
@@ -175,6 +193,8 @@ val _tmod_int_positive = pure {
 
 overload tmod_int = {_tmod_int_positive, _tmod_int}
 
+$c_reserved fdiv_int
+
 function fdiv_int(n: int, m: int) -> int = {
   if n < 0 & m > 0 then {
     tdiv_int(n + 1, m) - 1
@@ -184,6 +204,8 @@ function fdiv_int(n: int, m: int) -> int = {
     tdiv_int(n, m)
   }
 }
+
+$c_reserved fmod_int
 
 function fmod_int(n: int, m: int) -> int = {
   n - (m * fdiv_int(n, m))
@@ -195,15 +217,26 @@ val abs_int_plain = pure {
   interpreter: "abs_int",
   lem: "integerAbs",
   coq: "Z.abs",
+  lean: "Sail.Int.intAbs",
   _: "abs_int"
 } : int -> int
 
 overload abs_int = {abs_int_plain}
 
-val max_int = pure {lem: "integerMax", coq: "Z.max", _: "max_int"} : forall 'x 'y.
+val max_int = pure {
+  lem: "integerMax",
+  coq: "Z.max",
+  lean: "Max.max",
+  _: "max_int"
+} : forall 'x 'y.
   (int('x), int('y)) -> {'z, ('x >= 'y & 'z == 'x) | ('x < 'y & 'z == 'y). int('z)}
 
-val min_int = pure {lem: "integerMin", coq: "Z.min", _: "min_int"} : forall 'x 'y.
+val min_int = pure {
+  lem: "integerMin",
+  coq: "Z.min",
+  lean: "Min.min",
+  _: "min_int"
+} : forall 'x 'y.
   (int('x), int('y)) -> {'z, ('x < 'y & 'z == 'x) | ('x >= 'y & 'z == 'y). int('z)}
 
 $endif

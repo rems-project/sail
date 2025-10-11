@@ -55,36 +55,35 @@ therefore be included in just about every Sail specification.
 
 */
 
-val eq_unit : (unit, unit) -> bool(true)
-
-val eq_bit = pure { lem : "eq", lean : "Eq", _ : "eq_bit" } : (bit, bit) -> bool
-
+val eq_unit = pure { lean : "_lean_beq", _ : "eq_unit" } : (unit, unit) -> bool(true)
 function eq_unit(_, _) = true
 
-val not_bool = pure {coq: "negb", _: "not"} : forall ('p : Bool). bool('p) -> bool(not('p))
+val eq_bit = pure { lem : "eq", lean : "_lean_beq", _ : "eq_bit" } : (bit, bit) -> bool
+
+val not_bool = pure {coq: "negb", lean: "_lean_not", _: "not"} : forall ('p : Bool). bool('p) -> bool(not('p))
 /* NB: There are special cases in Sail for effectful uses of and_bool and
    or_bool that are not shown here. */
 
-val and_bool = pure {coq: "andb", lean: "Bool.and", _: "and_bool"} : forall ('p : Bool) ('q : Bool). (bool('p), bool('q)) -> bool('p & 'q)
+val and_bool = pure {coq: "andb", lean: "_lean_and", _: "and_bool"} : forall ('p : Bool) ('q : Bool). (bool('p), bool('q)) -> bool('p & 'q)
 
-val and_bool_no_flow = pure {coq: "andb", lean: "Bool.and", _: "and_bool"} : (bool, bool) -> bool
+val and_bool_no_flow = pure {coq: "andb", lean: "_lean_and", _: "and_bool"} : (bool, bool) -> bool
 
-val or_bool = pure {coq: "orb", lean: "Bool.or", _: "or_bool"} : forall ('p : Bool) ('q : Bool). (bool('p), bool('q)) -> bool('p | 'q)
+val or_bool = pure {coq: "orb", lean: "_lean_or", _: "or_bool"} : forall ('p : Bool) ('q : Bool). (bool('p), bool('q)) -> bool('p | 'q)
 
-val eq_int = pure {ocaml: "eq_int", interpreter: "eq_int", lem: "eq", coq: "Z.eqb", _: "eq_int"} : forall 'n 'm. (int('n), int('m)) -> bool('n == 'm)
+val eq_int = pure {ocaml: "eq_int", interpreter: "eq_int", lem: "eq", coq: "Z.eqb", lean: "_lean_beq", _: "eq_int"} : forall 'n 'm. (int('n), int('m)) -> bool('n == 'm)
 
-val eq_bool = pure {ocaml: "eq_bool", interpreter: "eq_bool", lem: "eq", coq: "Bool.eqb", lean: "Eq", _: "eq_bool"} : (bool, bool) -> bool
+val eq_bool = pure {ocaml: "eq_bool", interpreter: "eq_bool", lem: "eq", coq: "Bool.eqb", lean: "_lean_beq", _: "eq_bool"} : (bool, bool) -> bool
 
-val neq_int = pure {lem: "neq"} : forall 'n 'm. (int('n), int('m)) -> bool('n != 'm)
+val neq_int = pure {lem: "neq", lean: "_lean_bne"} : forall 'n 'm. (int('n), int('m)) -> bool('n != 'm)
 function neq_int (x, y) = not_bool(eq_int(x, y))
 
 val neq_bool : (bool, bool) -> bool
 function neq_bool (x, y) = not_bool(eq_bool(x, y))
 
-val lteq_int = pure {coq: "Z.leb", _:"lteq"} : forall 'n 'm. (int('n), int('m)) -> bool('n <= 'm)
-val gteq_int = pure {coq: "Z.geb", _:"gteq"} : forall 'n 'm. (int('n), int('m)) -> bool('n >= 'm)
-val lt_int = pure {coq: "Z.ltb", _:"lt"} : forall 'n 'm. (int('n), int('m)) -> bool('n < 'm)
-val gt_int = pure {coq: "Z.gtb", _:"gt"} : forall 'n 'm. (int('n), int('m)) -> bool('n > 'm)
+val lteq_int = pure {coq: "Z.leb", lean: "_lean_le", _:"lteq"} : forall 'n 'm. (int('n), int('m)) -> bool('n <= 'm)
+val gteq_int = pure {coq: "Z.geb", lean: "_lean_ge",_:"gteq"} : forall 'n 'm. (int('n), int('m)) -> bool('n >= 'm)
+val lt_int = pure {coq: "Z.ltb", lean: "_lean_lt", _:"lt"} : forall 'n 'm. (int('n), int('m)) -> bool('n < 'm)
+val gt_int = pure {coq: "Z.gtb", lean: "_lean_gt", _:"gt"} : forall 'n 'm. (int('n), int('m)) -> bool('n > 'm)
 
 overload operator == = {eq_int, eq_bit, eq_bool, eq_unit}
 overload operator != = {neq_int, neq_bool}

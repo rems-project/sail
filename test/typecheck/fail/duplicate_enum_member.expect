@@ -1,0 +1,8 @@
+[93mError[0m:
+[96mfail/duplicate_enum_member.sail[0m:3.2-5:
+3[96m |[0m  Bar, Bar
+ [92m |[0m  [92m^-^[0m [92mprevious occurrence here[0m
+[96mfail/duplicate_enum_member.sail[0m:3.7-10:
+3[96m |[0m  Bar, Bar
+ [91m |[0m       [91m^-^[0m
+ [91m |[0m Enumeration member 'Bar' occurs twice in enum declaration

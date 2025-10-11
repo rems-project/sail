@@ -56,6 +56,7 @@ $include <option.sail>
 
 $option -lem_extern_type result
 $option -coq_extern_type result
+$option -lean_extern_type result
 union result('a : Type, 'b : Type) = {
     Ok : 'a,
     Err : 'b

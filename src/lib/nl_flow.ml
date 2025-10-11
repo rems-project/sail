@@ -61,8 +61,8 @@ let is_bitvector_literal (L_aux (aux, _)) = match aux with L_bin _ | L_hex _ -> 
 let bitvector_unsigned (L_aux (aux, _)) =
   let open Sail_lib in
   match aux with
-  | L_bin str -> uint (List.map bin_char (Util.string_to_list str))
-  | L_hex str -> uint (bits_of_string str)
+  | L_bin bin -> uint (Semantics.bitlist_of_bin_lit bin)
+  | L_hex hex -> uint (Semantics.bitlist_of_hex_lit hex)
   | _ -> assert false
 
 let rec pat_id (P_aux (aux, _)) =
@@ -86,19 +86,21 @@ let modify_unsigned id value (E_aux (aux, annot) as exp) =
       | Some uid ->
           E_aux
             ( E_let
-                (lb, add_assert (mk_exp (E_app_infix (mk_exp (E_id uid), mk_id "!=", mk_lit_exp (L_num value)))) exp'),
+                (lb, add_assert (mk_infix_exp (mk_exp (E_id uid)) (mk_operator "!=") (mk_lit_exp (L_num value))) exp'),
               annot
             )
     end
   | _ -> exp
 
+let is_equals = function Id_aux (Operator "==", _) -> true | _ -> false
+
 let analyze' exps =
   match exps with
   | E_aux (E_if (cond, then_exp, _), _) :: _ when escapes then_exp -> begin
       match cond with
-      | E_aux (E_app_infix (E_aux (E_id id, _), op, E_aux (E_lit lit, _)), _)
-      | E_aux (E_app_infix (E_aux (E_lit lit, _), op, E_aux (E_id id, _)), _)
-        when string_of_id op = "==" && is_bitvector_literal lit ->
+      | E_aux (E_app (op, [E_aux (E_id id, _); E_aux (E_lit lit, _)]), _)
+      | E_aux (E_app (op, [E_aux (E_lit lit, _); E_aux (E_id id, _)]), _)
+        when is_equals op && is_bitvector_literal lit ->
           let value = bitvector_unsigned lit in
           List.map (modify_unsigned id value) exps
       | _ -> exps

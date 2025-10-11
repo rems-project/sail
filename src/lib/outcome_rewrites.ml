@@ -53,6 +53,8 @@ open Type_check
 open Type_error
 open Rewriter
 
+open Coq_extern
+
 let rec in_substs id = function
   | IS_aux (IS_id (id_from, _), _) :: _ when Id.compare id id_from = 0 -> true
   | _ :: substs -> in_substs id substs
@@ -65,8 +67,13 @@ let rec instantiate_id id = function
 
 let instantiate_typ substs typ =
   List.fold_left
-    (fun typ -> function kid, (_, subst_typ) -> typ_subst kid (mk_typ_arg (A_typ subst_typ)) typ)
+    (fun typ -> function kid, (_, subst_arg) -> typ_subst kid subst_arg typ)
     typ (KBindings.bindings substs)
+
+let instantiate_typquant substs typq =
+  List.fold_left
+    (fun typq -> function kid, (_, subst_arg) -> typquant_subst kid subst_arg typq)
+    typq (KBindings.bindings substs)
 
 let instantiate_def target id substs = function
   | DEF_aux (DEF_impl (FCL_aux (FCL_funcl (target_id, pexp), (fcl_def_annot, tannot))), def_annot)
@@ -97,11 +104,13 @@ let rec instantiated_or_abstract l = function
       else raise (Reporting.err_general l "Multiple instantiations found for target")
 
 let instantiate target ast =
+  (* Some backends will need the instantiations to hook up to a particular interface *)
+  let keep_original_defs = String.compare target "coq" == 0 in
   let process_def outcomes = function
     | DEF_aux (DEF_outcome (OV_aux (OV_outcome (id, TypSchm_aux (TypSchm_ts (typq, typ), _), args), l), outcome_defs), _)
-      ->
-        (Bindings.add id (typq, typ, args, l, outcome_defs) outcomes, [])
-    | DEF_aux (DEF_instantiation (IN_aux (IN_id id, annot), id_substs), def_annot) ->
+      as def ->
+        (Bindings.add id (typq, typ, args, l, outcome_defs) outcomes, if keep_original_defs then [def] else [])
+    | DEF_aux (DEF_instantiation (IN_aux (IN_id id, annot), id_substs), def_annot) as def ->
         let l = gen_loc (id_loc id) in
         let env = env_of_annot annot in
         let substs = Env.get_outcome_instantiation env in
@@ -122,6 +131,16 @@ let instantiate target ast =
           match exp with
           | E_app (f, args) -> E_aux (E_app (instantiate_id f id_substs, args), annot)
           | E_typ (typ, exp) -> E_aux (E_typ (instantiate_typ substs typ, exp), annot)
+          | E_constraint (NC_aux (NC_var v, _)) -> (
+              match KBindings.find_opt v substs with
+              | Some (_, A_aux (A_bool nc, _)) -> E_aux (E_constraint nc, annot)
+              | _ -> Reporting.unreachable (id_loc id) __POS__ "Failed to instantiate constraint"
+            )
+          | E_sizeof (Nexp_aux (Nexp_var v, _)) -> (
+              match KBindings.find_opt v substs with
+              | Some (_, A_aux (A_nexp n, _)) -> E_aux (E_sizeof n, annot)
+              | _ -> Reporting.unreachable (id_loc id) __POS__ "Failed to instantiate constraint"
+            )
           | _ -> E_aux (exp, annot)
         in
         let pat_alg = { id_pat_alg with p_aux = rewrite_p_aux } in
@@ -133,7 +152,11 @@ let instantiate target ast =
           DEF_aux
             ( DEF_val
                 (VS_aux
-                   ( VS_val_spec (TypSchm_aux (TypSchm_ts (typq, instantiate_typ substs typ), l), id, extern),
+                   ( VS_val_spec
+                       ( TypSchm_aux (TypSchm_ts (instantiate_typquant substs typq, instantiate_typ substs typ), l),
+                         id,
+                         extern
+                       ),
                      (l, empty_uannot)
                    )
                 ),
@@ -150,14 +173,16 @@ let instantiate target ast =
           | None ->
               [
                 DEF_aux
-                  (DEF_pragma ("abstract", string_of_id id, gen_loc (id_loc id)), mk_def_annot (gen_loc (id_loc id)) ());
+                  ( DEF_pragma ("abstract", Pragma_line (string_of_id id, gen_loc (id_loc id))),
+                    mk_def_annot (gen_loc (id_loc id)) ()
+                  );
                 valspec true;
               ]
           | Some def -> [valspec false; strip_def def]
           )
           |> Type_error.check_defs env
         in
-        (outcomes, outcome_defs)
+        (outcomes, if keep_original_defs then def :: outcome_defs else outcome_defs)
     | def -> (outcomes, [def])
   in
   { ast with defs = snd (Util.fold_left_concat_map process_def Bindings.empty ast.defs) }

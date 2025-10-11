@@ -28,10 +28,11 @@ def test_c_builtins(name, sail_opts):
             basename = os.path.splitext(os.path.basename(filename))[0]
             tests[filename] = os.fork()
             if tests[filename] == 0:
-                step('\'{}\' -no_warn -c {} {} 1> {}.c'.format(sail, sail_opts, filename, basename))
+                step('\'{}\' -no_warn -c {} {} -o {}'.format(sail, sail_opts, filename, basename))
                 step('gcc {}.c \'{}\'/lib/*.c -lgmp -I \'{}\'/lib -o {}'.format(basename, sail_dir, sail_dir, basename))
                 step('./{}'.format(basename))
                 step('rm {}.c'.format(basename))
+                step('rm {}.h'.format(basename))
                 step('rm {}'.format(basename))
                 print('{} {}{}{}'.format(filename, color.PASS, 'ok', color.END))
                 sys.exit()
@@ -104,7 +105,7 @@ def test_coq_builtins(name):
             tests[filename] = os.fork()
             if tests[filename] == 0:
                 # Generate Coq from Sail
-                step('\'{}\' -no_warn -coq -coq-lib-style stdpp -coq-record-update -coq-all-eq-dec -undefined_gen -o {} {}'.format(sail, basename, filename))
+                step('\'{}\' --no-warn --coq --coq-lib-style stdpp --coq-record-update --undefined-gen -o {} {}'.format(sail, basename, filename))
 
                 step('mkdir -p _coqbuild_{}'.format(basename))
                 step('mv {}.v _coqbuild_{}'.format(basename, basename))

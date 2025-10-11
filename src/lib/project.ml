@@ -390,11 +390,11 @@ let add_child parent child map =
     map
 
 let get_parents id proj =
-  let parents = ref ModSet.empty in
+  let parents = ref [] in
   let rec loop child =
     match ModMap.find_opt child proj.parents with
     | Some parent ->
-        parents := ModSet.add parent !parents;
+        parents := parent :: !parents;
         loop parent
     | None -> ()
   in
@@ -415,7 +415,7 @@ let rec collect_files = function
   | [] -> []
 
 let add_root root_opt (file, l) =
-  match root_opt with Some root -> (root ^ Filename.dir_sep ^ file, l) | None -> (file, l)
+  match root_opt with None | Some "." -> (file, l) | Some root -> (root ^ Filename.dir_sep ^ file, l)
 
 class structure_visitor (proj : project_structure) =
   object
@@ -516,7 +516,7 @@ class dependency_visitor (proj : project_structure) =
             let before = get_before stack proj in
             let after = get_after stack proj in
 
-            proj.requires <- ModMap.add id (ModSet.union (get_parents id proj) requires) proj.requires;
+            proj.requires <- ModMap.add id (ModSet.union (ModSet.of_list (get_parents id proj)) requires) proj.requires;
 
             proj.deps <- ModGraph.add_edges id [] proj.deps;
             proj.deps <- ModSet.fold (fun r -> ModGraph.add_edge id r) requires proj.deps;
@@ -528,6 +528,45 @@ class dependency_visitor (proj : project_structure) =
         )
   end
 
+let opt_ddump_depgraph = ref None
+let opt_ddump_depgraph_reduced = ref false
+let opt_ddump_depgraph_skip_deps = ref false
+let opt_ddump_depgraph_skip_reqs = ref false
+
+let do_dump_depgraph chan reduce_req skip_deps skip_reqs proj =
+  let darken id color = match ModMap.find_opt id proj.files with Some [] -> color | _ -> color ^ "3" in
+  ModGraph.make_multi_dot
+    ~node_color:(fun id -> darken id "chartreuse")
+    ~edge_color:(fun _ _ -> "black")
+    ~string_of_node:(fun id -> fst proj.names.(id))
+    chan
+    (List.concat
+       [
+         (if skip_deps then [] else [("dotted", ModGraph.reverse (ModGraph.transitive_reduction proj.deps))]);
+         ( if skip_reqs then []
+           else
+             [
+               ( "solid",
+                 ModGraph.reverse (if reduce_req then ModGraph.transitive_reduction proj.requires else proj.requires)
+               );
+             ]
+         );
+       ]
+    )
+
+let dump_project_depgraph proj =
+  let reduce_req = !opt_ddump_depgraph_reduced in
+  let skip_deps = !opt_ddump_depgraph_skip_deps in
+  let skip_reqs = !opt_ddump_depgraph_skip_reqs in
+  match !opt_ddump_depgraph with
+  | None -> ()
+  | Some "stdout" -> do_dump_depgraph stdout reduce_req skip_deps skip_reqs proj
+  | Some "stderr" -> do_dump_depgraph stderr reduce_req skip_deps skip_reqs proj
+  | Some f ->
+      let chan = open_out f in
+      do_dump_depgraph chan reduce_req skip_deps skip_reqs proj;
+      close_out chan
+
 let run_tests defs (proj : project_structure) =
   let run_test_cmd l cmd args =
     let invalid_cmd () = raise (Reporting.err_general (to_loc l) ("Invalid test command " ^ cmd)) in
@@ -538,18 +577,7 @@ let run_tests defs (proj : project_structure) =
           match List.nth_opt args 0 with Some "stderr" -> stderr | Some "stdout" -> stdout | _ -> invalid_cmd ()
         in
         let reduce_req = match List.nth_opt args 1 with Some "reduce_req" -> true | _ -> false in
-        let darken id color = match ModMap.find_opt id proj.files with Some [] -> color | _ -> color ^ "3" in
-        ModGraph.make_multi_dot
-          ~node_color:(fun id -> darken id "chartreuse")
-          ~edge_color:(fun _ _ -> "black")
-          ~string_of_node:(fun id -> fst proj.names.(id))
-          chan
-          [
-            ("dotted", ModGraph.reverse (ModGraph.transitive_reduction proj.deps));
-            ( "solid",
-              ModGraph.reverse (if reduce_req then ModGraph.transitive_reduction proj.requires else proj.requires)
-            );
-          ]
+        do_dump_depgraph chan reduce_req false false proj
     | _ -> ()
   in
   List.iter (function Def_test (cmd :: args), l -> run_test_cmd l cmd args | _ -> ()) defs
@@ -578,8 +606,10 @@ let initialize_project_structure ~variables defs =
   (* Fill in the mutable fields of the project *)
   let _ = visit_defs (new structure_visitor proj) defs in
   let _ = visit_defs (new dependency_visitor proj) defs in
-  (* Finally evaluate any __test definitions *)
+  (* Evaluate any __test definitions *)
   run_tests defs proj;
+  (* Finally, dump the project graph if requested *)
+  dump_project_depgraph proj;
   proj
 
 let rec shorten_scc loop g =

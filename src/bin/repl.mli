@@ -53,13 +53,12 @@ open Libsail
     @param banner If true (default), then print an ASCII-art Sail logo.
     @param commands An optional list of commands to run automatically in the repl
     @param auto_rewrites Performs default rewrites (target "interpreter") on the ast passed to the repl
-    @param options This is the set of options for the :options interactive command
- *)
+    @param options This is the set of options for the :options interactive command *)
 val start_repl :
   ?banner:bool ->
   ?commands:string list ->
   ?auto_rewrites:bool ->
-  config:Yojson.Basic.t option ->
+  config:Yojson.Safe.t option ->
   options:(Arg.key * Arg.spec * Arg.doc) list ->
   Initial_check.ctx ->
   Type_check.Env.t ->

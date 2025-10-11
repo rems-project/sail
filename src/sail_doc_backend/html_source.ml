@@ -83,17 +83,17 @@ let highlights ~filename ~contents =
     | String _ ->
         mark Highlight.String;
         go ()
-    | Doc _ ->
+    | DocLine _ | DocBlock _ ->
         mark Highlight.Comment;
         go ()
     | And | As | Assert | By | Match | Clause | Dec | Op | Default | Effect | End | Enum | Else | Exit | Cast | Forall
     | Foreach | Function_ | Mapping | Overload | Throw | Try | Catch | If_ | In | Inc | Var | Ref | Pure | Impure
     | Monadic | Register | Return | Scattered | Sizeof | Constraint | Constant | Struct | Then | Typedef | Union
-    | Newtype | With | Val | Outcome | Instantiation | Impl | Private | Repeat | Until | While | Do | Mutual
-    | Configuration | TerminationMeasure | Forwards | Backwards | Let_ | Bitfield ->
+    | Newtype | With | Val | Outcome | Instantiation | Impl | Private | Repeat | Until | While | Do | Mutual | Config
+    | Configuration | TerminationMeasure | Forwards | Backwards | Let_ | Bitfield | When | To | Downto | From ->
         mark Highlight.Keyword;
         go ()
-    | Pragma _ | Attribute _ | Fixity _ ->
+    | StructuredPragma _ | Pragma _ | Attribute _ | Fixity _ ->
         mark Highlight.Pragma;
         go ()
     | InternalPLet | InternalReturn | InternalAssume ->
@@ -298,7 +298,9 @@ let output_html ?(css = default_css) ~file_info ~hyperlinks out_chan =
       else if ends_on n link then (
         output_string out_chan "</a>";
         (* Another link span could start on the same character *)
-        match get_link n with Some (t, ls, _) when n = ls -> outputf "<a href=\"%s\">" t | _ -> ()
+        match get_link n with
+        | Some (t, ls, _) when n = ls -> outputf "<a href=\"%s\">" t
+        | _ -> ()
       );
       output_html_char out_chan c
     )

@@ -49,7 +49,7 @@ def test_smt(name, solver, sail_opts):
             if tests[filename] == 0:
                 step('\'{}\' {} -smt {} -o {}'.format(sail, sail_opts, filename, basename))
                 step('timeout 30s {} {}_prop.smt2 1> {}.out'.format(solver, basename, basename))
-                if re.match('.+\.sat\.sail$', filename):
+                if re.match(r'.+\.sat\.sail$', filename):
                     step('grep -q ^sat$ {}.out'.format(basename))
                 else:
                     step('grep -q ^unsat$ {}.out'.format(basename))

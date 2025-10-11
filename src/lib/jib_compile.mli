@@ -51,41 +51,46 @@ open Ast
 open Ast_defs
 open Ast_util
 open Jib
+open Jib_util
 open Type_check
 
-(** This forces all integer struct fields to be represented as
-   int64_t. Specifically intended for the various TLB structs in the
-   ARM v8.5 spec. It is unsound in general. *)
+(** This forces all integer struct fields to be represented as int64_t. Specifically intended for the various TLB
+    structs in the ARM v8.5 spec. It is unsound in general. *)
 val optimize_aarch64_fast_struct : bool ref
 
-(** (WIP) [opt_memo_cache] will store the compiled function
-   definitions in file _sbuild/ccacheDIGEST where DIGEST is the md5sum
-   of the original function to be compiled. Enabled using the -memo
-   flag. Uses Marshal so it's quite picky about the exact version of
-   the Sail version. This cache can obviously become stale if the Sail
-   changes - it'll load an old version compiled without said
-   changes. *)
+(** (WIP) [opt_memo_cache] will store the compiled function definitions in file _sbuild/ccacheDIGEST where DIGEST is the
+    md5sum of the original function to be compiled. Enabled using the -memo flag. Uses Marshal so it's quite picky about
+    the exact version of the Sail version. This cache can obviously become stale if the Sail changes - it'll load an old
+    version compiled without said changes. *)
 val opt_memo_cache : bool ref
 
 (** {2 Jib context} *)
 
-(** Dynamic context for compiling Sail to Jib. We need to pass a
-   (global) typechecking environment given by checking the full
-   AST. *)
+(* For an abstract type like `type xlen : Int`, is it initialised?
+   Yes: `type xlen : Int = config xlen`
+   No: `type xlen : Int`
+*)
+type abstract_type_initialised = Initialised | Uninitialised
+
+(** Dynamic context for compiling Sail to Jib. We need to pass a (global) typechecking environment given by checking the
+    full AST. *)
 type ctx = {
   target_name : string;
   records : (kid list * ctyp Bindings.t) Bindings.t;
   enums : IdSet.t Bindings.t;
   variants : (kid list * ctyp Bindings.t) Bindings.t;
+  abstracts : (ctyp * abstract_type_initialised) Bindings.t;
   valspecs : (string option * ctyp list * ctyp * uannot) Bindings.t;
   quants : ctyp KBindings.t;
   local_env : Env.t;
   tc_env : Env.t;
   effect_info : Effects.side_effect_info;
-  locals : (mut * ctyp) Bindings.t;
+  locals : (mut * ctyp) NameMap.t;
+  registers : ctyp Bindings.t;
   letbinds : int list;
-  letbind_ids : IdSet.t;
+  letbind_ctyps : ctyp Bindings.t;
   no_raw : bool;
+  no_static : bool;
   coverage_override : bool;
   def_annot : unit def_annot option;
 }
@@ -100,35 +105,44 @@ val ctx_has_val_spec : id -> ctx -> bool
 
     The target is the name that would appear in a valspec extern section, i.e.
 
+    {v
     val foo = { systemverilog: "bar", c: "baz" } = ...
+    v}
 
-    would mean "systemverilog" and "c" would be valid for_target parameters.
-    If unspecified it will get the current target name from the Target module.
-    If unspecified and there is no current target, it defaults to "c". *)
+    would mean "systemverilog" and "c" would be valid for_target parameters. If unspecified it will get the current
+    target name from the Target module. If unspecified and there is no current target, it defaults to "c". *)
 val initial_ctx : ?for_target:string -> Env.t -> Effects.side_effect_info -> ctx
+
+type funwire = Arg of int | Ret | Invoke
+
+val transparent_newtype : ctx -> ctyp -> ctyp
+
+val struct_field_bindings : Ast.l -> ctx -> ctyp -> Ast.id * ctyp Bindings.t
+
+val struct_fields : Ast.l -> ctx -> ctyp -> Ast.id * (Ast.id -> ctyp)
+
+val variant_constructor_bindings : Ast.l -> ctx -> ctyp -> Ast.id * ctyp Bindings.t
+
+val enum_members : Ast.l -> ctx -> Ast.id -> IdSet.t
 
 (** {2 Compilation functions} *)
 
-(** The Config module specifies static configuration for compiling
-   Sail into Jib.  We have to provide a conversion function from Sail
-   types into Jib types, as well as a function that optimizes ANF
-   expressions (which can just be the identity function) *)
+(** The Config module specifies static configuration for compiling Sail into Jib. We have to provide a conversion
+    function from Sail types into Jib types, as well as a function that optimizes ANF expressions (which can just be the
+    identity function) *)
 module type CONFIG = sig
   val convert_typ : ctx -> typ -> ctyp
 
   val optimize_anf : ctx -> typ aexp -> typ aexp
 
-  (** Unroll all for loops a bounded number of times. Used for SMT
-      generation. *)
+  (** Unroll all for loops a bounded number of times. Used for SMT generation. *)
   val unroll_loops : int option
 
-  (** A call is precise if the function arguments match the function
-      type exactly. Leaving functions imprecise can allow later passes
-      to specialize implementations. *)
+  (** A call is precise if the function arguments match the function type exactly. Leaving functions imprecise can allow
+      later passes to specialize implementations. *)
   val make_call_precise : ctx -> id -> ctyp list -> ctyp -> bool
 
-  (** If false, will ensure that fixed size bitvectors are
-      specifically less that 64-bits. If true this restriction will
+  (** If false, will ensure that fixed size bitvectors are specifically less that 64-bits. If true this restriction will
       be ignored. *)
   val ignore_64 : bool
 
@@ -144,10 +158,12 @@ module type CONFIG = sig
   (** Insert branch coverage operations *)
   val branch_coverage : out_channel option
 
-  (** If true track the location of the last exception thrown, useful
-      for debugging C but we want to turn it off for SMT generation
-      where we can't use strings *)
+  (** If true track the location of the last exception thrown, useful for debugging C but we want to turn it off for SMT
+      generation where we can't use strings *)
   val track_throw : bool
+
+  (** Assertions in the Sail code will be compiled to exceptions in the Jib output *)
+  val assert_to_exception : bool
 
   val use_void : bool
 
@@ -159,11 +175,14 @@ module type CONFIG = sig
 
       let x = eager_if(b, y, z)
 
-      so `y` and `z` are eagerly evaluated before the if-statement
-      which just becomes like a function call. Reducing the
-      control-flow like this is useful for the Sail->SV and Sail->SMT
-      backends. *)
+      so `y` and `z` are eagerly evaluated before the if-statement which just becomes like a function call. Reducing the
+      control-flow like this is useful for the Sail->SV and Sail->SMT backends. *)
   val eager_control_flow : bool
+
+  (** Types to preserve in the Jib output *)
+  val preserve_types : IdSet.t
+
+  val fun_to_wires : int Bindings.t
 end
 
 module IdGraph : sig
@@ -173,16 +192,9 @@ end
 val callgraph : cdef list -> IdGraph.graph
 
 module Make (C : CONFIG) : sig
-  (** Compile a Sail definition into a Jib definition. The first two
-       arguments are is the current definition number and the total
-       number of definitions, and can be used to drive a progress bar
-       (see Util.progress). *)
+  (** Compile a Sail definition into a Jib definition. The first two arguments are is the current definition number and
+      the total number of definitions, and can be used to drive a progress bar (see Util.progress). *)
   val compile_def : int -> int -> ctx -> typed_def -> cdef list * ctx
 
   val compile_ast : ctx -> typed_ast -> cdef list * ctx
 end
-
-(** Adds some special functions to the environment that are used to
-   convert several Sail language features, these are sail_assert,
-   sail_exit, and sail_cons. *)
-val add_special_functions : Env.t -> Effects.side_effect_info -> Env.t * Effects.side_effect_info

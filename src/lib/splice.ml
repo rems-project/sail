@@ -58,7 +58,7 @@ let scan_ast { defs; _ } =
     match aux with
     | DEF_fundef fd -> (IdSet.add (id_of_fundef fd) ids, specs)
     | DEF_val (VS_aux (VS_val_spec (_, id, _), _) as vs) -> (ids, Bindings.add id vs specs)
-    | DEF_pragma (("file_start" | "file_end"), _, _) -> (ids, specs)
+    | DEF_pragma (("file_start" | "file_end"), _) -> (ids, specs)
     | _ -> raise (Reporting.err_general (def_loc def) "Definition in splice file isn't a spec or function")
   in
   List.fold_left scan (IdSet.empty, Bindings.empty) defs
@@ -69,7 +69,9 @@ let filter_old_ast repl_ids repl_specs { defs; _ } =
     | DEF_fundef fd ->
         let id = id_of_fundef fd in
         if IdSet.mem id repl_ids then
-          (DEF_aux (DEF_pragma ("spliced_function#", string_of_id id, def_annot.loc), def_annot) :: rdefs, specs_found)
+          ( DEF_aux (DEF_pragma ("spliced_function#", Pragma_line (string_of_id id, def_annot.loc)), def_annot) :: rdefs,
+            specs_found
+          )
         else (def :: rdefs, specs_found)
     | DEF_val (VS_aux (VS_val_spec (_, id, _), _)) -> (
         match Bindings.find_opt id repl_specs with
@@ -90,7 +92,7 @@ let filter_replacements spec_found { defs; _ } =
 
 let move_replacement_fundefs ast =
   let rec aux acc = function
-    | DEF_aux (DEF_pragma ("spliced_function#", id, _), _) :: defs ->
+    | DEF_aux (DEF_pragma ("spliced_function#", Pragma_line (id, _)), _) :: defs ->
         let is_replacement = function
           | DEF_aux (DEF_fundef fd, _) -> string_of_id (id_of_fundef fd) = id
           | _ -> false
@@ -111,7 +113,7 @@ let annotate_ast ast =
 
 let splice ctx ast file =
   let parsed_ast = Initial_check.parse_file file |> snd in
-  let repl_ast, _ = Initial_check.process_ast ctx (Parse_ast.Defs [(file, parsed_ast)]) in
+  let repl_ast, _ = Initial_check.process_ast ctx (Parse_ast.Defs [(Some file, parsed_ast)]) in
   let repl_ast = map_ast_annot (fun (l, _) -> (l, Type_check.empty_tannot)) repl_ast in
   let repl_ast = annotate_ast repl_ast in
   let repl_ids, repl_specs = scan_ast repl_ast in

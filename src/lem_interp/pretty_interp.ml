@@ -338,7 +338,10 @@ let doc_pat, doc_atomic_pat =
     | P_list pats -> squarebarbars (separate_map semi_sp atomic_pat pats)
     | P_app (_, _ :: _) | P_vector_concat _ -> group (parens (pat pa))
   and fpat (FP_aux (FP_Fpat (id, fpat), _)) = doc_op equals (doc_id id) (pat fpat)
-  and npat (i, p) = doc_op equals (doc_int i) (pat p) (* expose doc_pat and doc_atomic_pat *) in
+  and npat (i, p) =
+    doc_op equals (doc_int i) (pat p)
+    (* expose doc_pat and doc_atomic_pat *)
+  in
 
   (pat, atomic_pat)
 

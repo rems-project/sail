@@ -46,8 +46,7 @@
 
 (** Definition of Sail project files, and functions for working with them. *)
 
-(** Module identifiers are just integers, but we don't want to expose
-    that representation to the world. *)
+(** Module identifiers are just integers, but we don't want to expose that representation to the world. *)
 module ModId : sig
   type t = private int
 
@@ -112,9 +111,10 @@ val get_module_id : project_structure -> string -> mod_id option
 
 val get_children : mod_id -> project_structure -> ModSet.t
 
-(** Create a predicate that returns true for any module that is
-    (transitively) required by any module in the roots set of
-    modules. *)
+val get_parents : mod_id -> project_structure -> mod_id list
+
+(** Create a predicate that returns true for any module that is (transitively) required by any module in the roots set
+    of modules. *)
 val required_modules : roots:ModSet.t -> project_structure -> mod_id -> bool
 
 val module_name : project_structure -> mod_id -> string spanned
@@ -130,3 +130,10 @@ val module_requires : project_structure -> mod_id -> mod_id list
 val all_files : project_structure -> string spanned list
 
 val all_modules : project_structure -> mod_id list
+
+(** Print the project structure. *)
+val opt_ddump_depgraph : string option ref
+
+val opt_ddump_depgraph_reduced : bool ref
+val opt_ddump_depgraph_skip_deps : bool ref
+val opt_ddump_depgraph_skip_reqs : bool ref

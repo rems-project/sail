@@ -44,43 +44,106 @@
 (*  SPDX-License-Identifier: BSD-2-Clause                                   *)
 (****************************************************************************)
 
+open Ast
 open Ast_util
 open Ast_defs
 
-module StringMap = Map.Make (String)
+module StringMap = Util.StringMap
 
 let opt_ddump_initial_ast = ref false
 let opt_ddump_side_effect = ref false
 let opt_ddump_tc_ast = ref false
-let opt_list_files = ref false
+let opt_list_files = ref None
 let opt_reformat : string option ref = ref None
 
 let finalize_ast asserts_termination ctx env ast =
   Lint.warn_unmodified_variables ast;
-  let ast = Scattered.descatter ast in
+  let ast = Scattered.descatter env ast in
   let side_effects = Effects.infer_side_effects asserts_termination ast in
   if !opt_ddump_side_effect then Effects.dump_effects side_effects;
   Effects.check_side_effects side_effects ast;
   if !opt_ddump_tc_ast then Pretty_print_sail.output_ast stdout (Type_check.strip_ast ast);
   (ctx, ast, Type_check.Env.open_all_modules env, side_effects)
 
-let instantiate_abstract_types tgt insts ast =
+type abstract_instantiation = {
+  env_update : Type_check.env -> Type_check.env;
+  config_ids : (kind_aux * string list) Bindings.t;
+}
+
+let rec json_lookup key json =
+  match (key, json) with
+  | [], _ -> Some json
+  | first :: rest, `Assoc obj -> (
+      match List.assoc_opt first obj with Some json -> json_lookup rest json | None -> None
+    )
+  | _ -> None
+
+let instantiate_from_json ~at:l (json : Yojson.Safe.t) =
+  let instantiate_error k =
+    let msg =
+      Printf.sprintf "Failed to instantiate abstract type of kind %s from JSON %s" (string_of_kind_aux k)
+        (Yojson.Safe.to_string json)
+    in
+    raise (Reporting.err_general l msg)
+  in
+  function
+  | K_int -> (
+      match json with
+      | `Int n -> mk_typ_arg ~loc:l (A_nexp (nint n))
+      | `Intlit s -> mk_typ_arg ~loc:l (A_nexp (nconstant (Big_int.of_string s)))
+      | _ -> instantiate_error K_int
+    )
+  | K_bool -> (
+      match json with
+      | `Bool true -> mk_typ_arg ~loc:l (A_bool nc_true)
+      | `Bool false -> mk_typ_arg ~loc:l (A_bool nc_false)
+      | _ -> instantiate_error K_bool
+    )
+  | k -> instantiate_error k
+
+let instantiate_abstract_types tgt config insts ast =
   let open Ast in
+  let env_update = ref (fun env -> env) in
+  let config_ids = ref Bindings.empty in
+  let add_to_env_update l id arg =
+    let prev_env_update = !env_update in
+    env_update :=
+      Type_check.Env.(
+        fun env ->
+          prev_env_update env |> remove_abstract_typ id
+          |> add_typ_synonym id (mk_empty_typquant ~loc:(gen_loc l)) arg
+          |> simplify_constraints
+      )
+  in
   let instantiate = function
-    | DEF_aux (DEF_type (TD_aux (TD_abstract (id, kind), (l, _))), def_annot) as def -> begin
+    | DEF_aux (DEF_type (TD_aux (TD_abstract (id, kind, TDC_none), (l, _))), def_annot) as def -> (
         match Bindings.find_opt id insts with
         | Some arg_fun ->
             let arg = arg_fun (unaux_kind kind) in
+            add_to_env_update l id arg;
             DEF_aux
               ( DEF_type (TD_aux (TD_abbrev (id, mk_empty_typquant ~loc:(gen_loc l), arg), (l, Type_check.empty_tannot))),
                 def_annot
               )
         | None -> def
-      end
+      )
+    | DEF_aux (DEF_type (TD_aux (TD_abstract (id, kind, TDC_key key), (l, _))), def_annot) as def -> (
+        config_ids := Bindings.add id (unaux_kind kind, key) !config_ids;
+        match json_lookup key config with
+        | Some json ->
+            let arg = instantiate_from_json ~at:l json (unaux_kind kind) in
+            add_to_env_update l id arg;
+            DEF_aux
+              ( DEF_type (TD_aux (TD_abbrev (id, mk_empty_typquant ~loc:(gen_loc l), arg), (l, Type_check.empty_tannot))),
+                def_annot
+              )
+        | None -> def
+      )
     | def -> def
   in
   let defs = List.map instantiate ast.defs in
-  if Option.fold ~none:true ~some:Target.supports_abstract_types tgt then { ast with defs }
+  let inst = { env_update = !env_update; config_ids = !config_ids } in
+  if Option.fold ~none:true ~some:Target.supports_abstract_types tgt then ({ ast with defs }, inst)
   else (
     match List.find_opt (function DEF_aux (DEF_type (TD_aux (TD_abstract _, _)), _) -> true | _ -> false) defs with
     | Some (DEF_aux (_, def_annot)) ->
@@ -92,7 +155,7 @@ let instantiate_abstract_types tgt insts ast =
                 target_name
              )
           )
-    | None -> { ast with defs }
+    | None -> ({ ast with defs }, inst)
   )
 
 type parse_continuation = {
@@ -116,7 +179,7 @@ let wrap_module proj parsed_module =
   let module P = Parse_ast in
   let open Project in
   let name, l = module_name proj parsed_module.id in
-  let bracket_pragma p = [Generated [P.DEF_aux (P.DEF_pragma (p, name, 1), to_loc l)]] in
+  let bracket_pragma p = [Generated [P.DEF_aux (P.DEF_pragma (p, P.Pragma_line (name, 1)), to_loc l)]] in
   { parsed_module with files = bracket_pragma "start_module#" @ parsed_module.files @ bracket_pragma "end_module#" }
 
 let filter_modules proj is_included ast =
@@ -127,13 +190,13 @@ let filter_modules proj is_included ast =
     | None -> Reporting.unreachable l __POS__ "Failed to get module id"
   in
   let rec go skipping acc = function
-    | DEF_aux (DEF_pragma ("ended_module#", name, l), def_annot) :: defs ->
+    | DEF_aux (DEF_pragma ("ended_module#", Pragma_line (name, l)), def_annot) :: defs ->
         let mod_id = get_module_id l name in
         begin
           match skipping with Some skip_id when mod_id = skip_id -> go None acc defs | _ -> go skipping acc defs
         end
     | _ :: defs when Option.is_some skipping -> go skipping acc defs
-    | DEF_aux (DEF_pragma ("started_module#", name, l), def_annot) :: defs ->
+    | DEF_aux (DEF_pragma ("started_module#", Pragma_line (name, l)), def_annot) :: defs ->
         let mod_id = get_module_id l name in
         if is_included mod_id then go None acc defs else go (Some mod_id) acc defs
     | def :: defs -> go None (def :: acc) defs
@@ -178,7 +241,8 @@ module SailHandler : FILE_HANDLER = struct
 
   let process ~default_sail_dir ~target_name ~options ctx (filename, comments, defs) =
     let defs = Preprocess.preprocess default_sail_dir target_name options defs in
-    let ast, ctx = Initial_check.process_ast ctx (Parse_ast.Defs [(filename, defs)]) in
+    let ast, ctx = Initial_check.process_ast ctx (Parse_ast.Defs [(Some filename, defs)]) in
+    if !opt_ddump_initial_ast then Pretty_print_sail.output_ast stdout ast;
     ({ ast with comments = [(filename, comments)] }, ctx)
 
   let check env ast = Type_error.check env ast
@@ -223,9 +287,9 @@ let process_files ~target_name ~default_sail_dir ~options ctx vs_ids regs files 
           ((cont.ctx, IdSet.union vs_ids cont.vs_ids, regs @ cont.regs), ProcessedFile { filename; cont = cont.check })
       | Generated defs ->
           let defs = Preprocess.preprocess default_sail_dir target_name options defs in
-          let ast, ctx = Initial_check.process_ast ctx (Parse_ast.Defs [("", defs)]) in
+          let ast, ctx = Initial_check.process_ast ctx (Parse_ast.Defs [(None, defs)]) in
           ((ctx, vs_ids, regs), ProcessedGenerated ast.defs)
-    )
+      )
     (ctx, vs_ids, regs) files
 
 let check_files env files =
@@ -237,7 +301,7 @@ let check_files env files =
       | ProcessedGenerated defs ->
           let defs, env = Type_error.check_defs env defs in
           (env, { defs; comments = [] })
-    )
+      )
     env files
 
 let load_modules ?target default_sail_dir options env proj root_mod_ids =
@@ -264,17 +328,19 @@ let load_modules ?target default_sail_dir options env proj root_mod_ids =
       mod_ids
   in
 
-  if !opt_list_files then (
-    let included_files =
-      List.map (fun parsed_module -> if parsed_module.included then parsed_module.files else []) parsed_modules
-      |> List.concat
-    in
-    print_endline
-      (Util.string_of_list " "
-         (fun s -> s)
-         (List.filter_map (function File { filename; _ } -> Some filename | Generated _ -> None) included_files)
-      );
-    exit 0
+  ( match !opt_list_files with
+  | Some sep ->
+      let included_files =
+        List.map (fun parsed_module -> if parsed_module.included then parsed_module.files else []) parsed_modules
+        |> List.concat
+      in
+      print_endline
+        (Util.string_of_list sep
+           (fun s -> s)
+           (List.filter_map (function File { filename; _ } -> Some filename | Generated _ -> None) included_files)
+        );
+      exit 0
+  | None -> ()
   );
 
   let all_files =
@@ -338,6 +404,49 @@ let load_files ?target default_sail_dir options env files =
   Profile.finish "type checking" t;
 
   finalize_ast asserts_termination ctx env (concat_ast checked)
+
+let file_to_string filename =
+  let chan = open_in filename in
+  let buf = Buffer.create 4096 in
+  try
+    let rec loop () =
+      let line = input_line chan in
+      Buffer.add_string buf line;
+      Buffer.add_char buf '\n';
+      loop ()
+    in
+    loop ()
+  with End_of_file ->
+    close_in chan;
+    Buffer.contents buf
+
+let load_project ?target ?modules ?(options = []) ?(variables = []) default_sail_dir project_files =
+  let defs =
+    List.map
+      (fun project_file ->
+        let root_directory = Filename.dirname project_file in
+        let contents = file_to_string project_file in
+        Project.mk_root root_directory :: Initial_check.parse_project ~filename:project_file ~contents ()
+      )
+      project_files
+    |> List.concat
+  in
+  let variables = ref (StringMap.of_seq @@ List.to_seq @@ variables) in
+  let proj = Project.initialize_project_structure ~variables defs in
+  let mod_ids =
+    match modules with
+    | None -> Project.all_modules proj
+    | Some modules ->
+        List.map
+          (fun mod_name ->
+            match Project.get_module_id proj mod_name with
+            | Some id -> id
+            | None -> raise (Reporting.err_general Parse_ast.Unknown ("Unknown module " ^ mod_name))
+          )
+          modules
+  in
+  let env = Type_check.initial_env_with_modules proj in
+  load_modules ?target default_sail_dir options env proj mod_ids
 
 let rewrite_ast_initial effect_info env =
   Rewrites.rewrite Initial_check.initial_ctx effect_info env

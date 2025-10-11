@@ -1,0 +1,7 @@
+{
+    "hello": {
+        "world": "Hello, World!",
+        "number": 13438537428731902344561435823034520154709854735643,
+        "bits" : [true, false, false, false, false]
+    }
+}

@@ -77,6 +77,7 @@ lib/hol/sail-heap
 /test/smt/*.out
 /test/smt/*.smt2
 /test/c/*.c
+/test/c/*.cpp
 /test/c/*.h
 /test/c/*.result
 /test/c/*.err_result

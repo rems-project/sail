@@ -54,6 +54,7 @@ module IntIntSet = Util.IntIntSet
 let opt_debug_no_literals = ref false
 
 type ctx = {
+  abstract : kind Bindings.t;
   variants : (typquant * type_union list) Bindings.t;
   structs : (typquant * (typ * id) list) Bindings.t;
   enums : IdSet.t Bindings.t;
@@ -185,7 +186,8 @@ let number_pat (from : int) (pat : 'a pat) : ('a * int) pat * int =
       | P_list ps -> P_list (List.map (go counter) ps)
       | P_cons (p1, p2) -> P_cons (go counter p1, go counter p2)
       | P_string_append ps -> P_string_append (List.map (go counter) ps)
-      | P_struct (fps, fwild) -> P_struct (List.map (fun (field, p) -> (field, go counter p)) fps, fwild)
+      | P_struct (struct_name, fps, fwild) ->
+          P_struct (struct_name, List.map (fun (field, p) -> (field, go counter p)) fps, fwild)
       | P_id id -> P_id id
       | P_lit lit -> P_lit lit
       | P_wild -> P_wild
@@ -204,7 +206,7 @@ let rec contains_mapping ctx (P_aux (aux, _)) =
   | P_or (p1, p2) | P_cons (p1, p2) -> contains_mapping ctx p1 || contains_mapping ctx p2
   | P_tuple ps | P_vector ps | P_vector_concat ps | P_string_append ps | P_list ps ->
       List.exists (contains_mapping ctx) ps
-  | P_struct (fps, _) -> List.exists (fun (_, p) -> contains_mapping ctx p) fps
+  | P_struct (_, fps, _) -> List.exists (fun (_, p) -> contains_mapping ctx p) fps
 
 let preserved_explanation =
   "Sail cannot simplify the above pattern match:\n"
@@ -241,6 +243,10 @@ let row_matrix_width l (Rows rows) =
   | [] -> Reporting.unreachable l __POS__ "Cannot determine width of empty pattern matrix" [@coverage off]
 
 let row_matrix_height (Rows rows) = List.length rows
+
+let filter_out (is : IntSet.t) l =
+  let rec aux (i, acc) elt = if IntSet.mem i is then (i + 1, acc) else (i + 1, elt :: acc) in
+  List.fold_left aux (0, []) l |> snd |> List.rev
 
 module Make (C : Config) = struct
   type bv_constraint =
@@ -286,7 +292,8 @@ module Make (C : Config) = struct
         | P_list ps -> P_list (List.map (go wild) ps)
         | P_cons (p1, p2) -> P_cons (go wild p1, go wild p2)
         | P_string_append ps -> P_string_append (List.map (go wild) ps)
-        | P_struct (fps, fwild) -> P_struct (List.map (fun (field, p) -> (field, go wild p)) fps, fwild)
+        | P_struct (struct_name, fps, fwild) ->
+            P_struct (struct_name, List.map (fun (field, p) -> (field, go wild p)) fps, fwild)
         | P_id id -> P_id id
         | P_lit (L_aux (L_num n, _)) when wild ->
             t := C.add_attribute (gen_loc l) "int_wildcard" (Some (AD_aux (AD_num n, gen_loc l))) !t;
@@ -351,8 +358,14 @@ module Make (C : Config) = struct
         (* Unit pattern always matches on unit, so generalize to wildcard *)
         GP_wild
     | P_lit (L_aux (L_hex hex, _)) ->
-        GP_bitvector (pnum, String.length hex * 4, fun x -> BVC_eq (x, BVC_lit ("#x" ^ hex)))
-    | P_lit (L_aux (L_bin bin, _)) -> GP_bitvector (pnum, String.length bin, fun x -> BVC_eq (x, BVC_lit ("#b" ^ bin)))
+        GP_bitvector
+          ( pnum,
+            hex_lit_length hex,
+            fun x -> BVC_eq (x, BVC_lit ("#x" ^ string_of_hex_lit ~group_separator:"" ~case:Uppercase hex))
+          )
+    | P_lit (L_aux (L_bin bin, _)) ->
+        GP_bitvector
+          (pnum, bin_lit_length bin, fun x -> BVC_eq (x, BVC_lit ("#b" ^ string_of_bin_lit ~group_separator:"" bin)))
     | P_vector pats when is_bitvector_typ typ ->
         let mask, bits =
           List.fold_left
@@ -450,7 +463,7 @@ module Make (C : Config) = struct
     | P_cons (hd_pat, tl_pat) -> GP_cons (generalize ctx head_exp_typ hd_pat, generalize ctx head_exp_typ tl_pat)
     | P_list xs ->
         List.fold_right (fun pat tl_gpat -> GP_cons (generalize ctx head_exp_typ pat, tl_gpat)) xs GP_empty_list
-    | P_struct (fpats, FP_no_wild) -> begin
+    | P_struct (_, fpats, FP_no_wild) -> begin
         let get_field_typs struct_id =
           match Bindings.find_opt struct_id ctx.structs with
           | Some (typq, field_typs) -> (typq, field_typs)
@@ -601,8 +614,20 @@ module Make (C : Config) = struct
         (* If there are any rows after the wildcard row, they are redundant *)
         | Some (_, redundant) -> mk_complete ~redundant:(List.map (fun (idx, _) -> idx.num) redundant) all_rows []
         | None -> (
+            let abstract_decs =
+              ctx.abstract |> Bindings.bindings
+              |> List.filter_map (fun (id, kind) ->
+                     let name = Util.zencode_string (string_of_id id) in
+                     match kind with
+                     | K_aux (K_type, _) -> None
+                     | K_aux (K_int, _) -> Some (Printf.sprintf "(declare-const %s Int)" name)
+                     | K_aux (K_bool, _) -> Some (Printf.sprintf "(declare-const %s Bool)" name)
+                 )
+              |> String.concat "\n"
+            in
             let smtlib =
-              (if !require_head_exp_constraint then head_exp_constraint ^ "\n" else "")
+              abstract_decs ^ "\n"
+              ^ (if !require_head_exp_constraint then head_exp_constraint ^ "\n" else "")
               ^ Util.string_of_list "\n" (fun (v, ty) -> Printf.sprintf "(declare-const p%d %s)" v ty) just_vars
               ^ "\n"
               ^ Util.string_of_list "\n" (fun x -> x) (Util.option_these (List.map snd constrs))
@@ -674,7 +699,9 @@ module Make (C : Config) = struct
     let flatten = function
       | GP_tuple gpats -> gpats
       | GP_wild -> List.init width (fun _ -> GP_wild)
-      | _ -> Reporting.unreachable Parse_ast.Unknown __POS__ "Tuple column contains invalid pattern" [@coverage off]
+      | _ -> (
+          Reporting.unreachable Parse_ast.Unknown __POS__ "Tuple column contains invalid pattern" [@coverage off]
+        )
     in
     Rows
       (List.map
@@ -693,7 +720,9 @@ module Make (C : Config) = struct
       | GP_struct (_, fpats) ->
           List.map (fun field -> match Bindings.find_opt field fpats with Some gpat -> gpat | None -> GP_wild) fields
       | GP_wild -> List.init num_fields (fun _ -> GP_wild)
-      | _ -> Reporting.unreachable Parse_ast.Unknown __POS__ "Struct column contains invalid pattern" [@coverage off]
+      | _ -> (
+          Reporting.unreachable Parse_ast.Unknown __POS__ "Struct column contains invalid pattern" [@coverage off]
+        )
     in
     Rows
       (List.map
@@ -711,7 +740,9 @@ module Make (C : Config) = struct
     let flatten = function
       | GP_app (_, _, gpats) -> GP_tuple gpats
       | GP_wild -> GP_wild
-      | _ -> Reporting.unreachable Parse_ast.Unknown __POS__ "App column contains invalid pattern" [@coverage off]
+      | _ -> (
+          Reporting.unreachable Parse_ast.Unknown __POS__ "App column contains invalid pattern" [@coverage off]
+        )
     in
     let remove_ctor row =
       Columns (List.mapi (fun i gpat -> if i = c then flatten gpat else gpat) (columns_to_list row))
@@ -746,7 +777,9 @@ module Make (C : Config) = struct
     let uncons = function
       | GP_wild -> GP_tuple [GP_wild; GP_wild]
       | GP_cons (hd_gpat, tl_gpat) -> GP_tuple [hd_gpat; tl_gpat]
-      | _ -> Reporting.unreachable Parse_ast.Unknown __POS__ "Cons row contains invalid pattern" [@coverage off]
+      | _ -> (
+          Reporting.unreachable Parse_ast.Unknown __POS__ "Cons row contains invalid pattern" [@coverage off]
+        )
     in
     let remove_cons row =
       Columns (List.mapi (fun i gpat -> if i = c then uncons gpat else gpat) (columns_to_list row))
@@ -783,7 +816,7 @@ module Make (C : Config) = struct
     let xs, ys = Util.split_after i unmatcheds in
     let field_elems = Util.take num_fields ys in
     let zs = Util.drop num_fields ys in
-    xs @ (mk_exp (E_struct (List.map2 (fun field elem -> mk_fexp field elem) fields field_elems)) :: zs)
+    xs @ (mk_exp (E_struct (SN_anon, List.map2 (fun field elem -> mk_fexp field elem) fields field_elems)) :: zs)
 
   let rector ctor i unmatcheds =
     let xs, ys = Util.split_after i unmatcheds in
@@ -837,7 +870,11 @@ module Make (C : Config) = struct
             let wild_matrix = split_matrix_wild i matrix in
             begin
               match unmatched_literal col with
-              | None -> Completeness_unknown
+              | None -> begin
+                  match matrix_is_complete l ctx wild_matrix with
+                  | Complete cinfo -> Complete cinfo
+                  | Incomplete _ | Completeness_unknown -> Completeness_unknown
+                end
               | Some lit ->
                   if row_matrix_empty wild_matrix then
                     Incomplete (undefs_except 0 i (mk_lit_exp lit) (row_matrix_width l matrix))
@@ -924,7 +961,12 @@ module Make (C : Config) = struct
                       |> completeness_map (reenum (mk_counterexample member) i) (union_complete cinfo)
               )
               (mk_complete [] []) members
-        | Unknown_column -> Completeness_unknown
+        | Unknown_column -> (
+            match matrix_is_complete l ctx (split_matrix_wild i matrix) with
+            | Incomplete unmatcheds -> Completeness_unknown
+            | Complete cinfo -> Complete cinfo
+            | Completeness_unknown -> Completeness_unknown
+          )
       end
 
   (* Just highlight the match keyword and not the whole match block. *)
@@ -953,7 +995,7 @@ module Make (C : Config) = struct
     | _, (Pat_aux (Pat_when _, _) as case) :: cases -> case :: update_cases l new_pats cases
     | _, _ -> Reporting.unreachable l __POS__ "Impossible case in update_cases" [@coverage off]
 
-  let is_complete_wildcarded ?(keyword = "match") l ctx cases head_exp_typ =
+  let is_complete_wildcarded ?(keyword = "match") ?(remove_redundant = false) l ctx cases head_exp_typ =
     try
       match cases_to_pats ctx 0 ~have_guard:false ~have_mapping:false cases with
       | _, _, [] -> None
@@ -989,13 +1031,16 @@ module Make (C : Config) = struct
                       Reporting.warn "Redundant case" idx.loc "This match case is never used"
                   )
                   (rows_to_list matrix);
-                Some (update_cases l wildcarded_pats cases)
+                let result = update_cases l wildcarded_pats cases in
+                if remove_redundant then Some (filter_out cinfo.redundant result) else Some result
             | Completeness_unknown -> None
           end
-    with (* For now, if any error occurs just report the pattern match is incomplete *)
-    | _ -> None
+    with
+    (* For now, if any error occurs just report the pattern match is incomplete *)
+    | _ ->
+      None
 
-  let is_complete_funcls_wildcarded ?(keyword = "match") l ctx funcls head_exp_typ =
+  let is_complete_funcls_wildcarded ?(keyword = "match") ?(remove_redundant = false) l ctx funcls head_exp_typ =
     let destruct_funcl (FCL_aux (FCL_funcl (id, pexp), annot)) = ((id, annot), pexp) in
     let cases = List.map destruct_funcl funcls in
     match is_complete_wildcarded ~keyword l ctx (List.map snd cases) head_exp_typ with

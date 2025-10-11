@@ -56,8 +56,6 @@ let rec map_last f = function
       let x = f false x in
       x :: map_last f xs
 
-let line_comment_opt = function Comment (Lexer.Comment_line, _, _, contents, _trailing) -> Some contents | _ -> None
-
 (* Remove additional (> 1) trailing newlines at the end of a string *)
 let discard_extra_trailing_newlines s =
   let len = String.length s in
@@ -96,9 +94,8 @@ let fixup_comments ~filename source =
     source;
   Buffer.contents fixed
 
-(** We implement a small wrapper around a subset of the PPrint API to
-    track line breaks and dedents (points where the indentation level
-    decreases), re-implementing a few core combinators. *)
+(** We implement a small wrapper around a subset of the PPrint API to track line breaks and dedents (points where the
+    indentation level decreases), re-implementing a few core combinators. *)
 module PPrintWrapper = struct
   type hardline_type = Required | Desired
 
@@ -182,9 +179,6 @@ module PPrintWrapper = struct
 
   let separate sep xs = separate_map sep (fun x -> x) xs
 
-  let concat_map_last f xs =
-    Util.fold_left_index_last (fun n last acc x -> if n = 0 then f last x else acc ^^ f last x) Empty xs
-
   let prefix n b x y = Group (x ^^ Nest (n, break b ^^ y))
 
   let infix n b op x y = prefix n b (x ^^ blank b ^^ op) y
@@ -259,6 +253,11 @@ module PPrintWrapper = struct
         )
       )
       lines
+
+  (* TODO: maybe save line_number in ast *)
+  let is_single_line_block_comment s =
+    let lines = Util.split_on_char '\n' s in
+    List.length lines <= 1
 end
 
 open PPrintWrapper
@@ -348,7 +347,12 @@ let unary_operator_precedence = function
   | "2^" -> (10, atomic, empty)
   | _ -> (10, subatomic, empty)
 
-let can_hang chunks = match Queue.peek_opt chunks with Some (Comment _) -> false | _ -> true
+let can_hang chunks =
+  match Queue.peek_opt chunks with
+  | Some (Comment (t, _, _, contents, _)) -> (
+      match t with Comment_block -> is_single_line_block_comment contents | _ -> false
+    )
+  | _ -> true
 
 let opt_delim s = ifflat empty (string s)
 
@@ -372,7 +376,7 @@ let int_option k = function
   | json ->
       Reporting.simple_warn
         (Printf.sprintf "Argument for key %s must be an integer, got %s instead. Using default value." k
-           (Yojson.Basic.to_string json)
+           (Yojson.Safe.to_string json)
         );
       None
 
@@ -381,7 +385,7 @@ let bool_option k = function
   | json ->
       Reporting.simple_warn
         (Printf.sprintf "Argument for key %s must be a boolean, got %s instead. Using default value." k
-           (Yojson.Basic.to_string json)
+           (Yojson.Safe.to_string json)
         );
       None
 
@@ -391,14 +395,14 @@ let float_option k = function
   | json ->
       Reporting.simple_warn
         (Printf.sprintf "Argument for key %s must be a number, got %s instead. Using default value." k
-           (Yojson.Basic.to_string json)
+           (Yojson.Safe.to_string json)
         );
       None
 
 let get_option ~key:k ~keys:ks ~read ~default:d =
   List.assoc_opt k ks |> (fun opt -> Option.bind opt (read k)) |> Option.value ~default:d
 
-let config_from_json (json : Yojson.Basic.t) =
+let config_from_json (json : Yojson.Safe.t) =
   match json with
   | `Assoc keys ->
       begin
@@ -533,7 +537,8 @@ module Make (Config : CONFIG) = struct
     | Index (exp, ix) ->
         let exp_doc = doc_chunks (opts |> atomic |> expression_like) exp in
         let ix_doc = doc_chunks (opts |> nonatomic |> expression_like) ix in
-        exp_doc ^^ surround indent 0 (char '[') ix_doc (char ']') |> subatomic_parens opts
+        let ix_doc = surround_hardline false indent 0 (char '[') ix_doc (char ']') in
+        exp_doc ^^ ix_doc
     | Exists ex ->
         let ex_doc =
           doc_chunks (atomic opts) ex.vars
@@ -570,8 +575,8 @@ module Make (Config : CONFIG) = struct
           (char '}')
     | Comment (comment_type, n, col, contents, _) -> begin
         match comment_type with
-        | Lexer.Comment_line -> blank n ^^ string "//" ^^ string contents ^^ require_hardline
-        | Lexer.Comment_block -> (
+        | Comment_line -> blank n ^^ string "//" ^^ string contents ^^ require_hardline
+        | Comment_block -> (
             (* Allow a linebreak after a block comment with newlines. This prevents formatting like:
                /* comment line 1
                   comment line 2 */exp
@@ -582,9 +587,15 @@ module Make (Config : CONFIG) = struct
             | ls -> blank n ^^ group (align (string "/*" ^^ separate hardline ls ^^ string "*/")) ^^ require_hardline
           )
       end
-    | Doc_comment contents ->
-        let ls = block_comment_lines 0 contents in
-        align (string "/*!" ^^ separate hardline ls ^^ string "*/") ^^ require_hardline
+    | Doc_comment { contents; comment_type } -> (
+        match comment_type with
+        | Comment_block ->
+            let ls = block_comment_lines 0 contents in
+            align (string "/*!" ^^ separate hardline ls ^^ string "*/") ^^ require_hardline
+        | Comment_line ->
+            let ls = String.split_on_char '\n' contents in
+            align (string "///" ^^ separate_map (hardline ^^ string "///") string ls) ^^ require_hardline
+      )
     | Function f ->
         let sep = hardline ^^ string "and" ^^ space in
         let clauses =
@@ -654,7 +665,7 @@ module Make (Config : CONFIG) = struct
           separate space [string (binder_keyword binder); doc_chunks (atomic opts) x; char '=']
           ^^ nest 4 (hardline ^^ doc_chunks (nonatomic opts) y)
     | Binder (binder, x, y, z) ->
-        prefix indent 1
+        group
           (separate space
              [
                string (binder_keyword binder);
@@ -664,7 +675,8 @@ module Make (Config : CONFIG) = struct
                string "in";
              ]
           )
-          (doc_chunks (nonatomic opts) z)
+        ^^ break 1
+        ^^ doc_chunks (nonatomic opts) z
     | Match m ->
         let kw1, kw2 = match_keywords m.kind in
         string kw1 ^^ space

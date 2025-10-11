@@ -7,7 +7,7 @@ function extzv(m,v) = sail_zero_extend(v, m)
 
 val ex_int : int -> {'n, true. int('n)}
 function ex_int 'n = n
-val quotient = pure {ocaml: "quotient", lem: "integerDiv", c: "div_int"} : (int, int) -> int
+val quotient = pure {ocaml: "quotient", lem: "integerDiv", c: "div_int", cpp: "div_int"} : (int, int) -> int
 overload operator / = {quotient}
 
 /* Byte/bits size conversions are a pain */

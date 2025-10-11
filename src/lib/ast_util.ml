@@ -50,6 +50,9 @@ open Parse_ast.Attribute_data
 open Util
 module Big_int = Nat_big_num
 
+open Coq_def_annot
+open Coq_extern
+
 (* The type of annotations for untyped AST nodes *)
 type uannot = { attrs : (l * string * attribute_data option) list }
 
@@ -85,6 +88,8 @@ let attribute_data_object = function AD_aux (AD_object kvs, _) -> Some kvs | _ -
 
 let attribute_data_bool = function AD_aux (AD_bool b, _) -> Some b | _ -> None
 
+let attribute_data_num = function AD_aux (AD_num n, _) -> Some n | _ -> None
+
 let attribute_data_string = function AD_aux (AD_string s, _) -> Some s | _ -> None
 
 let attribute_data_string_with_loc = function AD_aux (AD_string s, l) -> Some (s, l) | _ -> None
@@ -110,7 +115,7 @@ let find_attribute_opt attr1 attrs =
   List.find_opt (fun (_, attr2, _) -> attr1 = attr2) attrs |> Option.map (fun (l, _, arg) -> (l, arg))
 
 let mk_def_annot ?doc ?(attrs = []) ?(visibility = Public) l env =
-  { doc_comment = doc; attrs; visibility; loc = l; env }
+  { doc_comment = doc; attrs = List.map (fun (x, y, z) -> (x, (y, z))) attrs; visibility; loc = l; env }
 
 let map_clause_annot f (def_annot, annot) =
   let l, annot' = f (def_annot.loc, annot) in
@@ -121,7 +126,8 @@ let is_public = function Public -> true | _ -> false
 
 let visibility_loc = function Private l -> l | Public -> Parse_ast.Unknown
 
-let uannot_of_def_annot (def_annot : 'a def_annot) : uannot = { attrs = def_annot.attrs }
+let uannot_of_def_annot (def_annot : 'a def_annot) : uannot =
+  { attrs = List.map (fun (x, (y, z)) -> (x, y, z)) def_annot.attrs }
 
 let def_annot_map_loc f (annot : 'a def_annot) = { annot with loc = f annot.loc }
 
@@ -134,13 +140,15 @@ let def_annot_map_env (f : 'a -> 'b) (annot : 'a def_annot) =
     env = f annot.env;
   }
 
-let add_def_attribute l attr arg (annot : 'a def_annot) = { annot with attrs = (l, attr, arg) :: annot.attrs }
+let add_def_attribute l attr arg (annot : 'a def_annot) = { annot with attrs = (l, (attr, arg)) :: annot.attrs }
 
 let get_def_attribute attr (annot : 'a def_annot) =
-  List.find_opt (fun (_, attr', _) -> attr = attr') annot.attrs |> Option.map (fun (l, _, arg) -> (l, arg))
+  List.find_opt (fun (_, (attr', _)) -> attr = attr') annot.attrs |> Option.map (fun (l, (_, arg)) -> (l, arg))
+
+let get_def_attributes (annot : 'a def_annot) = List.map (fun (x, (y, z)) -> (x, y, z)) annot.attrs
 
 let remove_def_attribute attr (annot : 'a def_annot) =
-  { annot with attrs = List.filter (fun (_, attr', _) -> attr <> attr') annot.attrs }
+  { annot with attrs = List.filter (fun (_, (attr', _)) -> attr <> attr') annot.attrs }
 
 type mut = Immutable | Mutable
 
@@ -152,7 +160,11 @@ let is_order_inc = function Ord_aux (Ord_inc, _) -> true | Ord_aux (Ord_dec, _) 
 
 let is_order_dec o = not (is_order_inc o)
 
-let string_of_id = function Id_aux (Id v, _) -> v | Id_aux (Operator v, _) -> "(operator " ^ v ^ ")"
+let string_of_id = function
+  | Id_aux (And_bool, _) -> "and_bool"
+  | Id_aux (Or_bool, _) -> "or_bool"
+  | Id_aux (Id v, _) -> v
+  | Id_aux (Operator v, _) -> "(operator " ^ v ^ ")"
 
 let lvar_typ ?loc:(l = Parse_ast.Unknown) = function
   | Local (_, typ) -> typ
@@ -191,7 +203,15 @@ let rec is_gen_loc = function
   | Parse_ast.Hint (_, l1, l2) -> is_gen_loc l1 || is_gen_loc l2
   | Parse_ast.Range _ -> false
 
+let mk_and_bool ?loc:(l = Parse_ast.Unknown) () = Id_aux (And_bool, l)
+let mk_or_bool ?loc:(l = Parse_ast.Unknown) () = Id_aux (Or_bool, l)
+
+let is_and_bool = function Id_aux (And_bool, _) -> true | _ -> false
+
+let is_or_bool = function Id_aux (Or_bool, _) -> true | _ -> false
+
 let mk_id ?loc:(l = Parse_ast.Unknown) str = Id_aux (Id str, l)
+let mk_operator ?loc:(l = Parse_ast.Unknown) str = Id_aux (Operator str, l)
 
 let mk_nc ?loc:(l = Parse_ast.Unknown) nc_aux = NC_aux (nc_aux, l)
 
@@ -204,9 +224,13 @@ let uncast_exp = function
   | E_aux (E_typ (typ, exp), _) -> (exp, Some typ)
   | exp -> (exp, None)
 
+let mk_id_exp ?loc id = match loc with None -> mk_exp ~loc:(id_loc id) (E_id id) | Some l -> mk_exp ~loc:l (E_id id)
+
 let mk_pat ?loc:(l = Parse_ast.Unknown) pat_aux = P_aux (pat_aux, (l, empty_uannot))
 let unaux_pat (P_aux (pat_aux, _)) = pat_aux
 let untyp_pat = function P_aux (P_typ (typ, pat), _) -> (pat, Some typ) | pat -> (pat, None)
+
+let mk_infix_exp ?loc:(l = Parse_ast.Unknown) lhs op rhs = E_aux (E_app (op, [lhs; rhs]), (l, empty_uannot))
 
 let mk_pexp ?loc:(l = Parse_ast.Unknown) pexp_aux = Pat_aux (pexp_aux, (l, empty_uannot))
 
@@ -243,6 +267,17 @@ let mk_val_spec ?loc:(l = Parse_ast.Unknown) vs_aux = DEF_aux (DEF_val (VS_aux (
 
 let mk_def ?loc:(l = Parse_ast.Unknown) def env = DEF_aux (def, mk_def_annot l env)
 
+let is_vector_syntax (Id_aux (aux, _)) =
+  match aux with
+  | Id "vector_access#" | Id "vector_subrange#" | Id "vector_update#" | Id "vector_update_subrange#" -> true
+  | _ -> false
+
+let vector_access ?(loc = Parse_ast.Unknown) vexp ix = E_app (mk_id ~loc "vector_access#", [vexp; ix])
+let vector_subrange ?(loc = Parse_ast.Unknown) vexp n m = E_app (mk_id ~loc "vector_subrange#", [vexp; n; m])
+let vector_update ?(loc = Parse_ast.Unknown) vexp ix exp = E_app (mk_id ~loc "vector_update#", [vexp; ix; exp])
+let vector_update_subrange ?(loc = Parse_ast.Unknown) vexp n m exp =
+  E_app (mk_id ~loc "vector_update_subrange#", [vexp; n; m; exp])
+
 let rec pat_of_mpat (MP_aux (mpat, annot)) =
   match mpat with
   | MP_lit lit -> P_aux (P_lit lit, annot)
@@ -257,8 +292,8 @@ let rec pat_of_mpat (MP_aux (mpat, annot)) =
   | MP_string_append mpats -> P_aux (P_string_append (List.map pat_of_mpat mpats), annot)
   | MP_typ (mpat, typ) -> P_aux (P_typ (typ, pat_of_mpat mpat), annot)
   | MP_as (mpat, id) -> P_aux (P_as (pat_of_mpat mpat, id), annot)
-  | MP_struct fmpats ->
-      P_aux (P_struct (List.map (fun (field, mpat) -> (field, pat_of_mpat mpat)) fmpats, FP_no_wild), annot)
+  | MP_struct (name, fmpats) ->
+      P_aux (P_struct (name, List.map (fun (field, mpat) -> (field, pat_of_mpat mpat)) fmpats, FP_no_wild), annot)
 
 let kopt_kid (KOpt_aux (KOpt_kind (_, kid), _)) = kid
 let kopt_kind (KOpt_aux (KOpt_kind (k, _), _)) = k
@@ -300,10 +335,16 @@ module Id = struct
   type t = id
   let compare id1 id2 =
     match (id1, id2) with
+    | Id_aux (And_bool, _), Id_aux (And_bool, _) -> 0
+    | Id_aux (Or_bool, _), Id_aux (Or_bool, _) -> 0
     | Id_aux (Id x, _), Id_aux (Id y, _) -> String.compare x y
     | Id_aux (Operator x, _), Id_aux (Operator y, _) -> String.compare x y
-    | Id_aux (Id _, _), Id_aux (Operator _, _) -> -1
-    | Id_aux (Operator _, _), Id_aux (Id _, _) -> 1
+    | Id_aux (Id _, _), _ -> -1
+    | _, Id_aux (Id _, _) -> 1
+    | Id_aux (Operator _, _), _ -> -1
+    | _, Id_aux (Operator _, _) -> 1
+    | Id_aux (And_bool, _), _ -> -1
+    | _, Id_aux (And_bool, _) -> 1
 end
 
 let lex_ord f g x1 x2 y1 y2 = match f x1 x2 with 0 -> g y1 y2 | n -> n
@@ -458,6 +499,14 @@ let unaux_typ (Typ_aux (typ, _)) = typ
 let unaux_kind (K_aux (k, _)) = k
 let unaux_constraint (NC_aux (nc, _)) = nc
 
+let non_empty_singleton = function [] -> [] | x :: xs -> [Non_empty (x, xs)]
+
+let non_empty_for_all p (Non_empty (x, xs)) = p x && List.for_all p xs
+
+let hex_lit_length hex = List.fold_left (fun acc (Non_empty (_, ds)) -> acc + ((List.length ds + 1) * 4)) 0 hex
+
+let bin_lit_length bin = List.fold_left (fun acc (Non_empty (_, ds)) -> acc + List.length ds + 1) 0 bin
+
 let nexp_identical nexp1 nexp2 = Nexp.compare nexp1 nexp2 = 0
 
 let rec is_nexp_constant (Nexp_aux (nexp, _)) =
@@ -569,18 +618,15 @@ and nexp_simp_aux = function
             Nexp_constant (Big_int.pow_int_positive 2 (Big_int.to_int c))
         | _ -> Nexp_exp nexp
       end
+  | Nexp_if (i, t, e) -> (
+      match constraint_simp i with
+      | NC_aux (NC_true, _) -> unaux_nexp (nexp_simp t)
+      | NC_aux (NC_false, _) -> unaux_nexp (nexp_simp e)
+      | _ -> Nexp_if (i, nexp_simp t, nexp_simp e)
+    )
   | nexp -> nexp
 
-let rec get_nexp_constant (Nexp_aux (n, _)) =
-  match nexp_simp_aux n with
-  | Nexp_constant c -> Some c
-  (* nexp_simp does not always expand large existentials *)
-  | Nexp_exp e -> begin
-      match get_nexp_constant e with Some c -> Some (Big_int.pow_int_positive 2 (Big_int.to_int c)) | None -> None
-    end
-  | _ -> None
-
-let rec constraint_simp (NC_aux (nc_aux, l)) =
+and constraint_simp (NC_aux (nc_aux, l)) =
   let nc_aux =
     match nc_aux with
     | NC_set (nexp, ints) ->
@@ -592,10 +638,28 @@ let rec constraint_simp (NC_aux (nc_aux, l)) =
         end
     | NC_equal (arg1, arg2) ->
         let arg1, arg2 = (typ_arg_simp arg1, typ_arg_simp arg2) in
-        if typ_arg_compare arg1 arg2 = 0 then NC_true else NC_equal (arg1, arg2)
+        if typ_arg_compare arg1 arg2 = 0 then NC_true
+        else (
+          match (arg1, arg2) with
+          | A_aux (A_nexp (Nexp_aux (Nexp_constant c1, _)), _), A_aux (A_nexp (Nexp_aux (Nexp_constant c2, _)), _)
+            when not (Big_int.equal c1 c2) ->
+              NC_false
+          | A_aux (A_bool (NC_aux (NC_true, _)), _), A_aux (A_bool (NC_aux (NC_false, _)), _) -> NC_false
+          | A_aux (A_bool (NC_aux (NC_false, _)), _), A_aux (A_bool (NC_aux (NC_true, _)), _) -> NC_false
+          | _, _ -> NC_equal (arg1, arg2)
+        )
     | NC_not_equal (arg1, arg2) ->
         let arg1, arg2 = (typ_arg_simp arg1, typ_arg_simp arg2) in
-        if typ_arg_compare arg1 arg2 = 0 then NC_false else NC_not_equal (arg1, arg2)
+        if typ_arg_compare arg1 arg2 = 0 then NC_false
+        else (
+          match (arg1, arg2) with
+          | A_aux (A_nexp (Nexp_aux (Nexp_constant c1, _)), _), A_aux (A_nexp (Nexp_aux (Nexp_constant c2, _)), _)
+            when not (Big_int.equal c1 c2) ->
+              NC_true
+          | A_aux (A_bool (NC_aux (NC_true, _)), _), A_aux (A_bool (NC_aux (NC_false, _)), _) -> NC_true
+          | A_aux (A_bool (NC_aux (NC_false, _)), _), A_aux (A_bool (NC_aux (NC_true, _)), _) -> NC_true
+          | _, _ -> NC_not_equal (arg1, arg2)
+        )
     | NC_and (nc1, nc2) ->
         let nc1, nc2 = (constraint_simp nc1, constraint_simp nc2) in
         begin
@@ -668,6 +732,15 @@ and typ_arg_simp (A_aux (aux, l)) =
   | A_bool nc -> A_aux (A_bool (constraint_simp nc), l)
   | A_typ typ -> A_aux (A_typ typ, l)
 
+let rec get_nexp_constant (Nexp_aux (n, _)) =
+  match nexp_simp_aux n with
+  | Nexp_constant c -> Some c
+  (* nexp_simp does not always expand large existentials *)
+  | Nexp_exp e -> begin
+      match get_nexp_constant e with Some c -> Some (Big_int.pow_int_positive 2 (Big_int.to_int c)) | None -> None
+    end
+  | _ -> None
+
 let rec constraint_conj (NC_aux (nc_aux, _) as nc) =
   match nc_aux with NC_and (nc1, nc2) -> constraint_conj nc1 @ constraint_conj nc2 | _ -> [nc]
 
@@ -690,7 +763,7 @@ let nat_typ = mk_id_typ (mk_id "nat")
 let unit_typ = mk_id_typ (mk_id "unit")
 let bit_typ = mk_id_typ (mk_id "bit")
 let real_typ = mk_id_typ (mk_id "real")
-let app_typ id args = mk_typ (Typ_app (id, args))
+let app_typ id = function [] -> mk_typ (Typ_id id) | args -> mk_typ (Typ_app (id, args))
 let register_typ typ = mk_typ (Typ_app (mk_id "register", [mk_typ_arg (A_typ typ)]))
 let atom_typ nexp = mk_typ (Typ_app (mk_id "atom", [mk_typ_arg (A_nexp nexp)]))
 let implicit_typ nexp = mk_typ (Typ_app (mk_id "implicit", [mk_typ_arg (A_nexp (nexp_simp nexp))]))
@@ -762,7 +835,7 @@ let mk_typquant ?loc:(l = Parse_ast.Unknown) qis = TypQ_aux (TypQ_tq qis, l)
 
 let mk_fexp ?loc:(l = Parse_ast.Unknown) id exp = FE_aux (FE_fexp (id, exp), (l, empty_uannot))
 
-type effect = bool
+type effects = bool
 
 let no_effect = false
 let monadic_effect = true
@@ -828,7 +901,7 @@ let rec pattern_vector_subranges (P_aux (aux, _)) =
           Bindings.union (fun _ r1 r2 -> Some (insert_subranges r1 r2)) ranges (pattern_vector_subranges pat)
         )
         Bindings.empty pats
-  | P_struct (fpats, _) ->
+  | P_struct (_, fpats, _) ->
       let pats = List.map snd fpats in
       List.fold_left
         (fun ranges pat ->
@@ -844,9 +917,9 @@ and map_exp_annot_aux f = function
   | E_id id -> E_id id
   | E_ref id -> E_ref id
   | E_lit lit -> E_lit lit
+  | E_config key -> E_config key
   | E_typ (typ, exp) -> E_typ (typ, map_exp_annot f exp)
   | E_app (id, xs) -> E_app (id, List.map (map_exp_annot f) xs)
-  | E_app_infix (x, op, y) -> E_app_infix (map_exp_annot f x, op, map_exp_annot f y)
   | E_tuple xs -> E_tuple (List.map (map_exp_annot f) xs)
   | E_if (cond, t, e) -> E_if (map_exp_annot f cond, map_exp_annot f t, map_exp_annot f e)
   | E_for (v, e1, e2, e3, o, e4) ->
@@ -854,17 +927,10 @@ and map_exp_annot_aux f = function
   | E_loop (loop_type, measure, e1, e2) ->
       E_loop (loop_type, map_measure_annot f measure, map_exp_annot f e1, map_exp_annot f e2)
   | E_vector exps -> E_vector (List.map (map_exp_annot f) exps)
-  | E_vector_access (exp1, exp2) -> E_vector_access (map_exp_annot f exp1, map_exp_annot f exp2)
-  | E_vector_subrange (exp1, exp2, exp3) ->
-      E_vector_subrange (map_exp_annot f exp1, map_exp_annot f exp2, map_exp_annot f exp3)
-  | E_vector_update (exp1, exp2, exp3) ->
-      E_vector_update (map_exp_annot f exp1, map_exp_annot f exp2, map_exp_annot f exp3)
-  | E_vector_update_subrange (exp1, exp2, exp3, exp4) ->
-      E_vector_update_subrange (map_exp_annot f exp1, map_exp_annot f exp2, map_exp_annot f exp3, map_exp_annot f exp4)
   | E_vector_append (exp1, exp2) -> E_vector_append (map_exp_annot f exp1, map_exp_annot f exp2)
   | E_list xs -> E_list (List.map (map_exp_annot f) xs)
   | E_cons (exp1, exp2) -> E_cons (map_exp_annot f exp1, map_exp_annot f exp2)
-  | E_struct fexps -> E_struct (List.map (map_fexp_annot f) fexps)
+  | E_struct (struct_name, fexps) -> E_struct (struct_name, List.map (map_fexp_annot f) fexps)
   | E_struct_update (exp, fexps) -> E_struct_update (map_exp_annot f exp, List.map (map_fexp_annot f) fexps)
   | E_field (exp, id) -> E_field (map_exp_annot f exp, id)
   | E_match (exp, cases) -> E_match (map_exp_annot f exp, List.map (map_pexp_annot f) cases)
@@ -917,7 +983,8 @@ and map_pat_annot_aux f = function
   | P_vector pats -> P_vector (List.map (map_pat_annot f) pats)
   | P_cons (pat1, pat2) -> P_cons (map_pat_annot f pat1, map_pat_annot f pat2)
   | P_string_append pats -> P_string_append (List.map (map_pat_annot f) pats)
-  | P_struct (fpats, fwild) -> P_struct (List.map (fun (field, pat) -> (field, map_pat_annot f pat)) fpats, fwild)
+  | P_struct (struct_name, fpats, fwild) ->
+      P_struct (struct_name, List.map (fun (field, pat) -> (field, map_pat_annot f pat)) fpats, fwild)
 
 and map_mpexp_annot f (MPat_aux (mpexp, annot)) = MPat_aux (map_mpexp_annot_aux f mpexp, f annot)
 
@@ -946,7 +1013,8 @@ and map_mpat_annot_aux f = function
   | MP_string_append mpats -> MP_string_append (List.map (map_mpat_annot f) mpats)
   | MP_typ (mpat, typ) -> MP_typ (map_mpat_annot f mpat, typ)
   | MP_as (mpat, id) -> MP_as (map_mpat_annot f mpat, id)
-  | MP_struct fmpats -> MP_struct (List.map (fun (field, mpat) -> (field, map_mpat_annot f mpat)) fmpats)
+  | MP_struct (struct_name, fmpats) ->
+      MP_struct (struct_name, List.map (fun (field, mpat) -> (field, map_mpat_annot f mpat)) fmpats)
 
 and map_letbind_annot f (LB_aux (lb, annot)) = LB_aux (map_letbind_annot_aux f lb, f annot)
 
@@ -1032,7 +1100,7 @@ and map_def_annot f (DEF_aux (aux, annot)) =
     | DEF_loop_measures (id, measures) -> DEF_loop_measures (id, measures)
     | DEF_register ds -> DEF_register (map_register_annot f ds)
     | DEF_internal_mutrec fds -> DEF_internal_mutrec (List.map (map_fundef_annot f) fds)
-    | DEF_pragma (name, arg, l) -> DEF_pragma (name, arg, l)
+    | DEF_pragma (pragma, arg) -> DEF_pragma (pragma, arg)
   in
   DEF_aux (aux, annot)
 
@@ -1058,7 +1126,7 @@ let rec map_def_def_annot f (DEF_aux (aux, annot)) =
     | DEF_loop_measures (id, measures) -> DEF_loop_measures (id, measures)
     | DEF_register ds -> DEF_register ds
     | DEF_internal_mutrec fds -> DEF_internal_mutrec fds
-    | DEF_pragma (name, arg, l) -> DEF_pragma (name, arg, l)
+    | DEF_pragma (pragma, arg) -> DEF_pragma (pragma, arg)
   in
   DEF_aux (aux, f annot)
 
@@ -1069,6 +1137,8 @@ type id_chunk = Id_chunk_int of int | Id_chunk_string of string
 let split_id =
   let open Ast in
   function
+  | Id_aux (And_bool, _) -> [Id_chunk_string "and_bool"]
+  | Id_aux (Or_bool, _) -> [Id_chunk_string "or_bool"]
   | Id_aux (Id id, _) ->
       let pos = ref 0 in
       let is_number = ref false in
@@ -1123,25 +1193,31 @@ let natural_sort_ids ids =
   let ids = List.stable_sort (fun (n1, _) (n2, _) -> split_id_compare n1 n2) ids in
   List.map snd ids
 
-let deinfix = function Id_aux (Id v, l) -> Id_aux (Operator v, l) | Id_aux (Operator v, l) -> Id_aux (Operator v, l)
-
-let infix_swap = function Id_aux (Id v, l) -> Id_aux (Operator v, l) | Id_aux (Operator v, l) -> Id_aux (Id v, l)
-
 let id_of_kid = function Kid_aux (Var v, l) -> Id_aux (Id (String.sub v 1 (String.length v - 1)), l)
 
-let kid_of_id = function Id_aux (Id v, l) -> Kid_aux (Var ("'" ^ v), l) | Id_aux (Operator _, _) -> assert false
+let kid_of_id = function Id_aux (Id v, l) -> Kid_aux (Var ("'" ^ v), l) | _ -> assert false
 
 let prepend_id str = function
   | Id_aux (Id v, l) -> Id_aux (Id (str ^ v), l)
   | Id_aux (Operator v, l) -> Id_aux (Operator (str ^ v), l)
+  | Id_aux ((And_bool | Or_bool), l) ->
+      Reporting.unreachable l __POS__
+        "Attempted to construct prepended identifier from short-circuiting boolean operator"
 
 let append_id id str =
-  match id with Id_aux (Id v, l) -> Id_aux (Id (v ^ str), l) | Id_aux (Operator v, l) -> Id_aux (Operator (v ^ str), l)
+  match id with
+  | Id_aux (Id v, l) -> Id_aux (Id (v ^ str), l)
+  | Id_aux (Operator v, l) -> Id_aux (Operator (v ^ str), l)
+  | Id_aux ((And_bool | Or_bool), l) ->
+      Reporting.unreachable l __POS__
+        "Attempted to construct appended identifier from short-circuiting boolean operator"
 
 let remove_id_suffix id str =
   match id with
   | Id_aux (Id v, l) -> remove_suffix v str |> Option.map (fun s -> Id_aux (Id s, l))
   | Id_aux (Operator v, l) -> remove_suffix v str |> Option.map (fun s -> Id_aux (Operator s, l))
+  | Id_aux ((And_bool | Or_bool), l) ->
+      Reporting.unreachable l __POS__ "Attempted to remove suffix from short-circuiting boolean operator"
 
 let prepend_kid str = function
   | Kid_aux (Var v, l) -> Kid_aux (Var ("'" ^ str ^ String.sub v 1 (String.length v - 1)), l)
@@ -1228,6 +1304,41 @@ let string_of_typquant_aux = function
 let string_of_typquant = function TypQ_aux (quant, _) -> string_of_typquant_aux quant
 
 let string_of_typschm (TypSchm_aux (TypSchm_ts (quant, typ), _)) = string_of_typquant quant ^ ". " ^ string_of_typ typ
+
+type digit_case = Lowercase | Uppercase
+
+let string_of_hex_digit ~case digit =
+  let c =
+    match digit with
+    | Hex_0 -> "0"
+    | Hex_1 -> "1"
+    | Hex_2 -> "2"
+    | Hex_3 -> "3"
+    | Hex_4 -> "4"
+    | Hex_5 -> "5"
+    | Hex_6 -> "6"
+    | Hex_7 -> "7"
+    | Hex_8 -> "8"
+    | Hex_9 -> "9"
+    | Hex_A -> "A"
+    | Hex_B -> "B"
+    | Hex_C -> "C"
+    | Hex_D -> "D"
+    | Hex_E -> "E"
+    | Hex_F -> "F"
+  in
+  match case with Uppercase -> c | Lowercase -> String.lowercase_ascii c
+
+let string_of_hex_lit ?(group_separator = "_") ~case hex =
+  List.map (function Non_empty (d, ds) -> List.map (string_of_hex_digit ~case) (d :: ds) |> String.concat "") hex
+  |> String.concat group_separator
+
+let string_of_bin_lit ?(group_separator = "_") bin =
+  List.map
+    (function Non_empty (d, ds) -> List.map (function Bin_0 -> "0" | Bin_1 -> "1") (d :: ds) |> String.concat "")
+    bin
+  |> String.concat group_separator
+
 let string_of_lit (L_aux (lit, _)) =
   match lit with
   | L_unit -> "()"
@@ -1236,8 +1347,8 @@ let string_of_lit (L_aux (lit, _)) =
   | L_true -> "true"
   | L_false -> "false"
   | L_num n -> Big_int.to_string n
-  | L_hex n -> "0x" ^ n
-  | L_bin n -> "0b" ^ n
+  | L_hex hex -> "0x" ^ string_of_hex_lit ~case:Uppercase hex
+  | L_bin bin -> "0b" ^ string_of_bin_lit bin
   | L_undef -> "undefined"
   | L_real r -> r
   | L_string str -> "\"" ^ str ^ "\""
@@ -1255,7 +1366,6 @@ let rec string_of_exp (E_aux (exp, _)) =
   | E_return exp -> "return " ^ string_of_exp exp
   | E_app (f, [E_aux (E_lit (L_aux (L_unit, _)), _)]) -> string_of_id f ^ "()"
   | E_app (f, args) -> string_of_id f ^ "(" ^ string_of_list ", " string_of_exp args ^ ")"
-  | E_app_infix (x, op, y) -> "(" ^ string_of_exp x ^ " " ^ string_of_id op ^ " " ^ string_of_exp y ^ ")"
   | E_tuple exps -> "(" ^ string_of_list ", " string_of_exp exps ^ ")"
   | E_match (exp, cases) -> "match " ^ string_of_exp exp ^ " { " ^ string_of_list ", " string_of_pexp cases ^ " }"
   | E_try (exp, cases) ->
@@ -1264,11 +1374,6 @@ let rec string_of_exp (E_aux (exp, _)) =
   | E_assign (lexp, bind) -> string_of_lexp lexp ^ " = " ^ string_of_exp bind
   | E_typ (typ, exp) -> string_of_exp exp ^ " : " ^ string_of_typ typ
   | E_vector vec -> "[" ^ string_of_list ", " string_of_exp vec ^ "]"
-  | E_vector_access (v, n) -> string_of_exp v ^ "[" ^ string_of_exp n ^ "]"
-  | E_vector_update (v, n, exp) -> "[" ^ string_of_exp v ^ " with " ^ string_of_exp n ^ " = " ^ string_of_exp exp ^ "]"
-  | E_vector_update_subrange (v, n, m, exp) ->
-      "[" ^ string_of_exp v ^ " with " ^ string_of_exp n ^ " .. " ^ string_of_exp m ^ " = " ^ string_of_exp exp ^ "]"
-  | E_vector_subrange (v, n1, n2) -> string_of_exp v ^ "[" ^ string_of_exp n1 ^ " .. " ^ string_of_exp n2 ^ "]"
   | E_vector_append (v1, v2) -> string_of_exp v1 ^ " @ " ^ string_of_exp v2
   | E_if (cond, then_branch, else_branch) ->
       "if " ^ string_of_exp cond ^ " then " ^ string_of_exp then_branch ^ " else " ^ string_of_exp else_branch
@@ -1285,9 +1390,12 @@ let rec string_of_exp (E_aux (exp, _)) =
   | E_throw exp -> "throw " ^ string_of_exp exp
   | E_cons (x, xs) -> string_of_exp x ^ " :: " ^ string_of_exp xs
   | E_list xs -> "[|" ^ string_of_list ", " string_of_exp xs ^ "|]"
+  | E_config key -> "config " ^ string_of_list "." (fun s -> s) key
   | E_struct_update (exp, fexps) ->
       "struct { " ^ string_of_exp exp ^ " with " ^ string_of_list "; " string_of_fexp fexps ^ " }"
-  | E_struct fexps -> "struct { " ^ string_of_list "; " string_of_fexp fexps ^ " }"
+  | E_struct (struct_name, fexps) ->
+      let name_string = match struct_name with SN_anon -> "" | SN_id id -> " " ^ string_of_id id in
+      "struct" ^ name_string ^ " { " ^ string_of_list "; " string_of_fexp fexps ^ " }"
   | E_var (lexp, binding, exp) ->
       "var " ^ string_of_lexp lexp ^ " = " ^ string_of_exp binding ^ " in " ^ string_of_exp exp
   | E_internal_return exp -> "internal_return (" ^ string_of_exp exp ^ ")"
@@ -1333,9 +1441,10 @@ and string_of_pat (P_aux (pat, _)) =
   | P_as (pat, id) -> "(" ^ string_of_pat pat ^ " as " ^ string_of_id id ^ ")"
   | P_string_append [] -> "\"\""
   | P_string_append pats -> string_of_list " ^ " string_of_pat pats
-  | P_struct (fpats, fwild) ->
+  | P_struct (struct_name, fpats, fwild) ->
+      let name_string = match struct_name with SN_anon -> "" | SN_id id -> " " ^ string_of_id id in
       let wild_string = function FP_wild _ -> ", _" | FP_no_wild -> "" in
-      "struct { "
+      "struct" ^ name_string ^ " { "
       ^ Util.string_of_list ", " (fun (field, pat) -> string_of_id field ^ " = " ^ string_of_pat pat) fpats
       ^ wild_string fwild ^ " }"
 
@@ -1353,8 +1462,9 @@ and string_of_mpat (MP_aux (pat, _)) =
   | MP_string_append pats -> string_of_list " ^ " string_of_mpat pats
   | MP_typ (mpat, typ) -> "(" ^ string_of_mpat mpat ^ " : " ^ string_of_typ typ ^ ")"
   | MP_as (mpat, id) -> "((" ^ string_of_mpat mpat ^ ") as " ^ string_of_id id ^ ")"
-  | MP_struct fmpats ->
-      "struct { "
+  | MP_struct (struct_name, fmpats) ->
+      let name_string = match struct_name with SN_anon -> "" | SN_id id -> " " ^ string_of_id id in
+      "struct" ^ name_string ^ " { "
       ^ Util.string_of_list ", " (fun (field, mpat) -> string_of_id field ^ " = " ^ string_of_mpat mpat) fmpats
       ^ " }"
 
@@ -1392,7 +1502,7 @@ let rec pat_ids (P_aux (pat_aux, _)) =
       List.fold_left IdSet.union IdSet.empty (List.map pat_ids pats)
   | P_cons (pat1, pat2) -> IdSet.union (pat_ids pat1) (pat_ids pat2)
   | P_string_append pats -> List.fold_left IdSet.union IdSet.empty (List.map pat_ids pats)
-  | P_struct (fpats, _) -> List.fold_left IdSet.union IdSet.empty (List.map (fun (_, pat) -> pat_ids pat) fpats)
+  | P_struct (_, fpats, _) -> List.fold_left IdSet.union IdSet.empty (List.map (fun (_, pat) -> pat_ids pat) fpats)
 
 let id_of_fundef (FD_aux (FD_function (_, _, funcls), (l, _))) =
   match
@@ -1422,7 +1532,7 @@ let id_of_type_def_aux = function
   | TD_record (id, _, _, _)
   | TD_variant (id, _, _, _)
   | TD_enum (id, _, _)
-  | TD_abstract (id, _)
+  | TD_abstract (id, _, _)
   | TD_bitfield (id, _, _) ->
       id
 
@@ -1524,8 +1634,8 @@ let rec lexp_to_exp (LE_aux (lexp_aux, annot)) =
         | _ -> raise (Reporting.err_unreachable l __POS__ ("Unsupported sub-lexp " ^ string_of_lexp le ^ " in tuple"))
       in
       rewrap (E_tuple (List.map get_id les))
-  | LE_vector (lexp, e) -> rewrap (E_vector_access (lexp_to_exp lexp, e))
-  | LE_vector_range (lexp, e1, e2) -> rewrap (E_vector_subrange (lexp_to_exp lexp, e1, e2))
+  | LE_vector (lexp, e) -> rewrap (vector_access ~loc:(fst annot) (lexp_to_exp lexp) e)
+  | LE_vector_range (lexp, e1, e2) -> rewrap (vector_subrange ~loc:(fst annot) (lexp_to_exp lexp) e1 e2)
   | LE_field (lexp, id) -> rewrap (E_field (lexp_to_exp lexp, id))
   | LE_app (id, exps) -> rewrap (E_app (id, exps))
   | LE_vector_concat [] -> rewrap (E_vector [])
@@ -1624,6 +1734,39 @@ and kopts_of_typ_arg (A_aux (ta, _)) =
 
 let kopts_of_quant_item (QI_aux (qi, _)) =
   match qi with QI_id kopt -> KOptSet.singleton kopt | QI_constraint nc -> kopts_of_constraint nc
+
+let rec ids_of_nexp (Nexp_aux (nexp, _)) =
+  match nexp with
+  | Nexp_id id -> IdSet.singleton id
+  | Nexp_var _ | Nexp_constant _ -> IdSet.empty
+  | Nexp_times (n1, n2) | Nexp_sum (n1, n2) | Nexp_minus (n1, n2) -> IdSet.union (ids_of_nexp n1) (ids_of_nexp n2)
+  | Nexp_exp n | Nexp_neg n -> ids_of_nexp n
+  | Nexp_app (_, nexps) -> List.fold_left IdSet.union IdSet.empty (List.map ids_of_nexp nexps)
+  | Nexp_if (i, t, e) -> IdSet.union (ids_of_constraint i) (IdSet.union (ids_of_nexp t) (ids_of_nexp e))
+
+and ids_of_constraint (NC_aux (nc, _)) =
+  match nc with
+  | NC_equal (arg1, arg2) | NC_not_equal (arg1, arg2) -> IdSet.union (ids_of_typ_arg arg1) (ids_of_typ_arg arg2)
+  | NC_ge (nexp1, nexp2) | NC_gt (nexp1, nexp2) | NC_le (nexp1, nexp2) | NC_lt (nexp1, nexp2) ->
+      IdSet.union (ids_of_nexp nexp1) (ids_of_nexp nexp2)
+  | NC_set (nexp, _) -> ids_of_nexp nexp
+  | NC_or (nc1, nc2) | NC_and (nc1, nc2) -> IdSet.union (ids_of_constraint nc1) (ids_of_constraint nc2)
+  | NC_app (_, args) -> List.fold_left (fun s t -> IdSet.union s (ids_of_typ_arg t)) IdSet.empty args
+  | NC_id id -> IdSet.singleton id
+  | NC_var _ | NC_true | NC_false -> IdSet.empty
+
+and ids_of_typ (Typ_aux (t, _)) =
+  match t with
+  | Typ_internal_unknown | Typ_var _ -> IdSet.empty
+  | Typ_id id -> IdSet.singleton id
+  | Typ_fn (ts, t) -> List.fold_left IdSet.union (ids_of_typ t) (List.map ids_of_typ ts)
+  | Typ_bidir (t1, t2) -> IdSet.union (ids_of_typ t1) (ids_of_typ t2)
+  | Typ_tuple ts -> List.fold_left (fun s t -> IdSet.union s (ids_of_typ t)) IdSet.empty ts
+  | Typ_app (_, tas) -> List.fold_left (fun s ta -> IdSet.union s (ids_of_typ_arg ta)) IdSet.empty tas
+  | Typ_exist (kids, nc, t) -> IdSet.union (ids_of_constraint nc) (ids_of_typ t)
+
+and ids_of_typ_arg (A_aux (ta, _)) =
+  match ta with A_nexp nexp -> ids_of_nexp nexp | A_typ typ -> ids_of_typ typ | A_bool nc -> ids_of_constraint nc
 
 let rec tyvars_of_nexp (Nexp_aux (nexp, _)) =
   match nexp with
@@ -1755,9 +1898,9 @@ let rec subst id value (E_aux (e_aux, annot) as exp) =
     | E_block exps -> E_block (List.map (subst id value) exps)
     | E_id id' -> if Id.compare id id' = 0 then unaux_exp value else E_id id'
     | E_lit lit -> E_lit lit
+    | E_config parts -> E_config parts
     | E_typ (typ, exp) -> E_typ (typ, subst id value exp)
     | E_app (fn, exps) -> E_app (fn, List.map (subst id value) exps)
-    | E_app_infix (exp1, op, exp2) -> E_app_infix (subst id value exp1, op, subst id value exp2)
     | E_tuple exps -> E_tuple (List.map (subst id value) exps)
     | E_if (cond, then_exp, else_exp) -> E_if (subst id value cond, subst id value then_exp, subst id value else_exp)
     | E_loop (loop, measure, cond, body) ->
@@ -1766,17 +1909,10 @@ let rec subst id value (E_aux (e_aux, annot) as exp) =
     | E_for (id', exp1, exp2, exp3, order, body) ->
         E_for (id', subst id value exp1, subst id value exp2, subst id value exp3, order, subst id value body)
     | E_vector exps -> E_vector (List.map (subst id value) exps)
-    | E_vector_access (exp1, exp2) -> E_vector_access (subst id value exp1, subst id value exp2)
-    | E_vector_subrange (exp1, exp2, exp3) ->
-        E_vector_subrange (subst id value exp1, subst id value exp2, subst id value exp3)
-    | E_vector_update (exp1, exp2, exp3) ->
-        E_vector_update (subst id value exp1, subst id value exp2, subst id value exp3)
-    | E_vector_update_subrange (exp1, exp2, exp3, exp4) ->
-        E_vector_update_subrange (subst id value exp1, subst id value exp2, subst id value exp3, subst id value exp4)
     | E_vector_append (exp1, exp2) -> E_vector_append (subst id value exp1, subst id value exp2)
     | E_list exps -> E_list (List.map (subst id value) exps)
     | E_cons (exp1, exp2) -> E_cons (subst id value exp1, subst id value exp2)
-    | E_struct fexps -> E_struct (List.map (subst_fexp id value) fexps)
+    | E_struct (struct_name, fexps) -> E_struct (struct_name, List.map (subst_fexp id value) fexps)
     | E_struct_update (exp, fexps) -> E_struct_update (subst id value exp, List.map (subst_fexp id value) fexps)
     | E_field (exp, id') -> E_field (subst id value exp, id')
     | E_match (exp, pexps) -> E_match (subst id value exp, List.map (subst_pexp id value) pexps)
@@ -1846,40 +1982,13 @@ let explode s =
   exp (String.length s - 1) []
 
 let vector_string_to_bit_list (L_aux (lit, l)) =
-  let hexchar_to_binlist = function
-    | '0' -> ['0'; '0'; '0'; '0']
-    | '1' -> ['0'; '0'; '0'; '1']
-    | '2' -> ['0'; '0'; '1'; '0']
-    | '3' -> ['0'; '0'; '1'; '1']
-    | '4' -> ['0'; '1'; '0'; '0']
-    | '5' -> ['0'; '1'; '0'; '1']
-    | '6' -> ['0'; '1'; '1'; '0']
-    | '7' -> ['0'; '1'; '1'; '1']
-    | '8' -> ['1'; '0'; '0'; '0']
-    | '9' -> ['1'; '0'; '0'; '1']
-    | 'A' -> ['1'; '0'; '1'; '0']
-    | 'B' -> ['1'; '0'; '1'; '1']
-    | 'C' -> ['1'; '1'; '0'; '0']
-    | 'D' -> ['1'; '1'; '0'; '1']
-    | 'E' -> ['1'; '1'; '1'; '0']
-    | 'F' -> ['1'; '1'; '1'; '1']
-    | _ -> raise (Reporting.err_unreachable l __POS__ "hexchar_to_binlist given unrecognized character")
-  in
-
   let s_bin =
     match lit with
-    | L_hex s_hex -> List.flatten (List.map hexchar_to_binlist (explode (String.uppercase_ascii s_hex)))
-    | L_bin s_bin -> explode s_bin
+    | L_hex hex -> Semantics.bitlist_of_hex_lit hex
+    | L_bin bin -> Semantics.bitlist_of_bin_lit bin
     | _ -> raise (Reporting.err_unreachable l __POS__ "s_bin given non vector literal")
   in
-
-  List.map
-    (function
-      | '0' -> L_aux (L_zero, gen_loc l)
-      | '1' -> L_aux (L_one, gen_loc l)
-      | _ -> raise (Reporting.err_unreachable (gen_loc l) __POS__ "binary had non-zero or one")
-      )
-    s_bin
+  List.map (function Value_type.B0 -> L_aux (L_zero, gen_loc l) | Value_type.B1 -> L_aux (L_one, gen_loc l)) s_bin
 
 (* Functions for working with locations *)
 
@@ -1982,7 +2091,8 @@ let rec locate_pat : 'a. (l -> l) -> 'a pat -> 'a pat =
     | P_list pats -> P_list (List.map (locate_pat f) pats)
     | P_cons (hd_pat, tl_pat) -> P_cons (locate_pat f hd_pat, locate_pat f tl_pat)
     | P_string_append pats -> P_string_append (List.map (locate_pat f) pats)
-    | P_struct (fpats, fwild) -> P_struct (List.map (fun (field, pat) -> (field, locate_pat f pat)) fpats, fwild)
+    | P_struct (struct_name, fpats, fwild) ->
+        P_struct (struct_name, List.map (fun (field, pat) -> (field, locate_pat f pat)) fpats, fwild)
   in
   P_aux (p_aux, (f l, annot))
 
@@ -1993,24 +2103,19 @@ let rec locate : 'a. (l -> l) -> 'a exp -> 'a exp =
     | E_block exps -> E_block (List.map (locate f) exps)
     | E_id id -> E_id (locate_id f id)
     | E_lit lit -> E_lit (locate_lit f lit)
+    | E_config parts -> E_config parts
     | E_typ (typ, exp) -> E_typ (locate_typ f typ, locate f exp)
     | E_app (id, exps) -> E_app (locate_id f id, List.map (locate f) exps)
-    | E_app_infix (exp1, op, exp2) -> E_app_infix (locate f exp1, locate_id f op, locate f exp2)
     | E_tuple exps -> E_tuple (List.map (locate f) exps)
     | E_if (cond_exp, then_exp, else_exp) -> E_if (locate f cond_exp, locate f then_exp, locate f else_exp)
     | E_loop (loop, measure, cond, body) -> E_loop (loop, locate_measure f measure, locate f cond, locate f body)
     | E_for (id, exp1, exp2, exp3, ord, exp4) ->
         E_for (locate_id f id, locate f exp1, locate f exp2, locate f exp3, ord, locate f exp4)
     | E_vector exps -> E_vector (List.map (locate f) exps)
-    | E_vector_access (exp1, exp2) -> E_vector_access (locate f exp1, locate f exp2)
-    | E_vector_subrange (exp1, exp2, exp3) -> E_vector_subrange (locate f exp1, locate f exp2, locate f exp3)
-    | E_vector_update (exp1, exp2, exp3) -> E_vector_update (locate f exp1, locate f exp2, locate f exp3)
-    | E_vector_update_subrange (exp1, exp2, exp3, exp4) ->
-        E_vector_update_subrange (locate f exp1, locate f exp2, locate f exp3, locate f exp4)
     | E_vector_append (exp1, exp2) -> E_vector_append (locate f exp1, locate f exp2)
     | E_list exps -> E_list (List.map (locate f) exps)
     | E_cons (exp1, exp2) -> E_cons (locate f exp1, locate f exp2)
-    | E_struct fexps -> E_struct (List.map (locate_fexp f) fexps)
+    | E_struct (struct_name, fexps) -> E_struct (struct_name, List.map (locate_fexp f) fexps)
     | E_struct_update (exp, fexps) -> E_struct_update (locate f exp, List.map (locate_fexp f) fexps)
     | E_field (exp, id) -> E_field (locate f exp, locate_id f id)
     | E_match (exp, cases) -> E_match (locate f exp, List.map (locate_pexp f) cases)
@@ -2161,6 +2266,19 @@ and typ_arg_subst_aux sv subst = function
   | A_nexp nexp -> A_nexp (nexp_subst sv subst nexp)
   | A_typ typ -> A_typ (typ_subst sv subst typ)
   | A_bool nc -> A_bool (constraint_subst sv subst nc)
+
+let typquant_subst sv subst = function
+  | TypQ_aux (TypQ_no_forall, l) -> TypQ_aux (TypQ_no_forall, l)
+  | TypQ_aux (TypQ_tq qis, l) ->
+      let rec subst_qis = function
+        | [] -> []
+        | QI_aux (QI_id kopt, l) :: qis ->
+            if Kid.compare (kopt_kid kopt) sv = 0 then QI_aux (QI_id kopt, l) :: qis
+            else QI_aux (QI_id kopt, l) :: subst_qis qis
+        | QI_aux (QI_constraint nc, l) :: qis ->
+            QI_aux (QI_constraint (constraint_subst sv subst nc), l) :: subst_qis qis
+      in
+      TypQ_aux (TypQ_tq (subst_qis qis), l)
 
 let subst_kid subst sv v x =
   x

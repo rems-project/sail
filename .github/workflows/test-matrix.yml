@@ -1,0 +1,169 @@
+name: Test matrix
+
+on: [pull_request, workflow_dispatch]
+
+env:
+  OPAMVERBOSE: 1
+
+jobs:
+  build:
+    # GitHub allows matrix variables in more places than env variables
+    strategy:
+      matrix:
+        version: [5.2.1]
+        os: [ubuntu-24.04]
+        suite: [typecheck, exec, sv, lean, prover, other]
+
+    runs-on: ${{ matrix.os }}
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: System dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get -o Acquire::Retries=3 install build-essential libgmp-dev z3 cvc4 opam cargo verilator git curl
+
+    - name: Restore cached elan
+      id: cache-elan-restore
+      uses: actions/cache/restore@v3
+      with:
+        path: ~/.elan
+        key: ${{ matrix.os }}-${{ matrix.version }}-elan
+
+    - name: Install Lean version manager
+      if: steps.cache-elan-restore.outputs.cache-hit != 'true'
+      run: |
+        curl https://raw.githubusercontent.com/leanprover/elan/master/elan-init.sh -sSf | bash -s -- -y
+
+    - name: Save cached elan
+      if: steps.cache-elan-restore.outputs.cache-hit != 'true'
+      id: cache-elan-save
+      uses: actions/cache/save@v3
+      with:
+        path: ~/.elan
+        key: ${{ steps.cache-elan-restore.outputs.cache-primary-key }}
+
+    - name: Set elan path
+      run: |
+        echo "$HOME/.elan/bin" >> "$GITHUB_PATH"
+
+    - name: Restore cached opam
+      id: cache-opam-restore
+      uses: actions/cache/restore@v4
+      with:
+        path: ~/.opam
+        key: ${{ matrix.os }}-${{ matrix.version }}-cov
+
+    - name: Setup opam
+      if: steps.cache-opam-restore.outputs.cache-hit != 'true'
+      run: |
+        opam init --yes --no-setup --shell=sh --compiler=${{ matrix.version }}
+
+    - name: Save cached opam
+      if: steps.cache-opam-restore.outputs.cache-hit != 'true'
+      id: cache-opam-save
+      uses: actions/cache/save@v4
+      with:
+        path: ~/.opam
+        key: ${{ steps.cache-opam-restore.outputs.cache-primary-key }}
+
+    - name: Install Sail dependencies
+      run: |
+        eval $(opam env)
+        opam pin --yes --no-action add .
+        opam install . --yes --deps-only
+
+    - name: Build Sail with coverage
+      run: |
+        eval $(opam env)
+        dune build --release --instrument-with bisect_ppx
+        dune install
+
+    - name: Build sailcov
+      working-directory: sailcov
+      run: |
+        eval $(opam env)
+        make
+
+    - name: Build sailcov library
+      working-directory: lib/coverage
+      run: |
+        make
+
+    - name: Test Sail
+      run: |
+        eval $(opam env)
+        export SAIL_DIR=$(pwd)
+        etc/ci_coverage_tests.sh ${{ matrix.suite }}
+        bisect-ppx-report merge --coverage-path=test/ test/suite-${{ matrix.suite }}.coverage
+
+    - name: Upload test results
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: test-results-${{ matrix.suite }}
+        path: |
+          test/**/tests.xml
+          test/suite-${{ matrix.suite }}.coverage 
+
+    # Only do this for one job in the test matrix
+    - name: Upload event payload
+      if: matrix.suite == 'typecheck'
+      uses: actions/upload-artifact@v4
+      with:
+        name: event.json
+        path: ${{ github.event_path }}
+
+  rocq:
+    runs-on: ubuntu-latest
+    env:
+      OPAMROOT: /home/rocq/.opam
+    container:
+      image: rocq/rocq-prover:9.0.0
+      # github requires root to access some resources from outside the container
+      # (e.g. https://github.com/actions/checkout/issues/47)
+      options: --user root
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: System dependencies
+      run: |
+        apt-get update
+        apt-get -o Acquire::Retries=3 install -y build-essential libgmp-dev z3 git curl
+
+    - name: Install Sail dependencies
+      run: |
+        eval $(opam env)
+        # checkout does this, but for some reason it has disappeared by this point...
+        git config --global --add safe.directory /__w/sail/sail
+        opam pin --yes --no-action add coq-sail-stdpp git+https://github.com/rems-project/coq-sail.git
+        opam pin --yes --no-action -k path add .
+        opam install --yes coq=9.0.0 coq-sail-stdpp coq-record-update
+        opam install . --yes --deps-only
+
+    - name: Build Sail with coverage
+      run: |
+        eval $(opam env)
+        dune build --release --instrument-with bisect_ppx
+        dune install
+
+    - name: Test Sail
+      run: |
+        eval $(opam env)
+        export SAIL_DIR=$(pwd)
+        etc/ci_coverage_tests.sh rocq
+        # Workflows using the results assume filenames are unique
+        mkdir test/c-rocq
+        mv test/c/tests.xml test/c-rocq/tests.xml
+        bisect-ppx-report merge --coverage-path=test/ test/suite-rocq.coverage
+
+    - name: Upload test results
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: test-results-rocq
+        path: |
+          test/**/tests.xml
+          test/suite-rocq.coverage

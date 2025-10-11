@@ -129,6 +129,12 @@ let pure_early_return = function
   | Right a -> a
 end
 
+val pure_early_return_embed : forall 'rv 'a 'r 'e. either 'r 'a -> monadR 'rv 'a 'r 'e
+let pure_early_return_embed = function
+  | Left r -> throw (Left r)
+  | Right a -> return a
+end
+
 val either_bind : forall 'e 'a 'b. either 'e 'a -> ('a -> either 'e 'b) -> either 'e 'b
 let either_bind m f =
   match m with

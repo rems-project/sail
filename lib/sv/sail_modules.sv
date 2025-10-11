@@ -13,6 +13,61 @@ function automatic int get_cycle_count(sail_unit u);
    return cycle_count;
 endfunction
 
+`ifdef SAIL_NOSTRINGS
+module print
+  (input sail_unit  in_str,
+   input sail_unit  in_sail_stdout,
+   output sail_unit out_return,
+   output sail_unit out_sail_stdout
+   );
+
+   always_comb begin
+      out_sail_stdout = SAIL_UNIT;
+      out_return = SAIL_UNIT;
+   end
+endmodule
+
+module print_endline
+  (input sail_unit  in_str,
+   input sail_unit  in_sail_stdout,
+   output sail_unit out_return,
+   output sail_unit out_sail_stdout
+   );
+
+   always_comb begin
+      out_sail_stdout = SAIL_UNIT;
+      out_return = SAIL_UNIT;
+   end
+endmodule
+
+function automatic bit valid_hex_bits(int n, sail_unit hex);
+   return 1'h1;
+endfunction
+
+function automatic sail_bits parse_hex_bits(int n, sail_unit str);
+   logic [SAIL_BITS_WIDTH-1:0] buffer;
+
+   buffer = 0;
+
+   return '{n[SAIL_INDEX_WIDTH-1:0] * 8, buffer};
+endfunction
+
+function automatic sail_unit string_take(sail_unit str, int n);
+   return SAIL_UNIT;
+endfunction
+
+function automatic sail_unit string_drop(sail_unit str, int n);
+   return SAIL_UNIT;
+endfunction
+
+function automatic int string_length(sail_unit str);
+   return 0;
+endfunction
+
+function automatic sail_unit sail_string_of_bits(sail_bits bv);
+   return SAIL_UNIT;
+endfunction
+`else
 module print
   (input string     in_str,
    input string     in_sail_stdout,
@@ -72,7 +127,7 @@ function automatic bit valid_hex_bits(int n, string hex);
    end;
 
    return 1'h1;
-endfunction // valid_hex_bits
+endfunction
 
 function automatic sail_bits parse_hex_bits(int n, string str);
    logic [SAIL_BITS_WIDTH-1:0] buffer;
@@ -97,6 +152,15 @@ endfunction
 function automatic int string_length(string str);
    return str.len();
 endfunction
+
+function automatic string sail_string_of_bits(sail_bits bv);
+   string hexstr;
+   string trimmed;
+   hexstr = $sformatf("%x", bv.sb_bits);
+   trimmed = hexstr.substr(SAIL_BITS_WIDTH / 4 - (bv.sb_size / 4), SAIL_BITS_WIDTH / 4 - 1).toupper();
+   return {"0x", trimmed};
+endfunction
+`endif
 
 `ifdef SAIL_DPI_MEMORY
 import "DPI-C" function bit[7:0] sail_read_byte(logic [63:0] addr);
@@ -130,7 +194,7 @@ function automatic sail_bits emulator_read_mem(logic [63:0] addrsize, sail_bits 
    logic [SAIL_BITS_WIDTH-1:0] buffer;
    logic [SAIL_INDEX_WIDTH-2:0] i;
 
-   paddr = addr.bits[63:0];
+   paddr = addr.sb_bits[63:0];
 
    for (i = n[SAIL_INDEX_WIDTH-2:0]; i > 0; i = i - 1) begin
 `ifdef SAIL_DPI_MEMORY
@@ -153,7 +217,7 @@ endfunction
 
 function automatic bit emulator_read_tag(logic [63:0] addrsize, sail_bits addr);
    logic [63:0] paddr;
-   paddr = addr.bits[63:0];
+   paddr = addr.sb_bits[63:0];
 `ifdef SAIL_DPI_MEMORY
    return sail_read_tag(paddr);
 `else
@@ -179,8 +243,8 @@ module emulator_write_mem
       logic [SAIL_INDEX_WIDTH-2:0] i;
       sail_memory_writes tmp;
 
-      buffer = value.bits;
-      paddr = addr.bits[63:0];
+      buffer = value.sb_bits;
+      paddr = addr.sb_bits[63:0];
       tmp = in_writes;
 
       for (i = n[SAIL_INDEX_WIDTH-2:0]; i > 0; i = i - 1) begin
@@ -214,13 +278,5 @@ module emulator_write_tag
    output sail_memory_writes out_writes
    );
 endmodule
-
-function automatic string sail_string_of_bits(sail_bits bv);
-   string hexstr;
-   string trimmed;
-   hexstr = $sformatf("%x", bv.bits);
-   trimmed = hexstr.substr(SAIL_BITS_WIDTH / 4 - (bv.size / 4), SAIL_BITS_WIDTH / 4 - 1).toupper();
-   return {"0x", trimmed};
-endfunction
 
 `endif

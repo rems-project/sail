@@ -55,10 +55,12 @@ type l =
   | Hint of string * l * l
   | Range of Lexing.position * Lexing.position
 
-(** We put the attribute data type in it's own module, so other
-    modules can import it unqualified. The parse AST and the main AST
-    share this type, so modules that wouldn't normally import this
-    module will want to use it. *)
+type comment_type = Comment_block | Comment_line
+
+type doc_comment = { contents : string; comment_type : comment_type }
+
+(** We put the attribute data type in it's own module, so other modules can import it unqualified. The parse AST and the
+    main AST share this type, so modules that wouldn't normally import this module will want to use it. *)
 module Attribute_data = struct
   type attribute_data_aux =
     | AD_object of (string * attribute_data) list
@@ -75,6 +77,11 @@ open Attribute_data
 
 type 'a annot = l * 'a
 
+type 'a field_annot =
+  | Ann_attribute of string * attribute_data option * 'a field_annot * l
+  | Ann_doc of doc_comment * 'a field_annot * l
+  | Ann_item of 'a
+
 type extern = { pure : bool; bindings : (string * string) list }
 
 type x = text (* identifier *)
@@ -90,17 +97,20 @@ type kind_aux =
 
 type kind = K_aux of kind_aux * l
 
-type kid_aux = (* identifiers with kind, ticked to differentiate from program variables *)
+type kid_aux =
+  (* identifiers with kind, ticked to differentiate from program variables *)
   | Var of x
 
-type id_aux = (* Identifier *)
-  | Id of x | Operator of x (* remove infix status *)
+type id_aux =
+  (* Identifier *)
+  | Id of x
+  | Operator of x (* remove infix status *)
 
 type kid = Kid_aux of kid_aux * l
 
 type id = Id_aux of id_aux * l
 
-type 'a infix_token = IT_primary of 'a | IT_op of id | IT_prefix of id
+type 'a infix_token = IT_primary of 'a | IT_op of string | IT_prefix of string
 
 type lit_aux =
   | (* Literal constant *)
@@ -165,7 +175,8 @@ type typquant_aux =
 
 type typquant = TypQ_aux of typquant_aux * l
 
-type typschm_aux = (* type scheme *)
+type typschm_aux =
+  (* type scheme *)
   | TypSchm_ts of typquant * atyp
 
 type typschm = TypSchm_aux of typschm_aux * l
@@ -185,13 +196,15 @@ type pat_aux =
   | P_list of pat list (* list pattern *)
   | P_cons of pat * pat (* cons pattern *)
   | P_string_append of pat list (* string append pattern, x ^^ y *)
-  | P_struct of fpat list (* struct pattern *)
+  | P_struct of id option * fpat list (* struct pattern *)
   | P_attribute of string * attribute_data option * pat
 
 and pat = P_aux of pat_aux * l
 
-and fpat_aux = (* Field pattern *)
-  | FP_field of id * pat | FP_wild
+and fpat_aux =
+  (* Field pattern *)
+  | FP_field of id * pat
+  | FP_wild
 
 and fpat = FP_aux of fpat_aux * l
 
@@ -199,8 +212,10 @@ type loop = While | Until
 
 type if_loc = { if_loc : l; then_loc : l; else_loc : l option }
 
-type measure_aux = (* optional termination measure for a loop *)
-  | Measure_none | Measure_some of exp
+type measure_aux =
+  (* optional termination measure for a loop *)
+  | Measure_none
+  | Measure_some of exp
 
 and measure = Measure_aux of measure_aux * l
 
@@ -227,7 +242,7 @@ and exp_aux =
   | E_vector_append of exp * exp (* vector concatenation *)
   | E_list of exp list (* list *)
   | E_cons of exp * exp (* cons *)
-  | E_struct of exp list (* struct *)
+  | E_struct of id option * exp list (* struct *)
   | E_struct_update of exp * exp list (* functional update of struct *)
   | E_field of exp * id (* field projection from struct *)
   | E_match of exp * pexp list (* pattern matching *)
@@ -236,6 +251,7 @@ and exp_aux =
   | E_sizeof of atyp
   | E_constraint of atyp
   | E_exit of exp
+  | E_config of string
   | E_throw of exp
   | E_try of exp * pexp list
   | E_return of exp
@@ -263,7 +279,8 @@ and pexp_aux =
 
 and pexp = Pat_aux of pexp_aux * l
 
-and letbind_aux = (* Let binding *)
+and letbind_aux =
+  (* Let binding *)
   | LB_val of pat * exp (* value binding, implicit type (pat must be total) *)
 
 and letbind = LB_aux of letbind_aux * l
@@ -293,7 +310,7 @@ and funcl_aux =
   (* Function clause *)
   | FCL_private of funcl
   | FCL_attribute of string * attribute_data option * funcl
-  | FCL_doc of string * funcl
+  | FCL_doc of doc_comment * funcl
   | FCL_funcl of id * pexp
 
 type type_union = Tu_aux of type_union_aux * l
@@ -302,9 +319,9 @@ and type_union_aux =
   (* Type union constructors *)
   | Tu_private of type_union
   | Tu_attribute of string * attribute_data option * type_union
-  | Tu_doc of string * type_union
+  | Tu_doc of doc_comment * type_union
   | Tu_ty_id of atyp * id
-  | Tu_ty_anon_rec of (atyp * id) list * id
+  | Tu_ty_anon_rec of (id * atyp) field_annot list * id
 
 type tannot_opt = Typ_annot_opt_aux of tannot_opt_aux * l
 
@@ -345,7 +362,7 @@ type mpat_aux =
   | MP_string_append of mpat list
   | MP_typ of mpat * atyp
   | MP_as of mpat * id
-  | MP_struct of (id * mpat) list
+  | MP_struct of id option * (id * mpat) list
 
 and mpat = MP_aux of mpat_aux * l
 
@@ -358,11 +375,12 @@ type mapcl = MCL_aux of mapcl_aux * l
 and mapcl_aux =
   (* mapping clause (bidirectional pattern-match) *)
   | MCL_attribute of string * attribute_data option * mapcl
-  | MCL_doc of string * mapcl
+  | MCL_doc of doc_comment * mapcl
   | MCL_bidir of mpexp * mpexp
   | MCL_forwards_deprecated of mpexp * exp
   | MCL_forwards of pexp
   | MCL_backwards of pexp
+  | MCL_when of mapcl * exp
 
 type mapdef_aux =
   (* mapping definition (bidirectional pattern-match function) *)
@@ -370,27 +388,31 @@ type mapdef_aux =
 
 type mapdef = MD_aux of mapdef_aux * l
 
-type outcome_spec_aux = (* outcome declaration *)
-  | OV_outcome of id * typschm * kinded_id list
+type outcome_spec_aux =
+  (* outcome declaration *)
+  | OV_outcome of id * typschm * typquant
 
 type outcome_spec = OV_aux of outcome_spec_aux * l
 
-type fundef_aux = (* Function definition *)
+type fundef_aux =
+  (* Function definition *)
   | FD_function of rec_opt * tannot_opt * funcl list
 
 type type_def_aux =
   (* Type definition body *)
   | TD_abbrev of id * typquant * kind option * atyp (* type abbreviation *)
-  | TD_record of id * typquant * (atyp * id) list (* struct type definition *)
-  | TD_variant of id * typquant * type_union list (* union type definition *)
+  | TD_record of id * typquant * (id * atyp) field_annot list (* struct type definition *)
+  | TD_variant of id * typquant * type_union list * bool (* union type definition *)
   | TD_enum of id * (id * atyp) list * (id * exp option) list (* enumeration type definition *)
-  | TD_abstract of id * kind
-  | TD_bitfield of id * atyp * (id * index_range) list (* register mutable bitfield type definition *)
+  | TD_abstract of id * kind * string list option
+  | TD_bitfield of id * atyp * (id * index_range) field_annot list (* register mutable bitfield type definition *)
 
-type val_spec_aux = (* Value type specification *)
+type val_spec_aux =
+  (* Value type specification *)
   | VS_val_spec of typschm * id * extern option
 
-type dec_spec_aux = (* Register declarations *)
+type dec_spec_aux =
+  (* Register declarations *)
   | DEC_reg of atyp * id * exp option
 
 type scattered_def_aux =
@@ -424,6 +446,11 @@ type prec = Infix | InfixL | InfixR
 
 type fixity_token = prec * Big_int.num * string
 
+type pragma =
+  (* pragma contents *)
+  | Pragma_line of string * int
+  | Pragma_structured of (string * attribute_data) list
+
 type def_aux =
   (* Top-level definition *)
   | DEF_type of type_def (* type definition *)
@@ -433,7 +460,7 @@ type def_aux =
   | DEF_impl of funcl (* impl definition *)
   | DEF_let of letbind (* value definition *)
   | DEF_overload of id * id list (* operator overload specifications *)
-  | DEF_fixity of prec * Big_int.num * id (* fixity declaration *)
+  | DEF_fixity of prec * Big_int.num * string (* fixity declaration *)
   | DEF_val of val_spec (* top-level type constraint *)
   | DEF_outcome of outcome_spec * def list (* top-level outcome definition *)
   | DEF_instantiation of id * subst list (* instantiation *)
@@ -442,10 +469,10 @@ type def_aux =
   | DEF_measure of id * pat * exp (* separate termination measure declaration *)
   | DEF_loop_measures of id * loop_measure list (* separate termination measure declaration *)
   | DEF_register of dec_spec (* register declaration *)
-  | DEF_pragma of string * string * int
+  | DEF_pragma of string * pragma
   | DEF_private of def
   | DEF_attribute of string * attribute_data option * def
-  | DEF_doc of string * def
+  | DEF_doc of doc_comment * def
   | DEF_internal_mutrec of fundef list
 
 and def = DEF_aux of def_aux * l
@@ -461,5 +488,6 @@ type lexp_aux =
 
 and lexp = LE_aux of lexp_aux * l
 
-type defs = (* Definition sequence *)
-  | Defs of (string * def list) list
+type defs =
+  (* Definition sequence *)
+  | Defs of (string option * def list) list

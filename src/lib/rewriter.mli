@@ -55,6 +55,7 @@ type ('a, 'b) rewriters = {
   rewrite_exp : ('a, 'b) rewriters -> 'a exp -> 'a exp;
   rewrite_lexp : ('a, 'b) rewriters -> 'a lexp -> 'a lexp;
   rewrite_pat : ('a, 'b) rewriters -> 'a pat -> 'a pat;
+  rewrite_mpat : ('a, 'b) rewriters -> 'a mpat -> 'a mpat;
   rewrite_let : ('a, 'b) rewriters -> 'a letbind -> 'a letbind;
   rewrite_fun : ('a, 'b) rewriters -> 'a fundef -> 'a fundef;
   rewrite_def : ('a, 'b) rewriters -> ('a, 'b) def -> ('a, 'b) def;
@@ -78,6 +79,8 @@ val rewrite_ast_base_progress : string -> (tannot, env) rewriters -> typed_ast -
 val rewrite_lexp : (tannot, env) rewriters -> tannot lexp -> tannot lexp
 
 val rewrite_pat : (tannot, env) rewriters -> tannot pat -> tannot pat
+
+val rewrite_mpat : (tannot, env) rewriters -> tannot mpat -> tannot mpat
 
 val rewrite_pexp : (tannot, env) rewriters -> tannot pexp -> tannot pexp
 
@@ -107,7 +110,7 @@ type ('a, 'pat, 'pat_aux) pat_alg = {
   p_list : 'pat list -> 'pat_aux;
   p_cons : 'pat * 'pat -> 'pat_aux;
   p_string_append : 'pat list -> 'pat_aux;
-  p_struct : (id * 'pat) list * field_pat_wildcard -> 'pat_aux;
+  p_struct : struct_name * (id * 'pat) list * field_pat_wildcard -> 'pat_aux;
   p_aux : 'pat_aux * 'a annot -> 'pat;
 }
 
@@ -135,20 +138,15 @@ type ( 'a,
   e_lit : lit -> 'exp_aux;
   e_typ : Ast.typ * 'exp -> 'exp_aux;
   e_app : id * 'exp list -> 'exp_aux;
-  e_app_infix : 'exp * id * 'exp -> 'exp_aux;
   e_tuple : 'exp list -> 'exp_aux;
   e_if : 'exp * 'exp * 'exp -> 'exp_aux;
   e_for : id * 'exp * 'exp * 'exp * Ast.order * 'exp -> 'exp_aux;
   e_loop : loop * ('exp option * Parse_ast.l) * 'exp * 'exp -> 'exp_aux;
   e_vector : 'exp list -> 'exp_aux;
-  e_vector_access : 'exp * 'exp -> 'exp_aux;
-  e_vector_subrange : 'exp * 'exp * 'exp -> 'exp_aux;
-  e_vector_update : 'exp * 'exp * 'exp -> 'exp_aux;
-  e_vector_update_subrange : 'exp * 'exp * 'exp * 'exp -> 'exp_aux;
   e_vector_append : 'exp * 'exp -> 'exp_aux;
   e_list : 'exp list -> 'exp_aux;
   e_cons : 'exp * 'exp -> 'exp_aux;
-  e_struct : 'fexp list -> 'exp_aux;
+  e_struct : struct_name * 'fexp list -> 'exp_aux;
   e_struct_update : 'exp * 'fexp list -> 'exp_aux;
   e_field : 'exp * id -> 'exp_aux;
   e_case : 'exp * 'pexp list -> 'exp_aux;
@@ -159,12 +157,13 @@ type ( 'a,
   e_constraint : n_constraint -> 'exp_aux;
   e_exit : 'exp -> 'exp_aux;
   e_throw : 'exp -> 'exp_aux;
+  e_config : string list -> 'exp_aux;
   e_return : 'exp -> 'exp_aux;
   e_assert : 'exp * 'exp -> 'exp_aux;
   e_var : 'lexp * 'exp * 'exp -> 'exp_aux;
   e_internal_plet : 'pat * 'exp * 'exp -> 'exp_aux;
   e_internal_return : 'exp -> 'exp_aux;
-  e_internal_value : Value.value -> 'exp_aux;
+  e_internal_value : Value_type.value -> 'exp_aux;
   e_internal_assume : n_constraint * 'exp -> 'exp_aux;
   e_aux : 'exp_aux * 'a annot -> 'exp;
   le_id : id -> 'lexp_aux;

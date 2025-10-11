@@ -50,25 +50,25 @@ open Ast
 open Ast_util
 open Jib
 
-(** {1 Instruction construction functions, and Jib names } *)
+(** {1 Instruction construction functions, and Jib names} *)
 
-(** Create a generator that produces fresh names, paired with a
-   function that resets the generator (allowing it to regenerate the
-   same name). *)
-val symbol_generator : string -> (unit -> id) * (unit -> unit)
+(** Create a generator that produces fresh names. *)
+val symbol_generator : unit -> unit -> name
 
 val idecl : l -> ctyp -> name -> instr
+val istatic : l -> ctyp -> Value2.vl -> name * instr
 val ireset : l -> ctyp -> name -> instr
 val iinit : l -> ctyp -> name -> cval -> instr
-val iif : l -> cval -> instr list -> instr list -> ctyp -> instr
+val ijson_key : l -> name -> string list -> instr
+val iif : l -> cval -> instr list -> instr list -> instr
 val ifuncall : l -> clexp -> id * ctyp list -> cval list -> instr
 val ifuncall_multi : l -> clexp list -> id * ctyp list -> cval list -> instr
-val iextern : l -> clexp -> id * ctyp list -> cval list -> instr
+val iextern : ?return_ctyp:ctyp -> l -> clexp -> id * ctyp list -> cval list -> instr
 val icopy : l -> clexp -> cval -> instr
 val iclear : ?loc:l -> ctyp -> name -> instr
 val ireturn : ?loc:l -> cval -> instr
 val iend : l -> instr
-val iend_id : l -> id -> instr
+val iend_name : l -> name -> instr
 val iblock : ?loc:l -> instr list -> instr
 val itry_block : l -> instr list -> instr
 val ithrow : l -> cval -> instr
@@ -77,6 +77,7 @@ val ilabel : ?loc:l -> string -> instr
 val igoto : ?loc:l -> string -> instr
 val iundefined : ?loc:l -> ctyp -> instr
 val imatch_failure : l -> instr
+val ibad_config : l -> instr
 val iexit : l -> instr
 val iraw : ?loc:l -> string -> instr
 val ijump : l -> cval -> string -> instr
@@ -117,8 +118,6 @@ val string_of_value : Value2.vl -> string
 val string_of_cval : cval -> string
 val string_of_clexp : clexp -> string
 val string_of_instr : instr -> string
-
-val full_string_of_ctyp : ctyp -> string
 
 (** {1 Functions and modules for working with ctyps} *)
 
@@ -178,9 +177,18 @@ val ctype_def_to_ctyp : ctype_def -> ctyp
 
 (** {1 Functions for mapping over and extracting information from instructions, values, and definitions} *)
 
-val instr_ids : instr -> NameSet.t
-val instr_reads : instr -> NameSet.t
-val instr_writes : instr -> NameSet.t
+(** Return the read/write dependencies of a single instruction.
+
+    If direct is true, only returns the dependencies of that specific instruction and will not recurse into any
+    sub-instructions in if-then-else or block instructions. *)
+val instr_ids : direct:bool -> instr -> NameSet.t
+
+val instr_reads : direct:bool -> instr -> NameSet.t
+val instr_writes : direct:bool -> instr -> NameSet.t
+
+(** [instr_references ~read:id ~direct:true instr] is equivalent to [NameSet.mem id (instr_reads ~direct:true instr)],
+    but much more efficient as it does not construct an intermediate set. *)
+val instr_references : ?read:name -> ?write:name -> direct:bool -> instr -> bool
 
 val instr_typed_writes : instr -> NameCTSet.t
 
@@ -224,4 +232,4 @@ val cdef_map_cval : (cval -> cval) -> cdef -> cdef
 (** Map over each instruction in a cdef using concatmap_instr *)
 val cdef_concatmap_instr : (instr -> instr list) -> cdef -> cdef
 
-val c_ast_registers : cdef list -> (id * ctyp * instr list) list
+val cdef_has_ctyp : (ctyp -> bool) -> cdef -> bool

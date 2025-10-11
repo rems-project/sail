@@ -52,9 +52,8 @@ module Big_int = Nat_big_num
 
 (** {1 Untyped AST annotations and locations} *)
 
-(** The type of annotations for untyped AST nodes. When expressions
-   are type-checked the untyped annotations are replaced with typed
-   annotations {!Type_check.tannot}. *)
+(** The type of annotations for untyped AST nodes. When expressions are type-checked the untyped annotations are
+    replaced with typed annotations {!Type_check.tannot}. *)
 type uannot
 
 (** Aliases for an untyped definitions and full AST for readability *)
@@ -79,19 +78,19 @@ val attribute_data_object : attribute_data -> (string * attribute_data) list opt
 
 val attribute_data_bool : attribute_data -> bool option
 
+val attribute_data_num : attribute_data -> Big_int.num option
+
 val attribute_data_string : attribute_data -> string option
 
 val attribute_data_string_with_loc : attribute_data -> (string * Parse_ast.l) option
 
 val attribute_data_list : attribute_data -> attribute_data list option
 
-(** Add an attribute to an annotation. Attributes are attached to expressions in Sail  via:
+(** Add an attribute to an annotation. Attributes are attached to expressions in Sail via:
     {@sail[
-    $[attribute argument] expression
+      $[attribute argument] expression
     ]}
-    The location argument should be a span that corresponds to the attribute itself, and not
-    include the expression.
-*)
+    The location argument should be a span that corresponds to the attribute itself, and not include the expression. *)
 val add_attribute : l -> string -> attribute_data option -> uannot -> uannot
 
 val remove_attribute : string -> uannot -> uannot
@@ -103,7 +102,12 @@ val get_attributes : uannot -> (l * string * attribute_data option) list
 val find_attribute_opt : string -> (l * string * attribute_data option) list -> (l * attribute_data option) option
 
 val mk_def_annot :
-  ?doc:string -> ?attrs:(l * string * attribute_data option) list -> ?visibility:visibility -> l -> 'a -> 'a def_annot
+  ?doc:Parse_ast.doc_comment ->
+  ?attrs:(l * string * attribute_data option) list ->
+  ?visibility:visibility ->
+  l ->
+  'a ->
+  'a def_annot
 
 val uannot_of_def_annot : 'a def_annot -> uannot
 
@@ -111,23 +115,23 @@ val add_def_attribute : l -> string -> attribute_data option -> 'a def_annot -> 
 
 val get_def_attribute : string -> 'a def_annot -> (l * attribute_data option) option
 
+val get_def_attributes : 'a def_annot -> (l * string * attribute_data option) list
+
 val remove_def_attribute : string -> 'a def_annot -> 'a def_annot
 
 val def_annot_map_loc : (l -> l) -> 'a def_annot -> 'a def_annot
 
 val def_annot_map_env : ('a -> 'b) -> 'a def_annot -> 'b def_annot
 
-(** The empty annotation (as a location + uannot pair). Should be used
-   carefully because it can result in unhelpful error messgaes. However
-   a common pattern is generating code with [no_annot], then adding location
-   information with the various [locate_] functions in this module. *)
+(** The empty annotation (as a location + uannot pair). Should be used carefully because it can result in unhelpful
+    error messgaes. However a common pattern is generating code with [no_annot], then adding location information with
+    the various [locate_] functions in this module. *)
 val no_annot : l * uannot
 
 (** {1 Generated locations} *)
 
-(** [gen_loc l] takes a location l and generates a location which
-   means 'generated/derived from location l'. This is useful for debugging
-   errors that occur in generated code. *)
+(** [gen_loc l] takes a location l and generates a location which means 'generated/derived from location l'. This is
+    useful for debugging errors that occur in generated code. *)
 val gen_loc : Parse_ast.l -> Parse_ast.l
 
 val is_gen_loc : Parse_ast.l -> bool
@@ -144,9 +148,8 @@ val visibility_loc : visibility -> Parse_ast.l
 
 type mut = Immutable | Mutable
 
-(** [lvar] is the type of variables - they can either be registers,
-   local mutable or immutable variables constructors or unbound
-   identifiers. *)
+(** [lvar] is the type of variables - they can either be registers, local mutable or immutable variables constructors or
+    unbound identifiers. *)
 type 'a lvar = Register of 'a | Enum of 'a | Local of mut * 'a | Unbound of id
 
 val is_unbound : 'a lvar -> bool
@@ -157,15 +160,23 @@ val lvar_typ : ?loc:l -> 'a lvar -> 'a
 val is_order_inc : order -> bool
 val is_order_dec : order -> bool
 
+val is_and_bool : id -> bool
+val is_or_bool : id -> bool
+
 (** {1 Functions for building and destructuring untyped AST elements} *)
 
 (** {2 Functions for building untyped AST elements} *)
 
+val mk_and_bool : ?loc:l -> unit -> id
+val mk_or_bool : ?loc:l -> unit -> id
 val mk_id : ?loc:l -> string -> id
+val mk_operator : ?loc:l -> string -> id
 val mk_kid : ?loc:l -> string -> kid
 val mk_nc : ?loc:l -> n_constraint_aux -> n_constraint
 val mk_nexp : ?loc:l -> nexp_aux -> nexp
 val mk_exp : ?loc:l -> uannot exp_aux -> uannot exp
+val mk_id_exp : ?loc:l -> id -> uannot exp
+val mk_infix_exp : ?loc:l -> uannot exp -> id -> uannot exp -> uannot exp
 val mk_pat : ?loc:l -> uannot pat_aux -> uannot pat
 val mk_mpat : ?loc:l -> uannot mpat_aux -> uannot mpat
 val mk_pexp : ?loc:l -> uannot pexp_aux -> uannot pexp
@@ -188,6 +199,13 @@ val mk_letbind : ?loc:l -> uannot pat -> uannot exp -> uannot letbind
 val mk_kopt : ?loc:l -> kind_aux -> kid -> kinded_id
 val mk_def : ?loc:l -> ('a, 'b) def_aux -> 'b -> ('a, 'b) def
 
+val is_vector_syntax : id -> bool
+
+val vector_access : ?loc:l -> 'a exp -> 'a exp -> 'a exp_aux
+val vector_subrange : ?loc:l -> 'a exp -> 'a exp -> 'a exp -> 'a exp_aux
+val vector_update : ?loc:l -> 'a exp -> 'a exp -> 'a exp -> 'a exp_aux
+val vector_update_subrange : ?loc:l -> 'a exp -> 'a exp -> 'a exp -> 'a exp -> 'a exp_aux
+
 (** Mapping patterns are a subset of patterns, so we can always convert one to the other *)
 val pat_of_mpat : 'a mpat -> 'a pat
 
@@ -202,8 +220,7 @@ val unaux_constraint : n_constraint -> n_constraint_aux
 
 (** {2 Destruct type annotated patterns and expressions} *)
 
-(** [untyp_pat (P_aux (P_typ (typ, pat)), _)] returns [Some (pat,
-   typ)] or [None] if the pattern does not match. *)
+(** [untyp_pat (P_aux (P_typ (typ, pat)), _)] returns [Some (pat, typ)] or [None] if the pattern does not match. *)
 val untyp_pat : 'a pat -> 'a pat * typ option
 
 (** Same as [untyp_pat], but for [E_typ] nodes *)
@@ -263,11 +280,9 @@ val is_bitvector_typ : typ -> bool
 
 (** {1 Simplifcation of numeric expressions and constraints}
 
-   These functions simplify nexps and n_constraints using various
-   basic rules. In general they will guarantee to reduce constant
-   numeric expressions like 2 + 5 into 7, although they will not
-   simplify 2^constant, as that often leads to unreadable error
-   messages containing huge numbers. *)
+    These functions simplify nexps and n_constraints using various basic rules. In general they will guarantee to reduce
+    constant numeric expressions like 2 + 5 into 7, although they will not simplify 2^constant, as that often leads to
+    unreadable error messages containing huge numbers. *)
 
 val nexp_simp : nexp -> nexp
 val constraint_simp : n_constraint -> n_constraint
@@ -280,16 +295,16 @@ val constraint_conj : n_constraint -> n_constraint list
 (** Same as constraint_conj but for disjunctions *)
 val constraint_disj : n_constraint -> n_constraint list
 
-type effect
+type effects
 
-val no_effect : effect
-val monadic_effect : effect
+val no_effect : effects
+val monadic_effect : effects
 
-val effectful : effect -> bool
+val effectful : effects -> bool
 
-val equal_effects : effect -> effect -> bool
-val subseteq_effects : effect -> effect -> bool
-val union_effects : effect -> effect -> effect
+val equal_effects : effects -> effects -> bool
+val subseteq_effects : effects -> effects -> bool
+val union_effects : effects -> effects -> effects
 
 (** {2 Functions for building numeric expressions} *)
 
@@ -458,11 +473,12 @@ val def_loc : ('a, 'b) def -> Parse_ast.l
 
 (** {1 Printing utilities}
 
-   Note: For debugging and error messages only - not guaranteed to
-   produce parseable Sail, or even print all language constructs! *)
+    Note: For debugging and error messages only - not guaranteed to produce parseable Sail, or even print all language
+    constructs! *)
+
+type digit_case = Lowercase | Uppercase
 
 val string_of_order : order -> string
-
 val string_of_id : id -> string
 val string_of_kid : kid -> string
 val string_of_kind_aux : kind_aux -> string
@@ -476,6 +492,8 @@ val string_of_kinded_id : kinded_id -> string
 val string_of_quant_item : quant_item -> string
 val string_of_typquant : typquant -> string
 val string_of_typschm : typschm -> string
+val string_of_hex_lit : ?group_separator:string -> case:digit_case -> hex_digit non_empty list -> string
+val string_of_bin_lit : ?group_separator:string -> bin_digit non_empty list -> string
 val string_of_lit : lit -> string
 val string_of_exp : 'a exp -> string
 val string_of_pexp : 'a pexp -> string
@@ -499,9 +517,6 @@ val id_of_dec_spec : 'a dec_spec -> id
 val natural_id_compare : id -> id -> int
 val natural_sort_ids : id list -> id list
 
-val deinfix : id -> id
-val infix_swap : id -> id
-
 val id_of_kid : kid -> id
 val kid_of_id : id -> kid
 
@@ -511,6 +526,12 @@ val remove_id_suffix : id -> string -> id option
 val prepend_kid : string -> kid -> kid
 
 (** {1 Misc functions} *)
+
+val non_empty_singleton : 'a list -> 'a non_empty list
+val non_empty_for_all : ('a -> bool) -> 'a non_empty -> bool
+
+val hex_lit_length : hex_digit non_empty list -> int
+val bin_lit_length : bin_digit non_empty list -> int
 
 val nexp_identical : nexp -> nexp -> bool
 val is_nexp_constant : nexp -> bool
@@ -526,6 +547,11 @@ val kopts_of_typ : typ -> KOptSet.t
 val kopts_of_typ_arg : typ_arg -> KOptSet.t
 val kopts_of_constraint : n_constraint -> KOptSet.t
 val kopts_of_quant_item : quant_item -> KOptSet.t
+
+val ids_of_nexp : nexp -> IdSet.t
+val ids_of_constraint : n_constraint -> IdSet.t
+val ids_of_typ : typ -> IdSet.t
+val ids_of_typ_arg : typ_arg -> IdSet.t
 
 val tyvars_of_nexp : nexp -> KidSet.t
 val tyvars_of_typ : typ -> KidSet.t
@@ -583,12 +609,10 @@ val extern_assoc : string -> extern option -> string option
 
 (** {1 Manipulating locations} *)
 
-(** locate takes an expression and recursively sets the location in
-   every subexpression using a function that takes the orginal
-   location as an argument. Expressions build using mk_exp and similar
-   do not have locations, so they can then be annotated as e.g. locate
-   (gen_loc l) (mk_exp ...) where l is the location from which the
-   code is being generated. *)
+(** locate takes an expression and recursively sets the location in every subexpression using a function that takes the
+    orginal location as an argument. Expressions build using mk_exp and similar do not have locations, so they can then
+    be annotated as e.g. locate (gen_loc l) (mk_exp ...) where l is the location from which the code is being generated.
+*)
 val locate : (l -> l) -> 'a exp -> 'a exp
 
 val locate_pat : (l -> l) -> 'a pat -> 'a pat
@@ -599,22 +623,17 @@ val locate_typ : (l -> l) -> typ -> typ
 
 val locate_letbind : (l -> l) -> 'a letbind -> 'a letbind
 
-(** Make a unique location by giving it a Parse_ast.Unique wrapper with
-   a generated number. *)
+(** Make a unique location by giving it a Parse_ast.Unique wrapper with a generated number. *)
 val unique : l -> l
 
-(** Convert unknown locations into known ones by replacing any Unknown
-    subparts of the second argument with the first argument. Set up so
-    one can do: [locate (unknown_to l) exp] and similar. *)
+(** Convert unknown locations into known ones by replacing any Unknown subparts of the second argument with the first
+    argument. Set up so one can do: [locate (unknown_to l) exp] and similar. *)
 val unknown_to : l -> l -> l
 
-(** Try to find the annotation closest to the provided location (which
-    can be in any format, as long as we can tell if it is smaller than
-    any other location). Note that this function makes no guarantees
-    about finding the closest annotation or even finding an annotation
-    at all. This is used by the LSP to provide type-at-cursor
-    functionality and we don't mind if it's a bit fuzzy in that
-    context. *)
+(** Try to find the annotation closest to the provided location (which can be in any format, as long as we can tell if
+    it is smaller than any other location). Note that this function makes no guarantees about finding the closest
+    annotation or even finding an annotation at all. This is used by the LSP to provide type-at-cursor functionality and
+    we don't mind if it's a bit fuzzy in that context. *)
 module Scanner (Loc : sig
   type t
 
@@ -625,14 +644,14 @@ end
 
 (** {1 Substitutions}
 
-   The function X_subst substitutes a type argument into something of
-   type X. The type of the type argument determines which kind of type
-   variables will be replaced *)
+    The function X_subst substitutes a type argument into something of type X. The type of the type argument determines
+    which kind of type variables will be replaced *)
 
 val nexp_subst : kid -> typ_arg -> nexp -> nexp
 val constraint_subst : kid -> typ_arg -> n_constraint -> n_constraint
 val typ_subst : kid -> typ_arg -> typ -> typ
 val typ_arg_subst : kid -> typ_arg -> typ_arg -> typ_arg
+val typquant_subst : kid -> typ_arg -> typquant -> typquant
 
 val subst_kid : (kid -> typ_arg -> 'a -> 'a) -> kid -> kid -> 'a -> 'a
 

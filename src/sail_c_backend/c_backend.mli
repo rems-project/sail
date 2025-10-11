@@ -51,54 +51,77 @@ open Type_check
 
 (** Global compilation options *)
 
-(** Define generated functions as static *)
-val opt_static : bool ref
-
-(** Do not generate a main function *)
-val opt_no_main : bool ref
-
-(** (WIP) Do not include rts.h (the runtime), and do not generate code
-   that requires any setup or teardown routines to be run by a runtime
-   before executing any instruction semantics. *)
-val opt_no_rts : bool ref
-
-(** Do not include sail.h by default *)
-val opt_no_lib : bool ref
-
-(** Ordinarily we use plain z-encoding to name-mangle generated Sail
-   identifiers into a form suitable for C. If opt_prefix is set, then
-   the "z" which is added on the front of each generated C function
-   will be replaced by opt_prefix. E.g. opt_prefix := "sail_" would
-   give sail_my_function rather than zmy_function. *)
+(** Ordinarily we use plain z-encoding to name-mangle generated Sail identifiers into a form suitable for C. If
+    opt_prefix is set, then the "z" which is added on the front of each generated C function will be replaced by
+    opt_prefix. E.g. opt_prefix := "sail_" would give sail_my_function rather than zmy_function. *)
 val opt_prefix : string ref
 
-(** opt_extra_params and opt_extra_arguments allow additional state to
-   be threaded through the generated C code by adding an additional
-   parameter to each function type, and then giving an extra argument
-   to each function call. For example we could have
+(** opt_extra_params and opt_extra_arguments allow additional state to be threaded through the generated C code by
+    adding an additional parameter to each function type, and then giving an extra argument to each function call. For
+    example we could have
 
-   opt_extra_params := Some "CPUMIPSState *env"
-   opt_extra_arguments := Some "env"
+    opt_extra_params := Some "CPUMIPSState *env" opt_extra_arguments := Some "env"
 
-   and every generated function will take a pointer to a QEMU MIPS
-   processor state, and each function will be passed the env argument
-   when it is called. *)
+    and every generated function will take a pointer to a QEMU MIPS processor state, and each function will be passed
+    the env argument when it is called. *)
 val opt_extra_params : string option ref
 
 val opt_extra_arguments : string option ref
-
-val opt_branch_coverage : out_channel option ref
 
 (** Optimization flags *)
 
 val optimize_primops : bool ref
 val optimize_hoist_allocations : bool ref
-val optimize_struct_updates : bool ref
 val optimize_alias : bool ref
 val optimize_fixed_int : bool ref
 val optimize_fixed_bits : bool ref
 
-val jib_of_ast : Env.t -> Effects.side_effect_info -> typed_ast -> cdef list * Jib_compile.ctx
-val compile_ast : Env.t -> Effects.side_effect_info -> out_channel -> string list -> typed_ast -> unit
+module type CODEGEN_CONFIG = sig
+  (** A list of includes for the generated C file *)
+  val includes : string list
 
-val compile_ast_clib : Env.t -> Effects.side_effect_info -> typed_ast -> (Jib_compile.ctx -> cdef list -> unit) -> unit
+  (** A list of includes for the generated header. *)
+  val header_includes : string list
+
+  (** Do not generate a main function *)
+  val no_main : bool
+
+  (** Do not include sail.h automatically *)
+  val no_lib : bool
+
+  (** Do not include rts.h (the runtime), and do not generate code that requires any setup or teardown routines to be
+      run by a runtime before executing any instruction semantics. *)
+  val no_rts : bool
+
+  (** Do not mangle generated C identifiers, prefer readable names when possible. *)
+  val no_mangle : bool
+
+  val reserved_words : Util.StringSet.t
+
+  val overrides : string Name_generator.Overrides.t
+
+  (** If [Some channel], the generated C code will be instrumented to track branch coverage information. Information
+      about all the possible branches will be written to the provided output channel. *)
+  val branch_coverage : out_channel option
+
+  val assert_to_exception : bool
+
+  val preserve_types : Ast_util.IdSet.t
+
+  (** If set generate a C++ class for the model instead of global C functions/variables. *)
+  val cpp : bool
+
+  (** Name of the C++ class. *)
+  val cpp_class_name : string
+
+  (* C++ namespace name. *)
+  val cpp_namespace : string
+
+  (* Optional classes/structs to derive from. *)
+  val cpp_derive_from : string option
+end
+
+module Codegen (Config : CODEGEN_CONFIG) : sig
+  val jib_of_ast : Env.t -> Effects.side_effect_info -> typed_ast -> cdef list * Jib_compile.ctx
+  val compile_ast : Env.t -> Effects.side_effect_info -> string -> typed_ast -> string * string
+end

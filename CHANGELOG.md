@@ -1,8 +1,86 @@
 Changelog
 =========
 
+Sail 0.20.0
+-----------
+
+##### Rocq Semantics
+
+The core stepwise semantics of Sail that are currently used by the
+interactive REPL and during optimisation passes like constant-folding
+are now implemented in Rocq and extracted to OCaml.
+
+##### Improved C++ support
+
+New C++ `--cpp` backend that is a variant of the Sail C backend. It
+wraps the generated model in a struct, so when using C++ multiple
+instances can be created.
+PR: https://github.com/rems-project/sail/pull/1437
+
+As part of the above work, Sail always generates a separate header
+file for C or C++, meaning the `--c-generate-header` option is
+redundant and deprecated.
+
+The `--c-static` option has been removed.
+
+Small fixes to the parsing of `-` and foreach loops. Slightly breaking
+as `from`, `to`, and `downto` are now treated as proper keywords and
+cannot be used as identifiers.
+
+##### Other changes
+
+Arguments can now be passed via the `SAIL_FLAGS` environment variable,
+or via `SAIL_ENCODED_FLAGS`.
+PR: https://github.com/rems-project/sail/pull/1374
+
+Sail 0.19.1
+-----------
+
+This is primarily a bugfix release for Sail 0.19. It also includes
+performance fixes that should significantly reduce the time and memory
+usage when generating C code from Sail.
+
 Sail 0.19
 ---------
+
+In addition to numerous bug-fixes and smaller improvements, the
+following major changes and improvements have been made to the
+language:
+
+##### Model configuration system
+
+Sail now supports writing configurable ISA models. There is a new
+language construct:
+```
+config x.y : T
+```
+which will interpret a JSON value contained at `x.y` in a provided
+configuration file as the Sail type T. Depending on the Sail backend,
+the configuration can be provided statically at build time using the
+`--config` flag, or at runtime for C generated from Sail.
+
+Sail is able to generate a JSON schema which describes the set of
+configuration parameters supported by a model, to enable static
+checking of configurations.
+
+See the corresponding section of the Sail manual for details.
+
+##### Abstract types
+
+Abstract types are no longer behind an experimental flag. One can write:
+```
+// Declare a top-level abstract numeric type
+type xlen : Int
+
+// And then write top-level constraints about it
+constraint xlen in {32, 64, 128}
+```
+
+These abstract types are integrated with the configuration system so
+the following is supported.
+```
+type xlen : Int = config <some key>
+```
 
 ##### Stricter bitvector type indexing
 
@@ -21,6 +99,8 @@ the `'n` type variable will be inferred as:
 ```
 val foo : forall ('n : Nat). bits('n) -> bool
 ```
+This is enabled with the `--strict-bitvector` flag. We expect this
+behaviour will be the default in future.
 
 ##### Removed support for compressed ELF binaries
 
@@ -29,6 +109,39 @@ loading compressed ELF files directly by using `gzopen`. However, it
 is easy to just manually decompress such files before passing them to
 the runtime, so we have decided to remove this feature in favour
 of fewer build-time dependencies for the Sail C runtime.
+
+##### Lean backend (HIGHLY EXPERIMENTAL)
+
+This release contains the first version of a new Sail to Lean backend.
+
+It is currently highly experimental, and will likely not compile all
+Sail programs.
+
+##### Sail to SystemVerilog improvements
+
+The Sail to SystemVerilog generation has been improved significantly,
+to the point where it is possible (with some hackery) get a working
+sail-riscv emulator running in Verilator. Note that we still consider
+this backend a work in progress, so expect to run into issues for the
+time being.
+
+##### Sail to C improvements
+
+Several new flags have been implemented:
+
+* The `--c-no-mangle` flag disables name mangling (except where
+  necessary for monomorphisation, or to avoid name-clashes), producing
+  much more readable function names.
+
+* The `--c-generate-header` will cause Sail to generate both a `.c`
+  file and a corresponding `.h` file, rather than just a `.c` file.
+  There is also a `--c-header-include` flag which mirrors the
+  `--c-include` flag when this option is used.
+
+Type synonyms are now preserved into C, which makes it possible to
+write external bindings that refer to polymorphic types in Sail.
+
+Code generation for the `newtype` construct has been improved.
 
 Sail 0.18
 ---------

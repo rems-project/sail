@@ -13,7 +13,7 @@ from sailtest import *
 
 sail_dir = get_sail_dir()
 sail = get_sail()
-targets = get_targets(['c', 'interpreter', 'ocaml'])
+targets = get_targets(['c', 'cpp', 'interpreter', 'ocaml'])
 
 print("Sail is {}".format(sail))
 print("Sail dir is {}".format(sail_dir))
@@ -26,48 +26,51 @@ def no_valgrind():
     except FileNotFoundError:
         return True
 
-def test_c(name, c_opts, sail_opts, valgrind, compiler='cc'):
+def test_c(name, c_opts, sail_opts, valgrind, compiler='cc', actually_cpp=False):
     banner('Testing {} with C options: {} Sail options: {} valgrind: {}'.format(name, c_opts, sail_opts, valgrind))
     results = Results(name)
     if valgrind and no_valgrind():
         print('skipping because no valgrind found')
         return results.finish()
+
+    if actually_cpp:
+        extension = "cpp"
+        target_opt = "--cpp"
+        # TODO: This is awkward because we compile the C and C++ code in C++ mode, so you can't
+        # use #ifdef __cplusplus to decide whether to `use model::my_pair_in_c`. Probably the
+        # best fix is to add a #define like `-DSAIL_TEST_COMPILING_C_AS_CPP` or something.
+        results.expect_failure("cabbrev.sail", "my_pair_in_c is declared in a namespace in C++")
+        # This tests access to a global variable `zxlen_val` which doesn't exist in C++ mode.
+        # It's now a struct member variable.
+        results.expect_failure("xlen_val.sail", "assumes variables are still global")
+        # TODO: These use `$c_in_main` to add a call to `sail_set_abstract_xlen(32)` to `main()`
+        # but for C++ it needs to go in `model_main()` and be `model.sail_set_abstract_xlen(32)`.
+        results.expect_failure("abstract_sizeof_no_use.sail", "difficult to call model.sail_set_abstract_... in the right place")
+        results.expect_failure("abstract_type.sail", "difficult to call model.sail_set_abstract_... in the right place")
+        results.expect_failure("tl_let_flow_change.sail", "difficult to call model.sail_set_abstract_... in the right place")
+
+    else:
+        extension = "c"
+        target_opt = "-c"
+
     for filenames in chunks(os.listdir('.'), parallel()):
         tests = {}
         for filename in filenames:
             basename = os.path.splitext(os.path.basename(filename))[0]
             tests[filename] = os.fork()
             if tests[filename] == 0:
-                step('\'{}\' -no_warn -c {} {} 1> {}.c'.format(sail, sail_opts, filename, basename))
-                step('{} {} {}.c \'{}\'/lib/*.c -lgmp -I \'{}\'/lib -o {}.bin'.format(compiler, c_opts, basename, sail_dir, sail_dir, basename))
-                step('./{}.bin > {}.result 2> {}.err_result'.format(basename, basename, basename), expected_status = 1 if basename.startswith('fail') else 0)
+                step('\'{}\' --no-warn {} {} {} -o {}'.format(sail, target_opt, sail_opts, filename, basename))
+                step('{} {} {}.{} \'{}\'/lib/*.c -lgmp -I \'{}\'/lib -o {}.bin'.format(compiler, c_opts, basename, extension, sail_dir, sail_dir, basename))
+                step('./{}.bin > {}.result 2> {}.err_result'.format(basename, basename, basename),
+                     expected_status = 1 if basename.startswith('fail') else 0,
+                     stderr_file='{}.err_result'.format(basename))
                 step('diff {}.result {}.expect'.format(basename, basename))
                 if os.path.exists('{}.err_expect'.format(basename)):
                     step('diff {}.err_result {}.err_expect'.format(basename, basename))
                 if valgrind and not basename.startswith('fail'):
-                    step("valgrind --leak-check=full --track-origins=yes --errors-for-leak-kinds=all --error-exitcode=2 ./{}.bin".format(basename), expected_status = 1 if basename.startswith('fail') else 0)
-                step('rm {}.c {}.bin {}.result'.format(basename, basename, basename))
-                print_ok(filename)
-                sys.exit()
-        results.collect(tests)
-    return results.finish()
-
-def test_c2(name, c_opts, sail_opts, valgrind):
-    banner('Testing {} with C (-c2) options: {} Sail options: {} valgrind: {}'.format(name, c_opts, sail_opts, valgrind))
-    results = Results(name)
-    for filenames in chunks(os.listdir('.'), parallel()):
-        tests = {}
-        for filename in filenames:
-            basename = os.path.splitext(os.path.basename(filename))[0]
-            tests[filename] = os.fork()
-            if tests[filename] == 0:
-                step('\'{}\' -no_warn -c2 {} {} -o {}'.format(sail, sail_opts, filename, basename))
-                step('gcc {} {}.c {}_emu.c \'{}\'/lib/*.c -lgmp -I \'{}\'/lib -o {}'.format(c_opts, basename, basename, sail_dir, sail_dir, basename))
-                step('./{} > {}.result 2>&1'.format(basename, basename), expected_status = 1 if basename.startswith('fail') else 0)
-                step('diff {}.result {}.expect'.format(basename, basename))
-                if valgrind:
-                    step("valgrind --leak-check=full --track-origins=yes --errors-for-leak-kinds=all --error-exitcode=2 ./{}".format(basename), expected_status = 1 if basename.startswith('fail') else 0)
-                step('rm {}.c {} {}.result'.format(basename, basename, basename))
+                    step("valgrind --leak-check=full --track-origins=yes --errors-for-leak-kinds=all --error-exitcode=2 ./{}.bin".format(basename),
+                         expected_status = 1 if basename.startswith('fail') else 0)
+                step('rm {}.{} {}.h {}.bin {}.result'.format(basename, extension, basename, basename, basename))
                 print_ok(filename)
                 sys.exit()
         results.collect(tests)
@@ -82,7 +85,7 @@ def test_interpreter(name):
             basename = os.path.splitext(os.path.basename(filename))[0]
             tests[filename] = os.fork()
             if tests[filename] == 0:
-                step('\'{}\' -undefined_gen -is execute.isail -iout {}.iresult {}'.format(sail, basename, filename))
+                step('timeout 10s \'{}\' -undefined_gen -is execute.isail -iout {}.iresult {}'.format(sail, basename, filename))
                 step('diff {}.iresult {}.expect'.format(basename, basename))
                 step('rm {}.iresult'.format(basename))
                 print_ok(filename)
@@ -119,12 +122,16 @@ def test_lem(name):
     results.expect_failure("real.sail", "print_real not available for Lem at present")
     results.expect_failure("real_prop.sail", "print_real not available for Lem at present")
     results.expect_failure("concurrency_interface.sail", "test doesn't meet Lem library's expectations for the concurrency interface")
+    results.expect_failure("concurrency_interface_v2.sail", "test doesn't meet Lem library's expectations for the concurrency interface")
     results.expect_failure("concurrency_interface_write.sail", "test harness doesn't meet Lem library's expectations for the concurrency interface")
     results.expect_failure("pc_no_wildcard.sail", "register type unsupported by Lem backend")
     results.expect_failure("cheri_capreg.sail", "test has strange 'pure' reg_deref")
     results.expect_failure("constructor247.sail", "don't attempt to support so many constructors in lem -> ocaml builds")
     results.expect_failure("either.sail", "Lem breaks because it has the same name as a library module")
     results.expect_failure("poly_outcome.sail", "test doesn't meet Lem library's expectations for the concurrency interface")
+    results.expect_failure("config_abstract_bool.sail", "type-level if not yet supported")
+    results.expect_failure("outcome_impl_int.sail", "unsupported outcome")
+    results.expect_failure("outcome_impl_bool.sail", "unsupported outcome")
     for filenames in chunks(os.listdir('.'), parallel()):
         tests = {}
         for filename in filenames:
@@ -133,12 +140,12 @@ def test_lem(name):
             if tests[filename] == 0:
                 step('\'{}\' -lem -lem_lib Undefined_override -o {} {}'.format(sail, basename, filename))
                 step('mkdir -p _lbuild_{}'.format(basename))
-                step('mv {}*.lem _lbuild_{}'.format(basename, basename))
+                step('mv {}.lem {}_types.lem _lbuild_{}'.format(basename, basename, basename))
                 step('rm {}_lemmas.thy'.format(basename.capitalize()))
                 step('cp lbuild/* _lbuild_{}'.format(basename))
-                step('cp \'{}\'/src/gen_lib/*.lem _lbuild_{}'.format(sail_dir, basename))
                 os.chdir('_lbuild_{}'.format(basename))
-                step('../mk_lem_ocaml_main.sh {} {}'.format(basename, basename.capitalize()))
+                step('../mk_lem_ocaml_main.sh {} {} {}'.format(basename, basename.capitalize(), sail_dir))
+                step('lem -lib .. -ocaml *.lem')
                 step('ocamlbuild -use-ocamlfind main.native'.format(basename, basename))
                 step('./main.native 1> {}.lresult 2> {}.lerr'.format(basename, basename), expected_status = 1 if basename.startswith('fail') else 0)
                 step('diff ../{}.expect {}.lresult'.format(basename, basename))
@@ -156,28 +163,21 @@ def test_coq(name):
     results = Results(name)
     results.expect_failure("inc_tests.sail", "missing built-in functions for increasing vectors in Coq library")
     results.expect_failure("read_write_ram.sail", "uses memory primitives not provided by default in Coq")
-    results.expect_failure("fail_exception.sail", "try-blocks around pure expressions not supported in Coq (and a little silly)")
-    results.expect_failure("loop_exception.sail", "try-blocks around pure expressions not supported in Coq (and a little silly)")
-    results.expect_failure("concurrency_interface.sail", "test doesn't meet Coq library's expectations for the concurrency interface")
+    results.expect_failure("fail_exception.sail", "test harness can't produce expected output for uncaught exception")
+    results.expect_failure("loop_exception.sail", "Loop without termination measure")
     results.expect_failure("outcome_impl.sail", "test doesn't meet Coq backend's expectations for the concurrency interface")
+    results.expect_failure("outcome_impl_int.sail", "test doesn't meet Coq backend's expectations for the concurrency interface")
+    results.expect_failure("outcome_impl_bool.sail", "test doesn't meet Coq backend's expectations for the concurrency interface")
     results.expect_failure("pc_no_wildcard.sail", "register type unsupported by Coq backend")
-    results.expect_failure("cheri_capreg.sail", "test has strange 'pure' reg_deref")
     results.expect_failure("poly_outcome.sail", "test doesn't meet Coq library's expectations for the concurrency interface")
     results.expect_failure("poly_mapping.sail", "test requires non-standard hex built-ins")
     results.expect_failure("real.sail", "print_real not available for Coq at present")
     results.expect_failure("real_prop.sail", "random_real not available for Coq at present")
-    results.expect_failure("fail_assert_mono_bug.sail", "test output checking not supported for Coq yet")
-    results.expect_failure("fail_issue203.sail", "test output checking not supported for Coq yet")
-    results.expect_failure("vector_example.sail", "bug: function defs and function calls treat 'len equation differently in Coq backend")
-    results.expect_failure("list_torture.sail", "Coq backend doesn't remove a phantom type parameter")
-    results.expect_failure("type_if_bits.sail", "existential type not supported by Coq backend yet")
-    results.expect_failure("lib_hex_bits_signed.sail","bug: unable to drop the type variable")
     results.expect_failure("for_shadow.sail","bug: remove_e_assign rewrite assumes <= available")
-    results.expect_failure("config.sail","bug: configuration register initialisation missing")
-    results.expect_failure("reg_init_let.sail","bug: configuration register initialisation missing")
-    results.expect_failure("partial_mapping.sail","bug: configuration register initialisation missing")
-    results.expect_failure("concurrency_interface_write.sail","Test output not supported in concurrency interface yet")
-    results.expect_failure("ctz.sail","bug: configuration register initialisation missing")
+    results.expect_failure("newtype.sail", "Type definition with a parameter that should be merged, inferred, or made explicit")
+    results.expect_failure("simple_while.sail", "Loop without termination measure")
+    results.expect_failure("simple_while2.sail", "Loop without termination measure")
+    results.expect_failure("simple_while3.sail", "Loop without termination measure")
     for filenames in chunks(os.listdir('.'), parallel()):
         tests = {}
         for filename in filenames:
@@ -185,7 +185,7 @@ def test_coq(name):
             tests[filename] = os.fork()
             if tests[filename] == 0:
                 # Generate Coq from Sail
-                step('\'{}\' -coq -coq-lib-style stdpp -coq-record-update -D PRINT_EFFECTS -splice coq-print.splice -undefined_gen -o {} {}'.format(sail, basename, filename))
+                step('\'{}\' -coq -coq-record-update -D PRINT_EFFECTS -splice coq-print.splice -undefined_gen -o {} {}'.format(sail, basename, filename))
 
                 step('mkdir -p _coqbuild_{}'.format(basename))
                 step('mv {}.v _coqbuild_{}'.format(basename, basename))
@@ -193,7 +193,6 @@ def test_coq(name):
                 step('./mk_coq_main.sh {} {}'.format(basename, basename.capitalize()))
                 os.chdir('_coqbuild_{}'.format(basename))
 
-                # TODO: find bbv properly
                 step('coqc {}_types.v'.format(basename))
                 step('coqc {}.v'.format(basename))
                 step('coqtop -require-import {}_types -require-import {} -l main.v -batch | tee /dev/stderr | grep -q OK'.format(basename,basename), expected_status = 1 if basename.startswith('fail') else 0)
@@ -212,14 +211,22 @@ def test_coq(name):
 xml = '<testsuites>\n'
 
 if 'c' in targets:
-    #xml += test_c2('unoptimized C', '', '', True)
+    xml += test_c('unoptimized C', '', '--c-no-mangle', False)
     xml += test_c('unoptimized C', '', '', False)
-    xml += test_c('unoptimized C with C++ compiler', '-xc++', '', False, compiler='c++')
     xml += test_c('optimized C', '-O2', '-O', True)
-    xml += test_c('optimized C with C++ compiler', '-xc++ -O2', '-O', True, compiler='c++')
     xml += test_c('constant folding', '', '-Oconstant_fold', False)
     #xml += test_c('monomorphised C', '-O2', '-O -Oconstant_fold -auto_mono', True)
     xml += test_c('undefined behavior sanitised', '-O2 -fsanitize=undefined', '-O', False)
+    xml += test_c('address sanitised', '-O2 -fsanitize=address -g', '-O', False)
+
+if 'cpp' in targets:
+    # Compiling the C as if it was C++.
+    xml += test_c('unoptimized C with C++ compiler', '-xc++', '', False, compiler='c++')
+    xml += test_c('optimized C with C++ compiler', '-xc++ -O2', '-O', True, compiler='c++')
+
+    # Actual C++ output.
+    xml += test_c('unoptimized C++', '', '', False, compiler='c++', actually_cpp=True)
+    xml += test_c('optimized C++', '-O2', '-O', True, compiler='c++', actually_cpp=True)
 
 if 'interpreter' in targets:
     xml += test_interpreter('interpreter')
