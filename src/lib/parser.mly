@@ -973,6 +973,12 @@ r_def_body:
   | r_id_def Comma r_def_body
     { $1 :: $3 }
 
+bitfield_def_body:
+  | Lcurly Rcurly
+    { [] }
+  | Lcurly r_def_body Rcurly
+    { $2 }
+
 param_kopt:
   | kid Colon kind
     { KOpt_aux (KOpt_kind (None, [$1], Some $3, None), loc $startpos $endpos) }
@@ -1031,8 +1037,8 @@ type_def:
     { mk_td (TD_variant ($2, TypQ_aux (TypQ_tq [], loc $endpos($2) $startpos($3)), $5, false)) $startpos $endpos }
   | Union id typaram Eq Lcurly type_unions Rcurly
     { mk_td (TD_variant ($2, $3, $6, false)) $startpos $endpos }
-  | Bitfield id Colon typ Eq Lcurly r_def_body Rcurly
-    { mk_td (TD_bitfield ($2, $4, $7)) $startpos $endpos }
+  | Bitfield id Colon typ Eq bitfield_def_body
+    { mk_td (TD_bitfield ($2, $4, $6)) $startpos $endpos }
 
 enum_functions:
   | id MinusGt typ Comma enum_functions
