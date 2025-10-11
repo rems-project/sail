@@ -433,7 +433,12 @@ module Make (C : CONFIG) = struct
         | Some (_, ctyp) -> ([], V_id (id, ctyp), [])
         | None -> ([], V_id (id, ctyp_of_typ ctx (lvar_typ typ)), [])
       end
-    | AV_abstract (id, typ) -> ([], V_id (Abstract id, ctyp_of_typ ctx typ), [])
+    | AV_abstract (id, typ) -> (
+        match Bindings.find_opt id ctx.abstracts with
+        | Some (ctyp, _) -> ([], V_id (Abstract id, ctyp), [])
+        | None ->
+            Reporting.unreachable l __POS__ ("Failed to find a C-type for abstract type variable " ^ string_of_id id)
+      )
     | AV_ref (id, typ) -> ([], V_lit (VL_ref (string_of_id id), CT_ref (ctyp_of_typ ctx (lvar_typ typ))), [])
     | AV_lit (L_aux (L_string str, _), typ) -> ([], V_lit (VL_string (String.escaped str), ctyp_of_typ ctx typ), [])
     | AV_lit (L_aux (L_num n, _), typ) when C.ignore_64 -> ([], V_lit (VL_int n, ctyp_of_typ ctx typ), [])
