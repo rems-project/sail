@@ -3,8 +3,10 @@ import THE_MODULE_NAME.Defs
 
 namespace Sail
 
+@[simp_sail]
 def sailTryCatch (e : SailM α) (h : exception → SailM α) : SailM α := PreSail.sailTryCatch e h
 
+@[simp_sail]
 def sailThrow (e : exception) : SailM α := PreSail.sailThrow e
 
 abbrev undefined_unit (_ : Unit) : SailM Unit := PreSail.undefined_unit ()
