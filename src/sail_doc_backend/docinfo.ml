@@ -146,6 +146,9 @@ let json_of_hyperlink = function
           ("loc", `List [`Int c1; `Int c2]);
         ]
 
+let json_of_comment (comment : Parse_ast.doc_comment option) =
+  match comment with Some { contents; _ } -> [("comment", `String contents)] | None -> []
+
 let hyperlinks_from_def files def =
   let open Rewriter in
   let links = ref [] in
@@ -256,12 +259,11 @@ let json_of_function_clause_doc docinfo =
        ("pattern", json_of_pat docinfo.pat);
      ]
     @ (match docinfo.wavedrom with Some w -> [("wavedrom", `String w)] | None -> [])
-    @ (match docinfo.comment with Some { contents; _ } -> [("comment", `String contents)] | None -> [])
     @ (match docinfo.guard_source with Some s -> [("guard", json_of_location_or_raw s)] | None -> [])
     @ [("body", json_of_location_or_raw docinfo.body_source)]
     @ (match docinfo.module_path with Some mods -> [("path", `List (List.map (fun m -> `String m) mods))] | None -> [])
     @ (match docinfo.splits with Some s -> [("splits", json_of_bindings s json_of_location_or_raw)] | None -> [])
-    @ json_of_attributes docinfo.attributes
+    @ json_of_comment docinfo.comment @ json_of_attributes docinfo.attributes
     )
 
 type 'a function_doc = Multiple_clauses of 'a function_clause_doc list | Single_clause of 'a function_clause_doc
@@ -278,6 +280,7 @@ type 'a mapping_clause_doc = {
   right : 'a pat option;
   right_wavedrom : string option;
   body : location_or_raw option;
+  comment : Parse_ast.doc_comment option;
   attributes : (string * attribute_data option) list;
 }
 
@@ -289,7 +292,7 @@ let json_of_mapping_clause_doc docinfo =
     @ (match docinfo.right with Some p -> [("right", json_of_pat p)] | None -> [])
     @ (match docinfo.right_wavedrom with Some w -> [("right_wavedrom", `String w)] | None -> [])
     @ (match docinfo.body with Some s -> [("body", json_of_location_or_raw s)] | None -> [])
-    @ json_of_attributes docinfo.attributes
+    @ json_of_comment docinfo.comment @ json_of_attributes docinfo.attributes
     )
 
 type 'a mapping_doc = 'a mapping_clause_doc list
@@ -299,13 +302,14 @@ let json_of_mapping_doc docinfos = `List (List.map json_of_mapping_clause_doc do
 type valspec_doc = {
   source : location_or_raw;
   type_source : location_or_raw;
+  comment : Parse_ast.doc_comment option;
   attributes : (string * attribute_data option) list;
 }
 
 let json_of_valspec_doc docinfo =
   `Assoc
     ([("source", json_of_location_or_raw docinfo.source); ("type", json_of_location_or_raw docinfo.type_source)]
-    @ json_of_attributes docinfo.attributes
+    @ json_of_comment docinfo.comment @ json_of_attributes docinfo.attributes
     )
 
 type type_def_doc = location_or_raw
@@ -316,6 +320,7 @@ type register_doc = {
   source : location_or_raw;
   type_source : location_or_raw;
   exp_source : location_or_raw option;
+  comment : Parse_ast.doc_comment option;
   attributes : (string * attribute_data option) list;
 }
 
@@ -323,28 +328,26 @@ let json_of_register_doc docinfo =
   `Assoc
     ([("source", json_of_location_or_raw docinfo.source); ("type", json_of_location_or_raw docinfo.type_source)]
     @ (match docinfo.exp_source with None -> [] | Some source -> [("exp", json_of_location_or_raw source)])
-    @ json_of_attributes docinfo.attributes
+    @ json_of_comment docinfo.comment @ json_of_attributes docinfo.attributes
     )
 
 type let_doc = {
   source : location_or_raw;
   exp_source : location_or_raw;
+  comment : Parse_ast.doc_comment option;
   attributes : (string * attribute_data option) list;
 }
 
 let json_of_let_doc docinfo =
   `Assoc
     ([("source", json_of_location_or_raw docinfo.source); ("exp", json_of_location_or_raw docinfo.exp_source)]
-    @ json_of_attributes docinfo.attributes
+    @ json_of_comment docinfo.comment @ json_of_attributes docinfo.attributes
     )
 
 type anchor_doc = { source : location_or_raw; comment : Parse_ast.doc_comment option }
 
 let json_of_anchor_doc docinfo =
-  `Assoc
-    ([("source", json_of_location_or_raw docinfo.source)]
-    @ match docinfo.comment with Some { contents; _ } -> [("comment", `String contents)] | None -> []
-    )
+  `Assoc ([("source", json_of_location_or_raw docinfo.source)] @ json_of_comment docinfo.comment)
 
 type 'a linkable = { doc : 'a; links : hyperlink list; module_path : string list option }
 
@@ -452,6 +455,7 @@ module Generator (Converter : Markdown.CONVERTER) (Config : CONFIG) = struct
     {
       source = doc_loc (fst vs_annot) Type_check.strip_val_spec Reformatter.doc_spec vs;
       type_source = doc_loc ts_l (fun ts -> ts) Reformatter.doc_typschm ts;
+      comment = get_doc_comment def_annot;
       attributes = List.map (fun (_, attr_info) -> attr_info) def_annot.attrs;
     }
 
@@ -464,6 +468,7 @@ module Generator (Converter : Markdown.CONVERTER) (Config : CONFIG) = struct
       type_source = doc_loc typ_l (fun typ -> typ) Reformatter.doc_typ typ;
       exp_source =
         Option.map (fun (E_aux (_, (l, _)) as exp) -> doc_loc l Type_check.strip_exp Reformatter.doc_exp exp) exp;
+      comment = get_doc_comment def_annot;
       attributes = List.map (fun (_, attr_info) -> attr_info) def_annot.attrs;
     }
 
@@ -471,6 +476,7 @@ module Generator (Converter : Markdown.CONVERTER) (Config : CONFIG) = struct
     {
       source = doc_loc (fst annot) Type_check.strip_letbind Reformatter.doc_letbind lbind;
       exp_source = doc_loc (exp_loc exp) Type_check.strip_exp Reformatter.doc_exp exp;
+      comment = get_doc_comment def_annot;
       attributes = List.map (fun (_, attr_info) -> attr_info) def_annot.attrs;
     }
 
@@ -617,6 +623,7 @@ module Generator (Converter : Markdown.CONVERTER) (Config : CONFIG) = struct
       right;
       right_wavedrom = Option.map encode right_wavedrom;
       body;
+      comment = get_doc_comment def_annot;
       attributes = List.map (fun (_, attr_info) -> attr_info) def_annot.attrs;
     }
 
