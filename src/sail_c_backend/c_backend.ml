@@ -1318,6 +1318,11 @@ module Codegen (Config : CODEGEN_CONFIG) = struct
     | CL_void _ -> assert false
     | CL_rmw _ -> assert false
 
+  let codegen_equal ctyp arg1 arg2 =
+    match ctyp with
+    | CT_ref _ -> ksprintf string "(%s == %s)" arg1 arg2
+    | ctyp -> sail_equal (sgen_ctyp_name ctyp) "%s, %s" arg1 arg2
+
   (** Generate instructions to copy from a cval to a clexp. This will insert any needed type conversions from big
       integers to small integers (or vice versa), or from arbitrary-length bitvectors to and from uint64 bitvectors as
       needed. *)
@@ -1704,7 +1709,7 @@ module Codegen (Config : CODEGEN_CONFIG) = struct
         let struct_eq =
           let field_eq (field_id, ctyp) =
             let field = sgen_id field_id in
-            sail_equal (sgen_ctyp_name ctyp) "op1.%s, op2.%s" field field
+            codegen_equal ctyp (sprintf "op1.%s" field) (sprintf "op2.%s" field)
           in
           c_function ~return:"static bool"
             (sail_equal (sgen_id id) "struct %s op1, struct %s op2" (sgen_id id) (sgen_id id))
@@ -1813,7 +1818,10 @@ module Codegen (Config : CODEGEN_CONFIG) = struct
         let codegen_eq =
           let codegen_eq_test ctor_id ctyp =
             c_return
-              (sail_equal (sgen_ctyp_name ctyp) "op1.variants.%s, op2.variants.%s" (sgen_id ctor_id) (sgen_id ctor_id))
+              (codegen_equal ctyp
+                 (sprintf "op1.variants.%s" (sgen_id ctor_id))
+                 (sprintf "op2.variants.%s" (sgen_id ctor_id))
+              )
           in
           let rec codegen_eq_tests = function
             | [] -> c_return (string "false")
@@ -1978,7 +1986,7 @@ module Codegen (Config : CODEGEN_CONFIG) = struct
       in
 
       let codegen_list_equal =
-        let equal_hd = sail_equal (sgen_ctyp_name ctyp) "op1->hd, op2->hd" in
+        let equal_hd = codegen_equal ctyp "op1->hd" "op2->hd" in
         let equal_tl = sail_equal (sgen_id id) "op1->tl, op2->tl" in
         c_function ~return:"static bool"
           (sail_equal (sgen_id id) "const %s op1, const %s op2" (sgen_id id) (sgen_id id))
@@ -2170,7 +2178,7 @@ module Codegen (Config : CODEGEN_CONFIG) = struct
             c_stmt "bool result = true";
             c_for
               (string "(int i = 0; i < op1.len; i++)")
-              [c_assign (string "result") "&=" (sail_equal (sgen_ctyp_name ctyp) "op1.data[i], op2.data[i]")];
+              [c_assign (string "result") "&=" (codegen_equal ctyp "op1.data[i]" "op2.data[i]")];
             c_stmt "return result";
           ]
       in

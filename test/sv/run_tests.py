@@ -32,6 +32,7 @@ skip_tests = {
     'simple_while', # loops
     'simple_while2', # loops
     'simple_while3', # loops
+    'ref_cmp',
     'concurrency_interface_v2',
     'concurrency_interface_v2_var'
 }
