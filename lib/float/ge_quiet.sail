@@ -21,7 +21,7 @@ function float_is_ge_quiet (op_0, op_1) = {
   let flags   = if   is_snan
                 then fp_eflag_invalid
                 else fp_eflag_none;
-  let is_ge   = not (is_nan) & float_is_ge_internal (op_0, op_1);
+  let is_ge   = not_bool (is_nan) & float_is_ge_internal (op_0, op_1);
 
   (is_ge, flags);
 }

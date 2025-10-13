@@ -22,7 +22,7 @@ function float_is_ne (op_0, op_1) = {
                 else fp_eflag_none;
 
   let is_nan  = float_is_nan (op_0) | float_is_nan (op_1);
-  let is_ne   = not (is_nan) & float_is_ne_internal (op_0, op_1);
+  let is_ne   = not_bool (is_nan) & float_is_ne_internal (op_0, op_1);
 
   (is_ne, flags);
 }
