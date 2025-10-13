@@ -93,8 +93,8 @@ EOF
   fi
   cat <<EOF >> "$OUT"
   
-  Definition read_reg {T} (st : state) (r : register T) : T := register_lookup r st.(state_regs).
-  Definition write_reg {T} (st : state) (r : register T) (v : T) : state :=
+  Definition read_reg (st : state) (r : register) : type_of_register r := register_lookup r st.(state_regs).
+  Definition write_reg (st : state) (r : register) (v : type_of_register r) : state :=
     {| state_memory := st.(state_memory);
        state_tags := st.(state_tags);
        state_regs := register_set r v st.(state_regs);
