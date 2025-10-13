@@ -21,11 +21,11 @@ function float_is_lt_internal (op_0, op_1) = {
   let fp_1 = float_decompose (op_1);
 
   let is_zero      = float_is_zero (op_0) & float_is_zero (op_1);
-  let diff_sign_lt = is_lowest_one (fp_0.sign) & not (is_zero);
+  let diff_sign_lt = is_lowest_one (fp_0.sign) & not_bool (is_zero);
 
   let is_neg       = is_lowest_one (fp_0.sign);
   let unsigned_lt  = unsigned (op_0) < unsigned (op_1);
-  let is_xor       = (is_neg & not (unsigned_lt)) | (not (is_neg) & unsigned_lt);
+  let is_xor       = (is_neg & not_bool (unsigned_lt)) | (not_bool (is_neg) & unsigned_lt);
   let same_sign_lt = (op_0 != op_1) & is_xor;
 
   let is_lt = if   fp_0.sign != fp_1.sign
@@ -45,7 +45,7 @@ function float_is_eq_internal (op_0, op_1) = {
 
 val      float_is_ne_internal : forall 'n, is_fp_bits('n) . (bits('n), bits('n)) -> bool
 function float_is_ne_internal (op_0, op_1)
-  = not (float_is_eq_internal (op_0, op_1))
+  = not_bool (float_is_eq_internal (op_0, op_1))
 
 val      float_is_le_internal : forall 'n, is_fp_bits('n) . (bits('n), bits('n)) -> bool
 function float_is_le_internal (op_0, op_1)
@@ -53,11 +53,11 @@ function float_is_le_internal (op_0, op_1)
 
 val      float_is_gt_internal : forall 'n, is_fp_bits('n) . (bits('n), bits('n)) -> bool
 function float_is_gt_internal (op_0, op_1)
-  = not (float_is_le_internal (op_0, op_1))
+  = not_bool (float_is_le_internal (op_0, op_1))
 
 val      float_is_ge_internal : forall 'n, is_fp_bits('n) . (bits('n), bits('n)) -> bool
 function float_is_ge_internal (op_0, op_1)
-  = not (float_is_lt_internal (op_0, op_1))
+  = not_bool (float_is_lt_internal (op_0, op_1))
 
 val      float_propagate_nan : forall 'n, 'n in {16, 32, 64, 128}.
   (bits('n), bits('n)) -> (bits('n), fp_exception_flags)
@@ -80,7 +80,7 @@ function float_rounding_increment (sign, op, rounding_mode) = {
   let fp = float_decompose (op);
   let is_rne = rounding_mode == fp_rounding_rne;
   let is_rna = rounding_mode == fp_rounding_rna;
-  let not_rne_and_rna = not (is_rne) & not (is_rna);
+  let not_rne_and_rna = not_bool (is_rne) & not_bool (is_rna);
   let rounding_inf = if sign == [bitone] then fp_rounding_rdn else fp_rounding_rup;
 
   let one = sail_zero_extend ([bitone], bitsize);
@@ -147,11 +147,11 @@ function float_round_and_compose (sign, exp, mantissa, rounding_mode) = {
   let increment = float_rounding_increment (sign, mantissa, rounding_mode);
 
   let exp_limit = sub_bits (sail_shiftleft (one, length (fp.exp)), three);
-  let exp_reach_limit = not (unsigned (exp) < unsigned (exp_limit));
+  let exp_reach_limit = not_bool (unsigned (exp) < unsigned (exp_limit));
   let exp_overflow = unsigned (exp) > unsigned (exp_limit);
 
   let mantissa_limit = sail_shiftleft (one, bitsize - 1);
-  let mantissa_overflow = not (unsigned (mantissa_limit)
+  let mantissa_overflow = not_bool (unsigned (mantissa_limit)
     > unsigned (mantissa) + unsigned(increment));
 
   if exp_reach_limit & (exp_overflow | mantissa_overflow) then {
@@ -176,7 +176,7 @@ function float_add_same_exp_internal (op_0, op_1) = {
   let mantissa_sum = mantissa_0 + mantissa_1;
 
   let sign = fp_0.sign;
-  let no_round = is_lowest_zero (mantissa_sum) & not (float_has_max_exp (op_0));
+  let no_round = is_lowest_zero (mantissa_sum) & not_bool (float_has_max_exp (op_0));
 
   if no_round then {
     let mantissa_shift = sail_shiftright (mantissa_sum, 1);
@@ -214,7 +214,7 @@ function float_add_same_exp (op_0, op_1) = {
     (op_0 + sail_zero_extend (fp_1.mantissa, bitsize), fp_eflag_none)
   else if is_exp_0_all_ones & is_mantissa_all_zeros then
     (op_0, fp_eflag_none)
-  else if is_exp_0_all_ones & not (is_mantissa_all_zeros) then
+  else if is_exp_0_all_ones & not_bool (is_mantissa_all_zeros) then
     float_propagate_nan (op_0, op_1)
   else
     float_add_same_exp_internal (op_0, op_1);
@@ -232,7 +232,7 @@ function float_add_less_than_exp (op_0, op_1) = {
 
   let is_exp_all_ones = is_all_ones (fp_1.exp);
   let mantissa_shift = sail_shiftleft (fp_1.mantissa, length (fp_1.exp) - 2);
-  let is_nan = not (is_all_zeros (mantissa_shift));
+  let is_nan = not_bool (is_all_zeros (mantissa_shift));
 
   if is_exp_all_ones & is_nan then
     float_propagate_nan (op_0, op_1)

@@ -15,7 +15,7 @@ $include <float/common.sail>
 val      float_is_nan : fp_bits -> bool
 function float_is_nan (op) = {
   let struct {_, exp, mantissa} = float_decompose(op);
-  let is_nan                    = is_all_ones (exp) & not (is_all_zeros (mantissa));
+  let is_nan                    = is_all_ones (exp) & not_bool (is_all_zeros (mantissa));
 
   is_nan
 }

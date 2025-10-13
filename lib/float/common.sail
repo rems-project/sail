@@ -99,9 +99,6 @@ function float_has_max_exp (op) = {
   has_max;
 }
 
-val      not : forall ('p : Bool). bool('p) -> bool(not('p))
-function not(b) = not_bool(b)
-
 val      is_lowest_one : forall 'n, 0 < 'n. bits('n) -> bool
 function is_lowest_one (op) = op[0] == bitone
 

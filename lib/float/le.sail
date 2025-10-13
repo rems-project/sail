@@ -20,7 +20,7 @@ function float_is_le (op_0, op_1) = {
   let flags   = if   is_nan
                 then fp_eflag_invalid
                 else fp_eflag_none;
-  let is_le   = not (is_nan) & float_is_le_internal (op_0, op_1);
+  let is_le   = not_bool (is_nan) & float_is_le_internal (op_0, op_1);
 
   (is_le, flags);
 }
