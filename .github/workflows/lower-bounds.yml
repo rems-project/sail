@@ -32,7 +32,7 @@ jobs:
 
       - name: Downgrade dependencies
         # Option 1: allow OCaml version downgrade
-        run: opam install --unlock-base $(opam exec -- opam-0install --prefer-oldest sail)
+        run: opam install --update-invariant $(opam exec -- opam-0install --prefer-oldest sail)
         # Option 2: forbid OCaml version downgrade (specify ocaml-base-compiler again to prevent it from being downgraded)
         # run: opam install $(opam exec -- opam-0install --prefer-oldest sail ocaml-base-compiler.${{ matrix.ocaml-compiler }})
 
