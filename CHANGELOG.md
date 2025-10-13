@@ -1,8 +1,11 @@
 Changelog
 =========
 
-Sail 0.20.0
------------
+Sail 0.20
+---------
+
+In addition to bug-fixes and smaller improvements, the following
+changes and improvements have been made to the language:
 
 ##### Rocq Semantics
 
