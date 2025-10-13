@@ -2,7 +2,7 @@
 
 set -e
 
-if sail --require-version 0.20; then
+if sail --require-version 0.20.1; then
     exit 1;
 else
     exit 0;

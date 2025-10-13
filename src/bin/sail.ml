@@ -52,7 +52,7 @@ open Sail_options
 type version = { major : int; minor : int; patch : int }
 
 (* Current version of Sail. Must be updated manually. *)
-let version = { major = 0; minor = 19; patch = 1 }
+let version = { major = 0; minor = 20; patch = 0 }
 
 let opt_new_cli = ref false
 let opt_free_arguments : string list ref = ref []
