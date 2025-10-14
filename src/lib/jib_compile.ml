@@ -1773,7 +1773,8 @@ module Make (C : CONFIG) = struct
       types it compiles to the context, ctx, which is why it returns a ctypdef * ctx pair. **)
   let compile_type_def ctx (TD_aux (type_def, (l, _))) =
     match type_def with
-    | TD_enum (id, ids, _) ->
+    | TD_enum (id, members, _) ->
+        let ids = List.map fst members in
         (Some (CTD_enum (id, ids)), { ctx with enums = Bindings.add id (IdSet.of_list ids) ctx.enums })
     | TD_record (id, typq, ctors, _) ->
         let record_ctx = { ctx with local_env = Env.add_typquant l typq ctx.local_env } in

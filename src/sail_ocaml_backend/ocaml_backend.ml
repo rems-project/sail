@@ -795,7 +795,8 @@ let ocaml_typedef ctx (TD_aux (td_aux, (l, _))) =
       ^^ ocaml_def_end
       ^^ ocaml_string_of_variant ctx id typq cases
       ^^ ocaml_def_end
-  | TD_enum (id, ids, _) ->
+  | TD_enum (id, members, _) ->
+      let ids = List.map fst members in
       (separate space [string "type"; zencode ctx id; equals] ^//^ bar ^^ space ^^ ocaml_enum ctx ids)
       ^^ ocaml_def_end ^^ ocaml_string_of_enum ctx id ids ^^ ocaml_def_end
   | TD_abbrev (id, typq, A_aux (A_typ typ, _)) ->
@@ -1004,13 +1005,14 @@ let ocaml_pp_generators ctx defs orig_types required =
               Some (separate_map (string ";" ^^ break 1) variant_constructor variants),
               Some (separate_map (break 1) build_constructor variants)
             )
-        | TD_enum (_, variants, _) ->
+        | TD_enum (_, members, _) ->
+            let ids = List.map fst members in
             ( TypQ_aux (TypQ_no_forall, Parse_ast.Unknown),
               string "rand_choice ["
-              ^^ group (nest 2 (break 0 ^^ separate_map (string ";" ^^ break 1) (zencode_upper ctx) variants) ^^ break 0)
+              ^^ group (nest 2 (break 0 ^^ separate_map (string ";" ^^ break 1) (zencode_upper ctx) ids) ^^ break 0)
               ^^ string "]",
-              Some (separate_map (string ";" ^^ break 1) enum_constructor variants),
-              Some (separate_map (break 1) build_enum_constructor variants)
+              Some (separate_map (string ";" ^^ break 1) enum_constructor ids),
+              Some (separate_map (break 1) build_enum_constructor ids)
             )
         | TD_record (_, tqs, fields, _) ->
             (tqs, braces (separate_map (string ";" ^^ break 1) rand_field fields), None, None)

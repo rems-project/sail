@@ -5100,7 +5100,8 @@ let rec check_typedef : Env.t -> env def_annot -> uannot type_def -> typed_def l
         rec_env |> fun env -> List.fold_left (fun env tu -> check_type_union l non_rec_env env id typq tu) env arms
       in
       ([DEF_aux (DEF_type (TD_aux (tdef, (l, empty_tannot))), def_annot)], env)
-  | TD_enum (id, ids, _) ->
+  | TD_enum (id, members, _) ->
+      let ids = List.map fst members in
       let env = Env.add_enum id ids env in
       (* If the enumeration has the "enum_vector" attribute, we will generate a
          top-level letbinding which is a vector of all the members. *)

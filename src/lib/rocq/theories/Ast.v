@@ -533,7 +533,7 @@ Inductive type_def_aux : Set :=
 | TD_abbrev : id -> typquant -> typ_arg -> type_def_aux
 | TD_record : id -> typquant -> list (id * typ * def_annot unit) -> bool -> type_def_aux
 | TD_variant : id -> typquant -> list type_union -> bool -> type_def_aux
-| TD_enum : id -> list id -> bool -> type_def_aux
+| TD_enum : id -> list (id * def_annot unit) -> bool -> type_def_aux
 | TD_abstract : id -> kind -> opt_abstract_config -> type_def_aux
 | TD_bitfield : id -> typ -> list (id * index_range * def_annot unit) -> type_def_aux.
 

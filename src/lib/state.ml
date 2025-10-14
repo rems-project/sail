@@ -222,7 +222,7 @@ let generate_initial_regstate ctx env ast =
       in
       let typ_subst_typquant tq args typ = List.fold_left2 typ_subst_quant_item typ (quant_items tq) args in
       let add_typ_init_val (defs', vals) = function
-        | TD_enum (id, id1 :: _, _) ->
+        | TD_enum (id, (id1, _) :: _, _) ->
             (* Choose the first value of an enumeration type as default *)
             (defs', Bindings.add id (fun _ -> string_of_id id1) vals)
         | TD_variant (id, tq, Tu_aux (Tu_ty_id (typ1, id1), _) :: _, _) ->

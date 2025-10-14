@@ -257,7 +257,8 @@ let frominterp_typedef (TD_aux (td_aux, (l, _))) =
   | TD_enum (Id_aux (Id "barrier_kind", _), _, _) -> empty
   | TD_enum (Id_aux (Id "trans_kind", _), _, _) -> empty
   | TD_enum (Id_aux (Id "cache_op_kind", _), _, _) -> empty
-  | TD_enum (id, ids, _) ->
+  | TD_enum (id, members, _) ->
+      let ids = List.map fst members in
       let fromInterpValueName = concat [string (maybe_zencode (string_of_id id)); string "FromInterpValue"] in
       let fromFallback =
         separate space
@@ -498,7 +499,8 @@ let tointerp_typedef (TD_aux (td_aux, (l, _))) =
   | TD_enum (Id_aux (Id "barrier_kind", _), _, _) -> empty
   | TD_enum (Id_aux (Id "trans_kind", _), _, _) -> empty
   | TD_enum (Id_aux (Id "cache_op_kind", _), _, _) -> empty
-  | TD_enum (id, ids, _) ->
+  | TD_enum (id, members, _) ->
+      let ids = List.map fst members in
       let toInterpValueName = concat [string (maybe_zencode (string_of_id id)); string "ToInterpValue"] in
       let toInterpValue =
         prefix 2 1

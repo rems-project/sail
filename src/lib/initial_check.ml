@@ -1752,10 +1752,10 @@ let generate_enum_functions l ctx enum_id fns exps =
   let num_exps = function Some (P.E_aux (P.E_tuple exps, _)) -> List.length exps | Some _ -> 1 | None -> 0 in
   let num_fns = List.length fns in
   List.iter
-    (fun (id, exp) ->
+    (fun ((id, _), exp) ->
       let n = num_exps exp in
       if n <> num_fns then (
-        let l = match exp with Some (P.E_aux (_, l)) -> l | None -> parse_id_loc id in
+        let l = match exp with Some (P.E_aux (_, l)) -> l | None -> id_loc id in
         raise
           (Reporting.err_general l
              (sprintf
@@ -1782,8 +1782,8 @@ let generate_enum_functions l ctx enum_id fns exps =
                  (E_match
                     ( mk_exp (E_id (mk_id "arg#")),
                       List.map
-                        (fun (id, exps) ->
-                          let id = to_ast_id ctx id in
+                        (fun ((id, _), exps) ->
+                          (* let id = to_ast_id ctx id in *)
                           let exp = to_ast_exp ctx (get_exp i exps) in
                           mk_pexp (Pat_exp (mk_pat (P_id id), exp))
                         )
@@ -1852,7 +1852,7 @@ let to_ast_record ctx id typq fields =
 let check_duplicate_enum_ids ids =
   let _ =
     List.fold_left
-      (fun seen id ->
+      (fun seen (id, _) ->
         let l = id_loc id in
         match Bindings.find_opt id seen with
         | Some previous ->
@@ -1924,8 +1924,22 @@ let rec to_ast_typedef ctx def_annot (P.TD_aux (aux, l) : P.type_def) : untyped_
   | P.TD_enum (id, fns, members) ->
       let id = to_ast_reserved_type_id ctx id in
       let ctx = { ctx with type_constructors = Bindings.add id ([], P.K_type) ctx.type_constructors } in
+      let members =
+        List.map
+          (fun (ann_id, exp) ->
+            ( to_ast_field
+                (fun doc attrs id ->
+                  let id = to_ast_id ctx id in
+                  (id, mk_def_annot ?doc ~attrs (id_loc id) ())
+                )
+                None [] ann_id,
+              exp
+            )
+          )
+          members
+      in
       let fns = generate_enum_functions l ctx id fns members in
-      let members = List.map (fun e -> to_ast_id ctx (fst e)) members in
+      let members = List.map fst members in
       check_duplicate_enum_ids members;
       ( fns @ [DEF_aux (DEF_type (TD_aux (TD_enum (id, members, false), (l, empty_uannot))), def_annot)],
         { ctx with type_constructors = Bindings.add id ([], P.K_type) ctx.type_constructors }
@@ -2631,7 +2645,7 @@ let generate_enum_number_conversions defs =
               if IdSet.mem name vs_ids then already_defined name
               else (
                 let kid = mk_kid "e" in
-                let pexp n id =
+                let pexp n (id, _) =
                   let pat =
                     if n = List.length elems - 1 then mk_pat P_wild
                     else mk_pat (P_lit (mk_lit (L_num (Big_int.of_int n))))
@@ -2660,7 +2674,7 @@ let generate_enum_number_conversions defs =
               else (
                 let kid = mk_kid "e" in
                 let to_typ = mk_typ (Typ_exist ([mk_kopt K_int kid], range_constraint kid, atom_typ (nvar kid))) in
-                let pexp n id = mk_pexp (Pat_exp (mk_pat (P_id id), mk_lit_exp (L_num (Big_int.of_int n)))) in
+                let pexp n (id, _) = mk_pexp (Pat_exp (mk_pat (P_id id), mk_lit_exp (L_num (Big_int.of_int n)))) in
                 let funcl =
                   mk_funcl name
                     (mk_pat (P_id (mk_id "arg#")))

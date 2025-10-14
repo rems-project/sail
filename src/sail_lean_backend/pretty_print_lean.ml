@@ -1234,12 +1234,13 @@ let string_of_type_def_con (TD_aux (td, _)) =
 
 let doc_typdef ctx (TD_aux (td, tannot) as full_typdef) =
   match td with
-  | TD_enum (id, fields, _) ->
-      let fields = List.map doc_id_ctor fields in
-      let fields = List.map (fun i -> space ^^ pipe ^^ space ^^ i) fields in
-      let derivers = if List.length fields == 0 then [string "Repr"] else [string "Inhabited"; string "Repr"] in
+  | TD_enum (id, members, _) ->
+      let ids = List.map fst members in
+      let ids = List.map doc_id_ctor ids in
+      let ids = List.map (fun i -> space ^^ pipe ^^ space ^^ i) ids in
+      let derivers = if List.length ids == 0 then [string "Repr"] else [string "Inhabited"; string "Repr"] in
       let derivers = if IdSet.mem id !non_beq_types then derivers else string "BEq" :: derivers in
-      let enums_doc = concat fields in
+      let enums_doc = concat ids in
       let _ = opens := IdSet.add id !opens in
       let id = doc_id_ctor id in
       nest 2

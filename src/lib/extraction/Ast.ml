@@ -396,7 +396,7 @@ type type_def_aux =
 | TD_abbrev of id * typquant * typ_arg
 | TD_record of id * typquant * ((id * typ) * unit def_annot) list * bool
 | TD_variant of id * typquant * type_union list * bool
-| TD_enum of id * id list * bool
+| TD_enum of id * (id * unit def_annot) list * bool
 | TD_abstract of id * kind * opt_abstract_config
 | TD_bitfield of id * typ * ((id * index_range) * unit def_annot) list
 
