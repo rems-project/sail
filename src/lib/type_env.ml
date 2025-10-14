@@ -1060,6 +1060,18 @@ let wf_typ_arg ~at:at_l env (A_aux (_, l) as arg) =
     let extra, l = match l with Parse_ast.Unknown -> (" here", at_l) | _ -> ("", l) in
     typ_raise l (err_because (Err_other ("Well-formedness check failed for type argument" ^ extra), err_l, err))
 
+let wf_nexp ~at:at_l env (Nexp_aux (_, l) as nexp) =
+  Well_formedness.wf_debug "nexp" string_of_nexp nexp Well_formedness.no_existential;
+  incr depth;
+  try
+    Well_formedness.wf_nexp Well_formedness.no_existential env nexp;
+    decr depth
+  with Type_error (err_l, err) ->
+    decr depth;
+    let extra, l = match l with Parse_ast.Unknown -> (" here", at_l) | _ -> ("", l) in
+    typ_raise l
+      (err_because (Err_other ("Well-formedness check failed for numeric type expression" ^ extra), err_l, err))
+
 let wf_constraint ~at:at_l env (NC_aux (_, l) as nc) =
   Well_formedness.wf_debug "constraint" string_of_n_constraint nc Well_formedness.no_existential;
   incr depth;
