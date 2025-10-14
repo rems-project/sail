@@ -98,6 +98,9 @@ val generate : untyped_ast -> untyped_ast
 
 val process_ast : ctx -> Parse_ast.defs -> untyped_ast * ctx
 
+(** {2 Constructing notation attributes} *)
+val notation_attr : Parse_ast.l -> int -> string list -> uannot -> uannot
+
 (** {2 Parsing expressions and definitions from strings} *)
 
 val hex_digit_of_char : char -> (hex_digit * digit_case option) option
