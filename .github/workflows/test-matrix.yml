@@ -120,7 +120,7 @@ jobs:
     env:
       OPAMROOT: /home/rocq/.opam
     container:
-      image: rocq/rocq-prover:9.0.0
+      image: rocq/rocq-prover:9.0
       # github requires root to access some resources from outside the container
       # (e.g. https://github.com/actions/checkout/issues/47)
       options: --user root
