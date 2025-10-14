@@ -5025,7 +5025,12 @@ let rec check_typedef : Env.t -> env def_annot -> uannot type_def -> typed_def l
       begin
         match typ_arg with
         | A_aux (A_typ typ, a_l) -> forbid_recursive_types l (fun () -> wf_binding a_l env (typq, typ))
-        | _ -> ()
+        | A_aux (A_nexp nexp, a_l) ->
+            let env = Env.add_typquant l typq env in
+            Env.wf_nexp ~at:a_l env nexp
+        | A_aux (A_bool nc, a_l) ->
+            let env = Env.add_typquant l typq env in
+            Env.wf_constraint ~at:a_l env nc
       end;
       ([DEF_aux (DEF_type (TD_aux (tdef, (l, empty_tannot))), def_annot)], Env.add_typ_synonym id typq typ_arg env)
   | TD_abstract (id, kind, _) -> begin

@@ -258,6 +258,7 @@ val is_toplevel : t -> l option
 (* Well formedness-checks *)
 val wf_typ : at:l -> t -> typ -> unit
 val wf_typ_arg : at:l -> t -> typ_arg -> unit
+val wf_nexp : at:l -> t -> nexp -> unit
 val wf_constraint : at:l -> t -> n_constraint -> unit
 
 (** Some of the code in the environment needs to use the smt solver, which is defined below. To break the circularity

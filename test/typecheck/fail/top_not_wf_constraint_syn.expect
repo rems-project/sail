@@ -1,0 +1,10 @@
+[93mType error[0m:
+[96mfail/top_not_wf_constraint_syn.sail[0m:4.20-22:
+4[96m |[0mtype tyvar : Bool = 'v
+ [91m |[0m                    [91m^^[0m
+ [91m |[0m Well-formedness check failed for constraint
+ [91m |[0m 
+ [91m |[0m [93mCaused by [0m[96mfail/top_not_wf_constraint_syn.sail[0m:4.20-22:
+ [91m |[0m 4[96m |[0mtype tyvar : Bool = 'v
+ [91m |[0m  [91m |[0m                    [91m^^[0m
+ [91m |[0m  [91m |[0m No type variable 'v
