@@ -271,15 +271,15 @@ let rewrite_ast_remove_vector_subrange_pats env ast =
     let pat = fold_pat pat_alg pat in
     (pat, !appends)
   in
-  let rewrite_pexp pat body =
+  let rewrite_pexp pat guard_opt body =
     let pat, appends = rewrite_pattern pat in
-    let body =
+    let add_letbind exp =
       Bindings.fold
-        (fun id append body ->
+        (fun id append exp ->
           match append with
           | (_, _, id1, _) :: tl_append ->
               let env =
-                List.fold_left (fun env (_, _, id, typ) -> Env.add_local id (Immutable, typ) env) (env_of body) append
+                List.fold_left (fun env (_, _, id, typ) -> Env.add_local id (Immutable, typ) env) (env_of exp) append
               in
               let append_exp =
                 List.fold_left
@@ -290,27 +290,27 @@ let rewrite_ast_remove_vector_subrange_pats env ast =
               let bind = check_exp env bind unit_typ in
               begin
                 match bind with
-                | E_aux (E_let (letbind, _), annot) -> E_aux (E_let (letbind, body), annot)
+                | E_aux (E_let (letbind, _), annot) -> E_aux (E_let (letbind, exp), annot)
                 | _ -> assert false
               end
-          | [] -> body
+          | [] -> exp
         )
-        appends body
+        appends exp
     in
-    (pat, body)
+    (pat, Option.map add_letbind guard_opt, add_letbind body)
   in
   let exp_alg =
     {
       id_exp_alg with
       pat_exp =
         (fun (pat, body) ->
-          let pat, body = rewrite_pexp pat body in
+          let pat, _, body = rewrite_pexp pat None body in
           Pat_exp (pat, body)
         );
       pat_when =
         (fun (pat, guard, body) ->
-          let pat, body = rewrite_pexp pat body in
-          Pat_when (pat, guard, body)
+          let pat, guard, body = rewrite_pexp pat (Some guard) body in
+          Pat_when (pat, Option.get guard, body)
         );
     }
   in
