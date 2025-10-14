@@ -702,7 +702,20 @@ module Well_formedness = struct
             ("Numeric type constructor " ^ string_of_id id ^ " expected arguments " ^ string_of_typquant typq
            ^ ", but was used here with none"
             )
-    | Nexp_id id -> typ_error l ("Undefined numeric type " ^ string_of_id id)
+    | Nexp_id id -> (
+        let msg = "No numeric type named " ^ string_of_id id ^ " in scope" in
+        match Bindings.find_opt id env.global.letbinds with
+        | Some item ->
+            typ_error
+              (Hint
+                 ( string_of_id id ^ " defined as term-level variable here, but this cannot be used in a type",
+                   item_loc item,
+                   l
+                 )
+              )
+              msg
+        | None -> typ_error l msg
+      )
     | Nexp_var kid when KidSet.mem kid exs.vars -> ()
     | Nexp_var kid -> begin
         match get_typ_var kid env with
