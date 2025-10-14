@@ -1390,7 +1390,8 @@ let doc_typdef_lem params_to_print env (TD_aux (td, (l, annot))) =
             ^^ hardline
           else empty
     )
-  | TD_enum (id, enums, _) -> (
+  | TD_enum (id, members, _) -> (
+      let enums = List.map fst members in
       match id with
       | Id_aux (Id "regfp", _) -> empty
       | Id_aux (Id "niafp", _) -> empty

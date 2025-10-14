@@ -303,8 +303,8 @@ let add_def_to_graph graph (DEF_aux (def, def_annot)) =
         IdSet.iter (fun ctor_id -> graph := G.add_edge (Constructor ctor_id) (Type id) !graph) (snd ctor_nodes);
         IdSet.iter (fun typ_id -> graph := G.add_edge (Type id) (Type typ_id) !graph) (fst ctor_nodes);
         scan_typquant (Type id) typq
-    | TD_enum (id, ctors, _) ->
-        List.iter (fun ctor_id -> graph := G.add_edge (Constructor ctor_id) (Type id) !graph) ctors
+    | TD_enum (id, members, _) ->
+        List.iter (fun (member_id, _) -> graph := G.add_edge (Constructor member_id) (Type id) !graph) members
     | TD_abstract (id, _, _) -> graph := G.add_edges (Type id) [] !graph
     | TD_bitfield (id, typ, ranges) ->
         graph := G.add_edges (Type id) (List.map (fun id -> Type id) (IdSet.elements (typ_ids typ))) !graph

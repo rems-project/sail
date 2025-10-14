@@ -815,6 +815,8 @@ module Printer (Config : PRINT_CONFIG) = struct
     | A_bool _ -> space ^^ string sep ^^ space ^^ string "Bool"
     | A_typ _ -> empty
 
+  let doc_enum_member (id, def_annot) = doc_def_annot def_annot ^^ doc_id id
+
   let doc_type_def (TD_aux (td, (l, _))) =
     match td with
     | TD_abstract (id, kind, instantiation) ->
@@ -832,9 +834,14 @@ module Printer (Config : PRINT_CONFIG) = struct
         | None ->
             doc_op equals (concat [string "type"; space; doc_id id; doc_typ_arg_kind ":" typ_arg]) (doc_typ_arg typ_arg)
       end
-    | TD_enum (id, ids, _) ->
+    | TD_enum (id, members, _) ->
         separate space
-          [string "enum"; doc_id id; equals; surround 2 0 lbrace (separate_map (comma ^^ break 1) doc_id ids) rbrace]
+          [
+            string "enum";
+            doc_id id;
+            equals;
+            surround 2 0 lbrace (separate_map (comma ^^ break 1) doc_enum_member members) rbrace;
+          ]
     | TD_record (id, TypQ_aux (TypQ_no_forall, _), fields, _) | TD_record (id, TypQ_aux (TypQ_tq [], _), fields, _) ->
         separate space
           [

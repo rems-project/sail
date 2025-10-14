@@ -403,7 +403,7 @@ type type_def_aux =
   | TD_abbrev of id * typquant * kind option * atyp (* type abbreviation *)
   | TD_record of id * typquant * (id * atyp) field_annot list (* struct type definition *)
   | TD_variant of id * typquant * type_union list * bool (* union type definition *)
-  | TD_enum of id * (id * atyp) list * (id * exp option) list (* enumeration type definition *)
+  | TD_enum of id * (id * atyp) list * (id field_annot * exp option) list (* enumeration type definition *)
   | TD_abstract of id * kind * string list option
   | TD_bitfield of id * atyp * (id * index_range) field_annot list (* register mutable bitfield type definition *)
 

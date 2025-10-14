@@ -3076,7 +3076,8 @@ let doc_typdef global generic_eq_types countable_types enum_number_defs (TD_aux 
           in
           typ_pp ^^ dot ^^ hardline ^^ reset_implicits_pp ^^ hardline ^^ eq_pp ^^ hardline ^^ inhabited_pp ^^ hardline
     )
-  | TD_enum (id, enums, _) ->
+  | TD_enum (id, members, _) ->
+      let enums = List.map fst members in
       let enums_doc = group (separate_map (break 1 ^^ pipe ^^ space) (doc_id_ctor bare_ctxt) enums) in
       let id_pp = doc_id_type global None id in
       let typ_pp =
@@ -3922,7 +3923,8 @@ let doc_isla_typ global (TD_aux (td, _)) =
           empty;
           empty;
         ]
-  | TD_enum (id, enums, _) ->
+  | TD_enum (id, members, _) ->
+      let enums = List.map fst members in
       hang 2
         (string "#[export] Instance get_isla_" ^^ type_id_pp id ^^ string " : IslaEnum " ^^ type_id_pp id
        ^^ string " :=" ^^ hardline

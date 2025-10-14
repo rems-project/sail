@@ -1237,15 +1237,33 @@ let build_def chunks fs =
   List.iter (fun f -> f def_chunks) fs;
   finish_def def_chunks chunks
 
+let rec chunk_annotations f comments chunks = function
+  | Ann_attribute (attr, arg, anns, l) ->
+      pop_comments comments chunks l;
+      Queue.add (Atom (Ast_util.string_of_attribute attr arg)) chunks;
+      Queue.add (Spacer (true, 1)) chunks;
+      chunk_annotations f comments chunks anns
+  | Ann_doc (doc, anns, l) ->
+      pop_comments comments chunks l;
+      Queue.add (Doc_comment doc) chunks;
+      chunk_annotations f comments chunks anns
+  | Ann_item x -> f comments chunks x
+
+let rec ann_item = function Ann_attribute (_, _, anns, _) | Ann_doc (_, anns, _) -> ann_item anns | Ann_item x -> x
+
 let chunk_type_def comments chunks (TD_aux (aux, l)) =
   pop_comments comments chunks l;
-  let chunk_enum_member comments chunks member =
-    match member with
-    | id, None ->
+  let chunk_enum_member comments chunks (ann_id, exp_opt) =
+    chunk_annotations
+      (fun comments chunks id ->
         pop_comments comments chunks (id_loc id);
         Queue.push (Atom (string_of_id id)) chunks
-    | id, Some exp ->
-        chunk_id id comments chunks;
+      )
+      comments chunks ann_id;
+    match exp_opt with
+    | None -> ()
+    | Some exp ->
+        Queue.push (Spacer (false, 1)) chunks;
         chunk_keyword "=>" chunks;
         chunk_exp comments chunks exp
   in
@@ -1257,7 +1275,7 @@ let chunk_type_def comments chunks (TD_aux (aux, l)) =
   match aux with
   | TD_enum (id, [], members) ->
       let members =
-        chunk_delimit ~delim:"," ~get_loc:(fun x -> id_loc (fst x)) ~chunk:chunk_enum_member comments members
+        chunk_delimit ~delim:"," ~get_loc:(fun x -> id_loc (ann_item (fst x))) ~chunk:chunk_enum_member comments members
       in
       Queue.add (Enum { id; enum_functions = None; members }) chunks;
       Queue.add (Spacer (true, 1)) chunks
@@ -1266,7 +1284,7 @@ let chunk_type_def comments chunks (TD_aux (aux, l)) =
         chunk_delimit ~delim:"," ~get_loc:(fun x -> id_loc (fst x)) ~chunk:chunk_enum_function comments enum_functions
       in
       let members =
-        chunk_delimit ~delim:"," ~get_loc:(fun x -> id_loc (fst x)) ~chunk:chunk_enum_member comments members
+        chunk_delimit ~delim:"," ~get_loc:(fun x -> id_loc (ann_item (fst x))) ~chunk:chunk_enum_member comments members
       in
       Queue.add (Enum { id; enum_functions = Some enum_functions; members }) chunks;
       Queue.add (Spacer (true, 1)) chunks
@@ -1282,6 +1300,10 @@ let chunk_scattered comments chunks (SD_aux (aux, l)) =
         chunks
   | SD_end id -> build_def chunks [chunk_keyword "end"; chunk_id id comments]
   | SD_function (id, _) -> build_def chunks [chunk_keyword "scattered function"; chunk_id id comments]
+  | SD_enum id -> build_def chunks [chunk_keyword "scattered enum"; chunk_id id comments]
+  | SD_enumcl (enum_id, member_id) ->
+      build_def chunks
+        [chunk_keyword "enum clause"; chunk_id enum_id comments; chunk_keyword "="; chunk_id member_id comments]
   | _ -> Reporting.unreachable l __POS__ "unhandled scattered def"
 
 let def_spacer (_, e) (s, _) = match (e, s) with Some l_e, Some l_s -> if l_s > l_e + 1 then 1 else 0 | _, _ -> 1
@@ -1291,7 +1313,8 @@ let read_source (p1 : Lexing.position) (p2 : Lexing.position) source =
 
 let can_handle_td (TD_aux (aux, _)) = match aux with TD_enum _ -> true | _ -> false
 
-let can_handle_sd (SD_aux (aux, _)) = match aux with SD_funcl _ | SD_end _ | SD_function _ -> true | _ -> false
+let can_handle_sd (SD_aux (aux, _)) =
+  match aux with SD_funcl _ | SD_end _ | SD_function _ | SD_enum _ | SD_enumcl _ -> true | _ -> false
 
 let rec chunk_def source last_line_span comments chunks (DEF_aux (def, l)) =
   let line_span = (starting_line_num l, ending_line_num l) in
@@ -1301,6 +1324,10 @@ let rec chunk_def source last_line_span comments chunks (DEF_aux (def, l)) =
   match def with
   | DEF_doc (doc, def) ->
       Queue.add (Doc_comment doc) chunks;
+      chunk_def source last_line_span comments chunks def
+  | DEF_attribute (attr, arg, def) ->
+      Queue.add (Atom (Ast_util.string_of_attribute attr arg)) chunks;
+      Queue.add (Spacer (false, 1)) chunks;
       chunk_def source last_line_span comments chunks def
   | def ->
       begin

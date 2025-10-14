@@ -1024,7 +1024,7 @@ type_def:
   | Struct id typaram Eq Lcurly struct_fields Rcurly
     { mk_td (TD_record ($2, $3, $6)) $startpos $endpos }
   | Enum id Eq enum_bar
-    { mk_td (TD_enum ($2, [], $4)) $startpos $endpos }
+    { mk_td (TD_enum ($2, [], List.map (fun (id, exp) -> Ann_item id, exp) $4)) $startpos $endpos }
   | Enum id Eq Lcurly enum Rcurly
     { mk_td (TD_enum ($2, [], $5)) $startpos $endpos }
   | Enum id With enum_functions Eq Lcurly enum Rcurly
@@ -1048,6 +1048,14 @@ enum_functions:
   | id MinusGt typ
     { [($1, $3)] }
 
+enum_member:
+  | doc = doc_comment; e = enum_member
+    { Ann_doc (doc, e, loc $startpos(doc) $endpos(doc)) }
+  | attr = attribute; e = enum_member
+    { Ann_attribute (fst attr, snd attr, e, loc $startpos(attr) $endpos(attr)) }
+  | e = id
+    { Ann_item e }
+
 enum_bar:
   | id
     { [($1, None)] }
@@ -1055,13 +1063,13 @@ enum_bar:
     { ($1, None) :: $3 }
 
 enum:
-  | id Comma?
+  | enum_member Comma?
     { [($1, None)] }
-  | id EqGt exp Comma?
+  | enum_member EqGt exp Comma?
     { [($1, Some $3)] }
-  | id Comma enum
+  | enum_member Comma enum
     { ($1, None) :: $3 }
-  | id EqGt exp Comma enum
+  | enum_member EqGt exp Comma enum
     { ($1, Some $3) :: $5 }
 
 struct_field:
