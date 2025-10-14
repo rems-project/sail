@@ -140,7 +140,7 @@ jobs:
         git config --global --add safe.directory /__w/sail/sail
         opam pin --yes --no-action add coq-sail-stdpp git+https://github.com/rems-project/coq-sail.git
         opam pin --yes --no-action -k path add .
-        opam install --yes coq<9.1 coq-sail-stdpp coq-record-update
+        opam install --yes "coq<9.1" coq-sail-stdpp coq-record-update
         opam install . --yes --deps-only
 
     - name: Build Sail with coverage
