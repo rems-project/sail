@@ -363,16 +363,6 @@ module Printer (Config : PRINT_CONFIG) = struct
 
   type 'a vector_update = VU_single of 'a exp * 'a exp | VU_range of 'a exp * 'a exp * 'a exp
 
-  let rec get_vector_updates (E_aux (e_aux, _) as exp) =
-    match e_aux with
-    | E_app (id, [exp1; exp2; exp3]) when Id.compare id (mk_id "vector_update#") == 0 ->
-        let input, updates = get_vector_updates exp1 in
-        (input, updates @ [VU_single (exp2, exp3)])
-    | E_app (id, [exp1; exp2; exp3; exp4]) when Id.compare id (mk_id "vector_update_subrange#") == 0 ->
-        let input, updates = get_vector_updates exp1 in
-        (input, updates @ [VU_range (exp2, exp3, exp4)])
-    | _ -> (exp, [])
-
   let get_overloaded_info uannot =
     let open Util.Option_monad in
     match get_attribute "overloaded" uannot with
@@ -596,26 +586,28 @@ module Printer (Config : PRINT_CONFIG) = struct
   and doc_measure (Measure_aux (m_aux, _)) =
     match m_aux with Measure_none -> [] | Measure_some exp -> [string "termination_measure"; braces (doc_exp exp)]
 
-  and doc_infix n exp =
-    let (E_aux (e_aux, (l, _)) as exp), uannot_fmt = consume_exp_uannot ~atomic:false exp in
-    uannot_fmt.doc
-    @@
-    match e_aux with
-    | E_app (id, exps) when Option.is_some uannot_fmt.overloaded ->
-        let name, is_infix = Option.get uannot_fmt.overloaded in
-        if is_infix then doc_infix n (E_aux (E_app (mk_operator name, exps), (l, empty_uannot)))
-        else doc_atomic_exp (E_aux (E_app (mk_id name, exps), (l, empty_uannot)))
-    | E_app ((Id_aux (Operator s, _) as op), [x; y]) when n < 10 -> (
-        match Bindings.find_opt op !fixities with
-        | Some (Infix, m) when m >= n -> separate space [doc_infix (m + 1) x; string s; doc_infix (m + 1) y]
-        | Some (Infix, m) -> parens (separate space [doc_infix (m + 1) x; string s; doc_infix (m + 1) y])
-        | Some (InfixL, m) when m >= n -> separate space [doc_infix m x; string s; doc_infix (m + 1) y]
-        | Some (InfixL, m) -> parens (separate space [doc_infix m x; string s; doc_infix (m + 1) y])
-        | Some (InfixR, m) when m >= n -> separate space [doc_infix (m + 1) x; string s; doc_infix m y]
-        | Some (InfixR, m) -> parens (separate space [doc_infix (m + 1) x; string s; doc_infix m y])
-        | None -> parens (separate space [doc_atomic_exp x; string s; doc_atomic_exp y])
-      )
-    | _ -> doc_atomic_exp exp
+  and doc_infix n exp_orig =
+    let (E_aux (e_aux, (l, _)) as exp), uannot_fmt = consume_exp_uannot ~atomic:false exp_orig in
+    if Option.is_some uannot_fmt.notation then doc_atomic_exp exp_orig
+    else
+      uannot_fmt.doc
+      @@
+      match e_aux with
+      | E_app (id, exps) when Option.is_some uannot_fmt.overloaded ->
+          let name, is_infix = Option.get uannot_fmt.overloaded in
+          if is_infix then doc_infix n (E_aux (E_app (mk_operator name, exps), (l, empty_uannot)))
+          else doc_atomic_exp (E_aux (E_app (mk_id name, exps), (l, empty_uannot)))
+      | E_app ((Id_aux (Operator s, _) as op), [x; y]) when n < 10 -> (
+          match Bindings.find_opt op !fixities with
+          | Some (Infix, m) when m >= n -> separate space [doc_infix (m + 1) x; string s; doc_infix (m + 1) y]
+          | Some (Infix, m) -> parens (separate space [doc_infix (m + 1) x; string s; doc_infix (m + 1) y])
+          | Some (InfixL, m) when m >= n -> separate space [doc_infix m x; string s; doc_infix (m + 1) y]
+          | Some (InfixL, m) -> parens (separate space [doc_infix m x; string s; doc_infix (m + 1) y])
+          | Some (InfixR, m) when m >= n -> separate space [doc_infix (m + 1) x; string s; doc_infix m y]
+          | Some (InfixR, m) -> parens (separate space [doc_infix (m + 1) x; string s; doc_infix m y])
+          | None -> parens (separate space [doc_atomic_exp x; string s; doc_atomic_exp y])
+        )
+      | _ -> doc_atomic_exp exp
 
   and doc_atomic_exp (E_aux (e_aux, (_, uannot)) as exp) =
     let (E_aux (e_aux, (l, _)) as exp), uannot_fmt = consume_exp_uannot ~atomic:true exp in
