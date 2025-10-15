@@ -4,7 +4,7 @@ $sail_internal
 
 $include <prelude.sail>
 
-$target_set emulator c ocaml interpreter systemverilog
+$target_set emulator c cpp ocaml interpreter systemverilog
 
 struct Foo = {
     bar : option(int)
