@@ -1753,32 +1753,41 @@ let same_bindings ~at:l ~env ~left_env ~right_env lhs rhs =
         ("Identifier " ^ string_of_id id ^ " found on right hand side of mapping, but not on left")
   | None -> ()
 
-let bitvector_typ_from_range l env n m =
+let bitvector_typ_from_vector_subrange l env n m =
   let len =
-    match Env.get_default_order env with
+    let order = Env.get_default_order env in
+    match order with
     | Ord_aux (Ord_dec, _) ->
         if Big_int.greater_equal n m then Big_int.sub (Big_int.succ n) m
-        else
-          typ_error l
+        else typ_raise l (Err_vector_subrange { n; m; order })
+    (*
             (Printf.sprintf "First index %s must be greater than or equal to second index %s (when default Order dec)"
                (Big_int.to_string n) (Big_int.to_string m)
             )
+*)
     | Ord_aux (Ord_inc, _) ->
         if Big_int.less_equal n m then Big_int.sub (Big_int.succ m) n
-        else
-          typ_error l
+        else typ_raise l (Err_vector_subrange { n; m; order })
+    (*
             (Printf.sprintf "First index %s must be less than or equal to second index %s (when default Order inc)"
                (Big_int.to_string n) (Big_int.to_string m)
             )
+*)
   in
   bitvector_typ (nconstant len)
 
-let bind_pattern_vector_subranges (P_aux (_, (l, _)) as pat) env =
+let each_pattern_vector_subranges f (P_aux (_, (l, _)) as pat) acc =
   let id_ranges = pattern_vector_subranges pat in
   Bindings.fold
-    (fun id ranges env ->
+    (fun id ranges acc ->
       match ranges with
-      | [(n, m)] -> Env.add_local id (Immutable, bitvector_typ_from_range l env n m) env
+      | [(n, m)] ->
+          if Big_int.equal m Big_int.zero then f l id n m acc
+          else
+            typ_error l
+              (Printf.sprintf "Cannot bind %s as pattern subranges do not start at bit 0 (lowest bit is %s)."
+                 (string_of_id id) (Big_int.to_string m)
+              )
       | _ :: (m, _) :: _ ->
           typ_error l
             (Printf.sprintf "Cannot bind %s as pattern subranges are non-contiguous. %s[%s] is not defined."
@@ -1787,7 +1796,14 @@ let bind_pattern_vector_subranges (P_aux (_, (l, _)) as pat) env =
             )
       | _ -> Reporting.unreachable l __POS__ "Found range pattern with no range"
     )
-    id_ranges env
+    id_ranges acc
+
+let bind_pattern_vector_subranges pat env =
+  each_pattern_vector_subranges
+    (fun l id n m -> Env.add_local id (Immutable, bitvector_typ (nconstant (Big_int.sub (Big_int.succ n) m))))
+    pat env
+
+let check_pattern_vector_subranges pat env = each_pattern_vector_subranges (fun _ _ _ _ () -> ()) pat ()
 
 let unbound_id_error ~at:l env v =
   match Bindings.find_opt v (Env.get_val_specs env) with
@@ -3071,7 +3087,7 @@ and infer_pat env (P_aux (pat_aux, (l, uannot)) as pat) =
       (annot_pat (P_vector pats) (bitvector_typ len), env, guards)
   | P_vector_concat (pat :: pats) -> bind_vector_concat_pat l env uannot pat pats None
   | P_vector_subrange (id, n, m) ->
-      let typ = bitvector_typ_from_range l env n m in
+      let typ = bitvector_typ_from_vector_subrange l env n m in
       (annot_pat (P_vector_subrange (id, n, m)) typ, env, [])
   | P_string_append pats ->
       let fold_pats (pats, env, guards) pat =
@@ -3115,7 +3131,13 @@ and bind_vector_concat_generic :
     let wrap_ok (x, y, z) = (VC_elem_ok x, y, z) in
     let inferred_pat, env, guards' =
       if Option.is_none typ_opt then wrap_ok (funcs.infer env pat)
-      else (try wrap_ok (funcs.infer env pat) with Type_error _ as exn -> (VC_elem_error (pat, exn), env, []))
+      else (
+        try wrap_ok (funcs.infer env pat) with
+        (* A vector subrange error means the whole vector concat is
+             certainly broken, so error out immediately. *)
+        | Type_error (_, Err_vector_subrange _) as exn -> raise exn
+        | Type_error _ as exn -> (VC_elem_error (pat, exn), env, [])
+      )
     in
     (inferred_pat :: pats, env, guards' @ guards)
   in
@@ -4632,9 +4654,11 @@ let check_mapcl env (MCL_aux (cl, (def_annot, _))) typ =
       | MCL_bidir (left_mpexp, right_mpexp) -> begin
           let left_mpat, _, _ = destruct_mpexp left_mpexp in
           let left_dups = check_pattern_duplicates env (pat_of_mpat left_mpat) in
+          check_pattern_vector_subranges (pat_of_mpat left_mpat) env;
           let left_env = find_types env left_mpat typ1 in
           let right_mpat, _, _ = destruct_mpexp right_mpexp in
           let right_dups = check_pattern_duplicates env (pat_of_mpat right_mpat) in
+          check_pattern_vector_subranges (pat_of_mpat right_mpat) env;
           let right_env = find_types env right_mpat typ2 in
           same_bindings ~at:def_annot.loc ~env ~left_env ~right_env left_dups right_dups;
 

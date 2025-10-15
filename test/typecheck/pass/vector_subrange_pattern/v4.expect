@@ -1,0 +1,5 @@
+[93mType error[0m:
+[96mpass/vector_subrange_pattern/v4.sail[0m:7.13-56:
+7[96m |[0mfunction foo imm[19] @ imm[1..9] @ imm[10] @ imm[11..18] = {
+ [91m |[0m             [91m^-----------------------------------------^[0m
+ [91m |[0m Cannot bind imm as pattern subranges do not start at bit 0 (lowest bit is 1).

@@ -1,0 +1,5 @@
+[93mType error[0m:
+[96mfail/jal_encdec_nc.sail[0m:14.6-66:
+14[96m |[0m  <-> imm[20] @ imm[9..0] @ imm[11] @ imm[19..12] @ rd @ 0b1101111
+  [91m |[0m      [91m^----------------------------------------------------------^[0m
+  [91m |[0m Cannot bind imm as pattern subranges are non-contiguous. imm[10] is not defined.
