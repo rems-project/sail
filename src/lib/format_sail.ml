@@ -354,6 +354,14 @@ let can_hang chunks =
     )
   | _ -> true
 
+let can_hang_bracketed chunks =
+  match Queue.peek_opt chunks with
+  | Some (Block _) -> true
+  | Some (Struct_update _) -> true
+  | Some (Match _) -> true
+  | Some (App _) -> true
+  | _ -> false
+
 let opt_delim s = ifflat empty (string s)
 
 let softline = break 0
@@ -453,6 +461,8 @@ module Make (Config : CONFIG) = struct
     | Delim s -> string s ^^ space
     | Opt_delim s -> opt_delim s
     | String_literal s -> utf8string ("\"" ^ String.escaped s ^ "\"")
+    | Multiline_string_literal lines ->
+        string "\"\"\"" ^^ hardline ^^ separate_map hardline string lines ^^ hardline ^^ string "\"\"\""
     | App (id, args) -> (
         match args with
         | [] -> doc_id id ^^ string "()"
@@ -662,12 +672,18 @@ module Make (Config : CONFIG) = struct
         let exps = List.map fst exps in
         surround_hardline always_hardline indent 1 (char '{') (separate sep exps) (char '}') |> atomic_parens opts
     | Block_binder (binder, x, y) ->
-        if can_hang y then
+        (* If the body is braced or otherwise bracketed, then the bracketing construct will take care of indentation *)
+        if can_hang_bracketed y then
           separate space
             [string (binder_keyword binder); doc_chunks (atomic opts) x; char '='; doc_chunks (nonatomic opts) y]
+        else if can_hang y then
+          nest indent
+            (separate space
+               [string (binder_keyword binder); doc_chunks (atomic opts) x; char '='; doc_chunks (nonatomic opts) y]
+            )
         else
           separate space [string (binder_keyword binder); doc_chunks (atomic opts) x; char '=']
-          ^^ nest 4 (hardline ^^ doc_chunks (nonatomic opts) y)
+          ^^ nest indent (hardline ^^ doc_chunks (nonatomic opts) y)
     | Binder (binder, x, y, z) ->
         group
           (separate space

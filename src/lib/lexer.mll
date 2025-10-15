@@ -139,6 +139,31 @@ let kw_table =
 type comment =
   | Comment of comment_type * Lexing.position * Lexing.position * string
 
+let process_multiline start_delim pos end_delim str =
+  let open Lexing in
+  let open Printf in
+  let full_loc = Parse_ast.Range (start_delim, end_delim) in
+  let lines = String.split_on_char '\n' str |> List.rev in
+  match lines with
+  | [] -> assert false
+  | prefix :: lines ->
+     if not (Util.string_for_all (fun c -> c = ' ' || c = '\t') prefix) then (
+       raise (Reporting.err_syntax_loc full_loc "Final line before \"\"\" delimiter in multi-line string must only contain whitespace")
+     );
+     let chars = ref 0 in
+     List.mapi (fun n line ->
+       if Util.starts_with ~prefix line || line = "" then (
+         let len = String.length line in
+         chars := !chars + len + 1;
+         String.sub line (String.length prefix) (len - String.length prefix)
+       ) else (
+         let h = { pos with pos_cnum = pos.pos_cnum + !chars; pos_bol = pos.pos_bol + !chars; pos_lnum = pos.pos_lnum + n } in
+         let l = Parse_ast.Hint (sprintf "Line %d starting here" (n + 1), Parse_ast.Range (h, h), full_loc) in
+         let extra = "It must contain the exact sequence of whitespace characters that preceed the final \"\"\" delimiter." in
+         raise (Reporting.err_syntax_loc l (sprintf "Line %d in multi-line string literal has an invalid prefix.\n%s" (n + 1) extra))
+       )
+     ) (List.rev lines)
+
 }
 
 let wsc = [' ''\t']
@@ -239,10 +264,16 @@ rule token comments = parse
   | digit+ as i                           { Num (Big_int.of_string i) }
   | "0b" (binarydigit+ as b)              { Bin b }
   | "0x" (hexdigit+ as h)                 { Hex h }
-  | '"'                                   { let startpos = Lexing.lexeme_start_p lexbuf in
-                                            let contents = string startpos (Buffer.create 10) lexbuf in
+  | "\"\"\"" wsc* '\n'                    { let startpos = Lexing.lexeme_start_p lexbuf in
+                                            Lexing.new_line lexbuf;
+                                            let endpos = Lexing.lexeme_end_p lexbuf in
+                                            let contents = multiline_string startpos endpos (Buffer.create 256) lexbuf in
                                             lexbuf.lex_start_p <- startpos;
-                                            String(contents) }
+                                            MultilineString contents }
+  | '"'                                   { let startpos = Lexing.lexeme_start_p lexbuf in
+                                            let contents = string startpos (Buffer.create 16) lexbuf in
+                                            lexbuf.lex_start_p <- startpos;
+                                            String contents }
   | eof                                   { Eof }
   | _  as c
     { raise (Reporting.err_lex (Lexing.lexeme_start_p lexbuf) (Printf.sprintf "Unexpected character: %s" (Char.escaped c))) }
@@ -322,7 +353,7 @@ and block_comment comments pos b depth = parse
   | eof                                 { raise (Reporting.err_lex pos "Unbalanced comment") }
 
 and string pos b = parse
-  | ([^'"''\n''\\']*'\n' as i)          { Lexing.new_line lexbuf;
+  | ([^'"''\n''\\']* '\n' as i)         { Lexing.new_line lexbuf;
                                           Buffer.add_string b i;
                                           string pos b lexbuf }
   | ([^'"''\n''\\']* as i)              { Buffer.add_string b i; string pos b lexbuf }
@@ -331,3 +362,14 @@ and string pos b = parse
   | '\\'                                { raise (Reporting.err_lex (Lexing.lexeme_start_p lexbuf) "String literal contains illegal backslash escape sequence") }
   | '"'                                 { Scanf.unescaped (Buffer.contents b) }
   | eof                                 { raise (Reporting.err_lex pos "String literal not terminated") }
+
+and multiline_string delim_pos pos b = parse
+  | "\"\"\""                            { process_multiline delim_pos pos (Lexing.lexeme_end_p lexbuf) (Buffer.contents b) }
+  | "\""                                { Buffer.add_char b '"'; multiline_string delim_pos pos b lexbuf }
+  | ([^'"''\n''\\']* '\n' as i)         { Lexing.new_line lexbuf;
+                                          Buffer.add_string b i;
+                                          multiline_string delim_pos pos b lexbuf }
+  | ([^'"''\n''\\']* as i)              { Buffer.add_string b i; multiline_string delim_pos pos b lexbuf }
+  | escape_sequence as i                { Buffer.add_string b i; multiline_string delim_pos pos b lexbuf }
+  | '\\'                                { raise (Reporting.err_lex (Lexing.lexeme_start_p lexbuf) "String literal contains illegal backslash escape sequence") }
+  | eof                                 { raise (Reporting.err_lex delim_pos "Multiline string literal not terminated") }

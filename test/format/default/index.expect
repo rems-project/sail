@@ -6,7 +6,7 @@ function rX r = {
     let foo = /* comment */ Xs[unsigned(r)];
     let foo = Xs[let r = 1 in unsigned(r)]; // comment
     let foo = Xs[
-        let foooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooo = 1 in
-        foo
-    ]
+            let foooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooo = 1 in
+            foo
+        ]
 }

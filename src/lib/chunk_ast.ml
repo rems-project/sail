@@ -96,6 +96,7 @@ and chunk =
   | Intersperse of string * chunks list
   | Atom of string
   | String_literal of string
+  | Multiline_string_literal of string list
   | Pragma of string * string
   | Unary of string * chunks
   | Binary of chunks * string * chunks
@@ -139,6 +140,9 @@ let rec prerr_chunk indent = function
   | Spacer (line, w) -> Printf.eprintf "%sSpacer:%b %d\n" indent line w
   | Atom str -> Printf.eprintf "%sAtom:%s\n" indent str
   | String_literal str -> Printf.eprintf "%sString_literal:%s\n" indent str
+  | Multiline_string_literal lines ->
+      Printf.eprintf "%sMultiline_string_literal:\n" indent;
+      List.iteri (fun i line -> Printf.eprintf "%s%d>%s\n" indent i line) lines
   | App (id, args) ->
       Printf.eprintf "%sApp:%s\n" indent (string_of_id id);
       List.iteri
@@ -484,6 +488,7 @@ let chunk_of_lit (L_aux (aux, _)) =
   | L_bin b -> Atom ("0b" ^ b)
   | L_undef -> Atom "undefined"
   | L_string s -> String_literal s
+  | L_multiline_string lines -> Multiline_string_literal lines
   | L_real r -> Atom r
 
 let rec map_peek f = function
@@ -1197,24 +1202,23 @@ let chunk_register comments chunks (DEC_aux (DEC_reg ((ATyp_aux (_, typ_l) as ty
 let chunk_toplevel_let l comments chunks (LB_aux (LB_val (pat, exp), _)) =
   pop_comments comments chunks l;
   let def_chunks = Queue.create () in
-  Queue.push (Atom "let") def_chunks;
-  Queue.push (Spacer (false, 1)) def_chunks;
 
   let pat_chunks = Queue.create () in
   let exp_chunks = Queue.create () in
-  begin
-    match pat with
-    | P_aux (P_typ (typ, pat), pat_l) ->
-        chunk_pat comments pat_chunks pat;
-        let typ_chunks = Queue.create () in
-        chunk_atyp comments typ_chunks typ;
-        chunk_exp comments exp_chunks exp;
-        Queue.push (Ternary (pat_chunks, ":", typ_chunks, "=", exp_chunks)) def_chunks
-    | _ ->
-        chunk_pat comments pat_chunks pat;
-        chunk_exp comments exp_chunks exp;
-        Queue.push (Binary (pat_chunks, "=", exp_chunks)) def_chunks
-  end;
+  ( match pat with
+  | P_aux (P_typ (typ, pat), pat_l) ->
+      chunk_pat comments pat_chunks pat;
+      let typ_chunks = Queue.create () in
+      chunk_atyp comments typ_chunks typ;
+      chunk_exp comments exp_chunks exp;
+      let pat_typ_chunks = Queue.create () in
+      Queue.push (Binary (pat_chunks, ":", typ_chunks)) pat_typ_chunks;
+      Queue.push (Block_binder (Let_binder, pat_typ_chunks, exp_chunks)) def_chunks
+  | _ ->
+      chunk_pat comments pat_chunks pat;
+      chunk_exp comments exp_chunks exp;
+      Queue.push (Block_binder (Let_binder, pat_chunks, exp_chunks)) def_chunks
+  );
   Queue.push (Chunks def_chunks) chunks;
   if not (pop_trailing_comment ~space:1 comments exp_chunks (ending_line_num l)) then
     Queue.push (Spacer (true, 1)) chunks

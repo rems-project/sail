@@ -87,6 +87,7 @@ and chunk =
   | Intersperse of string * chunks list
   | Atom of string
   | String_literal of string
+  | Multiline_string_literal of string list
   | Pragma of string * string
   | Unary of string * chunks
   | Binary of chunks * string * chunks

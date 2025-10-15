@@ -230,6 +230,7 @@ let set_syntax_deprecated l =
 %token <string> Id TyVar
 %token <Nat_big_num.num> Num
 %token <string> String Bin Hex Real
+%token <string list> MultilineString
 
 %token <string> Eq EqGt Unit Colon
 
@@ -587,6 +588,8 @@ lit:
     { mk_lit (L_hex $1) $startpos $endpos }
   | String
     { mk_lit (L_string $1) $startpos $endpos }
+  | MultilineString
+    { mk_lit (L_multiline_string $1) $startpos $endpos }
   | Real
     { mk_lit (L_real $1) $startpos $endpos }
 

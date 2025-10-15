@@ -1,0 +1,12 @@
+
+let foo
+  : string =
+                     """
+some text
+x
+ y
+  z
+    abc\n\n
+dedent
+more text\n
+"""
