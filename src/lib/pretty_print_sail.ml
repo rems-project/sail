@@ -527,9 +527,9 @@ module Printer (Config : PRINT_CONFIG) = struct
                   (separate (break 1)
                      [
                        doc_id id;
-                       string "from " ^^ doc_atomic_exp exp1;
-                       string "to " ^^ doc_atomic_exp exp2;
-                       string "by " ^^ doc_atomic_exp exp3;
+                       string "from " ^^ doc_exp exp1;
+                       string "to " ^^ doc_exp exp2;
+                       string "by " ^^ doc_exp exp3;
                        string "in " ^^ doc_ord order;
                      ]
                   )
