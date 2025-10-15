@@ -4,7 +4,10 @@
   [91m |[0m        [91m^--------------------------^[0m
   [91m |[0m Well-formedness check failed for type
   [91m |[0m 
+  [91m |[0m [93mCaused by [0m[96mpass/wf_specs/wf_specs.sail[0m:8.4-14:
+  [91m |[0m 8[96m |[0mlet THIRTY_TWO : atom(32) = 32
+  [91m |[0m  [92m |[0m    [92m^--------^[0m [92mTHIRTY_TWO defined as term-level variable here, but this cannot be used in a type[0m
   [91m |[0m [93mCaused by [0m[96mpass/wf_specs/wf_specs.sail[0m:10.25-35:
   [91m |[0m 10[96m |[0mval f : bits(32) -> bits(THIRTY_TWO)
   [91m |[0m   [91m |[0m                         [91m^--------^[0m
-  [91m |[0m   [91m |[0m Undefined numeric type THIRTY_TWO
+  [91m |[0m   [91m |[0m No numeric type named THIRTY_TWO in scope

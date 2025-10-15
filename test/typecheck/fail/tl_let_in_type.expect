@@ -1,0 +1,13 @@
+[93mType error[0m:
+[96mfail/tl_let_in_type.sail[0m:5.15-16:
+5[96m |[0mtype t : Nat = v
+ [91m |[0m               [91m^[0m
+ [91m |[0m Well-formedness check failed for numeric type expression
+ [91m |[0m 
+ [91m |[0m [93mCaused by [0m[96mfail/tl_let_in_type.sail[0m:3.4-5:
+ [91m |[0m 3[96m |[0mlet v = 3
+ [91m |[0m  [92m |[0m    [92m^[0m [92mv defined as term-level variable here, but this cannot be used in a type[0m
+ [91m |[0m [93mCaused by [0m[96mfail/tl_let_in_type.sail[0m:5.15-16:
+ [91m |[0m 5[96m |[0mtype t : Nat = v
+ [91m |[0m  [91m |[0m               [91m^[0m
+ [91m |[0m  [91m |[0m No numeric type named v in scope
