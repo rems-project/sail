@@ -155,10 +155,17 @@ let cpp_options =
     );
   ]
 
-let c_rewrites =
+(* The C backend can output in C or C++ mode. *)
+type c_backend_mode = C | Cpp
+
+(* Convert the mode to a string. This can be used as the target name and file extension. *)
+let string_of_mode = function C -> "c" | Cpp -> "cpp"
+
+let c_cpp_rewrites (mode : c_backend_mode) =
+  let target_name = string_of_mode mode in
   let open Rewrites in
   [
-    ("instantiate_outcomes", [String_arg "c"]);
+    ("instantiate_outcomes", [String_arg target_name]);
     ("realize_mappings", []);
     ("remove_vector_subrange_pats", []);
     ("toplevel_string_append", []);
@@ -168,8 +175,8 @@ let c_rewrites =
     ("mono_rewrites", [If_flag opt_mono_rewrites]);
     ("recheck_defs", [If_flag opt_mono_rewrites]);
     ("toplevel_nexps", [If_mono_arg]);
-    ("monomorphise", [String_arg "c"; If_mono_arg]);
-    ("atoms_to_singletons", [String_arg "c"; If_mono_arg]);
+    ("monomorphise", [String_arg target_name; If_mono_arg]);
+    ("atoms_to_singletons", [String_arg target_name; If_mono_arg]);
     ("recheck_defs", [If_mono_arg]);
     ("undefined", [Bool_arg false]);
     ("vector_string_pats_to_bit_list", []);
@@ -183,10 +190,13 @@ let c_rewrites =
     ("exp_lift_assign", []);
     ("merge_function_clauses", []);
     ("recheck_defs", []);
-    ("constant_fold", [String_arg "c"]);
+    ("constant_fold", [String_arg target_name]);
   ]
 
-let collect_c_name_info ast =
+(* Find overides (`$c_override` directive) and reserved works
+   (`$c_reserved` directive, and extern functions). *)
+let collect_c_name_info ast (mode : c_backend_mode) =
+  let target_name = string_of_mode mode in
   let open Ast in
   let open Ast_defs in
   let reserved = ref Util.StringSet.empty in
@@ -194,7 +204,9 @@ let collect_c_name_info ast =
   List.iter
     (function
       | DEF_aux (DEF_val (VS_aux (VS_val_spec (_, _, extern), _)), _) -> (
-          match extern_assoc "c" extern with Some name -> reserved := Util.StringSet.add name !reserved | None -> ()
+          match extern_assoc target_name extern with
+          | Some name -> reserved := Util.StringSet.add name !reserved
+          | None -> ()
         )
       | DEF_aux (DEF_pragma ("c_reserved", Pragma_line (name, _)), _) -> reserved := Util.StringSet.add name !reserved
       | DEF_aux (DEF_pragma ("c_override", Pragma_structured data), def_annot) -> (
@@ -207,8 +219,8 @@ let collect_c_name_info ast =
     ast.defs;
   (!reserved, !overrides)
 
-let c_target is_cpp out_file { ast; effect_info; env; default_sail_dir; _ } =
-  let reserveds, overrides = collect_c_name_info ast in
+let c_target (mode : c_backend_mode) out_file { ast; effect_info; env; default_sail_dir; _ } =
+  let reserveds, overrides = collect_c_name_info ast mode in
 
   let module Codegen = C_backend.Codegen (struct
     let includes = !opt_includes_c
@@ -222,7 +234,9 @@ let c_target is_cpp out_file { ast; effect_info; env; default_sail_dir; _ } =
     let branch_coverage = !opt_branch_coverage
     let assert_to_exception = !opt_assert_to_exception
     let preserve_types = !opt_preserve_types
-    let cpp = is_cpp
+
+    (* TODO: Convert `cpp` to use `c_backend_mode` instead of `bool`. *)
+    let cpp = match mode with C -> false | Cpp -> true
     let cpp_class_name = !opt_cpp_class_name
     let cpp_namespace = !opt_cpp_namespace
     let cpp_derive_from = !opt_cpp_derive_from
@@ -241,9 +255,7 @@ let c_target is_cpp out_file { ast; effect_info; env; default_sail_dir; _ } =
 
   let header, impl = Codegen.compile_ast env effect_info basename ast in
 
-  let impl_ext = if is_cpp then ".cpp" else ".c" in
-
-  let impl_out = Util.open_output_with_check (out_file ^ impl_ext) in
+  let impl_out = Util.open_output_with_check (out_file ^ "." ^ string_of_mode mode) in
   output_string impl_out.channel impl;
   flush impl_out.channel;
   Util.close_output_with_check impl_out;
@@ -266,10 +278,10 @@ let _ =
   Pragma.register "c_reserved";
   Pragma.register "c_override";
   ignore
-    (Target.register ~name:"c" ~options:c_options ~rewrites:c_rewrites ~supports_abstract_types:true
-       ~supports_runtime_config:true (c_target false)
+    (Target.register ~name:"c" ~options:c_options ~rewrites:(c_cpp_rewrites C) ~supports_abstract_types:true
+       ~supports_runtime_config:true (c_target C)
     );
   ignore
-    (Target.register ~name:"cpp" ~options:cpp_options ~rewrites:c_rewrites ~supports_abstract_types:true
-       ~supports_runtime_config:true (c_target true)
+    (Target.register ~name:"cpp" ~options:cpp_options ~rewrites:(c_cpp_rewrites Cpp) ~supports_abstract_types:true
+       ~supports_runtime_config:true (c_target Cpp)
     )

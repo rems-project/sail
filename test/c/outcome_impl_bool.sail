@@ -2,7 +2,7 @@ default Order dec
 
 $include <prelude.sail>
 
-$target_set emulator c ocaml interpreter systemverilog
+$target_set emulator c cpp ocaml interpreter systemverilog
 
 outcome foo : bits(if 'is_32 then 32 else 64) -> unit with 'is_32 = {
   impl emulator(bv) = {

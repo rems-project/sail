@@ -2,7 +2,7 @@ default Order dec
 
 $include <prelude.sail>
 
-$target_set emulator c ocaml interpreter systemverilog
+$target_set emulator c cpp ocaml interpreter systemverilog
 
 outcome foo : bits('n) -> unit with 'n, constraint 'n in {32, 64} = {
   impl emulator(bv) = {
