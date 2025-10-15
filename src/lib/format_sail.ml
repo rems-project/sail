@@ -453,13 +453,17 @@ module Make (Config : CONFIG) = struct
     | Delim s -> string s ^^ space
     | Opt_delim s -> opt_delim s
     | String_literal s -> utf8string ("\"" ^ String.escaped s ^ "\"")
-    | App (id, args) ->
-        doc_id id
-        ^^ group
-             (surround indent 0 (char '(')
-                (separate_map softline (doc_chunks (opts |> nonatomic |> expression_like)) args)
-                (char ')')
-             )
+    | App (id, args) -> (
+        match args with
+        | [] -> doc_id id ^^ string "()"
+        | _ ->
+            doc_id id
+            ^^ group
+                 (surround indent 0 (char '(')
+                    (separate_map softline (doc_chunks (opts |> nonatomic |> expression_like)) args)
+                    (char ')')
+                 )
+      )
     | Tuple (l, r, spacing, args) ->
         let group_fn = if ungroup_tuple then fun x -> x else group in
         group_fn

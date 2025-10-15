@@ -596,7 +596,33 @@ let run_sail_format (config : Yojson.Safe.t option) =
       | None -> Format_sail.default_config
   end in
   let module Formatter = Format_sail.Make (Config) in
-  let parsed_files = List.map (fun f -> (f, Initial_check.parse_file f)) !opt_free_arguments in
+  let project_files, files =
+    List.partition (fun free -> Filename.check_suffix free ".sail_project") !opt_free_arguments
+  in
+
+  (* Get all the files references by project files *)
+  let referenced_files =
+    List.map
+      (fun project_file ->
+        let root_directory = Filename.dirname project_file in
+        let contents = file_to_string project_file in
+        let defs = Project.mk_root root_directory :: Initial_check.parse_project ~filename:project_file ~contents () in
+
+        let variables = ref Util.StringMap.empty in
+        List.iter
+          (fun assignment ->
+            if not (Project.parse_assignment ~variables assignment) then
+              raise (Reporting.err_general Parse_ast.Unknown ("Could not parse assignment " ^ assignment))
+          )
+          !opt_variable_assignments;
+        let proj = Project.initialize_project_structure ~variables defs in
+        Project.all_files proj
+      )
+      project_files
+    |> List.concat |> List.map fst
+  in
+
+  let parsed_files = List.map (fun f -> (f, Initial_check.parse_file f)) (files @ referenced_files) in
   List.iter
     (fun (f, (comments, parse_ast)) ->
       let source = file_to_string f in
