@@ -124,6 +124,7 @@ type lit_aux =
   | L_bin of string (* bit vector constant, C-style *)
   | L_undef (* undefined value *)
   | L_string of string (* string constant *)
+  | L_multiline_string of string list (* multi-line string constant *)
   | L_real of string
 
 type lit = L_aux of lit_aux * l

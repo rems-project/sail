@@ -1,0 +1,11 @@
+[93mSyntax error[0m:
+[96mmls_dedent.sail[0m:8.0-0:
+8[96m |[0m  dedent
+ [92m |[0m[92m^[0m [92mLine 6 starting here[0m
+[96mmls_dedent.sail[0m:2.19-10.7:
+2 [96m |[0mlet foo : string = """
+  [91m |[0m                   [91m^--[0m
+10[96m |[0m    """
+  [91m |[0m[91m------^[0m
+  [91m |[0m Line 6 in multi-line string literal has an invalid prefix.
+  [91m |[0m It must contain the exact sequence of whitespace characters that preceed the final """ delimiter.

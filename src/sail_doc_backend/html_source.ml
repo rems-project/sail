@@ -80,7 +80,7 @@ let highlights ~filename ~contents =
     | INT | NAT | BOOL | TYPE | ORDER ->
         mark Highlight.Kind;
         go ()
-    | String _ ->
+    | String _ | MultilineString _ ->
         mark Highlight.String;
         go ()
     | DocLine _ | DocBlock _ ->

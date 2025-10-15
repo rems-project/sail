@@ -1281,6 +1281,7 @@ let to_ast_lit (P.L_aux (lit, l)) =
         )
       | P.L_real r -> L_real r
       | P.L_string s -> L_string s
+      | P.L_multiline_string lines -> L_string (String.concat "\n" (List.map Scanf.unescaped lines))
       ),
       l
     )
