@@ -79,7 +79,7 @@ and chunk =
   | Val of { id : Parse_ast.id; extern_opt : Parse_ast.extern option; typq_opt : chunks option; typ : chunks }
   | Enum of { id : Parse_ast.id; enum_functions : chunks list option; members : chunks list }
   | Function_typ of { mapping : bool; lhs : chunks; rhs : chunks }
-  | Exists of { vars : chunks; constr : chunks; typ : chunks }
+  | Exists of { vars : chunks; constr : chunks option; typ : chunks }
   | Typ_quant of { vars : chunks; constr_opt : chunks option }
   | App of Parse_ast.id * chunks list
   | Field of chunks * Parse_ast.id

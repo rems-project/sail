@@ -88,7 +88,7 @@ and chunk =
   | Val of { id : id; extern_opt : extern option; typq_opt : chunks option; typ : chunks }
   | Enum of { id : id; enum_functions : chunks list option; members : chunks list }
   | Function_typ of { mapping : bool; lhs : chunks; rhs : chunks }
-  | Exists of { vars : chunks; constr : chunks; typ : chunks }
+  | Exists of { vars : chunks; constr : chunks option; typ : chunks }
   | Typ_quant of { vars : chunks; constr_opt : chunks option }
   | App of id * chunks list
   | Field of chunks * id
@@ -208,7 +208,10 @@ let rec prerr_chunk indent = function
           Queue.iter (prerr_chunk (indent ^ "    ")) funcl.body
         )
         fn.funcls
-  | Val vs -> Printf.eprintf "%sVal:%s has_extern=%b\n" indent (string_of_id vs.id) (Option.is_some vs.extern_opt)
+  | Val vs ->
+      Printf.eprintf "%sVal:%s has_extern=%b\n" indent (string_of_id vs.id) (Option.is_some vs.extern_opt);
+      Printf.eprintf "%s  typ:\n" indent;
+      Queue.iter (prerr_chunk (indent ^ "    ")) vs.typ
   | Enum e ->
       Printf.eprintf "%sEnum:%s\n" indent (string_of_id e.id);
       begin
@@ -332,11 +335,13 @@ let rec prerr_chunk indent = function
   | Exists ex ->
       Printf.eprintf "%sExists:\n" indent;
       List.iter
-        (fun (name, arg) ->
+        (fun (name, arg_opt) ->
           Printf.eprintf "%s  %s:\n" indent name;
-          Queue.iter (prerr_chunk (indent ^ "    ")) arg
+          match arg_opt with
+          | Some arg -> Queue.iter (prerr_chunk (indent ^ "    ")) arg
+          | None -> Printf.eprintf "%s    <empty>" indent
         )
-        [("vars", ex.vars); ("constr", ex.constr); ("typ", ex.typ)]
+        [("vars", Some ex.vars); ("constr", ex.constr); ("typ", Some ex.typ)]
   | Binder _ -> ()
   | Block_binder (binder, binding, exp) ->
       Printf.eprintf "%sBlock_binder:%s\n" indent (binder_keyword binder);
@@ -634,10 +639,17 @@ let rec chunk_atyp comments chunks (ATyp_aux (aux, l)) =
   | ATyp_wild -> Queue.add (Atom "_") chunks
   | ATyp_exist (vars, constr, typ) ->
       let var_chunks = Queue.create () in
-      List.iter (fun kopt -> Queue.add (chunk_of_kopt kopt) var_chunks) vars;
-      let constr_chunks = rec_chunk_atyp constr in
+      Util.iter_last
+        (fun is_last kopt ->
+          Queue.add (chunk_of_kopt kopt) var_chunks;
+          if not is_last then Queue.add (Spacer (false, 1)) var_chunks
+        )
+        vars;
+      let constr_chunks_opt =
+        match constr with ATyp_aux (ATyp_lit (L_aux (L_true, _)), _) -> None | _ -> Some (rec_chunk_atyp constr)
+      in
       let typ_chunks = rec_chunk_atyp typ in
-      Queue.add (Exists { vars = var_chunks; constr = constr_chunks; typ = typ_chunks }) chunks
+      Queue.add (Exists { vars = var_chunks; constr = constr_chunks_opt; typ = typ_chunks }) chunks
   | ATyp_set _ -> ()
 
 let rec chunk_pat comments chunks (P_aux (aux, l)) =
