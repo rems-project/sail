@@ -556,8 +556,7 @@ module Make (Config : CONFIG) = struct
     | Exists ex ->
         let ex_doc =
           doc_chunks (atomic opts) ex.vars
-          ^^ char ',' ^^ break 1
-          ^^ doc_chunks (nonatomic opts) ex.constr
+          ^^ (match ex.constr with Some cs -> char ',' ^^ break 1 ^^ doc_chunks (nonatomic opts) cs | None -> empty)
           ^^ char '.' ^^ break 1
           ^^ doc_chunks (nonatomic opts) ex.typ
         in
