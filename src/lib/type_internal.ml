@@ -93,6 +93,7 @@ type type_error =
   | Err_function_arg of Parse_ast.l * typ * type_error
   | Err_no_function_type of { id : id; functions : (typquant * typ) Bindings.t }
   | Err_unbound_id of { id : id; locals : (mut * typ) Bindings.t; have_function : bool }
+  | Err_vector_subrange of { n : Big_int.num; m : Big_int.num; order : order }
   | Err_hint of string
   | Err_with_hint of string * type_error
   | Err_alternate of type_error * (string * Parse_ast.l * type_error) list

@@ -84,6 +84,7 @@ type type_error =
   | Err_unbound_id of { id : id; locals : (mut * typ) Bindings.t; have_function : bool }
       (** Takes the name of the identifier, the set of local bindings, and whether we have a function of the same name
           in scope. *)
+  | Err_vector_subrange of { n : Big_int.num; m : Big_int.num; order : order }
   | Err_hint of string  (** A short error that only appears attached to a location *)
   | Err_with_hint of string * type_error
   | Err_alternate of type_error * (string * Parse_ast.l * type_error) list

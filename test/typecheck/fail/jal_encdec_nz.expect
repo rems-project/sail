@@ -1,0 +1,5 @@
+[93mType error[0m:
+[96mfail/jal_encdec_nz.sail[0m:14.6-67:
+14[96m |[0m  <-> imm[20] @ imm[10..1] @ imm[11] @ imm[19..12] @ rd @ 0b1101111
+  [91m |[0m      [91m^-----------------------------------------------------------^[0m
+  [91m |[0m Cannot bind imm as pattern subranges do not start at bit 0 (lowest bit is 1).
