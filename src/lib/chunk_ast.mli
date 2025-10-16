@@ -75,6 +75,7 @@ and chunk =
       typq_opt : chunks option;
       return_typ_opt : chunks option;
       funcls : (chunks * pexp_chunks) list;
+      hanging : bool;
     }
   | Val of { id : Parse_ast.id; extern_opt : Parse_ast.extern option; typq_opt : chunks option; typ : chunks }
   | Enum of { id : Parse_ast.id; enum_functions : chunks list option; members : chunks list }
@@ -91,7 +92,8 @@ and chunk =
   | Pragma of string * string
   | Unary of string * chunks
   | Binary of chunks * string * chunks
-  | Ternary of chunks * string * chunks * string * chunks
+  | Vector_binary of chunks * string * chunks
+  | Assign of chunks * (string * chunks) option * string * chunks
   | Infix_sequence of infix_chunk list
   | Index of chunks * chunks
   | Delim of string
@@ -112,7 +114,7 @@ and chunk =
       body : chunks;
     }
   | While of { repeat_until : bool; termination_measure : chunks option; cond : chunks; body : chunks }
-  | Vector_updates of chunks * chunk list
+  | Vector_updates of chunks * chunks list
   | Chunks of chunks
   | Raw of string
 

@@ -5,5 +5,5 @@ $include <prelude.sail>
 val main : unit -> unit
 
 function main() = {
-    let x : {1, 2, 3} = 3
+  let x : {1, 2, 3} = 3
 }

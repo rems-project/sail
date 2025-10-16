@@ -1,0 +1,17 @@
+
+// comment
+
+// Another comment
+
+/* a block
+   comment */
+
+// A third
+// comment
+
+
+/// Doc comment
+val foo : unit -> unit
+
+function foo () =
+  ()

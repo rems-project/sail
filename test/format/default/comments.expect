@@ -9,16 +9,19 @@
 /* first line comment
 
         last line comment         */
+
 /* first line comment
              indent many
            last line comment*/
+
 /* first line comment
 indent many
      last line comment*/
+
 /* first line comment
        indent many
 last line comment*/
-function a () -> int = {
+function a() -> int = {
     /*comment*/
     /*      comment          */
     /* first line comment
@@ -29,12 +32,15 @@ function a () -> int = {
     /* first line comment
 
             last line comment         */
+
     /* first line comment
                  indent many
                last line comment*/
+
     /* first line comment
     indent many
          last line comment*/
+
     /* first line comment
            indent many
     last line comment*/
@@ -49,7 +55,8 @@ function a () -> int = {
 }
 
 // comment
-function b () -> int = {
+
+function b() -> int = {
     let a = {
         1
         // comment

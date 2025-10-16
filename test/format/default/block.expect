@@ -4,7 +4,7 @@ $include <prelude.sail>
 
 val foo : unit -> unit
 
-function foo () = {
+function foo() = {
     print_endline("string1"); // comment
     print_endline("string2");
 
