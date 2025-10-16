@@ -44,6 +44,8 @@
 (*  SPDX-License-Identifier: BSD-2-Clause                                   *)
 (****************************************************************************)
 
+type infix_style = Prefix_lineup | Prefix
+
 type config = {
   indent : int;  (** The default indentation depth (default 4) *)
   preserve_structure : bool;
@@ -53,6 +55,7 @@ type config = {
   ribbon_width : float;
       (** The fraction (between 0.0 and 1.0) of the maximum line width that can be filled by non whitespace characters
           before we consider breaking. (default 1.0) *)
+  infix_style : infix_style;
 }
 
 (** Read the config struct from a json object. Raises err_general if the json is not an object, and warns about any

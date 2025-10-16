@@ -1,0 +1,9 @@
+{
+    "fmt": {
+        "indent": 2,
+        "preserve_structure": true,
+        "line_width": 80,
+        "ribbon_width": 1.0,
+        "infix_style": "prefix"
+    }
+}

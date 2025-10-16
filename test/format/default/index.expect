@@ -1,4 +1,4 @@
-function rX r = {
+function rX(r) = {
     let foo = Xs[1];
     let foo = Xs[a];
     let foo = Xs[unsigned(r)];

@@ -1,9 +1,3 @@
 {
-    "fmt": {
-        "indent": 4,
-        "preserve_structure": false,
-        "line_width": 120,
-        "ribbon_width": 1.0
-    }
+    "fmt": {}
 }
-

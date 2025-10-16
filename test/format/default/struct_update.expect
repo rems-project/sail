@@ -6,14 +6,14 @@ $include <prelude.sail>
 
 val foo : unit -> unit
 
-function foo () = {
+function foo() = {
     ();
     let x = { s with foo = 0xFFFF,  bar = 0b1 }
 }
 
 val bar : unit -> int
 
-function baz () = {
+function baz() = {
     ();
     let some_long_named_variable_to_break_the_line = {
         function_modify_the_struct(struct_with_a_long_name, x) with
@@ -27,7 +27,7 @@ function baz () = {
 
 scattered function /* comment */ quux
 
-function clause quux 0b0000_0000 = ()
+function clause quux(0b0000_0000) = ()
 
 end /* comment */ quux
 
@@ -43,7 +43,7 @@ enum E with f -> very_long_type_that_will_trigger_a_linebreak,
     B,
 }
 
-function has_loops () = {
+function has_loops() = {
     foreach (n from 1 to 3) { () };
     foreach (n from 3 downto 1) { () };
     foreach (n from 0 to 4 by 2) { () };
