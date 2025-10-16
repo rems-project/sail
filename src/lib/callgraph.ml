@@ -235,7 +235,7 @@ let add_def_to_graph graph (DEF_aux (def, def_annot)) =
             let funcalls_of_exp =
               let e_app (id, args) =
                 let arg_funcalls = List.fold_left IdSet.union IdSet.empty args in
-                if Bindings.mem id (Env.get_val_specs env) then IdSet.add id arg_funcalls else arg_funcalls
+                if Env.has_val_spec id env then IdSet.add id arg_funcalls else arg_funcalls
               in
               fold_exp { (pure_exp_alg IdSet.empty IdSet.union) with e_app }
             in
