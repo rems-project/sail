@@ -3783,7 +3783,7 @@ module BitvectorSizeCasts = struct
   let specs_required = ref IdSet.empty
   let check_for_spec env name =
     let id = mk_id name in
-    match Env.get_val_spec id env with _ -> () | exception _ -> specs_required := IdSet.add id !specs_required
+    if Env.has_val_spec id env then () else specs_required := IdSet.add id !specs_required
 
   (* These functions add cast functions across case splits, so that when a
      bitvector size becomes known in sail, the generated Lem code contains a

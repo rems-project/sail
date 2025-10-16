@@ -119,6 +119,7 @@ val get_val_spec_opt : id -> t -> ((typquant * typ) * l) option
 val get_val_spec : id -> t -> typquant * typ
 val get_val_specs : t -> (typquant * typ) Bindings.t
 val get_val_spec_orig : id -> t -> typquant * typ
+val has_val_spec : id -> t -> bool
 
 val is_outcome : id -> t -> bool
 val add_outcome : id -> typquant * typ * typquant * id list * t -> t -> t

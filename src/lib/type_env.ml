@@ -1181,6 +1181,8 @@ let get_val_spec id env =
   | Some (bind, _) -> bind
   | None -> typ_raise (id_loc id) (Err_no_function_type { id; functions = get_val_specs env })
 
+let has_val_spec id env = Bindings.mem id env.global.val_specs
+
 let add_union_id ?in_module id bind env =
   if bound_global env id then already_bound_global "union constructor" id env
   else (
