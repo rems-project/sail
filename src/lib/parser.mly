@@ -265,6 +265,14 @@ separated_nonempty_list_trailing(SEP, ELEM):
   | x=ELEM; SEP; xs=separated_nonempty_list_trailing(SEP, ELEM)
     { x :: xs }
 
+separated_list_trailing(SEP, ELEM):
+  |
+    { [] }
+  | x=ELEM
+    { [x] }
+  | x=ELEM; SEP; xs=separated_list_trailing(SEP, ELEM)
+    { x :: xs }
+
 id:
   | Id       { mk_id (Id $1) $startpos $endpos }
   | Op OpId  { mk_id (Operator $2) $startpos $endpos }
@@ -853,19 +861,21 @@ attribute_data_key_value:
     { (key, value) }
 
 attribute_data:
-  | Lcurly; kvs = separated_list(Comma, attribute_data_key_value) Rcurly
+  | Lcurly; kvs = separated_list_trailing(Comma, attribute_data_key_value) Rcurly
     { AD_aux (AD_object kvs, loc $startpos $endpos) }
   | n = Num
     { AD_aux (AD_num n, loc $startpos $endpos) }
   | s = String
     { AD_aux (AD_string s, loc $startpos $endpos) }
+  | lines = MultilineString
+    { AD_aux (AD_string (String.concat "\n" (List.map Scanf.unescaped lines)), loc $startpos $endpos) }
   | id = Id
     { AD_aux (AD_string id, loc $startpos $endpos) }
   | True
     { AD_aux (AD_bool true, loc $startpos $endpos) }
   | False
     { AD_aux (AD_bool false, loc $startpos $endpos) }
-  | Lsquare; xs = separated_list(Comma, attribute_data) Rsquare
+  | Lsquare; xs = separated_list_trailing(Comma, attribute_data) Rsquare
     { AD_aux (AD_list xs, loc $startpos $endpos) }
 
 attribute:

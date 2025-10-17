@@ -1,5 +1,5 @@
 
-$[fmt "skip"]
+$[fmt skip]
 let foo =
 
 
