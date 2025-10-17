@@ -327,13 +327,24 @@ let operator_precedence = function
   | "=" -> (10, precedence 1, nonatomic, 1)
   | ":" -> (0, subatomic, subatomic, 1)
   | ".." -> (10, atomic, atomic, 1)
-  | "@" -> (6, precedence 5, precedence 6, 1)
   | _ -> (10, subatomic, subatomic, 1)
+
+let unary_operator_precedence = function
+  | "throw" -> (0, nonatomic, space)
+  | "return" -> (0, nonatomic, space)
+  | "internal_return" -> (0, nonatomic, space)
+  | "*" -> (0, atomic, empty)
+  | "-" -> (0, atomic, empty)
+  | "2^" -> (10, atomic, empty)
+  | _ -> (10, subatomic, empty)
 
 let max_precedence infix_chunks =
   List.fold_left
     (fun max_prec infix_chunk ->
       match infix_chunk with
+      | Infix_prefix op ->
+          let prec, _, _ = unary_operator_precedence op in
+          max prec max_prec
       | Infix_op op ->
           let prec, _, _, _ = operator_precedence op in
           max prec max_prec
@@ -352,15 +363,6 @@ let ternary_operator_precedence = function
   | "..", "=" -> (0, atomic, atomic, nonatomic)
   | ":", "=" -> (0, atomic, nonatomic, nonatomic)
   | _ -> (10, subatomic, subatomic, subatomic)
-
-let unary_operator_precedence = function
-  | "throw" -> (0, nonatomic, space)
-  | "return" -> (0, nonatomic, space)
-  | "internal_return" -> (0, nonatomic, space)
-  | "*" -> (10, atomic, empty)
-  | "-" -> (10, atomic, empty)
-  | "2^" -> (10, atomic, empty)
-  | _ -> (10, subatomic, empty)
 
 let can_hang chunks =
   match Queue.peek_opt chunks with
@@ -551,9 +553,7 @@ module Make (Config : CONFIG) = struct
                   let padding =
                     match infix_style with
                     | Prefix_lineup -> ifflat space (repeat (longest_op - op_w + 1) space)
-                    | Prefix ->
-                        prerr_endline "NOPAD";
-                        space
+                    | Prefix -> space
                   in
                   break 1 ^^ string op ^^ padding
               | Infix_chunks chunks ->
@@ -582,7 +582,7 @@ module Make (Config : CONFIG) = struct
     | Assign (x, ternary, op, z) -> (
         match ternary with
         | None ->
-            let x_doc = doc_chunks (atomic opts) x in
+            let x_doc = doc_chunks (nonatomic opts) x in
             let z_doc = doc_chunks (nonatomic opts) z in
             group (x_doc ^^ space ^^ char '=' ^^ nest indent (break 1 ^^ z_doc))
         | Some (t_op, y) ->
@@ -838,7 +838,12 @@ module Make (Config : CONFIG) = struct
 
   and doc_pexp_chunks opts pexp =
     let guarded_pat, body = doc_pexp_chunks_pair opts pexp in
-    separate space [guarded_pat; string "=>"; body]
+    let doc = separate space [guarded_pat; string "=>"; body] in
+    match pexp.attr with
+    | Some attr ->
+        let attr = doc_chunks opts attr in
+        attr ^^ parens doc ^^ char ','
+    | None -> doc
 
   and doc_funcl hanging typq_opt return_typ_opt opts (header, pexp) =
     let return_typ =
@@ -1002,17 +1007,27 @@ module Make (Config : CONFIG) = struct
     let formatted, lb_info = to_string (doc ^^ hardline) in
     fixup lb_info formatted |> fixup_comments ~filename |> discard_extra_trailing_newlines
 
-  let format_defs ?(debug = false) filename source comments defs =
+  let format_defs ?(debug = false) filename source comments starting_defs =
     let open Initial_check in
-    let f1 = format_defs_once ~debug filename source comments defs in
+    let open Parse_ast_diff in
+    let f1 = format_defs_once ~debug filename source comments starting_defs in
     let comments, defs = parse_file_from_string ~filename ~contents:f1 in
     let f2 = format_defs_once ~debug filename f1 comments defs in
     let comments, defs = parse_file_from_string ~filename ~contents:f2 in
     let f3 = format_defs_once ~debug filename f2 comments defs in
     if f2 <> f3 then (
-      print_endline f2;
-      print_endline f3;
+      prerr_endline f2;
+      prerr_endline f3;
       raise (Reporting.err_general Parse_ast.Unknown filename)
+    );
+    ( match diff_list ~at:Parse_ast.Unknown diff_def starting_defs defs with
+    | Some difference ->
+        prerr_endline f3;
+        raise
+          (Reporting.err_general difference
+             (Printf.sprintf "Found difference in syntax tree here after formatting %s" filename)
+          )
+    | None -> ()
     );
     f3
 end
