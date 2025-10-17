@@ -108,15 +108,6 @@ let mk_lit l n m = L_aux (l, loc n m)
 let mk_lit_exp l n m = mk_exp (E_lit (mk_lit l n m)) n m
 let mk_typschm tq t n m = TypSchm_aux (TypSchm_ts (tq, t), loc n m)
 
-let mk_typschm_opt ts n m = TypSchm_opt_aux (
-                                  TypSchm_opt_some (
-                                      ts
-                                    ),
-                                  loc n m
-                                )
-
-let mk_typschm_opt_none = TypSchm_opt_aux (TypSchm_opt_none, Unknown)
-
 let mk_sd s n m = SD_aux (s, loc n m)
 let mk_ir r n m = BF_aux (r, loc n m)
 
@@ -737,7 +728,13 @@ case:
     { mk_pexp (Pat_exp (p, body)) $startpos $endpos }
   | p = pat; If_; guard = exp; EqGt; body = exp
     { mk_pexp (Pat_when (p, guard, body)) $startpos $endpos }
-  | a = attribute; Lparen; c = case; Rparen
+  | a = attribute; c = attr_case
+    { mk_pexp (Pat_attribute (fst a, snd a, c)) $startpos $endpos(a) }
+
+attr_case:
+  | Lparen; c = case; Rparen
+    { c }
+  | a = attribute; c = attr_case
     { mk_pexp (Pat_attribute (fst a, snd a, c)) $startpos $endpos(a) }
 
 case_list:
@@ -1248,9 +1245,9 @@ mapcl_list:
 
 map_def:
   | Mapping id Eq Lcurly mapcl_list Rcurly
-    { mk_map $2 mk_typschm_opt_none $5 $startpos $endpos }
+    { mk_map $2 None $5 $startpos $endpos }
   | Mapping id Colon typschm Eq Lcurly mapcl_list Rcurly
-    { mk_map $2 (mk_typschm_opt $4 $startpos($4) $endpos($4)) $7 $startpos $endpos }
+    { mk_map $2 (Some $4) $7 $startpos $endpos }
 
 let_def:
   | Let_ letbind

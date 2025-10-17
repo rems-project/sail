@@ -121,7 +121,7 @@ and chunk =
 
 and chunks = chunk Queue.t
 
-and pexp_chunks = { funcl_space : bool; pat : chunks; guard : chunks option; body : chunks }
+and pexp_chunks = { funcl_space : bool; attr : chunks option; pat : chunks; guard : chunks option; body : chunks }
 
 val prerr_chunk : string -> chunk -> unit
 

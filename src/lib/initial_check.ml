@@ -1159,10 +1159,9 @@ let to_ast_typschm ctx (P.TypSchm_aux (P.TypSchm_ts (typq, typ), l)) =
 
 let to_ast_tannot_opt = ConvertType.to_ast_tannot_opt KindInference.initial_env
 
-let to_ast_typschm_opt ctx (P.TypSchm_opt_aux (aux, l)) : tannot_opt ctx_out =
-  match aux with
-  | P.TypSchm_opt_none -> (Typ_annot_opt_aux (Typ_annot_opt_none, l), ctx)
-  | P.TypSchm_opt_some (P.TypSchm_aux (P.TypSchm_ts (tq, typ), l)) ->
+let to_ast_typschm_opt ~at:l ctx = function
+  | None -> (Typ_annot_opt_aux (Typ_annot_opt_none, l), ctx)
+  | Some (P.TypSchm_aux (P.TypSchm_ts (tq, typ), l)) ->
       let open KindInference in
       let (tq, typ, _), kenv = check_bind ctx tq typ (Some (P.K_aux (P.K_type, l))) initial_env in
       let tq, ctx = ConvertType.to_ast_typquant kenv ctx tq in
@@ -2132,7 +2131,7 @@ let rec to_ast_mapcl doc attrs ctx (P.MCL_aux (mcl, l)) =
 let to_ast_mapdef ctx (P.MD_aux (md, l) : P.mapdef) : uannot mapdef =
   match md with
   | P.MD_mapping (id, typschm_opt, mapcls) ->
-      let tannot_opt, ctx = to_ast_typschm_opt ctx typschm_opt in
+      let tannot_opt, ctx = to_ast_typschm_opt ~at:l ctx typschm_opt in
       MD_aux (MD_mapping (to_ast_id ctx id, tannot_opt, List.map (to_ast_mapcl None [] ctx) mapcls), (l, empty_uannot))
 
 let to_ast_dec ctx (P.DEC_aux (regdec, l)) =

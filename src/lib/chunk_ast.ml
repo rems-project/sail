@@ -135,7 +135,7 @@ and chunk =
 
 and chunks = chunk Queue.t
 
-and pexp_chunks = { funcl_space : bool; pat : chunks; guard : chunks option; body : chunks }
+and pexp_chunks = { funcl_space : bool; attr : chunks option; pat : chunks; guard : chunks option; body : chunks }
 
 let add_chunk q chunk = Queue.add chunk q
 
@@ -608,7 +608,7 @@ let chunk_infix_token comments chunk_primary (infix_token, _, _) =
   | IT_prefix op -> (
       match op with
       | "__deref" -> Infix_prefix "*"
-      | "pow2" -> Infix_prefix "2 ^"
+      | "pow2" -> Infix_prefix "2 ^ "
       | "negate" -> Infix_prefix "-"
       | _ -> Infix_prefix op
     )
@@ -1201,12 +1201,13 @@ and chunk_vector_update comments (E_aux (aux, l) as exp) =
       chunk_exp comments exp_chunks exp;
       (exp_chunks, [])
 
-and chunk_pexp ?delim comments chunks (Pat_aux (aux, l)) =
+and chunk_pexp ?attr_chunks ?delim comments chunks (Pat_aux (aux, l)) =
   match aux with
   | Pat_attribute (attr, arg, pexp) ->
+      let chunks = match attr_chunks with Some chunks -> chunks | None -> Queue.create () in
       chunk_attribute comments chunks attr arg;
       Queue.add (Spacer (false, 1)) chunks;
-      chunk_pexp ?delim comments chunks pexp
+      chunk_pexp ~attr_chunks:chunks ?delim comments chunks pexp
   | Pat_exp (pat, exp) ->
       let funcl_space =
         match pat with P_aux (P_lit (L_aux (L_unit, _)), _) | P_aux (P_tuple _, _) -> false | _ -> true
@@ -1215,9 +1216,9 @@ and chunk_pexp ?delim comments chunks (Pat_aux (aux, l)) =
       chunk_pat comments pat_chunks pat;
       let exp_chunks = Queue.create () in
       chunk_exp comments exp_chunks exp;
-      (match delim with Some d -> Queue.add (Delim d) exp_chunks | _ -> ());
+      (match delim with Some d when Option.is_none attr_chunks -> Queue.add (Delim d) exp_chunks | _ -> ());
       ignore (pop_trailing_comment comments exp_chunks (ending_line_num l));
-      { funcl_space; pat = pat_chunks; guard = None; body = exp_chunks }
+      { funcl_space; attr = attr_chunks; pat = pat_chunks; guard = None; body = exp_chunks }
   | Pat_when (pat, guard, exp) ->
       let pat_chunks = Queue.create () in
       chunk_pat comments pat_chunks pat;
@@ -1225,9 +1226,9 @@ and chunk_pexp ?delim comments chunks (Pat_aux (aux, l)) =
       chunk_exp comments guard_chunks guard;
       let exp_chunks = Queue.create () in
       chunk_exp comments exp_chunks exp;
-      (match delim with Some d -> Queue.add (Delim d) exp_chunks | _ -> ());
+      (match delim with Some d when Option.is_none attr_chunks -> Queue.add (Delim d) exp_chunks | _ -> ());
       ignore (pop_trailing_comment comments exp_chunks (ending_line_num l));
-      { funcl_space = true; pat = pat_chunks; guard = Some guard_chunks; body = exp_chunks }
+      { funcl_space = true; attr = attr_chunks; pat = pat_chunks; guard = Some guard_chunks; body = exp_chunks }
 
 let chunk_funcl comments funcl =
   let chunks = Queue.create () in

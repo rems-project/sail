@@ -291,15 +291,6 @@ type tannot_opt_aux =
     Typ_annot_opt_none
   | Typ_annot_opt_some of typquant * atyp
 
-type typschm_opt_aux = TypSchm_opt_none | TypSchm_opt_some of typschm
-
-type typschm_opt = TypSchm_opt_aux of typschm_opt_aux * l
-
-type effect_opt_aux =
-  | (* Optional effect annotation for functions *)
-    Effect_opt_none (* sugar for empty effect set *)
-  | Effect_opt_effect of atyp
-
 type rec_opt_aux =
   | (* Optional recursive annotation for functions *)
     Rec_none (* no termination measure *)
@@ -325,8 +316,6 @@ and type_union_aux =
   | Tu_ty_anon_rec of (id * atyp) field_annot list * id
 
 type tannot_opt = Typ_annot_opt_aux of tannot_opt_aux * l
-
-type effect_opt = Effect_opt_aux of effect_opt_aux * l
 
 type rec_opt = Rec_aux of rec_opt_aux * l
 
@@ -385,7 +374,7 @@ and mapcl_aux =
 
 type mapdef_aux =
   (* mapping definition (bidirectional pattern-match function) *)
-  | MD_mapping of id * typschm_opt * mapcl list
+  | MD_mapping of id * typschm option * mapcl list
 
 type mapdef = MD_aux of mapdef_aux * l
 
@@ -477,17 +466,6 @@ type def_aux =
   | DEF_internal_mutrec of fundef list
 
 and def = DEF_aux of def_aux * l
-
-type lexp_aux =
-  (* lvalue expression, can't occur out of the parser *)
-  | LE_id of id (* identifier *)
-  | LE_mem of id * exp list
-  | LE_vector of lexp * exp (* vector element *)
-  | LE_vector_range of lexp * exp * exp (* subvector *)
-  | LE_vector_concat of lexp list
-  | LE_field of lexp * id (* struct field *)
-
-and lexp = LE_aux of lexp_aux * l
 
 type defs =
   (* Definition sequence *)

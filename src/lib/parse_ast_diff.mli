@@ -44,32 +44,8 @@
 (*  SPDX-License-Identifier: BSD-2-Clause                                   *)
 (****************************************************************************)
 
-type infix_style = Prefix_lineup | Prefix
+open Parse_ast
 
-type config = {
-  indent : int;  (** The default indentation depth (default 4) *)
-  preserve_structure : bool;
-      (** If true, the formatter preserves the structure of the AST as much as possible - it won't insert braces around
-          if statements and so on where there weren't any and so on. (default false) *)
-  line_width : int;  (** The desired maximum line width. (default 120) *)
-  ribbon_width : float;
-      (** The fraction (between 0.0 and 1.0) of the maximum line width that can be filled by non whitespace characters
-          before we consider breaking. (default 1.0) *)
-  infix_style : infix_style;
-}
+val diff_list : at:l -> ('a -> 'a -> l option) -> 'a list -> 'a list -> l option
 
-(** Read the config struct from a json object. Raises err_general if the json is not an object, and warns about any
-    invalid keys. *)
-val config_from_json : Yojson.Safe.t -> config
-
-val default_config : config
-
-module type CONFIG = sig
-  val config : config
-end
-
-module Make (_ : CONFIG) : sig
-  (** If debug is true, we print extra debugging information to stderr, and annotate the output with various information
-      on linebreaking decisions. *)
-  val format_defs : ?debug:bool -> string -> string -> Lexer.comment list -> Parse_ast.def list -> string
-end
+val diff_def : def -> def -> l option
