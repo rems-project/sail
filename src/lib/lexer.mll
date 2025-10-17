@@ -152,7 +152,10 @@ let process_multiline start_delim pos end_delim str =
      );
      let chars = ref 0 in
      List.mapi (fun n line ->
-       if Util.starts_with ~prefix line || line = "" then (
+       if line = "" then (
+         incr chars;
+         ""
+       ) else if Util.starts_with ~prefix line then (
          let len = String.length line in
          chars := !chars + len + 1;
          String.sub line (String.length prefix) (len - String.length prefix)
