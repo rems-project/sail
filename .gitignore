@@ -15,7 +15,7 @@ a.out
 _build/
 _sbuild/
 
-z3_problems
+sail_smt_cache
 
 # bisect_ppx coverage
 
@@ -125,7 +125,7 @@ lib/hol/sail-heap
 /aarch64/Aarch64_types.thy
 /aarch64/aarch64.lem
 /aarch64/aarch64_types.lem
-/aarch64/z3_problems
+/aarch64/sail_smt_cache
 
 /cheri/cheri
 /cheri/cheri128

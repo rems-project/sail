@@ -65,7 +65,7 @@ let opt_splice : string list ref = ref []
 let opt_print_version = ref false
 let opt_require_version : string option ref = ref None
 let opt_memo_z3 = ref true
-let opt_memo_z3_path = ref "z3_problems"
+let opt_memo_z3_path = ref "sail_smt_cache"
 let opt_have_feature = ref None
 let opt_all_modules = ref false
 let opt_show_sail_dir = ref false
@@ -313,7 +313,10 @@ let rec options =
         " memoize calls to z3, improving performance when typechecking repeatedly (default)"
       );
       ("-no_memo_z3", Arg.Clear opt_memo_z3, " do not memoize calls to z3");
-      ("-memo_z3_path", Arg.String (fun f -> opt_memo_z3_path := f), "path to cache z3 results (default 'z3_problems')");
+      ( "-memo_z3_path",
+        Arg.String (fun f -> opt_memo_z3_path := f),
+        "path to cache z3 results (default 'sail_smt_cache')"
+      );
       ( "-have_feature",
         Arg.String (fun symbol -> opt_have_feature := Some symbol),
         "<symbol> check if a feature symbol is set by default"
