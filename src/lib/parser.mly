@@ -681,13 +681,21 @@ exp:
     { mk_exp (E_match ($2, $4)) $startpos $endpos }
   | Try exp Catch Lcurly case_list Rcurly
     { mk_exp (E_try ($2, $5)) $startpos $endpos }
-  | Foreach Lparen loop_exp Rparen exp
+  | Foreach Lparen loop_exp Rparen Do? exp
     { let (v, f, t, step, order) = $3 in
-      mk_exp (E_for (v, f, t, step, order, $5)) $startpos $endpos }
+      mk_exp (E_for (v, f, t, step, order, $6)) $startpos $endpos }
+  | Foreach loop_exp Lcurly block Rcurly
+    { let (v, f, t, step, order) = $2 in
+      mk_exp (E_for (v, f, t, step, order, mk_exp (E_block $4) $startpos($3) $endpos($5))) $startpos $endpos }
+  | Foreach loop_exp Do exp
+    { let (v, f, t, step, order) = $2 in
+      mk_exp (E_for (v, f, t, step, order, $4)) $startpos $endpos }
   | Repeat internal_loop_measure exp Until exp
     { mk_exp (E_loop (Until, $2, $5, $3)) $startpos $endpos }
   | While internal_loop_measure exp Do exp
     { mk_exp (E_loop (While, $2, $3, $5)) $startpos $endpos }
+  | While internal_loop_measure exp Lcurly block Rcurly
+    { mk_exp (E_loop (While, $2, $3, mk_exp (E_block $5) $startpos($4) $endpos($6))) $startpos $endpos }
 
   /* Debugging only, will be rejected in initial_check if debugging isn't on */
   | InternalPLet pat Eq exp In exp
