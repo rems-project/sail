@@ -320,10 +320,16 @@ kid:
   | TyVar
     { mk_kid $1 $startpos $endpos }
 
-num_list:
+negative_num:
   | Num
+    { $1 }
+  | Minus Num
+    { Big_int.negate $2 }
+
+num_list:
+  | negative_num Comma?
     { [$1] }
-  | Num Comma num_list
+  | negative_num Comma num_list
     { $1 :: $3 }
 
 tyarg:
