@@ -2175,7 +2175,7 @@ module Make (C : CONFIG) = struct
     let fundef_label = label "fundef_fail_" in
     let orig_ctx = ctx in
     (* The context must be updated before we call ctyp_of_typ on the argument types. *)
-    let ctx = { ctx with local_env = Env.add_typquant (id_loc id) quant ctx.tc_env } in
+    let ctx = { ctx with local_env = Env.add_typquant (id_loc id) quant ctx.local_env } in
     let ctx = update_coverage_override_def def_annot ctx in
 
     let arg_ctyps = List.map (ctyp_of_typ ctx) arg_typs in
@@ -2244,7 +2244,8 @@ module Make (C : CONFIG) = struct
     let instrs = compile_body ctx in
 
     if Option.is_some debug_attr then (
-      prerr_endline Util.("IR for " ^ string_of_id id ^ ":" |> yellow |> bold |> clear);
+      let type_string = Util.string_of_list ", " string_of_ctyp arg_ctyps ^ " -> " ^ string_of_ctyp ret_ctyp in
+      prerr_endline Util.("IR for " ^ string_of_id id ^ ": " ^ type_string |> yellow |> bold |> clear);
       List.iter (fun instr -> prerr_endline (string_of_instr instr)) instrs
     );
 
