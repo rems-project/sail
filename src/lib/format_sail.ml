@@ -47,6 +47,8 @@
 open Parse_ast
 open Chunk_ast
 
+module IntMap = Util.IntMap
+
 let id_loc (Id_aux (_, l)) = l
 
 let rec map_last f = function
@@ -99,10 +101,13 @@ let fixup_comments ~filename source =
 module PPrintWrapper = struct
   type hardline_type = Required | Desired
 
+  type lineup = Lineup_start | Lineup_point | Lineup_end
+
   type document =
     | Empty
     | Weak_space
     | Char of char
+    | Lineup_char of lineup * char
     | String of string
     | Utf8string of string
     | Group of document
@@ -116,10 +121,11 @@ module PPrintWrapper = struct
     hardlines : (int * int * hardline_type) Queue.t;
     dedents : (int * int * int) Queue.t;
     weak_spaces : (int * int) Queue.t;
+    lineups : (int * int * lineup) Queue.t;
   }
 
   let empty_linebreak_info () =
-    { hardlines = Queue.create (); dedents = Queue.create (); weak_spaces = Queue.create () }
+    { hardlines = Queue.create (); dedents = Queue.create (); weak_spaces = Queue.create (); lineups = Queue.create () }
 
   let rec to_pprint lb_info =
     let open PPrint in
@@ -127,6 +133,7 @@ module PPrintWrapper = struct
     | Empty -> empty
     | Weak_space -> range (fun (lc, _) -> Queue.add lc lb_info.weak_spaces) (char ' ')
     | Char c -> char c
+    | Lineup_char (p, c) -> range (fun ((l, c), _) -> Queue.add (l, c, p) lb_info.lineups) (char c)
     | String s -> string s
     | Utf8string s -> utf8string s
     | Group doc -> group (to_pprint lb_info doc)
@@ -175,6 +182,12 @@ module PPrintWrapper = struct
   let group doc = Group doc
 
   let space = char ' '
+
+  let lineup_start c = Lineup_char (Lineup_start, c)
+
+  let lineup_point c = Lineup_char (Lineup_point, c)
+
+  let lineup_end c = Lineup_char (Lineup_end, c)
 
   (* A weak_space is like a space, but it is empty when it appears before any non-whitespace character in a line. *)
   let weak_space = Weak_space
@@ -584,7 +597,8 @@ module Make (Config : CONFIG) = struct
         | None ->
             let x_doc = doc_chunks (nonatomic opts) x in
             let z_doc = doc_chunks (nonatomic opts) z in
-            group (x_doc ^^ space ^^ char '=' ^^ nest indent (break 1 ^^ z_doc))
+            let rhs = if can_hang_bracketed z then space ^^ z_doc else nest indent (break 1 ^^ z_doc) in
+            group (x_doc ^^ space ^^ char '=' ^^ rhs)
         | Some (t_op, y) ->
             let outer_prec, x_prec, y_prec, z_prec = ternary_operator_precedence (t_op, op) in
             let doc =
@@ -783,12 +797,13 @@ module Make (Config : CONFIG) = struct
         ^^ break 1
         ^^ doc_chunks (nonatomic opts) z
     | Match m ->
+        let opener, closer = if m.aligned then (lineup_start '{', lineup_end '}') else (char '{', char '}') in
         let kw1, kw2 = match_keywords m.kind in
         string kw1 ^^ space
         ^^ doc_chunks (nonatomic opts) m.exp
         ^^ Option.fold ~none:empty ~some:(fun k -> space ^^ string k) kw2
         ^^ space
-        ^^ surround indent 1 (char '{') (separate_map hardline (doc_pexp_chunks opts) m.cases) (char '}')
+        ^^ surround indent 1 opener (separate_map hardline (doc_pexp_chunks m.aligned opts) m.cases) closer
         |> atomic_parens opts
     | Foreach loop ->
         let to_keyword = string (if loop.decreasing then "downto" else "to") in
@@ -836,9 +851,10 @@ module Make (Config : CONFIG) = struct
     | None -> (pat, body)
     | Some guard -> (separate space [pat; string "if"; doc_chunks opts guard], body)
 
-  and doc_pexp_chunks opts pexp =
+  and doc_pexp_chunks aligned opts pexp =
     let guarded_pat, body = doc_pexp_chunks_pair opts pexp in
-    let doc = separate space [guarded_pat; string "=>"; body] in
+    let arrow = if aligned then lineup_point '=' ^^ char '>' else string "=>" in
+    let doc = separate space [guarded_pat; arrow; body] in
     match pexp.attr with
     | Some attr ->
         let attr = doc_chunks opts attr in
@@ -926,6 +942,16 @@ module Make (Config : CONFIG) = struct
        hardline. Encountering a desired hardline means the requirement
        has been satisifed so we set it to false. *)
     let require_hardline = ref false in
+    let last_newline = ref 0 in
+    let all_lineups = ref [] in
+    let current_lineup = ref None in
+    let lineup_nesting = ref 0 in
+
+    let add_newline () =
+      Buffer.add_char buf '\n';
+      last_newline := Buffer.length buf
+    in
+
     String.iter
       (fun c ->
         let rec pop_dedents () =
@@ -952,7 +978,7 @@ module Make (Config : CONFIG) = struct
                 match hardline_type with
                 | Desired ->
                     if debug then Buffer.add_string buf Util.("H" |> red |> clear);
-                    Buffer.add_char buf '\n';
+                    add_newline ();
                     pending_spaces := 0;
                     if !require_hardline then require_hardline := false;
                     after_hardline := true
@@ -981,7 +1007,7 @@ module Make (Config : CONFIG) = struct
           )
           else (
             if !require_hardline then (
-              Buffer.add_char buf '\n';
+              add_newline ();
               require_hardline := false
             );
             if !pending_spaces > 0 then Buffer.add_string buf (String.make !pending_spaces ' ');
@@ -989,10 +1015,61 @@ module Make (Config : CONFIG) = struct
             after_hardline := false;
             pending_spaces := 0
           );
+
+          ( match Queue.peek_opt lb_info.lineups with
+          | Some (l, c, lineup_type) when l = !line && c = !column ->
+              ( match lineup_type with
+              | Lineup_start -> (
+                  match !current_lineup with None -> current_lineup := Some [] | Some _ -> incr lineup_nesting
+                )
+              | Lineup_point -> (
+                  match !current_lineup with
+                  | Some lineup when !lineup_nesting = 0 ->
+                      let offset = Buffer.length buf in
+                      current_lineup := Some (lineup @ [(offset, !last_newline)])
+                  | _ -> ()
+                )
+              | Lineup_end -> (
+                  match !current_lineup with
+                  | None -> ()
+                  | Some lineup ->
+                      if !lineup_nesting = 0 then (
+                        all_lineups := !all_lineups @ [lineup];
+                        current_lineup := None
+                      )
+                      else decr lineup_nesting
+                )
+              );
+              ignore (Queue.take lb_info.lineups)
+          | _ -> ()
+          );
+
           incr column
         )
       )
       s;
+
+    let lineup_map =
+      List.map
+        (fun lineup ->
+          let indent = List.fold_left (fun m (n, ln) -> max m (n - ln)) 0 lineup in
+          List.map (fun (n, ln) -> (n, indent - (n - ln))) lineup
+        )
+        !all_lineups
+      |> List.flatten |> List.to_seq |> IntMap.of_seq
+    in
+
+    let unaligned = Buffer.contents buf in
+    let buf = Buffer.create (String.length unaligned) in
+    String.iteri
+      (fun offset c ->
+        ( match IntMap.find_opt (offset + 1) lineup_map with
+        | Some align -> Buffer.add_string buf (String.make align ' ')
+        | None -> ()
+        );
+        Buffer.add_char buf c
+      )
+      unaligned;
     Buffer.contents buf
 
   let format_defs_once ?(debug = false) filename source comments defs =

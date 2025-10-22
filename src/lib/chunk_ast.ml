@@ -1047,7 +1047,7 @@ let rec chunk_exp comments chunks (E_aux (aux, l)) =
   | E_assign (lexp, exp) ->
       let lexp_chunks = rec_chunk_exp lexp in
       let exp_chunks = rec_chunk_exp exp in
-      Queue.add (Binary (lexp_chunks, "=", exp_chunks)) chunks
+      Queue.add (Assign (lexp_chunks, None, "=", exp_chunks)) chunks
   | E_if (i, t, E_aux (E_lit (L_aux (L_unit, _)), _), keywords) ->
       let then_brace = match t with E_aux (E_block _, _) -> true | _ -> false in
       let i_chunks = rec_chunk_exp i in
