@@ -2746,6 +2746,7 @@ and check_case env pat_typ pexp typ =
 
 and check_mpexp other_env env mpexp typ =
   let mpat, guard, (l, _) = destruct_mpexp mpexp in
+  let env = bind_pattern_vector_subranges (pat_of_mpat mpat) env in
   match bind_mpat false other_env env mpat typ with
   | checked_mpat, env, guards ->
       let guard =
