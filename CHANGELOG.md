@@ -1,6 +1,24 @@
 Changelog
 =========
 
+Sail 0.20.1
+-----------
+
+This is bugfix release for Sail 0.20. It includes fixes for the
+following issues:
+
+* https://github.com/rems-project/sail/issues/1532
+
+* https://github.com/rems-project/sail/issues/1529
+
+* https://github.com/rems-project/sail/issues/1512
+
+* https://github.com/rems-project/sail/pull/1509
+
+It also includes various improvements to the Sail formatter, and some
+improvements to the loop syntax that should make while and foreach
+loops slightly more consistent.
+
 Sail 0.20
 ---------
 
