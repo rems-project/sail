@@ -609,42 +609,49 @@ module Printer (Config : PRINT_CONFIG) = struct
         )
       | _ -> doc_atomic_exp exp
 
-  and doc_atomic_exp (E_aux (e_aux, (_, uannot)) as exp) =
-    let (E_aux (e_aux, (l, _)) as exp), uannot_fmt = consume_exp_uannot ~atomic:true exp in
-    uannot_fmt.doc
-    @@
-    match e_aux with
-    | E_typ (typ, exp) -> separate space [doc_atomic_exp exp; colon; doc_typ typ]
-    | E_lit lit -> doc_lit lit
-    | E_id id -> doc_id id
-    | E_ref id -> string "ref" ^^ space ^^ doc_id id
-    | E_field (exp, id) -> doc_atomic_exp exp ^^ dot ^^ doc_id id
-    | E_config key -> string "config" ^^ space ^^ separate_map dot string key
-    | E_sizeof (Nexp_aux (Nexp_var kid, _)) -> doc_kid kid
-    | E_sizeof nexp -> string "sizeof" ^^ parens (doc_nexp nexp)
-    (* Format a function with a unit argument as f() rather than f(()) *)
-    | E_app (id, [E_aux (E_lit (L_aux (L_unit, _)), _)]) -> doc_id id ^^ string "()"
-    | E_app (id, exps) -> (
-        let as_function () = doc_id id ^^ parens (separate_map (comma ^^ space) doc_exp exps) in
-        match uannot_fmt.notation with
-        | Some (level, parts) -> (
-            match attach_to_holes exps parts with
-            | Some parts ->
-                let doc = concat_map doc_part parts in
-                if level >= 10 then doc else parens doc
-            | None -> as_function ()
-          )
-        | None -> as_function ()
+  and doc_atomic_exp (E_aux (e_aux, (_, uannot)) as exp_orig) =
+    let (E_aux (e_aux, (l, _)) as exp), uannot_fmt = consume_exp_uannot ~atomic:true exp_orig in
+    if
+      (Option.is_some uannot_fmt.overloaded
+      || match e_aux with E_app (Id_aux ((Operator _ | And_bool | Or_bool), _), _) -> Config.resugar | _ -> false
       )
-    | E_constraint nc -> string "constraint" ^^ parens (doc_nc nc)
-    | E_assert (exp1, E_aux (E_lit (L_aux (L_string "", _)), _)) -> string "assert" ^^ parens (doc_exp exp1)
-    | E_assert (exp1, exp2) -> string "assert" ^^ parens (doc_exp exp1 ^^ comma ^^ space ^^ doc_exp exp2)
-    | E_exit exp -> string "exit" ^^ parens (doc_exp exp)
-    | E_vector exps -> brackets (separate_map (comma ^^ space) doc_exp exps)
-    | E_internal_value v ->
-        if !Interactive.opt_interactive then string (Value.string_of_value v |> Util.green |> Util.clear)
-        else string (Value.string_of_value v)
-    | _ -> parens (doc_exp exp)
+      && Option.is_none uannot_fmt.notation
+    then parens (doc_exp exp_orig)
+    else
+      uannot_fmt.doc
+      @@
+      match e_aux with
+      | E_typ (typ, exp) -> separate space [doc_atomic_exp exp; colon; doc_typ typ]
+      | E_lit lit -> doc_lit lit
+      | E_id id -> doc_id id
+      | E_ref id -> string "ref" ^^ space ^^ doc_id id
+      | E_field (exp, id) -> doc_atomic_exp exp ^^ dot ^^ doc_id id
+      | E_config key -> string "config" ^^ space ^^ separate_map dot string key
+      | E_sizeof (Nexp_aux (Nexp_var kid, _)) -> doc_kid kid
+      | E_sizeof nexp -> string "sizeof" ^^ parens (doc_nexp nexp)
+      (* Format a function with a unit argument as f() rather than f(()) *)
+      | E_app (id, [E_aux (E_lit (L_aux (L_unit, _)), _)]) -> doc_id id ^^ string "()"
+      | E_app (id, exps) -> (
+          let as_function () = doc_id id ^^ parens (separate_map (comma ^^ space) doc_exp exps) in
+          match uannot_fmt.notation with
+          | Some (level, parts) -> (
+              match attach_to_holes exps parts with
+              | Some parts ->
+                  let doc = concat_map doc_part parts in
+                  if level >= 10 then doc else parens doc
+              | None -> as_function ()
+            )
+          | None -> as_function ()
+        )
+      | E_constraint nc -> string "constraint" ^^ parens (doc_nc nc)
+      | E_assert (exp1, E_aux (E_lit (L_aux (L_string "", _)), _)) -> string "assert" ^^ parens (doc_exp exp1)
+      | E_assert (exp1, exp2) -> string "assert" ^^ parens (doc_exp exp1 ^^ comma ^^ space ^^ doc_exp exp2)
+      | E_exit exp -> string "exit" ^^ parens (doc_exp exp)
+      | E_vector exps -> brackets (separate_map (comma ^^ space) doc_exp exps)
+      | E_internal_value v ->
+          if !Interactive.opt_interactive then string (Value.string_of_value v |> Util.green |> Util.clear)
+          else string (Value.string_of_value v)
+      | _ -> parens (doc_exp exp)
 
   and doc_fexps fexps = separate_map (comma ^^ space) doc_fexp fexps
 
