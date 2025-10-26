@@ -56,7 +56,7 @@ let opt_doc_compact = ref false
 let opt_doc_bundle = ref "doc.json"
 
 let opt_html_css = ref None
-let opt_html_link_prefix = ref "../"
+let opt_html_link_prefix = ref None
 
 let embedding_option () =
   match !opt_doc_embed with
@@ -148,7 +148,7 @@ let html_options =
       "CSS file for html output"
     );
     ( Flag.create ~prefix:["html"] ~arg:"string" "link_prefix",
-      Arg.String (fun prefix -> opt_html_link_prefix := prefix),
+      Arg.String (fun prefix -> opt_html_link_prefix := Some prefix),
       "Prefix links in HTML output with string"
     );
   ]
@@ -181,8 +181,14 @@ let html_target files out_dir_opt { ast; _ } =
                 let filename = p.Lexing.pos_fname in
                 begin
                   match List.find_opt (fun info -> info.filename = filename) !files with
-                  | Some info ->
-                      Some (Printf.sprintf "%s%s.html#L%d" !opt_html_link_prefix info.prefix p.Lexing.pos_lnum, s, e)
+                  | Some info -> (
+                      match !opt_html_link_prefix with
+                      | None ->
+                          let relpath = Util.relativize_path file_info.filename info.prefix in
+                          Some (Printf.sprintf "%s.html#L%d" relpath p.Lexing.pos_lnum, s, e)
+                      | Some html_prefix ->
+                          Some (Printf.sprintf "%s%s.html#L%d" html_prefix info.prefix p.Lexing.pos_lnum, s, e)
+                    )
                   | None -> None
                 end
             | None -> None
