@@ -383,6 +383,42 @@ let read_whole_file filename =
   close_in ch;
   s
 
+(** [path] is assumed to be a path to a file, not a directory (i.e. not something like "a/b/") *)
+let split_path path =
+  let rec split p acc =
+    (* "" gives a basename and dirname of "." *)
+    if p = "" then acc
+    else (
+      let base = Filename.basename p in
+      if base = p then base :: acc else split (Filename.dirname p) (base :: acc)
+    )
+  in
+  split path []
+
+let rec join_path_segments = function [] -> "" | f :: [] -> f | h :: t -> Filename.concat h (join_path_segments t)
+
+let normalize_path_segments path_segments =
+  let rec normalize p acc =
+    match (p, acc) with
+    | [], _ -> acc
+    | "." :: p', _ -> normalize p' acc
+    | ".." :: _, [] -> failwith "escaping path segment"
+    | ".." :: p', _ :: t -> normalize p' t
+    | d :: p', acc -> normalize p' (d :: acc)
+  in
+  List.rev (normalize path_segments [])
+
+let rec relativize_path_segments base_segs target_segs =
+  match (base_segs, target_segs) with
+  | [], _ -> target_segs
+  | base_hd :: base_tl, target_hd :: target_tl when base_hd = target_hd -> relativize_path_segments base_tl target_tl
+  | _, _ -> List.init (List.length base_segs) (fun _ -> "..") @ target_segs
+
+let relativize_path base target =
+  let base_segs = normalize_path_segments (split_path (Filename.dirname base)) in
+  let target_segs = normalize_path_segments (split_path target) in
+  join_path_segments (relativize_path_segments base_segs target_segs)
+
 (*String formatting *)
 let rec string_of_list sep string_of = function
   | [] -> ""

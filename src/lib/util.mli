@@ -240,6 +240,10 @@ val same_content_files : string -> string -> bool
 (** [read_whole_file filename] reads the contents of the file and returns it as a string. *)
 val read_whole_file : string -> string
 
+(** [relativize_path base target] gives the relative path to the file at [target] from [base]. Both paths are assumed to
+    be paths of files (not directories), and from the same root. *)
+val relativize_path : string -> string -> string
+
 (** {2 Strings} *)
 
 (** [string_to_list l] translates the string [l] to the list of its characters. *)
