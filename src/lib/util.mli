@@ -175,6 +175,8 @@ val split3 : ('a * 'b * 'c) list -> 'a list * 'b list * 'c list
 
 val compare_list : ('a -> 'b -> int) -> 'a list -> 'b list -> int
 
+val equal_list : ('a -> 'b -> bool) -> 'a list -> 'b list -> bool
+
 val take : int -> 'a list -> 'a list
 val drop : int -> 'a list -> 'a list
 

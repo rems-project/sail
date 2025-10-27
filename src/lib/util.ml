@@ -163,6 +163,13 @@ let rec compare_list f l1 l2 =
       let c = f x y in
       if c = 0 then compare_list f l1 l2 else c
 
+let rec equal_list f l1 l2 =
+  match (l1, l2) with
+  | [], [] -> true
+  | _, [] -> false
+  | [], _ -> false
+  | x :: l1, y :: l2 -> f x y && equal_list f l1 l2
+
 let update_first f = function [] -> [] | x :: xs -> f x :: xs
 
 let rec update_last f = function [] -> [] | [x] -> [f x] | x :: xs -> x :: update_last f xs

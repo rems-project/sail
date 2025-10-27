@@ -105,7 +105,7 @@ let rec diff_atyp lhs rhs =
       match rhs with ATyp_lit lit2 -> diff_lit lit1 lit2 | _ -> Some l
     )
   | ATyp_nset nums1 -> (
-      match rhs with ATyp_nset nums2 -> diff_eq_pred ~at:l (List.equal Big_int.equal) nums1 nums2 | _ -> Some l
+      match rhs with ATyp_nset nums2 -> diff_eq_pred ~at:l (Util.equal_list Big_int.equal) nums1 nums2 | _ -> Some l
     )
   | ATyp_in (n1, set1) -> (
       match rhs with ATyp_in (n2, set2) -> diff_atyp n1 n2 &&& lazy (diff_atyp set1 set2) | _ -> Some l
@@ -797,12 +797,53 @@ let diff_scattered_def (SD_aux (lhs, l)) (SD_aux (rhs, _)) =
   | SD_funcl funcl1 -> (
       match rhs with SD_funcl funcl2 -> diff_funcl funcl1 funcl2 | _ -> Some l
     )
-  | _ -> None
+  | SD_enum id1 -> (
+      match rhs with SD_enum id2 -> diff_id id1 id2 | _ -> Some l
+    )
+  | SD_enumcl (id1, m1) -> (
+      match rhs with SD_enumcl (id2, m2) -> diff_id id1 id2 &&& lazy (diff_id m1 m2) | _ -> Some l
+    )
+  | SD_variant (id1, typq1) -> (
+      match rhs with SD_variant (id2, typq2) -> diff_id id1 id2 &&& lazy (diff_typquant typq1 typq2) | _ -> Some l
+    )
+  | SD_unioncl (id1, tu1) -> (
+      match rhs with SD_unioncl (id2, tu2) -> diff_id id1 id2 &&& lazy (diff_type_union tu1 tu2) | _ -> Some l
+    )
+  | SD_mapping (id1, tannot_opt1) -> (
+      match rhs with
+      | SD_mapping (id2, tannot_opt2) -> diff_id id1 id2 &&& lazy (diff_tannot_opt tannot_opt1 tannot_opt2)
+      | _ -> Some l
+    )
+  | SD_mapcl (id1, mcl1) -> (
+      match rhs with SD_mapcl (id2, mcl2) -> diff_id id1 id2 &&& lazy (diff_mapcl mcl1 mcl2) | _ -> Some l
+    )
+  | SD_end id1 -> (
+      match rhs with SD_end id2 -> diff_id id1 id2 | _ -> Some l
+    )
+
+let diff_subst (IS_aux (lhs, l)) (IS_aux (rhs, _)) =
+  match lhs with
+  | IS_id (l_id1, r_id1) -> (
+      match rhs with IS_id (l_id2, r_id2) -> diff_id l_id1 l_id2 &&& lazy (diff_id r_id1 r_id2) | _ -> Some l
+    )
+  | IS_typ (v1, atyp1) -> (
+      match rhs with IS_typ (v2, atyp2) -> diff_kid v1 v2 &&& lazy (diff_atyp atyp1 atyp2) | _ -> Some l
+    )
 
 let diff_dec_spec (DEC_aux (lhs, l)) (DEC_aux (rhs, _)) =
   let (DEC_reg (atyp1, id1, opt_exp1)) = lhs in
   let (DEC_reg (atyp2, id2, opt_exp2)) = rhs in
   diff_id id1 id2 &&& lazy (diff_atyp atyp1 atyp2) &&& lazy (diff_option ~at:l diff_exp opt_exp1 opt_exp2)
+
+let diff_outcome (OV_aux (lhs, l)) (OV_aux (rhs, _)) =
+  let (OV_outcome (id1, typschm1, typq1)) = lhs in
+  let (OV_outcome (id2, typschm2, typq2)) = rhs in
+  diff_id id1 id2 &&& lazy (diff_typschm typschm1 typschm2) &&& lazy (diff_typquant typq1 typq2)
+
+let diff_default_typing_spec (DT_aux (lhs, l)) (DT_aux (rhs, _)) =
+  let (DT_order (k1, atyp1)) = lhs in
+  let (DT_order (k2, atyp2)) = rhs in
+  diff_kind k1 k2 &&& lazy (diff_atyp atyp1 atyp2)
 
 let rec diff_def (DEF_aux (lhs, l)) (DEF_aux (rhs, _)) =
   match lhs with
@@ -838,9 +879,19 @@ let rec diff_def (DEF_aux (lhs, l)) (DEF_aux (rhs, _)) =
   | DEF_val vs1 -> (
       match rhs with DEF_val vs2 -> diff_val_spec vs1 vs2 | _ -> Some l
     )
-  | DEF_outcome _ -> None
-  | DEF_instantiation _ -> None
-  | DEF_default _ -> None
+  | DEF_outcome (o1, defs1) -> (
+      match rhs with
+      | DEF_outcome (o2, defs2) -> diff_outcome o1 o2 &&& lazy (diff_list ~at:l diff_def defs1 defs2)
+      | _ -> Some l
+    )
+  | DEF_instantiation (id1, substs1) -> (
+      match rhs with
+      | DEF_instantiation (id2, substs2) -> diff_id id1 id2 &&& lazy (diff_list ~at:l diff_subst substs1 substs2)
+      | _ -> Some l
+    )
+  | DEF_default dtspec1 -> (
+      match rhs with DEF_default dtspec2 -> diff_default_typing_spec dtspec1 dtspec2 | _ -> Some l
+    )
   | DEF_scattered sdef1 -> (
       match rhs with DEF_scattered sdef2 -> diff_scattered_def sdef1 sdef2 | _ -> Some l
     )
