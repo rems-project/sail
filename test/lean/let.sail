@@ -19,3 +19,22 @@ function baz() -> bits(16) = {
   0x0000
 }
 
+function f(x : int) -> int = {
+  assert (x > 4, "...");
+  x
+}
+
+let a_constant : int = f(22)
+
+function g() -> int = {
+  a_constant + 3
+}
+
+function h() -> int = {
+  print_str ("hi there");
+  a_constant + g()
+}
+
+function i() -> int = {
+  a_constant + g()
+}

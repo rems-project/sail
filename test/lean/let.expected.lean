@@ -46,7 +46,7 @@ namespace Out.Functions
 
 open option
 
-/-- Type quantifiers: k_ex778# : Bool, k_ex777# : Bool -/
+/-- Type quantifiers: k_ex857_ : Bool, k_ex856_ : Bool -/
 def neq_bool (x : Bool) (y : Bool) : Bool :=
   (! (x == y))
 
@@ -150,6 +150,23 @@ def bar (_ : Unit) : (BitVec 16) :=
 def baz (_ : Unit) : SailM (BitVec 16) := do
   (print_effect "baz")
   (pure (0x0000 : (BitVec 16)))
+
+/-- Type quantifiers: x : Int -/
+def f (x : Int) : SailM Int := do
+  assert (x >b 4) "..."
+  (pure x)
+
+def a_constant : Int := unwrapValue ((f 22))
+
+def g (_ : Unit) : SailM Int := do
+  (pure (a_constant +i 3))
+
+def h (_ : Unit) : SailM Int := do
+  (print_effect "hi there")
+  (pure (a_constant +i (← (g ()))))
+
+def i (_ : Unit) : SailM Int := do
+  (pure (a_constant +i (← (g ()))))
 
 def initialize_registers (_ : Unit) : Unit :=
   ()
