@@ -50,7 +50,7 @@ namespace Out.Functions
 open word_width
 open option
 
-/-- Type quantifiers: k_ex921# : Bool, k_ex920# : Bool -/
+/-- Type quantifiers: k_ex921_ : Bool, k_ex920_ : Bool -/
 def neq_bool (x : Bool) (y : Bool) : Bool :=
   (! (x == y))
 
@@ -313,7 +313,7 @@ def hex_bits_2_backwards (arg_ : String) : (BitVec 2) :=
   match arg_ with
   | s => (hex_bits_backwards (2, s))
 
-def hex_bits_2_forwards_matches (arg_ : (BitVec 2)) : Bool :=
+def hex_bits_2_forwards_matches (arg_ : (BitVec 2)) : SailM Bool := do
   let head_exp_ := arg_
   match (match head_exp_ with
   | mapping0_ =>
@@ -321,10 +321,10 @@ def hex_bits_2_forwards_matches (arg_ : (BitVec 2)) : Bool :=
     | (2, s) => (some true)
     | _ => none)
   | _ => none) with
-  | .some result => result
+  | .some result => (pure result)
   | none =>
     (match head_exp_ with
-    | _ => false)
+    | _ => (pure false))
 
 def hex_bits_2_backwards_matches (arg_ : String) : Bool :=
   match arg_ with
@@ -371,7 +371,7 @@ def vtype_assembly2_backwards (arg_ : ((BitVec 1) × (BitVec 1))) : SailM String
   match arg_ with
   | (ta, sew) => (hex_bits_2_forwards ((ta : (BitVec 1)) ++ (sew : (BitVec 1))))
 
-def vtype_assembly2_forwards_matches (arg_ : String) : Bool :=
+def vtype_assembly2_forwards_matches (arg_ : String) : SailM Bool := do
   let head_exp_ := arg_
   match (let mapping0_ := head_exp_
   if ((hex_bits_2_backwards_matches mapping0_) : Bool)
@@ -380,10 +380,10 @@ def vtype_assembly2_forwards_matches (arg_ : String) : Bool :=
     | [ta:1,sew:1] => (some true)
     | _ => none)
   else none) with
-  | .some result => result
+  | .some result => (pure result)
   | none =>
     (match head_exp_ with
-    | _ => false)
+    | _ => (pure false))
 
 def vtype_assembly2_backwards_matches (arg_ : ((BitVec 1) × (BitVec 1))) : Bool :=
   match arg_ with

@@ -118,7 +118,7 @@ namespace Out.Functions
 open option
 open Register
 
-/-- Type quantifiers: k_ex2436# : Bool, k_ex2435# : Bool -/
+/-- Type quantifiers: k_ex2436_ : Bool, k_ex2435_ : Bool -/
 def neq_bool (x : Bool) (y : Bool) : Bool :=
   (! (x == y))
 

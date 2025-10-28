@@ -104,4 +104,12 @@ def ExceptM.run (m : ExceptM α α) : α :=
 
 abbrev sailTryCatchE (e : SailME β α) (h : exception → SailME β α) : SailME β α := PreSail.sailTryCatchE e h
 
+instance : Inhabited (PreSail.SequentialState RegisterType trivialChoiceSource) where
+  default := ⟨default, (), default, default, default, default⟩
+
+def unwrapValue [Inhabited α] (x : SailM α) : α :=
+  match x.run default with
+  | .ok x _ => x
+  | _ => default
+
 end Sail

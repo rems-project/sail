@@ -77,7 +77,7 @@ namespace Out.Functions
 open option
 open Register
 
-/-- Type quantifiers: k_ex948# : Bool, k_ex947# : Bool -/
+/-- Type quantifiers: k_ex948_ : Bool, k_ex947_ : Bool -/
 def neq_bool (x : Bool) (y : Bool) : Bool :=
   (! (x == y))
 
@@ -178,7 +178,7 @@ def undefined_My_struct (_ : Unit) : SailM My_struct := do
   (pure { field1 := (← (undefined_int ()))
           field2 := (← (undefined_bit ())) })
 
-/-- Type quantifiers: k_ex1058# : Bool -/
+/-- Type quantifiers: k_ex1058_ : Bool -/
 def test_reg_if_struct (x : My_struct) (b : Bool) : SailM My_struct := do
   let y ← do
     (pure { x with field1 := (← if (b : Bool)

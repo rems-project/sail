@@ -111,7 +111,7 @@ let doc_id_ctor (Id_aux (i, _)) =
 let doc_kid ctx (Kid_aux (Var x, _) as ki) =
   match KBindings.find_opt ki ctx.kid_id_renames with
   | Some (Some i) -> doc_id_ctor i
-  | _ -> string ("k_" ^ String.sub x 1 (String.length x - 1))
+  | _ -> "k_" ^ String.sub x 1 (String.length x - 1) |> fix_id |> string
 
 (* TODO do a proper renaming and keep track of it *)
 
@@ -1127,7 +1127,7 @@ let doc_funcl_init global (FCL_aux (FCL_funcl (id, pexp), annot)) =
   let typ_quant_comment = doc_typ_quant_in_comment ctx tq_all in
   (* Use auto-implicits for type quanitifiers for now and see if this works *)
   let doc_ret_typ_orig = doc_typ ctx ret_typ in
-  let is_monadic = effectful (effect_of exp) in
+  let is_monadic = not (Effects.function_is_pure id ctx.global.effect_info) in
   let early_return = has_early_return exp in
   let has_loop = has_loop exp in
   (* Add monad for stateful functions *)
@@ -1180,7 +1180,7 @@ let doc_funcl_body fixup_binders ctx (FCL_aux (FCL_funcl (id, pexp), annot)) =
   (* If an argument was [x : (Int, Int)], which is transformed to [(arg0: Int) (arg1: Int)],
      this adds a let binding at the beginning of the function, of the form [let x := (arg0, arg1)] *)
   let exp = fixup_binders exp in
-  let is_monadic = has_effect exp in
+  let is_monadic = has_effect exp || not (Effects.function_is_pure id ctx.global.effect_info) in
   if untranslatable_mapping id exp then string "throw Error.Exit" else doc_exp is_monadic (context_with_env ctx env) exp
 
 let doc_termination ctx fnpat (Rec_aux (meas, _)) =
@@ -1264,6 +1264,8 @@ let doc_typdef ctx (TD_aux (td, tannot) as full_typdef) =
       let vars = List.map parens vars in
       let vars = separate space vars in
       nest 2 (flow (break 1) (remove_empties [string "abbrev"; doc_id_ctor id; vars; coloneq; doc_typ ctx t]))
+  | TD_abbrev (id, tq, A_aux (A_typ t, _)) when string_of_id id = "fp_bits" ->
+      string (Printf.sprintf "-- Abbreviation %s skipped" (string_of_id id)) (* FIXME *)
   | TD_abbrev (id, tq, A_aux (A_typ t, _)) ->
       let vars = doc_typ_quant_only_vars ctx tq in
       let vars = separate space vars in
@@ -1317,7 +1319,9 @@ let doc_val ctx pat exp =
   in
   let typpp = match pat_typ with None -> empty | Some typ -> space ^^ colon ^^ space ^^ doc_typ ctx typ in
   let idpp = doc_id_ctor id in
-  let base_pp = doc_exp false ctx exp in
+  let base_pp =
+    if has_effect exp then string "unwrapValue" ^^ space ^^ parens (doc_exp true ctx exp) else doc_exp false ctx exp
+  in
   (global, nest 2 (group (string "def" ^^ space ^^ idpp ^^ typpp ^^ space ^^ coloneq ^/^ base_pp)))
 
 let should_print_function_def def =
