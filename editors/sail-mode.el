@@ -35,7 +35,7 @@
     "else" "match" "in" "return" "register" "ref" "forall" "operator" "effect" "config"
     "overload" "cast" "sizeof" "constant" "constraint" "default" "assert" "newtype" "from"
     "pure" "impure" "monadic" "infixl" "infixr" "infix" "scattered" "end" "try" "catch" "and" "to" "private"
-    "throw" "clause" "as" "repeat" "until" "while" "do" "foreach" "bitfield"
+    "throw" "clause" "as" "repeat" "until" "while" "do" "foreach" "bitfield" "when"
     "mapping" "where" "with" "implicit" "instantiation" "impl" "forwards" "backwards"))
 
 (defconst sail-project-keywords
@@ -107,8 +107,8 @@
   (setq-local comment-end "*/")
   (setq major-mode 'sail-mode)
   (setq mode-name "Sail")
-  (add-hook 'sail-mode-hook
-	    (lambda () (add-hook 'after-save-hook 'sail-load nil 'local)))
+;;  (add-hook 'sail-mode-hook
+;;	    (lambda () (add-hook 'after-save-hook 'sail-load nil 'local)))
   (run-hooks 'sail-mode-hook))
 
 ;; (with-eval-after-load 'lsp-mode **/
