@@ -19,3 +19,6 @@ Sail2_concurrency_interface_bitlists.thy
 Sail2_concurrency_interface_mwords.thy
 Sail2_monadic_combinators.thy
 Sail2_undefined_concurrency_interface.thy
+Sail2_concurrency_interface_v2.thy
+Sail2_monadic_combinators_v2.thy
+Sail2_undefined_concurrency_interface_v2.thy

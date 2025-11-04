@@ -11,9 +11,12 @@ session "Sail" = "LEM" +
     Sail2_concurrency_interface_mwords
     Sail2_concurrency_interface_bitlists
     Sail2_concurrency_interface_lemmas
+    Sail2_concurrency_interface_v2_lemmas
     Sail2_monadic_combinators_lemmas
+    Sail2_monadic_combinators_v2_lemmas
     Sail2_string
     Sail2_undefined
     Sail2_undefined_concurrency_interface
+    Sail2_undefined_concurrency_interface_v2
     Hoare
   document_files "root.tex"

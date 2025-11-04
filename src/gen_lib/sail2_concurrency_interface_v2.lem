@@ -1,0 +1,370 @@
+open import Pervasives_extra
+open import Sail2_values
+open import Sail2_string
+
+
+
+
+type Mem_request 'addr_size 'addr_space 'mem_acc =
+  <| Mem_request_access_kind : 'mem_acc;
+     Mem_request_address : mword 'addr_size;
+     Mem_request_address_space : 'addr_space;
+     Mem_request_size : integer;
+     Mem_request_num_tag : integer; |>
+
+
+type monad 'abort 'barrier 'cache_op 'exn 'tlb_op 'trans_start 'trans_end 'mem_acc 'addr_size 'addr_space 'regval 'a 'e =
+  | Done of 'a
+  | Fail of string
+  | Exception of 'e
+  | Choose of string * ('regval -> monad 'abort 'barrier 'cache_op 'exn 'tlb_op 'trans_start 'trans_end 'mem_acc 'addr_size 'addr_space 'regval 'a 'e)
+  | Read_reg of string * ('regval -> monad 'abort 'barrier 'cache_op 'exn 'tlb_op 'trans_start 'trans_end 'mem_acc 'addr_size 'addr_space 'regval 'a 'e)
+  | Write_reg of string * 'regval * monad 'abort 'barrier 'cache_op 'exn 'tlb_op 'trans_start 'trans_end 'mem_acc 'addr_size 'addr_space 'regval 'a 'e
+  | Mem_read of Mem_request 'addr_size 'addr_space 'mem_acc * (result (list (mword ty8) * list bool) 'abort -> monad 'abort 'barrier 'cache_op 'exn 'tlb_op 'trans_start 'trans_end 'mem_acc 'addr_size 'addr_space 'regval 'a 'e)
+  | Mem_write of Mem_request 'addr_size 'addr_space 'mem_acc * list (mword ty8) * list bool * (result unit 'abort -> monad 'abort 'barrier 'cache_op 'exn 'tlb_op 'trans_start 'trans_end 'mem_acc 'addr_size 'addr_space 'regval 'a 'e)
+  | Mem_write_address_announce of Mem_request 'addr_size 'addr_space 'mem_acc * monad 'abort 'barrier 'cache_op 'exn 'tlb_op 'trans_start 'trans_end 'mem_acc 'addr_size 'addr_space 'regval 'a 'e
+  | Barrier_request of 'barrier * monad 'abort 'barrier 'cache_op 'exn 'tlb_op 'trans_start 'trans_end 'mem_acc 'addr_size 'addr_space 'regval 'a 'e
+  | Cache_op_request of 'cache_op * monad 'abort 'barrier 'cache_op 'exn 'tlb_op 'trans_start 'trans_end 'mem_acc 'addr_size 'addr_space 'regval 'a 'e
+  | TLB_op_request of 'tlb_op * monad 'abort 'barrier 'cache_op 'exn 'tlb_op 'trans_start 'trans_end 'mem_acc 'addr_size 'addr_space 'regval 'a 'e
+  | Take_exception of 'exn * monad 'abort 'barrier 'cache_op 'exn 'tlb_op 'trans_start 'trans_end 'mem_acc 'addr_size 'addr_space 'regval 'a 'e
+  | Return_exception of monad 'abort 'barrier 'cache_op 'exn 'tlb_op 'trans_start 'trans_end 'mem_acc 'addr_size 'addr_space 'regval 'a 'e
+  | Translation_start of 'trans_start * monad 'abort 'barrier 'cache_op 'exn 'tlb_op 'trans_start 'trans_end 'mem_acc 'addr_size 'addr_space 'regval 'a 'e
+  | Translation_end of 'trans_end * monad 'abort 'barrier 'cache_op 'exn 'tlb_op 'trans_start 'trans_end 'mem_acc 'addr_size 'addr_space 'regval 'a 'e
+
+type event 'abort 'barrier 'cache_op 'exn 'tlb_op 'trans_start 'trans_end 'mem_acc 'addr_size 'addr_space 'regval =
+  | E_choose of string * 'regval
+  | E_read_reg of string * 'regval
+  | E_write_reg of string * 'regval
+  | E_mem_read of Mem_request 'addr_size 'addr_space 'mem_acc * result (list (mword ty8) * list bool) 'abort
+  | E_mem_write of Mem_request 'addr_size 'addr_space 'mem_acc * list (mword ty8) * list bool * result unit 'abort
+  | E_mem_write_address_announce of Mem_request 'addr_size 'addr_space 'mem_acc
+  | E_barrier_request of 'barrier
+  | E_cache_op_request of 'cache_op
+  | E_tlb_op_request of 'tlb_op
+  | E_take_exception of 'exn
+  | E_return_exception
+  | E_translation_start of 'trans_start
+  | E_translation_end of 'trans_end
+
+type trace 'abort 'barrier 'cache_op 'exn 'tlb_op 'trans_start 'trans_end 'mem_acc 'addr_size 'addr_space 'regval =
+  list (event 'abort 'barrier 'cache_op 'exn 'tlb_op 'trans_start 'trans_end 'mem_acc 'addr_size 'addr_space 'regval)
+
+val return : forall 'abort 'barrier 'cache_op 'fault 'tlb_op 'trans_start 'trans_end 'mem_acc 'addr_size 'addr_space 'regval 'a 'e.
+  'a -> monad 'abort 'barrier 'cache_op 'fault 'tlb_op 'trans_start 'trans_end 'mem_acc 'addr_size 'addr_space 'regval 'a 'e
+let return a = Done a
+
+val bind : forall 'abort 'barrier 'cache_op 'fault 'tlb_op 'trans_start 'trans_end 'mem_acc 'addr_size 'addr_space 'regval 'a 'b 'e.
+  monad 'abort 'barrier 'cache_op 'fault 'tlb_op 'trans_start 'trans_end 'mem_acc 'addr_size 'addr_space 'regval 'a 'e ->
+  ('a -> monad 'abort 'barrier 'cache_op 'fault 'tlb_op 'trans_start 'trans_end 'mem_acc 'addr_size 'addr_space 'regval 'b 'e) ->
+  monad 'abort 'barrier 'cache_op 'fault 'tlb_op 'trans_start 'trans_end 'mem_acc 'addr_size 'addr_space 'regval 'b 'e
+let rec bind m f = match m with
+  | Done a -> f a
+  | Fail msg -> Fail msg
+  | Exception e -> Exception e
+  | Choose msg k -> Choose msg (fun v -> bind (k v) f)
+  | Read_reg r k -> Read_reg r (fun v -> bind (k v) f)
+  | Write_reg r v k -> Write_reg r v (bind k f)
+  | Mem_read req k -> Mem_read req (fun v -> bind (k v) f)
+  | Mem_write req data tags k -> Mem_write req data tags (fun v -> bind (k v) f)
+  | Mem_write_address_announce req k -> Mem_write_address_announce req (bind k f)
+  | Barrier_request b k -> Barrier_request b (bind k f)
+  | Cache_op_request c k -> Cache_op_request c (bind k f)
+  | TLB_op_request t k -> TLB_op_request t (bind k f)
+  | Take_exception exn k -> Take_exception exn (bind k f)
+  | Return_exception k -> Return_exception (bind k f)
+  | Translation_start ts k -> Translation_start ts (bind k f)
+  | Translation_end te k -> Translation_end te (bind k f)
+end
+
+val throw : forall 'abort 'barrier 'cache_op 'fault 'tlb_op 'trans_start 'trans_end 'mem_acc 'addr_size 'addr_space 'regval 'a 'e.
+  'e -> monad 'abort 'barrier 'cache_op 'fault 'tlb_op 'trans_start 'trans_end 'mem_acc 'addr_size 'addr_space 'regval 'a 'e
+let throw e = Exception e
+
+val try_catch : forall 'abort 'barrier 'cache_op 'fault 'tlb_op 'trans_start 'trans_end 'mem_acc 'addr_size 'addr_space 'regval 'a 'e1 'e2.
+  monad 'abort 'barrier 'cache_op 'fault 'tlb_op 'trans_start 'trans_end 'mem_acc 'addr_size 'addr_space 'regval 'a 'e1 ->
+  ('e1 -> monad 'abort 'barrier 'cache_op 'fault 'tlb_op 'trans_start 'trans_end 'mem_acc 'addr_size 'addr_space 'regval 'a 'e2) ->
+  monad 'abort 'barrier 'cache_op 'fault 'tlb_op 'trans_start 'trans_end 'mem_acc 'addr_size 'addr_space 'regval 'a 'e2
+let rec try_catch m h = match m with
+  | Done a -> Done a
+  | Fail msg -> Fail msg
+  | Exception e -> h e
+  | Choose msg k -> Choose msg (fun v -> try_catch (k v) h)
+  | Read_reg r k -> Read_reg r (fun v -> try_catch (k v) h)
+  | Write_reg r v k -> Write_reg r v (try_catch k h)
+  | Mem_read req k -> Mem_read req (fun v -> try_catch (k v) h)
+  | Mem_write req data tags k -> Mem_write req data tags (fun v -> try_catch (k v) h)
+  | Mem_write_address_announce req k -> Mem_write_address_announce req (try_catch k h)
+  | Barrier_request b k -> Barrier_request b (try_catch k h)
+  | Cache_op_request c k -> Cache_op_request c (try_catch k h)
+  | TLB_op_request t k -> TLB_op_request t (try_catch k h)
+  | Take_exception exn k -> Take_exception exn (try_catch k h)
+  | Return_exception k -> Return_exception (try_catch k h)
+  | Translation_start ts k -> Translation_start ts (try_catch k h)
+  | Translation_end te k -> Translation_end te (try_catch k h)
+end
+
+(* For early return, we abuse exceptions by throwing and catching
+   the return value. The exception type is "either 'r 'e", where "Right e"
+   represents a proper exception and "Left r" an early return of value "r". *)
+type monadR 'abort 'barrier 'cache_op 'fault 'tlb_op 'trans_start 'trans_end 'mem_acc 'addr_size 'addr_space 'rv 'a 'r 'e =
+  monad 'abort 'barrier 'cache_op 'fault 'tlb_op 'trans_start 'trans_end 'mem_acc 'addr_size 'addr_space 'rv 'a (either 'r 'e)
+
+(* val early_return : forall 'rv 'a 'r 'e. 'r -> monadR 'rv 'a 'r 'e *)
+let early_return r = throw (Left r)
+
+(* val catch_early_return : forall 'rv 'a 'e. monadR 'rv 'a 'a 'e -> monad 'rv 'a 'e *)
+let catch_early_return m =
+  try_catch m
+    (function
+      | Left a -> return a
+      | Right e -> throw e
+     end)
+
+val pure_early_return : forall 'a. either 'a 'a -> 'a
+let pure_early_return = function
+  | Left a -> a
+  | Right a -> a
+end
+
+(*val pure_early_return_embed : forall 'rv 'a 'r 'e. either 'r 'a -> monadR 'rv 'a 'r 'e*)
+let pure_early_return_embed = function
+  | Left r -> throw (Left r)
+  | Right a -> return a
+end
+
+val either_bind : forall 'e 'a 'b. either 'e 'a -> ('a -> either 'e 'b) -> either 'e 'b
+let either_bind m f =
+  match m with
+  | Left e -> Left e
+  | Right x -> f x
+  end
+
+(* Lift to monad with early return by wrapping exceptions *)
+(* val liftR : forall 'rv 'a 'r 'e. monad 'rv 'a 'e -> monadR 'rv 'a 'r 'e *)
+let liftR m = try_catch m (fun e -> throw (Right e))
+
+(* Catch exceptions in the presence of early returns *)
+(* val try_catchR : forall 'rv 'a 'r 'e1 'e2. monadR 'rv 'a 'r 'e1 -> ('e1 -> monadR 'rv 'a 'r 'e2) ->  monadR 'rv 'a 'r 'e2 *)
+let try_catchR m h =
+  try_catch m
+    (function
+      | Left r -> throw (Left r)
+      | Right e -> h e
+     end)
+
+(* val maybe_fail : forall 'rv 'a 'e. string -> maybe 'a -> monad 'rv 'a 'e *)
+let maybe_fail msg = function
+  | Just a -> return a
+  | Nothing -> Fail msg
+end
+
+val assert_exp : forall 'abort 'barrier 'cache_op 'fault 'tlb_op 'trans_start 'trans_end 'mem_acc 'addr_size 'addr_space 'regval 'e.
+  bool -> string -> monad 'abort 'barrier 'cache_op 'fault 'tlb_op 'trans_start 'trans_end 'mem_acc 'addr_size 'addr_space 'regval unit 'e
+let assert_exp exp msg = if exp then Done () else Fail msg
+
+val exit : forall 'abort 'barrier 'cache_op 'fault 'tlb_op 'trans_start 'trans_end 'mem_acc 'addr_size 'addr_space 'regval 'a 'e.
+  unit -> monad 'abort 'barrier 'cache_op 'fault 'tlb_op 'trans_start 'trans_end 'mem_acc 'addr_size 'addr_space 'regval 'a 'e
+let exit _ = Fail "exit"
+
+val read_reg : forall 's 'abort 'barrier 'cache_op 'fault 'tlb_op 'trans_start 'trans_end 'mem_acc 'addr_size 'addr_space 'regval 'a 'e.
+  register_ref 's 'regval 'a -> monad 'abort 'barrier 'cache_op 'fault 'tlb_op 'trans_start 'trans_end 'mem_acc 'addr_size 'addr_space 'regval 'a 'e
+let read_reg reg =
+  let k v =
+    match reg.of_regval v with
+      | Just v -> Done v
+      | Nothing -> Fail "read_reg: unrecognised value"
+    end
+  in
+  Read_reg reg.name k
+
+let inline reg_deref = read_reg
+
+val write_reg : forall 's 'abort 'barrier 'cache_op 'fault 'tlb_op 'trans_start 'trans_end 'mem_acc 'addr_size 'addr_space 'regval 'a 'e.
+  register_ref 's 'regval 'a -> 'a -> monad 'abort 'barrier 'cache_op 'fault 'tlb_op 'trans_start 'trans_end 'mem_acc 'addr_size 'addr_space 'regval unit 'e
+let write_reg reg v = Write_reg reg.name (reg.regval_of v) (Done ())
+
+val sail_mem_read : forall 'abort 'barrier 'cache_op 'exn 'pa 'tlb_op 'trans_start 'trans_end 'mem_acc 'addr_size 'addr_space 'regval 'e.
+  Mem_request 'addr_size 'addr_space 'mem_acc ->
+  monad 'abort 'barrier 'cache_op 'exn 'tlb_op 'trans_start 'trans_end 'mem_acc 'addr_size 'addr_space 'regval (result (list (mword ty8) * list bool) 'abort) 'e
+let sail_mem_read req = Mem_read req return
+
+val sail_mem_write : forall 'abort 'barrier 'cache_op 'exn 'pa 'tlb_op 'trans_start 'trans_end 'mem_acc 'addr_size 'addr_space 'regval 'e.
+  Mem_request 'addr_size 'addr_space 'mem_acc ->
+  list (mword ty8) ->
+  list bool ->
+  monad 'abort 'barrier 'cache_op 'exn 'tlb_op 'trans_start 'trans_end 'mem_acc 'addr_size 'addr_space 'regval (result unit 'abort) 'e
+let sail_mem_write req data tags = Mem_write req data tags return
+
+val choose_regval : forall 'abort 'barrier 'cache_op 'fault 'tlb_op 'trans_start 'trans_end 'mem_acc 'addr_size 'addr_space 'rv 'e.
+  string -> monad 'abort 'barrier 'cache_op 'fault 'tlb_op 'trans_start 'trans_end 'mem_acc 'addr_size 'addr_space 'rv 'rv 'e
+let choose_regval descr = Choose descr return
+
+val choose_convert : forall 'abort 'barrier 'cache_op 'fault 'tlb_op 'trans_start 'trans_end 'mem_acc 'addr_size 'addr_space 'rv 'e 'a.
+  ('rv -> maybe 'a) -> string -> monad 'abort 'barrier 'cache_op 'fault 'tlb_op 'trans_start 'trans_end 'mem_acc 'addr_size 'addr_space 'rv 'a 'e
+let choose_convert of_rv descr = Choose descr (fun rv -> maybe_fail descr (of_rv rv))
+
+val choose_convert_default : forall 'abort 'barrier 'cache_op 'fault 'tlb_op 'trans_start 'trans_end 'mem_acc 'addr_size 'addr_space 'rv 'e 'a.
+  ('rv -> maybe 'a) -> 'a -> string -> monad 'abort 'barrier 'cache_op 'fault 'tlb_op 'trans_start 'trans_end 'mem_acc 'addr_size 'addr_space 'rv 'a 'e
+let choose_convert_default of_rv x descr = Choose descr (fun rv -> return (match of_rv rv with
+    | Just a -> a
+    | Nothing -> x
+  end))
+
+let choose_bool descr = choose_convert_default bool_of_regval false descr
+let choose_bit descr = bind (choose_bool descr) (fun b -> return (bitU_of_bool b))
+let choose_int descr = choose_convert_default int_of_regval 0 descr
+let choose_real descr = choose_convert_default real_of_regval 0 descr
+let choose_string descr = choose_convert_default string_of_regval "default" descr
+
+let headM = function
+  | x :: _ -> return x
+  | [] -> Fail "headM"
+end
+
+let tailM = function
+  | _ :: xs -> return xs
+  | [] -> Fail "tailM"
+end
+
+val sail_mem_address_announce : forall 'abort 'barrier 'cache_op 'exn 'tlb_op 'trans_start 'trans_end 'mem_acc 'addr_size 'addr_space 'regval 'e.
+  Mem_request 'addr_size 'addr_space 'mem_acc ->
+  monad 'abort 'barrier 'cache_op 'exn 'tlb_op 'trans_start 'trans_end 'mem_acc 'addr_size 'addr_space 'regval unit 'e
+let sail_mem_address_announce req = Mem_write_address_announce req (return ())
+
+val sail_translation_start : forall 'abort 'barrier 'cache_op 'exn 'tlb_op 'trans_start 'trans_end 'mem_acc 'addr_size 'addr_space 'regval 'e.
+  'trans_start -> monad 'abort 'barrier 'cache_op 'exn 'tlb_op 'trans_start 'trans_end 'mem_acc 'addr_size 'addr_space 'regval unit 'e
+let sail_translation_start ts = Translation_start ts (return ())
+
+val sail_translation_end : forall 'abort 'barrier 'cache_op 'exn 'tlb_op 'trans_start 'trans_end 'mem_acc 'addr_size 'addr_space 'regval 'e.
+  'trans_end -> monad 'abort 'barrier 'cache_op 'exn 'tlb_op 'trans_start 'trans_end 'mem_acc 'addr_size 'addr_space 'regval unit 'e
+let sail_translation_end te = Translation_end te (return ())
+
+val instr_announce : forall 'instr 'abort 'barrier 'cache_op 'exn 'tlb_op 'trans_start 'trans_end 'mem_acc 'addr_size 'addr_space 'regval 'e.
+  'instr ->
+  monad 'abort 'barrier 'cache_op 'exn 'tlb_op 'trans_start 'trans_end 'mem_acc 'addr_size 'addr_space 'regval unit 'e
+let instr_announce _ = return () (* TODO *)
+
+val branch_announce : forall 'addr 'abort 'barrier 'cache_op 'exn 'tlb_op 'trans_start 'trans_end 'mem_acc 'addr_size 'addr_space 'regval 'e. Bitvector 'addr =>
+  integer -> 'addr ->
+  monad 'abort 'barrier 'cache_op 'exn 'tlb_op 'trans_start 'trans_end 'mem_acc 'addr_size 'addr_space 'regval unit 'e
+let branch_announce _ _ = return ()
+
+val sail_barrier : forall 'abort 'barrier 'cache_op 'exn 'tlb_op 'trans_start 'trans_end 'mem_acc 'addr_size 'addr_space 'regval 'e.
+  'barrier ->
+  monad 'abort 'barrier 'cache_op 'exn 'tlb_op 'trans_start 'trans_end 'mem_acc 'addr_size 'addr_space 'regval unit 'e
+let sail_barrier barrier = Barrier_request barrier (return ())
+
+val sail_cache_op : forall 'abort 'barrier 'cache_op 'exn 'tlb_op 'trans_start 'trans_end 'mem_acc 'addr_size 'addr_space 'regval 'e.
+  'cache_op ->
+  monad 'abort 'barrier 'cache_op 'exn 'tlb_op 'trans_start 'trans_end 'mem_acc 'addr_size 'addr_space 'regval unit 'e
+let sail_cache_op cache_op = Cache_op_request cache_op (return ())
+
+val sail_tlbi : forall 'abort 'barrier 'cache_op 'exn 'tlb_op 'trans_start 'trans_end 'mem_acc 'addr_size 'addr_space 'regval 'e.
+  'tlb_op ->
+  monad 'abort 'barrier 'cache_op 'exn 'tlb_op 'trans_start 'trans_end 'mem_acc 'addr_size 'addr_space 'regval unit 'e
+let sail_tlbi tlb_op = TLB_op_request tlb_op (return ())
+
+val sail_take_exception : forall 'abort 'barrier 'cache_op 'exn 'tlb_op 'trans_start 'trans_end 'mem_acc 'addr_size 'addr_space 'regval 'e.
+  'exn ->
+  monad 'abort 'barrier 'cache_op 'exn 'tlb_op 'trans_start 'trans_end 'mem_acc 'addr_size 'addr_space 'regval unit 'e
+let sail_take_exception exn = Take_exception exn (return ())
+
+val sail_return_exception : forall 'abort 'barrier 'cache_op 'exn 'tlb_op 'trans_start 'trans_end 'mem_acc 'addr_size 'addr_space 'regval 'e.
+  unit -> monad 'abort 'barrier 'cache_op 'exn 'tlb_op 'trans_start 'trans_end 'mem_acc 'addr_size 'addr_space 'regval unit 'e
+let sail_return_exception _ = Return_exception (return ())
+
+val sail_instr_announce : forall 'abort 'barrier 'cache_op 'exn 'tlb_op 'trans_start 'trans_end 'mem_acc 'addr_size 'addr_space 'regval 'e 'addr.
+  'addr -> monad 'abort 'barrier 'cache_op 'exn 'tlb_op 'trans_start 'trans_end 'mem_acc 'addr_size 'addr_space 'regval unit 'e
+let sail_instr_announce _ = return ()
+
+(* We treat the cycle count operations as dummy operations.  We don't currently use cycle_count as an end-of-instruction marker
+   in the Lem targets, and we're going to move get_cycle_count into the Arm model directly soon. *)
+val cycle_count : forall 'abort 'barrier 'cache_op 'exn 'tlb_op 'trans_start 'trans_end 'mem_acc 'addr_size 'addr_space 'regval 'e.
+  unit ->
+  monad 'abort 'barrier 'cache_op 'exn 'tlb_op 'trans_start 'trans_end 'mem_acc 'addr_size 'addr_space 'regval unit 'e
+let cycle_count () = return ()
+
+val get_cycle_count : forall 'abort 'barrier 'cache_op 'exn 'tlb_op 'trans_start 'trans_end 'mem_acc 'addr_size 'addr_space 'regval 'e.
+  unit ->
+  monad 'abort 'barrier 'cache_op 'exn 'tlb_op 'trans_start 'trans_end 'mem_acc 'addr_size 'addr_space 'regval integer 'e
+let get_cycle_count () = return 0
+
+(* Event traces *)
+
+val emitEvent : forall 'abort 'barrier 'cache_op 'exn 'tlb_op 'trans_start 'trans_end 'mem_acc 'addr_size 'addr_space 'regval 'a 'e.
+  Eq 'regval, Eq 'barrier, Eq 'cache_op, Eq 'tlb_op, Eq 'exn, Eq 'trans_start, Eq 'trans_end =>
+  monad 'abort 'barrier 'cache_op 'exn 'tlb_op 'trans_start 'trans_end 'mem_acc 'addr_size 'addr_space 'regval 'a 'e
+  -> event 'abort 'barrier 'cache_op 'exn 'tlb_op 'trans_start 'trans_end 'mem_acc 'addr_size 'addr_space 'regval
+  -> maybe (monad 'abort 'barrier 'cache_op 'exn 'tlb_op 'trans_start 'trans_end 'mem_acc 'addr_size 'addr_space 'regval 'a 'e)
+let emitEvent m e = match (e, m) with
+  | (E_choose descr v, Choose descr' k) ->
+     if descr' = descr then Just (k v) else Nothing
+  | (E_read_reg r v, Read_reg r' k) ->
+     if r' = r then Just (k v) else Nothing
+  | (E_write_reg r v, Write_reg r' v' k) ->
+     if r' = r && v' = v then Just k else Nothing
+  | (E_mem_read req v, Mem_read req' k) ->
+     if req' = req then Just (k v) else Nothing
+  | (E_mem_write req data tags r, Mem_write req' data' tags' k) ->
+     if req' = req && data' = data && tags' = tags then Just (k r) else Nothing
+  | (E_mem_write_address_announce a, Mem_write_address_announce a' k) ->
+     if a' = a then Just k else Nothing
+  | (E_barrier_request r, Barrier_request r' k) ->
+     if r' = r then Just k else Nothing
+  | (E_cache_op_request r, Cache_op_request r' k) ->
+     if r' = r then Just k else Nothing
+  | (E_tlb_op_request r, TLB_op_request r' k) ->
+     if r' = r then Just k else Nothing
+  | (E_take_exception exn, Take_exception exn' k) ->
+     if exn' = exn then Just k else Nothing
+  | (E_return_exception, Return_exception k) ->
+     Just k
+  | (E_translation_start ts, Translation_start ts' k) ->
+     if ts' = ts then Just k else Nothing
+  | (E_translation_end te, Translation_end te' k) ->
+     if te' = te then Just k else Nothing
+  | _ -> Nothing
+end
+
+(*val runTrace : forall 'regval 'a 'e. Eq 'regval => trace 'regval -> monad 'regval 'a 'e -> maybe (monad 'regval 'a 'e)*)
+let rec runTrace t m = match t with
+  | [] -> Just m
+  | e :: t' -> Maybe.bind (emitEvent m e) (runTrace t')
+end
+
+declare {isabelle} termination_argument runTrace = automatic
+
+(*val final : forall 'regval 'a 'e. monad 'regval 'a 'e -> bool*)
+let final = function
+  | Done _ -> true
+  | Fail _ -> true
+  | Exception _ -> true
+  | _ -> false
+end
+
+(*val hasTrace : forall 'regval 'a 'e. Eq 'regval => trace 'regval -> monad 'regval 'a 'e -> bool*)
+let hasTrace t m = match runTrace t m with
+  | Just m -> final m
+  | Nothing -> false
+end
+
+(*val hasException : forall 'regval 'a 'e. Eq 'regval => trace 'regval -> monad 'regval 'a 'e -> bool*)
+let hasException t m = match runTrace t m with
+  | Just (Exception _) -> true
+  | _ -> false
+end
+
+(*val hasFailure : forall 'regval 'a 'e. Eq 'regval => trace 'regval -> monad 'regval 'a 'e -> bool*)
+let hasFailure t m = match runTrace t m with
+  | Just (Fail _) -> true
+  | _ -> false
+end
+
+(* Define a type synonym that also takes the register state as a type parameter,
+   in order to make switching to the state monad without changing generated
+   definitions easier, see also lib/hol/prompt_monad.lem. *)
+
+type base_monad 'abort 'barrier 'cache_op 'exn 'tlb_op 'trans_start 'trans_end 'mem_acc 'addr_size 'addr_space 'regval 'regstate 'a 'e =
+  monad 'abort 'barrier 'cache_op 'exn 'tlb_op 'trans_start 'trans_end 'mem_acc 'addr_size 'addr_space 'regval 'a 'e
+type base_monadR 'abort 'barrier 'cache_op 'exn 'tlb_op 'trans_start 'trans_end 'mem_acc 'addr_size 'addr_space 'regval 'regstate 'a 'r 'e =
+  monadR 'abort 'barrier 'cache_op 'exn 'tlb_op 'trans_start 'trans_end 'mem_acc 'addr_size 'addr_space 'regval 'a 'r 'e
