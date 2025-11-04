@@ -14,3 +14,8 @@ Sail2_state_lifting.thy
 Sail2_state.thy
 Sail2_string.thy
 Sail2_undefined.thy
+Sail2_concurrency_interface.thy
+Sail2_concurrency_interface_bitlists.thy
+Sail2_concurrency_interface_mwords.thy
+Sail2_monadic_combinators.thy
+Sail2_undefined_concurrency_interface.thy
