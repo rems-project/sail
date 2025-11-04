@@ -1832,9 +1832,9 @@ def wPC (pc : (BitVec 64)) : SailM Unit := do
   writeReg _PC pc
 
 def decodeLoadStoreRegister (opc : (BitVec 2)) (Rm : (BitVec 5)) (option_v : (BitVec 3)) (S : (BitVec 1)) (Rn : (BitVec 5)) (Rt : (BitVec 5)) : (Option ast) :=
-  let t : reg_index := (BitVec.toNat Rt)
-  let n : reg_index := (BitVec.toNat Rn)
-  let m : reg_index := (BitVec.toNat Rm)
+  let t : reg_index := (BitVec.toNatInt Rt)
+  let n : reg_index := (BitVec.toNatInt Rn)
+  let m : reg_index := (BitVec.toNatInt Rm)
   if (((option_v != (0b011 : (BitVec 3))) || (S == 1#1)) : Bool)
   then none
   else
@@ -1846,9 +1846,9 @@ def decodeLoadStoreRegister (opc : (BitVec 2)) (Rm : (BitVec 5)) (option_v : (Bi
       else none))
 
 def decodeExclusiveOr (sf : (BitVec 1)) (shift : (BitVec 2)) (N : (BitVec 1)) (Rm : (BitVec 5)) (imm6 : (BitVec 6)) (Rn : (BitVec 5)) (Rd : (BitVec 5)) : (Option ast) :=
-  let d : reg_index := (BitVec.toNat Rd)
-  let n : reg_index := (BitVec.toNat Rn)
-  let m : reg_index := (BitVec.toNat Rm)
+  let d : reg_index := (BitVec.toNatInt Rd)
+  let n : reg_index := (BitVec.toNatInt Rn)
+  let m : reg_index := (BitVec.toNatInt Rm)
   if (((sf == 0#1) && ((BitVec.access imm6 5) == 1#1)) : Bool)
   then none
   else
@@ -1862,7 +1862,7 @@ def decodeDataMemoryBarrier (CRm : (BitVec 4)) : (Option ast) :=
   else (some (DataMemoryBarrier ()))
 
 def decodeCompareAndBranch (imm19 : (BitVec 19)) (Rt : (BitVec 5)) : (Option ast) :=
-  let t : reg_index := (BitVec.toNat Rt)
+  let t : reg_index := (BitVec.toNatInt Rt)
   let offset : (BitVec 64) := (Sail.BitVec.signExtend (imm19 ++ (0b00 : (BitVec 2))) 64)
   (some (CompareAndBranch (t, offset)))
 

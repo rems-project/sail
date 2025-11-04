@@ -10,6 +10,10 @@ namespace BitVec
 abbrev length {w : Nat} (_ : BitVec w) : Nat := w
 
 @[simp_sail]
+def toNatInt {w : Nat} (x : BitVec w) : Int :=
+  Int.ofNat x.toNat
+
+@[simp_sail]
 def signExtend {w : Nat} (x : BitVec w) (w' : Nat) : BitVec w' :=
   x.signExtend w'
 

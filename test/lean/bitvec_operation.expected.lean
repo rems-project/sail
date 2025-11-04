@@ -182,7 +182,7 @@ def bitvector_xor (x : (BitVec 16)) (y : (BitVec 16)) : (BitVec 16) :=
   (x ^^^ y)
 
 def bitvector_unsigned (x : (BitVec 16)) : Nat :=
-  (BitVec.toNat x)
+  (BitVec.toNatInt x)
 
 def bitvector_signed (x : (BitVec 16)) : Int :=
   (BitVec.toInt x)

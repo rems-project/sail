@@ -157,8 +157,9 @@ def xlen := 32
 
 def write_CSR (merge_var : (BitVec 12)) : SailM Bool := do
   match_bv merge_var with
-  | [1011000:7,index:5] if ((BitVec.toNat index) ≥b 3) => do (pure true)
-  | [1011100,index:5] if ((xlen == 32) && (((BitVec.toNat index) ≥b 3) : Bool)) => do (pure true)
+  | [1011000:7,index:5] if ((BitVec.toNatInt index) ≥b 3) => do (pure true)
+  | [1011100,index:5] if ((xlen == 32) && (((BitVec.toNatInt index) ≥b 3) : Bool)) => do
+    (pure true)
   | _ => do
     (do
       assert false "Pattern match failure at match_bv.sail:36.0-38.1"
@@ -166,7 +167,8 @@ def write_CSR (merge_var : (BitVec 12)) : SailM Bool := do
 
 def write_CSR2 (merge_var : (BitVec 12)) : SailM Bool := do
   match_bv merge_var with
-  | [1011100,index:5] if ((xlen == 32) && (((BitVec.toNat index) ≥b 3) : Bool)) => do (pure true)
+  | [1011100,index:5] if ((xlen == 32) && (((BitVec.toNatInt index) ≥b 3) : Bool)) => do
+    (pure true)
   | _ => do
     (do
       assert false "Pattern match failure at match_bv.sail:41.0-43.1"
