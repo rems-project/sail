@@ -5,12 +5,16 @@ THYS = Sail2_instr_kinds.thy Sail2_values.thy Sail2_operators.thy \
   Sail2_string.thy Sail2_concurrency_interface.thy \
   Sail2_concurrency_interface_mwords.thy \
   Sail2_concurrency_interface_bitlists.thy \
-  Sail2_monadic_combinators.thy Sail2_undefined_concurrency_interface.thy
+  Sail2_monadic_combinators.thy Sail2_undefined_concurrency_interface.thy \
+  Sail2_concurrency_interface_v2.thy \
+  Sail2_monadic_combinators_v2.thy Sail2_undefined_concurrency_interface_v2.thy
 EXTRA_THYS = Sail2_state_monad_lemmas.thy Sail2_state_lemmas.thy \
   Sail2_prompt_monad_lemmas.thy \
   Sail2_operators_mwords_lemmas.thy Hoare.thy \
   Sail2_concurrency_interface_lemmas.thy \
+  Sail2_concurrency_interface_v2_lemmas.thy \
   Sail2_monadic_combinators_lemmas.thy \
+  Sail2_monadic_combinators_v2_lemmas.thy \
   Trace_Properties.thy
 
 LEM_ISA_LIB?=$(shell opam config var lem:share)/isabelle-lib
@@ -60,9 +64,6 @@ Sail2_prompt.thy: ../../src/gen_lib/sail2_prompt.lem Sail2_prompt_monad.thy Sail
 Sail2_undefined.thy: ../../src/gen_lib/sail2_undefined.lem Sail2_prompt.thy
 	lem -isa -outdir . -auxiliary_level none -lib ../../src/gen_lib $<
 
-Sail2_undefined_concurrency_interface.thy: ../../src/gen_lib/sail2_undefined_concurrency_interface.lem Sail2_concurrency_interface.thy
-	lem -isa -outdir . -auxiliary_level none -lib ../../src/gen_lib $<
-
 Sail2_state_monad.thy: ../../src/gen_lib/sail2_state_monad.lem Sail2_values.thy
 	lem -isa -outdir . -auxiliary_level none -lib ../../src/gen_lib $<
 
@@ -78,6 +79,9 @@ Sail2_string.thy: ../../src/gen_lib/sail2_string.lem Sail2_operators_mwords.thy
 Sail2_concurrency_interface.thy: ../../src/gen_lib/sail2_concurrency_interface.lem Sail2_string.thy Sail2_values.thy
 	lem -isa -outdir . -auxiliary_level none -lib ../../src/gen_lib $<
 
+Sail2_concurrency_interface_v2.thy: ../../src/gen_lib/sail2_concurrency_interface_v2.lem Sail2_string.thy Sail2_values.thy
+	lem -isa -outdir . -auxiliary_level none -lib ../../src/lem_interp -lib ../../src/gen_lib $<
+
 Sail2_concurrency_interface_mwords.thy: ../../src/gen_lib/sail2_concurrency_interface_mwords.lem Sail2_concurrency_interface.thy
 	lem -isa -outdir . -auxiliary_level none -lib ../../src/gen_lib $<
 
@@ -86,6 +90,15 @@ Sail2_concurrency_interface_bitlists.thy: ../../src/gen_lib/sail2_concurrency_in
 
 Sail2_monadic_combinators.thy: ../../src/gen_lib/sail2_monadic_combinators.lem Sail2_concurrency_interface.thy Sail2_values.thy
 	lem -isa -outdir . -auxiliary_level none -lib ../../src/gen_lib $<
+
+Sail2_monadic_combinators_v2.thy: ../../src/gen_lib/sail2_monadic_combinators_v2.lem Sail2_concurrency_interface_v2.thy
+	lem -isa -outdir . -auxiliary_level none -lib ../../src/lem_interp -lib ../../src/gen_lib $<
+
+Sail2_undefined_concurrency_interface.thy: ../../src/gen_lib/sail2_undefined_concurrency_interface.lem Sail2_concurrency_interface.thy
+	lem -isa -outdir . -auxiliary_level none -lib ../../src/lem_interp -lib ../../src/gen_lib $<
+
+Sail2_undefined_concurrency_interface_v2.thy: ../../src/gen_lib/sail2_undefined_concurrency_interface_v2.lem Sail2_concurrency_interface_v2.thy
+	lem -isa -outdir . -auxiliary_level none -lib ../../src/lem_interp -lib ../../src/gen_lib $<
 
 clean:
 	-rm $(THYS)
