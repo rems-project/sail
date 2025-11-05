@@ -144,7 +144,8 @@ let rec is_unknown_loc = function
   | Parse_ast.Generated l | Parse_ast.Unique (_, l) | Parse_ast.Hint (_, _, l) -> is_unknown_loc l
 
 let loc_range_to_src (p1 : Lexing.position) (p2 : Lexing.position) =
-  (fun contents -> String.sub contents p1.pos_cnum (p2.pos_cnum - p1.pos_cnum)) (Util.read_whole_file p1.pos_fname)
+  let handle = Sail_file.open_file p1.pos_fname in
+  String.sub (Sail_file.contents handle) p1.pos_cnum (p2.pos_cnum - p1.pos_cnum)
 
 let rec map_loc_range f = function
   | Parse_ast.Unknown -> Parse_ast.Unknown
