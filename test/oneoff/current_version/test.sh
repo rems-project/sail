@@ -2,4 +2,4 @@
 
 set -e
 
-sail --require-version 0.20
+sail --require-version 0.20.1
