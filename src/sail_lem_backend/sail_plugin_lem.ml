@@ -167,7 +167,9 @@ let lem_target out_file { ctx; ast; effect_info; env = type_env; _ } =
   let out_filename = match out_file with Some f -> f | None -> "out" in
   let concurrency_monad_params = Monad_params.find_monad_parameters type_env in
   let monad_modules =
-    if Option.is_some concurrency_monad_params then
+    if Preprocess.have_symbol "CONCURRENCY_INTERFACE_V2" then
+      ["Sail2_concurrency_interface_v2"; "Sail2_monadic_combinators_v2"; "Sail2_undefined_concurrency_interface_v2"]
+    else if Option.is_some concurrency_monad_params then
       [
         "Sail2_concurrency_interface";
         "Sail2_monadic_combinators";
@@ -176,12 +178,10 @@ let lem_target out_file { ctx; ast; effect_info; env = type_env; _ } =
           else "Sail2_concurrency_interface_bitlists"
         );
       ]
-    else ["Sail2_prompt_monad"; "Sail2_prompt"; "Sail2_undefined"]
+    else ["Sail2_instr_kinds"; "Sail2_prompt_monad"; "Sail2_prompt"; "Sail2_undefined"]
   in
   let operators_module = if !Monomorphise.opt_mwords then "Sail2_operators_mwords" else "Sail2_operators_bitlists" in
-  let base_imports =
-    ["Pervasives_extra"; "Sail2_instr_kinds"; "Sail2_values"; "Sail2_string"; operators_module] @ monad_modules
-  in
+  let base_imports = ["Pervasives_extra"; "Sail2_values"; "Sail2_string"; operators_module] @ monad_modules in
   let isa_thy_name = String.capitalize_ascii out_filename ^ "_lemmas" in
   let isa_lemmas =
     separate hardline
@@ -190,7 +190,9 @@ let lem_target out_file { ctx; ast; effect_info; env = type_env; _ } =
         string "  imports";
         string ("    " ^ String.capitalize_ascii out_filename);
         string "    Sail.Sail2_values_lemmas";
-        ( if Option.is_some concurrency_monad_params then string "    Sail.Sail2_concurrency_interface_lemmas"
+        ( if Preprocess.have_symbol "CONCURRENCY_INTERFACE_V2" then
+            string "    Sail.Sail2_concurrency_interface_v2_lemmas"
+          else if Option.is_some concurrency_monad_params then string "    Sail.Sail2_concurrency_interface_lemmas"
           else string "    Sail.Sail2_state_lemmas"
         );
         string "    Sail.Add_Cancel_Distinct";

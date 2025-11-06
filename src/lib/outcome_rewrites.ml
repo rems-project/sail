@@ -106,7 +106,7 @@ let rec instantiated_or_abstract l = function
 
 let instantiate target ast =
   (* Some backends will need the instantiations to hook up to a particular interface *)
-  let keep_original_defs = String.compare target "coq" == 0 || String.compare target "lean" == 0 in
+  let keep_original_defs = String.compare target "coq" == 0 || String.compare target "lean" == 0 || String.compare target "lem" == 0 in
   let process_def outcomes = function
     | DEF_aux (DEF_outcome (OV_aux (OV_outcome (id, TypSchm_aux (TypSchm_ts (typq, typ), _), args), l), outcome_defs), _)
       as def ->

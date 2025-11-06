@@ -1237,7 +1237,7 @@ let split_defs target all_errors (splits : split_req list) env ast =
       Util.progress "Monomorphising " (string_of_int idx ^ "/" ^ string_of_int num_defs) idx num_defs;
       match aux with
       | DEF_type _ | DEF_constraint _ | DEF_val _ | DEF_default _ | DEF_register _ | DEF_overload _ | DEF_fixity _
-      | DEF_pragma _ | DEF_internal_mutrec _ ->
+      | DEF_pragma _ | DEF_internal_mutrec _ | DEF_outcome _ | DEF_impl _ | DEF_instantiation _ ->
           [def]
       | DEF_fundef fd -> [DEF_aux (DEF_fundef (map_fundef fd), def_annot)]
       | DEF_let (pat, exp) ->
@@ -1245,7 +1245,7 @@ let split_defs target all_errors (splits : split_req list) env ast =
           [DEF_aux (DEF_let (pat, exp), def_annot)]
       | DEF_scattered sd -> List.map (fun x -> DEF_aux (DEF_scattered x, def_annot)) (map_scattered_def sd)
       | DEF_measure (id, pat, exp) -> [DEF_aux (DEF_measure (id, pat, map_exp exp), def_annot)]
-      | DEF_impl _ | DEF_instantiation _ | DEF_outcome _ | DEF_mapdef _ | DEF_loop_measures _ ->
+      | DEF_mapdef _ | DEF_loop_measures _ ->
           Reporting.unreachable (def_loc def) __POS__
             "Found definition that should have been rewritten previously during monomorphisation"
     in
