@@ -327,7 +327,7 @@ let lem_tyvars_of_typ params_to_print typ =
     (lem_nexps_of_typ params_to_print typ) KidSet.empty
 
 (* When making changes here, check whether they affect lem_tyvars_of_typ *)
-let doc_typ_lem, doc_typ_lem_brackets, doc_atomic_typ_lem =
+let doc_typ_lem, doc_typ_lem_brackets, doc_atomic_typ_lem, doc_typ_arg_lem =
   (* following the structure of parser for precedence *)
   let rec typ params_to_print atyp_needed ty = tup_typ params_to_print atyp_needed ty
   and tup_typ params_to_print atyp_needed (Typ_aux (t, l) as ty) =
@@ -426,7 +426,7 @@ let doc_typ_lem, doc_typ_lem_brackets, doc_atomic_typ_lem =
     let ty' = if !Monomorphise.opt_mwords then ty else Env.expand_synonyms env ty in
     typ params_to_print atyp_needed ty'
   in
-  (top false, top true, atomic_typ)
+  (top false, top true, atomic_typ, doc_typ_arg_lem)
 
 let doc_fn_typ_lem ?(monad = empty) params_to_print env (Typ_aux (aux, l) as ty) =
   match aux with
@@ -1713,8 +1713,7 @@ let doc_def_lem effect_info params_to_print type_env (DEF_aux (aux, _) as def) =
   | DEF_let (pat, exp) -> doc_def_let { empty_ctxt with params_to_print } pat exp
   | DEF_scattered sdef -> unreachable (def_loc def) __POS__ "doc_def_lem: shoulnd't have DEF_scattered at this point"
   | DEF_mapdef (MD_aux (_, (l, _))) -> unreachable l __POS__ "Lem doesn't support mappings"
-  | DEF_outcome _ | DEF_impl _ | DEF_instantiation _ ->
-      unreachable (def_loc def) __POS__ "Event definition found when generating lem"
+  | DEF_outcome _ | DEF_impl _ | DEF_instantiation _ -> empty
   | DEF_pragma _ -> empty
   | DEF_measure _ -> empty (* we might use these in future *)
   | DEF_loop_measures _ -> empty
@@ -1804,25 +1803,51 @@ let doc_ast_lem out_filename split_files base_imports extra_imports ctx effect_i
   in
   let register_refs = State.register_refs_lem register_ref_tannot type_env (State.find_registers defs) in
   let extra_monad_params =
-    match concurrency_monad_params with
-    | None -> empty
-    | Some params ->
-        let open Monad_params in
-        space
-        ^^ separate_map space
-             (doc_typ_lem_brackets params_to_print type_env)
-             [
-               params.abort_type;
-               params.barrier_type;
-               params.cache_op_type;
-               params.fault_type;
-               params.pa_type;
-               params.tlbi_type;
-               params.translation_summary_type;
-               params.trans_start_type;
-               params.trans_end_type;
-               params.arch_ak_type;
-             ]
+    if Preprocess.have_symbol "CONCURRENCY_INTERFACE_V2" then begin
+      let open Monad_params in
+      let type_substs, id_substs = find_instantiations defs in
+      let pp_typish name default =
+        match KBindings.find_opt (mk_kid name) type_substs with
+        | Some typ_arg -> doc_typ_arg_lem params_to_print typ_arg
+        | None -> string default
+      in
+      let pp_typ_or_unit name = pp_typish name "unit" in
+      space
+      ^^ separate_map space pp_typ_or_unit
+           [
+             "abort";
+             "barrier";
+             "cache_op";
+             "exn";
+             "tlbi";
+             "trans_start";
+             "trans_end";
+             "mem_acc";
+             "addr_size";
+             "addr_space";
+           ]
+    end
+    else begin
+      match concurrency_monad_params with
+      | None -> empty
+      | Some params ->
+          let open Monad_params in
+          space
+          ^^ separate_map space
+               (doc_typ_lem_brackets params_to_print type_env)
+               [
+                 params.abort_type;
+                 params.barrier_type;
+                 params.cache_op_type;
+                 params.fault_type;
+                 params.pa_type;
+                 params.tlbi_type;
+                 params.translation_summary_type;
+                 params.trans_start_type;
+                 params.trans_end_type;
+                 params.arch_ak_type;
+               ]
+    end
   in
   let types_doc =
     concat
