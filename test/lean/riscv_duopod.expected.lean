@@ -186,11 +186,11 @@ def zeros (n : Nat) : (BitVec n) :=
 def rX (r : (BitVec 5)) : SailM (BitVec 64) := do
   match_bv r with
   | 00000 => do (pure (EXTZ (m := 64) (0x0 : (BitVec 4))))
-  | _ => do (pure (GetElem?.getElem! (← readReg Xs) (BitVec.toNat r)))
+  | _ => do (pure (GetElem?.getElem! (← readReg Xs) (BitVec.toNatInt r)))
 
 def wX (r : (BitVec 5)) (v : (BitVec 64)) : SailM Unit := do
   if ((r != (0b00000 : (BitVec 5))) : Bool)
-  then writeReg Xs (vectorUpdate (← readReg Xs) (BitVec.toNat r) v)
+  then writeReg Xs (vectorUpdate (← readReg Xs) (BitVec.toNatInt r) v)
   else (pure ())
 
 /-- Type quantifiers: width : Nat, width ≥ 0 -/

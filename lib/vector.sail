@@ -430,7 +430,7 @@ val unsigned = pure {
   lem: "uint",
   interpreter: "uint",
   coq: "uint",
-  lean: "BitVec.toNat",
+  lean: "BitVec.toNatInt",
   _: "sail_unsigned"
 } : forall 'n. bits('n) -> range(0, 2 ^ 'n - 1)
 

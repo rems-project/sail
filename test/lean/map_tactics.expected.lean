@@ -141,7 +141,7 @@ def concat_str_dec (str : String) (x : Int) : String :=
 
 /-- Type quantifiers: k_n : Nat, k_n > 0 -/
 def hex_bits_forwards (bv : (BitVec k_n)) : (Nat × String) :=
-  ((Sail.BitVec.length bv), (Int.toHex (BitVec.toNat bv)))
+  ((Sail.BitVec.length bv), (Int.toHex (BitVec.toNatInt bv)))
 
 /-- Type quantifiers: k_n : Nat, k_n > 0 -/
 def hex_bits_forwards_matches (bv : (BitVec k_n)) : Bool :=
