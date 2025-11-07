@@ -58,6 +58,8 @@ open Pretty_print_sail
 
 let opt_type_grouped_regstate = ref false
 
+module StringMap = Map.Make (String)
+
 let is_defined defs name = IdSet.mem (mk_id name) (ids_of_defs defs)
 
 let get_bitfield_typ_id env typ =
@@ -546,12 +548,19 @@ let generate_isa_lemmas env defs =
   in
   let regval_class_typ_ids = List.map (fun (t, _) -> mk_id t) regval_class_typs_lem in
   let register_defs =
-    let reg_id id = remove_leading_underscores (string_of_id id) in
+    let add_reg_def (previous_names, regs) (_, id, _) =
+      let id' = remove_leading_underscores (string_of_id id) ^ "_ref" in
+      (* Handle name clashes when generating Isabelle definitions from Lem:
+         If a name after mangling has already been used, Lem appends a 0, 1, ... *)
+      let id'', i =
+        match StringMap.find_opt id' previous_names with Some i -> (id' ^ string_of_int i, i + 1) | None -> (id', 0)
+      in
+      (StringMap.add id' i previous_names, (id'' ^ "_def") :: regs)
+    in
+    let _, regs = List.fold_left add_reg_def (StringMap.empty, []) registers in
     hang 2
       (flow_map (break 1) string
-         (["lemmas register_defs"; "="; "get_regval_unfold"; "set_regval_unfold"]
-         @ List.map (fun (typ, id, _) -> reg_id id ^ "_ref_def") registers
-         )
+         (["lemmas register_defs"; "="; "get_regval_unfold"; "set_regval_unfold"] @ List.rev regs)
       )
   in
   let conv_lemma typ_id =
@@ -622,7 +631,6 @@ let generate_isa_lemmas env defs =
          ]
       )
   in
-  let module StringMap = Map.Make (String) in
   let field_id typ = remove_leading_underscores (string_of_id (id_of_regtyp IdSet.empty typ)) in
   let field_id_stripped typ = remove_trailing_underscores (field_id typ) in
   (* TODO: Handle bitfield registers *)
