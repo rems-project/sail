@@ -309,7 +309,7 @@ lemma update_list_inc_update[simp]:
 
 lemma update_list_dec_update[simp]:
   "update_list_dec xs n x = xs[length xs - nat (n + 1) := x]"
-  by (auto simp: update_list_dec_def add.commute diff_diff_add nat_minus_as_int)
+  by (auto simp: update_list_dec_def add.commute diff_diff_add nat_minus_as_int list_update_beyond)
 
 lemma update_list_dec_update_rev:
   "0 \<le> n \<Longrightarrow> nat n < length xs \<Longrightarrow> update_list_dec xs n x = rev ((rev xs)[nat n := x])"
