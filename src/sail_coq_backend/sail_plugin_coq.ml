@@ -122,6 +122,10 @@ let make_options prefix hide =
       Arg.Set opt_separate_interface_file,
       "create separate file for concurrency interface definitions"
     );
+    ( Flag.create ~prefix ~hide "generic_value",
+      Arg.Set Pretty_print_coq.opt_generic_values,
+      "generate conversions to a generic value type (requires --rocq-record-update)"
+    );
   ]
 
 let rocq_options = make_options ["rocq"] false
@@ -203,14 +207,16 @@ let output_coq opt_dir filename alt_modules alt_modules2 libs ctx env effect_inf
   let library_style = Option.value ~default:Pretty_print_coq.Stdpp !opt_coq_lib_style in
   let base_imports_lib = match library_style with BBV -> "Sail." | Stdpp -> "SailStdpp." in
   let base_imports_default =
-    List.map (( ^ ) base_imports_lib)
-      ( if Preprocess.have_symbol "CONCURRENCY_INTERFACE_V2" then
-          ["Base"; "Real"; "ConcurrencyInterfaceTypesV2"; "ConcurrencyInterfaceV2"; "ConcurrencyInterfaceBuiltinsV2"]
-        else if Option.is_some concurrency_monad_params then
-          ["Base"; "Real"; "ConcurrencyInterfaceTypes"; "ConcurrencyInterface"; "ConcurrencyInterfaceBuiltins"]
-        else ["Base"; "Real"]
-      )
+    if Preprocess.have_symbol "CONCURRENCY_INTERFACE_V2" then
+      ["Base"; "Real"; "ConcurrencyInterfaceTypesV2"; "ConcurrencyInterfaceV2"; "ConcurrencyInterfaceBuiltinsV2"]
+    else if Option.is_some concurrency_monad_params then
+      ["Base"; "Real"; "ConcurrencyInterfaceTypes"; "ConcurrencyInterface"; "ConcurrencyInterfaceBuiltins"]
+    else ["Base"; "Real"]
   in
+  let base_imports_default =
+    if !Pretty_print_coq.opt_generic_values then base_imports_default @ ["GenericValue"] else base_imports_default
+  in
+  let base_imports_default = List.map (( ^ ) base_imports_lib) base_imports_default in
   let base_imports =
     match alt_modules with
     | [] -> base_imports_default
@@ -255,7 +261,9 @@ let output libs files =
     )
     files
 
-let ignore_grouped_regstate () =
+let check_flags () =
+  if !Pretty_print_coq.opt_generic_values && not !Pretty_print_coq.opt_coq_record_update then
+    raise (Reporting.err_general Parse_ast.Unknown "--rocq-generic-value requires --rocq-record-update");
   if !State.opt_type_grouped_regstate then begin
     Reporting.simple_warn "-grouped-regstate option not supported in the Rocq back-end, ignoring";
     State.opt_type_grouped_regstate := false
@@ -267,10 +275,10 @@ let coq_target out_file { ctx; ast; effect_info; env; _ } =
 
 let _ =
   ignore
-    (Target.register ~name:"rocq" ~options:rocq_options ~pre_parse_hook:ignore_grouped_regstate ~rewrites:coq_rewrites
+    (Target.register ~name:"rocq" ~options:rocq_options ~pre_parse_hook:check_flags ~rewrites:coq_rewrites
        ~asserts_termination:true coq_target
     );
   ignore
-    (Target.register ~name:"coq" ~options:coq_options ~pre_parse_hook:ignore_grouped_regstate ~rewrites:coq_rewrites
+    (Target.register ~name:"coq" ~options:coq_options ~pre_parse_hook:check_flags ~rewrites:coq_rewrites
        ~asserts_termination:true coq_target
     )

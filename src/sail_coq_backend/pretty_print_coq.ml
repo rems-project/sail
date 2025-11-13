@@ -79,6 +79,7 @@ let opt_extern_types : string list ref = ref []
 let opt_generate_extern_types : bool ref = ref false
 let opt_coq_record_update : bool ref = ref false
 let opt_coq_all_eq_dec : bool ref = ref true
+let opt_generic_values : bool ref = ref false
 
 let prefix_recordtype = true
 
@@ -2422,7 +2423,7 @@ let type_dependencies defs =
                        if IdSet.mem typ_id s then s
                        else (
                          match Bindings.find_opt typ_id depmap with
-                         | None -> IdSet.singleton typ_id
+                         | None -> IdSet.add typ_id s
                          | Some typs -> IdSet.add typ_id (IdSet.union s typs)
                        )
                      )
@@ -2486,6 +2487,13 @@ let types_used_with_generic_eq defs =
         unreachable (def_loc def) __POS__ "Definition found in the Coq back-end that should have been rewritten away"
   in
   List.fold_left IdSet.union IdSet.empty (List.map typs_req_def defs)
+
+let types_used_in_registers deps final_env =
+  let add_id id idset =
+    let s = match Bindings.find_opt id deps with None -> idset | Some s -> IdSet.union s idset in
+    IdSet.add id s
+  in
+  Bindings.fold (fun _reg_id typ s -> IdSet.fold add_id (ids_of_typ typ) s) (Env.get_registers final_env) IdSet.empty
 
 (* Uses the immediate dependencies rather than the full set above *)
 let countable_types defs =
@@ -3975,6 +3983,7 @@ let doc_isla global (DEF_aux (aux, _)) =
 
 module NewRegisters : sig
   val doc_reg_info : global_context -> Env.t -> (typ * id * bool) list -> PPrint.document
+  val generic_value_conversions : global_context -> Env.t -> _ def list -> IdSet.t -> PPrint.document
 end = struct
   let opt_cons v = function None -> Some [v] | Some t -> Some (v :: t)
 
@@ -4466,21 +4475,244 @@ end = struct
       List.fold_left (fun pp (t, rs) -> pp ^^ per_type_register_enum bare_ctxt t rs) empty type_regs_map
     in
 
+    let generic_value_register_type_pp =
+      if !opt_generic_values then (
+        let match_pp =
+          (* We use a pattern match to refine `type_of_register r` to a concrete type, but
+           we need at least one concrete pattern for that to happen. *)
+          match type_regs_map with
+          | [] -> string "_"
+          | [(typ_id, _)] -> doc_id_ctor bare_ctxt (reg_case_name typ_id) ^^ string " _"
+          | (typ_id, _) :: _ -> doc_id_ctor bare_ctxt (reg_case_name typ_id) ^^ string " _ | _ "
+        in
+        [
+          string "#[global] Instance update_register_type (r : register) : GenericUpdate (type_of_register r) := {";
+          string "  generic_update gv :=";
+          string "    match r with " ^^ match_pp ^^ string " => generic_update gv end";
+          string "}.";
+          empty;
+          string "#[global] Instance to_generic_register_type (r : register) : ToGeneric (type_of_register r) := {";
+          string "  to_generic :=";
+          string "    match r with " ^^ match_pp ^^ string " => to_generic end";
+          string "}.";
+          empty;
+          empty;
+        ]
+      )
+      else [empty]
+    in
+
     separate hardline
+      ([
+         reg_enums;
+         type_enum bare_ctxt env type_map;
+         register_refs bare_ctxt env type_regs_map;
+         empty;
+         string "(* Definitions to support the lifting to the sequential monad *)";
+         regstate bare_ctxt env type_map;
+         reg_accessors bare_ctxt env type_map;
+         string
+           "Definition register_accessors : register_accessors regstate register type_of_register := \
+            (@register_lookup, @register_set).";
+         empty;
+       ]
+      @ generic_value_register_type_pp
+      )
+
+  (* Generic conversions to toml-like datatype in GenericValue.v in the library.
+
+     For now, requires coq-record-updates
+  *)
+  let generic_value_conversions global env defs register_type_ids =
+    let bare_ctxt = { empty_ctxt with global } in
+    let generic_fns_for_record typ_id quant fields =
+      let type_id_pp = doc_id_type global None typ_id in
+      let typq_pps = doc_typquant_items bare_ctxt Env.empty braces quant in
+      let full_type_pps = type_id_pp :: List.filter_map (quant_item_id_name bare_ctxt) (quant_items quant) in
+      let full_type_pp = separate space full_type_pps in
+      let type_for_class = if List.length full_type_pps > 1 then parens full_type_pp else full_type_pp in
+      let type_reqs class_str =
+        List.filter_map
+          (function
+            | QI_aux (QI_id (KOpt_aux (KOpt_kind (K_aux (K_type, _), kid), _)), _) ->
+                Some (string "`{" ^^ string class_str ^^ space ^^ doc_var bare_ctxt kid ^^ string "}")
+            | _ -> None
+            )
+          (quant_items quant)
+      in
+      (separate space
+      @@ [string "  Definition update_" ^^ type_id_pp ^^ string "_field "]
+      @ typq_pps @ type_reqs "GenericUpdate"
+      @ [
+          string "(name : string) (up : generic_value) (prev : "
+          ^^ full_type_pp ^^ string ") : result " ^^ type_for_class ^^ string " string := match name with";
+        ]
+      )
+      :: List.map
+           (fun ((field_id, field_typ), _) ->
+             string "  | "
+             ^^ dquotes (string (string_of_id field_id))
+             ^^ string " => result_bind (fun x => Ok (prev <| "
+             ^^ doc_field_name bare_ctxt typ_id field_id
+             ^^ string " := x |>)) "
+             ^^ parens (string "generic_update up prev." ^^ parens (doc_field_name bare_ctxt typ_id field_id))
+           )
+           fields
+      @ [
+          string "  | _ => Err (\"Unknown field \" ++ name)%string";
+          string "  end.";
+          empty;
+          separate space
+          @@ [string "  #[global] Instance update_" ^^ type_id_pp]
+          @ typq_pps @ type_reqs "GenericUpdate"
+          @ [string ": GenericUpdate " ^^ type_for_class ^^ string " := {"];
+          string "  generic_update up prev := match up with";
+          string "    | GVStruct l => fold_left (fun x '(fl, v) => result_bind (update_"
+          ^^ type_id_pp ^^ string "_field fl v) x) l (Ok prev)";
+          string "    | _ => Err \"Bad generic value for structure\"";
+          string "    end";
+          string "  }.";
+          empty;
+          separate space
+          @@ [string "  #[global] Instance to_generic_" ^^ type_id_pp]
+          @ typq_pps @ type_reqs "ToGeneric"
+          @ [string " : ToGeneric " ^^ type_for_class ^^ string " := {"];
+          string "    to_generic r := GVStruct [";
+        ]
+      @ Util.map_last
+          (fun last ((field_id, _field_typ), _) ->
+            string "      ("
+            ^^ dquotes (string (string_of_id field_id))
+            ^^ string ", to_generic r."
+            ^^ parens (doc_field_name bare_ctxt typ_id field_id)
+            ^^ string ")"
+            ^^ if last then empty else string ";"
+          )
+          fields
+      @ [string "    ]"; string "  }."; empty]
+    in
+    let generic_fns_for_variant typ_id quant ar =
+      let type_id_pp = doc_id_type global None typ_id in
+      let typq_pps = doc_typquant_items bare_ctxt Env.empty braces quant in
+      let full_type_pps = type_id_pp :: List.filter_map (quant_item_id_name bare_ctxt) (quant_items quant) in
+      let full_type_pp = separate space full_type_pps in
+      let type_for_class = if List.length full_type_pps > 1 then parens full_type_pp else full_type_pp in
+      let type_reqs classes =
+        List.filter_map
+          (function
+            | QI_aux (QI_id (KOpt_aux (KOpt_kind (K_aux (K_type, _), kid), _)), _) ->
+                Some
+                  (separate_map space
+                     (fun class_name -> string "`{" ^^ string class_name ^^ space ^^ doc_var bare_ctxt kid ^^ string "}")
+                     classes
+                  )
+            | _ -> None
+            )
+          (quant_items quant)
+      in
       [
-        reg_enums;
-        type_enum bare_ctxt env type_map;
-        register_refs bare_ctxt env type_regs_map;
-        empty;
-        string "(* Definitions to support the lifting to the sequential monad *)";
-        regstate bare_ctxt env type_map;
-        reg_accessors bare_ctxt env type_map;
-        string
-          "Definition register_accessors : register_accessors regstate register type_of_register := (@register_lookup, \
-           @register_set).";
-        empty;
-        empty;
+        separate space
+        @@ [string "  #[global] Instance update_" ^^ type_id_pp]
+        @ typq_pps
+        @ type_reqs ["GenericUpdate"; "Inhabited"]
+        @ [string ": GenericUpdate " ^^ type_for_class ^^ string " := {"];
+        string "  generic_update up prev := match up with";
       ]
+      @ List.map
+          (fun (Tu_aux (Tu_ty_id (ar_typ, ar_id), _)) ->
+            let arm_name_pp = dquotes (string (string_of_id ar_id)) in
+            let arm_ctor_pp = doc_id_ctor bare_ctxt ar_id in
+            if is_unit_typ ar_typ then
+              string "  | GVString " ^^ arm_name_pp ^^ string " => Ok (" ^^ arm_ctor_pp ^^ string " tt)"
+            else (
+              let prev_arg =
+                (* Don't put inhabitant inside the wildcard case because Rocq will repeat the typeclass search for each
+                   constructor. *)
+                if List.length ar > 1 then
+                  string "(opt_def inhabitant match prev with " ^^ arm_ctor_pp ^^ string " x => Some x | _ => None end)"
+                else string "(match prev with " ^^ arm_ctor_pp ^^ string " x => x end)"
+              in
+              string "  | GVArray [GVString " ^^ arm_name_pp
+              ^^ string "; up_arg] => result_bind (fun x => Ok ("
+              ^^ arm_ctor_pp ^^ string " x)) "
+              ^^ parens (string "generic_update up_arg " ^^ prev_arg)
+            )
+          )
+          ar
+      @ [
+          string "  | _ => Err (\"Invalid value for " ^^ type_id_pp ^^ string "\")%string";
+          string "  end";
+          string "}.";
+          empty;
+          separate space
+          @@ [string "  #[global] Instance to_generic_" ^^ type_id_pp]
+          @ typq_pps @ type_reqs ["ToGeneric"]
+          @ [string ": ToGeneric " ^^ type_for_class ^^ string " := {"];
+          string "  to_generic v := match v with";
+        ]
+      @ List.map
+          (fun (Tu_aux (Tu_ty_id (ar_typ, ar_id), _)) ->
+            let arm_name_pp = dquotes (string (string_of_id ar_id)) in
+            let arm_ctor_pp = doc_id_ctor bare_ctxt ar_id in
+            if is_unit_typ ar_typ then string "  | " ^^ arm_ctor_pp ^^ string " _ => GVString " ^^ arm_name_pp
+            else
+              string "  | " ^^ arm_ctor_pp ^^ string " x => GVArray [GVString " ^^ arm_name_pp
+              ^^ string "; to_generic x]"
+          )
+          ar
+      @ [string "  end"; string "}."; empty]
+    in
+    let generic_fns_for_enum id elements =
+      let id_pp = doc_id_type global None id in
+      (string "  Definition members_" ^^ id_pp ^^ string " := [")
+      :: Util.map_last
+           (fun last (elt_id, _) ->
+             string "      "
+             ^^ parens (dquotes (string (string_of_id elt_id)) ^^ string ", " ^^ doc_id_ctor bare_ctxt elt_id)
+             ^^ if last then empty else string ";"
+           )
+           elements
+      @ [
+          string "  ].";
+          empty;
+          string "  #[global] Instance update_" ^^ id_pp ^^ string " : GenericUpdate " ^^ id_pp ^^ string " := {";
+          string "    generic_update up prev := update_enum_type up members_" ^^ id_pp ^^ string " prev";
+          string "  }.";
+          empty;
+          string "  #[global, refine] Instance to_generic_"
+          ^^ id_pp ^^ string " : ToGeneric " ^^ id_pp ^^ string " := {";
+          string "    to_generic v := match List.find (fun '(_, v') => generic_eq v v') members_"
+          ^^ id_pp ^^ string " as x return _ = x -> _ with";
+          string "      | Some (name, _) => fun _ => GVString name";
+          string "      | None => fun H => _";
+          string "    end eq_refl";
+          string "  }.";
+          string "  exfalso; destruct v; simpl in H; congruence.";
+          string "  Defined.";
+          empty;
+        ]
+    in
+    let update_for_def = function
+      | DEF_aux (DEF_type td, _) ->
+          let typ_id = id_of_type_def td in
+          if
+            List.mem (string_of_id typ_id) !opt_extern_types == !opt_generate_extern_types
+            && IdSet.mem typ_id register_type_ids
+          then (
+            match td with
+            | TD_aux (TD_record (id, quant, fields, _), _) -> generic_fns_for_record id quant fields
+            | TD_aux (TD_variant (Id_aux (Id "option", _), _quant, _arms, _), _) -> []
+            | TD_aux (TD_variant (id, quant, arms, _), _) -> generic_fns_for_variant id quant arms
+            | TD_aux (TD_enum (id, elements, _), _) -> generic_fns_for_enum id elements
+            | _ -> []
+          )
+          else []
+      | _ -> []
+    in
+    separate hardline
+    @@ [string "Module GenericValueConversion."]
+    @ List.concat_map update_for_def defs
+    @ [string "End GenericValueConversion."]
 end
 
 let find_exc_typ defs =
@@ -4750,6 +4982,15 @@ let pp_ast_coq library_style (types_file, types_modules) (interface_file, interf
     let typdefs, defs = List.partition is_typ_def defs in
     let typdefs = if not separate_interface_file then typdefs @ inst_defs else typdefs in
 
+    let generic_conv_pp =
+      if !opt_generic_values then (
+        let deps = type_dependencies typdefs in
+        let register_type_ids = types_used_in_registers deps type_env in
+        NewRegisters.generic_value_conversions global type_env typdefs register_type_ids
+      )
+      else empty
+    in
+
     let doc_def = doc_def global unimplemented generic_eq_types countable_types enum_number_defs in
     let () =
       if !opt_undef_axioms || IdSet.is_empty unimplemented then ()
@@ -4822,6 +5063,8 @@ let pp_ast_coq library_style (types_file, types_modules) (interface_file, interf
             string "Open Scope Z.";
             empty;
             separate empty (List.map doc_def typdefs);
+            empty;
+            generic_conv_pp;
             empty;
           ]
          @
