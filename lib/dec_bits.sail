@@ -58,7 +58,7 @@ val "valid_dec_bits" : forall 'n, 'n > 0. (int('n), string) -> bool
 val dec_bits : forall 'n, 'n > 0. bits('n) <-> (int('n), string)
 
 function dec_bits_forwards(bv) = (length(bv), dec_str(unsigned(bv)))
-function dec_bits_forwards_matches(bv) = true
+function dec_bits_forwards_matches(_) = true
 
 function dec_bits_backwards(n, str) = parse_dec_bits(n, str)
 function dec_bits_backwards_matches(n, str) = valid_dec_bits(n, str)

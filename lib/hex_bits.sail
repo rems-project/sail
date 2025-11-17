@@ -60,7 +60,7 @@ val "valid_hex_bits" : forall 'n, 'n > 0. (int('n), string) -> bool
 val hex_bits : forall 'n, 'n > 0. bits('n) <-> (int('n), string)
 
 function hex_bits_forwards(bv) = (length(bv), hex_str(unsigned(bv)))
-function hex_bits_forwards_matches(bv) = true
+function hex_bits_forwards_matches(_) = true
 
 function hex_bits_backwards(n, str) = parse_hex_bits(n, str)
 function hex_bits_backwards_matches(n, str) = valid_hex_bits(n, str)

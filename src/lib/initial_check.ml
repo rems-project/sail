@@ -2512,6 +2512,7 @@ let generate_undefined_record id typq fields =
   let p_tup = function [pat] -> pat | pats -> mk_pat (P_tuple pats) in
   let pat =
     p_tup (quant_items typq |> List.map quant_item_param |> List.concat |> List.map (fun id -> mk_pat (P_id id)))
+    |> locate_pat gen_loc
   in
   [
     mk_val_spec (VS_val_spec (undefined_typschm id typq, prepend_id "undefined_" id, None));
