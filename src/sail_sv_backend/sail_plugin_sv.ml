@@ -244,7 +244,7 @@ let verilog_options =
 let verilog_rewrites =
   let open Rewrites in
   [
-    ("instantiate_outcomes", [String_arg "systemverilog"]);
+    ("instantiate_outcomes", [String_arg "systemverilog"; Bool_arg false]);
     ("realize_mappings", []);
     ("remove_vector_subrange_pats", []);
     ("toplevel_string_append", []);

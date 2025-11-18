@@ -91,7 +91,7 @@ let lem_rewrites =
   let open Rewrites in
   [
     ("move_termination_measures", []);
-    ("instantiate_outcomes", [String_arg "lem"]);
+    ("instantiate_outcomes", [String_arg "lem"; Bool_arg true]);
     ("realize_mappings", []);
     ("remove_vector_subrange_pats", []);
     ("remove_duplicate_valspecs", []);

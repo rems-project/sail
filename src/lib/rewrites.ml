@@ -4552,7 +4552,11 @@ let all_rewriters =
     ("rewrite_loops_with_escape_effect", basic_rewriter rewrite_loops_with_escape_effect);
     ("simple_types", basic_rewriter rewrite_simple_types);
     ( "instantiate_outcomes",
-      String_rewriter (fun target -> basic_rewriter (fun _ -> Outcome_rewrites.instantiate target))
+      String_rewriter
+        (fun target ->
+          Bool_rewriter
+            (fun keep_original_defs -> basic_rewriter (fun _ -> Outcome_rewrites.instantiate ~keep_original_defs target))
+        )
     );
     ("top_sort_defs", basic_rewriter (fun _ -> Callgraph.top_sort_defs));
     ( "constant_fold",
@@ -4588,7 +4592,7 @@ let all_rewriters =
 
 let rewrites_interpreter =
   [
-    ("instantiate_outcomes", [String_arg "interpreter"]);
+    ("instantiate_outcomes", [String_arg "interpreter"; Bool_arg false]);
     ("realize_mappings", []);
     ("toplevel_string_append", []);
     ("pat_string_append", []);

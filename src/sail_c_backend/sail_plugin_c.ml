@@ -166,7 +166,7 @@ let c_cpp_rewrites (mode : c_backend_mode) =
   let target_name = string_of_mode mode in
   let open Rewrites in
   [
-    ("instantiate_outcomes", [String_arg target_name]);
+    ("instantiate_outcomes", [String_arg target_name; Bool_arg false]);
     ("realize_mappings", []);
     ("remove_vector_subrange_pats", []);
     ("toplevel_string_append", []);

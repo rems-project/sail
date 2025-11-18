@@ -78,7 +78,7 @@ let stash_pre_rewrite_info (ast : _ Ast_defs.ast) _ type_envs =
 let ocaml_rewrites =
   let open Rewrites in
   [
-    ("instantiate_outcomes", [String_arg "ocaml"]);
+    ("instantiate_outcomes", [String_arg "ocaml"; Bool_arg false]);
     ("realize_mappings", []);
     ("remove_vector_subrange_pats", []);
     ("toplevel_string_append", []);
@@ -128,7 +128,7 @@ let tofrominterp_options =
 let tofrominterp_rewrites =
   let open Rewrites in
   [
-    ("instantiate_outcomes", [String_arg "interpreter"]);
+    ("instantiate_outcomes", [String_arg "interpreter"; Bool_arg false]);
     ("realize_mappings", []);
     ("toplevel_string_append", []);
     ("pat_string_append", []);
