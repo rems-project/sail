@@ -16,7 +16,7 @@ instance : DecidableRel (fun (i : Int) (r : IntRange) => i ∈ r) := fun i r => 
   infer_instance
 
 theorem toNat_le {n : Nat} : Int.toNat m ≤ n ↔ m ≤ n := by
-  rw [Int.ofNat_le.symm, Int.toNat_eq_max, Int.max_le]; exact and_iff_left (Int.ofNat_zero_le _)
+  rw [Int.ofNat_le.symm, Int.toNat_eq_max, Int.max_le]; exact and_iff_left (Int.natCast_nonneg _)
 
 theorem lt_toNat {m : Nat} : m < Int.toNat n ↔ (m : Int) < n := by rw [← Int.not_le, ← Nat.not_le, toNat_le]
 
