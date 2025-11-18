@@ -104,9 +104,9 @@ let rec instantiated_or_abstract l = function
       if List.for_all Option.is_none xs then Some def
       else raise (Reporting.err_general l "Multiple instantiations found for target")
 
-let instantiate target ast =
-  (* Some backends will need the instantiations to hook up to a particular interface *)
-  let keep_original_defs = String.compare target "coq" == 0 || String.compare target "lean" == 0 || String.compare target "lem" == 0 in
+(** Generate instantiations of outcomes declared using [instantiation]. Some backends will need the instantiations to
+    hook up to a particular interface; they can set [?keep_original_defs] to [true]. *)
+let instantiate ?(keep_original_defs = false) target ast =
   let process_def outcomes = function
     | DEF_aux (DEF_outcome (OV_aux (OV_outcome (id, TypSchm_aux (TypSchm_ts (typq, typ), _), args), l), outcome_defs), _)
       as def ->

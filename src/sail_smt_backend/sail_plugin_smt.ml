@@ -105,7 +105,7 @@ let smt_options =
 let smt_rewrites =
   let open Rewrites in
   [
-    ("instantiate_outcomes", [String_arg "c"]);
+    ("instantiate_outcomes", [String_arg "c"; Bool_arg false]);
     ("realize_mappings", []);
     ("remove_vector_subrange_pats", []);
     ("toplevel_string_append", []);

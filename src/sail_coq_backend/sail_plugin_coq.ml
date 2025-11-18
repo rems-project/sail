@@ -131,7 +131,7 @@ let coq_rewrites =
   let open Rewrites in
   [
     ("move_termination_measures", []);
-    ("instantiate_outcomes", [String_arg "coq"]);
+    ("instantiate_outcomes", [String_arg "coq"; Bool_arg true]);
     ("realize_mappings", []);
     ("remove_extern_defs", [String_arg "coq"]);
     ("remove_vector_subrange_pats", []);
