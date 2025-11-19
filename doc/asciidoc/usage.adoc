@@ -277,13 +277,6 @@ plugins. These options are all prefixed with `d`.
   re-writing pass. The output from each pass is placed in a file
   starting with `prefix`.
 
-* `--dmagic-hash` Allow the `#` symbol in identifiers. It's
-  currently used as a magic symbol to separate generated identifiers
-  from those the user can write, so this option allows for the output
-  of the various other debugging options to be fed back into Sail. The
-  name comes from the GHC option with the same purpose:
-  https://ghc.gitlab.haskell.org/ghc/doc/users_guide/exts/magic_hash.html
-
 === Passing options via SAIL_FLAGS
 
 The `SAIL_FLAGS` environment variable can be used to pass additional

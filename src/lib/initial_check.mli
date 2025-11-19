@@ -61,8 +61,8 @@ val opt_strict_bitvector : bool ref
     the right effects, so the -no_effects flag may be needed if this is true. False by default. *)
 val opt_fast_undefined : bool ref
 
-(** Allow # in identifiers when set, much like the GHC option of the same name *)
-val opt_magic_hash : bool ref
+(** Allow parsing internal constructs that should otherwise not appear in regular code *)
+val opt_allow_internal : bool ref
 
 (** {2 Contexts} *)
 

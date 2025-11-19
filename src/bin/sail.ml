@@ -398,7 +398,7 @@ let rec options =
         Arg.String (fun str -> Callgraph.opt_debug_callgraph := Some str),
         "<file> (debug) dump callgraph to file"
       );
-      ("-dmagic_hash", Arg.Set Initial_check.opt_magic_hash, " (debug) allow special character # in identifiers");
+      ("-dallow_internal", Arg.Set Initial_check.opt_allow_internal, " (debug) allow special character # in identifiers");
       ("-dno_error_filenames", Arg.Set Error_format.opt_debug_no_filenames, " (debug) do not print filenames in errors");
       ( "-dprofile",
         Arg.Set Profile.opt_profile,

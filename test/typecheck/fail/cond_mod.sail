@@ -1,4 +1,4 @@
-$option -dmagic_hash
+$option --dallow-internal
 
 $project# variable b = false A {} B { requires if $b then A else [] }
 

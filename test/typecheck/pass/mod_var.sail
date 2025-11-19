@@ -1,4 +1,4 @@
-$option -dmagic_hash
+$option --dallow-internal
 
 $project# variable mods = [A] A {} B { requires $mods }
 
