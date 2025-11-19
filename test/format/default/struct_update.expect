@@ -1,4 +1,4 @@
-$option -dmagic_hash
+$option --dallow-internal
 
 default Order dec
 

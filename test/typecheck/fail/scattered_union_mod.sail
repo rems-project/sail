@@ -1,4 +1,4 @@
-$option -dmagic_hash
+$option --dallow-internal
 
 $project# A {} B { requires A } C { requires B }
 

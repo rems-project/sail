@@ -1,4 +1,4 @@
-$option -dmagic_hash
+$option --dallow-internal
 
 // This test demonstrates that even though bar overloads foo, we
 // cannot use bar to access foo in a module where it is not available
