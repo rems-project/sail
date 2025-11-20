@@ -11,6 +11,8 @@ sys.path.insert(0, os.path.realpath('..'))
 
 from sailtest import *
 
+update_expected = args.update_expected
+
 sail_dir = get_sail_dir()
 sail = get_sail()
 
@@ -28,9 +30,15 @@ def test_patterns(name):
             if tests[filename] == 0:
                 step('\'{}\' --just-check {} 2> {}.error'.format(sail, filename, basename))
                 if filename.startswith('warn'):
-                    step('diff {}.error {}.expect'.format(basename, basename))
+                    status = step_with_status('diff {}.error {}.expect'.format(basename, basename))
                 else:
-                    step('diff {}.error no_error'.format(basename))
+                    status = step_with_status('diff {}.error no_error'.format(basename))
+                if status != 0:
+                    if update_expected and filename.startswith('warn'):
+                        print(f'Overriding file {basename}.expected')
+                        step(f'\'{sail}\' --just-check {filename} 2> {basename}.expect')
+                    else:
+                        sys.exit(1)
                 step('rm {}.error'.format(basename))
                 print_ok(filename)
                 sys.exit()

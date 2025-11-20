@@ -58,6 +58,7 @@ let opt_reformat : string option ref = ref None
 
 let finalize_ast asserts_termination ctx env ast =
   Lint.warn_unmodified_variables ast;
+  Lint.warn_unused_variables ast;
   let ast = Scattered.descatter env ast in
   let side_effects = Effects.infer_side_effects asserts_termination ast in
   if !opt_ddump_side_effect then Effects.dump_effects side_effects;

@@ -18,7 +18,7 @@ function bar(x: foo) -> unit = {
     match x {
         struct { f1 = 0, f2 = _, _ } => (),
         struct { f1 = _, f2 = 0, _ } => (),
-        struct { f1 = x, f2 = y, _ } => (),
+        struct { f1 = x, f2 = y, _ } => { print_int("x = ", x); print_int("y = ", y) },
     }
 }
 

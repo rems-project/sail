@@ -278,7 +278,7 @@ function float_add_internal (op_0, op_1) = {
 
 val      float_sub_internal : forall 'n, 'n in {16, 32, 64, 128}.
   (bits('n), bits('n)) -> (bits('n), fp_exception_flags)
-function float_sub_internal (op_0, op_1) = {
+function float_sub_internal (_op_0, _op_1) = {
   assert (false, "Not implemented yet.");
   (sail_zeros ('n), fp_eflag_none);
 }

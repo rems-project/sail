@@ -48,59 +48,74 @@ open Ast
 open Ast_defs
 open Ast_util
 
-let scan_exp_in_pexp f (Pat_aux (aux, _)) =
-  match aux with
-  | Pat_exp (_, exp) -> f exp
-  | Pat_when (_, guard, exp) ->
-      f guard;
-      f exp
+module Scan (F : sig
+  type t
+  val do_exp : t exp -> unit
+  val do_funcl_pexp : (t pat -> t exp option -> t exp -> unit) option
+end) : sig
+  val in_def : (F.t, 'b) def -> unit
+end = struct
+  let in_pexp (Pat_aux (aux, _)) =
+    match aux with
+    | Pat_exp (_, exp) -> F.do_exp exp
+    | Pat_when (_, guard, exp) ->
+        F.do_exp guard;
+        F.do_exp exp
 
-let scan_exp_in_funcl f (FCL_aux (FCL_funcl (_, pexp), _)) = scan_exp_in_pexp f pexp
+  let in_funcl (FCL_aux (FCL_funcl (_, pexp), _)) =
+    match F.do_funcl_pexp with
+    | Some g -> (
+        match pexp with
+        | Pat_aux (Pat_exp (pat, exp), _) -> g pat None exp
+        | Pat_aux (Pat_when (pat, guard, exp), _) -> g pat (Some guard) exp
+      )
+    | None -> in_pexp pexp
 
-let scan_exp_in_mpexp f (MPat_aux (aux, _)) = match aux with MPat_when (_, exp) -> f exp | MPat_pat _ -> ()
+  let in_mpexp (MPat_aux (aux, _)) = match aux with MPat_when (_, exp) -> F.do_exp exp | MPat_pat _ -> ()
 
-let scan_exp_in_mapcl f (MCL_aux (aux, _)) =
-  match aux with
-  | MCL_forwards pexp | MCL_backwards pexp -> scan_exp_in_pexp f pexp
-  | MCL_bidir (left, right) ->
-      scan_exp_in_mpexp f left;
-      scan_exp_in_mpexp f right
+  let in_mapcl (MCL_aux (aux, _)) =
+    match aux with
+    | MCL_forwards pexp | MCL_backwards pexp -> in_pexp pexp
+    | MCL_bidir (left, right) ->
+        in_mpexp left;
+        in_mpexp right
 
-let scan_exp_in_scattered_def f (SD_aux (aux, _)) =
-  match aux with
-  | SD_function _ | SD_unioncl _ | SD_variant _ | SD_internal_unioncl_record _ | SD_enumcl _ | SD_enum _ | SD_mapping _
-  | SD_end _ ->
-      ()
-  | SD_funcl funcl -> scan_exp_in_funcl f funcl
-  | SD_mapcl (_, mapcl) -> scan_exp_in_mapcl f mapcl
+  let in_scattered_def (SD_aux (aux, _)) =
+    match aux with
+    | SD_function _ | SD_unioncl _ | SD_variant _ | SD_internal_unioncl_record _ | SD_enumcl _ | SD_enum _
+    | SD_mapping _ | SD_end _ ->
+        ()
+    | SD_funcl funcl -> in_funcl funcl
+    | SD_mapcl (_, mapcl) -> in_mapcl mapcl
 
-let scan_exp_in_fundef f (FD_aux (FD_function (_, _, funcls), _)) = List.iter (scan_exp_in_funcl f) funcls
+  let in_fundef (FD_aux (FD_function (_, _, funcls), _)) = List.iter in_funcl funcls
 
-let rec scan_exp_in_def f (DEF_aux (aux, _)) =
-  match aux with
-  | DEF_fundef fdef -> scan_exp_in_fundef f fdef
-  | DEF_mapdef (MD_aux (MD_mapping (_, _, mapcls), _)) -> List.iter (scan_exp_in_mapcl f) mapcls
-  | DEF_register (DEC_aux (DEC_reg (_, _, exp_opt), _)) -> Option.iter f exp_opt
-  | DEF_outcome (_, defs) -> List.iter (scan_exp_in_def f) defs
-  | DEF_impl funcl -> scan_exp_in_funcl f funcl
-  | DEF_let (LB_aux (LB_val (_, exp), _)) -> f exp
-  | DEF_scattered sdef -> scan_exp_in_scattered_def f sdef
-  | DEF_internal_mutrec fdefs -> List.iter (scan_exp_in_fundef f) fdefs
-  | DEF_loop_measures _ -> ()
-  | DEF_measure (_, _, exp) -> f exp
-  | DEF_type _ | DEF_constraint _ | DEF_val _ | DEF_fixity _ | DEF_overload _ | DEF_default _ | DEF_pragma _
-  | DEF_instantiation _ ->
-      ()
+  let rec in_def (DEF_aux (aux, _)) =
+    match aux with
+    | DEF_fundef fdef -> in_fundef fdef
+    | DEF_mapdef (MD_aux (MD_mapping (_, _, mapcls), _)) -> List.iter in_mapcl mapcls
+    | DEF_register (DEC_aux (DEC_reg (_, _, exp_opt), _)) -> Option.iter F.do_exp exp_opt
+    | DEF_outcome (_, defs) -> List.iter in_def defs
+    | DEF_impl funcl -> in_funcl funcl
+    | DEF_let (LB_aux (LB_val (_, exp), _)) -> F.do_exp exp
+    | DEF_scattered sdef -> in_scattered_def sdef
+    | DEF_internal_mutrec fdefs -> List.iter in_fundef fdefs
+    | DEF_loop_measures _ -> ()
+    | DEF_measure (_, _, exp) -> F.do_exp exp
+    | DEF_type _ | DEF_constraint _ | DEF_val _ | DEF_fixity _ | DEF_overload _ | DEF_default _ | DEF_pragma _
+    | DEF_instantiation _ ->
+        ()
+end
 
-let warn_unmodified_variables ast =
-  let warn_unused (lexp, bind, exp) =
-    let unused = IdSet.diff lexp exp in
+let warn_unmodified_variables (type a) (ast : (a, 'b) ast) : unit =
+  let warn_unmodified (lexp, bind, exp) =
+    let unmodified = IdSet.diff lexp exp in
     IdSet.iter
       (fun id ->
         Reporting.warn "Unnecessary mutability" (id_loc id)
           "This variable is mutable, but it is never modified. It could be declared as immutable using 'let'."
       )
-      unused;
+      unmodified;
     IdSet.union (IdSet.diff exp lexp) bind
   in
   let alg =
@@ -108,7 +123,58 @@ let warn_unmodified_variables ast =
       (Rewriter.pure_exp_alg IdSet.empty IdSet.union) with
       le_id = IdSet.singleton;
       le_typ = (fun (_, id) -> IdSet.singleton id);
-      e_var = warn_unused;
+      e_var = warn_unmodified;
     }
   in
-  List.iter (scan_exp_in_def (fun exp -> ignore (Rewriter.fold_exp alg exp))) ast.defs
+  let module S = Scan (struct
+    type t = a
+    let do_exp exp = ignore (Rewriter.fold_exp alg exp)
+    let do_funcl_pexp = None
+  end) in
+  List.iter S.in_def ast.defs
+
+let warn_unused_variables (ast : Type_check.typed_ast) : unit =
+  let ignore_variable id = (string_of_id id).[0] = '_' || is_gen_loc (id_loc id) in
+  let pexp_unused pat guard_opt exp =
+    let used = IdSet.union exp (Option.value ~default:IdSet.empty guard_opt) in
+    let unused = IdSet.diff pat used in
+    IdSet.iter
+      (fun id ->
+        if not (ignore_variable id) then
+          Reporting.warn "Unused variable" (id_loc id) "This variable is defined but never used."
+      )
+      unused;
+    IdSet.diff used pat
+  in
+  (* Gather all the variables defined by a pattern *)
+  let pat_alg env =
+    {
+      (Rewriter.pure_pat_alg IdSet.empty IdSet.union) with
+      p_id = (fun id -> if Type_check.is_enum_member id env then IdSet.empty else IdSet.singleton id);
+      p_vector_subrange = (fun (id, _, _) -> IdSet.singleton id);
+      p_as = (fun (_, id) -> IdSet.singleton id);
+    }
+  in
+  let alg env =
+    {
+      (Rewriter.pure_exp_alg IdSet.empty IdSet.union) with
+      e_id = IdSet.singleton;
+      pat_exp = (fun (pat, exp) -> pexp_unused pat None exp);
+      pat_when = (fun (pat, guard, exp) -> pexp_unused pat (Some guard) exp);
+      pat_alg = pat_alg env;
+    }
+  in
+  let module S = Scan (struct
+    type t = Type_check.tannot
+    let do_exp exp = ignore (Rewriter.fold_exp (alg (Type_check.env_of exp)) exp)
+    let do_funcl_pexp =
+      Some
+        (fun pat guard_opt exp ->
+          let env = Type_check.env_of_pat pat in
+          let pat = Rewriter.fold_pat (pat_alg env) pat in
+          let guard_opt = Option.map (Rewriter.fold_exp (alg env)) guard_opt in
+          let exp = Rewriter.fold_exp (alg env) exp in
+          ignore (pexp_unused pat guard_opt exp)
+        )
+  end) in
+  List.iter S.in_def ast.defs

@@ -64,7 +64,7 @@ function hex_bits_signed_forwards(bv) = {
   (length(bv), s)
 }
 
-function hex_bits_signed_forwards_matches(bv) = true
+function hex_bits_signed_forwards_matches(_) = true
 
 function hex_bits_signed_backwards(n, str) = {
   if string_take(str, 1) == "-" then {
