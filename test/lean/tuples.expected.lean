@@ -47,7 +47,7 @@ def z :=
   z
 
 def tuple1 (_ : Unit) : (Int × Int × ((BitVec 2) × Unit)) :=
-  (3, 5, ((0b10 : (BitVec 2)), ()))
+  (3, 5, (0b10#2, ()))
 
 def tuple2 (_ : Unit) : SailM (Int × Int) := do
   (pure ((← (undefined_int ())), (← (undefined_int ()))))

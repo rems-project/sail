@@ -367,7 +367,6 @@ let builtin_typs =
       ("vector", [K_int; K_type], K_type);
       ("bitvector", [K_int], K_type);
       ("register", [K_type], K_type);
-      ("bit", [], K_type);
       ("unit", [], K_type);
       ("int", [], K_type);
       ("nat", [], K_type);
@@ -834,8 +833,8 @@ let mk_synonym typq typ_arg =
 
 let get_typ_synonym id env =
   match Option.map (get_item (id_loc id) env) (Bindings.find_opt id env.global.synonyms) with
-  | Some (typq, arg) -> mk_synonym typq arg
-  | None -> raise Not_found
+  | Some (typq, arg) -> Some (mk_synonym typq arg)
+  | None -> None
 
 let get_typ_synonyms env = filter_items env env.global.synonyms
 
@@ -870,24 +869,18 @@ let rec expand_constraint_synonyms env (NC_aux (aux, l) as nc) =
   | NC_ge (n1, n2) -> NC_aux (NC_ge (expand_nexp_synonyms env n1, expand_nexp_synonyms env n2), l)
   | NC_gt (n1, n2) -> NC_aux (NC_gt (expand_nexp_synonyms env n1, expand_nexp_synonyms env n2), l)
   | NC_app (id, args) -> (
-      try
-        begin
-          match get_typ_synonym id env l env args with
-          | A_aux (A_bool nc, _) -> expand_constraint_synonyms env nc
-          | arg ->
-              typ_error l ("Expected Bool when expanding synonym " ^ string_of_id id ^ " got " ^ string_of_typ_arg arg)
-        end
-      with Not_found -> NC_aux (NC_app (id, List.map (expand_arg_synonyms env) args), l)
+      match Option.map (fun syn -> syn l env args) (get_typ_synonym id env) with
+      | Some (A_aux (A_bool nc, _)) -> expand_constraint_synonyms env nc
+      | Some arg ->
+          typ_error l ("Expected Bool when expanding synonym " ^ string_of_id id ^ " got " ^ string_of_typ_arg arg)
+      | None -> NC_aux (NC_app (id, List.map (expand_arg_synonyms env) args), l)
     )
   | NC_id id -> (
-      try
-        begin
-          match get_typ_synonym id env l env [] with
-          | A_aux (A_bool nc, _) -> expand_constraint_synonyms env nc
-          | arg ->
-              typ_error l ("Expected Bool when expanding synonym " ^ string_of_id id ^ " got " ^ string_of_typ_arg arg)
-        end
-      with Not_found -> nc
+      match Option.map (fun syn -> syn l env []) (get_typ_synonym id env) with
+      | Some (A_aux (A_bool nc, _)) -> expand_constraint_synonyms env nc
+      | Some arg ->
+          typ_error l ("Expected Bool when expanding synonym " ^ string_of_id id ^ " got " ^ string_of_typ_arg arg)
+      | None -> nc
     )
   | NC_set (nexp, set) -> NC_aux (NC_set (expand_nexp_synonyms env nexp, set), l)
   | NC_true | NC_false | NC_var _ -> nc
@@ -895,22 +888,16 @@ let rec expand_constraint_synonyms env (NC_aux (aux, l) as nc) =
 and expand_nexp_synonyms env (Nexp_aux (aux, l) as nexp) =
   match aux with
   | Nexp_app (id, args) -> (
-      try
-        begin
-          match get_typ_synonym id env l env (List.map arg_nexp args) with
-          | A_aux (A_nexp nexp, _) -> expand_nexp_synonyms env nexp
-          | _ -> typ_error l ("Expected Int when expanding synonym " ^ string_of_id id)
-        end
-      with Not_found -> Nexp_aux (Nexp_app (id, List.map (expand_nexp_synonyms env) args), l)
+      match Option.map (fun syn -> syn l env (List.map arg_nexp args)) (get_typ_synonym id env) with
+      | Some (A_aux (A_nexp nexp, _)) -> expand_nexp_synonyms env nexp
+      | Some _ -> typ_error l ("Expected Int when expanding synonym " ^ string_of_id id)
+      | None -> Nexp_aux (Nexp_app (id, List.map (expand_nexp_synonyms env) args), l)
     )
   | Nexp_id id -> (
-      try
-        begin
-          match get_typ_synonym id env l env [] with
-          | A_aux (A_nexp nexp, _) -> expand_nexp_synonyms env nexp
-          | _ -> typ_error l ("Expected Int when expanding synonym " ^ string_of_id id)
-        end
-      with Not_found -> nexp
+      match Option.map (fun syn -> syn l env []) (get_typ_synonym id env) with
+      | Some (A_aux (A_nexp nexp, _)) -> expand_nexp_synonyms env nexp
+      | Some _ -> typ_error l ("Expected Int when expanding synonym " ^ string_of_id id)
+      | None -> nexp
     )
   | Nexp_times (nexp1, nexp2) ->
       Nexp_aux (Nexp_times (expand_nexp_synonyms env nexp1, expand_nexp_synonyms env nexp2), l)
@@ -932,22 +919,16 @@ and expand_synonyms env (Typ_aux (typ, l)) =
       Typ_aux (Typ_fn (List.map (expand_synonyms env) arg_typs, expand_synonyms env ret_typ), l)
   | Typ_bidir (typ1, typ2) -> Typ_aux (Typ_bidir (expand_synonyms env typ1, expand_synonyms env typ2), l)
   | Typ_app (id, args) -> (
-      try
-        begin
-          match get_typ_synonym id env l env args with
-          | A_aux (A_typ typ, _) -> expand_synonyms env typ
-          | _ -> typ_error l ("Expected Type when expanding synonym " ^ string_of_id id)
-        end
-      with Not_found -> Typ_aux (Typ_app (id, List.map (expand_arg_synonyms env) args), l)
+      match Option.map (fun syn -> syn l env args) (get_typ_synonym id env) with
+      | Some (A_aux (A_typ typ, _)) -> expand_synonyms env typ
+      | Some _ -> typ_error l ("Expected Type when expanding synonym " ^ string_of_id id)
+      | None -> Typ_aux (Typ_app (id, List.map (expand_arg_synonyms env) args), l)
     )
   | Typ_id id -> (
-      try
-        begin
-          match get_typ_synonym id env l env [] with
-          | A_aux (A_typ typ, _) -> expand_synonyms env typ
-          | _ -> typ_error l ("Expected Type when expanding synonym " ^ string_of_id id)
-        end
-      with Not_found -> Typ_aux (Typ_id id, l)
+      match Option.map (fun syn -> syn l env []) (get_typ_synonym id env) with
+      | Some (A_aux (A_typ typ, _)) -> expand_synonyms env typ
+      | Some _ -> typ_error l ("Expected Type when expanding synonym " ^ string_of_id id)
+      | None -> Typ_aux (Typ_id id, l)
     )
   | Typ_exist (kopts, nc, typ) -> (
       let nc = expand_constraint_synonyms env nc in

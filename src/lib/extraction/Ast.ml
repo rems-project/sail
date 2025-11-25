@@ -90,8 +90,6 @@ type id =
 
 type lit_aux =
 | L_unit
-| L_zero
-| L_one
 | L_true
 | L_false
 | L_num of Big_int_Z.big_int

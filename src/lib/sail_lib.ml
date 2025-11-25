@@ -198,28 +198,43 @@ let slice_inc (list, n, m) =
 
 let eq_list (xs, ys) = if List.compare_lengths xs ys = 0 then List.for_all2 (fun x y -> x = y) xs ys else false
 
-let access (xs, n) = List.nth (List.rev xs) (Big_int.to_int n)
+let access (xs, n) = [List.nth (List.rev xs) (Big_int.to_int n)]
 
-let access_inc (xs, n) = List.nth xs (Big_int.to_int n)
+let access_inc (xs, n) = [List.nth xs (Big_int.to_int n)]
+
+let access_list (xs, n) = List.nth (List.rev xs) (Big_int.to_int n)
+
+let access_list_inc (xs, n) = List.nth xs (Big_int.to_int n)
 
 let append (xs, ys) = xs @ ys
 
 let update (xs, n, x) =
   let n = List.length xs - Big_int.to_int n - 1 in
-  take n xs @ [x] @ drop (n + 1) xs
+  take n xs @ x @ drop (n + 1) xs
 
 let update_inc (xs, n, x) =
+  let n = Big_int.to_int n in
+  take n xs @ x @ drop (n + 1) xs
+
+let update_list (xs, n, x) =
+  let n = List.length xs - Big_int.to_int n - 1 in
+  take n xs @ [x] @ drop (n + 1) xs
+
+let update_list_inc (xs, n, x) =
   let n = Big_int.to_int n in
   take n xs @ [x] @ drop (n + 1) xs
 
 let update_subrange (xs, n, _, ys) =
-  let rec aux xs o = function [] -> xs | y :: ys -> aux (update (xs, o, y)) (Big_int.sub o (Big_int.of_int 1)) ys in
+  let rec aux xs o = function
+    | [] -> xs
+    | y :: ys -> aux (update_list (xs, o, y)) (Big_int.sub o (Big_int.of_int 1)) ys
+  in
   aux xs n ys
 
 let update_subrange_inc (xs, n, _, ys) =
   let rec aux xs o = function
     | [] -> xs
-    | y :: ys -> aux (update_inc (xs, o, y)) (Big_int.add o (Big_int.of_int 1)) ys
+    | y :: ys -> aux (update_list_inc (xs, o, y)) (Big_int.add o (Big_int.of_int 1)) ys
   in
   aux xs n ys
 
@@ -710,7 +725,7 @@ let prerr_string (str, msg) = prerr_endline (str ^ msg)
 
 let reg_deref r = !r
 
-let string_of_zbit = function B0 -> "0" | B1 -> "1"
+let string_of_zbitvector bits = "0b" ^ Util.string_of_list "" (function B0 -> "0" | B1 -> "1") bits
 let string_of_znat n = Big_int.to_string n
 let string_of_zint n = Big_int.to_string n
 let string_of_zimplicit n = Big_int.to_string n

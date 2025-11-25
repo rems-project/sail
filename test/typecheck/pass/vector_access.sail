@@ -1,3 +1,5 @@
+type bit = bitvector(1)
+
 val vector_access_dec : forall 'l ('a : Type), 'l >= 0.
   (vector('l, dec, 'a), range(0, 'l - 1)) -> 'a
 

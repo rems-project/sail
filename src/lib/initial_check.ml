@@ -1262,8 +1262,8 @@ let to_ast_lit (P.L_aux (lit, l)) =
   L_aux
     ( ( match lit with
       | P.L_unit -> L_unit
-      | P.L_zero -> L_zero
-      | P.L_one -> L_one
+      | P.L_zero -> L_bin [Non_empty (Bin_0, [])]
+      | P.L_one -> L_bin [Non_empty (Bin_1, [])]
       | P.L_true -> L_true
       | P.L_false -> L_false
       | P.L_undef -> L_undef
@@ -2385,7 +2385,6 @@ let initial_ctx =
           ("nat", ([], P.K_type));
           ("int", ([], P.K_type));
           ("unit", ([], P.K_type));
-          ("bit", ([], P.K_type));
           ("string", ([], P.K_type));
           ("string_literal", ([], P.K_type));
           ("real", ([], P.K_type));
@@ -2541,7 +2540,7 @@ let undefined_builtin_val_specs () =
   [
     extern_of_string (mk_id "internal_pick") "forall ('a:Type). list('a) -> 'a";
     extern_of_string (mk_id "undefined_bool") "unit -> bool";
-    extern_of_string (mk_id "undefined_bit") "unit -> bit";
+    extern_of_string (mk_id "undefined_bit") "unit -> bitvector(1)";
     extern_of_string (mk_id "undefined_int") "unit -> int";
     extern_of_string (mk_id "undefined_nat") "unit -> nat";
     extern_of_string (mk_id "undefined_real") "unit -> real";

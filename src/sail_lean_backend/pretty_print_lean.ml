@@ -371,26 +371,27 @@ let doc_typ_quant_only_vars ctx (TypQ_aux (tq, _) as tq_full) =
 
 let lean_escape_string s = Str.global_replace (Str.regexp "\"") "\\\"" s
 
-let doc_lit (L_aux (lit, l)) =
+let doc_lit ~width (L_aux (lit, l)) =
   match lit with
   | L_unit -> string "()"
-  | L_zero -> string "0#1"
-  | L_one -> string "1#1"
   | L_false -> string "false"
   | L_true -> string "true"
   | L_num i -> doc_big_int i
   | L_hex [] | L_bin [] -> string "BitVec.nil"
-  | L_hex hex -> utf8string ("0x" ^ string_of_hex_lit ~group_separator:"" ~case:Uppercase hex)
-  | L_bin bin -> utf8string ("0b" ^ string_of_bin_lit ~group_separator:"" bin)
+  | L_hex hex ->
+      let width_specifier = if width then "#" ^ string_of_int (hex_lit_length hex) else "" in
+      utf8string ("0x" ^ string_of_hex_lit ~group_separator:"" ~case:Uppercase hex ^ width_specifier)
+  | L_bin bin -> (
+      let width_specifier = if width then "#" ^ string_of_int (bin_lit_length bin) else "" in
+      (* Print single bits as just 0 or 1 without a 0b prefix *)
+      match bin with
+      | [Non_empty (Bin_0, [])] -> string ("0" ^ width_specifier)
+      | [Non_empty (Bin_1, [])] -> string ("1" ^ width_specifier)
+      | _ -> utf8string ("0b" ^ string_of_bin_lit ~group_separator:"" bin ^ width_specifier)
+    )
   | L_undef -> utf8string "(Fail \"undefined value of unsupported type\")"
   | L_string s -> utf8string ("\"" ^ lean_escape_string s ^ "\"")
   | L_real s -> utf8string s (* TODO test if this is really working *)
-
-let doc_vec_lit (L_aux (lit, _) as l) =
-  match lit with
-  | L_zero -> string "0"
-  | L_one -> string "1"
-  | _ -> failwith "Unexpected litteral found in vector: " ^^ doc_lit l
 
 let string_of_exp_con (E_aux (e, _)) =
   match e with
@@ -497,8 +498,7 @@ let rec doc_pat ?(need_parens = false) ?(in_vector = false) ctx in_match_bv (P_a
   let env = env_of_tannot annot in
   match p with
   | P_wild -> underscore
-  | P_lit lit when in_vector -> doc_vec_lit lit
-  | P_lit lit -> doc_lit lit
+  | P_lit lit -> doc_lit ~width:false lit
   | P_typ (Typ_aux (Typ_id (Id_aux (Id "bit", _)), _), p) when in_vector -> doc_pat ctx in_match_bv p ^^ string ":1"
   | P_typ (Typ_aux (Typ_app (Id_aux (Id id, _), [A_aux (A_nexp (Nexp_aux (Nexp_constant i, _)), _)]), _), p)
     when in_vector && (id = "bits" || id = "bitvector") ->
@@ -518,9 +518,7 @@ let rec doc_pat ?(need_parens = false) ?(in_vector = false) ctx in_match_bv (P_a
     when List.for_all (fun p -> match p with P_aux (P_lit _, _) -> true | _ -> false) pats && not in_match_bv ->
       string "0b" ^^ concat (List.map (doc_pat ~in_vector:true ctx in_match_bv) pats)
   | P_vector pats -> concat (List.map (doc_pat ~in_vector:true ctx in_match_bv) pats)
-  | P_vector_concat pats when in_vector ->
-      separate (string ",") (List.map (doc_pat ~in_vector:true ctx in_match_bv) pats)
-  | P_vector_concat pats -> separate (string ",") (List.map (doc_pat ~in_vector:true ctx in_match_bv) pats) |> brackets
+  | P_vector_concat pats -> doc_vector_concat pats
   | P_app (Id_aux (Id "None", _), p) -> string "none"
   | P_app (cons, pats) ->
       opt_parens
@@ -539,6 +537,27 @@ let rec doc_pat ?(need_parens = false) ?(in_vector = false) ctx in_match_bv (P_a
   | P_cons (hd_pat, tl_pat) ->
       parens (separate space [doc_pat ctx in_match_bv hd_pat; string "::"; doc_pat ctx in_match_bv tl_pat])
   | _ -> failwith ("Doc Pattern " ^ string_of_pat_con pat ^ " " ^ string_of_pat pat ^ " not translatable yet.")
+
+and doc_vector_concat pats =
+  let rec doc_part (P_aux (aux, (l, _)) as pat) =
+    match aux with
+    | P_lit (L_aux (L_bin bin, _)) ->
+        let bits = Semantics.bitlist_of_bin_lit bin in
+        concat_map (function Value_type.B0 -> char '0' | Value_type.B1 -> char '1') bits
+    | P_lit (L_aux (L_hex hex, _)) ->
+        let bits = Semantics.bitlist_of_hex_lit hex in
+        concat_map (function Value_type.B0 -> char '0' | Value_type.B1 -> char '1') bits
+    | P_id id -> (
+        match destruct_bitvector (env_of_pat pat) (typ_of_pat pat) with
+        | Some (Nexp_aux (Nexp_constant n, _)) ->
+            doc_id_ctor (fixup_match_id id) ^^ char ':' ^^ string (Big_int.to_string n)
+        | _ -> Reporting.unreachable l __POS__ "Found subpattern with unclear width in bitvector pattern"
+      )
+    | P_typ (_, pat) -> doc_part pat
+    | P_vector pats -> separate_map comma doc_part pats
+    | _ -> Reporting.unreachable l __POS__ ("Unexpected pattern in match_bv vector_concat pattern " ^ string_of_pat pat)
+  in
+  brackets (separate_map comma doc_part pats)
 
 let doc_pat_typ_ascription ctx (P_aux (p, (l, annot)) as pat) =
   match p with P_typ (ptyp, p) -> Some (doc_typ ctx ptyp) | _ -> None
@@ -817,7 +836,7 @@ and doc_exp (as_monadic : bool) ctx (E_aux (e, (l, annot)) as full_exp) =
   | E_id id ->
       if Env.is_register id env then wrap_with_left_arrow (not as_monadic) (string "readReg " ^^ doc_id_ctor id)
       else wrap_with_pure as_monadic (doc_id_ctor id)
-  | E_lit l -> wrap_with_pure as_monadic (doc_lit l)
+  | E_lit l -> wrap_with_pure as_monadic (doc_lit ~width:true l)
   | E_app (Id_aux (Id "None", _), _) -> wrap_with_pure as_monadic (string "none")
   | E_app (Id_aux (Id "Some", _), args) ->
       wrap_with_pure as_monadic
@@ -927,19 +946,14 @@ and doc_exp (as_monadic : bool) ctx (E_aux (e, (l, annot)) as full_exp) =
             )
     )
   | E_vector vals ->
-      let pp =
-        match typ_of full_exp with
-        | Typ_aux (Typ_app (Id_aux (Id "bitvector", _), [A_aux (A_nexp m, _)]), _)
-        | Typ_aux (Typ_app (Id_aux (Id "bits", _), [A_aux (A_nexp m, _)]), _) ->
-            nest 2
-              (wrap_with_pure as_monadic
-                 (parens (flow space [string "BitVec.join1"; brackets (separate_map comma_sp (d_of_arg ctx) vals)]))
-              )
-        | _ ->
-            string "#v"
-            ^^ wrap_with_pure as_monadic (brackets (nest 2 (separate_map comma_sp (d_of_arg ctx) (List.rev vals))))
-      in
-      pp
+      if is_bitvector_typ (typ_of full_exp) then
+        nest 2
+          (wrap_with_pure as_monadic
+             (parens (flow space [string "BitVec.join1"; brackets (separate_map comma_sp (d_of_arg ctx) vals)]))
+          )
+      else
+        string "#v"
+        ^^ wrap_with_pure as_monadic (brackets (nest 2 (separate_map comma_sp (d_of_arg ctx) (List.rev vals))))
   | E_typ (typ, e) ->
       if has_effect e then doc_exp as_monadic ctx e
       else wrap_with_pure as_monadic (parens (separate space [doc_exp false ctx e; colon; doc_typ ctx typ]))

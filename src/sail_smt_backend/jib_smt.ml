@@ -284,7 +284,6 @@ module Make (Config : CONFIG) = struct
     | CT_fint n -> return (Bitvec n)
     | CT_lint -> return (Bitvec Config.max_unknown_integer_width)
     | CT_unit -> return smt_unit
-    | CT_bit -> return (Bitvec 1)
     | CT_fbits n -> return (Bitvec n)
     | CT_sbits n -> return smt_lbits
     | CT_lbits -> return smt_lbits
@@ -1075,7 +1074,6 @@ end) : Jib_compile.CONFIG = struct
     let open Type_check in
     let (Typ_aux (typ_aux, l) as typ) = Env.expand_synonyms ctx.local_env typ in
     match typ_aux with
-    | Typ_id id when string_of_id id = "bit" -> CT_bit
     | Typ_id id when string_of_id id = "bool" -> CT_bool
     | Typ_id id when string_of_id id = "int" -> CT_lint
     | Typ_id id when string_of_id id = "nat" -> CT_lint

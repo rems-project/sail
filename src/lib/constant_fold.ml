@@ -55,21 +55,24 @@ module StringMap = Map.Make (String)
    false = no folding, true = perform constant folding. *)
 let optimize_constant_fold = ref false
 
-let rec fexp_of_ctor (field, value) = FE_aux (FE_fexp (mk_id field, exp_of_value value), no_annot)
-
 (* The interpreter will return a value for each folded expression, so
    we must convert that back to expression to re-insert it in the AST
 *)
+let rec fexp_of_ctor (field, value) = FE_aux (FE_fexp (mk_id field, exp_of_value value), no_annot)
+
 and exp_of_value =
   let open Value_type in
   function
   | V_int n -> mk_lit_exp (L_num n)
-  | V_bit B0 -> mk_lit_exp L_zero
-  | V_bit B1 -> mk_lit_exp L_one
   | V_bool true -> mk_lit_exp L_true
   | V_bool false -> mk_lit_exp L_false
   | V_string str -> mk_lit_exp (L_string str)
   | V_record fields -> mk_exp (E_struct (SN_anon, List.map fexp_of_ctor fields))
+  | V_bitvector bs -> (
+      match Semantics.hex_digits_of_bitlist bs with
+      | Some hs -> mk_lit_exp (L_hex (non_empty_singleton hs))
+      | None -> mk_lit_exp (L_bin (non_empty_singleton (List.map (function B0 -> Bin_0 | B1 -> Bin_1) bs)))
+    )
   | V_vector vs -> mk_exp (E_vector (List.map exp_of_value vs))
   | V_tuple vs -> mk_exp (E_tuple (List.map exp_of_value vs))
   | V_unit -> mk_lit_exp L_unit
@@ -82,7 +85,8 @@ and exp_of_value =
 let rec is_too_large =
   let open Value_type in
   function
-  | V_int _ | V_bit _ | V_bool _ | V_string _ | V_unit | V_attempted_read _ | V_real _ | V_ref _ | V_member _ -> false
+  | V_int _ | V_bool _ | V_bitvector _ | V_string _ | V_unit | V_attempted_read _ | V_real _ | V_ref _ | V_member _ ->
+      false
   | V_vector vs | V_tuple vs | V_list vs -> List.compare_length_with vs 256 > 0
   | V_record fields -> List.exists (fun (_, v) -> is_too_large v) fields
   | V_ctor (_, vs) -> List.exists is_too_large vs

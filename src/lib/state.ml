@@ -175,7 +175,6 @@ let generate_initial_regstate ctx env ast =
         match unaux_typ typ with
         | Typ_id id ->
             if string_of_id id = "bool" then "false"
-            else if string_of_id id = "bit" then "bitzero"
             else if string_of_id id = "int" then "0"
             else if string_of_id id = "nat" then "0"
             else if string_of_id id = "real" then "0"

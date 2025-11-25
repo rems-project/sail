@@ -1,3 +1,5 @@
+type bit = bitvector(1)
+
 val bitwise_not : forall ('m : Int) ('o : Order).
   vector('m, 'o, bit) -> vector('m, 'o, bit)
 

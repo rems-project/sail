@@ -126,7 +126,7 @@ let ocaml_typ_id ctx = function
   | id when Id.compare id (mk_id "string") = 0 -> string "string"
   | id when Id.compare id (mk_id "string_literal") = 0 -> string "string"
   | id when Id.compare id (mk_id "list") = 0 -> string "list"
-  | id when Id.compare id (mk_id "bit") = 0 -> string "bit"
+  | id when Id.compare id (mk_id "bitvector") = 0 -> string "bit" ^^ space ^^ string "list"
   | id when Id.compare id (mk_id "int") = 0 -> string "Big_int.num"
   | id when Id.compare id (mk_id "implicit") = 0 -> string "Big_int.num"
   | id when Id.compare id (mk_id "nat") = 0 -> string "Big_int.num"
@@ -168,11 +168,11 @@ let ocaml_typquant (TypQ_aux (_, l) as typq) =
 
 let string_lit str = dquotes (string (String.escaped str))
 
+let ocaml_bit = function Value_type.B0 -> string "B0" | Value_type.B1 -> string "B1"
+
 let ocaml_lit (L_aux (lit_aux, _)) =
   match lit_aux with
   | L_unit -> string "()"
-  | L_zero -> string "B0"
-  | L_one -> string "B1"
   | L_true -> string "true"
   | L_false -> string "false"
   | L_num n ->
@@ -183,7 +183,8 @@ let ocaml_lit (L_aux (lit_aux, _)) =
   | L_undef -> failwith "undefined should have been re-written prior to ocaml backend"
   | L_string str -> string_lit str
   | L_real str -> parens (string "real_of_string" ^^ space ^^ dquotes (string (String.escaped str)))
-  | _ -> string "LIT"
+  | L_bin bin -> brackets (separate_map (semi ^^ space) ocaml_bit (Semantics.bitlist_of_bin_lit bin))
+  | L_hex hex -> brackets (separate_map (semi ^^ space) ocaml_bit (Semantics.bitlist_of_hex_lit hex))
 
 let pat_record_id l pat =
   match typ_of_pat pat with
@@ -328,7 +329,7 @@ let rec ocaml_exp ctx (E_aux (exp_aux, (l, _)) as exp) =
           ]
       in
       (string "let rec loop () =" ^//^ loop_body) ^/^ string "in" ^/^ string "loop ()"
-  | E_lit _ | E_list _ | E_id _ | E_tuple _ | E_ref _ -> ocaml_atomic_exp ctx exp
+  | E_lit _ | E_vector _ | E_list _ | E_id _ | E_tuple _ | E_ref _ -> ocaml_atomic_exp ctx exp
   | E_for (id, exp_from, exp_to, exp_step, ord, exp_body) ->
       let loop_var =
         separate space [string "let"; zencode ctx id; equals; string "ref"; ocaml_atomic_exp ctx exp_from; string "in"]
@@ -412,6 +413,9 @@ and ocaml_atomic_exp ctx (E_aux (exp_aux, _) as exp) =
           else bang ^^ zencode ctx id
       | Local (Mutable, _) -> bang ^^ zencode ctx id
     end
+  | E_vector exps ->
+      parens
+        (string "List.concat" ^^ space ^^ enclose lbracket rbracket (separate_map (semi ^^ space) (ocaml_exp ctx) exps))
   | E_list exps -> enclose lbracket rbracket (separate_map (semi ^^ space) (ocaml_exp ctx) exps)
   | E_tuple exps ->
       let len = List.length exps in
@@ -1144,8 +1148,7 @@ let ocaml_compile default_sail_dir spec ast generator_types =
   List.iter (fun w -> output_string out_chan (Printf.sprintf "[@@@warning \"-%d\"]\n" w)) [8; 9; 11; 23; 26];
   ocaml_pp_ast out_chan ast generator_types;
   close_out out_chan;
-  if IdSet.mem (mk_id "main") (val_spec_ids ast.defs) then begin
-    print_endline "Generating main";
+  if IdSet.mem (mk_id "main") (val_spec_ids ast.defs) then (
     let out_chan = open_out "main.ml" in
     output_string out_chan (ocaml_main spec sail_dir);
     close_out out_chan;
@@ -1156,6 +1159,6 @@ let ocaml_compile default_sail_dir spec ast generator_types =
       else system_checked "ocamlbuild -use-ocamlfind main.native";
       ignore (Unix.system ("cp main.native " ^ Filename.quote (cwd ^ "/" ^ spec)))
     )
-  end
+  )
   else if not !opt_ocaml_nobuild then system_checked ("ocamlbuild -use-ocamlfind " ^ spec ^ ".cmo");
   Unix.chdir cwd

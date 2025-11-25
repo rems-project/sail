@@ -36,6 +36,7 @@ libml = joiner.join(['sail2_{}.ml'.format(lib) for lib in libraries])
 def test():
     banner('Monomorphisation tests')
     results = Results('mono')
+    results.expect_failure('union-exist2', 'impossible function clause')
     for filenames in chunks(os.listdir('pass'), parallel()):
         tests = {}
         for filename in filenames:

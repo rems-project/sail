@@ -10,6 +10,8 @@ set_option match.ignoreUnusedAlts true
 
 open Sail
 
+abbrev bit := (BitVec 1)
+
 abbrev bits k_n := (BitVec k_n)
 
 /-- Type quantifiers: k_a : Type -/
@@ -99,7 +101,7 @@ def slice_mask {n : _} (i : Int) (l : Int) : (BitVec n) :=
   if ((l ≥b n) : Bool)
   then ((sail_ones n) <<< i)
   else
-    (let one : (BitVec n) := (sail_mask n (0b1 : (BitVec 1)))
+    (let one : (BitVec n) := (sail_mask n (1#1 : (BitVec 1)))
     (((one <<< l) - one) <<< i))
 
 /-- Type quantifiers: n : Nat, n > 0 -/
@@ -146,7 +148,7 @@ def concat_str_dec (str : String) (x : Int) : String :=
 
 /-- Type quantifiers: n : Nat, n > 0 -/
 def foo (n : Nat) : (BitVec 4) :=
-  (0xF : (BitVec 4))
+  0xF#4
 
 /-- Type quantifiers: n : Nat, n > 0 -/
 def foo2 (n : Nat) : (BitVec n) :=

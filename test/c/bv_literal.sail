@@ -1,6 +1,8 @@
 
 default Order dec
 
+type bit = bitvector(1)
+
 $[sv_module { stdout = true }]
 val "print_bits" : forall 'n. (string, bitvector('n, dec)) -> unit
 

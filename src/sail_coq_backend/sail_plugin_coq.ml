@@ -135,7 +135,6 @@ let coq_rewrites =
     ("mapping_patterns", []);
     ("add_unspecified_rec", []);
     ("undefined", [Bool_arg true]);
-    ("vector_string_pats_to_bit_list", []);
     ("remove_not_pats", []);
     ("remove_impossible_int_cases", []);
     ("tuple_assignments", []);

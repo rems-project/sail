@@ -259,11 +259,8 @@ let verilog_rewrites =
     ("atoms_to_singletons", [String_arg "systemverilog"; If_mono_arg]);
     ("recheck_defs", [If_mono_arg]);
     ("undefined", [Bool_arg false]);
-    ("vector_string_pats_to_bit_list", []);
     ("remove_not_pats", []);
-    ("remove_vector_concat", []);
-    ("remove_bitvector_pats", []);
-    ("pattern_literals", [Literal_arg "all"]);
+    ("pattern_literals_typed", [Literal_arg "all"]);
     ("tuple_assignments", []);
     ("vector_concat_assignments", []);
     ("simple_struct_assignments", []);
@@ -291,7 +288,6 @@ module Verilog_config (C : JIB_CONFIG) : Jib_compile.CONFIG = struct
   let rec convert_typ ctx typ =
     let (Typ_aux (typ_aux, l) as typ) = Env.expand_synonyms ctx.local_env typ in
     match typ_aux with
-    | Typ_id id when string_of_id id = "bit" -> CT_bit
     | Typ_id id when string_of_id id = "bool" -> CT_bool
     | Typ_id id when string_of_id id = "int" -> CT_lint
     | Typ_id id when string_of_id id = "nat" -> CT_lint

@@ -1,5 +1,7 @@
 default Order dec
 
+type bit = bitvector(1)
+
 scattered union ast('datasize : Int, 'destsize : Int, 'regsize : Int)
 
 val execute : forall ('datasize : Int) ('destsize : Int) ('regsize : Int).

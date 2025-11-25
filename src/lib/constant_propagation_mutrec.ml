@@ -60,7 +60,7 @@ let targets = ref ([] : id list)
 
 let rec is_const_exp exp =
   match unaux_exp exp with
-  | E_lit (L_aux ((L_true | L_false | L_one | L_zero | L_num _), _)) -> true
+  | E_lit (L_aux ((L_true | L_false | L_bin [Non_empty (_, [])] | L_num _), _)) -> true
   | E_vector es -> List.for_all is_const_exp es && is_bitvector_typ (typ_of exp)
   | E_struct (_, fes) -> List.for_all is_const_fexp fes
   | E_typ (_, e) -> is_const_exp e
@@ -74,8 +74,9 @@ let recheck_exp exp = check_exp (env_of exp) (strip_exp exp) (typ_of exp)
 let generate_fun_id id args =
   let rec suffix exp =
     match unaux_exp exp with
-    | E_lit (L_aux (L_one, _)) -> "1"
-    | E_lit (L_aux (L_zero, _)) -> "0"
+    | E_lit (L_aux (L_bin [Non_empty (b, [])], _)) -> (
+        match b with Bin_0 -> "0" | Bin_1 -> "1"
+      )
     | E_lit (L_aux (L_true, _)) -> "T"
     | E_lit (L_aux (L_false, _)) -> "F"
     | E_struct (_, fes) when is_const_exp exp ->

@@ -16,9 +16,9 @@ function read_sysreg code : bits(2) -> bits(xlen) = {
   let res: bits(xlen) = match (code, sizeof(xlen)) {
     (0b00, _) => 0x0000_0000_0000_0000,
     (0b01, 32) => sysreg.bits(),
-    (0b01, _) => 0x0000_0000_0000_0001, 
-    (0b10, _) => 0x0000_0000_0000_0010, 
-    (0b11, _) => 0x0000_0000_0000_0011, 
+    (0b01, _) => 0x0000_0000_0000_0001,
+    (0b10, _) => 0x0000_0000_0000_0010,
+    (0b11, _) => 0x0000_0000_0000_0011,
   };
   print_bits("sysreg = ", sysreg.bits);
   res

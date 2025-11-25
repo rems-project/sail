@@ -23,8 +23,8 @@ let visit_name vis name = Option.value ~default:name (vis#vname name)
 let rec visit_ctyp vis outer_ctyp =
   let aux vis no_change =
     match no_change with
-    | CT_lint | CT_fint _ | CT_constant _ | CT_lbits | CT_sbits _ | CT_fbits _ | CT_unit | CT_bool | CT_bit | CT_string
-    | CT_real | CT_float _ | CT_rounding_mode | CT_memory_writes | CT_poly _ | CT_json | CT_json_key ->
+    | CT_lint | CT_fint _ | CT_constant _ | CT_lbits | CT_sbits _ | CT_fbits _ | CT_unit | CT_bool | CT_string | CT_real
+    | CT_float _ | CT_rounding_mode | CT_memory_writes | CT_poly _ | CT_json | CT_json_key ->
         no_change
     | CT_tup ctyps ->
         let ctyps' = visit_ctyps vis ctyps in

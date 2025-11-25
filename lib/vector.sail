@@ -56,6 +56,15 @@ $include <arith.sail>
 
 type bits('n) = bitvector('n)
 
+val eq_bit = pure {
+  ocaml: "eq_list",
+  interpreter: "eq_list",
+  lem: "eq_vec",
+  coq: "eq_vec",
+  lean: "_lean_beq",
+  _: "eq_bits"
+} : (bit, bit) -> bool
+
 val eq_bits = pure {
   ocaml: "eq_list",
   interpreter: "eq_list",
@@ -65,7 +74,7 @@ val eq_bits = pure {
   _: "eq_bits"
 } : forall 'n. (bits('n), bits('n)) -> bool
 
-overload operator == = {eq_bit, eq_bits}
+overload operator == = {eq_bits}
 
 val neq_bits = pure {
   lem: "neq_vec",
@@ -207,7 +216,7 @@ val bitvector_access = pure {
 $endif
 
 val plain_vector_access = pure {
-  ocaml: "access",
+  ocaml: "access_list",
   interpreter: "access",
   lem: "access_list_dec",
   coq: "vec_access_dec",
@@ -238,7 +247,7 @@ val bitvector_update = pure {
 $endif
 
 val plain_vector_update = pure {
-  ocaml: "update",
+  ocaml: "update_list",
   interpreter: "update",
   lem: "update_list_dec",
   coq: "vec_update_dec",

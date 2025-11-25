@@ -50,7 +50,6 @@ open import Sail2_values
 
 type vl =
   | VL_bits of list bitU
-  | VL_bit of bitU
   | VL_bool of bool
   | VL_unit
   | VL_int of integer

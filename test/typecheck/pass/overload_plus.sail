@@ -1,10 +1,7 @@
 default Order inc
 
-val bv_add = pure {ocaml: "add_vec", lem: "add_vec"}: forall ('n : Int).
-  (vector('n, inc, bit), vector('n, inc, bit)) -> vector('n, inc, bit)
+$include <prelude.sail>
 
-overload operator + = {bv_add}
-
-val test : (vector(3, inc, bit), vector(3, inc, bit)) -> vector(3, inc, bit)
+val test : (bitvector(3), bitvector(3)) -> bitvector(3)
 
 function test (x, y) = x + y

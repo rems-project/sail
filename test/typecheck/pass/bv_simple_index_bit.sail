@@ -1,3 +1,5 @@
+type bit = bitvector(1)
+
 val bitvector_access_dec : forall ('n : Int), 'n >= 0.
   (vector('n, dec, bit), range(0, 'n - 1)) -> bit
 

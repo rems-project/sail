@@ -55,10 +55,10 @@ therefore be included in just about every Sail specification.
 
 */
 
+type bit = bitvector(1)
+
 val eq_unit = pure { lean : "_lean_beq", _ : "eq_unit" } : (unit, unit) -> bool(true)
 function eq_unit(_, _) = true
-
-val eq_bit = pure { lem : "eq", lean : "_lean_beq", _ : "eq_bit" } : (bit, bit) -> bool
 
 val not_bool = pure {coq: "negb", lean: "_lean_not", _: "not"} : forall ('p : Bool). bool('p) -> bool(not('p))
 /* NB: There are special cases in Sail for effectful uses of and_bool and
@@ -85,7 +85,7 @@ val gteq_int = pure {coq: "Z.geb", lean: "_lean_ge",_:"gteq"} : forall 'n 'm. (i
 val lt_int = pure {coq: "Z.ltb", lean: "_lean_lt", _:"lt"} : forall 'n 'm. (int('n), int('m)) -> bool('n < 'm)
 val gt_int = pure {coq: "Z.gtb", lean: "_lean_gt", _:"gt"} : forall 'n 'm. (int('n), int('m)) -> bool('n > 'm)
 
-overload operator == = {eq_int, eq_bit, eq_bool, eq_unit}
+overload operator == = {eq_int, eq_bool, eq_unit}
 overload operator != = {neq_int, neq_bool}
 overload operator | = {or_bool}
 overload operator & = {and_bool}

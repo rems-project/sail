@@ -326,13 +326,15 @@ val strip_ast : typed_ast -> untyped_ast
     process on any sub-expression. so local modifications to the AST can be re-checked. *)
 val check_exp : Env.t -> uannot exp -> typ -> tannot exp
 
+val infer_lit : lit -> typ
+
 val infer_exp : Env.t -> uannot exp -> tannot exp
 
 val infer_pat : Env.t -> uannot pat -> tannot pat * Env.t * uannot exp list
 
 val infer_lexp : Env.t -> uannot lexp -> tannot lexp
 
-val check_case : Env.t -> typ -> uannot pexp -> typ -> tannot pexp
+val check_case : Env.t -> typ -> uannot pexp -> typ -> tannot pexp option
 
 val check_funcl : Env.t -> uannot funcl -> typ -> tannot funcl
 
@@ -417,7 +419,14 @@ val effect_of_annot : tannot -> effects
 val add_effect_annot : tannot -> effects -> tannot
 
 (** Returns the type that an expression was checked against, if any. Note that these may be removed if an expression is
-    rewritten. *)
+    rewritten.
+
+    This function is useful because it can tell us what the bi-directional type-checking was doing.
+
+    + If this returns [None], then the type system was {i inferring} a type when creating the annotation.
+    + If this returns [Some _], then the type system was {i checking} against an expected type.
+
+    This can inform us whether certain rewrites need to introduce type annotations to preserve typability. *)
 val expected_typ_of : Ast.l * tannot -> typ option
 
 (** {2 Utilities} *)

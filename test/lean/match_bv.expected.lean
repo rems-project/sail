@@ -10,6 +10,8 @@ set_option match.ignoreUnusedAlts true
 
 open Sail
 
+abbrev bit := (BitVec 1)
+
 abbrev bits k_n := (BitVec k_n)
 
 /-- Type quantifiers: k_a : Type -/
@@ -94,7 +96,7 @@ def slice_mask {n : _} (i : Int) (l : Int) : (BitVec n) :=
   if ((l ≥b n) : Bool)
   then ((sail_ones n) <<< i)
   else
-    (let one : (BitVec n) := (sail_mask n (0b1 : (BitVec 1)))
+    (let one : (BitVec n) := (sail_mask n (1#1 : (BitVec 1)))
     (((one <<< l) - one) <<< i))
 
 /-- Type quantifiers: n : Nat, n > 0 -/
@@ -141,11 +143,11 @@ def concat_str_dec (str : String) (x : Int) : String :=
 
 def decode (merge_var : (BitVec 32)) : Bool :=
   match_bv merge_var with
-  | [11,111,0,00,opc:2,1,Rm:5,option_v:3,S,10,Rn:5,Rt:5] =>
+  | [11,111,0,00,opc:2,1,Rm:5,option_v:3,S:1,10,Rn:5,Rt:5] =>
     (if ((Rm == Rn) : Bool)
     then true
     else false)
-  | [sf,10,01010,shift:2,N,Rm:5,imm6:6,Rn:5,Rd:5] =>
+  | [sf:1,10,01010,shift:2,N:1,Rm:5,imm6:6,Rn:5,Rd:5] =>
     (if ((Rn == Rd) : Bool)
     then true
     else false)
@@ -157,7 +159,7 @@ def xlen := 32
 
 def write_CSR (merge_var : (BitVec 12)) : SailM Bool := do
   match_bv merge_var with
-  | [1011000:7,index:5] if ((BitVec.toNatInt index) ≥b 3) => do (pure true)
+  | [1011000,index:5] if ((BitVec.toNatInt index) ≥b 3) => do (pure true)
   | [1011100,index:5] if ((xlen == 32) && (((BitVec.toNatInt index) ≥b 3) : Bool)) => do
     (pure true)
   | _ => do

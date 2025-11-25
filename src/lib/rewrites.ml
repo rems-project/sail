@@ -592,8 +592,14 @@ let remove_vector_concat_pat pat =
         let typ = Env.base_typ_of env (typ_of_annot annot) in
         let l, _ = annot in
         let wild _ = P_aux (P_wild, (gen_loc l, mk_tannot env bit_typ)) in
+        let bit b =
+          let b = match b with Value_type.B0 -> Bin_0 | Value_type.B1 -> Bin_1 in
+          P_aux (P_lit (L_aux (L_bin [Non_empty (b, [])], gen_loc l)), (gen_loc l, mk_tannot env bit_typ))
+        in
         if is_vector_typ typ || is_bitvector_typ typ then (
           match (p, vector_typ_args_of typ) with
+          | P_lit (L_aux (L_bin bin, _)), _ -> acc @ List.map bit (Semantics.bitlist_of_bin_lit bin)
+          | P_lit (L_aux (L_hex hex, _)), _ -> acc @ List.map bit (Semantics.bitlist_of_hex_lit hex)
           | P_vector ps, _ -> acc @ ps
           | _, (nexp, _) -> begin
               match Type_check.solve_unique env nexp with
@@ -799,16 +805,6 @@ let vector_string_to_bits_pat (L_aux (lit, _) as l_aux) (l, tannot) =
     | lit -> P_aux (P_lit l_aux, (l, tannot))
   end
 
-let vector_string_to_bits_exp (L_aux (lit, _) as l_aux) (l, tannot) =
-  let bit_annot = match destruct_tannot tannot with Some (env, _) -> mk_tannot env bit_typ | None -> empty_tannot in
-  begin
-    match lit with
-    | L_hex _ | L_bin _ ->
-        E_aux
-          (E_vector (List.map (fun p -> E_aux (E_lit p, (l, bit_annot))) (vector_string_to_bit_list l_aux)), (l, tannot))
-    | lit -> E_aux (E_lit l_aux, (l, tannot))
-  end
-
 (* A simple check for pattern disjointness; used for optimisation in the
    guarded pattern rewrite step *)
 let rec disjoint_pat env (P_aux (p1, annot1) as pat1) (P_aux (p2, annot2) as pat2) =
@@ -822,6 +818,14 @@ let rec disjoint_pat env (P_aux (p1, annot1) as pat1) (P_aux (p2, annot2) as pat
   | P_id id, _ when id_is_unbound id env -> false
   | _, P_id id when id_is_unbound id env -> false
   | P_id id1, P_id id2 -> Id.compare id1 id2 <> 0
+  | P_lit (L_aux (L_bin bin1, _)), P_lit (L_aux (L_bin bin2, _)) ->
+      Semantics.(bitlist_of_bin_lit bin1 <> bitlist_of_bin_lit bin2)
+  | P_lit (L_aux (L_bin bin1, _)), P_lit (L_aux (L_hex hex2, _)) ->
+      Semantics.(bitlist_of_bin_lit bin1 <> bitlist_of_hex_lit hex2)
+  | P_lit (L_aux (L_hex hex1, _)), P_lit (L_aux (L_bin bin2, _)) ->
+      Semantics.(bitlist_of_hex_lit hex1 <> bitlist_of_bin_lit bin2)
+  | P_lit (L_aux (L_hex hex1, _)), P_lit (L_aux (L_hex hex2, _)) ->
+      Semantics.(bitlist_of_hex_lit hex1 <> bitlist_of_hex_lit hex2)
   | P_lit (L_aux ((L_bin _ | L_hex _), _) as lit), _ ->
       disjoint_pat env (vector_string_to_bits_pat lit (Unknown, empty_tannot)) pat2
   | _, P_lit (L_aux ((L_bin _ | L_hex _), _) as lit) ->
@@ -1414,24 +1418,11 @@ let rewrite_ast_remove_numeral_pats env =
   in
   rewrite_ast_base { rewriters_base with rewrite_exp; rewrite_fun }
 
-let rewrite_ast_vector_string_pats_to_bit_list env =
-  let rewrite_p_aux (pat, (annot : tannot annot)) =
-    match pat with P_lit lit -> vector_string_to_bits_pat lit annot | pat -> P_aux (pat, annot)
-  in
-  let rewrite_e_aux (exp, (annot : tannot annot)) =
-    match exp with E_lit lit -> vector_string_to_bits_exp lit annot | exp -> E_aux (exp, annot)
-  in
-  let pat_alg = { id_pat_alg with p_aux = rewrite_p_aux } in
-  let rewrite_pat rw pat = fold_pat pat_alg pat in
-  let rewrite_exp rw exp = fold_exp { id_exp_alg with e_aux = rewrite_e_aux; pat_alg } exp in
-  rewrite_ast_base { rewriters_base with rewrite_pat; rewrite_exp }
-
 let rewrite_bit_lists_to_lits env =
   (* TODO Make all rewriting passes support bitvector literals instead of
      converting back and forth *)
   let bit_of_lit = function
-    | L_aux (L_zero, _) -> Some Value_type.B0
-    | L_aux (L_one, _) -> Some Value_type.B1
+    | L_aux (L_bin [Non_empty (b, [])], _) -> Some (match b with Bin_0 -> Value_type.B0 | Bin_1 -> Value_type.B1)
     | _ -> None
   in
   let bit_of_exp = function E_aux (E_lit lit, _) -> bit_of_lit lit | _ -> None in
@@ -2072,8 +2063,7 @@ and simple_typ_aux l = function
   | Typ_id id -> Typ_id id
   | Typ_app (id, [_; A_aux (A_typ typ, l)]) when Id.compare id (mk_id "vector") = 0 ->
       Typ_app (mk_id "list", [A_aux (A_typ (simple_typ typ), l)])
-  | Typ_app (id, [_]) when Id.compare id (mk_id "bitvector") = 0 ->
-      Typ_app (mk_id "list", [A_aux (A_typ bit_typ, gen_loc l)])
+  | Typ_app (id, [_]) when Id.compare id (mk_id "bitvector") = 0 -> Typ_id id
   | Typ_app (id, [_]) when Id.compare id (mk_id "atom") = 0 -> Typ_id (mk_id "int")
   | Typ_app (id, [_; _]) when Id.compare id (mk_id "range") = 0 -> Typ_id (mk_id "int")
   | Typ_app (id, [_]) when Id.compare id (mk_id "atom_bool") = 0 -> Typ_id (mk_id "bool")
@@ -2100,12 +2090,6 @@ let rewrite_simple_types env ast =
   let simple_vs (VS_aux (vs_aux, annot)) =
     match vs_aux with VS_val_spec (typschm, id, ext) -> VS_aux (VS_val_spec (simple_typschm typschm, id, ext), annot)
   in
-  let simple_lit (L_aux (lit_aux, l) as lit) =
-    match lit_aux with
-    | L_bin _ | L_hex _ ->
-        E_list (List.map (fun b -> E_aux (E_lit b, simple_annot l bit_typ)) (vector_string_to_bit_list lit))
-    | _ -> E_lit lit
-  in
   let simple_def (DEF_aux (aux, def_annot)) =
     let aux =
       match aux with
@@ -2127,11 +2111,14 @@ let rewrite_simple_types env ast =
   let simple_exp =
     {
       id_exp_alg with
-      e_lit = simple_lit;
-      e_vector = (fun exps -> E_list exps);
       e_typ = (fun (typ, exp) -> E_typ (simple_typ typ, exp));
-      (* e_assert = (fun (E_aux (_, annot), str) -> E_assert (E_aux (E_lit (mk_lit L_true), annot), str)); *)
       le_typ = (fun (typ, lexp) -> LE_typ (simple_typ typ, lexp));
+      e_aux =
+        (fun (aux, annot) ->
+          match aux with
+          | E_vector exps when not (is_bitvector_typ (typ_of_annot annot)) -> E_aux (E_list exps, annot)
+          | _ -> E_aux (aux, annot)
+        );
       pat_alg = simple_pat;
     }
   in
@@ -2585,7 +2572,9 @@ let rewrite_lit_lem (L_aux (lit, _)) =
 let rewrite_lit_ocaml (L_aux (lit, _)) =
   match lit with L_num _ | L_string _ | L_hex _ | L_bin _ | L_real _ | L_unit -> false | _ -> true
 
-let rewrite_ast_pat_lits rewrite_lit env ast =
+let is_bitvector_lit (L_aux (lit, _)) = match lit with L_bin _ | L_hex _ -> true | _ -> false
+
+let rewrite_ast_pat_lits add_types rewrite_lit env ast =
   let rewrite_pexp (Pat_aux (pexp_aux, annot)) =
     let guards = ref [] in
     let counter = ref 0 in
@@ -2601,7 +2590,14 @@ let rewrite_ast_pat_lits rewrite_lit env ast =
           let guard = check_exp (Env.add_local id (Immutable, typ) env) guard bool_typ in
           guards := guard :: !guards;
           incr counter;
-          P_aux (P_id id, p_annot)
+          (* For bitvector literals appearing directly under a vector concat pattern `... @ literal @ ...`,
+             it must be possible to infer the type of whatever we replace it with.
+
+             We ensure the type-checker actually needs the type by ensuring there was no expected type, which
+             would imply the bi-directionality was in checking mode. *)
+          if add_types && is_bitvector_lit lit && Option.is_none (expected_typ_of p_annot) then
+            P_aux (P_typ (infer_lit lit, P_aux (P_id id, p_annot)), p_annot)
+          else P_aux (P_id id, p_annot)
       | p_aux, p_annot -> P_aux (p_aux, p_annot)
     in
 
@@ -3580,8 +3576,6 @@ module MakeExhaustive = struct
   let rlit_of_lit (L_aux (l, _)) =
     match l with
     | L_unit -> RL_unit
-    | L_zero -> RL_inf
-    | L_one -> RL_inf
     | L_true -> RL_true
     | L_false -> RL_false
     | L_num _ | L_hex _ | L_bin _ | L_string _ | L_real _ -> RL_inf
@@ -3590,8 +3584,6 @@ module MakeExhaustive = struct
   let inv_rlit_of_lit (L_aux (l, _)) =
     match l with
     | L_unit -> []
-    | L_zero -> [RL_inf]
-    | L_one -> [RL_inf]
     | L_true -> [RL_false]
     | L_false -> [RL_true]
     | L_num _ | L_hex _ | L_bin _ | L_string _ | L_real _ -> [RL_inf]
@@ -4841,9 +4833,9 @@ let all_rewriters =
     ("make_cases_exhaustive", base_rewriter MakeExhaustive.rewrite);
     ("remove_redundant_pats", basic_rewriter remove_redundant_pats);
     ("undefined", Bool_rewriter (fun b -> basic_rewriter (rewrite_undefined_if_gen b)));
-    ("vector_string_pats_to_bit_list", basic_rewriter rewrite_ast_vector_string_pats_to_bit_list);
     ("remove_not_pats", basic_rewriter rewrite_ast_not_pats);
-    ("pattern_literals", Literal_rewriter (fun f -> basic_rewriter (rewrite_ast_pat_lits f)));
+    ("pattern_literals", Literal_rewriter (fun f -> basic_rewriter (rewrite_ast_pat_lits false f)));
+    ("pattern_literals_typed", Literal_rewriter (fun f -> basic_rewriter (rewrite_ast_pat_lits true f)));
     ("vector_concat_assignments", basic_rewriter rewrite_vector_concat_assignments);
     ("tuple_assignments", basic_rewriter rewrite_tuple_assignments);
     ("simple_assignments", basic_rewriter (rewrite_simple_assignments false));
@@ -4969,8 +4961,8 @@ let rewrite ctx effect_info env rewriters ast =
       Printexc.print_backtrace stderr;
       raise (Type_error.to_reporting_exn l err)
   | e ->
-      Printexc.print_backtrace stderr;
-      raise e
+      let bt = Printexc.get_raw_backtrace () in
+      Printexc.raise_with_backtrace e bt
 
 let () =
   let open Interactive in

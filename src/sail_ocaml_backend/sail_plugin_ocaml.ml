@@ -89,7 +89,6 @@ let ocaml_rewrites =
     ("pat_string_append", []);
     ("mapping_patterns", []);
     ("undefined", [Bool_arg false]);
-    ("vector_string_pats_to_bit_list", []);
     ("tuple_assignments", []);
     ("vector_concat_assignments", []);
     ("simple_assignments", []);

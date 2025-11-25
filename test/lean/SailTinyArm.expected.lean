@@ -10,6 +10,8 @@ set_option match.ignoreUnusedAlts true
 
 open Sail
 
+abbrev bit := (BitVec 1)
+
 abbrev bits k_n := (BitVec k_n)
 
 /-- Type quantifiers: k_a : Type -/
@@ -557,7 +559,7 @@ def slice_mask {n : _} (i : Int) (l : Int) : (BitVec n) :=
   if ((l ≥b n) : Bool)
   then ((sail_ones n) <<< i)
   else
-    (let one : (BitVec n) := (sail_mask n (0b1 : (BitVec 1)))
+    (let one : (BitVec n) := (sail_mask n (1#1 : (BitVec 1)))
     (((one <<< l) - one) <<< i))
 
 /-- Type quantifiers: n : Nat, n > 0 -/
@@ -1823,7 +1825,7 @@ def wX (n : Nat) (value : (BitVec 64)) : SailM Unit := do
 def rX (n : Nat) : SailM (BitVec 64) := do
   if ((n != 31) : Bool)
   then (reg_deref (GetElem?.getElem! GPRs n))
-  else (pure (0x0000000000000000 : (BitVec 64)))
+  else (pure 0x0000000000000000#64)
 
 def rPC (_ : Unit) : SailM (BitVec 64) := do
   readReg _PC
@@ -1835,13 +1837,13 @@ def decodeLoadStoreRegister (opc : (BitVec 2)) (Rm : (BitVec 5)) (option_v : (Bi
   let t : reg_index := (BitVec.toNatInt Rt)
   let n : reg_index := (BitVec.toNatInt Rn)
   let m : reg_index := (BitVec.toNatInt Rm)
-  if (((option_v != (0b011 : (BitVec 3))) || (S == 1#1)) : Bool)
+  if (((option_v != 0b011#3) || (S == 1#1)) : Bool)
   then none
   else
-    (if ((opc == (0b00 : (BitVec 2))) : Bool)
+    (if ((opc == 0b00#2) : Bool)
     then (some (LoadRegister (t, n, m)))
     else
-      (if ((opc == (0b01 : (BitVec 2))) : Bool)
+      (if ((opc == 0b01#2) : Bool)
       then (some (StoreRegister (t, n, m)))
       else none))
 
@@ -1852,18 +1854,18 @@ def decodeExclusiveOr (sf : (BitVec 1)) (shift : (BitVec 2)) (N : (BitVec 1)) (R
   if (((sf == 0#1) && ((BitVec.access imm6 5) == 1#1)) : Bool)
   then none
   else
-    (if ((imm6 != (0b000000 : (BitVec 6))) : Bool)
+    (if ((imm6 != 0b000000#6) : Bool)
     then none
     else (some (ExclusiveOr (d, n, m))))
 
 def decodeDataMemoryBarrier (CRm : (BitVec 4)) : (Option ast) :=
-  if ((CRm != (0xF : (BitVec 4))) : Bool)
+  if ((CRm != 0b1111#4) : Bool)
   then none
   else (some (DataMemoryBarrier ()))
 
 def decodeCompareAndBranch (imm19 : (BitVec 19)) (Rt : (BitVec 5)) : (Option ast) :=
   let t : reg_index := (BitVec.toNatInt Rt)
-  let offset : (BitVec 64) := (Sail.BitVec.signExtend (imm19 ++ (0b00 : (BitVec 2))) 64)
+  let offset : (BitVec 64) := (Sail.BitVec.signExtend (imm19 ++ 0b00#2) 64)
   (some (CompareAndBranch (t, offset)))
 
 def wMem (addr : (BitVec 64)) (value : (BitVec 64)) : SailM Unit := do
@@ -1943,7 +1945,7 @@ def execute_DataMemoryBarrier (_ : Unit) : SailM Unit := do
 /-- Type quantifiers: t : Nat, 0 ≤ t ∧ t ≤ 31 -/
 def execute_CompareAndBranch (t : Nat) (offset : (BitVec 64)) : SailM Unit := do
   let operand ← do (rX t)
-  if ((operand == (0x0000000000000000 : (BitVec 64))) : Bool)
+  if ((operand == 0x0000000000000000#64) : Bool)
   then
     (do
       let base ← do (rPC ())
@@ -1961,9 +1963,10 @@ def execute (merge_var : ast) : SailM Unit := do
 
 def decode (merge_var : (BitVec 32)) : (Option ast) :=
   match_bv merge_var with
-  | [11,111,0,00,opc:2,1,Rm:5,option_v:3,S,10,Rn:5,Rt:5] =>
+  | [11,111,0,00,opc:2,1,Rm:5,option_v:3,S:1,10,Rn:5,Rt:5] =>
     (decodeLoadStoreRegister opc Rm option_v S Rn Rt)
-  | [sf,10,01010,shift:2,N,Rm:5,imm6:6,Rn:5,Rd:5] => (decodeExclusiveOr sf shift N Rm imm6 Rn Rd)
+  | [sf:1,10,01010,shift:2,N:1,Rm:5,imm6:6,Rn:5,Rd:5] =>
+    (decodeExclusiveOr sf shift N Rm imm6 Rn Rd)
   | [1101010100,0,00,011,0011,CRm:4,1,01,11111] => (decodeDataMemoryBarrier CRm)
   | [1,011010,0,imm19:19,Rt:5] => (decodeCompareAndBranch imm19 Rt)
   | _ => none

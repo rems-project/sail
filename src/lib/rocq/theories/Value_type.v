@@ -22,12 +22,12 @@ Inductive bit : Set :=
 | B1 : bit.
 
 Inductive value : Set :=
+| V_bitvector : list bit -> value
 | V_vector : list value -> value
 | V_list : list value -> value
 | V_int : Z -> value
 | V_real : rational -> value
 | V_bool : bool -> value
-| V_bit : bit -> value
 | V_tuple : list value -> value
 | V_unit : value
 | V_string : string -> value
@@ -64,13 +64,13 @@ Module Primops.
 
   Definition zero_extend (bits : value) (n : value) : option value :=
     match (bits, n) with
-    | (V_vector bitlist, V_int n) =>
+    | (V_bitvector bitlist, V_int n) =>
       let len := List.length bitlist in
       if Z.ltb n (Z.of_nat len) then
         None
       else
         let extend := (Z.to_nat n) - len in
-        Some (V_vector (List.repeat (V_bit B0) extend ++ bitlist))
+        Some (V_bitvector (List.repeat B0 extend ++ bitlist))
     | _ => None
     end.
 End Primops.

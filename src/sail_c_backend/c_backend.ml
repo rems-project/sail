@@ -93,7 +93,7 @@ let min_int n = Big_int.negate (Big_int.pow_int_positive 2 (n - 1))
     This is roughly the same distinction that Rust makes between copy and non-copy types. *)
 let rec is_stack_ctyp ctx ctyp =
   match ctyp with
-  | CT_fbits _ | CT_sbits _ | CT_bit | CT_unit | CT_bool | CT_enum _ -> true
+  | CT_fbits _ | CT_sbits _ | CT_unit | CT_bool | CT_enum _ -> true
   | CT_fint n -> n <= 64
   | CT_lint when !optimize_fixed_int -> true
   | CT_lint -> false
@@ -214,7 +214,6 @@ end) : CONFIG = struct
   let rec convert_typ ctx typ =
     let (Typ_aux (typ_aux, l) as typ) = Env.expand_synonyms ctx.local_env typ in
     match typ_aux with
-    | Typ_id id when string_of_id id = "bit" -> CT_bit
     | Typ_id id when string_of_id id = "bool" -> CT_bool
     | Typ_id id when string_of_id id = "int" -> CT_lint
     | Typ_id id when string_of_id id = "nat" -> CT_lint
@@ -309,13 +308,13 @@ end) : CONFIG = struct
 
   let rec is_bitvector = function
     | [] -> true
-    | AV_lit (L_aux (L_zero, _), _) :: avals -> is_bitvector avals
-    | AV_lit (L_aux (L_one, _), _) :: avals -> is_bitvector avals
+    | AV_lit (L_aux (L_bin [Non_empty (_, [])], _), _) :: avals -> is_bitvector avals
     | _ :: _ -> false
 
   let value_of_aval_bit = function
-    | AV_lit (L_aux (L_zero, _), _) -> Sail2_values.B0
-    | AV_lit (L_aux (L_one, _), _) -> Sail2_values.B1
+    | AV_lit (L_aux (L_bin [Non_empty (b, [])], _), _) -> (
+        match b with Bin_0 -> Sail2_values.B0 | Bin_1 -> Sail2_values.B1
+      )
     | _ -> assert false
 
   (** Used to make sure the -Ofixed_int and -Ofixed_bits don't interfere with assumptions made about optimizations in
@@ -440,24 +439,21 @@ end) : CONFIG = struct
     | "eq_int", [AV_cval (v1, _); AV_cval (v2, _)] -> AE_val (AV_cval (V_call (Eq, [v1; v2]), typ))
     | "eq_bit", [AV_cval (v1, _); AV_cval (v2, _)] -> AE_val (AV_cval (V_call (Eq, [v1; v2]), typ))
     | "zeros", [_] -> begin
-        match destruct_vector ctx.tc_env typ with
-        | Some (Nexp_aux (Nexp_constant n, _), Typ_aux (Typ_id id, _))
-          when string_of_id id = "bit" && Big_int.less_equal n (Big_int.of_int 64) ->
+        match destruct_bitvector ctx.tc_env typ with
+        | Some (Nexp_aux (Nexp_constant n, _)) when Big_int.less_equal n (Big_int.of_int 64) ->
             let n = Big_int.to_int n in
             AE_val (AV_cval (V_lit (VL_bits (Util.list_init n (fun _ -> Sail2_values.B0)), CT_fbits n), typ))
         | _ -> no_change
       end
     | "zero_extend", [AV_cval (v, _); _] -> begin
-        match destruct_vector ctx.tc_env typ with
-        | Some (Nexp_aux (Nexp_constant n, _), Typ_aux (Typ_id id, _))
-          when string_of_id id = "bit" && Big_int.less_equal n (Big_int.of_int 64) ->
+        match destruct_bitvector ctx.tc_env typ with
+        | Some (Nexp_aux (Nexp_constant n, _)) when Big_int.less_equal n (Big_int.of_int 64) ->
             AE_val (AV_cval (V_call (Zero_extend (Big_int.to_int n), [v]), typ))
         | _ -> no_change
       end
     | "sign_extend", [AV_cval (v, _); _] -> begin
-        match destruct_vector ctx.tc_env typ with
-        | Some (Nexp_aux (Nexp_constant n, _), Typ_aux (Typ_id id, _))
-          when string_of_id id = "bit" && Big_int.less_equal n (Big_int.of_int 64) ->
+        match destruct_bitvector ctx.tc_env typ with
+        | Some (Nexp_aux (Nexp_constant n, _)) when Big_int.less_equal n (Big_int.of_int 64) ->
             AE_val (AV_cval (V_call (Sign_extend (Big_int.to_int n), [v]), typ))
         | _ -> no_change
       end
@@ -528,7 +524,7 @@ end) : CONFIG = struct
         | _, _ -> no_change
       end
     | "print_int", [_; AV_cval _] -> AE_app (Extern (mk_id "fast_print_int", None), args, typ)
-    | "undefined_bit", _ -> AE_val (AV_cval (V_lit (VL_bit Sail2_values.B0, CT_bit), typ))
+    | "undefined_bit", _ -> AE_val (AV_cval (V_lit (VL_bits [Sail2_values.B0], CT_fbits 1), typ))
     | "undefined_bool", _ -> AE_val (AV_cval (V_lit (VL_bool false, CT_bool), typ))
     | _, _ -> no_change
 
@@ -1067,7 +1063,6 @@ module Codegen (Config : CODEGEN_CONFIG) = struct
 
   let rec sgen_ctyp = function
     | CT_unit -> "unit"
-    | CT_bit -> "fbits"
     | CT_bool -> "bool"
     | CT_fbits _ -> "uint64_t"
     | CT_sbits _ -> "sbits"
@@ -1094,7 +1089,6 @@ module Codegen (Config : CODEGEN_CONFIG) = struct
 
   let rec sgen_ctyp_name = function
     | CT_unit -> "unit"
-    | CT_bit -> "fbits"
     | CT_bool -> "bool"
     | CT_fbits _ -> "fbits"
     | CT_sbits _ -> "sbits"
@@ -1137,9 +1131,6 @@ module Codegen (Config : CODEGEN_CONFIG) = struct
     | VL_bool true -> "true"
     | VL_bool false -> "false"
     | VL_unit -> "UNIT"
-    | VL_bit Sail2_values.B0 -> "UINT64_C(0)"
-    | VL_bit Sail2_values.B1 -> "UINT64_C(1)"
-    | VL_bit Sail2_values.BU -> failwith "Undefined bit found in value"
     | VL_real str -> str
     | VL_string str -> "\"" ^ str ^ "\""
     | VL_enum element -> Util.zencode_string element
@@ -1483,8 +1474,8 @@ module Codegen (Config : CODEGEN_CONFIG) = struct
               | cval :: _ -> sprintf "length_%s" (sgen_ctyp_name (cval_ctyp cval))
               | _ -> c_error "length function with bad arity."
             end
-          | "vector_access", CT_bit -> "bitvector_access"
-          | "vector_access_inc", CT_bit -> "bitvector_access_inc"
+          | "vector_access", CT_fbits 1 -> "bitvector_access"
+          | "vector_access_inc", CT_fbits 1 -> "bitvector_access_inc"
           | "vector_access", _ -> begin
               match args with
               | cval :: _ -> sprintf "vector_access_%s" (sgen_ctyp_name (cval_ctyp cval))
@@ -1562,9 +1553,9 @@ module Codegen (Config : CODEGEN_CONFIG) = struct
         let rec codegen_exn_return ctyp =
           match ctyp with
           | CT_unit -> ("UNIT", [])
-          | CT_bit -> ("UINT64_C(0)", [])
           | CT_fint _ -> ("INT64_C(0xdeadc0de)", [])
           | CT_lint when !optimize_fixed_int -> ("((sail_int) 0xdeadc0de)", [])
+          | CT_fbits 1 -> ("UINT64_C(0)", [])
           | CT_fbits _ -> ("UINT64_C(0xdeadc0de)", [])
           | CT_sbits _ -> ("undefined_sbits()", [])
           | CT_lbits when !optimize_fixed_bits -> ("undefined_lbits(false)", [])
@@ -2388,9 +2379,8 @@ module Codegen (Config : CODEGEN_CONFIG) = struct
     | CT_vector ctyp | CT_fvector (_, ctyp) -> ctyp_dependencies ctyp @ [CTG_vector ctyp]
     | CT_ref ctyp -> ctyp_dependencies ctyp
     | CT_struct (_, ctyps) | CT_variant (_, ctyps) -> List.concat (List.map ctyp_dependencies ctyps)
-    | CT_lint | CT_fint _ | CT_lbits | CT_fbits _ | CT_sbits _ | CT_unit | CT_bool | CT_real | CT_bit | CT_string
-    | CT_enum _ | CT_poly _ | CT_constant _ | CT_float _ | CT_rounding_mode | CT_memory_writes | CT_json | CT_json_key
-      ->
+    | CT_lint | CT_fint _ | CT_lbits | CT_fbits _ | CT_sbits _ | CT_unit | CT_bool | CT_real | CT_string | CT_enum _
+    | CT_poly _ | CT_constant _ | CT_float _ | CT_rounding_mode | CT_memory_writes | CT_json | CT_json_key ->
         []
 
   (* Generate types and utility functions for non-bitvector vectors, tuples and lists.
