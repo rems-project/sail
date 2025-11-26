@@ -1,0 +1,9 @@
+[93mError[0m:
+[96mfailure/duplicate.sail_project[0m:4.0-1:
+4[96m |[0mA {
+ [91m |[0m[91m^[0m
+ [91m |[0m Duplicate module name 'A', previously defined at
+ [91m |[0m [96mfailure/duplicate.sail_project[0m:1.0-1:
+ [91m |[0m 1[96m |[0mA {
+ [91m |[0m  [91m |[0m[91m^[0m
+ [91m |[0m  [91m |[0m 
