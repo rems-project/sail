@@ -588,7 +588,21 @@ let initialize_project_structure ~variables defs =
   let _ = visit_defs (new order_visitor xs) defs in
   let names = Array.of_list (List.rev !xs) in
   let ids =
-    snd (Array.fold_left (fun (n, m) name -> (n + 1, StringMap.add (fst name) n m)) (0, StringMap.empty) names)
+    snd
+      (Array.fold_left
+         (fun ((n, d), m) (name, loc) ->
+           if StringMap.mem name d then
+             raise
+               (Reporting.err_general (to_loc loc)
+                  ("Duplicate module name '" ^ name ^ "', previously defined at\n"
+                  ^ Reporting.loc_to_string (to_loc (StringMap.find name d))
+                  )
+               );
+           ((n + 1, StringMap.add name loc d), StringMap.add name n m)
+         )
+         ((0, StringMap.empty), StringMap.empty)
+         names
+      )
   in
   (* Evaluate the expressions in the project file *)
   let defs = visit_defs (new eval_visitor variables) defs in
