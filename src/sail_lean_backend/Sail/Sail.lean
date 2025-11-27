@@ -294,7 +294,7 @@ def trivialChoiceSource : ChoiceSource where
     | .fin _ => 0
     | .bitvector _ => 0
 
-class Arch where
+class ConcurrencyInterfaceV1.Arch where
   va_size : Nat
   pa : Type
   arch_ak : Type
@@ -307,6 +307,33 @@ class Arch where
   tlb_op : Type
   fault : Type
   sys_reg_id : Type
+
+class ConcurrencyInterfaceV2.Arch where
+  addr_size : Nat
+  addr_space : Type
+  CHERI : Bool
+  cap_size_log : Nat
+
+  mem_acc : Type
+  mem_acc_is_explicit : mem_acc -> Bool
+  mem_acc_is_ifetch : mem_acc -> Bool
+  mem_acc_is_ttw : mem_acc -> Bool
+  mem_acc_is_relaxed : mem_acc -> Bool
+  mem_acc_is_rel_acq_rcpc : mem_acc -> Bool
+  mem_acc_is_rel_acq_rcsc : mem_acc -> Bool
+  mem_acc_is_standalone : mem_acc -> Bool
+  mem_acc_is_exclusive : mem_acc -> Bool
+  mem_acc_is_atomic_rmw : mem_acc -> Bool
+
+  trans_start : Type
+  trans_end : Type
+  abort : Type
+  barrier : Type
+  cache_op : Type
+  tlbi : Type
+  exn : Type
+  sys_reg_id : Type
+
 
 /- The Units are placeholders for a future implementation of the state monad some Sail functions use. -/
 inductive Error (ue: Type) where
@@ -324,7 +351,13 @@ def Error.print : Error UE → String
   | Assertion s => s!"Assertion failed: {s}"
   | User _ => "Uncaught user exception"
 
-section ConcurrencyInterface
+inductive Result (α : Type) (β : Type) where
+  | Ok (_ : α)
+  | Err (_ : β)
+  deriving Repr
+export Result(Ok Err)
+
+namespace ConcurrencyInterfaceV1
 
 inductive Access_variety where
   | AV_plain
@@ -356,11 +389,6 @@ inductive Access_kind (arch : Type) where
 
 export Access_kind(AK_explicit AK_ifetch AK_ttw AK_arch)
 
-inductive Result (α : Type) (β : Type) where
-  | Ok (_ : α)
-  | Err (_ : β)
-  deriving Repr
-export Result(Ok Err)
 
 structure Mem_read_request
   (n : Nat) (vasize : Nat) (pa : Type) (ts : Type) (arch_ak : Type) where
@@ -383,7 +411,20 @@ structure Mem_write_request
   tag : (Option Bool)
   deriving Inhabited, Repr
 
-end ConcurrencyInterface
+end ConcurrencyInterfaceV1
+
+namespace ConcurrencyInterfaceV2
+
+attribute [reducible] Arch.exn Arch.cache_op Arch.barrier Arch.trans_start Arch.trans_end Arch.tlbi
+
+structure Mem_request (n : Nat) (nt : Nat) (addr_size : Nat) (addr_space : Type) (mem_acc : Type) where
+  access_kind : mem_acc
+  address : BitVec addr_size
+  address_space : addr_space
+  size : Nat
+  num_tag : Nat
+
+end ConcurrencyInterfaceV2
 
 end PreSailTypes
 
@@ -513,12 +554,10 @@ def writeBytes (addr : Nat) (value : BitVec (8 * n)) : PreSailM RegisterType c u
   pure true
 
 @[simp_sail]
-def sail_mem_write [Arch] (req : Mem_write_request n vasize (BitVec pa_size) ts arch) : PreSailM RegisterType c ue (Result (Option Bool) Arch.abort) := do
-  let addr := req.pa.toNat
-  let b ← match req.value with
-    | some v => writeBytes addr v
-    | none => pure true
-  pure (Ok (some b))
+def writeByteVec (addr : Nat) (value : Vector (BitVec 8) n) : PreSailM RegisterType c ue Bool := do
+  let list := List.ofFn (λ i : Fin n => (addr + i.val, value[i]))
+  List.forM list (λ (a, v) => writeByte a v)
+  pure true
 
 @[simp_sail]
 def write_ram (addr_size data_size : Nat) (_hex_ram addr : BitVec addr_size) (value : BitVec (8 * data_size)) :
@@ -547,15 +586,36 @@ def readBytes (size : Nat) (addr : Nat) : PreSailM RegisterType c ue ((BitVec (8
     return (h ▸ bytes.append b, bool)
 
 @[simp_sail]
+def readBytesVec (size : Nat) (addr : Nat) :
+    PreSailM RegisterType c ue ((Vector (BitVec 8) size) × Vector Bool nt) :=
+  match size with
+  | 0 => pure (default, default)
+  | 1 => do
+    let b ← readByte addr
+    return (#v[b], default)
+  | n + 1 => do
+    let b ← readByte (addr + n)
+    let (bytes, bool) ← readBytesVec n addr
+    return (bytes.push b, bool)
+
+namespace ConcurrencyInterfaceV1
+
+open Sail.ConcurrencyInterfaceV1
+
+@[simp_sail]
+def sail_mem_write [Arch] (req : Mem_write_request n vasize (BitVec pa_size) ts arch) : PreSailM RegisterType c ue (Result (Option Bool) Arch.abort) := do
+  let addr := req.pa.toNat
+  let b ← match req.value with
+    | some v => writeBytes addr v
+    | none => pure true
+  pure (Ok (some b))
+
+@[simp_sail]
 def sail_mem_read [Arch] (req : Mem_read_request n vasize (BitVec pa_size) ts arch) : PreSailM RegisterType c ue (Result ((BitVec (8 * n)) × (Option Bool)) Arch.abort) := do
   let addr := req.pa.toNat
   let value ← readBytes n addr
   pure (Ok value)
 
-@[simp_sail]
-def read_ram (addr_size data_size : Nat) (_hex_ram addr : BitVec addr_size) : PreSailM RegisterType c ue (BitVec (8 * data_size)) := do
-  let ⟨bytes, _⟩ ← readBytes data_size addr.toNat
-  pure bytes
 
 @[simp_sail]
 def sail_barrier (_ : α) : PreSailM RegisterType c ue Unit := pure ()
@@ -571,6 +631,65 @@ def sail_translation_end [Arch] (_ : Arch.trans_end) : PreSailM RegisterType c u
 def sail_take_exception [Arch] (_ : Arch.fault) : PreSailM RegisterType c ue Unit := pure ()
 @[simp_sail]
 def sail_return_exception [Arch] (_ : Arch.pa) : PreSailM RegisterType c ue Unit := pure ()
+
+end ConcurrencyInterfaceV1
+
+namespace ConcurrencyInterfaceV2
+
+open Sail.ConcurrencyInterfaceV2
+
+@[simp_sail]
+def sail_mem_read [Arch] (req : Mem_request n nt Arch.addr_size Arch.addr_space Arch.mem_acc) :
+    PreSailM RegisterType c ue (Result ((Vector (BitVec 8) n) × (Vector Bool nt)) Arch.abort) := do
+  let addr := req.address.toNat
+  let value ← readBytesVec n addr
+  pure (Ok value)
+
+def sail_mem_write [Arch] (req : Mem_request n nt Arch.addr_size Arch.addr_space Arch.mem_acc) (valueBytes : Vector (BitVec 8) n) (_tags : Vector Bool nt) :
+    PreSailM RegisterType c ue (Result (Option Bool) Arch.abort) := do
+  let addr := req.address.toNat
+  let b ← writeByteVec addr valueBytes
+  pure (Ok (some b))
+
+@[simp_sail]
+def sail_sys_reg_read [Arch] (_id : Arch.sys_reg_id) (r : @RegisterRef Register RegisterType α) : PreSailM RegisterType c ue α :=
+  readRegRef r
+
+@[simp_sail]
+def sail_sys_reg_write [Arch] (_id : Arch.sys_reg_id) (r : @RegisterRef Register RegisterType α) (v : α) :
+    PreSailM RegisterType c ue Unit :=
+  writeRegRef r v
+
+def sail_mem_address_announce [Arch] (_ann : Mem_request n nt Arch.addr_size Arch.addr_space Arch.mem_acc) : PreSailM RegisterType c ue Unit :=
+  pure ()
+
+@[simp_sail]
+def sail_translation_start [Arch] (_ : Arch.trans_start) : PreSailM RegisterType c ue Unit := pure ()
+
+@[simp_sail]
+def sail_translation_end [Arch] (_ : Arch.trans_end) : PreSailM RegisterType c ue Unit := pure ()
+
+@[simp_sail]
+def sail_barrier [Arch] (_ : Arch.barrier) : PreSailM RegisterType c ue Unit := pure ()
+
+@[simp_sail]
+def sail_take_exception [Arch] (_ : Arch.exn) : PreSailM RegisterType c ue Unit := pure ()
+
+@[simp_sail]
+def sail_return_exception (_ : Unit) : PreSailM RegisterType c ue Unit := pure ()
+
+@[simp_sail]
+def sail_cache_op [Arch] (_ : Arch.cache_op) : PreSailM RegisterType c ue Unit := pure ()
+
+@[simp_sail]
+def sail_tlbi [Arch] (_ : Arch.tlbi) : PreSailM RegisterType c ue Unit := pure ()
+
+end ConcurrencyInterfaceV2
+
+@[simp_sail]
+def read_ram (addr_size data_size : Nat) (_hex_ram addr : BitVec addr_size) : PreSailM RegisterType c ue (BitVec (8 * data_size)) := do
+  let ⟨bytes, _⟩ ← readBytes data_size addr.toNat
+  pure bytes
 
 @[simp_sail]
 def cycle_count (_ : Unit) : PreSailM RegisterType c ue Unit :=
@@ -752,4 +871,3 @@ macro_rules | `(tactic| decreasing_trivial) => `(tactic|
 -- termination.
 @[wf_preprocess]
 theorem cond_eq_ite (b : Bool) (x y : α) : cond b x y = ite b x y := by cases b <;> rfl
-
