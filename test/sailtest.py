@@ -92,7 +92,7 @@ def chunks(filenames, cores):
     chunk = []
     for filename in filenames:
         basename = os.path.splitext(os.path.basename(filename))[0]
-        if re.match(r'.+\.sail$', filename) and (not args.test or basename in args.test):
+        if (re.match(r'.+\.sail$', filename) or re.match(r'.+\.sail_project$', filename)) and (not args.test or basename in args.test):
             chunk.append(filename)
         if len(chunk) >= cores:
             ys.append(list(chunk))
