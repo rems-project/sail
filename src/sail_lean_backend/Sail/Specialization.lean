@@ -77,35 +77,11 @@ abbrev print_bits_effect {w : Nat} (str : String) (x : BitVec w) : SailM Unit :=
 
 abbrev print_endline_effect (str : String) : SailM Unit := PreSail.print_endline_effect str
 
-abbrev SailME α := ExceptT α SailM
+def SailME.run (m : SailME α α) : SailM α := PreSail.PreSailME.run m
 
-def SailME.run (m : SailME α α) : SailM α := do
-  match (← ExceptT.run m) with
-    | .error e => pure e
-    | .ok e => pure e
-
-def _root_.ExceptT.map_error [Monad m] (e : ExceptT ε m α) (f : ε → ε') : ExceptT ε' m α :=
-  ExceptT.mk <| do
-    match ← e.run with
-    | .ok x => pure $ .ok x
-    | .error e => pure $ .error (f e)
-
-instance [∀ x, CoeT α x α'] : CoeT (SailME α β) e (SailME α' β) where
-  coe := e.map_error (fun x => x)
-
-def SailME.throw (e : α) : SailME α β := MonadExcept.throw e
-
-abbrev ExceptM α := ExceptT α Id
-
-def ExceptM.run (m : ExceptM α α) : α :=
-  match (ExceptT.run m) with
-    | .error e => e
-    | .ok e => e
+def SailME.throw (e : α) : SailME α β := PreSail.PreSailME.throw e
 
 abbrev sailTryCatchE (e : SailME β α) (h : exception → SailME β α) : SailME β α := PreSail.sailTryCatchE e h
-
-instance : Inhabited (PreSail.SequentialState RegisterType trivialChoiceSource) where
-  default := ⟨default, (), default, default, default, default⟩
 
 def unwrapValue [Inhabited α] (x : SailM α) : α :=
   match x.run default with
@@ -113,3 +89,4 @@ def unwrapValue [Inhabited α] (x : SailM α) : α :=
   | _ => default
 
 end Sail
+

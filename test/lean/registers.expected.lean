@@ -56,6 +56,7 @@ instance : Inhabited (RegisterRef RegisterType Nat) where
 abbrev exception := Unit
 
 abbrev SailM := PreSailM RegisterType trivialChoiceSource exception
+abbrev SailME := PreSailME RegisterType trivialChoiceSource exception
 
 
 XXXXXXXXX

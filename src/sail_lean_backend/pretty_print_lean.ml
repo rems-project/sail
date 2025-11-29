@@ -1470,8 +1470,12 @@ let doc_monad_abbrev defs (has_registers : bool) =
   in
   let excdef = find_exc_typ defs in
   let pp_register_type = string "PreSailM RegisterType trivialChoiceSource exception" in
-  let monad = separate space [string "abbrev"; string "SailM"; coloneq; pp_register_type] ^^ hardline ^^ hardline in
-  separate hardline (remove_empties [excdef; monad])
+  let pp_register_type_e = string "PreSailME RegisterType trivialChoiceSource exception" in
+  let monad = separate space [string "abbrev"; string "SailM"; coloneq; pp_register_type] in
+  let monad_e =
+    separate space [string "abbrev"; string "SailME"; coloneq; pp_register_type_e] ^^ hardline ^^ hardline
+  in
+  separate hardline (remove_empties [excdef; monad; monad_e])
 
 let doc_instantiations ctx env =
   let params = Monad_params.find_monad_parameters env in
