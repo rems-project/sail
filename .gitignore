@@ -50,7 +50,6 @@ lib/hol/sail-heap
 # Sail coverage
 /lib/coverage/Cargo.lock
 /lib/coverage/target
-/lib/coverage/libsail_coverage.a
 /sailcov/sailcov
 
 # location specific things

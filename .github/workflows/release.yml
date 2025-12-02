@@ -15,36 +15,33 @@ jobs:
       matrix:
         include:
           - name: Linux-x86_64
-            os: ubuntu-latest
+            os: ubuntu-24.04
             container: rockylinux:8
             ocaml_version: 5.2.1
-            opam_arch: i686
-            opam_cache_key: rocky8-5.2.1
+            tarball_filename: sail-Linux-x86_64.tar.gz
           - name: Linux-aarch64
             os: ubuntu-24.04-arm
             container: rockylinux:8
             ocaml_version: 5.2.1
-            opam_arch: arm64
-            opam_cache_key: rocky8-5.2.1-arm
+            tarball_filename: sail-Linux-aarch64.tar.gz
           # MacOS disabled for now due to code signing and notarisation requirements
-          # - name: mac-arm64 */
-          #   os: macos-latest */
-          #   container: "" */
-          #   ocaml_version: 5.2.1 */
-          #   opam_cache_key: macos-latest-5.2.1 */
+          # - name: mac-arm64
+          #   os: macos-26
+          #   container: ""
+          #   ocaml_version: 5.2.1
+          #   tarball_filename: sail-Mac-arm64.tar.gz
+          - name: Windows-x86_64
+            os: windows-2025
+            container: ""
+            ocaml_version: 5.2.1
+            tarball_filename: sail-Windows-AMD64.zip
 
     runs-on: ${{ matrix.os }}
     container: ${{ matrix.container }}
 
-    env:
-      # Disable opam warning about running as root.
-      OPAMROOTISOK: 1
-
     steps:
-    # This must be before checkout otherwise Github will use a zip of the
-    # code instead of git clone.
     - name: System dependencies (Linux)
-      if: startsWith(matrix.os, 'ubuntu')
+      if: runner.os == 'Linux'
       run: |
         dnf install --assumeyes \
           gmp-devel \
@@ -64,15 +61,20 @@ jobs:
           diffutils \
           rsync \
           which \
-          cargo
-        curl -L -o /usr/local/bin/opam https://github.com/ocaml/opam/releases/download/2.1.5/opam-2.1.5-${{ matrix.opam_arch }}-linux
-        chmod +x /usr/local/bin/opam
+          cargo \
+          bubblewrap
 
-    - name: System dependencies (Mac)
-      if: startsWith(matrix.os, 'macos')
+    - name: System dependencies (macOS)
+      if: runner.os == 'macOS'
       run: |
-        brew install --force --overwrite gpatch gmp z3 pkgconf opam git rust
+        brew install --force --overwrite gpatch gmp pkgconf git rust
 
+    - name: System dependencies (Windows)
+      if: runner.os == 'Windows'
+      run: vcpkg install gmp
+
+    # This must be after git has been installed otherwise Github will use a zip
+    # of the code instead of git clone.
     - uses: actions/checkout@v4
 
     # Retreive git history (but not files) so that `git describe` works. This is
@@ -89,39 +91,45 @@ jobs:
         git config --global --add safe.directory '*'
         git fetch --unshallow
 
-    - name: Restore cached ~/.opam
-      id: cache-opam-restore
-      uses: actions/cache/restore@v4
+    - name: Setup Z3
+      id: z3
+      uses: cda-tum/setup-z3@v1
       with:
-        path: ~/.opam
-        key: ${{ matrix.opam_cache_key }}
+        version: 4.15.3
 
-    - name: Init opam
-      if: steps.cache-opam-restore.outputs.cache-hit != 'true'
+    # Note this must be after checkout otherwise it doesn't pin local packages
+    # and create the default switch or something.
+    - name: Set-up OCaml
+      uses: ocaml/setup-ocaml@v3
+      with:
+        ocaml-compiler: ${{ matrix.ocaml_version }}
+
+    - name: Set LEMLIB env var
+      if: runner.os == 'Windows'
+      # Note we can't use `opam var lem:share` because lem hasn't been installed yet.
+      run: echo "LEMLIB=$(opam var share)\lem\library" >> $env:GITHUB_ENV
+
+    # This contains a fix for paths on Windows but hasn't been released yet.
+    - name: Pin latest linksem
+      if: runner.os == 'Windows'
+      run: opam pin add linksem https://github.com/rems-project/linksem.git
+
+    # Workaround for https://github.com/rems-project/lem/issues/38
+    - name: Install and fix lem
+      if: runner.os == 'Windows'
       run: |
-        # Sandboxing doesn't work in Docker.
-        opam init --disable-sandboxing --yes --no-setup --shell=sh --compiler=${{ matrix.ocaml_version }} && \
-        eval "$(opam env)" && \
-        ocaml --version
-
-    - name: Save cached opam
-      if: steps.cache-opam-restore.outputs.cache-hit != 'true'
-      id: cache-opam-save
-      uses: actions/cache/save@v4
-      with:
-        path: ~/.opam
-        key: ${{ steps.cache-opam-restore.outputs.cache-primary-key }}
+        opam install lem
+        Rename-Item -Path "$(opam var lem:bin)\lem" -NewName "lem.exe"
 
     - name: Install Sail
       run: |
-        eval $(opam env)
         opam pin --yes --no-action add .
         opam install sail --yes
 
     # Build Z3 from source since the binary releases only support glibc 2.31
     # and old distros like RHEL 8 have 2.28.
     - name: Build Z3
-      if: startsWith(matrix.os, 'ubuntu')
+      if: runner.os == 'Linux'
       run: |
         git clone --depth 1 --branch z3-4.13.0 https://github.com/Z3Prover/z3.git
         mkdir z3/build
@@ -130,17 +138,22 @@ jobs:
         make -j4
         make install
 
-    - name: Make release tarball
+    - name: Make release tarball (Linux)
+      if: runner.os == 'Linux'
       run: |
-        eval $(opam env)
-        make tarball TARBALL_EXTRA_BIN=z3/build/z3
+        opam exec -- make tarball Z3_EXE=z3/build/z3
+
+    - name: Make release tarball (Windows)
+      if: runner.os == 'Windows'
+      run: |
+        opam exec -- make tarball "Z3_EXE=$($(Get-Command z3).Source)" "GMP_DLL=$($(Get-Command libgmp-10.dll).Source)"
 
     - uses: actions/attest-build-provenance@v1
       with:
-        subject-path: _build/sail-${{ matrix.name }}.tar.gz
+        subject-path: _build/${{ matrix.tarball_filename }}
 
     - name: Upload tarball
       uses: actions/upload-artifact@v4
       with:
         name: sail-${{ matrix.name }}
-        path: _build/sail-${{ matrix.name }}.tar.gz
+        path: _build/${{ matrix.tarball_filename }}

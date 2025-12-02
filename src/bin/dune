@@ -7,7 +7,7 @@
    %{target}
    (chdir
     %{workspace_root}
-    (run sail_manifest -gen_manifest)))))
+    (run sail_maker gen_manifest)))))
 
 (executable
  (name sail)
@@ -15,7 +15,14 @@
  (public_name sail)
  (package sail)
  (link_flags -linkall)
- (libraries libsail linenoise dynlink))
+ (libraries
+  libsail
+  dynlink
+  (select
+   repl.ml
+   from
+   (linenoise -> repl.enabled.ml)
+   (-> repl.disabled.ml))))
 
 ; For legacy reasons install all the Sail files in lib as part of this package
 
