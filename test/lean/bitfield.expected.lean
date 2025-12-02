@@ -35,6 +35,7 @@ instance : Inhabited (RegisterRef RegisterType (BitVec 8)) where
 abbrev exception := Unit
 
 abbrev SailM := PreSailM RegisterType trivialChoiceSource exception
+abbrev SailME := PreSailME RegisterType trivialChoiceSource exception
 
 
 XXXXXXXXX

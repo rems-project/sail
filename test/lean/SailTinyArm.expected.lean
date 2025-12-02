@@ -447,6 +447,7 @@ instance : Inhabited (RegisterRef RegisterType (BitVec 64)) where
 abbrev exception := Unit
 
 abbrev SailM := PreSailM RegisterType trivialChoiceSource exception
+abbrev SailME := PreSailME RegisterType trivialChoiceSource exception
 
 instance : Arch where
   va_size := 64

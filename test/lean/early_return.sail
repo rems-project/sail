@@ -203,3 +203,11 @@ function ite_early_return_seq(x : bool) -> E = {
   let y : E = if x then {unit_type(A); return r_A} else r_B;
   r_B
 }
+
+function ite_early_return_exit(x : bool) -> E = {
+  r_A = r_C;
+  let y : E = if x then return r_A else r_B;
+  if x then exit();
+  r_B
+}
+
