@@ -49,7 +49,7 @@ namespace Out.Functions
 
 open option
 
-/-- Type quantifiers: k_ex795_ : Bool, k_ex794_ : Bool -/
+/-- Type quantifiers: k_ex908_ : Bool, k_ex907_ : Bool -/
 def neq_bool (x : Bool) (y : Bool) : Bool :=
   (! (x == y))
 
@@ -149,7 +149,7 @@ def EXTZ {m : _} (v : (BitVec k_n)) : (BitVec m) :=
 def foo (x : (BitVec 8)) : (BitVec 16) :=
   (EXTZ (m := 16) x)
 
-/-- Type quantifiers: k_ex892_ : Bool, n : Nat, n ≥ 0 -/
+/-- Type quantifiers: k_ex1005_ : Bool, n : Nat, n ≥ 0 -/
 def slice_mask2 {n : _} (i : (BitVec n)) (l : (BitVec n)) (b : Bool) : (BitVec n) :=
   if (b : Bool)
   then i

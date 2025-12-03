@@ -20,15 +20,7 @@ inductive option (k_a : Type) where
   | None (_ : Unit)
   deriving Inhabited, BEq, Repr
 
-abbrev xlen : Int := 64
-
-abbrev xlen_bytes : Int := 8
-
-abbrev xlenbits := (BitVec 64)
-
-abbrev booltype : Bool := xlen = 64
-
-abbrev my_bits k_n := (BitVec k_n)
+abbrev xlen : Int := 32
 
 abbrev Register := PEmpty
 abbrev RegisterType : Register -> Type := PEmpty.elim
@@ -59,7 +51,7 @@ namespace Out.Functions
 
 open option
 
-/-- Type quantifiers: k_ex826_ : Bool, k_ex825_ : Bool -/
+/-- Type quantifiers: k_ex865_ : Bool, k_ex864_ : Bool -/
 def neq_bool (x : Bool) (y : Bool) : Bool :=
   (! (x == y))
 
@@ -152,18 +144,23 @@ def concat_str_bits (str : String) (x : (BitVec k_n)) : String :=
 def concat_str_dec (str : String) (x : Int) : String :=
   (HAppend.hAppend str (Int.repr x))
 
-def xlen := 64
+def xlen := 32
 
-/-- Type quantifiers: k_n : Int, m : Int, m ≥ k_n -/
-def EXTZ {m : _} (v : (BitVec k_n)) : (BitVec m) :=
-  (Sail.BitVec.zeroExtend v m)
-
-/-- Type quantifiers: k_n : Int, m : Int, m ≥ k_n -/
-def EXTS {m : _} (v : (BitVec k_n)) : (BitVec m) :=
-  (Sail.BitVec.signExtend v m)
-
-def uses_xlen_term (_ : Unit) : Int :=
-  xlen
+/-- Type quantifiers: arg1 : Int -/
+def f (arg0 : (BitVec 12)) (arg1 : Int) : Int :=
+  let merge_var := (arg0, arg1)
+  match merge_var with
+  | (0x200, v) => 0
+  | (0x300, v) =>
+    (if ((xlen == 32) : Bool)
+    then 1
+    else 2)
+  | (0x308, v) => 3
+  | (0x310, v) =>
+    (if ((xlen == 32) : Bool)
+    then 4
+    else 5)
+  | (_, _) => 7
 
 def initialize_registers (_ : Unit) : Unit :=
   ()

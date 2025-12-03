@@ -39,7 +39,7 @@ open Sail
 
 namespace Out.Functions
 
-/-- Type quantifiers: k_ex448_ : Bool, k_ex447_ : Bool -/
+/-- Type quantifiers: k_ex517_ : Bool, k_ex516_ : Bool -/
 def neq_bool (x : Bool) (y : Bool) : Bool :=
   (! (x == y))
 

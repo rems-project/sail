@@ -144,6 +144,7 @@ let coq_rewrites =
     ("remove_bitvector_pats", []);
     ("remove_numeral_pats", []);
     ("pattern_literals", [Literal_arg "lem"]);
+    ("recheck_defs", []);
     ("guarded_pats", []);
     (* ("register_ref_writes", rewrite_register_ref_writes); *)
     ("nexp_ids", []);
