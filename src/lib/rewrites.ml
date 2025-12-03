@@ -1003,16 +1003,19 @@ let rewrite_toplevel_guarded_clauses fun_only mk_fallthrough l env pat_typ typ
     and if_pexp fallthrough (pat, cs, annot) =
       match cs with
       | c :: _ ->
-          let body = if_exp fallthrough pat cs in
+          let body = if_exp fallthrough [] pat cs in
           (pat, body, annot)
       | [] -> raise (Reporting.err_unreachable l __POS__ "if_pexp given empty list in rewrite_guarded_clauses")
-    and if_exp fallthrough current_pat = function
+    (* The path constraint records any information from guards that the type checker might use,
+       allowing us to avoid generating unnecessary fallthrough cases (which may be harmful because
+       they would have an inconsistent type environment). *)
+    and if_exp fallthrough path_constraints current_pat = function
       | (pat, guard, body, annot) :: ((pat', _, body', _) as c') :: cs -> (
           match guard with
           | Some exp ->
               let env = env_of exp in
               let else_exp =
-                if equiv_pats current_pat pat' then if_exp fallthrough current_pat (c' :: cs)
+                if equiv_pats current_pat pat' then if_exp fallthrough (exp :: path_constraints) current_pat (c' :: cs)
                 else case_exp (pat_to_exp env current_pat) (typ_of body') (group fallthrough (c' :: cs))
               in
               annot_exp (E_if (exp, body, else_exp)) (fst annot).loc env (typ_of body)
@@ -1027,8 +1030,21 @@ let rewrite_toplevel_guarded_clauses fun_only mk_fallthrough l env pat_typ typ
           match (guard, fallthrough) with
           | Some exp, _ :: _ ->
               let env = env_of exp in
-              let else_exp = case_exp (pat_to_exp env current_pat) (typ_of body) fallthrough in
-              annot_exp (E_if (exp, body, else_exp)) (fst annot).loc env (typ_of body)
+              let add_constraint env exp =
+                (* Recheck the guards in the new environment - essential because generated type
+                   variable names may have changed. *)
+                let exp = check_exp env (strip_exp exp) bool_typ in
+                (* We recorded the true branch constraints, so negate them all *)
+                match assert_constraint env false exp with
+                | None -> env
+                | Some c -> Env.add_constraint (nc_not c) env
+              in
+              let else_env = List.fold_left add_constraint (env_of exp) (exp :: path_constraints) in
+              if prove __POS__ else_env nc_false then body
+              else (
+                let else_exp = case_exp (pat_to_exp env current_pat) (typ_of body) fallthrough in
+                annot_exp (E_if (exp, body, else_exp)) (fst annot).loc env (typ_of body)
+              )
           | _, _ -> body
         )
       | [] -> raise (Reporting.err_unreachable l __POS__ "if_exp given empty list in rewrite_guarded_clauses")
@@ -1055,9 +1071,20 @@ let mk_rethrow_pexp l env pat_typ typ =
   let (E_aux (_, a) as e) = check_exp env' (mk_exp ~loc:(gen_loc l) (E_throw (mk_exp (E_id (mk_id "e"))))) typ in
   construct_pexp (p, None, e, a)
 
+(* When we merge guards, they go from being checked against bool_typ to having their type inferred.
+   If they can't be inferred as they are (e.g., a pattern match), then add a type annotation. *)
+let ensure_condition_inferrable exp =
+  match infer_exp (env_of exp) (strip_exp exp) with
+  | _ -> exp
+  | exception _ ->
+      let typ = Option.fold ~none:bool_typ ~some:(fun c -> atom_bool_typ c) (assert_constraint (env_of exp) true exp) in
+      annot_exp (E_typ (typ, exp)) (exp_loc exp) (env_of exp) typ
+
 let bitwise_and_exp exp1 exp2 =
   let (E_aux (_, (l, _))) = exp1 in
   let andid = Id_aux (And_bool, gen_loc l) in
+  let exp1 = ensure_condition_inferrable exp1 in
+  let exp2 = ensure_condition_inferrable exp2 in
   annot_exp (E_app (andid, [exp1; exp2])) l (env_of exp1) bool_typ
 
 let compose_guard_opt g1 g2 =

@@ -65,7 +65,7 @@ open option
 open Register
 open E
 
-/-- Type quantifiers: k_ex823_ : Bool, k_ex822_ : Bool -/
+/-- Type quantifiers: k_ex942_ : Bool, k_ex941_ : Bool -/
 def neq_bool (x : Bool) (y : Bool) : Bool :=
   (! (x == y))
 

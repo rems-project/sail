@@ -172,6 +172,7 @@ let lean_rewrites =
     ("simple_assignments", []);
     ("remove_vector_concat", [If_flag opt_disable_matchbv]);
     ("remove_bitvector_pats", [If_flag opt_disable_matchbv]);
+    ("recheck_defs", []);
     (* ("remove_numeral_pats", []); *)
     (* ("pattern_literals", [Literal_arg "lem"]); *)
     ("fun_guarded_pats", [If_flag opt_enable_matchbv]);

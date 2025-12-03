@@ -53,7 +53,7 @@ namespace Out.Functions
 open word_width
 open option
 
-/-- Type quantifiers: k_ex921_ : Bool, k_ex920_ : Bool -/
+/-- Type quantifiers: k_ex1029_ : Bool, k_ex1028_ : Bool -/
 def neq_bool (x : Bool) (y : Bool) : Bool :=
   (! (x == y))
 
