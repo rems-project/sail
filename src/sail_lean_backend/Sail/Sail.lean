@@ -97,7 +97,7 @@ def update (x : BitVec m) (n : Nat) (b : BitVec 1) := updateSubrange' x n _ b
 def updateBE (x : BitVec m) (n : Nat) (b : BitVec 1) := updateSubrange' x (m - n - 1) _ b
 
 def toBin {w : Nat} (x : BitVec w) : String :=
-  List.asString (List.map (fun c => if c then '1' else '0') (List.ofFn (BitVec.getMsb x)))
+  String.ofList (List.map (fun c => if c then '1' else '0') (List.ofFn (BitVec.getMsb x)))
 
 def toFormatted {w : Nat} (x : BitVec w) : String :=
   if (length x % 4) == 0 then
@@ -127,7 +127,7 @@ def parse_hex_bits_digits (n : Nat) (str : String) : BitVec n :=
   let len := str.length
   if h : n < 4 || len = 0 then BitVec.zero n else
     let bv := parse_hex_bits_digits (n-4) (str.take (len-1))
-    let c := str.get! ⟨len-1⟩ |> charToHex
+    let c := String.Pos.Raw.get! str ⟨len-1⟩ |> charToHex
     BitVec.append bv c |>.cast (by simp_all)
 decreasing_by simp_all <;> omega
 
@@ -137,7 +137,7 @@ where
   -- TODO: when there are lemmas about `String.take`, replace with WF induction
   go (fuel : Nat) (str : String) :=
     if fuel = 0 then 0 else
-      let lsd := str.get! ⟨str.length - 1⟩
+      let lsd := String.Pos.Raw.get! str ⟨str.length - 1⟩
       let rest := str.take (str.length - 1)
       (charToHex lsd).setWidth n + 10#n * go (fuel-1) rest
 
