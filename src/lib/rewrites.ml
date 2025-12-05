@@ -736,13 +736,44 @@ let rec subsumes_pat (P_aux (p1, annot1) as pat1) (P_aux (p2, annot2) as pat2) =
     if List.length pats1 = List.length pats2 then (
       let subs = List.map2 subsumes_pat pats1 pats2 in
       List.fold_right
-        (fun p acc -> match (p, acc) with Some subst, Some substs -> Some (subst @ substs) | _ -> None)
-        subs (Some [])
+        (fun p acc ->
+          match (p, acc) with
+          | Some (subst, ksubst), Some (substs, ksubsts) -> Some (subst @ substs, ksubst @ ksubsts)
+          | _ -> None
+        )
+        subs
+        (Some ([], []))
     )
     else None
   in
+  (* Types ought to be the same up to type variable names, so it's straightforward to calculate
+     enough of a renaming. *)
+  let rec typ_substs (Typ_aux (t1, _)) (Typ_aux (t2, _)) =
+    match (t1, t2) with
+    | Typ_var k1, Typ_var k2 -> if Kid.compare k1 k2 == 0 then [] else [(k2, k1)]
+    | Typ_tuple ts1, Typ_tuple ts2 -> List.concat (List.map2 typ_substs ts1 ts2)
+    | Typ_app (_, args1), Typ_app (_, args2) -> List.concat (List.map2 typ_arg_substs args1 args2)
+    | Typ_exist (_, _, ty1), Typ_exist (_, _, ty2) -> typ_substs ty1 ty2
+    | _ -> []
+  and typ_arg_substs (A_aux (a1, _)) (A_aux (a2, _)) =
+    match (a1, a2) with
+    | A_nexp n1, A_nexp n2 -> nexp_substs n1 n2
+    | A_typ t1, A_typ t2 -> typ_substs t1 t2
+    | A_bool nc1, A_bool nc2 -> []
+    | _ -> []
+  and nexp_substs (Nexp_aux (n1, _)) (Nexp_aux (n2, _)) =
+    match (n1, n2) with
+    | Nexp_var k1, Nexp_var k2 -> if Kid.compare k1 k2 == 0 then [] else [(k2, k1)]
+    | Nexp_app (_, ns1), Nexp_app (_, ns2) -> List.concat (List.map2 nexp_substs ns1 ns2)
+    | Nexp_times (n1', n1''), Nexp_times (n2', n2'')
+    | Nexp_sum (n1', n1''), Nexp_sum (n2', n2'')
+    | Nexp_minus (n1', n1''), Nexp_minus (n2', n2'') ->
+        nexp_substs n1' n2' @ nexp_substs n1'' n2''
+    | Nexp_exp n1', Nexp_exp n2' | Nexp_neg n1', Nexp_neg n2' -> nexp_substs n1' n2'
+    | _ -> []
+  in
   match (p1, p2) with
-  | P_lit (L_aux (lit1, _)), P_lit (L_aux (lit2, _)) -> if lit1 = lit2 then Some [] else None
+  | P_lit (L_aux (lit1, _)), P_lit (L_aux (lit2, _)) -> if lit1 = lit2 then Some ([], []) else None
   | P_or (pat1, pat2), _ -> (* todo: possibly not the right answer *) None
   | _, P_or (pat1, pat2) -> (* todo: possibly not the right answer *) None
   | P_not pat, _ -> (* todo: possibly not the right answer *) None
@@ -757,13 +788,15 @@ let rec subsumes_pat (P_aux (p1, annot1) as pat1) (P_aux (p2, annot2) as pat2) =
   | P_typ (_, pat1), _ -> subsumes_pat pat1 pat2
   | _, P_typ (_, pat2) -> subsumes_pat pat1 pat2
   | P_id (Id_aux (id1, _) as aid1), P_id (Id_aux (id2, _) as aid2) ->
-      if id1 = id2 then Some []
+      let ksubsts = typ_substs (typ_of_pat pat1) (typ_of_pat pat2) in
+      if id1 = id2 then Some ([], ksubsts)
       else if is_unbound (Env.lookup_id aid1 (env_of_annot annot1)) then
-        if is_unbound (Env.lookup_id aid2 (env_of_annot annot2)) then Some [(id2, id1)] else Some []
+        if is_unbound (Env.lookup_id aid2 (env_of_annot annot2)) then Some ([(id2, id1)], ksubsts)
+        else Some ([], ksubsts)
       else None
-  | P_id id1, _ -> if is_unbound (Env.lookup_id id1 (env_of_annot annot1)) then Some [] else None
+  | P_id id1, _ -> if is_unbound (Env.lookup_id id1 (env_of_annot annot1)) then Some ([], []) else None
   | P_var (pat1, _), P_var (pat2, _) -> subsumes_pat pat1 pat2
-  | P_wild, _ -> Some []
+  | P_wild, _ -> Some ([], [])
   | P_app (Id_aux (id1, _), args1), P_app (Id_aux (id2, _), args2) ->
       if id1 = id2 then subsumes_list args1 args2 else None
   | P_vector pats1, P_vector pats2
@@ -775,7 +808,7 @@ let rec subsumes_pat (P_aux (p1, annot1) as pat1) (P_aux (p2, annot2) as pat2) =
   | P_cons _, P_list (pat2 :: pats2) -> subsumes_pat pat1 (rewrap (P_cons (pat2, rewrap (P_list pats2))))
   | P_cons (pat1, pats1), P_cons (pat2, pats2) -> (
       match (subsumes_pat pat1 pat2, subsumes_pat pats1 pats2) with
-      | Some substs1, Some substs2 -> Some (substs1 @ substs2)
+      | Some (substs1, ksubsts1), Some (substs2, ksubsts2) -> Some (substs1 @ substs2, ksubsts1 @ ksubsts2)
       | _ -> None
     )
   | P_struct (_, fields1, wild1), P_struct (_, fields2, wild2) ->
@@ -783,7 +816,9 @@ let rec subsumes_pat (P_aux (p1, annot1) as pat1) (P_aux (p2, annot2) as pat2) =
         (fun acc (f1, p1) ->
           match List.find_opt (fun (f2, _) -> Id.compare f1 f2 == 0) fields2 with
           | Some (_, p2) -> (
-              match (subsumes_pat p1 p2, acc) with Some subst, Some substs -> Some (subst @ substs) | _ -> None
+              match (subsumes_pat p1 p2, acc) with
+              | Some (subst, ksubst), Some (substs, ksubsts) -> Some (subst @ substs, ksubst @ ksubsts)
+              | _ -> None
             )
           | None -> (
               match wild2 with
@@ -791,8 +826,9 @@ let rec subsumes_pat (P_aux (p1, annot1) as pat1) (P_aux (p2, annot2) as pat2) =
               | FP_no_wild -> Reporting.unreachable (fst annot2) __POS__ "Field mismatch in guarded patterns rewrite"
             )
         )
-        (Some []) fields1
-  | _, P_wild -> if is_irrefutable_pattern pat1 then Some [] else None
+        (Some ([], []))
+        fields1
+  | _, P_wild -> if is_irrefutable_pattern pat1 then Some ([], []) else None
   | _ -> None
 
 let vector_string_to_bits_pat (L_aux (lit, _) as l_aux) (l, tannot) =
@@ -962,18 +998,30 @@ let rewrite_toplevel_guarded_clauses fun_only mk_fallthrough l env pat_typ typ
     List.map (fun (pat, guard, body, annot) -> (pat, guard, body, annot_from_clause annot)) (cs @ fallthrough)
   else (
     let rec group fallthrough clauses =
-      let add_clause (pat, cls, annot) c = (pat, cls @ [c], annot) in
+      let add_clause (pat, env, cls, annot) c = (pat, env, cls @ [c], annot) in
       let rec group_aux acc = function
         | ((pat, guard, body, annot) as c) :: cs -> (
             let rec find_group = function
               | [] -> None
               | current :: t -> (
-                  let current_pat, _, _ = current in
+                  let current_pat, _, _, _ = current in
                   match subsumes_pat current_pat pat with
-                  | Some substs ->
+                  | Some (substs, ksubsts) ->
                       let pat' = List.fold_left subst_id_pat pat substs in
+                      (* At the moment we only need accurate type information for the guard, so
+                         only substitute type variables there. *)
+                      let ksub_typ typ =
+                        List.fold_left (fun typ (k1, k2) -> subst_kid typ_subst k1 k2 typ) typ ksubsts
+                      in
+                      let ksub_exp =
+                        map_exp_annot (fun (l, a) ->
+                            (l, Option.fold ~none:a ~some:(fun (_, t) -> replace_typ (ksub_typ t) a) (destruct_tannot a))
+                        )
+                      in
                       let guard' =
-                        match guard with Some exp -> Some (List.fold_left subst_id_exp exp substs) | None -> None
+                        match guard with
+                        | Some exp -> Some (ksub_exp (List.fold_left subst_id_exp exp substs))
+                        | None -> None
                       in
                       let body' = List.fold_left subst_id_exp body substs in
                       let c' = (pat', guard', body', annot) in
@@ -987,35 +1035,39 @@ let rewrite_toplevel_guarded_clauses fun_only mk_fallthrough l env pat_typ typ
             | Some acc' -> group_aux acc' cs
             | None ->
                 let pat = match cs with _ :: _ -> remove_wildcards "g__" pat | _ -> pat in
-                group_aux ((pat, [c], annot_from_clause annot) :: acc) cs
+                group_aux ((pat, env_of (Option.value ~default:body guard), [c], annot_from_clause annot) :: acc) cs
           )
         | [] -> List.rev acc
       in
       let groups =
         match clauses with
-        | [((pat, guard, body, annot) as c)] -> [(pat, [c], annot_from_clause annot)]
+        | [((pat, guard, body, annot) as c)] ->
+            [(pat, env_of (Option.value ~default:body guard), [c], annot_from_clause annot)]
         | ((pat, guard, body, annot) as c) :: cs ->
-            group_aux [(remove_wildcards "g__" pat, [c], annot_from_clause annot)] cs
+            group_aux
+              [(remove_wildcards "g__" pat, env_of (Option.value ~default:body guard), [c], annot_from_clause annot)]
+              cs
         | _ -> raise (Reporting.err_unreachable l __POS__ "group given empty list in rewrite_guarded_clauses")
       in
       let add_group cs groups = if_pexp (groups @ fallthrough) cs :: groups in
       List.fold_right add_group groups []
-    and if_pexp fallthrough (pat, cs, annot) =
+    and if_pexp fallthrough (pat, env, cs, annot) =
       match cs with
       | c :: _ ->
-          let body = if_exp fallthrough [] pat cs in
+          let body = if_exp fallthrough [] pat env cs in
           (pat, body, annot)
       | [] -> raise (Reporting.err_unreachable l __POS__ "if_pexp given empty list in rewrite_guarded_clauses")
     (* The path constraint records any information from guards that the type checker might use,
        allowing us to avoid generating unnecessary fallthrough cases (which may be harmful because
        they would have an inconsistent type environment). *)
-    and if_exp fallthrough path_constraints current_pat = function
+    and if_exp fallthrough path_constraints current_pat current_env = function
       | (pat, guard, body, annot) :: ((pat', _, body', _) as c') :: cs -> (
           match guard with
           | Some exp ->
               let env = env_of exp in
               let else_exp =
-                if equiv_pats current_pat pat' then if_exp fallthrough (exp :: path_constraints) current_pat (c' :: cs)
+                if equiv_pats current_pat pat' then
+                  if_exp fallthrough (exp :: path_constraints) current_pat current_env (c' :: cs)
                 else case_exp (pat_to_exp env current_pat) (typ_of body') (group fallthrough (c' :: cs))
               in
               annot_exp (E_if (exp, body, else_exp)) (fst annot).loc env (typ_of body)
@@ -1031,15 +1083,12 @@ let rewrite_toplevel_guarded_clauses fun_only mk_fallthrough l env pat_typ typ
           | Some exp, _ :: _ ->
               let env = env_of exp in
               let add_constraint env exp =
-                (* Recheck the guards in the new environment - essential because generated type
-                   variable names may have changed. *)
-                let exp = check_exp env (strip_exp exp) bool_typ in
                 (* We recorded the true branch constraints, so negate them all *)
                 match assert_constraint env false exp with
                 | None -> env
                 | Some c -> Env.add_constraint (nc_not c) env
               in
-              let else_env = List.fold_left add_constraint (env_of exp) (exp :: path_constraints) in
+              let else_env = List.fold_left add_constraint current_env (exp :: path_constraints) in
               if prove __POS__ else_env nc_false then body
               else (
                 let else_exp = case_exp (pat_to_exp env current_pat) (typ_of body) fallthrough in
