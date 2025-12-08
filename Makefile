@@ -13,24 +13,23 @@ install: sail
 libsail_coverage:
 	$(MAKE) -C lib/coverage
 
+# TODO: Make this work on Windows.
 extraction:
 	$(MAKE) -C src/lib/rocq
 	mv src/lib/rocq/*.mli src/lib/extraction
 	mv src/lib/rocq/*.ml src/lib/extraction
 
 # Build binary tarball. The lib directory is very large and not needed
-# for running the compiler. TARBALL_EXTRA_BIN can be used to bundle z3.
+# for running the compiler. Z3_EXE can be used to bundle a z3 binary.
+# GMP_DLL can be used to bundle a libgmp DLL (this is only used on Windows currently).
 tarball: sail libsail_coverage
 	dune install --relocatable --prefix=_build/tarball/sail
-	rm -rf _build/tarball/sail/lib
-	cp LICENSE _build/tarball/sail
-	cp THIRD_PARTY_FILES.md _build/tarball/sail
-	cp -a etc/tarball_extra/. _build/tarball/sail
-ifdef TARBALL_EXTRA_BIN
-	cp $(TARBALL_EXTRA_BIN) _build/tarball/sail/bin/
-endif
-	cp lib/coverage/libsail_coverage.a _build/tarball/sail/share/sail/lib/coverage/
+	dune exec -- sail_maker tarball --prefix=_build/tarball/sail --z3=$(Z3_EXE) --gmp=$(GMP_DLL)
+ifeq ($(OS),Windows_NT)
+	powershell Compress-Archive -Path "_build/tarball/sail" -DestinationPath "_build/sail-Windows-$(PROCESSOR_ARCHITECTURE).zip" -Force
+else
 	tar czvf _build/sail-$(shell uname -s)-$(shell uname -m).tar.gz -C _build/tarball sail
+endif
 
 coverage:
 	dune build --release --instrument-with bisect_ppx

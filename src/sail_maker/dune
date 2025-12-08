@@ -1,0 +1,5 @@
+(executable
+ (name sail_maker)
+ (public_name sail_maker)
+ (package sail_maker)
+ (libraries unix))

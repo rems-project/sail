@@ -32,7 +32,7 @@ bug-reports: "https://github.com/rems-project/sail/issues"
 depends: [
   "dune" {>= "3.11"}
   "libsail" {= version}
-  "sail_manifest" {= version & build}
+  "sail_maker" {= version & build}
   "sail_ocaml_backend" {= version & post}
   "sail_c_backend" {= version & post}
   "sail_smt_backend" {= version & post}
@@ -43,7 +43,7 @@ depends: [
   "sail_latex_backend" {= version & post}
   "sail_doc_backend" {= version & post}
   "sail_output" {= version & post}
-  "linenoise" {>= "1.1.0"}
+  "linenoise" {>= "1.1.0" & os != "win32"}
   "odoc" {with-doc}
 ]
 build: [

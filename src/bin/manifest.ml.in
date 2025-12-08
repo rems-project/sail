@@ -1,9 +1,9 @@
 (*
 This file is used to generate manifest.ml when you use OPAM to install Sail.
 If instead you use Dune then manifest.ml will not exist and Dune will use
-sail_manifest.ml to generate it.
+sail_maker.ml to generate it.
 
-So in this file we use OPAM to find the share directory. In sail_manifest.ml
+So in this file we use OPAM to find the share directory. In sail_maker.ml
 we set `dir` to `None` so that Sail will look relative to the `sail` binary.
 *)
 

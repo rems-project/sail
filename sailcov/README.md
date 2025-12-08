@@ -23,7 +23,7 @@ in [lib/coverage/](../lib/coverage/). Currently this is written in Rust
 for want of an obvious hashset implementation in C and can be built
 using `cargo build --release` which will produce a `libsail_coverage.a`
 static library. Once this is done, we can link this into our C
-emulator by passing `$SAIL_DIR/lib/coverage/libsail_coverage.a
+emulator by passing `$SAIL_DIR/lib/coverage/target/release/libsail_coverage.a
 -lpthread -ldl` to gcc, where SAIL_DIR is the location of this
 repository.
 

@@ -229,7 +229,10 @@ if 'cpp' in targets:
     xml += test_c('optimized C++', '-O2', '-O', True, compiler='c++', actually_cpp=True)
 
 if 'interpreter' in targets:
-    xml += test_interpreter('interpreter')
+    if os.name == 'posix':
+        xml += test_interpreter('interpreter')
+    else:
+        print('Skipping interpreter tests because the interpreter is only supported on Unix-like platforms')
 
 if 'ocaml' in targets:
     xml += test_ocaml('OCaml')

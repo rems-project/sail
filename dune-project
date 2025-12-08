@@ -31,7 +31,7 @@
 
 (package
   (synopsis "Helper tool for compiling Sail")
-  (name sail_manifest)
+  (name sail_maker)
   (depends
     (ocaml (>= 4.08.1))))
 
@@ -139,7 +139,7 @@ http://www.cl.cam.ac.uk/~pes20/sail/.
 ")
   (depends
     (libsail (= :version))
-    (sail_manifest (and (= :version) :build))
+    (sail_maker (and (= :version) :build))
     (sail_ocaml_backend (and (= :version) :post))
     (sail_c_backend (and (= :version) :post))
     (sail_smt_backend (and (= :version) :post))
@@ -150,4 +150,7 @@ http://www.cl.cam.ac.uk/~pes20/sail/.
     (sail_latex_backend (and (= :version) :post))
     (sail_doc_backend (and (= :version) :post))
     (sail_output (and (= :version) :post))
-    (linenoise (>= 1.1.0))))
+    ; linenoise needs termios.h and some other headers that are not available
+    ; on windows (at least without installing extra cygwin packages which
+    ; is tricky).
+    (linenoise (and (>= 1.1.0) (<> :os "win32")))))

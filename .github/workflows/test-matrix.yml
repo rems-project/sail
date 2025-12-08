@@ -105,7 +105,7 @@ jobs:
         name: test-results-${{ matrix.suite }}
         path: |
           test/**/tests.xml
-          test/suite-${{ matrix.suite }}.coverage 
+          test/suite-${{ matrix.suite }}.coverage
 
     # Only do this for one job in the test matrix
     - name: Upload event payload

@@ -2,69 +2,89 @@ name: Build matrix
 
 on: [push, workflow_dispatch]
 
+# Required for vcpkg binary caching. See
+# https://learn.microsoft.com/en-us/vcpkg/github-integration
+permissions:
+  contents: write
+
 env:
+  GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+  VCPKG_FEATURE_FLAGS: dependencygraph
   OPAMVERBOSE: 1
 
 jobs:
   build:
     strategy:
       matrix:
-        version: [4.08.1, 5.2.1]
-        os: [ubuntu-latest, ubuntu-24.04-arm, macos-latest]
+        ocaml_version: [4.08.1, 5.2.1]
+        os: [ubuntu-24.04, ubuntu-24.04-arm, macos-26, windows-2025]
         exclude:
-        - os: macos-latest
-          version: 4.08.1
+        - os: macos-26
+          ocaml_version: 4.08.1
+        # Windows is only supported by OCaml 5 or later.
+        - os: windows-2025
+          ocaml_version: 4.08.1
 
     runs-on: ${{ matrix.os }}
 
     steps:
     - uses: actions/checkout@v4
 
-    - name: System dependencies (ubuntu)
-      if: startsWith(matrix.os, 'ubuntu')
-      run: |
-        sudo apt install build-essential libgmp-dev z3 cvc4 opam
+    - name: System dependencies (Linux)
+      if: runner.os == 'Linux'
+      run: sudo apt install build-essential libgmp-dev cvc4
 
     - name: System dependencies (macOS)
-      if: startsWith(matrix.os, 'macos')
-      run: |
-        brew install --force --overwrite gpatch gmp z3 pkgconf opam
+      if: runner.os == 'macOS'
+      run: brew install --force --overwrite gpatch gmp pkgconf
 
-    - name: Restore cached opam
-      id: cache-opam-restore
-      uses: actions/cache/restore@v4
+    - name: System dependencies (Windows)
+      if: runner.os == 'Windows'
+      run: vcpkg install gmp
+
+    - name: Setup Z3
+      id: z3
+      uses: cda-tum/setup-z3@v1
       with:
-        path: ~/.opam
-        key: ${{ matrix.os }}-${{ matrix.version }}
+        version: 4.15.3
 
-    - name: Setup opam
-      if: steps.cache-opam-restore.outputs.cache-hit != 'true'
-      run: |
-        opam init --yes --no-setup --shell=sh --compiler=${{ matrix.version }}
-
-    - name: Save cached opam
-      if: steps.cache-opam-restore.outputs.cache-hit != 'true'
-      id: cache-opam-save
-      uses: actions/cache/save@v4
+    - name: Set-up OCaml
+      uses: ocaml/setup-ocaml@v3
       with:
-        path: ~/.opam
-        key: ${{ steps.cache-opam-restore.outputs.cache-primary-key }}
+        ocaml-compiler: ${{ matrix.ocaml_version }}
+
+    - name: Set LEMLIB env var
+      if: runner.os == 'Windows'
+      # Note we can't use `opam var lem:share` because lem hasn't been installed yet.
+      run: echo "LEMLIB=$(opam var share)\lem\library" >> $env:GITHUB_ENV
+
+    # This contains a fix for paths on Windows but hasn't been released yet.
+    - name: Pin latest linksem
+      if: runner.os == 'Windows'
+      run: opam pin add linksem https://github.com/rems-project/linksem.git
+
+    # Workaround for https://github.com/rems-project/lem/issues/38
+    - name: Install and fix lem
+      if: runner.os == 'Windows'
+      run: |
+        opam install lem
+        Rename-Item -Path "$(opam var lem:bin)\lem" -NewName "lem.exe"
 
     - name: Install Sail
       run: |
-        eval $(opam env)
         opam pin --yes --no-action add .
         opam install sail --yes
 
     - name: Test Sail
+      # Tests use lots of unix-isms currently (fork, mkdir -p, etc).
+      if: runner.os != 'Windows'
       run: |
-        eval $(opam env)
-        etc/ci_core_tests.sh
+        opam exec -- bash etc/ci_core_tests.sh
 
   build-docker:
     strategy:
       matrix:
-        os: [ubuntu-latest, ubuntu-24.04-arm]
+        os: [ubuntu-24.04, ubuntu-24.04-arm]
 
     runs-on: ${{ matrix.os }}
 
