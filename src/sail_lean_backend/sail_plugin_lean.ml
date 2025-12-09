@@ -235,15 +235,17 @@ let file_to_module (filename : string) =
   let base = Filename.basename filename in
   Filename.chop_extension base
 
-let file_prelude =
-  {|set_option maxHeartbeats 1_000_000_000
+let file_prelude version =
+  let p =
+    {|set_option maxHeartbeats 1_000_000_000
 set_option maxRecDepth 1_000_000
 set_option linter.unusedVariables false
 set_option match.ignoreUnusedAlts true
 
 open Sail
-
 |}
+  in
+  Printf.sprintf "%sopen ConcurrencyInterfaceV%d\n\n" p version
 
 let path_to_static_library sail_dir str = Filename.quote (sail_dir ^ "/src/sail_lean_backend/Sail/" ^ str ^ ".lean")
 
@@ -256,7 +258,7 @@ let copy_from_static_library out_name_camel sail_dir lean_sail_dir str =
 
 (* Unix.system ("cp " ^ path_to_static_library sail_dir str ^ " " ^ Filename.quote lean_sail_dir) *)
 
-let print_function_file_prelude file out_name_camel (imp_refs : string list) =
+let print_function_file_prelude interface_v file out_name_camel (imp_refs : string list) =
   let _ =
     match imp_refs with
     | [] ->
@@ -269,11 +271,11 @@ let print_function_file_prelude file out_name_camel (imp_refs : string list) =
           !opt_lean_import_files
     | ns -> List.iter (fun n -> output_string file ("import " ^ out_name_camel ^ "." ^ n ^ "\n")) ns
   in
-  output_string file ("\n" ^ file_prelude);
+  output_string file ("\n" ^ file_prelude interface_v);
   if !opt_lean_noncomputable then output_string file "noncomputable section\n\n";
   output_string file ("namespace " ^ out_name_camel ^ ".Functions\n\n")
 
-let start_lean_output (out_name : string) (import_names : string list) (import_refs : string list list)
+let start_lean_output interface_v (out_name : string) (import_names : string list) (import_refs : string list list)
     (main_import_refs : string list) default_sail_dir =
   let base_dir = match !opt_lean_output_dir with Some dir -> dir | None -> "." in
   let project_dir = Filename.concat base_dir out_name in
@@ -320,7 +322,7 @@ let start_lean_output (out_name : string) (import_names : string list) (import_r
   output_string types_file ("import " ^ out_name_camel ^ ".Sail.Sail\n");
   output_string types_file ("import " ^ out_name_camel ^ ".Sail.BitVec\n\n");
   output_string types_file "open PreSail\n\n";
-  output_string types_file file_prelude;
+  output_string types_file (file_prelude interface_v);
   let funcs_file = open_out (Filename.concat project_dir (out_name_camel ^ ".lean")) in
   let lakefile = open_out (Filename.concat project_dir "lakefile.toml") in
   let lakemanifest = open_out (Filename.concat project_dir "lake-manifest.json") in
@@ -331,14 +333,14 @@ let start_lean_output (out_name : string) (import_names : string list) (import_r
   let last_import_name =
     List.fold_left
       (fun prev_name (out, (n, imps)) ->
-        print_function_file_prelude out out_name_camel imps;
+        print_function_file_prelude interface_v out out_name_camel imps;
         [n]
       )
       []
       (List.combine import_files (List.combine import_names_camel import_refs_camel))
   in
   let funcs_file_imports = main_import_refs_camel @ last_import_name in
-  print_function_file_prelude funcs_file out_name_camel funcs_file_imports;
+  print_function_file_prelude interface_v funcs_file out_name_camel funcs_file_imports;
   { out_name; out_name_camel; sail_dir; types_file; funcs_file; import_files; lakefile; lakemanifest }
 
 let close_context ctx =
@@ -381,6 +383,7 @@ let rec dedup_files (files : string list) (acc : string list) =
 
 let output (out_name : string) env effect_info ({ defs; _ } as ast : Libsail.Type_check.typed_ast) default_sail_dir
     single_file noncomputable =
+  let interface_v = if Preprocess.have_symbol "CONCURRENCY_INTERFACE_V2" then 2 else 1 in
   let cg = Callgraph.graph_of_ast ast in
   let files, import_sets, main_import_set =
     if single_file then ([], [], [])
@@ -406,7 +409,7 @@ let output (out_name : string) env effect_info ({ defs; _ } as ast : Libsail.Typ
       (import_files, Util.butlast import_refs, Util.last import_refs)
     )
   in
-  let ctx = start_lean_output out_name files import_sets main_import_set default_sail_dir in
+  let ctx = start_lean_output interface_v out_name files import_sets main_import_set default_sail_dir in
   let out_name_camel = Libsail.Util.to_upper_camel_case out_name in
   let executable =
     Pretty_print_lean.pp_ast_lean env effect_info ast out_name_camel ctx.types_file ctx.import_files ctx.funcs_file

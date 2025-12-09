@@ -9,6 +9,7 @@ set_option linter.unusedVariables false
 set_option match.ignoreUnusedAlts true
 
 open Sail
+open ConcurrencyInterfaceV1
 
 structure rectangle where
   width : Int
@@ -23,12 +24,14 @@ inductive shape where
   | Rectangle (_ : rectangle)
   | Circle (_ : circle)
   deriving Inhabited, BEq, Repr
+  open shape
 
 /-- Type quantifiers: k_a : Type -/
 inductive my_option (k_a : Type) where
   | MySome (_ : k_a)
   | MyNone (_ : Unit)
   deriving Inhabited, BEq, Repr
+  open my_option
 
 abbrev Register := PEmpty
 abbrev RegisterType : Register -> Type := PEmpty.elim
@@ -54,6 +57,7 @@ set_option linter.unusedVariables false
 set_option match.ignoreUnusedAlts true
 
 open Sail
+open ConcurrencyInterfaceV1
 
 namespace Out.Functions
 

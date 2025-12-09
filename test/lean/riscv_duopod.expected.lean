@@ -9,6 +9,7 @@ set_option linter.unusedVariables false
 set_option match.ignoreUnusedAlts true
 
 open Sail
+open ConcurrencyInterfaceV1
 
 abbrev bit := (BitVec 1)
 
@@ -19,6 +20,7 @@ inductive option (k_a : Type) where
   | Some (_ : k_a)
   | None (_ : Unit)
   deriving Inhabited, BEq, Repr
+  open option
 
 abbrev xlen : Int := 64
 
@@ -30,11 +32,13 @@ abbrev regbits := (BitVec 5)
 
 inductive iop where | RISCV_ADDI | RISCV_SLTI | RISCV_SLTIU | RISCV_XORI | RISCV_ORI | RISCV_ANDI
   deriving BEq, Inhabited, Repr
+  open iop
 
 inductive ast where
   | ITYPE (_ : ((BitVec 12) × regbits × regbits × iop))
   | LOAD (_ : ((BitVec 12) × regbits × regbits))
   deriving Inhabited, BEq, Repr
+  open ast
 
 inductive Register : Type where
   | Xs
@@ -73,6 +77,7 @@ set_option linter.unusedVariables false
 set_option match.ignoreUnusedAlts true
 
 open Sail
+open ConcurrencyInterfaceV1
 
 namespace Out.Functions
 

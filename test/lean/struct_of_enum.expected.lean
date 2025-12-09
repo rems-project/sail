@@ -9,6 +9,7 @@ set_option linter.unusedVariables false
 set_option match.ignoreUnusedAlts true
 
 open Sail
+open ConcurrencyInterfaceV1
 
 abbrev bit := (BitVec 1)
 
@@ -19,9 +20,11 @@ inductive option (k_a : Type) where
   | Some (_ : k_a)
   | None (_ : Unit)
   deriving Inhabited, BEq, Repr
+  open option
 
 inductive e_test where | VAL
   deriving BEq, Inhabited, Repr
+  open e_test
 
 structure s_test where
   f : e_test
@@ -51,6 +54,7 @@ set_option linter.unusedVariables false
 set_option match.ignoreUnusedAlts true
 
 open Sail
+open ConcurrencyInterfaceV1
 
 namespace Out.Functions
 
