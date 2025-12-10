@@ -65,11 +65,11 @@ open shape
 open my_option
 
 def undefined_rectangle (_ : Unit) : SailM rectangle := do
-  (pure { width := (← (undefined_int ()))
-          height := (← (undefined_int ())) })
+  (pure { width := ← (undefined_int ())
+          height := ← (undefined_int ()) })
 
 def undefined_circle (_ : Unit) : SailM circle := do
-  (pure { radius := (← (undefined_int ())) })
+  (pure { radius := ← (undefined_int ()) })
 
 /-- Type quantifiers: k_a : Type -/
 def is_none (opt : (my_option k_a)) : Bool :=
