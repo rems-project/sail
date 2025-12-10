@@ -167,7 +167,7 @@ def num_of_e_test (arg_ : e_test) : Int :=
   | VAL => 0
 
 def undefined_s_test (_ : Unit) : SailM s_test := do
-  (pure { f := (← (undefined_e_test ())) })
+  (pure { f := ← (undefined_e_test ()) })
 
 def initialize_registers (_ : Unit) : Unit :=
   ()

@@ -2,6 +2,12 @@ default Order dec
 
 $include <prelude.sail>
 
+register r : int
+
+enum My_enum = {
+  E1, E2,
+}
+
 struct My_struct = {
   field1 : int,
   field2 : bit,
@@ -26,6 +32,14 @@ val mk_struct : (int, bit) -> My_struct
 function mk_struct(i, b) = {
   struct { 
     field1 = i,
+    field2 = b
+  }
+}
+
+val mk_struct_effectful : (My_enum, bit) -> My_struct
+function mk_struct_effectful(e, b) = {
+  struct { 
+    field1 = match e { E1 => r, E2 => 2 },
     field2 = b
   }
 }

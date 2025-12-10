@@ -824,11 +824,7 @@ and doc_exp (as_monadic : bool) ctx (E_aux (e, (l, annot)) as full_exp) =
     in
     wrap (doc_exp arg_monadic ctx arg)
   in
-  let d_of_field (FE_aux (FE_fexp (field, e), _) as fexp) =
-    let field_monadic = has_effect e in
-    doc_fexp field_monadic ctx fexp
-  in
-  (* string (" /- " ^ string_of_exp_con full_exp ^ " -/ ") ^^ *)
+  let d_of_field (FE_aux (FE_fexp (field, e), _) as fexp) = doc_fexp (has_effect e) ctx fexp in
   match e with
   | E_id id ->
       if Env.is_register id env then wrap_with_left_arrow (not as_monadic) (string "readReg " ^^ doc_id_ctor id)
@@ -1056,7 +1052,9 @@ and doc_exp (as_monadic : bool) ctx (E_aux (e, (l, annot)) as full_exp) =
   | E_cons (hd_e, tl_e) -> parens (separate space [doc_exp false ctx hd_e; string "::"; doc_exp false ctx tl_e])
   | _ -> failwith ("Expression " ^ string_of_exp_con full_exp ^ " " ^ string_of_exp full_exp ^ " not translatable yet.")
 
-and doc_fexp with_arrow ctx (FE_aux (FE_fexp (field, e), _)) = doc_id_ctor field ^^ string " := " ^^ doc_exp false ctx e
+and doc_fexp with_arrow ctx (FE_aux (FE_fexp (field, e), _)) =
+  let arrow = if with_arrow then leftarrow ^^ space else empty in
+  doc_id_ctor field ^^ string " := " ^^ arrow ^^ nest 2 (doc_exp with_arrow ctx e)
 
 let doc_binder ctx i t =
   let parenthesizer =
