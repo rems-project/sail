@@ -1,4 +1,4 @@
-import THE_MODULE_NAME.Sail.Sail
+import Sail
 import THE_MODULE_NAME.Defs
 
 abbrev real := Float
