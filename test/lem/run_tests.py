@@ -75,6 +75,8 @@ skip_tests_mwords = {
     # Custom outcome
     'outcome_int',
     'outcome_impl_int',
+    # Type level if-then-else
+    'if_unify',
 }
 
 print('Sail is {}'.format(sail))
