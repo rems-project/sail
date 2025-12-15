@@ -312,6 +312,14 @@ let rec options =
         Arg.Set opt_memo_z3,
         " memoize calls to z3, improving performance when typechecking repeatedly (default)"
       );
+      ( "-naming_check",
+        Arg.Set Naming_check.opt_enabled,
+        " enable naming convention checks"
+      );
+      ( "-naming_check_strict",
+        Arg.Set Naming_check.opt_strict,
+        " treat naming convention violations as errors (implies -naming_check)"
+      );
       ("-no_memo_z3", Arg.Clear opt_memo_z3, " do not memoize calls to z3");
       ( "-memo_z3_path",
         Arg.String (fun f -> opt_memo_z3_path := f),
@@ -565,6 +573,7 @@ let run_sail (config : Yojson.Safe.t option) tgt =
   let schema, ast = Config.rewrite_ast tgt env instantiation config_json ast in
   let ast, env = if Target.skip_initial_rewrite tgt then (ast, env) else Frontend.initial_rewrite effect_info env ast in
   let ast, env = match !opt_splice with [] -> (ast, env) | files -> Splice.splice_files ctx ast (List.rev files) in
+  Naming_check.check ast;
   let effect_info = Effects.infer_side_effects (Target.asserts_termination tgt) ast in
 
   ( match !opt_output_schema_file with
