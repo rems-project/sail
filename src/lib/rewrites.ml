@@ -391,6 +391,9 @@ let remove_vector_concat_pat pat =
 
   let pat = fold_pat name_vector_concat_elements pat in
 
+  (* Fix up the types and produce a new environment for guards and bodies that contains the new variables *)
+  let pat, body_env = bind_pat_no_guard (env_of_pat pat) (strip_pat pat) (typ_of_pat pat) in
+
   let rec tag_last = function
     | x :: xs ->
         let is_last = xs = [] in
@@ -422,7 +425,8 @@ let remove_vector_concat_pat pat =
       let letbind = LB_aux (LB_val (id_pat, subv), cannot) in
       ( letbind,
         (fun body ->
-          if IdSet.mem child (find_used_vars body) then annot_exp (E_let (letbind, body)) l env (typ_of body) else body
+          if IdSet.mem child (find_used_vars body) then annot_exp (E_let (letbind, body)) l body_env (typ_of body)
+          else body
         ),
         (rootname, childname)
       )
