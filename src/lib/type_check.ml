@@ -650,6 +650,15 @@ and unify_nexp l env goals (Nexp_aux (nexp_aux1, _) as nexp1) (Nexp_aux (nexp_au
         | Nexp_constant c2 -> if c1 = c2 then KBindings.empty else unify_error l "Constants are not the same"
         | _ -> unify_error l "Unification error"
       end
+    | Nexp_if (i1, t1, e1) -> (
+        match nexp_aux2 with
+        | Nexp_if (i2, t2, e2) ->
+            let i_unifiers = unify_constraint l env goals i1 i2 in
+            let t_unifiers = unify_nexp l env goals t1 t2 in
+            let e_unifiers = unify_nexp l env goals e1 e2 in
+            merge_uvars env l i_unifiers (merge_uvars env l t_unifiers e_unifiers)
+        | _ -> unify_error l "Cannot unify if-then-else with non-conditional expression"
+      )
     | Nexp_sum (n1a, n1b) ->
         if KidSet.is_empty (tyvars_of_nexp n1b) then unify_nexp l env goals n1a (nminus nexp2 n1b)
         else if KidSet.is_empty (tyvars_of_nexp n1a) then unify_nexp l env goals n1b (nminus nexp2 n1a)
