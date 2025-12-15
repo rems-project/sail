@@ -1354,11 +1354,7 @@ module Make (Config : CONFIG) (Primop_gen : PRIMOP_GEN) = struct
   let builtin_count_trailing_zeros v ret_ctyp =
     let rec tzcnt ret_sz sz smt =
       if sz == 1 then
-        Ite
-          ( Fn ("=", [Extract (0, 0, sz, smt); Bitvec_lit [Sail2_values.B0]]),
-            bvint ret_sz (Big_int.of_int 1),
-            bvint ret_sz Big_int.zero
-          )
+        Ite (Fn ("=", [smt; Bitvec_lit [Sail2_values.B0]]), bvint ret_sz (Big_int.of_int 1), bvint ret_sz Big_int.zero)
       else (
         assert (sz land (sz - 1) = 0);
         let hsz = sz / 2 in
@@ -1383,43 +1379,26 @@ module Make (Config : CONFIG) (Primop_gen : PRIMOP_GEN) = struct
     | CT_fbits sz when sz land (sz - 1) = 0 -> return (tzcnt ret_sz sz smt)
     | CT_fbits sz ->
         let padded_sz = smallest_greater_power_of_two sz in
-        let padding = bvzero (padded_sz - sz) in
+        let padding = bvone (padded_sz - sz) in
         assert (padded_sz > sz);
-        return
-          (Fn
-             ( "bvsub",
-               [tzcnt ret_sz padded_sz (Fn ("concat", [padding; smt])); bvint ret_sz (Big_int.of_int (padded_sz - sz))]
-             )
-          )
+        return (tzcnt ret_sz padded_sz (Fn ("concat", [padding; smt])))
     | CT_lbits ->
         if ret_sz > lbits_index then
           return
-            (Fn
-               ( "bvsub",
-                 [
-                   tzcnt ret_sz lbits_size (Fn ("contents", [smt]));
-                   Fn
-                     ( "bvsub",
-                       [
-                         bvint ret_sz (Big_int.of_int lbits_size);
-                         Fn ("concat", [bvzero (ret_sz - lbits_index); Fn ("len", [smt])]);
-                       ]
-                     );
-                 ]
+            (tzcnt ret_sz lbits_size
+               (Fn
+                  ( "bvor",
+                    [
+                      Fn
+                        ( "bvshl",
+                          [bvone lbits_size; Fn ("concat", [bvzero (lbits_size - lbits_index); Fn ("len", [smt])])]
+                        );
+                      Fn ("contents", [smt]);
+                    ]
+                  )
                )
             )
-        else (
-          let trailing_zeros =
-            Fn
-              ( "bvsub",
-                [
-                  tzcnt lbits_index lbits_size (Fn ("contents", [smt]));
-                  Fn ("bvsub", [bvint lbits_index (Big_int.of_int lbits_size); Fn ("len", [smt])]);
-                ]
-              )
-          in
-          return (Extract (ret_sz - 1, 0, lbits_index, trailing_zeros))
-        )
+        else failwith "count_trailing_zeros: unimplemented for lbits with small return size"
     | _ -> builtin_type_error "count_trailing_zeros" [v] (Some ret_ctyp)
 
   let rec builtin_eq_anything x y =
