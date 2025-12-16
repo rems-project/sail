@@ -1129,9 +1129,10 @@ let mk_rethrow_pexp l env pat_typ typ =
 let ensure_condition_inferrable exp =
   match infer_exp (env_of exp) (strip_exp exp) with
   | _ -> exp
-  | exception _ ->
-      let typ = Option.fold ~none:bool_typ ~some:(fun c -> atom_bool_typ c) (assert_constraint (env_of exp) true exp) in
-      annot_exp (E_typ (typ, exp)) (exp_loc exp) (env_of exp) typ
+  | exception e ->
+      (* The forms of expression that cannot be inferred don't provide any information to the
+         case body's environment, so we can just use the plain bool type. *)
+      annot_exp (E_typ (bool_typ, exp)) (exp_loc exp) (env_of exp) bool_typ
 
 let bitwise_and_exp exp1 exp2 =
   let (E_aux (_, (l, _))) = exp1 in
