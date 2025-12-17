@@ -377,11 +377,6 @@ bool platform_excl_res(const unit unit)
     return true;
 }
 
-unit platform_barrier()
-{
-    return UNIT;
-}
-
 void emulator_read_mem(lbits *data,
                        const uint64_t addr_size,
                        const sbits addr,
