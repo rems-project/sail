@@ -98,14 +98,14 @@ type pos_or_loc = Loc of Parse_ast.l | Pos of Lexing.position
 
 let fix_endline str = if str.[String.length str - 1] = '\n' then String.sub str 0 (String.length str - 1) else str
 
-let print_err_internal hint p_l m1 m2 =
+let format_err_internal formatter hint p_l m1 m2 =
   let open Error_format in
-  prerr_endline (m1 ^ ":");
-  begin
-    match p_l with
-    | Loc l -> format_message (Location ("", hint, l, Line (fix_endline m2))) err_formatter
-    | Pos p -> format_message (Location ("", hint, Parse_ast.Range (p, p), Line (fix_endline m2))) err_formatter
-  end
+  formatter.endline (m1 ^ ":");
+  match p_l with
+  | Loc l -> format_message (Location ("", hint, l, Line (fix_endline m2))) formatter
+  | Pos p -> format_message (Location ("", hint, Parse_ast.Range (p, p), Line (fix_endline m2))) formatter
+
+let print_err_internal = format_err_internal Error_format.err_formatter
 
 let loc_to_string l =
   let open Error_format in
@@ -233,6 +233,16 @@ let forbid_errors ocaml_pos f x =
 let print_error ?(interactive = false) e =
   let m1, hint, pos_l, m2 = dest_err ~interactive e in
   print_err_internal hint pos_l m1 m2
+
+let _ =
+  Printexc.register_printer (function
+    | Fatal_error err ->
+        let m1, hint, pos_l, m2 = dest_err ~interactive:false err in
+        let buf = Buffer.create 1024 in
+        format_err_internal (Error_format.buffer_formatter buf) hint pos_l m1 m2;
+        Some (Buffer.contents buf)
+    | _ -> None
+    )
 
 let print_type_error ?hint l msg = print_err_internal hint (Loc l) Util.("Type error" |> yellow |> clear) msg
 
