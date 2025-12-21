@@ -492,12 +492,12 @@ let place_phi_functions graph df =
 
 module NameGraph = Graph.Make (Name)
 
-let phi_dependencies cfg =
+let variable_dependencies cfg =
   let deps = ref NameGraph.empty in
   let decl_nodes = ref NameMap.empty in
   for n = 0 to cfg.next - 1 do
     match cfg.nodes.(n) with
-    | Some ((ssa, _), _, _) ->
+    | Some ((ssa, cfnode), _, _) -> (
         List.iter
           (function
             | Phi (id, _, args) ->
@@ -506,7 +506,23 @@ let phi_dependencies cfg =
                 List.iter (fun arg -> deps := NameGraph.add_edge id arg !deps) args
             | _ -> ()
             )
-          ssa
+          ssa;
+        match cfnode with
+        | CF_block (instrs, _) ->
+            List.iter
+              (fun instr ->
+                let reads = instr_reads ~direct:true instr in
+                let writes = instr_writes ~direct:true instr in
+                NameSet.iter
+                  (fun write ->
+                    decl_nodes := NameMap.add write n !decl_nodes;
+                    NameSet.iter (fun read -> deps := NameGraph.add_edge write read !deps) reads
+                  )
+                  writes
+              )
+              instrs
+        | _ -> ()
+      )
     | None -> ()
   done;
   (!deps, !decl_nodes)

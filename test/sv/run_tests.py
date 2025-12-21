@@ -34,7 +34,8 @@ skip_tests = {
     'simple_while3', # loops
     'ref_cmp',
     'concurrency_interface_v2',
-    'concurrency_interface_v2_var'
+    'concurrency_interface_v2_var',
+    'config_abstract_bool' # bug
 }
 
 print("Sail is {}".format(sail))

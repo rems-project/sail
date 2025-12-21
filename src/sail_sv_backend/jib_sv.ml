@@ -1303,92 +1303,25 @@ module Make (Config : CONFIG) = struct
         | _ -> DoChildren
     end
 
-  (* We want to be able tp find the final assigned value of any
+  (* We want to be able to find the final assigned value of any
      variable v in the SSA control flow graph, as that is the variable
      that will be passed on to output ports if needed. *)
   let get_final_names ssa_vars cfg =
     let open Jib_ssa in
-    let phi_graph, phi_nodes = phi_dependencies cfg in
-    let phi_names, final_names =
-      phi_graph |> NameGraph.topsort
+    let var_graph, _ = variable_dependencies cfg in
+    let var_names, final_names =
+      var_graph |> NameGraph.topsort
       |> List.fold_left
            (fun (seen, fins) ssa_name ->
-             let name, n = Jib_ssa.unssa_name ssa_name in
+             let name, _ = Jib_ssa.unssa_name ssa_name in
              if NameSet.mem name seen then (seen, fins) else (NameSet.add name seen, NameMap.add name ssa_name fins)
            )
            (NameSet.empty, NameMap.empty)
     in
-    (* Once we find the final assignment to a variable v by a phi function,
-       we explore all successor nodes from where that phi function is to check for cases like:
-
-       v_a = phi(v_b, v_c);
-       v_d = f(v_a);
-       v_e = g(v_d);
-
-       here v_e is the last assignment to v, not v_a
-    *)
-    let rec explore_successors node name ssa_name =
-      match get_vertex cfg node with
-      | Some ((_, cf_node), _, succs) ->
-          let num_succs = IntSet.cardinal succs in
-          let ssa_name =
-            match cf_node with
-            | CF_block (instrs, _) ->
-                let last_write =
-                  List.fold_left
-                    (fun acc instr ->
-                      match acc with
-                      | None ->
-                          let writes =
-                            instr_writes ~direct:true instr
-                            |> NameSet.filter (fun w ->
-                                   let w', _ = unssa_name w in
-                                   Name.compare name w' = 0
-                               )
-                          in
-                          let num_writes = NameSet.cardinal writes in
-                          if num_writes = 0 then None
-                          else (
-                            assert (num_writes = 1);
-                            let write = NameSet.min_elt writes in
-                            Some write
-                          )
-                      | Some v -> Some v
-                    )
-                    None (List.rev instrs)
-                in
-                Option.value last_write ~default:ssa_name
-            | _ -> ssa_name
-          in
-          if num_succs = 0 then ssa_name
-          else
-            (* Note if we have successors like
-
-                 A
-                / \
-               B   C
-                \ /
-                 D
-
-               There could be updates in D, but there cannot be any in
-               B or C because then D would have a phi function, and we
-               would then have started from there. Therefore we can
-               just choose a single successor here. *)
-            explore_successors (IntSet.min_elt succs) name ssa_name
-      | None -> assert false
-    in
-    let final_names =
-      NameMap.mapi
-        (fun name ssa_name ->
-          let node = NameMap.find ssa_name phi_nodes in
-          explore_successors node name ssa_name
-        )
-        final_names
-    in
     let final_names =
       NameMap.fold
         (fun name nums fins ->
-          if NameSet.mem name phi_names then fins
+          if NameSet.mem name var_names then fins
           else NameMap.add name (Jib_ssa.ssa_name (IntSet.max_elt nums) name) fins
         )
         ssa_vars final_names
