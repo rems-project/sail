@@ -100,7 +100,16 @@ type formatter = { indent : string; endline : string -> unit; loc_color : string
 
 let err_formatter = { indent = ""; endline = prerr_endline; loc_color = Util.red }
 
-let buffer_formatter b = { indent = ""; endline = (fun str -> Buffer.add_string b (str ^ "\n")); loc_color = Util.red }
+let buffer_formatter b =
+  {
+    indent = "";
+    endline =
+      (fun str ->
+        Buffer.add_string b str;
+        Buffer.add_char b '\n'
+      );
+    loc_color = Util.red;
+  }
 
 let format_endline str ppf =
   ppf.endline (ppf.indent ^ Str.global_replace (Str.regexp_string "\n") ("\n" ^ ppf.indent) str)
