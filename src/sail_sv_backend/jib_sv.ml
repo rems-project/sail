@@ -937,25 +937,28 @@ module Make (Config : CONFIG) = struct
                     | SVP_id id1, Var id2 when Name.compare id1 id2 = 0 ->
                         wrap (with_updates l updates (SVS_assign (SVP_index (ret, i), x)))
                     | _ ->
-                        wrap
-                          (with_updates l updates
-                             (SVS_foreach
-                                ( SVN_id j,
-                                  arr,
-                                  SVS_aux
-                                    ( SVS_assign
-                                        ( SVP_index (ret, var_id j),
-                                          Ite
-                                            ( Fn ("=", [Extract (sz - 1, 0, 32, var_id j); i]),
-                                              x,
-                                              Fn ("select", [arr; var_id j])
-                                            )
-                                        ),
-                                      l
-                                    )
-                                )
-                             )
-                          )
+                        if sz = 0 then
+                          wrap (with_updates l updates (SVS_assign (SVP_index (ret, Bitvec_lit [Sail2_values.B0]), x)))
+                        else
+                          wrap
+                            (with_updates l updates
+                               (SVS_foreach
+                                  ( SVN_id j,
+                                    arr,
+                                    SVS_aux
+                                      ( SVS_assign
+                                          ( SVP_index (ret, var_id j),
+                                            Ite
+                                              ( Fn ("=", [Extract (sz - 1, 0, 32, var_id j); i]),
+                                                x,
+                                                Fn ("select", [arr; var_id j])
+                                              )
+                                          ),
+                                        l
+                                      )
+                                  )
+                               )
+                            )
                   end
               | _ -> Reporting.unreachable l __POS__ "Invalid vector type for internal vector update"
             end
