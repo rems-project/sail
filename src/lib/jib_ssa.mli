@@ -104,7 +104,9 @@ module NameGraph : sig
   include Graph.S with type node = Jib.name and type node_set = Set.Make(Name).t and type graph = Graph.Make(Name).graph
 end
 
-val phi_dependencies : (ssa_elem list * cf_node) array_graph -> NameGraph.graph * int NameMap.t
+(** Return a graph of variable dependencies (from writes to reads). The second element of the return tuple is the node
+    containing the variable declaration. *)
+val variable_dependencies : (ssa_elem list * cf_node) array_graph -> NameGraph.graph * int NameMap.t
 
 (** Convert a list of instructions into SSA form *)
 val ssa :
