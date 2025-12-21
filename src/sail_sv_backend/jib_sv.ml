@@ -1303,21 +1303,43 @@ module Make (Config : CONFIG) = struct
         | _ -> DoChildren
     end
 
+  let debug_attr_vardep_graph attr =
+    let open Util.Option_monad in
+    let* _, attr_data = attr in
+    let* obj = Option.bind attr_data attribute_data_object in
+    let* vardep_graph = List.assoc_opt "vardep_graph" obj in
+    attribute_data_string vardep_graph
+
   (* We want to be able to find the final assigned value of any
      variable v in the SSA control flow graph, as that is the variable
      that will be passed on to output ports if needed. *)
-  let get_final_names ssa_vars cfg =
+  let get_final_names debug_attr ssa_vars cfg =
     let open Jib_ssa in
-    let var_graph, _ = variable_dependencies cfg in
+    let var_graph, var_write_nodes = variable_dependencies cfg in
     let var_names, final_names =
       var_graph |> NameGraph.topsort
       |> List.fold_left
            (fun (seen, fins) ssa_name ->
              let name, _ = Jib_ssa.unssa_name ssa_name in
-             if NameSet.mem name seen then (seen, fins) else (NameSet.add name seen, NameMap.add name ssa_name fins)
+             (* After topological sorting, the first name we see in the list of variable names that exists as a write
+                within the function is the final write. *)
+             if (not (NameSet.mem name seen)) && NameMap.mem ssa_name var_write_nodes then
+               (NameSet.add name seen, NameMap.add name ssa_name fins)
+             else (seen, fins)
            )
            (NameSet.empty, NameMap.empty)
     in
+    ( match debug_attr_vardep_graph debug_attr with
+    | None -> ()
+    | Some filename ->
+        prerr_endline Util.("Dumping variable dependency graph: " ^ filename |> bold |> yellow |> clear);
+        let out_chan = open_out filename in
+        NameGraph.make_dot
+          ~node_color:(fun _ -> "white")
+          ~edge_color:(fun _ _ -> "black")
+          ~string_of_node:string_of_name out_chan var_graph;
+        close_out out_chan
+    );
     let final_names =
       NameMap.fold
         (fun name nums fins ->
@@ -1484,7 +1506,7 @@ module Make (Config : CONFIG) = struct
       |> fun m -> Smt_gen.run m Parse_ast.Unknown ctx
     in
 
-    let final_names = get_final_names !ssa_vars cfg in
+    let final_names = get_final_names debug_attr !ssa_vars cfg in
 
     (* Create the always_comb definition, lifting/hoisting the module instantations out of the block *)
     let module_instantiations = Queue.create () in
