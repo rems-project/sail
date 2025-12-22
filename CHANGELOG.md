@@ -5,19 +5,23 @@ Sail 0.20.1
 -----------
 
 This is bugfix release for Sail 0.20. It includes fixes for the
-following issues:
+following issues, among others:
 
 * https://github.com/rems-project/sail/issues/1532
-
 * https://github.com/rems-project/sail/issues/1529
-
 * https://github.com/rems-project/sail/issues/1512
-
 * https://github.com/rems-project/sail/pull/1509
+* https://github.com/rems-project/sail/issues/1554
 
 It also includes various improvements to the Sail formatter, and some
 improvements to the loop syntax that should make while and foreach
 loops slightly more consistent.
+
+This point release also includes the change that unifies the `bit`
+type with the `bits(1)` type. In principle, this means that strictly
+more programs should be permitted than before, so we have decided to
+forgo a major version increment for this. The change may be noticable
+to those using Sail generated theorem prover definitions.
 
 Sail 0.20
 ---------
