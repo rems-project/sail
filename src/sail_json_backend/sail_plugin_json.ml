@@ -82,8 +82,7 @@ let json_options =
     );
   ]
 
-let output_json file ast =
-  print_endline (Pretty_print_json.pp_ast_json ast.defs)
+let output_json file ast = print_endline (Pretty_print_json.pp_ast_json ast.defs)
 
 let output files =
   List.iter
