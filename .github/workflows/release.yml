@@ -24,12 +24,11 @@ jobs:
             container: rockylinux:8
             ocaml_version: 5.2.1
             tarball_filename: sail-Linux-aarch64.tar.gz
-          # MacOS disabled for now due to code signing and notarisation requirements
-          # - name: mac-arm64
-          #   os: macos-26
-          #   container: ""
-          #   ocaml_version: 5.2.1
-          #   tarball_filename: sail-Mac-arm64.tar.gz
+          - name: mac-arm64
+            os: macos-26
+            container: ""
+            ocaml_version: 5.2.1
+            tarball_filename: sail-Darwin-arm64.tar.gz
           - name: Windows-x86_64
             os: windows-2025
             container: ""
@@ -91,11 +90,24 @@ jobs:
         git config --global --add safe.directory '*'
         git fetch --unshallow
 
-    - name: Setup Z3
+    - name: Setup Z3 (Windows, Mac)
       id: z3
+      if: runner.os != 'Linux'
       uses: cda-tum/setup-z3@v1
       with:
         version: 4.15.3
+
+    # Build Z3 from source since the binary releases only support glibc 2.31
+    # and old distros like RHEL 8 have 2.28.
+    - name: Build Z3 (Linux)
+      if: runner.os == 'Linux'
+      run: |
+        git clone --depth 1 --branch z3-4.13.0 https://github.com/Z3Prover/z3.git
+        mkdir z3/build
+        cd z3/build
+        cmake -DCMAKE_BUILD_TYPE=Release ..
+        make -j4
+        make install
 
     # Note this must be after checkout otherwise it doesn't pin local packages
     # and create the default switch or something.
@@ -126,18 +138,6 @@ jobs:
         opam pin --yes --no-action add .
         opam install sail --yes
 
-    # Build Z3 from source since the binary releases only support glibc 2.31
-    # and old distros like RHEL 8 have 2.28.
-    - name: Build Z3
-      if: runner.os == 'Linux'
-      run: |
-        git clone --depth 1 --branch z3-4.13.0 https://github.com/Z3Prover/z3.git
-        mkdir z3/build
-        cd z3/build
-        cmake -DCMAKE_BUILD_TYPE=Release ..
-        make -j4
-        make install
-
     - name: Make release tarball (Linux)
       if: runner.os == 'Linux'
       run: |
@@ -147,6 +147,11 @@ jobs:
       if: runner.os == 'Windows'
       run: |
         opam exec -- make tarball "Z3_EXE=$($(Get-Command z3).Source)" "GMP_DLL=$($(Get-Command libgmp-10.dll).Source)"
+
+    - name: Make release tarball (Mac)
+      if: runner.os == 'macOS'
+      run: |
+        opam exec -- make tarball "Z3_EXE=$(which z3)"
 
     - uses: actions/attest-build-provenance@v1
       with:
