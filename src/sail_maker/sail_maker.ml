@@ -76,7 +76,11 @@ let copy_file (input_path : string) (output_path : string) =
     in
     copy_loop ();
     close_in ic;
-    close_out oc
+    close_out oc;
+
+    (* Copy permission bits; needed for copying in Z3 on Unix platforms. *)
+    let in_stat = Unix.stat input_path in
+    Unix.chmod output_path in_stat.Unix.st_perm
   with e ->
     close_in_noerr ic;
     close_out_noerr oc;
