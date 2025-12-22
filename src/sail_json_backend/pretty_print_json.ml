@@ -112,7 +112,7 @@ let json_of_visibility = function
 
 let rec json_of_value = function
   | V_vector values -> sprintf "{\"V_vector\":%s}" (json_of_list json_of_value values)
-  | V_bit bit -> sprintf "{\"V_bit\":\"%s\"}" (Sail_lib.string_of_bit bit)
+  | V_bitvector bit -> sprintf "{\"V_bitvector\":\"%s\"}" (json_of_list Sail_lib.string_of_bit bit)
   | V_list values -> sprintf "{\"V_list\":%s}" (json_of_list json_of_value values)
   | V_int num -> sprintf "{\"V_int\":%s}" (json_of_big_int num)
   | V_real real -> sprintf "{\"V_real\":[%s,%s]}" (Big_int.to_string (Rational.num real)) (Big_int.to_string (Rational.den real))
@@ -206,8 +206,6 @@ and string_of_bin_non_empty_list lst =
 
 let rec json_of_lit_aux = function
   | L_unit -> json_of_string "L_unit"
-  | L_zero -> json_of_string "L_zero"
-  | L_one -> json_of_string "L_one"
   | L_true -> json_of_string "L_true"
   | L_false -> json_of_string "L_false"
   | L_num num -> sprintf "{\"L_num\":%s}" (json_of_big_int num)
@@ -564,7 +562,7 @@ let rec json_of_type_def_aux = function
   | TD_abbrev (id,typquant,typ_arg) -> sprintf "{\"TD_abbrev\":[%s,%s,%s]}" (json_of_id id) (json_of_typquant typquant) (json_of_typ_arg typ_arg)
   | TD_record (id,typquant,typs_ids,bool) -> sprintf "{\"TD_record\":[%s,%s,%s,%b]}" (json_of_id id) (json_of_typquant typquant) (json_of_list (fun ((id, typ), _) -> sprintf "[%s,%s]" (json_of_typ typ) (json_of_id id)) typs_ids) bool
   | TD_variant (id,typquant,type_unions,bool) -> sprintf "{\"TD_variant\":[%s,%s,%s,%b]}" (json_of_id id) (json_of_typquant typquant) (json_of_list json_of_type_union type_unions) bool
-  | TD_enum (id,ids,bool) -> sprintf "{\"TD_enum\":[%s,%s,%b]}" (json_of_id id) (json_of_list json_of_id ids) bool
+  | TD_enum (id,id_annots,bool) -> sprintf "{\"TD_enum\":[%s,%s,%b]}" (json_of_id id) (json_of_list (fun (id, _) -> json_of_id id) id_annots) bool
   | TD_abstract (id,kind,_) -> sprintf "{\"TD_abstract\":[%s,%s]}" (json_of_id id) (json_of_kind kind)
   | TD_bitfield (id,typ,id_ranges) -> sprintf "{\"TD_bitfield\":[%s,%s,%s]}" (json_of_id id) (json_of_typ typ) ((json_of_list (fun ((id, range), _) -> sprintf "[%s,%s]" (json_of_id id) (json_of_index_range range)) id_ranges))
 
