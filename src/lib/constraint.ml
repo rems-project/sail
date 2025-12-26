@@ -407,11 +407,11 @@ let rec call_smt' l abstract extra constraints =
         in
         Sys.remove input_file;
         try
-          let _problem, _ = List.find (fun (_, result) -> result = "unsat") smt_output in
+          let _problem, _ = List.find (fun (_, result) -> String.starts_with ~prefix:"unsat" result) smt_output in
           known_problems := DigestMap.add digest Unsat !known_problems;
           Unsat
         with Not_found ->
-          let unsolved = List.filter (fun (_, result) -> result = "unknown") smt_output in
+          let unsolved = List.filter (fun (_, result) -> String.starts_with ~prefix:"unknown" result) smt_output in
           if unsolved == [] then (
             known_problems := DigestMap.add digest Sat !known_problems;
             Sat
