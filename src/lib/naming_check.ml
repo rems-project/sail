@@ -59,6 +59,7 @@ type naming_style =
   | PascalCase
   | SnakeCase
   | ScreamingSnakeCase
+  | TrainCase
   | Any
 
 type naming_config = {
@@ -66,6 +67,7 @@ type naming_config = {
   function_style : naming_style;
   variable_style : naming_style;
   constant_style : naming_style;
+  variant_style : naming_style;
 }
 
 let default_config = {
@@ -73,6 +75,7 @@ let default_config = {
   function_style = SnakeCase;
   variable_style = SnakeCase;
   constant_style = ScreamingSnakeCase;
+  variant_style = TrainCase;
 }
 
 let is_pascal_case s =
@@ -100,16 +103,27 @@ let is_screaming_snake_case s =
       (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') || c = '_'
     ) s
 
+let is_train_case s =
+  if String.length s =0 then false 
+  else
+    let first_char =s.[0] in
+    (first_char>= 'A' && first_char <= 'Z') &&
+    String.for_all (fun c ->
+      (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') || c = '_'
+    ) s
+
 let matches_style s = function
   | PascalCase -> is_pascal_case s
   | SnakeCase -> is_snake_case s
   | ScreamingSnakeCase -> is_screaming_snake_case s
+  | TrainCase -> is_train_case s
   | Any -> true
 
 let string_of_style = function
   | PascalCase -> "PascalCase (e.g., MemoryAccess)"
   | SnakeCase -> "snake_case (e.g., execute_load)"
   | ScreamingSnakeCase -> "SCREAMING_SNAKE_CASE (e.g., MAX_XLEN)"
+  | TrainCase -> "Train_Case (e.g. State_Stop)"
   | Any -> "any"
 
 type identifier_category =
@@ -117,12 +131,14 @@ type identifier_category =
   | Category_function
   | Category_variable
   | Category_constant
+  | Category_variant
 
 let string_of_category = function
   | Category_type -> "Type"
   | Category_function -> "Function"
   | Category_variable -> "Variable"
   | Category_constant -> "Constant"
+  | Category_variant -> "Variant"
 
 (** Warning/error report *)
 let report_naming_issue l id expected_style category =
@@ -212,7 +228,7 @@ let check_type_def config (TD_aux (td, annot)) =
   | TD_enum (id, members, _) ->
       report_naming_issue l id config.type_style Category_type;
       List.iter (fun (member_id, def_annot) ->
-        report_naming_issue def_annot.loc member_id config.type_style Category_type
+        report_naming_issue def_annot.loc member_id config.variant_style Category_variant
       ) members
   | TD_abstract (id, _, _) ->
       report_naming_issue l id config.type_style Category_type
@@ -281,7 +297,7 @@ let rec check_scattered config (SD_aux (sd, annot)) =
   | SD_enum id ->
       report_naming_issue l id config.type_style Category_type
   | SD_enumcl (_, member_id) ->
-      report_naming_issue l member_id config.type_style Category_type
+      report_naming_issue l member_id config.variant_style Category_variant
   | SD_end _ -> ()
 
 let check_outcome config (OV_aux (OV_outcome (id, _, _), l)) =

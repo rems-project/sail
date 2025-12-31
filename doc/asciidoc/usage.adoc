@@ -262,6 +262,7 @@ The default conventions are:
 * Types, records, and enums should be in PascalCase.
 * Functions and variables should be in snake_case.
 * Constants should be in SCREAMING_SNAKE_CASE.
+* Variants should be in Train_Case.
 
 <<<
 === Debug options

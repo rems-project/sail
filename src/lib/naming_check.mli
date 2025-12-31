@@ -49,18 +49,20 @@
     This module provides static analysis to ensure identifiers follow
     consistent naming conventions:
     
-    | Identifier Type           | Expected Style       | Example                      |
-    |---------------------------|----------------------|------------------------------|
-    | Types / Structs / Enums   | PascalCase           | MemoryAccess, Privilege      |
-    | Functions                 | snake_case           | execute_load, get_csr_value  |
-    | Variables / Let bindings  | snake_case           | mem_addr, reg_value          |
-    | Constants                 | SCREAMING_SNAKE_CASE | MAX_XLEN, DEFAULT_VALUE      |
+    | Identifier Type           | Expected Style       | Example                         |
+    |---------------------------|----------------------|---------------------------------|
+    | Types / Structs / Enums   | PascalCase           | MemoryAccess, Privilege         |
+    | Functions                 | snake_case           | execute_load, get_csr_value     |
+    | Variables / Let bindings  | snake_case           | mem_addr, reg_value             |
+    | Constants                 | SCREAMING_SNAKE_CASE | MAX_XLEN, DEFAULT_VALUE         |
+    | Variant                   | Train_case           | State_Stop, State_StopWith_Time |
 *)
 
 type naming_style = 
   | PascalCase            (** PascalCase: MemoryAccess *)
   | SnakeCase             (** snake_case: execute_load *)
   | ScreamingSnakeCase    (** SCREAMING_SNAKE_CASE: MAX_XLEN *)
+  | TrainCase             (** Train_Case: State_Stop *)
   | Any                   (** No check *)
 
 type naming_config = {
@@ -68,13 +70,15 @@ type naming_config = {
   function_style : naming_style;
   variable_style : naming_style;
   constant_style : naming_style;
+  variant_style : naming_style;
 }
 
 (** Default configuration:
     - Types    : PascalCase
     - Functions: snake_case
     - Variables: snake_case
-    - Constants: SCREAMING_SNAKE_CASE *)
+    - Constants: SCREAMING_SNAKE_CASE 
+    - Variant  : Train_Case*)
 val default_config : naming_config
 
 (** Enable naming convention checks (default: false) *)
@@ -88,6 +92,7 @@ val options : (Arg.key * Arg.spec * Arg.doc) list
 val is_pascal_case : string -> bool
 val is_snake_case : string -> bool
 val is_screaming_snake_case : string -> bool
+val is_train_case : string -> bool
 
 val matches_style : string -> naming_style -> bool
 

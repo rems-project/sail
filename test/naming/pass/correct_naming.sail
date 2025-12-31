@@ -13,7 +13,7 @@ union MyUnion = {
   MyConstructor: int
 }
 
-enum MyEnum = { MyMember }
+enum MyEnum = { My_Member }
 
 scattered enum MyScatteredEnum
 
