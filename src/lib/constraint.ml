@@ -406,20 +406,33 @@ let rec call_smt' l abstract extra constraints =
               raise (Reporting.err_general l ("SMT solver killed by signal " ^ string_of_int n))
         in
         Sys.remove input_file;
-        try
-          let _problem, _ = List.find (fun (_, result) -> result = "unsat") smt_output in
-          known_problems := DigestMap.add digest Unsat !known_problems;
-          Unsat
-        with Not_found ->
-          let unsolved = List.filter (fun (_, result) -> result = "unknown") smt_output in
-          if unsolved == [] then (
-            known_problems := DigestMap.add digest Sat !known_problems;
-            Sat
-          )
-          else (
-            known_problems := DigestMap.add digest Unknown !known_problems;
-            Unknown
-          )
+
+        (* The output should contain exactly one of 'unsat', 'sat' or 'unknown'. *)
+        let result =
+          List.fold_left
+            (fun acc (_problem, s) ->
+              (* Trim whitespace because on Windows there are trailing \r's. *)
+              let result =
+                match String.trim s with
+                | "unsat" -> Some Unsat
+                | "sat" -> Some Sat
+                | "unknown" -> Some Unknown
+                | _ -> None
+              in
+              match (acc, result) with
+              | None, None -> None
+              | None, Some r -> Some r
+              | Some r, None -> Some r
+              | Some _, Some _ -> raise (Reporting.err_general l "SMT solver returned inconsistent results")
+            )
+            None smt_output
+        in
+
+        match result with
+        | None -> raise (Reporting.err_general l "SMT solver returned no results")
+        | Some result ->
+            known_problems := DigestMap.add digest result !known_problems;
+            result
       )
   in
   ( ( match result with
