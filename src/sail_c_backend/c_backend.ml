@@ -203,6 +203,16 @@ let c_if_else cond then_block else_block =
 
 let c_return exp = string "return" ^^ space ^^ exp ^^ semi
 
+let c_case_block b = nest 2 (separate hardline ([lbrace] @ b @ [c_stmt "break"])) ^^ hardline ^^ rbrace
+
+(* Generate a C switch statement. There's no default case. *)
+let c_switch cond cases =
+  string "switch" ^^ space ^^ cond ^^ space ^^ lbrace ^^ hardline
+  ^^ separate_map hardline
+       (fun (case_exp, case_block) -> string "case" ^^ space ^^ case_exp ^^ colon ^^ space ^^ c_case_block case_block)
+       cases
+  ^^ hardline ^^ rbrace
+
 module C_config (Opts : sig
   val branch_coverage : out_channel option
   val assert_to_exception : bool
@@ -1731,21 +1741,15 @@ module Codegen (Config : CODEGEN_CONFIG) = struct
         let codegen_tu (ctor_id, ctyp) =
           separate space [string "struct"; lbrace; string (sgen_ctyp ctyp); codegen_id ctor_id ^^ semi; rbrace]
         in
-        (* Create an if, else if, ... block that does something for each constructor *)
-        let rec each_ctor v f = function
-          | [] -> string "{}"
-          | [(ctor_id, ctyp)] -> begin
-              match f ctor_id ctyp with
-              | None -> string "{}"
-              | Some op -> c_if (ksprintf string "(%skind == Kind_%s)" v (sgen_id ctor_id)) [op]
-            end
-          | (ctor_id, ctyp) :: ctors -> begin
-              match f ctor_id ctyp with
-              | None -> each_ctor v f ctors
-              | Some op ->
-                  c_if (ksprintf string "(%skind == Kind_%s)" v (sgen_id ctor_id)) [op]
-                  ^^ space ^^ string "else" ^^ space ^^ each_ctor v f ctors
-            end
+        (* Create a switch that does something for each constructor *)
+        let each_ctor v f ctors =
+          c_switch (ksprintf string "(%skind)" v)
+            (List.filter_map
+               (fun (ctor_id, ctyp) ->
+                 Option.map (fun op -> (ksprintf string "Kind_%s" (sgen_id ctor_id), [op])) (f ctor_id ctyp)
+               )
+               ctors
+            )
         in
         let codegen_init =
           let n = sgen_id id in
@@ -1814,13 +1818,19 @@ module Codegen (Config : CODEGEN_CONFIG) = struct
                  (sprintf "op2.variants.%s" (sgen_id ctor_id))
               )
           in
-          let rec codegen_eq_tests = function
-            | [] -> c_return (string "false")
-            | (ctor_id, ctyp) :: ctors ->
-                c_if
-                  (ksprintf string "(op1.kind == Kind_%s && op2.kind == Kind_%s)" (sgen_id ctor_id) (sgen_id ctor_id))
-                  [codegen_eq_test ctor_id ctyp]
-                ^^ space ^^ string "else" ^^ space ^^ codegen_eq_tests ctors
+          let codegen_eq_tests ctors =
+            c_if (ksprintf string "(op1.kind != op2.kind)") [c_return (string "false")]
+            ^^ hardline
+            ^^ c_switch (string "(op1.kind)")
+                 (List.map
+                    (fun (ctor_id, ctyp) ->
+                      (ksprintf string "Kind_%s" (sgen_id ctor_id), [codegen_eq_test ctor_id ctyp])
+                    )
+                    ctors
+                 )
+            ^^ hardline
+            (* This should be unreachable. *)
+            ^^ c_return (string "false")
           in
           let n = sgen_id id in
           c_function ~return:"static bool" (sail_equal n "struct %s op1, struct %s op2" n n) [codegen_eq_tests tus]
