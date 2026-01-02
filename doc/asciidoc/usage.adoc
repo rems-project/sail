@@ -234,10 +234,6 @@ indicated by starting with the letter `d`.
 * `--enum-casts` Allow elements of enumerations to be
   automatically cast to numbers.
 
-* `--memo-z3` Memoize calls to the Z3 solver. This can greatly improve
-  typechecking times if you are repeatedly typechecking the same
-  specification while developing it.
-
 * `--no-lexp-bounds-check` Turn off bounds checking in the left hand
   side of assignments. This option only exists for some Sail translated
   from ASL (as ASL does not do compile-time bounds checking here).

@@ -308,10 +308,6 @@ let rec options =
       );
       ("-plugin", Arg.String (fun plugin -> load_plugin options plugin), "<file> load a Sail plugin");
       ("-just_check", Arg.Set opt_just_check, " terminate immediately after typechecking");
-      ( "-memo_z3",
-        Arg.Set opt_memo_z3,
-        " memoize calls to z3, improving performance when typechecking repeatedly (default)"
-      );
       ("-no_memo_z3", Arg.Clear opt_memo_z3, " do not memoize calls to z3");
       ( "-memo_z3_path",
         Arg.String (fun f -> opt_memo_z3_path := f),

@@ -5,19 +5,19 @@ SAIL_LIB_DIR:=$(SAIL_DIR)/lib
 SAIL:=$(SAIL_DIR)/sail
 
 aarch64.c: no_vector.sail
-	$(SAIL) $(SAIL_FLAGS) $^ -c -O -undefined_gen -no_lexp_bounds_check -memo_z3 1> aarch64.c
+	$(SAIL) $(SAIL_FLAGS) $^ -c -O -undefined_gen -no_lexp_bounds_check 1> aarch64.c
 
 aarch64_c: aarch64.c
 	gcc -O2 $^ -o aarch64_c -lgmp -I $(SAIL_DIR)/lib
 
 aarch64: no_vector.sail
-	$(SAIL) $(SAIL_FLAGS) $^ -o aarch64 -ocaml -undefined_gen -no_lexp_bounds_check -memo_z3
+	$(SAIL) $(SAIL_FLAGS) $^ -o aarch64 -ocaml -undefined_gen -no_lexp_bounds_check
 
 aarch64_full: full.sail
-	$(SAIL) $^ -o aarch64_full -ocaml -undefined_gen -no_lexp_bounds_check -memo_z3
+	$(SAIL) $^ -o aarch64_full -ocaml -undefined_gen -no_lexp_bounds_check
 
 aarch64.lem: no_vector.sail
-	$(SAIL) $^ -o aarch64 -lem -lem_lib Aarch64_extras -memo_z3 -undefined_gen -no_lexp_bounds_check
+	$(SAIL) $^ -o aarch64 -lem -lem_lib Aarch64_extras -undefined_gen -no_lexp_bounds_check
 aarch64_types.lem: aarch64.lem
 
 Aarch64.thy: aarch64_extras.lem aarch64_types.lem aarch64.lem

@@ -2,7 +2,7 @@
 set -ex
 ../../../sail ../../prelude.sail ../../no_devices.sail ../mono_rewrites.sail \
      aarch64_no_vector/spec.sail aarch64_no_vector/decode_start.sail aarch64_no_vector/decode.sail aarch64_no_vector/decode_end.sail \
-     -no_lexp_bounds_check -memo_z3 -undefined_gen \
+     -no_lexp_bounds_check -undefined_gen \
      -auto_mono -mono_rewrites -dall_split_errors -dmono_continue \
      -lem -lem_mwords -lem_sequential -lem_lib Aarch64_extras -o aarch64_mono
 # Explicitly include replacement prompt files, as Lem's choice of file depends
