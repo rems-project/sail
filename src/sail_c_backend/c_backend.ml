@@ -647,20 +647,6 @@ let rec insert_heap_returns ctx ret_ctyps = function
   | cdef :: cdefs -> cdef :: insert_heap_returns ctx ret_ctyps cdefs
   | [] -> []
 
-(** To keep things neat we use GCC's local labels extension to limit the scope of labels. We do this by iterating over
-    all the blocks and adding a __label__ declaration with all the labels local to that block. The add_local_labels
-    function is called by the code generator just before it outputs C.
-
-    See https://gcc.gnu.org/onlinedocs/gcc/Local-Labels.html **)
-let add_local_labels' instrs =
-  let is_label (I_aux (instr, _)) = match instr with I_label str -> [str] | _ -> [] in
-  let labels = List.concat (List.map is_label instrs) in
-  let local_label_decl = iraw ("__label__ " ^ String.concat ", " labels ^ ";\n") in
-  if labels = [] then instrs else local_label_decl :: instrs
-
-let add_local_labels instrs =
-  match map_instrs add_local_labels' (iblock instrs) with I_aux (I_block instrs, _) -> instrs | _ -> assert false
-
 (**************************************************************************)
 (* 5. Optimizations                                                       *)
 (**************************************************************************)
@@ -2288,7 +2274,6 @@ module Codegen (Config : CODEGEN_CONFIG) = struct
               )
           else ();
 
-          let instrs = add_local_labels instrs in
           let args =
             Util.string_of_list ", "
               (fun x -> x)
@@ -2352,7 +2337,6 @@ module Codegen (Config : CODEGEN_CONFIG) = struct
         if Config.cpp then [FunctionDefinition finish_impl; FunctionDeclaration finish_decl]
         else [FunctionDefinition finish_impl]
     | CDEF_let (number, bindings, instrs) ->
-        let instrs = add_local_labels instrs in
         let setup = List.concat (List.map (fun (id, ctyp) -> [idecl (id_loc id) ctyp (name id)]) bindings) in
         let cleanup = List.concat (List.map (fun (id, ctyp) -> [iclear ~loc:(id_loc id) ctyp (name id)]) bindings) in
         let variable_defs =
