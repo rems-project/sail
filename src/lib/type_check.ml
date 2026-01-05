@@ -3137,6 +3137,18 @@ and bind_vector_concat_generic :
     )
   in
 
+  let check_final_length nexp =
+    match typ_opt with
+    | Some (required_length, _) ->
+        if not (prove __POS__ env (nc_eq nexp (nconstant required_length))) then
+          typ_error l
+            (Printf.sprintf
+               "Vector concatentation pattern does not have the correct width.\nExpected width %s, found %s."
+               (Big_int.to_string required_length) (string_of_nexp nexp)
+            )
+    | None -> ()
+  in
+
   (* Try to infer any subpatterns, skipping those we cannot infer *)
   let fold_pats (pats, env, guards) pat =
     let wrap_ok (x, y, z) = (VC_elem_ok x, y, z) in
@@ -3255,13 +3267,16 @@ and bind_vector_concat_generic :
         match uninferred with
         | Some (total_len, uninferred_pat) ->
             let total_len = nconstant total_len in
+            check_final_length total_len;
             let uninferred_len = nexp_simp (nminus total_len inferred_len) in
             let checked_pat, env, guards' = funcs.bind env uninferred_pat (vector_typ uninferred_len elem_typ) in
             ( annotate (before_uninferred @ [checked_pat] @ after_uninferred) (vector_typ total_len elem_typ),
               env,
               guards' @ guards
             )
-        | None -> (annotate before_uninferred (dvector_typ env inferred_len elem_typ), env, guards)
+        | None ->
+            check_final_length inferred_len;
+            (annotate before_uninferred (dvector_typ env inferred_len elem_typ), env, guards)
       )
     | None -> (
         let fold_len len pat =
@@ -3276,6 +3291,7 @@ and bind_vector_concat_generic :
         match uninferred with
         | Some (total_len, uninferred_pat) ->
             let total_len = nconstant total_len in
+            check_final_length total_len;
             let uninferred_len = nexp_simp (nminus total_len inferred_len) in
             let uninferred_len = check_constant_len (funcs.get_loc uninferred_pat) uninferred_len in
             let checked_pat, env, guards' = funcs.bind env uninferred_pat (bitvector_typ uninferred_len) in
@@ -3283,7 +3299,9 @@ and bind_vector_concat_generic :
               env,
               guards' @ guards
             )
-        | None -> (annotate before_uninferred (bitvector_typ inferred_len), env, guards)
+        | None ->
+            check_final_length inferred_len;
+            (annotate before_uninferred (bitvector_typ inferred_len), env, guards)
       )
   )
 
