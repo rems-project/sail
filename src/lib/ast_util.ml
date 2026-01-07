@@ -1349,7 +1349,7 @@ let string_of_lit (L_aux (lit, _)) =
   | L_hex hex -> "0x" ^ string_of_hex_lit ~case:Uppercase hex
   | L_bin bin -> "0b" ^ string_of_bin_lit bin
   | L_undef -> "undefined"
-  | L_real r -> r
+  | L_real r -> Q.to_string (Util.Rational.from_rocq r)
   | L_string str -> "\"" ^ str ^ "\""
 
 let string_of_order (Ord_aux (aux, _)) = match aux with Ord_inc -> "inc" | Ord_dec -> "dec"

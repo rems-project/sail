@@ -91,6 +91,11 @@ module Z =
 
   let sub = Big_int_Z.sub_big_int
 
+  (** val mul :
+      Big_int_Z.big_int -> Big_int_Z.big_int -> Big_int_Z.big_int **)
+
+  let mul = Big_int_Z.mult_big_int
+
   (** val compare : Big_int_Z.big_int -> Big_int_Z.big_int -> comparison **)
 
   let compare = (fun x y -> let s = Big_int_Z.compare_big_int x y in
@@ -102,6 +107,10 @@ module Z =
     match compare x y with
     | Lt -> true
     | _ -> false
+
+  (** val eqb : Big_int_Z.big_int -> Big_int_Z.big_int -> bool **)
+
+  let eqb = Big_int_Z.eq_big_int
 
   (** val to_nat : Big_int_Z.big_int -> Big_int_Z.big_int **)
 

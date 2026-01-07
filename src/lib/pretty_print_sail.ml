@@ -286,7 +286,9 @@ module Printer (Config : PRINT_CONFIG) = struct
       | L_num i -> Big_int.to_string i
       | L_hex hex -> "0x" ^ string_of_hex_lit ~case:Uppercase hex
       | L_bin bin -> "0b" ^ string_of_bin_lit bin
-      | L_real r -> r
+      | L_real r ->
+          let r = Util.Rational.from_rocq r in
+          Printf.sprintf "div_real(to_real(%s), to_real(%s))" (Big_int.to_string (Q.num r)) (Big_int.to_string (Q.den r))
       | L_undef -> "undefined"
       | L_string s -> "\"" ^ String.escaped s ^ "\""
       )

@@ -17,9 +17,13 @@ module Z :
 
   val sub : Big_int_Z.big_int -> Big_int_Z.big_int -> Big_int_Z.big_int
 
+  val mul : Big_int_Z.big_int -> Big_int_Z.big_int -> Big_int_Z.big_int
+
   val compare : Big_int_Z.big_int -> Big_int_Z.big_int -> comparison
 
   val ltb : Big_int_Z.big_int -> Big_int_Z.big_int -> bool
+
+  val eqb : Big_int_Z.big_int -> Big_int_Z.big_int -> bool
 
   val to_nat : Big_int_Z.big_int -> Big_int_Z.big_int
 

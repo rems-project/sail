@@ -388,7 +388,8 @@ let doc_lit ~width (L_aux (lit, l)) =
     )
   | L_undef -> utf8string "(Fail \"undefined value of unsupported type\")"
   | L_string s -> utf8string ("\"" ^ lean_escape_string s ^ "\"")
-  | L_real s -> utf8string s (* TODO test if this is really working *)
+  | L_real r -> utf8string (Q.to_string (Util.Rational.from_rocq r))
+(* TODO test if this is really working *)
 
 let string_of_exp_con (E_aux (e, _)) =
   match e with

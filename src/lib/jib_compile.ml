@@ -467,7 +467,8 @@ module Make (C : CONFIG) = struct
         )
     | AV_lit (L_aux (L_true, _), _) -> ([], V_lit (VL_bool true, CT_bool), [])
     | AV_lit (L_aux (L_false, _), _) -> ([], V_lit (VL_bool false, CT_bool), [])
-    | AV_lit (L_aux (L_real str, _), _) ->
+    | AV_lit (L_aux (L_real r, _), _) ->
+        let str = Q.to_string (Util.Rational.from_rocq r) in
         if C.use_real then ([], V_lit (VL_real str, CT_real), [])
         else (
           let gs = ngensym () in

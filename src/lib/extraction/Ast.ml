@@ -1,3 +1,4 @@
+open QArith_base
 open Value_type
 
 type l = Parse_ast.l
@@ -97,7 +98,7 @@ type lit_aux =
 | L_bin of bin_digit non_empty list
 | L_string of string
 | L_undef
-| L_real of string
+| L_real of coq_Q
 
 type nexp_aux =
 | Nexp_id of id

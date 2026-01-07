@@ -480,6 +480,7 @@ void round_up(sail_int *rop, const real op);
 void round_down(sail_int *rop, const real op);
 
 void to_real(real *rop, const sail_int op);
+void frac_to_real(real *rop, const sail_int num, const sail_int den);
 
 bool EQUAL(real)(const real op1, const real op2);
 

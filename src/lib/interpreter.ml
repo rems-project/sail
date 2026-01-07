@@ -289,19 +289,9 @@ module RocqSemantics = Semantics.Make (struct
 
   let is_bitvector tannot = is_bitvector_typ (Type_check.typ_of_tannot tannot)
 
-  let num_equal x y = Big_int.compare x y = 0
-
-  let rational_equal x y = Rational.equal x y
-
   let id_equal_string x s = string_of_id x = s
 
   let string_of_id = string_of_id
-
-  let bits_of_hex_string = Sail_lib.bits_of_string
-
-  let bits_of_bin_string s = List.map Sail_lib.bin_char (Sail_lib.list_of_string s)
-
-  let rational_of_string = Sail_lib.real_of_string
 
   let fallthrough = fallthrough
 

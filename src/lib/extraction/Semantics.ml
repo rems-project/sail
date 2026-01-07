@@ -1,10 +1,12 @@
 open Ast
 open AstInduction
+open BinInt
 open Datatypes
 open IdUtil
 open List0
 open ListDef
 open PeanoNat
+open QArith_base
 open Specif
 open Value_type
 open Wf
@@ -419,15 +421,9 @@ module type SemanticExt =
 
   val is_bitvector : tannot -> bool
 
-  val num_equal : Big_int_Z.big_int -> Big_int_Z.big_int -> bool
-
-  val rational_equal : Rational.t -> Rational.t -> bool
-
   val id_equal_string : id -> string -> bool
 
   val string_of_id : id -> string
-
-  val rational_of_string : string -> Rational.t
 
   val fallthrough : tannot pexp
 
@@ -595,7 +591,7 @@ module Make =
      | L_bin b -> Monad.pure (V_bitvector (bitlist_of_bin_lit b))
      | L_string s -> Monad.pure (V_string s)
      | L_undef -> Monad.get_undefined typ0
-     | L_real r -> Monad.pure (V_real (T.rational_of_string r)))
+     | L_real r -> Monad.pure (V_real r))
 
   (** val same_bits : bit list -> bit list -> bool **)
 
@@ -632,7 +628,7 @@ module Make =
         | V_bool b -> if b then false else true
         | _ -> false)
      | L_num n -> (match v with
-                   | V_int m -> T.num_equal n m
+                   | V_int m -> Z.eqb n m
                    | _ -> false)
      | L_hex s ->
        (match v with
@@ -648,7 +644,7 @@ module Make =
      | L_undef -> false
      | L_real r1 ->
        (match v with
-        | V_real r2 -> T.rational_equal (T.rational_of_string r1) r2
+        | V_real r2 -> coq_Qeq_bool r1 r2
         | _ -> false))
 
   (** val get_struct_field : string -> (string * value) list -> value **)

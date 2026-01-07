@@ -2,6 +2,7 @@ Require Extraction.
 
 From Stdlib Require Import String.
 From Stdlib Require Import ZArith.
+From Stdlib Require Import QArith.
 
 From Stdlib Require ExtrOcamlBasic.
 From Stdlib Require ExtrOcamlNatBigInt.
@@ -13,10 +14,6 @@ Set Extraction Output Directory ".".
 
 From Stdlib Require Import Bool.
 
-Parameter rational : Set.
-
-Extract Inlined Constant rational => "Rational.t".
-
 Inductive bit : Set :=
 | B0 : bit
 | B1 : bit.
@@ -26,7 +23,7 @@ Inductive value : Set :=
 | V_vector : list value -> value
 | V_list : list value -> value
 | V_int : Z -> value
-| V_real : rational -> value
+| V_real : Q -> value
 | V_bool : bool -> value
 | V_tuple : list value -> value
 | V_unit : value
@@ -69,7 +66,7 @@ Module Primops.
       if Z.ltb n (Z.of_nat len) then
         None
       else
-        let extend := (Z.to_nat n) - len in
+        let extend := Nat.sub (Z.to_nat n) len in
         Some (V_bitvector (List.repeat B0 extend ++ bitlist))
     | _ => None
     end.
