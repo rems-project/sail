@@ -1,10 +1,12 @@
 open Ast
 open AstInduction
+open BinInt
 open Datatypes
 open IdUtil
 open List0
 open ListDef
 open PeanoNat
+open QArith_base
 open Specif
 open Value_type
 open Wf
@@ -146,15 +148,9 @@ module type SemanticExt =
 
   val is_bitvector : tannot -> bool
 
-  val num_equal : Big_int_Z.big_int -> Big_int_Z.big_int -> bool
-
-  val rational_equal : Rational.t -> Rational.t -> bool
-
   val id_equal_string : id -> string -> bool
 
   val string_of_id : id -> string
-
-  val rational_of_string : string -> Rational.t
 
   val fallthrough : tannot pexp
 

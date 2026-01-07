@@ -11,6 +11,7 @@ From Stdlib Require Import Lists.List.
 From Stdlib Require Import Program.
 From Stdlib Require Import String.
 From Stdlib Require Import ZArith.
+From Stdlib Require QArith.
 
 Require Import Value_type.
 Require Import Ast.
@@ -506,15 +507,9 @@ Module Type SemanticExt.
 
   Parameter is_bitvector : tannot -> bool.
 
-  Parameter num_equal : Z -> Z -> bool.
-
-  Parameter rational_equal : rational -> rational -> bool.
-
   Parameter id_equal_string : id -> string -> bool.
 
   Parameter string_of_id : id -> string.
-
-  Parameter rational_of_string : string -> rational.
 
   Parameter fallthrough : Ast.pexp tannot.
 
@@ -648,7 +643,7 @@ Module Make (T : SemanticExt).
     | L_num n => pure (V_int n)
     | L_hex h => pure (V_bitvector (bitlist_of_hex_lit h))
     | L_bin b => pure (V_bitvector (bitlist_of_bin_lit b))
-    | L_real r => pure (V_real (T.rational_of_string r))
+    | L_real r => pure (V_real r)
     | L_string s => pure (V_string s)
     | L_undef => get_undefined typ
     end.
@@ -699,11 +694,11 @@ Module Make (T : SemanticExt).
     | (L_unit, V_unit) => true
     | (L_true, V_bool true) => true
     | (L_false, V_bool false) => true
-    | (L_num n, V_int m) => T.num_equal n m
+    | (L_num n, V_int m) => Z.eqb n m
     | (L_hex s, V_bitvector vs) => same_bits (bitlist_of_hex_lit s) vs
     | (L_bin s, V_bitvector vs) => same_bits (bitlist_of_bin_lit s) vs
     | (L_string s1, V_string s2) => String.eqb s1 s2
-    | (L_real r1, V_real r2) => T.rational_equal (T.rational_of_string r1) r2
+    | (L_real r1, V_real r2) => QArith_base.Qeq_bool r1 r2
     | _ => false
     end.
 

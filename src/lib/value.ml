@@ -78,12 +78,14 @@ let rec string_of_value = function
   | V_unit -> "()"
   | V_string str -> "\"" ^ str ^ "\""
   | V_ref str -> "ref " ^ str
-  | V_real r -> Sail_lib.string_of_real r
+  | V_real r -> Sail_lib.string_of_real (Util.Rational.from_rocq r)
   | V_member str -> str
   | V_ctor (str, vals) -> str ^ "(" ^ Util.string_of_list ", " string_of_value vals ^ ")"
   | V_record record ->
       "struct {" ^ Util.string_of_list ", " (fun (field, v) -> field ^ " = " ^ string_of_value v) record ^ "}"
   | V_attempted_read _ -> assert false
+
+let mk_real r = V_real (Util.Rational.to_rocq r)
 
 let rec eq_value v1 v2 =
   match (v1, v2) with
@@ -91,7 +93,7 @@ let rec eq_value v1 v2 =
   | V_vector v1s, V_vector v2s when List.length v1s = List.length v2s -> List.for_all2 eq_value v1s v2s
   | V_list v1s, V_list v2s when List.length v1s = List.length v2s -> List.for_all2 eq_value v1s v2s
   | V_int n, V_int m -> Big_int.equal n m
-  | V_real n, V_real m -> Rational.equal n m
+  | V_real n, V_real m -> Q.equal (Util.Rational.from_rocq n) (Util.Rational.from_rocq m)
   | V_bool b1, V_bool b2 -> b1 = b2
   | V_tuple v1s, V_tuple v2s when List.length v1s = List.length v2s -> List.for_all2 eq_value v1s v2s
   | V_unit, V_unit -> true
@@ -126,7 +128,7 @@ let coerce_listlike = function V_tuple vs -> vs | V_list vs -> vs | V_unit -> []
 
 let coerce_int = function V_int i -> i | _ -> assert false
 
-let coerce_real = function V_real r -> r | _ -> assert false
+let coerce_real = function V_real r -> Util.Rational.from_rocq r | _ -> assert false
 
 let coerce_cons = function V_list (v :: vs) -> Some (v, vs) | V_list [] -> None | _ -> assert false
 
@@ -515,7 +517,7 @@ let value_concat_str = function
   | [v1; v2] -> V_string (Sail_lib.concat_str (coerce_string v1, coerce_string v2))
   | _ -> failwith "value concat_str"
 
-let value_to_real = function [v] -> V_real (Sail_lib.to_real (coerce_int v)) | _ -> failwith "value to_real"
+let value_to_real = function [v] -> mk_real (Sail_lib.to_real (coerce_int v)) | _ -> failwith "value to_real"
 
 let value_print_real = function
   | [v1; v2] ->
@@ -523,12 +525,12 @@ let value_print_real = function
       V_unit
   | _ -> failwith "value print_real"
 
-let value_random_real = function [_] -> V_real (Sail_lib.random_real ()) | _ -> failwith "value random_real"
+let value_random_real = function [_] -> mk_real (Sail_lib.random_real ()) | _ -> failwith "value random_real"
 
-let value_sqrt_real = function [v] -> V_real (Sail_lib.sqrt_real (coerce_real v)) | _ -> failwith "value sqrt_real"
+let value_sqrt_real = function [v] -> mk_real (Sail_lib.sqrt_real (coerce_real v)) | _ -> failwith "value sqrt_real"
 
 let value_quotient_real = function
-  | [v1; v2] -> V_real (Sail_lib.quotient_real (coerce_real v1, coerce_real v2))
+  | [v1; v2] -> mk_real (Sail_lib.quotient_real (coerce_real v1, coerce_real v2))
   | _ -> failwith "value quotient_real"
 
 let value_round_up = function [v] -> V_int (Sail_lib.round_up (coerce_real v)) | _ -> failwith "value round_up"
@@ -544,22 +546,22 @@ let value_rem_round_zero = function
   | _ -> failwith "value rem_round_zero"
 
 let value_add_real = function
-  | [v1; v2] -> V_real (Sail_lib.add_real (coerce_real v1, coerce_real v2))
+  | [v1; v2] -> mk_real (Sail_lib.add_real (coerce_real v1, coerce_real v2))
   | _ -> failwith "value add_real"
 
 let value_sub_real = function
-  | [v1; v2] -> V_real (Sail_lib.sub_real (coerce_real v1, coerce_real v2))
+  | [v1; v2] -> mk_real (Sail_lib.sub_real (coerce_real v1, coerce_real v2))
   | _ -> failwith "value sub_real"
 
 let value_mult_real = function
-  | [v1; v2] -> V_real (Sail_lib.mult_real (coerce_real v1, coerce_real v2))
+  | [v1; v2] -> mk_real (Sail_lib.mult_real (coerce_real v1, coerce_real v2))
   | _ -> failwith "value mult_real"
 
 let value_div_real = function
-  | [v1; v2] -> V_real (Sail_lib.div_real (coerce_real v1, coerce_real v2))
+  | [v1; v2] -> mk_real (Sail_lib.div_real (coerce_real v1, coerce_real v2))
   | _ -> failwith "value div_real"
 
-let value_abs_real = function [v] -> V_real (Sail_lib.abs_real (coerce_real v)) | _ -> failwith "value abs_real"
+let value_abs_real = function [v] -> mk_real (Sail_lib.abs_real (coerce_real v)) | _ -> failwith "value abs_real"
 
 let value_eq_real = function
   | [v1; v2] -> V_bool (Sail_lib.eq_real (coerce_real v1, coerce_real v2))

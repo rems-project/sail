@@ -124,6 +124,19 @@ module Pos =
       (fun _ -> Big_int_Z.unit_big_int)
       x
 
+  (** val mul :
+      Big_int_Z.big_int -> Big_int_Z.big_int -> Big_int_Z.big_int **)
+
+  let rec mul x y =
+    (fun f2p1 f2p f1 p ->
+  if Big_int_Z.le_big_int p Big_int_Z.unit_big_int then f1 () else
+  let (q,r) = Big_int_Z.quomod_big_int p (Big_int_Z.big_int_of_int 2) in
+  if Big_int_Z.eq_big_int r Big_int_Z.zero_big_int then f2p q else f2p1 q)
+      (fun p -> add y (Big_int_Z.mult_int_big_int 2 (mul p y)))
+      (fun p -> Big_int_Z.mult_int_big_int 2 (mul p y))
+      (fun _ -> y)
+      x
+
   (** val compare_cont :
       comparison -> Big_int_Z.big_int -> Big_int_Z.big_int -> comparison **)
 
@@ -165,6 +178,42 @@ module Pos =
 
   let compare =
     compare_cont Eq
+
+  (** val eqb : Big_int_Z.big_int -> Big_int_Z.big_int -> bool **)
+
+  let rec eqb p q =
+    (fun f2p1 f2p f1 p ->
+  if Big_int_Z.le_big_int p Big_int_Z.unit_big_int then f1 () else
+  let (q,r) = Big_int_Z.quomod_big_int p (Big_int_Z.big_int_of_int 2) in
+  if Big_int_Z.eq_big_int r Big_int_Z.zero_big_int then f2p q else f2p1 q)
+      (fun p0 ->
+      (fun f2p1 f2p f1 p ->
+  if Big_int_Z.le_big_int p Big_int_Z.unit_big_int then f1 () else
+  let (q,r) = Big_int_Z.quomod_big_int p (Big_int_Z.big_int_of_int 2) in
+  if Big_int_Z.eq_big_int r Big_int_Z.zero_big_int then f2p q else f2p1 q)
+        (fun q0 -> eqb p0 q0)
+        (fun _ -> false)
+        (fun _ -> false)
+        q)
+      (fun p0 ->
+      (fun f2p1 f2p f1 p ->
+  if Big_int_Z.le_big_int p Big_int_Z.unit_big_int then f1 () else
+  let (q,r) = Big_int_Z.quomod_big_int p (Big_int_Z.big_int_of_int 2) in
+  if Big_int_Z.eq_big_int r Big_int_Z.zero_big_int then f2p q else f2p1 q)
+        (fun _ -> false)
+        (fun q0 -> eqb p0 q0)
+        (fun _ -> false)
+        q)
+      (fun _ ->
+      (fun f2p1 f2p f1 p ->
+  if Big_int_Z.le_big_int p Big_int_Z.unit_big_int then f1 () else
+  let (q,r) = Big_int_Z.quomod_big_int p (Big_int_Z.big_int_of_int 2) in
+  if Big_int_Z.eq_big_int r Big_int_Z.zero_big_int then f2p q else f2p1 q)
+        (fun _ -> false)
+        (fun _ -> false)
+        (fun _ -> true)
+        q)
+      p
 
   (** val iter_op : ('a1 -> 'a1 -> 'a1) -> Big_int_Z.big_int -> 'a1 -> 'a1 **)
 

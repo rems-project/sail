@@ -1278,7 +1278,7 @@ let to_ast_lit (P.L_aux (lit, l)) =
           | Some b -> L_bin b
           | None -> raise (Reporting.err_syntax_loc l "Failed to parse binary bitvector literal")
         )
-      | P.L_real r -> L_real r
+      | P.L_real r -> L_real (Util.Rational.to_rocq (Sail_lib.real_of_string r))
       | P.L_string s -> L_string s
       | P.L_multiline_string lines -> L_string (String.concat "\n" (List.map Scanf.unescaped lines))
       ),

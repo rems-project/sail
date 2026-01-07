@@ -1526,6 +1526,13 @@ void to_real(real *rop, const sail_int op)
   mpq_canonicalize(*rop);
 }
 
+void frac_to_real(real *rop, const sail_int num, const sail_int den)
+{
+  mpz_set(mpq_numref(*rop), num);
+  mpz_set(mpq_denref(*rop), den);
+  mpq_canonicalize(*rop);
+}
+
 bool EQUAL(real)(const real op1, const real op2)
 {
   return mpq_cmp(op1, op2) == 0;
@@ -1584,16 +1591,26 @@ void CREATE_OF(real, sail_string)(real *rop, const_sail_string op)
   int total;
 
   mpq_init(*rop);
-  gmp_sscanf(op, "%Zd.%n%Zd%n", sail_lib_tmp1, &decimal, sail_lib_tmp2, &total);
-
-  int len = total - decimal;
-  mpz_ui_pow_ui(sail_lib_tmp3, 10, len);
-  mpz_set(mpq_numref(*rop), sail_lib_tmp2);
-  mpz_set(mpq_denref(*rop), sail_lib_tmp3);
-  mpq_canonicalize(*rop);
-  mpz_set(mpq_numref(sail_lib_tmp_real), sail_lib_tmp1);
-  mpz_set_ui(mpq_denref(sail_lib_tmp_real), 1);
-  mpq_add(*rop, *rop, sail_lib_tmp_real);
+  if (gmp_sscanf(op, "%Zd.%n%Zd%n", sail_lib_tmp1, &decimal, sail_lib_tmp2, &total) == 2) {
+    int len = total - decimal;
+    mpz_ui_pow_ui(sail_lib_tmp3, 10, len);
+    mpz_set(mpq_numref(*rop), sail_lib_tmp2);
+    mpz_set(mpq_denref(*rop), sail_lib_tmp3);
+    mpq_canonicalize(*rop);
+    mpz_set(mpq_numref(sail_lib_tmp_real), sail_lib_tmp1);
+    mpz_set_ui(mpq_denref(sail_lib_tmp_real), 1);
+    mpq_add(*rop, *rop, sail_lib_tmp_real);
+  } else if (gmp_sscanf(op, "%Zd/%Zd", sail_lib_tmp1, sail_lib_tmp2, &total) == 2) {
+    mpz_set(mpq_numref(*rop), sail_lib_tmp1);
+    mpz_set(mpq_denref(*rop), sail_lib_tmp2);
+    mpq_canonicalize(*rop);
+  } else if (gmp_sscanf(op, "%Zd", sail_lib_tmp1, &total) == 1) {
+    mpz_set(mpq_numref(*rop), sail_lib_tmp1);
+    mpz_set_ui(mpq_denref(*rop), 1);
+    mpq_canonicalize(*rop);
+  } else {
+    fprintf(stderr, "Failed to parse rational number\n");
+  }
 }
 
 void CONVERT_OF(real, sail_string)(real *rop, const_sail_string op)
@@ -1601,16 +1618,26 @@ void CONVERT_OF(real, sail_string)(real *rop, const_sail_string op)
   int decimal;
   int total;
 
-  gmp_sscanf(op, "%Zd.%n%Zd%n", sail_lib_tmp1, &decimal, sail_lib_tmp2, &total);
-
-  int len = total - decimal;
-  mpz_ui_pow_ui(sail_lib_tmp3, 10, len);
-  mpz_set(mpq_numref(*rop), sail_lib_tmp2);
-  mpz_set(mpq_denref(*rop), sail_lib_tmp3);
-  mpq_canonicalize(*rop);
-  mpz_set(mpq_numref(sail_lib_tmp_real), sail_lib_tmp1);
-  mpz_set_ui(mpq_denref(sail_lib_tmp_real), 1);
-  mpq_add(*rop, *rop, sail_lib_tmp_real);
+  if (gmp_sscanf(op, "%Zd.%n%Zd%n", sail_lib_tmp1, &decimal, sail_lib_tmp2, &total) == 2) {
+    int len = total - decimal;
+    mpz_ui_pow_ui(sail_lib_tmp3, 10, len);
+    mpz_set(mpq_numref(*rop), sail_lib_tmp2);
+    mpz_set(mpq_denref(*rop), sail_lib_tmp3);
+    mpq_canonicalize(*rop);
+    mpz_set(mpq_numref(sail_lib_tmp_real), sail_lib_tmp1);
+    mpz_set_ui(mpq_denref(sail_lib_tmp_real), 1);
+    mpq_add(*rop, *rop, sail_lib_tmp_real);
+  } else if (gmp_sscanf(op, "%Zd/%Zd", sail_lib_tmp1, sail_lib_tmp2, &total) == 2) {
+    mpz_set(mpq_numref(*rop), sail_lib_tmp1);
+    mpz_set(mpq_denref(*rop), sail_lib_tmp2);
+    mpq_canonicalize(*rop);
+  } else if (gmp_sscanf(op, "%Zd", sail_lib_tmp1, &total) == 1) {
+    mpz_set(mpq_numref(*rop), sail_lib_tmp1);
+    mpz_set_ui(mpq_denref(*rop), 1);
+    mpq_canonicalize(*rop);
+  } else {
+    fprintf(stderr, "Failed to parse rational number\n");
+  }
 }
 
 unit print_real(const_sail_string str, const real op)

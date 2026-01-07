@@ -5,6 +5,7 @@ Set Extraction Output Directory ".".
 
 From Stdlib Require Import String.
 From Stdlib Require Import ZArith.
+From Stdlib Require Import QArith.
 
 Require Import Value_type.
 
@@ -136,7 +137,7 @@ Inductive lit_aux : Set :=
 | L_bin : list (non_empty bin_digit) -> lit_aux
 | L_string : string -> lit_aux
 | L_undef : lit_aux
-| L_real : string -> lit_aux.
+| L_real : Q -> lit_aux.
 
 Inductive nexp_aux : Set :=
 | Nexp_id : id -> nexp_aux

@@ -1,7 +1,8 @@
 open BinInt
 open Datatypes
 open ListDef
-open Nat0
+open PeanoNat
+open QArith_base
 
 type bit =
 | B0
@@ -12,7 +13,7 @@ type value =
 | V_vector of value list
 | V_list of value list
 | V_int of Big_int_Z.big_int
-| V_real of Rational.t
+| V_real of coq_Q
 | V_bool of bool
 | V_tuple of value list
 | V_unit
