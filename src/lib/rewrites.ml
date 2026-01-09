@@ -4892,7 +4892,9 @@ let instantiate_rewriter rewriter args =
 
 let all_rewriters =
   [
-    ("recheck_defs", checking_rewriter (fun _ ast -> Type_error.check initial_env (strip_ast ast)));
+    ( "recheck_defs",
+      checking_rewriter (fun _ ast -> Type_error.check initial_env ~internal:"During rewriting" (strip_ast ast))
+    );
     ("realize_mappings", base_rewriter rewrite_ast_realize_mappings);
     ("remove_duplicate_valspecs", basic_rewriter remove_duplicate_valspecs);
     ("toplevel_string_append", base_rewriter rewrite_ast_toplevel_string_append);
