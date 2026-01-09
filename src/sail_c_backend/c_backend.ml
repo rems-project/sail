@@ -1749,9 +1749,10 @@ module Codegen (Config : CODEGEN_CONFIG) = struct
         (* Create a switch that does something for each constructor *)
         let each_ctor v f ctors =
           c_switch (ksprintf string "(%skind)" v)
-            (List.filter_map
+            (List.map
                (fun (ctor_id, ctyp) ->
-                 Option.map (fun op -> (ksprintf string "Kind_%s" (sgen_id ctor_id), [op])) (f ctor_id ctyp)
+                 let enum_label = ksprintf string "Kind_%s" (sgen_id ctor_id) in
+                 (enum_label, match f ctor_id ctyp with Some op -> [op] | None -> [])
                )
                ctors
             )
