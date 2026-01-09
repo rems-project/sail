@@ -207,11 +207,16 @@ let c_case_block b = nest 2 (separate hardline ([lbrace] @ b @ [c_stmt "break"])
 
 (* Generate a C switch statement. There's no default case. *)
 let c_switch cond cases =
-  string "switch" ^^ space ^^ cond ^^ space ^^ lbrace ^^ hardline
-  ^^ separate_map hardline
-       (fun (case_exp, case_block) -> string "case" ^^ space ^^ case_exp ^^ colon ^^ space ^^ c_case_block case_block)
-       cases
-  ^^ hardline ^^ rbrace
+  match cases with
+  | [] -> string "{}"
+  | _ ->
+      string "switch" ^^ space ^^ cond ^^ space ^^ lbrace ^^ hardline
+      ^^ separate_map hardline
+           (fun (case_exp, case_block) ->
+             string "case" ^^ space ^^ case_exp ^^ colon ^^ space ^^ c_case_block case_block
+           )
+           cases
+      ^^ hardline ^^ rbrace
 
 module C_config (Opts : sig
   val branch_coverage : out_channel option
