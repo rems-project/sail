@@ -963,10 +963,15 @@ and expand_synonyms env (Typ_aux (typ, l)) =
       let env = add_constraint nc env in
       let typ = expand_synonyms env typ in
       (* When simplifying type variables might be removed (e.g., in 'b & false). Don't bind them or
-         the type checker can get upset. *)
-      let used_vars = KidSet.union (tyvars_of_constraint nc) (tyvars_of_typ typ) in
+         the type checker can get upset.  Ideally we would do a careful dependency analysis to
+         remove unnecessary parts of nc, but it's enough for (e.g.) subtyping to drop completely
+         unused variables, and to drop the existential wrapper if there's a closed type. *)
+      let typ_vars = tyvars_of_typ typ in
+      let used_vars = KidSet.union (tyvars_of_constraint nc) typ_vars in
       let kopts = List.filter (fun k -> KidSet.mem (kopt_kid k) used_vars) kopts in
-      match kopts with [] -> typ | _ -> Typ_aux (Typ_exist (kopts, nc, typ), l)
+      match (kopts, KidSet.is_empty typ_vars) with
+      | [], _ | _, true -> typ
+      | _, _ -> Typ_aux (Typ_exist (kopts, nc, typ), l)
     )
   | Typ_var v -> Typ_aux (Typ_var v, l)
 
