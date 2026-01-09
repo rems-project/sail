@@ -102,42 +102,44 @@ module Printer (Config : PRINT_CONFIG) = struct
     | TP_var kid -> doc_kid kid
     | TP_app (f, tpats) -> doc_id f ^^ parens (separate_map (comma ^^ space) doc_typ_pat tpats)
 
-  let rec doc_nexp nexp =
-    let rec atomic_nexp (Nexp_aux (n_aux, _) as nexp) =
-      match n_aux with
-      | Nexp_constant c -> string (Big_int.to_string c)
-      | Nexp_app (Id_aux (Operator op, _), [n1; n2]) -> separate space [atomic_nexp n1; string op; atomic_nexp n2]
-      | Nexp_app (_id, _nexps) -> string (string_of_nexp nexp)
-      (* This segfaults??!!!!
-         doc_id id ^^ (parens (separate_map (comma ^^ space) doc_nexp nexps))
-      *)
-      | Nexp_id id -> doc_id id
-      | Nexp_var kid -> doc_kid kid
-      | _ -> parens (nexp0 nexp)
-    and nexp0 (Nexp_aux (n_aux, _) as nexp) =
-      match n_aux with
-      | Nexp_if (i, t, e) -> separate space [string "if"; doc_nc i; string "then"; nexp1 t; string "else"; nexp1 e]
-      | _ -> nexp1 nexp
-    and nexp1 (Nexp_aux (n_aux, _) as nexp) =
-      match n_aux with
-      | Nexp_sum (n1, Nexp_aux (Nexp_neg n2, _)) | Nexp_minus (n1, n2) ->
-          separate space [nexp1 n1; string "-"; nexp2 n2]
-      | Nexp_sum (n1, Nexp_aux (Nexp_constant c, _)) when Big_int.less c Big_int.zero ->
-          separate space [nexp1 n1; string "-"; doc_int (Big_int.abs c)]
-      | Nexp_sum (n1, n2) -> separate space [nexp1 n1; string "+"; nexp2 n2]
-      | _ -> nexp2 nexp
-    and nexp2 (Nexp_aux (n_aux, _) as nexp) =
-      match n_aux with Nexp_times (n1, n2) -> separate space [nexp2 n1; string "*"; nexp3 n2] | _ -> nexp3 nexp
-    and nexp3 (Nexp_aux (n_aux, _) as nexp) =
-      match n_aux with
-      | Nexp_neg n -> separate space [string "-"; atomic_nexp n]
-      | Nexp_exp n -> separate space [string "2"; string "^"; atomic_nexp n]
-      | _ -> atomic_nexp nexp
-    in
-    nexp0 nexp
+  let rec atomic_nexp (Nexp_aux (n_aux, _) as nexp) =
+    match n_aux with
+    | Nexp_constant c -> string (Big_int.to_string c)
+    | Nexp_app (Id_aux (Operator op, _), [n1; n2]) -> separate space [atomic_nexp n1; string op; atomic_nexp n2]
+    | Nexp_app (_id, _nexps) -> string (string_of_nexp nexp)
+    (* This segfaults??!!!!
+       doc_id id ^^ (parens (separate_map (comma ^^ space) doc_nexp nexps))
+    *)
+    | Nexp_id id -> doc_id id
+    | Nexp_var kid -> doc_kid kid
+    | _ -> parens (nexp0 nexp)
+
+  and nexp0 (Nexp_aux (n_aux, _) as nexp) =
+    match n_aux with
+    | Nexp_if (i, t, e) -> separate space [string "if"; doc_nc i; string "then"; nexp1 t; string "else"; nexp1 e]
+    | _ -> nexp1 nexp
+
+  and nexp1 (Nexp_aux (n_aux, _) as nexp) =
+    match n_aux with
+    | Nexp_sum (n1, Nexp_aux (Nexp_neg n2, _)) | Nexp_minus (n1, n2) -> separate space [nexp1 n1; string "-"; nexp2 n2]
+    | Nexp_sum (n1, Nexp_aux (Nexp_constant c, _)) when Big_int.less c Big_int.zero ->
+        separate space [nexp1 n1; string "-"; doc_int (Big_int.abs c)]
+    | Nexp_sum (n1, n2) -> separate space [nexp1 n1; string "+"; nexp2 n2]
+    | _ -> nexp2 nexp
+
+  and nexp2 (Nexp_aux (n_aux, _) as nexp) =
+    match n_aux with Nexp_times (n1, n2) -> separate space [nexp2 n1; string "*"; nexp3 n2] | _ -> nexp3 nexp
+
+  and nexp3 (Nexp_aux (n_aux, _) as nexp) =
+    match n_aux with
+    | Nexp_neg n -> separate space [string "-"; atomic_nexp n]
+    | Nexp_exp n -> separate space [string "2"; string "^"; atomic_nexp n]
+    | _ -> atomic_nexp nexp
+
+  and doc_nexp nexp = nexp0 nexp
 
   and doc_nc nc =
-    let nc_op op n1 n2 = separate space [doc_nexp n1; string op; doc_nexp n2] in
+    let nc_op op n1 n2 = separate space [atomic_nexp n1; string op; atomic_nexp n2] in
     let rec atomic_nc (NC_aux (nc_aux, _) as nc) =
       match nc_aux with
       | NC_id id -> doc_id id
@@ -186,7 +188,7 @@ module Printer (Config : PRINT_CONFIG) = struct
       let conjs = constraint_conj nc in
       separate_map (space ^^ string "&" ^^ space) atomic_nc conjs
     in
-    atomic_nc (constraint_simp nc)
+    atomic_nc nc
 
   and doc_typ (Typ_aux (typ_aux, l)) =
     match typ_aux with
