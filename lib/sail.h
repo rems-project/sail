@@ -113,6 +113,10 @@ void cleanup_library(void);
 /* Return true if two instances of the type are semantically equal
    (e.g. two strings are compared by values, not by their addresses). */
 #define EQUAL(type) eq_ ## type
+/* Seralize a value into a byte buffer. */
+#define SERIALIZE(type) serialize_ ## type
+/* Deeralize a value from a byte buffer. */
+#define DESERIALIZE(type) deserialize_ ## type
 
 #define SAIL_BUILTIN_TYPE_IMPL(type, const_type)\
   void create_ ## type(type *);\
@@ -550,6 +554,9 @@ void get_time_ns(sail_int*, const unit);
 /* ***** ARM optimisations ***** */
 
 void arm_align(lbits *, const lbits, const sail_int);
+
+// TODO: Add SERIALIZE and DESERIALIZE implementations for all
+// of the non-aggregate types.
 
 #ifdef __cplusplus
 }
