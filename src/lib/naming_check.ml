@@ -79,20 +79,12 @@ let default_config = {
 }
 
 let is_pascal_case s =
-  if String.length s = 0 then false
-  else
-    let first_char = s.[0] in
-    first_char >= 'A' && first_char <= 'Z' &&
-    not (String.contains s '_')
+  not (String.contains s '_') && (String.length s = 0 || (s.[0] >= 'A' && s.[0] <= 'Z'))
 
 let is_snake_case s =
-  if String.length s = 0 then false
-  else
-    let first_char = s.[0] in
-    (first_char >= 'a' && first_char <= 'z') &&
-    String.for_all (fun c ->
-      (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') || c = '_'
-    ) s
+  String.for_all (fun c ->
+    (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') || c = '_'
+  ) s
 
 let is_screaming_snake_case s =
   if String.length s = 0 then false
