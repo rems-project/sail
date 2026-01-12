@@ -87,13 +87,9 @@ let is_snake_case s =
   ) s
 
 let is_screaming_snake_case s =
-  if String.length s = 0 then false
-  else
-    let first_char = s.[0] in
-    (first_char >= 'A' && first_char <= 'Z') &&
-    String.for_all (fun c ->
-      (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') || c = '_'
-    ) s
+  String.for_all (fun c ->
+    (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') || c = '_'
+  ) s
 
 let is_train_case s =
   if String.length s =0 then false 
