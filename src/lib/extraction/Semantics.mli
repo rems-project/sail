@@ -6,6 +6,7 @@ open Datatypes
 open IdUtil
 open List0
 open ListDef
+open Nat0
 open PeanoNat
 open QArith_base
 open Specif
@@ -14,7 +15,7 @@ open Wf
 
 type binding =
 | Complete of value
-| Partial of ((value * Big_int_Z.big_int) * Big_int_Z.big_int) list
+| Partial of ((value * Big_int_Z.big_int) * Big_int_Z.big_int) non_empty
 
 val combine_binding : binding option -> binding option -> binding option
 
@@ -136,6 +137,13 @@ val bitlist_of_hex_lit : hex_digit non_empty list -> bit list
 
 val bitlist_of_bin_lit : bin_digit non_empty list -> bit list
 
+val update_list : bit list -> Big_int_Z.big_int -> bit -> bit list
+
+val update_subrange : bit list -> Big_int_Z.big_int -> bit list -> bit list
+
+val complete_value :
+  ((value * Big_int_Z.big_int) * Big_int_Z.big_int) non_empty -> value
+
 module type SemanticExt =
  sig
   type tannot
@@ -149,9 +157,6 @@ module type SemanticExt =
   val is_bitvector : tannot -> bool
 
   val fallthrough : tannot pexp
-
-  val complete_value :
-    ((value * Big_int_Z.big_int) * Big_int_Z.big_int) list -> value
  end
 
 module Make :

@@ -248,20 +248,6 @@ let is_interpreter_extern id env = Type_check.Env.is_extern id env "interpreter"
 
 let get_interpreter_extern id env = Type_check.Env.get_extern id env "interpreter"
 
-let complete_value = function
-  | ((v1, n1), m1) :: partial_values ->
-      let max, min =
-        List.fold_left
-          (fun (max, min) ((_, n), m) -> (Big_int.max max (Big_int.max n m), Big_int.min min (Big_int.min n m)))
-          (n1, m1) partial_values
-      in
-      let len = Big_int.sub (Big_int.succ max) min in
-      List.fold_left
-        (fun bv ((slice, n), m) -> value_update_subrange [bv; V_int n; V_int m; slice])
-        (value_zeros [V_int len])
-        (((v1, n1), m1) :: partial_values)
-  | [] -> Reporting.unreachable Parse_ast.Unknown __POS__ "Empty partial binding set"
-
 module RocqSemantics = Semantics.Make (struct
   type tannot = Type_check.tannot
 
@@ -294,8 +280,6 @@ module RocqSemantics = Semantics.Make (struct
   let string_of_id = string_of_id
 
   let fallthrough = fallthrough
-
-  let complete_value vs = complete_value vs
 end)
 
 module Monad = Semantics.Monad

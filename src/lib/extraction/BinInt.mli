@@ -25,9 +25,15 @@ module Z :
 
   val eqb : Big_int_Z.big_int -> Big_int_Z.big_int -> bool
 
+  val max : Big_int_Z.big_int -> Big_int_Z.big_int -> Big_int_Z.big_int
+
+  val min : Big_int_Z.big_int -> Big_int_Z.big_int -> Big_int_Z.big_int
+
   val to_nat : Big_int_Z.big_int -> Big_int_Z.big_int
 
   val of_nat : Big_int_Z.big_int -> Big_int_Z.big_int
+
+  val succ : Big_int_Z.big_int -> Big_int_Z.big_int
 
   val gtb : Big_int_Z.big_int -> Big_int_Z.big_int -> bool
  end
