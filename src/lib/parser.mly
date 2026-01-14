@@ -448,16 +448,16 @@ typquant:
   | kopt_list
     { TypQ_aux (TypQ_tq (List.map qi_id_of_kopt $1), loc $startpos $endpos) }
 
-effect:
+effect_annot:
   | id
     { $1 }
   | Configuration
     { mk_id (Id "configuration") $startpos $endpos }
 
 effect_list:
-  | effect
+  | effect_annot
     { [$1] }
-  | effect Comma effect_list
+  | effect_annot Comma effect_list
     { $1::$3 }
 
 effect_set:
