@@ -23,7 +23,7 @@ Import ListNotations.
 
 Inductive binding :=
 | Complete : value -> binding
-| Partial : list (value * Z * Z) -> binding.
+| Partial : non_empty (value * Z * Z) -> binding.
 
 Definition combine_binding (l r : option binding) : option binding :=
   match (l, r) with
@@ -34,7 +34,8 @@ Definition combine_binding (l r : option binding) : option binding :=
       match (lb, rb) with
       | (Complete v, _) => Some (Complete v)
       | (_, Complete v) => Some (Complete v)
-      | (Partial lv, Partial rv) => Some (Partial (lv ++ rv))
+      | (Partial (Non_empty lv lvs), Partial (Non_empty rv rvs)) =>
+          Some (Partial (Non_empty lv (lvs ++ rv :: rvs)))
       end
   end.
 
@@ -493,6 +494,43 @@ Definition bitlist_of_bin_lit (bin : list (non_empty bin_digit)) : list bit :=
       end
     ) digits.
 
+Definition update_list (xs : list bit) (n : nat) (y : bit) : list bit :=
+  let n := List.length xs - n - 1 in
+  let '(ys, zs) := take_drop n xs in
+  ys ++ [y] ++ List.tl zs.
+
+Fixpoint update_subrange (xs : list bit) (n : nat) (ys : list bit) : list bit :=
+  match ys with
+  | [] => xs
+  | y :: ys =>
+    update_subrange (update_list xs n y) (n - 1) ys
+  end.
+
+Definition complete_value (partial_values : non_empty (value * Z * Z)) : value :=
+  let '(Non_empty (v1, n1, m1) partial_values) := partial_values in
+    let '(max, min) :=
+      List.fold_left
+        (fun range pvalue =>
+         let '(max, min) := range in
+         let '(_, n, m) := pvalue in
+         (Z.max max (Z.max n m), Z.min min (Z.min n m)))
+        partial_values (n1, m1)
+    in
+    let len := Z.sub (Z.succ max) min in
+    let zeros := List.repeat B0 (Z.to_nat len) in
+    let value :=
+      List.fold_left
+        (fun bv pvalue =>
+         let '(slice, n, _) := pvalue in
+         match slice with
+         | V_bitvector slice => update_subrange bv (Z.to_nat n) slice
+         | _ => bv
+         end)
+        ((v1, n1, m1) :: partial_values)
+        zeros
+    in
+    V_bitvector value.
+
 (** Sail annotates terms with custom type annotation data, which we
     don't have access to here. Instead use a functor parameterised by
     the following SemanticExt signature, which can provide the methods we
@@ -509,8 +547,6 @@ Module Type SemanticExt.
   Parameter is_bitvector : tannot -> bool.
 
   Parameter fallthrough : Ast.pexp tannot.
-
-  Parameter complete_value : list (value * Z * Z) -> value.
 End SemanticExt.
 
 Module Make (T : SemanticExt).
@@ -718,7 +754,7 @@ Module Make (T : SemanticExt).
       (fun b =>
          match b with
          | Complete v => v
-         | Partial vs => T.complete_value vs
+         | Partial vs => complete_value vs
          end
       )
       m.
@@ -909,7 +945,7 @@ Module Make (T : SemanticExt).
               (true, [])
         | _ => no_match
         end
-    | P_vector_subrange id n m => (true, IdMap.add id (Partial [(v, n, m)]) empty_bindings)
+    | P_vector_subrange id n m => (true, IdMap.add id (Partial (Non_empty (v, n, m) [])) empty_bindings)
     (* TODO *)
     | P_string_append _ => (true, empty_bindings)
     end.
