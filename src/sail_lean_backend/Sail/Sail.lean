@@ -297,6 +297,7 @@ def trivialChoiceSource : ChoiceSource where
 class ConcurrencyInterfaceV1.Arch where
   va_size : Nat
   pa : Type
+  pa_OfNat {n : Nat} : OfNat pa n
   arch_ak : Type
   translation : Type
   trans_start : Type
