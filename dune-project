@@ -110,6 +110,12 @@ http://www.cl.cam.ac.uk/~pes20/sail/.
     (libsail (= :version))))
 
 (package
+  (name sail_isla_backend)
+  (synopsis "Output Sail Jib IR for Isla symbolic execution")
+  (depends
+    (libsail (= :version))))
+
+(package
   (name sail_latex_backend)
   (synopsis "Sail to LaTeX formatting")
   (depends
