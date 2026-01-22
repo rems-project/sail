@@ -1,7 +1,7 @@
 import Mathlib.Data.Real.Basic
 import Mathlib.Data.Real.Sqrt
 
-import THE_MODULE_NAME.Sail.Sail
+import Sail
 import THE_MODULE_NAME.Defs
 
 noncomputable section
