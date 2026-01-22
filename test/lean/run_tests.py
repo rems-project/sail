@@ -101,7 +101,7 @@ def test_lean(subdir: str, skip_list = None, runnable: bool = False):
                 if not runnable:
                     extra_flags.append('--lean-matchbv')
                 extra_flags = ' '.join(extra_flags)
-                step('\'{}\' {} {} --lean --lean-single-file  --lean-executable --lean-output-dir {} --lean-lib-path {}'.format(
+                step("'{}' {} {} --lean --lean-single-file  --lean-executable --lean-output-dir {} --lean-lib-path {}".format(
                     sail, extra_flags, filename, basename, support_lib), name=filename)
                 step('lake update', cwd=f'{basename}/out', name=filename)
                 expected_status = 0
