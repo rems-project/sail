@@ -293,10 +293,10 @@ def extern_vector_update (_ : Unit) : (Vector Int 5) :=
   (vectorUpdate #v[23, 23, 23, 23, 23] 2 42)
 
 def extern_string_take (_ : Unit) : String :=
-  (String.take "Hello, world" 5)
+  (String.takeStr "Hello, world" 5)
 
 def extern_string_drop (_ : Unit) : String :=
-  (String.drop "Hello, world" 5)
+  (String.dropStr "Hello, world" 5)
 
 def extern_string_length (_ : Unit) : Int :=
   (String.length "Hello, world")

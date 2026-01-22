@@ -93,10 +93,10 @@ let opt_lean_lib_rev : string option ref = ref None
 let opt_enable_matchbv : bool ref = ref false
 let opt_disable_matchbv : bool ref = ref true
 
-let lean_version : string = "lean4:nightly-2025-11-18"
-let mathlib_version : string = "nightly-testing-2025-11-18"
+let lean_version : string = "lean4:nightly-2026-01-22"
+let mathlib_version : string = "nightly-testing-2026-01-22"
 let lib_default_git : string = "https://github.com/rems-project/lean-sail"
-let lib_default_rev : string = "v1"
+let lib_default_rev : string = "v2"
 
 let lean_options =
   [

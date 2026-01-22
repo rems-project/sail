@@ -48,7 +48,7 @@ namespace Out.Functions
 
 open option
 
-/-- Type quantifiers: k_ex2049_ : Bool, k_ex2048_ : Bool -/
+/-- Type quantifiers: k_ex2561_ : Bool, k_ex2560_ : Bool -/
 def neq_bool (x : Bool) (y : Bool) : Bool :=
   (! (x == y))
 
@@ -173,9 +173,14 @@ def hex_bits_1_forwards (arg_ : (BitVec 1)) : SailM String := do
       assert false "Pattern match failure at unknown location"
       throw Error.Exit)
 
-def hex_bits_1_backwards (arg_ : String) : (BitVec 1) :=
-  match arg_ with
-  | s => (hex_bits_backwards (1, s))
+def hex_bits_1_backwards (arg_ : String) : SailM (BitVec 1) := do
+  let s := arg_
+  if ((hex_bits_backwards_matches (1, s)) : Bool)
+  then (pure (hex_bits_backwards (1, s)))
+  else
+    (do
+      assert false "Pattern match failure at unknown location"
+      throw Error.Exit)
 
 def hex_bits_1_forwards_matches (arg_ : (BitVec 1)) : SailM Bool := do
   let head_exp_ := arg_
@@ -191,9 +196,10 @@ def hex_bits_1_forwards_matches (arg_ : (BitVec 1)) : SailM Bool := do
     | _ => (pure false))
 
 def hex_bits_1_backwards_matches (arg_ : String) : Bool :=
-  match arg_ with
-  | s => true
-  | _ => false
+  let s := arg_
+  if ((hex_bits_backwards_matches (1, s)) : Bool)
+  then true
+  else false
 
 def hex_bits_2_forwards (arg_ : (BitVec 2)) : SailM String := do
   let head_exp_ := arg_
@@ -209,9 +215,14 @@ def hex_bits_2_forwards (arg_ : (BitVec 2)) : SailM String := do
       assert false "Pattern match failure at unknown location"
       throw Error.Exit)
 
-def hex_bits_2_backwards (arg_ : String) : (BitVec 2) :=
-  match arg_ with
-  | s => (hex_bits_backwards (2, s))
+def hex_bits_2_backwards (arg_ : String) : SailM (BitVec 2) := do
+  let s := arg_
+  if ((hex_bits_backwards_matches (2, s)) : Bool)
+  then (pure (hex_bits_backwards (2, s)))
+  else
+    (do
+      assert false "Pattern match failure at unknown location"
+      throw Error.Exit)
 
 def hex_bits_2_forwards_matches (arg_ : (BitVec 2)) : SailM Bool := do
   let head_exp_ := arg_
@@ -227,9 +238,10 @@ def hex_bits_2_forwards_matches (arg_ : (BitVec 2)) : SailM Bool := do
     | _ => (pure false))
 
 def hex_bits_2_backwards_matches (arg_ : String) : Bool :=
-  match arg_ with
-  | s => true
-  | _ => false
+  let s := arg_
+  if ((hex_bits_backwards_matches (2, s)) : Bool)
+  then true
+  else false
 
 def hex_bits_3_forwards (arg_ : (BitVec 3)) : SailM String := do
   let head_exp_ := arg_
@@ -245,9 +257,14 @@ def hex_bits_3_forwards (arg_ : (BitVec 3)) : SailM String := do
       assert false "Pattern match failure at unknown location"
       throw Error.Exit)
 
-def hex_bits_3_backwards (arg_ : String) : (BitVec 3) :=
-  match arg_ with
-  | s => (hex_bits_backwards (3, s))
+def hex_bits_3_backwards (arg_ : String) : SailM (BitVec 3) := do
+  let s := arg_
+  if ((hex_bits_backwards_matches (3, s)) : Bool)
+  then (pure (hex_bits_backwards (3, s)))
+  else
+    (do
+      assert false "Pattern match failure at unknown location"
+      throw Error.Exit)
 
 def hex_bits_3_forwards_matches (arg_ : (BitVec 3)) : SailM Bool := do
   let head_exp_ := arg_
@@ -263,9 +280,10 @@ def hex_bits_3_forwards_matches (arg_ : (BitVec 3)) : SailM Bool := do
     | _ => (pure false))
 
 def hex_bits_3_backwards_matches (arg_ : String) : Bool :=
-  match arg_ with
-  | s => true
-  | _ => false
+  let s := arg_
+  if ((hex_bits_backwards_matches (3, s)) : Bool)
+  then true
+  else false
 
 def hex_bits_4_forwards (arg_ : (BitVec 4)) : SailM String := do
   let head_exp_ := arg_
@@ -281,9 +299,14 @@ def hex_bits_4_forwards (arg_ : (BitVec 4)) : SailM String := do
       assert false "Pattern match failure at unknown location"
       throw Error.Exit)
 
-def hex_bits_4_backwards (arg_ : String) : (BitVec 4) :=
-  match arg_ with
-  | s => (hex_bits_backwards (4, s))
+def hex_bits_4_backwards (arg_ : String) : SailM (BitVec 4) := do
+  let s := arg_
+  if ((hex_bits_backwards_matches (4, s)) : Bool)
+  then (pure (hex_bits_backwards (4, s)))
+  else
+    (do
+      assert false "Pattern match failure at unknown location"
+      throw Error.Exit)
 
 def hex_bits_4_forwards_matches (arg_ : (BitVec 4)) : SailM Bool := do
   let head_exp_ := arg_
@@ -299,9 +322,10 @@ def hex_bits_4_forwards_matches (arg_ : (BitVec 4)) : SailM Bool := do
     | _ => (pure false))
 
 def hex_bits_4_backwards_matches (arg_ : String) : Bool :=
-  match arg_ with
-  | s => true
-  | _ => false
+  let s := arg_
+  if ((hex_bits_backwards_matches (4, s)) : Bool)
+  then true
+  else false
 
 def hex_bits_5_forwards (arg_ : (BitVec 5)) : SailM String := do
   let head_exp_ := arg_
@@ -317,9 +341,14 @@ def hex_bits_5_forwards (arg_ : (BitVec 5)) : SailM String := do
       assert false "Pattern match failure at unknown location"
       throw Error.Exit)
 
-def hex_bits_5_backwards (arg_ : String) : (BitVec 5) :=
-  match arg_ with
-  | s => (hex_bits_backwards (5, s))
+def hex_bits_5_backwards (arg_ : String) : SailM (BitVec 5) := do
+  let s := arg_
+  if ((hex_bits_backwards_matches (5, s)) : Bool)
+  then (pure (hex_bits_backwards (5, s)))
+  else
+    (do
+      assert false "Pattern match failure at unknown location"
+      throw Error.Exit)
 
 def hex_bits_5_forwards_matches (arg_ : (BitVec 5)) : SailM Bool := do
   let head_exp_ := arg_
@@ -335,9 +364,10 @@ def hex_bits_5_forwards_matches (arg_ : (BitVec 5)) : SailM Bool := do
     | _ => (pure false))
 
 def hex_bits_5_backwards_matches (arg_ : String) : Bool :=
-  match arg_ with
-  | s => true
-  | _ => false
+  let s := arg_
+  if ((hex_bits_backwards_matches (5, s)) : Bool)
+  then true
+  else false
 
 def hex_bits_6_forwards (arg_ : (BitVec 6)) : SailM String := do
   let head_exp_ := arg_
@@ -353,9 +383,14 @@ def hex_bits_6_forwards (arg_ : (BitVec 6)) : SailM String := do
       assert false "Pattern match failure at unknown location"
       throw Error.Exit)
 
-def hex_bits_6_backwards (arg_ : String) : (BitVec 6) :=
-  match arg_ with
-  | s => (hex_bits_backwards (6, s))
+def hex_bits_6_backwards (arg_ : String) : SailM (BitVec 6) := do
+  let s := arg_
+  if ((hex_bits_backwards_matches (6, s)) : Bool)
+  then (pure (hex_bits_backwards (6, s)))
+  else
+    (do
+      assert false "Pattern match failure at unknown location"
+      throw Error.Exit)
 
 def hex_bits_6_forwards_matches (arg_ : (BitVec 6)) : SailM Bool := do
   let head_exp_ := arg_
@@ -371,9 +406,10 @@ def hex_bits_6_forwards_matches (arg_ : (BitVec 6)) : SailM Bool := do
     | _ => (pure false))
 
 def hex_bits_6_backwards_matches (arg_ : String) : Bool :=
-  match arg_ with
-  | s => true
-  | _ => false
+  let s := arg_
+  if ((hex_bits_backwards_matches (6, s)) : Bool)
+  then true
+  else false
 
 def hex_bits_7_forwards (arg_ : (BitVec 7)) : SailM String := do
   let head_exp_ := arg_
@@ -389,9 +425,14 @@ def hex_bits_7_forwards (arg_ : (BitVec 7)) : SailM String := do
       assert false "Pattern match failure at unknown location"
       throw Error.Exit)
 
-def hex_bits_7_backwards (arg_ : String) : (BitVec 7) :=
-  match arg_ with
-  | s => (hex_bits_backwards (7, s))
+def hex_bits_7_backwards (arg_ : String) : SailM (BitVec 7) := do
+  let s := arg_
+  if ((hex_bits_backwards_matches (7, s)) : Bool)
+  then (pure (hex_bits_backwards (7, s)))
+  else
+    (do
+      assert false "Pattern match failure at unknown location"
+      throw Error.Exit)
 
 def hex_bits_7_forwards_matches (arg_ : (BitVec 7)) : SailM Bool := do
   let head_exp_ := arg_
@@ -407,9 +448,10 @@ def hex_bits_7_forwards_matches (arg_ : (BitVec 7)) : SailM Bool := do
     | _ => (pure false))
 
 def hex_bits_7_backwards_matches (arg_ : String) : Bool :=
-  match arg_ with
-  | s => true
-  | _ => false
+  let s := arg_
+  if ((hex_bits_backwards_matches (7, s)) : Bool)
+  then true
+  else false
 
 def hex_bits_8_forwards (arg_ : (BitVec 8)) : SailM String := do
   let head_exp_ := arg_
@@ -425,9 +467,14 @@ def hex_bits_8_forwards (arg_ : (BitVec 8)) : SailM String := do
       assert false "Pattern match failure at unknown location"
       throw Error.Exit)
 
-def hex_bits_8_backwards (arg_ : String) : (BitVec 8) :=
-  match arg_ with
-  | s => (hex_bits_backwards (8, s))
+def hex_bits_8_backwards (arg_ : String) : SailM (BitVec 8) := do
+  let s := arg_
+  if ((hex_bits_backwards_matches (8, s)) : Bool)
+  then (pure (hex_bits_backwards (8, s)))
+  else
+    (do
+      assert false "Pattern match failure at unknown location"
+      throw Error.Exit)
 
 def hex_bits_8_forwards_matches (arg_ : (BitVec 8)) : SailM Bool := do
   let head_exp_ := arg_
@@ -443,9 +490,10 @@ def hex_bits_8_forwards_matches (arg_ : (BitVec 8)) : SailM Bool := do
     | _ => (pure false))
 
 def hex_bits_8_backwards_matches (arg_ : String) : Bool :=
-  match arg_ with
-  | s => true
-  | _ => false
+  let s := arg_
+  if ((hex_bits_backwards_matches (8, s)) : Bool)
+  then true
+  else false
 
 def hex_bits_9_forwards (arg_ : (BitVec 9)) : SailM String := do
   let head_exp_ := arg_
@@ -461,9 +509,14 @@ def hex_bits_9_forwards (arg_ : (BitVec 9)) : SailM String := do
       assert false "Pattern match failure at unknown location"
       throw Error.Exit)
 
-def hex_bits_9_backwards (arg_ : String) : (BitVec 9) :=
-  match arg_ with
-  | s => (hex_bits_backwards (9, s))
+def hex_bits_9_backwards (arg_ : String) : SailM (BitVec 9) := do
+  let s := arg_
+  if ((hex_bits_backwards_matches (9, s)) : Bool)
+  then (pure (hex_bits_backwards (9, s)))
+  else
+    (do
+      assert false "Pattern match failure at unknown location"
+      throw Error.Exit)
 
 def hex_bits_9_forwards_matches (arg_ : (BitVec 9)) : SailM Bool := do
   let head_exp_ := arg_
@@ -479,9 +532,10 @@ def hex_bits_9_forwards_matches (arg_ : (BitVec 9)) : SailM Bool := do
     | _ => (pure false))
 
 def hex_bits_9_backwards_matches (arg_ : String) : Bool :=
-  match arg_ with
-  | s => true
-  | _ => false
+  let s := arg_
+  if ((hex_bits_backwards_matches (9, s)) : Bool)
+  then true
+  else false
 
 def hex_bits_10_forwards (arg_ : (BitVec 10)) : SailM String := do
   let head_exp_ := arg_
@@ -497,9 +551,14 @@ def hex_bits_10_forwards (arg_ : (BitVec 10)) : SailM String := do
       assert false "Pattern match failure at unknown location"
       throw Error.Exit)
 
-def hex_bits_10_backwards (arg_ : String) : (BitVec 10) :=
-  match arg_ with
-  | s => (hex_bits_backwards (10, s))
+def hex_bits_10_backwards (arg_ : String) : SailM (BitVec 10) := do
+  let s := arg_
+  if ((hex_bits_backwards_matches (10, s)) : Bool)
+  then (pure (hex_bits_backwards (10, s)))
+  else
+    (do
+      assert false "Pattern match failure at unknown location"
+      throw Error.Exit)
 
 def hex_bits_10_forwards_matches (arg_ : (BitVec 10)) : SailM Bool := do
   let head_exp_ := arg_
@@ -515,9 +574,10 @@ def hex_bits_10_forwards_matches (arg_ : (BitVec 10)) : SailM Bool := do
     | _ => (pure false))
 
 def hex_bits_10_backwards_matches (arg_ : String) : Bool :=
-  match arg_ with
-  | s => true
-  | _ => false
+  let s := arg_
+  if ((hex_bits_backwards_matches (10, s)) : Bool)
+  then true
+  else false
 
 def hex_bits_11_forwards (arg_ : (BitVec 11)) : SailM String := do
   let head_exp_ := arg_
@@ -533,9 +593,14 @@ def hex_bits_11_forwards (arg_ : (BitVec 11)) : SailM String := do
       assert false "Pattern match failure at unknown location"
       throw Error.Exit)
 
-def hex_bits_11_backwards (arg_ : String) : (BitVec 11) :=
-  match arg_ with
-  | s => (hex_bits_backwards (11, s))
+def hex_bits_11_backwards (arg_ : String) : SailM (BitVec 11) := do
+  let s := arg_
+  if ((hex_bits_backwards_matches (11, s)) : Bool)
+  then (pure (hex_bits_backwards (11, s)))
+  else
+    (do
+      assert false "Pattern match failure at unknown location"
+      throw Error.Exit)
 
 def hex_bits_11_forwards_matches (arg_ : (BitVec 11)) : SailM Bool := do
   let head_exp_ := arg_
@@ -551,9 +616,10 @@ def hex_bits_11_forwards_matches (arg_ : (BitVec 11)) : SailM Bool := do
     | _ => (pure false))
 
 def hex_bits_11_backwards_matches (arg_ : String) : Bool :=
-  match arg_ with
-  | s => true
-  | _ => false
+  let s := arg_
+  if ((hex_bits_backwards_matches (11, s)) : Bool)
+  then true
+  else false
 
 def hex_bits_12_forwards (arg_ : (BitVec 12)) : SailM String := do
   let head_exp_ := arg_
@@ -569,9 +635,14 @@ def hex_bits_12_forwards (arg_ : (BitVec 12)) : SailM String := do
       assert false "Pattern match failure at unknown location"
       throw Error.Exit)
 
-def hex_bits_12_backwards (arg_ : String) : (BitVec 12) :=
-  match arg_ with
-  | s => (hex_bits_backwards (12, s))
+def hex_bits_12_backwards (arg_ : String) : SailM (BitVec 12) := do
+  let s := arg_
+  if ((hex_bits_backwards_matches (12, s)) : Bool)
+  then (pure (hex_bits_backwards (12, s)))
+  else
+    (do
+      assert false "Pattern match failure at unknown location"
+      throw Error.Exit)
 
 def hex_bits_12_forwards_matches (arg_ : (BitVec 12)) : SailM Bool := do
   let head_exp_ := arg_
@@ -587,9 +658,10 @@ def hex_bits_12_forwards_matches (arg_ : (BitVec 12)) : SailM Bool := do
     | _ => (pure false))
 
 def hex_bits_12_backwards_matches (arg_ : String) : Bool :=
-  match arg_ with
-  | s => true
-  | _ => false
+  let s := arg_
+  if ((hex_bits_backwards_matches (12, s)) : Bool)
+  then true
+  else false
 
 def hex_bits_13_forwards (arg_ : (BitVec 13)) : SailM String := do
   let head_exp_ := arg_
@@ -605,9 +677,14 @@ def hex_bits_13_forwards (arg_ : (BitVec 13)) : SailM String := do
       assert false "Pattern match failure at unknown location"
       throw Error.Exit)
 
-def hex_bits_13_backwards (arg_ : String) : (BitVec 13) :=
-  match arg_ with
-  | s => (hex_bits_backwards (13, s))
+def hex_bits_13_backwards (arg_ : String) : SailM (BitVec 13) := do
+  let s := arg_
+  if ((hex_bits_backwards_matches (13, s)) : Bool)
+  then (pure (hex_bits_backwards (13, s)))
+  else
+    (do
+      assert false "Pattern match failure at unknown location"
+      throw Error.Exit)
 
 def hex_bits_13_forwards_matches (arg_ : (BitVec 13)) : SailM Bool := do
   let head_exp_ := arg_
@@ -623,9 +700,10 @@ def hex_bits_13_forwards_matches (arg_ : (BitVec 13)) : SailM Bool := do
     | _ => (pure false))
 
 def hex_bits_13_backwards_matches (arg_ : String) : Bool :=
-  match arg_ with
-  | s => true
-  | _ => false
+  let s := arg_
+  if ((hex_bits_backwards_matches (13, s)) : Bool)
+  then true
+  else false
 
 def hex_bits_14_forwards (arg_ : (BitVec 14)) : SailM String := do
   let head_exp_ := arg_
@@ -641,9 +719,14 @@ def hex_bits_14_forwards (arg_ : (BitVec 14)) : SailM String := do
       assert false "Pattern match failure at unknown location"
       throw Error.Exit)
 
-def hex_bits_14_backwards (arg_ : String) : (BitVec 14) :=
-  match arg_ with
-  | s => (hex_bits_backwards (14, s))
+def hex_bits_14_backwards (arg_ : String) : SailM (BitVec 14) := do
+  let s := arg_
+  if ((hex_bits_backwards_matches (14, s)) : Bool)
+  then (pure (hex_bits_backwards (14, s)))
+  else
+    (do
+      assert false "Pattern match failure at unknown location"
+      throw Error.Exit)
 
 def hex_bits_14_forwards_matches (arg_ : (BitVec 14)) : SailM Bool := do
   let head_exp_ := arg_
@@ -659,9 +742,10 @@ def hex_bits_14_forwards_matches (arg_ : (BitVec 14)) : SailM Bool := do
     | _ => (pure false))
 
 def hex_bits_14_backwards_matches (arg_ : String) : Bool :=
-  match arg_ with
-  | s => true
-  | _ => false
+  let s := arg_
+  if ((hex_bits_backwards_matches (14, s)) : Bool)
+  then true
+  else false
 
 def hex_bits_15_forwards (arg_ : (BitVec 15)) : SailM String := do
   let head_exp_ := arg_
@@ -677,9 +761,14 @@ def hex_bits_15_forwards (arg_ : (BitVec 15)) : SailM String := do
       assert false "Pattern match failure at unknown location"
       throw Error.Exit)
 
-def hex_bits_15_backwards (arg_ : String) : (BitVec 15) :=
-  match arg_ with
-  | s => (hex_bits_backwards (15, s))
+def hex_bits_15_backwards (arg_ : String) : SailM (BitVec 15) := do
+  let s := arg_
+  if ((hex_bits_backwards_matches (15, s)) : Bool)
+  then (pure (hex_bits_backwards (15, s)))
+  else
+    (do
+      assert false "Pattern match failure at unknown location"
+      throw Error.Exit)
 
 def hex_bits_15_forwards_matches (arg_ : (BitVec 15)) : SailM Bool := do
   let head_exp_ := arg_
@@ -695,9 +784,10 @@ def hex_bits_15_forwards_matches (arg_ : (BitVec 15)) : SailM Bool := do
     | _ => (pure false))
 
 def hex_bits_15_backwards_matches (arg_ : String) : Bool :=
-  match arg_ with
-  | s => true
-  | _ => false
+  let s := arg_
+  if ((hex_bits_backwards_matches (15, s)) : Bool)
+  then true
+  else false
 
 def hex_bits_16_forwards (arg_ : (BitVec 16)) : SailM String := do
   let head_exp_ := arg_
@@ -713,9 +803,14 @@ def hex_bits_16_forwards (arg_ : (BitVec 16)) : SailM String := do
       assert false "Pattern match failure at unknown location"
       throw Error.Exit)
 
-def hex_bits_16_backwards (arg_ : String) : (BitVec 16) :=
-  match arg_ with
-  | s => (hex_bits_backwards (16, s))
+def hex_bits_16_backwards (arg_ : String) : SailM (BitVec 16) := do
+  let s := arg_
+  if ((hex_bits_backwards_matches (16, s)) : Bool)
+  then (pure (hex_bits_backwards (16, s)))
+  else
+    (do
+      assert false "Pattern match failure at unknown location"
+      throw Error.Exit)
 
 def hex_bits_16_forwards_matches (arg_ : (BitVec 16)) : SailM Bool := do
   let head_exp_ := arg_
@@ -731,9 +826,10 @@ def hex_bits_16_forwards_matches (arg_ : (BitVec 16)) : SailM Bool := do
     | _ => (pure false))
 
 def hex_bits_16_backwards_matches (arg_ : String) : Bool :=
-  match arg_ with
-  | s => true
-  | _ => false
+  let s := arg_
+  if ((hex_bits_backwards_matches (16, s)) : Bool)
+  then true
+  else false
 
 def hex_bits_17_forwards (arg_ : (BitVec 17)) : SailM String := do
   let head_exp_ := arg_
@@ -749,9 +845,14 @@ def hex_bits_17_forwards (arg_ : (BitVec 17)) : SailM String := do
       assert false "Pattern match failure at unknown location"
       throw Error.Exit)
 
-def hex_bits_17_backwards (arg_ : String) : (BitVec 17) :=
-  match arg_ with
-  | s => (hex_bits_backwards (17, s))
+def hex_bits_17_backwards (arg_ : String) : SailM (BitVec 17) := do
+  let s := arg_
+  if ((hex_bits_backwards_matches (17, s)) : Bool)
+  then (pure (hex_bits_backwards (17, s)))
+  else
+    (do
+      assert false "Pattern match failure at unknown location"
+      throw Error.Exit)
 
 def hex_bits_17_forwards_matches (arg_ : (BitVec 17)) : SailM Bool := do
   let head_exp_ := arg_
@@ -767,9 +868,10 @@ def hex_bits_17_forwards_matches (arg_ : (BitVec 17)) : SailM Bool := do
     | _ => (pure false))
 
 def hex_bits_17_backwards_matches (arg_ : String) : Bool :=
-  match arg_ with
-  | s => true
-  | _ => false
+  let s := arg_
+  if ((hex_bits_backwards_matches (17, s)) : Bool)
+  then true
+  else false
 
 def hex_bits_18_forwards (arg_ : (BitVec 18)) : SailM String := do
   let head_exp_ := arg_
@@ -785,9 +887,14 @@ def hex_bits_18_forwards (arg_ : (BitVec 18)) : SailM String := do
       assert false "Pattern match failure at unknown location"
       throw Error.Exit)
 
-def hex_bits_18_backwards (arg_ : String) : (BitVec 18) :=
-  match arg_ with
-  | s => (hex_bits_backwards (18, s))
+def hex_bits_18_backwards (arg_ : String) : SailM (BitVec 18) := do
+  let s := arg_
+  if ((hex_bits_backwards_matches (18, s)) : Bool)
+  then (pure (hex_bits_backwards (18, s)))
+  else
+    (do
+      assert false "Pattern match failure at unknown location"
+      throw Error.Exit)
 
 def hex_bits_18_forwards_matches (arg_ : (BitVec 18)) : SailM Bool := do
   let head_exp_ := arg_
@@ -803,9 +910,10 @@ def hex_bits_18_forwards_matches (arg_ : (BitVec 18)) : SailM Bool := do
     | _ => (pure false))
 
 def hex_bits_18_backwards_matches (arg_ : String) : Bool :=
-  match arg_ with
-  | s => true
-  | _ => false
+  let s := arg_
+  if ((hex_bits_backwards_matches (18, s)) : Bool)
+  then true
+  else false
 
 def hex_bits_19_forwards (arg_ : (BitVec 19)) : SailM String := do
   let head_exp_ := arg_
@@ -821,9 +929,14 @@ def hex_bits_19_forwards (arg_ : (BitVec 19)) : SailM String := do
       assert false "Pattern match failure at unknown location"
       throw Error.Exit)
 
-def hex_bits_19_backwards (arg_ : String) : (BitVec 19) :=
-  match arg_ with
-  | s => (hex_bits_backwards (19, s))
+def hex_bits_19_backwards (arg_ : String) : SailM (BitVec 19) := do
+  let s := arg_
+  if ((hex_bits_backwards_matches (19, s)) : Bool)
+  then (pure (hex_bits_backwards (19, s)))
+  else
+    (do
+      assert false "Pattern match failure at unknown location"
+      throw Error.Exit)
 
 def hex_bits_19_forwards_matches (arg_ : (BitVec 19)) : SailM Bool := do
   let head_exp_ := arg_
@@ -839,9 +952,10 @@ def hex_bits_19_forwards_matches (arg_ : (BitVec 19)) : SailM Bool := do
     | _ => (pure false))
 
 def hex_bits_19_backwards_matches (arg_ : String) : Bool :=
-  match arg_ with
-  | s => true
-  | _ => false
+  let s := arg_
+  if ((hex_bits_backwards_matches (19, s)) : Bool)
+  then true
+  else false
 
 def hex_bits_20_forwards (arg_ : (BitVec 20)) : SailM String := do
   let head_exp_ := arg_
@@ -857,9 +971,14 @@ def hex_bits_20_forwards (arg_ : (BitVec 20)) : SailM String := do
       assert false "Pattern match failure at unknown location"
       throw Error.Exit)
 
-def hex_bits_20_backwards (arg_ : String) : (BitVec 20) :=
-  match arg_ with
-  | s => (hex_bits_backwards (20, s))
+def hex_bits_20_backwards (arg_ : String) : SailM (BitVec 20) := do
+  let s := arg_
+  if ((hex_bits_backwards_matches (20, s)) : Bool)
+  then (pure (hex_bits_backwards (20, s)))
+  else
+    (do
+      assert false "Pattern match failure at unknown location"
+      throw Error.Exit)
 
 def hex_bits_20_forwards_matches (arg_ : (BitVec 20)) : SailM Bool := do
   let head_exp_ := arg_
@@ -875,9 +994,10 @@ def hex_bits_20_forwards_matches (arg_ : (BitVec 20)) : SailM Bool := do
     | _ => (pure false))
 
 def hex_bits_20_backwards_matches (arg_ : String) : Bool :=
-  match arg_ with
-  | s => true
-  | _ => false
+  let s := arg_
+  if ((hex_bits_backwards_matches (20, s)) : Bool)
+  then true
+  else false
 
 def hex_bits_21_forwards (arg_ : (BitVec 21)) : SailM String := do
   let head_exp_ := arg_
@@ -893,9 +1013,14 @@ def hex_bits_21_forwards (arg_ : (BitVec 21)) : SailM String := do
       assert false "Pattern match failure at unknown location"
       throw Error.Exit)
 
-def hex_bits_21_backwards (arg_ : String) : (BitVec 21) :=
-  match arg_ with
-  | s => (hex_bits_backwards (21, s))
+def hex_bits_21_backwards (arg_ : String) : SailM (BitVec 21) := do
+  let s := arg_
+  if ((hex_bits_backwards_matches (21, s)) : Bool)
+  then (pure (hex_bits_backwards (21, s)))
+  else
+    (do
+      assert false "Pattern match failure at unknown location"
+      throw Error.Exit)
 
 def hex_bits_21_forwards_matches (arg_ : (BitVec 21)) : SailM Bool := do
   let head_exp_ := arg_
@@ -911,9 +1036,10 @@ def hex_bits_21_forwards_matches (arg_ : (BitVec 21)) : SailM Bool := do
     | _ => (pure false))
 
 def hex_bits_21_backwards_matches (arg_ : String) : Bool :=
-  match arg_ with
-  | s => true
-  | _ => false
+  let s := arg_
+  if ((hex_bits_backwards_matches (21, s)) : Bool)
+  then true
+  else false
 
 def hex_bits_22_forwards (arg_ : (BitVec 22)) : SailM String := do
   let head_exp_ := arg_
@@ -929,9 +1055,14 @@ def hex_bits_22_forwards (arg_ : (BitVec 22)) : SailM String := do
       assert false "Pattern match failure at unknown location"
       throw Error.Exit)
 
-def hex_bits_22_backwards (arg_ : String) : (BitVec 22) :=
-  match arg_ with
-  | s => (hex_bits_backwards (22, s))
+def hex_bits_22_backwards (arg_ : String) : SailM (BitVec 22) := do
+  let s := arg_
+  if ((hex_bits_backwards_matches (22, s)) : Bool)
+  then (pure (hex_bits_backwards (22, s)))
+  else
+    (do
+      assert false "Pattern match failure at unknown location"
+      throw Error.Exit)
 
 def hex_bits_22_forwards_matches (arg_ : (BitVec 22)) : SailM Bool := do
   let head_exp_ := arg_
@@ -947,9 +1078,10 @@ def hex_bits_22_forwards_matches (arg_ : (BitVec 22)) : SailM Bool := do
     | _ => (pure false))
 
 def hex_bits_22_backwards_matches (arg_ : String) : Bool :=
-  match arg_ with
-  | s => true
-  | _ => false
+  let s := arg_
+  if ((hex_bits_backwards_matches (22, s)) : Bool)
+  then true
+  else false
 
 def hex_bits_23_forwards (arg_ : (BitVec 23)) : SailM String := do
   let head_exp_ := arg_
@@ -965,9 +1097,14 @@ def hex_bits_23_forwards (arg_ : (BitVec 23)) : SailM String := do
       assert false "Pattern match failure at unknown location"
       throw Error.Exit)
 
-def hex_bits_23_backwards (arg_ : String) : (BitVec 23) :=
-  match arg_ with
-  | s => (hex_bits_backwards (23, s))
+def hex_bits_23_backwards (arg_ : String) : SailM (BitVec 23) := do
+  let s := arg_
+  if ((hex_bits_backwards_matches (23, s)) : Bool)
+  then (pure (hex_bits_backwards (23, s)))
+  else
+    (do
+      assert false "Pattern match failure at unknown location"
+      throw Error.Exit)
 
 def hex_bits_23_forwards_matches (arg_ : (BitVec 23)) : SailM Bool := do
   let head_exp_ := arg_
@@ -983,9 +1120,10 @@ def hex_bits_23_forwards_matches (arg_ : (BitVec 23)) : SailM Bool := do
     | _ => (pure false))
 
 def hex_bits_23_backwards_matches (arg_ : String) : Bool :=
-  match arg_ with
-  | s => true
-  | _ => false
+  let s := arg_
+  if ((hex_bits_backwards_matches (23, s)) : Bool)
+  then true
+  else false
 
 def hex_bits_24_forwards (arg_ : (BitVec 24)) : SailM String := do
   let head_exp_ := arg_
@@ -1001,9 +1139,14 @@ def hex_bits_24_forwards (arg_ : (BitVec 24)) : SailM String := do
       assert false "Pattern match failure at unknown location"
       throw Error.Exit)
 
-def hex_bits_24_backwards (arg_ : String) : (BitVec 24) :=
-  match arg_ with
-  | s => (hex_bits_backwards (24, s))
+def hex_bits_24_backwards (arg_ : String) : SailM (BitVec 24) := do
+  let s := arg_
+  if ((hex_bits_backwards_matches (24, s)) : Bool)
+  then (pure (hex_bits_backwards (24, s)))
+  else
+    (do
+      assert false "Pattern match failure at unknown location"
+      throw Error.Exit)
 
 def hex_bits_24_forwards_matches (arg_ : (BitVec 24)) : SailM Bool := do
   let head_exp_ := arg_
@@ -1019,9 +1162,10 @@ def hex_bits_24_forwards_matches (arg_ : (BitVec 24)) : SailM Bool := do
     | _ => (pure false))
 
 def hex_bits_24_backwards_matches (arg_ : String) : Bool :=
-  match arg_ with
-  | s => true
-  | _ => false
+  let s := arg_
+  if ((hex_bits_backwards_matches (24, s)) : Bool)
+  then true
+  else false
 
 def hex_bits_25_forwards (arg_ : (BitVec 25)) : SailM String := do
   let head_exp_ := arg_
@@ -1037,9 +1181,14 @@ def hex_bits_25_forwards (arg_ : (BitVec 25)) : SailM String := do
       assert false "Pattern match failure at unknown location"
       throw Error.Exit)
 
-def hex_bits_25_backwards (arg_ : String) : (BitVec 25) :=
-  match arg_ with
-  | s => (hex_bits_backwards (25, s))
+def hex_bits_25_backwards (arg_ : String) : SailM (BitVec 25) := do
+  let s := arg_
+  if ((hex_bits_backwards_matches (25, s)) : Bool)
+  then (pure (hex_bits_backwards (25, s)))
+  else
+    (do
+      assert false "Pattern match failure at unknown location"
+      throw Error.Exit)
 
 def hex_bits_25_forwards_matches (arg_ : (BitVec 25)) : SailM Bool := do
   let head_exp_ := arg_
@@ -1055,9 +1204,10 @@ def hex_bits_25_forwards_matches (arg_ : (BitVec 25)) : SailM Bool := do
     | _ => (pure false))
 
 def hex_bits_25_backwards_matches (arg_ : String) : Bool :=
-  match arg_ with
-  | s => true
-  | _ => false
+  let s := arg_
+  if ((hex_bits_backwards_matches (25, s)) : Bool)
+  then true
+  else false
 
 def hex_bits_26_forwards (arg_ : (BitVec 26)) : SailM String := do
   let head_exp_ := arg_
@@ -1073,9 +1223,14 @@ def hex_bits_26_forwards (arg_ : (BitVec 26)) : SailM String := do
       assert false "Pattern match failure at unknown location"
       throw Error.Exit)
 
-def hex_bits_26_backwards (arg_ : String) : (BitVec 26) :=
-  match arg_ with
-  | s => (hex_bits_backwards (26, s))
+def hex_bits_26_backwards (arg_ : String) : SailM (BitVec 26) := do
+  let s := arg_
+  if ((hex_bits_backwards_matches (26, s)) : Bool)
+  then (pure (hex_bits_backwards (26, s)))
+  else
+    (do
+      assert false "Pattern match failure at unknown location"
+      throw Error.Exit)
 
 def hex_bits_26_forwards_matches (arg_ : (BitVec 26)) : SailM Bool := do
   let head_exp_ := arg_
@@ -1091,9 +1246,10 @@ def hex_bits_26_forwards_matches (arg_ : (BitVec 26)) : SailM Bool := do
     | _ => (pure false))
 
 def hex_bits_26_backwards_matches (arg_ : String) : Bool :=
-  match arg_ with
-  | s => true
-  | _ => false
+  let s := arg_
+  if ((hex_bits_backwards_matches (26, s)) : Bool)
+  then true
+  else false
 
 def hex_bits_27_forwards (arg_ : (BitVec 27)) : SailM String := do
   let head_exp_ := arg_
@@ -1109,9 +1265,14 @@ def hex_bits_27_forwards (arg_ : (BitVec 27)) : SailM String := do
       assert false "Pattern match failure at unknown location"
       throw Error.Exit)
 
-def hex_bits_27_backwards (arg_ : String) : (BitVec 27) :=
-  match arg_ with
-  | s => (hex_bits_backwards (27, s))
+def hex_bits_27_backwards (arg_ : String) : SailM (BitVec 27) := do
+  let s := arg_
+  if ((hex_bits_backwards_matches (27, s)) : Bool)
+  then (pure (hex_bits_backwards (27, s)))
+  else
+    (do
+      assert false "Pattern match failure at unknown location"
+      throw Error.Exit)
 
 def hex_bits_27_forwards_matches (arg_ : (BitVec 27)) : SailM Bool := do
   let head_exp_ := arg_
@@ -1127,9 +1288,10 @@ def hex_bits_27_forwards_matches (arg_ : (BitVec 27)) : SailM Bool := do
     | _ => (pure false))
 
 def hex_bits_27_backwards_matches (arg_ : String) : Bool :=
-  match arg_ with
-  | s => true
-  | _ => false
+  let s := arg_
+  if ((hex_bits_backwards_matches (27, s)) : Bool)
+  then true
+  else false
 
 def hex_bits_28_forwards (arg_ : (BitVec 28)) : SailM String := do
   let head_exp_ := arg_
@@ -1145,9 +1307,14 @@ def hex_bits_28_forwards (arg_ : (BitVec 28)) : SailM String := do
       assert false "Pattern match failure at unknown location"
       throw Error.Exit)
 
-def hex_bits_28_backwards (arg_ : String) : (BitVec 28) :=
-  match arg_ with
-  | s => (hex_bits_backwards (28, s))
+def hex_bits_28_backwards (arg_ : String) : SailM (BitVec 28) := do
+  let s := arg_
+  if ((hex_bits_backwards_matches (28, s)) : Bool)
+  then (pure (hex_bits_backwards (28, s)))
+  else
+    (do
+      assert false "Pattern match failure at unknown location"
+      throw Error.Exit)
 
 def hex_bits_28_forwards_matches (arg_ : (BitVec 28)) : SailM Bool := do
   let head_exp_ := arg_
@@ -1163,9 +1330,10 @@ def hex_bits_28_forwards_matches (arg_ : (BitVec 28)) : SailM Bool := do
     | _ => (pure false))
 
 def hex_bits_28_backwards_matches (arg_ : String) : Bool :=
-  match arg_ with
-  | s => true
-  | _ => false
+  let s := arg_
+  if ((hex_bits_backwards_matches (28, s)) : Bool)
+  then true
+  else false
 
 def hex_bits_29_forwards (arg_ : (BitVec 29)) : SailM String := do
   let head_exp_ := arg_
@@ -1181,9 +1349,14 @@ def hex_bits_29_forwards (arg_ : (BitVec 29)) : SailM String := do
       assert false "Pattern match failure at unknown location"
       throw Error.Exit)
 
-def hex_bits_29_backwards (arg_ : String) : (BitVec 29) :=
-  match arg_ with
-  | s => (hex_bits_backwards (29, s))
+def hex_bits_29_backwards (arg_ : String) : SailM (BitVec 29) := do
+  let s := arg_
+  if ((hex_bits_backwards_matches (29, s)) : Bool)
+  then (pure (hex_bits_backwards (29, s)))
+  else
+    (do
+      assert false "Pattern match failure at unknown location"
+      throw Error.Exit)
 
 def hex_bits_29_forwards_matches (arg_ : (BitVec 29)) : SailM Bool := do
   let head_exp_ := arg_
@@ -1199,9 +1372,10 @@ def hex_bits_29_forwards_matches (arg_ : (BitVec 29)) : SailM Bool := do
     | _ => (pure false))
 
 def hex_bits_29_backwards_matches (arg_ : String) : Bool :=
-  match arg_ with
-  | s => true
-  | _ => false
+  let s := arg_
+  if ((hex_bits_backwards_matches (29, s)) : Bool)
+  then true
+  else false
 
 def hex_bits_30_forwards (arg_ : (BitVec 30)) : SailM String := do
   let head_exp_ := arg_
@@ -1217,9 +1391,14 @@ def hex_bits_30_forwards (arg_ : (BitVec 30)) : SailM String := do
       assert false "Pattern match failure at unknown location"
       throw Error.Exit)
 
-def hex_bits_30_backwards (arg_ : String) : (BitVec 30) :=
-  match arg_ with
-  | s => (hex_bits_backwards (30, s))
+def hex_bits_30_backwards (arg_ : String) : SailM (BitVec 30) := do
+  let s := arg_
+  if ((hex_bits_backwards_matches (30, s)) : Bool)
+  then (pure (hex_bits_backwards (30, s)))
+  else
+    (do
+      assert false "Pattern match failure at unknown location"
+      throw Error.Exit)
 
 def hex_bits_30_forwards_matches (arg_ : (BitVec 30)) : SailM Bool := do
   let head_exp_ := arg_
@@ -1235,9 +1414,10 @@ def hex_bits_30_forwards_matches (arg_ : (BitVec 30)) : SailM Bool := do
     | _ => (pure false))
 
 def hex_bits_30_backwards_matches (arg_ : String) : Bool :=
-  match arg_ with
-  | s => true
-  | _ => false
+  let s := arg_
+  if ((hex_bits_backwards_matches (30, s)) : Bool)
+  then true
+  else false
 
 def hex_bits_31_forwards (arg_ : (BitVec 31)) : SailM String := do
   let head_exp_ := arg_
@@ -1253,9 +1433,14 @@ def hex_bits_31_forwards (arg_ : (BitVec 31)) : SailM String := do
       assert false "Pattern match failure at unknown location"
       throw Error.Exit)
 
-def hex_bits_31_backwards (arg_ : String) : (BitVec 31) :=
-  match arg_ with
-  | s => (hex_bits_backwards (31, s))
+def hex_bits_31_backwards (arg_ : String) : SailM (BitVec 31) := do
+  let s := arg_
+  if ((hex_bits_backwards_matches (31, s)) : Bool)
+  then (pure (hex_bits_backwards (31, s)))
+  else
+    (do
+      assert false "Pattern match failure at unknown location"
+      throw Error.Exit)
 
 def hex_bits_31_forwards_matches (arg_ : (BitVec 31)) : SailM Bool := do
   let head_exp_ := arg_
@@ -1271,9 +1456,10 @@ def hex_bits_31_forwards_matches (arg_ : (BitVec 31)) : SailM Bool := do
     | _ => (pure false))
 
 def hex_bits_31_backwards_matches (arg_ : String) : Bool :=
-  match arg_ with
-  | s => true
-  | _ => false
+  let s := arg_
+  if ((hex_bits_backwards_matches (31, s)) : Bool)
+  then true
+  else false
 
 def hex_bits_32_forwards (arg_ : (BitVec 32)) : SailM String := do
   let head_exp_ := arg_
@@ -1289,9 +1475,14 @@ def hex_bits_32_forwards (arg_ : (BitVec 32)) : SailM String := do
       assert false "Pattern match failure at unknown location"
       throw Error.Exit)
 
-def hex_bits_32_backwards (arg_ : String) : (BitVec 32) :=
-  match arg_ with
-  | s => (hex_bits_backwards (32, s))
+def hex_bits_32_backwards (arg_ : String) : SailM (BitVec 32) := do
+  let s := arg_
+  if ((hex_bits_backwards_matches (32, s)) : Bool)
+  then (pure (hex_bits_backwards (32, s)))
+  else
+    (do
+      assert false "Pattern match failure at unknown location"
+      throw Error.Exit)
 
 def hex_bits_32_forwards_matches (arg_ : (BitVec 32)) : SailM Bool := do
   let head_exp_ := arg_
@@ -1307,9 +1498,10 @@ def hex_bits_32_forwards_matches (arg_ : (BitVec 32)) : SailM Bool := do
     | _ => (pure false))
 
 def hex_bits_32_backwards_matches (arg_ : String) : Bool :=
-  match arg_ with
-  | s => true
-  | _ => false
+  let s := arg_
+  if ((hex_bits_backwards_matches (32, s)) : Bool)
+  then true
+  else false
 
 def hex_bits_33_forwards (arg_ : (BitVec 33)) : SailM String := do
   let head_exp_ := arg_
@@ -1325,9 +1517,14 @@ def hex_bits_33_forwards (arg_ : (BitVec 33)) : SailM String := do
       assert false "Pattern match failure at unknown location"
       throw Error.Exit)
 
-def hex_bits_33_backwards (arg_ : String) : (BitVec 33) :=
-  match arg_ with
-  | s => (hex_bits_backwards (33, s))
+def hex_bits_33_backwards (arg_ : String) : SailM (BitVec 33) := do
+  let s := arg_
+  if ((hex_bits_backwards_matches (33, s)) : Bool)
+  then (pure (hex_bits_backwards (33, s)))
+  else
+    (do
+      assert false "Pattern match failure at unknown location"
+      throw Error.Exit)
 
 def hex_bits_33_forwards_matches (arg_ : (BitVec 33)) : SailM Bool := do
   let head_exp_ := arg_
@@ -1343,9 +1540,10 @@ def hex_bits_33_forwards_matches (arg_ : (BitVec 33)) : SailM Bool := do
     | _ => (pure false))
 
 def hex_bits_33_backwards_matches (arg_ : String) : Bool :=
-  match arg_ with
-  | s => true
-  | _ => false
+  let s := arg_
+  if ((hex_bits_backwards_matches (33, s)) : Bool)
+  then true
+  else false
 
 def hex_bits_34_forwards (arg_ : (BitVec 34)) : SailM String := do
   let head_exp_ := arg_
@@ -1361,9 +1559,14 @@ def hex_bits_34_forwards (arg_ : (BitVec 34)) : SailM String := do
       assert false "Pattern match failure at unknown location"
       throw Error.Exit)
 
-def hex_bits_34_backwards (arg_ : String) : (BitVec 34) :=
-  match arg_ with
-  | s => (hex_bits_backwards (34, s))
+def hex_bits_34_backwards (arg_ : String) : SailM (BitVec 34) := do
+  let s := arg_
+  if ((hex_bits_backwards_matches (34, s)) : Bool)
+  then (pure (hex_bits_backwards (34, s)))
+  else
+    (do
+      assert false "Pattern match failure at unknown location"
+      throw Error.Exit)
 
 def hex_bits_34_forwards_matches (arg_ : (BitVec 34)) : SailM Bool := do
   let head_exp_ := arg_
@@ -1379,9 +1582,10 @@ def hex_bits_34_forwards_matches (arg_ : (BitVec 34)) : SailM Bool := do
     | _ => (pure false))
 
 def hex_bits_34_backwards_matches (arg_ : String) : Bool :=
-  match arg_ with
-  | s => true
-  | _ => false
+  let s := arg_
+  if ((hex_bits_backwards_matches (34, s)) : Bool)
+  then true
+  else false
 
 def hex_bits_35_forwards (arg_ : (BitVec 35)) : SailM String := do
   let head_exp_ := arg_
@@ -1397,9 +1601,14 @@ def hex_bits_35_forwards (arg_ : (BitVec 35)) : SailM String := do
       assert false "Pattern match failure at unknown location"
       throw Error.Exit)
 
-def hex_bits_35_backwards (arg_ : String) : (BitVec 35) :=
-  match arg_ with
-  | s => (hex_bits_backwards (35, s))
+def hex_bits_35_backwards (arg_ : String) : SailM (BitVec 35) := do
+  let s := arg_
+  if ((hex_bits_backwards_matches (35, s)) : Bool)
+  then (pure (hex_bits_backwards (35, s)))
+  else
+    (do
+      assert false "Pattern match failure at unknown location"
+      throw Error.Exit)
 
 def hex_bits_35_forwards_matches (arg_ : (BitVec 35)) : SailM Bool := do
   let head_exp_ := arg_
@@ -1415,9 +1624,10 @@ def hex_bits_35_forwards_matches (arg_ : (BitVec 35)) : SailM Bool := do
     | _ => (pure false))
 
 def hex_bits_35_backwards_matches (arg_ : String) : Bool :=
-  match arg_ with
-  | s => true
-  | _ => false
+  let s := arg_
+  if ((hex_bits_backwards_matches (35, s)) : Bool)
+  then true
+  else false
 
 def hex_bits_36_forwards (arg_ : (BitVec 36)) : SailM String := do
   let head_exp_ := arg_
@@ -1433,9 +1643,14 @@ def hex_bits_36_forwards (arg_ : (BitVec 36)) : SailM String := do
       assert false "Pattern match failure at unknown location"
       throw Error.Exit)
 
-def hex_bits_36_backwards (arg_ : String) : (BitVec 36) :=
-  match arg_ with
-  | s => (hex_bits_backwards (36, s))
+def hex_bits_36_backwards (arg_ : String) : SailM (BitVec 36) := do
+  let s := arg_
+  if ((hex_bits_backwards_matches (36, s)) : Bool)
+  then (pure (hex_bits_backwards (36, s)))
+  else
+    (do
+      assert false "Pattern match failure at unknown location"
+      throw Error.Exit)
 
 def hex_bits_36_forwards_matches (arg_ : (BitVec 36)) : SailM Bool := do
   let head_exp_ := arg_
@@ -1451,9 +1666,10 @@ def hex_bits_36_forwards_matches (arg_ : (BitVec 36)) : SailM Bool := do
     | _ => (pure false))
 
 def hex_bits_36_backwards_matches (arg_ : String) : Bool :=
-  match arg_ with
-  | s => true
-  | _ => false
+  let s := arg_
+  if ((hex_bits_backwards_matches (36, s)) : Bool)
+  then true
+  else false
 
 def hex_bits_37_forwards (arg_ : (BitVec 37)) : SailM String := do
   let head_exp_ := arg_
@@ -1469,9 +1685,14 @@ def hex_bits_37_forwards (arg_ : (BitVec 37)) : SailM String := do
       assert false "Pattern match failure at unknown location"
       throw Error.Exit)
 
-def hex_bits_37_backwards (arg_ : String) : (BitVec 37) :=
-  match arg_ with
-  | s => (hex_bits_backwards (37, s))
+def hex_bits_37_backwards (arg_ : String) : SailM (BitVec 37) := do
+  let s := arg_
+  if ((hex_bits_backwards_matches (37, s)) : Bool)
+  then (pure (hex_bits_backwards (37, s)))
+  else
+    (do
+      assert false "Pattern match failure at unknown location"
+      throw Error.Exit)
 
 def hex_bits_37_forwards_matches (arg_ : (BitVec 37)) : SailM Bool := do
   let head_exp_ := arg_
@@ -1487,9 +1708,10 @@ def hex_bits_37_forwards_matches (arg_ : (BitVec 37)) : SailM Bool := do
     | _ => (pure false))
 
 def hex_bits_37_backwards_matches (arg_ : String) : Bool :=
-  match arg_ with
-  | s => true
-  | _ => false
+  let s := arg_
+  if ((hex_bits_backwards_matches (37, s)) : Bool)
+  then true
+  else false
 
 def hex_bits_38_forwards (arg_ : (BitVec 38)) : SailM String := do
   let head_exp_ := arg_
@@ -1505,9 +1727,14 @@ def hex_bits_38_forwards (arg_ : (BitVec 38)) : SailM String := do
       assert false "Pattern match failure at unknown location"
       throw Error.Exit)
 
-def hex_bits_38_backwards (arg_ : String) : (BitVec 38) :=
-  match arg_ with
-  | s => (hex_bits_backwards (38, s))
+def hex_bits_38_backwards (arg_ : String) : SailM (BitVec 38) := do
+  let s := arg_
+  if ((hex_bits_backwards_matches (38, s)) : Bool)
+  then (pure (hex_bits_backwards (38, s)))
+  else
+    (do
+      assert false "Pattern match failure at unknown location"
+      throw Error.Exit)
 
 def hex_bits_38_forwards_matches (arg_ : (BitVec 38)) : SailM Bool := do
   let head_exp_ := arg_
@@ -1523,9 +1750,10 @@ def hex_bits_38_forwards_matches (arg_ : (BitVec 38)) : SailM Bool := do
     | _ => (pure false))
 
 def hex_bits_38_backwards_matches (arg_ : String) : Bool :=
-  match arg_ with
-  | s => true
-  | _ => false
+  let s := arg_
+  if ((hex_bits_backwards_matches (38, s)) : Bool)
+  then true
+  else false
 
 def hex_bits_39_forwards (arg_ : (BitVec 39)) : SailM String := do
   let head_exp_ := arg_
@@ -1541,9 +1769,14 @@ def hex_bits_39_forwards (arg_ : (BitVec 39)) : SailM String := do
       assert false "Pattern match failure at unknown location"
       throw Error.Exit)
 
-def hex_bits_39_backwards (arg_ : String) : (BitVec 39) :=
-  match arg_ with
-  | s => (hex_bits_backwards (39, s))
+def hex_bits_39_backwards (arg_ : String) : SailM (BitVec 39) := do
+  let s := arg_
+  if ((hex_bits_backwards_matches (39, s)) : Bool)
+  then (pure (hex_bits_backwards (39, s)))
+  else
+    (do
+      assert false "Pattern match failure at unknown location"
+      throw Error.Exit)
 
 def hex_bits_39_forwards_matches (arg_ : (BitVec 39)) : SailM Bool := do
   let head_exp_ := arg_
@@ -1559,9 +1792,10 @@ def hex_bits_39_forwards_matches (arg_ : (BitVec 39)) : SailM Bool := do
     | _ => (pure false))
 
 def hex_bits_39_backwards_matches (arg_ : String) : Bool :=
-  match arg_ with
-  | s => true
-  | _ => false
+  let s := arg_
+  if ((hex_bits_backwards_matches (39, s)) : Bool)
+  then true
+  else false
 
 def hex_bits_40_forwards (arg_ : (BitVec 40)) : SailM String := do
   let head_exp_ := arg_
@@ -1577,9 +1811,14 @@ def hex_bits_40_forwards (arg_ : (BitVec 40)) : SailM String := do
       assert false "Pattern match failure at unknown location"
       throw Error.Exit)
 
-def hex_bits_40_backwards (arg_ : String) : (BitVec 40) :=
-  match arg_ with
-  | s => (hex_bits_backwards (40, s))
+def hex_bits_40_backwards (arg_ : String) : SailM (BitVec 40) := do
+  let s := arg_
+  if ((hex_bits_backwards_matches (40, s)) : Bool)
+  then (pure (hex_bits_backwards (40, s)))
+  else
+    (do
+      assert false "Pattern match failure at unknown location"
+      throw Error.Exit)
 
 def hex_bits_40_forwards_matches (arg_ : (BitVec 40)) : SailM Bool := do
   let head_exp_ := arg_
@@ -1595,9 +1834,10 @@ def hex_bits_40_forwards_matches (arg_ : (BitVec 40)) : SailM Bool := do
     | _ => (pure false))
 
 def hex_bits_40_backwards_matches (arg_ : String) : Bool :=
-  match arg_ with
-  | s => true
-  | _ => false
+  let s := arg_
+  if ((hex_bits_backwards_matches (40, s)) : Bool)
+  then true
+  else false
 
 def hex_bits_41_forwards (arg_ : (BitVec 41)) : SailM String := do
   let head_exp_ := arg_
@@ -1613,9 +1853,14 @@ def hex_bits_41_forwards (arg_ : (BitVec 41)) : SailM String := do
       assert false "Pattern match failure at unknown location"
       throw Error.Exit)
 
-def hex_bits_41_backwards (arg_ : String) : (BitVec 41) :=
-  match arg_ with
-  | s => (hex_bits_backwards (41, s))
+def hex_bits_41_backwards (arg_ : String) : SailM (BitVec 41) := do
+  let s := arg_
+  if ((hex_bits_backwards_matches (41, s)) : Bool)
+  then (pure (hex_bits_backwards (41, s)))
+  else
+    (do
+      assert false "Pattern match failure at unknown location"
+      throw Error.Exit)
 
 def hex_bits_41_forwards_matches (arg_ : (BitVec 41)) : SailM Bool := do
   let head_exp_ := arg_
@@ -1631,9 +1876,10 @@ def hex_bits_41_forwards_matches (arg_ : (BitVec 41)) : SailM Bool := do
     | _ => (pure false))
 
 def hex_bits_41_backwards_matches (arg_ : String) : Bool :=
-  match arg_ with
-  | s => true
-  | _ => false
+  let s := arg_
+  if ((hex_bits_backwards_matches (41, s)) : Bool)
+  then true
+  else false
 
 def hex_bits_42_forwards (arg_ : (BitVec 42)) : SailM String := do
   let head_exp_ := arg_
@@ -1649,9 +1895,14 @@ def hex_bits_42_forwards (arg_ : (BitVec 42)) : SailM String := do
       assert false "Pattern match failure at unknown location"
       throw Error.Exit)
 
-def hex_bits_42_backwards (arg_ : String) : (BitVec 42) :=
-  match arg_ with
-  | s => (hex_bits_backwards (42, s))
+def hex_bits_42_backwards (arg_ : String) : SailM (BitVec 42) := do
+  let s := arg_
+  if ((hex_bits_backwards_matches (42, s)) : Bool)
+  then (pure (hex_bits_backwards (42, s)))
+  else
+    (do
+      assert false "Pattern match failure at unknown location"
+      throw Error.Exit)
 
 def hex_bits_42_forwards_matches (arg_ : (BitVec 42)) : SailM Bool := do
   let head_exp_ := arg_
@@ -1667,9 +1918,10 @@ def hex_bits_42_forwards_matches (arg_ : (BitVec 42)) : SailM Bool := do
     | _ => (pure false))
 
 def hex_bits_42_backwards_matches (arg_ : String) : Bool :=
-  match arg_ with
-  | s => true
-  | _ => false
+  let s := arg_
+  if ((hex_bits_backwards_matches (42, s)) : Bool)
+  then true
+  else false
 
 def hex_bits_43_forwards (arg_ : (BitVec 43)) : SailM String := do
   let head_exp_ := arg_
@@ -1685,9 +1937,14 @@ def hex_bits_43_forwards (arg_ : (BitVec 43)) : SailM String := do
       assert false "Pattern match failure at unknown location"
       throw Error.Exit)
 
-def hex_bits_43_backwards (arg_ : String) : (BitVec 43) :=
-  match arg_ with
-  | s => (hex_bits_backwards (43, s))
+def hex_bits_43_backwards (arg_ : String) : SailM (BitVec 43) := do
+  let s := arg_
+  if ((hex_bits_backwards_matches (43, s)) : Bool)
+  then (pure (hex_bits_backwards (43, s)))
+  else
+    (do
+      assert false "Pattern match failure at unknown location"
+      throw Error.Exit)
 
 def hex_bits_43_forwards_matches (arg_ : (BitVec 43)) : SailM Bool := do
   let head_exp_ := arg_
@@ -1703,9 +1960,10 @@ def hex_bits_43_forwards_matches (arg_ : (BitVec 43)) : SailM Bool := do
     | _ => (pure false))
 
 def hex_bits_43_backwards_matches (arg_ : String) : Bool :=
-  match arg_ with
-  | s => true
-  | _ => false
+  let s := arg_
+  if ((hex_bits_backwards_matches (43, s)) : Bool)
+  then true
+  else false
 
 def hex_bits_44_forwards (arg_ : (BitVec 44)) : SailM String := do
   let head_exp_ := arg_
@@ -1721,9 +1979,14 @@ def hex_bits_44_forwards (arg_ : (BitVec 44)) : SailM String := do
       assert false "Pattern match failure at unknown location"
       throw Error.Exit)
 
-def hex_bits_44_backwards (arg_ : String) : (BitVec 44) :=
-  match arg_ with
-  | s => (hex_bits_backwards (44, s))
+def hex_bits_44_backwards (arg_ : String) : SailM (BitVec 44) := do
+  let s := arg_
+  if ((hex_bits_backwards_matches (44, s)) : Bool)
+  then (pure (hex_bits_backwards (44, s)))
+  else
+    (do
+      assert false "Pattern match failure at unknown location"
+      throw Error.Exit)
 
 def hex_bits_44_forwards_matches (arg_ : (BitVec 44)) : SailM Bool := do
   let head_exp_ := arg_
@@ -1739,9 +2002,10 @@ def hex_bits_44_forwards_matches (arg_ : (BitVec 44)) : SailM Bool := do
     | _ => (pure false))
 
 def hex_bits_44_backwards_matches (arg_ : String) : Bool :=
-  match arg_ with
-  | s => true
-  | _ => false
+  let s := arg_
+  if ((hex_bits_backwards_matches (44, s)) : Bool)
+  then true
+  else false
 
 def hex_bits_45_forwards (arg_ : (BitVec 45)) : SailM String := do
   let head_exp_ := arg_
@@ -1757,9 +2021,14 @@ def hex_bits_45_forwards (arg_ : (BitVec 45)) : SailM String := do
       assert false "Pattern match failure at unknown location"
       throw Error.Exit)
 
-def hex_bits_45_backwards (arg_ : String) : (BitVec 45) :=
-  match arg_ with
-  | s => (hex_bits_backwards (45, s))
+def hex_bits_45_backwards (arg_ : String) : SailM (BitVec 45) := do
+  let s := arg_
+  if ((hex_bits_backwards_matches (45, s)) : Bool)
+  then (pure (hex_bits_backwards (45, s)))
+  else
+    (do
+      assert false "Pattern match failure at unknown location"
+      throw Error.Exit)
 
 def hex_bits_45_forwards_matches (arg_ : (BitVec 45)) : SailM Bool := do
   let head_exp_ := arg_
@@ -1775,9 +2044,10 @@ def hex_bits_45_forwards_matches (arg_ : (BitVec 45)) : SailM Bool := do
     | _ => (pure false))
 
 def hex_bits_45_backwards_matches (arg_ : String) : Bool :=
-  match arg_ with
-  | s => true
-  | _ => false
+  let s := arg_
+  if ((hex_bits_backwards_matches (45, s)) : Bool)
+  then true
+  else false
 
 def hex_bits_46_forwards (arg_ : (BitVec 46)) : SailM String := do
   let head_exp_ := arg_
@@ -1793,9 +2063,14 @@ def hex_bits_46_forwards (arg_ : (BitVec 46)) : SailM String := do
       assert false "Pattern match failure at unknown location"
       throw Error.Exit)
 
-def hex_bits_46_backwards (arg_ : String) : (BitVec 46) :=
-  match arg_ with
-  | s => (hex_bits_backwards (46, s))
+def hex_bits_46_backwards (arg_ : String) : SailM (BitVec 46) := do
+  let s := arg_
+  if ((hex_bits_backwards_matches (46, s)) : Bool)
+  then (pure (hex_bits_backwards (46, s)))
+  else
+    (do
+      assert false "Pattern match failure at unknown location"
+      throw Error.Exit)
 
 def hex_bits_46_forwards_matches (arg_ : (BitVec 46)) : SailM Bool := do
   let head_exp_ := arg_
@@ -1811,9 +2086,10 @@ def hex_bits_46_forwards_matches (arg_ : (BitVec 46)) : SailM Bool := do
     | _ => (pure false))
 
 def hex_bits_46_backwards_matches (arg_ : String) : Bool :=
-  match arg_ with
-  | s => true
-  | _ => false
+  let s := arg_
+  if ((hex_bits_backwards_matches (46, s)) : Bool)
+  then true
+  else false
 
 def hex_bits_47_forwards (arg_ : (BitVec 47)) : SailM String := do
   let head_exp_ := arg_
@@ -1829,9 +2105,14 @@ def hex_bits_47_forwards (arg_ : (BitVec 47)) : SailM String := do
       assert false "Pattern match failure at unknown location"
       throw Error.Exit)
 
-def hex_bits_47_backwards (arg_ : String) : (BitVec 47) :=
-  match arg_ with
-  | s => (hex_bits_backwards (47, s))
+def hex_bits_47_backwards (arg_ : String) : SailM (BitVec 47) := do
+  let s := arg_
+  if ((hex_bits_backwards_matches (47, s)) : Bool)
+  then (pure (hex_bits_backwards (47, s)))
+  else
+    (do
+      assert false "Pattern match failure at unknown location"
+      throw Error.Exit)
 
 def hex_bits_47_forwards_matches (arg_ : (BitVec 47)) : SailM Bool := do
   let head_exp_ := arg_
@@ -1847,9 +2128,10 @@ def hex_bits_47_forwards_matches (arg_ : (BitVec 47)) : SailM Bool := do
     | _ => (pure false))
 
 def hex_bits_47_backwards_matches (arg_ : String) : Bool :=
-  match arg_ with
-  | s => true
-  | _ => false
+  let s := arg_
+  if ((hex_bits_backwards_matches (47, s)) : Bool)
+  then true
+  else false
 
 def hex_bits_48_forwards (arg_ : (BitVec 48)) : SailM String := do
   let head_exp_ := arg_
@@ -1865,9 +2147,14 @@ def hex_bits_48_forwards (arg_ : (BitVec 48)) : SailM String := do
       assert false "Pattern match failure at unknown location"
       throw Error.Exit)
 
-def hex_bits_48_backwards (arg_ : String) : (BitVec 48) :=
-  match arg_ with
-  | s => (hex_bits_backwards (48, s))
+def hex_bits_48_backwards (arg_ : String) : SailM (BitVec 48) := do
+  let s := arg_
+  if ((hex_bits_backwards_matches (48, s)) : Bool)
+  then (pure (hex_bits_backwards (48, s)))
+  else
+    (do
+      assert false "Pattern match failure at unknown location"
+      throw Error.Exit)
 
 def hex_bits_48_forwards_matches (arg_ : (BitVec 48)) : SailM Bool := do
   let head_exp_ := arg_
@@ -1883,9 +2170,10 @@ def hex_bits_48_forwards_matches (arg_ : (BitVec 48)) : SailM Bool := do
     | _ => (pure false))
 
 def hex_bits_48_backwards_matches (arg_ : String) : Bool :=
-  match arg_ with
-  | s => true
-  | _ => false
+  let s := arg_
+  if ((hex_bits_backwards_matches (48, s)) : Bool)
+  then true
+  else false
 
 def hex_bits_49_forwards (arg_ : (BitVec 49)) : SailM String := do
   let head_exp_ := arg_
@@ -1901,9 +2189,14 @@ def hex_bits_49_forwards (arg_ : (BitVec 49)) : SailM String := do
       assert false "Pattern match failure at unknown location"
       throw Error.Exit)
 
-def hex_bits_49_backwards (arg_ : String) : (BitVec 49) :=
-  match arg_ with
-  | s => (hex_bits_backwards (49, s))
+def hex_bits_49_backwards (arg_ : String) : SailM (BitVec 49) := do
+  let s := arg_
+  if ((hex_bits_backwards_matches (49, s)) : Bool)
+  then (pure (hex_bits_backwards (49, s)))
+  else
+    (do
+      assert false "Pattern match failure at unknown location"
+      throw Error.Exit)
 
 def hex_bits_49_forwards_matches (arg_ : (BitVec 49)) : SailM Bool := do
   let head_exp_ := arg_
@@ -1919,9 +2212,10 @@ def hex_bits_49_forwards_matches (arg_ : (BitVec 49)) : SailM Bool := do
     | _ => (pure false))
 
 def hex_bits_49_backwards_matches (arg_ : String) : Bool :=
-  match arg_ with
-  | s => true
-  | _ => false
+  let s := arg_
+  if ((hex_bits_backwards_matches (49, s)) : Bool)
+  then true
+  else false
 
 def hex_bits_50_forwards (arg_ : (BitVec 50)) : SailM String := do
   let head_exp_ := arg_
@@ -1937,9 +2231,14 @@ def hex_bits_50_forwards (arg_ : (BitVec 50)) : SailM String := do
       assert false "Pattern match failure at unknown location"
       throw Error.Exit)
 
-def hex_bits_50_backwards (arg_ : String) : (BitVec 50) :=
-  match arg_ with
-  | s => (hex_bits_backwards (50, s))
+def hex_bits_50_backwards (arg_ : String) : SailM (BitVec 50) := do
+  let s := arg_
+  if ((hex_bits_backwards_matches (50, s)) : Bool)
+  then (pure (hex_bits_backwards (50, s)))
+  else
+    (do
+      assert false "Pattern match failure at unknown location"
+      throw Error.Exit)
 
 def hex_bits_50_forwards_matches (arg_ : (BitVec 50)) : SailM Bool := do
   let head_exp_ := arg_
@@ -1955,9 +2254,10 @@ def hex_bits_50_forwards_matches (arg_ : (BitVec 50)) : SailM Bool := do
     | _ => (pure false))
 
 def hex_bits_50_backwards_matches (arg_ : String) : Bool :=
-  match arg_ with
-  | s => true
-  | _ => false
+  let s := arg_
+  if ((hex_bits_backwards_matches (50, s)) : Bool)
+  then true
+  else false
 
 def hex_bits_51_forwards (arg_ : (BitVec 51)) : SailM String := do
   let head_exp_ := arg_
@@ -1973,9 +2273,14 @@ def hex_bits_51_forwards (arg_ : (BitVec 51)) : SailM String := do
       assert false "Pattern match failure at unknown location"
       throw Error.Exit)
 
-def hex_bits_51_backwards (arg_ : String) : (BitVec 51) :=
-  match arg_ with
-  | s => (hex_bits_backwards (51, s))
+def hex_bits_51_backwards (arg_ : String) : SailM (BitVec 51) := do
+  let s := arg_
+  if ((hex_bits_backwards_matches (51, s)) : Bool)
+  then (pure (hex_bits_backwards (51, s)))
+  else
+    (do
+      assert false "Pattern match failure at unknown location"
+      throw Error.Exit)
 
 def hex_bits_51_forwards_matches (arg_ : (BitVec 51)) : SailM Bool := do
   let head_exp_ := arg_
@@ -1991,9 +2296,10 @@ def hex_bits_51_forwards_matches (arg_ : (BitVec 51)) : SailM Bool := do
     | _ => (pure false))
 
 def hex_bits_51_backwards_matches (arg_ : String) : Bool :=
-  match arg_ with
-  | s => true
-  | _ => false
+  let s := arg_
+  if ((hex_bits_backwards_matches (51, s)) : Bool)
+  then true
+  else false
 
 def hex_bits_52_forwards (arg_ : (BitVec 52)) : SailM String := do
   let head_exp_ := arg_
@@ -2009,9 +2315,14 @@ def hex_bits_52_forwards (arg_ : (BitVec 52)) : SailM String := do
       assert false "Pattern match failure at unknown location"
       throw Error.Exit)
 
-def hex_bits_52_backwards (arg_ : String) : (BitVec 52) :=
-  match arg_ with
-  | s => (hex_bits_backwards (52, s))
+def hex_bits_52_backwards (arg_ : String) : SailM (BitVec 52) := do
+  let s := arg_
+  if ((hex_bits_backwards_matches (52, s)) : Bool)
+  then (pure (hex_bits_backwards (52, s)))
+  else
+    (do
+      assert false "Pattern match failure at unknown location"
+      throw Error.Exit)
 
 def hex_bits_52_forwards_matches (arg_ : (BitVec 52)) : SailM Bool := do
   let head_exp_ := arg_
@@ -2027,9 +2338,10 @@ def hex_bits_52_forwards_matches (arg_ : (BitVec 52)) : SailM Bool := do
     | _ => (pure false))
 
 def hex_bits_52_backwards_matches (arg_ : String) : Bool :=
-  match arg_ with
-  | s => true
-  | _ => false
+  let s := arg_
+  if ((hex_bits_backwards_matches (52, s)) : Bool)
+  then true
+  else false
 
 def hex_bits_53_forwards (arg_ : (BitVec 53)) : SailM String := do
   let head_exp_ := arg_
@@ -2045,9 +2357,14 @@ def hex_bits_53_forwards (arg_ : (BitVec 53)) : SailM String := do
       assert false "Pattern match failure at unknown location"
       throw Error.Exit)
 
-def hex_bits_53_backwards (arg_ : String) : (BitVec 53) :=
-  match arg_ with
-  | s => (hex_bits_backwards (53, s))
+def hex_bits_53_backwards (arg_ : String) : SailM (BitVec 53) := do
+  let s := arg_
+  if ((hex_bits_backwards_matches (53, s)) : Bool)
+  then (pure (hex_bits_backwards (53, s)))
+  else
+    (do
+      assert false "Pattern match failure at unknown location"
+      throw Error.Exit)
 
 def hex_bits_53_forwards_matches (arg_ : (BitVec 53)) : SailM Bool := do
   let head_exp_ := arg_
@@ -2063,9 +2380,10 @@ def hex_bits_53_forwards_matches (arg_ : (BitVec 53)) : SailM Bool := do
     | _ => (pure false))
 
 def hex_bits_53_backwards_matches (arg_ : String) : Bool :=
-  match arg_ with
-  | s => true
-  | _ => false
+  let s := arg_
+  if ((hex_bits_backwards_matches (53, s)) : Bool)
+  then true
+  else false
 
 def hex_bits_54_forwards (arg_ : (BitVec 54)) : SailM String := do
   let head_exp_ := arg_
@@ -2081,9 +2399,14 @@ def hex_bits_54_forwards (arg_ : (BitVec 54)) : SailM String := do
       assert false "Pattern match failure at unknown location"
       throw Error.Exit)
 
-def hex_bits_54_backwards (arg_ : String) : (BitVec 54) :=
-  match arg_ with
-  | s => (hex_bits_backwards (54, s))
+def hex_bits_54_backwards (arg_ : String) : SailM (BitVec 54) := do
+  let s := arg_
+  if ((hex_bits_backwards_matches (54, s)) : Bool)
+  then (pure (hex_bits_backwards (54, s)))
+  else
+    (do
+      assert false "Pattern match failure at unknown location"
+      throw Error.Exit)
 
 def hex_bits_54_forwards_matches (arg_ : (BitVec 54)) : SailM Bool := do
   let head_exp_ := arg_
@@ -2099,9 +2422,10 @@ def hex_bits_54_forwards_matches (arg_ : (BitVec 54)) : SailM Bool := do
     | _ => (pure false))
 
 def hex_bits_54_backwards_matches (arg_ : String) : Bool :=
-  match arg_ with
-  | s => true
-  | _ => false
+  let s := arg_
+  if ((hex_bits_backwards_matches (54, s)) : Bool)
+  then true
+  else false
 
 def hex_bits_55_forwards (arg_ : (BitVec 55)) : SailM String := do
   let head_exp_ := arg_
@@ -2117,9 +2441,14 @@ def hex_bits_55_forwards (arg_ : (BitVec 55)) : SailM String := do
       assert false "Pattern match failure at unknown location"
       throw Error.Exit)
 
-def hex_bits_55_backwards (arg_ : String) : (BitVec 55) :=
-  match arg_ with
-  | s => (hex_bits_backwards (55, s))
+def hex_bits_55_backwards (arg_ : String) : SailM (BitVec 55) := do
+  let s := arg_
+  if ((hex_bits_backwards_matches (55, s)) : Bool)
+  then (pure (hex_bits_backwards (55, s)))
+  else
+    (do
+      assert false "Pattern match failure at unknown location"
+      throw Error.Exit)
 
 def hex_bits_55_forwards_matches (arg_ : (BitVec 55)) : SailM Bool := do
   let head_exp_ := arg_
@@ -2135,9 +2464,10 @@ def hex_bits_55_forwards_matches (arg_ : (BitVec 55)) : SailM Bool := do
     | _ => (pure false))
 
 def hex_bits_55_backwards_matches (arg_ : String) : Bool :=
-  match arg_ with
-  | s => true
-  | _ => false
+  let s := arg_
+  if ((hex_bits_backwards_matches (55, s)) : Bool)
+  then true
+  else false
 
 def hex_bits_56_forwards (arg_ : (BitVec 56)) : SailM String := do
   let head_exp_ := arg_
@@ -2153,9 +2483,14 @@ def hex_bits_56_forwards (arg_ : (BitVec 56)) : SailM String := do
       assert false "Pattern match failure at unknown location"
       throw Error.Exit)
 
-def hex_bits_56_backwards (arg_ : String) : (BitVec 56) :=
-  match arg_ with
-  | s => (hex_bits_backwards (56, s))
+def hex_bits_56_backwards (arg_ : String) : SailM (BitVec 56) := do
+  let s := arg_
+  if ((hex_bits_backwards_matches (56, s)) : Bool)
+  then (pure (hex_bits_backwards (56, s)))
+  else
+    (do
+      assert false "Pattern match failure at unknown location"
+      throw Error.Exit)
 
 def hex_bits_56_forwards_matches (arg_ : (BitVec 56)) : SailM Bool := do
   let head_exp_ := arg_
@@ -2171,9 +2506,10 @@ def hex_bits_56_forwards_matches (arg_ : (BitVec 56)) : SailM Bool := do
     | _ => (pure false))
 
 def hex_bits_56_backwards_matches (arg_ : String) : Bool :=
-  match arg_ with
-  | s => true
-  | _ => false
+  let s := arg_
+  if ((hex_bits_backwards_matches (56, s)) : Bool)
+  then true
+  else false
 
 def hex_bits_57_forwards (arg_ : (BitVec 57)) : SailM String := do
   let head_exp_ := arg_
@@ -2189,9 +2525,14 @@ def hex_bits_57_forwards (arg_ : (BitVec 57)) : SailM String := do
       assert false "Pattern match failure at unknown location"
       throw Error.Exit)
 
-def hex_bits_57_backwards (arg_ : String) : (BitVec 57) :=
-  match arg_ with
-  | s => (hex_bits_backwards (57, s))
+def hex_bits_57_backwards (arg_ : String) : SailM (BitVec 57) := do
+  let s := arg_
+  if ((hex_bits_backwards_matches (57, s)) : Bool)
+  then (pure (hex_bits_backwards (57, s)))
+  else
+    (do
+      assert false "Pattern match failure at unknown location"
+      throw Error.Exit)
 
 def hex_bits_57_forwards_matches (arg_ : (BitVec 57)) : SailM Bool := do
   let head_exp_ := arg_
@@ -2207,9 +2548,10 @@ def hex_bits_57_forwards_matches (arg_ : (BitVec 57)) : SailM Bool := do
     | _ => (pure false))
 
 def hex_bits_57_backwards_matches (arg_ : String) : Bool :=
-  match arg_ with
-  | s => true
-  | _ => false
+  let s := arg_
+  if ((hex_bits_backwards_matches (57, s)) : Bool)
+  then true
+  else false
 
 def hex_bits_58_forwards (arg_ : (BitVec 58)) : SailM String := do
   let head_exp_ := arg_
@@ -2225,9 +2567,14 @@ def hex_bits_58_forwards (arg_ : (BitVec 58)) : SailM String := do
       assert false "Pattern match failure at unknown location"
       throw Error.Exit)
 
-def hex_bits_58_backwards (arg_ : String) : (BitVec 58) :=
-  match arg_ with
-  | s => (hex_bits_backwards (58, s))
+def hex_bits_58_backwards (arg_ : String) : SailM (BitVec 58) := do
+  let s := arg_
+  if ((hex_bits_backwards_matches (58, s)) : Bool)
+  then (pure (hex_bits_backwards (58, s)))
+  else
+    (do
+      assert false "Pattern match failure at unknown location"
+      throw Error.Exit)
 
 def hex_bits_58_forwards_matches (arg_ : (BitVec 58)) : SailM Bool := do
   let head_exp_ := arg_
@@ -2243,9 +2590,10 @@ def hex_bits_58_forwards_matches (arg_ : (BitVec 58)) : SailM Bool := do
     | _ => (pure false))
 
 def hex_bits_58_backwards_matches (arg_ : String) : Bool :=
-  match arg_ with
-  | s => true
-  | _ => false
+  let s := arg_
+  if ((hex_bits_backwards_matches (58, s)) : Bool)
+  then true
+  else false
 
 def hex_bits_59_forwards (arg_ : (BitVec 59)) : SailM String := do
   let head_exp_ := arg_
@@ -2261,9 +2609,14 @@ def hex_bits_59_forwards (arg_ : (BitVec 59)) : SailM String := do
       assert false "Pattern match failure at unknown location"
       throw Error.Exit)
 
-def hex_bits_59_backwards (arg_ : String) : (BitVec 59) :=
-  match arg_ with
-  | s => (hex_bits_backwards (59, s))
+def hex_bits_59_backwards (arg_ : String) : SailM (BitVec 59) := do
+  let s := arg_
+  if ((hex_bits_backwards_matches (59, s)) : Bool)
+  then (pure (hex_bits_backwards (59, s)))
+  else
+    (do
+      assert false "Pattern match failure at unknown location"
+      throw Error.Exit)
 
 def hex_bits_59_forwards_matches (arg_ : (BitVec 59)) : SailM Bool := do
   let head_exp_ := arg_
@@ -2279,9 +2632,10 @@ def hex_bits_59_forwards_matches (arg_ : (BitVec 59)) : SailM Bool := do
     | _ => (pure false))
 
 def hex_bits_59_backwards_matches (arg_ : String) : Bool :=
-  match arg_ with
-  | s => true
-  | _ => false
+  let s := arg_
+  if ((hex_bits_backwards_matches (59, s)) : Bool)
+  then true
+  else false
 
 def hex_bits_60_forwards (arg_ : (BitVec 60)) : SailM String := do
   let head_exp_ := arg_
@@ -2297,9 +2651,14 @@ def hex_bits_60_forwards (arg_ : (BitVec 60)) : SailM String := do
       assert false "Pattern match failure at unknown location"
       throw Error.Exit)
 
-def hex_bits_60_backwards (arg_ : String) : (BitVec 60) :=
-  match arg_ with
-  | s => (hex_bits_backwards (60, s))
+def hex_bits_60_backwards (arg_ : String) : SailM (BitVec 60) := do
+  let s := arg_
+  if ((hex_bits_backwards_matches (60, s)) : Bool)
+  then (pure (hex_bits_backwards (60, s)))
+  else
+    (do
+      assert false "Pattern match failure at unknown location"
+      throw Error.Exit)
 
 def hex_bits_60_forwards_matches (arg_ : (BitVec 60)) : SailM Bool := do
   let head_exp_ := arg_
@@ -2315,9 +2674,10 @@ def hex_bits_60_forwards_matches (arg_ : (BitVec 60)) : SailM Bool := do
     | _ => (pure false))
 
 def hex_bits_60_backwards_matches (arg_ : String) : Bool :=
-  match arg_ with
-  | s => true
-  | _ => false
+  let s := arg_
+  if ((hex_bits_backwards_matches (60, s)) : Bool)
+  then true
+  else false
 
 def hex_bits_61_forwards (arg_ : (BitVec 61)) : SailM String := do
   let head_exp_ := arg_
@@ -2333,9 +2693,14 @@ def hex_bits_61_forwards (arg_ : (BitVec 61)) : SailM String := do
       assert false "Pattern match failure at unknown location"
       throw Error.Exit)
 
-def hex_bits_61_backwards (arg_ : String) : (BitVec 61) :=
-  match arg_ with
-  | s => (hex_bits_backwards (61, s))
+def hex_bits_61_backwards (arg_ : String) : SailM (BitVec 61) := do
+  let s := arg_
+  if ((hex_bits_backwards_matches (61, s)) : Bool)
+  then (pure (hex_bits_backwards (61, s)))
+  else
+    (do
+      assert false "Pattern match failure at unknown location"
+      throw Error.Exit)
 
 def hex_bits_61_forwards_matches (arg_ : (BitVec 61)) : SailM Bool := do
   let head_exp_ := arg_
@@ -2351,9 +2716,10 @@ def hex_bits_61_forwards_matches (arg_ : (BitVec 61)) : SailM Bool := do
     | _ => (pure false))
 
 def hex_bits_61_backwards_matches (arg_ : String) : Bool :=
-  match arg_ with
-  | s => true
-  | _ => false
+  let s := arg_
+  if ((hex_bits_backwards_matches (61, s)) : Bool)
+  then true
+  else false
 
 def hex_bits_62_forwards (arg_ : (BitVec 62)) : SailM String := do
   let head_exp_ := arg_
@@ -2369,9 +2735,14 @@ def hex_bits_62_forwards (arg_ : (BitVec 62)) : SailM String := do
       assert false "Pattern match failure at unknown location"
       throw Error.Exit)
 
-def hex_bits_62_backwards (arg_ : String) : (BitVec 62) :=
-  match arg_ with
-  | s => (hex_bits_backwards (62, s))
+def hex_bits_62_backwards (arg_ : String) : SailM (BitVec 62) := do
+  let s := arg_
+  if ((hex_bits_backwards_matches (62, s)) : Bool)
+  then (pure (hex_bits_backwards (62, s)))
+  else
+    (do
+      assert false "Pattern match failure at unknown location"
+      throw Error.Exit)
 
 def hex_bits_62_forwards_matches (arg_ : (BitVec 62)) : SailM Bool := do
   let head_exp_ := arg_
@@ -2387,9 +2758,10 @@ def hex_bits_62_forwards_matches (arg_ : (BitVec 62)) : SailM Bool := do
     | _ => (pure false))
 
 def hex_bits_62_backwards_matches (arg_ : String) : Bool :=
-  match arg_ with
-  | s => true
-  | _ => false
+  let s := arg_
+  if ((hex_bits_backwards_matches (62, s)) : Bool)
+  then true
+  else false
 
 def hex_bits_63_forwards (arg_ : (BitVec 63)) : SailM String := do
   let head_exp_ := arg_
@@ -2405,9 +2777,14 @@ def hex_bits_63_forwards (arg_ : (BitVec 63)) : SailM String := do
       assert false "Pattern match failure at unknown location"
       throw Error.Exit)
 
-def hex_bits_63_backwards (arg_ : String) : (BitVec 63) :=
-  match arg_ with
-  | s => (hex_bits_backwards (63, s))
+def hex_bits_63_backwards (arg_ : String) : SailM (BitVec 63) := do
+  let s := arg_
+  if ((hex_bits_backwards_matches (63, s)) : Bool)
+  then (pure (hex_bits_backwards (63, s)))
+  else
+    (do
+      assert false "Pattern match failure at unknown location"
+      throw Error.Exit)
 
 def hex_bits_63_forwards_matches (arg_ : (BitVec 63)) : SailM Bool := do
   let head_exp_ := arg_
@@ -2423,9 +2800,10 @@ def hex_bits_63_forwards_matches (arg_ : (BitVec 63)) : SailM Bool := do
     | _ => (pure false))
 
 def hex_bits_63_backwards_matches (arg_ : String) : Bool :=
-  match arg_ with
-  | s => true
-  | _ => false
+  let s := arg_
+  if ((hex_bits_backwards_matches (63, s)) : Bool)
+  then true
+  else false
 
 def hex_bits_64_forwards (arg_ : (BitVec 64)) : SailM String := do
   let head_exp_ := arg_
@@ -2441,9 +2819,14 @@ def hex_bits_64_forwards (arg_ : (BitVec 64)) : SailM String := do
       assert false "Pattern match failure at unknown location"
       throw Error.Exit)
 
-def hex_bits_64_backwards (arg_ : String) : (BitVec 64) :=
-  match arg_ with
-  | s => (hex_bits_backwards (64, s))
+def hex_bits_64_backwards (arg_ : String) : SailM (BitVec 64) := do
+  let s := arg_
+  if ((hex_bits_backwards_matches (64, s)) : Bool)
+  then (pure (hex_bits_backwards (64, s)))
+  else
+    (do
+      assert false "Pattern match failure at unknown location"
+      throw Error.Exit)
 
 def hex_bits_64_forwards_matches (arg_ : (BitVec 64)) : SailM Bool := do
   let head_exp_ := arg_
@@ -2459,9 +2842,10 @@ def hex_bits_64_forwards_matches (arg_ : (BitVec 64)) : SailM Bool := do
     | _ => (pure false))
 
 def hex_bits_64_backwards_matches (arg_ : String) : Bool :=
-  match arg_ with
-  | s => true
-  | _ => false
+  let s := arg_
+  if ((hex_bits_backwards_matches (64, s)) : Bool)
+  then true
+  else false
 
 def csr_name_map_forwards (arg_ : (BitVec 12)) : SailM String := do
   match arg_ with
@@ -2750,266 +3134,269 @@ def csr_name_map_forwards (arg_ : (BitVec 12)) : SailM String := do
 
 def csr_name_map_backwards (arg_ : String) : SailM (BitVec 12) := do
   let head_exp_ := arg_
-  match (match head_exp_ with
-  | "stimecmp" => (some 0x14D#12)
-  | "stimecmph" => (some 0x15D#12)
-  | "hpmcounter3" => (some 0xC03#12)
-  | "hpmcounter4" => (some 0xC04#12)
-  | "hpmcounter5" => (some 0xC05#12)
-  | "hpmcounter6" => (some 0xC06#12)
-  | "hpmcounter7" => (some 0xC07#12)
-  | "hpmcounter8" => (some 0xC08#12)
-  | "hpmcounter9" => (some 0xC09#12)
-  | "hpmcounter10" => (some 0xC0A#12)
-  | "hpmcounter11" => (some 0xC0B#12)
-  | "hpmcounter12" => (some 0xC0C#12)
-  | "hpmcounter13" => (some 0xC0D#12)
-  | "hpmcounter14" => (some 0xC0E#12)
-  | "hpmcounter15" => (some 0xC0F#12)
-  | "hpmcounter16" => (some 0xC10#12)
-  | "hpmcounter17" => (some 0xC11#12)
-  | "hpmcounter18" => (some 0xC12#12)
-  | "hpmcounter19" => (some 0xC13#12)
-  | "hpmcounter20" => (some 0xC14#12)
-  | "hpmcounter21" => (some 0xC15#12)
-  | "hpmcounter22" => (some 0xC16#12)
-  | "hpmcounter23" => (some 0xC17#12)
-  | "hpmcounter24" => (some 0xC18#12)
-  | "hpmcounter25" => (some 0xC19#12)
-  | "hpmcounter26" => (some 0xC1A#12)
-  | "hpmcounter27" => (some 0xC1B#12)
-  | "hpmcounter28" => (some 0xC1C#12)
-  | "hpmcounter29" => (some 0xC1D#12)
-  | "hpmcounter30" => (some 0xC1E#12)
-  | "hpmcounter31" => (some 0xC1F#12)
-  | "hpmcounter3h" => (some 0xC83#12)
-  | "hpmcounter4h" => (some 0xC84#12)
-  | "hpmcounter5h" => (some 0xC85#12)
-  | "hpmcounter6h" => (some 0xC86#12)
-  | "hpmcounter7h" => (some 0xC87#12)
-  | "hpmcounter8h" => (some 0xC88#12)
-  | "hpmcounter9h" => (some 0xC89#12)
-  | "hpmcounter10h" => (some 0xC8A#12)
-  | "hpmcounter11h" => (some 0xC8B#12)
-  | "hpmcounter12h" => (some 0xC8C#12)
-  | "hpmcounter13h" => (some 0xC8D#12)
-  | "hpmcounter14h" => (some 0xC8E#12)
-  | "hpmcounter15h" => (some 0xC8F#12)
-  | "hpmcounter16h" => (some 0xC90#12)
-  | "hpmcounter17h" => (some 0xC91#12)
-  | "hpmcounter18h" => (some 0xC92#12)
-  | "hpmcounter19h" => (some 0xC93#12)
-  | "hpmcounter20h" => (some 0xC94#12)
-  | "hpmcounter21h" => (some 0xC95#12)
-  | "hpmcounter22h" => (some 0xC96#12)
-  | "hpmcounter23h" => (some 0xC97#12)
-  | "hpmcounter24h" => (some 0xC98#12)
-  | "hpmcounter25h" => (some 0xC99#12)
-  | "hpmcounter26h" => (some 0xC9A#12)
-  | "hpmcounter27h" => (some 0xC9B#12)
-  | "hpmcounter28h" => (some 0xC9C#12)
-  | "hpmcounter29h" => (some 0xC9D#12)
-  | "hpmcounter30h" => (some 0xC9E#12)
-  | "hpmcounter31h" => (some 0xC9F#12)
-  | "mhpmevent3" => (some 0x323#12)
-  | "mhpmevent4" => (some 0x324#12)
-  | "mhpmevent5" => (some 0x325#12)
-  | "mhpmevent6" => (some 0x326#12)
-  | "mhpmevent7" => (some 0x327#12)
-  | "mhpmevent8" => (some 0x328#12)
-  | "mhpmevent9" => (some 0x329#12)
-  | "mhpmevent10" => (some 0x32A#12)
-  | "mhpmevent11" => (some 0x32B#12)
-  | "mhpmevent12" => (some 0x32C#12)
-  | "mhpmevent13" => (some 0x32D#12)
-  | "mhpmevent14" => (some 0x32E#12)
-  | "mhpmevent15" => (some 0x32F#12)
-  | "mhpmevent16" => (some 0x330#12)
-  | "mhpmevent17" => (some 0x331#12)
-  | "mhpmevent18" => (some 0x332#12)
-  | "mhpmevent19" => (some 0x333#12)
-  | "mhpmevent20" => (some 0x334#12)
-  | "mhpmevent21" => (some 0x335#12)
-  | "mhpmevent22" => (some 0x336#12)
-  | "mhpmevent23" => (some 0x337#12)
-  | "mhpmevent24" => (some 0x338#12)
-  | "mhpmevent25" => (some 0x339#12)
-  | "mhpmevent26" => (some 0x33A#12)
-  | "mhpmevent27" => (some 0x33B#12)
-  | "mhpmevent28" => (some 0x33C#12)
-  | "mhpmevent29" => (some 0x33D#12)
-  | "mhpmevent30" => (some 0x33E#12)
-  | "mhpmevent31" => (some 0x33F#12)
-  | "mhpmcounter3" => (some 0xB03#12)
-  | "mhpmcounter4" => (some 0xB04#12)
-  | "mhpmcounter5" => (some 0xB05#12)
-  | "mhpmcounter6" => (some 0xB06#12)
-  | "mhpmcounter7" => (some 0xB07#12)
-  | "mhpmcounter8" => (some 0xB08#12)
-  | "mhpmcounter9" => (some 0xB09#12)
-  | "mhpmcounter10" => (some 0xB0A#12)
-  | "mhpmcounter11" => (some 0xB0B#12)
-  | "mhpmcounter12" => (some 0xB0C#12)
-  | "mhpmcounter13" => (some 0xB0D#12)
-  | "mhpmcounter14" => (some 0xB0E#12)
-  | "mhpmcounter15" => (some 0xB0F#12)
-  | "mhpmcounter16" => (some 0xB10#12)
-  | "mhpmcounter17" => (some 0xB11#12)
-  | "mhpmcounter18" => (some 0xB12#12)
-  | "mhpmcounter19" => (some 0xB13#12)
-  | "mhpmcounter20" => (some 0xB14#12)
-  | "mhpmcounter21" => (some 0xB15#12)
-  | "mhpmcounter22" => (some 0xB16#12)
-  | "mhpmcounter23" => (some 0xB17#12)
-  | "mhpmcounter24" => (some 0xB18#12)
-  | "mhpmcounter25" => (some 0xB19#12)
-  | "mhpmcounter26" => (some 0xB1A#12)
-  | "mhpmcounter27" => (some 0xB1B#12)
-  | "mhpmcounter28" => (some 0xB1C#12)
-  | "mhpmcounter29" => (some 0xB1D#12)
-  | "mhpmcounter30" => (some 0xB1E#12)
-  | "mhpmcounter31" => (some 0xB1F#12)
-  | "mhpmcounter3h" => (some 0xB83#12)
-  | "mhpmcounter4h" => (some 0xB84#12)
-  | "mhpmcounter5h" => (some 0xB85#12)
-  | "mhpmcounter6h" => (some 0xB86#12)
-  | "mhpmcounter7h" => (some 0xB87#12)
-  | "mhpmcounter8h" => (some 0xB88#12)
-  | "mhpmcounter9h" => (some 0xB89#12)
-  | "mhpmcounter10h" => (some 0xB8A#12)
-  | "mhpmcounter11h" => (some 0xB8B#12)
-  | "mhpmcounter12h" => (some 0xB8C#12)
-  | "mhpmcounter13h" => (some 0xB8D#12)
-  | "mhpmcounter14h" => (some 0xB8E#12)
-  | "mhpmcounter15h" => (some 0xB8F#12)
-  | "mhpmcounter16h" => (some 0xB90#12)
-  | "mhpmcounter17h" => (some 0xB91#12)
-  | "mhpmcounter18h" => (some 0xB92#12)
-  | "mhpmcounter19h" => (some 0xB93#12)
-  | "mhpmcounter20h" => (some 0xB94#12)
-  | "mhpmcounter21h" => (some 0xB95#12)
-  | "mhpmcounter22h" => (some 0xB96#12)
-  | "mhpmcounter23h" => (some 0xB97#12)
-  | "mhpmcounter24h" => (some 0xB98#12)
-  | "mhpmcounter25h" => (some 0xB99#12)
-  | "mhpmcounter26h" => (some 0xB9A#12)
-  | "mhpmcounter27h" => (some 0xB9B#12)
-  | "mhpmcounter28h" => (some 0xB9C#12)
-  | "mhpmcounter29h" => (some 0xB9D#12)
-  | "mhpmcounter30h" => (some 0xB9E#12)
-  | "mhpmcounter31h" => (some 0xB9F#12)
-  | "pmpcfg0" => (some 0x3A0#12)
-  | "pmpcfg1" => (some 0x3A1#12)
-  | "pmpcfg2" => (some 0x3A2#12)
-  | "pmpcfg3" => (some 0x3A3#12)
-  | "pmpcfg4" => (some 0x3A4#12)
-  | "pmpcfg5" => (some 0x3A5#12)
-  | "pmpcfg6" => (some 0x3A6#12)
-  | "pmpcfg7" => (some 0x3A7#12)
-  | "pmpcfg8" => (some 0x3A8#12)
-  | "pmpcfg9" => (some 0x3A9#12)
-  | "pmpcfg10" => (some 0x3AA#12)
-  | "pmpcfg11" => (some 0x3AB#12)
-  | "pmpcfg12" => (some 0x3AC#12)
-  | "pmpcfg13" => (some 0x3AD#12)
-  | "pmpcfg14" => (some 0x3AE#12)
-  | "pmpcfg15" => (some 0x3AF#12)
-  | "pmpaddr0" => (some 0x3B0#12)
-  | "pmpaddr1" => (some 0x3B1#12)
-  | "pmpaddr2" => (some 0x3B2#12)
-  | "pmpaddr3" => (some 0x3B3#12)
-  | "pmpaddr4" => (some 0x3B4#12)
-  | "pmpaddr5" => (some 0x3B5#12)
-  | "pmpaddr6" => (some 0x3B6#12)
-  | "pmpaddr7" => (some 0x3B7#12)
-  | "pmpaddr8" => (some 0x3B8#12)
-  | "pmpaddr9" => (some 0x3B9#12)
-  | "pmpaddr10" => (some 0x3BA#12)
-  | "pmpaddr11" => (some 0x3BB#12)
-  | "pmpaddr12" => (some 0x3BC#12)
-  | "pmpaddr13" => (some 0x3BD#12)
-  | "pmpaddr14" => (some 0x3BE#12)
-  | "pmpaddr15" => (some 0x3BF#12)
-  | "pmpaddr16" => (some 0x3C0#12)
-  | "pmpaddr17" => (some 0x3C1#12)
-  | "pmpaddr18" => (some 0x3C2#12)
-  | "pmpaddr19" => (some 0x3C3#12)
-  | "pmpaddr20" => (some 0x3C4#12)
-  | "pmpaddr21" => (some 0x3C5#12)
-  | "pmpaddr22" => (some 0x3C6#12)
-  | "pmpaddr23" => (some 0x3C7#12)
-  | "pmpaddr24" => (some 0x3C8#12)
-  | "pmpaddr25" => (some 0x3C9#12)
-  | "pmpaddr26" => (some 0x3CA#12)
-  | "pmpaddr27" => (some 0x3CB#12)
-  | "pmpaddr28" => (some 0x3CC#12)
-  | "pmpaddr29" => (some 0x3CD#12)
-  | "pmpaddr30" => (some 0x3CE#12)
-  | "pmpaddr31" => (some 0x3CF#12)
-  | "pmpaddr32" => (some 0x3D0#12)
-  | "pmpaddr33" => (some 0x3D1#12)
-  | "pmpaddr34" => (some 0x3D2#12)
-  | "pmpaddr35" => (some 0x3D3#12)
-  | "pmpaddr36" => (some 0x3D4#12)
-  | "pmpaddr37" => (some 0x3D5#12)
-  | "pmpaddr38" => (some 0x3D6#12)
-  | "pmpaddr39" => (some 0x3D7#12)
-  | "pmpaddr40" => (some 0x3D8#12)
-  | "pmpaddr41" => (some 0x3D9#12)
-  | "pmpaddr42" => (some 0x3DA#12)
-  | "pmpaddr43" => (some 0x3DB#12)
-  | "pmpaddr44" => (some 0x3DC#12)
-  | "pmpaddr45" => (some 0x3DD#12)
-  | "pmpaddr46" => (some 0x3DE#12)
-  | "pmpaddr47" => (some 0x3DF#12)
-  | "pmpaddr48" => (some 0x3E0#12)
-  | "pmpaddr49" => (some 0x3E1#12)
-  | "pmpaddr50" => (some 0x3E2#12)
-  | "pmpaddr51" => (some 0x3E3#12)
-  | "pmpaddr52" => (some 0x3E4#12)
-  | "pmpaddr53" => (some 0x3E5#12)
-  | "pmpaddr54" => (some 0x3E6#12)
-  | "pmpaddr55" => (some 0x3E7#12)
-  | "pmpaddr56" => (some 0x3E8#12)
-  | "pmpaddr57" => (some 0x3E9#12)
-  | "pmpaddr58" => (some 0x3EA#12)
-  | "pmpaddr59" => (some 0x3EB#12)
-  | "pmpaddr60" => (some 0x3EC#12)
-  | "pmpaddr61" => (some 0x3ED#12)
-  | "pmpaddr62" => (some 0x3EE#12)
-  | "pmpaddr63" => (some 0x3EF#12)
-  | "mcyclecfg" => (some 0x321#12)
-  | "mcyclecfgh" => (some 0x721#12)
-  | "minstretcfg" => (some 0x322#12)
-  | "minstretcfgh" => (some 0x722#12)
-  | "seed" => (some 0x015#12)
-  | "vstart" => (some 0x008#12)
-  | "vxsat" => (some 0x009#12)
-  | "vxrm" => (some 0x00A#12)
-  | "vcsr" => (some 0x00F#12)
-  | "fflags" => (some 0x001#12)
-  | "frm" => (some 0x002#12)
-  | "fcsr" => (some 0x003#12)
-  | "stvec" => (some 0x105#12)
-  | "sepc" => (some 0x141#12)
-  | "mtvec" => (some 0x305#12)
-  | "mepc" => (some 0x341#12)
-  | "cycle" => (some 0xC00#12)
-  | "time" => (some 0xC01#12)
-  | "instret" => (some 0xC02#12)
-  | "cycleh" => (some 0xC80#12)
-  | "menvcfg" => (some 0x30A#12)
-  | "menvcfgh" => (some 0x31A#12)
-  | "mtval" => (some 0x343#12)
-  | "mscratch" => (some 0x340#12)
-  | "satp" => (some 0x180#12)
-  | mapping0_ =>
-    (if ((hex_bits_12_backwards_matches mapping0_) : Bool)
-    then
-      (match (hex_bits_12_backwards mapping0_) with
-      | reg => (some reg)
-      | _ => none)
-    else none)) with
+  match (← do
+    match head_exp_ with
+    | "stimecmp" => (pure (some 0x14D#12))
+    | "stimecmph" => (pure (some 0x15D#12))
+    | "hpmcounter3" => (pure (some 0xC03#12))
+    | "hpmcounter4" => (pure (some 0xC04#12))
+    | "hpmcounter5" => (pure (some 0xC05#12))
+    | "hpmcounter6" => (pure (some 0xC06#12))
+    | "hpmcounter7" => (pure (some 0xC07#12))
+    | "hpmcounter8" => (pure (some 0xC08#12))
+    | "hpmcounter9" => (pure (some 0xC09#12))
+    | "hpmcounter10" => (pure (some 0xC0A#12))
+    | "hpmcounter11" => (pure (some 0xC0B#12))
+    | "hpmcounter12" => (pure (some 0xC0C#12))
+    | "hpmcounter13" => (pure (some 0xC0D#12))
+    | "hpmcounter14" => (pure (some 0xC0E#12))
+    | "hpmcounter15" => (pure (some 0xC0F#12))
+    | "hpmcounter16" => (pure (some 0xC10#12))
+    | "hpmcounter17" => (pure (some 0xC11#12))
+    | "hpmcounter18" => (pure (some 0xC12#12))
+    | "hpmcounter19" => (pure (some 0xC13#12))
+    | "hpmcounter20" => (pure (some 0xC14#12))
+    | "hpmcounter21" => (pure (some 0xC15#12))
+    | "hpmcounter22" => (pure (some 0xC16#12))
+    | "hpmcounter23" => (pure (some 0xC17#12))
+    | "hpmcounter24" => (pure (some 0xC18#12))
+    | "hpmcounter25" => (pure (some 0xC19#12))
+    | "hpmcounter26" => (pure (some 0xC1A#12))
+    | "hpmcounter27" => (pure (some 0xC1B#12))
+    | "hpmcounter28" => (pure (some 0xC1C#12))
+    | "hpmcounter29" => (pure (some 0xC1D#12))
+    | "hpmcounter30" => (pure (some 0xC1E#12))
+    | "hpmcounter31" => (pure (some 0xC1F#12))
+    | "hpmcounter3h" => (pure (some 0xC83#12))
+    | "hpmcounter4h" => (pure (some 0xC84#12))
+    | "hpmcounter5h" => (pure (some 0xC85#12))
+    | "hpmcounter6h" => (pure (some 0xC86#12))
+    | "hpmcounter7h" => (pure (some 0xC87#12))
+    | "hpmcounter8h" => (pure (some 0xC88#12))
+    | "hpmcounter9h" => (pure (some 0xC89#12))
+    | "hpmcounter10h" => (pure (some 0xC8A#12))
+    | "hpmcounter11h" => (pure (some 0xC8B#12))
+    | "hpmcounter12h" => (pure (some 0xC8C#12))
+    | "hpmcounter13h" => (pure (some 0xC8D#12))
+    | "hpmcounter14h" => (pure (some 0xC8E#12))
+    | "hpmcounter15h" => (pure (some 0xC8F#12))
+    | "hpmcounter16h" => (pure (some 0xC90#12))
+    | "hpmcounter17h" => (pure (some 0xC91#12))
+    | "hpmcounter18h" => (pure (some 0xC92#12))
+    | "hpmcounter19h" => (pure (some 0xC93#12))
+    | "hpmcounter20h" => (pure (some 0xC94#12))
+    | "hpmcounter21h" => (pure (some 0xC95#12))
+    | "hpmcounter22h" => (pure (some 0xC96#12))
+    | "hpmcounter23h" => (pure (some 0xC97#12))
+    | "hpmcounter24h" => (pure (some 0xC98#12))
+    | "hpmcounter25h" => (pure (some 0xC99#12))
+    | "hpmcounter26h" => (pure (some 0xC9A#12))
+    | "hpmcounter27h" => (pure (some 0xC9B#12))
+    | "hpmcounter28h" => (pure (some 0xC9C#12))
+    | "hpmcounter29h" => (pure (some 0xC9D#12))
+    | "hpmcounter30h" => (pure (some 0xC9E#12))
+    | "hpmcounter31h" => (pure (some 0xC9F#12))
+    | "mhpmevent3" => (pure (some 0x323#12))
+    | "mhpmevent4" => (pure (some 0x324#12))
+    | "mhpmevent5" => (pure (some 0x325#12))
+    | "mhpmevent6" => (pure (some 0x326#12))
+    | "mhpmevent7" => (pure (some 0x327#12))
+    | "mhpmevent8" => (pure (some 0x328#12))
+    | "mhpmevent9" => (pure (some 0x329#12))
+    | "mhpmevent10" => (pure (some 0x32A#12))
+    | "mhpmevent11" => (pure (some 0x32B#12))
+    | "mhpmevent12" => (pure (some 0x32C#12))
+    | "mhpmevent13" => (pure (some 0x32D#12))
+    | "mhpmevent14" => (pure (some 0x32E#12))
+    | "mhpmevent15" => (pure (some 0x32F#12))
+    | "mhpmevent16" => (pure (some 0x330#12))
+    | "mhpmevent17" => (pure (some 0x331#12))
+    | "mhpmevent18" => (pure (some 0x332#12))
+    | "mhpmevent19" => (pure (some 0x333#12))
+    | "mhpmevent20" => (pure (some 0x334#12))
+    | "mhpmevent21" => (pure (some 0x335#12))
+    | "mhpmevent22" => (pure (some 0x336#12))
+    | "mhpmevent23" => (pure (some 0x337#12))
+    | "mhpmevent24" => (pure (some 0x338#12))
+    | "mhpmevent25" => (pure (some 0x339#12))
+    | "mhpmevent26" => (pure (some 0x33A#12))
+    | "mhpmevent27" => (pure (some 0x33B#12))
+    | "mhpmevent28" => (pure (some 0x33C#12))
+    | "mhpmevent29" => (pure (some 0x33D#12))
+    | "mhpmevent30" => (pure (some 0x33E#12))
+    | "mhpmevent31" => (pure (some 0x33F#12))
+    | "mhpmcounter3" => (pure (some 0xB03#12))
+    | "mhpmcounter4" => (pure (some 0xB04#12))
+    | "mhpmcounter5" => (pure (some 0xB05#12))
+    | "mhpmcounter6" => (pure (some 0xB06#12))
+    | "mhpmcounter7" => (pure (some 0xB07#12))
+    | "mhpmcounter8" => (pure (some 0xB08#12))
+    | "mhpmcounter9" => (pure (some 0xB09#12))
+    | "mhpmcounter10" => (pure (some 0xB0A#12))
+    | "mhpmcounter11" => (pure (some 0xB0B#12))
+    | "mhpmcounter12" => (pure (some 0xB0C#12))
+    | "mhpmcounter13" => (pure (some 0xB0D#12))
+    | "mhpmcounter14" => (pure (some 0xB0E#12))
+    | "mhpmcounter15" => (pure (some 0xB0F#12))
+    | "mhpmcounter16" => (pure (some 0xB10#12))
+    | "mhpmcounter17" => (pure (some 0xB11#12))
+    | "mhpmcounter18" => (pure (some 0xB12#12))
+    | "mhpmcounter19" => (pure (some 0xB13#12))
+    | "mhpmcounter20" => (pure (some 0xB14#12))
+    | "mhpmcounter21" => (pure (some 0xB15#12))
+    | "mhpmcounter22" => (pure (some 0xB16#12))
+    | "mhpmcounter23" => (pure (some 0xB17#12))
+    | "mhpmcounter24" => (pure (some 0xB18#12))
+    | "mhpmcounter25" => (pure (some 0xB19#12))
+    | "mhpmcounter26" => (pure (some 0xB1A#12))
+    | "mhpmcounter27" => (pure (some 0xB1B#12))
+    | "mhpmcounter28" => (pure (some 0xB1C#12))
+    | "mhpmcounter29" => (pure (some 0xB1D#12))
+    | "mhpmcounter30" => (pure (some 0xB1E#12))
+    | "mhpmcounter31" => (pure (some 0xB1F#12))
+    | "mhpmcounter3h" => (pure (some 0xB83#12))
+    | "mhpmcounter4h" => (pure (some 0xB84#12))
+    | "mhpmcounter5h" => (pure (some 0xB85#12))
+    | "mhpmcounter6h" => (pure (some 0xB86#12))
+    | "mhpmcounter7h" => (pure (some 0xB87#12))
+    | "mhpmcounter8h" => (pure (some 0xB88#12))
+    | "mhpmcounter9h" => (pure (some 0xB89#12))
+    | "mhpmcounter10h" => (pure (some 0xB8A#12))
+    | "mhpmcounter11h" => (pure (some 0xB8B#12))
+    | "mhpmcounter12h" => (pure (some 0xB8C#12))
+    | "mhpmcounter13h" => (pure (some 0xB8D#12))
+    | "mhpmcounter14h" => (pure (some 0xB8E#12))
+    | "mhpmcounter15h" => (pure (some 0xB8F#12))
+    | "mhpmcounter16h" => (pure (some 0xB90#12))
+    | "mhpmcounter17h" => (pure (some 0xB91#12))
+    | "mhpmcounter18h" => (pure (some 0xB92#12))
+    | "mhpmcounter19h" => (pure (some 0xB93#12))
+    | "mhpmcounter20h" => (pure (some 0xB94#12))
+    | "mhpmcounter21h" => (pure (some 0xB95#12))
+    | "mhpmcounter22h" => (pure (some 0xB96#12))
+    | "mhpmcounter23h" => (pure (some 0xB97#12))
+    | "mhpmcounter24h" => (pure (some 0xB98#12))
+    | "mhpmcounter25h" => (pure (some 0xB99#12))
+    | "mhpmcounter26h" => (pure (some 0xB9A#12))
+    | "mhpmcounter27h" => (pure (some 0xB9B#12))
+    | "mhpmcounter28h" => (pure (some 0xB9C#12))
+    | "mhpmcounter29h" => (pure (some 0xB9D#12))
+    | "mhpmcounter30h" => (pure (some 0xB9E#12))
+    | "mhpmcounter31h" => (pure (some 0xB9F#12))
+    | "pmpcfg0" => (pure (some 0x3A0#12))
+    | "pmpcfg1" => (pure (some 0x3A1#12))
+    | "pmpcfg2" => (pure (some 0x3A2#12))
+    | "pmpcfg3" => (pure (some 0x3A3#12))
+    | "pmpcfg4" => (pure (some 0x3A4#12))
+    | "pmpcfg5" => (pure (some 0x3A5#12))
+    | "pmpcfg6" => (pure (some 0x3A6#12))
+    | "pmpcfg7" => (pure (some 0x3A7#12))
+    | "pmpcfg8" => (pure (some 0x3A8#12))
+    | "pmpcfg9" => (pure (some 0x3A9#12))
+    | "pmpcfg10" => (pure (some 0x3AA#12))
+    | "pmpcfg11" => (pure (some 0x3AB#12))
+    | "pmpcfg12" => (pure (some 0x3AC#12))
+    | "pmpcfg13" => (pure (some 0x3AD#12))
+    | "pmpcfg14" => (pure (some 0x3AE#12))
+    | "pmpcfg15" => (pure (some 0x3AF#12))
+    | "pmpaddr0" => (pure (some 0x3B0#12))
+    | "pmpaddr1" => (pure (some 0x3B1#12))
+    | "pmpaddr2" => (pure (some 0x3B2#12))
+    | "pmpaddr3" => (pure (some 0x3B3#12))
+    | "pmpaddr4" => (pure (some 0x3B4#12))
+    | "pmpaddr5" => (pure (some 0x3B5#12))
+    | "pmpaddr6" => (pure (some 0x3B6#12))
+    | "pmpaddr7" => (pure (some 0x3B7#12))
+    | "pmpaddr8" => (pure (some 0x3B8#12))
+    | "pmpaddr9" => (pure (some 0x3B9#12))
+    | "pmpaddr10" => (pure (some 0x3BA#12))
+    | "pmpaddr11" => (pure (some 0x3BB#12))
+    | "pmpaddr12" => (pure (some 0x3BC#12))
+    | "pmpaddr13" => (pure (some 0x3BD#12))
+    | "pmpaddr14" => (pure (some 0x3BE#12))
+    | "pmpaddr15" => (pure (some 0x3BF#12))
+    | "pmpaddr16" => (pure (some 0x3C0#12))
+    | "pmpaddr17" => (pure (some 0x3C1#12))
+    | "pmpaddr18" => (pure (some 0x3C2#12))
+    | "pmpaddr19" => (pure (some 0x3C3#12))
+    | "pmpaddr20" => (pure (some 0x3C4#12))
+    | "pmpaddr21" => (pure (some 0x3C5#12))
+    | "pmpaddr22" => (pure (some 0x3C6#12))
+    | "pmpaddr23" => (pure (some 0x3C7#12))
+    | "pmpaddr24" => (pure (some 0x3C8#12))
+    | "pmpaddr25" => (pure (some 0x3C9#12))
+    | "pmpaddr26" => (pure (some 0x3CA#12))
+    | "pmpaddr27" => (pure (some 0x3CB#12))
+    | "pmpaddr28" => (pure (some 0x3CC#12))
+    | "pmpaddr29" => (pure (some 0x3CD#12))
+    | "pmpaddr30" => (pure (some 0x3CE#12))
+    | "pmpaddr31" => (pure (some 0x3CF#12))
+    | "pmpaddr32" => (pure (some 0x3D0#12))
+    | "pmpaddr33" => (pure (some 0x3D1#12))
+    | "pmpaddr34" => (pure (some 0x3D2#12))
+    | "pmpaddr35" => (pure (some 0x3D3#12))
+    | "pmpaddr36" => (pure (some 0x3D4#12))
+    | "pmpaddr37" => (pure (some 0x3D5#12))
+    | "pmpaddr38" => (pure (some 0x3D6#12))
+    | "pmpaddr39" => (pure (some 0x3D7#12))
+    | "pmpaddr40" => (pure (some 0x3D8#12))
+    | "pmpaddr41" => (pure (some 0x3D9#12))
+    | "pmpaddr42" => (pure (some 0x3DA#12))
+    | "pmpaddr43" => (pure (some 0x3DB#12))
+    | "pmpaddr44" => (pure (some 0x3DC#12))
+    | "pmpaddr45" => (pure (some 0x3DD#12))
+    | "pmpaddr46" => (pure (some 0x3DE#12))
+    | "pmpaddr47" => (pure (some 0x3DF#12))
+    | "pmpaddr48" => (pure (some 0x3E0#12))
+    | "pmpaddr49" => (pure (some 0x3E1#12))
+    | "pmpaddr50" => (pure (some 0x3E2#12))
+    | "pmpaddr51" => (pure (some 0x3E3#12))
+    | "pmpaddr52" => (pure (some 0x3E4#12))
+    | "pmpaddr53" => (pure (some 0x3E5#12))
+    | "pmpaddr54" => (pure (some 0x3E6#12))
+    | "pmpaddr55" => (pure (some 0x3E7#12))
+    | "pmpaddr56" => (pure (some 0x3E8#12))
+    | "pmpaddr57" => (pure (some 0x3E9#12))
+    | "pmpaddr58" => (pure (some 0x3EA#12))
+    | "pmpaddr59" => (pure (some 0x3EB#12))
+    | "pmpaddr60" => (pure (some 0x3EC#12))
+    | "pmpaddr61" => (pure (some 0x3ED#12))
+    | "pmpaddr62" => (pure (some 0x3EE#12))
+    | "pmpaddr63" => (pure (some 0x3EF#12))
+    | "mcyclecfg" => (pure (some 0x321#12))
+    | "mcyclecfgh" => (pure (some 0x721#12))
+    | "minstretcfg" => (pure (some 0x322#12))
+    | "minstretcfgh" => (pure (some 0x722#12))
+    | "seed" => (pure (some 0x015#12))
+    | "vstart" => (pure (some 0x008#12))
+    | "vxsat" => (pure (some 0x009#12))
+    | "vxrm" => (pure (some 0x00A#12))
+    | "vcsr" => (pure (some 0x00F#12))
+    | "fflags" => (pure (some 0x001#12))
+    | "frm" => (pure (some 0x002#12))
+    | "fcsr" => (pure (some 0x003#12))
+    | "stvec" => (pure (some 0x105#12))
+    | "sepc" => (pure (some 0x141#12))
+    | "mtvec" => (pure (some 0x305#12))
+    | "mepc" => (pure (some 0x341#12))
+    | "cycle" => (pure (some 0xC00#12))
+    | "time" => (pure (some 0xC01#12))
+    | "instret" => (pure (some 0xC02#12))
+    | "cycleh" => (pure (some 0xC80#12))
+    | "menvcfg" => (pure (some 0x30A#12))
+    | "menvcfgh" => (pure (some 0x31A#12))
+    | "mtval" => (pure (some 0x343#12))
+    | "mscratch" => (pure (some 0x340#12))
+    | "satp" => (pure (some 0x180#12))
+    | mapping0_ =>
+      (do
+        if ((hex_bits_12_backwards_matches mapping0_) : Bool)
+        then
+          (do
+            match (← (hex_bits_12_backwards mapping0_)) with
+            | reg => (pure (some reg))
+            | _ => (pure none))
+        else (pure none))) with
   | .some result => (pure result)
   | _ =>
     (do
@@ -3304,266 +3691,269 @@ def csr_name_map_forwards_matches (arg_ : (BitVec 12)) : Bool :=
 
 def csr_name_map_backwards_matches (arg_ : String) : SailM Bool := do
   let head_exp_ := arg_
-  match (match head_exp_ with
-  | "stimecmp" => (some true)
-  | "stimecmph" => (some true)
-  | "hpmcounter3" => (some true)
-  | "hpmcounter4" => (some true)
-  | "hpmcounter5" => (some true)
-  | "hpmcounter6" => (some true)
-  | "hpmcounter7" => (some true)
-  | "hpmcounter8" => (some true)
-  | "hpmcounter9" => (some true)
-  | "hpmcounter10" => (some true)
-  | "hpmcounter11" => (some true)
-  | "hpmcounter12" => (some true)
-  | "hpmcounter13" => (some true)
-  | "hpmcounter14" => (some true)
-  | "hpmcounter15" => (some true)
-  | "hpmcounter16" => (some true)
-  | "hpmcounter17" => (some true)
-  | "hpmcounter18" => (some true)
-  | "hpmcounter19" => (some true)
-  | "hpmcounter20" => (some true)
-  | "hpmcounter21" => (some true)
-  | "hpmcounter22" => (some true)
-  | "hpmcounter23" => (some true)
-  | "hpmcounter24" => (some true)
-  | "hpmcounter25" => (some true)
-  | "hpmcounter26" => (some true)
-  | "hpmcounter27" => (some true)
-  | "hpmcounter28" => (some true)
-  | "hpmcounter29" => (some true)
-  | "hpmcounter30" => (some true)
-  | "hpmcounter31" => (some true)
-  | "hpmcounter3h" => (some true)
-  | "hpmcounter4h" => (some true)
-  | "hpmcounter5h" => (some true)
-  | "hpmcounter6h" => (some true)
-  | "hpmcounter7h" => (some true)
-  | "hpmcounter8h" => (some true)
-  | "hpmcounter9h" => (some true)
-  | "hpmcounter10h" => (some true)
-  | "hpmcounter11h" => (some true)
-  | "hpmcounter12h" => (some true)
-  | "hpmcounter13h" => (some true)
-  | "hpmcounter14h" => (some true)
-  | "hpmcounter15h" => (some true)
-  | "hpmcounter16h" => (some true)
-  | "hpmcounter17h" => (some true)
-  | "hpmcounter18h" => (some true)
-  | "hpmcounter19h" => (some true)
-  | "hpmcounter20h" => (some true)
-  | "hpmcounter21h" => (some true)
-  | "hpmcounter22h" => (some true)
-  | "hpmcounter23h" => (some true)
-  | "hpmcounter24h" => (some true)
-  | "hpmcounter25h" => (some true)
-  | "hpmcounter26h" => (some true)
-  | "hpmcounter27h" => (some true)
-  | "hpmcounter28h" => (some true)
-  | "hpmcounter29h" => (some true)
-  | "hpmcounter30h" => (some true)
-  | "hpmcounter31h" => (some true)
-  | "mhpmevent3" => (some true)
-  | "mhpmevent4" => (some true)
-  | "mhpmevent5" => (some true)
-  | "mhpmevent6" => (some true)
-  | "mhpmevent7" => (some true)
-  | "mhpmevent8" => (some true)
-  | "mhpmevent9" => (some true)
-  | "mhpmevent10" => (some true)
-  | "mhpmevent11" => (some true)
-  | "mhpmevent12" => (some true)
-  | "mhpmevent13" => (some true)
-  | "mhpmevent14" => (some true)
-  | "mhpmevent15" => (some true)
-  | "mhpmevent16" => (some true)
-  | "mhpmevent17" => (some true)
-  | "mhpmevent18" => (some true)
-  | "mhpmevent19" => (some true)
-  | "mhpmevent20" => (some true)
-  | "mhpmevent21" => (some true)
-  | "mhpmevent22" => (some true)
-  | "mhpmevent23" => (some true)
-  | "mhpmevent24" => (some true)
-  | "mhpmevent25" => (some true)
-  | "mhpmevent26" => (some true)
-  | "mhpmevent27" => (some true)
-  | "mhpmevent28" => (some true)
-  | "mhpmevent29" => (some true)
-  | "mhpmevent30" => (some true)
-  | "mhpmevent31" => (some true)
-  | "mhpmcounter3" => (some true)
-  | "mhpmcounter4" => (some true)
-  | "mhpmcounter5" => (some true)
-  | "mhpmcounter6" => (some true)
-  | "mhpmcounter7" => (some true)
-  | "mhpmcounter8" => (some true)
-  | "mhpmcounter9" => (some true)
-  | "mhpmcounter10" => (some true)
-  | "mhpmcounter11" => (some true)
-  | "mhpmcounter12" => (some true)
-  | "mhpmcounter13" => (some true)
-  | "mhpmcounter14" => (some true)
-  | "mhpmcounter15" => (some true)
-  | "mhpmcounter16" => (some true)
-  | "mhpmcounter17" => (some true)
-  | "mhpmcounter18" => (some true)
-  | "mhpmcounter19" => (some true)
-  | "mhpmcounter20" => (some true)
-  | "mhpmcounter21" => (some true)
-  | "mhpmcounter22" => (some true)
-  | "mhpmcounter23" => (some true)
-  | "mhpmcounter24" => (some true)
-  | "mhpmcounter25" => (some true)
-  | "mhpmcounter26" => (some true)
-  | "mhpmcounter27" => (some true)
-  | "mhpmcounter28" => (some true)
-  | "mhpmcounter29" => (some true)
-  | "mhpmcounter30" => (some true)
-  | "mhpmcounter31" => (some true)
-  | "mhpmcounter3h" => (some true)
-  | "mhpmcounter4h" => (some true)
-  | "mhpmcounter5h" => (some true)
-  | "mhpmcounter6h" => (some true)
-  | "mhpmcounter7h" => (some true)
-  | "mhpmcounter8h" => (some true)
-  | "mhpmcounter9h" => (some true)
-  | "mhpmcounter10h" => (some true)
-  | "mhpmcounter11h" => (some true)
-  | "mhpmcounter12h" => (some true)
-  | "mhpmcounter13h" => (some true)
-  | "mhpmcounter14h" => (some true)
-  | "mhpmcounter15h" => (some true)
-  | "mhpmcounter16h" => (some true)
-  | "mhpmcounter17h" => (some true)
-  | "mhpmcounter18h" => (some true)
-  | "mhpmcounter19h" => (some true)
-  | "mhpmcounter20h" => (some true)
-  | "mhpmcounter21h" => (some true)
-  | "mhpmcounter22h" => (some true)
-  | "mhpmcounter23h" => (some true)
-  | "mhpmcounter24h" => (some true)
-  | "mhpmcounter25h" => (some true)
-  | "mhpmcounter26h" => (some true)
-  | "mhpmcounter27h" => (some true)
-  | "mhpmcounter28h" => (some true)
-  | "mhpmcounter29h" => (some true)
-  | "mhpmcounter30h" => (some true)
-  | "mhpmcounter31h" => (some true)
-  | "pmpcfg0" => (some true)
-  | "pmpcfg1" => (some true)
-  | "pmpcfg2" => (some true)
-  | "pmpcfg3" => (some true)
-  | "pmpcfg4" => (some true)
-  | "pmpcfg5" => (some true)
-  | "pmpcfg6" => (some true)
-  | "pmpcfg7" => (some true)
-  | "pmpcfg8" => (some true)
-  | "pmpcfg9" => (some true)
-  | "pmpcfg10" => (some true)
-  | "pmpcfg11" => (some true)
-  | "pmpcfg12" => (some true)
-  | "pmpcfg13" => (some true)
-  | "pmpcfg14" => (some true)
-  | "pmpcfg15" => (some true)
-  | "pmpaddr0" => (some true)
-  | "pmpaddr1" => (some true)
-  | "pmpaddr2" => (some true)
-  | "pmpaddr3" => (some true)
-  | "pmpaddr4" => (some true)
-  | "pmpaddr5" => (some true)
-  | "pmpaddr6" => (some true)
-  | "pmpaddr7" => (some true)
-  | "pmpaddr8" => (some true)
-  | "pmpaddr9" => (some true)
-  | "pmpaddr10" => (some true)
-  | "pmpaddr11" => (some true)
-  | "pmpaddr12" => (some true)
-  | "pmpaddr13" => (some true)
-  | "pmpaddr14" => (some true)
-  | "pmpaddr15" => (some true)
-  | "pmpaddr16" => (some true)
-  | "pmpaddr17" => (some true)
-  | "pmpaddr18" => (some true)
-  | "pmpaddr19" => (some true)
-  | "pmpaddr20" => (some true)
-  | "pmpaddr21" => (some true)
-  | "pmpaddr22" => (some true)
-  | "pmpaddr23" => (some true)
-  | "pmpaddr24" => (some true)
-  | "pmpaddr25" => (some true)
-  | "pmpaddr26" => (some true)
-  | "pmpaddr27" => (some true)
-  | "pmpaddr28" => (some true)
-  | "pmpaddr29" => (some true)
-  | "pmpaddr30" => (some true)
-  | "pmpaddr31" => (some true)
-  | "pmpaddr32" => (some true)
-  | "pmpaddr33" => (some true)
-  | "pmpaddr34" => (some true)
-  | "pmpaddr35" => (some true)
-  | "pmpaddr36" => (some true)
-  | "pmpaddr37" => (some true)
-  | "pmpaddr38" => (some true)
-  | "pmpaddr39" => (some true)
-  | "pmpaddr40" => (some true)
-  | "pmpaddr41" => (some true)
-  | "pmpaddr42" => (some true)
-  | "pmpaddr43" => (some true)
-  | "pmpaddr44" => (some true)
-  | "pmpaddr45" => (some true)
-  | "pmpaddr46" => (some true)
-  | "pmpaddr47" => (some true)
-  | "pmpaddr48" => (some true)
-  | "pmpaddr49" => (some true)
-  | "pmpaddr50" => (some true)
-  | "pmpaddr51" => (some true)
-  | "pmpaddr52" => (some true)
-  | "pmpaddr53" => (some true)
-  | "pmpaddr54" => (some true)
-  | "pmpaddr55" => (some true)
-  | "pmpaddr56" => (some true)
-  | "pmpaddr57" => (some true)
-  | "pmpaddr58" => (some true)
-  | "pmpaddr59" => (some true)
-  | "pmpaddr60" => (some true)
-  | "pmpaddr61" => (some true)
-  | "pmpaddr62" => (some true)
-  | "pmpaddr63" => (some true)
-  | "mcyclecfg" => (some true)
-  | "mcyclecfgh" => (some true)
-  | "minstretcfg" => (some true)
-  | "minstretcfgh" => (some true)
-  | "seed" => (some true)
-  | "vstart" => (some true)
-  | "vxsat" => (some true)
-  | "vxrm" => (some true)
-  | "vcsr" => (some true)
-  | "fflags" => (some true)
-  | "frm" => (some true)
-  | "fcsr" => (some true)
-  | "stvec" => (some true)
-  | "sepc" => (some true)
-  | "mtvec" => (some true)
-  | "mepc" => (some true)
-  | "cycle" => (some true)
-  | "time" => (some true)
-  | "instret" => (some true)
-  | "cycleh" => (some true)
-  | "menvcfg" => (some true)
-  | "menvcfgh" => (some true)
-  | "mtval" => (some true)
-  | "mscratch" => (some true)
-  | "satp" => (some true)
-  | mapping0_ =>
-    (if ((hex_bits_12_backwards_matches mapping0_) : Bool)
-    then
-      (match (hex_bits_12_backwards mapping0_) with
-      | reg => (some true)
-      | _ => none)
-    else none)) with
+  match (← do
+    match head_exp_ with
+    | "stimecmp" => (pure (some true))
+    | "stimecmph" => (pure (some true))
+    | "hpmcounter3" => (pure (some true))
+    | "hpmcounter4" => (pure (some true))
+    | "hpmcounter5" => (pure (some true))
+    | "hpmcounter6" => (pure (some true))
+    | "hpmcounter7" => (pure (some true))
+    | "hpmcounter8" => (pure (some true))
+    | "hpmcounter9" => (pure (some true))
+    | "hpmcounter10" => (pure (some true))
+    | "hpmcounter11" => (pure (some true))
+    | "hpmcounter12" => (pure (some true))
+    | "hpmcounter13" => (pure (some true))
+    | "hpmcounter14" => (pure (some true))
+    | "hpmcounter15" => (pure (some true))
+    | "hpmcounter16" => (pure (some true))
+    | "hpmcounter17" => (pure (some true))
+    | "hpmcounter18" => (pure (some true))
+    | "hpmcounter19" => (pure (some true))
+    | "hpmcounter20" => (pure (some true))
+    | "hpmcounter21" => (pure (some true))
+    | "hpmcounter22" => (pure (some true))
+    | "hpmcounter23" => (pure (some true))
+    | "hpmcounter24" => (pure (some true))
+    | "hpmcounter25" => (pure (some true))
+    | "hpmcounter26" => (pure (some true))
+    | "hpmcounter27" => (pure (some true))
+    | "hpmcounter28" => (pure (some true))
+    | "hpmcounter29" => (pure (some true))
+    | "hpmcounter30" => (pure (some true))
+    | "hpmcounter31" => (pure (some true))
+    | "hpmcounter3h" => (pure (some true))
+    | "hpmcounter4h" => (pure (some true))
+    | "hpmcounter5h" => (pure (some true))
+    | "hpmcounter6h" => (pure (some true))
+    | "hpmcounter7h" => (pure (some true))
+    | "hpmcounter8h" => (pure (some true))
+    | "hpmcounter9h" => (pure (some true))
+    | "hpmcounter10h" => (pure (some true))
+    | "hpmcounter11h" => (pure (some true))
+    | "hpmcounter12h" => (pure (some true))
+    | "hpmcounter13h" => (pure (some true))
+    | "hpmcounter14h" => (pure (some true))
+    | "hpmcounter15h" => (pure (some true))
+    | "hpmcounter16h" => (pure (some true))
+    | "hpmcounter17h" => (pure (some true))
+    | "hpmcounter18h" => (pure (some true))
+    | "hpmcounter19h" => (pure (some true))
+    | "hpmcounter20h" => (pure (some true))
+    | "hpmcounter21h" => (pure (some true))
+    | "hpmcounter22h" => (pure (some true))
+    | "hpmcounter23h" => (pure (some true))
+    | "hpmcounter24h" => (pure (some true))
+    | "hpmcounter25h" => (pure (some true))
+    | "hpmcounter26h" => (pure (some true))
+    | "hpmcounter27h" => (pure (some true))
+    | "hpmcounter28h" => (pure (some true))
+    | "hpmcounter29h" => (pure (some true))
+    | "hpmcounter30h" => (pure (some true))
+    | "hpmcounter31h" => (pure (some true))
+    | "mhpmevent3" => (pure (some true))
+    | "mhpmevent4" => (pure (some true))
+    | "mhpmevent5" => (pure (some true))
+    | "mhpmevent6" => (pure (some true))
+    | "mhpmevent7" => (pure (some true))
+    | "mhpmevent8" => (pure (some true))
+    | "mhpmevent9" => (pure (some true))
+    | "mhpmevent10" => (pure (some true))
+    | "mhpmevent11" => (pure (some true))
+    | "mhpmevent12" => (pure (some true))
+    | "mhpmevent13" => (pure (some true))
+    | "mhpmevent14" => (pure (some true))
+    | "mhpmevent15" => (pure (some true))
+    | "mhpmevent16" => (pure (some true))
+    | "mhpmevent17" => (pure (some true))
+    | "mhpmevent18" => (pure (some true))
+    | "mhpmevent19" => (pure (some true))
+    | "mhpmevent20" => (pure (some true))
+    | "mhpmevent21" => (pure (some true))
+    | "mhpmevent22" => (pure (some true))
+    | "mhpmevent23" => (pure (some true))
+    | "mhpmevent24" => (pure (some true))
+    | "mhpmevent25" => (pure (some true))
+    | "mhpmevent26" => (pure (some true))
+    | "mhpmevent27" => (pure (some true))
+    | "mhpmevent28" => (pure (some true))
+    | "mhpmevent29" => (pure (some true))
+    | "mhpmevent30" => (pure (some true))
+    | "mhpmevent31" => (pure (some true))
+    | "mhpmcounter3" => (pure (some true))
+    | "mhpmcounter4" => (pure (some true))
+    | "mhpmcounter5" => (pure (some true))
+    | "mhpmcounter6" => (pure (some true))
+    | "mhpmcounter7" => (pure (some true))
+    | "mhpmcounter8" => (pure (some true))
+    | "mhpmcounter9" => (pure (some true))
+    | "mhpmcounter10" => (pure (some true))
+    | "mhpmcounter11" => (pure (some true))
+    | "mhpmcounter12" => (pure (some true))
+    | "mhpmcounter13" => (pure (some true))
+    | "mhpmcounter14" => (pure (some true))
+    | "mhpmcounter15" => (pure (some true))
+    | "mhpmcounter16" => (pure (some true))
+    | "mhpmcounter17" => (pure (some true))
+    | "mhpmcounter18" => (pure (some true))
+    | "mhpmcounter19" => (pure (some true))
+    | "mhpmcounter20" => (pure (some true))
+    | "mhpmcounter21" => (pure (some true))
+    | "mhpmcounter22" => (pure (some true))
+    | "mhpmcounter23" => (pure (some true))
+    | "mhpmcounter24" => (pure (some true))
+    | "mhpmcounter25" => (pure (some true))
+    | "mhpmcounter26" => (pure (some true))
+    | "mhpmcounter27" => (pure (some true))
+    | "mhpmcounter28" => (pure (some true))
+    | "mhpmcounter29" => (pure (some true))
+    | "mhpmcounter30" => (pure (some true))
+    | "mhpmcounter31" => (pure (some true))
+    | "mhpmcounter3h" => (pure (some true))
+    | "mhpmcounter4h" => (pure (some true))
+    | "mhpmcounter5h" => (pure (some true))
+    | "mhpmcounter6h" => (pure (some true))
+    | "mhpmcounter7h" => (pure (some true))
+    | "mhpmcounter8h" => (pure (some true))
+    | "mhpmcounter9h" => (pure (some true))
+    | "mhpmcounter10h" => (pure (some true))
+    | "mhpmcounter11h" => (pure (some true))
+    | "mhpmcounter12h" => (pure (some true))
+    | "mhpmcounter13h" => (pure (some true))
+    | "mhpmcounter14h" => (pure (some true))
+    | "mhpmcounter15h" => (pure (some true))
+    | "mhpmcounter16h" => (pure (some true))
+    | "mhpmcounter17h" => (pure (some true))
+    | "mhpmcounter18h" => (pure (some true))
+    | "mhpmcounter19h" => (pure (some true))
+    | "mhpmcounter20h" => (pure (some true))
+    | "mhpmcounter21h" => (pure (some true))
+    | "mhpmcounter22h" => (pure (some true))
+    | "mhpmcounter23h" => (pure (some true))
+    | "mhpmcounter24h" => (pure (some true))
+    | "mhpmcounter25h" => (pure (some true))
+    | "mhpmcounter26h" => (pure (some true))
+    | "mhpmcounter27h" => (pure (some true))
+    | "mhpmcounter28h" => (pure (some true))
+    | "mhpmcounter29h" => (pure (some true))
+    | "mhpmcounter30h" => (pure (some true))
+    | "mhpmcounter31h" => (pure (some true))
+    | "pmpcfg0" => (pure (some true))
+    | "pmpcfg1" => (pure (some true))
+    | "pmpcfg2" => (pure (some true))
+    | "pmpcfg3" => (pure (some true))
+    | "pmpcfg4" => (pure (some true))
+    | "pmpcfg5" => (pure (some true))
+    | "pmpcfg6" => (pure (some true))
+    | "pmpcfg7" => (pure (some true))
+    | "pmpcfg8" => (pure (some true))
+    | "pmpcfg9" => (pure (some true))
+    | "pmpcfg10" => (pure (some true))
+    | "pmpcfg11" => (pure (some true))
+    | "pmpcfg12" => (pure (some true))
+    | "pmpcfg13" => (pure (some true))
+    | "pmpcfg14" => (pure (some true))
+    | "pmpcfg15" => (pure (some true))
+    | "pmpaddr0" => (pure (some true))
+    | "pmpaddr1" => (pure (some true))
+    | "pmpaddr2" => (pure (some true))
+    | "pmpaddr3" => (pure (some true))
+    | "pmpaddr4" => (pure (some true))
+    | "pmpaddr5" => (pure (some true))
+    | "pmpaddr6" => (pure (some true))
+    | "pmpaddr7" => (pure (some true))
+    | "pmpaddr8" => (pure (some true))
+    | "pmpaddr9" => (pure (some true))
+    | "pmpaddr10" => (pure (some true))
+    | "pmpaddr11" => (pure (some true))
+    | "pmpaddr12" => (pure (some true))
+    | "pmpaddr13" => (pure (some true))
+    | "pmpaddr14" => (pure (some true))
+    | "pmpaddr15" => (pure (some true))
+    | "pmpaddr16" => (pure (some true))
+    | "pmpaddr17" => (pure (some true))
+    | "pmpaddr18" => (pure (some true))
+    | "pmpaddr19" => (pure (some true))
+    | "pmpaddr20" => (pure (some true))
+    | "pmpaddr21" => (pure (some true))
+    | "pmpaddr22" => (pure (some true))
+    | "pmpaddr23" => (pure (some true))
+    | "pmpaddr24" => (pure (some true))
+    | "pmpaddr25" => (pure (some true))
+    | "pmpaddr26" => (pure (some true))
+    | "pmpaddr27" => (pure (some true))
+    | "pmpaddr28" => (pure (some true))
+    | "pmpaddr29" => (pure (some true))
+    | "pmpaddr30" => (pure (some true))
+    | "pmpaddr31" => (pure (some true))
+    | "pmpaddr32" => (pure (some true))
+    | "pmpaddr33" => (pure (some true))
+    | "pmpaddr34" => (pure (some true))
+    | "pmpaddr35" => (pure (some true))
+    | "pmpaddr36" => (pure (some true))
+    | "pmpaddr37" => (pure (some true))
+    | "pmpaddr38" => (pure (some true))
+    | "pmpaddr39" => (pure (some true))
+    | "pmpaddr40" => (pure (some true))
+    | "pmpaddr41" => (pure (some true))
+    | "pmpaddr42" => (pure (some true))
+    | "pmpaddr43" => (pure (some true))
+    | "pmpaddr44" => (pure (some true))
+    | "pmpaddr45" => (pure (some true))
+    | "pmpaddr46" => (pure (some true))
+    | "pmpaddr47" => (pure (some true))
+    | "pmpaddr48" => (pure (some true))
+    | "pmpaddr49" => (pure (some true))
+    | "pmpaddr50" => (pure (some true))
+    | "pmpaddr51" => (pure (some true))
+    | "pmpaddr52" => (pure (some true))
+    | "pmpaddr53" => (pure (some true))
+    | "pmpaddr54" => (pure (some true))
+    | "pmpaddr55" => (pure (some true))
+    | "pmpaddr56" => (pure (some true))
+    | "pmpaddr57" => (pure (some true))
+    | "pmpaddr58" => (pure (some true))
+    | "pmpaddr59" => (pure (some true))
+    | "pmpaddr60" => (pure (some true))
+    | "pmpaddr61" => (pure (some true))
+    | "pmpaddr62" => (pure (some true))
+    | "pmpaddr63" => (pure (some true))
+    | "mcyclecfg" => (pure (some true))
+    | "mcyclecfgh" => (pure (some true))
+    | "minstretcfg" => (pure (some true))
+    | "minstretcfgh" => (pure (some true))
+    | "seed" => (pure (some true))
+    | "vstart" => (pure (some true))
+    | "vxsat" => (pure (some true))
+    | "vxrm" => (pure (some true))
+    | "vcsr" => (pure (some true))
+    | "fflags" => (pure (some true))
+    | "frm" => (pure (some true))
+    | "fcsr" => (pure (some true))
+    | "stvec" => (pure (some true))
+    | "sepc" => (pure (some true))
+    | "mtvec" => (pure (some true))
+    | "mepc" => (pure (some true))
+    | "cycle" => (pure (some true))
+    | "time" => (pure (some true))
+    | "instret" => (pure (some true))
+    | "cycleh" => (pure (some true))
+    | "menvcfg" => (pure (some true))
+    | "menvcfgh" => (pure (some true))
+    | "mtval" => (pure (some true))
+    | "mscratch" => (pure (some true))
+    | "satp" => (pure (some true))
+    | mapping0_ =>
+      (do
+        if ((hex_bits_12_backwards_matches mapping0_) : Bool)
+        then
+          (do
+            match (← (hex_bits_12_backwards mapping0_)) with
+            | reg => (pure (some true))
+            | _ => (pure none))
+        else (pure none))) with
   | .some result => (pure result)
   | none =>
     (match head_exp_ with

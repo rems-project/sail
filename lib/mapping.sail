@@ -52,13 +52,13 @@ $include <option.sail>
 
 $[sv_function { types = "int #1" }]
 val string_take = pure {
-  lean: "String.take",
+  lean: "String.takeStr",
   _: "string_take"
 }: (string, nat) -> string
 
 $[sv_function { types = "int #1" }]
 val string_drop = pure {
-  lean: "String.drop",
+  lean: "String.dropStr",
   _: "string_drop"
 }: (string, nat) -> string
 
