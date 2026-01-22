@@ -27,6 +27,7 @@ skip_tests = {
     'concurrency_interface', # memory
     'ediv_from_tdiv', # loops
     'lib_hex_bits_signed', # verilator bug (in CI, works with latest)
+    'hex_bits_backwards', # verilator bug (in CI, works with latest)
     'lib_dec_bits', # todo
     'config_vec_list', # unknown length vectors
     'simple_while', # loops
