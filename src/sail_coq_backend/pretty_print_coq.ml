@@ -3107,7 +3107,30 @@ let doc_typdef global generic_eq_types countable_types enum_number_defs (TD_aux 
       let countable_pp =
         match (global.library_style, num_fns) with
         | BBV, _ -> empty
-        | Stdpp, None -> empty
+        | Stdpp, None ->
+            (* If there isn't a reasonable encode/decode pair, produce a generic one *)
+            separate hardline
+              ([
+                 string "#[export]";
+                 string "Instance Countable_" ^^ id_pp ^^ string " : Countable " ^^ id_pp ^^ string ".";
+                 string "refine {|";
+                 string "  encode x := match x with";
+               ]
+              @ List.mapi
+                  (fun i id -> string "  | " ^^ doc_id_ctor bare_ctxt id ^^ string (" => " ^ string_of_int (i + 1)))
+                  enums
+              @ [string "  end%positive;"; string "  decode x := match x with"]
+              @ List.mapi
+                  (fun i id -> string ("  | " ^ string_of_int (i + 1)) ^^ string " => Some " ^^ doc_id_ctor bare_ctxt id)
+                  enums
+              @ [
+                  string "  | _ => None";
+                  string "  end%positive;";
+                  string "|}.";
+                  string "abstract (intro x; destruct x; reflexivity).";
+                  string "Defined.";
+                ]
+              )
         | Stdpp, Some (of_num_id_pp, num_of_id_pp) ->
             separate hardline
               [
