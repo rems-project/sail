@@ -1,0 +1,5 @@
+[93mType error[0m:
+[96mproject/global_constraint2/bmod.sail[0m:4.16-17:
+4[96m |[0mconstraint y <= x
+ [91m |[0m                [91m^[0m
+ [91m |[0m The abstract numeric type named x is not in scope
