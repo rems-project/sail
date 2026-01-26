@@ -684,7 +684,9 @@ module Well_formedness = struct
   and wf_nexp exs env (Nexp_aux (nexp_aux, l) as nexp) =
     wf_debug "nexp" string_of_nexp nexp exs;
     match nexp_aux with
-    | Nexp_id id when Bindings.mem id env.global.abstract_typs -> ()
+    | Nexp_id id when Bindings.mem id env.global.abstract_typs ->
+        if not (item_in_scope env (Bindings.find id env.global.abstract_typs)) then
+          typ_error l ("The abstract numeric type named " ^ string_of_id id ^ " is not in scope")
     | Nexp_id id when bound_typ_id env id ->
         let typq, k = infer_kind env id in
         begin
@@ -765,7 +767,9 @@ module Well_formedness = struct
   and wf_constraint (exs : existential) env (NC_aux (nc_aux, l) as nc) =
     wf_debug "constraint" string_of_n_constraint nc exs;
     match nc_aux with
-    | NC_id id when Bindings.mem id env.global.abstract_typs -> ()
+    | NC_id id when Bindings.mem id env.global.abstract_typs ->
+        if not (item_in_scope env (Bindings.find id env.global.abstract_typs)) then
+          typ_error l ("The abstract type constraint named " ^ string_of_id id ^ " is not in scope")
     | NC_id id when bound_typ_id env id ->
         let typq, k = infer_kind env id in
         begin
@@ -854,7 +858,7 @@ let add_abstract_typ id kind env =
 let remove_abstract_typ id env =
   update_global (fun global -> { global with abstract_typs = Bindings.remove id global.abstract_typs }) env
 
-let get_abstract_typs env = filter_items env env.global.abstract_typs
+let get_abstract_typs env = Bindings.map (fun item -> item.item) env.global.abstract_typs
 
 let is_abstract_typ id env = Bindings.mem id env.global.abstract_typs
 
