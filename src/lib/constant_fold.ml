@@ -59,7 +59,7 @@ let optimize_constant_fold = ref false
 (* The interpreter will return a value for each folded expression, so
    we must convert that back to expression to re-insert it in the AST
 *)
-let rec fexp_of_ctor (field, value) = FE_aux (FE_fexp (mk_id field, exp_of_value value), no_annot)
+let rec fexp_of_ctor (field, value) = FE_aux (FE_fexp (field, exp_of_value value), no_annot)
 
 and exp_of_value = function
   | V_int n -> mk_lit_exp (L_num n)

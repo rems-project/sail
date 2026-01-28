@@ -99,10 +99,10 @@ type value =
 | V_tuple of value list
 | V_unit
 | V_string of string
-| V_ref of string
-| V_member of string
-| V_ctor of string * value list
-| V_record of (string * value) list
+| V_ref of id
+| V_member of id
+| V_ctor of id * value list
+| V_record of (id * value) list
 
 type lit_aux =
 | L_unit

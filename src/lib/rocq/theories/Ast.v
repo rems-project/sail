@@ -138,10 +138,10 @@ Inductive value : Set :=
 | V_tuple : list value -> value
 | V_unit : value
 | V_string : string -> value
-| V_ref : string -> value
-| V_member : string -> value
-| V_ctor : string -> list value -> value
-| V_record : list (string * value) -> value.
+| V_ref : id -> value
+| V_member : id -> value
+| V_ctor : id -> list value -> value
+| V_record : list (id * value) -> value.
 
 Inductive lit_aux : Set :=
 | L_unit : lit_aux

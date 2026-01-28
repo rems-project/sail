@@ -91,8 +91,8 @@ type frame =
       * string
 
 and effect_request =
-  | Read_reg of string * VariableUpdate.accessor list * (value -> state -> frame)
-  | Write_reg of string * VariableUpdate.accessor list * value * (unit -> state -> frame)
+  | Read_reg of id * VariableUpdate.accessor list * (value -> state -> frame)
+  | Write_reg of id * VariableUpdate.accessor list * value * (unit -> state -> frame)
   | Outcome of id * value list * (return_value -> tannot exp Monad.t)
 
 val stack_string : string Lazy.t * lstate * (return_value -> tannot exp Monad.t) -> string Lazy.t
