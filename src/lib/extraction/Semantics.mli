@@ -1,6 +1,7 @@
 open Ast
 open AstInduction
 open BinInt
+open Bit
 open Datatypes
 open IdUtil
 open List0

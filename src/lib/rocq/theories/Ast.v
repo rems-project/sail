@@ -7,7 +7,7 @@ From Stdlib Require Import String.
 From Stdlib Require Import ZArith.
 From Stdlib Require Import QArith.
 
-Require Import Value_type.
+Require Import Bit.
 
 Parameter loc : Set.
 
@@ -127,6 +127,21 @@ Inductive kinded_id : Set :=
 
 Inductive id : Set :=
 | Id_aux : id_aux -> loc -> id.
+
+Inductive value : Set :=
+| V_bitvector : list bit -> value
+| V_vector : list value -> value
+| V_list : list value -> value
+| V_int : Z -> value
+| V_real : Q -> value
+| V_bool : bool -> value
+| V_tuple : list value -> value
+| V_unit : value
+| V_string : string -> value
+| V_ref : string -> value
+| V_member : string -> value
+| V_ctor : string -> list value -> value
+| V_record : list (string * value) -> value.
 
 Inductive lit_aux : Set :=
 | L_unit : lit_aux

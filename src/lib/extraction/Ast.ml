@@ -1,5 +1,5 @@
+open Bit
 open QArith_base
-open Value_type
 
 type l = Parse_ast.l
 
@@ -88,6 +88,21 @@ type kinded_id =
 
 type id =
 | Id_aux of id_aux * Parse_ast.l
+
+type value =
+| V_bitvector of bit list
+| V_vector of value list
+| V_list of value list
+| V_int of Big_int_Z.big_int
+| V_real of coq_Q
+| V_bool of bool
+| V_tuple of value list
+| V_unit
+| V_string of string
+| V_ref of string
+| V_member of string
+| V_ctor of string * value list
+| V_record of (string * value) list
 
 type lit_aux =
 | L_unit

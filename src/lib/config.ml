@@ -47,6 +47,7 @@
 open Ast
 open Ast_defs
 open Ast_util
+open Bit
 open Rewriter
 open Type_check
 
@@ -519,7 +520,7 @@ let valid_hex_char c =
   if c = '_' then None
   else (match Initial_check.hex_digit_of_char c with Some (digit, _) -> Some (Some digit) | None -> Some None)
 
-let bin_digit_to_bit = function Bin_0 -> Value_type.B0 | Bin_1 -> Value_type.B1
+let bin_digit_to_bit = function Bin_0 -> B0 | Bin_1 -> B1
 
 let fix_length ~at:l ~len bitlist =
   let open Value_type in
@@ -530,8 +531,7 @@ let fix_length ~at:l ~len bitlist =
       let d = len - List.length bitlist in
       Util.drop (abs d) bitlist
 
-let bitlist_to_literal bitlist =
-  non_empty_singleton (List.map (function Value_type.B0 -> Bin_0 | Value_type.B1 -> Bin_1) bitlist)
+let bitlist_to_literal bitlist = non_empty_singleton (List.map (function B0 -> Bin_0 | B1 -> Bin_1) bitlist)
 
 let parse_json_string_to_bits ~at:l ~len str =
   let open Util.Option_monad in

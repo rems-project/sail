@@ -1127,8 +1127,8 @@ module Counterexample (Config : COUNTEREXAMPLE_CONFIG) = struct
     | _ -> None
 
   let rec value_of_sexpr l ctx sexpr =
+    let open Ast in
     let open Jib in
-    let open Value_type in
     let open Value in
     function
     | CT_fbits width -> begin
