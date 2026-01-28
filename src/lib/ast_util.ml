@@ -161,11 +161,7 @@ let is_order_inc = function Ord_aux (Ord_inc, _) -> true | Ord_aux (Ord_dec, _) 
 
 let is_order_dec o = not (is_order_inc o)
 
-let string_of_id = function
-  | Id_aux (And_bool, _) -> "and_bool"
-  | Id_aux (Or_bool, _) -> "or_bool"
-  | Id_aux (Id v, _) -> v
-  | Id_aux (Operator v, _) -> "(operator " ^ v ^ ")"
+let string_of_id = Value.string_of_id
 
 let lvar_typ ?loc:(l = Parse_ast.Unknown) = function
   | Local (_, typ) -> typ
@@ -332,21 +328,7 @@ module KOpt = struct
     lex_ord (Kid.compare (kopt_kid kopt1) (kopt_kid kopt2)) (Kind.compare (kopt_kind kopt1) (kopt_kind kopt2))
 end
 
-module Id = struct
-  type t = id
-  let compare id1 id2 =
-    match (id1, id2) with
-    | Id_aux (And_bool, _), Id_aux (And_bool, _) -> 0
-    | Id_aux (Or_bool, _), Id_aux (Or_bool, _) -> 0
-    | Id_aux (Id x, _), Id_aux (Id y, _) -> String.compare x y
-    | Id_aux (Operator x, _), Id_aux (Operator y, _) -> String.compare x y
-    | Id_aux (Id _, _), _ -> -1
-    | _, Id_aux (Id _, _) -> 1
-    | Id_aux (Operator _, _), _ -> -1
-    | _, Id_aux (Operator _, _) -> 1
-    | Id_aux (And_bool, _), _ -> -1
-    | _, Id_aux (And_bool, _) -> 1
-end
+module Id = Value.Id
 
 let lex_ord f g x1 x2 y1 y2 = match f x1 x2 with 0 -> g y1 y2 | n -> n
 

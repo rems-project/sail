@@ -70,7 +70,7 @@ Inductive id_type :=
 
 Inductive place : Set :=
 | PL_id : id -> var_type -> place
-| PL_register : string -> place
+| PL_register : id -> place
 | PL_vector : place -> Z -> place
 | PL_vector_range : place -> Z -> Z -> place
 | PL_field : place -> id -> place.
@@ -307,12 +307,12 @@ Proof.
     reflexivity.
 Qed.
 
-Fixpoint all_evaluated_fields {A : Set} (f : id -> string) (xs : list (fexp A)) : list (string * value) :=
+Fixpoint all_evaluated_fields {A : Set} (xs : list (fexp A)) : list (id * value) :=
   match xs with
   | [] => []
   | FE_aux (FE_fexp id (E_aux (E_internal_value v) _)) _ :: xs =>
-      (f id, v) :: all_evaluated_fields f xs
-  | _ :: xs => all_evaluated_fields f xs
+      (id, v) :: all_evaluated_fields xs
+  | _ :: xs => all_evaluated_fields xs
   end.
 
 Fixpoint take_evaluated_fields {A : Set} (xs : list (fexp A)) : list (fexp A) :=
@@ -508,10 +508,6 @@ Module Type SemanticExt.
 
   Parameter is_bitvector : tannot -> bool.
 
-  Parameter id_equal_string : id -> string -> bool.
-
-  Parameter string_of_id : id -> string.
-
   Parameter fallthrough : Ast.pexp tannot.
 
   Parameter complete_value : list (value * Z * Z) -> value.
@@ -703,10 +699,10 @@ Module Make (T : SemanticExt).
     | _ => false
     end.
 
-  Fixpoint get_struct_field (name : string) (fields : list (string * value)) {struct fields} : value :=
+  Fixpoint get_struct_field (name : id) (fields : list (id * value)) {struct fields} : value :=
     match fields with
     | (name', v) :: rest_fields =>
-        if String.eqb name name' then
+        if id_eqb name name' then
           v
         else
           get_struct_field name rest_fields
@@ -736,7 +732,7 @@ Module Make (T : SemanticExt).
         | Enum_member =>
             match v with
             | V_member m =>
-                (T.id_equal_string n m, empty_bindings)
+                (id_eqb n m, empty_bindings)
             | _ => no_match
             end
         | _ =>
@@ -750,7 +746,7 @@ Module Make (T : SemanticExt).
     | P_app ctor ps =>
         match v with
         | V_ctor v_ctor vs =>
-            if T.id_equal_string ctor v_ctor then
+            if id_eqb ctor v_ctor then
               fst (fold_left
                      (fun match_info p =>
                         match match_info with
@@ -905,7 +901,7 @@ Module Make (T : SemanticExt).
               (fun match_info fp =>
                  let '(prev_matched, prev_bound) := match_info in
                  let '(name, p) := fp in
-                 let v := get_struct_field (T.string_of_id name) fields in
+                 let v := get_struct_field name fields in
                  let '(matched, bound) := pattern_match p v in
                  (andb prev_matched matched, prev_bound ⋈ bound)
               )
@@ -918,11 +914,11 @@ Module Make (T : SemanticExt).
     | P_string_append _ => (true, empty_bindings)
     end.
 
-  Fixpoint lookup_field (l : Ast.loc) (name : string) (fields : list (string * value)) {struct fields} : t value :=
+  Fixpoint lookup_field (l : Ast.loc) (name : id) (fields : list (id * value)) {struct fields} : t value :=
       match fields with
       | [] => Runtime_type_error l
       | (name', v) :: fields =>
-          if String.eqb name name' then
+          if id_eqb name name' then
             pure v
           else
             lookup_field l name fields
@@ -1225,10 +1221,10 @@ Module Make (T : SemanticExt).
         end
     end.
 
-  Fixpoint update_field (name : string) (v : value) (fields : list (string * value)) : list (string * value) :=
+  Fixpoint update_field (name : id) (v : value) (fields : list (id * value)) : list (id * value) :=
     match fields with
     | (name', old_v) :: rest =>
-        if String.eqb name name' then
+        if id_eqb name name' then
           (name, v) :: rest
         else
           (name', old_v) :: update_field name v rest
@@ -1261,7 +1257,7 @@ Module Make (T : SemanticExt).
         | Local_variable =>
             Read_var (PL_id id Var_local) (fun v => wrap (E_internal_value v))
         | Enum_member =>
-            wrap (E_internal_value (V_member (T.string_of_id id)))
+            wrap (E_internal_value (V_member id))
         end
     | E_return x =>
         match get_value x with
@@ -1428,7 +1424,7 @@ Module Make (T : SemanticExt).
         | Evaluated v =>
             match v with
             | V_record fields =>
-                v_field ← lookup_field (fst annot) (T.string_of_id f) fields;
+                v_field ← lookup_field (fst annot) f fields;
                 wrap (E_internal_value v_field)
             | _ => Runtime_type_error (fst annot)
             end
@@ -1443,7 +1439,7 @@ Module Make (T : SemanticExt).
             x' ← step x;
             wrap (E_struct struct_id (evaluated ++ (FE_aux (FE_fexp name x') annot :: xs)))
         | [] =>
-            wrap (E_internal_value (V_record (all_evaluated_fields T.string_of_id evaluated)))
+            wrap (E_internal_value (V_record (all_evaluated_fields evaluated)))
         end
     | E_struct_update x fs =>
         match x with
@@ -1454,7 +1450,7 @@ Module Make (T : SemanticExt).
                 y' ← step y;
                 wrap (E_struct_update x (evaluated ++ (FE_aux (FE_fexp name y') annot :: ys)))
             | [] =>
-                let updates := all_evaluated_fields T.string_of_id evaluated in
+                let updates := all_evaluated_fields evaluated in
                 let fields := fold_left (fun fields s => update_field (fst s) (snd s) fields) updates fields in
                 wrap (E_internal_value (V_record fields))
             end
@@ -1521,7 +1517,7 @@ Module Make (T : SemanticExt).
         end
     | E_internal_value v => wrap (E_internal_value v)
     | E_ref register_name =>
-        wrap (E_internal_value (V_ref (T.string_of_id register_name)))
+        wrap (E_internal_value (V_ref register_name))
     | E_loop While measure cond body =>
         wrap (E_if cond (E_aux (E_block [body; orig_exp]) annot) (E_aux (E_internal_value V_unit) annot))
     | E_loop Until measure cond body =>

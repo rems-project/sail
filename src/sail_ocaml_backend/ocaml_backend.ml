@@ -1091,7 +1091,7 @@ let ocaml_ast ast generator_info =
     | Some (types, req) -> ocaml_pp_generators ctx ast.defs types (List.map mk_id req)
   in
   (string "open Sail_lib;;" ^^ hardline)
-  ^^ (string "open Value_type;;" ^^ hardline)
+  ^^ (string "open Bit;;" ^^ hardline)
   ^^ (string "module Big_int = Nat_big_num" ^^ ocaml_def_end)
   ^^ concat (List.map (ocaml_def ctx) ast.defs)
   ^^ empty_reg_init ^^ gen_pp

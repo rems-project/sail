@@ -77,7 +77,7 @@ module VariableUpdate = struct
   open Semantics
   open Util.Option_monad
 
-  type root = Register of string | Var of id * Semantics.var_type
+  type root = Register of id | Var of id * Semantics.var_type
 
   type accessor = Vector of Big_int.num | Vector_range of Big_int.num * Big_int.num | Field of id
 
@@ -101,7 +101,7 @@ module VariableUpdate = struct
         | Field field -> (
             match v with
             | V_record fields ->
-                let* v = List.assoc_opt (string_of_id field) fields in
+                let* v = Bindings.find_opt field @@ Bindings.of_seq @@ List.to_seq fields in
                 access v accessors
             | _ -> None
           )
@@ -158,13 +158,13 @@ module VariableUpdate = struct
     | a :: accessors -> (
         match a with
         | Field field -> (
-            let field = string_of_id field in
             match v with
             | V_record fields ->
-                let* v = List.assoc_opt field fields in
-                let fields = List.remove_assoc field fields in
+                let fields = Bindings.of_seq @@ List.to_seq fields in
+                let* v = Bindings.find_opt field fields in
+                let fields = Bindings.remove field fields in
                 let* updated = update is_inc v v' accessors in
-                Some (V_record ((field, updated) :: fields))
+                Some (V_record ((field, updated) :: Bindings.bindings fields))
             | _ -> None
           )
         | Vector n -> (
@@ -337,8 +337,8 @@ type frame =
       * string
 
 and effect_request =
-  | Read_reg of string * VariableUpdate.accessor list * (value -> state -> frame)
-  | Write_reg of string * VariableUpdate.accessor list * value * (unit -> state -> frame)
+  | Read_reg of id * VariableUpdate.accessor list * (value -> state -> frame)
+  | Write_reg of id * VariableUpdate.accessor list * value * (unit -> state -> frame)
   | Outcome of id * value list * (Semantics.return_value -> Type_check.tannot exp Monad.t)
 
 let read_variable id lstate gstate =
@@ -376,7 +376,7 @@ let rec eval_frame' = function
           let env = gstate.typecheck_env in
           if Type_check.Env.is_outcome id env then Effect_request (out, state, stack, Outcome (id, args, cont))
           else if Type_check.Env.is_union_constructor id env then
-            Step (lazy "", state, cont (Semantics.Return_ok (V_ctor (string_of_id id, args))), stack)
+            Step (lazy "", state, cont (Semantics.Return_ok (V_ctor (id, args))), stack)
           else if is_interpreter_extern id env then (
             let extern = get_interpreter_extern id env in
             if extern = "reg_deref" then (
@@ -421,7 +421,7 @@ let rec eval_frame' = function
           match root with
           | VariableUpdate.Var (name, var_type) -> (
               match var_type with
-              | Var_register -> Effect_request (out, state, stack, Read_reg (string_of_id name, [], do_update))
+              | Var_register -> Effect_request (out, state, stack, Read_reg (name, [], do_update))
               | Var_local -> (
                   try eval_frame' (Step (out, state, cont (read_variable name lstate gstate), stack))
                   with Not_found -> Fail (out, state, m, stack, "Local not found: " ^ string_of_id name)
@@ -444,11 +444,7 @@ let rec eval_frame' = function
                       state,
                       stack,
                       Write_reg
-                        ( string_of_id name,
-                          accessors,
-                          value,
-                          fun () state' -> eval_frame' (Step (out, state', cont (), stack))
-                        )
+                        (name, accessors, value, fun () state' -> eval_frame' (Step (out, state', cont (), stack)))
                     )
               | Var_local ->
                   let state' = ({ locals = Bindings.update name do_update lstate.locals }, gstate) in
@@ -474,14 +470,13 @@ let eval_frame frame =
 let default_effect_interp out state stack eff =
   let lstate, gstate = state in
   match eff with
-  | Read_reg (name, _, cont) ->
+  | Read_reg (id, _, cont) ->
       if gstate.allow_registers then (
-        try cont (Bindings.find (mk_id name) gstate.registers) state
-        with Not_found -> failwith ("Read of nonexistent register: " ^ name)
+        try cont (Bindings.find id gstate.registers) state
+        with Not_found -> failwith ("Read of nonexistent register: " ^ string_of_id id)
       )
-      else failwith ("Register read disallowed by allow_registers setting: " ^ name)
-  | Write_reg (name, accessors, v, cont) ->
-      let id = mk_id name in
+      else failwith ("Register read disallowed by allow_registers setting: " ^ string_of_id id)
+  | Write_reg (id, accessors, v, cont) ->
       let do_update = function
         | None -> Some v
         | Some old_value -> (
@@ -495,8 +490,8 @@ let default_effect_interp out state stack eff =
           let state' = (lstate, { gstate with registers = Bindings.update id do_update gstate.registers }) in
           cont () state'
         )
-        else failwith ("Write of nonexistent register: " ^ name)
-      else failwith ("Register write disallowed by allow_registers setting: " ^ name)
+        else failwith ("Write of nonexistent register: " ^ string_of_id id)
+      else failwith ("Register write disallowed by allow_registers setting: " ^ string_of_id id)
   | Outcome (id, vals, cont) -> (
       let arg = if List.length vals != 1 then tuple_value vals else List.hd vals in
       match Bindings.find_opt id gstate.fundefs with

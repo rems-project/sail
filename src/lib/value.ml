@@ -51,6 +51,24 @@ module StringMap = Map.Make (String)
 open Ast
 open Bit
 
+module Id = struct
+  type t = id
+  let compare id1 id2 =
+    match (id1, id2) with
+    | Id_aux (And_bool, _), Id_aux (And_bool, _) -> 0
+    | Id_aux (Or_bool, _), Id_aux (Or_bool, _) -> 0
+    | Id_aux (Id x, _), Id_aux (Id y, _) -> String.compare x y
+    | Id_aux (Operator x, _), Id_aux (Operator y, _) -> String.compare x y
+    | Id_aux (Id _, _), _ -> -1
+    | _, Id_aux (Id _, _) -> 1
+    | Id_aux (Operator _, _), _ -> -1
+    | _, Id_aux (Operator _, _) -> 1
+    | Id_aux (And_bool, _), _ -> -1
+    | _, Id_aux (And_bool, _) -> 1
+end
+
+module IdMap = Map.Make (Id)
+
 let print_chan = ref stdout
 let print_redirected = ref false
 
@@ -68,6 +86,12 @@ let output_endline str =
   output_string !print_chan (str ^ "\n");
   flush !print_chan
 
+let string_of_id = function
+  | Id_aux (And_bool, _) -> "and_bool"
+  | Id_aux (Or_bool, _) -> "or_bool"
+  | Id_aux (Id v, _) -> v
+  | Id_aux (Operator v, _) -> "(operator " ^ v ^ ")"
+
 let rec string_of_value = function
   | V_bitvector vs -> Sail_lib.string_of_bits vs
   | V_vector vs -> "[" ^ Util.string_of_list ", " string_of_value vs ^ "]"
@@ -78,12 +102,14 @@ let rec string_of_value = function
   | V_list vals -> "[|" ^ Util.string_of_list ", " string_of_value vals ^ "|]"
   | V_unit -> "()"
   | V_string str -> "\"" ^ str ^ "\""
-  | V_ref str -> "ref " ^ str
+  | V_ref id -> "ref " ^ string_of_id id
   | V_real r -> Sail_lib.string_of_real (Util.Rational.from_rocq r)
-  | V_member str -> str
-  | V_ctor (str, vals) -> str ^ "(" ^ Util.string_of_list ", " string_of_value vals ^ ")"
+  | V_member id -> string_of_id id
+  | V_ctor (id, vals) -> string_of_id id ^ "(" ^ Util.string_of_list ", " string_of_value vals ^ ")"
   | V_record record ->
-      "struct {" ^ Util.string_of_list ", " (fun (field, v) -> field ^ " = " ^ string_of_value v) record ^ "}"
+      "struct {"
+      ^ Util.string_of_list ", " (fun (field, v) -> string_of_id field ^ " = " ^ string_of_value v) record
+      ^ "}"
 
 let mk_real r = V_real (Util.Rational.to_rocq r)
 
@@ -98,12 +124,14 @@ let rec eq_value v1 v2 =
   | V_tuple v1s, V_tuple v2s when List.length v1s = List.length v2s -> List.for_all2 eq_value v1s v2s
   | V_unit, V_unit -> true
   | V_string str1, V_string str2 -> str1 = str2
-  | V_ref str1, V_ref str2 -> str1 = str2
-  | V_member name1, V_member name2 -> name1 = name2
+  | V_ref str1, V_ref str2 -> Id.compare str1 str2 = 0
+  | V_member name1, V_member name2 -> Id.compare name1 name2 = 0
   | V_ctor (name1, fields1), V_ctor (name2, fields2) when List.length fields1 = List.length fields2 ->
-      name1 = name2 && List.for_all2 eq_value fields1 fields2
+      Id.compare name1 name2 = 0 && List.for_all2 eq_value fields1 fields2
   | V_record fields1, V_record fields2 ->
-      List.compare_lengths fields1 fields2 = 0 && List.for_all2 (fun (_, f1) (_, f2) -> eq_value f1 f2) fields1 fields2
+      let fields1 = IdMap.of_seq @@ List.to_seq fields1 in
+      let fields2 = IdMap.of_seq @@ List.to_seq fields2 in
+      IdMap.equal eq_value fields1 fields2
   | _, _ -> false
 
 let coerce_member = function V_member str -> str | _ -> assert false
@@ -111,8 +139,6 @@ let coerce_member = function V_member str -> str | _ -> assert false
 let coerce_ctor = function V_ctor (str, vals) -> (str, vals) | _ -> assert false
 
 let coerce_bool = function V_bool b -> b | _ -> assert false
-
-let coerce_record = function V_record record -> StringMap.of_seq @@ List.to_seq record | _ -> assert false
 
 let and_bool = function [v1; v2] -> V_bool (coerce_bool v1 && coerce_bool v2) | _ -> assert false
 
