@@ -47,6 +47,7 @@
 module Big_int = Nat_big_num
 
 open Ast
+open Ast_compare
 open Ast_defs
 open Ast_util
 open Type_check

@@ -44,6 +44,7 @@
 (*  SPDX-License-Identifier: BSD-2-Clause                                   *)
 (****************************************************************************)
 
+open Ast_compare
 open Ast_util
 open Jib
 open Jib_compile

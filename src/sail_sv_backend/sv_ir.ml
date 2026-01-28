@@ -47,6 +47,7 @@
 
 open Libsail
 
+open Ast_compare
 open Ast_util
 open Jib_util
 open Jib_visitor

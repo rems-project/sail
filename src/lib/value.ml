@@ -49,25 +49,8 @@ module Big_int = Nat_big_num
 module StringMap = Map.Make (String)
 
 open Ast
+open Ast_compare
 open Bit
-
-module Id = struct
-  type t = id
-  let compare id1 id2 =
-    match (id1, id2) with
-    | Id_aux (And_bool, _), Id_aux (And_bool, _) -> 0
-    | Id_aux (Or_bool, _), Id_aux (Or_bool, _) -> 0
-    | Id_aux (Id x, _), Id_aux (Id y, _) -> String.compare x y
-    | Id_aux (Operator x, _), Id_aux (Operator y, _) -> String.compare x y
-    | Id_aux (Id _, _), _ -> -1
-    | _, Id_aux (Id _, _) -> 1
-    | Id_aux (Operator _, _), _ -> -1
-    | _, Id_aux (Operator _, _) -> 1
-    | Id_aux (And_bool, _), _ -> -1
-    | _, Id_aux (And_bool, _) -> 1
-end
-
-module IdMap = Map.Make (Id)
 
 let print_chan = ref stdout
 let print_redirected = ref false
@@ -129,9 +112,9 @@ let rec eq_value v1 v2 =
   | V_ctor (name1, fields1), V_ctor (name2, fields2) when List.length fields1 = List.length fields2 ->
       Id.compare name1 name2 = 0 && List.for_all2 eq_value fields1 fields2
   | V_record fields1, V_record fields2 ->
-      let fields1 = IdMap.of_seq @@ List.to_seq fields1 in
-      let fields2 = IdMap.of_seq @@ List.to_seq fields2 in
-      IdMap.equal eq_value fields1 fields2
+      let fields1 = Bindings.of_seq @@ List.to_seq fields1 in
+      let fields2 = Bindings.of_seq @@ List.to_seq fields2 in
+      Bindings.equal eq_value fields1 fields2
   | _, _ -> false
 
 let coerce_member = function V_member str -> str | _ -> assert false

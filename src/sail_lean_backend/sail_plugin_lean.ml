@@ -66,6 +66,7 @@
 (****************************************************************************)
 
 open Libsail
+open Ast_compare
 open Ast_util
 open Interactive.State
 

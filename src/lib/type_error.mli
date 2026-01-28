@@ -50,6 +50,7 @@
     than Type_errors. *)
 
 open Ast
+open Ast_compare
 open Ast_util
 open Type_env
 
@@ -95,7 +96,7 @@ type suggestion = Suggest_add_constraint of Ast.n_constraint | Suggest_none
 
 (** Analyze an unresolved quantifier type error *)
 val analyze_unresolved_quant :
-  (Ast_util.mut * Ast.typ) Ast_util.Bindings.t -> Ast.n_constraint list -> Ast.quant_item -> suggestion
+  (Ast_util.mut * Ast.typ) Bindings.t -> Ast.n_constraint list -> Ast.quant_item -> suggestion
 
 val string_of_type_error : type_error -> string * string option
 

@@ -49,4 +49,4 @@
 
 open Libsail
 
-let opt_instantiations : (Ast.kind_aux -> Ast.typ_arg) Ast_util.Bindings.t ref = ref Ast_util.Bindings.empty
+let opt_instantiations : (Ast.kind_aux -> Ast.typ_arg) Ast_compare.Bindings.t ref = ref Ast_compare.Bindings.empty

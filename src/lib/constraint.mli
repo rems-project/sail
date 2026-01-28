@@ -48,6 +48,7 @@
 
 module Big_int = Nat_big_num
 open Ast
+open Ast_compare
 open Ast_util
 
 (** Print generated SMT problems (for debugging) *)
