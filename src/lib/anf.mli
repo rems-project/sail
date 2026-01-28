@@ -68,6 +68,7 @@
     See Flanagan et al's {e The Essence of Compiling with Continuations}. *)
 
 open Ast
+open Ast_compare
 open Ast_util
 open Jib
 open Jib_util

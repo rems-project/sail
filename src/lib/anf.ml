@@ -45,6 +45,7 @@
 (****************************************************************************)
 
 open Ast
+open Ast_compare
 open Ast_util
 open Jib
 open Jib_util

@@ -45,6 +45,7 @@
 (****************************************************************************)
 
 open Ast
+open Ast_compare
 open Ast_util
 
 (** Create an L-expression for setting the bits of a bitfield defined by an index_range type. *)

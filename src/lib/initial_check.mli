@@ -47,6 +47,7 @@
 (** Initial desugaring pass over AST after parsing *)
 
 open Ast
+open Ast_compare
 open Ast_defs
 open Ast_util
 

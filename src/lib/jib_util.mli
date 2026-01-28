@@ -47,6 +47,7 @@
 (** Utilities and helper functions for operating on Jib instructions and definitions *)
 
 open Ast
+open Ast_compare
 open Ast_util
 open Jib
 

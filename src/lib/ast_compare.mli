@@ -25,7 +25,6 @@
 (*    Stephen Kell                                                          *)
 (*    Mark Wassell                                                          *)
 (*    Alastair Reid (Arm Ltd)                                               *)
-(*    Louis-Emile Ploix                                                     *)
 (*                                                                          *)
 (*  All rights reserved.                                                    *)
 (*                                                                          *)
@@ -45,41 +44,87 @@
 (*  SPDX-License-Identifier: BSD-2-Clause                                   *)
 (****************************************************************************)
 
-open Libsail
-
 open Ast
-open Ast_compare
-open Ast_util
-open Jib
-open Jib_util
 
-type footprint = {
-  direct_reads : NameSet.t;
-  direct_writes : NameSet.t;
-  direct_throws : bool;
-  all_reads : NameSet.t;
-  all_writes : NameSet.t;
-  throws : bool;
-  need_stdout : bool;
-  need_stderr : bool;
-  reads_mem : bool;
-  writes_mem : bool;
-  contains_assert : bool;
-  exits : bool;
-}
+(** {1 Set and Map modules for various AST elements} *)
 
-val pure_footprint : footprint
+module Id : sig
+  type t = id
+  val compare : id -> id -> int
+end
 
-type spec_info = {
-  register_ctyp_map : NameSet.t CTMap.t;  (** A map from register types to all the registers with that type *)
-  registers : (ctyp * unit def_annot) NameMap.t;  (** A map from register names to types *)
-  initialized_registers : name list;  (** A list of registers with initial values *)
-  constructors : IdSet.t;  (** A list of constructor functions *)
-  global_lets : NameSet.t;  (** Global letbindings *)
-  global_let_numbers : Ast.id list Util.IntMap.t;  (** Global let numbers *)
-  footprints : footprint Bindings.t;  (** Function footprint information *)
-  callgraph : Jib_compile.IdGraph.graph;  (** Specification callgraph *)
-  exception_ctyp : ctyp;  (** The type of exceptions *)
-}
+module Kid : sig
+  type t = kid
+  val compare : kid -> kid -> int
+end
 
-val collect_spec_info : Jib_compile.ctx -> cdef list -> spec_info
+module Kind : sig
+  type t = kind
+  val compare : kind -> kind -> int
+end
+
+module KOpt : sig
+  type t = kinded_id
+  val compare : kinded_id -> kinded_id -> int
+end
+
+module Nexp : sig
+  type t = nexp
+  val compare : nexp -> nexp -> int
+end
+
+module NC : sig
+  type t = n_constraint
+  val compare : n_constraint -> n_constraint -> int
+end
+
+(* NB: the comparison function does not expand synonyms *)
+module Typ : sig
+  type t = typ
+  val compare : typ -> typ -> int
+end
+
+module TypArg : sig
+  type t = typ_arg
+  val compare : typ_arg -> typ_arg -> int
+end
+
+module IdSet : sig
+  include Set.S with type elt = id and type t = Set.Make(Id).t
+end
+
+module NexpSet : sig
+  include Set.S with type elt = nexp
+end
+
+module NexpMap : sig
+  include Map.S with type key = nexp
+end
+
+module KOptSet : sig
+  include Set.S with type elt = kinded_id
+end
+
+module KOptMap : sig
+  include Map.S with type key = kinded_id
+end
+
+module KidSet : sig
+  include Set.S with type elt = kid
+end
+
+module KBindings : sig
+  include Map.S with type key = kid
+end
+
+module Bindings : sig
+  include Map.S with type key = id
+end
+
+module NCMap : sig
+  include Map.S with type key = n_constraint
+end
+
+module TypMap : sig
+  include Map.S with type key = typ
+end
