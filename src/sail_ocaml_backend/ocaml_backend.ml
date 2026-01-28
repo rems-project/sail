@@ -48,6 +48,7 @@ open Libsail
 open Ast
 open Ast_defs
 open Ast_util
+open Bit
 open PPrint
 open Type_check
 open Util
@@ -168,7 +169,7 @@ let ocaml_typquant (TypQ_aux (_, l) as typq) =
 
 let string_lit str = dquotes (string (String.escaped str))
 
-let ocaml_bit = function Value_type.B0 -> string "B0" | Value_type.B1 -> string "B1"
+let ocaml_bit = function B0 -> string "B0" | B1 -> string "B1"
 
 let ocaml_lit (L_aux (lit_aux, _)) =
   match lit_aux with

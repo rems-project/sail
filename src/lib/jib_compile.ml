@@ -47,6 +47,7 @@
 open Ast
 open Ast_defs
 open Ast_util
+open Bit
 open Parse_ast.Attribute_data
 open Jib
 open Jib_util
@@ -446,7 +447,7 @@ module Make (C : CONFIG) = struct
           | L_bin bin -> Semantics.bitlist_of_bin_lit bin
           | _ -> assert false
           )
-          |> List.map (function Value_type.B0 -> Sail2_values.B0 | Value_type.B1 -> Sail2_values.B1)
+          |> List.map (function B0 -> Sail2_values.B0 | B1 -> Sail2_values.B1)
         in
         let len = List.length bitlist in
         (* For small bitvectors, or when we permit arbitrary-length literals > 64 we can emit a literal directly,

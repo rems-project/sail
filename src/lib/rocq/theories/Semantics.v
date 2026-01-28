@@ -13,8 +13,9 @@ From Stdlib Require Import String.
 From Stdlib Require Import ZArith.
 From Stdlib Require QArith.
 
-Require Import Value_type.
+Require Import Bit.
 Require Import Ast.
+Require Import Value_type.
 Require Import AstInduction.
 Require Import IdUtil.
 
@@ -531,7 +532,7 @@ Module Make (T : SemanticExt).
     | P_vector_subrange m _ _ => id_eqb n m
     end.
 
-  Fixpoint substitute {A} (n : Ast.id) (v : Value_type.value) (x : exp A) : exp A :=
+  Fixpoint substitute {A} (n : Ast.id) (v : Ast.value) (x : exp A) : exp A :=
     let 'E_aux aux annot := x in
     match aux with
     | E_id m =>
@@ -598,7 +599,7 @@ Module Make (T : SemanticExt).
     | E_return x => E_aux (E_return (substitute n v x)) annot
     | _ => x
     end
-  with substitute_arm {A} (n : Ast.id) (v : Value_type.value) (arm : pexp A) : pexp A :=
+  with substitute_arm {A} (n : Ast.id) (v : Ast.value) (arm : pexp A) : pexp A :=
     let 'Pat_aux aux annot := arm in
     match aux with
     | Pat_exp pat body =>
@@ -612,7 +613,7 @@ Module Make (T : SemanticExt).
         else
           Pat_aux (Pat_when pat (substitute n v guard) (substitute n v body)) annot
     end
-  with substitute_lexp {A} (n : Ast.id) (v : Value_type.value) (l : lexp A) : lexp A :=
+  with substitute_lexp {A} (n : Ast.id) (v : Ast.value) (l : lexp A) : lexp A :=
     let 'LE_aux aux annot := l in
     match aux with
     | LE_deref x => LE_aux (LE_deref (substitute n v x)) annot

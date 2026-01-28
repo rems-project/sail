@@ -48,6 +48,7 @@ module Big_int = Nat_big_num
 open Ast
 open Ast_defs
 open Ast_util
+open Bit
 open Type_check
 open Spec_analysis
 open Rewriter
@@ -597,7 +598,7 @@ let remove_vector_concat_pat pat =
         let l, _ = annot in
         let wild _ = P_aux (P_wild, (gen_loc l, mk_tannot env bit_typ)) in
         let bit b =
-          let b = match b with Value_type.B0 -> Bin_0 | Value_type.B1 -> Bin_1 in
+          let b = match b with B0 -> Bin_0 | B1 -> Bin_1 in
           P_aux (P_lit (L_aux (L_bin [Non_empty (b, [])], gen_loc l)), (gen_loc l, mk_tannot env bit_typ))
         in
         if is_vector_typ typ || is_bitvector_typ typ then (
@@ -1503,14 +1504,14 @@ let rewrite_bit_lists_to_lits env =
   (* TODO Make all rewriting passes support bitvector literals instead of
      converting back and forth *)
   let bit_of_lit = function
-    | L_aux (L_bin [Non_empty (b, [])], _) -> Some (match b with Bin_0 -> Value_type.B0 | Bin_1 -> Value_type.B1)
+    | L_aux (L_bin [Non_empty (b, [])], _) -> Some (match b with Bin_0 -> B0 | Bin_1 -> B1)
     | _ -> None
   in
   let bit_of_exp = function E_aux (E_lit lit, _) -> bit_of_lit lit | _ -> None in
   let lit_of_bits bits =
     match Semantics.hex_digits_of_bitlist bits with
     | Some h -> L_hex (non_empty_singleton h)
-    | None -> L_bin (non_empty_singleton (List.map (function Value_type.B0 -> Bin_0 | Value_type.B1 -> Bin_1) bits))
+    | None -> L_bin (non_empty_singleton (List.map (function B0 -> Bin_0 | B1 -> Bin_1) bits))
   in
   let e_aux (e, (l, annot)) =
     let rewrap e = E_aux (e, (l, annot)) in
@@ -4511,9 +4512,7 @@ let rewrite_truncate_hex_literals _type_env defs =
         ( Id_aux (Id "truncate", _),
           [E_aux (E_lit (L_aux (L_hex hex, l_ann)), _); E_aux (E_lit (L_aux (L_num len, _)), _)]
         ) ->
-        let bin =
-          Semantics.bitlist_of_hex_lit hex |> List.map (function Value_type.B0 -> Bin_0 | Value_type.B1 -> Bin_1)
-        in
+        let bin = Semantics.bitlist_of_hex_lit hex |> List.map (function B0 -> Bin_0 | B1 -> Bin_1) in
         let len = Nat_big_num.to_int len in
         let truncation = Util.drop (List.length bin - len) bin in
         E_aux (E_lit (L_aux (L_bin (non_empty_singleton truncation), l_ann)), annot)

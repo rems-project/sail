@@ -48,7 +48,8 @@ module Big_int = Nat_big_num
 
 module StringMap = Map.Make (String)
 
-open Value_type
+open Ast
+open Bit
 
 let print_chan = ref stdout
 let print_redirected = ref false
@@ -83,7 +84,6 @@ let rec string_of_value = function
   | V_ctor (str, vals) -> str ^ "(" ^ Util.string_of_list ", " string_of_value vals ^ ")"
   | V_record record ->
       "struct {" ^ Util.string_of_list ", " (fun (field, v) -> field ^ " = " ^ string_of_value v) record ^ "}"
-  | V_attempted_read _ -> assert false
 
 let mk_real r = V_real (Util.Rational.to_rocq r)
 

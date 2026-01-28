@@ -4,6 +4,7 @@ open Type_check
 open Ast
 open Ast_defs
 open Ast_util
+open Bit
 open Reporting
 open Rewriter
 open PPrint
@@ -541,10 +542,10 @@ and doc_vector_concat pats =
     match aux with
     | P_lit (L_aux (L_bin bin, _)) ->
         let bits = Semantics.bitlist_of_bin_lit bin in
-        concat_map (function Value_type.B0 -> char '0' | Value_type.B1 -> char '1') bits
+        concat_map (function B0 -> char '0' | B1 -> char '1') bits
     | P_lit (L_aux (L_hex hex, _)) ->
         let bits = Semantics.bitlist_of_hex_lit hex in
-        concat_map (function Value_type.B0 -> char '0' | Value_type.B1 -> char '1') bits
+        concat_map (function B0 -> char '0' | B1 -> char '1') bits
     | P_id id -> (
         match destruct_bitvector (env_of_pat pat) (typ_of_pat pat) with
         | Some (Nexp_aux (Nexp_constant n, _)) ->

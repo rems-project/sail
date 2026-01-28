@@ -46,6 +46,7 @@
 
 open Ast
 open Ast_defs
+open Bit
 open Parse_ast.Attribute_data
 open Util
 module Big_int = Nat_big_num
@@ -1989,8 +1990,7 @@ let vector_string_to_bit_list (L_aux (lit, l)) =
   in
   List.map
     (function
-      | Value_type.B0 -> L_aux (L_bin [Non_empty (Bin_0, [])], gen_loc l)
-      | Value_type.B1 -> L_aux (L_bin [Non_empty (Bin_1, [])], gen_loc l)
+      | B0 -> L_aux (L_bin [Non_empty (Bin_0, [])], gen_loc l) | B1 -> L_aux (L_bin [Non_empty (Bin_1, [])], gen_loc l)
       )
     s_bin
 

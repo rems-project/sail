@@ -48,6 +48,7 @@ open Libsail
 
 open Ast
 open Ast_util
+open Bit
 open Jib
 open Jib_compile
 open Jib_util
@@ -146,8 +147,7 @@ let literal_to_fragment (L_aux (l_aux, _)) =
       let len = hex_lit_length hex in
       if len <= 64 then (
         let content =
-          Semantics.bitlist_of_hex_lit hex
-          |> List.map (function Value_type.B0 -> Sail2_values.B0 | Value_type.B1 -> Sail2_values.B1)
+          Semantics.bitlist_of_hex_lit hex |> List.map (function B0 -> Sail2_values.B0 | B1 -> Sail2_values.B1)
         in
         Some (V_lit (VL_bits content, CT_fbits len))
       )

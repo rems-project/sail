@@ -44,7 +44,7 @@
 (*  SPDX-License-Identifier: BSD-2-Clause                                   *)
 (****************************************************************************)
 
-open Value_type
+open Bit
 
 module Big_int = Nat_big_num
 

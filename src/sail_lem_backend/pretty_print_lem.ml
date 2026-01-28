@@ -50,6 +50,7 @@ open Type_check
 open Ast
 open Ast_defs
 open Ast_util
+open Bit
 open Reporting
 open Rewriter
 open PPrint
@@ -499,7 +500,7 @@ let doc_tannot_lem ctxt env eff typ =
 let min_int32 = Big_int.of_int64 (Int64.of_int32 Int32.min_int)
 let max_int32 = Big_int.of_int64 (Int64.of_int32 Int32.max_int)
 
-let doc_bit = function Value_type.B0 -> string "B0" | Value_type.B1 -> string "B1"
+let doc_bit = function B0 -> string "B0" | B1 -> string "B1"
 
 let rec doc_lit_lem (L_aux (lit, l)) =
   match lit with

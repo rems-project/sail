@@ -1,5 +1,9 @@
 Require Extraction.
 
+Set Extraction KeepSingleton.
+Set Extraction Output Directory ".".
+
+From Stdlib Require Import Bool.
 From Stdlib Require Import String.
 From Stdlib Require Import ZArith.
 From Stdlib Require Import QArith.
@@ -9,30 +13,8 @@ From Stdlib Require ExtrOcamlNatBigInt.
 From Stdlib Require ExtrOcamlNativeString.
 From Stdlib Require ExtrOcamlZBigInt.
 
-Set Extraction KeepSingleton.
-Set Extraction Output Directory ".".
-
-From Stdlib Require Import Bool.
-
-Inductive bit : Set :=
-| B0 : bit
-| B1 : bit.
-
-Inductive value : Set :=
-| V_bitvector : list bit -> value
-| V_vector : list value -> value
-| V_list : list value -> value
-| V_int : Z -> value
-| V_real : Q -> value
-| V_bool : bool -> value
-| V_tuple : list value -> value
-| V_unit : value
-| V_string : string -> value
-| V_ref : string -> value
-| V_member : string -> value
-| V_ctor : string -> list value -> value
-| V_record : list (string * value) -> value
-| V_attempted_read : string -> value.
+Require Import Bit.
+Require Import Ast.
 
 Module Primops.
   Definition gt_int (v1 : value) (v2 : value) : option value :=
