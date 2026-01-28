@@ -3,3 +3,11 @@
 4[96m |[0mconstraint y <= x
  [91m |[0m                [91m^[0m
  [91m |[0m The abstract numeric type named x is not in scope
+ [91m |[0m 
+ [91m |[0m Try requiring module A to bring the following into scope for module B:
+ [91m |[0m [96mproject/global_constraint2/amod.sail[0m:2.5-6:
+ [91m |[0m 2[96m |[0mtype x : Int
+ [91m |[0m  [91m |[0m     [91m^[0m [91mdefinition here in A[0m
+ [91m |[0m [96mproject/fail_global_constraint2.sail_project[0m:5.0-1:
+ [91m |[0m 5[96m |[0mB {
+ [91m |[0m  [91m |[0m[91m^[0m [91madd 'requires A' within B here[0m
