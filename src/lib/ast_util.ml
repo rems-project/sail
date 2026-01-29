@@ -2123,7 +2123,7 @@ let rec locate : 'a. (l -> l) -> 'a exp -> 'a exp =
   in
   E_aux (e_aux, (f l, annot))
 
-and locate_measure : 'a. (l -> l) -> 'a internal_loop_measure -> 'a internal_loop_measure =
+and locate_measure : 'a. (l -> l) -> 'a in_place_loop_measure -> 'a in_place_loop_measure =
  fun f (Measure_aux (m, l)) ->
   let m = match m with Measure_none -> Measure_none | Measure_some exp -> Measure_some (locate f exp) in
   Measure_aux (m, f l)

@@ -302,12 +302,12 @@ Inductive mpat_aux (a : Set) : Set :=
 with mpat (a : Set) : Set :=
 | MP_aux : mpat_aux a -> annot a -> mpat a.
 
-Inductive internal_loop_measure_aux (a : Set) : Set :=
-| Measure_none : internal_loop_measure_aux a
-| Measure_some : exp a -> internal_loop_measure_aux a
+Inductive in_place_loop_measure_aux (a : Set) : Set :=
+| Measure_none : in_place_loop_measure_aux a
+| Measure_some : exp a -> in_place_loop_measure_aux a
 
-with internal_loop_measure (a : Set) : Set :=
-| Measure_aux : internal_loop_measure_aux a -> loc -> internal_loop_measure a
+with in_place_loop_measure (a : Set) : Set :=
+| Measure_aux : in_place_loop_measure_aux a -> loc -> in_place_loop_measure a
 
 with exp_aux (a : Set) : Set :=
 | E_block : list (exp a) -> exp_aux a
@@ -317,7 +317,7 @@ with exp_aux (a : Set) : Set :=
 | E_app : id -> list (exp a) -> exp_aux a
 | E_tuple : list (exp a) -> exp_aux a
 | E_if : exp a -> exp a -> exp a -> exp_aux a
-| E_loop : loop -> internal_loop_measure a -> exp a -> exp a -> exp_aux a
+| E_loop : loop -> in_place_loop_measure a -> exp a -> exp a -> exp_aux a
 | E_for : id -> exp a -> exp a -> exp a -> order -> exp a -> exp_aux a
 | E_vector : list (exp a) -> exp_aux a
 | E_vector_append : exp a -> exp a -> exp_aux a

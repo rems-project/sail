@@ -58,7 +58,7 @@ function has_loops() = {
     while true do {
         ()
     };
-    repeat termination_measure { foo } () until true
+    repeat termination_measure(foo) () until true
 }
 
 type foo = bar

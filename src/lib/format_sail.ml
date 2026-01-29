@@ -831,8 +831,8 @@ module Make (Config : CONFIG) = struct
         let measure =
           match loop.termination_measure with
           | Some chunks ->
-              string "termination_measure" ^^ space
-              ^^ group (surround indent 1 (char '{') (doc_chunks opts chunks) (char '}'))
+              string "termination_measure"
+              ^^ group (surround indent 0 (char '(') (doc_chunks opts chunks) (char ')'))
               ^^ space
           | None -> empty
         in
@@ -840,7 +840,7 @@ module Make (Config : CONFIG) = struct
         let body = doc_chunks (opts |> nonatomic |> statement_like) loop.body in
         if loop.repeat_until then
           string "repeat" ^^ space ^^ measure ^^ body ^^ space ^^ string "until" ^^ space ^^ cond
-        else string "while" ^^ space ^^ measure ^^ cond ^^ space ^^ string "do" ^^ space ^^ body
+        else string "while" ^^ space ^^ cond ^^ space ^^ measure ^^ string "do" ^^ space ^^ body
     | Field (exp, id) -> doc_chunks (subatomic opts) exp ^^ char '.' ^^ doc_id id
     | Raw str -> separate hardline (lines str)
 
