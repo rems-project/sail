@@ -218,11 +218,11 @@ type 'a mpat_aux =
 and 'a mpat =
 | MP_aux of 'a mpat_aux * 'a annot
 
-type 'a internal_loop_measure_aux =
+type 'a in_place_loop_measure_aux =
 | Measure_none
 | Measure_some of 'a exp
-and 'a internal_loop_measure =
-| Measure_aux of 'a internal_loop_measure_aux * Parse_ast.l
+and 'a in_place_loop_measure =
+| Measure_aux of 'a in_place_loop_measure_aux * Parse_ast.l
 and 'a exp_aux =
 | E_block of 'a exp list
 | E_id of id
@@ -231,7 +231,7 @@ and 'a exp_aux =
 | E_app of id * 'a exp list
 | E_tuple of 'a exp list
 | E_if of 'a exp * 'a exp * 'a exp
-| E_loop of loop * 'a internal_loop_measure * 'a exp * 'a exp
+| E_loop of loop * 'a in_place_loop_measure * 'a exp * 'a exp
 | E_for of id * 'a exp * 'a exp * 'a exp * order * 'a exp
 | E_vector of 'a exp list
 | E_vector_append of 'a exp * 'a exp

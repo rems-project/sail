@@ -510,7 +510,7 @@ module Printer (Config : PRINT_CONFIG) = struct
     | E_struct (struct_name, fexps) ->
         separate space [doc_struct_name struct_name; string "{"; doc_fexps fexps; string "}"]
     | E_loop (While, measure, cond, exp) ->
-        separate space ([string "while"] @ doc_measure measure @ [doc_exp cond; string "do"; doc_exp exp])
+        separate space ([string "while"; doc_exp cond] @ doc_measure measure @ [string "do"; doc_exp exp])
     | E_loop (Until, measure, cond, exp) ->
         separate space ([string "repeat"] @ doc_measure measure @ [doc_exp exp; string "until"; doc_exp cond])
     | E_struct_update (exp, fexps) ->
@@ -586,7 +586,7 @@ module Printer (Config : PRINT_CONFIG) = struct
     | None -> group ((string keyword ^//^ lhs) ^/^ string "in") ^///^ doc_exp body
 
   and doc_measure (Measure_aux (m_aux, _)) =
-    match m_aux with Measure_none -> [] | Measure_some exp -> [string "termination_measure"; braces (doc_exp exp)]
+    match m_aux with Measure_none -> [] | Measure_some exp -> [string "termination_measure" ^^ parens (doc_exp exp)]
 
   and doc_infix n exp_orig =
     let (E_aux (e_aux, (l, _)) as exp), uannot_fmt = consume_exp_uannot ~atomic:false exp_orig in

@@ -18,6 +18,7 @@ skip_tests = {
     'all_even_vector_length', # loops
     'for_shadow', # loops
     'loop_exception', # loops
+    'loop_termination', # loops
     'read_write_ram', # memory
     'real', # reals
     'real_prop', # reals

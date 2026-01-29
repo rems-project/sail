@@ -164,7 +164,8 @@ def test_coq(name):
     results.expect_failure("inc_tests.sail", "missing built-in functions for increasing vectors in Coq library")
     results.expect_failure("read_write_ram.sail", "uses memory primitives not provided by default in Coq")
     results.expect_failure("fail_exception.sail", "test harness can't produce expected output for uncaught exception")
-    results.expect_failure("loop_exception.sail", "Loop without termination measure")
+    # Note that loop_termination.sail is essentially loop_exception.sail without the unsupported bit
+    results.expect_failure("loop_exception.sail", "Loop requiring termination measure with a register read")
     results.expect_failure("outcome_impl.sail", "test doesn't meet Coq backend's expectations for the concurrency interface")
     results.expect_failure("outcome_impl_int.sail", "test doesn't meet Coq backend's expectations for the concurrency interface")
     results.expect_failure("outcome_impl_bool.sail", "test doesn't meet Coq backend's expectations for the concurrency interface")
