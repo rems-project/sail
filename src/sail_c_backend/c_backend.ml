@@ -1743,13 +1743,16 @@ module Codegen (Config : CODEGEN_CONFIG) = struct
         in
         (* Create a switch that does something for each constructor *)
         let each_ctor v f ctors =
-          c_switch (ksprintf string "(%skind)" v)
-            (List.filter_map
-               (fun (ctor_id, ctyp) ->
-                 Option.map (fun op -> (ksprintf string "Kind_%s" (sgen_id ctor_id), [op])) (f ctor_id ctyp)
-               )
-               ctors
-            )
+          let cases =
+            List.filter_map
+              (fun (ctor_id, ctyp) ->
+                Option.map (fun op -> (ksprintf string "Kind_%s" (sgen_id ctor_id), [op])) (f ctor_id ctyp)
+              )
+              ctors
+          in
+          (* Avoid outputting empty switches. This is here instead of in `c_switch` because
+            in `c_switch` we don't know that the condition expression has no side effects. *)
+          if cases == [] then empty else c_switch (ksprintf string "(%skind)" v) cases
         in
         let codegen_init =
           let n = sgen_id id in
