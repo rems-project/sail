@@ -1277,12 +1277,23 @@ let doc_typdef ctx (TD_aux (td, tannot) as full_typdef) =
       let vars = List.map parens vars in
       let vars = separate space vars in
       nest 2 (flow (break 1) (remove_empties [string "abbrev"; doc_id_ctor id; vars; coloneq; doc_typ ctx t]))
-  | TD_abbrev (id, tq, A_aux (A_typ t, _)) when string_of_id id = "fp_bits" ->
-      string (Printf.sprintf "-- Abbreviation %s skipped" (string_of_id id)) (* FIXME *)
   | TD_abbrev (id, tq, A_aux (A_typ t, _)) ->
-      let vars = doc_typ_quant_only_vars ctx tq in
-      let vars = separate space vars in
-      nest 2 (flow (break 1) (remove_empties [string "abbrev"; doc_id_ctor id; vars; coloneq; doc_typ ctx t]))
+      (* Since the t is a type, so abbrev should be an abbreviation of the type, in most of the cases
+      the type inference by the underscore is imposible, so we need to use a dependent pair. *)
+      (match t with 
+        | Typ_aux (Typ_exist (kids, _nc, body), _l) -> 
+        (* We add a marker here to force the doc_typ print out dependent pairs. *)
+        let body_doc = doc_typ ctx t in
+          List.fold_right
+            (fun kopt acc ->
+              let kid = kopt_kid kopt in
+              string "Sigma" ^^ space ^^ parens (string "fun " ^^ doc_kid ctx kid ^^ space ^^ string "=> " ^^ acc)
+            )
+            kids body_doc
+        | _ ->
+          let vars = doc_typ_quant_only_vars ctx tq in
+          let vars = separate space vars in
+          nest 2 (flow (break 1) (remove_empties [string "abbrev"; doc_id_ctor id; vars; coloneq; doc_typ ctx t])))
   | TD_abbrev (id, tq, A_aux (A_nexp ne, _)) ->
       let vars = doc_typ_quant_only_vars ctx tq in
       let vars = separate space vars in
