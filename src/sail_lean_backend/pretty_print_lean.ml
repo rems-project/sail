@@ -1113,17 +1113,17 @@ let doc_funcl_init global (FCL_aux (FCL_funcl (id, pexp), annot)) =
   let binders : (tannot pat * id * typ) list =
     pats
     |> List.mapi (fun i (pat, typ) ->
-           match pat_is_plain_binder ~suffix:(Printf.sprintf "_%i" i) env pat with
-           | Some (Some id, _) -> (pat, id, typ)
-           | Some (None, _) ->
-               (pat, mk_id ~loc:l (Printf.sprintf "x_%i" i), typ) (* TODO fresh name or wildcard instead of x *)
-           | _ ->
-               ( pat,
-                 Id_aux (Id "TODO_ARG_PATTERN", Unknown),
-                 Typ_aux (Typ_id (Id_aux (Id "TODO_ARG_PATTERN", Unknown)), Unknown)
-               )
-           (*failwith "Argument pattern not translatable yet."*)
-       )
+        match pat_is_plain_binder ~suffix:(Printf.sprintf "_%i" i) env pat with
+        | Some (Some id, _) -> (pat, id, typ)
+        | Some (None, _) ->
+            (pat, mk_id ~loc:l (Printf.sprintf "x_%i" i), typ) (* TODO fresh name or wildcard instead of x *)
+        | _ ->
+            ( pat,
+              Id_aux (Id "TODO_ARG_PATTERN", Unknown),
+              Typ_aux (Typ_id (Id_aux (Id "TODO_ARG_PATTERN", Unknown)), Unknown)
+            )
+        (*failwith "Argument pattern not translatable yet."*)
+    )
   in
   let ctx = context_init env global in
   let ctx, binders, fixup_binders =
@@ -1278,22 +1278,25 @@ let doc_typdef ctx (TD_aux (td, tannot) as full_typdef) =
       let vars = separate space vars in
       nest 2 (flow (break 1) (remove_empties [string "abbrev"; doc_id_ctor id; vars; coloneq; doc_typ ctx t]))
   | TD_abbrev (id, tq, A_aux (A_typ t, _)) ->
-      (* Since the t is a type, so abbrev should be an abbreviation of the type, in most of the cases
-      the type inference by the underscore is imposible, so we need to use a dependent pair. *)
-      (match t with 
-        | Typ_aux (Typ_exist (kids, _nc, body), _l) -> 
-        (* We add a marker here to force the doc_typ print out dependent pairs. *)
-        let body_doc = doc_typ ctx t in
-          List.fold_right
-            (fun kopt acc ->
-              let kid = kopt_kid kopt in
-              string "Sigma" ^^ space ^^ parens (string "fun " ^^ doc_kid ctx kid ^^ space ^^ string "=> " ^^ acc)
-            )
-            kids body_doc
-        | _ ->
-          let vars = doc_typ_quant_only_vars ctx tq in
-          let vars = separate space vars in
-          nest 2 (flow (break 1) (remove_empties [string "abbrev"; doc_id_ctor id; vars; coloneq; doc_typ ctx t])))
+      (* Since RHS is a type term, `abbrev` defines a type abbreviation.
+       In an abbrev there is usually no expected-type context, so `_` holes
+       from existentials are often not solvable. For existentials we therefore
+       print an explicit dependent pair (Sigma). *)
+      let rhs_doc =
+        match t with
+        | Typ_aux (Typ_exist (kopts, _nc, body), _l) ->
+            (* Copied from Coq backend. *)
+            let body_doc = doc_typ ctx body in
+            List.fold_right
+              (fun kopt acc ->
+                let kid = kopt_kid kopt in
+                string "Sigma" ^^ space ^^ parens (string "fun " ^^ doc_kid ctx kid ^^ space ^^ string "=> " ^^ acc)
+              )
+              kopts body_doc
+        | _ -> doc_typ ctx t
+      in
+      let vars = doc_typ_quant_only_vars ctx tq |> separate space in
+      nest 2 (flow (break 1) (remove_empties [string "abbrev"; doc_id_ctor id; vars; coloneq; rhs_doc]))
   | TD_abbrev (id, tq, A_aux (A_nexp ne, _)) ->
       let vars = doc_typ_quant_only_vars ctx tq in
       let vars = separate space vars in
