@@ -228,7 +228,7 @@ let add_def_to_graph graph (DEF_aux (def, def_annot)) =
           | Typ_aux ((Typ_id id | Typ_app (id, _)), _) -> graph := G.add_edge self (Type id) !graph
           | _ -> Reporting.unreachable (fst annot) __POS__ "Struct without struct type"
         end
-      | E_lit (L_aux (L_undef, l)) -> begin
+      | E_undef -> begin
           (* Make undefined literals depend on the undefined functions generated for the type (if any)
              to ensure that `rewrite_undefined` works *)
           try
@@ -242,7 +242,7 @@ let add_def_to_graph graph (DEF_aux (def, def_annot)) =
             in
             (* The `mwords` parameter of `undefined_of_type` shouldn't change the set of functions called,
                so just pass `true`. *)
-            funcalls_of_exp (undefined_of_typ true l (fun _ -> empty_uannot) typ)
+            funcalls_of_exp (undefined_of_typ true (fst annot) (fun _ -> empty_uannot) typ)
             |> IdSet.iter (fun f -> graph := G.add_edge self (Function f) !graph)
           with _ -> ()
         end
@@ -378,7 +378,7 @@ let add_def_to_graph graph (DEF_aux (def, def_annot)) =
     | DEF_register (DEC_aux (DEC_reg (typ, id, opt_exp), annot)) ->
         (* Determine dependencies of initial expressions (or `undefined` if missing, which will add
            dependencies to `undefined_*` functions) *)
-        let exp = match opt_exp with Some exp -> exp | None -> E_aux (E_lit (mk_lit L_undef), annot) in
+        let exp = match opt_exp with Some exp -> exp | None -> E_aux (E_undef, annot) in
         ignore (fold_exp (rw_exp (Register id)) exp);
         IdSet.iter (fun typ_id -> graph := G.add_edge (Register id) (Type typ_id) !graph) (typ_ids typ)
     | DEF_measure (id, pat, exp) ->

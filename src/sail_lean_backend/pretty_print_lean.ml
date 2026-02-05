@@ -388,7 +388,6 @@ let doc_lit ~width (L_aux (lit, l)) =
       | [Non_empty (Bin_1, [])] -> string ("1" ^ width_specifier)
       | _ -> utf8string ("0b" ^ string_of_bin_lit ~group_separator:"" bin ^ width_specifier)
     )
-  | L_undef -> utf8string "(Fail \"undefined value of unsupported type\")"
   | L_string s -> utf8string ("\"" ^ lean_escape_string s ^ "\"")
   | L_real r -> utf8string (Q.to_string (Util.Rational.from_rocq r))
 (* TODO test if this is really working *)
@@ -416,6 +415,7 @@ let string_of_exp_con (E_aux (e, _)) =
   | E_return _ -> "E_return"
   | E_assert _ -> "E_assert"
   | E_var _ -> "E_var"
+  | E_undef -> "E_undef"
   | E_internal_plet _ -> "E_internal_plet"
   | E_internal_return _ -> "E_internal_return"
   | E_internal_assume _ -> "E_internal_assume"

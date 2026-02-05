@@ -667,18 +667,17 @@ Module Make (T : SemanticExt).
     | _ :: _ => Runtime_type_error l
     end.
 
-  Definition value_of_lit (lit : Ast.lit) (typ : Ast.typ) : t value :=
+  Definition value_of_lit (lit : Ast.lit) : value :=
     let 'L_aux aux _ := lit in
     match aux with
-    | L_unit => pure V_unit
-    | L_true => pure (V_bool true)
-    | L_false => pure (V_bool false)
-    | L_num n => pure (V_int n)
-    | L_hex h => pure (V_bitvector (bitlist_of_hex_lit h))
-    | L_bin b => pure (V_bitvector (bitlist_of_bin_lit b))
-    | L_real r => pure (V_real r)
-    | L_string s => pure (V_string s)
-    | L_undef => get_undefined typ
+    | L_unit => V_unit
+    | L_true => V_bool true
+    | L_false => V_bool false
+    | L_num n => V_int n
+    | L_hex h => V_bitvector (bitlist_of_hex_lit h)
+    | L_bin b => V_bitvector (bitlist_of_bin_lit b)
+    | L_real r => V_real r
+    | L_string s => V_string s
     end.
 
   Definition same_bits (bs : list bit) (vs : list bit) : bool :=
@@ -1374,8 +1373,7 @@ Module Make (T : SemanticExt).
             wrap (E_let (LB_aux (LB_val pat x') lb_annot) body)
         end
     | E_lit lit =>
-        v ← value_of_lit lit (T.get_type (snd annot));
-        wrap (E_internal_value v)
+        wrap (E_internal_value (value_of_lit lit))
     | E_tuple xs =>
         let '(evaluated, unevaluated) := left_to_right xs in
         match unevaluated with
@@ -1603,6 +1601,9 @@ Module Make (T : SemanticExt).
                 end
             end
         end
+    | E_undef =>
+        u ← get_undefined (T.get_type (snd annot));
+        wrap (E_internal_value u)
     | E_vector_append _ _ => Runtime_type_error (fst annot)
     | E_sizeof _ => Runtime_type_error (fst annot)
     | E_constraint _ => Runtime_type_error (fst annot)

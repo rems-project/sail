@@ -477,7 +477,7 @@ module Make (C : CONFIG) = struct
           ([iinit l CT_real gs (V_lit (VL_string str, CT_string))], V_id (gs, CT_real), [iclear CT_real gs])
         )
     | AV_lit (L_aux (L_unit, _), _) -> ([], V_lit (VL_unit, CT_unit), [])
-    | AV_lit (L_aux (L_undef, _), typ) ->
+    | AV_undef typ ->
         let ctyp = ctyp_of_typ ctx typ in
         ([], V_lit (VL_undefined, ctyp), [])
     | AV_tuple avals ->

@@ -172,7 +172,7 @@ module Make :
 
   val bv_concat : Parse_ast.l -> value list -> bit list Monad.t
 
-  val value_of_lit : lit -> typ -> value Monad.t
+  val value_of_lit : lit -> value
 
   val same_bits : bit list -> bit list -> bool
 

@@ -1267,7 +1267,6 @@ let to_ast_lit (P.L_aux (lit, l)) =
       | P.L_one -> L_bin [Non_empty (Bin_1, [])]
       | P.L_true -> L_true
       | P.L_false -> L_false
-      | P.L_undef -> L_undef
       | P.L_num i -> L_num i
       | P.L_hex h -> (
           match parse_hex_lit ~warn_inconsistent_case:l h with
@@ -1431,6 +1430,7 @@ and to_ast_exp ctx exp =
       )
       else wrap (E_id (to_ast_id ctx id))
   | P.E_ref id -> wrap (E_ref (to_ast_id ctx id))
+  | P.E_undef -> wrap E_undef
   | P.E_lit lit -> wrap (E_lit (to_ast_lit lit))
   | P.E_typ (typ, exp) -> wrap (E_typ (to_ast_typ ctx typ, to_ast_exp ctx exp))
   | P.E_app (f, args) -> (
@@ -2513,7 +2513,7 @@ let generate_undefined_record id typq fields =
     mk_fundef
       [
         mk_funcl (prepend_id "undefined_" id) pat
-          (mk_exp (E_struct (SN_anon, List.map (fun ((id, _), _) -> mk_fexp id (mk_lit_exp L_undef)) fields)));
+          (mk_exp (E_struct (SN_anon, List.map (fun ((id, _), _) -> mk_fexp id (mk_exp E_undef)) fields)));
       ];
   ]
 
@@ -2580,7 +2580,7 @@ let generate_initialize_registers vs_ids regs =
             mk_funcl (mk_id "initialize_registers")
               (mk_pat (P_lit (mk_lit L_unit)))
               (mk_exp
-                 (E_block (List.map (fun (id, typ) -> mk_exp (E_assign (mk_lexp (LE_id id), mk_lit_exp L_undef))) regs))
+                 (E_block (List.map (fun (id, typ) -> mk_exp (E_assign (mk_lexp (LE_id id), mk_exp E_undef))) regs))
               );
           ];
       ]

@@ -92,7 +92,7 @@ let rec is_value (E_aux (e, (l, annot))) =
   | E_struct (_, fes) -> List.for_all (fun (FE_aux (FE_fexp (_, e), _)) -> is_value e) fes
   | E_app (id, es) -> is_constructor id && List.for_all is_value es
   (* We add casts to undefined to keep the type information in the AST *)
-  | E_typ (typ, E_aux (E_lit (L_aux (L_undef, _)), _)) -> true
+  | E_typ (typ, E_aux (E_undef, _)) -> true
   (* Also keep casts around, as type inference fails without (e.g., for records for vectors) *)
   | E_typ (_, e') -> is_value e'
   (* TODO: more? *)
@@ -198,12 +198,12 @@ let reduce_cast typ exp l annot =
             ^ string_of_n_constraint nc
              )
           )
-  | E_aux (E_lit (L_aux (L_undef, _)), _), Some ([kopt], nc, typ'') when atom_typ_kid (kopt_kid kopt) typ'' ->
+  | E_aux (E_undef, _), Some ([kopt], nc, typ'') when atom_typ_kid (kopt_kid kopt) typ'' ->
       let nexp = fabricate_nexp_exist env Unknown typ [kopt_kid kopt] nc typ'' in
       let newtyp = subst_kids_typ (KBindings.singleton (kopt_kid kopt) nexp) typ'' in
       E_aux (E_typ (newtyp, exp), (Generated l, replace_typ newtyp annot))
-  | E_aux (E_typ (_, (E_aux (E_lit (L_aux (L_undef, _)), _) as exp)), _), Some ([kopt], nc, typ'')
-    when atom_typ_kid (kopt_kid kopt) typ'' ->
+  | E_aux (E_typ (_, (E_aux (E_undef, _) as exp)), _), Some ([kopt], nc, typ'') when atom_typ_kid (kopt_kid kopt) typ''
+    ->
       let nexp = fabricate_nexp_exist env Unknown typ [kopt_kid kopt] nc typ'' in
       let newtyp = subst_kids_typ (KBindings.singleton (kopt_kid kopt) nexp) typ'' in
       E_aux (E_typ (newtyp, exp), (Generated l, replace_typ newtyp annot))
@@ -230,7 +230,7 @@ let construct_lit_vector args =
 let keep_undef_typ value =
   let e_aux (e, ann) =
     match e with
-    | E_lit (L_aux (L_undef, _)) ->
+    | E_undef ->
         (* Add cast to undefined... *)
         E_aux (E_typ (typ_of_annot ann, E_aux (e, ann)), ann)
     | E_typ (typ, E_aux (E_typ (_, e), _)) ->
@@ -346,7 +346,7 @@ let const_props target env ast =
             ),
             assigns
           )
-      | E_lit _ | E_sizeof _ | E_constraint _ | E_config _ -> (exp, assigns)
+      | E_undef | E_lit _ | E_sizeof _ | E_constraint _ | E_config _ -> (exp, assigns)
       | E_typ (t, e') ->
           let e'', assigns = const_prop_exp substs assigns e' in
           if is_value e'' then (reduce_cast t e'' l annot, assigns) else re (E_typ (t, e'')) assigns
@@ -683,6 +683,13 @@ let const_props target env ast =
               end
             | _ -> GiveUp
           )
+        | E_undef, P_var (P_aux (P_id id, p_id_annot), TP_aux (TP_var kid, _)) ->
+            (* For undefined we fix the type-level size (because there's no good
+               way to construct an undefined size), but leave the term as undefined
+               to make the meaning clear. *)
+            let nexp = fabricate_nexp l annot in
+            let typ = subst_kids_typ (KBindings.singleton kid nexp) (typ_of_annot p_id_annot) in
+            DoesMatch ([(id, E_aux (E_typ (typ, E_aux (e, (l, empty_tannot))), (l, empty_tannot)))], [(kid, nexp)])
         | E_lit (L_aux (lit_e, lit_l)), P_lit (L_aux (lit_p, _)) ->
             if lit_match (lit_e, lit_p) then DoesMatch ([], []) else DoesNotMatch
         | E_lit (L_aux (lit_e, lit_l)), P_var (P_aux (P_id id, p_id_annot), TP_aux (TP_var kid, _)) -> begin
@@ -691,10 +698,6 @@ let const_props target env ast =
             (* For undefined we fix the type-level size (because there's no good
                way to construct an undefined size), but leave the term as undefined
                to make the meaning clear. *)
-            | L_undef ->
-                let nexp = fabricate_nexp l annot in
-                let typ = subst_kids_typ (KBindings.singleton kid nexp) (typ_of_annot p_id_annot) in
-                DoesMatch ([(id, E_aux (E_typ (typ, E_aux (e, (l, empty_tannot))), (l, empty_tannot)))], [(kid, nexp)])
             | _ ->
                 Reporting.print_err lit_l "Monomorphisation"
                   ("Unexpected kind of literal for var match: " ^ string_of_lit (L_aux (lit_e, lit_l)));
@@ -748,9 +751,9 @@ let const_props target env ast =
             Reporting.print_err l "Monomorphisation"
               ("Unexpected kind of pattern for vector literal: " ^ string_of_pat pat);
             GiveUp
-        | E_typ (undef_typ, E_aux (E_lit (L_aux (L_undef, lit_l)), _)), P_lit (L_aux (lit_p, _)) -> DoesNotMatch
-        | ( E_typ (undef_typ, (E_aux (E_lit (L_aux (L_undef, lit_l)), _) as e_undef)),
-            P_var (P_aux (P_id id, p_id_annot), TP_aux (TP_var kid, _)) ) ->
+        | E_typ (undef_typ, E_aux (E_undef, _)), P_lit (L_aux (lit_p, _)) -> DoesNotMatch
+        | E_typ (undef_typ, (E_aux (E_undef, _) as e_undef)), P_var (P_aux (P_id id, p_id_annot), TP_aux (TP_var kid, _))
+          ->
             (* For undefined we fix the type-level size (because there's no good
                way to construct an undefined size), but leave the term as undefined
                to make the meaning clear. *)
@@ -759,7 +762,7 @@ let const_props target env ast =
             let ksubst = KidSet.fold (fun k b -> KBindings.add k nexp b) kids KBindings.empty in
             let typ = subst_kids_typ ksubst (typ_of_annot p_id_annot) in
             DoesMatch ([(id, E_aux (E_typ (typ, e_undef), (l, empty_tannot)))], KBindings.bindings ksubst)
-        | E_typ (undef_typ, E_aux (E_lit (L_aux (L_undef, lit_l)), _)), _ ->
+        | E_typ (undef_typ, E_aux (E_undef, _)), _ ->
             Reporting.print_err l' "Monomorphisation" ("Unexpected kind of pattern for literal: " ^ string_of_pat pat);
             GiveUp
         | E_typ (_, exp'), _ -> check_exp_pat exp' pat

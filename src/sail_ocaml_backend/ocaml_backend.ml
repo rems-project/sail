@@ -182,7 +182,6 @@ let ocaml_lit (L_aux (lit_aux, _)) =
       else if Big_int.less_equal (Big_int.of_int min_int) n && Big_int.less_equal n (Big_int.of_int max_int) then
         parens (string "Big_int.of_int" ^^ space ^^ parens (string (Big_int.to_string n)))
       else parens (string "Big_int.of_string" ^^ space ^^ dquotes (string (Big_int.to_string n)))
-  | L_undef -> failwith "undefined should have been re-written prior to ocaml backend"
   | L_string str -> string_lit str
   | L_real r ->
       let str = Q.to_string (Util.Rational.from_rocq r) in

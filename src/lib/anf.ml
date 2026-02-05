@@ -115,6 +115,7 @@ and 'a aval =
   | AV_vector of 'a aval list * 'a
   | AV_record of 'a aval Bindings.t * 'a
   | AV_cval of cval * 'a
+  | AV_undef of 'a
 
 and 'a alexp = AL_id of name * 'a | AL_addr of name * 'a | AL_field of 'a alexp * id
 
@@ -193,6 +194,7 @@ let rec aval_typ = function
   | AV_vector (_, typ) -> typ
   | AV_record (_, typ) -> typ
   | AV_cval (_, typ) -> typ
+  | AV_undef typ -> typ
 
 let aexp_typ (AE_aux (aux, _)) =
   match aux with
@@ -226,6 +228,7 @@ let rec aval_rename from_id to_id = function
   | AV_vector (avals, typ) -> AV_vector (List.map (aval_rename from_id to_id) avals, typ)
   | AV_record (avals, typ) -> AV_record (Bindings.map (aval_rename from_id to_id) avals, typ)
   | AV_cval (cval, typ) -> AV_cval (cval_rename from_id to_id cval, typ)
+  | AV_undef typ -> AV_undef typ
 
 let rec alexp_rename from_id to_id = function
   | AL_id (id, typ) when Name.compare from_id id = 0 -> AL_id (to_id, typ)
@@ -591,6 +594,7 @@ and pp_block = function
   | aexp :: aexps -> pp_aexp aexp ^^ semi ^^ hardline ^^ pp_block aexps
 
 and pp_aval = function
+  | AV_undef typ -> pp_annot typ (string "undefined")
   | AV_lit (lit, typ) -> pp_annot typ (string (string_of_lit lit))
   | AV_id (id, lvar) -> pp_lvar lvar (pp_name id)
   | AV_abstract (id, typ) -> string "sizeof" ^^ parens (pp_annot typ (pp_id id))
@@ -735,6 +739,7 @@ let rec anf (E_aux (e_aux, (l, tannot)) as exp) =
   in
 
   match e_aux with
+  | E_undef -> mk_aexp (AE_val (AV_undef (typ_of exp)))
   | E_lit lit -> mk_aexp (ae_lit lit (typ_of exp))
   | E_block [] ->
       Reporting.warn "" l

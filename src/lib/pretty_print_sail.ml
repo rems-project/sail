@@ -290,7 +290,6 @@ module Printer (Config : PRINT_CONFIG) = struct
       | L_real r ->
           let r = Util.Rational.from_rocq r in
           Printf.sprintf "div_real(to_real(%s), to_real(%s))" (Big_int.to_string (Q.num r)) (Big_int.to_string (Q.den r))
-      | L_undef -> "undefined"
       | L_string s -> "\"" ^ String.escaped s ^ "\""
       )
 
@@ -651,6 +650,7 @@ module Printer (Config : PRINT_CONFIG) = struct
       | E_assert (exp1, exp2) -> string "assert" ^^ parens (doc_exp exp1 ^^ comma ^^ space ^^ doc_exp exp2)
       | E_exit exp -> string "exit" ^^ parens (doc_exp exp)
       | E_vector exps -> brackets (separate_map (comma ^^ space) doc_exp exps)
+      | E_undef -> string "undefined"
       | E_internal_value v ->
           if !Interactive.opt_interactive then string (Value.string_of_value v |> Util.green |> Util.clear)
           else string (Value.string_of_value v)

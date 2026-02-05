@@ -122,7 +122,6 @@ type lit_aux =
   | L_num of Big_int.num (* natural number constant *)
   | L_hex of string (* bit vector constant, C-style *)
   | L_bin of string (* bit vector constant, C-style *)
-  | L_undef (* undefined value *)
   | L_string of string (* string constant *)
   | L_multiline_string of string list (* multi-line string constant *)
   | L_real of string
@@ -258,6 +257,7 @@ and exp_aux =
   | E_return of exp
   | E_assert of exp * exp
   | E_var of exp * exp * exp
+  | E_undef
   | E_attribute of string * attribute_data option * exp
   | E_internal_plet of pat * exp * exp
   | E_internal_return of exp

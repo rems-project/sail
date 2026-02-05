@@ -151,7 +151,6 @@ Inductive lit_aux : Set :=
 | L_hex : list (non_empty hex_digit) -> lit_aux
 | L_bin : list (non_empty bin_digit) -> lit_aux
 | L_string : string -> lit_aux
-| L_undef : lit_aux
 | L_real : Q -> lit_aux.
 
 Inductive nexp_aux : Set :=
@@ -338,6 +337,7 @@ with exp_aux (a : Set) : Set :=
 | E_try : exp a -> list (pexp a) -> exp_aux a
 | E_assert : exp a -> exp a -> exp_aux a
 | E_var : lexp a -> exp a -> exp a -> exp_aux a
+| E_undef : exp_aux a
 | E_internal_plet : pat a -> exp a -> exp a -> exp_aux a
 | E_internal_return : exp a -> exp_aux a
 | E_internal_value : value -> exp_aux a
@@ -408,6 +408,7 @@ Arguments E_throw {_}.
 Arguments E_try {_}.
 Arguments E_assert {_}.
 Arguments E_var {_}.
+Arguments E_undef {_}.
 Arguments E_internal_plet {_}.
 Arguments E_internal_return {_}.
 Arguments E_internal_value {_}.

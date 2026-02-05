@@ -2126,9 +2126,9 @@ let rewrite_dec_spec_typs rw_typ (DEC_aux (ds, annot)) =
   match ds with DEC_reg (typ, id, opt_exp) -> DEC_aux (DEC_reg (rw_typ typ, id, opt_exp), annot)
 
 let rewrite_undefined mwords env =
-  let rewrite_e_aux (E_aux (e_aux, _) as exp) =
+  let rewrite_e_aux (E_aux (e_aux, (l, _)) as exp) =
     match e_aux with
-    | E_lit (L_aux (L_undef, l)) ->
+    | E_undef ->
         check_exp (env_of exp)
           (undefined_of_typ mwords l (fun _ -> empty_uannot) (Env.expand_synonyms (env_of exp) (typ_of exp)))
           (typ_of exp)
@@ -2449,6 +2449,7 @@ let rewrite_ast_letbind_effects effect_info env =
     | E_id _ -> k exp
     | E_ref _ -> k exp
     | E_lit _ -> k exp
+    | E_undef -> k exp
     | E_config _ -> k exp
     | E_typ (typ, exp') -> n_exp_name exp' (fun exp' -> k (pure_rewrap (E_typ (typ, exp'))))
     | E_app (op_bool, [l; r]) when is_and_bool op_bool || is_or_bool op_bool ->
@@ -3662,7 +3663,6 @@ module MakeExhaustive = struct
     | L_true -> RL_true
     | L_false -> RL_false
     | L_num _ | L_hex _ | L_bin _ | L_string _ | L_real _ -> RL_inf
-    | L_undef -> assert false
 
   let inv_rlit_of_lit (L_aux (l, _)) =
     match l with
@@ -3670,7 +3670,6 @@ module MakeExhaustive = struct
     | L_true -> [RL_false]
     | L_false -> [RL_true]
     | L_num _ | L_hex _ | L_bin _ | L_string _ | L_real _ -> [RL_inf]
-    | L_undef -> assert false
 
   type residual_pattern =
     | RP_any

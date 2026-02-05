@@ -636,11 +636,11 @@ module Make (C : Config) = struct
             in
             match Constraint.call_smt_solve_bitvector Parse_ast.Unknown smtlib just_vars with
             | Some lits ->
-                if !opt_debug_no_literals then Incomplete (List.init (List.length vars) (fun _ -> mk_lit_exp L_undef))
+                if !opt_debug_no_literals then Incomplete (List.init (List.length vars) (fun _ -> mk_exp E_undef))
                 else
                   Incomplete
                     (List.init (List.length vars) (fun i ->
-                         match List.assoc_opt i lits with Some lit -> mk_exp (E_lit lit) | None -> mk_lit_exp L_undef
+                         match List.assoc_opt i lits with Some lit -> mk_exp (E_lit lit) | None -> mk_exp E_undef
                      )
                     )
             | None ->
@@ -849,7 +849,7 @@ module Make (C : Config) = struct
   let rec undefs_except n c v len =
     if n = len then []
     else if n = c then v :: undefs_except (n + 1) c v len
-    else mk_lit_exp L_undef :: undefs_except (n + 1) c v len
+    else mk_exp E_undef :: undefs_except (n + 1) c v len
 
   let rec matrix_is_complete l ctx matrix =
     match find_complex_column matrix with
@@ -891,7 +891,7 @@ module Make (C : Config) = struct
             let width = row_matrix_width l matrix in
             if row_matrix_empty empty_list_matrix then Incomplete (undefs_except 0 i (mk_exp (E_list [])) width)
             else if row_matrix_empty cons_matrix then
-              Incomplete (undefs_except 0 i (mk_exp (E_cons (mk_lit_exp L_undef, mk_lit_exp L_undef))) width)
+              Incomplete (undefs_except 0 i (mk_exp (E_cons (mk_exp E_undef, mk_exp E_undef))) width)
             else begin
               match matrix_is_complete l ctx cons_matrix with
               | Incomplete unmatcheds -> Incomplete (recons l i unmatcheds)
@@ -919,7 +919,7 @@ module Make (C : Config) = struct
                     let ctor_matrix = split_matrix_ctor ctx i ctor_rows matrix in
                     if row_matrix_empty ctor_matrix then (
                       let width = row_matrix_width l matrix in
-                      Incomplete (undefs_except 0 i (mk_exp (E_app (ctor, [mk_lit_exp L_undef]))) width)
+                      Incomplete (undefs_except 0 i (mk_exp (E_app (ctor, [mk_exp E_undef]))) width)
                     )
                     else matrix_is_complete l ctx ctor_matrix |> completeness_map (rector ctor i) (union_complete cinfo)
               )

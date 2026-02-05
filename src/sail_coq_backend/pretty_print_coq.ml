@@ -847,7 +847,6 @@ let doc_lit (L_aux (lit, l)) =
   (* These need parens because of the 'sz 'b "..."' variants :( *)
   | L_hex hex -> utf8string ("(Ox\"" ^ string_of_hex_lit ~group_separator:"" ~case:Uppercase hex ^ "\")")
   | L_bin bin -> utf8string ("('b\"" ^ string_of_bin_lit ~group_separator:"" bin ^ "\")")
-  | L_undef -> utf8string "(Fail \"undefined value of unsupported type\")"
   | L_string s -> utf8string ("\"" ^ coq_escape_string s ^ "\"")
   | L_real r ->
       let r = Util.Rational.from_rocq r in
@@ -2279,6 +2278,8 @@ let doc_exp, doc_let =
     | E_config _ ->
         raise
           (Reporting.err_unreachable l __POS__ "Configuration expression should have been removed before Coq generation")
+    | E_undef ->
+        raise (Reporting.err_unreachable l __POS__ "undefined value should have been rewritten before pretty-printing")
     | E_internal_value _ ->
         raise (Reporting.err_unreachable l __POS__ "unsupported internal expression encountered while pretty-printing")
   (* In suitable places we translate terms with existential types into dependent pairs *)

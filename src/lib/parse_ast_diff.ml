@@ -301,6 +301,9 @@ let rec diff_exp lhs rhs =
   | E_deref exp1 -> (
       match rhs with E_deref exp2 -> diff_exp exp1 exp2 | _ -> Some l
     )
+  | E_undef -> (
+      match rhs with E_undef -> None | _ -> Some l
+    )
   | E_lit lit1 -> (
       match rhs with E_lit lit2 -> diff_lit lit1 lit2 | _ -> Some l
     )
