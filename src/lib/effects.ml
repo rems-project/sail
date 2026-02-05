@@ -158,7 +158,7 @@ let infer_def_direct_effects asserts_termination def =
       | E_id id -> begin
           match Env.lookup_id id env with Register _ -> effects := EffectSet.add Register !effects | _ -> ()
         end
-      | E_lit (L_aux (L_undef, _)) -> effects := EffectSet.add Undefined !effects
+      | E_undef -> effects := EffectSet.add Undefined !effects
       | E_throw _ -> effects := EffectSet.add Throw !effects
       | E_exit _ | E_assert _ -> effects := EffectSet.add Exit !effects
       | E_app (f, _) when Id.compare f (mk_id "__deref") = 0 -> effects := EffectSet.add Register !effects
@@ -479,7 +479,7 @@ let rewrite_attach_effects effect_info =
           | Some side_effects -> if pure side_effects then no_effect else monadic_effect
           | None -> no_effect
         end
-      | E_lit (L_aux (L_undef, _)) -> monadic_effect
+      | E_undef -> monadic_effect
       | E_id id -> begin match Env.lookup_id id env with Register _ -> monadic_effect | _ -> no_effect end
       | E_throw _ -> monadic_effect
       | E_exit _ | E_assert _ -> monadic_effect

@@ -1393,7 +1393,6 @@ let infer_lit (L_aux (lit_aux, l)) =
   | L_real _ -> real_typ
   | L_bin bin -> bitvector_typ (nint (bin_lit_length bin))
   | L_hex hex -> bitvector_typ (nint (hex_lit_length hex))
-  | L_undef -> typ_error l "Cannot infer the type of undefined"
 
 let instantiate_simple_equations =
   let rec find_eqs kid (NC_aux (nc, _)) =
@@ -1839,11 +1838,8 @@ and build_overload_tree_arg env (E_aux (aux, annot) as exp) =
       | Local (_, typ) | Enum typ | Register typ -> OT_leaf (exp, overload_leaf_type (Env.expand_synonyms env typ))
       | Unbound _ -> unbound_id_error ~at:(fst annot) env v
     end
-  | E_lit lit -> begin
-      match lit with
-      | L_aux (L_undef, _) -> OT_leaf (exp, OL_unknown)
-      | _ -> OT_leaf (exp, overload_leaf_type (infer_lit lit))
-    end
+  | E_undef -> OT_leaf (exp, OL_unknown)
+  | E_lit lit -> OT_leaf (exp, overload_leaf_type (infer_lit lit))
   | E_if (_, then_branch, else_branch) ->
       let then_tree = build_overload_tree_arg env then_branch in
       let else_tree = build_overload_tree_arg env else_branch in
@@ -2540,9 +2536,9 @@ let rec check_exp env (E_aux (exp_aux, (l, uannot)) as exp : uannot exp) (Typ_au
         end
       | None -> typ_error l ("List " ^ string_of_exp exp ^ " must have list type, got " ^ string_of_typ typ)
     end
-  | E_lit (L_aux (L_undef, _) as lit), _ ->
+  | E_undef, _ ->
       if can_be_undefined ~at:l env typ then
-        if is_typ_inhabited env (Env.expand_synonyms env typ) then annot_exp (E_lit lit) typ
+        if is_typ_inhabited env (Env.expand_synonyms env typ) then annot_exp E_undef typ
         else typ_error l ("Type " ^ string_of_typ typ ^ " could be empty")
       else typ_error l ("Type " ^ string_of_typ typ ^ " cannot be undefined")
   | E_internal_assume (nc, exp), _ ->

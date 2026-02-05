@@ -756,6 +756,7 @@ and map_exp_annot_aux f = function
   | E_assert (test, msg) -> E_assert (map_exp_annot f test, map_exp_annot f msg)
   | E_internal_value v -> E_internal_value v
   | E_var (lexp, exp1, exp2) -> E_var (map_lexp_annot f lexp, map_exp_annot f exp1, map_exp_annot f exp2)
+  | E_undef -> E_undef
   | E_internal_plet (pat, exp1, exp2) ->
       E_internal_plet (map_pat_annot f pat, map_exp_annot f exp1, map_exp_annot f exp2)
   | E_internal_return exp -> E_internal_return (map_exp_annot f exp)
@@ -1158,7 +1159,6 @@ let string_of_lit (L_aux (lit, _)) =
   | L_num n -> Big_int.to_string n
   | L_hex hex -> "0x" ^ string_of_hex_lit ~case:Uppercase hex
   | L_bin bin -> "0b" ^ string_of_bin_lit bin
-  | L_undef -> "undefined"
   | L_real r -> Q.to_string (Util.Rational.from_rocq r)
   | L_string str -> "\"" ^ str ^ "\""
 
@@ -1207,6 +1207,7 @@ let rec string_of_exp (E_aux (exp, _)) =
       "struct" ^ name_string ^ " { " ^ string_of_list "; " string_of_fexp fexps ^ " }"
   | E_var (lexp, binding, exp) ->
       "var " ^ string_of_lexp lexp ^ " = " ^ string_of_exp binding ^ " in " ^ string_of_exp exp
+  | E_undef -> "undefined"
   | E_internal_return exp -> "internal_return (" ^ string_of_exp exp ^ ")"
   | E_internal_plet (pat, exp, body) ->
       "internal_plet " ^ string_of_pat pat ^ " = " ^ string_of_exp exp ^ " in " ^ string_of_exp body
@@ -1729,6 +1730,7 @@ let rec subst id value (E_aux (e_aux, annot) as exp) =
     | E_assert (exp1, exp2) -> E_assert (subst id value exp1, subst id value exp2)
     | E_internal_value v -> E_internal_value v
     | E_var (lexp, exp1, exp2) -> E_var (subst_lexp id value lexp, subst id value exp1, subst id value exp2)
+    | E_undef -> E_undef
     | E_internal_assume (nc, exp) -> E_internal_assume (nc, subst id value exp)
     | E_internal_plet _ | E_internal_return _ -> failwith ("subst " ^ string_of_exp exp)
   in
@@ -1929,6 +1931,7 @@ let rec locate : 'a. (l -> l) -> 'a exp -> 'a exp =
     | E_assert (exp, message) -> E_assert (locate f exp, locate f message)
     | E_constraint constr -> E_constraint (locate_nc f constr)
     | E_var (lexp, exp1, exp2) -> E_var (locate_lexp f lexp, locate f exp1, locate f exp2)
+    | E_undef -> E_undef
     | E_internal_plet (pat, exp1, exp2) -> E_internal_plet (locate_pat f pat, locate f exp1, locate f exp2)
     | E_internal_return exp -> E_internal_return (locate f exp)
     | E_internal_value value -> E_internal_value value

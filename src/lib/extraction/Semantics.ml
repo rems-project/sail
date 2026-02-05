@@ -619,20 +619,19 @@ module Make =
        Monad.bind (bv_concat l rest) (fun rest' -> Monad.pure (app bs rest'))
      | _ -> Monad.Runtime_type_error l)
 
-  (** val value_of_lit : lit -> typ -> value Monad.t **)
+  (** val value_of_lit : lit -> value **)
 
-  let value_of_lit lit0 typ0 =
-    let L_aux (aux, _) = lit0 in
+  let value_of_lit = function
+  | L_aux (aux, _) ->
     (match aux with
-     | L_unit -> Monad.pure V_unit
-     | L_true -> Monad.pure (V_bool true)
-     | L_false -> Monad.pure (V_bool false)
-     | L_num n -> Monad.pure (V_int n)
-     | L_hex h -> Monad.pure (V_bitvector (bitlist_of_hex_lit h))
-     | L_bin b -> Monad.pure (V_bitvector (bitlist_of_bin_lit b))
-     | L_string s -> Monad.pure (V_string s)
-     | L_undef -> Monad.get_undefined typ0
-     | L_real r -> Monad.pure (V_real r))
+     | L_unit -> V_unit
+     | L_true -> V_bool true
+     | L_false -> V_bool false
+     | L_num n -> V_int n
+     | L_hex h -> V_bitvector (bitlist_of_hex_lit h)
+     | L_bin b -> V_bitvector (bitlist_of_bin_lit b)
+     | L_string s -> V_string s
+     | L_real r -> V_real r)
 
   (** val same_bits : bit list -> bit list -> bool **)
 
@@ -682,7 +681,6 @@ module Make =
      | L_string s1 -> (match v with
                        | V_string s2 -> (=) s1 s2
                        | _ -> false)
-     | L_undef -> false
      | L_real r1 ->
        (match v with
         | V_real r2 -> coq_Qeq_bool r1 r2
@@ -1243,6 +1241,12 @@ module Make =
                then wrap (E_block xs0)
                else Monad.bind (step0 x0) (fun x' ->
                       wrap (E_block (x' :: xs0)))
+             | E_undef ->
+               let x0 = E_aux (E_undef, annot1) in
+               if is_value x0
+               then wrap (E_block xs0)
+               else Monad.bind (step0 x0) (fun x' ->
+                      wrap (E_block (x' :: xs0)))
              | E_internal_plet (p, e0, e1) ->
                let x0 = E_aux ((E_internal_plet (p, e0, e1)), annot1) in
                if is_value x0
@@ -1287,9 +1291,7 @@ module Make =
             Monad.Read_var ((PL_id (id0, Var_register)), (fun v ->
               wrap (E_internal_value v)))
           | Enum_member -> wrap (E_internal_value (V_member id0)))
-       | E_lit lit0 ->
-         Monad.bind (value_of_lit lit0 (T.get_type (snd annot0))) (fun v ->
-           wrap (E_internal_value v))
+       | E_lit lit0 -> wrap (E_internal_value (value_of_lit lit0))
        | E_typ (_, x) -> step0 x
        | E_app (id0, args) ->
          let Id_aux (i, _) = id0 in
@@ -1637,6 +1639,9 @@ module Make =
              Monad.bind (step0 x) (fun x' -> wrap (E_assert (x', msg))))
        | E_var (l, x, body) ->
          wrap (E_block ((E_aux ((E_assign (l, x)), annot0)) :: (body :: [])))
+       | E_undef ->
+         Monad.bind (Monad.get_undefined (T.get_type (snd annot0))) (fun u ->
+           wrap (E_internal_value u))
        | E_internal_plet (_, _, _) -> Monad.Runtime_type_error (fst annot0)
        | E_internal_return _ -> Monad.Runtime_type_error (fst annot0)
        | E_internal_value v -> wrap (E_internal_value v)

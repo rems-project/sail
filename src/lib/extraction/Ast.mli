@@ -112,7 +112,6 @@ type lit_aux =
 | L_hex of hex_digit non_empty list
 | L_bin of bin_digit non_empty list
 | L_string of string
-| L_undef
 | L_real of coq_Q
 
 type nexp_aux =
@@ -267,6 +266,7 @@ and 'a exp_aux =
 | E_try of 'a exp * 'a pexp list
 | E_assert of 'a exp * 'a exp
 | E_var of 'a lexp * 'a exp * 'a exp
+| E_undef
 | E_internal_plet of 'a pat * 'a exp * 'a exp
 | E_internal_return of 'a exp
 | E_internal_value of value

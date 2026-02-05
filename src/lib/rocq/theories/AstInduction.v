@@ -370,6 +370,7 @@ Section exp_ind_g.
     (H_try : forall x arms ann, P x -> Forall (MatchArm P) arms -> P (E_aux (E_try x arms) ann))
     (H_assert : forall x msg ann, P x -> P msg -> P (E_aux (E_assert x msg) ann))
     (H_var : forall lx x body ann, P x -> P body -> P (E_aux (E_var lx x body) ann))
+    (H_undef : forall ann, P (E_aux E_undef ann))
     (H_internal_plet : forall p x y ann, P x -> P y -> P (E_aux (E_internal_plet p x y) ann))
     (H_internal_return : forall x ann, P x -> P (E_aux (E_internal_return x) ann))
     (H_internal_value : forall v ann, P (E_aux (E_internal_value v) ann))
@@ -452,6 +453,7 @@ Section exp_ind_g.
           assumption.
     - apply H_assert; trivial.
     - apply H_var; trivial.
+    - apply H_undef; trivial.
     - apply H_internal_plet; trivial.
     - apply H_internal_return; trivial.
     - apply H_internal_value.
@@ -493,6 +495,7 @@ Section exp_and_lexp_ind_g.
     (H_try : forall x arms ann, P x -> Forall (MatchArm P) arms -> P (E_aux (E_try x arms) ann))
     (H_assert : forall x msg ann, P x -> P msg -> P (E_aux (E_assert x msg) ann))
     (H_var : forall lx x body ann, Q lx -> P x -> P body -> P (E_aux (E_var lx x body) ann))
+    (H_undef : forall ann, P (E_aux E_undef ann))
     (H_internal_plet : forall p x y ann, P x -> P y -> P (E_aux (E_internal_plet p x y) ann))
     (H_internal_return : forall x ann, P x -> P (E_aux (E_internal_return x) ann))
     (H_internal_value : forall v ann, P (E_aux (E_internal_value v) ann))
@@ -586,6 +589,7 @@ Section exp_and_lexp_ind_g.
             assumption.
       - apply H_assert; trivial.
       - apply H_var; trivial.
+      - apply H_undef; trivial.
       - apply H_internal_plet; trivial.
       - apply H_internal_return; trivial.
       - apply H_internal_value.
@@ -672,7 +676,7 @@ Fixpoint depth {A : Set} (x : exp A) {struct x} : nat :=
   | E_vector_append x y => max (depth x) (depth y) + 1
   | E_exit x => depth x + 1
   | E_var l x y => max (lexp_depth l) (max (depth x) (depth y)) + 1
-  | E_id _ | E_lit _ | E_sizeof _ | E_constraint _ | E_config _ | E_ref _ | E_internal_value _ => 0
+  | E_id _ | E_lit _ | E_sizeof _ | E_constraint _ | E_config _ | E_ref _ | E_undef | E_internal_value _ => 0
   (* Internal constructors we can ignore for now *)
   | E_internal_plet _ _ _ => 0
   | E_internal_return _ => 0

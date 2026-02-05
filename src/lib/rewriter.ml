@@ -246,6 +246,7 @@ let rewrite_exp rewriters (E_aux (exp, (l, annot))) =
              rewriters.rewrite_exp rewriters e2
            )
         )
+  | E_undef -> rewrap E_undef
   | E_internal_assume (nc, e) -> rewrap (E_internal_assume (nc, rewrite e))
   | E_internal_return e -> rewrap (E_internal_return (rewrite e))
   | E_internal_plet (pat, e1, e2) ->
@@ -538,6 +539,7 @@ type ( 'a,
   e_return : 'exp -> 'exp_aux;
   e_assert : 'exp * 'exp -> 'exp_aux;
   e_var : 'lexp * 'exp * 'exp -> 'exp_aux;
+  e_undef : 'exp_aux;
   e_internal_plet : 'pat * 'exp * 'exp -> 'exp_aux;
   e_internal_return : 'exp -> 'exp_aux;
   e_internal_value : value -> 'exp_aux;
@@ -604,6 +606,7 @@ let rec fold_exp_aux alg = function
   | E_assert (e1, e2) -> alg.e_assert (fold_exp alg e1, fold_exp alg e2)
   | E_var (lexp, e1, e2) -> alg.e_var (fold_lexp alg lexp, fold_exp alg e1, fold_exp alg e2)
   | E_internal_plet (pat, e1, e2) -> alg.e_internal_plet (fold_pat alg.pat_alg pat, fold_exp alg e1, fold_exp alg e2)
+  | E_undef -> alg.e_undef
   | E_internal_return e -> alg.e_internal_return (fold_exp alg e)
   | E_internal_value v -> alg.e_internal_value v
   | E_internal_assume (nc, e) -> alg.e_internal_assume (nc, fold_exp alg e)
@@ -677,6 +680,7 @@ let id_exp_alg =
     e_return = (fun e1 -> E_return e1);
     e_assert = (fun (e1, e2) -> E_assert (e1, e2));
     e_var = (fun (lexp, e2, e3) -> E_var (lexp, e2, e3));
+    e_undef = E_undef;
     e_internal_plet = (fun (pat, e1, e2) -> E_internal_plet (pat, e1, e2));
     e_internal_return = (fun e -> E_internal_return e);
     e_internal_value = (fun v -> E_internal_value v);
@@ -801,6 +805,7 @@ let compute_exp_alg bot join =
     e_return = (fun (v1, e1) -> (v1, E_return e1));
     e_assert = (fun ((v1, e1), (v2, e2)) -> (join v1 v2, E_assert (e1, e2)));
     e_var = (fun ((vl, lexp), (v2, e2), (v3, e3)) -> (join_list [vl; v2; v3], E_var (lexp, e2, e3)));
+    e_undef = (bot, E_undef);
     e_internal_plet = (fun ((vp, pat), (v1, e1), (v2, e2)) -> (join_list [vp; v1; v2], E_internal_plet (pat, e1, e2)));
     e_internal_return = (fun (v, e) -> (v, E_internal_return e));
     e_internal_value = (fun v -> (bot, E_internal_value v));
@@ -896,6 +901,7 @@ let pure_exp_alg bot join =
     e_return = (fun v1 -> v1);
     e_assert = (fun (v1, v2) -> join v1 v2);
     e_var = (fun (vl, v2, v3) -> join_list [vl; v2; v3]);
+    e_undef = bot;
     e_internal_plet = (fun (vp, v1, v2) -> join_list [vp; v1; v2]);
     e_internal_return = (fun v -> v);
     e_internal_value = (fun v -> bot);
@@ -1008,7 +1014,7 @@ let default_fold_exp f x (E_aux (e, ann) as exp) =
           (x, []) es
       in
       (x, re (E_block (List.rev es)))
-  | E_id _ | E_ref _ | E_lit _ | E_config _ -> (x, exp)
+  | E_id _ | E_ref _ | E_undef | E_lit _ | E_config _ -> (x, exp)
   | E_typ (typ, e) ->
       let x, e = f x e in
       (x, re (E_typ (typ, e)))

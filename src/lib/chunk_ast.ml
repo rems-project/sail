@@ -528,7 +528,6 @@ let chunk_of_lit (L_aux (aux, _)) =
   | L_num n -> Atom (Big_int.to_string n)
   | L_hex b -> Atom ("0x" ^ b)
   | L_bin b -> Atom ("0b" ^ b)
-  | L_undef -> Atom "undefined"
   | L_string s -> String_literal s
   | L_multiline_string lines -> Multiline_string_literal lines
   | L_real r -> Atom r
@@ -908,6 +907,7 @@ let rec chunk_exp comments chunks (E_aux (aux, l)) =
   | E_id id -> Queue.add (Atom (string_of_id id)) chunks
   | E_ref id -> Queue.add (Atom ("ref " ^ string_of_id id)) chunks
   | E_config s -> Queue.add (Atom ("config " ^ s)) chunks
+  | E_undef -> Queue.add (Atom "undefined") chunks
   | E_lit lit -> Queue.add (chunk_of_lit lit) chunks
   | E_attribute (attr, arg, exp) ->
       chunk_attribute comments chunks attr arg;

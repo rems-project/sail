@@ -516,7 +516,6 @@ let rec doc_lit_lem (L_aux (lit, l)) =
   | L_bin bin when !Monomorphise.opt_mwords -> utf8string ("0b" ^ string_of_bin_lit ~group_separator:"" bin)
   | L_hex hex -> Semantics.bitlist_of_hex_lit hex |> flow_map (semi ^^ break 0) doc_bit |> group |> align |> brackets
   | L_bin bin -> Semantics.bitlist_of_bin_lit bin |> flow_map (semi ^^ break 0) doc_bit |> group |> align |> brackets
-  | L_undef -> utf8string "(return (failwith \"undefined value of unsupported type\"))"
   | L_string s -> utf8string ("\"" ^ String.escaped s ^ "\"")
   | L_real r ->
       let r = Util.Rational.from_rocq r in
@@ -1013,6 +1012,7 @@ let doc_exp_lem, doc_let_lem =
         else if Env.is_register id env && match e with E_ref _ -> true | _ -> false then doc_id_lem (append_id id "_ref")
         else if is_ctor env id then doc_id_lem_ctor id
         else doc_id_lem id
+    | E_undef -> utf8string "(return (failwith \"undefined value of unsupported type\"))"
     | E_lit lit ->
         let env = env_of full_exp in
         let typ = Env.expand_synonyms env (typ_of full_exp) in

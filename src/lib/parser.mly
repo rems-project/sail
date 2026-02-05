@@ -581,8 +581,6 @@ lit:
     { mk_lit L_unit $startpos $endpos }
   | Num
     { mk_lit (L_num $1) $startpos $endpos }
-  | Undefined
-    { mk_lit L_undef $startpos $endpos }
   | Bitzero
     { mk_lit L_zero $startpos $endpos }
   | Bitone
@@ -767,6 +765,8 @@ atomic_exp:
     { mk_exp (E_typ ($3, $1)) $startpos $endpos }
   | Config Id
     { mk_exp (E_config $2) $startpos $endpos }
+  | Undefined
+    { mk_exp E_undef $startpos $endpos }
   | lit
     { mk_exp (E_lit $1) $startpos $endpos }
   | id MinusGt id Unit

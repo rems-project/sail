@@ -137,6 +137,7 @@ and 'a aval =
   | AV_vector of 'a aval list * 'a
   | AV_record of 'a aval Bindings.t * 'a
   | AV_cval of cval * 'a
+  | AV_undef of 'a
 
 and 'a alexp = AL_id of name * 'a | AL_addr of name * 'a | AL_field of 'a alexp * id
 
