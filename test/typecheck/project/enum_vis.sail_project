@@ -1,0 +1,9 @@
+
+A {
+  files enum_vis/amod.sail
+}
+
+B {
+  requires A
+  files enum_vis/bmod.sail
+}

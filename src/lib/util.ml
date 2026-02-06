@@ -110,6 +110,11 @@ module Option_monad = struct
   let ( let+ ) = Option.map
 end
 
+module Result_monad = struct
+  let ( let* ) = Result.bind
+  let ( let+ ) = Result.map
+end
+
 module State_monad (S : sig
   type t
 end) =

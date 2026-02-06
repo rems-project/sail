@@ -388,6 +388,21 @@ let builtin_typs =
       ("div", [K_int; K_int], K_int);
     ]
 
+let in_scope_typ_id env id =
+  let open Util.Result_monad in
+  let check_map m =
+    match Bindings.find_opt id m with
+    | Some item -> if item_in_scope env item then Ok true else Error (err_not_in_scope env None (Some item.loc) item)
+    | None -> Ok false
+  in
+  let* is_synonym = check_map env.global.synonyms in
+  let* is_union = check_map env.global.unions in
+  let* is_record = check_map env.global.records in
+  let* is_enum = check_map env.global.enums in
+  let is_builtin = Bindings.mem id builtin_typs in
+  let* is_abstract = check_map env.global.abstract_typs in
+  Ok (is_synonym || is_union || is_record || is_enum || is_builtin || is_abstract)
+
 let bound_typ_id env id =
   Bindings.mem id env.global.synonyms || Bindings.mem id env.global.unions || Bindings.mem id env.global.records
   || Bindings.mem id env.global.enums || Bindings.mem id builtin_typs
@@ -599,24 +614,28 @@ module Well_formedness = struct
      well-formed. Throws a type error if the type is badly formed. *)
   let rec wf_typ exs env (Typ_aux (typ_aux, l) as typ) =
     match typ_aux with
-    | Typ_id id when bound_typ_id env id ->
-        let typq, k = infer_kind env id in
-        begin
-          match k with
-          | K_type -> ()
-          | _ ->
+    | Typ_id id -> (
+        match in_scope_typ_id env id with
+        | Ok true ->
+            let typq, k = infer_kind env id in
+            begin
+              match k with
+              | K_type -> ()
+              | _ ->
+                  typ_error l
+                    (string_of_id id ^ " has kind " ^ string_of_kind_aux k
+                   ^ " but was used in a place where a type was expected"
+                    )
+            end;
+            if not (Util.list_empty (quant_kopts typq)) then
               typ_error l
-                (string_of_id id ^ " has kind " ^ string_of_kind_aux k
-               ^ " but was used in a place where a type was expected"
+                ("Type constructor " ^ string_of_id id ^ " expected arguments " ^ string_of_typquant typq
+               ^ ", but was used here with none"
                 )
-        end;
-        if not (Util.list_empty (quant_kopts typq)) then
-          typ_error l
-            ("Type constructor " ^ string_of_id id ^ " expected arguments " ^ string_of_typquant typq
-           ^ ", but was used here with none"
-            )
-        else ()
-    | Typ_id id -> typ_error l ("Undefined type " ^ string_of_id id)
+            else ()
+        | Ok false -> typ_error l ("Undefined type " ^ string_of_id id)
+        | Error msg -> typ_raise l msg
+      )
     | Typ_var kid -> begin
         match KBindings.find kid env.typ_vars with
         | _, K_type, _ -> ()
@@ -653,20 +672,23 @@ module Well_formedness = struct
           | None -> Reporting.unreachable l __POS__ "No prover in environment when checking well-formedness"
         end
     | Typ_app (id, [(A_aux (A_nexp _, _) as arg)]) when string_of_id id = "implicit" -> wf_typ_arg exs env arg
-    | Typ_app (id, args) when bound_typ_id env id ->
-        List.iter (wf_typ_arg exs env) args;
-        let typq, k = infer_kind env id in
-        begin
-          match k with
-          | K_type -> ()
-          | _ ->
-              typ_error l
-                (string_of_id id ^ " has kind " ^ string_of_kind_aux k
-               ^ " but was used in a place where a type was expected"
-                )
-        end;
-        check_args_typquant id exs env args typq
-    | Typ_app (id, _) -> typ_error l ("Undefined type " ^ string_of_id id)
+    | Typ_app (id, args) -> (
+        match in_scope_typ_id env id with
+        | Ok true ->
+            List.iter (wf_typ_arg exs env) args;
+            let typq, k = infer_kind env id in
+            ( match k with
+            | K_type -> ()
+            | _ ->
+                typ_error l
+                  (string_of_id id ^ " has kind " ^ string_of_kind_aux k
+                 ^ " but was used in a place where a type was expected"
+                  )
+            );
+            check_args_typquant id exs env args typq
+        | Ok false -> typ_error l ("Undefined type " ^ string_of_id id)
+        | Error msg -> typ_raise l msg
+      )
     | Typ_exist ([], _, _) -> typ_error l "Existential must have some type variables"
     | Typ_exist (kopts, nc, typ) when KidSet.is_empty exs.vars ->
         let vars = KidSet.of_list (List.map kopt_kid kopts) in
@@ -734,19 +756,22 @@ module Well_formedness = struct
               )
       end
     | Nexp_constant _ -> ()
-    | Nexp_app (id, nexps) when bound_typ_id env id ->
-        let typq, k = infer_kind env id in
-        begin
-          match k with
-          | K_int -> ()
-          | _ ->
-              typ_error l
-                (string_of_id id ^ " has kind " ^ string_of_kind_aux k
-               ^ " but was used in a place where a type-level number was expected"
-                )
-        end;
-        List.iter (fun n -> wf_nexp exs env n) nexps
-    | Nexp_app (id, _) -> typ_error l ("Unknown type level numeric operator or function " ^ string_of_id id)
+    | Nexp_app (id, nexps) -> (
+        match in_scope_typ_id env id with
+        | Ok true ->
+            let typq, k = infer_kind env id in
+            ( match k with
+            | K_int -> ()
+            | _ ->
+                typ_error l
+                  (string_of_id id ^ " has kind " ^ string_of_kind_aux k
+                 ^ " but was used in a place where a type-level number was expected"
+                  )
+            );
+            List.iter (fun n -> wf_nexp exs env n) nexps
+        | Ok false -> typ_error l ("Unknown type level numeric operator or function " ^ string_of_id id)
+        | Error msg -> typ_raise l msg
+      )
     | Nexp_times (nexp1, nexp2) | Nexp_sum (nexp1, nexp2) | Nexp_minus (nexp1, nexp2) ->
         wf_nexp exs env nexp1;
         wf_nexp exs env nexp2
@@ -781,23 +806,26 @@ module Well_formedness = struct
                (Some ("The abstract type constraint named " ^ string_of_id id ^ " is not in scope"))
                (Some item.loc) item
             )
-    | NC_id id when bound_typ_id env id ->
-        let typq, k = infer_kind env id in
-        begin
-          match k with
-          | K_bool -> ()
-          | _ ->
+    | NC_id id -> (
+        match in_scope_typ_id env id with
+        | Ok true ->
+            let typq, k = infer_kind env id in
+            ( match k with
+            | K_bool -> ()
+            | _ ->
+                typ_error l
+                  (string_of_id id ^ " has kind " ^ string_of_kind_aux k
+                 ^ " but was used in a place where a constraint was expected"
+                  )
+            );
+            if not (Util.list_empty (quant_kopts typq)) then
               typ_error l
-                (string_of_id id ^ " has kind " ^ string_of_kind_aux k
-               ^ " but was used in a place where a constraint was expected"
+                ("Constraint " ^ string_of_id id ^ " expected arguments " ^ string_of_typquant typq
+               ^ ", but was used here with none"
                 )
-        end;
-        if not (Util.list_empty (quant_kopts typq)) then
-          typ_error l
-            ("Constraint " ^ string_of_id id ^ " expected arguments " ^ string_of_typquant typq
-           ^ ", but was used here with none"
-            )
-    | NC_id id -> typ_error l ("Undefined type constraint " ^ string_of_id id)
+        | Ok false -> typ_error l ("Undefined type constraint " ^ string_of_id id)
+        | Error msg -> typ_raise l msg
+      )
     | NC_equal (arg1, arg2) | NC_not_equal (arg1, arg2) ->
         wf_typ_arg exs env arg1;
         wf_typ_arg exs env arg2
