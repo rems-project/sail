@@ -66,6 +66,11 @@ module Option_monad : sig
   val ( let+ ) : ('a -> 'b) -> 'a option -> 'b option
 end
 
+module Result_monad : sig
+  val ( let* ) : ('a, 'e) result -> ('a -> ('b, 'e) result) -> ('b, 'e) result
+  val ( let+ ) : ('a -> 'b) -> ('a, 'e) result -> ('b, 'e) result
+end
+
 module State_monad : functor
   (S : sig
      type t
