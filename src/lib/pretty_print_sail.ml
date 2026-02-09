@@ -45,6 +45,7 @@
 (****************************************************************************)
 
 open Ast
+open Ast_compare
 open Ast_defs
 open Ast_util
 open PPrint
@@ -102,42 +103,44 @@ module Printer (Config : PRINT_CONFIG) = struct
     | TP_var kid -> doc_kid kid
     | TP_app (f, tpats) -> doc_id f ^^ parens (separate_map (comma ^^ space) doc_typ_pat tpats)
 
-  let rec doc_nexp nexp =
-    let rec atomic_nexp (Nexp_aux (n_aux, _) as nexp) =
-      match n_aux with
-      | Nexp_constant c -> string (Big_int.to_string c)
-      | Nexp_app (Id_aux (Operator op, _), [n1; n2]) -> separate space [atomic_nexp n1; string op; atomic_nexp n2]
-      | Nexp_app (_id, _nexps) -> string (string_of_nexp nexp)
-      (* This segfaults??!!!!
-         doc_id id ^^ (parens (separate_map (comma ^^ space) doc_nexp nexps))
-      *)
-      | Nexp_id id -> doc_id id
-      | Nexp_var kid -> doc_kid kid
-      | _ -> parens (nexp0 nexp)
-    and nexp0 (Nexp_aux (n_aux, _) as nexp) =
-      match n_aux with
-      | Nexp_if (i, t, e) -> separate space [string "if"; doc_nc i; string "then"; nexp1 t; string "else"; nexp1 e]
-      | _ -> nexp1 nexp
-    and nexp1 (Nexp_aux (n_aux, _) as nexp) =
-      match n_aux with
-      | Nexp_sum (n1, Nexp_aux (Nexp_neg n2, _)) | Nexp_minus (n1, n2) ->
-          separate space [nexp1 n1; string "-"; nexp2 n2]
-      | Nexp_sum (n1, Nexp_aux (Nexp_constant c, _)) when Big_int.less c Big_int.zero ->
-          separate space [nexp1 n1; string "-"; doc_int (Big_int.abs c)]
-      | Nexp_sum (n1, n2) -> separate space [nexp1 n1; string "+"; nexp2 n2]
-      | _ -> nexp2 nexp
-    and nexp2 (Nexp_aux (n_aux, _) as nexp) =
-      match n_aux with Nexp_times (n1, n2) -> separate space [nexp2 n1; string "*"; nexp3 n2] | _ -> nexp3 nexp
-    and nexp3 (Nexp_aux (n_aux, _) as nexp) =
-      match n_aux with
-      | Nexp_neg n -> separate space [string "-"; atomic_nexp n]
-      | Nexp_exp n -> separate space [string "2"; string "^"; atomic_nexp n]
-      | _ -> atomic_nexp nexp
-    in
-    nexp0 nexp
+  let rec atomic_nexp (Nexp_aux (n_aux, _) as nexp) =
+    match n_aux with
+    | Nexp_constant c -> string (Big_int.to_string c)
+    | Nexp_app (Id_aux (Operator op, _), [n1; n2]) -> separate space [atomic_nexp n1; string op; atomic_nexp n2]
+    | Nexp_app (_id, _nexps) -> string (string_of_nexp nexp)
+    (* This segfaults??!!!!
+       doc_id id ^^ (parens (separate_map (comma ^^ space) doc_nexp nexps))
+    *)
+    | Nexp_id id -> doc_id id
+    | Nexp_var kid -> doc_kid kid
+    | _ -> parens (nexp0 nexp)
+
+  and nexp0 (Nexp_aux (n_aux, _) as nexp) =
+    match n_aux with
+    | Nexp_if (i, t, e) -> separate space [string "if"; doc_nc i; string "then"; nexp1 t; string "else"; nexp1 e]
+    | _ -> nexp1 nexp
+
+  and nexp1 (Nexp_aux (n_aux, _) as nexp) =
+    match n_aux with
+    | Nexp_sum (n1, Nexp_aux (Nexp_neg n2, _)) | Nexp_minus (n1, n2) -> separate space [nexp1 n1; string "-"; nexp2 n2]
+    | Nexp_sum (n1, Nexp_aux (Nexp_constant c, _)) when Big_int.less c Big_int.zero ->
+        separate space [nexp1 n1; string "-"; doc_int (Big_int.abs c)]
+    | Nexp_sum (n1, n2) -> separate space [nexp1 n1; string "+"; nexp2 n2]
+    | _ -> nexp2 nexp
+
+  and nexp2 (Nexp_aux (n_aux, _) as nexp) =
+    match n_aux with Nexp_times (n1, n2) -> separate space [nexp2 n1; string "*"; nexp3 n2] | _ -> nexp3 nexp
+
+  and nexp3 (Nexp_aux (n_aux, _) as nexp) =
+    match n_aux with
+    | Nexp_neg n -> separate space [string "-"; atomic_nexp n]
+    | Nexp_exp n -> separate space [string "2"; string "^"; atomic_nexp n]
+    | _ -> atomic_nexp nexp
+
+  and doc_nexp nexp = nexp0 nexp
 
   and doc_nc nc =
-    let nc_op op n1 n2 = separate space [doc_nexp n1; string op; doc_nexp n2] in
+    let nc_op op n1 n2 = separate space [atomic_nexp n1; string op; atomic_nexp n2] in
     let rec atomic_nc (NC_aux (nc_aux, _) as nc) =
       match nc_aux with
       | NC_id id -> doc_id id
@@ -186,7 +189,7 @@ module Printer (Config : PRINT_CONFIG) = struct
       let conjs = constraint_conj nc in
       separate_map (space ^^ string "&" ^^ space) atomic_nc conjs
     in
-    atomic_nc (constraint_simp nc)
+    atomic_nc nc
 
   and doc_typ (Typ_aux (typ_aux, l)) =
     match typ_aux with
@@ -284,7 +287,9 @@ module Printer (Config : PRINT_CONFIG) = struct
       | L_num i -> Big_int.to_string i
       | L_hex hex -> "0x" ^ string_of_hex_lit ~case:Uppercase hex
       | L_bin bin -> "0b" ^ string_of_bin_lit bin
-      | L_real r -> r
+      | L_real r ->
+          let r = Util.Rational.from_rocq r in
+          Printf.sprintf "div_real(to_real(%s), to_real(%s))" (Big_int.to_string (Q.num r)) (Big_int.to_string (Q.den r))
       | L_undef -> "undefined"
       | L_string s -> "\"" ^ String.escaped s ^ "\""
       )
@@ -506,7 +511,7 @@ module Printer (Config : PRINT_CONFIG) = struct
     | E_struct (struct_name, fexps) ->
         separate space [doc_struct_name struct_name; string "{"; doc_fexps fexps; string "}"]
     | E_loop (While, measure, cond, exp) ->
-        separate space ([string "while"] @ doc_measure measure @ [doc_exp cond; string "do"; doc_exp exp])
+        separate space ([string "while"; doc_exp cond] @ doc_measure measure @ [string "do"; doc_exp exp])
     | E_loop (Until, measure, cond, exp) ->
         separate space ([string "repeat"] @ doc_measure measure @ [doc_exp exp; string "until"; doc_exp cond])
     | E_struct_update (exp, fexps) ->
@@ -582,7 +587,7 @@ module Printer (Config : PRINT_CONFIG) = struct
     | None -> group ((string keyword ^//^ lhs) ^/^ string "in") ^///^ doc_exp body
 
   and doc_measure (Measure_aux (m_aux, _)) =
-    match m_aux with Measure_none -> [] | Measure_some exp -> [string "termination_measure"; braces (doc_exp exp)]
+    match m_aux with Measure_none -> [] | Measure_some exp -> [string "termination_measure" ^^ parens (doc_exp exp)]
 
   and doc_infix n exp_orig =
     let (E_aux (e_aux, (l, _)) as exp), uannot_fmt = consume_exp_uannot ~atomic:false exp_orig in

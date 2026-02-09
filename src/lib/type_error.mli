@@ -50,6 +50,7 @@
     than Type_errors. *)
 
 open Ast
+open Ast_compare
 open Ast_util
 open Type_env
 
@@ -95,13 +96,13 @@ type suggestion = Suggest_add_constraint of Ast.n_constraint | Suggest_none
 
 (** Analyze an unresolved quantifier type error *)
 val analyze_unresolved_quant :
-  (Ast_util.mut * Ast.typ) Ast_util.Bindings.t -> Ast.n_constraint list -> Ast.quant_item -> suggestion
+  (Ast_util.mut * Ast.typ) Bindings.t -> Ast.n_constraint list -> Ast.quant_item -> suggestion
 
 val string_of_type_error : type_error -> string * string option
 
 (** Convert a type error into a general purpose error from the Reporting file *)
-val to_reporting_exn : Parse_ast.l -> type_error -> exn
+val to_reporting_exn : ?internal:string -> Parse_ast.l -> type_error -> exn
 
 val check_defs : Type_check.Env.t -> untyped_def list -> Type_check.typed_def list * Type_check.Env.t
 
-val check : Type_check.Env.t -> untyped_ast -> Type_check.typed_ast * Type_check.Env.t
+val check : ?internal:string -> Type_check.Env.t -> untyped_ast -> Type_check.typed_ast * Type_check.Env.t

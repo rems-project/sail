@@ -1,5 +1,3 @@
-val add_real : (real, real) -> real
-
-overload operator + = {add_real}
+$include <real.sail>
 
 let r : real = 2.2 + 0.2

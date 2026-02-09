@@ -45,7 +45,9 @@
 (****************************************************************************)
 
 open Ast
+open Ast_compare
 open Ast_defs
+open Bit
 open Parse_ast.Attribute_data
 open Util
 module Big_int = Nat_big_num
@@ -160,11 +162,7 @@ let is_order_inc = function Ord_aux (Ord_inc, _) -> true | Ord_aux (Ord_dec, _) 
 
 let is_order_dec o = not (is_order_inc o)
 
-let string_of_id = function
-  | Id_aux (And_bool, _) -> "and_bool"
-  | Id_aux (Or_bool, _) -> "or_bool"
-  | Id_aux (Id v, _) -> v
-  | Id_aux (Operator v, _) -> "(operator " ^ v ^ ")"
+let string_of_id = Value.string_of_id
 
 let lvar_typ ?loc:(l = Parse_ast.Unknown) = function
   | Local (_, typ) -> typ
@@ -305,194 +303,6 @@ let is_typ_kopt = function KOpt_aux (KOpt_kind (K_aux (K_type, _), _), _) -> tru
 let is_bool_kopt = function KOpt_aux (KOpt_kind (K_aux (K_bool, _), _), _) -> true | _ -> false
 
 let string_of_kid = function Kid_aux (Var v, _) -> v
-
-module Kid = struct
-  type t = kid
-  let compare kid1 kid2 = String.compare (string_of_kid kid1) (string_of_kid kid2)
-end
-
-module Kind = struct
-  type t = kind
-  let compare (K_aux (aux1, _)) (K_aux (aux2, _)) =
-    match (aux1, aux2) with
-    | K_int, K_int -> 0
-    | K_type, K_type -> 0
-    | K_bool, K_bool -> 0
-    | K_int, _ -> 1
-    | _, K_int -> -1
-    | K_type, _ -> 1
-    | _, K_type -> -1
-end
-
-module KOpt = struct
-  type t = kinded_id
-  let compare kopt1 kopt2 =
-    let lex_ord c1 c2 = if c1 = 0 then c2 else c1 in
-    lex_ord (Kid.compare (kopt_kid kopt1) (kopt_kid kopt2)) (Kind.compare (kopt_kind kopt1) (kopt_kind kopt2))
-end
-
-module Id = struct
-  type t = id
-  let compare id1 id2 =
-    match (id1, id2) with
-    | Id_aux (And_bool, _), Id_aux (And_bool, _) -> 0
-    | Id_aux (Or_bool, _), Id_aux (Or_bool, _) -> 0
-    | Id_aux (Id x, _), Id_aux (Id y, _) -> String.compare x y
-    | Id_aux (Operator x, _), Id_aux (Operator y, _) -> String.compare x y
-    | Id_aux (Id _, _), _ -> -1
-    | _, Id_aux (Id _, _) -> 1
-    | Id_aux (Operator _, _), _ -> -1
-    | _, Id_aux (Operator _, _) -> 1
-    | Id_aux (And_bool, _), _ -> -1
-    | _, Id_aux (And_bool, _) -> 1
-end
-
-let lex_ord f g x1 x2 y1 y2 = match f x1 x2 with 0 -> g y1 y2 | n -> n
-
-let rec nexp_compare (Nexp_aux (nexp1, _)) (Nexp_aux (nexp2, _)) =
-  let lex_ord (c1, c2) = if c1 = 0 then c2 else c1 in
-  match (nexp1, nexp2) with
-  | Nexp_id v1, Nexp_id v2 -> Id.compare v1 v2
-  | Nexp_var kid1, Nexp_var kid2 -> Kid.compare kid1 kid2
-  | Nexp_constant c1, Nexp_constant c2 -> Big_int.compare c1 c2
-  | Nexp_app (op1, args1), Nexp_app (op2, args2) ->
-      let lex1 = Id.compare op1 op2 in
-      let lex2 = List.length args1 - List.length args2 in
-      let lex3 = if lex2 = 0 then List.fold_left2 (fun l n1 n2 -> lex_ord (l, compare n1 n2)) 0 args1 args2 else 0 in
-      lex_ord (lex1, lex_ord (lex2, lex3))
-  | Nexp_times (n1a, n1b), Nexp_times (n2a, n2b)
-  | Nexp_sum (n1a, n1b), Nexp_sum (n2a, n2b)
-  | Nexp_minus (n1a, n1b), Nexp_minus (n2a, n2b) ->
-      lex_ord (compare n1a n2a, compare n1b n2b)
-  | Nexp_exp n1, Nexp_exp n2 -> compare n1 n2
-  | Nexp_neg n1, Nexp_neg n2 -> compare n1 n2
-  | Nexp_if (i1, t1, e1), Nexp_if (i2, t2, e2) ->
-      let lex1 = nc_compare i1 i2 in
-      let lex2 = nexp_compare t1 t2 in
-      let lex3 = nexp_compare e1 e2 in
-      lex_ord (lex1, lex_ord (lex2, lex3))
-  | Nexp_constant _, _ -> -1
-  | _, Nexp_constant _ -> 1
-  | Nexp_id _, _ -> -1
-  | _, Nexp_id _ -> 1
-  | Nexp_var _, _ -> -1
-  | _, Nexp_var _ -> 1
-  | Nexp_neg _, _ -> -1
-  | _, Nexp_neg _ -> 1
-  | Nexp_exp _, _ -> -1
-  | _, Nexp_exp _ -> 1
-  | Nexp_minus _, _ -> -1
-  | _, Nexp_minus _ -> 1
-  | Nexp_sum _, _ -> -1
-  | _, Nexp_sum _ -> 1
-  | Nexp_times _, _ -> -1
-  | _, Nexp_times _ -> 1
-  | Nexp_if _, _ -> -1
-  | _, Nexp_if _ -> 1
-
-and nc_compare (NC_aux (nc1, _)) (NC_aux (nc2, _)) =
-  match (nc1, nc2) with
-  | NC_id id1, NC_id id2 -> Id.compare id1 id2
-  | NC_equal (t1, t2), NC_equal (t3, t4) | NC_not_equal (t1, t2), NC_not_equal (t3, t4) ->
-      lex_ord typ_arg_compare typ_arg_compare t1 t3 t2 t4
-  | NC_ge (n1, n2), NC_ge (n3, n4)
-  | NC_gt (n1, n2), NC_gt (n3, n4)
-  | NC_le (n1, n2), NC_le (n3, n4)
-  | NC_lt (n1, n2), NC_lt (n3, n4) ->
-      lex_ord nexp_compare nexp_compare n1 n3 n2 n4
-  | NC_set (n1, s1), NC_set (n2, s2) -> lex_ord nexp_compare (Util.compare_list Nat_big_num.compare) n1 n2 s1 s2
-  | NC_or (nc1, nc2), NC_or (nc3, nc4) | NC_and (nc1, nc2), NC_and (nc3, nc4) ->
-      lex_ord nc_compare nc_compare nc1 nc3 nc2 nc4
-  | NC_app (f1, args1), NC_app (f2, args2) -> lex_ord Id.compare (Util.compare_list typ_arg_compare) f1 f2 args1 args2
-  | NC_var v1, NC_var v2 -> Kid.compare v1 v2
-  | NC_true, NC_true | NC_false, NC_false -> 0
-  | NC_equal _, _ -> -1
-  | _, NC_equal _ -> 1
-  | NC_ge _, _ -> -1
-  | _, NC_ge _ -> 1
-  | NC_gt _, _ -> -1
-  | _, NC_gt _ -> 1
-  | NC_le _, _ -> -1
-  | _, NC_le _ -> 1
-  | NC_lt _, _ -> -1
-  | _, NC_lt _ -> 1
-  | NC_not_equal _, _ -> -1
-  | _, NC_not_equal _ -> 1
-  | NC_set _, _ -> -1
-  | _, NC_set _ -> 1
-  | NC_or _, _ -> -1
-  | _, NC_or _ -> 1
-  | NC_and _, _ -> -1
-  | _, NC_and _ -> 1
-  | NC_app _, _ -> -1
-  | _, NC_app _ -> 1
-  | NC_var _, _ -> -1
-  | _, NC_var _ -> 1
-  | NC_true, _ -> -1
-  | _, NC_true -> 1
-  | NC_id _, _ -> -1
-  | _, NC_id _ -> 1
-
-and typ_compare (Typ_aux (t1, _)) (Typ_aux (t2, _)) =
-  match (t1, t2) with
-  | Typ_internal_unknown, Typ_internal_unknown -> 0
-  | Typ_id id1, Typ_id id2 -> Id.compare id1 id2
-  | Typ_var kid1, Typ_var kid2 -> Kid.compare kid1 kid2
-  | Typ_fn (ts1, t2), Typ_fn (ts3, t4) -> (
-      match Util.compare_list typ_compare ts1 ts3 with 0 -> typ_compare t2 t4 | n -> n
-    )
-  | Typ_bidir (t1, t2), Typ_bidir (t3, t4) -> (
-      match typ_compare t1 t3 with 0 -> typ_compare t2 t4 | n -> n
-    )
-  | Typ_tuple ts1, Typ_tuple ts2 -> Util.compare_list typ_compare ts1 ts2
-  | Typ_exist (ks1, nc1, t1), Typ_exist (ks2, nc2, t2) -> (
-      match Util.compare_list KOpt.compare ks1 ks2 with
-      | 0 -> (
-          match nc_compare nc1 nc2 with 0 -> typ_compare t1 t2 | n -> n
-        )
-      | n -> n
-    )
-  | Typ_app (id1, ts1), Typ_app (id2, ts2) -> (
-      match Id.compare id1 id2 with 0 -> Util.compare_list typ_arg_compare ts1 ts2 | n -> n
-    )
-  | Typ_internal_unknown, _ -> -1
-  | _, Typ_internal_unknown -> 1
-  | Typ_id _, _ -> -1
-  | _, Typ_id _ -> 1
-  | Typ_var _, _ -> -1
-  | _, Typ_var _ -> 1
-  | Typ_fn _, _ -> -1
-  | _, Typ_fn _ -> 1
-  | Typ_bidir _, _ -> -1
-  | _, Typ_bidir _ -> 1
-  | Typ_tuple _, _ -> -1
-  | _, Typ_tuple _ -> 1
-  | Typ_exist _, _ -> -1
-  | _, Typ_exist _ -> 1
-
-and typ_arg_compare (A_aux (ta1, _)) (A_aux (ta2, _)) =
-  match (ta1, ta2) with
-  | A_nexp n1, A_nexp n2 -> nexp_compare n1 n2
-  | A_typ t1, A_typ t2 -> typ_compare t1 t2
-  | A_bool nc1, A_bool nc2 -> nc_compare nc1 nc2
-  | A_nexp _, _ -> -1
-  | _, A_nexp _ -> 1
-  | A_typ _, _ -> -1
-  | _, A_typ _ -> 1
-
-module Nexp = struct
-  type t = nexp
-  let compare = nexp_compare
-end
-
-module Bindings = Map.Make (Id)
-module IdSet = Set.Make (Id)
-module KBindings = Map.Make (Kid)
-module KidSet = Set.Make (Kid)
-module KOptSet = Set.Make (KOpt)
-module KOptMap = Map.Make (KOpt)
-module NexpSet = Set.Make (Nexp)
-module NexpMap = Map.Make (Nexp)
 
 let unaux_nexp (Nexp_aux (nexp, _)) = nexp
 let unaux_typ (Typ_aux (typ, _)) = typ
@@ -638,7 +448,7 @@ and constraint_simp (NC_aux (nc_aux, l)) =
         end
     | NC_equal (arg1, arg2) ->
         let arg1, arg2 = (typ_arg_simp arg1, typ_arg_simp arg2) in
-        if typ_arg_compare arg1 arg2 = 0 then NC_true
+        if TypArg.compare arg1 arg2 = 0 then NC_true
         else (
           match (arg1, arg2) with
           | A_aux (A_nexp (Nexp_aux (Nexp_constant c1, _)), _), A_aux (A_nexp (Nexp_aux (Nexp_constant c2, _)), _)
@@ -650,7 +460,7 @@ and constraint_simp (NC_aux (nc_aux, l)) =
         )
     | NC_not_equal (arg1, arg2) ->
         let arg1, arg2 = (typ_arg_simp arg1, typ_arg_simp arg2) in
-        if typ_arg_compare arg1 arg2 = 0 then NC_false
+        if TypArg.compare arg1 arg2 = 0 then NC_false
         else (
           match (arg1, arg2) with
           | A_aux (A_nexp (Nexp_aux (Nexp_constant c1, _)), _), A_aux (A_nexp (Nexp_aux (Nexp_constant c2, _)), _)
@@ -1349,7 +1159,7 @@ let string_of_lit (L_aux (lit, _)) =
   | L_hex hex -> "0x" ^ string_of_hex_lit ~case:Uppercase hex
   | L_bin bin -> "0b" ^ string_of_bin_lit bin
   | L_undef -> "undefined"
-  | L_real r -> r
+  | L_real r -> Q.to_string (Util.Rational.from_rocq r)
   | L_string str -> "\"" ^ str ^ "\""
 
 let string_of_order (Ord_aux (aux, _)) = match aux with Ord_inc -> "inc" | Ord_dec -> "dec"
@@ -1607,20 +1417,6 @@ let is_typ_arg_bool = function A_aux (A_bool _, _) -> true | _ -> false
 
 let typ_arg_kind (A_aux (aux, l)) =
   match aux with A_typ _ -> K_aux (K_type, l) | A_bool _ -> K_aux (K_bool, l) | A_nexp _ -> K_aux (K_int, l)
-
-module NC = struct
-  type t = n_constraint
-  let compare = nc_compare
-end
-
-module NCMap = Map.Make (NC)
-
-module Typ = struct
-  type t = typ
-  let compare = typ_compare
-end
-
-module TypMap = Map.Make (Typ)
 
 let rec lexp_to_exp (LE_aux (lexp_aux, annot)) =
   let rewrap e_aux = E_aux (e_aux, annot) in
@@ -1989,8 +1785,7 @@ let vector_string_to_bit_list (L_aux (lit, l)) =
   in
   List.map
     (function
-      | Value_type.B0 -> L_aux (L_bin [Non_empty (Bin_0, [])], gen_loc l)
-      | Value_type.B1 -> L_aux (L_bin [Non_empty (Bin_1, [])], gen_loc l)
+      | B0 -> L_aux (L_bin [Non_empty (Bin_0, [])], gen_loc l) | B1 -> L_aux (L_bin [Non_empty (Bin_1, [])], gen_loc l)
       )
     s_bin
 
@@ -2141,7 +1936,7 @@ let rec locate : 'a. (l -> l) -> 'a exp -> 'a exp =
   in
   E_aux (e_aux, (f l, annot))
 
-and locate_measure : 'a. (l -> l) -> 'a internal_loop_measure -> 'a internal_loop_measure =
+and locate_measure : 'a. (l -> l) -> 'a in_place_loop_measure -> 'a in_place_loop_measure =
  fun f (Measure_aux (m, l)) ->
   let m = match m with Measure_none -> Measure_none | Measure_some exp -> Measure_some (locate f exp) in
   Measure_aux (m, f l)

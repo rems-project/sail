@@ -48,8 +48,10 @@ open Libsail
 
 open Type_check
 open Ast
+open Ast_compare
 open Ast_defs
 open Ast_util
+open Bit
 open Reporting
 open Rewriter
 open PPrint
@@ -499,7 +501,7 @@ let doc_tannot_lem ctxt env eff typ =
 let min_int32 = Big_int.of_int64 (Int64.of_int32 Int32.min_int)
 let max_int32 = Big_int.of_int64 (Int64.of_int32 Int32.max_int)
 
-let doc_bit = function Value_type.B0 -> string "B0" | Value_type.B1 -> string "B1"
+let doc_bit = function B0 -> string "B0" | B1 -> string "B1"
 
 let rec doc_lit_lem (L_aux (lit, l)) =
   match lit with
@@ -516,22 +518,10 @@ let rec doc_lit_lem (L_aux (lit, l)) =
   | L_bin bin -> Semantics.bitlist_of_bin_lit bin |> flow_map (semi ^^ break 0) doc_bit |> group |> align |> brackets
   | L_undef -> utf8string "(return (failwith \"undefined value of unsupported type\"))"
   | L_string s -> utf8string ("\"" ^ String.escaped s ^ "\"")
-  | L_real s ->
-      (* Lem does not support decimal syntax, so we translate a string
-         of the form "x.y" into the ratio (x * 10^len(y) + y) / 10^len(y).
-         The OCaml library has a conversion function from strings to floats, but
-         not from floats to ratios. ZArith's Q library does have the latter, but
-         using this would require adding a dependency on ZArith to Sail. *)
-      let parts = Util.split_on_char '.' s in
-      let num, denom =
-        match parts with
-        | [i] -> (Big_int.of_string i, Big_int.of_int 1)
-        | [i; f] ->
-            let denom = Big_int.pow_int_positive 10 (String.length f) in
-            (Big_int.add (Big_int.mul (Big_int.of_string i) denom) (Big_int.of_string f), denom)
-        | _ -> raise (Reporting.err_syntax_loc l "could not parse real literal")
-      in
-      parens (separate space (List.map string ["realFromFrac"; Big_int.to_string num; Big_int.to_string denom]))
+  | L_real r ->
+      let r = Util.Rational.from_rocq r in
+      parens
+        (separate space (List.map string ["realFromFrac"; Big_int.to_string (Q.num r); Big_int.to_string (Q.den r)]))
 
 let kid_nexps_of_typquant tq =
   quant_kopts tq |> List.filter (fun k -> is_int_kopt k || is_typ_kopt k) |> List.map kopt_kid |> List.map nvar

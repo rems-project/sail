@@ -1,4 +1,5 @@
-open Value_type
+open Bit
+open QArith_base
 
 type l = Parse_ast.l
 
@@ -88,6 +89,21 @@ type kinded_id =
 type id =
 | Id_aux of id_aux * Parse_ast.l
 
+type value =
+| V_bitvector of bit list
+| V_vector of value list
+| V_list of value list
+| V_int of Big_int_Z.big_int
+| V_real of coq_Q
+| V_bool of bool
+| V_tuple of value list
+| V_unit
+| V_string of string
+| V_ref of id
+| V_member of id
+| V_ctor of id * value list
+| V_record of (id * value) list
+
 type lit_aux =
 | L_unit
 | L_true
@@ -97,7 +113,7 @@ type lit_aux =
 | L_bin of bin_digit non_empty list
 | L_string of string
 | L_undef
-| L_real of string
+| L_real of coq_Q
 
 type nexp_aux =
 | Nexp_id of id
@@ -217,11 +233,11 @@ type 'a mpat_aux =
 and 'a mpat =
 | MP_aux of 'a mpat_aux * 'a annot
 
-type 'a internal_loop_measure_aux =
+type 'a in_place_loop_measure_aux =
 | Measure_none
 | Measure_some of 'a exp
-and 'a internal_loop_measure =
-| Measure_aux of 'a internal_loop_measure_aux * Parse_ast.l
+and 'a in_place_loop_measure =
+| Measure_aux of 'a in_place_loop_measure_aux * Parse_ast.l
 and 'a exp_aux =
 | E_block of 'a exp list
 | E_id of id
@@ -230,7 +246,7 @@ and 'a exp_aux =
 | E_app of id * 'a exp list
 | E_tuple of 'a exp list
 | E_if of 'a exp * 'a exp * 'a exp
-| E_loop of loop * 'a internal_loop_measure * 'a exp * 'a exp
+| E_loop of loop * 'a in_place_loop_measure * 'a exp * 'a exp
 | E_for of id * 'a exp * 'a exp * 'a exp * order * 'a exp
 | E_vector of 'a exp list
 | E_vector_append of 'a exp * 'a exp

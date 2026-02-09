@@ -44,7 +44,7 @@
 (*  SPDX-License-Identifier: BSD-2-Clause                                   *)
 (****************************************************************************)
 
-open Value_type
+open Bit
 
 module Big_int = Nat_big_num
 
@@ -625,59 +625,51 @@ let set_slice_int (slice_len, m, n, slice) =
   let mask = uint (replicate_bits ([B1], slice_len) @ replicate_bits ([B0], n)) in
   Big_int.bitwise_or (Big_int.bitwise_xor (Big_int.bitwise_or mask m) mask) shifted_slice
 
-let eq_real (x, y) = Rational.equal x y
-let lt_real (x, y) = Rational.lt x y
-let gt_real (x, y) = Rational.gt x y
-let lteq_real (x, y) = Rational.leq x y
-let gteq_real (x, y) = Rational.geq x y
-let to_real x = Rational.of_big_int x
-let negate_real x = Rational.neg x
-let neg_real x = Rational.neg x
+let eq_real (x, y) = Q.equal x y
+let lt_real (x, y) = Q.lt x y
+let gt_real (x, y) = Q.gt x y
+let lteq_real (x, y) = Q.leq x y
+let gteq_real (x, y) = Q.geq x y
+let to_real x = Q.of_bigint x
+let negate_real x = Q.neg x
+let neg_real x = Q.neg x
 
-let string_of_real x =
-  if Big_int.equal (Rational.den x) (Big_int.of_int 1) then Big_int.to_string (Rational.num x)
-  else Big_int.to_string (Rational.num x) ^ "/" ^ Big_int.to_string (Rational.den x)
+let string_of_real x = Q.to_string x
 
 let print_real (str, r) = print_endline (str ^ string_of_real r)
 let prerr_real (str, r) = prerr_endline (str ^ string_of_real r)
 
-let round_down x = Rational.floor x
-let round_up x = Rational.ceiling x
-let quotient_real (x, y) = Rational.div x y
-let div_real (x, y) = Rational.div x y
-let mult_real (x, y) = Rational.mul x y
+let round_down x = Z.fdiv (Q.num x) (Q.den x)
+let round_up x = Z.cdiv (Q.num x) (Q.den x)
+let quotient_real (x, y) = Q.div x y
+let div_real (x, y) = Q.div x y
+let mult_real (x, y) = Q.mul x y
 let real_power (_, _) = failwith "real_power"
 let int_power (x, y) = Big_int.pow_int x (Big_int.to_int y)
-let add_real (x, y) = Rational.add x y
-let sub_real (x, y) = Rational.sub x y
+let add_real (x, y) = Q.add x y
+let sub_real (x, y) = Q.sub x y
 
-let abs_real x = Rational.abs x
+let abs_real x = Q.abs x
 
 let sqrt_real x =
   let precision = 30 in
-  let s =
-    Rational.div
-      (Rational.of_big_int (Big_int.sqrt (Rational.num x)))
-      (Rational.of_big_int (Big_int.sqrt (Rational.den x)))
-  in
-  if Rational.equal (Rational.mul s s) x then s
+  let s = Q.div (Q.of_bigint (Big_int.sqrt (Q.num x))) (Q.of_bigint (Big_int.sqrt (Q.den x))) in
+  if Q.equal (Q.mul s s) x then s
   else (
     let p = ref s in
-    let n = ref (Rational.of_int 0) in
-    let num_convergence = if Rational.gt x (Rational.of_int 1) then Rational.of_int 1 else x in
-    let convergence =
-      ref (Rational.div num_convergence (Rational.of_big_int (Big_int.pow_int_positive 10 precision)))
-    in
+    let n = ref (Q.of_int 0) in
+    let num_convergence = if Q.gt x (Q.of_int 1) then Q.of_int 1 else x in
+    let convergence = ref (Q.div num_convergence (Q.of_bigint (Big_int.pow_int_positive 10 precision))) in
     let quit_loop = ref false in
     while not !quit_loop do
-      n := Rational.div (Rational.add !p (Rational.div x !p)) (Rational.of_int 2);
+      n := Q.div (Q.add !p (Q.div x !p)) (Q.of_int 2);
 
-      if Rational.lt (Rational.abs (Rational.sub !p !n)) !convergence then quit_loop := true else p := !n
+      if Q.lt (Q.abs (Q.sub !p !n)) !convergence then quit_loop := true else p := !n
     done;
     !n
   )
 
-let random_real () = Rational.div (Rational.of_int (Random.bits ())) (Rational.of_int (Random.bits ()))
+let random_real () = Q.div (Q.of_int (Random.bits ())) (Q.of_int (Random.bits ()))
 
 let lt (x, y) = Big_int.less x y
 let gt (x, y) = Big_int.greater x y
@@ -692,20 +684,11 @@ let abs_int x = Big_int.abs x
 
 let string_of_int x = Big_int.to_string x
 
-let undefined_real () = Rational.of_int 0
+let undefined_real () = Q.of_int 0
 
 let rec pow x = function 0 -> 1 | n -> x * pow x (n - 1)
 
-let real_of_string str =
-  match Util.split_on_char '.' str with
-  | [whole; frac] ->
-      let whole = Rational.of_big_int (Big_int.of_string whole) in
-      let frac =
-        Rational.div (Rational.of_big_int (Big_int.of_string frac)) (Rational.of_int (pow 10 (String.length frac)))
-      in
-      Rational.add whole frac
-  | [_] -> Rational.of_big_int (Big_int.of_string str)
-  | _ -> failwith "invalid real literal"
+let real_of_string str = Q.of_string str
 
 let print str = Stdlib.print_string str
 
@@ -795,7 +778,7 @@ let get_time_ns () = Big_int.of_int (int_of_float (1e9 *. Unix.gettimeofday ()))
      | ZSome (n, len) ->
         if Big_int.less_equal Big_int.zero n
            && Big_int.less n (Big_int.pow_int_positive 2 {0}) then
-          ZSome ((bits_of_big_int {0} n, len))
+          ZSome ((bits_of_bigint {0} n, len))
         else
           ZNone ()
    """

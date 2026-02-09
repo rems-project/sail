@@ -25,8 +25,7 @@ function main() -> unit = {
   assert(hex_bits_signed_5("-0x0") == 0b00000);
 
   assert(not_bool(hex_bits_signed_backwards_matches((1, "0x1"))));
-  assert(hex_bits_signed_backwards((1, "0x1")) == 0b0);
-  assert(hex_bits_signed_1("0x1") == 0b0);
+  assert(not_bool(hex_bits_signed_1_backwards_matches("0x1")));
 
   assert(hex_bits_signed_2("0x1") == 0b01);
   assert(hex_bits_signed_3("0x1") == 0b001);

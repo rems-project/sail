@@ -99,6 +99,12 @@ let rec last_opt = function [x] -> Some x | _ :: xs -> last_opt xs | [] -> None
 
 let rec butlast = function [_] -> [] | x :: xs -> x :: butlast xs | [] -> []
 
+module Rational = struct
+  let from_rocq r = { Q.num = r.QArith_base.coq_Qnum; Q.den = r.QArith_base.coq_Qden }
+
+  let to_rocq r = { QArith_base.coq_Qnum = r.Q.num; QArith_base.coq_Qden = r.Q.den }
+end
+
 module Option_monad = struct
   let ( let* ) = Option.bind
   let ( let+ ) = Option.map

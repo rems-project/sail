@@ -45,8 +45,10 @@
 (****************************************************************************)
 
 open Ast
+open Ast_compare
 open Ast_defs
 open Ast_util
+open Bit
 open Parse_ast.Attribute_data
 open Jib
 open Jib_util
@@ -446,7 +448,7 @@ module Make (C : CONFIG) = struct
           | L_bin bin -> Semantics.bitlist_of_bin_lit bin
           | _ -> assert false
           )
-          |> List.map (function Value_type.B0 -> Sail2_values.B0 | Value_type.B1 -> Sail2_values.B1)
+          |> List.map (function B0 -> Sail2_values.B0 | B1 -> Sail2_values.B1)
         in
         let len = List.length bitlist in
         (* For small bitvectors, or when we permit arbitrary-length literals > 64 we can emit a literal directly,
@@ -467,7 +469,8 @@ module Make (C : CONFIG) = struct
         )
     | AV_lit (L_aux (L_true, _), _) -> ([], V_lit (VL_bool true, CT_bool), [])
     | AV_lit (L_aux (L_false, _), _) -> ([], V_lit (VL_bool false, CT_bool), [])
-    | AV_lit (L_aux (L_real str, _), _) ->
+    | AV_lit (L_aux (L_real r, _), _) ->
+        let str = Q.to_string (Util.Rational.from_rocq r) in
         if C.use_real then ([], V_lit (VL_real str, CT_real), [])
         else (
           let gs = ngensym () in

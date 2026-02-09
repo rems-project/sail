@@ -1,0 +1,7 @@
+A {
+  files global_constraint/amod.sail
+}
+
+B {
+  files global_constraint/bmod.sail
+}

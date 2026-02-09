@@ -1,6 +1,4 @@
-import Out.Sail.Sail
-import Out.Sail.BitVec
-
+import Sail
 open PreSail
 
 set_option maxHeartbeats 1_000_000_000
@@ -43,9 +41,7 @@ abbrev SailME := PreSailME RegisterType trivialChoiceSource exception
 
 XXXXXXXXX
 
-import Out.Sail.Sail
-import Out.Sail.BitVec
-import Out.Sail.IntRange
+import Sail
 import Out.Defs
 import Out.Specialization
 import Out.FakeReal

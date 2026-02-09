@@ -46,6 +46,7 @@
 
 module Big_int = Nat_big_num
 open Ast
+open Ast_compare
 open Ast_defs
 open Ast_util
 open Type_check
@@ -539,7 +540,7 @@ type ( 'a,
   e_var : 'lexp * 'exp * 'exp -> 'exp_aux;
   e_internal_plet : 'pat * 'exp * 'exp -> 'exp_aux;
   e_internal_return : 'exp -> 'exp_aux;
-  e_internal_value : Value_type.value -> 'exp_aux;
+  e_internal_value : value -> 'exp_aux;
   e_internal_assume : n_constraint * 'exp -> 'exp_aux;
   e_aux : 'exp_aux * 'a annot -> 'exp;
   le_id : id -> 'lexp_aux;

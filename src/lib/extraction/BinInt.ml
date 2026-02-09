@@ -91,6 +91,11 @@ module Z =
 
   let sub = Big_int_Z.sub_big_int
 
+  (** val mul :
+      Big_int_Z.big_int -> Big_int_Z.big_int -> Big_int_Z.big_int **)
+
+  let mul = Big_int_Z.mult_big_int
+
   (** val compare : Big_int_Z.big_int -> Big_int_Z.big_int -> comparison **)
 
   let compare = (fun x y -> let s = Big_int_Z.compare_big_int x y in
@@ -102,6 +107,20 @@ module Z =
     match compare x y with
     | Lt -> true
     | _ -> false
+
+  (** val eqb : Big_int_Z.big_int -> Big_int_Z.big_int -> bool **)
+
+  let eqb = Big_int_Z.eq_big_int
+
+  (** val max :
+      Big_int_Z.big_int -> Big_int_Z.big_int -> Big_int_Z.big_int **)
+
+  let max = Big_int_Z.max_big_int
+
+  (** val min :
+      Big_int_Z.big_int -> Big_int_Z.big_int -> Big_int_Z.big_int **)
+
+  let min = Big_int_Z.min_big_int
 
   (** val to_nat : Big_int_Z.big_int -> Big_int_Z.big_int **)
 
@@ -122,6 +141,10 @@ module Z =
       (fun _ -> Big_int_Z.zero_big_int)
       (fun n0 -> (Pos.of_succ_nat n0))
       n
+
+  (** val succ : Big_int_Z.big_int -> Big_int_Z.big_int **)
+
+  let succ = Big_int_Z.succ_big_int
 
   (** val gtb : Big_int_Z.big_int -> Big_int_Z.big_int -> bool **)
 

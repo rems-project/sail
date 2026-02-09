@@ -46,6 +46,7 @@
 
 module Big_int = Nat_big_num
 open Ast
+open Ast_compare
 open Ast_util
 open Util
 
@@ -385,11 +386,14 @@ let rec call_smt' l abstract extra constraints =
               in
               Unix.open_process_full cmd (Unix.environment ())
             in
-            let smt_output =
-              try List.combine problems (input_lines smt_out (List.length problems))
-              with End_of_file -> List.combine problems ["unknown"]
+            let smt_output, smt_raw_output =
+              try
+                let raw_output = input_lines smt_out (List.length problems) in
+                (List.combine problems raw_output, raw_output)
+              with End_of_file -> (List.combine problems ["unknown"], [])
             in
-            let smt_errors = input_all smt_err in
+            (* In case of errors, the output on stdout might be useful. *)
+            let smt_errors = List.append (input_all smt_err) smt_raw_output in
             let status = Unix.close_process_full (smt_out, smt_in, smt_err) in
             (status, smt_output, smt_errors)
           with exn -> raise (Reporting.err_general l ("Error when calling smt: " ^ Printexc.to_string exn))

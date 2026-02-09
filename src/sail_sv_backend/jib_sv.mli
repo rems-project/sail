@@ -47,7 +47,7 @@
 
 open Libsail
 
-open Ast_util
+open Ast_compare
 
 module type CONFIG = sig
   (** Set recursion depth for recursive SystemVerilog modules *)

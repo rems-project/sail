@@ -18,6 +18,7 @@ skip_tests = {
     'all_even_vector_length', # loops
     'for_shadow', # loops
     'loop_exception', # loops
+    'loop_termination', # loops
     'read_write_ram', # memory
     'real', # reals
     'real_prop', # reals
@@ -27,6 +28,7 @@ skip_tests = {
     'concurrency_interface', # memory
     'ediv_from_tdiv', # loops
     'lib_hex_bits_signed', # verilator bug (in CI, works with latest)
+    'hex_bits_backwards', # verilator bug (in CI, works with latest)
     'lib_dec_bits', # todo
     'config_vec_list', # unknown length vectors
     'simple_while', # loops

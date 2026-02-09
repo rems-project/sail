@@ -45,6 +45,7 @@
 (****************************************************************************)
 
 open Ast
+open Ast_compare
 open Ast_util
 module Big_int = Nat_big_num
 
@@ -245,7 +246,7 @@ let row_matrix_width l (Rows rows) =
 let row_matrix_height (Rows rows) = List.length rows
 
 let filter_out (is : IntSet.t) l =
-  let rec aux (i, acc) elt = if IntSet.mem i is then (i + 1, acc) else (i + 1, elt :: acc) in
+  let aux (i, acc) elt = if IntSet.mem i is then (i + 1, acc) else (i + 1, elt :: acc) in
   List.fold_left aux (0, []) l |> snd |> List.rev
 
 module Make (C : Config) = struct

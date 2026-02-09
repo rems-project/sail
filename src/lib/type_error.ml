@@ -46,6 +46,7 @@
 
 open Util
 open Ast
+open Ast_compare
 open Ast_defs
 open Ast_util
 open Type_check
@@ -574,12 +575,15 @@ let string_of_type_error err =
   format_message msg (buffer_formatter b);
   (Buffer.contents b, hint)
 
-let to_reporting_exn l err =
+let to_reporting_exn ?internal l err =
   let str, hint = string_of_type_error err in
-  Reporting.err_typ ?hint l str
+  match internal with
+  | None -> Reporting.err_typ ?hint l str
+  | Some descr -> Reporting.err_unreachable l __POS__ (descr ^ ": " ^ str)
 
 let check_defs : Env.t -> untyped_def list -> typed_def list * Env.t =
  fun env defs -> try Type_check.check_defs env defs with Type_error (l, err) -> raise (to_reporting_exn l err)
 
-let check : Env.t -> untyped_ast -> typed_ast * Env.t =
- fun env defs -> try Type_check.check env defs with Type_error (l, err) -> raise (to_reporting_exn l err)
+let check : ?internal:string -> Env.t -> untyped_ast -> typed_ast * Env.t =
+ fun ?internal env defs ->
+  try Type_check.check env defs with Type_error (l, err) -> raise (to_reporting_exn ?internal l err)

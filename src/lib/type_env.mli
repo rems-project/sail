@@ -45,6 +45,7 @@
 (****************************************************************************)
 
 open Ast
+open Ast_compare
 open Ast_util
 
 (** Linearize cases involving power where we would otherwise require the SMT solver to use non-linear arithmetic. *)

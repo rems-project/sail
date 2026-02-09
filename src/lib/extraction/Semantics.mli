@@ -1,17 +1,21 @@
 open Ast
 open AstInduction
+open BinInt
+open Bit
 open Datatypes
 open IdUtil
 open List0
 open ListDef
+open Nat0
 open PeanoNat
+open QArith_base
 open Specif
 open Value_type
 open Wf
 
 type binding =
 | Complete of value
-| Partial of ((value * Big_int_Z.big_int) * Big_int_Z.big_int) list
+| Partial of ((value * Big_int_Z.big_int) * Big_int_Z.big_int) non_empty
 
 val combine_binding : binding option -> binding option -> binding option
 
@@ -36,7 +40,7 @@ type id_type =
 
 type place =
 | PL_id of id * var_type
-| PL_register of string
+| PL_register of id
 | PL_vector of place * Big_int_Z.big_int
 | PL_vector_range of place * Big_int_Z.big_int * Big_int_Z.big_int
 | PL_field of place * id
@@ -102,8 +106,7 @@ val coerce_place : Parse_ast.l -> destructure -> place Monad.t
 
 val left_to_right : 'a1 exp list -> 'a1 exp list * 'a1 exp list
 
-val all_evaluated_fields :
-  (id -> string) -> 'a1 fexp list -> (string * value) list
+val all_evaluated_fields : 'a1 fexp list -> (id * value) list
 
 val left_to_right_fields : 'a1 fexp list -> 'a1 fexp list * 'a1 fexp list
 
@@ -134,6 +137,13 @@ val bitlist_of_hex_lit : hex_digit non_empty list -> bit list
 
 val bitlist_of_bin_lit : bin_digit non_empty list -> bit list
 
+val update_list : bit list -> Big_int_Z.big_int -> bit -> bit list
+
+val update_subrange : bit list -> Big_int_Z.big_int -> bit list -> bit list
+
+val complete_value :
+  ((value * Big_int_Z.big_int) * Big_int_Z.big_int) non_empty -> value
+
 module type SemanticExt =
  sig
   type tannot
@@ -146,20 +156,7 @@ module type SemanticExt =
 
   val is_bitvector : tannot -> bool
 
-  val num_equal : Big_int_Z.big_int -> Big_int_Z.big_int -> bool
-
-  val rational_equal : Rational.t -> Rational.t -> bool
-
-  val id_equal_string : id -> string -> bool
-
-  val string_of_id : id -> string
-
-  val rational_of_string : string -> Rational.t
-
   val fallthrough : tannot pexp
-
-  val complete_value :
-    ((value * Big_int_Z.big_int) * Big_int_Z.big_int) list -> value
  end
 
 module Make :
@@ -181,7 +178,7 @@ module Make :
 
   val pattern_match_literal : lit -> value -> bool
 
-  val get_struct_field : string -> (string * value) list -> value
+  val get_struct_field : id -> (id * value) list -> value
 
   val no_match : bool * binding IdMap.t
 
@@ -191,16 +188,14 @@ module Make :
 
   val pattern_match : T.tannot pat -> value -> bool * binding IdMap.t
 
-  val lookup_field :
-    Parse_ast.l -> string -> (string * value) list -> value Monad.t
+  val lookup_field : Parse_ast.l -> id -> (id * value) list -> value Monad.t
 
   val destructuring_assignment :
     T.tannot annot -> destructure -> value -> unit Monad.t
 
   val lexp_to_destructure : T.tannot lexp -> destructure Monad.t
 
-  val update_field :
-    string -> value -> (string * value) list -> (string * value) list
+  val update_field : id -> value -> (id * value) list -> (id * value) list
 
   val step : T.tannot exp -> T.tannot exp Monad.t
  end

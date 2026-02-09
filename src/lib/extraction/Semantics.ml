@@ -1,17 +1,21 @@
 open Ast
 open AstInduction
+open BinInt
+open Bit
 open Datatypes
 open IdUtil
 open List0
 open ListDef
+open Nat0
 open PeanoNat
+open QArith_base
 open Specif
 open Value_type
 open Wf
 
 type binding =
 | Complete of value
-| Partial of ((value * Big_int_Z.big_int) * Big_int_Z.big_int) list
+| Partial of ((value * Big_int_Z.big_int) * Big_int_Z.big_int) non_empty
 
 (** val combine_binding :
     binding option -> binding option -> binding option **)
@@ -23,10 +27,13 @@ let combine_binding l r =
      | Some rb ->
        (match lb with
         | Complete v -> Some (Complete v)
-        | Partial lv ->
+        | Partial n ->
+          let Non_empty (lv, lvs) = n in
           (match rb with
            | Complete v -> Some (Complete v)
-           | Partial rv -> Some (Partial (app lv rv))))
+           | Partial n0 ->
+             let Non_empty (rv, rvs) = n0 in
+             Some (Partial (Non_empty (lv, (app lvs (rv :: rvs)))))))
      | None -> Some lb)
   | None -> r
 
@@ -64,7 +71,7 @@ type id_type =
 
 type place =
 | PL_id of id * var_type
-| PL_register of string
+| PL_register of id
 | PL_vector of place * Big_int_Z.big_int
 | PL_vector_range of place * Big_int_Z.big_int * Big_int_Z.big_int
 | PL_field of place * id
@@ -235,18 +242,17 @@ let rec left_to_right = function
      (((E_aux ((E_internal_value v), annot0)) :: vs), xs')
    | _ -> ([], (x :: xs0)))
 
-(** val all_evaluated_fields :
-    (id -> string) -> 'a1 fexp list -> (string * value) list **)
+(** val all_evaluated_fields : 'a1 fexp list -> (id * value) list **)
 
-let rec all_evaluated_fields f = function
+let rec all_evaluated_fields = function
 | [] -> []
-| f0 :: xs0 ->
-  let FE_aux (f1, _) = f0 in
-  let FE_fexp (id0, e) = f1 in
+| f :: xs0 ->
+  let FE_aux (f0, _) = f in
+  let FE_fexp (id0, e) = f0 in
   let E_aux (e0, _) = e in
   (match e0 with
-   | E_internal_value v -> ((f id0), v) :: (all_evaluated_fields f xs0)
-   | _ -> all_evaluated_fields f xs0)
+   | E_internal_value v -> (id0, v) :: (all_evaluated_fields xs0)
+   | _ -> all_evaluated_fields xs0)
 
 (** val left_to_right_fields :
     'a1 fexp list -> 'a1 fexp list * 'a1 fexp list **)
@@ -407,6 +413,50 @@ let bitlist_of_bin_lit bin =
                 | Bin_0 -> B0
                 | Bin_1 -> B1) digits
 
+(** val update_list : bit list -> Big_int_Z.big_int -> bit -> bit list **)
+
+let update_list xs n y =
+  let n0 =
+    sub (sub (length xs) n) (Big_int_Z.succ_big_int Big_int_Z.zero_big_int)
+  in
+  let (ys, zs) = take_drop n0 xs in app ys (app (y :: []) (tl zs))
+
+(** val update_subrange :
+    bit list -> Big_int_Z.big_int -> bit list -> bit list **)
+
+let rec update_subrange xs n = function
+| [] -> xs
+| y :: ys0 ->
+  update_subrange (update_list xs n y)
+    (sub n (Big_int_Z.succ_big_int Big_int_Z.zero_big_int)) ys0
+
+(** val complete_value :
+    ((value * Big_int_Z.big_int) * Big_int_Z.big_int) non_empty -> value **)
+
+let complete_value = function
+| Non_empty (p, partial_values0) ->
+  let (p0, m1) = p in
+  let (v1, n1) = p0 in
+  let (max0, min0) =
+    fold_left (fun range pvalue ->
+      let (max0, min0) = range in
+      let (y, m) = pvalue in
+      let (_, n) = y in ((Z.max max0 (Z.max n m)), (Z.min min0 (Z.min n m))))
+      partial_values0 (n1, m1)
+  in
+  let len = Z.sub (Z.succ max0) min0 in
+  let zeros = repeat B0 (Z.to_nat len) in
+  let value0 =
+    fold_left (fun bv pvalue ->
+      let (y, _) = pvalue in
+      let (slice, n) = y in
+      (match slice with
+       | V_bitvector slice0 -> update_subrange bv (Z.to_nat n) slice0
+       | _ -> bv))
+      (((v1, n1), m1) :: partial_values0) zeros
+  in
+  V_bitvector value0
+
 module type SemanticExt =
  sig
   type tannot
@@ -419,20 +469,7 @@ module type SemanticExt =
 
   val is_bitvector : tannot -> bool
 
-  val num_equal : Big_int_Z.big_int -> Big_int_Z.big_int -> bool
-
-  val rational_equal : Rational.t -> Rational.t -> bool
-
-  val id_equal_string : id -> string -> bool
-
-  val string_of_id : id -> string
-
-  val rational_of_string : string -> Rational.t
-
   val fallthrough : tannot pexp
-
-  val complete_value :
-    ((value * Big_int_Z.big_int) * Big_int_Z.big_int) list -> value
  end
 
 module Make =
@@ -595,7 +632,7 @@ module Make =
      | L_bin b -> Monad.pure (V_bitvector (bitlist_of_bin_lit b))
      | L_string s -> Monad.pure (V_string s)
      | L_undef -> Monad.get_undefined typ0
-     | L_real r -> Monad.pure (V_real (T.rational_of_string r)))
+     | L_real r -> Monad.pure (V_real r))
 
   (** val same_bits : bit list -> bit list -> bool **)
 
@@ -632,7 +669,7 @@ module Make =
         | V_bool b -> if b then false else true
         | _ -> false)
      | L_num n -> (match v with
-                   | V_int m -> T.num_equal n m
+                   | V_int m -> Z.eqb n m
                    | _ -> false)
      | L_hex s ->
        (match v with
@@ -648,16 +685,16 @@ module Make =
      | L_undef -> false
      | L_real r1 ->
        (match v with
-        | V_real r2 -> T.rational_equal (T.rational_of_string r1) r2
+        | V_real r2 -> coq_Qeq_bool r1 r2
         | _ -> false))
 
-  (** val get_struct_field : string -> (string * value) list -> value **)
+  (** val get_struct_field : id -> (id * value) list -> value **)
 
   let rec get_struct_field name = function
   | [] -> V_unit
   | p :: rest_fields ->
     let (name', v) = p in
-    if (=) name name' then v else get_struct_field name rest_fields
+    if id_eqb name name' then v else get_struct_field name rest_fields
 
   (** val no_match : bool * binding IdMap.t **)
 
@@ -675,7 +712,7 @@ module Make =
     IdMap.map (fun b ->
       match b with
       | Complete v -> v
-      | Partial vs -> T.complete_value vs) m
+      | Partial vs -> complete_value vs) m
 
   (** val pattern_match : T.tannot pat -> value -> bool * binding IdMap.t **)
 
@@ -700,14 +737,14 @@ module Make =
        (match T.get_id_type (snd annot0) n with
         | Enum_member ->
           (match v with
-           | V_member m -> ((T.id_equal_string n m), empty_bindings)
+           | V_member m -> ((id_eqb n m), empty_bindings)
            | _ -> no_match)
         | _ -> (true, (IdMap.add n (Complete v) empty_bindings)))
      | P_var (p0, _) -> pattern_match p0 v
      | P_app (ctor, ps) ->
        (match v with
         | V_ctor (v_ctor, vs) ->
-          if T.id_equal_string ctor v_ctor
+          if id_eqb ctor v_ctor
           then fst
                  (fold_left (fun match_info p0 ->
                    let (y, y0) = match_info in
@@ -792,7 +829,9 @@ module Make =
               ps ((true, []), vs))
         | _ -> no_match)
      | P_vector_subrange (id0, n, m) ->
-       (true, (IdMap.add id0 (Partial (((v, n), m) :: [])) empty_bindings))
+       (true,
+         (IdMap.add id0 (Partial (Non_empty (((v, n), m), [])))
+           empty_bindings))
      | P_tuple ps ->
        (match ps with
         | [] -> (match v with
@@ -854,20 +893,20 @@ module Make =
           fold_left (fun match_info fp ->
             let (prev_matched, prev_bound) = match_info in
             let (name, p0) = fp in
-            let v0 = get_struct_field (T.string_of_id name) fields in
+            let v0 = get_struct_field name fields in
             let (matched, bound) = pattern_match p0 v0 in
             (((&&) prev_matched matched), (merge_bindings prev_bound bound)))
             field_patterns (true, [])
         | _ -> no_match))
 
   (** val lookup_field :
-      Parse_ast.l -> string -> (string * value) list -> value Monad.t **)
+      Parse_ast.l -> id -> (id * value) list -> value Monad.t **)
 
   let rec lookup_field l name = function
   | [] -> Monad.Runtime_type_error l
   | p :: fields0 ->
     let (name', v) = p in
-    if (=) name name' then Monad.pure v else lookup_field l name fields0
+    if id_eqb name name' then Monad.pure v else lookup_field l name fields0
 
   (** val destructuring_assignment :
       T.tannot annot -> destructure -> value -> unit Monad.t **)
@@ -1008,13 +1047,13 @@ module Make =
          (fun p -> Monad.pure (DL_place (PL_field (p, f)))))
 
   (** val update_field :
-      string -> value -> (string * value) list -> (string * value) list **)
+      id -> value -> (id * value) list -> (id * value) list **)
 
   let rec update_field name v = function
   | [] -> []
   | p :: rest ->
     let (name', old_v) = p in
-    if (=) name name'
+    if id_eqb name name'
     then (name, v) :: rest
     else (name', old_v) :: (update_field name v rest)
 
@@ -1247,8 +1286,7 @@ module Make =
           | Global_register ->
             Monad.Read_var ((PL_id (id0, Var_register)), (fun v ->
               wrap (E_internal_value v)))
-          | Enum_member ->
-            wrap (E_internal_value (V_member (T.string_of_id id0))))
+          | Enum_member -> wrap (E_internal_value (V_member id0)))
        | E_lit lit0 ->
          Monad.bind (value_of_lit lit0 (T.get_type (snd annot0))) (fun v ->
            wrap (E_internal_value v))
@@ -1421,7 +1459,7 @@ module Make =
          (match unevaluated with
           | [] ->
             wrap (E_internal_value (V_record
-              (all_evaluated_fields T.string_of_id evaluated0)))
+              (all_evaluated_fields evaluated0)))
           | f :: xs ->
             let FE_aux (f0, annot1) = f in
             let FE_fexp (name, x) = f0 in
@@ -1439,8 +1477,7 @@ module Make =
                let (evaluated0, unevaluated) = filtered_var in
                (match unevaluated with
                 | [] ->
-                  let updates = all_evaluated_fields T.string_of_id evaluated0
-                  in
+                  let updates = all_evaluated_fields evaluated0 in
                   let fields0 =
                     fold_left (fun fields0 s ->
                       update_field (fst s) (snd s) fields0) updates fields
@@ -1462,8 +1499,7 @@ module Make =
           | Evaluated v ->
             (match v with
              | V_record fields ->
-               Monad.bind
-                 (lookup_field (fst annot0) (T.string_of_id f) fields)
+               Monad.bind (lookup_field (fst annot0) f fields)
                  (fun v_field -> wrap (E_internal_value v_field))
              | _ -> Monad.Runtime_type_error (fst annot0))
           | Unevaluated ->
@@ -1566,8 +1602,7 @@ module Make =
           | Unevaluated -> Monad.bind (step0 x) (fun x' -> wrap (E_return x')))
        | E_exit _ -> Monad.Runtime_type_error (fst annot0)
        | E_config _ -> Monad.Runtime_type_error (fst annot0)
-       | E_ref register_name ->
-         wrap (E_internal_value (V_ref (T.string_of_id register_name)))
+       | E_ref register_name -> wrap (E_internal_value (V_ref register_name))
        | E_throw x ->
          let filtered_var = get_value x in
          (match filtered_var with

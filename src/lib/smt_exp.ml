@@ -44,6 +44,7 @@
 (*  SPDX-License-Identifier: BSD-2-Clause                                   *)
 (****************************************************************************)
 
+open Ast_compare
 open Ast_util
 open Jib_util
 
@@ -1127,8 +1128,8 @@ module Counterexample (Config : COUNTEREXAMPLE_CONFIG) = struct
     | _ -> None
 
   let rec value_of_sexpr l ctx sexpr =
+    let open Ast in
     let open Jib in
-    let open Value_type in
     let open Value in
     function
     | CT_fbits width -> begin
@@ -1142,11 +1143,9 @@ module Counterexample (Config : COUNTEREXAMPLE_CONFIG) = struct
         | List (Atom name :: smt_fields) ->
             V_record
               (List.fold_left2
-                 (fun m (field_id, ctyp) sexpr ->
-                   StringMap.add (string_of_id field_id) (value_of_sexpr l ctx sexpr ctyp) m
-                 )
-                 StringMap.empty fields smt_fields
-              |> StringMap.bindings
+                 (fun m (field_id, ctyp) sexpr -> Bindings.add field_id (value_of_sexpr l ctx sexpr ctyp) m)
+                 Bindings.empty fields smt_fields
+              |> Bindings.bindings
               )
         | _ -> raise (Reporting.err_general l ("Cannot parse sexpr as struct " ^ string_of_sexpr sexpr))
       end
@@ -1155,7 +1154,7 @@ module Counterexample (Config : COUNTEREXAMPLE_CONFIG) = struct
         match sexpr with
         | Atom name -> begin
             match List.find_opt (fun member -> Util.zencode_string (string_of_id member) = name) members with
-            | Some member -> V_member (string_of_id member)
+            | Some member -> V_member member
             | None ->
                 failwith
                   ("Could not find enum member for " ^ name ^ " in " ^ Util.string_of_list ", " string_of_id members)

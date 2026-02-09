@@ -1,0 +1,13 @@
+A {
+  files global_constraint2/amod.sail
+}
+
+B {
+  requires A
+  files global_constraint2/bmod.sail
+}
+
+C {
+  requires B
+  files global_constraint2/cmod.sail
+}

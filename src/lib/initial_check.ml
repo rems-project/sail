@@ -45,6 +45,7 @@
 (****************************************************************************)
 
 open Ast
+open Ast_compare
 open Ast_defs
 open Ast_util
 open Util
@@ -1278,7 +1279,7 @@ let to_ast_lit (P.L_aux (lit, l)) =
           | Some b -> L_bin b
           | None -> raise (Reporting.err_syntax_loc l "Failed to parse binary bitvector literal")
         )
-      | P.L_real r -> L_real r
+      | P.L_real r -> L_real (Util.Rational.to_rocq (Sail_lib.real_of_string r))
       | P.L_string s -> L_string s
       | P.L_multiline_string lines -> L_string (String.concat "\n" (List.map Scanf.unescaped lines))
       ),
@@ -1516,14 +1517,8 @@ and to_ast_exp ctx exp =
       else raise (Reporting.err_general l "Internal assume construct found (internal only construct)")
   | P.E_deref exp -> wrap (E_app (Id_aux (Id "__deref", l), [to_ast_exp ctx exp]))
 
-and to_ast_measure ctx (P.Measure_aux (m, l)) : uannot internal_loop_measure =
-  let m =
-    match m with
-    | P.Measure_none -> Measure_none
-    | P.Measure_some exp ->
-        if !opt_allow_internal then Measure_some (to_ast_exp ctx exp)
-        else raise (Reporting.err_general l "Internal loop termination measure found (internal only construct)")
-  in
+and to_ast_measure ctx (P.Measure_aux (m, l)) : uannot in_place_loop_measure =
+  let m = match m with P.Measure_none -> Measure_none | P.Measure_some exp -> Measure_some (to_ast_exp ctx exp) in
   Measure_aux (m, l)
 
 and to_ast_lexp ctx exp =

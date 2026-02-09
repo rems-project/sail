@@ -448,16 +448,16 @@ typquant:
   | kopt_list
     { TypQ_aux (TypQ_tq (List.map qi_id_of_kopt $1), loc $startpos $endpos) }
 
-effect:
+effect_annot:
   | id
     { $1 }
   | Configuration
     { mk_id (Id "configuration") $startpos $endpos }
 
 effect_list:
-  | effect
+  | effect_annot
     { [$1] }
-  | effect Comma effect_list
+  | effect_annot Comma effect_list
     { $1::$3 }
 
 effect_set:
@@ -608,11 +608,10 @@ exp_eof:
   | exp Eof
     { $1 }
 
-/* Internal syntax for loop measures, rejected in normal code by initial_check */
-internal_loop_measure:
+in_place_loop_measure:
   |
     { mk_measure Measure_none $startpos $endpos }
-  | TerminationMeasure Lcurly exp Rcurly
+  | TerminationMeasure Lparen exp Rparen
     { mk_measure (Measure_some $3) $startpos $endpos }
 
 %inline to_or_downto:
@@ -687,12 +686,12 @@ exp:
   | Foreach loop_exp Do exp
     { let (v, f, t, step, order) = $2 in
       mk_exp (E_for (v, f, t, step, order, $4)) $startpos $endpos }
-  | Repeat internal_loop_measure exp Until exp
+  | Repeat in_place_loop_measure exp Until exp
     { mk_exp (E_loop (Until, $2, $5, $3)) $startpos $endpos }
-  | While internal_loop_measure exp Do exp
-    { mk_exp (E_loop (While, $2, $3, $5)) $startpos $endpos }
-  | While internal_loop_measure exp Lcurly block Rcurly
-    { mk_exp (E_loop (While, $2, $3, mk_exp (E_block $5) $startpos($4) $endpos($6))) $startpos $endpos }
+  | While exp in_place_loop_measure Do exp
+    { mk_exp (E_loop (While, $3, $2, $5)) $startpos $endpos }
+  | While exp in_place_loop_measure Lcurly block Rcurly
+    { mk_exp (E_loop (While, $3, $2, mk_exp (E_block $5) $startpos($4) $endpos($6))) $startpos $endpos }
 
   /* Debugging only, will be rejected in initial_check if debugging isn't on */
   | InternalPLet pat Eq exp In exp

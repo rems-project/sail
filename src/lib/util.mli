@@ -56,6 +56,11 @@ val last_opt : 'a list -> 'a option
 
 val butlast : 'a list -> 'a list
 
+module Rational : sig
+  val from_rocq : QArith_base.coq_Q -> Q.t
+  val to_rocq : Q.t -> QArith_base.coq_Q
+end
+
 module Option_monad : sig
   val ( let* ) : 'a option -> ('a -> 'b option) -> 'b option
   val ( let+ ) : ('a -> 'b) -> 'a option -> 'b option

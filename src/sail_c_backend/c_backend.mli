@@ -106,7 +106,7 @@ module type CODEGEN_CONFIG = sig
 
   val assert_to_exception : bool
 
-  val preserve_types : Ast_util.IdSet.t
+  val preserve_types : Ast_compare.IdSet.t
 
   (** If set generate a C++ class for the model instead of global C functions/variables. *)
   val cpp : bool

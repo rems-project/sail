@@ -47,7 +47,9 @@
 open Libsail
 
 open Ast
+open Ast_compare
 open Ast_util
+open Bit
 open Jib
 open Jib_compile
 open Jib_util
@@ -146,8 +148,7 @@ let literal_to_fragment (L_aux (l_aux, _)) =
       let len = hex_lit_length hex in
       if len <= 64 then (
         let content =
-          Semantics.bitlist_of_hex_lit hex
-          |> List.map (function Value_type.B0 -> Sail2_values.B0 | Value_type.B1 -> Sail2_values.B1)
+          Semantics.bitlist_of_hex_lit hex |> List.map (function B0 -> Sail2_values.B0 | B1 -> Sail2_values.B1)
         in
         Some (V_lit (VL_bits content, CT_fbits len))
       )
@@ -207,11 +208,16 @@ let c_case_block b = nest 2 (separate hardline ([lbrace] @ b @ [c_stmt "break"])
 
 (* Generate a C switch statement. There's no default case. *)
 let c_switch cond cases =
-  string "switch" ^^ space ^^ cond ^^ space ^^ lbrace ^^ hardline
-  ^^ separate_map hardline
-       (fun (case_exp, case_block) -> string "case" ^^ space ^^ case_exp ^^ colon ^^ space ^^ c_case_block case_block)
-       cases
-  ^^ hardline ^^ rbrace
+  match cases with
+  | [] -> string "{}"
+  | _ ->
+      string "switch" ^^ space ^^ cond ^^ space ^^ lbrace ^^ hardline
+      ^^ separate_map hardline
+           (fun (case_exp, case_block) ->
+             string "case" ^^ space ^^ case_exp ^^ colon ^^ space ^^ c_case_block case_block
+           )
+           cases
+      ^^ hardline ^^ rbrace
 
 module C_config (Opts : sig
   val branch_coverage : out_channel option
@@ -641,20 +647,6 @@ let rec insert_heap_returns ctx ret_ctyps = function
       Reporting.unreachable (id_loc id) __POS__ "Found function with return already re-written in insert_heap_returns"
   | cdef :: cdefs -> cdef :: insert_heap_returns ctx ret_ctyps cdefs
   | [] -> []
-
-(** To keep things neat we use GCC's local labels extension to limit the scope of labels. We do this by iterating over
-    all the blocks and adding a __label__ declaration with all the labels local to that block. The add_local_labels
-    function is called by the code generator just before it outputs C.
-
-    See https://gcc.gnu.org/onlinedocs/gcc/Local-Labels.html **)
-let add_local_labels' instrs =
-  let is_label (I_aux (instr, _)) = match instr with I_label str -> [str] | _ -> [] in
-  let labels = List.concat (List.map is_label instrs) in
-  let local_label_decl = iraw ("__label__ " ^ String.concat ", " labels ^ ";\n") in
-  if labels = [] then instrs else local_label_decl :: instrs
-
-let add_local_labels instrs =
-  match map_instrs add_local_labels' (iblock instrs) with I_aux (I_block instrs, _) -> instrs | _ -> assert false
 
 (**************************************************************************)
 (* 5. Optimizations                                                       *)
@@ -1752,7 +1744,7 @@ module Codegen (Config : CODEGEN_CONFIG) = struct
           in
           (* Avoid outputting empty switches. This is here instead of in `c_switch` because
             in `c_switch` we don't know that the condition expression has no side effects. *)
-          if cases == [] then empty else c_switch (ksprintf string "(%skind)" v) cases
+          if List.is_empty cases then empty else c_switch (ksprintf string "(%skind)" v) cases
         in
         let codegen_init =
           let n = sgen_id id in
@@ -2285,7 +2277,6 @@ module Codegen (Config : CODEGEN_CONFIG) = struct
               )
           else ();
 
-          let instrs = add_local_labels instrs in
           let args =
             Util.string_of_list ", "
               (fun x -> x)
@@ -2349,7 +2340,6 @@ module Codegen (Config : CODEGEN_CONFIG) = struct
         if Config.cpp then [FunctionDefinition finish_impl; FunctionDeclaration finish_decl]
         else [FunctionDefinition finish_impl]
     | CDEF_let (number, bindings, instrs) ->
-        let instrs = add_local_labels instrs in
         let setup = List.concat (List.map (fun (id, ctyp) -> [idecl (id_loc id) ctyp (name id)]) bindings) in
         let cleanup = List.concat (List.map (fun (id, ctyp) -> [iclear ~loc:(id_loc id) ctyp (name id)]) bindings) in
         let variable_defs =

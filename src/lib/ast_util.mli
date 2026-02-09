@@ -47,6 +47,7 @@
 (** Utilities and helper functions for operating on Sail ASTs *)
 
 open Ast
+open Ast_compare
 open Ast_defs
 module Big_int = Nat_big_num
 
@@ -343,84 +344,6 @@ val arg_nexp : ?loc:l -> nexp -> typ_arg
 val arg_typ : ?loc:l -> typ -> typ_arg
 val arg_bool : ?loc:l -> n_constraint -> typ_arg
 val arg_kopt : kinded_id -> typ_arg
-
-(** {1 Set and Map modules for various AST elements} *)
-
-module Id : sig
-  type t = id
-  val compare : id -> id -> int
-end
-
-module Kid : sig
-  type t = kid
-  val compare : kid -> kid -> int
-end
-
-module Kind : sig
-  type t = kind
-  val compare : kind -> kind -> int
-end
-
-module KOpt : sig
-  type t = kinded_id
-  val compare : kinded_id -> kinded_id -> int
-end
-
-module Nexp : sig
-  type t = nexp
-  val compare : nexp -> nexp -> int
-end
-
-module NC : sig
-  type t = n_constraint
-  val compare : n_constraint -> n_constraint -> int
-end
-
-(* NB: the comparison function does not expand synonyms *)
-module Typ : sig
-  type t = typ
-  val compare : typ -> typ -> int
-end
-
-module IdSet : sig
-  include Set.S with type elt = id and type t = Set.Make(Id).t
-end
-
-module NexpSet : sig
-  include Set.S with type elt = nexp
-end
-
-module NexpMap : sig
-  include Map.S with type key = nexp
-end
-
-module KOptSet : sig
-  include Set.S with type elt = kinded_id
-end
-
-module KOptMap : sig
-  include Map.S with type key = kinded_id
-end
-
-module KidSet : sig
-  include Set.S with type elt = kid
-end
-
-module KBindings : sig
-  include Map.S with type key = kid
-end
-
-module Bindings : sig
-  include Map.S with type key = id
-end
-
-module NCMap : sig
-  include Map.S with type key = n_constraint
-end
-
-module TypMap : sig
-  include Map.S with type key = typ
-end
 
 (** {1 Functions for working with type quantifiers} *)
 

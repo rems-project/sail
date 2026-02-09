@@ -11,9 +11,11 @@ From Stdlib Require Import Lists.List.
 From Stdlib Require Import Program.
 From Stdlib Require Import String.
 From Stdlib Require Import ZArith.
+From Stdlib Require QArith.
 
-Require Import Value_type.
+Require Import Bit.
 Require Import Ast.
+Require Import Value_type.
 Require Import AstInduction.
 Require Import IdUtil.
 
@@ -21,7 +23,7 @@ Import ListNotations.
 
 Inductive binding :=
 | Complete : value -> binding
-| Partial : list (value * Z * Z) -> binding.
+| Partial : non_empty (value * Z * Z) -> binding.
 
 Definition combine_binding (l r : option binding) : option binding :=
   match (l, r) with
@@ -32,7 +34,8 @@ Definition combine_binding (l r : option binding) : option binding :=
       match (lb, rb) with
       | (Complete v, _) => Some (Complete v)
       | (_, Complete v) => Some (Complete v)
-      | (Partial lv, Partial rv) => Some (Partial (lv ++ rv))
+      | (Partial (Non_empty lv lvs), Partial (Non_empty rv rvs)) =>
+          Some (Partial (Non_empty lv (lvs ++ rv :: rvs)))
       end
   end.
 
@@ -68,7 +71,7 @@ Inductive id_type :=
 
 Inductive place : Set :=
 | PL_id : id -> var_type -> place
-| PL_register : string -> place
+| PL_register : id -> place
 | PL_vector : place -> Z -> place
 | PL_vector_range : place -> Z -> Z -> place
 | PL_field : place -> id -> place.
@@ -305,12 +308,12 @@ Proof.
     reflexivity.
 Qed.
 
-Fixpoint all_evaluated_fields {A : Set} (f : id -> string) (xs : list (fexp A)) : list (string * value) :=
+Fixpoint all_evaluated_fields {A : Set} (xs : list (fexp A)) : list (id * value) :=
   match xs with
   | [] => []
   | FE_aux (FE_fexp id (E_aux (E_internal_value v) _)) _ :: xs =>
-      (f id, v) :: all_evaluated_fields f xs
-  | _ :: xs => all_evaluated_fields f xs
+      (id, v) :: all_evaluated_fields xs
+  | _ :: xs => all_evaluated_fields xs
   end.
 
 Fixpoint take_evaluated_fields {A : Set} (xs : list (fexp A)) : list (fexp A) :=
@@ -491,6 +494,43 @@ Definition bitlist_of_bin_lit (bin : list (non_empty bin_digit)) : list bit :=
       end
     ) digits.
 
+Definition update_list (xs : list bit) (n : nat) (y : bit) : list bit :=
+  let n := List.length xs - n - 1 in
+  let '(ys, zs) := take_drop n xs in
+  ys ++ [y] ++ List.tl zs.
+
+Fixpoint update_subrange (xs : list bit) (n : nat) (ys : list bit) : list bit :=
+  match ys with
+  | [] => xs
+  | y :: ys =>
+    update_subrange (update_list xs n y) (n - 1) ys
+  end.
+
+Definition complete_value (partial_values : non_empty (value * Z * Z)) : value :=
+  let '(Non_empty (v1, n1, m1) partial_values) := partial_values in
+    let '(max, min) :=
+      List.fold_left
+        (fun range pvalue =>
+         let '(max, min) := range in
+         let '(_, n, m) := pvalue in
+         (Z.max max (Z.max n m), Z.min min (Z.min n m)))
+        partial_values (n1, m1)
+    in
+    let len := Z.sub (Z.succ max) min in
+    let zeros := List.repeat B0 (Z.to_nat len) in
+    let value :=
+      List.fold_left
+        (fun bv pvalue =>
+         let '(slice, n, _) := pvalue in
+         match slice with
+         | V_bitvector slice => update_subrange bv (Z.to_nat n) slice
+         | _ => bv
+         end)
+        ((v1, n1, m1) :: partial_values)
+        zeros
+    in
+    V_bitvector value.
+
 (** Sail annotates terms with custom type annotation data, which we
     don't have access to here. Instead use a functor parameterised by
     the following SemanticExt signature, which can provide the methods we
@@ -506,19 +546,7 @@ Module Type SemanticExt.
 
   Parameter is_bitvector : tannot -> bool.
 
-  Parameter num_equal : Z -> Z -> bool.
-
-  Parameter rational_equal : rational -> rational -> bool.
-
-  Parameter id_equal_string : id -> string -> bool.
-
-  Parameter string_of_id : id -> string.
-
-  Parameter rational_of_string : string -> rational.
-
   Parameter fallthrough : Ast.pexp tannot.
-
-  Parameter complete_value : list (value * Z * Z) -> value.
 End SemanticExt.
 
 Module Make (T : SemanticExt).
@@ -536,7 +564,7 @@ Module Make (T : SemanticExt).
     | P_vector_subrange m _ _ => id_eqb n m
     end.
 
-  Fixpoint substitute {A} (n : Ast.id) (v : Value_type.value) (x : exp A) : exp A :=
+  Fixpoint substitute {A} (n : Ast.id) (v : Ast.value) (x : exp A) : exp A :=
     let 'E_aux aux annot := x in
     match aux with
     | E_id m =>
@@ -603,7 +631,7 @@ Module Make (T : SemanticExt).
     | E_return x => E_aux (E_return (substitute n v x)) annot
     | _ => x
     end
-  with substitute_arm {A} (n : Ast.id) (v : Value_type.value) (arm : pexp A) : pexp A :=
+  with substitute_arm {A} (n : Ast.id) (v : Ast.value) (arm : pexp A) : pexp A :=
     let 'Pat_aux aux annot := arm in
     match aux with
     | Pat_exp pat body =>
@@ -617,7 +645,7 @@ Module Make (T : SemanticExt).
         else
           Pat_aux (Pat_when pat (substitute n v guard) (substitute n v body)) annot
     end
-  with substitute_lexp {A} (n : Ast.id) (v : Value_type.value) (l : lexp A) : lexp A :=
+  with substitute_lexp {A} (n : Ast.id) (v : Ast.value) (l : lexp A) : lexp A :=
     let 'LE_aux aux annot := l in
     match aux with
     | LE_deref x => LE_aux (LE_deref (substitute n v x)) annot
@@ -648,7 +676,7 @@ Module Make (T : SemanticExt).
     | L_num n => pure (V_int n)
     | L_hex h => pure (V_bitvector (bitlist_of_hex_lit h))
     | L_bin b => pure (V_bitvector (bitlist_of_bin_lit b))
-    | L_real r => pure (V_real (T.rational_of_string r))
+    | L_real r => pure (V_real r)
     | L_string s => pure (V_string s)
     | L_undef => get_undefined typ
     end.
@@ -699,18 +727,18 @@ Module Make (T : SemanticExt).
     | (L_unit, V_unit) => true
     | (L_true, V_bool true) => true
     | (L_false, V_bool false) => true
-    | (L_num n, V_int m) => T.num_equal n m
+    | (L_num n, V_int m) => Z.eqb n m
     | (L_hex s, V_bitvector vs) => same_bits (bitlist_of_hex_lit s) vs
     | (L_bin s, V_bitvector vs) => same_bits (bitlist_of_bin_lit s) vs
     | (L_string s1, V_string s2) => String.eqb s1 s2
-    | (L_real r1, V_real r2) => T.rational_equal (T.rational_of_string r1) r2
+    | (L_real r1, V_real r2) => QArith_base.Qeq_bool r1 r2
     | _ => false
     end.
 
-  Fixpoint get_struct_field (name : string) (fields : list (string * value)) {struct fields} : value :=
+  Fixpoint get_struct_field (name : id) (fields : list (id * value)) {struct fields} : value :=
     match fields with
     | (name', v) :: rest_fields =>
-        if String.eqb name name' then
+        if id_eqb name name' then
           v
         else
           get_struct_field name rest_fields
@@ -726,7 +754,7 @@ Module Make (T : SemanticExt).
       (fun b =>
          match b with
          | Complete v => v
-         | Partial vs => T.complete_value vs
+         | Partial vs => complete_value vs
          end
       )
       m.
@@ -740,7 +768,7 @@ Module Make (T : SemanticExt).
         | Enum_member =>
             match v with
             | V_member m =>
-                (T.id_equal_string n m, empty_bindings)
+                (id_eqb n m, empty_bindings)
             | _ => no_match
             end
         | _ =>
@@ -754,7 +782,7 @@ Module Make (T : SemanticExt).
     | P_app ctor ps =>
         match v with
         | V_ctor v_ctor vs =>
-            if T.id_equal_string ctor v_ctor then
+            if id_eqb ctor v_ctor then
               fst (fold_left
                      (fun match_info p =>
                         match match_info with
@@ -909,7 +937,7 @@ Module Make (T : SemanticExt).
               (fun match_info fp =>
                  let '(prev_matched, prev_bound) := match_info in
                  let '(name, p) := fp in
-                 let v := get_struct_field (T.string_of_id name) fields in
+                 let v := get_struct_field name fields in
                  let '(matched, bound) := pattern_match p v in
                  (andb prev_matched matched, prev_bound ⋈ bound)
               )
@@ -917,16 +945,16 @@ Module Make (T : SemanticExt).
               (true, [])
         | _ => no_match
         end
-    | P_vector_subrange id n m => (true, IdMap.add id (Partial [(v, n, m)]) empty_bindings)
+    | P_vector_subrange id n m => (true, IdMap.add id (Partial (Non_empty (v, n, m) [])) empty_bindings)
     (* TODO *)
     | P_string_append _ => (true, empty_bindings)
     end.
 
-  Fixpoint lookup_field (l : Ast.loc) (name : string) (fields : list (string * value)) {struct fields} : t value :=
+  Fixpoint lookup_field (l : Ast.loc) (name : id) (fields : list (id * value)) {struct fields} : t value :=
       match fields with
       | [] => Runtime_type_error l
       | (name', v) :: fields =>
-          if String.eqb name name' then
+          if id_eqb name name' then
             pure v
           else
             lookup_field l name fields
@@ -1229,10 +1257,10 @@ Module Make (T : SemanticExt).
         end
     end.
 
-  Fixpoint update_field (name : string) (v : value) (fields : list (string * value)) : list (string * value) :=
+  Fixpoint update_field (name : id) (v : value) (fields : list (id * value)) : list (id * value) :=
     match fields with
     | (name', old_v) :: rest =>
-        if String.eqb name name' then
+        if id_eqb name name' then
           (name, v) :: rest
         else
           (name', old_v) :: update_field name v rest
@@ -1265,7 +1293,7 @@ Module Make (T : SemanticExt).
         | Local_variable =>
             Read_var (PL_id id Var_local) (fun v => wrap (E_internal_value v))
         | Enum_member =>
-            wrap (E_internal_value (V_member (T.string_of_id id)))
+            wrap (E_internal_value (V_member id))
         end
     | E_return x =>
         match get_value x with
@@ -1432,7 +1460,7 @@ Module Make (T : SemanticExt).
         | Evaluated v =>
             match v with
             | V_record fields =>
-                v_field ← lookup_field (fst annot) (T.string_of_id f) fields;
+                v_field ← lookup_field (fst annot) f fields;
                 wrap (E_internal_value v_field)
             | _ => Runtime_type_error (fst annot)
             end
@@ -1447,7 +1475,7 @@ Module Make (T : SemanticExt).
             x' ← step x;
             wrap (E_struct struct_id (evaluated ++ (FE_aux (FE_fexp name x') annot :: xs)))
         | [] =>
-            wrap (E_internal_value (V_record (all_evaluated_fields T.string_of_id evaluated)))
+            wrap (E_internal_value (V_record (all_evaluated_fields evaluated)))
         end
     | E_struct_update x fs =>
         match x with
@@ -1458,7 +1486,7 @@ Module Make (T : SemanticExt).
                 y' ← step y;
                 wrap (E_struct_update x (evaluated ++ (FE_aux (FE_fexp name y') annot :: ys)))
             | [] =>
-                let updates := all_evaluated_fields T.string_of_id evaluated in
+                let updates := all_evaluated_fields evaluated in
                 let fields := fold_left (fun fields s => update_field (fst s) (snd s) fields) updates fields in
                 wrap (E_internal_value (V_record fields))
             end
@@ -1525,7 +1553,7 @@ Module Make (T : SemanticExt).
         end
     | E_internal_value v => wrap (E_internal_value v)
     | E_ref register_name =>
-        wrap (E_internal_value (V_ref (T.string_of_id register_name)))
+        wrap (E_internal_value (V_ref register_name))
     | E_loop While measure cond body =>
         wrap (E_if cond (E_aux (E_block [body; orig_exp]) annot) (E_aux (E_internal_value V_unit) annot))
     | E_loop Until measure cond body =>

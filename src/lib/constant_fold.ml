@@ -45,7 +45,9 @@
 (****************************************************************************)
 
 open Ast
+open Ast_compare
 open Ast_util
+open Bit
 open Type_check
 open Rewriter
 
@@ -58,11 +60,9 @@ let optimize_constant_fold = ref false
 (* The interpreter will return a value for each folded expression, so
    we must convert that back to expression to re-insert it in the AST
 *)
-let rec fexp_of_ctor (field, value) = FE_aux (FE_fexp (mk_id field, exp_of_value value), no_annot)
+let rec fexp_of_ctor (field, value) = FE_aux (FE_fexp (field, exp_of_value value), no_annot)
 
-and exp_of_value =
-  let open Value_type in
-  function
+and exp_of_value = function
   | V_int n -> mk_lit_exp (L_num n)
   | V_bool true -> mk_lit_exp L_true
   | V_bool false -> mk_lit_exp L_false
@@ -76,17 +76,13 @@ and exp_of_value =
   | V_vector vs -> mk_exp (E_vector (List.map exp_of_value vs))
   | V_tuple vs -> mk_exp (E_tuple (List.map exp_of_value vs))
   | V_unit -> mk_lit_exp L_unit
-  | V_attempted_read str -> mk_exp (E_id (mk_id str))
   | _ -> failwith "No expression for value"
 
 (* A simple heuristic to avoid generating overly large literals. Note
    that we avoid traversing through every element of vectors and
    lists, so a list of large lists could still sneak through *)
-let rec is_too_large =
-  let open Value_type in
-  function
-  | V_int _ | V_bool _ | V_bitvector _ | V_string _ | V_unit | V_attempted_read _ | V_real _ | V_ref _ | V_member _ ->
-      false
+let rec is_too_large = function
+  | V_int _ | V_bool _ | V_bitvector _ | V_string _ | V_unit | V_real _ | V_ref _ | V_member _ -> false
   | V_vector vs | V_tuple vs | V_list vs -> List.compare_length_with vs 256 > 0
   | V_record fields -> List.exists (fun (_, v) -> is_too_large v) fields
   | V_ctor (_, vs) -> List.exists is_too_large vs
@@ -158,11 +154,6 @@ let rec run frame =
       assert false
   | Interpreter.Step (lazy_str, _, _, _) -> run (Interpreter.eval_frame frame)
   | Interpreter.Break frame -> run (Interpreter.eval_frame frame)
-  | Interpreter.Effect_request (out, st, stack, Interpreter.Read_reg (reg, [], cont)) ->
-      (* return a dummy value to read_reg requests which we handle above
-         if an expression finally evals to it, but the interpreter
-         will fail if it tries to actually use. See value.ml *)
-      run (cont (Value_type.V_attempted_read reg) st)
   | Interpreter.Effect_request _ -> assert false (* effectful, raise exception to abort constant folding *)
 
 (** This rewriting pass looks for function applications (E_app) expressions where every argument is a literal. It passes

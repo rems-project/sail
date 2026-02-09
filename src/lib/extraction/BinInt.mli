@@ -17,13 +17,23 @@ module Z :
 
   val sub : Big_int_Z.big_int -> Big_int_Z.big_int -> Big_int_Z.big_int
 
+  val mul : Big_int_Z.big_int -> Big_int_Z.big_int -> Big_int_Z.big_int
+
   val compare : Big_int_Z.big_int -> Big_int_Z.big_int -> comparison
 
   val ltb : Big_int_Z.big_int -> Big_int_Z.big_int -> bool
 
+  val eqb : Big_int_Z.big_int -> Big_int_Z.big_int -> bool
+
+  val max : Big_int_Z.big_int -> Big_int_Z.big_int -> Big_int_Z.big_int
+
+  val min : Big_int_Z.big_int -> Big_int_Z.big_int -> Big_int_Z.big_int
+
   val to_nat : Big_int_Z.big_int -> Big_int_Z.big_int
 
   val of_nat : Big_int_Z.big_int -> Big_int_Z.big_int
+
+  val succ : Big_int_Z.big_int -> Big_int_Z.big_int
 
   val gtb : Big_int_Z.big_int -> Big_int_Z.big_int -> bool
  end

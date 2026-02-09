@@ -49,6 +49,7 @@
    not be imported elsewhere. *)
 
 open Ast
+open Ast_compare
 open Ast_util
 open Util
 

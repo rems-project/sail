@@ -5,8 +5,9 @@ Set Extraction Output Directory ".".
 
 From Stdlib Require Import String.
 From Stdlib Require Import ZArith.
+From Stdlib Require Import QArith.
 
-Require Import Value_type.
+Require Import Bit.
 
 Parameter loc : Set.
 
@@ -127,6 +128,21 @@ Inductive kinded_id : Set :=
 Inductive id : Set :=
 | Id_aux : id_aux -> loc -> id.
 
+Inductive value : Set :=
+| V_bitvector : list bit -> value
+| V_vector : list value -> value
+| V_list : list value -> value
+| V_int : Z -> value
+| V_real : Q -> value
+| V_bool : bool -> value
+| V_tuple : list value -> value
+| V_unit : value
+| V_string : string -> value
+| V_ref : id -> value
+| V_member : id -> value
+| V_ctor : id -> list value -> value
+| V_record : list (id * value) -> value.
+
 Inductive lit_aux : Set :=
 | L_unit : lit_aux
 | L_true : lit_aux
@@ -136,7 +152,7 @@ Inductive lit_aux : Set :=
 | L_bin : list (non_empty bin_digit) -> lit_aux
 | L_string : string -> lit_aux
 | L_undef : lit_aux
-| L_real : string -> lit_aux.
+| L_real : Q -> lit_aux.
 
 Inductive nexp_aux : Set :=
 | Nexp_id : id -> nexp_aux
@@ -286,12 +302,12 @@ Inductive mpat_aux (a : Set) : Set :=
 with mpat (a : Set) : Set :=
 | MP_aux : mpat_aux a -> annot a -> mpat a.
 
-Inductive internal_loop_measure_aux (a : Set) : Set :=
-| Measure_none : internal_loop_measure_aux a
-| Measure_some : exp a -> internal_loop_measure_aux a
+Inductive in_place_loop_measure_aux (a : Set) : Set :=
+| Measure_none : in_place_loop_measure_aux a
+| Measure_some : exp a -> in_place_loop_measure_aux a
 
-with internal_loop_measure (a : Set) : Set :=
-| Measure_aux : internal_loop_measure_aux a -> loc -> internal_loop_measure a
+with in_place_loop_measure (a : Set) : Set :=
+| Measure_aux : in_place_loop_measure_aux a -> loc -> in_place_loop_measure a
 
 with exp_aux (a : Set) : Set :=
 | E_block : list (exp a) -> exp_aux a
@@ -301,7 +317,7 @@ with exp_aux (a : Set) : Set :=
 | E_app : id -> list (exp a) -> exp_aux a
 | E_tuple : list (exp a) -> exp_aux a
 | E_if : exp a -> exp a -> exp a -> exp_aux a
-| E_loop : loop -> internal_loop_measure a -> exp a -> exp a -> exp_aux a
+| E_loop : loop -> in_place_loop_measure a -> exp a -> exp a -> exp_aux a
 | E_for : id -> exp a -> exp a -> exp a -> order -> exp a -> exp_aux a
 | E_vector : list (exp a) -> exp_aux a
 | E_vector_append : exp a -> exp a -> exp_aux a

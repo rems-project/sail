@@ -46,8 +46,10 @@
 
 open Libsail
 open Ast
+open Ast_compare
 open Ast_defs
 open Ast_util
+open Bit
 open PPrint
 open Type_check
 open Util
@@ -168,7 +170,7 @@ let ocaml_typquant (TypQ_aux (_, l) as typq) =
 
 let string_lit str = dquotes (string (String.escaped str))
 
-let ocaml_bit = function Value_type.B0 -> string "B0" | Value_type.B1 -> string "B1"
+let ocaml_bit = function B0 -> string "B0" | B1 -> string "B1"
 
 let ocaml_lit (L_aux (lit_aux, _)) =
   match lit_aux with
@@ -182,7 +184,9 @@ let ocaml_lit (L_aux (lit_aux, _)) =
       else parens (string "Big_int.of_string" ^^ space ^^ dquotes (string (Big_int.to_string n)))
   | L_undef -> failwith "undefined should have been re-written prior to ocaml backend"
   | L_string str -> string_lit str
-  | L_real str -> parens (string "real_of_string" ^^ space ^^ dquotes (string (String.escaped str)))
+  | L_real r ->
+      let str = Q.to_string (Util.Rational.from_rocq r) in
+      parens (string "real_of_string" ^^ space ^^ dquotes (string (String.escaped str)))
   | L_bin bin -> brackets (separate_map (semi ^^ space) ocaml_bit (Semantics.bitlist_of_bin_lit bin))
   | L_hex hex -> brackets (separate_map (semi ^^ space) ocaml_bit (Semantics.bitlist_of_hex_lit hex))
 
@@ -1088,7 +1092,7 @@ let ocaml_ast ast generator_info =
     | Some (types, req) -> ocaml_pp_generators ctx ast.defs types (List.map mk_id req)
   in
   (string "open Sail_lib;;" ^^ hardline)
-  ^^ (string "open Value_type;;" ^^ hardline)
+  ^^ (string "open Bit;;" ^^ hardline)
   ^^ (string "module Big_int = Nat_big_num" ^^ ocaml_def_end)
   ^^ concat (List.map (ocaml_def ctx) ast.defs)
   ^^ empty_reg_init ^^ gen_pp

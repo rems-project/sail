@@ -48,6 +48,7 @@ open Libsail
 
 open Type_check
 open Ast
+open Ast_compare
 open Ast_defs
 open Ast_util
 open Reporting
@@ -848,22 +849,10 @@ let doc_lit (L_aux (lit, l)) =
   | L_bin bin -> utf8string ("('b\"" ^ string_of_bin_lit ~group_separator:"" bin ^ "\")")
   | L_undef -> utf8string "(Fail \"undefined value of unsupported type\")"
   | L_string s -> utf8string ("\"" ^ coq_escape_string s ^ "\"")
-  | L_real s ->
-      (* Lem does not support decimal syntax, so we translate a string
-         of the form "x.y" into the ratio (x * 10^len(y) + y) / 10^len(y).
-         The OCaml library has a conversion function from strings to floats, but
-         not from floats to ratios. ZArith's Q library does have the latter, but
-         using this would require adding a dependency on ZArith to Sail. *)
-      let parts = Util.split_on_char '.' s in
-      let num, denom =
-        match parts with
-        | [i] -> (Big_int.of_string i, Big_int.of_int 1)
-        | [i; f] ->
-            let denom = Big_int.pow_int_positive 10 (String.length f) in
-            (Big_int.add (Big_int.mul (Big_int.of_string i) denom) (Big_int.of_string f), denom)
-        | _ -> raise (Reporting.err_syntax_loc l "could not parse real literal")
-      in
-      parens (separate space (List.map string ["realFromFrac"; Big_int.to_string num; Big_int.to_string denom]))
+  | L_real r ->
+      let r = Util.Rational.from_rocq r in
+      parens
+        (separate space (List.map string ["realFromFrac"; Big_int.to_string (Q.num r); Big_int.to_string (Q.den r)]))
 
 let doc_quant_item_id ?(prop_vars = false) ctx delimit (QI_aux (qi, _)) =
   match qi with
@@ -3119,7 +3108,30 @@ let doc_typdef global generic_eq_types countable_types enum_number_defs (TD_aux 
       let countable_pp =
         match (global.library_style, num_fns) with
         | BBV, _ -> empty
-        | Stdpp, None -> empty
+        | Stdpp, None ->
+            (* If there isn't a reasonable encode/decode pair, produce a generic one *)
+            separate hardline
+              ([
+                 string "#[export]";
+                 string "Instance Countable_" ^^ id_pp ^^ string " : Countable " ^^ id_pp ^^ string ".";
+                 string "refine {|";
+                 string "  encode x := match x with";
+               ]
+              @ List.mapi
+                  (fun i id -> string "  | " ^^ doc_id_ctor bare_ctxt id ^^ string (" => " ^ string_of_int (i + 1)))
+                  enums
+              @ [string "  end%positive;"; string "  decode x := match x with"]
+              @ List.mapi
+                  (fun i id -> string ("  | " ^ string_of_int (i + 1)) ^^ string " => Some " ^^ doc_id_ctor bare_ctxt id)
+                  enums
+              @ [
+                  string "  | _ => None";
+                  string "  end%positive;";
+                  string "|}.";
+                  string "abstract (intro x; destruct x; reflexivity).";
+                  string "Defined.";
+                ]
+              )
         | Stdpp, Some (of_num_id_pp, num_of_id_pp) ->
             separate hardline
               [

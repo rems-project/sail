@@ -99,6 +99,7 @@ lib/hol/sail-heap
 /test/sv/*.result
 /test/sv/*.cpp
 /test/sv/obj_dir/
+/test/lean/support-lib
 
 /language/*.pdf
 /language/*.uo

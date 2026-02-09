@@ -66,6 +66,7 @@
 (****************************************************************************)
 
 open Libsail
+open Ast_compare
 open Ast_util
 open Interactive.State
 
@@ -83,12 +84,20 @@ let opt_single_file : bool ref = ref false
 
 let opt_lean_executable : bool ref = ref false
 
+let opt_lean_lib_path : string option ref = ref None
+
+let opt_lean_lib_git : string option ref = ref None
+
+let opt_lean_lib_rev : string option ref = ref None
+
 (* We keep two flags to use the [If_flag] in the list of rewrites. They should never be equal. *)
 let opt_enable_matchbv : bool ref = ref false
 let opt_disable_matchbv : bool ref = ref true
 
-let lean_version : string = "lean4:nightly-2025-11-18"
-let mathlib_version : string = "nightly-testing-2025-11-18"
+let lean_version : string = "lean4:nightly-2026-01-22"
+let mathlib_version : string = "nightly-testing-2026-01-22"
+let lib_default_git : string = "https://github.com/rems-project/lean-sail"
+let lib_default_rev : string = "v2"
 
 let lean_options =
   [
@@ -148,6 +157,18 @@ let lean_options =
     ( Flag.create ~prefix:["lean"] "executable",
       Arg.Unit (fun () -> opt_lean_executable := true),
       "generate an executable if there is a main function in the Sail program"
+    );
+    ( Flag.create ~prefix:["lean"] "lib-path",
+      Arg.String (fun p -> opt_lean_lib_path := Some p),
+      "(local) path of the Lean support library, for development"
+    );
+    ( Flag.create ~prefix:["lean"] "lib-repo",
+      Arg.String (fun r -> opt_lean_lib_path := Some r),
+      "url of the git repository of the Lean support library"
+    );
+    ( Flag.create ~prefix:["lean"] "lib-rev",
+      Arg.String (fun r -> opt_lean_lib_rev := Some r),
+      "revision of the Lean support library"
     );
   ]
 
@@ -256,15 +277,11 @@ let copy_from_static_library out_name_camel sail_dir lean_sail_dir str =
     )
   |> ignore
 
-(* Unix.system ("cp " ^ path_to_static_library sail_dir str ^ " " ^ Filename.quote lean_sail_dir) *)
-
 let print_function_file_prelude interface_v file out_name_camel (imp_refs : string list) =
   let _ =
     match imp_refs with
     | [] ->
-        output_string file ("import " ^ out_name_camel ^ ".Sail.Sail\n");
-        output_string file ("import " ^ out_name_camel ^ ".Sail.BitVec\n");
-        output_string file ("import " ^ out_name_camel ^ ".Sail.IntRange\n");
+        output_string file "import Sail\n";
         output_string file ("import " ^ out_name_camel ^ ".Defs\n");
         List.iter
           (fun filename -> output_string file ("import " ^ out_name_camel ^ "." ^ file_to_module filename ^ "\n"))
@@ -298,12 +315,6 @@ let start_lean_output interface_v (out_name : string) (import_names : string lis
   let main_import_refs_camel = List.map Libsail.Util.to_upper_camel_case main_import_refs in
   let lean_src_dir = Filename.concat project_dir out_name_camel in
   if not (Sys.file_exists lean_src_dir) then Unix.mkdir lean_src_dir 0o775;
-  let lean_sail_dir = lean_src_dir ^ "/Sail/" in
-  Unix.mkdir lean_sail_dir 0o775;
-  let _ = copy_from_static_library out_name_camel sail_dir lean_sail_dir "Attr" in
-  let _ = copy_from_static_library out_name_camel sail_dir lean_sail_dir "BitVec" in
-  let _ = copy_from_static_library out_name_camel sail_dir lean_sail_dir "IntRange" in
-  let _ = copy_from_static_library out_name_camel sail_dir lean_sail_dir "Sail" in
   let real_numbers_file =
     if !opt_lean_real_numbers then "/src/sail_lean_backend/Sail/Real.lean"
     else "/src/sail_lean_backend/Sail/FakeReal.lean"
@@ -319,8 +330,7 @@ let start_lean_output interface_v (out_name : string) (import_names : string lis
     )
     !opt_lean_import_files;
   let types_file = open_out (Filename.concat lean_src_dir "Defs.lean") in
-  output_string types_file ("import " ^ out_name_camel ^ ".Sail.Sail\n");
-  output_string types_file ("import " ^ out_name_camel ^ ".Sail.BitVec\n\n");
+  output_string types_file "import Sail\n";
   output_string types_file "open PreSail\n\n";
   output_string types_file (file_prelude interface_v);
   let funcs_file = open_out (Filename.concat project_dir (out_name_camel ^ ".lean")) in
@@ -349,6 +359,19 @@ let close_context ctx =
   close_out ctx.lakefile;
   close_out ctx.lakemanifest
 
+let output_support_lib ctx =
+  output_string ctx.lakefile "\n\n[[require]]\n";
+  output_string ctx.lakefile "name = \"Sail\"\n";
+  let revision () = match !opt_lean_lib_rev with Some r -> r | None -> lib_default_rev in
+  let path_and_rev =
+    match (!opt_lean_lib_git, !opt_lean_lib_path) with
+    | Some _, Some _ -> failwith "--lean-lib-git and --lean-lib-path cannot be set simultaneously"
+    | None, Some p -> Printf.sprintf "path = \"%s\"\n" p
+    | Some r, None -> Printf.sprintf "git = \"%s\"\nrev = \"%s\"" r (revision ())
+    | None, None -> Printf.sprintf "git = \"%s\"\nrev = \"%s\"" lib_default_git (revision ())
+  in
+  output_string ctx.lakefile path_and_rev
+
 let create_lake_project (ctx : lean_context) executable =
   (* Change the base directory if the option '--lean-output-dir' is set *)
   output_string ctx.lakefile
@@ -356,6 +379,7 @@ let create_lake_project (ctx : lean_context) executable =
    ^ "\"]\nmoreLeanArgs = [\"--tstack=400000\"]\n\n[[lean_lib]]\nname = \"" ^ ctx.out_name_camel ^ "\""
     );
   output_string ctx.lakefile "\nleanOptions.weak.linter.style.nameCheck = false";
+  output_support_lib ctx;
   if !opt_lean_real_numbers then (
     output_string ctx.lakefile "\n\n[[require]]\n";
     output_string ctx.lakefile "name = \"mathlib\"\n";

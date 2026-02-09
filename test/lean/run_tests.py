@@ -54,12 +54,24 @@ skip_selftests = {
 print("Sail is {}".format(sail))
 print("Sail dir is {}".format(sail_dir))
 
+def clone_support_lib(subdir) -> str:
+    lean_path = f"../{subdir}"
+    lib_path = f"../{subdir}/support-lib"
+    step(f"rm -rf {lib_path} || true")
+    step(f"git clone https://github.com/rems-project/lean-sail.git {lib_path}")
+    print("Building the support library")
+    step("lake build", cwd=lib_path)
+    return f"../../support-lib"
+
 def test_lean(subdir: str, skip_list = None, runnable: bool = False):
     """
     Run all Sail files available in the `subdir`.
     If `runnable` is set to `True`, it will do `lake run`
     instead of `lake build`.
     """
+    banner("Cloning the support library")
+    support_lib = clone_support_lib(subdir)
+    print("...done!")
     banner(f'Testing lean target (sub-directory: {subdir})')
     results = Results(subdir)
     for filenames in chunks(os.listdir(f'../{subdir}'), parallel()):
@@ -78,7 +90,7 @@ def test_lean(subdir: str, skip_list = None, runnable: bool = False):
             tests[filename] = os.fork()
             if tests[filename] == 0:
                 os.chdir(f'../{subdir}')
-                step('rm -r {} || true'.format(basename))
+                step('rm -rf {} || true'.format(basename))
                 step('mkdir -p {}'.format(basename))
                 # TODO: should probably be dependent on whether print should be pure or effectful.
                 extra_flags = [
@@ -89,20 +101,21 @@ def test_lean(subdir: str, skip_list = None, runnable: bool = False):
                 if not runnable:
                     extra_flags.append('--lean-matchbv')
                 extra_flags = ' '.join(extra_flags)
-                step('\'{}\' {} {} --lean --lean-single-file  --lean-executable --lean-output-dir {}'.format(sail, extra_flags, filename, basename), name=filename)
+                step("'{}' {} {} --lean --lean-single-file  --lean-executable --lean-output-dir {} --lean-lib-path {}".format(
+                    sail, extra_flags, filename, basename, support_lib), name=filename)
+                step('lake update', cwd=f'{basename}/out', name=filename)
+                expected_status = 0
                 if runnable and basename.startswith('fail'):
+                    expected_status = 1
+                if runnable:
                     step(f'lake exe run > expected 2> err_status',
-                         cwd=f'{basename}/out',
-                         name=filename,
-                         expected_status=1,
-                         stderr_file=f'{basename}/out/err_status')
-                elif runnable:
-                    step('timeout 90s lake exe run > expected 2> err_status',
-                         cwd=f'{basename}/out',
-                         name=filename,
-                         stderr_file=f'{basename}/out/err_status')
+                        cwd=f'{basename}/out',
+                        name=filename,
+                        expected_status=expected_status,
+                        stderr_file=f'{basename}/out/err_status')
                 else:
                     # NOTE: lake --dir does not behave the same as cd $dir && lake build...
+                    step('lake update', cwd=f'{basename}/out', name=filename)
                     step('lake build', cwd=f'{basename}/out', name=filename)
 
                 if not runnable:
@@ -122,7 +135,7 @@ def test_lean(subdir: str, skip_list = None, runnable: bool = False):
                     if status != 0:
                         sys.exit(1)
 
-                step('rm -r {}'.format(basename))
+                step('rm -rf {}'.format(basename))
 
                 if is_skip:
                     print(f'{basename} now passes!')

@@ -1,6 +1,4 @@
-import Out.Sail.Sail
-import Out.Sail.BitVec
-
+import Sail
 open PreSail
 
 set_option maxHeartbeats 1_000_000_000
@@ -461,9 +459,7 @@ instance : Arch where
   sys_reg_id := Unit
 XXXXXXXXX
 
-import Out.Sail.Sail
-import Out.Sail.BitVec
-import Out.Sail.IntRange
+import Sail
 import Out.Defs
 import Out.Specialization
 import Out.FakeReal

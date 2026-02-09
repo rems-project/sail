@@ -132,7 +132,7 @@ let smt_rewrites =
   ]
 
 let smt_target out_file { ast; effect_info; env = orig_env; _ } =
-  let open Ast_util in
+  let open Ast_compare in
   let properties = Property.find_properties ast in
   let prop_ids = Bindings.bindings properties |> List.map fst |> IdSet.of_list in
   let ast = Callgraph.filter_ast_ids prop_ids IdSet.empty ast in
