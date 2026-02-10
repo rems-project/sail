@@ -1744,7 +1744,7 @@ module Codegen (Config : CODEGEN_CONFIG) = struct
           in
           (* Avoid outputting empty switches. This is here instead of in `c_switch` because
             in `c_switch` we don't know that the condition expression has no side effects. *)
-          if List.is_empty cases then empty else c_switch (ksprintf string "(%skind)" v) cases
+          if cases = [] then empty else c_switch (ksprintf string "(%skind)" v) cases
         in
         let codegen_init =
           let n = sgen_id id in
