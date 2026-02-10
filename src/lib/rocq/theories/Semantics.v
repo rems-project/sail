@@ -123,6 +123,7 @@ Module Monad.
     | Write_var r v cont => Write_var r v (fun u => bind (cont u) f)
     | Get_undefined t cont => Get_undefined t (fun v => bind (cont v) f)
     end.
+
   Notation "x ← y ; z" := (bind y (fun x : _ => z))
     (at level 20, y at level 100, z at level 200, only parsing).
 
@@ -1714,7 +1715,3 @@ Module Make (T : SemanticExt).
     lia.
   Defined.
 End Make.
-
-Extraction Blacklist Nat List String.
-
-Separate Extraction Primops l attribute_data hex_digits_of_bitlist def impldef opt_default Make IdMap.
