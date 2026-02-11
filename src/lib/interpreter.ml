@@ -526,12 +526,14 @@ let rec initialize_registers allow_registers undef_registers gstate =
     | DEF_aux (DEF_let (LB_aux (LB_val (pat, exp), annot)), def_annot) -> (
         try
           let evaluated = eval_exp (initial_lstate, gstate) exp in
-          let _, bindings = pattern_match pat evaluated in
-          {
-            gstate with
-            letbinds =
-              List.fold_left (fun lbs (id, v) -> Bindings.add id v lbs) gstate.letbinds (complete_bindings bindings);
-          }
+          match pattern_match pat evaluated with
+          | Matched bindings ->
+              {
+                gstate with
+                letbinds =
+                  List.fold_left (fun lbs (id, v) -> Bindings.add id v lbs) gstate.letbinds (complete_bindings bindings);
+              }
+          | _ -> gstate
         with _ -> gstate
       )
     | _ -> gstate

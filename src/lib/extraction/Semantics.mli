@@ -176,17 +176,40 @@ module Make :
 
   val same_bits : bit list -> bit list -> bool
 
-  val pattern_match_literal : lit -> value -> bool
+  type match_result =
+  | Matched of binding IdMap.t
+  | MaybeMatched of binding IdMap.t
+  | Unmatched
 
-  val get_struct_field : id -> (id * value) list -> value
+  val match_result_rect :
+    (binding IdMap.t -> 'a1) -> (binding IdMap.t -> 'a1) -> 'a1 ->
+    match_result -> 'a1
 
-  val no_match : bool * binding IdMap.t
+  val match_result_rec :
+    (binding IdMap.t -> 'a1) -> (binding IdMap.t -> 'a1) -> 'a1 ->
+    match_result -> 'a1
+
+  val merge_match_result : match_result -> match_result -> match_result
 
   val empty_bindings : binding IdMap.t
 
+  val simple_match : match_result
+
+  val simple_match_if : bool -> match_result
+
+  val match_binds : id -> binding -> match_result -> match_result
+
+  val neg_match : match_result -> match_result
+
+  val or_match : match_result -> match_result -> match_result
+
+  val pattern_match_literal : lit -> value -> match_result
+
+  val get_struct_field : id -> (id * value) list -> value
+
   val complete_bindings : binding IdMap.t -> value IdMap.t
 
-  val pattern_match : T.tannot pat -> value -> bool * binding IdMap.t
+  val pattern_match : T.tannot pat -> value -> match_result
 
   val lookup_field : Parse_ast.l -> id -> (id * value) list -> value Monad.t
 
