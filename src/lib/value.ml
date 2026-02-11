@@ -93,6 +93,7 @@ let rec string_of_value = function
       "struct {"
       ^ Util.string_of_list ", " (fun (field, v) -> string_of_id field ^ " = " ^ string_of_value v) record
       ^ "}"
+  | V_unknown -> "unknown"
 
 let mk_real r = V_real (Util.Rational.to_rocq r)
 

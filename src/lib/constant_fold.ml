@@ -82,7 +82,7 @@ and exp_of_value = function
    that we avoid traversing through every element of vectors and
    lists, so a list of large lists could still sneak through *)
 let rec is_too_large = function
-  | V_int _ | V_bool _ | V_bitvector _ | V_string _ | V_unit | V_real _ | V_ref _ | V_member _ -> false
+  | V_int _ | V_bool _ | V_bitvector _ | V_string _ | V_unit | V_real _ | V_ref _ | V_member _ | V_unknown -> false
   | V_vector vs | V_tuple vs | V_list vs -> List.compare_length_with vs 256 > 0
   | V_record fields -> List.exists (fun (_, v) -> is_too_large v) fields
   | V_ctor (_, vs) -> List.exists is_too_large vs

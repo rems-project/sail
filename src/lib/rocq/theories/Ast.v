@@ -141,7 +141,8 @@ Inductive value : Set :=
 | V_ref : id -> value
 | V_member : id -> value
 | V_ctor : id -> list value -> value
-| V_record : list (id * value) -> value.
+| V_record : list (id * value) -> value
+| V_unknown.
 
 Inductive lit_aux : Set :=
 | L_unit : lit_aux
