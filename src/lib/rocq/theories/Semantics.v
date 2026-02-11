@@ -42,8 +42,6 @@ Definition combine_binding (l r : option binding) : option binding :=
 Definition merge_bindings (l r : IdMap.t binding) : IdMap.t binding :=
   IdMap.map2 combine_binding l r.
 
-Infix "⋈" := merge_bindings (right associativity, at level 60).
-
 Definition to_gvector (v : value) : value :=
   match v with
   | V_bitvector bs => V_vector (List.map (fun b => V_bitvector [b]) bs)
@@ -123,6 +121,7 @@ Module Monad.
     | Write_var r v cont => Write_var r v (fun u => bind (cont u) f)
     | Get_undefined t cont => Get_undefined t (fun v => bind (cont v) f)
     end.
+
   Notation "x ← y ; z" := (bind y (fun x : _ => z))
     (at level 20, y at level 100, z at level 200, only parsing).
 
@@ -720,18 +719,66 @@ Module Make (T : SemanticExt).
     assumption.
   Qed.
 
-  Definition pattern_match_literal (l : Ast.lit) (v : value) : bool :=
+  Inductive match_result : Type :=
+  | Matched : IdMap.t binding -> match_result
+  | MaybeMatched : IdMap.t binding -> match_result
+  | Unmatched : match_result.
+
+  Definition merge_match_result (l r : match_result) : match_result :=
+    match (l, r) with
+    | (Unmatched, _) => Unmatched
+    | (_, Unmatched) => Unmatched
+    | (MaybeMatched l_b, MaybeMatched r_b) => MaybeMatched (merge_bindings l_b r_b)
+    | (Matched l_b,      MaybeMatched r_b) => MaybeMatched (merge_bindings l_b r_b)
+    | (MaybeMatched l_b, Matched r_b     ) => MaybeMatched (merge_bindings l_b r_b)
+    | (Matched l_b,      Matched r_b     ) => Matched (merge_bindings l_b r_b)
+    end.
+
+  Infix "⋈" := merge_match_result (right associativity, at level 60).
+
+  Definition empty_bindings : IdMap.t binding := @IdMap.empty binding.
+
+  Definition simple_match : match_result := Matched empty_bindings.
+
+  Definition simple_match_if (b : bool) : match_result :=
+    if b then simple_match else Unmatched.
+
+  Definition match_binds (name : Ast.id) (value : binding) (r : match_result) : match_result :=
+    match r with
+    | Unmatched => Unmatched
+    | MaybeMatched b => MaybeMatched (IdMap.add name value b)
+    | Matched b => Matched (IdMap.add name value b)
+    end.
+
+  Definition neg_match (r : match_result) : match_result :=
+    match r with
+    | Unmatched => simple_match
+    | MaybeMatched b => MaybeMatched b
+    | Matched _ => Unmatched
+    end.
+
+  Definition or_match (l r : match_result) : match_result :=
+    match (l, r) with
+    | (Matched l_b, _) => Matched l_b
+    | (_, Matched r_b) => Matched r_b
+    | (MaybeMatched l_b, _) => MaybeMatched l_b
+    | (_, MaybeMatched r_b) => MaybeMatched r_b
+    | _ => Unmatched
+    end.
+
+  Definition pattern_match_literal (l : Ast.lit) (v : value) : match_result :=
     let 'L_aux aux annot := l in
     match (aux, v) with
-    | (L_unit, V_unit) => true
-    | (L_true, V_bool true) => true
-    | (L_false, V_bool false) => true
-    | (L_num n, V_int m) => Z.eqb n m
-    | (L_hex s, V_bitvector vs) => same_bits (bitlist_of_hex_lit s) vs
-    | (L_bin s, V_bitvector vs) => same_bits (bitlist_of_bin_lit s) vs
-    | (L_string s1, V_string s2) => String.eqb s1 s2
-    | (L_real r1, V_real r2) => QArith_base.Qeq_bool r1 r2
-    | _ => false
+    | (L_unit,      V_unit        ) => simple_match
+    | (L_true,      V_bool true   ) => simple_match
+    | (L_false,     V_bool false  ) => simple_match
+    | (L_num n,     V_int m       ) => simple_match_if (Z.eqb n m)
+    | (L_hex s,     V_bitvector vs) => simple_match_if (same_bits (bitlist_of_hex_lit s) vs)
+    | (L_bin s,     V_bitvector vs) => simple_match_if (same_bits (bitlist_of_bin_lit s) vs)
+    | (L_string s1, V_string s2   ) => simple_match_if (String.eqb s1 s2)
+    | (L_real r1,   V_real r2     ) => simple_match_if (QArith_base.Qeq_bool r1 r2)
+    | (_,           V_unknown     ) => MaybeMatched empty_bindings
+    | _ => Unmatched
     end.
 
   Fixpoint get_struct_field (name : id) (fields : list (id * value)) {struct fields} : value :=
@@ -744,10 +791,6 @@ Module Make (T : SemanticExt).
     | [] => V_unit
     end.
 
-  Definition no_match : bool * IdMap.t binding := (false, @IdMap.empty binding).
-
-  Definition empty_bindings : IdMap.t binding := @IdMap.empty binding.
-
   Definition complete_bindings (m : IdMap.t binding) : IdMap.t value :=
     IdMap.map
       (fun b =>
@@ -758,26 +801,23 @@ Module Make (T : SemanticExt).
       )
       m.
 
-  Fixpoint pattern_match (p : Ast.pat T.tannot) (v : value) {struct p} : bool * IdMap.t binding :=
+  Fixpoint pattern_match (p : Ast.pat T.tannot) (v : value) {struct p} : match_result :=
     let 'P_aux aux annot := p in
     match aux with
-    | P_wild => (true, [])
+    | P_wild => simple_match
     | P_id n =>
         match T.get_id_type (snd annot) n with
         | Enum_member =>
             match v with
-            | V_member m =>
-                (id_eqb n m, empty_bindings)
-            | _ => no_match
+            | V_member m => simple_match_if (id_eqb n m)
+            | V_unknown  => MaybeMatched empty_bindings
+            | _          => Unmatched
             end
-        | _ =>
-            (true, IdMap.add n (Complete v) empty_bindings)
+        | _ => Matched (IdMap.add n (Complete v) empty_bindings)
         end
     | P_typ _ p => pattern_match p v
-    | P_lit l => (pattern_match_literal l v, empty_bindings)
-    | P_as p n =>
-        let '(matched, bindings) := pattern_match p v in
-        (matched, IdMap.add n (Complete v) bindings)
+    | P_lit l => pattern_match_literal l v
+    | P_as p n => match_binds n (Complete v) (pattern_match p v)
     | P_app ctor ps =>
         match v with
         | V_ctor v_ctor vs =>
@@ -786,24 +826,20 @@ Module Make (T : SemanticExt).
                      (fun match_info p =>
                         match match_info with
                         (* The arguments and pattern are different lengths, so no match *)
-                        | (_, []) => (no_match, [])
-                        (* A previous argument pattern already failed *)
-                        | ((false, _), v :: vs) => (no_match, vs)
-                        | ((true, vars), v :: vs) =>
-                            let '(matched, more_vars) := pattern_match p v in
-                            ((matched, vars ⋈ more_vars), vs)
+                        | (_, []) => (Unmatched, [])
+                        | (prev, v :: vs) => (prev ⋈ pattern_match p v, vs)
                         end
                      )
                      ps
-                     ((true, []), vs))
+                     (simple_match, vs))
             else
-              no_match
-        | _ => no_match
+              Unmatched
+        | _ => Unmatched
         end
     | P_tuple [] =>
         match v with
-        | V_unit => (true, [])
-        | _ => no_match
+        | V_unit | V_unknown => simple_match
+        | _ => Unmatched
         end
     | P_tuple ps =>
         match v with
@@ -812,17 +848,13 @@ Module Make (T : SemanticExt).
                    (fun match_info p =>
                       match match_info with
                       (* The tuple and pattern are different lengths, so no match *)
-                      | (_, []) => (no_match, [])
-                      (* A previous element pattern already failed *)
-                      | ((false, _), v :: vs) => (no_match, vs)
-                      | ((true, vars), v :: vs) =>
-                          let '(matched, more_vars) := pattern_match p v in
-                          ((matched, vars ⋈ more_vars), vs)
+                      | (_, []) => (Unmatched, [])
+                      | (prev, v :: vs) => (prev ⋈ pattern_match p v, vs)
                       end
                    )
                    ps
-                   ((true, []), vs))
-        | _ => no_match
+                   (simple_match, vs))
+        | _ => Unmatched
         end
     | P_list ps =>
         match v with
@@ -832,20 +864,16 @@ Module Make (T : SemanticExt).
                      (fun match_info p =>
                         match match_info with
                         (* The list and pattern are different lengths, so no match *)
-                        | (_, []) => (no_match, [])
-                        (* A previous element pattern already failed *)
-                        | ((false, _), v :: vs) => (no_match, vs)
-                        | ((true, vars), v :: vs) =>
-                            let '(matched, more_vars) := pattern_match p v in
-                            ((matched, vars ⋈ more_vars), vs)
+                        | (_, []) => (Unmatched, [])
+                        | (prev, v :: vs) => (prev ⋈ pattern_match p v, vs)
                         end
                      )
                      ps
-                     ((true, []), vs))
+                     (simple_match, vs))
             else
-              no_match
+              Unmatched
         (* Matching a list on a non-list *)
-        | _ => no_match
+        | _ => Unmatched
         end
     | P_vector ps =>
         match to_gvector v with
@@ -854,18 +882,14 @@ Module Make (T : SemanticExt).
                    (fun match_info p =>
                       match match_info with
                       (* The vector and pattern are different lengths, so no match *)
-                      | (_, []) => (no_match, [])
-                      (* A previous element pattern already failed *)
-                      | ((false, _), v :: vs) => (no_match, vs)
-                      | ((true, vars), v :: vs) =>
-                          let '(matched, more_vars) := pattern_match p v in
-                     ((matched, vars ⋈ more_vars), vs)
+                      | (_, []) => (Unmatched, [])
+                      | (prev, v :: vs) => (prev ⋈ pattern_match p v, vs)
                       end
                    )
                    ps
-                   ((true, []), vs))
+                   (simple_match, vs))
         (* Matching a list on a non-list *)
-        | _ => no_match
+        | _ => Unmatched
         end
     | P_vector_concat ps =>
         match v with
@@ -876,17 +900,15 @@ Module Make (T : SemanticExt).
                     match T.get_split (snd annot) with
                     | Split s =>
                         match match_info with
-                        | (_, []) => (no_match, [])
-                        | ((false, _), bs) => (no_match, bs)
-                        | ((true, bound), bs) =>
+                        | (_, []) => (Unmatched, [])
+                        | (prev, bs) =>
                             let '(bs_take, bs_drop) := take_drop s bs in
-                            let '(matched, more_bound) := pattern_match p (V_bitvector bs_take) in
-                            ((matched, bound ⋈ more_bound), bs_drop)
+                            (prev ⋈ pattern_match p (V_bitvector bs_take), bs_drop)
                         end
-                    | No_split => (no_match, [])
+                    | No_split => (Unmatched, [])
                     end)
                    ps
-                   ((true, []), bs))
+                   (simple_match, bs))
         | V_vector vs =>
             fst (fold_left
                    (fun match_info p =>
@@ -894,59 +916,41 @@ Module Make (T : SemanticExt).
                     match T.get_split (snd annot) with
                     | Split s =>
                         match match_info with
-                        | (_, []) => (no_match, [])
-                        | ((false, _), vs) => (no_match, vs)
-                        | ((true, bound), vs) =>
+                        | (_, []) => (Unmatched, [])
+                        | (prev, vs) =>
                             let '(vs_take, vs_drop) := take_drop s vs in
-                            let '(matched, more_bound) := pattern_match p (V_vector vs_take) in
-                            ((matched, bound ⋈ more_bound), vs_drop)
+                            (prev ⋈ pattern_match p (V_vector vs_take), vs_drop)
                         end
-                    | No_split => (no_match, [])
+                    | No_split => (Unmatched, [])
                     end)
                    ps
-                   ((true, []), vs))
-        | _ => no_match
+                   (simple_match, vs))
+        | _ => Unmatched
         end
     | P_cons p ps =>
         match v with
-        | V_list nil => no_match
-        | V_list (v :: vs) =>
-            let '(hd_matched, hd_bound) := pattern_match p v in
-            let '(tl_matched, tl_bound) := pattern_match ps (V_list vs) in
-            (andb hd_matched tl_matched, hd_bound ⋈ tl_bound)
-        | _ => no_match
+        | V_list (v :: vs) => pattern_match p v ⋈ pattern_match ps (V_list vs)
+        | _ => Unmatched
         end
-    | P_or lhs_p rhs_p =>
-        let '(lhs_matched, lhs_bound) := pattern_match lhs_p v in
-        let '(rhs_matched, rhs_bound) := pattern_match rhs_p v in
-        if lhs_matched then
-          (true, lhs_bound)
-        else if rhs_matched then
-               (true, rhs_bound)
-             else
-               no_match
-    | P_not p =>
-        let '(p_matched, _) := pattern_match p v in
-        (negb p_matched, [])
+    | P_or lhs_p rhs_p => or_match (pattern_match lhs_p v) (pattern_match rhs_p v)
+    | P_not p => neg_match (pattern_match p v)
     | P_var p _ => pattern_match p v
     | P_struct _ field_patterns _ =>
         match v with
         | V_record fields =>
             fold_left
-              (fun match_info fp =>
-                 let '(prev_matched, prev_bound) := match_info in
+              (fun prev fp =>
                  let '(name, p) := fp in
                  let v := get_struct_field name fields in
-                 let '(matched, bound) := pattern_match p v in
-                 (andb prev_matched matched, prev_bound ⋈ bound)
+                 prev ⋈ pattern_match p v
               )
               field_patterns
-              (true, [])
-        | _ => no_match
+              simple_match
+        | _ => Unmatched
         end
-    | P_vector_subrange id n m => (true, IdMap.add id (Partial (Non_empty (v, n, m) [])) empty_bindings)
+    | P_vector_subrange id n m => Matched (IdMap.add id (Partial (Non_empty (v, n, m) [])) empty_bindings)
     (* TODO *)
-    | P_string_append _ => (true, empty_bindings)
+    | P_string_append _ => simple_match
     end.
 
   Fixpoint lookup_field (l : Ast.loc) (name : id) (fields : list (id * value)) {struct fields} : t value :=
@@ -1326,34 +1330,37 @@ Module Make (T : SemanticExt).
         | E_aux (E_internal_value v) _ =>
             match arms with
             | Pat_aux (Pat_exp pat body) _ :: next_arms =>
-                let '(matched, arm_substs) := pattern_match pat v in
-                if matched then
-                  pure (fold_right (fun s body => substitute (fst s) (snd s) body) body (complete_bindings arm_substs))
-                else
-                  wrap (E_match head_exp next_arms)
+                match pattern_match pat v with
+                | Matched arm_substs =>
+                    pure (fold_right (fun s body => substitute (fst s) (snd s) body) body (complete_bindings arm_substs))
+                | _ =>
+                    wrap (E_match head_exp next_arms)
+                end
             | Pat_aux (Pat_when pat guard body) pexp_annot :: next_arms =>
-                let '(matched, arm_substs) := pattern_match pat v in
-                if matched then
-                  let guard := fold_right (fun s g => substitute (fst s) (snd s) g)  guard (complete_bindings arm_substs) in
-                  match guard with
-                  | E_aux (E_internal_value v_guard) _ =>
-                      match v_guard with
-                      | V_bool true =>
-                          let '(matched, arm_substs) := pattern_match pat v in
-                          if matched then
-                            pure (fold_right (fun s body => substitute (fst s) (snd s) body) body (complete_bindings arm_substs))
-                          else
+                match pattern_match pat v with
+                | Matched arm_substs =>
+                    let guard := fold_right (fun s g => substitute (fst s) (snd s) g)  guard (complete_bindings arm_substs) in
+                    match guard with
+                    | E_aux (E_internal_value v_guard) _ =>
+                        match v_guard with
+                        | V_bool true =>
+                            match pattern_match pat v with
+                            | Matched arm_substs =>
+                                pure (fold_right (fun s body => substitute (fst s) (snd s) body) body (complete_bindings arm_substs))
+                            | _ =>
+                                wrap (E_match head_exp next_arms)
+                            end
+                        | V_bool false =>
                             wrap (E_match head_exp next_arms)
-                      | V_bool false =>
-                          wrap (E_match head_exp next_arms)
-                      | _ => Runtime_type_error (fst pexp_annot)
-                      end
-                  | _ =>
-                      guard' ← step guard;
-                      wrap (E_match head_exp (Pat_aux (Pat_when pat guard' body) pexp_annot :: next_arms))
-                  end
-                else
-                  wrap (E_match head_exp next_arms)
+                        | _ => Runtime_type_error (fst pexp_annot)
+                        end
+                    | _ =>
+                        guard' ← step guard;
+                        wrap (E_match head_exp (Pat_aux (Pat_when pat guard' body) pexp_annot :: next_arms))
+                    end
+                | _ =>
+                    wrap (E_match head_exp next_arms)
+                end
             | [] => Match_failure (fst annot)
             end
         | _ =>
@@ -1363,11 +1370,12 @@ Module Make (T : SemanticExt).
     | E_let (LB_aux (LB_val pat x) lb_annot) body =>
         match x with
         | E_aux (E_internal_value v) _ =>
-            let '(matched, body_substs) := pattern_match pat v in
-            if matched then
-              pure (fold_left (fun body s => substitute (fst s) (snd s) body) (complete_bindings body_substs) body)
-            else
-              Match_failure (fst annot)
+            match pattern_match pat v with
+            | Matched body_substs =>
+                pure (fold_left (fun body s => substitute (fst s) (snd s) body) (complete_bindings body_substs) body)
+            | _ =>
+                Match_failure (fst annot)
+            end
         | _ =>
             x' ← step x;
             wrap (E_let (LB_aux (LB_val pat x') lb_annot) body)
@@ -1714,7 +1722,3 @@ Module Make (T : SemanticExt).
     lia.
   Defined.
 End Make.
-
-Extraction Blacklist Nat List String.
-
-Separate Extraction Primops l attribute_data hex_digits_of_bitlist def impldef opt_default Make IdMap.
