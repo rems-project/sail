@@ -379,6 +379,7 @@ let create_lake_project (ctx : lean_context) executable =
    ^ "\"]\nmoreLeanArgs = [\"--tstack=400000\"]\n\n[[lean_lib]]\nname = \"" ^ ctx.out_name_camel ^ "\""
     );
   output_string ctx.lakefile "\nleanOptions.weak.linter.style.nameCheck = false";
+  output_string ctx.lakefile "\nmoreLeancArgs= [\"-fbracket-depth=500\"]";
   output_support_lib ctx;
   if !opt_lean_real_numbers then (
     output_string ctx.lakefile "\n\n[[require]]\n";
