@@ -103,17 +103,35 @@ Definition id_eqb (id1 : id) (id2 : id) : bool :=
   | _ => false
   end.
 
+Theorem id_eqb_refl : forall x, id_eqb x x = true.
+Proof.
+  destruct x as [aux ?].
+  destruct aux; cbn; try trivial; rewrite String.eqb_refl; reflexivity.
+Qed.
+
+Theorem id_eqb_sym : forall x y, id_eqb x y = true -> id_eqb y x = true.
+Proof.
+  destruct x as [x_aux ?].
+  destruct y as [y_aux ?].
+  destruct x_aux as [| | x_s | x_s]; destruct y_aux as [| | y_s | y_s]; cbn; try trivial; rewrite String.eqb_sym; easy.
+Qed.
+
+Theorem id_eqb_trans : forall x y z, id_eqb x y = true -> id_eqb y z = true -> id_eqb x z = true.
+Proof.
+  destruct x as [x_aux ?].
+  destruct y as [y_aux ?].
+  destruct z as [z_aux ?].
+  destruct x_aux as [| | x_s | x_s]; destruct y_aux as [| | y_s | y_s]; destruct z_aux as [| | z_s | z_s].
+  all: cbn.
+  all: try easy.
+  all: rewrite String.eqb_eq in *.
+  all: congruence.
+Qed.
+
 Module IdMiniOrdered <: OrderedType.MiniOrderedType.
   Definition t := Ast.id.
 
-  Definition eq (id1 : id) (id2 : id) : Prop :=
-    match (id1, id2) with
-    | (Id_aux (Id s1) _, Id_aux (Id s2) _) => Is_true (String.eqb s1 s2)
-    | (Id_aux (Operator s1) _, Id_aux (Operator s2) _) => Is_true (String.eqb s1 s2)
-    | (Id_aux And_bool _, Id_aux And_bool _) => True
-    | (Id_aux Or_bool _, Id_aux Or_bool _) => True
-    | _ => False
-    end.
+  Definition eq (id1 : id) (id2 : id) : Prop := Is_true (id_eqb id1 id2).
 
   Definition lt (id1 : id) (id2 : id) : Prop :=
     match (id1, id2) with
@@ -127,33 +145,31 @@ Module IdMiniOrdered <: OrderedType.MiniOrderedType.
     | (_, Id_aux Or_bool _) => True
     end.
 
-   Theorem eq_refl : forall x, eq x x.
-   Proof.
-     destruct x as [aux ?].
-     destruct aux; cbn; try trivial; rewrite String.eqb_refl; reflexivity.
-   Qed.
+  Theorem eq_refl : forall x, eq x x.
+  Proof.
+    intros.
+    unfold eq.
+    apply Is_true_eq_left.
+    apply (id_eqb_refl x).
+  Qed.
 
-   Theorem eq_sym : forall x y, eq x y -> eq y x.
-   Proof.
-     destruct x as [x_aux ?].
-     destruct y as [y_aux ?].
-     destruct x_aux as [| | x_s | x_s]; destruct y_aux as [| | y_s | y_s]; cbn; try trivial; rewrite String.eqb_sym; easy.
-   Qed.
+  Theorem eq_sym : forall x y, eq x y -> eq y x.
+  Proof.
+    intros x y H.
+    unfold eq in *.
+    apply Is_true_eq_left.
+    apply Is_true_eq_true in H.
+    apply (id_eqb_sym x y H).
+  Qed.
 
   Theorem eq_trans : forall x y z, eq x y -> eq y z -> eq x z.
   Proof.
-    destruct x as [x_aux ?].
-    destruct y as [y_aux ?].
-    destruct z as [z_aux ?].
-    destruct x_aux as [| | x_s | x_s]; destruct y_aux as [| | y_s | y_s]; destruct z_aux as [| | z_s | z_s].
-    all: cbn.
-    all: try easy.
-    all: intros A B.
-    all: apply Is_true_eq_left.
-    all: apply Is_true_eq_true in A.
-    all: apply Is_true_eq_true in B.
-    all: rewrite String.eqb_eq in *.
-    all: congruence.
+    intros x y z H1 H2.
+    unfold eq in *.
+    apply Is_true_eq_left.
+    apply Is_true_eq_true in H1.
+    apply Is_true_eq_true in H2.
+    apply (id_eqb_trans x y z H1 H2).
   Qed.
 
   Theorem lt_trans : forall x y z, lt x y -> lt y z -> lt x z.
@@ -182,6 +198,7 @@ Module IdMiniOrdered <: OrderedType.MiniOrderedType.
     all: apply Is_true_eq_true in A.
     all: apply string_ltb_not_eqb in A.
     all: apply negb_prop_elim.
+    all: cbn.
     all: rewrite A.
     all: reflexivity.
   Qed.
@@ -198,7 +215,7 @@ Module IdMiniOrdered <: OrderedType.MiniOrderedType.
     - case_eq (String.ltb x_s y_s); intros Hlt.
       + apply OrderedType.LT. cbn. rewrite Hlt. reflexivity.
       + case_eq (String.eqb x_s y_s); intros Heq.
-        * apply OrderedType.EQ. cbn. rewrite Heq. reflexivity.
+        * apply OrderedType.EQ. unfold eq. cbn. rewrite Heq. reflexivity.
         * apply OrderedType.GT.
           cbn.
           apply Is_true_eq_left.
@@ -206,7 +223,7 @@ Module IdMiniOrdered <: OrderedType.MiniOrderedType.
     - case_eq (String.ltb x_s y_s); intros Hlt.
       + apply OrderedType.LT. cbn. rewrite Hlt. reflexivity.
       + case_eq (String.eqb x_s y_s); intros Heq.
-        * apply OrderedType.EQ. cbn. rewrite Heq. reflexivity.
+        * apply OrderedType.EQ. unfold eq. cbn. rewrite Heq. reflexivity.
         * apply OrderedType.GT.
           cbn.
           apply Is_true_eq_left.
