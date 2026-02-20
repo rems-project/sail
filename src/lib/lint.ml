@@ -98,7 +98,7 @@ end = struct
     | DEF_register (DEC_aux (DEC_reg (_, _, exp_opt), _)) -> Option.iter F.do_exp exp_opt
     | DEF_outcome (_, defs) -> List.iter in_def defs
     | DEF_impl funcl -> in_funcl funcl
-    | DEF_let (LB_aux (LB_val (_, exp), _)) -> F.do_exp exp
+    | DEF_let (_, exp) -> F.do_exp exp
     | DEF_scattered sdef -> in_scattered_def sdef
     | DEF_internal_mutrec fdefs -> List.iter in_fundef fdefs
     | DEF_loop_measures _ -> ()

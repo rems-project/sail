@@ -246,7 +246,7 @@ and exp_aux =
   | E_struct_update of exp * exp list (* functional update of struct *)
   | E_field of exp * id (* field projection from struct *)
   | E_match of exp * pexp list (* pattern matching *)
-  | E_let of letbind * exp (* let expression *)
+  | E_let of pat * exp * exp (* let expression *)
   | E_assign of exp * exp (* imperative assignment *)
   | E_sizeof of atyp
   | E_constraint of atyp
@@ -279,12 +279,6 @@ and pexp_aux =
   | Pat_attribute of string * attribute_data option * pexp
 
 and pexp = Pat_aux of pexp_aux * l
-
-and letbind_aux =
-  (* Let binding *)
-  | LB_val of pat * exp (* value binding, implicit type (pat must be total) *)
-
-and letbind = LB_aux of letbind_aux * l
 
 type tannot_opt_aux =
   | (* Optional type annotation for functions *)
@@ -448,7 +442,7 @@ type def_aux =
   | DEF_fundef of fundef (* function definition *)
   | DEF_mapdef of mapdef (* mapping definition *)
   | DEF_impl of funcl (* impl definition *)
-  | DEF_let of letbind (* value definition *)
+  | DEF_let of pat * exp (* value definition *)
   | DEF_overload of id * id list (* operator overload specifications *)
   | DEF_fixity of prec * Big_int.num * string (* fixity declaration *)
   | DEF_val of val_spec (* top-level type constraint *)

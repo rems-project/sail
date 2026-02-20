@@ -287,7 +287,7 @@ let const_props target env ast =
   fun ref_vars ->
     let constants =
       let add m = function
-        | DEF_aux (DEF_let (LB_aux (LB_val (P_aux ((P_id id | P_typ (_, P_aux (P_id id, _))), _), exp), _)), _)
+        | DEF_aux (DEF_let (P_aux ((P_id id | P_typ (_, P_aux (P_id id, _))), _), exp), _)
           when Constant_fold.is_constant exp ->
             Bindings.add id exp m
         | _ -> m
@@ -480,42 +480,30 @@ let const_props target env ast =
               let substs' = (bindings_union (fst substs) newbindings_env, snd substs) in
               const_prop_exp substs' assigns exp
         )
-      | E_let (lb, e2) -> begin
-          match lb with
-          | LB_aux (LB_val (p, e), lb_annot) -> (
-              let e', assigns = const_prop_exp substs assigns e in
-              let substs' = remove_bound substs p in
-              let plain () =
-                let e2', assigns = const_prop_exp substs' assigns e2 in
-                re (E_let (LB_aux (LB_val (p, e'), lb_annot), e2')) assigns
-              in
-              match can_match l e' [Pat_aux (Pat_exp (p, e2), (Unknown, empty_tannot))] substs assigns with
-              | None -> plain ()
-              | Some (e'', bindings, kbindings) ->
-                  let val_bindings, exp_bindings = List.partition (fun (_, e) -> is_value e) bindings in
-                  let e'' = nexp_subst_exp (kbindings_from_list kbindings) e'' in
-                  let val_bindings = bindings_from_list val_bindings in
-                  let substs'' = (bindings_union (fst substs') val_bindings, snd substs') in
-                  let tail_exp, tail_assigns = const_prop_exp substs'' assigns e'' in
-                  ( List.fold_left
-                      (fun (E_aux (_, t_annot) as t_exp) (id, bind_exp) ->
-                        let p_tannot = mk_tannot (env_of_annot (l, annot)) (typ_of bind_exp) in
-                        E_aux
-                          ( E_let
-                              ( LB_aux
-                                  ( LB_val (P_aux (P_id id, (Generated l, p_tannot)), bind_exp),
-                                    (Generated l, empty_tannot)
-                                  ),
-                                t_exp
-                              ),
-                            t_annot
-                          )
-                      )
-                      tail_exp exp_bindings,
-                    tail_assigns
+      | E_let (p, e, e2) -> (
+          let e', assigns = const_prop_exp substs assigns e in
+          let substs' = remove_bound substs p in
+          let plain () =
+            let e2', assigns = const_prop_exp substs' assigns e2 in
+            re (E_let (p, e', e2')) assigns
+          in
+          match can_match l e' [Pat_aux (Pat_exp (p, e2), (Unknown, empty_tannot))] substs assigns with
+          | None -> plain ()
+          | Some (e'', bindings, kbindings) ->
+              let val_bindings, exp_bindings = List.partition (fun (_, e) -> is_value e) bindings in
+              let e'' = nexp_subst_exp (kbindings_from_list kbindings) e'' in
+              let val_bindings = bindings_from_list val_bindings in
+              let substs'' = (bindings_union (fst substs') val_bindings, snd substs') in
+              let tail_exp, tail_assigns = const_prop_exp substs'' assigns e'' in
+              ( List.fold_left
+                  (fun (E_aux (_, t_annot) as t_exp) (id, bind_exp) ->
+                    let p_tannot = mk_tannot (env_of_annot (l, annot)) (typ_of bind_exp) in
+                    E_aux (E_let (P_aux (P_id id, (Generated l, p_tannot)), bind_exp, t_exp), t_annot)
                   )
-            )
-        end
+                  tail_exp exp_bindings,
+                tail_assigns
+              )
+        )
       (* TODO maybe - tuple assignments *)
       | E_assign (le, e) ->
           let env = Type_check.env_of_annot (l, annot) in

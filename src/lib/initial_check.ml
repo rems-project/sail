@@ -1396,10 +1396,7 @@ let notation_attr l level strs =
        )
     )
 
-let rec to_ast_letbind ctx (P.LB_aux (lb, l) : P.letbind) : uannot letbind =
-  LB_aux ((match lb with P.LB_val (pat, exp) -> LB_val (to_ast_pat ctx pat, to_ast_exp ctx exp)), (l, empty_uannot))
-
-and to_ast_exp ctx exp =
+let rec to_ast_exp ctx exp =
   let (P.E_aux (exp, l)) = parse_infix_exp ctx exp in
   let wrap exp = E_aux (exp, (l, empty_uannot)) in
   match exp with
@@ -1496,7 +1493,7 @@ and to_ast_exp ctx exp =
     )
   | P.E_match (exp, pexps) -> wrap (E_match (to_ast_exp ctx exp, List.map (to_ast_case ctx) pexps))
   | P.E_try (exp, pexps) -> wrap (E_try (to_ast_exp ctx exp, List.map (to_ast_case ctx) pexps))
-  | P.E_let (leb, exp) -> wrap (E_let (to_ast_letbind ctx leb, to_ast_exp ctx exp))
+  | P.E_let (pat, bind, exp) -> wrap (E_let (to_ast_pat ctx pat, to_ast_exp ctx bind, to_ast_exp ctx exp))
   | P.E_assign (lexp, exp) -> wrap (E_assign (to_ast_lexp ctx lexp, to_ast_exp ctx exp))
   | P.E_var (lexp, exp1, exp2) -> wrap (E_var (to_ast_lexp ctx lexp, to_ast_exp ctx exp1, to_ast_exp ctx exp2))
   | P.E_sizeof nexp -> wrap (E_sizeof (to_ast_nexp ctx nexp))
@@ -2257,9 +2254,10 @@ let rec to_ast_def doc attrs vis ctx (P.DEF_aux (def, l)) : untyped_def list ctx
   | P.DEF_impl funcl ->
       let funcls = to_ast_impl_funcls ctx funcl in
       (List.map (fun funcl -> DEF_aux (DEF_impl funcl, annot)) funcls, ctx)
-  | P.DEF_let lb ->
-      let lb = to_ast_letbind ctx lb in
-      ([DEF_aux (DEF_let lb, annot)], ctx)
+  | P.DEF_let (pat, exp) ->
+      let pat = to_ast_pat ctx pat in
+      let exp = to_ast_exp ctx exp in
+      ([DEF_aux (DEF_let (pat, exp), annot)], ctx)
   | P.DEF_val val_spec ->
       let vs, ctx = to_ast_spec ctx val_spec in
       ([DEF_aux (DEF_val vs, annot)], ctx)

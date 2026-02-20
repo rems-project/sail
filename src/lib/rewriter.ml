@@ -56,7 +56,6 @@ type ('a, 'b) rewriters = {
   rewrite_lexp : ('a, 'b) rewriters -> 'a lexp -> 'a lexp;
   rewrite_pat : ('a, 'b) rewriters -> 'a pat -> 'a pat;
   rewrite_mpat : ('a, 'b) rewriters -> 'a mpat -> 'a mpat;
-  rewrite_let : ('a, 'b) rewriters -> 'a letbind -> 'a letbind;
   rewrite_fun : ('a, 'b) rewriters -> 'a fundef -> 'a fundef;
   rewrite_def : ('a, 'b) rewriters -> ('a, 'b) def -> ('a, 'b) def;
   rewrite_ast : ('a, 'b) rewriters -> ('a, 'b) ast -> ('a, 'b) ast;
@@ -141,9 +140,9 @@ let add_typs_let env ltyp rtyp exp =
     (pat', lhs, rhs)
   in
   match exp with
-  | E_aux (E_let (LB_aux (LB_val (pat, lhs), lba), rhs), a) ->
+  | E_aux (E_let (pat, lhs, rhs), a) ->
       let pat', lhs', rhs' = aux pat lhs rhs in
-      E_aux (E_let (LB_aux (LB_val (pat', lhs'), lba), rhs'), a)
+      E_aux (E_let (pat', lhs', rhs'), a)
   | E_aux (E_internal_plet (pat, lhs, rhs), a) ->
       let pat', lhs', rhs' = aux pat lhs rhs in
       E_aux (E_internal_plet (pat', lhs', rhs'), a)
@@ -231,7 +230,7 @@ let rewrite_exp rewriters (E_aux (exp, (l, annot))) =
   | E_field (exp, id) -> rewrap (E_field (rewrite exp, id))
   | E_match (exp, pexps) -> rewrap (E_match (rewrite exp, List.map (rewrite_pexp rewriters) pexps))
   | E_try (exp, pexps) -> rewrap (E_try (rewrite exp, List.map (rewrite_pexp rewriters) pexps))
-  | E_let (letbind, body) -> rewrap (E_let (rewriters.rewrite_let rewriters letbind, rewrite body))
+  | E_let (pat, bind, body) -> rewrap (E_let (rewriters.rewrite_pat rewriters pat, rewrite bind, rewrite body))
   | E_assign (lexp, exp) -> rewrap (E_assign (rewriters.rewrite_lexp rewriters lexp, rewrite exp))
   | E_sizeof n -> rewrap (E_sizeof n)
   | E_exit e -> rewrap (E_exit (rewrite e))
@@ -252,11 +251,6 @@ let rewrite_exp rewriters (E_aux (exp, (l, annot))) =
   | E_internal_plet (pat, e1, e2) ->
       rewrap (E_internal_plet (rewriters.rewrite_pat rewriters pat, rewrite e1, rewrite e2))
   | E_ref _ | E_internal_value _ | E_constraint _ -> rewrap exp
-
-let rewrite_let rewriters (LB_aux (letbind, (l, annot))) =
-  match letbind with
-  | LB_val (pat, exp) ->
-      LB_aux (LB_val (rewriters.rewrite_pat rewriters pat, rewriters.rewrite_exp rewriters exp), (l, annot))
 
 let rewrite_lexp rewriters (LE_aux (lexp, (l, annot))) =
   let rewrap le = LE_aux (le, (l, annot)) in
@@ -335,7 +329,7 @@ let rec rewrite_def rewriters (DEF_aux (aux, def_annot)) =
     | DEF_impl funcl -> DEF_impl (rewrite_funcl rewriters funcl)
     | DEF_outcome (outcome_spec, defs) -> DEF_outcome (outcome_spec, List.map (rewrite_def rewriters) defs)
     | DEF_internal_mutrec fdefs -> DEF_internal_mutrec (List.map (rewriters.rewrite_fun rewriters) fdefs)
-    | DEF_let letbind -> DEF_let (rewriters.rewrite_let rewriters letbind)
+    | DEF_let (pat, exp) -> DEF_let (rewriters.rewrite_pat rewriters pat, rewriters.rewrite_exp rewriters exp)
     | DEF_pragma (pragma, arg) -> DEF_pragma (pragma, arg)
     | DEF_scattered sd -> DEF_scattered (rewrite_scattered rewriters sd)
     | DEF_measure (id, pat, exp) ->
@@ -367,16 +361,7 @@ let rewrite_ast_base_progress prefix rewriters ast =
   { ast with defs = rewrite 1 ast.defs }
 
 let rewriters_base =
-  {
-    rewrite_exp;
-    rewrite_pat;
-    rewrite_mpat;
-    rewrite_let;
-    rewrite_lexp;
-    rewrite_fun;
-    rewrite_def;
-    rewrite_ast = rewrite_ast_base;
-  }
+  { rewrite_exp; rewrite_pat; rewrite_mpat; rewrite_lexp; rewrite_fun; rewrite_def; rewrite_ast = rewrite_ast_base }
 
 let rewrite_ast ast = rewrite_ast_base rewriters_base ast
 
@@ -504,8 +489,6 @@ type ( 'a,
        'opt_default,
        'pexp,
        'pexp_aux,
-       'letbind_aux,
-       'letbind,
        'pat,
        'pat_aux
      )
@@ -529,7 +512,7 @@ type ( 'a,
   e_field : 'exp * id -> 'exp_aux;
   e_case : 'exp * 'pexp list -> 'exp_aux;
   e_try : 'exp * 'pexp list -> 'exp_aux;
-  e_let : 'letbind * 'exp -> 'exp_aux;
+  e_let : 'pat * 'exp * 'exp -> 'exp_aux;
   e_assign : 'lexp * 'exp -> 'exp_aux;
   e_sizeof : nexp -> 'exp_aux;
   e_constraint : n_constraint -> 'exp_aux;
@@ -563,8 +546,6 @@ type ( 'a,
   pat_exp : 'pat * 'exp -> 'pexp_aux;
   pat_when : 'pat * 'exp * 'exp -> 'pexp_aux;
   pat_aux : 'pexp_aux * 'a annot -> 'pexp;
-  lb_val : 'pat * 'exp -> 'letbind_aux;
-  lb_aux : 'letbind_aux * 'a annot -> 'letbind;
   pat_alg : ('a, 'pat, 'pat_aux) pat_alg;
 }
 
@@ -595,7 +576,7 @@ let rec fold_exp_aux alg = function
   | E_field (e, id) -> alg.e_field (fold_exp alg e, id)
   | E_match (e, pexps) -> alg.e_case (fold_exp alg e, List.map (fold_pexp alg) pexps)
   | E_try (e, pexps) -> alg.e_try (fold_exp alg e, List.map (fold_pexp alg) pexps)
-  | E_let (letbind, e) -> alg.e_let (fold_letbind alg letbind, fold_exp alg e)
+  | E_let (p, e1, e2) -> alg.e_let (fold_pat alg.pat_alg p, fold_exp alg e1, fold_exp alg e2)
   | E_assign (lexp, e) -> alg.e_assign (fold_lexp alg lexp, fold_exp alg e)
   | E_sizeof nexp -> alg.e_sizeof nexp
   | E_constraint nc -> alg.e_constraint nc
@@ -636,10 +617,6 @@ and fold_pexp_aux alg = function
 
 and fold_pexp alg (Pat_aux (pexp_aux, annot)) = alg.pat_aux (fold_pexp_aux alg pexp_aux, annot)
 
-and fold_letbind_aux alg = function LB_val (pat, e) -> alg.lb_val (fold_pat alg.pat_alg pat, fold_exp alg e)
-
-and fold_letbind alg (LB_aux (letbind_aux, annot)) = alg.lb_aux (fold_letbind_aux alg letbind_aux, annot)
-
 let fold_funcl alg (FCL_aux (FCL_funcl (id, pexp), annot)) = FCL_aux (FCL_funcl (id, fold_pexp alg pexp), annot)
 
 let fold_function alg (FD_aux (FD_function (rec_opt, tannot_opt, funcls), annot)) =
@@ -670,7 +647,7 @@ let id_exp_alg =
     e_field = (fun (e1, id) -> E_field (e1, id));
     e_case = (fun (e1, pexps) -> E_match (e1, pexps));
     e_try = (fun (e1, pexps) -> E_try (e1, pexps));
-    e_let = (fun (lb, e2) -> E_let (lb, e2));
+    e_let = (fun (p, e1, e2) -> E_let (p, e1, e2));
     e_assign = (fun (lexp, e2) -> E_assign (lexp, e2));
     e_sizeof = (fun nexp -> E_sizeof nexp);
     e_constraint = (fun nc -> E_constraint nc);
@@ -704,8 +681,6 @@ let id_exp_alg =
     pat_exp = (fun (pat, e) -> Pat_exp (pat, e));
     pat_when = (fun (pat, e, e') -> Pat_when (pat, e, e'));
     pat_aux = (fun (pexp, a) -> Pat_aux (pexp, a));
-    lb_val = (fun (pat, e) -> LB_val (pat, e));
-    lb_aux = (fun (lb, annot) -> LB_aux (lb, annot));
     pat_alg = id_pat_alg;
   }
 
@@ -795,7 +770,7 @@ let compute_exp_alg bot join =
         let vps, pexps = List.split pexps in
         (join_list (v1 :: vps), E_try (e1, pexps))
       );
-    e_let = (fun ((vl, lb), (v2, e2)) -> (join vl v2, E_let (lb, e2)));
+    e_let = (fun ((vp, p), (v1, e1), (v2, e2)) -> (join (join vp v1) v2, E_let (p, e1, e2)));
     e_assign = (fun ((vl, lexp), (v2, e2)) -> (join vl v2, E_assign (lexp, e2)));
     e_sizeof = (fun nexp -> (bot, E_sizeof nexp));
     e_constraint = (fun nc -> (bot, E_constraint nc));
@@ -837,8 +812,6 @@ let compute_exp_alg bot join =
     pat_exp = (fun ((vp, pat), (v, e)) -> (join vp v, Pat_exp (pat, e)));
     pat_when = (fun ((vp, pat), (v, e), (v', e')) -> (join_list [vp; v; v'], Pat_when (pat, e, e')));
     pat_aux = (fun ((v, pexp), a) -> (v, Pat_aux (pexp, a)));
-    lb_val = (fun ((vp, pat), (v, e)) -> (join vp v, LB_val (pat, e)));
-    lb_aux = (fun ((vl, lb), annot) -> (vl, LB_aux (lb, annot)));
     pat_alg = compute_pat_alg bot join;
   }
 
@@ -891,7 +864,7 @@ let pure_exp_alg bot join =
     e_field = (fun (v1, id) -> v1);
     e_case = (fun (v1, vps) -> join_list (v1 :: vps));
     e_try = (fun (v1, vps) -> join_list (v1 :: vps));
-    e_let = (fun (vl, v2) -> join vl v2);
+    e_let = (fun (vp, v1, v2) -> join (join vp v1) v2);
     e_assign = (fun (vl, v2) -> join vl v2);
     e_sizeof = (fun nexp -> bot);
     e_constraint = (fun nc -> bot);
@@ -925,8 +898,6 @@ let pure_exp_alg bot join =
     pat_exp = (fun (vp, v) -> join vp v);
     pat_when = (fun (vp, v, v') -> join_list [vp; v; v']);
     pat_aux = (fun (v, a) -> v);
-    lb_val = (fun (vp, v) -> join vp v);
-    lb_aux = (fun (vl, annot) -> vl);
     pat_alg = pure_pat_alg bot join;
   }
 
@@ -946,10 +917,6 @@ let default_fold_pexp f x (Pat_aux (pe, ann)) =
         (x, Pat_when (p, e1, e2))
   in
   (x, Pat_aux (pe, ann))
-
-let default_fold_letbind f x (LB_aux (LB_val (p, e), ann)) =
-  let x, e = f x e in
-  (x, LB_aux (LB_val (p, e), ann))
 
 let rec default_fold_lexp f x (LE_aux (le, ann) as lexp) =
   let re le = LE_aux (le, ann) in
@@ -1134,10 +1101,10 @@ let default_fold_exp f x (E_aux (e, ann) as exp) =
           (x, []) pexps
       in
       (x, re (E_try (e, List.rev pexps)))
-  | E_let (letbind, e) ->
-      let x, letbind = default_fold_letbind f x letbind in
-      let x, e = f x e in
-      (x, re (E_let (letbind, e)))
+  | E_let (p, e1, e2) ->
+      let x, e1 = f x e1 in
+      let x, e2 = f x e2 in
+      (x, re (E_let (p, e1, e2)))
   | E_assign (lexp, e) ->
       let x, lexp = default_fold_lexp f x lexp in
       let x, e = f x e in

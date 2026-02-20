@@ -790,7 +790,7 @@ let doc_exp_lem, doc_let_lem =
             )
         )
     | E_loop _ -> raise (report l __POS__ "E_loop should have been rewritten before pretty-printing")
-    | E_let (leb, e) -> wrap_parens (let_exp ctxt leb ^^ space ^^ string "in" ^^ hardline ^^ expN e)
+    | E_let (pat, bind, e) -> wrap_parens (let_exp ctxt pat bind ^^ space ^^ string "in" ^^ hardline ^^ expN e)
     | E_app (f, args) -> begin
         match f with
         | Id_aux (Id "None", _) as none -> doc_id_lem_ctor none
@@ -810,15 +810,10 @@ let doc_exp_lem, doc_let_lem =
                           ( _,
                             E_aux
                               ( E_let
-                                  ( LB_aux
-                                      ( LB_val
-                                          ( ( P_aux (P_typ (_, P_aux (P_var (P_aux (P_id id, _), _), _)), _)
-                                            | P_aux (P_var (P_aux (P_id id, _), _), _)
-                                            | P_aux (P_id id, _) ),
-                                            _
-                                          ),
-                                        _
-                                      ),
+                                  ( ( P_aux (P_typ (_, P_aux (P_var (P_aux (P_id id, _), _), _)), _)
+                                    | P_aux (P_var (P_aux (P_id id, _), _), _)
+                                    | P_aux (P_id id, _) ),
+                                    _,
                                     body
                                   ),
                                 _
@@ -1170,11 +1165,9 @@ let doc_exp_lem, doc_let_lem =
     in
     prefix 2 1 (soft_surround 2 1 if_pp (top_exp ctxt true c) (string "then")) (top_exp ctxt false t)
     ^^ break 1 ^^ else_pp
-  and let_exp ctxt (LB_aux (lb, _)) =
-    match lb with
-    | LB_val (pat, e) ->
-        let pat = if is_bitvector_cast_out e then replace_env_for_cast_out ctxt.top_env pat else pat in
-        prefix 2 1 (separate space [string "let"; doc_pat_lem ctxt true pat; equals]) (top_exp ctxt false e)
+  and let_exp ctxt pat e =
+    let pat = if is_bitvector_cast_out e then replace_env_for_cast_out ctxt.top_env pat else pat in
+    prefix 2 1 (separate space [string "let"; doc_pat_lem ctxt true pat; equals]) (top_exp ctxt false e)
   and doc_fexp ctxt recordtyp (FE_aux (FE_fexp (id, e), _)) =
     let fname = doc_fieldname_lem recordtyp id in
     group (doc_op equals fname (top_exp ctxt true e))
@@ -1513,7 +1506,7 @@ let rec untuple_args_pat (P_aux (paux, ((l, _) as annot)) as pat) arg_typs =
   | P_as _, _ :: _ :: _ | P_id _, _ :: _ :: _ ->
       let argpats, argexps = args_of_typs l env arg_typs in
       let argexp = E_aux (E_tuple argexps, annot) in
-      let bindargs (E_aux (_, bannot) as body) = E_aux (E_let (LB_aux (LB_val (pat, argexp), annot), body), bannot) in
+      let bindargs (E_aux (_, bannot) as body) = E_aux (E_let (pat, argexp, body), bannot) in
       (argpats, bindargs)
   (* The type checker currently has a special case for a single arg type; if
      that is removed, then remove the next case. *)
@@ -1715,8 +1708,7 @@ let doc_def_lem effect_info params_to_print type_env (DEF_aux (aux, _) as def) =
   | DEF_default df -> empty
   | DEF_fundef fdef -> group (doc_fundef_lem effect_info params_to_print type_env fdef) ^/^ hardline
   | DEF_internal_mutrec fundefs -> doc_mutrec_lem effect_info params_to_print type_env fundefs ^/^ hardline
-  | DEF_let (LB_aux (LB_val (pat, _), _) as lbind) ->
-      group (doc_let_lem { empty_ctxt with params_to_print } lbind) ^/^ hardline
+  | DEF_let (pat, exp) -> group (doc_let_lem { empty_ctxt with params_to_print } pat exp) ^/^ hardline
   | DEF_scattered sdef -> unreachable (def_loc def) __POS__ "doc_def_lem: shoulnd't have DEF_scattered at this point"
   | DEF_mapdef (MD_aux (_, (l, _))) -> unreachable l __POS__ "Lem doesn't support mappings"
   | DEF_outcome _ | DEF_impl _ | DEF_instantiation _ ->

@@ -349,7 +349,7 @@ and rewrite_arms ~return_position is_mapping subst msa (l, uannot) =
   (* Make sure we don't generate a pointless `let head_exp# = head_exp# in ...` *)
   match msa.head_exp with
   | E_aux (E_id id, _) when string_of_id id = "head_exp#" -> outer_match
-  | _ -> mk_exp (E_let (mk_letbind (mk_pat (P_id head_exp_tmp)) msa.head_exp, outer_match))
+  | _ -> mk_exp (E_let (mk_pat (P_id head_exp_tmp), msa.head_exp, outer_match))
 
 and rewrite_match_untyped ~return_position is_mapping subst head_exp arms (l, (uannot : uannot)) =
   match split_arms (fun x -> x) is_mapping subst [] arms with

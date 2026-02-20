@@ -494,14 +494,14 @@ let defs { defs; _ } =
     | DEF_fundef (FD_aux (FD_function (_, _, [FCL_aux (FCL_funcl (id, _), _)]), annot)) ->
         fundefs := Bindings.add id id !fundefs;
         Some (latex_command ~docstring Function id (Pretty_print_sail.doc_def def) (fst annot))
-    | DEF_let (LB_aux (LB_val (pat, _), annot)) ->
+    | DEF_let (pat, _) ->
         let ids = pat_ids pat in
         begin
           match IdSet.min_elt_opt ids with
           | None -> None
           | Some base_id ->
               letdefs := IdSet.fold (fun id -> Bindings.add id base_id) ids !letdefs;
-              Some (latex_command ~docstring Let base_id (Pretty_print_sail.doc_def def) (fst annot))
+              Some (latex_command ~docstring Let base_id (Pretty_print_sail.doc_def def) def_annot.loc)
         end
     | DEF_type (TD_aux (_, annot) as tdef) ->
         let id = id_of_type_def tdef in

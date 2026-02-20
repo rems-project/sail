@@ -473,9 +473,14 @@ module Generator (Converter : Markdown.CONVERTER) (Config : CONFIG) = struct
       attributes = List.map (fun (_, attr_info) -> attr_info) def_annot.attrs;
     }
 
-  let docinfo_for_let def_annot (LB_aux (LB_val (_, exp), annot) as lbind) =
+  let docinfo_for_let def_annot pat exp =
+    let strip (pat, exp) = (Type_check.strip_pat pat, Type_check.strip_exp exp) in
+    let doc (pat, exp) =
+      let open PPrint in
+      separate space [string "let"; Reformatter.doc_pat pat; char '='; Reformatter.doc_exp exp]
+    in
     {
-      source = doc_loc (fst annot) Type_check.strip_letbind Reformatter.doc_letbind lbind;
+      source = doc_loc def_annot.loc strip doc (pat, exp);
       exp_source = doc_loc (exp_loc exp) Type_check.strip_exp Reformatter.doc_exp exp;
       comment = get_doc_comment def_annot;
       attributes = List.map (fun (_, attr_info) -> attr_info) def_annot.attrs;
@@ -712,13 +717,13 @@ module Generator (Converter : Markdown.CONVERTER) (Config : CONFIG) = struct
             },
             skips
           )
-      | DEF_let (LB_aux (LB_val (pat, _), _) as letbind) ->
+      | DEF_let (pat, exp) ->
           let ids = pat_ids pat in
           ( IdSet.fold
               (fun id docinfo ->
                 {
                   docinfo with
-                  lets = Bindings.add id { doc = docinfo_for_let def_annot letbind; links; module_path } docinfo.lets;
+                  lets = Bindings.add id { doc = docinfo_for_let def_annot pat exp; links; module_path } docinfo.lets;
                 }
               )
               ids docinfo,

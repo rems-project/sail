@@ -1562,7 +1562,7 @@ let rec assert_constraint env b (E_aux (exp_aux, _) as exp) =
       | E_constraint nc -> Some nc
       | E_lit (L_aux (L_true, _)) -> Some nc_true
       | E_lit (L_aux (L_false, _)) -> Some nc_false
-      | E_let (_, e) -> assert_constraint env b e (* TODO: beware of fresh type vars *)
+      | E_let (_, _, e) -> assert_constraint env b e (* TODO: beware of fresh type vars *)
       | E_app (op, [x; y]) when is_or_bool op ->
           combine_constraint (not b) nc_or (assert_constraint env b x) (assert_constraint env b y)
       | E_app (op, [x; y]) when is_and_bool op ->
@@ -2006,7 +2006,6 @@ let strip_pat pat = map_pat_annot (fun (l, tannot) -> (l, untyped_annot tannot))
 let strip_pexp pexp = map_pexp_annot (fun (l, tannot) -> (l, untyped_annot tannot)) pexp
 let strip_lexp lexp = map_lexp_annot (fun (l, tannot) -> (l, untyped_annot tannot)) lexp
 
-let strip_letbind lb = map_letbind_annot (fun (l, tannot) -> (l, untyped_annot tannot)) lb
 let strip_mpat mpat = map_mpat_annot (fun (l, tannot) -> (l, untyped_annot tannot)) mpat
 let strip_mpexp mpexp = map_mpexp_annot (fun (l, tannot) -> (l, untyped_annot tannot)) mpexp
 let strip_mapcl mapcl = map_mapcl_annot (fun (l, tannot) -> (l, untyped_annot tannot)) mapcl
@@ -2261,23 +2260,23 @@ let rec check_exp env (E_aux (exp_aux, (l, uannot)) as exp : uannot exp) (Typ_au
       else
         typ_error l
           ("struct literal missing fields: " ^ string_of_list ", " string_of_id (IdSet.elements !record_fields))
-  | E_let (LB_aux (letbind, (let_loc, _)), exp), _ -> begin
-      match letbind with
-      | LB_val ((P_aux (P_typ (ptyp, _), _) as pat), bind) ->
+  | E_let (pat, bind, exp), _ -> begin
+      match pat with
+      | P_aux (P_typ (ptyp, _), _) ->
           Env.wf_typ ~at:l env ptyp;
           let checked_bind = crule check_exp env bind ptyp in
           ignore (check_pattern_duplicates env pat);
           let env = bind_pattern_vector_subranges pat env in
           let tpat, inner_env = bind_pat_no_guard env pat ptyp in
           annot_exp
-            (E_let (LB_aux (LB_val (tpat, checked_bind), (let_loc, empty_tannot)), crule check_exp inner_env exp typ))
+            (E_let (tpat, checked_bind, crule check_exp inner_env exp typ))
             (promote_to_existential l inner_env env typ)
-      | LB_val (pat, bind) ->
+      | _ ->
           let inferred_bind = irule infer_exp env bind in
           ignore (check_pattern_duplicates env pat);
           let tpat, inner_env = bind_pat_no_guard env pat (typ_of inferred_bind) in
           annot_exp
-            (E_let (LB_aux (LB_val (tpat, inferred_bind), (let_loc, empty_tannot)), crule check_exp inner_env exp typ))
+            (E_let (tpat, inferred_bind, crule check_exp inner_env exp typ))
             (promote_to_existential l inner_env env typ)
     end
   | E_vector_append (v1, E_aux (E_vector [], _)), _ -> check_exp env v1 typ
@@ -3984,23 +3983,21 @@ and infer_exp env (E_aux (exp_aux, (l, uannot)) as exp) =
       annot_exp
         (E_internal_plet (tpat, bind_exp, inferred_body))
         (promote_to_existential l inner_env env (typ_of inferred_body))
-  | E_let (LB_aux (letbind, (let_loc, _)), exp) ->
+  | E_let (pat, bind, exp) ->
       let bind_exp, pat, ptyp =
-        match letbind with
-        | LB_val ((P_aux (P_typ (ptyp, _), _) as pat), bind) ->
+        match pat with
+        | P_aux (P_typ (ptyp, _), _) ->
             Env.wf_typ ~at:l env ptyp;
             let checked_bind = crule check_exp env bind ptyp in
             (checked_bind, pat, ptyp)
-        | LB_val (pat, bind) ->
+        | _ ->
             let inferred_bind = irule infer_exp env bind in
             (inferred_bind, pat, typ_of inferred_bind)
       in
       ignore (check_pattern_duplicates env pat);
       let tpat, inner_env = bind_pat_no_guard env pat ptyp in
       let inferred_exp = irule infer_exp inner_env exp in
-      annot_exp
-        (E_let (LB_aux (LB_val (tpat, bind_exp), (let_loc, empty_tannot)), inferred_exp))
-        (promote_to_existential l inner_env env (typ_of inferred_exp))
+      annot_exp (E_let (tpat, bind_exp, inferred_exp)) (promote_to_existential l inner_env env (typ_of inferred_exp))
   | E_ref id when Env.is_register id env ->
       let typ = Env.get_register id env in
       annot_exp (E_ref id) (register_typ typ)
@@ -4628,24 +4625,20 @@ let check_duplicate_letbinding l pat env =
       typ_error (Hint ("Previous definition", id_loc id, l)) ("Duplicate toplevel let binding " ^ string_of_id id)
   | None -> ()
 
-let check_letdef orig_env def_annot (LB_aux (letbind, (l, _))) =
+let check_letdef orig_env def_annot pat bind =
   typ_print (lazy ("\nChecking top-level let" |> cyan |> clear));
-  match letbind with
-  | LB_val ((P_aux (P_typ (typ_annot, _), _) as pat), bind) ->
-      check_duplicate_letbinding l pat orig_env;
-      Env.wf_typ ~at:l orig_env typ_annot;
+  match pat with
+  | P_aux (P_typ (typ_annot, _), _) ->
+      check_duplicate_letbinding def_annot.loc pat orig_env;
+      Env.wf_typ ~at:def_annot.loc orig_env typ_annot;
       let checked_bind = crule check_exp orig_env bind typ_annot in
       let tpat, env = bind_pat_no_guard orig_env pat typ_annot in
-      ( [DEF_aux (DEF_let (LB_aux (LB_val (tpat, checked_bind), (l, empty_tannot))), def_annot)],
-        Env.add_toplevel_lets (pat_ids tpat) env
-      )
-  | LB_val (pat, bind) ->
-      check_duplicate_letbinding l pat orig_env;
+      ([DEF_aux (DEF_let (tpat, checked_bind), def_annot)], Env.add_toplevel_lets (pat_ids tpat) env)
+  | _ ->
+      check_duplicate_letbinding def_annot.loc pat orig_env;
       let inferred_bind = irule infer_exp orig_env bind in
       let tpat, env = bind_pat_no_guard orig_env pat (typ_of inferred_bind) in
-      ( [DEF_aux (DEF_let (LB_aux (LB_val (tpat, inferred_bind), (l, empty_tannot))), def_annot)],
-        Env.add_toplevel_lets (pat_ids tpat) env
-      )
+      ([DEF_aux (DEF_let (tpat, inferred_bind), def_annot)], Env.add_toplevel_lets (pat_ids tpat) env)
 
 let bind_funcl_arg_typ l env typ =
   match typ with
@@ -5164,15 +5157,14 @@ let rec check_typedef : Env.t -> env def_annot -> uannot type_def -> typed_def l
       let def_annot, enum_vector, env =
         match get_def_attribute "enum_vector" def_annot with
         | Some (l, Some (AD_aux (AD_string enum_vector_name, _))) ->
+            let l = gen_loc l in
             let enum_vector_id = mk_id enum_vector_name in
             let typ = vector_typ (nint (List.length ids)) (mk_id_typ id) in
-            let letbind =
-              mk_letbind
-                (mk_pat (P_typ (typ, mk_pat (P_id enum_vector_id))))
-                (mk_exp (E_vector (List.rev_map (fun member -> mk_exp (E_id member)) ids)))
-              |> locate_letbind (fun _ -> gen_loc l)
+            let pat = mk_pat (P_typ (typ, mk_pat (P_id enum_vector_id))) |> locate_pat (fun _ -> l) in
+            let exp =
+              mk_exp (E_vector (List.rev_map (fun member -> mk_exp (E_id member)) ids)) |> locate (fun _ -> l)
             in
-            let defs, env = check_letdef env (mk_def_annot (gen_loc l) env) letbind in
+            let defs, env = check_letdef env (mk_def_annot l env) pat exp in
             (remove_def_attribute "enum_vector" def_annot, defs, env)
         | Some (l, _) -> raise (Reporting.err_general l "Invalid enum_vector attribute")
         | None -> (def_annot, [], env)
@@ -5486,7 +5478,7 @@ and check_def : Env.t -> untyped_def -> typed_def list * Env.t =
       in
       let defs, fdefs = List.fold_left split_fundef ([], []) defs in
       (defs @ [DEF_aux (DEF_internal_mutrec fdefs, def_annot)], env)
-  | DEF_let letdef -> check_letdef env def_annot letdef
+  | DEF_let (pat, exp) -> check_letdef env def_annot pat exp
   | DEF_val vs -> check_val_spec env def_annot vs
   | DEF_outcome (outcome, defs) ->
       let outcome, defs, env = check_outcome env outcome defs in

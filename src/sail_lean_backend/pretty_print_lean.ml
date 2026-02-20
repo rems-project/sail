@@ -171,7 +171,7 @@ let rec untuple_args_pat typs (P_aux (paux, ((l, _) as annot)) as pat) =
   | P_as _, _ :: _ :: _ | P_id _, _ :: _ :: _ ->
       let argpats, argexps = args_of_typ l env typs in
       let argexp = E_aux (E_tuple argexps, annot) in
-      let bindargs (E_aux (_, bannot) as body) = E_aux (E_let (LB_aux (LB_val (pat, argexp), annot), body), bannot) in
+      let bindargs (E_aux (_, bannot) as body) = E_aux (E_let (pat, argexp, body), bannot) in
       (argpats, bindargs)
   | _, [typ] -> ([(pat, typ)], identity)
   | _, _ -> unreachable l __POS__ "Unexpected pattern/type combination"
@@ -572,12 +572,12 @@ let rebind_cast_pattern_vars pat typ exp =
           let l = Parse_ast.Generated l in
           let cast_annot = Type_check.replace_typ source_typ ann in
           let e_annot = Type_check.mk_tannot (env_of exp) source_typ in
-          [LB_aux (LB_val (pat, E_aux (E_id id, (l, e_annot))), (l, ann))]
+          [(pat, E_aux (E_id id, (l, e_annot)))]
         )
     | P_aux (P_tuple pats, _), Typ_aux (Typ_tuple typs, _) -> List.concat (List.map2 aux pats typs)
     | _ -> []
   in
-  let add_lb (E_aux (_, ann) as exp) lb = E_aux (E_let (lb, exp), ann) in
+  let add_lb (E_aux (_, ann) as exp) (pat, bind) = E_aux (E_let (pat, bind, exp), ann) in
   (* Don't introduce new bindings at the top-level, we'd just go into a loop. *)
   let lbs =
     match (pat, typ) with
@@ -855,15 +855,10 @@ and doc_exp (as_monadic : bool) ctx (E_aux (e, (l, annot)) as full_exp) =
                     ( _,
                       E_aux
                         ( E_let
-                            ( LB_aux
-                                ( LB_val
-                                    ( ( P_aux (P_typ (_, P_aux (P_var (P_aux (P_id id, _), _), _)), _)
-                                      | P_aux (P_var (P_aux (P_id id, _), _), _)
-                                      | P_aux (P_id id, _) ),
-                                      _
-                                    ),
-                                  _
-                                ),
+                            ( ( P_aux (P_typ (_, P_aux (P_var (P_aux (P_id id, _), _), _)), _)
+                              | P_aux (P_var (P_aux (P_id id, _), _), _)
+                              | P_aux (P_id id, _) ),
+                              _,
                               body
                             ),
                           _
@@ -954,7 +949,7 @@ and doc_exp (as_monadic : bool) ctx (E_aux (e, (l, annot)) as full_exp) =
       if has_effect e then doc_exp as_monadic ctx e
       else wrap_with_pure as_monadic (parens (separate space [doc_exp false ctx e; colon; doc_typ ctx typ]))
   | E_tuple es -> wrap_with_pure as_monadic (parens (separate_map (comma ^^ space) (d_of_arg ctx) es))
-  | E_let (LB_aux (LB_val (lpat, lexp), _), e') | E_internal_plet (lpat, lexp, e') ->
+  | E_let (lpat, lexp, e') | E_internal_plet (lpat, lexp, e') ->
       let has_loop = has_loop lexp in
       let is_arrow_do = match e with E_let _ when not has_loop -> false | _ -> true in
       let id_typ = doc_pat ctx false lpat in
@@ -1077,11 +1072,7 @@ let add_function_pattern ctx fixup_binders (P_aux (pat, pat_annot) as pat_full) 
   | P_id _ | P_typ (_, P_aux (P_id _, _)) | P_tuple [] | P_lit _ | P_wild -> fixup_binders
   | _ ->
       fun (E_aux (_, body_annot) as body : tannot exp) ->
-        E_aux
-          ( E_let (LB_aux (LB_val (pat_full, E_aux (E_id var, (Unknown, mk_tannot ctx.env typ))), pat_annot), body),
-            body_annot
-          )
-        |> fixup_binders
+        E_aux (E_let (pat_full, E_aux (E_id var, (Unknown, mk_tannot ctx.env typ)), body), body_annot) |> fixup_binders
 
 (** Find all the [int] and [atom] types in the function pattern and express them as paths that use the lean variables,
     so that we can use them in the return type of the function. For example, see the function [two_tuples_atom] in the
@@ -1175,12 +1166,12 @@ direction by a function that throws an exception. cf #260 *)
 let untranslatable_mapping id exp =
   let rec exp_disc e =
     match e with
-    | E_aux (E_let (_, e), _) -> exp_disc e
+    | E_aux (E_let (_, _, e), _) -> exp_disc e
     | E_aux (E_app (_, [E_aux (E_exit _, _)]), _) -> true
     | _ -> false
   in
   let rec exp_match e =
-    match e with E_aux (E_let (_, e), _) -> exp_match e | E_aux (E_match (e, _), _) -> exp_disc e | _ -> false
+    match e with E_aux (E_let (_, _, e), _) -> exp_match e | E_aux (E_match (e, _), _) -> exp_disc e | _ -> false
   in
 
   let id = string_of_id id in
@@ -1341,7 +1332,7 @@ let doc_val ctx pat exp =
 let should_print_function_def def =
   match def with
   | DEF_aux (DEF_fundef fdef, dannot) -> not (Env.is_extern (id_of_fundef fdef) dannot.env "lean")
-  | DEF_aux (DEF_let (LB_aux (LB_val (pat, exp), _)), _) -> true
+  | DEF_aux (DEF_let (pat, exp), _) -> true
   | _ -> false
 
 let rec doc_defs_rec ctx defs types (former_funcs : document list) (docdefs : document) =
@@ -1362,7 +1353,7 @@ let rec doc_defs_rec ctx defs types (former_funcs : document list) (docdefs : do
       doc_defs_rec ctx defs' types former_funcs docdefs
   | DEF_aux (DEF_type tdef, _) :: defs' ->
       doc_defs_rec ctx defs' (types ^^ group (doc_typdef ctx tdef) ^/^ hardline) former_funcs docdefs
-  | DEF_aux (DEF_let (LB_aux (LB_val (pat, exp), _)), _) :: defs' ->
+  | DEF_aux (DEF_let (pat, exp), _) :: defs' ->
       let global, pp_val = doc_val ctx pat exp in
       let ctx = { ctx with global } in
       doc_defs_rec ctx defs' types former_funcs (docdefs ^^ group pp_val ^/^ hardline)

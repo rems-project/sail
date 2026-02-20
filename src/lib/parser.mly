@@ -650,7 +650,7 @@ exp:
   | exp0 Eq exp
     { mk_exp (E_assign ($1, $3)) $startpos $endpos }
   | Let_ letbind In exp
-    { mk_exp (E_let ($2, $4)) $startpos $endpos }
+    { mk_exp (E_let (fst $2, snd $2, $4)) $startpos $endpos }
   | Var atomic_exp Eq exp In exp
     { mk_exp (E_var ($2, $4, $6)) $startpos $endpos }
   | Lcurly block Rcurly
@@ -746,9 +746,9 @@ block:
   | exp Semi?
     { [$1] }
   | Let_ letbind Semi?
-    { [mk_exp (E_let ($2, mk_lit_exp L_unit $startpos($3) $endpos)) $startpos $endpos] }
+    { [mk_exp (E_let (fst $2, snd $2, mk_lit_exp L_unit $startpos($3) $endpos)) $startpos $endpos] }
   | Let_ letbind Semi block
-    { [mk_exp (E_let ($2, mk_exp (E_block $4) $startpos($4) $endpos)) $startpos $endpos] }
+    { [mk_exp (E_let (fst $2, snd $2, mk_exp (E_block $4) $startpos($4) $endpos)) $startpos $endpos] }
   | Var atomic_exp Eq exp Semi?
     { [mk_exp (E_var ($2, $4, mk_lit_exp L_unit $startpos($5) $endpos)) $startpos $endpos] }
   | Var atomic_exp Eq exp Semi block
@@ -758,7 +758,7 @@ block:
 
 %inline letbind:
   | pat Eq exp
-    { LB_aux (LB_val ($1, $3), loc $startpos $endpos) }
+    { ($1, $3) }
 
 atomic_exp:
   | atomic_exp Colon atomic_typ
@@ -1405,7 +1405,7 @@ def_aux:
   | type_def
     { DEF_type $1 }
   | let_def
-    { DEF_let $1 }
+    { DEF_let (fst $1, snd $1) }
   | register_def
     { DEF_register $1 }
   | overload_def

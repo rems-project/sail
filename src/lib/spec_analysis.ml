@@ -204,7 +204,7 @@ let nexp_subst_fns substs =
     | E_struct_update (e, fes) -> re (E_struct_update (s_exp e, List.map s_fexp fes))
     | E_field (e, id) -> re (E_field (s_exp e, id))
     | E_match (e, cases) -> re (E_match (s_exp e, List.map s_pexp cases))
-    | E_let (lb, e) -> re (E_let (s_letbind lb, s_exp e))
+    | E_let (p, e1, e2) -> re (E_let (s_pat p, s_exp e1, s_exp e2))
     | E_assign (le, e) -> re (E_assign (s_lexp le, s_exp e))
     | E_exit e -> re (E_exit (s_exp e))
     | E_return e -> re (E_return (s_exp e))
@@ -222,8 +222,6 @@ let nexp_subst_fns substs =
   and s_pexp = function
     | Pat_aux (Pat_exp (p, e), (l, annot)) -> Pat_aux (Pat_exp (s_pat p, s_exp e), (l, s_tannot annot))
     | Pat_aux (Pat_when (p, e1, e2), (l, annot)) -> Pat_aux (Pat_when (s_pat p, s_exp e1, s_exp e2), (l, s_tannot annot))
-  and s_letbind (LB_aux (lb, (l, annot))) =
-    match lb with LB_val (p, e) -> LB_aux (LB_val (s_pat p, s_exp e), (l, s_tannot annot))
   and s_lexp (LE_aux (e, (l, annot))) =
     let re e = LE_aux (e, (l, s_tannot annot)) in
     match e with

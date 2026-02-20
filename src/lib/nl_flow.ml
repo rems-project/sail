@@ -80,14 +80,17 @@ let add_assert cond (E_aux (aux, (l, uannot)) as exp) =
    will also know that y != unsigned(bitv) *)
 let modify_unsigned id value (E_aux (aux, annot) as exp) =
   match aux with
-  | E_let ((LB_aux (LB_val (pat, E_aux (E_app (f, [E_aux (E_id id', _)]), _)), _) as lb), exp')
+  | E_let (pat, (E_aux (E_app (f, [E_aux (E_id id', _)]), _) as bind), exp')
     when (string_of_id f = "unsigned" || string_of_id f = "UInt") && Id.compare id id' = 0 -> begin
       match pat_id pat with
       | None -> exp
       | Some uid ->
           E_aux
             ( E_let
-                (lb, add_assert (mk_infix_exp (mk_exp (E_id uid)) (mk_operator "!=") (mk_lit_exp (L_num value))) exp'),
+                ( pat,
+                  bind,
+                  add_assert (mk_infix_exp (mk_exp (E_id uid)) (mk_operator "!=") (mk_lit_exp (L_num value))) exp'
+                ),
               annot
             )
     end

@@ -552,14 +552,11 @@ module Make =
      | E_match (head_exp, arms) ->
        E_aux ((E_match ((substitute n v head_exp),
          (map (substitute_arm n v) arms))), annot0)
-     | E_let (l, body) ->
-       let LB_aux (l0, lb_annot) = l in
-       let LB_val (pat0, y) = l0 in
+     | E_let (pat0, y, body) ->
        if binds_id n pat0
-       then E_aux ((E_let ((LB_aux ((LB_val (pat0, (substitute n v y))),
-              lb_annot)), body)), annot0)
-       else E_aux ((E_let ((LB_aux ((LB_val (pat0, (substitute n v y))),
-              lb_annot)), (substitute n v body))), annot0)
+       then E_aux ((E_let (pat0, (substitute n v y), body)), annot0)
+       else E_aux ((E_let (pat0, (substitute n v y), (substitute n v body))),
+              annot0)
      | E_assign (l, x0) ->
        E_aux ((E_assign ((substitute_lexp n v l), (substitute n v x0))),
          annot0)
@@ -1214,8 +1211,8 @@ module Make =
                then wrap (E_block xs0)
                else Monad.bind (step0 x0) (fun x' ->
                       wrap (E_block (x' :: xs0)))
-             | E_let (l, e0) ->
-               let x0 = E_aux ((E_let (l, e0)), annot1) in
+             | E_let (p, e0, e1) ->
+               let x0 = E_aux ((E_let (p, e0, e1)), annot1) in
                if is_value x0
                then wrap (E_block xs0)
                else Monad.bind (step0 x0) (fun x' ->
@@ -1596,9 +1593,7 @@ module Make =
           | _ ->
             Monad.bind (step0 head_exp) (fun head_exp' ->
               wrap (E_match (head_exp', arms))))
-       | E_let (l, body) ->
-         let LB_aux (l0, lb_annot) = l in
-         let LB_val (pat0, x) = l0 in
+       | E_let (pat0, x, body) ->
          let E_aux (e, _) = x in
          (match e with
           | E_internal_value v ->
@@ -1610,8 +1605,7 @@ module Make =
                    (complete_bindings body_substs) body)
              | _ -> Monad.Match_failure (fst annot0))
           | _ ->
-            Monad.bind (step0 x) (fun x' ->
-              wrap (E_let ((LB_aux ((LB_val (pat0, x')), lb_annot)), body))))
+            Monad.bind (step0 x) (fun x' -> wrap (E_let (pat0, x', body))))
        | E_assign (lx, x) ->
          let subexps = lexp_subexps lx in
          let filtered_var = left_to_right subexps in

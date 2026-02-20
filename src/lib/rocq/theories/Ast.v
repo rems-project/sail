@@ -327,7 +327,7 @@ with exp_aux (a : Set) : Set :=
 | E_struct_update : exp a -> list (fexp a) -> exp_aux a
 | E_field : exp a -> id -> exp_aux a
 | E_match : exp a -> list (pexp a) -> exp_aux a
-| E_let : letbind a -> exp a -> exp_aux a
+| E_let : pat a -> exp a -> exp a -> exp_aux a
 | E_assign : lexp a -> exp a -> exp_aux a
 | E_sizeof : nexp -> exp_aux a
 | E_return : exp a -> exp_aux a
@@ -373,13 +373,7 @@ with pexp_aux (a : Set) : Set :=
 | Pat_when : pat a -> exp a -> exp a -> pexp_aux a
 
 with pexp (a : Set) : Set :=
-| Pat_aux : pexp_aux a -> annot a -> pexp a
-
-with letbind_aux (a : Set) : Set :=
-| LB_val : pat a -> exp a -> letbind_aux a
-
-with letbind (a : Set) : Set :=
-| LB_aux : letbind_aux a -> annot a -> letbind a.
+| Pat_aux : pexp_aux a -> annot a -> pexp a.
 
 Arguments E_block {_}.
 Arguments E_id {_}.
@@ -423,9 +417,6 @@ Arguments FE_fexp {_}.
 Arguments Pat_aux {_}.
 Arguments Pat_exp {_}.
 Arguments Pat_when {_}.
-
-Arguments LB_aux {_}.
-Arguments LB_val {_}.
 
 Arguments LE_aux {_}.
 Arguments LE_id {_}.
@@ -607,7 +598,7 @@ Inductive def_aux (a b : Set) : Set :=
 | DEF_fundef : fundef a -> def_aux a b
 | DEF_mapdef : mapdef a -> def_aux a b
 | DEF_impl : funcl a -> def_aux a b
-| DEF_let : letbind a -> def_aux a b
+| DEF_let : pat a -> exp a -> def_aux a b
 | DEF_val : val_spec a -> def_aux a b
 | DEF_outcome : outcome_spec -> list (def a b) -> def_aux a b
 | DEF_instantiation : instantiation_spec a -> list subst -> def_aux a b
