@@ -1,7 +1,9 @@
 From Stdlib Require Import Lia.
 From Stdlib Require Import Lists.List.
+From Stdlib Require Import ZArith.
 
 Require Import Ast.
+Require Import ListUtil.
 
 Import ListNotations.
 
@@ -83,31 +85,6 @@ Fixpoint lexp_subexps {A : Set} (l : lexp A) : list (exp A) :=
   | LE_vector_range l n m => lexp_subexps l ++ [n; m]
   | LE_field l _ => lexp_subexps l
   end.
-
-Fixpoint take_drop {A : Set} (n : nat) (xs : list A) : list A * list A :=
-  match (n, xs) with
-  | (0, xs) => ([], xs)
-  | (S m, []) => ([], [])
-  | (S m, x :: xs) =>
-      let '(ys, zs) := take_drop m xs in
-      (x :: ys, zs)
-  end.
-
-Lemma take_drop_all : forall (A : Set) (xs : list A),
-    take_drop (length xs) xs = (xs, []).
-Proof.
-  induction xs.
-  - reflexivity.
-  - cbn. rewrite IHxs. reflexivity.
-Qed.
-
-Lemma take_drop_app : forall (A : Set) (xs ys : list A),
-    take_drop (length xs) (xs ++ ys) = (xs, ys).
-Proof.
-  induction xs.
-  - reflexivity.
-  - cbn. intros. rewrite IHxs. reflexivity.
-Qed.
 
 Fixpoint update_lexp_subexps {A : Set} (xs : list (exp A)) (l : lexp A) : lexp A * list (exp A) :=
   let 'LE_aux aux annot := l in
@@ -705,7 +682,7 @@ Proof.
     lia.
 Qed.
 
-Theorem lexp_subexps_depth : forall (A : Set) (l : lexp A),
+Lemma lexp_subexps_depth : forall (A : Set) (l : lexp A),
   fold_right max 0 (map depth (lexp_subexps l)) <= lexp_depth l.
 Proof.
    intros.
