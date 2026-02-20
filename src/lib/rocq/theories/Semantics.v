@@ -13,11 +13,12 @@ From Stdlib Require Import String.
 From Stdlib Require Import ZArith.
 From Stdlib Require QArith.
 
-Require Import Bit.
 Require Import Ast.
-Require Import Value_type.
 Require Import AstInduction.
+Require Import Bit.
 Require Import IdUtil.
+Require Import ListUtil.
+Require Import Value_type.
 
 Import ListNotations.
 
@@ -181,12 +182,12 @@ Module Monad.
     | Get_undefined t cont => Get_undefined t (fun v => fmap Continue (cont v))
     end.
 
-  Theorem bind_left_id : forall (A B : Set) (f : A -> t B) (x : A), bind (pure x) f = f x.
+  Lemma bind_left_id : forall (A B : Set) (f : A -> t B) (x : A), bind (pure x) f = f x.
   Proof.
     cbn. reflexivity.
   Qed.
 
-  Theorem bind_right_id : forall (A : Set) (m : t A), bind m pure = m.
+  Lemma bind_right_id : forall (A : Set) (m : t A), bind m pure = m.
   Proof.
     induction m as [| | | | | | ? ? cont | ? cont | ? ? cont | ? cont]; try easy.
     all: cbn.
@@ -197,7 +198,7 @@ Module Monad.
     all: assumption.
   Qed.
 
-  Theorem bind_assoc : forall (A B C : Set) (f : A -> t B) (g : B -> t C) (x : t A),
+  Lemma bind_assoc : forall (A B C : Set) (f : A -> t B) (g : B -> t C) (x : t A),
       bind (bind x f) g = bind x (fun y => bind (f y) g).
   Proof.
     induction x as [| | | | | | ? ? cont | ? cont | ? ? cont | ? cont]; try easy.
@@ -988,8 +989,8 @@ Module Make (T : SemanticExt).
     lia.
   Qed.
 
-  Theorem depth_subst : forall n v (x : exp T.tannot), depth (substitute n v x) <= depth x.
-  Proof.
+  Lemma depth_subst : forall n v (x : exp T.tannot), depth (substitute n v x) <= depth x.
+  Proof with lia.
     intros n v.
     einduction x using exp_ind_mutual_g.
     all: (cbn; try easy; try lia).
@@ -998,8 +999,7 @@ Module Make (T : SemanticExt).
       + cbn.
         rewrite Forall_cons_iff in H.
         inversion H as [Hhd Htl].
-        apply IHxs in Htl.
-        lia.
+        apply IHxs in Htl...
     - cbn.
       apply (PeanoNat.Nat.le_trans _ _ _ (depth_if _ _ _)).
       reflexivity.
@@ -1008,33 +1008,28 @@ Module Make (T : SemanticExt).
       + cbn.
         rewrite Forall_cons_iff in H.
         inversion H as [Hhd Htl].
-        apply IHxs in Htl.
-        lia.
+        apply IHxs in Htl...
     - induction xs.
       + reflexivity.
       + cbn.
         rewrite Forall_cons_iff in H.
         inversion H as [Hhd Htl].
-        apply IHxs in Htl.
-        lia.
+        apply IHxs in Htl...
     - cbn.
       apply (PeanoNat.Nat.le_trans _ _ _ (depth_if _ _ _)).
-      cbn.
-      lia.
+      cbn...
     - induction xs.
       + reflexivity.
       + cbn.
         rewrite Forall_cons_iff in H.
         inversion H as [Hhd Htl].
-        apply IHxs in Htl.
-        lia.
+        apply IHxs in Htl...
     - induction xs.
       + reflexivity.
       + cbn.
         rewrite Forall_cons_iff in H.
         inversion H as [Hhd Htl].
-        apply IHxs in Htl.
-        lia.
+        apply IHxs in Htl...
     - induction fields.
       + reflexivity.
       + rewrite Forall_cons_iff in H.
@@ -1046,12 +1041,11 @@ Module Make (T : SemanticExt).
         cbn in Htl.
         rewrite map_map in Htl.
         setoid_rewrite fexp_subst in Htl.
-        apply depth_subst_helper.
+        apply depth_subst_helper; [ idtac | lia ].
         apply (PeanoNat.Nat.le_trans _ _ _ Hhd).
         destruct a.
         destruct f.
         reflexivity.
-        lia.
     - cbn.
       apply depth_subst_helper.
       assumption.
@@ -1066,12 +1060,11 @@ Module Make (T : SemanticExt).
         cbn in Htl.
         rewrite map_map in Htl.
         setoid_rewrite fexp_subst in Htl.
-        apply depth_subst_helper.
+        apply depth_subst_helper; [ idtac | lia ].
         apply (PeanoNat.Nat.le_trans _ _ _ Hhd).
         destruct a.
         destruct f.
         reflexivity.
-        lia.
     - apply depth_subst_helper.
       assumption.
       induction arms.
@@ -1080,35 +1073,28 @@ Module Make (T : SemanticExt).
         inversion H as [Hhd Htl].
         apply IHarms in Htl.
         cbn.
-        apply depth_subst_helper.
+        apply depth_subst_helper; [ idtac | assumption ].
         cbn in Hhd.
         destruct a as [aux ?].
         destruct aux; cbn; destruct (binds_id n p); try reflexivity; try assumption.
-        cbn in Hhd.
-        lia.
-        assumption.
+        cbn in Hhd...
     - destruct (binds_id n p); cbn; lia.
-    - apply depth_subst_helper.
-      apply IHe.
-      lia.
-    - apply depth_subst_helper.
-      assumption.
+    - apply depth_subst_helper; [ apply IHe | lia ].
+    - apply depth_subst_helper; [ assumption | idtac ].
       induction arms.
       + reflexivity.
       + rewrite Forall_cons_iff in H.
         inversion H as [Hhd Htl].
         apply IHarms in Htl.
         cbn.
-        apply depth_subst_helper.
+        apply depth_subst_helper; [ idtac | assumption ].
         cbn in Hhd.
         destruct a as [aux ?].
         destruct aux; cbn; destruct (binds_id n p); try reflexivity; try assumption.
-        cbn in Hhd.
-        lia.
-        assumption.
-    - cbn in IHe1; lia.
+        cbn in Hhd...
+    - cbn in IHe1...
     - cbn; reflexivity.
-    - cbn; try assumption; lia.
+    - cbn; try assumption...
     - cbn; reflexivity.
     - cbn; reflexivity.
     - cbn.
@@ -1127,13 +1113,12 @@ Module Make (T : SemanticExt).
       + rewrite Forall_cons_iff in H.
         inversion H as [Hhd Htl].
         cbn.
-        apply depth_subst_helper.
-        assumption.
+        apply depth_subst_helper; [ assumption | idtac ].
         apply IHlxs in Htl.
         assumption.
-    - cbn. cbn in IHe. lia.
-    - cbn. cbn in IHe1. lia.
-    - cbn. cbn in IHe. lia.
+    - cbn. cbn in IHe...
+    - cbn. cbn in IHe1...
+    - cbn. cbn in IHe...
   Qed.
 
   Fixpoint destructuring_assignment (annot : Ast.annot T.tannot) (d : destructure) (v : value) : t unit :=

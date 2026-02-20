@@ -15,79 +15,16 @@ From Stdlib Require ExtrOcamlNatBigInt.
 From Stdlib Require ExtrOcamlNativeString.
 From Stdlib Require ExtrOcamlZBigInt.
 
-Require Import Bit.
 Require Import Ast.
+Require Import AstInduction.
+Require Import Bit.
 Require Import IdUtil.
+Require Import ListUtil.
 
 Import ListNotations.
 
-Definition bit_eqb (lhs rhs : bit) : bool :=
-  match (lhs, rhs) with
-  | (B0, B0) => true
-  | (B1, B1) => true
-  | _ => false
-  end.
-
-Theorem bit_eqb_refl : forall b, bit_eqb b b = true.
-Proof.
-  destruct b; reflexivity.
-Qed.
-
-Fixpoint list_eqb {A} (pred : A -> A -> bool) (lhs rhs : list A) : bool :=
-  match (lhs, rhs) with
-  | ([], []) => true
-  | ([], _) => false
-  | (_, []) => false
-  | (x :: xs, y :: ys) => pred x y && list_eqb pred xs ys
-  end.
-
-Lemma list_eqb_eq_right : forall A (pred : A -> A -> bool) lhs rhs,
-  (forall x y, In x lhs -> pred x y = true -> x = y) -> list_eqb pred lhs rhs = true -> lhs = rhs.
-Proof.
-  intros A pred lhs rhs H.
-  revert rhs.
-  induction lhs as [| l_hd l_tl].
-  - destruct rhs; easy.
-  - destruct rhs as [| r_hd r_tl].
-    + easy.
-    + cbn.
-      rewrite andb_true_iff.
-      intro B.
-      destruct B as (B1 & B2).
-      rewrite (H l_hd r_hd (in_eq l_hd l_tl) B1).
-      rewrite (fun P => IHl_tl P r_tl B2).
-      reflexivity.
-      intros x y In_x_l_tl XY.
-      assert (In x (l_hd :: l_tl)) as In_x_l.
-      apply in_cons; trivial.
-      apply (H _ _ In_x_l XY).
-Qed.
-
-Theorem list_eqb_refl: forall A (pred : A -> A -> bool) xs, (forall x, In x xs -> pred x x = true) -> list_eqb pred xs xs = true.
-Proof.
-  intros A pred xs H.
-  induction xs as [| x xs].
-  - reflexivity.
-  - cbn.
-    rewrite (H _ (in_eq _ _)).
-    rewrite IHxs.
-    reflexivity.
-    intros ? In_xs.
-    apply (H _ (in_cons _ _ _ In_xs)).
-Qed.
-
-Theorem list_eqb_eq : forall A (pred : A -> A -> bool) lhs rhs,
-  (forall x y, In x lhs -> pred x y = true <-> x = y) -> list_eqb pred lhs rhs = true <-> lhs = rhs.
-Proof.
-  intros A pred lhs rhs H.
-  split.
-  - apply (list_eqb_eq_right A pred lhs rhs (fun x y In => proj1 (H x y In))).
-  - intro E.
-    rewrite E in *.
-    apply list_eqb_refl.
-    intros x In_rhs.
-    apply (proj2 (H x x In_rhs) eq_refl).
-Qed.
+Declare Scope Value_scope.
+Delimit Scope Value_scope with value.
 
 (* A value is fully defined if it contains no unknown values *)
 Fixpoint fully_defined (v : value) : bool :=
@@ -97,9 +34,6 @@ Fixpoint fully_defined (v : value) : bool :=
   | V_unknown => false
   | _ => true
   end.
-
-Declare Scope Value_scope.
-Delimit Scope Value_scope with value.
 
 (* Induction rule for values, needed as they contain nested lists of values *)
 Section value_ind.
@@ -190,114 +124,6 @@ Definition value_ltb (lhs rhs : value) : bool := (lhs <=? rhs)%value && negb (lh
 
 Infix "<?" := value_ltb (at level 70, no associativity) : Value_scope.
 
-Theorem forall_in : forall A P (x : A) xs, Forall P xs -> In x xs -> P x.
-Proof.
-  induction xs.
-  - easy.
-  - cbn.
-    rewrite Forall_cons_iff.
-    intros.
-    destruct H0.
-    + rewrite <- H0. easy.
-    + apply (fun Q => IHxs Q H0). easy.
-Qed.
-
-Theorem list_eqb_sym: forall A (eq : A -> A -> bool) xs ys, (forall x y, eq x y = eq y x) -> list_eqb eq xs ys = true -> list_eqb eq ys xs = true.
-Proof.
-  intros A eq xs ys eq_sym.
-  revert ys.
-  induction xs as [| x xs].
-  - destruct ys as [| y ys]; trivial.
-  - destruct ys as [| y ys].
-    + trivial.
-    + cbn.
-      rewrite andb_true_iff.
-      intros H.
-      destruct H as (H1 & H2).
-      rewrite eq_sym.
-      rewrite H1.
-      rewrite IHxs.
-      * reflexivity.
-      * apply H2.
-Qed.
-
-Theorem list_eqb_comm: forall A (eq : A -> A -> bool) xs ys, (forall x y, eq x y = eq y x) -> list_eqb eq xs ys = list_eqb eq ys xs.
-Proof.
-  intros A eq xs ys eq_sym.
-  apply eq_true_iff_eq.
-  split.
-  apply (list_eqb_sym A eq xs ys eq_sym).
-  apply (list_eqb_sym A eq ys xs eq_sym).
-Qed.
-
-Theorem list_eqb_comm_in: forall A (eq : A -> A -> bool) xs ys, (forall x y, In x xs -> eq x y = eq y x) -> list_eqb eq xs ys = list_eqb eq ys xs.
-Proof.
-  intros A eq xs ys eq_sym.
-  revert ys.
-  induction xs as [| x xs].
-  - destruct ys as [| y ys]; trivial.
-  - destruct ys as [| y ys].
-    + trivial.
-    + cbn.
-      rewrite eq_sym.
-      rewrite IHxs.
-      reflexivity.
-      intros x0 y0 x0_in.
-      apply eq_sym.
-      cbn.
-      apply or_intror.
-      trivial.
-      cbn.
-      apply or_introl.
-      easy.
-Qed.
-
-Theorem list_eqb_trans_in : forall A (eq : A -> A -> bool) xs ys zs,
-  (forall x y z, In y ys -> eq x y = true -> eq y z = true -> eq x z = true) ->
-  list_eqb eq xs ys = true ->
-  list_eqb eq ys zs = true ->
-  list_eqb eq xs zs = true.
-Proof.
-  intros A eq xs ys zs eq_sym.
-  revert xs zs.
-  induction ys as [| y ys].
-  + intros xs zs.
-    destruct zs.
-    - trivial.
-    - cbn. easy.
-  + destruct zs as [| z zs].
-    - cbn. easy.
-    - destruct xs as [| x xs].
-      * cbn. easy.
-      * cbn.
-        intros XY YZ.
-        apply andb_true_iff in XY.
-        apply andb_true_iff in YZ.
-        destruct XY as (XY1 & XY2).
-        destruct YZ as (YZ1 & YZ2).
-        assert (eq x z = true) as Eq_xz.
-        apply (fun P => eq_sym x y z P XY1 YZ1).
-        cbn.
-        auto.
-        rewrite Eq_xz.
-        rewrite (fun P => IHys P xs zs XY2 YZ2).
-        reflexivity.
-        intros x' y' z' In_y' Eq_xy' Eq_yz'.
-        apply (eq_sym x' y' z' (in_cons _ _ _ In_y') Eq_xy' Eq_yz').
-Qed.
-
-Theorem list_eqb_trans : forall A (eq : A -> A -> bool) xs ys zs,
-  (forall x y z, eq x y = true -> eq y z = true -> eq x z = true) ->
-  list_eqb eq xs ys = true ->
-  list_eqb eq ys zs = true ->
-  list_eqb eq xs zs = true.
-Proof.
-  intros A eq xs ys zs eq_sym XY YZ.
-  apply (fun P => list_eqb_trans_in A eq xs ys zs P XY YZ).
-  intros x y z ? ? ?.
-  apply (eq_sym _ y _); assumption.
-Qed.
-
 Create HintDb sail.
 
 Hint Immediate id_eqb_refl : sail.
@@ -309,7 +135,7 @@ Hint Immediate String.eqb_refl : sail.
 Hint Resolve list_eqb_refl : sail.
 Hint Resolve Forall_cons_iff : sail.
 
-Theorem value_cmp_refl : forall f v, f V_unknown = true -> value_cmp f v v = true.
+Lemma value_cmp_refl : forall f v, f V_unknown = true -> value_cmp f v v = true.
 Proof.
   intros f v U.
   induction v using value_ind.
@@ -351,7 +177,7 @@ Proof.
       auto with sail bool.
 Qed.
 
-Theorem value_eqb_refl : forall v, (v =? v)%value = true.
+Lemma value_eqb_refl : forall v, (v =? v)%value = true.
 Proof.
   intros.
   unfold value_eqb.
@@ -360,7 +186,7 @@ Proof.
   reflexivity.
 Qed.
 
-Theorem value_leb_refl : forall v, (v <=? v)%value = true.
+Lemma value_leb_refl : forall v, (v <=? v)%value = true.
 Proof.
   intros.
   unfold value_leb.
@@ -368,7 +194,7 @@ Proof.
   reflexivity.
 Qed.
 
-Theorem value_ltb_not_eqb : forall x y, (x <? y)%value = true -> (x =? y)%value = false.
+Lemma value_ltb_not_eqb : forall x y, (x <? y)%value = true -> (x =? y)%value = false.
 Proof.
   intros x y x_ltb_y.
   unfold value_ltb in x_ltb_y.
@@ -376,7 +202,7 @@ Proof.
   tauto.
 Qed.
 
-Theorem value_eqb_comm : forall v1 v2, (v1 =? v2)%value = (v2 =? v1)%value.
+Lemma value_eqb_comm : forall v1 v2, (v1 =? v2)%value = (v2 =? v1)%value.
 Proof.
   intros v1.
   induction v1 using value_ind.
@@ -393,7 +219,7 @@ Proof.
     destruct vs.
     cbn in H1.
     easy.
-    apply (forall_in _ _ _ _ H H1).
+    apply (Forall_in _ _ _ H H1).
   - intros v2.
     induction v2 using value_ind; try reflexivity.
     cbn.
@@ -402,7 +228,7 @@ Proof.
     destruct vs.
     cbn in H1.
     easy.
-    apply (forall_in _ _ _ _ H H1).
+    apply (Forall_in _ _ _ H H1).
   - destruct v2; try reflexivity.
     cbn.
     apply Z.eqb_sym.
@@ -420,7 +246,7 @@ Proof.
     destruct vs.
     cbn in H1.
     easy.
-    apply (forall_in _ _ _ _ H H1).
+    apply (Forall_in _ _ _ H H1).
   - destruct v2; try reflexivity.
   - destruct v2; try reflexivity.
     cbn.
@@ -450,7 +276,7 @@ Proof.
     destruct vs.
     cbn in H1.
     easy.
-    apply (forall_in _ _ _ _ H H2).
+    apply (Forall_in _ _ _ H H2).
     rewrite H2.
     reflexivity.
   - intros v2.
@@ -480,19 +306,19 @@ Proof.
     destruct H1.
     rewrite H4 in H.
     apply H.
-    apply (forall_in _ _ _ _ H3 H1 v0).
+    apply (Forall_in _ _ _ H3 H1 v0).
     rewrite H3.
     reflexivity.
   - intros v2.
     destruct v2; trivial.
 Qed.
 
-Theorem value_cmp_ctor : forall f lid lvs rid rvs, value_cmp f (V_ctor lid lvs) (V_ctor rid rvs) = true <-> (id_eqb lid rid = true /\ list_eqb (value_cmp f) lvs rvs = true).
+Lemma value_cmp_ctor : forall f lid lvs rid rvs, value_cmp f (V_ctor lid lvs) (V_ctor rid rvs) = true <-> (id_eqb lid rid = true /\ list_eqb (value_cmp f) lvs rvs = true).
 Proof.
   split; cbn in *; rewrite andb_true_iff in *; easy.
 Qed.
 
-Theorem value_cmp_trans : forall f x y z (F : (forall x, f x = true) \/ f = is_unknown \/ (forall x, x <> V_unknown -> f x = true)),
+Lemma value_cmp_trans : forall f x y z (F : (forall x, f x = true) \/ f = is_unknown \/ (forall x, x <> V_unknown -> f x = true)),
   value_cmp f x y = true ->
   value_cmp f y z = true ->
   value_cmp f x z = true.
@@ -518,11 +344,11 @@ Proof.
   - cbn in *.
     apply (fun P => list_eqb_trans_in _ _ xs ys zs P L R).
     intros x y z In_y XY YZ.
-    apply (forall_in _ _ _ _ H In_y); easy.
+    apply (Forall_in _ _ _ H In_y); easy.
   - cbn in *.
     apply (fun P => list_eqb_trans_in _ _ xs ys zs P L R).
     intros x y z In_y XY YZ.
-    apply (forall_in _ _ _ _ H In_y); easy.
+    apply (Forall_in _ _ _ H In_y); easy.
   - cbn in *.
     rewrite Z.eqb_eq in *.
     apply (eq_trans L R).
@@ -534,7 +360,7 @@ Proof.
   - cbn in *.
     apply (fun P => list_eqb_trans_in _ _ xs ys zs P L R).
     intros x y z In_y XY YZ.
-    apply (forall_in _ _ _ _ H In_y); easy.
+    apply (Forall_in _ _ _ H In_y); easy.
   - cbn in *.
     rewrite String.eqb_eq in *.
     apply (eq_trans L R).
@@ -547,7 +373,7 @@ Proof.
     + apply (id_eqb_trans _ yid _); assumption.
     + apply (list_eqb_trans_in _ _ _ ys _); try assumption.
       intros x y z In_y XY YZ.
-      apply (forall_in _ _ _ _ H In_y); easy.
+      apply (Forall_in _ _ _ H In_y); easy.
   - apply (list_eqb_trans_in _ _ _ yfields _); try assumption.
     intros x y z In_y XY YZ.
     destruct x as [xid xv].
@@ -558,24 +384,24 @@ Proof.
     destruct YZ as (YZ1 & YZ2).
     split.
     + apply (id_eqb_trans _ yid _); assumption.
-    + apply (forall_in _ _ (yid, yv) yfields H In_y); assumption.
+    + apply (Forall_in _ (yid, yv) yfields H In_y); assumption.
 Qed.
 
-Theorem value_eqb_trans : forall x y z, (x =? y)%value = true -> (y =? z)%value = true -> (x =? z)%value = true.
+Lemma value_eqb_trans : forall x y z, (x =? y)%value = true -> (y =? z)%value = true -> (x =? z)%value = true.
 Proof.
   intros x y z.
   apply value_cmp_trans.
   auto.
 Qed.
 
-Theorem value_leb_trans : forall x y z, (x <=? y)%value = true -> (y <=? z)%value = true -> (x <=? z)%value = true.
+Lemma value_leb_trans : forall x y z, (x <=? y)%value = true -> (y <=? z)%value = true -> (x <=? z)%value = true.
 Proof.
   intros x y z.
   apply value_cmp_trans.
   auto.
 Qed.
 
-Theorem value_eqb_leb : forall x y, (x =? y)%value = true -> (x <=? y)%value = true.
+Lemma value_eqb_leb : forall x y, (x =? y)%value = true -> (x <=? y)%value = true.
 Proof.
   intros x y.
   revert x.
@@ -603,7 +429,7 @@ Proof.
     end.
 Qed.
 
-Theorem value_ltb_leb : forall x y, (x <? y)%value = true -> (x <=? y)%value = true.
+Lemma value_ltb_leb : forall x y, (x <? y)%value = true -> (x <=? y)%value = true.
 Proof.
   intros x y H.
   unfold value_ltb in H.
@@ -611,130 +437,7 @@ Proof.
   tauto.
 Qed.
 
-Fixpoint zip {A : Set} (xs ys : list A) : list (A * A) :=
-  match (xs, ys) with
-  | (x :: xs, y :: ys) => (x, y) :: zip xs ys
-  | ([], _) => []
-  | (_, []) => []
-  end.
-
-Theorem list_eqb_false : forall [A : Set] f (xs ys : list A),
-  length xs = length ys -> list_eqb f xs ys = false <-> Exists (fun '(x, y) => f x y = false) (zip xs ys).
-Proof.
-  intros A f xs.
-  induction xs as [| x xs]; intro ys; destruct ys as [| y ys]; try discriminate.
-  - cbn. rewrite Exists_nil. easy.
-  - intros Same_length.
-    cbn.
-    rewrite Exists_cons, andb_false_iff.
-    apply or_iff_compat_l.
-    apply IHxs.
-    cbn in Same_length.
-    apply (Nat.succ_inj _ _ Same_length).
-Qed.
-
-Theorem in_app_split : forall [A : Set] (x : A) xs, In x xs -> exists ys zs, xs = ys ++ (x :: zs).
-Proof.
-  intros A x xs x_in_xs.
-  induction xs as [| y ys].
-  - cbn in x_in_xs.
-    contradiction.
-  - apply in_inv in x_in_xs.
-    destruct x_in_xs as [y_eq_x | x_in_ys].
-    + rewrite y_eq_x.
-      exists [].
-      exists ys.
-      reflexivity.
-    + apply IHys in x_in_ys as H.
-      destruct H as [zs].
-      destruct H as [ws].
-      exists (y :: zs).
-      exists ws.
-      rewrite H.
-      reflexivity.
-Qed.
-
-Fixpoint drop {A : Set} (n : nat) (xs : list A) : list A :=
-  match (n, xs) with
-  | (0%nat, xs) => xs
-  | (S m, []) => []
-  | (S m, _ :: xs) => drop m xs
-  end.
-
-Fixpoint take {A : Set} (n : nat) (xs : list A) : list A :=
-  match (n, xs) with
-  | (0%nat, xs) => []
-  | (S m, []) => []
-  | (S m, x :: xs) => x :: take m xs
-  end.
-
-Theorem list_eqb_false_app_r : forall [A : Set] f (xs ys zs : list A), list_eqb f (drop (length ys) xs) zs = false -> list_eqb f xs (ys ++ zs) = false.
-Proof.
-  intros A f xs ys zs.
-  revert xs zs.
-  induction ys as [| y ys]; intros xs zs; destruct xs as [| x xs]; destruct zs as [| z zs]; try easy.
-  - cbn.
-    rewrite andb_false_iff.
-    intros H.
-    apply or_intror.
-    apply (IHys _ _ H).
-  - cbn.
-    rewrite andb_false_iff.
-    intros H.
-    apply or_intror.
-    apply (IHys _ _ H).
-Qed.
-
-Theorem map_fst_zip : forall [A : Set] (xs ys : list A), length xs = length ys -> map fst (zip xs ys) = xs.
-Proof.
-  intros A xs.
-  induction xs as [| x xs]; intro ys; destruct ys as [| y ys]; try easy.
-  cbn.
-  intro Same_length.
-  assert (H := IHxs _ (Nat.succ_inj _ _ Same_length)).
-  rewrite <- H at 2.
-  reflexivity.
-Qed.
-
-Theorem map_snd_zip : forall [A : Set] (xs ys : list A), length xs = length ys -> map snd (zip xs ys) = ys.
-Proof.
-  intros A xs.
-  induction xs as [| x xs]; intro ys; destruct ys as [| y ys]; try easy.
-  cbn.
-  intro Same_length.
-  assert (H := IHxs _ (Nat.succ_inj _ _ Same_length)).
-  rewrite <- H at 2.
-  reflexivity.
-Qed.
-
-Theorem zip_fst_snd : forall [A : Set] (xs ys: list A) zs,
-  length xs = length ys ->
-  zip xs ys = zs <-> xs = List.map fst zs /\ ys = List.map snd zs.
-Proof.
-  intros A xs ys zs.
-  revert xs ys.
-  induction zs as [| z zs]; intros xs ys; destruct xs as [| x xs]; destruct ys as [| y ys]; try easy.
-  cbn.
-  intro Same_length.
-  assert (H := IHzs _ _ (Nat.succ_inj _ _ Same_length)).
-  split.
-  - intros L.
-    injection L; intros L1 L2; rewrite <- L1; rewrite <- L2; cbn.
-    rewrite (map_fst_zip _ _ (Nat.succ_inj _ _ Same_length)).
-    rewrite (map_snd_zip _ _ (Nat.succ_inj _ _ Same_length)).
-    easy.
-  - intros L.
-    destruct z as (x', y').
-    cbn in L.
-    destruct L as (L1 & L2).
-    injection L1; intros L1_1 L1_2.
-    injection L2; intros L2_1 L2_2.
-    destruct H as [_ H].
-    rewrite (H (conj L1_1 L2_1)), L1_2, L2_2.
-    reflexivity.
-Qed.
-
-Theorem value_ltb_is_leb : forall x y, (x <? y)%value = true -> (x <=? y)%value = true.
+Lemma value_ltb_is_leb : forall x y, (x <? y)%value = true -> (x <=? y)%value = true.
 Proof.
   intros x y.
   revert x.
@@ -743,85 +446,7 @@ Proof.
   all: unfold value_ltb; cbn beta delta - [id_eqb] iota; rewrite andb_true_iff; easy.
 Qed.
 
-Theorem app_cons_in : forall [A : Set] (x : A) xs ys zs, xs = ys ++ (x :: zs) -> In x xs.
-Proof.
-  intros A x xs.
-  induction xs as [| w ws]; intros ys zs H.
-  - assert (NH := app_cons_not_nil ys zs x).
-    tauto.
-  - destruct ys as [| y ys].
-    + rewrite app_nil_l in H.
-      injection H; intros _ wx.
-      rewrite wx.
-      apply in_eq.
-    + apply in_cons.
-      apply (IHws ys zs).
-      rewrite <- app_comm_cons in H.
-      injection H.
-      tauto.
-Qed.
-
-Theorem list_eqb_app : forall [A : Set] f (xs ys zs ws : list A),
-  length xs = length zs ->
-  list_eqb f (xs ++ ys) (zs ++ ws) = true ->
-  list_eqb f ys ws = true.
-Proof.
-  intros A f xs ys zs ws.
-  revert ys zs ws.
-  induction xs as [| x xs]; intros ys zs ws; destruct zs as [| z zs]; try easy.
-  cbn.
-  intro Same_length.
-  assert (H := IHxs ys zs ws (Nat.succ_inj _ _ Same_length)).
-  rewrite andb_true_iff.
-  tauto.
-Qed.
-
-Theorem take_drop_app_h : forall [A : Set] n (xs ys : list A), xs ++ ys = take n xs ++ drop n xs ++ ys.
-Proof with reflexivity.
-  intros A n.
-  induction n; intros xs ys.
-  - cbn...
-  - destruct xs as [| x xs].
-    + cbn...
-    + cbn.
-      rewrite IHn at 1...
-Qed.
-
-Theorem take_drop_app : forall [A : Set] n (xs : list A), xs = take n xs ++ drop n xs.
-Proof.
-  intros A n xs.
-  assert (H := take_drop_app_h n xs []).
-  repeat rewrite app_nil_r in H.
-  assumption.
-Qed.
-
-Theorem take_length : forall [A : Set] n (xs : list A), (n <= length xs)%nat -> length (take n xs) = n.
-Proof.
-  intros A n.
-  induction n; intros xs H.
-  - cbn. reflexivity.
-  - destruct xs as [| x xs].
-    + cbn in *.
-      assert (C := Nat.nle_succ_0 n).
-      contradiction.
-    + cbn in *.
-      apply eq_S.
-      apply (IHn _ (le_S_n _ _ H)).
-Qed.
-
-Theorem list_eqb_same_length : forall [A : Set] f (xs ys : list A), list_eqb f xs ys = true -> length xs = length ys.
-Proof.
-  intros A f xs.
-  induction xs as [| x xs]; intros ys; destruct ys as [| y ys]; try easy.
-  cbn.
-  rewrite andb_true_iff.
-  intros.
-  apply eq_S.
-  apply IHxs.
-  tauto.
-Qed.
-
-Theorem value_ltb_trans_h : forall x y z, (x <=? y)%value = true -> (y <? z)%value = true -> (x =? z)%value = false.
+Lemma value_ltb_trans_h : forall x y z, (x <=? y)%value = true -> (y <? z)%value = true -> (x =? z)%value = false.
 Proof.
   intros x y z.
   revert x z.
@@ -875,11 +500,11 @@ Proof.
     destruct xstl; [reflexivity | idtac];
     cbn;
     apply andb_false_intro1;
-    apply (forall_in _ _ v_y _ H (app_cons_in _ _ _ _ H0)); [
+    apply (Forall_in _ v_y _ H (app_cons_in _ _ _ _ H0)); [
       assert (xs_ys_length := list_eqb_same_length _ _ _ L);
       assert (xs_zs_length := list_eqb_same_length _ _ _ Rleb);
       unfold value_leb;
-      rewrite (take_drop_app (length (map snd yzs1)) xs), H0 in L;
+      rewrite (take_app_drop (length (map snd yzs1)) xs), H0 in L;
       apply list_eqb_app in L; [
         rewrite <- Heqxstl in L;
         cbn in L;
@@ -960,11 +585,11 @@ Proof.
     cbn iota beta delta - [id_eqb] zeta.
     apply andb_false_intro1.
     apply andb_false_intro2.
-    apply (forall_in _ _ V _ H (app_cons_in _ _ _ _ H0)); rewrite HeqV.
+    apply (Forall_in _ V _ H (app_cons_in _ _ _ _ H0)); rewrite HeqV.
     + assert (xs_ys_length := list_eqb_same_length _ _ _ L);
       assert (xs_zs_length := list_eqb_same_length _ _ _ Rleb).
       unfold value_leb;
-      rewrite (take_drop_app (length (map snd yzs1)) xs), H0 in L.
+      rewrite (take_app_drop (length (map snd yzs1)) xs), H0 in L.
       apply list_eqb_app in L.
       *
         rewrite <- Heqxstl in L.
@@ -999,7 +624,7 @@ Proof.
         reflexivity.
 Qed.
 
-Theorem value_ltb_trans : forall x y z, (x <? y)%value = true -> (y <? z)%value = true -> (x <? z)%value = true.
+Lemma value_ltb_trans : forall x y z, (x <? y)%value = true -> (y <? z)%value = true -> (x <? z)%value = true.
 Proof.
   intros x y z XY YZ.
   apply value_ltb_leb in XY.
@@ -1010,7 +635,7 @@ Proof.
   - apply (value_ltb_trans_h _ y _ XY YZ).
 Qed.
 
-Theorem value_leb_antisym : forall x y, (x <=? y)%value = true -> (y <=? x)%value = true -> (x =? y)%value = true.
+Lemma value_leb_antisym : forall x y, (x <=? y)%value = true -> (y <=? x)%value = true -> (x =? y)%value = true.
 Proof.
   intros x.
   induction x as [ xbv | xs | xs | xi | xr | xb | xs | | xstr | xid | xid | xid xs | xfields | ] using value_ind.
@@ -1025,7 +650,7 @@ Proof.
     destruct Y_le_X as (y_le_x & ys_le_xs).
     split.
     + unfold value_eqb, value_leb in H.
-      apply (forall_in _ _ x (x :: xs) H (in_eq _ _) y x_le_y y_le_x).
+      apply (Forall_in _ x (x :: xs) H (in_eq _ _) y x_le_y y_le_x).
     + apply (IHys xs (Forall_inv_tail H) xs_le_ys ys_le_xs).
   - revert H. revert xs.
     induction ys as [ | y ys]; intros xs H; destruct xs as [| x xs]; try easy.
@@ -1036,7 +661,7 @@ Proof.
     destruct Y_le_X as (y_le_x & ys_le_xs).
     split.
     + unfold value_eqb, value_leb in H.
-      apply (forall_in _ _ x (x :: xs) H (in_eq _ _) y x_le_y y_le_x).
+      apply (Forall_in _ x (x :: xs) H (in_eq _ _) y x_le_y y_le_x).
     + apply (IHys xs (Forall_inv_tail H) xs_le_ys ys_le_xs).
   - revert H. revert xs.
     induction ys as [ | y ys]; intros xs H; destruct xs as [| x xs]; try easy.
@@ -1047,7 +672,7 @@ Proof.
     destruct Y_le_X as (y_le_x & ys_le_xs).
     split.
     + unfold value_eqb, value_leb in H.
-      apply (forall_in _ _ x (x :: xs) H (in_eq _ _) y x_le_y y_le_x).
+      apply (Forall_in _ x (x :: xs) H (in_eq _ _) y x_le_y y_le_x).
     + apply (IHys xs (Forall_inv_tail H) xs_le_ys ys_le_xs).
   - cbn beta delta - [id_eqb] iota.
     repeat rewrite andb_true_iff.
@@ -1065,7 +690,7 @@ Proof.
       destruct Y_le_X as (y_le_x & ys_le_xs).
       split.
       * unfold value_eqb, value_leb in H.
-        apply (forall_in _ _ x (x :: xs) H (in_eq _ _) y x_le_y y_le_x).
+        apply (Forall_in _ x (x :: xs) H (in_eq _ _) y x_le_y y_le_x).
       * apply (IHys xs (Forall_inv_tail H) xs_le_ys ys_le_xs).
   - cbn beta delta - [id_eqb] iota.
     revert H. revert xfields.
@@ -1081,10 +706,9 @@ Proof.
     + destruct X_le_Y as (_ & x_le_y).
       destruct Y_le_X as (_ & y_le_x).
       unfold value_eqb, value_leb in H.
-      apply (forall_in _ _ (x_id, x_v) (_ :: xfields) H (in_eq _ _) _ x_le_y y_le_x).
+      apply (Forall_in _ (x_id, x_v) (_ :: xfields) H (in_eq _ _) _ x_le_y y_le_x).
     + apply (IHyfields _ (Forall_inv_tail H) xs_le_ys ys_le_xs).
 Qed.
-
 
 Module Order.
   Definition eq (x y : value) : Prop := Is_true (value_eqb x y).

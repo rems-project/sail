@@ -103,20 +103,20 @@ Definition id_eqb (id1 : id) (id2 : id) : bool :=
   | _ => false
   end.
 
-Theorem id_eqb_refl : forall x, id_eqb x x = true.
+Lemma id_eqb_refl : forall x, id_eqb x x = true.
 Proof.
   destruct x as [aux ?].
   destruct aux; cbn; try trivial; rewrite String.eqb_refl; reflexivity.
 Qed.
 
-Theorem id_eqb_sym : forall x y, id_eqb x y = true -> id_eqb y x = true.
+Lemma id_eqb_sym : forall x y, id_eqb x y = true -> id_eqb y x = true.
 Proof.
   destruct x as [x_aux ?].
   destruct y as [y_aux ?].
   destruct x_aux as [| | x_s | x_s]; destruct y_aux as [| | y_s | y_s]; cbn; try trivial; rewrite String.eqb_sym; easy.
 Qed.
 
-Theorem id_eqb_trans : forall x y z, id_eqb x y = true -> id_eqb y z = true -> id_eqb x z = true.
+Lemma id_eqb_trans : forall x y z, id_eqb x y = true -> id_eqb y z = true -> id_eqb x z = true.
 Proof.
   destruct x as [x_aux ?].
   destruct y as [y_aux ?].
@@ -145,7 +145,7 @@ Module IdMiniOrdered <: OrderedType.MiniOrderedType.
     | (_, Id_aux Or_bool _) => True
     end.
 
-  Theorem eq_refl : forall x, eq x x.
+  Lemma eq_refl : forall x, eq x x.
   Proof.
     intros.
     unfold eq.
@@ -153,7 +153,7 @@ Module IdMiniOrdered <: OrderedType.MiniOrderedType.
     apply (id_eqb_refl x).
   Qed.
 
-  Theorem eq_sym : forall x y, eq x y -> eq y x.
+  Lemma eq_sym : forall x y, eq x y -> eq y x.
   Proof.
     intros x y H.
     unfold eq in *.
@@ -162,7 +162,7 @@ Module IdMiniOrdered <: OrderedType.MiniOrderedType.
     apply (id_eqb_sym x y H).
   Qed.
 
-  Theorem eq_trans : forall x y z, eq x y -> eq y z -> eq x z.
+  Lemma eq_trans : forall x y z, eq x y -> eq y z -> eq x z.
   Proof.
     intros x y z H1 H2.
     unfold eq in *.
@@ -172,7 +172,7 @@ Module IdMiniOrdered <: OrderedType.MiniOrderedType.
     apply (id_eqb_trans x y z H1 H2).
   Qed.
 
-  Theorem lt_trans : forall x y z, lt x y -> lt y z -> lt x z.
+  Lemma lt_trans : forall x y z, lt x y -> lt y z -> lt x z.
   Proof.
     destruct x as [x_aux ?].
     destruct y as [y_aux ?].
@@ -187,7 +187,7 @@ Module IdMiniOrdered <: OrderedType.MiniOrderedType.
     all: apply (string_ltb_trans _ y_s _); easy.
   Qed.
 
-  Theorem lt_not_eq : forall x y, lt x y -> ~ eq x y.
+  Lemma lt_not_eq : forall x y, lt x y -> ~ eq x y.
   Proof.
     destruct x as [x_aux ?].
     destruct y as [y_aux ?].

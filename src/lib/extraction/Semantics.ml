@@ -6,6 +6,7 @@ open Datatypes
 open IdUtil
 open List0
 open ListDef
+open ListUtil
 open Nat0
 open PeanoNat
 open QArith_base
