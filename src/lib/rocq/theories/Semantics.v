@@ -576,11 +576,11 @@ Module Make (T : SemanticExt).
     | E_vector_append x y => E_aux (E_vector_append (substitute n v x) (substitute n v y)) annot
     | E_if i t e =>
         E_aux (E_if (substitute n v i) (substitute n v t) (substitute n v e)) annot
-    | E_let (LB_aux (LB_val pat y) lb_annot) body =>
+    | E_let pat y body =>
         if binds_id n pat then
-          E_aux (E_let (LB_aux (LB_val pat (substitute n v y)) lb_annot) body) annot
+          E_aux (E_let pat (substitute n v y) body) annot
         else
-          E_aux (E_let (LB_aux (LB_val pat (substitute n v y)) lb_annot) (substitute n v body)) annot
+          E_aux (E_let pat (substitute n v y) (substitute n v body)) annot
     | E_var l x body =>
         E_aux (E_var (substitute_lexp n v l) (substitute n v x) (substitute n v body)) annot
     | E_match head_exp arms =>
@@ -1352,7 +1352,7 @@ Module Make (T : SemanticExt).
             head_exp' ← step head_exp;
             wrap (E_match head_exp' arms)
         end
-    | E_let (LB_aux (LB_val pat x) lb_annot) body =>
+    | E_let pat x body =>
         match x with
         | E_aux (E_internal_value v) _ =>
             match pattern_match pat v with
@@ -1363,7 +1363,7 @@ Module Make (T : SemanticExt).
             end
         | _ =>
             x' ← step x;
-            wrap (E_let (LB_aux (LB_val pat x') lb_annot) body)
+            wrap (E_let pat x' body)
         end
     | E_lit lit =>
         wrap (E_internal_value (value_of_lit lit))

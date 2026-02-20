@@ -267,7 +267,6 @@ let add_def_to_graph graph (DEF_aux (def, def_annot)) =
       rewrite_exp = (fun _ -> fold_exp (rw_exp self));
       rewrite_pat = (fun _ -> fold_pat (rw_pat self));
       rewrite_mpat = (fun _ mpat -> Option.get (fold_mpat (rw_mpat self) mpat));
-      rewrite_let = (fun _ -> fold_letbind (rw_exp self));
     }
   in
 
@@ -370,10 +369,11 @@ let add_def_to_graph graph (DEF_aux (def, def_annot)) =
         let id = id_of_mapdef mdef in
         graph := G.add_edges (Mapping id) [] !graph;
         ignore (rewrite_mapdef (rewriters (Mapping id)) mdef)
-    | DEF_let (LB_aux (LB_val (pat, exp), _) as lb) ->
+    | DEF_let (pat, exp) ->
         let ids = pat_ids pat in
         IdSet.iter (fun id -> graph := G.add_edges (Letbind id) [] !graph) ids;
-        IdSet.iter (fun id -> ignore (rewrite_let (rewriters (Letbind id)) lb)) ids
+        IdSet.iter (fun id -> ignore (fold_pat (rw_pat (Letbind id)) pat)) ids;
+        IdSet.iter (fun id -> ignore (fold_exp (rw_exp (Letbind id)) exp)) ids
     | DEF_type tdef -> add_type_def_to_graph tdef
     | DEF_register (DEC_aux (DEC_reg (typ, id, opt_exp), annot)) ->
         (* Determine dependencies of initial expressions (or `undefined` if missing, which will add
@@ -468,8 +468,7 @@ let nodes_of_def (DEF_aux (def, _)) =
   | DEF_measure (id, _, _) -> NS.singleton (FunctionMeasure id)
   | DEF_loop_measures (id, _) -> NS.singleton (LoopMeasures id)
   | DEF_register rdec -> NS.singleton (Register (id_of_reg_dec rdec))
-  | DEF_let (LB_aux (LB_val (pat, _), _)) ->
-      pat_ids pat |> IdSet.elements |> List.map (fun id -> Letbind id) |> NS.of_list
+  | DEF_let (pat, _) -> pat_ids pat |> IdSet.elements |> List.map (fun id -> Letbind id) |> NS.of_list
   | DEF_type tdef -> NS.singleton (Type (id_of_type_def tdef))
   | DEF_outcome (OV_aux (OV_outcome (id, _, _), _), _) -> NS.singleton (Outcome id)
   | DEF_instantiation (IN_aux (IN_id id, _), _) -> NS.singleton (Function id)
@@ -567,7 +566,7 @@ let top_sort_defs ast =
       let chan = open_out out in
       G.make_dot ~node_color
         ~edge_color:(fun _ _ -> "black")
-        ~string_of_node:(fun id -> string_of_id (node_id id))
+        ~string_of_node:(fun n -> string_of_int (node_kind n) ^ " " ^ string_of_id (node_id n))
         chan g;
       close_out chan
   | None -> ()

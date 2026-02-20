@@ -872,8 +872,8 @@ let rec anf (E_aux (e_aux, (l, tannot)) as exp) =
       mk_aexp (AE_try (match_aexp, List.map anf_pexp pexps, typ_of exp))
   | ( E_var (LE_aux (LE_id id, _), binding, body)
     | E_var (LE_aux (LE_typ (_, id), _), binding, body)
-    | E_let (LB_aux (LB_val (P_aux (P_id id, _), binding), _), body)
-    | E_let (LB_aux (LB_val (P_aux (P_typ (_, P_aux (P_id id, _)), _), binding), _), body) ) as binder ->
+    | E_let (P_aux (P_id id, _), binding, body)
+    | E_let (P_aux (P_typ (_, P_aux (P_id id, _)), _), binding, body) ) as binder ->
       let mut = match binder with E_var _ -> Mutable | E_let _ -> Immutable | _ -> assert false in
       let env = env_of body in
       let lvar = Env.lookup_id id env in
@@ -881,7 +881,7 @@ let rec anf (E_aux (e_aux, (l, tannot)) as exp) =
   | E_var (lexp, _, _) ->
       Reporting.unreachable l __POS__
         ("Encountered complex l-expression " ^ string_of_lexp lexp ^ " when converting to ANF") [@coverage off]
-  | E_let (LB_aux (LB_val (pat, binding), _), body) ->
+  | E_let (pat, binding, body) ->
       anf (E_aux (E_match (binding, [Pat_aux (Pat_exp (pat, body), (Parse_ast.Unknown, empty_tannot))]), (l, tannot)))
   | E_tuple exps ->
       let aexps = List.map anf exps in

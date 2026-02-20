@@ -259,8 +259,6 @@ let mk_fundef ?loc:(l = Parse_ast.Unknown) funcls =
   let rec_opt = Rec_aux (Rec_nonrec, l) in
   DEF_aux (DEF_fundef (FD_aux (FD_function (rec_opt, tannot_opt, funcls), no_annot)), mk_def_annot l ())
 
-let mk_letbind ?loc:(l = Parse_ast.Unknown) pat exp = LB_aux (LB_val (pat, exp), (l, empty_uannot))
-
 let mk_val_spec ?loc:(l = Parse_ast.Unknown) vs_aux = DEF_aux (DEF_val (VS_aux (vs_aux, no_annot)), mk_def_annot l ())
 
 let mk_def ?loc:(l = Parse_ast.Unknown) def env = DEF_aux (def, mk_def_annot l env)
@@ -746,7 +744,7 @@ and map_exp_annot_aux f = function
   | E_field (exp, id) -> E_field (map_exp_annot f exp, id)
   | E_match (exp, cases) -> E_match (map_exp_annot f exp, List.map (map_pexp_annot f) cases)
   | E_try (exp, cases) -> E_try (map_exp_annot f exp, List.map (map_pexp_annot f) cases)
-  | E_let (letbind, exp) -> E_let (map_letbind_annot f letbind, map_exp_annot f exp)
+  | E_let (pat, bind, exp) -> E_let (map_pat_annot f pat, map_exp_annot f bind, map_exp_annot f exp)
   | E_assign (lexp, exp) -> E_assign (map_lexp_annot f lexp, map_exp_annot f exp)
   | E_sizeof nexp -> E_sizeof nexp
   | E_constraint nc -> E_constraint nc
@@ -828,10 +826,6 @@ and map_mpat_annot_aux f = function
   | MP_struct (struct_name, fmpats) ->
       MP_struct (struct_name, List.map (fun (field, mpat) -> (field, map_mpat_annot f mpat)) fmpats)
 
-and map_letbind_annot f (LB_aux (lb, annot)) = LB_aux (map_letbind_annot_aux f lb, f annot)
-
-and map_letbind_annot_aux f = function LB_val (pat, exp) -> LB_val (map_pat_annot f pat, map_exp_annot f exp)
-
 and map_lexp_annot f (LE_aux (lexp, annot)) = LE_aux (map_lexp_annot_aux f lexp, f annot)
 
 and map_lexp_annot_aux f = function
@@ -902,7 +896,7 @@ and map_def_annot f (DEF_aux (aux, annot)) =
     | DEF_outcome (outcome_spec, defs) -> DEF_outcome (outcome_spec, List.map (map_def_annot f) defs)
     | DEF_instantiation (IN_aux (IN_id id, annot), substs) -> DEF_instantiation (IN_aux (IN_id id, f annot), substs)
     | DEF_impl funcl -> DEF_impl (map_funcl_annot f funcl)
-    | DEF_let lb -> DEF_let (map_letbind_annot f lb)
+    | DEF_let (pat, exp) -> DEF_let (map_pat_annot f pat, map_exp_annot f exp)
     | DEF_val vs -> DEF_val (map_valspec_annot f vs)
     | DEF_fixity (prec, n, id) -> DEF_fixity (prec, n, id)
     | DEF_overload (name, overloads) -> DEF_overload (name, overloads)
@@ -928,7 +922,7 @@ let rec map_def_def_annot f (DEF_aux (aux, annot)) =
     | DEF_outcome (outcome_spec, defs) -> DEF_outcome (outcome_spec, List.map (map_def_def_annot f) defs)
     | DEF_instantiation (inst_spec, substs) -> DEF_instantiation (inst_spec, substs)
     | DEF_impl funcl -> DEF_impl funcl
-    | DEF_let lb -> DEF_let lb
+    | DEF_let (pat, exp) -> DEF_let (pat, exp)
     | DEF_val vs -> DEF_val vs
     | DEF_fixity (prec, n, id) -> DEF_fixity (prec, n, id)
     | DEF_overload (name, overloads) -> DEF_overload (name, overloads)
@@ -1179,7 +1173,7 @@ let rec string_of_exp (E_aux (exp, _)) =
   | E_match (exp, cases) -> "match " ^ string_of_exp exp ^ " { " ^ string_of_list ", " string_of_pexp cases ^ " }"
   | E_try (exp, cases) ->
       "try " ^ string_of_exp exp ^ " catch { case " ^ string_of_list " case " string_of_pexp cases ^ "}"
-  | E_let (letbind, exp) -> "let " ^ string_of_letbind letbind ^ " in " ^ string_of_exp exp
+  | E_let (pat, bind, exp) -> "let " ^ string_of_pat pat ^ " = " ^ string_of_exp bind ^ " in " ^ string_of_exp exp
   | E_assign (lexp, bind) -> string_of_lexp lexp ^ " = " ^ string_of_exp bind
   | E_typ (typ, exp) -> string_of_exp exp ^ " : " ^ string_of_typ typ
   | E_vector vec -> "[" ^ string_of_list ", " string_of_exp vec ^ "]"
@@ -1291,9 +1285,6 @@ and string_of_lexp (LE_aux (lexp, _)) =
   | LE_field (lexp, id) -> string_of_lexp lexp ^ "." ^ string_of_id id
   | LE_app (f, xs) -> string_of_id f ^ "(" ^ string_of_list ", " string_of_exp xs ^ ")"
 
-and string_of_letbind (LB_aux (lb, _)) =
-  match lb with LB_val (pat, exp) -> string_of_pat pat ^ " = " ^ string_of_exp exp
-
 let rec string_of_index_range (BF_aux (ir, _)) =
   match ir with
   | BF_single n -> string_of_nexp n
@@ -1371,7 +1362,7 @@ let ids_of_def (DEF_aux (aux, _)) =
   | DEF_type td -> IdSet.singleton (id_of_type_def td)
   | DEF_fundef fd -> IdSet.singleton (id_of_fundef fd)
   | DEF_mapdef md -> IdSet.singleton (id_of_mapdef md)
-  | DEF_let (LB_aux (LB_val (pat, _), _)) -> pat_ids pat
+  | DEF_let (pat, _) -> pat_ids pat
   | DEF_register (DEC_aux (DEC_reg (_, id, _), _)) -> IdSet.singleton id
   | DEF_val vs -> IdSet.singleton (id_of_val_spec vs)
   | DEF_internal_mutrec fds -> IdSet.of_list (List.map id_of_fundef fds)
@@ -1712,11 +1703,8 @@ let rec subst id value (E_aux (e_aux, annot) as exp) =
     | E_struct_update (exp, fexps) -> E_struct_update (subst id value exp, List.map (subst_fexp id value) fexps)
     | E_field (exp, id') -> E_field (subst id value exp, id')
     | E_match (exp, pexps) -> E_match (subst id value exp, List.map (subst_pexp id value) pexps)
-    | E_let (LB_aux (LB_val (pat, bind), lb_annot), body) ->
-        E_let
-          ( LB_aux (LB_val (pat, subst id value bind), lb_annot),
-            if IdSet.mem id (pat_ids pat) then body else subst id value body
-          )
+    | E_let (pat, bind, body) ->
+        E_let (pat, subst id value bind, if IdSet.mem id (pat_ids pat) then body else subst id value body)
     | E_assign (lexp, exp) -> E_assign (subst_lexp id value lexp, subst id value exp) (* Shadowing... *)
     (* Should be re-written *)
     | E_sizeof nexp -> E_sizeof nexp
@@ -1920,7 +1908,7 @@ let rec locate : 'a. (l -> l) -> 'a exp -> 'a exp =
     | E_struct_update (exp, fexps) -> E_struct_update (locate f exp, List.map (locate_fexp f) fexps)
     | E_field (exp, id) -> E_field (locate f exp, locate_id f id)
     | E_match (exp, cases) -> E_match (locate f exp, List.map (locate_pexp f) cases)
-    | E_let (letbind, exp) -> E_let (locate_letbind f letbind, locate f exp)
+    | E_let (pat, bind, exp) -> E_let (locate_pat f pat, locate f bind, locate f exp)
     | E_assign (lexp, exp) -> E_assign (locate_lexp f lexp, locate f exp)
     | E_sizeof nexp -> E_sizeof (locate_nexp f nexp)
     | E_return exp -> E_return (locate f exp)
@@ -1943,9 +1931,6 @@ and locate_measure : 'a. (l -> l) -> 'a in_place_loop_measure -> 'a in_place_loo
  fun f (Measure_aux (m, l)) ->
   let m = match m with Measure_none -> Measure_none | Measure_some exp -> Measure_some (locate f exp) in
   Measure_aux (m, f l)
-
-and locate_letbind : 'a. (l -> l) -> 'a letbind -> 'a letbind =
- fun f (LB_aux (LB_val (pat, exp), (l, annot))) -> LB_aux (LB_val (locate_pat f pat, locate f exp), (f l, annot))
 
 and locate_pexp : 'a. (l -> l) -> 'a pexp -> 'a pexp =
  fun f (Pat_aux (pexp_aux, (l, annot))) ->
@@ -2181,8 +2166,7 @@ struct
         match aux with
         | E_block exps | E_tuple exps -> option_mapm (find_annot_exp sl) exps
         | E_app (_, exps) -> option_mapm (find_annot_exp sl) exps
-        | E_let (LB_aux (LB_val (pat, exp), _), body) ->
-            option_chain (find_annot_pat sl pat) (option_mapm (find_annot_exp sl) [exp; body])
+        | E_let (pat, exp, body) -> option_chain (find_annot_pat sl pat) (option_mapm (find_annot_exp sl) [exp; body])
         | E_assign (lexp, exp) -> option_chain (find_annot_lexp sl lexp) (find_annot_exp sl exp)
         | E_var (lexp, exp1, exp2) ->
             option_chain (find_annot_lexp sl lexp) (option_mapm (find_annot_exp sl) [exp1; exp2])

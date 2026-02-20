@@ -78,11 +78,11 @@ module Printer (Config : PRINT_CONFIG) : sig
 
   val doc_typschm : typschm -> PPrint.document
 
+  val doc_pat : uannot pat -> PPrint.document
+
   val doc_exp : uannot exp -> PPrint.document
 
   val doc_block : uannot exp list -> PPrint.document
-
-  val doc_letbind : uannot letbind -> PPrint.document
 
   val doc_funcl : uannot funcl -> PPrint.document
 

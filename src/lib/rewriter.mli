@@ -56,7 +56,6 @@ type ('a, 'b) rewriters = {
   rewrite_lexp : ('a, 'b) rewriters -> 'a lexp -> 'a lexp;
   rewrite_pat : ('a, 'b) rewriters -> 'a pat -> 'a pat;
   rewrite_mpat : ('a, 'b) rewriters -> 'a mpat -> 'a mpat;
-  rewrite_let : ('a, 'b) rewriters -> 'a letbind -> 'a letbind;
   rewrite_fun : ('a, 'b) rewriters -> 'a fundef -> 'a fundef;
   rewrite_def : ('a, 'b) rewriters -> ('a, 'b) def -> ('a, 'b) def;
   rewrite_ast : ('a, 'b) rewriters -> ('a, 'b) ast -> ('a, 'b) ast;
@@ -83,8 +82,6 @@ val rewrite_pat : (tannot, env) rewriters -> tannot pat -> tannot pat
 val rewrite_mpat : (tannot, env) rewriters -> tannot mpat -> tannot mpat
 
 val rewrite_pexp : (tannot, env) rewriters -> tannot pexp -> tannot pexp
-
-val rewrite_let : (tannot, env) rewriters -> tannot letbind -> tannot letbind
 
 val rewrite_def : (tannot, env) rewriters -> typed_def -> typed_def
 
@@ -126,8 +123,6 @@ type ( 'a,
        'opt_default,
        'pexp,
        'pexp_aux,
-       'letbind_aux,
-       'letbind,
        'pat,
        'pat_aux
      )
@@ -151,7 +146,7 @@ type ( 'a,
   e_field : 'exp * id -> 'exp_aux;
   e_case : 'exp * 'pexp list -> 'exp_aux;
   e_try : 'exp * 'pexp list -> 'exp_aux;
-  e_let : 'letbind * 'exp -> 'exp_aux;
+  e_let : 'pat * 'exp * 'exp -> 'exp_aux;
   e_assign : 'lexp * 'exp -> 'exp_aux;
   e_sizeof : nexp -> 'exp_aux;
   e_constraint : n_constraint -> 'exp_aux;
@@ -185,8 +180,6 @@ type ( 'a,
   pat_exp : 'pat * 'exp -> 'pexp_aux;
   pat_when : 'pat * 'exp * 'exp -> 'pexp_aux;
   pat_aux : 'pexp_aux * 'a annot -> 'pexp;
-  lb_val : 'pat * 'exp -> 'letbind_aux;
-  lb_aux : 'letbind_aux * 'a annot -> 'letbind;
   pat_alg : ('a, 'pat, 'pat_aux) pat_alg;
 }
 
@@ -208,35 +201,12 @@ val fold_exp :
     'opt_default,
     'pexp,
     'pexp_aux,
-    'letbind_aux,
-    'letbind,
     'pat,
     'pat_aux
   )
   exp_alg ->
   'a exp ->
   'exp
-
-val fold_letbind :
-  ( 'a,
-    'exp,
-    'exp_aux,
-    'lexp,
-    'lexp_aux,
-    'fexp,
-    'fexp_aux,
-    'opt_default_aux,
-    'opt_default,
-    'pexp,
-    'pexp_aux,
-    'letbind_aux,
-    'letbind,
-    'pat,
-    'pat_aux
-  )
-  exp_alg ->
-  'a letbind ->
-  'letbind
 
 val fold_pexp :
   ( 'a,
@@ -250,8 +220,6 @@ val fold_pexp :
     'opt_default,
     'pexp,
     'pexp_aux,
-    'letbind_aux,
-    'letbind,
     'pat,
     'pat_aux
   )
@@ -271,8 +239,6 @@ val fold_funcl :
     'opt_default,
     'a pexp,
     'pexp_aux,
-    'letbind_aux,
-    'letbind,
     'pat,
     'pat_aux
   )
@@ -292,8 +258,6 @@ val fold_function :
     'opt_default,
     'a pexp,
     'pexp_aux,
-    'letbind_aux,
-    'letbind,
     'pat,
     'pat_aux
   )
@@ -317,8 +281,6 @@ val id_exp_alg :
     'a opt_default,
     'a pexp,
     'a pexp_aux,
-    'a letbind_aux,
-    'a letbind,
     'a pat,
     'a pat_aux
   )
@@ -340,8 +302,6 @@ val compute_exp_alg :
     'b * 'a opt_default,
     'b * 'a pexp,
     'b * 'a pexp_aux,
-    'b * 'a letbind_aux,
-    'b * 'a letbind,
     'b * 'a pat,
     'b * 'a pat_aux
   )
@@ -349,7 +309,7 @@ val compute_exp_alg :
 
 val pure_pat_alg : 'b -> ('b -> 'b -> 'b) -> ('a, 'b, 'b) pat_alg
 
-val pure_exp_alg : 'b -> ('b -> 'b -> 'b) -> ('a, 'b, 'b, 'b, 'b, 'b, 'b, 'b, 'b, 'b, 'b, 'b, 'b, 'b, 'b) exp_alg
+val pure_exp_alg : 'b -> ('b -> 'b -> 'b) -> ('a, 'b, 'b, 'b, 'b, 'b, 'b, 'b, 'b, 'b, 'b, 'b, 'b) exp_alg
 
 val add_p_typ : Env.t -> typ -> 'a pat -> 'a pat
 

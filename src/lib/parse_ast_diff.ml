@@ -400,8 +400,10 @@ let rec diff_exp lhs rhs =
       | E_match (head_exp2, arms2) -> diff_exp head_exp1 head_exp2 &&& lazy (diff_list ~at:l diff_pexp arms1 arms2)
       | _ -> Some l
     )
-  | E_let (lb1, body1) -> (
-      match rhs with E_let (lb2, body2) -> diff_letbind lb1 lb2 &&& lazy (diff_exp body1 body2) | _ -> Some l
+  | E_let (pat1, bind1, body1) -> (
+      match rhs with
+      | E_let (pat2, bind2, body2) -> diff_pat pat1 pat2 &&& lazy (diff_exp bind1 bind2) &&& lazy (diff_exp body1 body2)
+      | _ -> Some l
     )
   | E_assign (lexp1, exp1) -> (
       match rhs with E_assign (lexp2, exp2) -> diff_exp lexp1 lexp2 &&& lazy (diff_exp exp1 exp2) | _ -> Some l
@@ -485,11 +487,6 @@ and diff_pexp (Pat_aux (lhs, l)) (Pat_aux (rhs, _)) =
           &&& lazy (diff_pexp pexp1 pexp2)
       | _ -> Some l
     )
-
-and diff_letbind (LB_aux (lhs, _)) (LB_aux (rhs, _)) =
-  let (LB_val (pat1, exp1)) = lhs in
-  let (LB_val (pat2, exp2)) = rhs in
-  diff_pat pat1 pat2 &&& lazy (diff_exp exp1 exp2)
 
 let rec diff_mpat (MP_aux (lhs, l)) (MP_aux (rhs, _)) =
   match lhs with
@@ -865,8 +862,8 @@ let rec diff_def (DEF_aux (lhs, l)) (DEF_aux (rhs, _)) =
   | DEF_impl funcl1 -> (
       match rhs with DEF_impl funcl2 -> diff_funcl funcl1 funcl2 | _ -> Some l
     )
-  | DEF_let lb1 -> (
-      match rhs with DEF_let lb2 -> diff_letbind lb1 lb2 | _ -> Some l
+  | DEF_let (pat1, exp1) -> (
+      match rhs with DEF_let (pat2, exp2) -> diff_pat pat1 pat2 &&& lazy (diff_exp exp1 exp2) | _ -> Some l
     )
   | DEF_overload (id1, ids1) -> (
       match rhs with

@@ -845,24 +845,25 @@ let rec chunk_pat comments chunks (P_aux (aux, l)) =
       Queue.add (Spacer (false, 1)) chunks;
       chunk_pat comments chunks pat
 
-type block_exp = Block_exp of exp | Block_let of letbind | Block_var of exp * exp
+type block_exp = Block_exp of exp | Block_let of pat * exp | Block_var of exp * exp
 
 let block_exp_locs = function
   | Block_exp (E_aux (_, l)) -> (l, l)
-  | Block_let (LB_aux (_, l)) -> (l, l)
+  | Block_let (P_aux (_, s_l), E_aux (_, e_l)) -> (s_l, e_l)
   | Block_var (E_aux (_, s_l), E_aux (_, e_l)) -> (s_l, e_l)
 
 let flatten_block exps =
   let block_exps = Queue.create () in
   let rec go = function
     | [] -> ()
-    | [E_aux (E_let (letbind, E_aux (E_block more_exps, _)), _)] ->
-        Queue.add (Block_let letbind) block_exps;
+    | [E_aux (E_let (pat, bind, E_aux (E_block more_exps, _)), _)] ->
+        Queue.add (Block_let (pat, bind)) block_exps;
         go more_exps
     | [E_aux (E_var (lexp, exp, E_aux (E_block more_exps, _)), _)] ->
         Queue.add (Block_var (lexp, exp)) block_exps;
         go more_exps
-    | [E_aux (E_let (letbind, E_aux (E_lit (L_aux (L_unit, _)), _)), _)] -> Queue.add (Block_let letbind) block_exps
+    | [E_aux (E_let (pat, bind, E_aux (E_lit (L_aux (L_unit, _)), _)), _)] ->
+        Queue.add (Block_let (pat, bind)) block_exps
     | [E_aux (E_var (lexp, exp, E_aux (E_lit (L_aux (L_unit, _)), _)), _)] ->
         Queue.add (Block_var (lexp, exp)) block_exps
     | exp :: exps ->
@@ -997,7 +998,7 @@ let rec chunk_exp comments chunks (E_aux (aux, l)) =
             begin
               match block_exp with
               | Block_exp exp -> chunk_exp comments chunks exp
-              | Block_let (LB_aux (LB_val (pat, exp), _)) ->
+              | Block_let (pat, exp) ->
                   pop_comments comments chunks s_l;
                   let pat_chunks = Queue.create () in
                   chunk_pat comments pat_chunks pat;
@@ -1027,7 +1028,7 @@ let rec chunk_exp comments chunks (E_aux (aux, l)) =
           false block_exps
       in
       Queue.add (Block (true, block_chunks)) chunks
-  | (E_let (LB_aux (LB_val (pat, exp), _), body) | E_internal_plet (pat, exp, body)) as binder ->
+  | (E_let (pat, exp, body) | E_internal_plet (pat, exp, body)) as binder ->
       let binder =
         match binder with
         | E_let _ -> Let_binder
@@ -1361,7 +1362,7 @@ let chunk_register comments chunks (DEC_aux (DEC_reg ((ATyp_aux (_, typ_l) as ty
   Queue.push (Chunks def_chunks) chunks;
   if not skip_spacer then Queue.push (Spacer (true, 1)) chunks
 
-let chunk_toplevel_let l comments chunks (LB_aux (LB_val (pat, exp), _)) =
+let chunk_toplevel_let l comments chunks pat exp =
   pop_comments comments chunks l;
   let def_chunks = Queue.create () in
 
@@ -1551,7 +1552,7 @@ let rec chunk_def skip source last_line_span comments chunks (DEF_aux (def, l)) 
             Queue.add (Atom (Printf.sprintf "%s %s %s" (string_of_prec prec) (Big_int.to_string n) op)) chunks;
             Queue.add (Spacer (true, 1)) chunks
         | DEF_register reg -> chunk_register comments chunks reg
-        | DEF_let lb -> chunk_toplevel_let l comments chunks lb
+        | DEF_let (pat, exp) -> chunk_toplevel_let l comments chunks pat exp
         | DEF_val vs -> chunk_val_spec comments chunks vs
         | DEF_scattered sd when can_handle_sd sd -> chunk_scattered comments chunks sd
         | DEF_type td when can_handle_td td -> chunk_type_def comments chunks td

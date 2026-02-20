@@ -591,14 +591,14 @@ let stop_at_false_assertions e =
         let e, stop = exp e in
         let stop = match stop with Some _ -> Some typ | None -> None in
         (E_aux (E_typ (typ, e), ann), stop)
-    | E_let (LB_aux (LB_val (p, e1), lbann), e2) ->
+    | E_let (p, e1, e2) ->
         let e1, stop = exp e1 in
         begin
           match stop with
           | Some _ -> (e1, stop)
           | None ->
               let e2, stop = exp e2 in
-              (E_aux (E_let (LB_aux (LB_val (p, e1), lbann), e2), ann), stop)
+              (E_aux (E_let (p, e1, e2), ann), stop)
         end
     | E_assert (e1, _) when exp_false e1 -> (ea, Some (typ_of_annot ann))
     | E_throw e -> (ea, Some (typ_of_annot ann))
@@ -644,11 +644,7 @@ let apply_pat_choices choices =
         | Pat_aux (Pat_exp (p, E_aux (e, _)), _) ->
             let dummyannot = (Generated Unknown, empty_tannot) in
             (* TODO: use a proper substitution *)
-            List.fold_left
-              (fun e (id, e') ->
-                E_let (LB_aux (LB_val (P_aux (P_id id, dummyannot), e'), dummyannot), E_aux (e, dummyannot))
-              )
-              e subst
+            List.fold_left (fun e (id, e') -> E_let (P_aux (P_id id, dummyannot), e', E_aux (e, dummyannot))) e subst
         | Pat_aux (Pat_when _, (l, _)) ->
             raise (Reporting.err_unreachable l __POS__ "Pattern acquired a guard after analysis!")
         | exception Not_found ->
@@ -660,6 +656,11 @@ let apply_pat_choices choices =
   fold_exp { id_exp_alg with e_assert = rewrite_assert; e_case = rewrite_case }
 
 type split_req = split_loc * string * (tannot pat list * Parse_ast.l) option
+
+let letbind_loc pat exp =
+  match Reporting.end_pos (exp_loc exp) with
+  | Some p2 -> Reporting.extend_loc p2 (pat_loc pat)
+  | None -> Parse_ast.Unknown
 
 let split_defs target all_errors (splits : split_req list) env ast =
   let no_errors_happened = ref true in
@@ -1075,9 +1076,11 @@ let split_defs target all_errors (splits : split_req list) env ast =
         | E_struct_update (e, fes) -> re (E_struct_update (map_exp e, List.map map_fexp fes))
         | E_field (e, id) -> re (E_field (map_exp e, id))
         | E_match (e, cases) -> re (E_match (map_exp e, List.concat (List.map map_pexp cases)))
-        | E_let (lb, e) ->
-            let lb_l, binding_exp_annot = match lb with LB_aux (LB_val (_, E_aux (_, (_, a))), (l, _)) -> (l, a) in
-            let lb' = map_letbind lb in
+        | E_let (lpat, lbind, e) ->
+            let binding_exp_annot = match lbind with E_aux (_, (_, a)) -> a in
+            let lb_l = letbind_loc lpat lbind in
+            let lpat' = check_single_pat lpat in
+            let lbind' = map_exp lbind in
             let e' = map_exp e in
             (* Add a case split in the right hand side, e.g. for let 'n = get_vector_size() in ... *)
             let e' =
@@ -1109,7 +1112,7 @@ let split_defs target all_errors (splits : split_req list) env ast =
                   E_aux (E_match (match_exp, pexps), annot)
               | _ -> assert false (* TODO: should just have an error here...? *)
             in
-            re (E_let (lb', e'))
+            re (E_let (lpat', lbind', e'))
         | E_assign (le, e) -> re (E_assign (map_lexp le, map_exp e))
         | E_exit e -> re (E_exit (map_exp e))
         | E_throw e -> re (E_throw e)
@@ -1179,8 +1182,7 @@ let split_defs target all_errors (splits : split_req list) env ast =
                   )
                   patnsubsts
           )
-      and map_letbind (LB_aux (lb, annot)) =
-        match lb with LB_val (p, e) -> LB_aux (LB_val (check_single_pat p, map_exp e), annot)
+      and map_letbind p e = (check_single_pat p, map_exp e)
       and map_lexp (LE_aux (e, annot) as le) =
         let re e = LE_aux (e, annot) in
         match e with
@@ -1219,9 +1221,9 @@ let split_defs target all_errors (splits : split_req list) env ast =
       let ref_vars = Constant_propagation.referenced_vars body in
       map_pexp ?f ref_vars top_pexp
     in
-    let map_letbind (LB_aux (LB_val (_, e), _) as lb) =
-      let ref_vars = Constant_propagation.referenced_vars e in
-      map_letbind ref_vars lb
+    let map_letbind pat exp =
+      let ref_vars = Constant_propagation.referenced_vars exp in
+      map_letbind ref_vars pat exp
     in
 
     let map_funcl (FCL_aux (FCL_funcl (id, pexp), annot)) =
@@ -1244,7 +1246,9 @@ let split_defs target all_errors (splits : split_req list) env ast =
       | DEF_pragma _ | DEF_internal_mutrec _ ->
           [def]
       | DEF_fundef fd -> [DEF_aux (DEF_fundef (map_fundef fd), def_annot)]
-      | DEF_let lb -> [DEF_aux (DEF_let (map_letbind lb), def_annot)]
+      | DEF_let (pat, exp) ->
+          let pat, exp = map_letbind pat exp in
+          [DEF_aux (DEF_let (pat, exp), def_annot)]
       | DEF_scattered sd -> List.map (fun x -> DEF_aux (DEF_scattered x, def_annot)) (map_scattered_def sd)
       | DEF_measure (id, pat, exp) -> [DEF_aux (DEF_measure (id, pat, map_exp exp), def_annot)]
       | DEF_impl _ | DEF_instantiation _ | DEF_outcome _ | DEF_mapdef _ | DEF_loop_measures _ ->
@@ -1321,14 +1325,7 @@ module AtomToItself = struct
       let l = Generated Unknown in
       let annot = (l, empty_tannot) in
       E_aux
-        ( E_let
-            ( LB_aux
-                ( LB_val
-                    (P_aux (P_id var, annot), E_aux (E_app (mk_id "size_itself_int", [E_aux (E_id var, annot)]), annot)),
-                  annot
-                ),
-              exp
-            ),
+        ( E_let (P_aux (P_id var, annot), E_aux (E_app (mk_id "size_itself_int", [E_aux (E_id var, annot)]), annot), exp),
           annot
         )
     )
@@ -1558,7 +1555,6 @@ module AtomToItself = struct
           E_app (id, args')
       | exception Not_found -> E_app (id, args)
     in
-    let rewrite_letbind = fold_letbind { id_exp_alg with e_app = rewrite_e_app } in
     let rewrite_exp = fold_exp { id_exp_alg with e_app = rewrite_e_app } in
     let replace_funtype id typ =
       match Bindings.find id fn_sizes with
@@ -1611,7 +1607,7 @@ module AtomToItself = struct
             let funcls = List.map check_funcl funcls in
             (* TODO rewrite tannopt? *)
             DEF_fundef (FD_aux (FD_function (recopt, tannopt, funcls), (l, empty_tannot)))
-        | DEF_let lb -> DEF_let (rewrite_letbind lb)
+        | DEF_let (pat, exp) -> DEF_let (pat, rewrite_exp exp)
         | DEF_val (VS_aux (VS_val_spec (typschm, id, extern), (l, annot))) ->
             let typschm =
               match typschm with
@@ -2358,7 +2354,8 @@ module Analysis = struct
           let ds, assigns, rs = split3 (List.map analyse_case cases) in
           let deps = add_dep_respecting_tuples deps (merge_deps ds) in
           (deps, List.fold_left dep_bindings_merge Bindings.empty assigns, List.fold_left merge r rs)
-      | E_let (LB_aux (LB_val (pat, e1), (lb_l, _)), e2) ->
+      | E_let (pat, e1, e2) ->
+          let lb_l = letbind_loc pat e1 in
           let d1, assigns, r1 = analyse_sub env assigns e1 in
           let rec update_env_subpat env pat d =
             match (pat, d) with
@@ -2775,7 +2772,7 @@ module Analysis = struct
     match e with
     | E_block es -> List.fold_left merge_set_asserts_by_kid KBindings.empty (List.map find_set_assertions es)
     | E_typ (_, e) -> find_set_assertions e
-    | E_let (LB_aux (LB_val (p, e1), _), e2) ->
+    | E_let (p, e1, e2) ->
         let sets1 = find_set_assertions e1 in
         let sets2 = find_set_assertions e2 in
         let kbound = kids_bound_by_pat p in
@@ -2857,7 +2854,7 @@ module Analysis = struct
     match aux with
     | DEF_fundef (FD_aux (FD_function (_, _, funcls), _)) ->
         (globals, List.fold_left (fun r f -> merge r (analyse_funcl debug effect_info env globals f)) empty funcls)
-    | DEF_let (LB_aux (LB_val (P_aux ((P_id id | P_typ (_, P_aux (P_id id, _))), _), exp), _)) ->
+    | DEF_let (P_aux ((P_id id | P_typ (_, P_aux (P_id id, _))), _), exp) ->
         (Bindings.add id (Constant_fold.is_constant exp) globals, empty)
     | _ -> (globals, empty)
 
@@ -3716,13 +3713,8 @@ module MonoRewrites = struct
             new_annot
           )
     | ( ( E_let
-            ( LB_aux
-                ( LB_val
-                    ( P_aux ((P_id id | P_typ (_, P_aux (P_id id, _))), _),
-                      (E_aux (E_app (subrange1, [vec1; start1; end1]), _) as exp1)
-                    ),
-                  _
-                ),
+            ( P_aux ((P_id id | P_typ (_, P_aux (P_id id, _))), _),
+              (E_aux (E_app (subrange1, [vec1; start1; end1]), _) as exp1),
               exp2
             ) as e_aux
         ),
@@ -3843,14 +3835,9 @@ module BitvectorSizeCasts = struct
                 let exp_ann = mk_tannot env (typ_of exp) in
                 E_aux
                   ( E_let
-                      ( LB_aux
-                          ( LB_val
-                              ( P_aux (P_typ (one_target_typ, P_aux (P_id var, (genunk, tar_ann))), (genunk, tar_ann)),
-                                E_aux
-                                  ( E_app (Id_aux (Id cast_name, genunk), [E_aux (E_id var, (genunk, src_ann))]),
-                                    (genunk, tar_ann)
-                                  )
-                              ),
+                      ( P_aux (P_typ (one_target_typ, P_aux (P_id var, (genunk, tar_ann))), (genunk, tar_ann)),
+                        E_aux
+                          ( E_app (Id_aux (Id cast_name, genunk), [E_aux (E_id var, (genunk, src_ann))]),
                             (genunk, tar_ann)
                           ),
                         exp
@@ -3884,11 +3871,9 @@ module BitvectorSizeCasts = struct
                 let exp_ann = mk_tannot env (typ_of exp) in
                 E_aux
                   ( E_let
-                      ( LB_aux (LB_val (pat, E_aux (E_id var, (genunk, src_ann))), (genunk, src_ann)),
-                        E_aux
-                          ( E_let (LB_aux (LB_val (P_aux (P_id var, (genunk, tar_ann)), e'), (genunk, tar_ann)), exp),
-                            (genunk, exp_ann)
-                          )
+                      ( pat,
+                        E_aux (E_id var, (genunk, src_ann)),
+                        E_aux (E_let (P_aux (P_id var, (genunk, tar_ann)), e', exp), (genunk, exp_ann))
                       ),
                     (genunk, exp_ann)
                   )
@@ -3897,7 +3882,8 @@ module BitvectorSizeCasts = struct
                 [
                   E_aux
                     ( E_let
-                        ( LB_aux (LB_val (pat, E_aux (E_id var, (genunk, src_ann))), (genunk, src_ann)),
+                        ( pat,
+                          E_aux (E_id var, (genunk, src_ann)),
                           E_aux
                             (E_assign (LE_aux (LE_typ (one_target_typ, var), (genunk, tar_ann)), e'), (genunk, asg_ann))
                         ),
@@ -3905,8 +3891,7 @@ module BitvectorSizeCasts = struct
                     );
                 ]
               ),
-              fun (E_aux (_, (exp_l, exp_ann)) as exp) ->
-                E_aux (E_let (LB_aux (LB_val (pat, exp), (Generated exp_l, exp_ann)), e'), (Generated exp_l, tar_ann))
+              fun (E_aux (_, (exp_l, exp_ann)) as exp) -> E_aux (E_let (pat, exp, e'), (Generated exp_l, tar_ann))
             )
       end
     | None -> ((fun _ e -> e), (fun _ -> []), fun e -> e)
@@ -3943,16 +3928,17 @@ module BitvectorSizeCasts = struct
           E_aux (E_block (assigns_in @ es @ assigns_out), ann)
       | _ :: _, E_aux (E_block es, ann), _ ->
           let ret_var = mk_id "cast#env#result" in
-          let lb = LB_aux (LB_val (P_aux (P_id ret_var, ann), E_aux (E_block es, ann)), ann) in
+          let pat = P_aux (P_id ret_var, ann) in
+          let exp = E_aux (E_block es, ann) in
           let suffix = E_aux (E_block (assigns_out @ [E_aux (E_id ret_var, ann)]), ann) in
-          E_aux (E_block (assigns_in @ [E_aux (E_let (lb, suffix), ann)]), ann)
+          E_aux (E_block (assigns_in @ [E_aux (E_let (pat, exp, suffix), ann)]), ann)
       | _ :: _, E_aux (_, (l, ann)), Typ_aux (Typ_id id, _) when Id.compare id (mk_id "unit") == 0 ->
           E_aux (E_block (assigns_in @ [exp] @ assigns_out), (Generated l, ann))
       | _ :: _, E_aux (_, ann), _ ->
           let ret_var = mk_id "cast#env#result" in
-          let lb = LB_aux (LB_val (P_aux (P_id ret_var, ann), exp), ann) in
+          let pat = P_aux (P_id ret_var, ann) in
           let suffix = E_aux (E_block (assigns_out @ [E_aux (E_id ret_var, ann)]), ann) in
-          E_aux (E_block (assigns_in @ [E_aux (E_let (lb, suffix), ann)]), ann)
+          E_aux (E_block (assigns_in @ [E_aux (E_let (pat, exp, suffix), ann)]), ann)
     in
     let add_immutables exp =
       Bindings.fold (fun var (mut, typ) exp -> if mut = Immutable then mk_cast var typ exp else exp) immutables exp
@@ -3982,7 +3968,7 @@ module BitvectorSizeCasts = struct
         else (
           let exp_env = env_of exp in
           match exp with
-          | E_aux (E_let (lb, exp'), ann) -> E_aux (E_let (lb, aux exp' (typ, target_typ)), ann)
+          | E_aux (E_let (pat, bind, exp'), ann) -> E_aux (E_let (pat, bind, aux exp' (typ, target_typ)), ann)
           | E_aux (E_var (lexp, bind, exp'), ann) -> E_aux (E_var (lexp, bind, aux exp' (typ, target_typ)), ann)
           | E_aux (E_block exps, ann) ->
               let exps' = match List.rev exps with [] -> [] | final :: l -> aux final (typ, target_typ) :: l in

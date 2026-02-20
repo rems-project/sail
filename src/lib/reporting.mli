@@ -75,6 +75,8 @@ val extend_loc : Lexing.position -> Ast.l -> Ast.l
 
 val start_pos : Ast.l -> Lexing.position option
 
+val end_pos : Ast.l -> Lexing.position option
+
 val range : Lexing.position option -> Lexing.position option -> Ast.l
 
 (** Reduce a location to a pair of positions if possible *)

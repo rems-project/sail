@@ -301,7 +301,8 @@ let rec ocaml_exp ctx (E_aux (exp_aux, (l, _)) as exp) =
              separate_map (semi ^^ space) (ocaml_fexp (record_id l exp) ctx) fexps;
            ]
         )
-  | E_let (lb, exp) -> separate space [string "let"; ocaml_letbind ctx lb; string "in"] ^/^ ocaml_exp ctx exp
+  | E_let (pat, bind, exp) ->
+      separate space [string "let"; ocaml_letbind ctx pat bind; string "in"] ^/^ ocaml_exp ctx exp
   | E_var (lexp, exp1, exp2) ->
       separate space
         [
@@ -363,8 +364,7 @@ let rec ocaml_exp ctx (E_aux (exp_aux, (l, _)) as exp) =
   | E_cons (x, xs) -> ocaml_exp ctx x ^^ string " :: " ^^ ocaml_exp ctx xs
   | _ -> string ("EXP(" ^ string_of_exp exp ^ ")")
 
-and ocaml_letbind ctx (LB_aux (lb_aux, _)) =
-  match lb_aux with LB_val (pat, exp) -> separate space [ocaml_pat ctx pat; equals; ocaml_atomic_exp ctx exp]
+and ocaml_letbind ctx pat exp = separate space [ocaml_pat ctx pat; equals; ocaml_atomic_exp ctx exp]
 
 and ocaml_pexps ctx = function
   | [pexp] -> ocaml_pexp ctx pexp
@@ -835,7 +835,7 @@ let ocaml_def ctx (DEF_aux (aux, _)) =
   | DEF_internal_mutrec fds ->
       separate_map (twice hardline) (fun fd -> group (ocaml_fundef ctx fd)) fds ^^ twice hardline
   | DEF_type td -> nf_group (ocaml_typedef ctx td)
-  | DEF_let lb -> nf_group (string "let" ^^ space ^^ ocaml_letbind ctx lb) ^^ ocaml_def_end
+  | DEF_let (pat, exp) -> nf_group (string "let" ^^ space ^^ ocaml_letbind ctx pat exp) ^^ ocaml_def_end
   | _ -> empty
 
 let val_spec_typs defs =

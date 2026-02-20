@@ -523,7 +523,7 @@ let rec initialize_registers allow_registers undef_registers gstate =
             let evaluated = eval_exp (initial_lstate, gstate) exp in
             { gstate with registers = Bindings.add id evaluated gstate.registers }
       end
-    | DEF_aux (DEF_let (LB_aux (LB_val (pat, exp), annot)), def_annot) -> (
+    | DEF_aux (DEF_let (pat, exp), def_annot) -> (
         try
           let evaluated = eval_exp (initial_lstate, gstate) exp in
           match pattern_match pat evaluated with

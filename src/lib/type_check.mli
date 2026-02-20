@@ -311,7 +311,6 @@ val strip_lexp : tannot lexp -> uannot lexp
 
 val strip_mpexp : tannot mpexp -> uannot mpexp
 val strip_mapcl : tannot mapcl -> uannot mapcl
-val strip_letbind : tannot letbind -> uannot letbind
 val strip_val_spec : tannot val_spec -> uannot val_spec
 val strip_funcl : tannot funcl -> uannot funcl
 val strip_register : tannot dec_spec -> uannot dec_spec

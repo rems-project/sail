@@ -196,7 +196,6 @@ val mk_qi_id : ?loc:l -> kind_aux -> kid -> quant_item
 val mk_qi_nc : ?loc:l -> n_constraint -> quant_item
 val mk_qi_kopt : ?loc:l -> kinded_id -> quant_item
 val mk_fexp : ?loc:l -> id -> uannot exp -> uannot fexp
-val mk_letbind : ?loc:l -> uannot pat -> uannot exp -> uannot letbind
 val mk_kopt : ?loc:l -> kind_aux -> kid -> kinded_id
 val mk_def : ?loc:l -> ('a, 'b) def_aux -> 'b -> ('a, 'b) def
 
@@ -363,7 +362,6 @@ val map_exp_annot : ('a annot -> 'b annot) -> 'a exp -> 'b exp
 val map_pat_annot : ('a annot -> 'b annot) -> 'a pat -> 'b pat
 val map_pexp_annot : ('a annot -> 'b annot) -> 'a pexp -> 'b pexp
 val map_lexp_annot : ('a annot -> 'b annot) -> 'a lexp -> 'b lexp
-val map_letbind_annot : ('a annot -> 'b annot) -> 'a letbind -> 'b letbind
 val map_mpat_annot : ('a annot -> 'b annot) -> 'a mpat -> 'b mpat
 val map_mpexp_annot : ('a annot -> 'b annot) -> 'a mpexp -> 'b mpexp
 val map_mapcl_annot : ('a annot -> 'b annot) -> 'a mapcl -> 'b mapcl
@@ -423,7 +421,6 @@ val string_of_pexp : 'a pexp -> string
 val string_of_lexp : 'a lexp -> string
 val string_of_pat : 'a pat -> string
 val string_of_mpat : 'a mpat -> string
-val string_of_letbind : 'a letbind -> string
 val string_of_index_range : index_range -> string
 
 (** {1 Functions for getting identifiers from toplevel definitions} *)
@@ -543,8 +540,6 @@ val locate_pat : (l -> l) -> 'a pat -> 'a pat
 val locate_lexp : (l -> l) -> 'a lexp -> 'a lexp
 
 val locate_typ : (l -> l) -> typ -> typ
-
-val locate_letbind : (l -> l) -> 'a letbind -> 'a letbind
 
 (** Make a unique location by giving it a Parse_ast.Unique wrapper with a generated number. *)
 val unique : l -> l

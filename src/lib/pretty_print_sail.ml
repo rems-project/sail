@@ -517,7 +517,7 @@ module Printer (Config : PRINT_CONFIG) = struct
         separate space [string "{"; doc_exp exp; string "with"; doc_fexps fexps; string "}"]
     | E_vector_append (exp1, exp2) -> separate space [doc_atomic_exp exp1; string "@"; doc_atomic_exp exp2]
     | E_match (exp, pexps) -> separate space [string "match"; doc_exp exp; doc_pexps pexps]
-    | E_let (LB_aux (LB_val (pat, binding), _), exp) -> doc_let_style "let" (doc_pat pat) (doc_exp binding) exp
+    | E_let (pat, binding, exp) -> doc_let_style "let" (doc_pat pat) (doc_exp binding) exp
     | E_internal_plet (pat, exp1, exp2) -> doc_let_style "internal_plet" (doc_pat pat) (doc_exp exp1) exp2
     | E_var (lexp, binding, exp) -> doc_let_style "var" (doc_lexp lexp) (doc_exp binding) exp
     | E_assign (lexp, exp) -> separate space [doc_lexp lexp; equals; doc_exp exp]
@@ -662,10 +662,10 @@ module Printer (Config : PRINT_CONFIG) = struct
 
   and doc_block = function
     | [] -> string "()"
-    | [E_aux (E_let (LB_aux (LB_val (pat, binding), _), E_aux (E_block exps, _)), _)] ->
+    | [E_aux (E_let (pat, binding, E_aux (E_block exps, _)), _)] ->
         let pat, binding = fix_binding pat binding in
         separate space [string "let"; doc_pat pat; equals; doc_exp binding] ^^ semi ^^ hardline ^^ doc_block exps
-    | [E_aux (E_let (LB_aux (LB_val (pat, binding), _), exp), _)] ->
+    | [E_aux (E_let (pat, binding, exp), _)] ->
         let pat, binding = fix_binding pat binding in
         separate space [string "let"; doc_pat pat; equals; doc_exp binding] ^^ semi ^^ hardline ^^ doc_block [exp]
     | [E_aux (E_var (lexp, binding, E_aux (E_block exps, _)), _)] ->
@@ -706,9 +706,6 @@ module Printer (Config : PRINT_CONFIG) = struct
       | Pat_when (pat, wh, exp) -> separate space [doc_pat pat; string "if"; doc_exp wh; string "=>"; doc_exp exp]
     in
     attrs_doc ^^ wrap pexp_doc
-
-  and doc_letbind (LB_aux (lb_aux, _)) =
-    match lb_aux with LB_val (pat, exp) -> separate space [doc_pat pat; equals; doc_exp exp]
 
   and doc_exp_as_block (E_aux (aux, _) as exp) =
     match aux with
@@ -970,7 +967,7 @@ module Printer (Config : PRINT_CONFIG) = struct
         | _ -> (space ^^ string "with") ^//^ separate_map (comma ^^ break 1) doc_subst substs
       )
     | DEF_impl funcl -> string "impl" ^^ space ^^ doc_funcl funcl
-    | DEF_let lbind -> string "let" ^^ space ^^ doc_letbind lbind
+    | DEF_let (pat, exp) -> string "let" ^^ space ^^ separate space [doc_pat pat; equals; doc_exp exp]
     | DEF_internal_mutrec fundefs ->
         (string "mutual {" ^//^ separate_map (hardline ^^ hardline) doc_fundef fundefs) ^^ hardline ^^ string "}"
     | DEF_register dec -> doc_register dec

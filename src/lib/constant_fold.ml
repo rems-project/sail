@@ -258,7 +258,7 @@ let rw_exp fixed target ok not_ok istate =
        complex let bindings trying to propagate them may result in
        type errors due to how type variables are bound by let bindings
     *)
-    | E_let (LB_aux (LB_val (P_aux (P_id id, _), bind), _), exp) when is_constant bind ->
+    | E_let (P_aux (P_id id, _), bind, exp) when is_constant bind ->
         ok ();
         subst id bind exp
     | _ -> E_aux (e_aux, annot)

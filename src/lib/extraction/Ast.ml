@@ -256,7 +256,7 @@ and 'a exp_aux =
 | E_struct_update of 'a exp * 'a fexp list
 | E_field of 'a exp * id
 | E_match of 'a exp * 'a pexp list
-| E_let of 'a letbind * 'a exp
+| E_let of 'a pat * 'a exp * 'a exp
 | E_assign of 'a lexp * 'a exp
 | E_sizeof of nexp
 | E_return of 'a exp
@@ -296,10 +296,6 @@ and 'a pexp_aux =
 | Pat_when of 'a pat * 'a exp * 'a exp
 and 'a pexp =
 | Pat_aux of 'a pexp_aux * 'a annot
-and 'a letbind_aux =
-| LB_val of 'a pat * 'a exp
-and 'a letbind =
-| LB_aux of 'a letbind_aux * 'a annot
 
 type typquant_aux =
 | TypQ_tq of quant_item list
@@ -469,7 +465,7 @@ type ('a, 'b) def_aux =
 | DEF_fundef of 'a fundef
 | DEF_mapdef of 'a mapdef
 | DEF_impl of 'a funcl
-| DEF_let of 'a letbind
+| DEF_let of 'a pat * 'a exp
 | DEF_val of 'a val_spec
 | DEF_outcome of outcome_spec * ('a, 'b) def list
 | DEF_instantiation of 'a instantiation_spec * subst list

@@ -336,7 +336,7 @@ Section exp_ind_g.
     (H_struct_update : forall x fields ann, P x -> Forall (fun f => P (fexp_exp f)) fields -> P (E_aux (E_struct_update x fields) ann))
     (H_field : forall x f ann, P x -> P (E_aux (E_field x f) ann))
     (H_match : forall x arms ann, P x -> Forall (MatchArm P) arms -> P (E_aux (E_match x arms) ann))
-    (H_let : forall p x body lb_ann ann, P x -> P body -> P (E_aux (E_let (LB_aux (LB_val p x) lb_ann) body) ann))
+    (H_let : forall p x body ann, P x -> P body -> P (E_aux (E_let p x body) ann))
     (H_assign : forall lx x ann, P x -> P (E_aux (E_assign lx x) ann))
     (H_sizeof : forall n ann, P (E_aux (E_sizeof n) ann))
     (H_return : forall x ann, P x -> P (E_aux (E_return x) ann))
@@ -407,9 +407,7 @@ Section exp_ind_g.
           unfold MatchArm; trivial.
           unfold MatchArm; split; trivial.
           assumption.
-    - destruct l as [lb_aux ?].
-      destruct lb_aux.
-      apply H_let; trivial.
+    - apply H_let; trivial.
     - apply H_assign; trivial.
     - apply H_sizeof.
     - apply H_return; trivial.
@@ -461,7 +459,7 @@ Section exp_and_lexp_ind_g.
     (H_struct_update : forall x fields ann, P x -> Forall (fun f => P (fexp_exp f)) fields -> P (E_aux (E_struct_update x fields) ann))
     (H_field : forall x f ann, P x -> P (E_aux (E_field x f) ann))
     (H_match : forall x arms ann, P x -> Forall (MatchArm P) arms -> P (E_aux (E_match x arms) ann))
-    (H_let : forall p x body lb_ann ann, P x -> P body -> P (E_aux (E_let (LB_aux (LB_val p x) lb_ann) body) ann))
+    (H_let : forall p x body ann, P x -> P body -> P (E_aux (E_let p x body) ann))
     (H_assign : forall lx x ann, Q lx -> P x -> P (E_aux (E_assign lx x) ann))
     (H_sizeof : forall n ann, P (E_aux (E_sizeof n) ann))
     (H_return : forall x ann, P x -> P (E_aux (E_return x) ann))
@@ -543,9 +541,7 @@ Section exp_and_lexp_ind_g.
             unfold MatchArm; trivial.
             unfold MatchArm; split; trivial.
             assumption.
-      - destruct l as [lb_aux ?].
-        destruct lb_aux.
-        apply H_let; trivial.
+      - apply H_let; trivial.
       - apply H_assign; trivial.
       - apply H_sizeof.
       - apply H_return; trivial.
@@ -638,7 +634,7 @@ Fixpoint depth {A : Set} (x : exp A) {struct x} : nat :=
         map (fun f => let 'FE_aux (FE_fexp _ y) _ := f in depth y) fields
       in
       max (depth x) (fold_right max 0 field_depths) + 1
-  | E_let (LB_aux (LB_val _ y) _) body => max (depth y) (depth body) + 1
+  | E_let  _ x body => max (depth x) (depth body) + 1
   | E_cons x y => max (depth x) (depth y) + 1
   | E_if i t e => max (depth i) (max (depth t) (depth e)) + 1
   | E_assert x msg => max (depth x) (depth msg) + 1

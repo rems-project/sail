@@ -2393,7 +2393,7 @@ module Make (C : CONFIG) = struct
     | DEF_type type_def ->
         let tdef_opt, ctx = compile_type_def ctx type_def in
         (List.map (fun tdef -> CDEF_aux (CDEF_type tdef, def_annot)) (Option.to_list tdef_opt), ctx)
-    | DEF_let (LB_aux (LB_val (pat, exp), _)) ->
+    | DEF_let (pat, exp) ->
         let debug_attr = get_def_attribute "jib_debug" def_annot in
         let ctyp = ctyp_of_typ ctx (typ_of_pat pat) in
         let aexp = C.optimize_anf ctx (no_shadow (letbind_ids ctx) (anf exp)) in
@@ -2962,10 +2962,7 @@ module Make (C : CONFIG) = struct
     |> IdSet.elements
 
   let toplevel_lets_of_ast ast =
-    let toplevel_lets_of_def = function
-      | DEF_aux (DEF_let (LB_aux (LB_val (pat, _), _)), _) -> pat_ids pat
-      | _ -> IdSet.empty
-    in
+    let toplevel_lets_of_def = function DEF_aux (DEF_let (pat, _), _) -> pat_ids pat | _ -> IdSet.empty in
     let toplevel_lets_of_defs defs = List.fold_left IdSet.union IdSet.empty (List.map toplevel_lets_of_def defs) in
     toplevel_lets_of_defs ast.defs |> IdSet.elements
 

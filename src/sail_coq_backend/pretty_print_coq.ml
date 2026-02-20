@@ -1217,12 +1217,12 @@ let rebind_cast_pattern_vars pat typ exp =
           let l = Parse_ast.Generated l in
           let cast_annot = Type_check.replace_typ source_typ ann in
           let e_annot = Type_check.mk_tannot (env_of exp) source_typ in
-          [LB_aux (LB_val (pat, E_aux (E_id id, (l, e_annot))), (l, ann))]
+          [(pat, E_aux (E_id id, (l, e_annot)))]
         )
     | P_aux (P_tuple pats, _), Typ_aux (Typ_tuple typs, _) -> List.concat (List.map2 aux pats typs)
     | _ -> []
   in
-  let add_lb (E_aux (_, ann) as exp) lb = E_aux (E_let (lb, exp), ann) in
+  let add_lb (E_aux (_, ann) as exp) (pat, bind) = E_aux (E_let (pat, bind, exp), ann) in
   (* Don't introduce new bindings at the top-level, we'd just go into a loop. *)
   let lbs =
     match (pat, typ) with
@@ -1473,18 +1473,14 @@ let doc_exp, doc_let =
     | E_loop _ -> raise (report l __POS__ "E_loop should have been rewritten before pretty-printing")
     (* Special case to catch rebinding (our extra vector monomorphisation in asl-to-sail
        leaves "let 'VL = VL;" around), which would trigger our shadowed type detection. *)
-    | E_let
-        ( LB_aux (LB_val (P_aux (P_var (P_aux (P_id id1, _), TP_aux (TP_var kid1, _)), _), E_aux (E_id id2, e_ann)), _),
-          exp2
-        )
+    | E_let (P_aux (P_var (P_aux (P_id id1, _), TP_aux (TP_var kid1, _)), _), E_aux (E_id id2, e_ann), exp2)
       when Id.compare id1 id2 == 0 && Typ.compare (atom_typ (nvar kid1)) (typ_of_annot e_ann) == 0 ->
         top_exp ctxt aexp_needed tail_position exp2
-    | E_let (leb, e) ->
-        let pat, lb_exp = match leb with LB_aux (LB_val (p, lbe), _) -> (p, lbe) in
+    | E_let (pat, lb_exp, e) ->
         let () = debug ctxt (lazy ("Let with pattern " ^ string_of_pat pat)) in
         let new_ctxt = merge_new_tyvars ctxt (env_of_annot (l, annot)) pat (env_of e) in
         let e' = rebind_cast_pattern_vars pat (typ_of lb_exp) e in
-        let leb_pp = let_exp ctxt leb in
+        let leb_pp = let_exp ctxt (pat, lb_exp) in
         let epp = leb_pp ^^ space ^^ string "in" ^^ hardline ^^ top_exp new_ctxt false tail_position e' in
         if aexp_needed then parens epp else epp
     | E_app (f, args) ->
@@ -1532,15 +1528,10 @@ let doc_exp, doc_let =
                             ( _,
                               E_aux
                                 ( E_let
-                                    ( LB_aux
-                                        ( LB_val
-                                            ( ( P_aux (P_typ (_, P_aux (P_var (P_aux (P_id id, _), _), _)), _)
-                                              | P_aux (P_var (P_aux (P_id id, _), _), _)
-                                              | P_aux (P_id id, _) ),
-                                              _
-                                            ),
-                                          _
-                                        ),
+                                    ( ( P_aux (P_typ (_, P_aux (P_var (P_aux (P_id id, _), _), _)), _)
+                                      | P_aux (P_var (P_aux (P_id id, _), _), _)
+                                      | P_aux (P_id id, _) ),
+                                      _,
                                       body
                                     ),
                                   _
@@ -2325,25 +2316,25 @@ let doc_exp, doc_let =
       | _ -> prefix 2 1 (string "else") (top_exp ctxt false tail_position e)
     in
     prefix 2 1 (soft_surround 2 1 if_pp (add_type_pp c_pp) (string "then")) t_pp ^^ break 1 ^^ else_pp
-  and let_exp ctxt (LB_aux (lb, _)) =
+  and let_exp ctxt lb =
     match lb with
     (* Prefer simple lets over patterns, because I've found Coq can struggle to
        work out return types otherwise *)
-    | LB_val (P_aux (P_id id, _), e) when not (is_enum (env_of e) id) ->
+    | P_aux (P_id id, _), e when not (is_enum (env_of e) id) ->
         prefix 2 1 (separate space [string "let"; doc_id ctxt id; coloneq]) (top_exp ctxt false false e)
     (* The type variable will be handled by merge_pat *)
-    | LB_val (P_aux (P_var (P_aux (P_id id, _), TP_aux (TP_var _, _)), p_annot), e) when not (is_enum (env_of e) id) ->
+    | P_aux (P_var (P_aux (P_id id, _), TP_aux (TP_var _, _)), p_annot), e when not (is_enum (env_of e) id) ->
         prefix 2 1 (separate space [string "let"; doc_id ctxt id; coloneq]) (top_exp ctxt false false e)
-    | LB_val (P_aux (P_typ (typ, P_aux (P_id id, _)), _), e) when not (is_enum (env_of e) id) ->
+    | P_aux (P_typ (typ, P_aux (P_id id, _)), _), e when not (is_enum (env_of e) id) ->
         prefix 2 1
           (separate space [string "let"; doc_id ctxt id; colon; doc_typ_exists_unfolded ctxt (env_of e) typ; coloneq])
           (top_exp ctxt false false e)
-    | LB_val (P_aux (P_typ (typ, pat), _), (E_aux (_, e_ann) as e)) ->
+    | P_aux (P_typ (typ, pat), _), (E_aux (_, e_ann) as e) ->
         let pat_pp = doc_pat ctxt true pat (typ_of_pat pat) in
         prefix 2 1
           (separate space [string "let"; squote ^^ parens pat_pp; coloneq])
           (top_exp ctxt false false (E_aux (E_typ (typ, e), e_ann)))
-    | LB_val (pat, e) ->
+    | pat, e ->
         let pat_pp = doc_pat ctxt true pat (typ_of_pat pat) in
         prefix 2 1 (separate space [string "let"; squote ^^ parens pat_pp; coloneq]) (top_exp ctxt false false e)
   and doc_fexp ctxt recordtyp (FE_aux (FE_fexp (id, e), _)) =
@@ -2490,7 +2481,7 @@ let types_used_with_generic_eq defs =
         IdSet.empty
     | DEF_fundef fd -> typs_req_fundef fd
     | DEF_internal_mutrec fds -> List.fold_left IdSet.union IdSet.empty (List.map typs_req_fundef fds)
-    | DEF_let lb -> fst (Rewriter.fold_letbind alg lb)
+    | DEF_let (pat, e) -> IdSet.union (fst (fold_pat alg.pat_alg pat)) (fst (fold_exp alg e))
     | DEF_mapdef _ | DEF_scattered _ | DEF_measure _ | DEF_loop_measures _ | DEF_impl _ ->
         unreachable (def_loc def) __POS__ "Definition found in the Coq back-end that should have been rewritten away"
   in
@@ -3204,7 +3195,7 @@ let rec untuple_args_pat typs (P_aux (paux, ((l, _) as annot)) as pat) =
   | P_as _, _ :: _ :: _ | P_id _, _ :: _ :: _ ->
       let argpats, argexps = args_of_typ l env typs in
       let argexp = E_aux (E_tuple argexps, annot) in
-      let bindargs (E_aux (_, bannot) as body) = E_aux (E_let (LB_aux (LB_val (pat, argexp), annot), body), bannot) in
+      let bindargs (E_aux (_, bannot) as body) = E_aux (E_let (pat, argexp, body), bannot) in
       (argpats, bindargs)
   | _, [typ] -> ([(pat, typ)], identity)
   | _, _ -> unreachable l __POS__ "Unexpected pattern/type combination"
@@ -3224,7 +3215,7 @@ let demote_as_pattern i ((P_aux (_, p_annot) as pat), typ) =
     let id = mk_id ("arg" ^ string_of_int i) in
     (* TODO: name conflicts *)
     ( (P_aux (P_id id, p_annot), typ),
-      fun (E_aux (_, e_ann) as e) -> E_aux (E_let (LB_aux (LB_val (pat, E_aux (E_id id, p_annot)), p_annot), e), e_ann)
+      fun (E_aux (_, e_ann) as e) -> E_aux (E_let (pat, E_aux (E_id id, p_annot), e), e_ann)
     )
   )
   else ((pat, typ), fun e -> e)
@@ -3242,7 +3233,7 @@ let demote_all_patterns env i ((P_aux (p, p_annot) as pat), typ) =
       let id = mk_id ("arg" ^ string_of_int i) in
       (* TODO: name conflicts *)
       ( (P_aux (P_id id, p_annot), typ),
-        fun (E_aux (_, e_ann) as e) -> E_aux (E_let (LB_aux (LB_val (pat, E_aux (E_id id, p_annot)), p_annot), e), e_ann)
+        fun (E_aux (_, e_ann) as e) -> E_aux (E_let (pat, E_aux (E_id id, p_annot), e), e_ann)
       )
 
 (* Note equality constraints between arguments and nexps in a comment, except in the case
@@ -3880,7 +3871,7 @@ let doc_def global unimplemented generic_eq_types countable_types enum_number_de
   | DEF_default df -> empty
   | DEF_fundef fdef -> group (doc_fundef global fdef) ^/^ hardline
   | DEF_internal_mutrec fundefs -> doc_mutrec global (ids_of_def def) fundefs ^/^ hardline
-  | DEF_let (LB_aux (LB_val (pat, exp), _)) -> doc_val global pat exp
+  | DEF_let (pat, exp) -> doc_val global pat exp
   | DEF_scattered sdef -> failwith "doc_def: shoulnd't have DEF_scattered at this point"
   | DEF_mapdef (MD_aux (_, (l, _))) -> unreachable l __POS__ "Coq doesn't support mappings"
   | DEF_pragma _ -> empty
