@@ -163,7 +163,7 @@ let lean_options =
       "(local) path of the Lean support library, for development"
     );
     ( Flag.create ~prefix:["lean"] "lib-repo",
-      Arg.String (fun r -> opt_lean_lib_path := Some r),
+      Arg.String (fun r -> opt_lean_lib_git := Some r),
       "url of the git repository of the Lean support library"
     );
     ( Flag.create ~prefix:["lean"] "lib-rev",
