@@ -383,7 +383,7 @@ val sail_shiftright = pure {
     (bitvector('n, 'ord), int) -> bitvector('n, 'ord)
 
 val sail_arith_shiftright = pure {
-  lean: "BitVec.rotateRight",
+  lean: "BitVec.sshiftRight",
   _: "arith_shiftr"} : forall 'n ('ord : Order).
     (bitvector('n, 'ord), int) -> bitvector('n, 'ord)
 

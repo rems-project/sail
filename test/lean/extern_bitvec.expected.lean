@@ -163,7 +163,7 @@ def extern_count_trailing_zeros (_ : Unit) : Int :=
   (BitVec.countTrailingZeros 0x00FF0FF0#32)
 
 def extern_arith_shiftright (_ : Unit) : (BitVec 32) :=
-  (BitVec.rotateRight 0xDEADBEEF#32 4)
+  (BitVec.sshiftRight 0xDEADBEEF#32 4)
 
 def initialize_registers (_ : Unit) : Unit :=
   ()
