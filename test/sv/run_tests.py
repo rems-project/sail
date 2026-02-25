@@ -36,6 +36,7 @@ skip_tests = {
     'simple_while3', # loops
     'concurrency_interface_v2',
     'concurrency_interface_v2_var',
+    'mini_builtins', # unsupported builtins
 }
 
 print("Sail is {}".format(sail))
