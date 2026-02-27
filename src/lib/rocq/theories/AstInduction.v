@@ -18,6 +18,72 @@ Import ListNotations.
    that stores additional annotation data, and we can make our custom induction
    rules work around this. *)
 
+Section pat_ind_g.
+  Variables (A : Set)
+            (P : pat A -> Prop)
+            (H_lit : forall lit ann, P (P_aux (P_lit lit) ann))
+            (H_wild : forall ann, P (P_aux P_wild ann))
+            (H_or : forall pat1 pat2 ann, P pat1 -> P pat2 -> P (P_aux (P_or pat1 pat2) ann))
+            (H_not : forall pat ann, P pat -> P (P_aux (P_not pat) ann))
+            (H_as : forall pat id ann, P pat -> P (P_aux (P_as pat id) ann))
+            (H_typ : forall typ pat ann, P pat -> P (P_aux (P_typ typ pat) ann))
+            (H_id : forall id ann, P (P_aux (P_id id) ann))
+            (H_var : forall pat typ_pat ann, P pat -> P (P_aux (P_var pat typ_pat) ann))
+            (H_app : forall id pats ann, Forall P pats -> P (P_aux (P_app id pats) ann))
+            (H_vector : forall pats ann, Forall P pats -> P (P_aux (P_vector pats) ann))
+            (H_vector_concat : forall pats ann, Forall P pats -> P (P_aux (P_vector_concat pats) ann))
+            (H_vector_subrange : forall id n m ann, P (P_aux (P_vector_subrange id n m) ann))
+            (H_tuple : forall pats ann, Forall P pats -> P (P_aux (P_tuple pats) ann))
+            (H_list : forall pats ann, Forall P pats -> P (P_aux (P_list pats) ann))
+            (H_cons : forall pat1 pat2 ann, P pat1 -> P pat2 -> P (P_aux (P_cons pat1 pat2) ann))
+            (H_string_append : forall pats ann, Forall P pats -> P (P_aux (P_string_append pats) ann))
+            (H_struct : forall sname fields wild ann, Forall (fun f => P (snd f)) fields -> P (P_aux (P_struct sname fields wild) ann)).
+
+  Fixpoint pat_ind_g pat : P pat.
+  Proof using All.
+    destruct pat as [aux ann].
+    destruct aux.
+    - apply H_lit.
+    - apply H_wild.
+    - apply H_or; trivial.
+    - apply H_not; trivial.
+    - apply H_as; trivial.
+    - apply H_typ; trivial.
+    - apply H_id.
+    - apply H_var; trivial.
+    - apply H_app.
+      induction l.
+      + trivial.
+      + apply Forall_cons; [trivial | assumption].
+    - apply H_vector.
+      induction l.
+      + trivial.
+      + apply Forall_cons; [trivial | assumption].
+    - apply H_vector_concat.
+      induction l.
+      + trivial.
+      + apply Forall_cons; [trivial | assumption].
+    - apply H_vector_subrange.
+    - apply H_tuple.
+      induction l.
+      + trivial.
+      + apply Forall_cons; [trivial | assumption].
+    - apply H_list.
+      induction l.
+      + trivial.
+      + apply Forall_cons; [trivial | assumption].
+    - apply H_cons; trivial.
+    - apply H_string_append.
+      induction l.
+      + trivial.
+      + apply Forall_cons; [trivial | assumption].
+    - apply H_struct.
+      induction l.
+      + trivial.
+      + apply Forall_cons; [trivial | assumption].
+  Qed.
+End pat_ind_g.
+
 Section lexp_ind_g.
   Variables (A : Set)
             (P : lexp A -> Prop)

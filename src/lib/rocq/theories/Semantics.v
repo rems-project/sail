@@ -12,6 +12,8 @@ From Stdlib Require Import Program.
 From Stdlib Require Import String.
 From Stdlib Require Import ZArith.
 From Stdlib Require QArith.
+From Stdlib Require Import Setoid.
+From Stdlib Require Import Morphisms.
 
 Require Import Ast.
 Require Import AstInduction.
@@ -25,6 +27,41 @@ Import ListNotations.
 Inductive binding :=
 | Complete : value -> binding
 | Partial : non_empty (value * Z * Z) -> binding.
+
+Definition binding_part_eqb (l r : value * Z * Z) :=
+  let '(lv, ln, lm) := l in
+  let '(rv, rn, rm) := r in
+  value_eqb lv rv && (ln =? rn)%Z && (lm =? rm)%Z.
+
+Lemma binding_part_eqb_refl : forall p, binding_part_eqb p p = true.
+Proof.
+  destruct p as (vn, m).
+  destruct vn as (v, n).
+  cbn.
+  repeat (apply andb_true_intro; split).
+  - apply value_eqb_refl.
+  - apply Z.eqb_refl.
+  - apply Z.eqb_refl.
+Qed.
+
+Definition binding_eqb (l r : binding) : bool :=
+  match (l, r) with
+  | (Complete lv, Complete rv) => value_eqb lv rv
+  | (Partial (Non_empty lv lvs), Partial (Non_empty rv rvs)) =>
+      binding_part_eqb lv rv && list_eqb binding_part_eqb lvs rvs
+  | _ => false
+  end.
+
+Lemma binding_eqb_refl : forall b, binding_eqb b b = true.
+Proof.
+  destruct b as [b | p].
+  - cbn; apply value_eqb_refl.
+  - destruct p as [part parts].
+    cbn.
+    apply andb_true_intro; split.
+    + apply binding_part_eqb_refl.
+    + apply list_eqb_refl; intros; apply binding_part_eqb_refl.
+Qed.
 
 Definition combine_binding (l r : option binding) : option binding :=
   match (l, r) with
@@ -40,8 +77,256 @@ Definition combine_binding (l r : option binding) : option binding :=
       end
   end.
 
+Lemma combine_binding_none_right : forall b, combine_binding b None = b.
+Proof.
+  destruct b; cbn; reflexivity.
+Qed.
+
+Definition unwrap_default {A : Set} (default : A) (opt : option A) : A :=
+  match opt with
+  | None => default
+  | Some x => x
+  end.
+
+Lemma combine_binding_assoc : forall a b c, combine_binding (combine_binding a b) c = combine_binding a (combine_binding b c).
+Proof.
+  (destruct a as [a |]; [destruct a | idtac]);
+  (destruct b as [b |]; [destruct b | idtac]);
+  (destruct c as [c |]; [destruct c | idtac]).
+  all: cbn; try reflexivity.
+  all: repeat (
+    match goal with
+    | [ n : non_empty _ |- _ ] => destruct n; cbn; try reflexivity
+    end
+  ).
+  rewrite app_comm_cons.
+  rewrite app_assoc.
+  reflexivity.
+Qed.
+
 Definition merge_bindings (l r : IdMap.t binding) : IdMap.t binding :=
   IdMap.map2 combine_binding l r.
+
+Lemma merge_bindings_in_left : forall k x y, IdMap.In k x -> IdMap.In k (merge_bindings x y).
+Proof.
+  intros k x y H.
+  pose proof H as H_in.
+  change (exists e, IdMap.MapsTo k e x) in H.
+  destruct H as [b].
+  change (exists e, IdMap.MapsTo k e (merge_bindings x y)).
+  exists (unwrap_default b (combine_binding (Some b) (IdMap.find k y))).
+  apply IdMap.find_2.
+  unfold merge_bindings.
+  rewrite IdMap.map2_1.
+  - apply IdMap.find_1 in H.
+    rewrite H.
+    case_eq (IdMap.find k y).
+    + intro b'.
+      destruct b as [? | n]; cbn; try tauto.
+      destruct n.
+      destruct b' as [? | n']; cbn; try tauto.
+      destruct n'; cbn; tauto.
+    + cbn; tauto.
+  - tauto.
+Qed.
+
+Lemma merge_bindings_in_right : forall k x y, IdMap.In k y -> IdMap.In k (merge_bindings x y).
+Proof.
+  intros k x y H.
+  pose proof H as H_in.
+  change (exists e, IdMap.MapsTo k e y) in H.
+  destruct H as [b].
+  change (exists e, IdMap.MapsTo k e (merge_bindings x y)).
+  exists (unwrap_default b (combine_binding (IdMap.find k x) (Some b))).
+  apply IdMap.find_2.
+  unfold merge_bindings.
+  rewrite IdMap.map2_1.
+  - apply IdMap.find_1 in H.
+    rewrite H.
+    case_eq (IdMap.find k x).
+    + intro b'.
+      destruct b' as [? | n']; cbn; try tauto.
+      destruct n'; cbn; try tauto.
+      destruct b as [? | n]; cbn; try tauto.
+      destruct n; cbn; tauto.
+    + cbn; tauto.
+  - tauto.
+Qed.
+
+Lemma merge_bindings_in : forall k x y, IdMap.In k (merge_bindings x y) -> IdMap.In (elt:=binding) k x \/ IdMap.In (elt:=binding) k y.
+Proof.
+  intros k x y H.
+  unfold merge_bindings.
+  apply (IdMap.map2_2 H).
+Qed.
+
+Lemma generalize_ex : forall [A] (P : A -> Prop) (x : A), P x -> (exists y, P y).
+Proof.
+  intros A P x H.
+  exists x.
+  assumption.
+Qed.
+
+Lemma not_in_map2 : forall A k (x y : IdMap.t A) f, ~ IdMap.In k x -> ~ IdMap.In k y -> ~ IdMap.In (elt:=A) k (IdMap.map2 f x y).
+Proof.
+  intros A k x y f Not_in_x Not_in_y.
+  unfold not.
+  intros In_xy.
+  apply IdMap.map2_2 in In_xy.
+  tauto.
+Qed.
+
+Lemma not_in_find_none : forall [A k] (x : IdMap.t A), ~ IdMap.In k x <-> IdMap.find k x = None.
+Proof.
+  intros A k x.
+  split; intros H.
+  - change (~ (exists m, IdMap.MapsTo k m x)) in H.
+    unfold not in H.
+    case_eq (IdMap.find k x).
+    + intros elt Find_x.
+      exfalso.
+      apply IdMap.find_2 in Find_x.
+      destruct H.
+      exists elt.
+      assumption.
+    + tauto.
+  - unfold not.
+    intros In_x.
+    change (exists elt, IdMap.MapsTo k elt x) in In_x.
+    destruct In_x as [elt In_x].
+    apply IdMap.find_1 in In_x.
+    rewrite In_x in H.
+    discriminate H.
+Qed.
+
+Lemma map2_none_none : forall [A k] (x y : IdMap.t A) f,
+  IdMap.find k x = None ->
+  IdMap.find k y = None ->
+  IdMap.find (elt:=A) k (IdMap.map2 f x y) = None.
+Proof.
+  intros A k x y f.
+  repeat rewrite <- not_in_find_none.
+  intros X Y.
+  apply not_in_map2; assumption.
+Qed.
+
+(* Define a tactic that attempts to simplify hypothesis that involve `IdMap.find`. *)
+
+Ltac idmap_find_simp_step :=
+  lazymatch goal with
+  | [ H : context [ IdMap.find ?k (IdMap.map2 combine_binding ?x ?y) ], X : IdMap.find ?k ?x = None, Y : IdMap.find ?k ?y = None |- _ ] =>
+      rewrite (map2_none_none x y combine_binding X Y) in H
+  | [ H : context [ IdMap.find ?k ?x ], X : IdMap.find ?k ?x = None |- _ ] =>
+      rewrite X in H
+  | [ H : context [ IdMap.find ?k ?x ], X : IdMap.find ?k ?x = Some ?b |- _ ] =>
+      rewrite X in H
+  | [ H : context [ combine_binding (combine_binding ?x ?y) ?z ] |- _ ] =>
+      rewrite combine_binding_assoc in H
+  end.
+
+Ltac idmap_find_simp := repeat idmap_find_simp_step.
+
+(* Define a tactic idmap_in_solve that attempts to solve goals of the form `IdMap.In _ _` *)
+
+Ltac idmap_in_step :=
+  lazymatch goal with
+  | |- IdMap.In ?k (IdMap.map2 combine_binding ?x ?y) => change (IdMap.In k (merge_bindings x y))
+  | [ H : IdMap.find ?k ?x = Some ?b |- IdMap.In ?k (merge_bindings ?x ?y) ] =>
+      apply merge_bindings_in_left
+  | [ H : IdMap.find ?k ?y = Some ?b |- IdMap.In ?k (merge_bindings ?x ?y) ] =>
+      apply merge_bindings_in_right
+  | [ H : IdMap.find ?k ?x = None |- IdMap.In ?k ?x \/ IdMap.In ?k _ ] => apply or_intror
+  | [ H : IdMap.find ?k ?y = None |- IdMap.In ?k _ \/ IdMap.In ?k ?y ] => apply or_introl
+  | [ H : IdMap.find ?k ?x = Some ?b |- IdMap.In ?k ?x \/ IdMap.In ?k _ ] =>
+      apply or_introl
+  | [ H : IdMap.find ?k ?y = Some ?b |- IdMap.In ?k _ \/ IdMap.In ?k ?y ] =>
+      apply or_intror
+  | [ H : IdMap.find ?k ?x = Some ?b |- IdMap.In ?k ?x ] =>
+      change (exists b, IdMap.MapsTo k b x);
+      exists b;
+      apply (IdMap.find_2 H)
+  end.
+
+Ltac idmap_in_solve := solve [ repeat idmap_in_step ].
+
+Ltac binding_eqb_solve_step :=
+  match goal with
+  | [ H1 : ?x = Some ?b1, H2 : ?x = Some ?b2 |- binding_eqb ?b1 ?b2 = true ] =>
+      let Eq := fresh "Eq" in
+      rewrite H1 in H2;
+      injection H2;
+      intros Eq;
+      rewrite Eq;
+      apply binding_eqb_refl
+  | [ H1 : ?x = Some ?b1, H2 : ?y = Some ?b2 |- binding_eqb ?b1 ?b2 = true ] =>
+      let Eq := fresh "Eq" in
+      assert (x = y) as Eq; [
+        cbn; reflexivity
+      | rewrite Eq in H1
+      ]
+  end.
+
+Ltac binding_eqb_solve := solve [ repeat binding_eqb_solve_step ].
+
+Lemma merge_bindings_assoc : forall x y z,
+  IdMap.Equivb binding_eqb (merge_bindings (merge_bindings x y) z) (merge_bindings x (merge_bindings y z)).
+Proof.
+  intros x y z.
+  split.
+
+  - intro k.
+    change (IdMap.In k (merge_bindings (merge_bindings x y) z) <-> IdMap.In k (merge_bindings x (merge_bindings y z))).
+    cbn.
+    split; intros H; unfold merge_bindings in H; apply IdMap.map2_2 in H.
+    + destruct H as [H_in_xy | H_in_z]; [ apply IdMap.map2_2 in H_in_xy; destruct H_in_xy as [H_in_x | H_in_y] | idtac].
+      * apply (merge_bindings_in_left _ _ _ H_in_x).
+      * apply (merge_bindings_in_right _ _ _ (merge_bindings_in_left _ _ _ H_in_y)).
+      * apply (merge_bindings_in_right _ _ _ (merge_bindings_in_right _ _ _ H_in_z)).
+    + destruct H as [H_in_x | H_in_yz]; [ idtac | apply IdMap.map2_2 in H_in_yz; destruct H_in_yz as [H_in_y | H_in_z]].
+      * apply (merge_bindings_in_left _ _ _ (merge_bindings_in_left _ _ _ H_in_x)).
+      * apply (merge_bindings_in_left _ _ _ (merge_bindings_in_right _ _ _ H_in_y)).
+      * apply (merge_bindings_in_right _ _ _ H_in_z).
+
+  (* If M is the merge bindings function, we must prove:
+     `(k, M x (M y z)) ↦ e` and `(k, M (M x y) z) ↦ e' then `binding_eqb e e' = true`. *)
+  - intros k b b' L R.
+    change (IdMap.MapsTo k b (merge_bindings (merge_bindings x y) z)) in L.
+    change (IdMap.MapsTo k b' (merge_bindings x (merge_bindings y z))) in R.
+
+    (* Remember a hypothesis H that k is in the merged bindings *)
+    pose proof L as H.
+    apply (fun P => generalize_ex P b) in H.
+    change (IdMap.In k (merge_bindings (merge_bindings x y) z)) in H.
+    apply IdMap.find_1 in L, R.
+    unfold merge_bindings in L, R.
+
+    (case_eq (IdMap.find k x); [ intros xb Find_x | intros None_x]);
+    (case_eq (IdMap.find k y); [ intros yb Find_y | intros None_y]);
+    (case_eq (IdMap.find k z); [ intros zb Find_z | intros None_z]).
+
+    (* First handle the case where k is none of the maps.
+       This is impossible due to the hypothesis H we created. *)
+    8: {
+      apply merge_bindings_in in H.
+      destruct H as [H | In_z]; [ apply merge_bindings_in in H; destruct H as [In_x | In_y] | idtac ].
+      all: (
+        match goal with
+        | [ In : IdMap.In ?k ?x, None : IdMap.find ?k ?x = None |- _ ] =>
+            change (exists b, IdMap.MapsTo k b x) in In;
+            destruct In as [b'' In];
+            apply IdMap.find_1 in In;
+            rewrite In in None;
+            discriminate None
+        end
+      ).
+    }
+
+    all: (
+      repeat (rewrite IdMap.map2_1 in L; [ idtac | idmap_in_solve ]; idmap_find_simp);
+      repeat (rewrite IdMap.map2_1 in R; [ idtac | idmap_in_solve ]; idmap_find_simp);
+      binding_eqb_solve
+    ).
+Qed.
 
 Definition to_gvector (v : value) : value :=
   match v with
@@ -725,6 +1010,14 @@ Module Make (T : SemanticExt).
   | MaybeMatched : IdMap.t binding -> match_result
   | Unmatched : match_result.
 
+  Definition match_result_eq (l r : match_result) : Prop :=
+    match (l, r) with
+    | (Unmatched, Unmatched) => True
+    | (Matched l_b, Matched r_b) => IdMap.Equivb binding_eqb l_b r_b
+    | (MaybeMatched l_b, MaybeMatched r_b) => IdMap.Equivb binding_eqb l_b r_b
+    | _ => False
+    end.
+
   Definition merge_match_result (l r : match_result) : match_result :=
     match (l, r) with
     | (Unmatched, _) => Unmatched
@@ -736,6 +1029,12 @@ Module Make (T : SemanticExt).
     end.
 
   Infix "⋈" := merge_match_result (right associativity, at level 60).
+
+  Lemma merge_match_result_assoc : forall a b c, match_result_eq ((a ⋈ b) ⋈ c) (a ⋈ (b ⋈ c)).
+  Proof.
+    destruct a as [a | a |]; destruct b as [b | b |]; destruct c as [c | c |].
+    all: cbn; try reflexivity; apply merge_bindings_assoc.
+  Qed.
 
   Definition empty_bindings : IdMap.t binding := @IdMap.empty binding.
 
@@ -749,6 +1048,12 @@ Module Make (T : SemanticExt).
     | Unmatched => Unmatched
     | MaybeMatched b => MaybeMatched (IdMap.add name value b)
     | Matched b => Matched (IdMap.add name value b)
+    end.
+
+  Definition fully_matched (r : match_result) : Prop :=
+    match r with
+    | MaybeMatched _ => False
+    | _ => True
     end.
 
   Definition neg_match (r : match_result) : match_result :=
@@ -802,6 +1107,23 @@ Module Make (T : SemanticExt).
       )
       m.
 
+  Fixpoint fold_match
+      (f : pat T.tannot -> value -> match_result)
+      (ps : list (pat T.tannot))
+      (match_info : match_result * list value)
+      : match_result * list value :=
+    match ps with
+    | [] => match_info
+    | p :: ps =>
+        let match_info :=
+          match match_info with
+          | (_, []) => (Unmatched, [])
+          | (prev, v :: vs) => (prev ⋈ f p v, vs)
+          end
+        in
+        fold_match f ps match_info
+    end.
+
   Fixpoint pattern_match (p : Ast.pat T.tannot) (v : value) {struct p} : match_result :=
     let 'P_aux aux annot := p in
     match aux with
@@ -822,19 +1144,7 @@ Module Make (T : SemanticExt).
     | P_app ctor ps =>
         match v with
         | V_ctor v_ctor vs =>
-            if id_eqb ctor v_ctor then
-              fst (fold_left
-                     (fun match_info p =>
-                        match match_info with
-                        (* The arguments and pattern are different lengths, so no match *)
-                        | (_, []) => (Unmatched, [])
-                        | (prev, v :: vs) => (prev ⋈ pattern_match p v, vs)
-                        end
-                     )
-                     ps
-                     (simple_match, vs))
-            else
-              Unmatched
+            if id_eqb ctor v_ctor then fst (fold_match pattern_match ps (simple_match, vs)) else Unmatched
         | _ => Unmatched
         end
     | P_tuple [] =>
@@ -845,51 +1155,21 @@ Module Make (T : SemanticExt).
     | P_tuple ps =>
         match v with
         | V_tuple vs =>
-            fst (fold_left
-                   (fun match_info p =>
-                      match match_info with
-                      (* The tuple and pattern are different lengths, so no match *)
-                      | (_, []) => (Unmatched, [])
-                      | (prev, v :: vs) => (prev ⋈ pattern_match p v, vs)
-                      end
-                   )
-                   ps
-                   (simple_match, vs))
+            fst (fold_match pattern_match ps (simple_match, vs))
         | _ => Unmatched
         end
     | P_list ps =>
         match v with
         | V_list vs =>
             if Nat.eqb (List.length ps) (List.length vs) then
-              fst (fold_left
-                     (fun match_info p =>
-                        match match_info with
-                        (* The list and pattern are different lengths, so no match *)
-                        | (_, []) => (Unmatched, [])
-                        | (prev, v :: vs) => (prev ⋈ pattern_match p v, vs)
-                        end
-                     )
-                     ps
-                     (simple_match, vs))
+              fst (fold_match pattern_match ps (simple_match, vs))
             else
               Unmatched
-        (* Matching a list on a non-list *)
         | _ => Unmatched
         end
     | P_vector ps =>
         match to_gvector v with
-        | V_vector vs =>
-            fst (fold_left
-                   (fun match_info p =>
-                      match match_info with
-                      (* The vector and pattern are different lengths, so no match *)
-                      | (_, []) => (Unmatched, [])
-                      | (prev, v :: vs) => (prev ⋈ pattern_match p v, vs)
-                      end
-                   )
-                   ps
-                   (simple_match, vs))
-        (* Matching a list on a non-list *)
+        | V_vector vs => fst (fold_match pattern_match ps (simple_match, vs))
         | _ => Unmatched
         end
     | P_vector_concat ps =>
@@ -953,6 +1233,41 @@ Module Make (T : SemanticExt).
     (* TODO *)
     | P_string_append _ => simple_match
     end.
+
+  Ltac solve_fd_once tac :=
+    lazymatch goal with
+    | |- fully_matched (match_binds _ _ _) => unfold match_binds
+    | |- fully_matched (simple_match_if _) => unfold simple_match_if
+    | |- fully_matched (if ?b then _ else _) => destruct b; tac
+    | |- fully_matched (match pattern_match ?p ?v with | Matched _ => _ | MaybeMatched _ => _ | Unmatched => _ end) =>
+        remember (pattern_match p v) as HD; destruct HD
+    | [ IH : (forall v : value, fully_defined v = true -> fully_matched (pattern_match ?p v)),
+        H : fully_defined ?v = true,
+        M : MaybeMatched _ = pattern_match ?p ?v
+      |- _
+      ] => exfalso; apply IH in H; rewrite <- M in H; cbn in H; assumption
+    | [ IH : (forall v : value, fully_defined v = true -> fully_matched (pattern_match ?p v)),
+        H : fully_defined ?v = true
+      |- fully_matched (pattern_match ?p ?v)
+      ] => apply IH
+    | |- fully_matched (fst (fold_left ?f ?pats (simple_match, ?vs))) =>
+        set f as F
+    | _ => tac
+    end.
+
+  Ltac solve_fd tac := solve [ repeat solve_fd_once tac ].
+
+  Lemma fold_left_once : forall [A B] f (x : A) (acc : B), fold_left f [x] acc = f acc x.
+  Proof.
+    reflexivity.
+  Qed.
+
+  Lemma fold_left_cons: forall [A B] f (x : A) (xs : list A) (acc : B), fold_left f (x :: xs) acc = fold_left f xs (f acc x).
+  Proof.
+    reflexivity.
+  Qed.
+
+  (* Lemma fully_defined_match : forall p v, fully_defined v = true -> fully_matched (pattern_match p v). *)
 
   Fixpoint lookup_field (l : Ast.loc) (name : id) (fields : list (id * value)) {struct fields} : t value :=
       match fields with
@@ -1255,8 +1570,882 @@ Module Make (T : SemanticExt).
     | [] => []
     end.
 
+  Lemma NoDupA_cons : forall [A] [eqA : A -> A -> Prop] (E : RelationClasses.Equivalence eqA) [x : A] [xs : list A],
+    SetoidList.NoDupA eqA (x :: xs) -> SetoidList.NoDupA eqA xs.
+  Proof.
+    intros A eqA E x xs H.
+    change (SetoidList.NoDupA eqA ([] ++ x :: xs)) in H.
+    apply (SetoidList.NoDupA_split H).
+  Qed.
+
+  Lemma NoDupA_eqA_h : forall [A] [eqA : A -> A -> Prop] (E : RelationClasses.Equivalence eqA) [x x' : A] [xs xs' : list A],
+    xs = (x :: x' :: xs') -> SetoidList.NoDupA eqA xs -> ~ (eqA x x').
+  Proof.
+    intros A eqA E x x' xs xs' X ND.
+    rewrite SetoidList.NoDupA_altdef in ND.
+    revert X.
+    revert xs' x x'.
+    induction ND.
+    - intros. discriminate.
+    - unfold not.
+      intros ys x x' L Eq.
+      inversion L; subst.
+      apply Forall_inv in H.
+      unfold RelationClasses.complement in H.
+      tauto.
+  Qed.
+
+  Lemma NoDupA_eqA : forall [A] [eqA : A -> A -> Prop] (E : RelationClasses.Equivalence eqA) [x x' : A] [xs : list A],
+    SetoidList.NoDupA eqA (x :: x' :: xs) -> ~ (eqA x x').
+  Proof.
+    intros A eqA E x x' xs H.
+    apply (NoDupA_eqA_h E eq_refl H).
+  Qed.
+
+  Lemma NoDupA_in_tl : forall [A] [eqA : A -> A -> Prop] (E : RelationClasses.Equivalence eqA) [x x' : A] (xs : list A),
+    SetoidList.NoDupA eqA (x :: xs) -> SetoidList.InA eqA x' xs -> ~ (eqA x x').
+  Proof.
+    intros A eqA E x x' xs.
+    revert x'.
+    induction xs as [| y ys].
+    - intro. rewrite SetoidList.InA_nil; tauto.
+    - intros z ND In.
+      unfold not.
+      intros Eq_x_z.
+      rewrite SetoidList.InA_cons in In.
+      destruct In as [Eq_z_y | In].
+      + apply (NoDupA_eqA E) in ND.
+        assert (L : eqA x y); [ setoid_transitivity z; assumption | idtac ].
+        tauto.
+      + assert (L : ~ eqA x z).
+        {
+          apply (fun H => IHys z H In).
+          change (SetoidList.NoDupA eqA ([x] ++ y :: ys)) in ND.
+          apply (SetoidList.NoDupA_swap E) in ND.
+          apply (NoDupA_cons E) in ND.
+          assumption.
+        }
+        tauto.
+  Qed.
+
+  Lemma fold_right_last_to_first : forall [A B] [eqB : B -> B -> Prop] (E : RelationClasses.Equivalence eqB) (f : B -> A -> A) (acc : A) (x : B) xs,
+    (forall y z, SetoidList.InA eqB y xs -> f y (f x z) = f x (f y z)) ->
+    fold_right f (f x acc) xs = f x (fold_right f acc xs).
+  Proof.
+    intros A B eqB E f acc x xs H.
+    induction xs as [| x' xs].
+    - cbn; reflexivity.
+    - cbn.
+      rewrite IHxs.
+      + apply H.
+        apply SetoidList.InA_cons_hd.
+        setoid_reflexivity.
+      + intros y z In_y.
+        apply H.
+        apply SetoidList.InA_cons_tl; assumption.
+  Qed.
+
+  Lemma id_eqb_sym_neg : forall x y, id_eqb x y = false -> id_eqb y x = false.
+  Proof.
+    intros x y.
+    destruct x as [x_aux ?].
+    destruct y as [y_aux ?].
+    destruct x_aux as [| | x_s | x_s]; destruct y_aux as [| | y_s | y_s].
+    all: cbn; try easy.
+    all: repeat rewrite String.eqb_neq.
+    all: congruence.
+  Qed.
+
+  Lemma substitute_swap : forall [A] id1 id2 v1 v2 (exp : exp A),
+    id_eqb id1 id2 = false ->
+    substitute id1 v1 (substitute id2 v2 exp) = substitute id2 v2 (substitute id1 v1 exp).
+  Proof.
+    intros A id1 id2 v1 v2 exp NE.
+
+    einduction exp using exp_ind_mutual_g.
+
+    Unshelve.
+    all: try (
+      apply (fun lx : lexp A => substitute_lexp id1 v1 (substitute_lexp id2 v2 lx) = substitute_lexp id2 v2 (substitute_lexp id1 v1 lx))
+    ).
+
+    (* First try to discharge as many simple cases as we can. *)
+    all: cbn beta delta - [id_eqb] iota zeta.
+    all: repeat (f_equal; try reflexivity; [idtac]).
+    all: try reflexivity.
+    all: repeat rewrite map_map; try (apply map_ext_Forall; apply H).
+    all: try (apply IHe).
+    all: try (rewrite IHe1; rewrite IHe2; reflexivity).
+    all: try (rewrite IHe1; rewrite IHe2; rewrite IHe3; reflexivity).
+    all: try (cbn in IHe; rewrite IHe, IHe0; reflexivity).
+
+    (* First interesting case is when exp is an identifier. *)
+    - case_eq (id_eqb id1 id); case_eq (id_eqb id2 id); intros I1 I2.
+      all: cbn beta delta - [id_eqb] iota zeta.
+      all: repeat (rewrite I1 + rewrite I2).
+      all: cbn beta delta - [id_eqb] iota zeta.
+      all: repeat (rewrite I1 + rewrite I2).
+      all: try reflexivity.
+      exfalso.
+      apply id_eqb_sym in I1.
+      assert (C := id_eqb_trans id1 id id2 I2 I1).
+      rewrite NE in C.
+      discriminate.
+
+    (* Next case is the for loop, as loop variable id affects substitutio.n *)
+    - case_eq (id_eqb id1 id); case_eq (id_eqb id2 id); intros I1 I2.
+      all: cbn beta delta - [id_eqb] iota zeta.
+      all: repeat (rewrite I1 + rewrite I2 + rewrite IHe1 + rewrite IHe2 + rewrite IHe3 + rewrite IHe4).
+      all: reflexivity.
+
+    (* Struct expression, just requires some extra destructuring. *)
+    - apply map_ext_Forall.
+      apply (fun Q P => Forall_impl Q P H).
+      clear H.
+      intros fexp IHfexp.
+      destruct fexp as [aux ?].
+      destruct aux.
+      cbn in IHfexp.
+      rewrite IHfexp.
+      reflexivity.
+
+    (* Struct update expression, same as above. *)
+    - f_equal; [ assumption | idtac].
+      apply map_ext_Forall.
+      apply (fun Q P => Forall_impl Q P H).
+      clear H IHe.
+      intros fexp IHfexp.
+      destruct fexp as [aux ?].
+      destruct aux.
+      cbn in IHfexp.
+      rewrite IHfexp.
+      reflexivity.
+
+    (* Pattern matching, essentially simplifies to a list of let-expressions. *)
+    - f_equal; [ assumption | idtac].
+      apply map_ext_Forall.
+      apply (fun Q P => Forall_impl Q P H).
+      clear H IHe.
+      intros pexp.
+      destruct pexp as [aux ?].
+      destruct aux as [pat arm | pat guard arm]; cbn.
+      + intros IH.
+        case_eq (binds_id id1 pat); case_eq (binds_id id2 pat); intros I1 I2.
+        all: cbn beta delta - [id_eqb] iota zeta.
+        all: repeat (rewrite I1 + rewrite I2 + rewrite IH).
+        all: reflexivity.
+      + intros IH.
+        destruct IH as [IHguard IHarm].
+        case_eq (binds_id id1 pat); case_eq (binds_id id2 pat); intros I1 I2.
+        all: cbn beta delta - [id_eqb] iota zeta.
+        all: repeat (rewrite I1 + rewrite I2 + rewrite IHarm + rewrite IHguard).
+        all: reflexivity.
+
+    (* let-expressions we just split on whether either pattern binds. *)
+    - case_eq (binds_id id1 p); case_eq (binds_id id2 p); intros I1 I2.
+      all: cbn beta delta - [id_eqb] iota zeta.
+      all: repeat (rewrite I1 + rewrite I2 + rewrite IHe1 + rewrite IHe2).
+      all: reflexivity.
+
+    (* try-expression - See match above. *)
+    - f_equal; [ assumption | idtac].
+      apply map_ext_Forall.
+      apply (fun Q P => Forall_impl Q P H).
+      clear H IHe.
+      intros pexp.
+      destruct pexp as [aux ?].
+      destruct aux as [pat arm | pat guard arm]; cbn.
+      + intros IH.
+        case_eq (binds_id id1 pat); case_eq (binds_id id2 pat); intros I1 I2.
+        all: cbn beta delta - [id_eqb] iota zeta.
+        all: repeat (rewrite I1 + rewrite I2 + rewrite IH).
+        all: reflexivity.
+      + intros IH.
+        destruct IH as [IHguard IHarm].
+        case_eq (binds_id id1 pat); case_eq (binds_id id2 pat); intros I1 I2.
+        all: cbn beta delta - [id_eqb] iota zeta.
+        all: repeat (rewrite I1 + rewrite I2 + rewrite IHarm + rewrite IHguard).
+        all: reflexivity.
+  Qed.
+
+  Lemma substitute_fold : forall substs (exp : exp T.tannot),
+    SetoidList.NoDupA (IdMap.eq_key (elt:=value)) substs ->
+    fold_left (fun exp s => substitute (fst s) (snd s) exp) substs exp =
+    fold_right (fun s exp => substitute (fst s) (snd s) exp) exp substs.
+  Proof.
+    intros substs exp H.
+    revert exp.
+    induction substs as [| s substs].
+    - cbn; reflexivity.
+    - cbn; intros exp.
+      rewrite IHsubsts.
+      rewrite (fold_right_last_to_first (eqB:=IdMap.eq_key (elt:=value))_ (fun (s : id * value) (exp : Ast.exp T.tannot) => substitute (fst s) (snd s) exp)).
+      + reflexivity.
+      + intros s' exp' In_s'.
+        apply substitute_swap.
+        assert (S := NoDupA_in_tl _ _ H In_s').
+        unfold IdMap.eq_key in S. unfold IdMap.Raw.PX.eqk in S.
+        apply negb_prop_intro, Is_true_eq_true, negb_true_iff in S.
+        rewrite id_eqb_comm.
+        assumption.
+      + apply (NoDupA_cons _ H).
+  Qed.
+
+  Ltac is_true_step :=
+    lazymatch goal with
+    | [ pair : _ * _ |- _ ] => destruct pair
+    | |- Is_true ?P => apply Is_true_eq_left
+    | |- ~ Is_true ?P => apply negb_prop_elim
+    | |- negb ?P = true => apply negb_true_iff
+    | [ H : Is_true ?P |- _ ] => apply Is_true_eq_true in H
+    | |- id_eqb ?x ?x = true => apply (id_eqb_refl x)
+    | [ _ : id_eqb ?x ?y = true |- id_eqb ?y ?x = true ] => apply id_eqb_sym; assumption
+    | [ L : id_eqb ?x ?y = true, R : id_eqb ?y ?z =  true |- id_eqb ?x ?z = true ] => apply (id_eqb_trans _ _ _ L R)
+    | [ _ : ?P |- ?P ] => assumption
+    end.
+
+  Ltac is_true_simp := repeat is_true_step.
+
+  Ltac is_true_solve := solve [ intros; repeat is_true_step ].
+
+  Lemma not_find_in_iff_r: forall [elt : Type] (m : IdMap.t elt) (x : IdMap.key),
+    ~ IdMap.In (elt:=elt) x m -> IdMap.find (elt:=elt) x m = None.
+  Proof.
+    intros.
+    apply IdMapP.P.F.not_find_in_iff.
+    assumption.
+  Qed.
+
+  Lemma not_in_remove : forall [A : Type] (m : IdMap.t A) (x y : IdMap.key),
+    ~ (IdMap.In x m) -> ~ (IdMap.In x (IdMap.remove y m)).
+  Proof.
+    intros A m x y H.
+    case_eq (id_eqb y x); intros.
+    - change (~ (exists b, IdMap.MapsTo x b m)) in H.
+    cbn in H.
+    unfold not.
+    intros In_remove.
+    change (exists b, IdMap.MapsTo x b (IdMap.remove y m)) in In_remove.
+    destruct In_remove as [b].
+    destruct H.
+    apply IdMap.find_1 in H1.
+    exists b.
+    apply IdMap.find_2.
+    rewrite IdMapP.P.F.remove_eq_o in H1.
+    + discriminate.
+    + is_true_simp.
+    -change (~ (exists b, IdMap.MapsTo x b m)) in H.
+    cbn in H.
+    unfold not.
+    intros In_remove.
+    change (exists b, IdMap.MapsTo x b (IdMap.remove y m)) in In_remove.
+    destruct In_remove as [b].
+    destruct H.
+    apply IdMap.find_1 in H1.
+    exists b.
+    apply IdMap.find_2.
+    rewrite IdMapP.P.F.remove_neq_o in H1.
+    + assumption.
+    + is_true_simp.
+  Qed.
+
+  Lemma Empty_Equal_empty : forall [A m], IdMap.Empty (elt:=A) m -> IdMap.Equal m (IdMap.empty _).
+  Proof.
+    intros.
+    rewrite IdMapP.P.F.Equal_mapsto_iff.
+    intros k e.
+    split.
+    - intros M.
+      apply IdMap.find_1 in M.
+      rewrite IdMapP.P.elements_Empty in H.
+      rewrite IdMapP.P.F.elements_o in M.
+      rewrite H in M.
+      cbn in M.
+      discriminate.
+    - intros M.
+      apply IdMap.find_1 in M.
+      rewrite IdMapP.P.elements_Empty in H.
+      rewrite IdMapP.P.F.elements_o in M.
+      rewrite IdMapP.P.elements_empty in M.
+      cbn in M.
+      discriminate.
+  Qed.
+
+  Lemma find_map_remove_comm : forall [A B] (f : A -> B) k m x,
+    IdMap.find x (IdMap.map f (IdMap.remove k m)) = IdMap.find x (IdMap.remove k (IdMap.map f m)).
+  Proof.
+    intros A B f k m x.
+    induction m using IdMapP.P.map_induction.
+    - rewrite IdMapP.P.F.map_o.
+      rewrite not_find_in_iff_r.
+      rewrite not_find_in_iff_r.
+      + reflexivity.
+      + apply not_in_remove.
+        unfold not.
+        intros In_map.
+        change (exists b, IdMap.MapsTo x b (IdMap.map f m)) in In_map.
+        destruct In_map as [b].
+        apply IdMap.find_1 in H0.
+        rewrite IdMapP.P.F.map_o in H0.
+        rewrite not_find_in_iff_r in H0.
+        cbn in H0.
+        discriminate.
+        unfold not.
+        intros In_m.
+        change (exists b, IdMap.MapsTo x b m) in In_m.
+        destruct In_m as [b'].
+        apply IdMap.find_1 in H1.
+        rewrite H1 in H0.
+        cbn in H0.
+        rewrite IdMapP.P.elements_Empty in H.
+        rewrite IdMapP.P.F.elements_o in H1.
+        rewrite H in H1.
+        cbn in H1.
+        discriminate.
+      + apply not_in_remove.
+        unfold not.
+        intros In_m.
+        rewrite IdMapP.P.elements_Empty in H.
+        change (exists b, IdMap.MapsTo x b m) in In_m.
+        destruct In_m as [b'].
+        apply IdMap.find_1 in H0.
+        rewrite IdMapP.P.F.elements_o in H0.
+        rewrite H in H0.
+        cbn in H0.
+        discriminate.
+    - unfold IdMapP.P.Add in H0.
+      case_eq (id_eqb k x); intros Key.
+      + rewrite IdMapP.P.F.map_o.
+        repeat rewrite IdMapP.P.F.remove_eq_o.
+        * reflexivity.
+        * is_true_simp.
+        * is_true_simp.
+      + rewrite IdMapP.P.F.map_o.
+        repeat rewrite IdMapP.P.F.remove_neq_o.
+        rewrite (H0 x).
+        rewrite IdMapP.P.F.map_o .
+        rewrite (H0 x).
+        * reflexivity.
+        * is_true_simp.
+        * is_true_simp.
+  Qed.
+
+  Lemma equiv_cong : forall [A]  [eqA : A -> A -> Prop] (E : Equivalence eqA) (x y : A),
+    x = y -> eqA x y.
+  Proof.
+    intros A eqA E x y H. rewrite H. setoid_reflexivity.
+  Qed.
+
+  Instance key_equiv (A : Type) : Equivalence (IdMap.eq_key (elt:=A)).
+  Proof with is_true_solve.
+    unfold IdMap.eq_key. unfold IdMap.Raw.PX.eqk.
+    split.
+    - intros []...
+    - intros [] []...
+    - intros [] [] []...
+  Qed.
+
+  Instance key_value_equiv (A : Type) : Equivalence (IdMapP.O.eqke (elt:=A)).
+  Proof.
+    unfold IdMapP.O.eqke. unfold IdMap.Raw.PX.eqk.
+    split.
+    - intros []; split; [ is_true_solve | reflexivity ].
+    - intros [] []; split; destruct H as [H1 H2]; [ is_true_solve | symmetry; apply H2].
+    - intros [] [] []; split.
+      destruct H.
+      destruct H0.
+      is_true_solve.
+      destruct H.
+      destruct H0.
+      transitivity (snd (i0, a0)); assumption.
+  Qed.
+
+  Lemma NoDupA_app_cons_swap_h : forall [A] [eqA : A -> A -> Prop] (E : RelationClasses.Equivalence eqA) [x : A] [xs : list A],
+    SetoidList.NoDupA eqA (x :: xs) -> SetoidList.NoDupA eqA (xs ++ [x]).
+  Proof.
+    intros A eqA E x xs H.
+    induction xs as [| x' xs].
+    - cbn; assumption.
+    - change (SetoidList.NoDupA eqA ([x] ++ x' :: xs)) in H.
+      apply (SetoidList.NoDupA_swap E) in H.
+      change (SetoidList.NoDupA eqA (([x'] ++ xs) ++ [x])).
+      rewrite <- app_assoc.
+      apply (SetoidList.NoDupA_app E).
+      + apply SetoidList.NoDupA_singleton.
+      + apply IHxs.
+        apply (NoDupA_cons E) in H.
+        assumption.
+      + intros z Eq_z_x' In_z.
+        rewrite SetoidList.InA_singleton in Eq_z_x'.
+        apply SetoidList.InA_app in In_z.
+        destruct In_z as [In_z | Eq_z_x].
+        * assert (L : ~ eqA z x').
+          {
+            apply (NoDupA_in_tl E (x :: xs)).
+            - apply SetoidList.NoDupA_cons.
+              + exfalso.
+                assert (C1 : ~ eqA x' x').
+                {
+                  apply (NoDupA_in_tl E (x :: xs) H).
+                  apply SetoidList.InA_cons_tl.
+                  apply (SetoidList.InA_eqA E Eq_z_x').
+                  assumption.
+                }
+                assert (C2 : eqA x' x'); [ setoid_reflexivity | tauto ].
+              + apply NoDupA_cons in H; assumption.
+            - apply (SetoidList.InA_eqA E Eq_z_x').
+              apply SetoidList.InA_cons.
+              tauto.
+          }
+          tauto.
+        * rewrite SetoidList.InA_singleton in Eq_z_x.
+          apply (NoDupA_eqA E) in H.
+          setoid_symmetry in Eq_z_x'.
+          assert (L : eqA x' x); [ setoid_transitivity z; assumption | idtac ].
+          tauto.
+  Qed.
+
+  Lemma NoDupA_app_cons_swap : forall [A] [eqA : A -> A -> Prop] (E : RelationClasses.Equivalence eqA) (x : A) (xs : list A),
+    SetoidList.NoDupA eqA (x :: xs) <-> SetoidList.NoDupA eqA (xs ++ [x]).
+  Proof.
+    intros.
+    split; intro H.
+    - apply (NoDupA_app_cons_swap_h E H).
+    - apply (SetoidList.NoDupA_swap E) in H.
+      rewrite app_nil_r in H.
+      assumption.
+  Qed.
+
+  Lemma NoDupA_app_comm : forall [A] [eqA : A -> A -> Prop] (E : RelationClasses.Equivalence eqA) (xs ys : list A),
+    SetoidList.NoDupA eqA (xs ++ ys) <-> SetoidList.NoDupA eqA (ys ++ xs).
+  Proof.
+    intros A eqA E xs ys.
+    revert xs.
+    induction ys as [| y ys].
+    - intros xs; cbn in *; rewrite app_nil_r; reflexivity.
+    - intros xs.
+      rewrite <- app_comm_cons.
+      rewrite (NoDupA_app_cons_swap E).
+      rewrite <- app_assoc.
+      change (SetoidList.NoDupA eqA (xs ++ [y] ++ ys) <-> SetoidList.NoDupA eqA (ys ++ xs ++ [y])).
+      rewrite app_assoc.
+      rewrite IHys.
+      reflexivity.
+  Qed.
+
+  Lemma proper_eqlist_NoDupA : forall [A] [eqA : A -> A -> Prop]
+    (E : RelationClasses.Equivalence eqA),
+    Proper (SetoidList.eqlistA eqA ==> flip impl) (SetoidList.NoDupA eqA).
+  Proof.
+    intros A eqA E xs ys Hxy.
+    unfold flip, impl.
+    intros NoDup.
+    induction Hxy as [| x y xs ys].
+    - apply SetoidList.NoDupA_nil.
+    - apply SetoidList.NoDupA_cons.
+      + setoid_rewrite H.
+        setoid_rewrite Hxy.
+        unfold not.
+        intro y_in_ys.
+        apply (NoDupA_in_tl E ys NoDup y_in_ys).
+        setoid_reflexivity.
+      + apply IHHxy.
+        apply (NoDupA_cons E NoDup).
+  Qed.
+
+  Lemma eqlistA_cons_iff : forall [A] [eqA : A -> A -> Prop] (E : Equivalence eqA) x xs y ys,
+    SetoidList.eqlistA eqA (x :: xs) (y :: ys) <-> eqA x y /\ SetoidList.eqlistA eqA xs ys.
+  Proof.
+    intros.
+    repeat rewrite SetoidList.eqlistA_altdef.
+    apply Forall2_cons_iff.
+  Qed.
+
+  Lemma eqlistA_weaken : forall [A] [eqA eqB : A -> A -> Prop]
+    (EA : RelationClasses.Equivalence eqA)
+    (EB : RelationClasses.Equivalence eqB)
+    (Weak : forall x y, eqA x y -> eqB x y)
+    [xs ys],
+    SetoidList.eqlistA eqA xs ys -> SetoidList.eqlistA eqB xs ys.
+  Proof.
+    intros A eqA eqB EA EB Weak xs ys H.
+    induction H as [| x y xs ys IH H Tl].
+    - apply SetoidList.eqlistA_nil.
+    - rewrite (eqlistA_cons_iff EB).
+      split.
+      + apply (Weak x y IH).
+      + apply Tl.
+  Qed.
+
+  Lemma proper_eqlist_NoDupA_Weak : forall [A] [eqA eqB : A -> A -> Prop]
+    (EA : RelationClasses.Equivalence eqA)
+    (EB : RelationClasses.Equivalence eqB)
+    (Weak : forall x y, eqA x y -> eqB x y),
+    Proper (SetoidList.eqlistA eqA ==> flip impl) (SetoidList.NoDupA eqB).
+  Proof.
+    intros A eqA eqB EA EB Weak xs ys Hxy.
+    unfold flip, impl.
+    intros NoDup.
+    induction Hxy as [| x y xs ys].
+    - apply SetoidList.NoDupA_nil.
+    - apply SetoidList.NoDupA_cons.
+      + assert (L : SetoidList.eqlistA eqB xs ys). {
+          apply (eqlistA_weaken EA EB Weak Hxy).
+        }
+        apply Weak in H.
+        setoid_rewrite H.
+        setoid_rewrite L.
+        unfold not.
+        intro y_in_ys.
+        apply (NoDupA_in_tl EB ys NoDup y_in_ys).
+        setoid_reflexivity.
+      + apply IHHxy.
+        apply (NoDupA_cons EB NoDup).
+  Qed.
+
+  Instance NoDupA_proper_key
+    : Proper (SetoidList.eqlistA (IdMap.eq_key (elt:=value)) ==> flip impl) (SetoidList.NoDupA (IdMap.eq_key (elt:=value))) :=
+    proper_eqlist_NoDupA (key_equiv value).
+
+  Instance NoDupA_proper_key_value
+    : Proper (SetoidList.eqlistA (IdMapP.O.eqke (elt:=value)) ==> flip impl) (SetoidList.NoDupA (IdMapP.O.eqke (elt:=value))) :=
+    proper_eqlist_NoDupA (key_value_equiv value).
+
+  Lemma eqke_is_eqk : forall x y, IdMapP.O.eqke (elt:=value) x y -> IdMap.eq_key (elt:=value) x y.
+  Proof.
+    unfold IdMapP.O.eqke, IdMap.eq_key, IdMap.Raw.PX.eqk.
+    easy.
+  Qed.
+
+  Instance NoDupA_proper_key_value_to_key
+    : Proper (SetoidList.eqlistA (IdMapP.O.eqke (elt:=value)) ==> flip impl) (SetoidList.NoDupA (IdMap.eq_key (elt:=value))) :=
+    proper_eqlist_NoDupA_Weak (key_value_equiv value) (key_equiv value) eqke_is_eqk.
+
+  Lemma min_elt_None_iff : forall [A] (m : IdMap.t A), IdMapP.min_elt m = None <-> IdMap.Empty (elt:=A) m.
+  Proof.
+    intros A m.
+    split.
+    - apply IdMapP.min_elt_Empty.
+    - intros H.
+      unfold IdMapP.min_elt.
+      rewrite IdMapP.P.elements_Empty in H.
+      rewrite H.
+      reflexivity.
+  Qed.
+
+  Lemma min_elt_elements_iff : forall [A] (m : IdMap.t A), IdMapP.min_elt m = None <-> IdMap.elements m = [].
+  Proof.
+    intros A m.
+    unfold IdMapP.min_elt.
+    case_eq (IdMap.elements m).
+    - intros; split; reflexivity.
+    - intros kv ? ?.
+      destruct kv; split; intros; discriminate.
+  Qed.
+
+  Lemma min_elt_elements : forall [A] (m : IdMap.t A) k v,
+    IdMapP.min_elt m = Some (k, v) <-> IdMap.elements m = (k, v) :: tl (IdMap.elements m).
+  Proof.
+    intros A m k v.
+    split; intros H.
+    - unfold IdMapP.min_elt in H.
+      case_eq (IdMap.elements m).
+      + intros Elems_m.
+        rewrite Elems_m in H.
+        discriminate.
+      + intros m_kv ? Elems_m.
+        destruct m_kv as (km, vm).
+        rewrite Elems_m in H.
+        injection H; intros; subst.
+        cbn.
+        reflexivity.
+    - unfold IdMapP.min_elt.
+      case_eq (IdMap.elements m).
+      + intros Elems_m.
+        rewrite Elems_m in H.
+        cbn in H.
+        discriminate.
+      + intros m_kv ? Elems_m.
+        destruct m_kv as (km, vm).
+        rewrite Elems_m in H.
+        cbn in H.
+        injection H; intros; subst.
+        reflexivity.
+  Qed.
+
+  Lemma min_elt_elements_right : forall [A] (m : IdMap.t A) k v,
+    IdMapP.min_elt m = Some (k, v) -> IdMap.elements m = (k, v) :: tl (IdMap.elements m).
+  Proof.
+    intros A m k v.
+    apply min_elt_elements.
+  Qed.
+
+  Lemma find_none_Empty : forall [A] (m : IdMap.t A), (forall k, IdMap.find k m = None) <-> IdMap.Empty m.
+  Proof.
+    intros A m.
+    split; intros H.
+    - assert (L : IdMap.Equal m (IdMap.empty A)).
+      {
+        rewrite IdMapP.P.F.Equal_mapsto_iff.
+        intros k ?.
+        split; intros M.
+        - apply IdMapP.P.F.find_mapsto_iff in M.
+          specialize (H k).
+          rewrite H in M.
+          discriminate.
+        - apply IdMapP.P.F.empty_mapsto_iff in M.
+          tauto.
+      }
+      setoid_rewrite L.
+      apply (IdMap.empty_1).
+    - intros k.
+      apply Empty_Equal_empty in H.
+      setoid_rewrite H.
+      apply IdMapP.P.F.empty_o.
+  Qed.
+
+  Lemma Equal_add_remove : forall [A] k v (m : IdMap.t A), IdMap.MapsTo k v m -> IdMap.Equal m (IdMap.add k v (IdMap.remove k m)).
+  Proof.
+    intros A k v m H.
+    rewrite IdMapP.P.F.Equal_mapsto_iff.
+    intros k' v'.
+    case_eq (id_eqb k k'); intros KE.
+    - split.
+      + intros M'.
+        assert (Same_v : v = v').
+        {
+          apply (IdMapP.P.F.MapsTo_fun H).
+          apply (fun P => IdMap.MapsTo_1 P M').
+          is_true_simp.
+        }
+        rewrite Same_v.
+        apply IdMap.add_1.
+        is_true_simp.
+      + intros M_add_rem.
+        apply IdMapP.P.F.add_mapsto_iff in M_add_rem.
+        destruct M_add_rem.
+        * destruct H0.
+          rewrite <- H1.
+          apply (fun P => IdMap.MapsTo_1 P H).
+          is_true_simp.
+        * destruct H0.
+          rewrite KE in H0.
+          apply negb_prop_intro in H0.
+          apply Is_true_eq_true in H0.
+          cbn in H0.
+          discriminate.
+    - split.
+      + intros M'.
+        apply IdMapP.P.F.add_mapsto_iff.
+        apply or_intror.
+        split.
+        * apply negb_prop_elim.
+          apply Is_true_eq_left.
+          apply negb_true_iff.
+          apply KE.
+        * apply IdMapP.P.F.remove_mapsto_iff.
+          split.
+          ** apply negb_prop_elim.
+             apply Is_true_eq_left.
+             apply negb_true_iff.
+             apply KE.
+          ** assumption.
+      + intros M_add_rem.
+        apply IdMapP.P.F.add_mapsto_iff in M_add_rem.
+        destruct M_add_rem.
+        * destruct H0.
+          apply Is_true_eq_true in H0.
+          rewrite KE in H0.
+          discriminate.
+        * destruct H0.
+          apply IdMapP.P.F.remove_mapsto_iff in H1.
+          tauto.
+  Qed.
+
+  Lemma elements_cons_mapsto : forall [A] [k v] [m : IdMap.t A] elems,
+    SetoidList.eqlistA (IdMapP.O.eqke (elt:=A))
+      (IdMap.elements m)
+      ((k, v) :: elems) ->
+    IdMap.MapsTo k v m.
+  Proof.
+    intros A k v m elems H.
+    case_eq (IdMap.elements m).
+    - intros Empty.
+      rewrite Empty in H.
+      apply SetoidList.eqlistA_length in H.
+      cbn in H.
+      discriminate.
+    - intros p ? Not_empty.
+      rewrite Not_empty in H.
+      rewrite (eqlistA_cons_iff (key_value_equiv A)) in H.
+      destruct p as (k', v').
+      destruct H as [H1 H2].
+      unfold IdMapP.O.eqke in H1.
+      destruct H1 as [KE VE].
+      cbn in VE.
+      rewrite <- VE.
+      cbn iota beta delta - [id_eqb] in KE.
+      apply IdMap.elements_2.
+      rewrite Not_empty.
+      rewrite SetoidList.InA_cons.
+      apply or_introl.
+      unfold IdMap.eq_key_elt, IdMap.Raw.PX.eqke.
+      cbn iota beta delta - [id_eqb].
+      easy.
+  Qed.
+
+  Lemma add_empty : forall {A k v}, IdMap.elements (IdMap.add k v (IdMap.empty A)) = [(k, v)].
+  Proof.
+    intros A k v.
+    unfold IdMap.empty, IdMap.add, IdMap.elements, IdMap.Raw.elements.
+    reflexivity.
+  Qed.
+
+  Lemma In_key_diff : forall [A] [m : IdMap.t A] [k k' : id], ~ IdMap.In k m -> IdMap.In k' m -> id_eqb k k' = false.
+  Proof.
+    intros A m k k' NI I.
+    apply IdMapP.P.F.not_find_in_iff in NI.
+    case_eq (id_eqb k k'); intros K.
+    - exfalso.
+      apply IdMapP.P.F.not_find_in_iff in I.
+      + apply I.
+      + rewrite <- NI.
+        apply IdMapP.P.F.find_o.
+        is_true_simp.
+    - reflexivity.
+  Qed.
+
+  Lemma id_eqb_ltb_compat_left : forall x y z, id_eqb x y = true -> id_ltb x z = true -> id_ltb y z = true.
+  Proof.
+    destruct x as [x_aux x_l].
+    destruct y as [y_aux y_l].
+    destruct z as [z_aux z_l].
+    destruct x_aux as [| | x_s | x_s]; destruct y_aux as [| | y_s | y_s]; destruct z_aux as [| | z_s | z_s].
+    all: cbn; try easy.
+    all: (
+      intros H;
+      apply (id_eqb_string_is_eq x_s y_s x_l y_l) in H;
+      rewrite H;
+      tauto
+    ).
+  Qed.
+
+  Lemma sorted_keys : forall [A] [k k' v v' xs ys],
+    id_eqb k k' = false ->
+    Sorted.Sorted (IdMap.lt_key (elt:=A)) xs ->
+    SetoidList.InA (IdMapP.O.eqke (elt:=A)) (k', v') xs ->
+    SetoidList.eqlistA (IdMapP.O.eqke (elt:=A)) xs ((k, v) :: ys) ->
+    id_ltb k k' = true.
+  Proof.
+    intros A k k' v v' xs ys Key_neq Sorted_xs In_xs Eq.
+    destruct xs as [| x xs].
+    - apply SetoidList.InA_nil in In_xs. easy.
+    - destruct x as (hd_k, hd_v).
+      apply Sorted.Sorted_inv in Sorted_xs.
+      destruct Sorted_xs as [Sorted_xs HdRel_xs].
+      apply SetoidList.InA_cons in In_xs.
+      apply (eqlistA_cons_iff (key_value_equiv A)) in Eq.
+      destruct Eq as [Eq_hd Eq_xs].
+
+      destruct In_xs as [H | In_xs].
+      + exfalso.
+        unfold IdMapP.O.eqke in H, Eq_hd.
+        destruct H as [H _].
+        destruct Eq_hd as [Eq_hd _].
+        cbn beta delta - [id_eqb] iota in H, Eq_hd.
+        is_true_simp.
+        assert (T := id_eqb_trans _ _ _ H Eq_hd).
+        apply id_eqb_sym in T.
+        rewrite Key_neq in T.
+        discriminate.
+      + assert (L : IdMap.lt_key (elt:=A) (hd_k, hd_v) (k', v')).
+        {
+          apply (fun SO P => SetoidList.SortA_InfA_InA (key_value_equiv A) SO P Sorted_xs HdRel_xs In_xs);
+          auto with typeclass_instances.
+        }
+        unfold IdMap.lt_key, IdMap.Raw.PX.ltk in L.
+        cbn beta delta - [id_ltb] iota in L.
+        unfold IdMapP.O.eqke in Eq_hd.
+        destruct Eq_hd as [Eq_hd _].
+        cbn beta delta - [id_eqb] iota in Eq_hd.
+        is_true_simp.
+        apply (id_eqb_ltb_compat_left _ _ _ Eq_hd L).
+  Qed.
+
+  Lemma in_elements : forall [A] [m : IdMap.t A] [k], IdMap.In k m -> exists v, SetoidList.InA (IdMapP.O.eqke (elt:=A)) (k, v) (IdMap.elements m).
+  Proof.
+    intros A m k H.
+    change (exists v, IdMap.MapsTo k v m) in H.
+    destruct H as [v].
+    exists v.
+    apply (IdMap.elements_1 H).
+  Qed.
+
+  Lemma elements_csubsts_remove_h : forall substs k v elems,
+    SetoidList.eqlistA (IdMapP.O.eqke (elt:=value)) (IdMap.elements substs) ((k, v) :: elems) ->
+    SetoidList.eqlistA (IdMapP.O.eqke (elt:=value)) (IdMap.elements (IdMap.remove k substs)) elems.
+  Proof.
+    intros substs k v elems H.
+    assert (Remove_k : ~ IdMap.In (elt:=value) k (IdMap.remove k substs)).
+    {
+      apply IdMap.remove_1.
+      is_true_solve.
+    }
+    assert (Below_remove : IdMapP.Below k (IdMap.remove (elt:=value) k substs)).
+    {
+      unfold IdMapP.Below.
+      intros k' In_substs.
+      is_true_simp.
+      assert (Not_k : id_eqb k k' = false).
+      {
+        apply (In_key_diff Remove_k In_substs).
+      }
+      rewrite IdMapP.P.F.remove_neq_in_iff in In_substs; [ idtac | is_true_simp ].
+      apply in_elements in In_substs.
+      destruct In_substs as [v' In_substs].
+      apply (fun S => sorted_keys Not_k S In_substs H).
+      apply IdMap.elements_3.
+    }
+    assert (Add_Remove : IdMapP.P.Add k v (IdMap.remove k substs) substs).
+    {
+      unfold IdMapP.P.Add.
+      intros k'.
+      apply (IdMapP.P.F.find_m).
+      - is_true_simp.
+      - apply Equal_add_remove.
+        apply (elements_cons_mapsto elems H).
+    }
+    setoid_rewrite (@IdMapP.elements_Add_Below value (IdMap.remove k substs) substs k v Below_remove Add_Remove) in H.
+    rewrite (eqlistA_cons_iff (key_value_equiv value)) in H.
+    destruct H as [H_hd H_tl].
+    setoid_rewrite <- H_tl.
+    setoid_reflexivity.
+  Qed.
+
+  Lemma eqlistA_map_remove_comm : forall [A B] [f : A -> B] [k : IdMap.key] (m : IdMap.t A),
+    SetoidList.eqlistA (IdMapP.O.eqke (elt:=B))
+      (IdMap.elements (IdMap.map f (IdMap.remove k m)))
+      (IdMap.elements (IdMap.remove k (IdMap.map f m))).
+  Proof.
+    intros A B f k m.
+    apply IdMapP.elements_Equal_eqlistA.
+    unfold IdMap.Equal.
+    apply find_map_remove_comm.
+  Qed.
+
+  Lemma elements_complete_substs_remove : forall substs k v elems,
+    SetoidList.eqlistA (IdMapP.O.eqke (elt:=value)) (IdMap.elements (complete_bindings substs)) ((k, v) :: elems) ->
+    SetoidList.eqlistA (IdMapP.O.eqke (elt:=value)) (IdMap.elements (complete_bindings (IdMap.remove k substs))) elems.
+  Proof.
+    intros substs k v elems H.
+    unfold complete_bindings in *.
+    setoid_rewrite (eqlistA_map_remove_comm substs).
+    setoid_rewrite <- (elements_csubsts_remove_h _ _ _ _ H).
+    setoid_reflexivity.
+  Qed.
+
   #[local]
-  Obligation Tactic := (program_simpl; try easy; cbn; try lia).
+  Obligation Tactic := solve [ program_simpl; try easy; cbn; try lia ] + program_simpl.
 
   Program Fixpoint step (orig_exp : exp T.tannot) {measure (depth orig_exp)} : t (exp T.tannot) :=
     let 'E_aux aux annot := orig_exp in
@@ -1317,21 +2506,21 @@ Module Make (T : SemanticExt).
             | Pat_aux (Pat_exp pat body) _ :: next_arms =>
                 match pattern_match pat v with
                 | Matched arm_substs =>
-                    pure (fold_right (fun s body => substitute (fst s) (snd s) body) body (complete_bindings arm_substs))
+                    pure (IdMap.fold (fun id v body => substitute id v body) (complete_bindings arm_substs) body)
                 | _ =>
                     wrap (E_match head_exp next_arms)
                 end
             | Pat_aux (Pat_when pat guard body) pexp_annot :: next_arms =>
                 match pattern_match pat v with
                 | Matched arm_substs =>
-                    let guard := fold_right (fun s g => substitute (fst s) (snd s) g)  guard (complete_bindings arm_substs) in
+                    let guard := IdMap.fold (fun id v g => substitute id v g) (complete_bindings arm_substs) guard in
                     match guard with
                     | E_aux (E_internal_value v_guard) _ =>
                         match v_guard with
                         | V_bool true =>
                             match pattern_match pat v with
                             | Matched arm_substs =>
-                                pure (fold_right (fun s body => substitute (fst s) (snd s) body) body (complete_bindings arm_substs))
+                                pure (IdMap.fold (fun id v body => substitute id v body) (complete_bindings arm_substs) body)
                             | _ =>
                                 wrap (E_match head_exp next_arms)
                             end
@@ -1357,7 +2546,7 @@ Module Make (T : SemanticExt).
         | E_aux (E_internal_value v) _ =>
             match pattern_match pat v with
             | Matched body_substs =>
-                pure (fold_left (fun body s => substitute (fst s) (snd s) body) (complete_bindings body_substs) body)
+                pure (IdMap.fold (fun id v body => substitute id v body) (complete_bindings body_substs) body)
             | _ =>
                 Match_failure (fst annot)
             end
@@ -1623,12 +2812,27 @@ Module Make (T : SemanticExt).
   Next Obligation.
     clear Heq_anonymous.
     clear n.
-    induction arm_substs.
+    rewrite IdMap.fold_1.
+    remember (IdMap.elements (complete_bindings arm_substs)) as elems.
+    apply eq_sym in Heqelems.
+    apply (equiv_cong (SetoidList.eqlistA_equiv (key_value_equiv value))) in Heqelems.
+    revert Heqelems.
+    revert arm_substs.
+    induction elems.
     - cbn; lia.
-    - destruct a.
+    - intros. destruct a.
+      rewrite substitute_fold.
+      rewrite substitute_fold in IHelems.
       cbn.
       apply (PeanoNat.Nat.le_lt_trans _ _ _ (depth_subst _ _ _)).
-      apply IHarm_substs.
+      apply (IHelems (IdMap.remove k arm_substs)).
+      + apply (elements_complete_substs_remove _ _ _ _ Heqelems).
+      + assert (E := SetoidList.eqlistA_equiv (key_value_equiv value)).
+        assert (Q := elements_complete_substs_remove _ _ _ _ Heqelems).
+        setoid_rewrite <- Q.
+        apply IdMap.elements_3w.
+      + setoid_rewrite <- Heqelems.
+        apply IdMap.elements_3w.
   Defined.
   Next Obligation.
     cbn.
@@ -1662,6 +2866,7 @@ Module Make (T : SemanticExt).
     rewrite <- (take_drop_evaluated_fields_concat T.tannot _).
     rewrite <- H0.
     rewrite <- H1.
+    cbn.
     rewrite map_app.
     rewrite fold_right_app.
     cbn.
@@ -1674,6 +2879,7 @@ Module Make (T : SemanticExt).
     rewrite <- (take_drop_evaluated_fields_concat T.tannot _).
     rewrite <- H0.
     rewrite <- H1.
+    cbn.
     rewrite map_app.
     rewrite fold_right_app.
     cbn.

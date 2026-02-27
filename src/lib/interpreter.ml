@@ -276,16 +276,12 @@ module RocqSemantics = Semantics.Make (struct
 
   let is_bitvector tannot = is_bitvector_typ (Type_check.typ_of_tannot tannot)
 
-  let id_equal_string x s = string_of_id x = s
-
-  let string_of_id = string_of_id
-
   let fallthrough = fallthrough
 end)
 
 module Monad = Semantics.Monad
 
-let step env exp = RocqSemantics.step exp
+let step exp = RocqSemantics.step exp
 
 let pattern_match pat value = RocqSemantics.pattern_match pat value
 
@@ -346,7 +342,7 @@ let rec eval_frame' = function
           Step (stack_string head, (stack_state head, gstate), stack_cont head (Return_ok (value_of_exp v)), stack')
       | Pure exp', _ ->
           let out' = lazy (Document.to_string (Printer.doc_exp (Type_check.strip_exp exp'))) in
-          Step (out', state, step gstate.typecheck_env exp', stack)
+          Step (out', state, step exp', stack)
       | Early_return v, [] -> Done (state, v)
       | Early_return v, head :: stack' ->
           Step (stack_string head, (stack_state head, gstate), stack_cont head (Return_ok v), stack')
@@ -531,7 +527,10 @@ let rec initialize_registers allow_registers undef_registers gstate =
               {
                 gstate with
                 letbinds =
-                  List.fold_left (fun lbs (id, v) -> Bindings.add id v lbs) gstate.letbinds (complete_bindings bindings);
+                  List.fold_left
+                    (fun lbs (id, v) -> Bindings.add id v lbs)
+                    gstate.letbinds
+                    (IdUtil.IdMap.elements (complete_bindings bindings));
               }
           | _ -> gstate
         with _ -> gstate

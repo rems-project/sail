@@ -5,13 +5,6 @@ type 'x coq_Compare =
 | EQ
 | GT
 
-module type MiniOrderedType =
- sig
-  type t
-
-  val compare : t -> t -> t coq_Compare
- end
-
 module type OrderedType =
  sig
   type t
@@ -19,24 +12,6 @@ module type OrderedType =
   val compare : t -> t -> t coq_Compare
 
   val eq_dec : t -> t -> bool
- end
-
-module MOT_to_OT =
- functor (O:MiniOrderedType) ->
- struct
-  type t = O.t
-
-  (** val compare : t -> t -> t coq_Compare **)
-
-  let compare =
-    O.compare
-
-  (** val eq_dec : t -> t -> bool **)
-
-  let eq_dec x y =
-    match compare x y with
-    | EQ -> true
-    | _ -> false
  end
 
 module OrderedTypeFacts =

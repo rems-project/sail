@@ -210,6 +210,10 @@ module Make :
 
   val complete_bindings : binding IdMap.t -> value IdMap.t
 
+  val fold_match :
+    (T.tannot pat -> value -> match_result) -> T.tannot pat list ->
+    (match_result * value list) -> match_result * value list
+
   val pattern_match : T.tannot pat -> value -> match_result
 
   val lookup_field : Parse_ast.l -> id -> (id * value) list -> value Monad.t

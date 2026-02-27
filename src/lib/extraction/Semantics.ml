@@ -795,6 +795,22 @@ module Make =
       | Complete v -> v
       | Partial vs -> complete_value vs) m
 
+  (** val fold_match :
+      (T.tannot pat -> value -> match_result) -> T.tannot pat list ->
+      (match_result * value list) -> match_result * value list **)
+
+  let rec fold_match f ps match_info =
+    match ps with
+    | [] -> match_info
+    | p :: ps0 ->
+      let match_info0 =
+        let (prev, l) = match_info in
+        (match l with
+         | [] -> (Unmatched, [])
+         | v :: vs -> ((merge_match_result prev (f p v)), vs))
+      in
+      fold_match f ps0 match_info0
+
   (** val pattern_match : T.tannot pat -> value -> match_result **)
 
   let rec pattern_match p v =
@@ -819,27 +835,12 @@ module Make =
        (match v with
         | V_ctor (v_ctor, vs) ->
           if id_eqb ctor v_ctor
-          then fst
-                 (fold_left (fun match_info p0 ->
-                   let (prev, y) = match_info in
-                   (match y with
-                    | [] -> (Unmatched, [])
-                    | v0 :: vs0 ->
-                      ((merge_match_result prev (pattern_match p0 v0)), vs0)))
-                   ps (simple_match, vs))
+          then fst (fold_match pattern_match ps (simple_match, vs))
           else Unmatched
         | _ -> Unmatched)
      | P_vector ps ->
        (match to_gvector v with
-        | V_vector vs ->
-          fst
-            (fold_left (fun match_info p0 ->
-              let (prev, y) = match_info in
-              (match y with
-               | [] -> (Unmatched, [])
-               | v0 :: vs0 ->
-                 ((merge_match_result prev (pattern_match p0 v0)), vs0)))
-              ps (simple_match, vs))
+        | V_vector vs -> fst (fold_match pattern_match ps (simple_match, vs))
         | _ -> Unmatched)
      | P_vector_concat ps ->
        (match v with
@@ -890,27 +891,13 @@ module Make =
         | _ :: _ ->
           (match v with
            | V_tuple vs ->
-             fst
-               (fold_left (fun match_info p0 ->
-                 let (prev, y) = match_info in
-                 (match y with
-                  | [] -> (Unmatched, [])
-                  | v0 :: vs0 ->
-                    ((merge_match_result prev (pattern_match p0 v0)), vs0)))
-                 ps (simple_match, vs))
+             fst (fold_match pattern_match ps (simple_match, vs))
            | _ -> Unmatched))
      | P_list ps ->
        (match v with
         | V_list vs ->
           if Nat.eqb (length ps) (length vs)
-          then fst
-                 (fold_left (fun match_info p0 ->
-                   let (prev, y) = match_info in
-                   (match y with
-                    | [] -> (Unmatched, [])
-                    | v0 :: vs0 ->
-                      ((merge_match_result prev (pattern_match p0 v0)), vs0)))
-                   ps (simple_match, vs))
+          then fst (fold_match pattern_match ps (simple_match, vs))
           else Unmatched
         | _ -> Unmatched)
      | P_cons (p0, ps) ->
@@ -1556,17 +1543,16 @@ module Make =
                   (match filtered_var with
                    | Matched arm_substs ->
                      Monad.pure
-                       (fold_right (fun s body0 ->
-                         substitute (fst s) (snd s) body0) body
-                         (complete_bindings arm_substs))
+                       (IdMap.fold substitute (complete_bindings arm_substs)
+                         body)
                    | _ -> wrap (E_match (head_exp, next_arms)))
                 | Pat_when (pat0, guard, body) ->
                   let filtered_var = pattern_match pat0 v in
                   (match filtered_var with
                    | Matched arm_substs ->
                      let guard0 =
-                       fold_right (fun s g -> substitute (fst s) (snd s) g)
-                         guard (complete_bindings arm_substs)
+                       IdMap.fold substitute (complete_bindings arm_substs)
+                         guard
                      in
                      let E_aux (e0, _) = guard0 in
                      (match e0 with
@@ -1578,9 +1564,8 @@ module Make =
                                 (match filtered_var0 with
                                  | Matched arm_substs0 ->
                                    Monad.pure
-                                     (fold_right (fun s body0 ->
-                                       substitute (fst s) (snd s) body0) body
-                                       (complete_bindings arm_substs0))
+                                     (IdMap.fold substitute
+                                       (complete_bindings arm_substs0) body)
                                  | _ -> wrap (E_match (head_exp, next_arms)))
                            else wrap (E_match (head_exp, next_arms))
                          | _ -> Monad.Runtime_type_error (fst pexp_annot))
@@ -1601,8 +1586,7 @@ module Make =
             (match filtered_var with
              | Matched body_substs ->
                Monad.pure
-                 (fold_left (fun body0 s -> substitute (fst s) (snd s) body0)
-                   (complete_bindings body_substs) body)
+                 (IdMap.fold substitute (complete_bindings body_substs) body)
              | _ -> Monad.Match_failure (fst annot0))
           | _ ->
             Monad.bind (step0 x) (fun x' -> wrap (E_let (pat0, x', body))))
