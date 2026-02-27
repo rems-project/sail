@@ -345,20 +345,37 @@ let rec doc_instr (I_aux (aux, _)) =
 
 let string_of_instr i = Document.to_string (doc_instr i)
 
+let rec clexp_loc = function
+  | CL_id (name, _) | CL_rmw (name, _, _) -> (
+      match name with Name (id, _) -> id_loc id | _ -> Parse_ast.Unknown
+    )
+  | CL_field (clexp, _, _) -> clexp_loc clexp
+  | CL_addr clexp -> clexp_loc clexp
+  | CL_tuple (clexp, _) -> clexp_loc clexp
+  | CL_void _ -> Parse_ast.Unknown
+
 let rec clexp_ctyp = function
   | CL_id (_, ctyp) -> ctyp
   | CL_rmw (_, _, ctyp) -> ctyp
   | CL_field (_, _, ctyp) -> ctyp
-  | CL_addr clexp -> begin
+  | CL_addr clexp -> (
       match clexp_ctyp clexp with
       | CT_ref ctyp -> ctyp
-      | ctyp -> failwith ("Bad ctyp for CL_addr " ^ string_of_ctyp ctyp)
-    end
-  | CL_tuple (clexp, n) -> begin
+      | ctyp ->
+          let l = clexp_loc clexp in
+          Reporting.unreachable l __POS__ ("Bad ctyp for CL_addr " ^ string_of_ctyp ctyp)
+    )
+  | CL_tuple (clexp, n) -> (
       match clexp_ctyp clexp with
-      | CT_tup typs -> begin try List.nth typs n with _ -> failwith "Tuple assignment index out of bounds" end
+      | CT_tup typs -> (
+          match List.nth_opt typs n with
+          | Some typ -> typ
+          | None ->
+              let l = clexp_loc clexp in
+              Reporting.unreachable l __POS__ ("Tuple assignment index " ^ string_of_int n ^ " out of bounds")
+        )
       | ctyp -> failwith ("Bad ctyp for CL_tuple " ^ string_of_ctyp ctyp)
-    end
+    )
   | CL_void ctyp -> ctyp
 
 (* Define wrappers for creating bytecode instructions. Each function
