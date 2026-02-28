@@ -286,6 +286,9 @@
   (%{workspace_root}/src/sail_lean_backend/Sail/FakeReal.lean
    as
    src/sail_lean_backend/Sail/FakeReal.lean)
-  (%{workspace_root}/src/sail_lean_backend/Sail/Specialization.lean
+  (%{workspace_root}/src/sail_lean_backend/Sail/SpecializationV1.lean
    as
-   src/sail_lean_backend/Sail/Specialization.lean)))
+   src/sail_lean_backend/Sail/SpecializationV1.lean)
+  (%{workspace_root}/src/sail_lean_backend/Sail/SpecializationArchSem.lean
+   as
+   src/sail_lean_backend/Sail/SpecializationArchSem.lean)))

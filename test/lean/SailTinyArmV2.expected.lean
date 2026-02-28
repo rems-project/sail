@@ -7,7 +7,7 @@ set_option linter.unusedVariables false
 set_option match.ignoreUnusedAlts true
 
 open Sail
-open ConcurrencyInterfaceV2
+open ArchSem
 
 abbrev bit := (BitVec 1)
 
@@ -399,13 +399,6 @@ abbrev RegisterType : Register → Type
   | .R30 => (BitVec 64)
   | ._PC => (BitVec 64)
 
-instance : Inhabited (RegisterRef RegisterType (BitVec 64)) where
-  default := .Reg _PC
-abbrev exception := Unit
-
-abbrev SailM := PreSailM RegisterType trivialChoiceSource exception
-abbrev SailME := PreSailME RegisterType trivialChoiceSource exception
-
 def mem_acc_is_explicit (acc : AccessDescriptor) : Bool :=
   (BEq.beq acc.acctype AccessType_GPR)
 
@@ -435,6 +428,8 @@ def mem_acc_is_atomic_rmw (acc : AccessDescriptor) : Bool :=
 
 @[reducible]
 instance : Arch where
+  register := Register
+  register_type := RegisterType
   addr_size := addr_size
   addr_space := addr_space
   CHERI := false
@@ -457,6 +452,13 @@ instance : Arch where
   tlbi := Unit
   exn := Unit
   sys_reg_id := Unit
+abbrev exception := Unit
+
+abbrev SailM := PreSailM exception
+abbrev SailME := PreSailME exception
+
+instance : Inhabited (PreSail.RegisterRef (BitVec 64)) where
+  default := .Reg _PC
 XXXXXXXXX
 
 import Sail
@@ -470,7 +472,7 @@ set_option linter.unusedVariables false
 set_option match.ignoreUnusedAlts true
 
 open Sail
-open ConcurrencyInterfaceV2
+open ArchSem
 
 namespace Out.Functions
 

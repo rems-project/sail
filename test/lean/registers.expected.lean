@@ -43,22 +43,22 @@ abbrev RegisterType : Register → Type
   | .R1 => (BitVec 64)
   | .R0 => (BitVec 64)
 
-instance : Inhabited (RegisterRef RegisterType (BitVec 1)) where
-  default := .Reg BIT
-instance : Inhabited (RegisterRef RegisterType (BitVec 64)) where
-  default := .Reg R0
-instance : Inhabited (RegisterRef RegisterType Bool) where
-  default := .Reg BOOL
-instance : Inhabited (RegisterRef RegisterType Int) where
-  default := .Reg INT
-instance : Inhabited (RegisterRef RegisterType Nat) where
-  default := .Reg NAT
+
 abbrev exception := Unit
 
 abbrev SailM := PreSailM RegisterType trivialChoiceSource exception
 abbrev SailME := PreSailME RegisterType trivialChoiceSource exception
 
-
+instance : Inhabited (PreSail.RegisterRef RegisterType (BitVec 1)) where
+  default := .Reg BIT
+instance : Inhabited (PreSail.RegisterRef RegisterType (BitVec 64)) where
+  default := .Reg R0
+instance : Inhabited (PreSail.RegisterRef RegisterType Bool) where
+  default := .Reg BOOL
+instance : Inhabited (PreSail.RegisterRef RegisterType Int) where
+  default := .Reg INT
+instance : Inhabited (PreSail.RegisterRef RegisterType Nat) where
+  default := .Reg NAT
 XXXXXXXXX
 
 import Sail

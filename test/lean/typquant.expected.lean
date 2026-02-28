@@ -28,6 +28,7 @@ inductive virtaddr where
 abbrev Register := PEmpty
 abbrev RegisterType : Register -> Type := PEmpty.elim
 
+
 abbrev exception := Unit
 
 abbrev SailM := PreSailM RegisterType trivialChoiceSource exception
