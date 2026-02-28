@@ -142,7 +142,7 @@ def concat_str_dec (str : String) (x : Int) : String :=
   (HAppend.hAppend str (Int.repr x))
 
 def unif_bitvec_append (x : (BitVec 13)) (y : (BitVec 3)) : (BitVec (4 * 4)) :=
-  (x ++ y)
+  (x +++ y)
 
 def unif_bitvec_replicate (x : (BitVec 4)) : (BitVec (2 * 8)) :=
   (BitVec.replicateBits x 4)

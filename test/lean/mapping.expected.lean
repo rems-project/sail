@@ -343,7 +343,7 @@ def vtype_assembly_backwards (arg_ : ((BitVec 1) × (BitVec 1))) : SailM String 
     (do
       if (((BitVec.access sew 0) == 1#1) : Bool)
       then (pure (String.append (ta_flag_backwards sew) (String.append (ta_flag_backwards ta) "")))
-      else (hex_bits_2_forwards ((ta : (BitVec 1)) ++ (sew : (BitVec 1)))))
+      else (hex_bits_2_forwards ((ta : (BitVec 1)) +++ (sew : (BitVec 1)))))
 
 def vtype_assembly_forwards_matches (arg_ : String) : SailM Bool := do
   throw Error.Exit
@@ -372,7 +372,7 @@ def vtype_assembly2_forwards (arg_ : String) : SailM ((BitVec 1) × (BitVec 1)) 
 
 def vtype_assembly2_backwards (arg_ : ((BitVec 1) × (BitVec 1))) : SailM String := do
   match arg_ with
-  | (ta, sew) => (hex_bits_2_forwards ((ta : (BitVec 1)) ++ (sew : (BitVec 1))))
+  | (ta, sew) => (hex_bits_2_forwards ((ta : (BitVec 1)) +++ (sew : (BitVec 1))))
 
 def vtype_assembly2_forwards_matches (arg_ : String) : SailM Bool := do
   let head_exp_ := arg_

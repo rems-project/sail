@@ -14,6 +14,7 @@ from sailtest import *
 
 update_expected = args.update_expected
 run_skips = args.run_skips
+local_support_lib = args.lean_local_support_library
 
 sail_dir = get_sail_dir()
 sail = get_sail()
@@ -54,14 +55,17 @@ skip_selftests = {
 print("Sail is {}".format(sail))
 print("Sail dir is {}".format(sail_dir))
 
-def clone_support_lib(subdir) -> str:
-    lean_path = f"../{subdir}"
-    lib_path = f"../{subdir}/support-lib"
-    step(f"rm -rf {lib_path} || true")
-    step(f"git clone https://github.com/rems-project/lean-sail.git {lib_path}")
-    print("Building the support library")
-    step("lake build", cwd=lib_path)
-    return f"../../support-lib"
+def get_support_lib(subdir) -> str:
+    if local_support_lib:
+        return local_support_lib
+    else:
+        lean_path = f"../{subdir}"
+        lib_path = f"../{subdir}/support-lib"
+        step(f"rm -rf {lib_path} || true")
+        step(f"git clone https://github.com/rems-project/lean-sail.git {lib_path}")
+        print("Building the support library")
+        step("lake build", cwd=lib_path)
+        return f"../../support-lib"
 
 def test_lean(subdir: str, skip_list = None, runnable: bool = False):
     """
@@ -70,7 +74,7 @@ def test_lean(subdir: str, skip_list = None, runnable: bool = False):
     instead of `lake build`.
     """
     banner("Cloning the support library")
-    support_lib = clone_support_lib(subdir)
+    support_lib = get_support_lib(subdir)
     print("...done!")
     banner(f'Testing lean target (sub-directory: {subdir})')
     results = Results(subdir)
