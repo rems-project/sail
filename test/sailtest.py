@@ -19,6 +19,7 @@ parser.add_argument("--targets", help="Targets to use (where supported).", actio
 parser.add_argument("--update-expected", help="Update the expected file (where supported)", action="store_true")
 parser.add_argument("--run-skips", help="Run tests that would otherwise be skipped", action="store_true")
 parser.add_argument("--test", help="Run only specified test.", action='append')
+parser.add_argument("--lean-local-support-library", help="Use a local Lean support library", action='store')
 args = parser.parse_args()
 
 def is_compact():

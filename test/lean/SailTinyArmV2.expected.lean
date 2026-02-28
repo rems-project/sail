@@ -1558,7 +1558,7 @@ def decodeDataMemoryBarrier (merge_var : (BitVec 4)) : (Option ast) :=
 
 def decodeCompareAndBranch (imm19 : (BitVec 19)) (Rt : (BitVec 5)) : (Option ast) :=
   let t : reg_index := (BitVec.toNatInt Rt)
-  let offset : (BitVec 64) := (Sail.BitVec.signExtend (imm19 ++ 0b00#2) 64)
+  let offset : (BitVec 64) := (Sail.BitVec.signExtend (imm19 +++ 0b00#2) 64)
   (some (CompareAndBranch (t, offset)))
 
 /-- Type quantifiers: m : Nat, n : Nat, t : Nat, 0 ≤ t ∧ t ≤ 31, 0 ≤ n ∧ n ≤ 31, 0 ≤ m

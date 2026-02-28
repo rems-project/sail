@@ -220,7 +220,7 @@ def match_width (x : (BitVec k_n)) : (BitVec (2 * k_n)) :=
     | 16 => (const16 ())
     | 32 => (const32 ())
     | n => ((BitVec.zero n), false)
-  (foo ++ foo)
+  (foo +++ foo)
 
 def match_option_bitvec (x : (Option (BitVec 16))) : Int :=
   match x with

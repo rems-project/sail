@@ -163,7 +163,7 @@ def bitvector_truncateLSB (x : (BitVec 32)) : (BitVec 16) :=
   (Sail.BitVec.truncateLsb x 16)
 
 def bitvector_append (x : (BitVec 16)) (y : (BitVec 16)) : (BitVec 32) :=
-  (x ++ y)
+  (x +++ y)
 
 def bitvector_add (x : (BitVec 16)) (y : (BitVec 16)) : (BitVec 16) :=
   (x + y)

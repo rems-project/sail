@@ -637,7 +637,7 @@ let op_of_id id =
   | Some "_lean_mul" -> `Binop "*"
   | Some "_lean_muli" -> `Binop "*i"
   | Some "_lean_div" -> `Binop "/"
-  | Some "_lean_app" -> `Binop "++"
+  | Some "_lean_app" -> `Binop "+++" (* see issue sail#1630 *)
   | Some "_lean_bvand" -> `Binop "&&&"
   | Some "_lean_bvor" -> `Binop "|||"
   | Some "_lean_bvxor" -> `Binop "^^^"

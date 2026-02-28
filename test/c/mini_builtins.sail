@@ -169,7 +169,7 @@ function test_vector_update_subrange() -> unit = {
 function main() -> unit = {
   test_add_bits();
 // Currently a problem with Lean
-//  test_append();
+  test_append();
   test_clz();
   test_ctz();
   test_divmod();
