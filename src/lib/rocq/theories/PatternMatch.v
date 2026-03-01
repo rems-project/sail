@@ -57,19 +57,21 @@ Require TypeAnnot.
 
 Import ListNotations.
 
-(** A [binding] is something an identifier in a pattern can bind with
-    during matching. The [Complete] case is for the regular case where
-    an identifier is just bound to a [value]. The [Partial] case is for
-    Sail vector range patterns, e.g.
+(**
+A [binding] is something an identifier in a pattern can bind with
+during matching. The [Complete] case is for the regular case where an
+identifier is just bound to a [value]. The [Partial] case is for Sail
+vector range patterns, e.g.
 
-    <<
-      match xs : bits(32) with
-      | ys[15 .. 0] @ ys[31 .. 16] => ...
-    >>
+<<
+  match xs : bits(32) with
+  | ys[15 .. 0] @ ys[31 .. 16] => ...
+>>
 
-    After pattern matching is complete, these partial bindings are
-    turned into a complete binding for the << ys >> variable. See the
-    [complete_bindings] function later in this module. *)
+After pattern matching is complete, these partial bindings are
+turned into a complete binding for the << ys >> variable. See the
+[complete_bindings] function later in this module.
+*)
 
 Inductive binding :=
 | Complete : value -> binding
@@ -114,17 +116,19 @@ Proof.
     + apply list_eqb_refl; intros; apply binding_part_eqb_refl.
 Qed.
 
-(** Now we define a notion of combining two bindings. Consider a tuple pattern.
+(**
+Now we define a notion of combining two bindings. Consider a tuple pattern.
 
-    <<
-       (pat1, pat2)
-    >>
+<<
+  (pat1, pat2)
+>>
 
-    The Sail type system will ensure subpatterns like pat1 and pat2 do
-    not bind the same identifiers, so either we will have no binding
-    for an identifier in << pat1 >> [None] or it will have [Some]
-    binding for a variable. The only special case is for the vector
-    range patterns above, where we combine the partial matches. *)
+The Sail type system will ensure subpatterns like pat1 and pat2 do
+not bind the same identifiers, so either we will have no binding
+for an identifier in << pat1 >> [None] or it will have [Some]
+binding for a variable. The only special case is for the vector
+range patterns above, where we combine the partial matches.
+*)
 
 Definition combine_binding (l r : option binding) : option binding :=
   match (l, r) with
