@@ -1,12 +1,16 @@
 open Ast
 open BinInt
 open Bit
+open BitList
 open Datatypes
 open IdUtil
 open List0
 open ListDef
 open ListUtil
 open Nat0
+open PeanoNat
+open QArith_base
+open TypeAnnot
 
 type binding =
 | Complete of value
@@ -45,3 +49,17 @@ val neg_match : match_result -> match_result
 val or_match : match_result -> match_result -> match_result
 
 val binds_id : id -> 'a1 pat -> bool
+
+val pattern_match_literal : lit -> value -> match_result
+
+val get_struct_field : id -> (id * value) list -> value
+
+module Make :
+ functor (Tannot:S) ->
+ sig
+  val fold_match :
+    (Tannot.t pat -> value -> match_result) -> Tannot.t pat list ->
+    (match_result * value list) -> match_result * value list
+
+  val pattern_match : Tannot.t pat -> value -> match_result
+ end

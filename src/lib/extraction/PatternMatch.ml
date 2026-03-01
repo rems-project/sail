@@ -1,12 +1,16 @@
 open Ast
 open BinInt
 open Bit
+open BitList
 open Datatypes
 open IdUtil
 open List0
 open ListDef
 open ListUtil
 open Nat0
+open PeanoNat
+open QArith_base
+open TypeAnnot
 
 type binding =
 | Complete of value
@@ -173,3 +177,186 @@ let rec binds_id n = function
    | P_struct (_, ps, _) ->
      fold_left (||) (map (fun fp -> binds_id n (snd fp)) ps) false
    | _ -> false)
+
+(** val pattern_match_literal : lit -> value -> match_result **)
+
+let pattern_match_literal l v =
+  let L_aux (aux, _) = l in
+  (match aux with
+   | L_unit ->
+     (match v with
+      | V_unit -> simple_match
+      | V_unknown -> MaybeMatched empty_bindings
+      | _ -> Unmatched)
+   | L_true ->
+     (match v with
+      | V_bool b -> if b then simple_match else Unmatched
+      | V_unknown -> MaybeMatched empty_bindings
+      | _ -> Unmatched)
+   | L_false ->
+     (match v with
+      | V_bool b -> if b then Unmatched else simple_match
+      | V_unknown -> MaybeMatched empty_bindings
+      | _ -> Unmatched)
+   | L_num n ->
+     (match v with
+      | V_int m -> simple_match_when (Z.eqb n m)
+      | V_unknown -> MaybeMatched empty_bindings
+      | _ -> Unmatched)
+   | L_hex s ->
+     (match v with
+      | V_bitvector vs -> simple_match_when (same_bits (of_hex_lit s) vs)
+      | V_unknown -> MaybeMatched empty_bindings
+      | _ -> Unmatched)
+   | L_bin s ->
+     (match v with
+      | V_bitvector vs -> simple_match_when (same_bits (of_bin_lit s) vs)
+      | V_unknown -> MaybeMatched empty_bindings
+      | _ -> Unmatched)
+   | L_string s1 ->
+     (match v with
+      | V_string s2 -> simple_match_when ((=) s1 s2)
+      | V_unknown -> MaybeMatched empty_bindings
+      | _ -> Unmatched)
+   | L_real r1 ->
+     (match v with
+      | V_real r2 -> simple_match_when (coq_Qeq_bool r1 r2)
+      | V_unknown -> MaybeMatched empty_bindings
+      | _ -> Unmatched))
+
+(** val get_struct_field : id -> (id * value) list -> value **)
+
+let rec get_struct_field name = function
+| [] -> V_unit
+| p :: rest_fields ->
+  let (name', v) = p in
+  if id_eqb name name' then v else get_struct_field name rest_fields
+
+module Make =
+ functor (Tannot:S) ->
+ struct
+  (** val fold_match :
+      (Tannot.t pat -> value -> match_result) -> Tannot.t pat list ->
+      (match_result * value list) -> match_result * value list **)
+
+  let rec fold_match f ps match_info =
+    match ps with
+    | [] -> match_info
+    | p :: ps0 ->
+      let match_info0 =
+        let (prev, l) = match_info in
+        (match l with
+         | [] -> (Unmatched, [])
+         | v :: vs -> ((merge_match_result prev (f p v)), vs))
+      in
+      fold_match f ps0 match_info0
+
+  (** val pattern_match : Tannot.t pat -> value -> match_result **)
+
+  let rec pattern_match p v =
+    let P_aux (aux, annot) = p in
+    (match aux with
+     | P_lit l -> pattern_match_literal l v
+     | P_or (lhs_p, rhs_p) ->
+       or_match (pattern_match lhs_p v) (pattern_match rhs_p v)
+     | P_not p0 -> neg_match (pattern_match p0 v)
+     | P_as (p0, n) -> add_match n (Complete v) (pattern_match p0 v)
+     | P_typ (_, p0) -> pattern_match p0 v
+     | P_id n ->
+       (match Tannot.get_id_type (snd annot) n with
+        | Enum_member ->
+          (match v with
+           | V_member m -> simple_match_when (id_eqb n m)
+           | V_unknown -> MaybeMatched empty_bindings
+           | _ -> Unmatched)
+        | _ -> Matched (IdMap.add n (Complete v) empty_bindings))
+     | P_var (p0, _) -> pattern_match p0 v
+     | P_app (ctor, ps) ->
+       (match v with
+        | V_ctor (v_ctor, vs) ->
+          if id_eqb ctor v_ctor
+          then fst (fold_match pattern_match ps (simple_match, vs))
+          else Unmatched
+        | _ -> Unmatched)
+     | P_vector ps ->
+       (match to_gvector v with
+        | V_vector vs -> fst (fold_match pattern_match ps (simple_match, vs))
+        | _ -> Unmatched)
+     | P_vector_concat ps ->
+       (match v with
+        | V_bitvector bs ->
+          fst
+            (fold_left (fun match_info p0 ->
+              let P_aux (_, annot0) = p0 in
+              (match Tannot.get_split (snd annot0) with
+               | No_split -> (Unmatched, [])
+               | Split s ->
+                 let (prev, bs0) = match_info in
+                 (match bs0 with
+                  | [] -> (Unmatched, [])
+                  | _ :: _ ->
+                    let (bs_take, bs_drop) = take_drop s bs0 in
+                    ((merge_match_result prev
+                       (pattern_match p0 (V_bitvector bs_take))),
+                    bs_drop))))
+              ps (simple_match, bs))
+        | V_vector vs ->
+          fst
+            (fold_left (fun match_info p0 ->
+              let P_aux (_, annot0) = p0 in
+              (match Tannot.get_split (snd annot0) with
+               | No_split -> (Unmatched, [])
+               | Split s ->
+                 let (prev, vs0) = match_info in
+                 (match vs0 with
+                  | [] -> (Unmatched, [])
+                  | _ :: _ ->
+                    let (vs_take, vs_drop) = take_drop s vs0 in
+                    ((merge_match_result prev
+                       (pattern_match p0 (V_vector vs_take))),
+                    vs_drop))))
+              ps (simple_match, vs))
+        | _ -> Unmatched)
+     | P_vector_subrange (id0, n, m) ->
+       Matched
+         (IdMap.add id0 (Partial (Non_empty (((v, n), m), [])))
+           empty_bindings)
+     | P_tuple ps ->
+       (match ps with
+        | [] ->
+          (match v with
+           | V_unit -> simple_match
+           | V_unknown -> simple_match
+           | _ -> Unmatched)
+        | _ :: _ ->
+          (match v with
+           | V_tuple vs ->
+             fst (fold_match pattern_match ps (simple_match, vs))
+           | _ -> Unmatched))
+     | P_list ps ->
+       (match v with
+        | V_list vs ->
+          if Nat.eqb (length ps) (length vs)
+          then fst (fold_match pattern_match ps (simple_match, vs))
+          else Unmatched
+        | _ -> Unmatched)
+     | P_cons (p0, ps) ->
+       (match v with
+        | V_list l ->
+          (match l with
+           | [] -> Unmatched
+           | v0 :: vs ->
+             merge_match_result (pattern_match p0 v0)
+               (pattern_match ps (V_list vs)))
+        | _ -> Unmatched)
+     | P_struct (_, field_patterns, _) ->
+       (match v with
+        | V_record fields ->
+          fold_left (fun prev fp ->
+            let (name, p0) = fp in
+            let v0 = get_struct_field name fields in
+            merge_match_result prev (pattern_match p0 v0)) field_patterns
+            simple_match
+        | _ -> Unmatched)
+     | _ -> simple_match)
+ end

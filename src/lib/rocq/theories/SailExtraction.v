@@ -9,7 +9,8 @@ Require Import Value_type.
 Require Import AstInduction.
 Require Import IdUtil.
 Require Import Semantics.
+Require Import PatternMatch.
 
 Extraction Blacklist Nat List String.
 
-Separate Extraction Primops l attribute_data hex_digits_of_bitlist def impldef opt_default Make IdMap.
+Separate Extraction Primops l attribute_data BitList.to_hex_digits def impldef opt_default Semantics.Make IdMap.

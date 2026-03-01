@@ -444,8 +444,8 @@ module Make (C : CONFIG) = struct
     | AV_lit (L_aux (((L_hex _ | L_bin _) as l_aux), _), _) ->
         let bitlist =
           ( match l_aux with
-          | L_hex hex -> Semantics.bitlist_of_hex_lit hex
-          | L_bin bin -> Semantics.bitlist_of_bin_lit bin
+          | L_hex hex -> BitList.of_hex_lit hex
+          | L_bin bin -> BitList.of_bin_lit bin
           | _ -> assert false
           )
           |> List.map (function B0 -> Sail2_values.B0 | B1 -> Sail2_values.B1)

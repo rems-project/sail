@@ -107,14 +107,14 @@ module VariableUpdate = struct
             | _ -> None
           )
         | Vector n -> (
-            match Semantics.to_gvector v with
+            match BitList.to_gvector v with
             | V_vector vs ->
                 let* v = List.nth_opt (List.rev vs) (Big_int.to_int n) in
                 access v accessors
             | _ -> None
           )
         | Vector_range (n, m) -> (
-            match Semantics.to_gvector v with
+            match BitList.to_gvector v with
             | V_vector vs ->
                 let vs = Sail_lib.subrange (vs, n, m) in
                 access (V_vector vs) accessors
@@ -176,7 +176,7 @@ module VariableUpdate = struct
                   Some (V_bitvector bs)
               | _ -> Some (V_vector vs)
             in
-            match Semantics.to_gvector v with
+            match BitList.to_gvector v with
             | V_vector vs ->
                 if is_inc then
                   let* vs = vector_update (fun v -> update is_inc v v' accessors) (Big_int.to_int n) vs in
@@ -250,7 +250,7 @@ let is_interpreter_extern id env = Type_check.Env.is_extern id env "interpreter"
 let get_interpreter_extern id env = Type_check.Env.get_extern id env "interpreter"
 
 module RocqSemantics = Semantics.Make (struct
-  type tannot = Type_check.tannot
+  type t = Type_check.tannot
 
   let get_type tannot =
     let typ = Type_check.typ_of_tannot tannot in
@@ -259,19 +259,19 @@ module RocqSemantics = Semantics.Make (struct
   let get_id_type tannot id =
     let env = Type_check.env_of_tannot tannot in
     match Type_check.Env.lookup_id id env with
-    | Register _ -> Semantics.Global_register
-    | Local _ | Unbound _ -> Semantics.Local_variable
-    | Enum _ -> Semantics.Enum_member
+    | Register _ -> Global_register
+    | Local _ | Unbound _ -> Local_variable
+    | Enum _ -> Enum_member
 
   let get_split tannot =
     let env = Type_check.env_of_tannot tannot in
     let typ = Type_check.typ_of_tannot tannot in
     match Type_check.destruct_vector env typ with
-    | Some (Nexp_aux (Nexp_constant n, _), _) -> Semantics.Split n
+    | Some (Nexp_aux (Nexp_constant n, _), _) -> Split n
     | _ -> (
         match Type_check.destruct_bitvector env typ with
-        | Some (Nexp_aux (Nexp_constant n, _)) -> Semantics.Split n
-        | _ -> Semantics.No_split
+        | Some (Nexp_aux (Nexp_constant n, _)) -> Split n
+        | _ -> No_split
       )
 
   let is_bitvector tannot = is_bitvector_typ (Type_check.typ_of_tannot tannot)
@@ -283,7 +283,7 @@ module Monad = Semantics.Monad
 
 let step exp = RocqSemantics.step exp
 
-let pattern_match pat value = RocqSemantics.pattern_match pat value
+let pattern_match pat value = RocqSemantics.PM.pattern_match pat value
 
 let complete_bindings bindings = PatternMatch.complete_bindings bindings
 

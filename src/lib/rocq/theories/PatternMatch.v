@@ -3,10 +3,14 @@ From Stdlib Require Import Lists.List.
 From Stdlib Require Import ZArith.
 
 Require Import Ast.
+Require Import AstInduction.
 Require Import Bit.
 Require Import IdUtil.
 Require Import ListUtil.
 Require Import Value_type.
+
+Require BitList.
+Require TypeAnnot.
 
 Import ListNotations.
 
@@ -474,3 +478,490 @@ Fixpoint binds_id {A} (n : Ast.id) (p : Ast.pat A) : bool :=
   | P_struct _ ps _ => fold_left orb (map (fun fp => binds_id n (snd fp)) ps) false
   | P_vector_subrange m _ _ => id_eqb n m
   end.
+
+
+Definition pattern_match_literal (l : Ast.lit) (v : value) : match_result :=
+  let 'L_aux aux annot := l in
+  match (aux, v) with
+  | (L_unit,      V_unit        ) => simple_match
+  | (L_true,      V_bool true   ) => simple_match
+  | (L_false,     V_bool false  ) => simple_match
+  | (L_num n,     V_int m       ) => simple_match_when (Z.eqb n m)
+  | (L_hex s,     V_bitvector vs) => simple_match_when (BitList.same_bits (BitList.of_hex_lit s) vs)
+  | (L_bin s,     V_bitvector vs) => simple_match_when (BitList.same_bits (BitList.of_bin_lit s) vs)
+  | (L_string s1, V_string s2   ) => simple_match_when (String.eqb s1 s2)
+  | (L_real r1,   V_real r2     ) => simple_match_when (QArith_base.Qeq_bool r1 r2)
+  | (_,           V_unknown     ) => MaybeMatched empty_bindings
+  | _ => Unmatched
+  end.
+
+Fixpoint get_struct_field (name : id) (fields : list (id * value)) {struct fields} : value :=
+  match fields with
+  | (name', v) :: rest_fields =>
+      if id_eqb name name' then
+        v
+      else
+        get_struct_field name rest_fields
+  | [] => V_unit
+  end.
+
+Module Make (Tannot : TypeAnnot.S).
+
+  Fixpoint fold_match
+      (f : pat Tannot.t -> value -> match_result)
+      (ps : list (pat Tannot.t))
+      (match_info : match_result * list value)
+      : match_result * list value :=
+    match ps with
+    | [] => match_info
+    | p :: ps =>
+        let match_info :=
+          match match_info with
+          | (_, []) => (Unmatched, [])
+          | (prev, v :: vs) => (prev ⋈ f p v, vs)
+          end
+        in
+        fold_match f ps match_info
+    end.
+
+  Fixpoint pattern_match (p : Ast.pat Tannot.t) (v : value) {struct p} : match_result :=
+    let 'P_aux aux annot := p in
+    match aux with
+    | P_wild => simple_match
+    | P_id n =>
+        match Tannot.get_id_type (snd annot) n with
+        | Enum_member =>
+            match v with
+            | V_member m => simple_match_when (id_eqb n m)
+            | V_unknown  => MaybeMatched empty_bindings
+            | _          => Unmatched
+            end
+        | _ => Matched (IdMap.add n (Complete v) empty_bindings)
+        end
+    | P_typ _ p => pattern_match p v
+    | P_lit l => pattern_match_literal l v
+    | P_as p n => add_match n (Complete v) (pattern_match p v)
+    | P_app ctor ps =>
+        match v with
+        | V_ctor v_ctor vs =>
+            if id_eqb ctor v_ctor then fst (fold_match pattern_match ps (simple_match, vs)) else Unmatched
+        | _ => Unmatched
+        end
+    | P_tuple [] =>
+        match v with
+        | V_unit | V_unknown => simple_match
+        | _ => Unmatched
+        end
+    | P_tuple ps =>
+        match v with
+        | V_tuple vs =>
+            fst (fold_match pattern_match ps (simple_match, vs))
+        | _ => Unmatched
+        end
+    | P_list ps =>
+        match v with
+        | V_list vs =>
+            if Nat.eqb (List.length ps) (List.length vs) then
+              fst (fold_match pattern_match ps (simple_match, vs))
+            else
+              Unmatched
+        | _ => Unmatched
+        end
+    | P_vector ps =>
+        match BitList.to_gvector v with
+        | V_vector vs => fst (fold_match pattern_match ps (simple_match, vs))
+        | _ => Unmatched
+        end
+    | P_vector_concat ps =>
+        match v with
+        | V_bitvector bs =>
+            fst (fold_left
+                   (fun match_info p =>
+                    let '(P_aux _ annot) := p in
+                    match Tannot.get_split (snd annot) with
+                    | Split s =>
+                        match match_info with
+                        | (_, []) => (Unmatched, [])
+                        | (prev, bs) =>
+                            let '(bs_take, bs_drop) := take_drop s bs in
+                            (prev ⋈ pattern_match p (V_bitvector bs_take), bs_drop)
+                        end
+                    | No_split => (Unmatched, [])
+                    end)
+                   ps
+                   (simple_match, bs))
+        | V_vector vs =>
+            fst (fold_left
+                   (fun match_info p =>
+                    let '(P_aux _ annot) := p in
+                    match Tannot.get_split (snd annot) with
+                    | Split s =>
+                        match match_info with
+                        | (_, []) => (Unmatched, [])
+                        | (prev, vs) =>
+                            let '(vs_take, vs_drop) := take_drop s vs in
+                            (prev ⋈ pattern_match p (V_vector vs_take), vs_drop)
+                        end
+                    | No_split => (Unmatched, [])
+                    end)
+                   ps
+                   (simple_match, vs))
+        | _ => Unmatched
+        end
+    | P_cons p ps =>
+        match v with
+        | V_list (v :: vs) => pattern_match p v ⋈ pattern_match ps (V_list vs)
+        | _ => Unmatched
+        end
+    | P_or lhs_p rhs_p => or_match (pattern_match lhs_p v) (pattern_match rhs_p v)
+    | P_not p => neg_match (pattern_match p v)
+    | P_var p _ => pattern_match p v
+    | P_struct _ field_patterns _ =>
+        match v with
+        | V_record fields =>
+            fold_left
+              (fun prev fp =>
+                 let '(name, p) := fp in
+                 let v := get_struct_field name fields in
+                 prev ⋈ pattern_match p v
+              )
+              field_patterns
+              simple_match
+        | _ => Unmatched
+        end
+    | P_vector_subrange id n m => Matched (IdMap.add id (Partial (Non_empty (v, n, m) [])) empty_bindings)
+    (* TODO *)
+    | P_string_append _ => simple_match
+    end.
+
+  Lemma fm_fold_unmatched : forall pats vs,
+    fully_matched (fst (fold_match pattern_match pats (Unmatched, vs))).
+  Proof.
+    intros pats.
+    induction pats as [| pat pats IH]; intros vs.
+    - reflexivity.
+    - destruct vs; apply IH.
+  Qed.
+
+  Lemma fm_fold_matched : forall pats vs b,
+    Forall (fun v => fully_defined v = true) vs ->
+    Forall
+      (fun p => forall v, fully_defined v = true -> fully_matched (pattern_match p v))
+      pats ->
+    fully_matched (fst (fold_match pattern_match pats (Matched b, vs))).
+  Proof.
+    intros pats.
+    induction pats as [| pat pats IH]; intros vs b FD_vs H.
+    - reflexivity.
+    - destruct vs as [| v vs]; cbn.
+      + apply fm_fold_unmatched.
+      + rewrite Forall_cons_iff in H, FD_vs.
+        destruct H as [H_hd H_tl].
+        destruct FD_vs as [FD_vs_hd FD_vs_tl].
+        apply H_hd in FD_vs_hd.
+        case_eq (pattern_match pat v).
+        * intros ? Match_pat.
+          apply (IH _ _ FD_vs_tl H_tl).
+        * intros ? MaybeMatched_pat.
+          exfalso.
+          rewrite MaybeMatched_pat in FD_vs_hd.
+          cbn in FD_vs_hd.
+          apply FD_vs_hd.
+        * intros Unmatched_pat.
+          apply fm_fold_unmatched.
+  Qed.
+
+  Definition MatcherResult {A} (xs : list A) (m : match_result * list A) : Prop :=
+    fully_matched (fst m) /\ Suffix (snd m) xs.
+
+  Lemma fm_fold_left_matched : forall [A B] (pats : list B) (matcher : (match_result * list A) -> B -> (match_result * list A)) vs m,
+    Forall
+      (fun p =>
+        forall m vs', fully_matched m -> Suffix vs' vs -> MatcherResult vs' (matcher (m, vs') p))
+      pats ->
+    fully_matched m ->
+    fully_matched (fst (fold_left matcher pats (m, vs))).
+  Proof.
+    intros A B pats matcher.
+    induction pats as [| pat pats IH]; intros vs m H Init.
+    - apply Init.
+    - cbn.
+      rewrite Forall_cons_iff in H.
+      destruct H as [H_hd H_tl].
+
+      specialize (H_hd m vs Init (Suffix_refl vs)).
+
+      destruct (matcher (m, vs) pat) as (m', vs') eqn : Matcher_hd.
+      destruct H_hd as [FM_m' Drop_vs].
+      cbn in Drop_vs, FM_m'.
+      destruct Drop_vs as [i]; subst.
+
+      destruct m' as [b' | b' |].
+      + apply (IH (drop i vs) (Matched b')).
+        * apply (fun G => Forall_impl _ G H_tl).
+          intros pat' Q m'' vs' FM_m'' Drop_vs'.
+          destruct Drop_vs' as [j]; subst.
+
+          specialize (fun G => Q m'' (drop j (drop i vs)) G).
+          assert (L : exists n : nat, drop j (drop i vs) = drop n vs).
+          {
+             exists (i + j).
+             apply drop_drop_add.
+          }
+          apply (Q FM_m'' L).
+        * reflexivity.
+      + exfalso.
+        apply FM_m'.
+      + apply (IH (drop i vs) Unmatched).
+        * apply (fun G => Forall_impl _ G H_tl).
+          intros pat' Q m'' vs' FM_m'' Drop_vs'.
+          destruct Drop_vs' as [j]; subst.
+
+          specialize (fun G => Q m'' (drop j (drop i vs)) G).
+          assert (L : exists n : nat, drop j (drop i vs) = drop n vs).
+          {
+             exists (i + j).
+             apply drop_drop_add.
+          }
+          apply (Q FM_m'' L).
+        * reflexivity.
+  Qed.
+
+  Ltac crunch :=
+    lazymatch goal with
+    | |- context [ match ?v with _ => _ end ] =>
+        let C := fresh "Crunch" in
+        destruct v eqn : C; crunch
+    | _ => idtac
+    end.
+
+  Ltac fm_simp :=
+    lazymatch goal with
+    | |- fully_matched (Matched _) => reflexivity
+    | |- fully_matched (MaybeMatched _) => exfalso
+    | |- fully_matched Unmatched => reflexivity
+
+    | |- fully_matched simple_match => unfold simple_match; reflexivity
+    | |- fully_matched (add_match _ _ _) => unfold add_match; fm_simp
+    | |- fully_matched (neg_match _) => unfold neg_match; fm_simp
+    | |- fully_matched (simple_match_when _) => unfold simple_match_when; fm_simp
+    | |- fully_matched (if ?b then _ else _) => destruct b; fm_simp
+
+    | |- fully_matched (fst (fold_match pattern_match _ (simple_match, _))) =>
+        apply (fm_fold_matched _ _ empty_bindings)
+
+    | |- fully_matched (fst (fold_left ?matcher ?pats (?m, ?vs))) =>
+        apply (fm_fold_left_matched pats matcher vs m); fm_simp
+
+    | |- fully_matched (match pattern_match ?p ?v with | Matched _ => _ | MaybeMatched _ => _ | Unmatched => _ end) =>
+        case_eq (pattern_match p v); intros; fm_simp
+
+    | |- fully_matched (fst (_, _)) => unfold fst; fm_simp
+
+    | |- fully_matched (match ?v with _ => _ end) =>
+        let T := type of v in
+        let LD := fresh "LD" in
+        lazymatch T with
+        | value => destruct v eqn : LD; fm_simp
+        | id_type => destruct v; fm_simp
+        | list _ => destruct v eqn : LD; fm_simp
+        | _ => destruct v eqn : LD; fm_simp
+        end
+
+    | |- fully_matched (fst (match ?v with _ => _ end)) =>
+        let T := type of v in
+        let LD := fresh "LD" in
+        lazymatch T with
+        | value => destruct v eqn : LD; fm_simp
+        | id_type => destruct v; fm_simp
+        | list _ => destruct v eqn : LD; fm_simp
+        | _ => destruct v eqn : LD; fm_simp
+        end
+
+    | |- _ => idtac
+    end.
+
+  Ltac solve_fd_once tac :=
+    lazymatch goal with
+    | [ IH : (forall v : value, fully_defined v = true -> fully_matched (pattern_match ?p v)),
+        H : fully_defined ?v = true,
+        M : pattern_match ?p ?v = MaybeMatched _
+      |- _
+      ] => exfalso; apply IH in H; rewrite M in H; cbn in H; assumption
+
+    | [ IH : (forall v : value, fully_defined v = true -> fully_matched (pattern_match ?p v)),
+        H : fully_defined ?v = true
+      |- fully_matched (pattern_match ?p ?v) ] =>
+        apply IH; apply H
+
+    | [ H1 : pattern_match ?p ?v = MaybeMatched _, H2 : fully_matched (pattern_match ?p ?v) |- _ ] =>
+        destruct (pattern_match p v); (discriminate + tauto)
+
+    | _ => tac
+    end.
+
+  Ltac solve_fd := solve_fd_once easy.
+
+  Lemma fully_defined_match_literal : forall lit v, fully_defined v = true -> fully_matched (pattern_match_literal lit v).
+  Proof.
+    intros lit v H.
+    destruct lit as [aux ?].
+    destruct aux; destruct v; try reflexivity; cbn; fm_simp; easy.
+  Qed.
+
+  Lemma fully_defined_struct_field : forall i flds,
+    forallb (fun fld => fully_defined (snd fld)) flds = true ->
+    fully_defined (get_struct_field i flds) = true.
+  Proof.
+    intros i flds H.
+    induction flds as [| fld flds IH].
+    - reflexivity.
+    - cbn beta delta - [id_eqb] iota.
+      destruct fld as (field_name, v).
+      cbn in H.
+      rewrite andb_true_iff in H.
+      destruct H as [H_hd H_tl].
+      destruct (id_eqb i field_name).
+      + tauto.
+      + exact (IH H_tl).
+  Qed.
+
+  Lemma struct_fdm_helper : forall field_patterns fields m,
+     fold_left (fun prev fp =>
+        let '(name, p) := fp in
+        let v := get_struct_field name fields in
+        prev ⋈ pattern_match p v
+      ) field_patterns m
+    =
+      fst (
+        fold_left (fun '(prev, fields) fp =>
+            let '(name, p) := fp in
+            let v := get_struct_field name fields in
+            (prev ⋈ pattern_match p v, fields)
+          )
+          field_patterns
+          (m, fields)
+      ).
+  Proof.
+    intros field_patterns fields.
+    induction field_patterns as [| fp fps IH]; intros m.
+    - reflexivity.
+    - cbn beta delta - [merge_match_result] iota.
+      rewrite IH.
+      destruct fp.
+      reflexivity.
+  Qed.
+
+  Lemma fully_defined_match : forall p v, fully_defined v = true -> fully_matched (pattern_match p v).
+  Proof.
+    intros p.
+    induction p using pat_ind_g; intros v FD.
+    all: try (cbn; reflexivity).
+    all: try (cbn beta delta - [id_eqb] iota; fm_simp; solve_fd).
+    - apply (fully_defined_match_literal _ _ FD).
+    - cbn beta delta - [id_eqb] iota.
+      fm_simp; try assumption.
+      cbn in FD.
+      rewrite forallb_forall in FD.
+      rewrite Forall_forall.
+      assumption.
+    - cbn beta delta - [id_eqb] iota.
+      fm_simp; try assumption.
+      destruct v; cbn in LD; inversion LD.
+      rewrite Forall_forall.
+      intros.
+      rewrite in_map_iff in H0.
+      destruct H0.
+      destruct H0.
+      rewrite <- H0.
+      reflexivity.
+      rewrite Forall_forall.
+      intros.
+      cbn in FD.
+      rewrite forallb_forall in FD.
+      rewrite <- H1 in H0.
+      apply FD in H0.
+      apply H0.
+    - cbn beta delta - [id_eqb] iota.
+      fm_simp; apply (fun P => Forall_impl _ P H); intros pat Q m bits FD_m Drop.
+      + destruct pat as [pat_aux ?].
+        unfold MatcherResult.
+        split.
+        * fm_simp; try apply FD_m.
+          specialize (Q (V_bitvector l1)).
+          cbn beta delta - [pattern_match] iota in FD, Q.
+          specialize (Q (eq_refl true)).
+          destruct (pattern_match (P_aux pat_aux a) (V_bitvector l1)); (discriminate + apply Q).
+        * crunch; cbn; try suffix_solve.
+      + destruct pat as [pat_aux ?].
+        unfold MatcherResult.
+        split.
+        * fm_simp; try apply FD_m.
+          specialize (Q (V_vector l1)).
+          cbn beta delta - [pattern_match] iota in FD, Q.
+          assert (L : forallb fully_defined l1 = true).
+          {
+            rewrite take_drop_split in LD2.
+            inversion LD2.
+            apply forallb_take.
+            apply (Suffix_forallb Drop).
+            exact FD.
+          }
+          apply Q in L.
+          destruct (pattern_match (P_aux pat_aux a) (V_vector l1)); (discriminate + apply L).
+        * crunch; cbn; try suffix_solve.
+    - cbn beta delta - [id_eqb] iota.
+      fm_simp; try assumption.
+      cbn in FD.
+      rewrite forallb_forall in FD.
+      rewrite Forall_forall.
+      assumption.
+    - cbn beta delta - [id_eqb] iota.
+      fm_simp; try assumption.
+      cbn in FD.
+      rewrite forallb_forall in FD.
+      rewrite Forall_forall.
+      assumption.
+    - cbn beta delta - [id_eqb] iota.
+      fm_simp; cbn in FD; rewrite andb_true_iff in FD.
+      + specialize (IHp2 (V_list l0)).
+        cbn in IHp2.
+        destruct FD.
+        apply IHp2 in H2.
+        destruct (pattern_match p2 (V_list l0)); cbn in H2.
+        * discriminate.
+        * tauto.
+        * discriminate.
+      + destruct FD.
+        solve_fd.
+      + destruct FD.
+        solve_fd.
+    - cbn beta delta - [id_eqb merge_match_result] iota.
+      destruct v; try reflexivity.
+      rewrite struct_fdm_helper.
+      fm_simp;apply (fun P => Forall_impl_in _ P H); intros fld In_fields Q m fvs FD_m Drop.
+      clear H.
+      unfold MatcherResult; split.
+      + unfold merge_match_result.
+        fm_simp; try apply FD_m.
+        cbn in FD.
+        specialize (Q (get_struct_field i fvs)).
+        assert (L : fully_defined (get_struct_field i fvs) = true).
+        {
+          apply fully_defined_struct_field.
+          apply (Suffix_forallb Drop).
+          unfold snd.
+          apply forallb_forall; intros fv In.
+          rewrite forallb_forall in FD.
+          specialize (FD fv In).
+          destruct fv.
+          exact FD.
+        }
+        apply Q in L.
+        cbn in L. solve_fd.
+      + destruct fld; unfold Suffix.
+        exists 0.
+        reflexivity.
+  Qed.
+
+End Make.

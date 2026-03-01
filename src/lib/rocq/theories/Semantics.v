@@ -22,14 +22,9 @@ Require Import IdUtil.
 Require Import ListUtil.
 Require Import PatternMatch.
 Require Import Value_type.
+Require TypeAnnot.
 
 Import ListNotations.
-
-Definition to_gvector (v : value) : value :=
-  match v with
-  | V_bitvector bs => V_vector (List.map (fun b => V_bitvector [b]) bs)
-  | v => v
-  end.
 
 Definition is_value {A : Set} (exp : exp A) : bool :=
   match exp with
@@ -45,21 +40,12 @@ Inductive var_type : Set :=
 | Var_local : var_type
 | Var_register : var_type.
 
-Inductive id_type :=
-| Local_variable : id_type
-| Global_register : id_type
-| Enum_member : id_type.
-
 Inductive place : Set :=
 | PL_id : id -> var_type -> place
 | PL_register : id -> place
 | PL_vector : place -> Z -> place
 | PL_vector_range : place -> Z -> Z -> place
 | PL_field : place -> id -> place.
-
-Inductive vector_concat_split :=
-| No_split : vector_concat_split
-| Split : nat -> vector_concat_split.
 
 Inductive destructure : Set :=
 | DL_app : id -> list value -> destructure
@@ -401,99 +387,11 @@ Proof.
   induction zs; cbn; lia.
 Qed.
 
-Definition bitlist_of_hex_digit (h : hex_digit) : list bit :=
-  match h with
-  | Hex_0 => [B0; B0; B0; B0]
-  | Hex_1 => [B0; B0; B0; B1]
-  | Hex_2 => [B0; B0; B1; B0]
-  | Hex_3 => [B0; B0; B1; B1]
-  | Hex_4 => [B0; B1; B0; B0]
-  | Hex_5 => [B0; B1; B0; B1]
-  | Hex_6 => [B0; B1; B1; B0]
-  | Hex_7 => [B0; B1; B1; B1]
-  | Hex_8 => [B1; B0; B0; B0]
-  | Hex_9 => [B1; B0; B0; B1]
-  | Hex_A => [B1; B0; B1; B0]
-  | Hex_B => [B1; B0; B1; B1]
-  | Hex_C => [B1; B1; B0; B0]
-  | Hex_D => [B1; B1; B0; B1]
-  | Hex_E => [B1; B1; B1; B0]
-  | Hex_F => [B1; B1; B1; B1]
-  end.
+Module Make (Tannot : TypeAnnot.S).
 
-Definition hex_digit_of_nibble (b1 b2 b3 b4 : bit) : hex_digit :=
-  match (b1, b2, b3, b4) with
-  | (B0, B0, B0, B0) => Hex_0
-  | (B0, B0, B0, B1) => Hex_1
-  | (B0, B0, B1, B0) => Hex_2
-  | (B0, B0, B1, B1) => Hex_3
-  | (B0, B1, B0, B0) => Hex_4
-  | (B0, B1, B0, B1) => Hex_5
-  | (B0, B1, B1, B0) => Hex_6
-  | (B0, B1, B1, B1) => Hex_7
-  | (B1, B0, B0, B0) => Hex_8
-  | (B1, B0, B0, B1) => Hex_9
-  | (B1, B0, B1, B0) => Hex_A
-  | (B1, B0, B1, B1) => Hex_B
-  | (B1, B1, B0, B0) => Hex_C
-  | (B1, B1, B0, B1) => Hex_D
-  | (B1, B1, B1, B0) => Hex_E
-  | (B1, B1, B1, B1) => Hex_F
-  end.
+  Module PM := PatternMatch.Make(Tannot).
+  Import PM.
 
-Fixpoint hex_digits_of_bitlist (bits : list bit) : option (list hex_digit) :=
-  match bits with
-  | b1 :: b2 :: b3 :: b4 :: rest =>
-      let digit := hex_digit_of_nibble b1 b2 b3 b4 in
-      match hex_digits_of_bitlist rest with
-      | None => None
-      | Some digits => Some (digit :: digits)
-      end
-  | [] => Some []
-  | _ => None
-  end.
-
-Definition non_empty_to_list {A : Set} (xs : non_empty A) : list A :=
-  let 'Non_empty y ys := xs in y :: ys.
-
-Definition bitlist_of_hex_lit (hex : list (non_empty hex_digit)) : list bit :=
-  let digits := List.concat (List.map non_empty_to_list hex) in
-  List.concat (List.map bitlist_of_hex_digit digits).
-
-Lemma hex_lit_bitlist_rt : forall (d : hex_digit), hex_digits_of_bitlist (bitlist_of_hex_lit [Non_empty d []]) = Some [d].
-Proof.
-  intros d.
-  induction d; cbn; reflexivity.
-Qed.
-
-Definition bitlist_of_bin_lit (bin : list (non_empty bin_digit)) : list bit :=
-  let digits := List.concat (List.map non_empty_to_list bin) in
-  List.map (fun b =>
-      match b with
-      | Bin_0 => B0
-      | Bin_1 => B1
-      end
-    ) digits.
-
-(** Sail annotates terms with custom type annotation data, which we
-    don't have access to here. Instead use a functor parameterised by
-    the following SemanticExt signature, which can provide the methods we
-    need. *)
-Module Type SemanticExt.
-  Parameter tannot : Set.
-
-  Parameter get_type : tannot -> typ.
-
-  Parameter get_id_type : tannot -> id -> id_type.
-
-  Parameter get_split : tannot -> vector_concat_split.
-
-  Parameter is_bitvector : tannot -> bool.
-
-  Parameter fallthrough : Ast.pexp tannot.
-End SemanticExt.
-
-Module Make (T : SemanticExt).
   Fixpoint substitute {A} (n : Ast.id) (v : Ast.value) (x : exp A) : exp A :=
     let 'E_aux aux annot := x in
     match aux with
@@ -604,534 +502,11 @@ Module Make (T : SemanticExt).
     | L_true => V_bool true
     | L_false => V_bool false
     | L_num n => V_int n
-    | L_hex h => V_bitvector (bitlist_of_hex_lit h)
-    | L_bin b => V_bitvector (bitlist_of_bin_lit b)
+    | L_hex h => V_bitvector (BitList.of_hex_lit h)
+    | L_bin b => V_bitvector (BitList.of_bin_lit b)
     | L_real r => V_real r
     | L_string s => V_string s
     end.
-
-  Definition same_bits (bs : list bit) (vs : list bit) : bool :=
-    fst (fold_left
-           (fun match_info b =>
-              match match_info with
-              | (_, []) => (false, [])
-              | (false, _) => (false, [])
-              | (true, B0 :: vs) =>
-                match b with
-                | B0 => (true, vs)
-                | B1 => (false, [])
-                end
-              | (true, B1 :: vs) =>
-                match b with
-                | B1 => (true, vs)
-                | B0 => (false, [])
-                end
-              end
-           )
-           bs
-           (true, vs)).
-
-  Lemma same_bits_cons : forall (b : bit) (bs : list bit),
-      same_bits (b :: bs) (b :: bs) = same_bits bs bs.
-  Proof.
-    intros b bs.
-    destruct b.
-    all: unfold same_bits.
-    all: cbn.
-    all: reflexivity.
-  Qed.
-
-  Lemma same_bits_refl : forall (bs : list bit),
-      same_bits bs bs = true.
-  Proof.
-    intros bs.
-    induction bs.
-    easy.
-    rewrite same_bits_cons.
-    assumption.
-  Qed.
-
-  Definition pattern_match_literal (l : Ast.lit) (v : value) : match_result :=
-    let 'L_aux aux annot := l in
-    match (aux, v) with
-    | (L_unit,      V_unit        ) => simple_match
-    | (L_true,      V_bool true   ) => simple_match
-    | (L_false,     V_bool false  ) => simple_match
-    | (L_num n,     V_int m       ) => simple_match_when (Z.eqb n m)
-    | (L_hex s,     V_bitvector vs) => simple_match_when (same_bits (bitlist_of_hex_lit s) vs)
-    | (L_bin s,     V_bitvector vs) => simple_match_when (same_bits (bitlist_of_bin_lit s) vs)
-    | (L_string s1, V_string s2   ) => simple_match_when (String.eqb s1 s2)
-    | (L_real r1,   V_real r2     ) => simple_match_when (QArith_base.Qeq_bool r1 r2)
-    | (_,           V_unknown     ) => MaybeMatched empty_bindings
-    | _ => Unmatched
-    end.
-
-  Fixpoint get_struct_field (name : id) (fields : list (id * value)) {struct fields} : value :=
-    match fields with
-    | (name', v) :: rest_fields =>
-        if id_eqb name name' then
-          v
-        else
-          get_struct_field name rest_fields
-    | [] => V_unit
-    end.
-
-  Fixpoint fold_match
-      (f : pat T.tannot -> value -> match_result)
-      (ps : list (pat T.tannot))
-      (match_info : match_result * list value)
-      : match_result * list value :=
-    match ps with
-    | [] => match_info
-    | p :: ps =>
-        let match_info :=
-          match match_info with
-          | (_, []) => (Unmatched, [])
-          | (prev, v :: vs) => (prev ⋈ f p v, vs)
-          end
-        in
-        fold_match f ps match_info
-    end.
-
-  Fixpoint pattern_match (p : Ast.pat T.tannot) (v : value) {struct p} : match_result :=
-    let 'P_aux aux annot := p in
-    match aux with
-    | P_wild => simple_match
-    | P_id n =>
-        match T.get_id_type (snd annot) n with
-        | Enum_member =>
-            match v with
-            | V_member m => simple_match_when (id_eqb n m)
-            | V_unknown  => MaybeMatched empty_bindings
-            | _          => Unmatched
-            end
-        | _ => Matched (IdMap.add n (Complete v) empty_bindings)
-        end
-    | P_typ _ p => pattern_match p v
-    | P_lit l => pattern_match_literal l v
-    | P_as p n => add_match n (Complete v) (pattern_match p v)
-    | P_app ctor ps =>
-        match v with
-        | V_ctor v_ctor vs =>
-            if id_eqb ctor v_ctor then fst (fold_match pattern_match ps (simple_match, vs)) else Unmatched
-        | _ => Unmatched
-        end
-    | P_tuple [] =>
-        match v with
-        | V_unit | V_unknown => simple_match
-        | _ => Unmatched
-        end
-    | P_tuple ps =>
-        match v with
-        | V_tuple vs =>
-            fst (fold_match pattern_match ps (simple_match, vs))
-        | _ => Unmatched
-        end
-    | P_list ps =>
-        match v with
-        | V_list vs =>
-            if Nat.eqb (List.length ps) (List.length vs) then
-              fst (fold_match pattern_match ps (simple_match, vs))
-            else
-              Unmatched
-        | _ => Unmatched
-        end
-    | P_vector ps =>
-        match to_gvector v with
-        | V_vector vs => fst (fold_match pattern_match ps (simple_match, vs))
-        | _ => Unmatched
-        end
-    | P_vector_concat ps =>
-        match v with
-        | V_bitvector bs =>
-            fst (fold_left
-                   (fun match_info p =>
-                    let '(P_aux _ annot) := p in
-                    match T.get_split (snd annot) with
-                    | Split s =>
-                        match match_info with
-                        | (_, []) => (Unmatched, [])
-                        | (prev, bs) =>
-                            let '(bs_take, bs_drop) := take_drop s bs in
-                            (prev ⋈ pattern_match p (V_bitvector bs_take), bs_drop)
-                        end
-                    | No_split => (Unmatched, [])
-                    end)
-                   ps
-                   (simple_match, bs))
-        | V_vector vs =>
-            fst (fold_left
-                   (fun match_info p =>
-                    let '(P_aux _ annot) := p in
-                    match T.get_split (snd annot) with
-                    | Split s =>
-                        match match_info with
-                        | (_, []) => (Unmatched, [])
-                        | (prev, vs) =>
-                            let '(vs_take, vs_drop) := take_drop s vs in
-                            (prev ⋈ pattern_match p (V_vector vs_take), vs_drop)
-                        end
-                    | No_split => (Unmatched, [])
-                    end)
-                   ps
-                   (simple_match, vs))
-        | _ => Unmatched
-        end
-    | P_cons p ps =>
-        match v with
-        | V_list (v :: vs) => pattern_match p v ⋈ pattern_match ps (V_list vs)
-        | _ => Unmatched
-        end
-    | P_or lhs_p rhs_p => or_match (pattern_match lhs_p v) (pattern_match rhs_p v)
-    | P_not p => neg_match (pattern_match p v)
-    | P_var p _ => pattern_match p v
-    | P_struct _ field_patterns _ =>
-        match v with
-        | V_record fields =>
-            fold_left
-              (fun prev fp =>
-                 let '(name, p) := fp in
-                 let v := get_struct_field name fields in
-                 prev ⋈ pattern_match p v
-              )
-              field_patterns
-              simple_match
-        | _ => Unmatched
-        end
-    | P_vector_subrange id n m => Matched (IdMap.add id (Partial (Non_empty (v, n, m) [])) empty_bindings)
-    (* TODO *)
-    | P_string_append _ => simple_match
-    end.
-
-  Lemma fm_fold_unmatched : forall pats vs,
-    fully_matched (fst (fold_match pattern_match pats (Unmatched, vs))).
-  Proof.
-    intros pats.
-    induction pats as [| pat pats IH]; intros vs.
-    - reflexivity.
-    - destruct vs; apply IH.
-  Qed.
-
-  Lemma fm_fold_matched : forall pats vs b,
-    Forall (fun v => fully_defined v = true) vs ->
-    Forall
-      (fun p => forall v, fully_defined v = true -> fully_matched (pattern_match p v))
-      pats ->
-    fully_matched (fst (fold_match pattern_match pats (Matched b, vs))).
-  Proof.
-    intros pats.
-    induction pats as [| pat pats IH]; intros vs b FD_vs H.
-    - reflexivity.
-    - destruct vs as [| v vs]; cbn.
-      + apply fm_fold_unmatched.
-      + rewrite Forall_cons_iff in H, FD_vs.
-        destruct H as [H_hd H_tl].
-        destruct FD_vs as [FD_vs_hd FD_vs_tl].
-        apply H_hd in FD_vs_hd.
-        case_eq (pattern_match pat v).
-        * intros ? Match_pat.
-          apply (IH _ _ FD_vs_tl H_tl).
-        * intros ? MaybeMatched_pat.
-          exfalso.
-          rewrite MaybeMatched_pat in FD_vs_hd.
-          cbn in FD_vs_hd.
-          apply FD_vs_hd.
-        * intros Unmatched_pat.
-          apply fm_fold_unmatched.
-  Qed.
-
-  Definition MatcherResult {A} (xs : list A) (m : match_result * list A) : Prop :=
-    fully_matched (fst m) /\ Suffix (snd m) xs.
-
-  Lemma fm_fold_left_matched : forall [A B] (pats : list B) (matcher : (match_result * list A) -> B -> (match_result * list A)) vs m,
-    Forall
-      (fun p =>
-        forall m vs', fully_matched m -> Suffix vs' vs -> MatcherResult vs' (matcher (m, vs') p))
-      pats ->
-    fully_matched m ->
-    fully_matched (fst (fold_left matcher pats (m, vs))).
-  Proof.
-    intros A B pats matcher.
-    induction pats as [| pat pats IH]; intros vs m H Init.
-    - apply Init.
-    - cbn.
-      rewrite Forall_cons_iff in H.
-      destruct H as [H_hd H_tl].
-
-      specialize (H_hd m vs Init (Suffix_refl vs)).
-
-      destruct (matcher (m, vs) pat) as (m', vs') eqn : Matcher_hd.
-      destruct H_hd as [FM_m' Drop_vs].
-      cbn in Drop_vs, FM_m'.
-      destruct Drop_vs as [i]; subst.
-
-      destruct m' as [b' | b' |].
-      + apply (IH (drop i vs) (Matched b')).
-        * apply (fun G => Forall_impl _ G H_tl).
-          intros pat' Q m'' vs' FM_m'' Drop_vs'.
-          destruct Drop_vs' as [j]; subst.
-
-          specialize (fun G => Q m'' (drop j (drop i vs)) G).
-          assert (L : exists n : nat, drop j (drop i vs) = drop n vs).
-          {
-             exists (i + j).
-             apply drop_drop_add.
-          }
-          apply (Q FM_m'' L).
-        * reflexivity.
-      + exfalso.
-        apply FM_m'.
-      + apply (IH (drop i vs) Unmatched).
-        * apply (fun G => Forall_impl _ G H_tl).
-          intros pat' Q m'' vs' FM_m'' Drop_vs'.
-          destruct Drop_vs' as [j]; subst.
-
-          specialize (fun G => Q m'' (drop j (drop i vs)) G).
-          assert (L : exists n : nat, drop j (drop i vs) = drop n vs).
-          {
-             exists (i + j).
-             apply drop_drop_add.
-          }
-          apply (Q FM_m'' L).
-        * reflexivity.
-  Qed.
-
-  Ltac crunch :=
-    lazymatch goal with
-    | |- context [ match ?v with _ => _ end ] =>
-        let C := fresh "Crunch" in
-        destruct v eqn : C; crunch
-    | _ => idtac
-    end.
-
-  Ltac fm_simp :=
-    lazymatch goal with
-    | |- fully_matched (Matched _) => reflexivity
-    | |- fully_matched (MaybeMatched _) => exfalso
-    | |- fully_matched Unmatched => reflexivity
-
-    | |- fully_matched simple_match => unfold simple_match; reflexivity
-    | |- fully_matched (add_match _ _ _) => unfold add_match; fm_simp
-    | |- fully_matched (neg_match _) => unfold neg_match; fm_simp
-    | |- fully_matched (simple_match_when _) => unfold simple_match_when; fm_simp
-    | |- fully_matched (if ?b then _ else _) => destruct b; fm_simp
-
-    | |- fully_matched (fst (fold_match pattern_match _ (simple_match, _))) =>
-        apply (fm_fold_matched _ _ empty_bindings)
-
-    | |- fully_matched (fst (fold_left ?matcher ?pats (?m, ?vs))) =>
-        apply (fm_fold_left_matched pats matcher vs m); fm_simp
-
-    | |- fully_matched (match pattern_match ?p ?v with | Matched _ => _ | MaybeMatched _ => _ | Unmatched => _ end) =>
-        case_eq (pattern_match p v); intros; fm_simp
-
-    | |- fully_matched (fst (_, _)) => unfold fst; fm_simp
-
-    | |- fully_matched (match ?v with _ => _ end) =>
-        let T := type of v in
-        let LD := fresh "LD" in
-        lazymatch T with
-        | value => destruct v eqn : LD; fm_simp
-        | id_type => destruct v; fm_simp
-        | list _ => destruct v eqn : LD; fm_simp
-        | _ => destruct v eqn : LD; fm_simp
-        end
-
-    | |- fully_matched (fst (match ?v with _ => _ end)) =>
-        let T := type of v in
-        let LD := fresh "LD" in
-        lazymatch T with
-        | value => destruct v eqn : LD; fm_simp
-        | id_type => destruct v; fm_simp
-        | list _ => destruct v eqn : LD; fm_simp
-        | _ => destruct v eqn : LD; fm_simp
-        end
-
-    | |- _ => idtac
-    end.
-
-  Ltac solve_fd_once tac :=
-    lazymatch goal with
-    | [ IH : (forall v : value, fully_defined v = true -> fully_matched (pattern_match ?p v)),
-        H : fully_defined ?v = true,
-        M : pattern_match ?p ?v = MaybeMatched _
-      |- _
-      ] => exfalso; apply IH in H; rewrite M in H; cbn in H; assumption
-
-    | [ IH : (forall v : value, fully_defined v = true -> fully_matched (pattern_match ?p v)),
-        H : fully_defined ?v = true
-      |- fully_matched (pattern_match ?p ?v) ] =>
-        apply IH; apply H
-
-    | [ H1 : pattern_match ?p ?v = MaybeMatched _, H2 : fully_matched (pattern_match ?p ?v) |- _ ] =>
-        destruct (pattern_match p v); (discriminate + tauto)
-
-    | _ => tac
-    end.
-
-  Ltac solve_fd := solve_fd_once easy.
-
-  Lemma fully_defined_match_literal : forall lit v, fully_defined v = true -> fully_matched (pattern_match_literal lit v).
-  Proof.
-    intros lit v H.
-    destruct lit as [aux ?].
-    destruct aux; destruct v; try reflexivity; cbn; fm_simp; easy.
-  Qed.
-
-  Lemma fully_defined_struct_field : forall i flds,
-    forallb (fun fld => fully_defined (snd fld)) flds = true ->
-    fully_defined (get_struct_field i flds) = true.
-  Proof.
-    intros i flds H.
-    induction flds as [| fld flds IH].
-    - reflexivity.
-    - cbn beta delta - [id_eqb] iota.
-      destruct fld as (field_name, v).
-      cbn in H.
-      rewrite andb_true_iff in H.
-      destruct H as [H_hd H_tl].
-      destruct (id_eqb i field_name).
-      + tauto.
-      + exact (IH H_tl).
-  Qed.
-
-  Lemma struct_fdm_helper : forall field_patterns fields m,
-     fold_left (fun prev fp =>
-        let '(name, p) := fp in
-        let v := get_struct_field name fields in
-        prev ⋈ pattern_match p v
-      ) field_patterns m
-    =
-      fst (
-        fold_left (fun '(prev, fields) fp =>
-            let '(name, p) := fp in
-            let v := get_struct_field name fields in
-            (prev ⋈ pattern_match p v, fields)
-          )
-          field_patterns
-          (m, fields)
-      ).
-  Proof.
-    intros field_patterns fields.
-    induction field_patterns as [| fp fps IH]; intros m.
-    - reflexivity.
-    - cbn beta delta - [merge_match_result] iota.
-      rewrite IH.
-      destruct fp.
-      reflexivity.
-  Qed.
-
-  Lemma fully_defined_match : forall p v, fully_defined v = true -> fully_matched (pattern_match p v).
-  Proof.
-    intros p.
-    induction p using pat_ind_g; intros v FD.
-    all: try (cbn; reflexivity).
-    all: try (cbn beta delta - [id_eqb] iota; fm_simp; solve_fd).
-    - apply (fully_defined_match_literal _ _ FD).
-    - cbn beta delta - [id_eqb] iota.
-      fm_simp; try assumption.
-      cbn in FD.
-      rewrite forallb_forall in FD.
-      rewrite Forall_forall.
-      assumption.
-    - cbn beta delta - [id_eqb] iota.
-      fm_simp; try assumption.
-      destruct v; cbn in LD; inversion LD.
-      rewrite Forall_forall.
-      intros.
-      rewrite in_map_iff in H0.
-      destruct H0.
-      destruct H0.
-      rewrite <- H0.
-      reflexivity.
-      rewrite Forall_forall.
-      intros.
-      cbn in FD.
-      rewrite forallb_forall in FD.
-      rewrite <- H1 in H0.
-      apply FD in H0.
-      apply H0.
-    - cbn beta delta - [id_eqb] iota.
-      fm_simp; apply (fun P => Forall_impl _ P H); intros pat Q m bits FD_m Drop.
-      + destruct pat as [pat_aux ?].
-        unfold MatcherResult.
-        split.
-        * fm_simp; try apply FD_m.
-          specialize (Q (V_bitvector l1)).
-          cbn beta delta - [pattern_match] iota in FD, Q.
-          specialize (Q (eq_refl true)).
-          destruct (pattern_match (P_aux pat_aux a) (V_bitvector l1)); (discriminate + apply Q).
-        * crunch; cbn; try suffix_solve.
-      + destruct pat as [pat_aux ?].
-        unfold MatcherResult.
-        split.
-        * fm_simp; try apply FD_m.
-          specialize (Q (V_vector l1)).
-          cbn beta delta - [pattern_match] iota in FD, Q.
-          assert (L : forallb fully_defined l1 = true).
-          {
-            rewrite take_drop_split in LD2.
-            inversion LD2.
-            apply forallb_take.
-            apply (Suffix_forallb Drop).
-            exact FD.
-          }
-          apply Q in L.
-          destruct (pattern_match (P_aux pat_aux a) (V_vector l1)); (discriminate + apply L).
-        * crunch; cbn; try suffix_solve.
-    - cbn beta delta - [id_eqb] iota.
-      fm_simp; try assumption.
-      cbn in FD.
-      rewrite forallb_forall in FD.
-      rewrite Forall_forall.
-      assumption.
-    - cbn beta delta - [id_eqb] iota.
-      fm_simp; try assumption.
-      cbn in FD.
-      rewrite forallb_forall in FD.
-      rewrite Forall_forall.
-      assumption.
-    - cbn beta delta - [id_eqb] iota.
-      fm_simp; cbn in FD; rewrite andb_true_iff in FD.
-      + specialize (IHp2 (V_list l0)).
-        cbn in IHp2.
-        destruct FD.
-        apply IHp2 in H2.
-        destruct (pattern_match p2 (V_list l0)); cbn in H2.
-        * discriminate.
-        * tauto.
-        * discriminate.
-      + destruct FD.
-        solve_fd.
-      + destruct FD.
-        solve_fd.
-    - cbn beta delta - [id_eqb merge_match_result] iota.
-      destruct v; try reflexivity.
-      rewrite struct_fdm_helper.
-      fm_simp;apply (fun P => Forall_impl_in _ P H); intros fld In_fields Q m fvs FD_m Drop.
-      clear H.
-      unfold MatcherResult; split.
-      + unfold merge_match_result.
-        fm_simp; try apply FD_m.
-        cbn in FD.
-        specialize (Q (get_struct_field i fvs)).
-        assert (L : fully_defined (get_struct_field i fvs) = true).
-        {
-          apply fully_defined_struct_field.
-          apply (Suffix_forallb Drop).
-          unfold snd.
-          apply forallb_forall; intros fv In.
-          rewrite forallb_forall in FD.
-          specialize (FD fv In).
-          destruct fv.
-          exact FD.
-        }
-        apply Q in L.
-        cbn in L. solve_fd.
-      + destruct fld; unfold Suffix.
-        exists 0.
-        reflexivity.
-  Qed.
 
   Fixpoint lookup_field (l : Ast.loc) (name : id) (fields : list (id * value)) {struct fields} : t value :=
       match fields with
@@ -1148,12 +523,12 @@ Module Make (T : SemanticExt).
     lia.
   Qed.
 
-  Lemma depth_if : forall (b : bool) (x y : exp T.tannot), depth (if b then x else y) <= max (depth x) (depth y).
+  Lemma depth_if : forall (b : bool) (x y : exp Tannot.t), depth (if b then x else y) <= max (depth x) (depth y).
   Proof.
     intro b; destruct b; lia.
   Qed.
 
-  Lemma fexp_subst : forall f (lx : fexp T.tannot),
+  Lemma fexp_subst : forall f (lx : fexp Tannot.t),
     (let 'FE_aux (FE_fexp id x) ann := lx in FE_aux (FE_fexp id (f x)) ann) =
     FE_aux (FE_fexp (fexp_name lx) (f (fexp_exp lx))) (fexp_annot lx).
   Proof.
@@ -1169,7 +544,7 @@ Module Make (T : SemanticExt).
     lia.
   Qed.
 
-  Lemma depth_subst : forall n v (x : exp T.tannot), depth (substitute n v x) <= depth x.
+  Lemma depth_subst : forall n v (x : exp Tannot.t), depth (substitute n v x) <= depth x.
   Proof with lia.
     intros n v x.
     einduction x using exp_ind_mutual_g.
@@ -1301,7 +676,7 @@ Module Make (T : SemanticExt).
     - cbn. cbn in IHe...
   Qed.
 
-  Fixpoint destructuring_assignment (annot : Ast.annot T.tannot) (d : destructure) (v : value) : t unit :=
+  Fixpoint destructuring_assignment (annot : Ast.annot Tannot.t) (d : destructure) (v : value) : t unit :=
     match d with
     | DL_place p =>
         Write_var p v (fun _ => pure tt)
@@ -1375,12 +750,12 @@ Module Make (T : SemanticExt).
         Runtime_type_error (fst annot)
     end.
 
-  Fixpoint lexp_to_destructure (l : lexp T.tannot) {struct l} : t destructure :=
+  Fixpoint lexp_to_destructure (l : lexp Tannot.t) {struct l} : t destructure :=
     let 'LE_aux aux annot := l in
     match aux with
     | LE_id var
     | LE_typ _ var =>
-        match T.get_id_type (snd annot) var with
+        match Tannot.get_id_type (snd annot) var with
         | Global_register =>
             pure (DL_place (PL_id var Var_register))
         | Local_variable =>
@@ -1402,13 +777,13 @@ Module Make (T : SemanticExt).
         ds ← sequence (map lexp_to_destructure ls);
         pure (DL_tuple ds)
     | LE_vector_concat ls =>
-        ds ← sequence (map (fun '((LE_aux _ annot) as l) => d ← lexp_to_destructure l; pure (T.get_split (snd annot), d)) ls);
+        ds ← sequence (map (fun '((LE_aux _ annot) as l) => d ← lexp_to_destructure l; pure (Tannot.get_split (snd annot), d)) ls);
         pure (DL_vector_concat ds)
     | LE_field l f =>
-        p ← bind (lexp_to_destructure l) (@coerce_place T.tannot (fst annot));
+        p ← bind (lexp_to_destructure l) (@coerce_place Tannot.t (fst annot));
         pure (DL_place (PL_field p f))
     | LE_vector l n =>
-        p ← bind (lexp_to_destructure l) (@coerce_place T.tannot (fst annot));
+        p ← bind (lexp_to_destructure l) (@coerce_place Tannot.t (fst annot));
         match n with
         | E_aux (E_internal_value (V_int n)) _ =>
             pure (DL_place (PL_vector p n))
@@ -1416,7 +791,7 @@ Module Make (T : SemanticExt).
             Runtime_type_error (fst annot)
         end
     | LE_vector_range l n m =>
-        p ← bind (lexp_to_destructure l) (@coerce_place T.tannot (fst annot));
+        p ← bind (lexp_to_destructure l) (@coerce_place Tannot.t (fst annot));
         match (n, m) with
         | (E_aux (E_internal_value (V_int n)) _, E_aux (E_internal_value (V_int m)) _) =>
             pure (DL_place (PL_vector_range p n m))
@@ -1633,7 +1008,7 @@ Module Make (T : SemanticExt).
         all: reflexivity.
   Qed.
 
-  Lemma substitute_fold : forall substs (exp : exp T.tannot),
+  Lemma substitute_fold : forall substs (exp : exp Tannot.t),
     SetoidList.NoDupA (IdMap.eq_key (elt:=value)) substs ->
     fold_left (fun exp s => substitute (fst s) (snd s) exp) substs exp =
     fold_right (fun s exp => substitute (fst s) (snd s) exp) exp substs.
@@ -1644,7 +1019,7 @@ Module Make (T : SemanticExt).
     - cbn; reflexivity.
     - cbn; intros exp.
       rewrite IHsubsts.
-      rewrite (fold_right_last_to_first (eqB:=IdMap.eq_key (elt:=value))_ (fun (s : id * value) (exp : Ast.exp T.tannot) => substitute (fst s) (snd s) exp)).
+      rewrite (fold_right_last_to_first (eqB:=IdMap.eq_key (elt:=value))_ (fun (s : id * value) (exp : Ast.exp Tannot.t) => substitute (fst s) (snd s) exp)).
       + reflexivity.
       + intros s' exp' In_s'.
         apply substitute_swap.
@@ -2312,7 +1687,7 @@ Module Make (T : SemanticExt).
   #[local]
   Obligation Tactic := solve [ program_simpl; try easy; cbn; try lia ] + program_simpl.
 
-  Program Fixpoint step (orig_exp : exp T.tannot) {measure (depth orig_exp)} : t (exp T.tannot) :=
+  Program Fixpoint step (orig_exp : exp Tannot.t) {measure (depth orig_exp)} : t (exp Tannot.t) :=
     let 'E_aux aux annot := orig_exp in
     let wrap e_aux' := pure (E_aux e_aux' annot) in
     match aux with
@@ -2329,7 +1704,7 @@ Module Make (T : SemanticExt).
               wrap (E_block (x' :: xs))
         end
     | E_id id =>
-        match T.get_id_type (snd annot) id with
+        match Tannot.get_id_type (snd annot) id with
         | Global_register =>
             Read_var (PL_id id Var_register) (fun v => wrap (E_internal_value v))
         | Local_variable =>
@@ -2547,7 +1922,7 @@ Module Make (T : SemanticExt).
             u' ← step u;
             wrap (E_vector (evaluated ++ (u' :: us)))
         | [] =>
-            if T.is_bitvector (snd annot) then
+            if Tannot.is_bitvector (snd annot) then
               bits ← bv_concat (fst annot) (all_evaluated evaluated);
               wrap (E_internal_value (V_bitvector bits))
             else
@@ -2592,7 +1967,7 @@ Module Make (T : SemanticExt).
         | _ =>
             x' ← catch (step x);
             match x' with
-            | Caught exn => wrap (E_match (E_aux (E_internal_value exn) annot) (arms ++ [T.fallthrough]))
+            | Caught exn => wrap (E_match (E_aux (E_internal_value exn) annot) (arms ++ [Tannot.fallthrough]))
             | Continue x'' => wrap (E_try x'' arms)
             end
         end
@@ -2649,7 +2024,7 @@ Module Make (T : SemanticExt).
             end
         end
     | E_undef =>
-        u ← get_undefined (T.get_type (snd annot));
+        u ← get_undefined (Tannot.get_type (snd annot));
         wrap (E_internal_value u)
     | E_vector_append _ _ => Runtime_type_error (fst annot)
     | E_sizeof _ => Runtime_type_error (fst annot)
@@ -2665,7 +2040,7 @@ Module Make (T : SemanticExt).
     rewrite ltr_tuple in Heq_anonymous.
     apply max_lhs_plus_1_le.
     apply (PeanoNat.Nat.le_trans _ (fold_right max 0 (map depth (lexp_subexps lx))) _).
-    rewrite <- (take_drop_evaluated_concat T.tannot (lexp_subexps lx)).
+    rewrite <- (take_drop_evaluated_concat Tannot.t (lexp_subexps lx)).
     inversion Heq_anonymous.
     rewrite map_app.
     rewrite fold_right_app.
@@ -2703,7 +2078,7 @@ Module Make (T : SemanticExt).
     cbn.
     rewrite ltr_tuple in Heq_anonymous.
     inversion Heq_anonymous.
-    rewrite <- (take_drop_evaluated_concat T.tannot xs0).
+    rewrite <- (take_drop_evaluated_concat Tannot.t xs0).
     rewrite <- H1.
     rewrite <- H0.
     rewrite map_app.
@@ -2716,7 +2091,7 @@ Module Make (T : SemanticExt).
     cbn.
     rewrite ltr_tuple in Heq_anonymous.
     inversion Heq_anonymous.
-    rewrite <- (take_drop_evaluated_concat T.tannot args).
+    rewrite <- (take_drop_evaluated_concat Tannot.t args).
     rewrite <- H3.
     rewrite <- H2.
     rewrite map_app.
@@ -2728,7 +2103,7 @@ Module Make (T : SemanticExt).
   Next Obligation.
     rewrite ltr_fields_tuple in Heq_anonymous.
     inversion Heq_anonymous.
-    rewrite <- (take_drop_evaluated_fields_concat T.tannot _).
+    rewrite <- (take_drop_evaluated_fields_concat Tannot.t _).
     rewrite <- H0.
     rewrite <- H1.
     cbn.
@@ -2741,7 +2116,7 @@ Module Make (T : SemanticExt).
   Next Obligation.
     rewrite ltr_fields_tuple in Heq_anonymous.
     inversion Heq_anonymous.
-    rewrite <- (take_drop_evaluated_fields_concat T.tannot _).
+    rewrite <- (take_drop_evaluated_fields_concat Tannot.t _).
     rewrite <- H0.
     rewrite <- H1.
     cbn.
@@ -2755,7 +2130,7 @@ Module Make (T : SemanticExt).
     cbn.
     rewrite ltr_tuple in Heq_anonymous.
     inversion Heq_anonymous.
-    rewrite <- (take_drop_evaluated_concat T.tannot xs).
+    rewrite <- (take_drop_evaluated_concat Tannot.t xs).
     rewrite <- H1.
     rewrite <- H0.
     rewrite map_app.
@@ -2768,7 +2143,7 @@ Module Make (T : SemanticExt).
     cbn.
     rewrite ltr_tuple in Heq_anonymous.
     inversion Heq_anonymous.
-    rewrite <- (take_drop_evaluated_concat T.tannot xs).
+    rewrite <- (take_drop_evaluated_concat Tannot.t xs).
     rewrite <- H1.
     rewrite <- H0.
     rewrite map_app.

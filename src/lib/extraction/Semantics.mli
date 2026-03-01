@@ -1,7 +1,7 @@
 open Ast
 open AstInduction
-open BinInt
 open Bit
+open BitList
 open Datatypes
 open IdUtil
 open List0
@@ -9,12 +9,10 @@ open ListDef
 open ListUtil
 open PatternMatch
 open PeanoNat
-open QArith_base
 open Specif
+open TypeAnnot
 open Value_type
 open Wf
-
-val to_gvector : value -> value
 
 val is_value : 'a1 exp -> bool
 
@@ -26,21 +24,12 @@ type var_type =
 | Var_local
 | Var_register
 
-type id_type =
-| Local_variable
-| Global_register
-| Enum_member
-
 type place =
 | PL_id of id * var_type
 | PL_register of id
 | PL_vector of place * Big_int_Z.big_int
 | PL_vector_range of place * Big_int_Z.big_int * Big_int_Z.big_int
 | PL_field of place * id
-
-type vector_concat_split =
-| No_split
-| Split of Big_int_Z.big_int
 
 type destructure =
 | DL_app of id * value list
@@ -118,36 +107,18 @@ type 'a ltr3 =
 
 val left_to_right3 : 'a1 exp -> 'a1 exp -> 'a1 exp -> 'a1 ltr3
 
-val bitlist_of_hex_digit : hex_digit -> bit list
-
-val hex_digit_of_nibble : bit -> bit -> bit -> bit -> hex_digit
-
-val hex_digits_of_bitlist : bit list -> hex_digit list option
-
-val non_empty_to_list : 'a1 non_empty -> 'a1 list
-
-val bitlist_of_hex_lit : hex_digit non_empty list -> bit list
-
-val bitlist_of_bin_lit : bin_digit non_empty list -> bit list
-
-module type SemanticExt =
- sig
-  type tannot
-
-  val get_type : tannot -> typ
-
-  val get_id_type : tannot -> id -> id_type
-
-  val get_split : tannot -> vector_concat_split
-
-  val is_bitvector : tannot -> bool
-
-  val fallthrough : tannot pexp
- end
-
 module Make :
- functor (T:SemanticExt) ->
+ functor (Tannot:S) ->
  sig
+  module PM :
+   sig
+    val fold_match :
+      (Tannot.t pat -> value -> match_result) -> Tannot.t pat list ->
+      (match_result * value list) -> match_result * value list
+
+    val pattern_match : Tannot.t pat -> value -> match_result
+   end
+
   val substitute : id -> value -> 'a1 exp -> 'a1 exp
 
   val substitute_arm : id -> value -> 'a1 pexp -> 'a1 pexp
@@ -158,26 +129,14 @@ module Make :
 
   val value_of_lit : lit -> value
 
-  val same_bits : bit list -> bit list -> bool
-
-  val pattern_match_literal : lit -> value -> match_result
-
-  val get_struct_field : id -> (id * value) list -> value
-
-  val fold_match :
-    (T.tannot pat -> value -> match_result) -> T.tannot pat list ->
-    (match_result * value list) -> match_result * value list
-
-  val pattern_match : T.tannot pat -> value -> match_result
-
   val lookup_field : Parse_ast.l -> id -> (id * value) list -> value Monad.t
 
   val destructuring_assignment :
-    T.tannot annot -> destructure -> value -> unit Monad.t
+    Tannot.t annot -> destructure -> value -> unit Monad.t
 
-  val lexp_to_destructure : T.tannot lexp -> destructure Monad.t
+  val lexp_to_destructure : Tannot.t lexp -> destructure Monad.t
 
   val update_field : id -> value -> (id * value) list -> (id * value) list
 
-  val step : T.tannot exp -> T.tannot exp Monad.t
+  val step : Tannot.t exp -> Tannot.t exp Monad.t
  end

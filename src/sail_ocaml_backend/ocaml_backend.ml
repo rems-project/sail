@@ -186,8 +186,8 @@ let ocaml_lit (L_aux (lit_aux, _)) =
   | L_real r ->
       let str = Q.to_string (Util.Rational.from_rocq r) in
       parens (string "real_of_string" ^^ space ^^ dquotes (string (String.escaped str)))
-  | L_bin bin -> brackets (separate_map (semi ^^ space) ocaml_bit (Semantics.bitlist_of_bin_lit bin))
-  | L_hex hex -> brackets (separate_map (semi ^^ space) ocaml_bit (Semantics.bitlist_of_hex_lit hex))
+  | L_bin bin -> brackets (separate_map (semi ^^ space) ocaml_bit (BitList.of_bin_lit bin))
+  | L_hex hex -> brackets (separate_map (semi ^^ space) ocaml_bit (BitList.of_hex_lit hex))
 
 let pat_record_id l pat =
   match typ_of_pat pat with

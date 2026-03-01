@@ -25,6 +25,15 @@ Extract Inlined Constant ext_attribute_data => "Parse_ast.Attribute_data.attribu
 
 Definition attribute_data := ext_attribute_data.
 
+Inductive id_type : Set :=
+| Local_variable : id_type
+| Global_register : id_type
+| Enum_member : id_type.
+
+Inductive vector_concat_split : Set :=
+| No_split : vector_concat_split
+| Split : nat -> vector_concat_split.
+
 Inductive visibility : Set :=
 | Public : visibility
 | Private : loc -> visibility.

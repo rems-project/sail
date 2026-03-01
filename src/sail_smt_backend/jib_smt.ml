@@ -1156,9 +1156,7 @@ end) : Jib_compile.CONFIG = struct
     | L_hex hex ->
         let len = hex_lit_length hex in
         if len <= 64 then (
-          let content =
-            Semantics.bitlist_of_hex_lit hex |> List.map (function B0 -> Sail2_values.B0 | B1 -> Sail2_values.B1)
-          in
+          let content = BitList.of_hex_lit hex |> List.map (function B0 -> Sail2_values.B0 | B1 -> Sail2_values.B1) in
           Some (V_lit (VL_bits content, CT_fbits len))
         )
         else None

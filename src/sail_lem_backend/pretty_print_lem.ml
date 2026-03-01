@@ -514,8 +514,8 @@ let rec doc_lit_lem (L_aux (lit, l)) =
   | L_hex hex when !Monomorphise.opt_mwords ->
       utf8string ("0x" ^ string_of_hex_lit ~group_separator:"" ~case:Uppercase hex)
   | L_bin bin when !Monomorphise.opt_mwords -> utf8string ("0b" ^ string_of_bin_lit ~group_separator:"" bin)
-  | L_hex hex -> Semantics.bitlist_of_hex_lit hex |> flow_map (semi ^^ break 0) doc_bit |> group |> align |> brackets
-  | L_bin bin -> Semantics.bitlist_of_bin_lit bin |> flow_map (semi ^^ break 0) doc_bit |> group |> align |> brackets
+  | L_hex hex -> BitList.of_hex_lit hex |> flow_map (semi ^^ break 0) doc_bit |> group |> align |> brackets
+  | L_bin bin -> BitList.of_bin_lit bin |> flow_map (semi ^^ break 0) doc_bit |> group |> align |> brackets
   | L_string s -> utf8string ("\"" ^ String.escaped s ^ "\"")
   | L_real r ->
       let r = Util.Rational.from_rocq r in
