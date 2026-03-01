@@ -48,8 +48,9 @@ open Ast
 open Ast_compare
 open Ast_defs
 open Ast_util
-open Value_type
 open Value
+
+open Extraction.Value_type
 
 module Big_int = Nat_big_num
 module Document = Pretty_print_sail.Document
@@ -75,10 +76,10 @@ let is_increasing gstate =
   | _ -> false
 
 module VariableUpdate = struct
-  open Semantics
+  open Extraction.Semantics
   open Util.Option_monad
 
-  type root = Register of id | Var of id * Semantics.var_type
+  type root = Register of id | Var of id * var_type
 
   type accessor = Vector of Big_int.num | Vector_range of Big_int.num * Big_int.num | Field of id
 
@@ -243,13 +244,13 @@ let fallthrough =
     |> Option.get
   with Type_error (l, err) -> Reporting.unreachable l __POS__ (fst (string_of_type_error err))
 
-type return_value = Semantics.return_value
+type return_value = Extraction.Semantics.return_value
 
 let is_interpreter_extern id env = Type_check.Env.is_extern id env "interpreter"
 
 let get_interpreter_extern id env = Type_check.Env.get_extern id env "interpreter"
 
-module RocqSemantics = Semantics.Make (struct
+module Semantics = Extraction.Semantics.Make (struct
   type t = Type_check.tannot
 
   let get_type tannot =
@@ -279,13 +280,13 @@ module RocqSemantics = Semantics.Make (struct
   let fallthrough = fallthrough
 end)
 
-module Monad = Semantics.Monad
+module Monad = Extraction.Semantics.Monad
 
-let step exp = RocqSemantics.step exp
+let step exp = Semantics.step exp
 
-let pattern_match pat value = RocqSemantics.PM.pattern_match pat value
+let pattern_match pat value = Semantics.PM.pattern_match pat value
 
-let complete_bindings bindings = PatternMatch.complete_bindings bindings
+let complete_bindings bindings = Extraction.PatternMatch.complete_bindings bindings
 
 let exp_of_fundef (FD_aux (FD_function (_, _, funcls), annot)) value =
   let pexp_of_funcl (FCL_aux (FCL_funcl (_, pexp), _)) = pexp in
@@ -303,24 +304,24 @@ type frame =
       string Lazy.t
       * state
       * Type_check.tannot exp Monad.t
-      * (string Lazy.t * lstate * (Semantics.return_value -> Type_check.tannot exp Monad.t)) list
+      * (string Lazy.t * lstate * (Extraction.Semantics.return_value -> Type_check.tannot exp Monad.t)) list
   | Break of frame
   | Effect_request of
       string Lazy.t
       * state
-      * (string Lazy.t * lstate * (Semantics.return_value -> Type_check.tannot exp Monad.t)) list
+      * (string Lazy.t * lstate * (Extraction.Semantics.return_value -> Type_check.tannot exp Monad.t)) list
       * effect_request
   | Fail of
       string Lazy.t
       * state
       * Type_check.tannot exp Monad.t
-      * (string Lazy.t * lstate * (Semantics.return_value -> Type_check.tannot exp Monad.t)) list
+      * (string Lazy.t * lstate * (Extraction.Semantics.return_value -> Type_check.tannot exp Monad.t)) list
       * string
 
 and effect_request =
   | Read_reg of id * VariableUpdate.accessor list * (value -> state -> frame)
   | Write_reg of id * VariableUpdate.accessor list * value * (unit -> state -> frame)
-  | Outcome of id * value list * (Semantics.return_value -> Type_check.tannot exp Monad.t)
+  | Outcome of id * value list * (Extraction.Semantics.return_value -> Type_check.tannot exp Monad.t)
 
 let read_variable id lstate gstate =
   match Bindings.find_opt id lstate.locals with
@@ -357,7 +358,7 @@ let rec eval_frame' = function
           let env = gstate.typecheck_env in
           if Type_check.Env.is_outcome id env then Effect_request (out, state, stack, Outcome (id, args, cont))
           else if Type_check.Env.is_union_constructor id env then
-            Step (lazy "", state, cont (Semantics.Return_ok (V_ctor (id, args))), stack)
+            Step (lazy "", state, cont (Extraction.Semantics.Return_ok (V_ctor (id, args))), stack)
           else if is_interpreter_extern id env then (
             let extern = get_interpreter_extern id env in
             if extern = "reg_deref" then (
@@ -367,7 +368,10 @@ let rec eval_frame' = function
                   state,
                   stack,
                   Read_reg
-                    (regname, [], fun v state' -> eval_frame' (Step (out, state', cont (Semantics.Return_ok v), stack)))
+                    ( regname,
+                      [],
+                      fun v state' -> eval_frame' (Step (out, state', cont (Extraction.Semantics.Return_ok v), stack))
+                    )
                 )
             )
             else (
@@ -379,7 +383,7 @@ let rec eval_frame' = function
                     try Ok (op args)
                     with exn -> Error ("Exception calling primop '" ^ extern ^ "': " ^ Printexc.to_string exn)
                   with
-                  | Ok v -> Step (lazy "", state, cont (Semantics.Return_ok v), stack)
+                  | Ok v -> Step (lazy "", state, cont (Extraction.Semantics.Return_ok v), stack)
                   | Error msg -> Fail (out, state, m, stack, msg)
                 )
               | None -> Fail (out, state, m, stack, "No such primop: " ^ string_of_id id)
@@ -530,7 +534,7 @@ let rec initialize_registers allow_registers undef_registers gstate =
                   List.fold_left
                     (fun lbs (id, v) -> Bindings.add id v lbs)
                     gstate.letbinds
-                    (IdUtil.IdMap.elements (complete_bindings bindings));
+                    (Extraction.IdUtil.IdMap.elements (complete_bindings bindings));
               }
           | _ -> gstate
         with _ -> gstate

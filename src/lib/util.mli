@@ -57,8 +57,8 @@ val last_opt : 'a list -> 'a option
 val butlast : 'a list -> 'a list
 
 module Rational : sig
-  val from_rocq : QArith_base.coq_Q -> Q.t
-  val to_rocq : Q.t -> QArith_base.coq_Q
+  val from_rocq : Extraction.QArith_base.coq_Q -> Q.t
+  val to_rocq : Q.t -> Extraction.QArith_base.coq_Q
 end
 
 module Option_monad : sig
