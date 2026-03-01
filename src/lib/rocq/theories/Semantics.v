@@ -20,313 +20,10 @@ Require Import AstInduction.
 Require Import Bit.
 Require Import IdUtil.
 Require Import ListUtil.
+Require Import PatternMatch.
 Require Import Value_type.
 
 Import ListNotations.
-
-Inductive binding :=
-| Complete : value -> binding
-| Partial : non_empty (value * Z * Z) -> binding.
-
-Definition binding_part_eqb (l r : value * Z * Z) :=
-  let '(lv, ln, lm) := l in
-  let '(rv, rn, rm) := r in
-  value_eqb lv rv && (ln =? rn)%Z && (lm =? rm)%Z.
-
-Lemma binding_part_eqb_refl : forall p, binding_part_eqb p p = true.
-Proof.
-  destruct p as (vn, m).
-  destruct vn as (v, n).
-  cbn.
-  repeat (apply andb_true_intro; split).
-  - apply value_eqb_refl.
-  - apply Z.eqb_refl.
-  - apply Z.eqb_refl.
-Qed.
-
-Definition binding_eqb (l r : binding) : bool :=
-  match (l, r) with
-  | (Complete lv, Complete rv) => value_eqb lv rv
-  | (Partial (Non_empty lv lvs), Partial (Non_empty rv rvs)) =>
-      binding_part_eqb lv rv && list_eqb binding_part_eqb lvs rvs
-  | _ => false
-  end.
-
-Lemma binding_eqb_refl : forall b, binding_eqb b b = true.
-Proof.
-  destruct b as [b | p].
-  - cbn; apply value_eqb_refl.
-  - destruct p as [part parts].
-    cbn.
-    apply andb_true_intro; split.
-    + apply binding_part_eqb_refl.
-    + apply list_eqb_refl; intros; apply binding_part_eqb_refl.
-Qed.
-
-Definition combine_binding (l r : option binding) : option binding :=
-  match (l, r) with
-  | (None, None) => None
-  | (Some b, None) => Some b
-  | (None, Some b) => Some b
-  | (Some lb, Some rb) =>
-      match (lb, rb) with
-      | (Complete v, _) => Some (Complete v)
-      | (_, Complete v) => Some (Complete v)
-      | (Partial (Non_empty lv lvs), Partial (Non_empty rv rvs)) =>
-          Some (Partial (Non_empty lv (lvs ++ rv :: rvs)))
-      end
-  end.
-
-Lemma combine_binding_none_right : forall b, combine_binding b None = b.
-Proof.
-  destruct b; cbn; reflexivity.
-Qed.
-
-Definition unwrap_default {A : Set} (default : A) (opt : option A) : A :=
-  match opt with
-  | None => default
-  | Some x => x
-  end.
-
-Lemma combine_binding_assoc : forall a b c, combine_binding (combine_binding a b) c = combine_binding a (combine_binding b c).
-Proof.
-  (destruct a as [a |]; [destruct a | idtac]);
-  (destruct b as [b |]; [destruct b | idtac]);
-  (destruct c as [c |]; [destruct c | idtac]).
-  all: cbn; try reflexivity.
-  all: repeat (
-    match goal with
-    | [ n : non_empty _ |- _ ] => destruct n; cbn; try reflexivity
-    end
-  ).
-  rewrite app_comm_cons.
-  rewrite app_assoc.
-  reflexivity.
-Qed.
-
-Definition merge_bindings (l r : IdMap.t binding) : IdMap.t binding :=
-  IdMap.map2 combine_binding l r.
-
-Lemma merge_bindings_in_left : forall k x y, IdMap.In k x -> IdMap.In k (merge_bindings x y).
-Proof.
-  intros k x y H.
-  pose proof H as H_in.
-  change (exists e, IdMap.MapsTo k e x) in H.
-  destruct H as [b].
-  change (exists e, IdMap.MapsTo k e (merge_bindings x y)).
-  exists (unwrap_default b (combine_binding (Some b) (IdMap.find k y))).
-  apply IdMap.find_2.
-  unfold merge_bindings.
-  rewrite IdMap.map2_1.
-  - apply IdMap.find_1 in H.
-    rewrite H.
-    case_eq (IdMap.find k y).
-    + intro b'.
-      destruct b as [? | n]; cbn; try tauto.
-      destruct n.
-      destruct b' as [? | n']; cbn; try tauto.
-      destruct n'; cbn; tauto.
-    + cbn; tauto.
-  - tauto.
-Qed.
-
-Lemma merge_bindings_in_right : forall k x y, IdMap.In k y -> IdMap.In k (merge_bindings x y).
-Proof.
-  intros k x y H.
-  pose proof H as H_in.
-  change (exists e, IdMap.MapsTo k e y) in H.
-  destruct H as [b].
-  change (exists e, IdMap.MapsTo k e (merge_bindings x y)).
-  exists (unwrap_default b (combine_binding (IdMap.find k x) (Some b))).
-  apply IdMap.find_2.
-  unfold merge_bindings.
-  rewrite IdMap.map2_1.
-  - apply IdMap.find_1 in H.
-    rewrite H.
-    case_eq (IdMap.find k x).
-    + intro b'.
-      destruct b' as [? | n']; cbn; try tauto.
-      destruct n'; cbn; try tauto.
-      destruct b as [? | n]; cbn; try tauto.
-      destruct n; cbn; tauto.
-    + cbn; tauto.
-  - tauto.
-Qed.
-
-Lemma merge_bindings_in : forall k x y, IdMap.In k (merge_bindings x y) -> IdMap.In (elt:=binding) k x \/ IdMap.In (elt:=binding) k y.
-Proof.
-  intros k x y H.
-  unfold merge_bindings.
-  apply (IdMap.map2_2 H).
-Qed.
-
-Lemma generalize_ex : forall [A] (P : A -> Prop) (x : A), P x -> (exists y, P y).
-Proof.
-  intros A P x H.
-  exists x.
-  assumption.
-Qed.
-
-Lemma not_in_map2 : forall A k (x y : IdMap.t A) f, ~ IdMap.In k x -> ~ IdMap.In k y -> ~ IdMap.In (elt:=A) k (IdMap.map2 f x y).
-Proof.
-  intros A k x y f Not_in_x Not_in_y.
-  unfold not.
-  intros In_xy.
-  apply IdMap.map2_2 in In_xy.
-  tauto.
-Qed.
-
-Lemma not_in_find_none : forall [A k] (x : IdMap.t A), ~ IdMap.In k x <-> IdMap.find k x = None.
-Proof.
-  intros A k x.
-  split; intros H.
-  - change (~ (exists m, IdMap.MapsTo k m x)) in H.
-    unfold not in H.
-    case_eq (IdMap.find k x).
-    + intros elt Find_x.
-      exfalso.
-      apply IdMap.find_2 in Find_x.
-      destruct H.
-      exists elt.
-      assumption.
-    + tauto.
-  - unfold not.
-    intros In_x.
-    change (exists elt, IdMap.MapsTo k elt x) in In_x.
-    destruct In_x as [elt In_x].
-    apply IdMap.find_1 in In_x.
-    rewrite In_x in H.
-    discriminate H.
-Qed.
-
-Lemma map2_none_none : forall [A k] (x y : IdMap.t A) f,
-  IdMap.find k x = None ->
-  IdMap.find k y = None ->
-  IdMap.find (elt:=A) k (IdMap.map2 f x y) = None.
-Proof.
-  intros A k x y f.
-  repeat rewrite <- not_in_find_none.
-  intros X Y.
-  apply not_in_map2; assumption.
-Qed.
-
-(* Define a tactic that attempts to simplify hypothesis that involve `IdMap.find`. *)
-
-Ltac idmap_find_simp_step :=
-  lazymatch goal with
-  | [ H : context [ IdMap.find ?k (IdMap.map2 combine_binding ?x ?y) ], X : IdMap.find ?k ?x = None, Y : IdMap.find ?k ?y = None |- _ ] =>
-      rewrite (map2_none_none x y combine_binding X Y) in H
-  | [ H : context [ IdMap.find ?k ?x ], X : IdMap.find ?k ?x = None |- _ ] =>
-      rewrite X in H
-  | [ H : context [ IdMap.find ?k ?x ], X : IdMap.find ?k ?x = Some ?b |- _ ] =>
-      rewrite X in H
-  | [ H : context [ combine_binding (combine_binding ?x ?y) ?z ] |- _ ] =>
-      rewrite combine_binding_assoc in H
-  end.
-
-Ltac idmap_find_simp := repeat idmap_find_simp_step.
-
-(* Define a tactic idmap_in_solve that attempts to solve goals of the form `IdMap.In _ _` *)
-
-Ltac idmap_in_step :=
-  lazymatch goal with
-  | |- IdMap.In ?k (IdMap.map2 combine_binding ?x ?y) => change (IdMap.In k (merge_bindings x y))
-  | [ H : IdMap.find ?k ?x = Some ?b |- IdMap.In ?k (merge_bindings ?x ?y) ] =>
-      apply merge_bindings_in_left
-  | [ H : IdMap.find ?k ?y = Some ?b |- IdMap.In ?k (merge_bindings ?x ?y) ] =>
-      apply merge_bindings_in_right
-  | [ H : IdMap.find ?k ?x = None |- IdMap.In ?k ?x \/ IdMap.In ?k _ ] => apply or_intror
-  | [ H : IdMap.find ?k ?y = None |- IdMap.In ?k _ \/ IdMap.In ?k ?y ] => apply or_introl
-  | [ H : IdMap.find ?k ?x = Some ?b |- IdMap.In ?k ?x \/ IdMap.In ?k _ ] =>
-      apply or_introl
-  | [ H : IdMap.find ?k ?y = Some ?b |- IdMap.In ?k _ \/ IdMap.In ?k ?y ] =>
-      apply or_intror
-  | [ H : IdMap.find ?k ?x = Some ?b |- IdMap.In ?k ?x ] =>
-      change (exists b, IdMap.MapsTo k b x);
-      exists b;
-      apply (IdMap.find_2 H)
-  end.
-
-Ltac idmap_in_solve := solve [ repeat idmap_in_step ].
-
-Ltac binding_eqb_solve_step :=
-  match goal with
-  | [ H1 : ?x = Some ?b1, H2 : ?x = Some ?b2 |- binding_eqb ?b1 ?b2 = true ] =>
-      let Eq := fresh "Eq" in
-      rewrite H1 in H2;
-      injection H2;
-      intros Eq;
-      rewrite Eq;
-      apply binding_eqb_refl
-  | [ H1 : ?x = Some ?b1, H2 : ?y = Some ?b2 |- binding_eqb ?b1 ?b2 = true ] =>
-      let Eq := fresh "Eq" in
-      assert (x = y) as Eq; [
-        cbn; reflexivity
-      | rewrite Eq in H1
-      ]
-  end.
-
-Ltac binding_eqb_solve := solve [ repeat binding_eqb_solve_step ].
-
-Lemma merge_bindings_assoc : forall x y z,
-  IdMap.Equivb binding_eqb (merge_bindings (merge_bindings x y) z) (merge_bindings x (merge_bindings y z)).
-Proof.
-  intros x y z.
-  split.
-
-  - intro k.
-    change (IdMap.In k (merge_bindings (merge_bindings x y) z) <-> IdMap.In k (merge_bindings x (merge_bindings y z))).
-    cbn.
-    split; intros H; unfold merge_bindings in H; apply IdMap.map2_2 in H.
-    + destruct H as [H_in_xy | H_in_z]; [ apply IdMap.map2_2 in H_in_xy; destruct H_in_xy as [H_in_x | H_in_y] | idtac].
-      * apply (merge_bindings_in_left _ _ _ H_in_x).
-      * apply (merge_bindings_in_right _ _ _ (merge_bindings_in_left _ _ _ H_in_y)).
-      * apply (merge_bindings_in_right _ _ _ (merge_bindings_in_right _ _ _ H_in_z)).
-    + destruct H as [H_in_x | H_in_yz]; [ idtac | apply IdMap.map2_2 in H_in_yz; destruct H_in_yz as [H_in_y | H_in_z]].
-      * apply (merge_bindings_in_left _ _ _ (merge_bindings_in_left _ _ _ H_in_x)).
-      * apply (merge_bindings_in_left _ _ _ (merge_bindings_in_right _ _ _ H_in_y)).
-      * apply (merge_bindings_in_right _ _ _ H_in_z).
-
-  (* If M is the merge bindings function, we must prove:
-     `(k, M x (M y z)) ↦ e` and `(k, M (M x y) z) ↦ e' then `binding_eqb e e' = true`. *)
-  - intros k b b' L R.
-    change (IdMap.MapsTo k b (merge_bindings (merge_bindings x y) z)) in L.
-    change (IdMap.MapsTo k b' (merge_bindings x (merge_bindings y z))) in R.
-
-    (* Remember a hypothesis H that k is in the merged bindings *)
-    pose proof L as H.
-    apply (fun P => generalize_ex P b) in H.
-    change (IdMap.In k (merge_bindings (merge_bindings x y) z)) in H.
-    apply IdMap.find_1 in L, R.
-    unfold merge_bindings in L, R.
-
-    (case_eq (IdMap.find k x); [ intros xb Find_x | intros None_x]);
-    (case_eq (IdMap.find k y); [ intros yb Find_y | intros None_y]);
-    (case_eq (IdMap.find k z); [ intros zb Find_z | intros None_z]).
-
-    (* First handle the case where k is none of the maps.
-       This is impossible due to the hypothesis H we created. *)
-    8: {
-      apply merge_bindings_in in H.
-      destruct H as [H | In_z]; [ apply merge_bindings_in in H; destruct H as [In_x | In_y] | idtac ].
-      all: (
-        match goal with
-        | [ In : IdMap.In ?k ?x, None : IdMap.find ?k ?x = None |- _ ] =>
-            change (exists b, IdMap.MapsTo k b x) in In;
-            destruct In as [b'' In];
-            apply IdMap.find_1 in In;
-            rewrite In in None;
-            discriminate None
-        end
-      ).
-    }
-
-    all: (
-      repeat (rewrite IdMap.map2_1 in L; [ idtac | idmap_in_solve ]; idmap_find_simp);
-      repeat (rewrite IdMap.map2_1 in R; [ idtac | idmap_in_solve ]; idmap_find_simp);
-      binding_eqb_solve
-    ).
-Qed.
 
 Definition to_gvector (v : value) : value :=
   match v with
@@ -474,11 +171,12 @@ Module Monad.
 
   Lemma bind_right_id : forall (A : Set) (m : t A), bind m pure = m.
   Proof.
-    induction m as [| | | | | | ? ? cont | ? cont | ? ? cont | ? cont]; try easy.
+    intros A m.
+    induction m as [| | | | | | ? ? cont H | ? cont H | ? ? cont H | ? cont H]; try easy.
     all: cbn.
     all: f_equal.
     all: apply functional_extensionality.
-    all: intros.
+    all: intros x.
     all: specialize (H x).
     all: assumption.
   Qed.
@@ -486,12 +184,13 @@ Module Monad.
   Lemma bind_assoc : forall (A B C : Set) (f : A -> t B) (g : B -> t C) (x : t A),
       bind (bind x f) g = bind x (fun y => bind (f y) g).
   Proof.
-    induction x as [| | | | | | ? ? cont | ? cont | ? ? cont | ? cont]; try easy.
+    intros A B C f g x.
+    induction x as [| | | | | | ? ? cont H | ? cont H | ? ? cont H | ? cont H]; try easy.
     all: cbn.
     all: f_equal.
     all: apply functional_extensionality.
-    all: intros.
-    all: remember (cont x) as z.
+    all: intros x.
+    all: remember (cont x) as z eqn : Heqz.
     all: specialize (H x).
     all: rewrite <- Heqz in H.
     all: cbn in H.
@@ -554,10 +253,11 @@ Fixpoint drop_evaluated {A : Set} (xs : list (exp A)) : list (exp A) :=
 Lemma take_drop_evaluated_concat : forall (A : Set) (xs : list (exp A)),
     take_evaluated xs ++ drop_evaluated xs = xs.
 Proof.
-  induction xs.
+  intros A xs.
+  induction xs as [| x xs IHxs].
   - cbn. reflexivity.
-  - destruct a.
-    destruct e.
+  - destruct x as [aux ?].
+    destruct aux.
     all: cbn.
     all: try reflexivity.
     rewrite IHxs.
@@ -582,11 +282,12 @@ Fixpoint left_to_right {A : Set} (xs : list (exp A)) {struct xs} : (list (exp A)
 Lemma ltr_tuple : forall (A : Set) (xs : list (exp A)),
     left_to_right xs = (take_evaluated xs, drop_evaluated xs).
 Proof.
-  induction xs.
+  intros A xs.
+  induction xs as [| x xs IHxs].
   - cbn.
     reflexivity.
-  - destruct a.
-    destruct e.
+  - destruct x as [aux ?].
+    destruct aux.
     all: cbn.
     all: try reflexivity.
     rewrite IHxs.
@@ -628,7 +329,8 @@ Fixpoint left_to_right_fields {A : Set} (xs : list (fexp A)) {struct xs} : (list
 Lemma take_drop_evaluated_fields_concat : forall (A : Set) (fxs : list (fexp A)),
   take_evaluated_fields fxs ++ drop_evaluated_fields fxs = fxs.
 Proof.
-  induction fxs as [| fx fxs ].
+  intros A fxs.
+  induction fxs as [| fx fxs IHfxs].
   - reflexivity.
   - destruct fx as [aux ?].
     destruct aux as [? e].
@@ -641,7 +343,8 @@ Qed.
 Lemma ltr_fields_tuple : forall (A : Set) (fxs : list (fexp A)),
   left_to_right_fields fxs = (take_evaluated_fields fxs, drop_evaluated_fields fxs).
 Proof.
-  induction fxs as [| fx fxs ].
+  intros A fxs.
+  induction fxs as [| fx fxs IHfxs].
   - reflexivity.
   - destruct fx as [aux ?].
     destruct aux as [? e].
@@ -688,20 +391,14 @@ Definition left_to_right3 {A : Set} (x y z : exp A) : ltr3 A :=
 
 Lemma fold_right_max_acc : forall x y zs, x <= y -> x < fold_right max y zs + 1.
 Proof.
-  induction zs.
-  - cbn.
-    lia.
-  - cbn.
-    lia.
+  intros ? ? zs.
+  induction zs; cbn; lia.
 Qed.
 
 Lemma fold_right_max_acc2 : forall x y zs, x <= y -> x <= fold_right max y zs.
 Proof.
-  induction zs.
-  - cbn.
-    lia.
-  - cbn.
-    lia.
+  intros ? ? zs.
+  induction zs; cbn; lia.
 Qed.
 
 Definition bitlist_of_hex_digit (h : hex_digit) : list bit :=
@@ -765,9 +462,8 @@ Definition bitlist_of_hex_lit (hex : list (non_empty hex_digit)) : list bit :=
 
 Lemma hex_lit_bitlist_rt : forall (d : hex_digit), hex_digits_of_bitlist (bitlist_of_hex_lit [Non_empty d []]) = Some [d].
 Proof.
-  induction d.
-  all: cbn.
-  all: reflexivity.
+  intros d.
+  induction d; cbn; reflexivity.
 Qed.
 
 Definition bitlist_of_bin_lit (bin : list (non_empty bin_digit)) : list bit :=
@@ -778,43 +474,6 @@ Definition bitlist_of_bin_lit (bin : list (non_empty bin_digit)) : list bit :=
       | Bin_1 => B1
       end
     ) digits.
-
-Definition update_list (xs : list bit) (n : nat) (y : bit) : list bit :=
-  let n := List.length xs - n - 1 in
-  let '(ys, zs) := take_drop n xs in
-  ys ++ [y] ++ List.tl zs.
-
-Fixpoint update_subrange (xs : list bit) (n : nat) (ys : list bit) : list bit :=
-  match ys with
-  | [] => xs
-  | y :: ys =>
-    update_subrange (update_list xs n y) (n - 1) ys
-  end.
-
-Definition complete_value (partial_values : non_empty (value * Z * Z)) : value :=
-  let '(Non_empty (v1, n1, m1) partial_values) := partial_values in
-    let '(max, min) :=
-      List.fold_left
-        (fun range pvalue =>
-         let '(max, min) := range in
-         let '(_, n, m) := pvalue in
-         (Z.max max (Z.max n m), Z.min min (Z.min n m)))
-        partial_values (n1, m1)
-    in
-    let len := Z.sub (Z.succ max) min in
-    let zeros := List.repeat B0 (Z.to_nat len) in
-    let value :=
-      List.fold_left
-        (fun bv pvalue =>
-         let '(slice, n, _) := pvalue in
-         match slice with
-         | V_bitvector slice => update_subrange bv (Z.to_nat n) slice
-         | _ => bv
-         end)
-        ((v1, n1, m1) :: partial_values)
-        zeros
-    in
-    V_bitvector value.
 
 (** Sail annotates terms with custom type annotation data, which we
     don't have access to here. Instead use a functor parameterised by
@@ -835,20 +494,6 @@ Module Type SemanticExt.
 End SemanticExt.
 
 Module Make (T : SemanticExt).
-  Fixpoint binds_id {A} (n : Ast.id) (p : Ast.pat A) : bool :=
-    let 'P_aux aux annot := p in
-    match aux with
-    | P_lit _ | P_wild | P_not _ => false
-    | P_id m => id_eqb n m
-    | P_typ _ p | P_var p _ => binds_id n p
-    | P_as pat m => binds_id n pat || id_eqb n m
-    | P_tuple ps | P_list ps | P_vector ps | P_app _ ps | P_vector_concat ps | P_string_append ps =>
-        fold_left orb (map (binds_id n) ps) false
-    | P_or p1 p2 | P_cons p1 p2 => binds_id n p1 || binds_id n p2
-    | P_struct _ ps _ => fold_left orb (map (fun fp => binds_id n (snd fp)) ps) false
-    | P_vector_subrange m _ _ => id_eqb n m
-    end.
-
   Fixpoint substitute {A} (n : Ast.id) (v : Ast.value) (x : exp A) : exp A :=
     let 'E_aux aux annot := x in
     match aux with
@@ -989,7 +634,7 @@ Module Make (T : SemanticExt).
   Lemma same_bits_cons : forall (b : bit) (bs : list bit),
       same_bits (b :: bs) (b :: bs) = same_bits bs bs.
   Proof.
-    intros.
+    intros b bs.
     destruct b.
     all: unfold same_bits.
     all: cbn.
@@ -999,78 +644,12 @@ Module Make (T : SemanticExt).
   Lemma same_bits_refl : forall (bs : list bit),
       same_bits bs bs = true.
   Proof.
+    intros bs.
     induction bs.
     easy.
     rewrite same_bits_cons.
     assumption.
   Qed.
-
-  Inductive match_result : Type :=
-  | Matched : IdMap.t binding -> match_result
-  | MaybeMatched : IdMap.t binding -> match_result
-  | Unmatched : match_result.
-
-  Definition match_result_eq (l r : match_result) : Prop :=
-    match (l, r) with
-    | (Unmatched, Unmatched) => True
-    | (Matched l_b, Matched r_b) => IdMap.Equivb binding_eqb l_b r_b
-    | (MaybeMatched l_b, MaybeMatched r_b) => IdMap.Equivb binding_eqb l_b r_b
-    | _ => False
-    end.
-
-  Definition merge_match_result (l r : match_result) : match_result :=
-    match (l, r) with
-    | (Unmatched, _) => Unmatched
-    | (_, Unmatched) => Unmatched
-    | (MaybeMatched l_b, MaybeMatched r_b) => MaybeMatched (merge_bindings l_b r_b)
-    | (Matched l_b,      MaybeMatched r_b) => MaybeMatched (merge_bindings l_b r_b)
-    | (MaybeMatched l_b, Matched r_b     ) => MaybeMatched (merge_bindings l_b r_b)
-    | (Matched l_b,      Matched r_b     ) => Matched (merge_bindings l_b r_b)
-    end.
-
-  Infix "⋈" := merge_match_result (right associativity, at level 60).
-
-  Lemma merge_match_result_assoc : forall a b c, match_result_eq ((a ⋈ b) ⋈ c) (a ⋈ (b ⋈ c)).
-  Proof.
-    destruct a as [a | a |]; destruct b as [b | b |]; destruct c as [c | c |].
-    all: cbn; try reflexivity; apply merge_bindings_assoc.
-  Qed.
-
-  Definition empty_bindings : IdMap.t binding := @IdMap.empty binding.
-
-  Definition simple_match : match_result := Matched empty_bindings.
-
-  Definition simple_match_if (b : bool) : match_result :=
-    if b then simple_match else Unmatched.
-
-  Definition match_binds (name : Ast.id) (value : binding) (r : match_result) : match_result :=
-    match r with
-    | Unmatched => Unmatched
-    | MaybeMatched b => MaybeMatched (IdMap.add name value b)
-    | Matched b => Matched (IdMap.add name value b)
-    end.
-
-  Definition fully_matched (r : match_result) : Prop :=
-    match r with
-    | MaybeMatched _ => False
-    | _ => True
-    end.
-
-  Definition neg_match (r : match_result) : match_result :=
-    match r with
-    | Unmatched => simple_match
-    | MaybeMatched b => MaybeMatched b
-    | Matched _ => Unmatched
-    end.
-
-  Definition or_match (l r : match_result) : match_result :=
-    match (l, r) with
-    | (Matched l_b, _) => Matched l_b
-    | (_, Matched r_b) => Matched r_b
-    | (MaybeMatched l_b, _) => MaybeMatched l_b
-    | (_, MaybeMatched r_b) => MaybeMatched r_b
-    | _ => Unmatched
-    end.
 
   Definition pattern_match_literal (l : Ast.lit) (v : value) : match_result :=
     let 'L_aux aux annot := l in
@@ -1078,11 +657,11 @@ Module Make (T : SemanticExt).
     | (L_unit,      V_unit        ) => simple_match
     | (L_true,      V_bool true   ) => simple_match
     | (L_false,     V_bool false  ) => simple_match
-    | (L_num n,     V_int m       ) => simple_match_if (Z.eqb n m)
-    | (L_hex s,     V_bitvector vs) => simple_match_if (same_bits (bitlist_of_hex_lit s) vs)
-    | (L_bin s,     V_bitvector vs) => simple_match_if (same_bits (bitlist_of_bin_lit s) vs)
-    | (L_string s1, V_string s2   ) => simple_match_if (String.eqb s1 s2)
-    | (L_real r1,   V_real r2     ) => simple_match_if (QArith_base.Qeq_bool r1 r2)
+    | (L_num n,     V_int m       ) => simple_match_when (Z.eqb n m)
+    | (L_hex s,     V_bitvector vs) => simple_match_when (same_bits (bitlist_of_hex_lit s) vs)
+    | (L_bin s,     V_bitvector vs) => simple_match_when (same_bits (bitlist_of_bin_lit s) vs)
+    | (L_string s1, V_string s2   ) => simple_match_when (String.eqb s1 s2)
+    | (L_real r1,   V_real r2     ) => simple_match_when (QArith_base.Qeq_bool r1 r2)
     | (_,           V_unknown     ) => MaybeMatched empty_bindings
     | _ => Unmatched
     end.
@@ -1096,16 +675,6 @@ Module Make (T : SemanticExt).
           get_struct_field name rest_fields
     | [] => V_unit
     end.
-
-  Definition complete_bindings (m : IdMap.t binding) : IdMap.t value :=
-    IdMap.map
-      (fun b =>
-         match b with
-         | Complete v => v
-         | Partial vs => complete_value vs
-         end
-      )
-      m.
 
   Fixpoint fold_match
       (f : pat T.tannot -> value -> match_result)
@@ -1132,7 +701,7 @@ Module Make (T : SemanticExt).
         match T.get_id_type (snd annot) n with
         | Enum_member =>
             match v with
-            | V_member m => simple_match_if (id_eqb n m)
+            | V_member m => simple_match_when (id_eqb n m)
             | V_unknown  => MaybeMatched empty_bindings
             | _          => Unmatched
             end
@@ -1140,7 +709,7 @@ Module Make (T : SemanticExt).
         end
     | P_typ _ p => pattern_match p v
     | P_lit l => pattern_match_literal l v
-    | P_as p n => match_binds n (Complete v) (pattern_match p v)
+    | P_as p n => add_match n (Complete v) (pattern_match p v)
     | P_app ctor ps =>
         match v with
         | V_ctor v_ctor vs =>
@@ -1234,40 +803,335 @@ Module Make (T : SemanticExt).
     | P_string_append _ => simple_match
     end.
 
+  Lemma fm_fold_unmatched : forall pats vs,
+    fully_matched (fst (fold_match pattern_match pats (Unmatched, vs))).
+  Proof.
+    intros pats.
+    induction pats as [| pat pats IH]; intros vs.
+    - reflexivity.
+    - destruct vs; apply IH.
+  Qed.
+
+  Lemma fm_fold_matched : forall pats vs b,
+    Forall (fun v => fully_defined v = true) vs ->
+    Forall
+      (fun p => forall v, fully_defined v = true -> fully_matched (pattern_match p v))
+      pats ->
+    fully_matched (fst (fold_match pattern_match pats (Matched b, vs))).
+  Proof.
+    intros pats.
+    induction pats as [| pat pats IH]; intros vs b FD_vs H.
+    - reflexivity.
+    - destruct vs as [| v vs]; cbn.
+      + apply fm_fold_unmatched.
+      + rewrite Forall_cons_iff in H, FD_vs.
+        destruct H as [H_hd H_tl].
+        destruct FD_vs as [FD_vs_hd FD_vs_tl].
+        apply H_hd in FD_vs_hd.
+        case_eq (pattern_match pat v).
+        * intros ? Match_pat.
+          apply (IH _ _ FD_vs_tl H_tl).
+        * intros ? MaybeMatched_pat.
+          exfalso.
+          rewrite MaybeMatched_pat in FD_vs_hd.
+          cbn in FD_vs_hd.
+          apply FD_vs_hd.
+        * intros Unmatched_pat.
+          apply fm_fold_unmatched.
+  Qed.
+
+  Definition MatcherResult {A} (xs : list A) (m : match_result * list A) : Prop :=
+    fully_matched (fst m) /\ Suffix (snd m) xs.
+
+  Lemma fm_fold_left_matched : forall [A B] (pats : list B) (matcher : (match_result * list A) -> B -> (match_result * list A)) vs m,
+    Forall
+      (fun p =>
+        forall m vs', fully_matched m -> Suffix vs' vs -> MatcherResult vs' (matcher (m, vs') p))
+      pats ->
+    fully_matched m ->
+    fully_matched (fst (fold_left matcher pats (m, vs))).
+  Proof.
+    intros A B pats matcher.
+    induction pats as [| pat pats IH]; intros vs m H Init.
+    - apply Init.
+    - cbn.
+      rewrite Forall_cons_iff in H.
+      destruct H as [H_hd H_tl].
+
+      specialize (H_hd m vs Init (Suffix_refl vs)).
+
+      destruct (matcher (m, vs) pat) as (m', vs') eqn : Matcher_hd.
+      destruct H_hd as [FM_m' Drop_vs].
+      cbn in Drop_vs, FM_m'.
+      destruct Drop_vs as [i]; subst.
+
+      destruct m' as [b' | b' |].
+      + apply (IH (drop i vs) (Matched b')).
+        * apply (fun G => Forall_impl _ G H_tl).
+          intros pat' Q m'' vs' FM_m'' Drop_vs'.
+          destruct Drop_vs' as [j]; subst.
+
+          specialize (fun G => Q m'' (drop j (drop i vs)) G).
+          assert (L : exists n : nat, drop j (drop i vs) = drop n vs).
+          {
+             exists (i + j).
+             apply drop_drop_add.
+          }
+          apply (Q FM_m'' L).
+        * reflexivity.
+      + exfalso.
+        apply FM_m'.
+      + apply (IH (drop i vs) Unmatched).
+        * apply (fun G => Forall_impl _ G H_tl).
+          intros pat' Q m'' vs' FM_m'' Drop_vs'.
+          destruct Drop_vs' as [j]; subst.
+
+          specialize (fun G => Q m'' (drop j (drop i vs)) G).
+          assert (L : exists n : nat, drop j (drop i vs) = drop n vs).
+          {
+             exists (i + j).
+             apply drop_drop_add.
+          }
+          apply (Q FM_m'' L).
+        * reflexivity.
+  Qed.
+
+  Ltac crunch :=
+    lazymatch goal with
+    | |- context [ match ?v with _ => _ end ] =>
+        let C := fresh "Crunch" in
+        destruct v eqn : C; crunch
+    | _ => idtac
+    end.
+
+  Ltac fm_simp :=
+    lazymatch goal with
+    | |- fully_matched (Matched _) => reflexivity
+    | |- fully_matched (MaybeMatched _) => exfalso
+    | |- fully_matched Unmatched => reflexivity
+
+    | |- fully_matched simple_match => unfold simple_match; reflexivity
+    | |- fully_matched (add_match _ _ _) => unfold add_match; fm_simp
+    | |- fully_matched (neg_match _) => unfold neg_match; fm_simp
+    | |- fully_matched (simple_match_when _) => unfold simple_match_when; fm_simp
+    | |- fully_matched (if ?b then _ else _) => destruct b; fm_simp
+
+    | |- fully_matched (fst (fold_match pattern_match _ (simple_match, _))) =>
+        apply (fm_fold_matched _ _ empty_bindings)
+
+    | |- fully_matched (fst (fold_left ?matcher ?pats (?m, ?vs))) =>
+        apply (fm_fold_left_matched pats matcher vs m); fm_simp
+
+    | |- fully_matched (match pattern_match ?p ?v with | Matched _ => _ | MaybeMatched _ => _ | Unmatched => _ end) =>
+        case_eq (pattern_match p v); intros; fm_simp
+
+    | |- fully_matched (fst (_, _)) => unfold fst; fm_simp
+
+    | |- fully_matched (match ?v with _ => _ end) =>
+        let T := type of v in
+        let LD := fresh "LD" in
+        lazymatch T with
+        | value => destruct v eqn : LD; fm_simp
+        | id_type => destruct v; fm_simp
+        | list _ => destruct v eqn : LD; fm_simp
+        | _ => destruct v eqn : LD; fm_simp
+        end
+
+    | |- fully_matched (fst (match ?v with _ => _ end)) =>
+        let T := type of v in
+        let LD := fresh "LD" in
+        lazymatch T with
+        | value => destruct v eqn : LD; fm_simp
+        | id_type => destruct v; fm_simp
+        | list _ => destruct v eqn : LD; fm_simp
+        | _ => destruct v eqn : LD; fm_simp
+        end
+
+    | |- _ => idtac
+    end.
+
   Ltac solve_fd_once tac :=
     lazymatch goal with
-    | |- fully_matched (match_binds _ _ _) => unfold match_binds
-    | |- fully_matched (simple_match_if _) => unfold simple_match_if
-    | |- fully_matched (if ?b then _ else _) => destruct b; tac
-    | |- fully_matched (match pattern_match ?p ?v with | Matched _ => _ | MaybeMatched _ => _ | Unmatched => _ end) =>
-        remember (pattern_match p v) as HD; destruct HD
     | [ IH : (forall v : value, fully_defined v = true -> fully_matched (pattern_match ?p v)),
         H : fully_defined ?v = true,
-        M : MaybeMatched _ = pattern_match ?p ?v
+        M : pattern_match ?p ?v = MaybeMatched _
       |- _
-      ] => exfalso; apply IH in H; rewrite <- M in H; cbn in H; assumption
+      ] => exfalso; apply IH in H; rewrite M in H; cbn in H; assumption
+
     | [ IH : (forall v : value, fully_defined v = true -> fully_matched (pattern_match ?p v)),
         H : fully_defined ?v = true
-      |- fully_matched (pattern_match ?p ?v)
-      ] => apply IH
-    | |- fully_matched (fst (fold_left ?f ?pats (simple_match, ?vs))) =>
-        set f as F
+      |- fully_matched (pattern_match ?p ?v) ] =>
+        apply IH; apply H
+
+    | [ H1 : pattern_match ?p ?v = MaybeMatched _, H2 : fully_matched (pattern_match ?p ?v) |- _ ] =>
+        destruct (pattern_match p v); (discriminate + tauto)
+
     | _ => tac
     end.
 
-  Ltac solve_fd tac := solve [ repeat solve_fd_once tac ].
+  Ltac solve_fd := solve_fd_once easy.
 
-  Lemma fold_left_once : forall [A B] f (x : A) (acc : B), fold_left f [x] acc = f acc x.
+  Lemma fully_defined_match_literal : forall lit v, fully_defined v = true -> fully_matched (pattern_match_literal lit v).
   Proof.
-    reflexivity.
+    intros lit v H.
+    destruct lit as [aux ?].
+    destruct aux; destruct v; try reflexivity; cbn; fm_simp; easy.
   Qed.
 
-  Lemma fold_left_cons: forall [A B] f (x : A) (xs : list A) (acc : B), fold_left f (x :: xs) acc = fold_left f xs (f acc x).
+  Lemma fully_defined_struct_field : forall i flds,
+    forallb (fun fld => fully_defined (snd fld)) flds = true ->
+    fully_defined (get_struct_field i flds) = true.
   Proof.
-    reflexivity.
+    intros i flds H.
+    induction flds as [| fld flds IH].
+    - reflexivity.
+    - cbn beta delta - [id_eqb] iota.
+      destruct fld as (field_name, v).
+      cbn in H.
+      rewrite andb_true_iff in H.
+      destruct H as [H_hd H_tl].
+      destruct (id_eqb i field_name).
+      + tauto.
+      + exact (IH H_tl).
   Qed.
 
-  (* Lemma fully_defined_match : forall p v, fully_defined v = true -> fully_matched (pattern_match p v). *)
+  Lemma struct_fdm_helper : forall field_patterns fields m,
+     fold_left (fun prev fp =>
+        let '(name, p) := fp in
+        let v := get_struct_field name fields in
+        prev ⋈ pattern_match p v
+      ) field_patterns m
+    =
+      fst (
+        fold_left (fun '(prev, fields) fp =>
+            let '(name, p) := fp in
+            let v := get_struct_field name fields in
+            (prev ⋈ pattern_match p v, fields)
+          )
+          field_patterns
+          (m, fields)
+      ).
+  Proof.
+    intros field_patterns fields.
+    induction field_patterns as [| fp fps IH]; intros m.
+    - reflexivity.
+    - cbn beta delta - [merge_match_result] iota.
+      rewrite IH.
+      destruct fp.
+      reflexivity.
+  Qed.
+
+  Lemma fully_defined_match : forall p v, fully_defined v = true -> fully_matched (pattern_match p v).
+  Proof.
+    intros p.
+    induction p using pat_ind_g; intros v FD.
+    all: try (cbn; reflexivity).
+    all: try (cbn beta delta - [id_eqb] iota; fm_simp; solve_fd).
+    - apply (fully_defined_match_literal _ _ FD).
+    - cbn beta delta - [id_eqb] iota.
+      fm_simp; try assumption.
+      cbn in FD.
+      rewrite forallb_forall in FD.
+      rewrite Forall_forall.
+      assumption.
+    - cbn beta delta - [id_eqb] iota.
+      fm_simp; try assumption.
+      destruct v; cbn in LD; inversion LD.
+      rewrite Forall_forall.
+      intros.
+      rewrite in_map_iff in H0.
+      destruct H0.
+      destruct H0.
+      rewrite <- H0.
+      reflexivity.
+      rewrite Forall_forall.
+      intros.
+      cbn in FD.
+      rewrite forallb_forall in FD.
+      rewrite <- H1 in H0.
+      apply FD in H0.
+      apply H0.
+    - cbn beta delta - [id_eqb] iota.
+      fm_simp; apply (fun P => Forall_impl _ P H); intros pat Q m bits FD_m Drop.
+      + destruct pat as [pat_aux ?].
+        unfold MatcherResult.
+        split.
+        * fm_simp; try apply FD_m.
+          specialize (Q (V_bitvector l1)).
+          cbn beta delta - [pattern_match] iota in FD, Q.
+          specialize (Q (eq_refl true)).
+          destruct (pattern_match (P_aux pat_aux a) (V_bitvector l1)); (discriminate + apply Q).
+        * crunch; cbn; try suffix_solve.
+      + destruct pat as [pat_aux ?].
+        unfold MatcherResult.
+        split.
+        * fm_simp; try apply FD_m.
+          specialize (Q (V_vector l1)).
+          cbn beta delta - [pattern_match] iota in FD, Q.
+          assert (L : forallb fully_defined l1 = true).
+          {
+            rewrite take_drop_split in LD2.
+            inversion LD2.
+            apply forallb_take.
+            apply (Suffix_forallb Drop).
+            exact FD.
+          }
+          apply Q in L.
+          destruct (pattern_match (P_aux pat_aux a) (V_vector l1)); (discriminate + apply L).
+        * crunch; cbn; try suffix_solve.
+    - cbn beta delta - [id_eqb] iota.
+      fm_simp; try assumption.
+      cbn in FD.
+      rewrite forallb_forall in FD.
+      rewrite Forall_forall.
+      assumption.
+    - cbn beta delta - [id_eqb] iota.
+      fm_simp; try assumption.
+      cbn in FD.
+      rewrite forallb_forall in FD.
+      rewrite Forall_forall.
+      assumption.
+    - cbn beta delta - [id_eqb] iota.
+      fm_simp; cbn in FD; rewrite andb_true_iff in FD.
+      + specialize (IHp2 (V_list l0)).
+        cbn in IHp2.
+        destruct FD.
+        apply IHp2 in H2.
+        destruct (pattern_match p2 (V_list l0)); cbn in H2.
+        * discriminate.
+        * tauto.
+        * discriminate.
+      + destruct FD.
+        solve_fd.
+      + destruct FD.
+        solve_fd.
+    - cbn beta delta - [id_eqb merge_match_result] iota.
+      destruct v; try reflexivity.
+      rewrite struct_fdm_helper.
+      fm_simp;apply (fun P => Forall_impl_in _ P H); intros fld In_fields Q m fvs FD_m Drop.
+      clear H.
+      unfold MatcherResult; split.
+      + unfold merge_match_result.
+        fm_simp; try apply FD_m.
+        cbn in FD.
+        specialize (Q (get_struct_field i fvs)).
+        assert (L : fully_defined (get_struct_field i fvs) = true).
+        {
+          apply fully_defined_struct_field.
+          apply (Suffix_forallb Drop).
+          unfold snd.
+          apply forallb_forall; intros fv In.
+          rewrite forallb_forall in FD.
+          specialize (FD fv In).
+          destruct fv.
+          exact FD.
+        }
+        apply Q in L.
+        cbn in L. solve_fd.
+      + destruct fld; unfold Suffix.
+        exists 0.
+        reflexivity.
+  Qed.
 
   Fixpoint lookup_field (l : Ast.loc) (name : id) (fields : list (id * value)) {struct fields} : t value :=
       match fields with
@@ -1286,13 +1150,14 @@ Module Make (T : SemanticExt).
 
   Lemma depth_if : forall (b : bool) (x y : exp T.tannot), depth (if b then x else y) <= max (depth x) (depth y).
   Proof.
-    destruct b; lia.
+    intro b; destruct b; lia.
   Qed.
 
   Lemma fexp_subst : forall f (lx : fexp T.tannot),
     (let 'FE_aux (FE_fexp id x) ann := lx in FE_aux (FE_fexp id (f x)) ann) =
     FE_aux (FE_fexp (fexp_name lx) (f (fexp_exp lx))) (fexp_annot lx).
   Proof.
+    intros ? lx.
     destruct lx as [aux ?].
     destruct aux.
     cbn.
@@ -1306,7 +1171,7 @@ Module Make (T : SemanticExt).
 
   Lemma depth_subst : forall n v (x : exp T.tannot), depth (substitute n v x) <= depth x.
   Proof with lia.
-    intros n v.
+    intros n v x.
     einduction x using exp_ind_mutual_g.
     all: (cbn; try easy; try lia).
     - induction xs.

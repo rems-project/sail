@@ -7,20 +7,12 @@ open IdUtil
 open List0
 open ListDef
 open ListUtil
-open Nat0
+open PatternMatch
 open PeanoNat
 open QArith_base
 open Specif
 open Value_type
 open Wf
-
-type binding =
-| Complete of value
-| Partial of ((value * Big_int_Z.big_int) * Big_int_Z.big_int) non_empty
-
-val combine_binding : binding option -> binding option -> binding option
-
-val merge_bindings : binding IdMap.t -> binding IdMap.t -> binding IdMap.t
 
 val to_gvector : value -> value
 
@@ -138,13 +130,6 @@ val bitlist_of_hex_lit : hex_digit non_empty list -> bit list
 
 val bitlist_of_bin_lit : bin_digit non_empty list -> bit list
 
-val update_list : bit list -> Big_int_Z.big_int -> bit -> bit list
-
-val update_subrange : bit list -> Big_int_Z.big_int -> bit list -> bit list
-
-val complete_value :
-  ((value * Big_int_Z.big_int) * Big_int_Z.big_int) non_empty -> value
-
 module type SemanticExt =
  sig
   type tannot
@@ -163,8 +148,6 @@ module type SemanticExt =
 module Make :
  functor (T:SemanticExt) ->
  sig
-  val binds_id : id -> 'a1 pat -> bool
-
   val substitute : id -> value -> 'a1 exp -> 'a1 exp
 
   val substitute_arm : id -> value -> 'a1 pexp -> 'a1 pexp
@@ -177,38 +160,9 @@ module Make :
 
   val same_bits : bit list -> bit list -> bool
 
-  type match_result =
-  | Matched of binding IdMap.t
-  | MaybeMatched of binding IdMap.t
-  | Unmatched
-
-  val match_result_rect :
-    (binding IdMap.t -> 'a1) -> (binding IdMap.t -> 'a1) -> 'a1 ->
-    match_result -> 'a1
-
-  val match_result_rec :
-    (binding IdMap.t -> 'a1) -> (binding IdMap.t -> 'a1) -> 'a1 ->
-    match_result -> 'a1
-
-  val merge_match_result : match_result -> match_result -> match_result
-
-  val empty_bindings : binding IdMap.t
-
-  val simple_match : match_result
-
-  val simple_match_if : bool -> match_result
-
-  val match_binds : id -> binding -> match_result -> match_result
-
-  val neg_match : match_result -> match_result
-
-  val or_match : match_result -> match_result -> match_result
-
   val pattern_match_literal : lit -> value -> match_result
 
   val get_struct_field : id -> (id * value) list -> value
-
-  val complete_bindings : binding IdMap.t -> value IdMap.t
 
   val fold_match :
     (T.tannot pat -> value -> match_result) -> T.tannot pat list ->

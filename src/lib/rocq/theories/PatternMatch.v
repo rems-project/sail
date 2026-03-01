@@ -1,0 +1,476 @@
+From Stdlib Require Import Bool.
+From Stdlib Require Import Lists.List.
+From Stdlib Require Import ZArith.
+
+Require Import Ast.
+Require Import Bit.
+Require Import IdUtil.
+Require Import ListUtil.
+Require Import Value_type.
+
+Import ListNotations.
+
+(** A [binding] is something an identifier in a pattern can bind with
+    during matching. The [Complete] case is for the regular case where
+    an identifier is just bound to a [value]. The [Partial] case is for
+    Sail vector range patterns, e.g.
+
+    <<
+      match xs : bits(32) with
+      | ys[15 .. 0] @ ys[31 .. 16] => ...
+    >>
+
+    After pattern matching is complete, these partial bindings are
+    turned into a complete binding for the << ys >> variable. See the
+    [complete_bindings] function later in this module. *)
+
+Inductive binding :=
+| Complete : value -> binding
+| Partial : non_empty (value * Z * Z) -> binding.
+
+(** Now we define an equality predicate [binding_eqb] for the [binding] type. *)
+
+Definition binding_part_eqb (l r : value * Z * Z) :=
+  let '(lv, ln, lm) := l in
+  let '(rv, rn, rm) := r in
+  value_eqb lv rv && (ln =? rn)%Z && (lm =? rm)%Z.
+
+Definition binding_eqb (l r : binding) : bool :=
+  match (l, r) with
+  | (Complete lv, Complete rv) => value_eqb lv rv
+  | (Partial (Non_empty lv lvs), Partial (Non_empty rv rvs)) =>
+      binding_part_eqb lv rv && list_eqb binding_part_eqb lvs rvs
+  | _ => false
+  end.
+
+Lemma binding_part_eqb_refl : forall p, binding_part_eqb p p = true.
+Proof.
+  intros p.
+  destruct p as (vn, m).
+  destruct vn as (v, n).
+  cbn.
+  repeat (apply andb_true_intro; split).
+  - apply value_eqb_refl.
+  - apply Z.eqb_refl.
+  - apply Z.eqb_refl.
+Qed.
+
+Lemma binding_eqb_refl : forall b, binding_eqb b b = true.
+Proof.
+  intros b.
+  destruct b as [b | p].
+  - cbn; apply value_eqb_refl.
+  - destruct p as [part parts].
+    cbn.
+    apply andb_true_intro; split.
+    + apply binding_part_eqb_refl.
+    + apply list_eqb_refl; intros; apply binding_part_eqb_refl.
+Qed.
+
+(** Now we define a notion of combining two bindings. Consider a tuple pattern.
+
+    <<
+       (pat1, pat2)
+    >>
+
+    The Sail type system will ensure subpatterns like pat1 and pat2 do
+    not bind the same identifiers, so either we will have no binding
+    for an identifier in << pat1 >> [None] or it will have [Some]
+    binding for a variable. The only special case is for the vector
+    range patterns above, where we combine the partial matches. *)
+
+Definition combine_binding (l r : option binding) : option binding :=
+  match (l, r) with
+  | (None, None) => None
+  | (Some b, None) => Some b
+  | (None, Some b) => Some b
+  | (Some lb, Some rb) =>
+      match (lb, rb) with
+      | (Complete v, _) => Some (Complete v)
+      | (_, Complete v) => Some (Complete v)
+      | (Partial (Non_empty lv lvs), Partial (Non_empty rv rvs)) =>
+          Some (Partial (Non_empty lv (lvs ++ rv :: rvs)))
+      end
+  end.
+
+Lemma combine_binding_none_left : forall b, combine_binding None b = b.
+Proof.
+  intros b; destruct b; cbn; reflexivity.
+Qed.
+
+Lemma combine_binding_none_right : forall b, combine_binding b None = b.
+Proof.
+  intros b; destruct b; cbn; reflexivity.
+Qed.
+
+Lemma combine_binding_assoc : forall a b c, combine_binding (combine_binding a b) c = combine_binding a (combine_binding b c).
+Proof.
+  intros a b c.
+  (destruct a as [a |]; [destruct a | idtac]);
+  (destruct b as [b |]; [destruct b | idtac]);
+  (destruct c as [c |]; [destruct c | idtac]).
+  all: cbn; try reflexivity.
+  all: repeat (
+    match goal with
+    | [ n : non_empty _ |- _ ] => destruct n; cbn; try reflexivity
+    end
+  ).
+  rewrite app_comm_cons.
+  rewrite app_assoc.
+  reflexivity.
+Qed.
+
+(** We now lift [combine_binding] to the sets of identifiers being
+    bound by different subpatterns using [IdMap.map2]. *)
+
+Definition merge_bindings (l r : IdMap.t binding) : IdMap.t binding :=
+  IdMap.map2 combine_binding l r.
+
+Definition unwrap_default {A : Set} (default : A) (opt : option A) : A :=
+  match opt with
+  | None => default
+  | Some x => x
+  end.
+
+Lemma merge_bindings_in_left : forall {k x} y, IdMap.In k x -> IdMap.In k (merge_bindings x y).
+Proof.
+  intros k x y H.
+  pose proof H as H_in.
+  change (exists e, IdMap.MapsTo k e x) in H.
+  destruct H as [b H].
+  change (exists e, IdMap.MapsTo k e (merge_bindings x y)).
+  exists (unwrap_default b (combine_binding (Some b) (IdMap.find k y))).
+  apply IdMap.find_2.
+  unfold merge_bindings.
+  rewrite IdMap.map2_1.
+  - apply IdMap.find_1 in H.
+    rewrite H.
+    case_eq (IdMap.find k y).
+    + intro b'.
+      destruct b as [? | n]; cbn; try tauto.
+      destruct n.
+      destruct b' as [? | n']; cbn; try tauto.
+      destruct n'; cbn; tauto.
+    + cbn; tauto.
+  - tauto.
+Qed.
+
+Lemma merge_bindings_in_right : forall {k y} x, IdMap.In k y -> IdMap.In k (merge_bindings x y).
+Proof.
+  intros k y x H.
+  pose proof H as H_in.
+  change (exists e, IdMap.MapsTo k e y) in H.
+  destruct H as [b H].
+  change (exists e, IdMap.MapsTo k e (merge_bindings x y)).
+  exists (unwrap_default b (combine_binding (IdMap.find k x) (Some b))).
+  apply IdMap.find_2.
+  unfold merge_bindings.
+  rewrite IdMap.map2_1.
+  - apply IdMap.find_1 in H.
+    rewrite H.
+    case_eq (IdMap.find k x).
+    + intro b'.
+      destruct b' as [? | n']; cbn; try tauto.
+      destruct n'; cbn; try tauto.
+      destruct b as [? | n]; cbn; try tauto.
+      destruct n; cbn; tauto.
+    + cbn; tauto.
+  - tauto.
+Qed.
+
+Lemma merge_bindings_in_iff : forall {k x y}, IdMap.In k (merge_bindings x y) <-> IdMap.In k x \/ IdMap.In k y.
+Proof.
+  intros k x y.
+  split; intros H.
+  - unfold merge_bindings.
+    apply (IdMap.map2_2 H).
+  - destruct H as [Hx | Hy].
+    + apply (merge_bindings_in_left _ Hx).
+    + apply (merge_bindings_in_right _ Hy).
+Qed.
+
+Lemma not_in_map2 : forall A k (x y : IdMap.t A) f, ~ IdMap.In k x -> ~ IdMap.In k y -> ~ IdMap.In (elt:=A) k (IdMap.map2 f x y).
+Proof.
+  intros A k x y f Not_in_x Not_in_y.
+  unfold not.
+  intros In_xy.
+  apply IdMap.map2_2 in In_xy.
+  tauto.
+Qed.
+
+Lemma not_in_find_none : forall [A k] (x : IdMap.t A), ~ IdMap.In k x <-> IdMap.find k x = None.
+Proof.
+  intros A k x.
+  split; intros H.
+  - change (~ (exists m, IdMap.MapsTo k m x)) in H.
+    unfold not in H.
+    case_eq (IdMap.find k x).
+    + intros elt Find_x.
+      exfalso.
+      apply IdMap.find_2 in Find_x.
+      destruct H.
+      exists elt.
+      assumption.
+    + tauto.
+  - unfold not.
+    intros In_x.
+    change (exists elt, IdMap.MapsTo k elt x) in In_x.
+    destruct In_x as [elt In_x].
+    apply IdMap.find_1 in In_x.
+    rewrite In_x in H.
+    discriminate H.
+Qed.
+
+Lemma map2_none_none : forall [A k] (x y : IdMap.t A) f,
+  IdMap.find k x = None ->
+  IdMap.find k y = None ->
+  IdMap.find (elt:=A) k (IdMap.map2 f x y) = None.
+Proof.
+  intros A k x y f.
+  repeat rewrite <- not_in_find_none.
+  intros X Y.
+  apply not_in_map2; assumption.
+Qed.
+
+(**  We now define some simple tactics to help prove associativity of merging bindings.
+
+     First, Define a simple tactic that attempts to simplify hypothesis that involve [IdMap.find]. *)
+
+Ltac idmap_find_simp_step :=
+  lazymatch goal with
+  | [ H : context [ IdMap.find ?k (IdMap.map2 combine_binding ?x ?y) ], X : IdMap.find ?k ?x = None, Y : IdMap.find ?k ?y = None |- _ ] =>
+      rewrite (map2_none_none x y combine_binding X Y) in H
+  | [ H : context [ IdMap.find ?k ?x ], X : IdMap.find ?k ?x = None |- _ ] =>
+      rewrite X in H
+  | [ H : context [ IdMap.find ?k ?x ], X : IdMap.find ?k ?x = Some ?b |- _ ] =>
+      rewrite X in H
+  | [ H : context [ combine_binding (combine_binding ?x ?y) ?z ] |- _ ] =>
+      rewrite combine_binding_assoc in H
+  end.
+
+Ltac idmap_find_simp := repeat idmap_find_simp_step.
+
+(** Second, Define a tactic idmap_in_solve that attempts to solve goals of the form [IdMap.In _ _]. *)
+
+Ltac idmap_in_step :=
+  lazymatch goal with
+  | |- IdMap.In ?k (IdMap.map2 combine_binding ?x ?y) => change (IdMap.In k (merge_bindings x y))
+  | [ H : IdMap.find ?k ?x = Some _ |- IdMap.In ?k (merge_bindings ?x ?y) ] => apply merge_bindings_in_left
+  | [ H : IdMap.find ?k ?y = Some _ |- IdMap.In ?k (merge_bindings ?x ?y) ] => apply merge_bindings_in_right
+
+  | [ H : IdMap.find ?k ?x = None |- IdMap.In ?k ?x \/ IdMap.In ?k _ ] => apply or_intror
+  | [ H : IdMap.find ?k ?y = None |- IdMap.In ?k _ \/ IdMap.In ?k ?y ] => apply or_introl
+  | [ H : IdMap.find ?k ?x = Some _ |- IdMap.In ?k ?x \/ IdMap.In ?k _ ] => apply or_introl
+  | [ H : IdMap.find ?k ?y = Some _ |- IdMap.In ?k _ \/ IdMap.In ?k ?y ] => apply or_intror
+
+  | [ H : IdMap.find ?k ?x = Some ?b |- IdMap.In ?k ?x ] =>
+      change (exists b, IdMap.MapsTo k b x);
+      exists b;
+      apply (IdMap.find_2 H)
+  end.
+
+Ltac idmap_in_solve := solve [ repeat idmap_in_step ].
+
+(** Third, Define a tactic binding_eqb_solve that attempts to solve goals of the form [binding_eqb b1 b2 = true]. *)
+
+Ltac binding_eqb_solve_step :=
+  match goal with
+  | [ H1 : ?x = Some ?b1, H2 : ?x = Some ?b2 |- binding_eqb ?b1 ?b2 = true ] =>
+      let Eq := fresh "Eq" in
+      rewrite H1 in H2;
+      injection H2;
+      intros Eq;
+      rewrite Eq;
+      apply binding_eqb_refl
+  | [ H1 : ?x = Some ?b1, H2 : ?y = Some ?b2 |- binding_eqb ?b1 ?b2 = true ] =>
+      let Eq := fresh "Eq" in
+      assert (x = y) as Eq; [
+        cbn; reflexivity
+      | rewrite Eq in H1
+      ]
+  end.
+
+Ltac binding_eqb_solve := solve [ repeat binding_eqb_solve_step ].
+
+(** Merging binding maps is associative. *)
+
+Lemma merge_bindings_assoc : forall x y z,
+  IdMap.Equivb binding_eqb (merge_bindings (merge_bindings x y) z) (merge_bindings x (merge_bindings y z)).
+Proof.
+  intros x y z.
+  split.
+
+  - intro k.
+    change (IdMap.In k (merge_bindings (merge_bindings x y) z) <-> IdMap.In k (merge_bindings x (merge_bindings y z))).
+    repeat rewrite merge_bindings_in_iff.
+    rewrite or_assoc.
+    reflexivity.
+
+  (* If M is the merge bindings function, we must prove:
+     `(k, M x (M y z)) ↦ e` and `(k, M (M x y) z) ↦ e' then `binding_eqb e e' = true`. *)
+  - intros k b b' L R.
+    change (IdMap.MapsTo k b (merge_bindings (merge_bindings x y) z)) in L.
+    change (IdMap.MapsTo k b' (merge_bindings x (merge_bindings y z))) in R.
+
+    (* Remember a hypothesis H that k is in the merged bindings *)
+    assert (exists b, IdMap.MapsTo k b (merge_bindings (merge_bindings x y) z)) as H by eauto.
+    change (IdMap.In k (merge_bindings (merge_bindings x y) z)) in H.
+    repeat rewrite merge_bindings_in_iff in H.
+    apply IdMap.find_1 in L, R.
+    unfold merge_bindings in L, R.
+
+    (case_eq (IdMap.find k x); [ intros xb Find_x | intros None_x]);
+    (case_eq (IdMap.find k y); [ intros yb Find_y | intros None_y]);
+    (case_eq (IdMap.find k z); [ intros zb Find_z | intros None_z]).
+
+    (* First handle the case where k is none of the maps.
+       This is impossible due to the hypothesis H we created. *)
+    8: {
+      destruct H as [H | In_z]; [ destruct H as [In_x | In_y] | idtac ].
+      all: (
+        match goal with
+        | [ In : IdMap.In ?k ?x, None : IdMap.find ?k ?x = None |- _ ] =>
+            change (exists b, IdMap.MapsTo k b x) in In;
+            destruct In as [b'' In];
+            apply IdMap.find_1 in In;
+            rewrite In in None;
+            discriminate None
+        end
+      ).
+    }
+
+    all: (
+      repeat (rewrite IdMap.map2_1 in L; [ idtac | idmap_in_solve ]; idmap_find_simp);
+      repeat (rewrite IdMap.map2_1 in R; [ idtac | idmap_in_solve ]; idmap_find_simp);
+      binding_eqb_solve
+    ).
+Qed.
+
+Definition update_list (xs : list bit) (n : nat) (y : bit) : list bit :=
+  let n := List.length xs - n - 1 in
+  let '(ys, zs) := take_drop n xs in
+  ys ++ [y] ++ List.tl zs.
+
+Fixpoint update_subrange (xs : list bit) (n : nat) (ys : list bit) : list bit :=
+  match ys with
+  | [] => xs
+  | y :: ys =>
+    update_subrange (update_list xs n y) (n - 1) ys
+  end.
+
+Definition complete_value (partial_values : non_empty (value * Z * Z)) : value :=
+  let '(Non_empty (v1, n1, m1) partial_values) := partial_values in
+    let '(max, min) :=
+      List.fold_left
+        (fun range pvalue =>
+         let '(max, min) := range in
+         let '(_, n, m) := pvalue in
+         (Z.max max (Z.max n m), Z.min min (Z.min n m)))
+        partial_values (n1, m1)
+    in
+    let len := Z.sub (Z.succ max) min in
+    let zeros := List.repeat B0 (Z.to_nat len) in
+    let value :=
+      List.fold_left
+        (fun bv pvalue =>
+         let '(slice, n, _) := pvalue in
+         match slice with
+         | V_bitvector slice => update_subrange bv (Z.to_nat n) slice
+         | _ => bv
+         end)
+        ((v1, n1, m1) :: partial_values)
+        zeros
+    in
+    V_bitvector value.
+
+Definition complete_bindings (m : IdMap.t binding) : IdMap.t value :=
+  IdMap.map
+    (fun b =>
+       match b with
+       | Complete v => v
+       | Partial vs => complete_value vs
+       end
+    )
+    m.
+
+Inductive match_result : Type :=
+| Matched : IdMap.t binding -> match_result
+| MaybeMatched : IdMap.t binding -> match_result
+| Unmatched : match_result.
+
+Definition match_result_eq (l r : match_result) : Prop :=
+  match (l, r) with
+  | (Unmatched, Unmatched) => True
+  | (Matched l_b, Matched r_b) => IdMap.Equivb binding_eqb l_b r_b
+  | (MaybeMatched l_b, MaybeMatched r_b) => IdMap.Equivb binding_eqb l_b r_b
+  | _ => False
+  end.
+
+Definition merge_match_result (l r : match_result) : match_result :=
+  match (l, r) with
+  | (Unmatched, _) => Unmatched
+  | (_, Unmatched) => Unmatched
+  | (MaybeMatched l_b, MaybeMatched r_b) => MaybeMatched (merge_bindings l_b r_b)
+  | (Matched l_b,      MaybeMatched r_b) => MaybeMatched (merge_bindings l_b r_b)
+  | (MaybeMatched l_b, Matched r_b     ) => MaybeMatched (merge_bindings l_b r_b)
+  | (Matched l_b,      Matched r_b     ) => Matched (merge_bindings l_b r_b)
+  end.
+
+Infix "⋈" := merge_match_result (right associativity, at level 60).
+
+Lemma merge_match_result_assoc : forall a b c, match_result_eq ((a ⋈ b) ⋈ c) (a ⋈ (b ⋈ c)).
+Proof.
+  intros a b c.
+  destruct a as [a | a |]; destruct b as [b | b |]; destruct c as [c | c |].
+  all: cbn; try reflexivity; apply merge_bindings_assoc.
+Qed.
+
+Definition empty_bindings : IdMap.t binding := @IdMap.empty binding.
+
+Definition simple_match : match_result := Matched empty_bindings.
+
+Definition simple_match_when (b : bool) : match_result :=
+  if b then simple_match else Unmatched.
+
+Definition add_match (k : id) (v : binding) (r : match_result) : match_result :=
+  match r with
+  | Unmatched => Unmatched
+  | MaybeMatched b => MaybeMatched (IdMap.add k v b)
+  | Matched b => Matched (IdMap.add k v b)
+  end.
+
+Definition fully_matched (r : match_result) : Prop :=
+  match r with
+  | MaybeMatched _ => False
+  | _ => True
+  end.
+
+Definition neg_match (r : match_result) : match_result :=
+  match r with
+  | Unmatched => simple_match
+  | MaybeMatched b => MaybeMatched b
+  | Matched _ => Unmatched
+  end.
+
+Definition or_match (l r : match_result) : match_result :=
+  match (l, r) with
+  | (Matched l_b, _) => Matched l_b
+  | (_, Matched r_b) => Matched r_b
+  | (MaybeMatched l_b, _) => MaybeMatched l_b
+  | (_, MaybeMatched r_b) => MaybeMatched r_b
+  | _ => Unmatched
+  end.
+
+Fixpoint binds_id {A} (n : Ast.id) (p : Ast.pat A) : bool :=
+  let 'P_aux aux annot := p in
+  match aux with
+  | P_lit _ | P_wild | P_not _ => false
+  | P_id m => id_eqb n m
+  | P_typ _ p | P_var p _ => binds_id n p
+  | P_as pat m => binds_id n pat || id_eqb n m
+  | P_tuple ps | P_list ps | P_vector ps | P_app _ ps | P_vector_concat ps | P_string_append ps =>
+      fold_left orb (map (binds_id n) ps) false
+  | P_or p1 p2 | P_cons p1 p2 => binds_id n p1 || binds_id n p2
+  | P_struct _ ps _ => fold_left orb (map (fun fp => binds_id n (snd fp)) ps) false
+  | P_vector_subrange m _ _ => id_eqb n m
+  end.

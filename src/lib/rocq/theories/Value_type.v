@@ -29,7 +29,7 @@ Delimit Scope Value_scope with value.
 (* A value is fully defined if it contains no unknown values *)
 Fixpoint fully_defined (v : value) : bool :=
   match v with
-  | V_vector vs | V_list vs | V_ctor _ vs => forallb fully_defined vs
+  | V_vector vs | V_list vs | V_ctor _ vs | V_tuple vs => forallb fully_defined vs
   | V_record fields => forallb (fun '(_, v) => fully_defined v) fields
   | V_unknown => false
   | _ => true

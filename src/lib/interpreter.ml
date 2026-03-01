@@ -285,7 +285,7 @@ let step exp = RocqSemantics.step exp
 
 let pattern_match pat value = RocqSemantics.pattern_match pat value
 
-let complete_bindings bindings = RocqSemantics.complete_bindings bindings
+let complete_bindings bindings = PatternMatch.complete_bindings bindings
 
 let exp_of_fundef (FD_aux (FD_function (_, _, funcls), annot)) value =
   let pexp_of_funcl (FCL_aux (FCL_funcl (_, pexp), _)) = pexp in

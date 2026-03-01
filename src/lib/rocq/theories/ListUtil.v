@@ -100,6 +100,16 @@ Proof with reflexivity.
   - destruct xs as [| x xs]; cbn; [ idtac | rewrite IHn ]...
 Qed.
 
+Lemma drop_drop_add : forall [A] n m (xs : list A), drop m (drop n xs) = drop (n + m) xs.
+Proof.
+  intros A n m.
+  induction n as [| n IH]; intros xs.
+  - reflexivity.
+  - destruct xs as [|x xs].
+    + destruct m; reflexivity.
+    + apply IH.
+Qed.
+
 (* This theorem about [Forall] and [In] is useful. *)
 Lemma Forall_in : forall [A] P (x : A) xs, Forall P xs -> In x xs -> P x.
 Proof.
@@ -111,6 +121,49 @@ Proof.
     destruct H0.
     + rewrite <- H0. easy.
     + apply (fun Q => IHxs Q H0). easy.
+Qed.
+
+Lemma Forall_impl_in: forall [A : Type] [P : A -> Prop] (Q : A -> Prop) [l : list A],
+  (forall a : A, In a l -> P a -> Q a) -> Forall P l -> Forall Q l.
+Proof.
+  intros A P Q l impl FP.
+  induction l as [|x xs IH].
+  - apply Forall_nil.
+  - rewrite Forall_cons_iff in *.
+    destruct FP as [Px Pxs].
+    split.
+    + exact (impl x (in_eq x xs) Px).
+    + apply (fun P => IH P Pxs).
+      intros x' In_xs Px'.
+      exact (impl x' (in_cons _ _ _ In_xs) Px').
+Qed.
+
+Lemma forallb_take: forall [A] [n] [xs : list A] [P : A -> bool], forallb P xs = true -> forallb P (take n xs) = true.
+Proof.
+  intros A n xs P All_xs.
+  rewrite (take_app_drop n xs), forallb_app, andb_true_iff in All_xs.
+  easy.
+Qed.
+
+Lemma forallb_drop: forall [A] [n] [xs : list A] [P : A -> bool], forallb P xs = true -> forallb P (drop n xs) = true.
+Proof.
+  intros A n xs P All_xs.
+  rewrite (take_app_drop n xs), forallb_app, andb_true_iff in All_xs.
+  easy.
+Qed.
+
+Lemma Forall_take: forall [A] [n] [xs : list A] [P : A -> Prop], Forall P xs -> Forall P (take n xs).
+Proof.
+  intros A n xs P All_xs.
+  rewrite (take_app_drop n xs), Forall_app in All_xs.
+  easy.
+Qed.
+
+Lemma Forall_drop: forall [A] [n] [xs : list A] [P : A -> Prop], Forall P xs -> Forall P (drop n xs).
+Proof.
+  intros A n xs P All_xs.
+  rewrite (take_app_drop n xs), Forall_app in All_xs.
+  easy.
 Qed.
 
 Lemma in_app_split : forall [A : Set] (x : A) xs, In x xs -> exists ys zs, xs = ys ++ (x :: zs).
@@ -419,3 +472,52 @@ Proof.
   apply IHxs.
   tauto.
 Qed.
+
+Definition Suffix {A} (xs ys : list A) : Prop := exists n, xs = drop n ys.
+
+Lemma Suffix_refl : forall {A} (xs : list A), Suffix xs xs.
+Proof with reflexivity.
+  intros A xs.
+  unfold Suffix.
+  exists 0...
+Qed.
+
+Lemma Suffix_nil : forall {A} (xs : list A), Suffix [] xs.
+Proof.
+  intros A xs.
+  unfold Suffix.
+  exists (List.length xs).
+  induction xs as [| x xs].
+  - reflexivity.
+  - rewrite length_cons; cbn.
+    exact IHxs.
+Qed.
+
+Lemma Suffix_drop : forall {A} n (xs : list A), Suffix (drop n xs) xs.
+Proof with reflexivity.
+  intros A n xs.
+  unfold Suffix.
+  exists n...
+Qed.
+
+Lemma Suffix_forallb: forall [A] [xs ys : list A] [P : A -> bool],
+  Suffix xs ys -> forallb P ys = true  -> forallb P xs = true.
+Proof.
+  intros A xs ys P S All_ys.
+  unfold Suffix in S.
+  destruct S as [n S].
+  rewrite (take_app_drop n ys), forallb_app, andb_true_iff, <- S in All_ys.
+  easy.
+Qed.
+
+Ltac suffix_solve :=
+  lazymatch goal with
+  | |- Suffix [] ?xs => exact (Suffix_nil xs)
+  | |- Suffix ?xs ?xs => exact (Suffix_refl xs)
+
+  | [ H : take_drop ?n ?xs = (?ys, ?zs) |- Suffix ?zs ?xs ] =>
+      rewrite (take_drop_split n xs) in H;
+      inversion H; subst; suffix_solve
+
+  | |- Suffix (drop ?n ?xs) ?xs => exact (Suffix_drop n xs)
+  end.
