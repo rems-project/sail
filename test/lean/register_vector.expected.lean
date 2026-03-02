@@ -92,14 +92,14 @@ abbrev RegisterType : Register → Type
   | .R30 => (BitVec 64)
   | ._PC => (BitVec 64)
 
-instance : Inhabited (RegisterRef RegisterType (BitVec 64)) where
-  default := .Reg _PC
+
 abbrev exception := Unit
 
 abbrev SailM := PreSailM RegisterType trivialChoiceSource exception
 abbrev SailME := PreSailME RegisterType trivialChoiceSource exception
 
-
+instance : Inhabited (PreSail.RegisterRef RegisterType (BitVec 64)) where
+  default := .Reg _PC
 XXXXXXXXX
 
 import Sail

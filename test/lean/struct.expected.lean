@@ -49,14 +49,14 @@ open Register
 abbrev RegisterType : Register → Type
   | .r => Int
 
-instance : Inhabited (RegisterRef RegisterType Int) where
-  default := .Reg r
+
 abbrev exception := Unit
 
 abbrev SailM := PreSailM RegisterType trivialChoiceSource exception
 abbrev SailME := PreSailME RegisterType trivialChoiceSource exception
 
-
+instance : Inhabited (PreSail.RegisterRef RegisterType Int) where
+  default := .Reg r
 XXXXXXXXX
 
 import Sail

@@ -28,14 +28,14 @@ open Register
 abbrev RegisterType : Register → Type
   | .dummy => (BitVec 1)
 
-instance : Inhabited (RegisterRef RegisterType (BitVec 1)) where
-  default := .Reg dummy
+
 abbrev exception := Unit
 
 abbrev SailM := PreSailM RegisterType trivialChoiceSource exception
 abbrev SailME := PreSailME RegisterType trivialChoiceSource exception
 
-
+instance : Inhabited (PreSail.RegisterRef RegisterType (BitVec 1)) where
+  default := .Reg dummy
 XXXXXXXXX
 
 import Sail

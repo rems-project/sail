@@ -63,6 +63,7 @@ def get_support_lib(subdir) -> str:
         lib_path = f"../{subdir}/support-lib"
         step(f"rm -rf {lib_path} || true")
         step(f"git clone https://github.com/rems-project/lean-sail.git {lib_path}")
+        step(f"cd {lib_path}; git checkout archsem-lean; cd ..") # remove before mergine the PR!
         print("Building the support library")
         step("lake build", cwd=lib_path)
         return f"../../support-lib"

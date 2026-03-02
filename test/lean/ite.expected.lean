@@ -30,16 +30,16 @@ abbrev RegisterType : Register → Type
   | .B => Bool
   | .R => Nat
 
-instance : Inhabited (RegisterRef RegisterType Bool) where
-  default := .Reg B
-instance : Inhabited (RegisterRef RegisterType Nat) where
-  default := .Reg R
+
 abbrev exception := Unit
 
 abbrev SailM := PreSailM RegisterType trivialChoiceSource exception
 abbrev SailME := PreSailME RegisterType trivialChoiceSource exception
 
-
+instance : Inhabited (PreSail.RegisterRef RegisterType Bool) where
+  default := .Reg B
+instance : Inhabited (PreSail.RegisterRef RegisterType Nat) where
+  default := .Reg R
 XXXXXXXXX
 
 import Sail

@@ -88,6 +88,8 @@ let add_global_kid_id_rename (global : global_context) id kid =
     kid_id_renames_rev = Bindings.add id kid global.kid_id_renames_rev;
   }
 
+let concurrency_interface_version () = if Preprocess.have_symbol "CONCURRENCY_INTERFACE_V2" then `ArchSem else `V1
+
 let implicit_parens x = enclose (string "{") (string "}") x
 let leftarrow = string "←"
 let leftarrowdo = string "← do"
@@ -1438,10 +1440,11 @@ let type_enum ctx registers =
     ]
 
 let inhabit_enum ctx typ_map =
+  let regtype = match concurrency_interface_version () with `ArchSem -> empty | `V1 -> string "RegisterType " in
   separate_map hardline
     (fun (_, (id, typ)) ->
-      string "instance : Inhabited (RegisterRef RegisterType "
-      ^^ doc_typ ctx typ ^^ string ") where" ^^ hardline ^^ string "  default := .Reg " ^^ doc_id_ctor id
+      string "instance : Inhabited (PreSail.RegisterRef "
+      ^^ regtype ^^ doc_typ ctx typ ^^ string ") where" ^^ hardline ^^ string "  default := .Reg " ^^ doc_id_ctor id
     )
     typ_map
 
@@ -1449,7 +1452,7 @@ let doc_reg_info env global registers =
   let ctx = context_init env global in
   let type_map = List.fold_left add_reg_typ Bindings.empty registers in
   let type_map = Bindings.bindings type_map in
-  separate hardline [register_enums registers; type_enum ctx registers; inhabit_enum ctx type_map; empty]
+  (separate hardline [register_enums registers; type_enum ctx registers; empty], inhabit_enum ctx type_map)
 
 let doc_monad_abbrev defs (has_registers : bool) =
   let find_exc_typ defs =
@@ -1460,13 +1463,18 @@ let doc_monad_abbrev defs (has_registers : bool) =
     if List.exists is_exc_typ_def defs then empty else string "abbrev exception := Unit\n"
   in
   let excdef = find_exc_typ defs in
-  let pp_register_type = string "PreSailM RegisterType trivialChoiceSource exception" in
-  let pp_register_type_e = string "PreSailME RegisterType trivialChoiceSource exception" in
+  let params =
+    match concurrency_interface_version () with
+    | `ArchSem -> "exception"
+    | `V1 -> "RegisterType trivialChoiceSource exception"
+  in
+  let pp_register_type = string "PreSailM" ^^ space ^^ string params in
+  let pp_register_type_e = string "PreSailME" ^^ space ^^ string params in
   let monad = separate space [string "abbrev"; string "SailM"; coloneq; pp_register_type] in
   let monad_e =
     separate space [string "abbrev"; string "SailME"; coloneq; pp_register_type_e] ^^ hardline ^^ hardline
   in
-  separate hardline (remove_empties [excdef; monad; monad_e])
+  separate hardline (remove_empties [excdef; monad; monad_e; empty])
 
 let doc_instantiations_v1 ctx env =
   let params = Monad_params.find_monad_parameters env in
@@ -1504,6 +1512,8 @@ let doc_instantiations_v2 ctx ast =
        (separate hardline
           [
             string "instance : Arch where";
+            pr "register" ~d:"Register";
+            pr "register_type" ~d:"RegisterType";
             pr "addr_size" ~d:"64";
             pr "addr_space";
             pr "CHERI" ~d:"false";
@@ -1541,8 +1551,9 @@ let doc_instantiations_v2 ctx ast =
 *)
 
 let doc_instantiations ctx env ast =
-  if Preprocess.have_symbol "CONCURRENCY_INTERFACE_V2" then doc_instantiations_v2 ctx ast
-  else doc_instantiations_v1 ctx env
+  match concurrency_interface_version () with
+  | `ArchSem -> doc_instantiations_v2 ctx ast
+  | `V1 -> doc_instantiations_v1 ctx env
 
 let main_function_stub effect_info has_registers =
   let open Effects in
@@ -1622,11 +1633,11 @@ let pp_ast_lean (env : Type_check.env) effect_info ({ defs; _ } as ast : Libsail
   let instantiation_deps =
     match instantiation_deps with [x] -> x | _ -> failwith "expected a single block of instantiation defs"
   in
-  let instantiations = doc_instantiations ctx env defs in
+  let instantiations = doc_instantiations ctx env defs ^^ hardline in
   let has_registers = List.length regs > 0 in
-  let register_refs =
+  let register_refs, inhabited_regref =
     if has_registers then doc_reg_info env global regs
-    else string "abbrev Register := PEmpty\nabbrev RegisterType : Register -> Type := PEmpty.elim\n\n"
+    else (string "abbrev Register := PEmpty\nabbrev RegisterType : Register -> Type := PEmpty.elim\n\n", empty)
   in
   let monad = doc_monad_abbrev defs has_registers in
   let types, all_fundefss = doc_defs ctx defs in
@@ -1642,7 +1653,7 @@ let pp_ast_lean (env : Type_check.env) effect_info ({ defs; _ } as ast : Libsail
     else []
   in
   let opens = IdSet.fold (fun id doc -> string "open " ^^ doc_id_ctor id ^^ hardline ^^ doc) !opens empty in
-  print types_file (types ^^ register_refs ^^ monad ^^ instantiation_deps ^^ instantiations);
+  print types_file (types ^^ register_refs ^^ instantiation_deps ^^ instantiations ^^ monad ^^ inhabited_regref);
   let _ =
     List.map2
       (fun file defs -> print file (separate hardline (remove_empties [opens; defs])))

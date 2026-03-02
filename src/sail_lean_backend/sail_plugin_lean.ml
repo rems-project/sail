@@ -74,7 +74,7 @@ let opt_lean_output_dir : string option ref = ref None
 
 let opt_lean_force_output : bool ref = ref false
 
-let opt_lean_import_files : string list ref = ref []
+let opt_lean_import_files : (string * string option) list ref = ref []
 
 let opt_lean_noncomputable : bool ref = ref false
 
@@ -97,7 +97,7 @@ let opt_disable_matchbv : bool ref = ref true
 let lean_version : string = "lean4:nightly-2026-01-22"
 let mathlib_version : string = "nightly-testing-2026-01-22"
 let lib_default_git : string = "https://github.com/rems-project/lean-sail"
-let lib_default_rev : string = "v2"
+let lib_default_rev : string = "archsem-lean" (* TODO: Remove before merging! *)
 
 let lean_options =
   [
@@ -138,7 +138,7 @@ let lean_options =
       "do not generate a definition for the type"
     );
     ( Flag.create ~prefix:["lean"] ~arg:"file" "import_file",
-      Arg.String (fun file -> opt_lean_import_files := file :: !opt_lean_import_files),
+      Arg.String (fun file -> opt_lean_import_files := (file, None) :: !opt_lean_import_files),
       "import this file in the generated model"
     );
     ( Flag.create ~prefix:["lean"] ~arg:"func-name" "noncomputable_function",
@@ -252,11 +252,15 @@ type lean_context = {
   lakemanifest : out_channel;
 }
 
-let file_to_module (filename : string) =
-  let base = Filename.basename filename in
-  Filename.chop_extension base
+let file_to_module (filename : string * string option) =
+  match filename with
+  | filename, None ->
+      let base = Filename.basename filename in
+      Filename.chop_extension base
+  | _, Some mdl -> mdl
 
 let file_prelude version =
+  let interface_module = match version with `ArchSem -> "ArchSem" | `V1 -> "ConcurrencyInterfaceV1" in
   let p =
     {|set_option maxHeartbeats 1_000_000_000
 set_option maxRecDepth 1_000_000
@@ -266,7 +270,7 @@ set_option match.ignoreUnusedAlts true
 open Sail
 |}
   in
-  Printf.sprintf "%sopen ConcurrencyInterfaceV%d\n\n" p version
+  Printf.sprintf "%sopen %s\n\n" p interface_module
 
 let path_to_static_library sail_dir str = Filename.quote (sail_dir ^ "/src/sail_lean_backend/Sail/" ^ str ^ ".lean")
 
@@ -319,13 +323,20 @@ let start_lean_output interface_v (out_name : string) (import_names : string lis
     if !opt_lean_real_numbers then "/src/sail_lean_backend/Sail/Real.lean"
     else "/src/sail_lean_backend/Sail/FakeReal.lean"
   in
-  opt_lean_import_files := (sail_dir ^ real_numbers_file) :: !opt_lean_import_files;
-  opt_lean_import_files := (sail_dir ^ "/src/sail_lean_backend/Sail/Specialization.lean") :: !opt_lean_import_files;
+  opt_lean_import_files := (sail_dir ^ real_numbers_file, None) :: !opt_lean_import_files;
+  let interface_file =
+    match interface_v with `ArchSem -> "SpecializationArchSem.lean" | `V1 -> "SpecializationV1.lean"
+  in
+  opt_lean_import_files :=
+    (sail_dir ^ "/src/sail_lean_backend/Sail/" ^ interface_file, Some "Specialization") :: !opt_lean_import_files;
   List.iter
     (fun filename ->
       let filepath = Filename.concat lean_src_dir (file_to_module filename) in
       Unix.system
-        (Printf.sprintf "sed 's/THE_MODULE_NAME/%s/g' %s > %s.lean" out_name_camel (Filename.quote filename) filepath)
+        (Printf.sprintf "sed 's/THE_MODULE_NAME/%s/g' %s > %s.lean" out_name_camel
+           (Filename.quote (fst filename))
+           filepath
+        )
       |> ignore
     )
     !opt_lean_import_files;
@@ -408,7 +419,7 @@ let rec dedup_files (files : string list) (acc : string list) =
 
 let output (out_name : string) env effect_info ({ defs; _ } as ast : Libsail.Type_check.typed_ast) default_sail_dir
     single_file noncomputable =
-  let interface_v = if Preprocess.have_symbol "CONCURRENCY_INTERFACE_V2" then 2 else 1 in
+  let interface_v = Pretty_print_lean.concurrency_interface_version () in
   let cg = Callgraph.graph_of_ast ast in
   let files, import_sets, main_import_set =
     if single_file then ([], [], [])
@@ -416,6 +427,7 @@ let output (out_name : string) env effect_info ({ defs; _ } as ast : Libsail.Typ
       let import_sets = Pretty_print_lean.collect_imports cg defs in
       (* Collect all non-empty slices between include pragmas in the file *)
       let import_files = Pretty_print_lean.collect_import_files defs (out_name ^ ".sail") in
+      let import_files = List.map (fun s -> (s, None)) import_files in
       let import_files = List.map file_to_module import_files in
       (* Discard the last import file, as we will use the main file instead *)
       let import_files = Util.butlast import_files in

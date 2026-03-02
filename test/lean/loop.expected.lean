@@ -28,14 +28,14 @@ open Register
 abbrev RegisterType : Register → Type
   | .r => Nat
 
-instance : Inhabited (RegisterRef RegisterType Nat) where
-  default := .Reg r
+
 abbrev exception := Unit
 
 abbrev SailM := PreSailM RegisterType trivialChoiceSource exception
 abbrev SailME := PreSailME RegisterType trivialChoiceSource exception
 
-
+instance : Inhabited (PreSail.RegisterRef RegisterType Nat) where
+  default := .Reg r
 XXXXXXXXX
 
 import Sail
