@@ -524,7 +524,7 @@ let valid_hex_char c =
 let bin_digit_to_bit = function Bin_0 -> B0 | Bin_1 -> B1
 
 let fix_length ~at:l ~len bitlist =
-  let open Extraction.Value_type in
+  let open Extraction.ValueType in
   match Primops.zero_extend (V_bitvector bitlist) (V_int (Big_int.of_int len)) with
   | Some (V_bitvector bitlist) -> bitlist
   | _ ->

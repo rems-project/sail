@@ -59,7 +59,7 @@ Require Import Bit.
 Require Import IdUtil.
 Require Import ListUtil.
 Require Import PatternMatch.
-Require Import Value_type.
+Require Import ValueType.
 Require TypeAnnot.
 
 Import ListNotations.

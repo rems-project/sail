@@ -11,7 +11,7 @@ open PatternMatch
 open PeanoNat
 open Specif
 open TypeAnnot
-open Value_type
+open ValueType
 open Wf
 
 (** val is_value : 'a1 exp -> bool **)

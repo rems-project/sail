@@ -45,12 +45,13 @@ From Stdlib Require Import Bool.
 From Stdlib Require Import Lists.List.
 From Stdlib Require Import ZArith.
 
+Require Import Tactics.
 Require Import Ast.
 Require Import AstInduction.
 Require Import Bit.
 Require Import IdUtil.
 Require Import ListUtil.
-Require Import Value_type.
+Require Import ValueType.
 
 Require BitList.
 Require TypeAnnot.
@@ -171,8 +172,10 @@ Proof.
   reflexivity.
 Qed.
 
-(** We now lift [combine_binding] to the sets of identifiers being
-    bound by different subpatterns using [IdMap.map2]. *)
+(**
+We now lift [combine_binding] to the sets of identifiers being
+bound by different subpatterns using [IdMap.map2].
+*)
 
 Definition merge_bindings (l r : IdMap.t binding) : IdMap.t binding :=
   IdMap.map2 combine_binding l r.
@@ -283,9 +286,11 @@ Proof.
   apply not_in_map2; assumption.
 Qed.
 
-(**  We now define some simple tactics to help prove associativity of merging bindings.
+(**
+We now define some simple tactics to help prove associativity of merging bindings.
 
-     First, Define a simple tactic that attempts to simplify hypothesis that involve [IdMap.find]. *)
+First, Define a simple tactic that attempts to simplify hypothesis that involve [IdMap.find].
+*)
 
 Ltac idmap_find_simp_step :=
   lazymatch goal with
@@ -301,7 +306,9 @@ Ltac idmap_find_simp_step :=
 
 Ltac idmap_find_simp := repeat idmap_find_simp_step.
 
-(** Second, Define a tactic idmap_in_solve that attempts to solve goals of the form [IdMap.In _ _]. *)
+(**
+Second, Define a tactic idmap_in_solve that attempts to solve goals of the form [IdMap.In _ _].
+*)
 
 Ltac idmap_in_step :=
   lazymatch goal with
@@ -322,7 +329,9 @@ Ltac idmap_in_step :=
 
 Ltac idmap_in_solve := solve [ repeat idmap_in_step ].
 
-(** Third, Define a tactic binding_eqb_solve that attempts to solve goals of the form [binding_eqb b1 b2 = true]. *)
+(**
+Third, Define a tactic binding_eqb_solve that attempts to solve goals of the form [binding_eqb b1 b2 = true].
+*)
 
 Ltac binding_eqb_solve_step :=
   match goal with
@@ -343,7 +352,9 @@ Ltac binding_eqb_solve_step :=
 
 Ltac binding_eqb_solve := solve [ repeat binding_eqb_solve_step ].
 
-(** Merging binding maps is associative. *)
+(**
+Merging binding maps is associative.
+*)
 
 Lemma merge_bindings_assoc : forall x y z,
   IdMap.Equivb binding_eqb (merge_bindings (merge_bindings x y) z) (merge_bindings x (merge_bindings y z)).
@@ -774,14 +785,6 @@ Module Make (Tannot : TypeAnnot.S).
         * reflexivity.
   Qed.
 
-  Ltac crunch :=
-    lazymatch goal with
-    | |- context [ match ?v with _ => _ end ] =>
-        let C := fresh "Crunch" in
-        destruct v eqn : C; crunch
-    | _ => idtac
-    end.
-
   Ltac fm_simp :=
     lazymatch goal with
     | |- fully_matched (Matched _) => reflexivity
@@ -912,51 +915,63 @@ Module Make (Tannot : TypeAnnot.S).
       rewrite forallb_forall in FD.
       rewrite Forall_forall.
       assumption.
-    - cbn beta delta - [id_eqb] iota.
+    - reintros IH v FD.
+      cbn beta delta - [id_eqb] iota.
       fm_simp; try assumption.
-      destruct v; cbn in LD; inversion LD.
-      rewrite Forall_forall.
-      intros.
-      rewrite in_map_iff in H0.
-      destruct H0.
-      destruct H0.
-      rewrite <- H0.
-      reflexivity.
-      rewrite Forall_forall.
-      intros.
-      cbn in FD.
-      rewrite forallb_forall in FD.
-      rewrite <- H1 in H0.
-      apply FD in H0.
-      apply H0.
-    - cbn beta delta - [id_eqb] iota.
-      fm_simp; apply (fun P => Forall_impl _ P H); intros pat Q m bits FD_m Drop.
-      + destruct pat as [pat_aux ?].
-        unfold MatcherResult.
-        split.
+      reintros vec G.
+      destruct v; cbn in G; inversion G.
+      + (* Bitvector *)
+        reintros Is_bitvector.
+        rewrite Forall_forall.
+        intros ? In.
+        rewrite in_map_iff in In.
+        destruct In as [bit In].
+        destruct In as [B _].
+        rewrite <- B.
+        reflexivity.
+      + (* Generic vector *)
+        reintros Is_vector.
+        rewrite Forall_forall.
+        intros ? In.
+        cbn in FD.
+        rewrite forallb_forall in FD.
+        rewrite <- Is_vector in In.
+        exact (FD _ In).
+    - reintros IH v FD.
+      cbn beta delta - [id_eqb] iota.
+      fm_simp; apply (fun P => Forall_impl _ P IH).
+      + (* Bitvector *)
+        reintros bits _ FD.
+        intros pat Q m bits' FD_m Drop.
+        destruct pat as [pat_aux ?].
+        unfold MatcherResult; split.
         * fm_simp; try apply FD_m.
-          specialize (Q (V_bitvector l1)).
-          cbn beta delta - [pattern_match] iota in FD, Q.
+          reintros t d TD i P.
+          specialize (Q (V_bitvector t)).
+          cbn beta delta - [pattern_match] iota in Q.
           specialize (Q (eq_refl true)).
-          destruct (pattern_match (P_aux pat_aux a) (V_bitvector l1)); (discriminate + apply Q).
-        * crunch; cbn; try suffix_solve.
-      + destruct pat as [pat_aux ?].
-        unfold MatcherResult.
-        split.
+          destruct (pattern_match (P_aux pat_aux _) (V_bitvector t)); (discriminate + apply Q).
+        * destruct_match; cbn; try suffix_solve.
+      + (* Generic vector *)
+        reintros vec _ FD.
+        intros pat Q m ? FD_m Drop.
+        destruct pat as [pat_aux ?].
+        unfold MatcherResult; split.
         * fm_simp; try apply FD_m.
-          specialize (Q (V_vector l1)).
+          reintros t ? TD ? ?.
+          specialize (Q (V_vector t)).
           cbn beta delta - [pattern_match] iota in FD, Q.
-          assert (L : forallb fully_defined l1 = true).
+          assert (L : forallb fully_defined t = true).
           {
-            rewrite take_drop_split in LD2.
-            inversion LD2.
+            rewrite take_drop_split in TD.
+            inversion TD.
             apply forallb_take.
             apply (Suffix_forallb Drop).
             exact FD.
           }
           apply Q in L.
-          destruct (pattern_match (P_aux pat_aux a) (V_vector l1)); (discriminate + apply L).
-        * crunch; cbn; try suffix_solve.
+          destruct (pattern_match (P_aux pat_aux _) (V_vector t)); (discriminate + apply L).
+        * destruct_match; cbn; try suffix_solve.
     - cbn beta delta - [id_eqb] iota.
       fm_simp; try assumption.
       cbn in FD.
@@ -969,13 +984,15 @@ Module Make (Tannot : TypeAnnot.S).
       rewrite forallb_forall in FD.
       rewrite Forall_forall.
       assumption.
-    - cbn beta delta - [id_eqb] iota.
+    - reintros IHp1 IHp2 v FD.
+      cbn beta delta - [id_eqb] iota.
       fm_simp; cbn in FD; rewrite andb_true_iff in FD.
-      + specialize (IHp2 (V_list l0)).
+      + reintros tl _ _ FD _ _ ? ?.
+        specialize (IHp2 (V_list tl)).
         cbn in IHp2.
-        destruct FD.
-        apply IHp2 in H2.
-        destruct (pattern_match p2 (V_list l0)); cbn in H2.
+        destruct FD as [_ FD_tl].
+        apply IHp2 in FD_tl.
+        destruct (pattern_match _ (V_list tl)); cbn in FD_tl.
         * discriminate.
         * tauto.
         * discriminate.
@@ -985,12 +1002,15 @@ Module Make (Tannot : TypeAnnot.S).
         solve_fd.
     - cbn beta delta - [id_eqb merge_match_result] iota.
       destruct v; try reflexivity.
+      reintros IH fields FD.
       rewrite struct_fdm_helper.
-      fm_simp;apply (fun P => Forall_impl_in _ P H); intros fld In_fields Q m fvs FD_m Drop.
-      clear H.
+      fm_simp; apply (fun P => Forall_impl_in _ P IH); intros fld In_fields Q m fvs FD_m Drop.
       unfold MatcherResult; split.
       + unfold merge_match_result.
         fm_simp; try apply FD_m.
+        lazymatch goal with
+        | [ name : id |- _ ] => rename name into i
+        end.
         cbn in FD.
         specialize (Q (get_struct_field i fvs)).
         assert (L : fully_defined (get_struct_field i fvs) = true).

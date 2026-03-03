@@ -50,7 +50,7 @@ open Ast_defs
 open Ast_util
 open Value
 
-open Extraction.Value_type
+open Extraction.ValueType
 
 module Big_int = Nat_big_num
 module Document = Pretty_print_sail.Document
