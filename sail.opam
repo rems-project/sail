@@ -30,7 +30,7 @@ license: "BSD-2-Clause"
 homepage: "https://github.com/rems-project/sail"
 bug-reports: "https://github.com/rems-project/sail/issues"
 depends: [
-  "dune" {>= "3.11"}
+  "dune" {>= "3.21"}
   "libsail" {= version}
   "sail_maker" {= version & build}
   "sail_ocaml_backend" {= version & post}
@@ -63,4 +63,5 @@ build: [
   ["dune" "install" "-p" name "--create-install-files" name]
 ]
 dev-repo: "git+https://github.com/rems-project/sail.git"
+x-maintenance-intent: ["(latest)"]
 substs: [ "src/bin/manifest.ml" ]

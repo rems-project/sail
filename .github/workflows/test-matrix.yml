@@ -138,6 +138,8 @@ jobs:
         eval $(opam env)
         # checkout does this, but for some reason it has disappeared by this point...
         git config --global --add safe.directory /__w/sail/sail
+        opam update --yes
+        opam pin --yes remove dune
         opam pin --yes --no-action add coq-sail-stdpp git+https://github.com/rems-project/coq-sail.git
         opam pin --yes --no-action -k path add .
         opam install --yes "coq<9.1" coq-sail-stdpp coq-record-update
