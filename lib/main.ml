@@ -44,7 +44,8 @@
 (*  SPDX-License-Identifier: BSD-2-Clause                                   *)
 (****************************************************************************)
 
-open Elf_loader;;
+open Libsail
+open Elf_loader
 
 let opt_file_arguments = ref ([] : string list)
 let opt_raw_files = ref ([] : (string * Nat_big_num.num)  list)

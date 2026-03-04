@@ -61,7 +61,6 @@ let opt_trace_ocaml = ref false
 
 (* Option to not build generated ocaml by default *)
 let opt_ocaml_nobuild = ref false
-let opt_ocaml_coverage = ref false
 let opt_ocaml_build_dir = ref "_sbuild"
 
 (* OCaml variant type can have at most 246 non-constant
@@ -1090,8 +1089,8 @@ let ocaml_ast ast generator_info =
     | None -> empty
     | Some (types, req) -> ocaml_pp_generators ctx ast.defs types (List.map mk_id req)
   in
-  (string "open Sail_lib;;" ^^ hardline)
-  ^^ (string "open Bit;;" ^^ hardline)
+  (string "open Libsail.Sail_lib;;" ^^ hardline)
+  ^^ (string "open Libsail.Ast.Bit;;" ^^ hardline)
   ^^ (string "module Big_int = Nat_big_num" ^^ ocaml_def_end)
   ^^ concat (List.map (ocaml_def ctx) ast.defs)
   ^^ empty_reg_init ^^ gen_pp
@@ -1134,34 +1133,56 @@ let system_checked str =
       prerr_endline (str ^ " was stopped by a signal");
       exit 1
 
+let in_directory dir f =
+  let cwd = Unix.getcwd () in
+  Unix.chdir dir;
+  f ();
+  Unix.chdir cwd
+
+let dune_project spec =
+  parens (string "lang dune 3.14")
+  ^^ twice hardline
+  ^^ parens
+       (string "package"
+       ^//^ parens (string "name" ^^ space ^^ string spec)
+       ^//^ parens (string "depends" ^//^ string "libsail")
+       )
+  ^^ hardline
+
+let dune_file spec =
+  parens
+    (string "executable"
+    ^//^ parens (string "name" ^^ space ^^ string "main")
+    ^//^ parens (string "modes" ^^ space ^^ string "native")
+    ^//^ parens (string "public_name" ^^ space ^^ string spec)
+    ^//^ parens (string "package" ^^ space ^^ string spec)
+    ^//^ parens (string "libraries" ^^ space ^^ string "libsail")
+    )
+
 let ocaml_compile default_sail_dir spec ast generator_types =
   let sail_dir = Reporting.get_sail_dir default_sail_dir in
-  if Sys.file_exists !opt_ocaml_build_dir then () else Unix.mkdir !opt_ocaml_build_dir 0o775;
+  if not (Sys.file_exists !opt_ocaml_build_dir) then Unix.mkdir !opt_ocaml_build_dir 0o775;
   let cwd = Unix.getcwd () in
-  Unix.chdir !opt_ocaml_build_dir;
-  let _ = Unix.system ("cp -r " ^ Filename.quote (sail_dir ^ "/src/lib/elf_loader.ml") ^ " .") in
-  let _ = Unix.system ("cp -r " ^ Filename.quote (sail_dir ^ "/src/lib/sail_lib.ml") ^ " .") in
-  let _ = Unix.system ("cp -r " ^ Filename.quote (sail_dir ^ "/src/lib/util.ml") ^ " .") in
-  let _ = Unix.system ("cp -r " ^ Filename.quote (sail_dir ^ "/src/lib/extraction/.") ^ " .") in
-  let tags_file = if !opt_ocaml_coverage then "_tags_coverage" else "_tags" in
-  let _ = Unix.system ("cp -r " ^ Filename.quote (sail_dir ^ "/lib/" ^ tags_file) ^ " _tags") in
-  let out_chan = open_out (spec ^ ".ml") in
-  if !opt_ocaml_coverage then
-    ignore (Unix.system ("cp -r " ^ Filename.quote (sail_dir ^ "/lib/myocamlbuild_coverage.ml") ^ " myocamlbuild.ml"));
-  List.iter (fun w -> output_string out_chan (Printf.sprintf "[@@@warning \"-%d\"]\n" w)) [8; 9; 11; 23; 26];
-  ocaml_pp_ast out_chan ast generator_types;
-  close_out out_chan;
-  if IdSet.mem (mk_id "main") (val_spec_ids ast.defs) then (
-    let out_chan = open_out "main.ml" in
-    output_string out_chan (ocaml_main spec sail_dir);
-    close_out out_chan;
-    if not !opt_ocaml_nobuild then (
-      if !opt_ocaml_coverage then
-        system_checked
-          "BISECT_COVERAGE=YES ocamlbuild -use-ocamlfind -plugin-tag 'package(bisect_ppx-ocamlbuild)' main.native"
-      else system_checked "ocamlbuild -use-ocamlfind main.native";
-      ignore (Unix.system ("cp main.native " ^ Filename.quote (cwd ^ "/" ^ spec)))
-    )
+  in_directory !opt_ocaml_build_dir (fun () ->
+      if not (Sys.file_exists "src") then Unix.mkdir "src" 0o775;
+
+      let out_chan = open_out (Filename.concat "src" (spec ^ ".ml")) in
+      List.iter (fun w -> output_string out_chan (Printf.sprintf "[@@@warning \"-%d\"]\n" w)) [8; 9; 11; 23; 26];
+      ocaml_pp_ast out_chan ast generator_types;
+      close_out out_chan;
+
+      let out_chan = open_out (Filename.concat "src" "dune") in
+      ToChannel.pretty 1. 80 out_chan (dune_file spec);
+      close_out out_chan;
+
+      let out_chan = open_out "dune-project" in
+      ToChannel.pretty 1. 80 out_chan (dune_project spec);
+      close_out out_chan;
+
+      if IdSet.mem (mk_id "main") (val_spec_ids ast.defs) then (
+        let out_chan = open_out (Filename.concat "src" "main.ml") in
+        output_string out_chan (ocaml_main spec sail_dir);
+        close_out out_chan;
+        if not !opt_ocaml_nobuild then system_checked "dune build --release"
+      )
   )
-  else if not !opt_ocaml_nobuild then system_checked ("ocamlbuild -use-ocamlfind " ^ spec ^ ".cmo");
-  Unix.chdir cwd

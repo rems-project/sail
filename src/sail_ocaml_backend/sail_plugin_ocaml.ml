@@ -61,10 +61,6 @@ let ocaml_options =
       Arg.String (fun dir -> Ocaml_backend.opt_ocaml_build_dir := dir),
       "set a custom directory to build generated OCaml"
     );
-    ( Flag.create ~prefix:["ocaml"] "coverage",
-      Arg.Set Ocaml_backend.opt_ocaml_coverage,
-      "build OCaml with bisect_ppx coverage reporting (requires opam packages bisect_ppx-ocamlbuild and bisect_ppx)."
-    );
     ( Flag.create ~prefix:["ocaml"] ~arg:"types" "generators",
       Arg.String (fun s -> opt_ocaml_generators := s :: !opt_ocaml_generators),
       "produce random generators for the given types"

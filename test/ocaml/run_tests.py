@@ -28,9 +28,8 @@ def test_ocaml(name, opts):
             tests[dir] = os.fork()
             if tests[dir] == 0:
                 step(f'{sail} --strict-bitvector --no-warn -o out --ocaml {opts} ../prelude.sail *.sail', cwd=dir)
-                step('./out > result 2> /dev/null', cwd=dir)
+                step('dune exec --release out > ../result 2> /dev/null', cwd=f'{dir}/_sbuild')
                 step('diff expect result', cwd=dir)
-                step('rm out', cwd=dir)
                 step('rm result', cwd=dir)
                 step('rm -rf _sbuild', cwd=dir)
                 print_ok(dir)
