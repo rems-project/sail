@@ -48,8 +48,9 @@ open Ast
 open Ast_compare
 open Ast_defs
 open Ast_util
-open Value_type
 open Value
+
+open Extraction.ValueType
 
 module Big_int = Nat_big_num
 module Document = Pretty_print_sail.Document
@@ -75,10 +76,10 @@ let is_increasing gstate =
   | _ -> false
 
 module VariableUpdate = struct
-  open Semantics
+  open Extraction.Semantics
   open Util.Option_monad
 
-  type root = Register of id | Var of id * Semantics.var_type
+  type root = Register of id | Var of id * var_type
 
   type accessor = Vector of Big_int.num | Vector_range of Big_int.num * Big_int.num | Field of id
 
@@ -107,14 +108,14 @@ module VariableUpdate = struct
             | _ -> None
           )
         | Vector n -> (
-            match Semantics.to_gvector v with
+            match BitList.to_gvector v with
             | V_vector vs ->
                 let* v = List.nth_opt (List.rev vs) (Big_int.to_int n) in
                 access v accessors
             | _ -> None
           )
         | Vector_range (n, m) -> (
-            match Semantics.to_gvector v with
+            match BitList.to_gvector v with
             | V_vector vs ->
                 let vs = Sail_lib.subrange (vs, n, m) in
                 access (V_vector vs) accessors
@@ -176,7 +177,7 @@ module VariableUpdate = struct
                   Some (V_bitvector bs)
               | _ -> Some (V_vector vs)
             in
-            match Semantics.to_gvector v with
+            match BitList.to_gvector v with
             | V_vector vs ->
                 if is_inc then
                   let* vs = vector_update (fun v -> update is_inc v v' accessors) (Big_int.to_int n) vs in
@@ -243,14 +244,14 @@ let fallthrough =
     |> Option.get
   with Type_error (l, err) -> Reporting.unreachable l __POS__ (fst (string_of_type_error err))
 
-type return_value = Semantics.return_value
+type return_value = Extraction.Semantics.return_value
 
 let is_interpreter_extern id env = Type_check.Env.is_extern id env "interpreter"
 
 let get_interpreter_extern id env = Type_check.Env.get_extern id env "interpreter"
 
-module RocqSemantics = Semantics.Make (struct
-  type tannot = Type_check.tannot
+module Semantics = Extraction.Semantics.Make (struct
+  type t = Type_check.tannot
 
   let get_type tannot =
     let typ = Type_check.typ_of_tannot tannot in
@@ -259,37 +260,33 @@ module RocqSemantics = Semantics.Make (struct
   let get_id_type tannot id =
     let env = Type_check.env_of_tannot tannot in
     match Type_check.Env.lookup_id id env with
-    | Register _ -> Semantics.Global_register
-    | Local _ | Unbound _ -> Semantics.Local_variable
-    | Enum _ -> Semantics.Enum_member
+    | Register _ -> Global_register
+    | Local _ | Unbound _ -> Local_variable
+    | Enum _ -> Enum_member
 
   let get_split tannot =
     let env = Type_check.env_of_tannot tannot in
     let typ = Type_check.typ_of_tannot tannot in
     match Type_check.destruct_vector env typ with
-    | Some (Nexp_aux (Nexp_constant n, _), _) -> Semantics.Split n
+    | Some (Nexp_aux (Nexp_constant n, _), _) -> Split n
     | _ -> (
         match Type_check.destruct_bitvector env typ with
-        | Some (Nexp_aux (Nexp_constant n, _)) -> Semantics.Split n
-        | _ -> Semantics.No_split
+        | Some (Nexp_aux (Nexp_constant n, _)) -> Split n
+        | _ -> No_split
       )
 
   let is_bitvector tannot = is_bitvector_typ (Type_check.typ_of_tannot tannot)
 
-  let id_equal_string x s = string_of_id x = s
-
-  let string_of_id = string_of_id
-
   let fallthrough = fallthrough
 end)
 
-module Monad = Semantics.Monad
+module Monad = Extraction.Semantics.Monad
 
-let step env exp = RocqSemantics.step exp
+let step exp = Semantics.step exp
 
-let pattern_match pat value = RocqSemantics.pattern_match pat value
+let pattern_match pat value = Semantics.PM.pattern_match pat value
 
-let complete_bindings bindings = RocqSemantics.complete_bindings bindings
+let complete_bindings bindings = Extraction.PatternMatch.complete_bindings bindings
 
 let exp_of_fundef (FD_aux (FD_function (_, _, funcls), annot)) value =
   let pexp_of_funcl (FCL_aux (FCL_funcl (_, pexp), _)) = pexp in
@@ -307,24 +304,24 @@ type frame =
       string Lazy.t
       * state
       * Type_check.tannot exp Monad.t
-      * (string Lazy.t * lstate * (Semantics.return_value -> Type_check.tannot exp Monad.t)) list
+      * (string Lazy.t * lstate * (Extraction.Semantics.return_value -> Type_check.tannot exp Monad.t)) list
   | Break of frame
   | Effect_request of
       string Lazy.t
       * state
-      * (string Lazy.t * lstate * (Semantics.return_value -> Type_check.tannot exp Monad.t)) list
+      * (string Lazy.t * lstate * (Extraction.Semantics.return_value -> Type_check.tannot exp Monad.t)) list
       * effect_request
   | Fail of
       string Lazy.t
       * state
       * Type_check.tannot exp Monad.t
-      * (string Lazy.t * lstate * (Semantics.return_value -> Type_check.tannot exp Monad.t)) list
+      * (string Lazy.t * lstate * (Extraction.Semantics.return_value -> Type_check.tannot exp Monad.t)) list
       * string
 
 and effect_request =
   | Read_reg of id * VariableUpdate.accessor list * (value -> state -> frame)
   | Write_reg of id * VariableUpdate.accessor list * value * (unit -> state -> frame)
-  | Outcome of id * value list * (Semantics.return_value -> Type_check.tannot exp Monad.t)
+  | Outcome of id * value list * (Extraction.Semantics.return_value -> Type_check.tannot exp Monad.t)
 
 let read_variable id lstate gstate =
   match Bindings.find_opt id lstate.locals with
@@ -346,7 +343,7 @@ let rec eval_frame' = function
           Step (stack_string head, (stack_state head, gstate), stack_cont head (Return_ok (value_of_exp v)), stack')
       | Pure exp', _ ->
           let out' = lazy (Document.to_string (Printer.doc_exp (Type_check.strip_exp exp'))) in
-          Step (out', state, step gstate.typecheck_env exp', stack)
+          Step (out', state, step exp', stack)
       | Early_return v, [] -> Done (state, v)
       | Early_return v, head :: stack' ->
           Step (stack_string head, (stack_state head, gstate), stack_cont head (Return_ok v), stack')
@@ -361,7 +358,7 @@ let rec eval_frame' = function
           let env = gstate.typecheck_env in
           if Type_check.Env.is_outcome id env then Effect_request (out, state, stack, Outcome (id, args, cont))
           else if Type_check.Env.is_union_constructor id env then
-            Step (lazy "", state, cont (Semantics.Return_ok (V_ctor (id, args))), stack)
+            Step (lazy "", state, cont (Extraction.Semantics.Return_ok (V_ctor (id, args))), stack)
           else if is_interpreter_extern id env then (
             let extern = get_interpreter_extern id env in
             if extern = "reg_deref" then (
@@ -371,7 +368,10 @@ let rec eval_frame' = function
                   state,
                   stack,
                   Read_reg
-                    (regname, [], fun v state' -> eval_frame' (Step (out, state', cont (Semantics.Return_ok v), stack)))
+                    ( regname,
+                      [],
+                      fun v state' -> eval_frame' (Step (out, state', cont (Extraction.Semantics.Return_ok v), stack))
+                    )
                 )
             )
             else (
@@ -383,7 +383,7 @@ let rec eval_frame' = function
                     try Ok (op args)
                     with exn -> Error ("Exception calling primop '" ^ extern ^ "': " ^ Printexc.to_string exn)
                   with
-                  | Ok v -> Step (lazy "", state, cont (Semantics.Return_ok v), stack)
+                  | Ok v -> Step (lazy "", state, cont (Extraction.Semantics.Return_ok v), stack)
                   | Error msg -> Fail (out, state, m, stack, msg)
                 )
               | None -> Fail (out, state, m, stack, "No such primop: " ^ string_of_id id)
@@ -531,7 +531,10 @@ let rec initialize_registers allow_registers undef_registers gstate =
               {
                 gstate with
                 letbinds =
-                  List.fold_left (fun lbs (id, v) -> Bindings.add id v lbs) gstate.letbinds (complete_bindings bindings);
+                  List.fold_left
+                    (fun lbs (id, v) -> Bindings.add id v lbs)
+                    gstate.letbinds
+                    (Extraction.IdUtil.IdMap.elements (complete_bindings bindings));
               }
           | _ -> gstate
         with _ -> gstate

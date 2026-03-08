@@ -603,8 +603,8 @@ let remove_vector_concat_pat pat =
         in
         if is_vector_typ typ || is_bitvector_typ typ then (
           match (p, vector_typ_args_of typ) with
-          | P_lit (L_aux (L_bin bin, _)), _ -> acc @ List.map bit (Semantics.bitlist_of_bin_lit bin)
-          | P_lit (L_aux (L_hex hex, _)), _ -> acc @ List.map bit (Semantics.bitlist_of_hex_lit hex)
+          | P_lit (L_aux (L_bin bin, _)), _ -> acc @ List.map bit (BitList.of_bin_lit bin)
+          | P_lit (L_aux (L_hex hex, _)), _ -> acc @ List.map bit (BitList.of_hex_lit hex)
           | P_vector ps, _ -> acc @ ps
           | _, (nexp, _) -> begin
               match Type_check.solve_unique env nexp with
@@ -860,14 +860,10 @@ let rec disjoint_pat env (P_aux (p1, annot1) as pat1) (P_aux (p2, annot2) as pat
   | P_id id, _ when id_is_unbound id env -> false
   | _, P_id id when id_is_unbound id env -> false
   | P_id id1, P_id id2 -> Id.compare id1 id2 <> 0
-  | P_lit (L_aux (L_bin bin1, _)), P_lit (L_aux (L_bin bin2, _)) ->
-      Semantics.(bitlist_of_bin_lit bin1 <> bitlist_of_bin_lit bin2)
-  | P_lit (L_aux (L_bin bin1, _)), P_lit (L_aux (L_hex hex2, _)) ->
-      Semantics.(bitlist_of_bin_lit bin1 <> bitlist_of_hex_lit hex2)
-  | P_lit (L_aux (L_hex hex1, _)), P_lit (L_aux (L_bin bin2, _)) ->
-      Semantics.(bitlist_of_hex_lit hex1 <> bitlist_of_bin_lit bin2)
-  | P_lit (L_aux (L_hex hex1, _)), P_lit (L_aux (L_hex hex2, _)) ->
-      Semantics.(bitlist_of_hex_lit hex1 <> bitlist_of_hex_lit hex2)
+  | P_lit (L_aux (L_bin bin1, _)), P_lit (L_aux (L_bin bin2, _)) -> BitList.(of_bin_lit bin1 <> of_bin_lit bin2)
+  | P_lit (L_aux (L_bin bin1, _)), P_lit (L_aux (L_hex hex2, _)) -> BitList.(of_bin_lit bin1 <> of_hex_lit hex2)
+  | P_lit (L_aux (L_hex hex1, _)), P_lit (L_aux (L_bin bin2, _)) -> BitList.(of_hex_lit hex1 <> of_bin_lit bin2)
+  | P_lit (L_aux (L_hex hex1, _)), P_lit (L_aux (L_hex hex2, _)) -> BitList.(of_hex_lit hex1 <> of_hex_lit hex2)
   | P_lit (L_aux ((L_bin _ | L_hex _), _) as lit), _ ->
       disjoint_pat env (vector_string_to_bits_pat lit (Unknown, empty_tannot)) pat2
   | _, P_lit (L_aux ((L_bin _ | L_hex _), _) as lit) ->
@@ -1511,7 +1507,7 @@ let rewrite_bit_lists_to_lits env =
   in
   let bit_of_exp = function E_aux (E_lit lit, _) -> bit_of_lit lit | _ -> None in
   let lit_of_bits bits =
-    match Semantics.hex_digits_of_bitlist bits with
+    match BitList.to_hex_digits bits with
     | Some h -> L_hex (non_empty_singleton h)
     | None -> L_bin (non_empty_singleton (List.map (function B0 -> Bin_0 | B1 -> Bin_1) bits))
   in
@@ -4477,7 +4473,7 @@ let rewrite_truncate_hex_literals _type_env defs =
         ( Id_aux (Id "truncate", _),
           [E_aux (E_lit (L_aux (L_hex hex, l_ann)), _); E_aux (E_lit (L_aux (L_num len, _)), _)]
         ) ->
-        let bin = Semantics.bitlist_of_hex_lit hex |> List.map (function B0 -> Bin_0 | B1 -> Bin_1) in
+        let bin = BitList.of_hex_lit hex |> List.map (function B0 -> Bin_0 | B1 -> Bin_1) in
         let len = Nat_big_num.to_int len in
         let truncation = Util.drop (List.length bin - len) bin in
         E_aux (E_lit (L_aux (L_bin (non_empty_singleton truncation), l_ann)), annot)

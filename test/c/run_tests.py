@@ -102,11 +102,11 @@ def test_ocaml(name):
             basename = os.path.splitext(os.path.basename(filename))[0]
             tests[filename] = os.fork()
             if tests[filename] == 0:
-                step('\'{}\' -ocaml -ocaml_build_dir _sbuild_{} -o {}_ocaml {}'.format(sail, basename, basename, filename))
-                step('./{}_ocaml 1> {}.oresult'.format(basename, basename), expected_status = 1 if basename.startswith('fail') else 0)
-                step('diff {}.oresult {}.expect'.format(basename, basename))
-                step('rm -r _sbuild_{}'.format(basename))
-                step('rm {}.oresult {}_ocaml'.format(basename, basename))
+                step(f'\'{sail}\' --ocaml --ocaml-build-dir _sbuild_{basename} -o {basename}_ocaml {filename}')
+                step(f'dune exec --release {basename}_ocaml 1> ../{basename}.oresult', expected_status = 1 if basename.startswith('fail') else 0, cwd=f'_sbuild_{basename}')
+                step(f'diff {basename}.oresult {basename}.expect')
+                step(f'rm -rf _sbuild_{basename}')
+                step(f'rm {basename}.oresult')
                 print_ok(filename)
                 sys.exit()
         results.collect(tests)

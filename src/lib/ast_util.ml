@@ -1769,8 +1769,8 @@ let explode s =
 let vector_string_to_bit_list (L_aux (lit, l)) =
   let s_bin =
     match lit with
-    | L_hex hex -> Semantics.bitlist_of_hex_lit hex
-    | L_bin bin -> Semantics.bitlist_of_bin_lit bin
+    | L_hex hex -> BitList.of_hex_lit hex
+    | L_bin bin -> BitList.of_bin_lit bin
     | _ -> raise (Reporting.err_unreachable l __POS__ "s_bin given non vector literal")
   in
   List.map

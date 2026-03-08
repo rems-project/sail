@@ -1,54 +1,18 @@
 open Ast
 open AstInduction
-open BinInt
 open Bit
+open BitList
 open Datatypes
 open IdUtil
 open List0
 open ListDef
 open ListUtil
-open Nat0
+open PatternMatch
 open PeanoNat
-open QArith_base
 open Specif
-open Value_type
+open TypeAnnot
+open ValueType
 open Wf
-
-type binding =
-| Complete of value
-| Partial of ((value * Big_int_Z.big_int) * Big_int_Z.big_int) non_empty
-
-(** val combine_binding :
-    binding option -> binding option -> binding option **)
-
-let combine_binding l r =
-  match l with
-  | Some lb ->
-    (match r with
-     | Some rb ->
-       (match lb with
-        | Complete v -> Some (Complete v)
-        | Partial n ->
-          let Non_empty (lv, lvs) = n in
-          (match rb with
-           | Complete v -> Some (Complete v)
-           | Partial n0 ->
-             let Non_empty (rv, rvs) = n0 in
-             Some (Partial (Non_empty (lv, (app lvs (rv :: rvs)))))))
-     | None -> Some lb)
-  | None -> r
-
-(** val merge_bindings :
-    binding IdMap.t -> binding IdMap.t -> binding IdMap.t **)
-
-let merge_bindings l r =
-  IdMap.map2 combine_binding l r
-
-(** val to_gvector : value -> value **)
-
-let to_gvector v = match v with
-| V_bitvector bs -> V_vector (map (fun b -> V_bitvector (b :: [])) bs)
-| _ -> v
 
 (** val is_value : 'a1 exp -> bool **)
 
@@ -65,21 +29,12 @@ type var_type =
 | Var_local
 | Var_register
 
-type id_type =
-| Local_variable
-| Global_register
-| Enum_member
-
 type place =
 | PL_id of id * var_type
 | PL_register of id
 | PL_vector of place * Big_int_Z.big_int
 | PL_vector_range of place * Big_int_Z.big_int * Big_int_Z.big_int
 | PL_field of place * id
-
-type vector_concat_split =
-| No_split
-| Split of Big_int_Z.big_int
 
 type destructure =
 | DL_app of id * value list
@@ -312,191 +267,10 @@ let left_to_right3 x y z =
       | _ -> LTR3_1 (v1, y, z))
    | _ -> LTR3_0 (x, y, z))
 
-(** val bitlist_of_hex_digit : hex_digit -> bit list **)
-
-let bitlist_of_hex_digit = function
-| Hex_0 -> B0 :: (B0 :: (B0 :: (B0 :: [])))
-| Hex_1 -> B0 :: (B0 :: (B0 :: (B1 :: [])))
-| Hex_2 -> B0 :: (B0 :: (B1 :: (B0 :: [])))
-| Hex_3 -> B0 :: (B0 :: (B1 :: (B1 :: [])))
-| Hex_4 -> B0 :: (B1 :: (B0 :: (B0 :: [])))
-| Hex_5 -> B0 :: (B1 :: (B0 :: (B1 :: [])))
-| Hex_6 -> B0 :: (B1 :: (B1 :: (B0 :: [])))
-| Hex_7 -> B0 :: (B1 :: (B1 :: (B1 :: [])))
-| Hex_8 -> B1 :: (B0 :: (B0 :: (B0 :: [])))
-| Hex_9 -> B1 :: (B0 :: (B0 :: (B1 :: [])))
-| Hex_A -> B1 :: (B0 :: (B1 :: (B0 :: [])))
-| Hex_B -> B1 :: (B0 :: (B1 :: (B1 :: [])))
-| Hex_C -> B1 :: (B1 :: (B0 :: (B0 :: [])))
-| Hex_D -> B1 :: (B1 :: (B0 :: (B1 :: [])))
-| Hex_E -> B1 :: (B1 :: (B1 :: (B0 :: [])))
-| Hex_F -> B1 :: (B1 :: (B1 :: (B1 :: [])))
-
-(** val hex_digit_of_nibble : bit -> bit -> bit -> bit -> hex_digit **)
-
-let hex_digit_of_nibble b1 b2 b3 b4 =
-  let p = ((b1, b2), b3) in
-  let (p0, b0) = p in
-  let (b5, b6) = p0 in
-  (match b5 with
-   | B0 ->
-     (match b6 with
-      | B0 ->
-        (match b0 with
-         | B0 -> (match b4 with
-                  | B0 -> Hex_0
-                  | B1 -> Hex_1)
-         | B1 -> (match b4 with
-                  | B0 -> Hex_2
-                  | B1 -> Hex_3))
-      | B1 ->
-        (match b0 with
-         | B0 -> (match b4 with
-                  | B0 -> Hex_4
-                  | B1 -> Hex_5)
-         | B1 -> (match b4 with
-                  | B0 -> Hex_6
-                  | B1 -> Hex_7)))
-   | B1 ->
-     (match b6 with
-      | B0 ->
-        (match b0 with
-         | B0 -> (match b4 with
-                  | B0 -> Hex_8
-                  | B1 -> Hex_9)
-         | B1 -> (match b4 with
-                  | B0 -> Hex_A
-                  | B1 -> Hex_B))
-      | B1 ->
-        (match b0 with
-         | B0 -> (match b4 with
-                  | B0 -> Hex_C
-                  | B1 -> Hex_D)
-         | B1 -> (match b4 with
-                  | B0 -> Hex_E
-                  | B1 -> Hex_F))))
-
-(** val hex_digits_of_bitlist : bit list -> hex_digit list option **)
-
-let rec hex_digits_of_bitlist = function
-| [] -> Some []
-| b1 :: l ->
-  (match l with
-   | [] -> None
-   | b2 :: l0 ->
-     (match l0 with
-      | [] -> None
-      | b3 :: l1 ->
-        (match l1 with
-         | [] -> None
-         | b4 :: rest ->
-           let digit = hex_digit_of_nibble b1 b2 b3 b4 in
-           (match hex_digits_of_bitlist rest with
-            | Some digits -> Some (digit :: digits)
-            | None -> None))))
-
-(** val non_empty_to_list : 'a1 non_empty -> 'a1 list **)
-
-let non_empty_to_list = function
-| Non_empty (y, ys) -> y :: ys
-
-(** val bitlist_of_hex_lit : hex_digit non_empty list -> bit list **)
-
-let bitlist_of_hex_lit hex =
-  let digits = concat (map non_empty_to_list hex) in
-  concat (map bitlist_of_hex_digit digits)
-
-(** val bitlist_of_bin_lit : bin_digit non_empty list -> bit list **)
-
-let bitlist_of_bin_lit bin =
-  let digits = concat (map non_empty_to_list bin) in
-  map (fun b -> match b with
-                | Bin_0 -> B0
-                | Bin_1 -> B1) digits
-
-(** val update_list : bit list -> Big_int_Z.big_int -> bit -> bit list **)
-
-let update_list xs n y =
-  let n0 =
-    sub (sub (length xs) n) (Big_int_Z.succ_big_int Big_int_Z.zero_big_int)
-  in
-  let (ys, zs) = take_drop n0 xs in app ys (app (y :: []) (tl zs))
-
-(** val update_subrange :
-    bit list -> Big_int_Z.big_int -> bit list -> bit list **)
-
-let rec update_subrange xs n = function
-| [] -> xs
-| y :: ys0 ->
-  update_subrange (update_list xs n y)
-    (sub n (Big_int_Z.succ_big_int Big_int_Z.zero_big_int)) ys0
-
-(** val complete_value :
-    ((value * Big_int_Z.big_int) * Big_int_Z.big_int) non_empty -> value **)
-
-let complete_value = function
-| Non_empty (p, partial_values0) ->
-  let (p0, m1) = p in
-  let (v1, n1) = p0 in
-  let (max0, min0) =
-    fold_left (fun range pvalue ->
-      let (max0, min0) = range in
-      let (y, m) = pvalue in
-      let (_, n) = y in ((Z.max max0 (Z.max n m)), (Z.min min0 (Z.min n m))))
-      partial_values0 (n1, m1)
-  in
-  let len = Z.sub (Z.succ max0) min0 in
-  let zeros = repeat B0 (Z.to_nat len) in
-  let value0 =
-    fold_left (fun bv pvalue ->
-      let (y, _) = pvalue in
-      let (slice, n) = y in
-      (match slice with
-       | V_bitvector slice0 -> update_subrange bv (Z.to_nat n) slice0
-       | _ -> bv))
-      (((v1, n1), m1) :: partial_values0) zeros
-  in
-  V_bitvector value0
-
-module type SemanticExt =
- sig
-  type tannot
-
-  val get_type : tannot -> typ
-
-  val get_id_type : tannot -> id -> id_type
-
-  val get_split : tannot -> vector_concat_split
-
-  val is_bitvector : tannot -> bool
-
-  val fallthrough : tannot pexp
- end
-
 module Make =
- functor (T:SemanticExt) ->
+ functor (Tannot:S) ->
  struct
-  (** val binds_id : id -> 'a1 pat -> bool **)
-
-  let rec binds_id n = function
-  | P_aux (aux, _) ->
-    (match aux with
-     | P_or (p1, p2) -> (||) (binds_id n p1) (binds_id n p2)
-     | P_as (pat0, m) -> (||) (binds_id n pat0) (id_eqb n m)
-     | P_typ (_, p0) -> binds_id n p0
-     | P_id m -> id_eqb n m
-     | P_var (p0, _) -> binds_id n p0
-     | P_app (_, ps) -> fold_left (||) (map (binds_id n) ps) false
-     | P_vector ps -> fold_left (||) (map (binds_id n) ps) false
-     | P_vector_concat ps -> fold_left (||) (map (binds_id n) ps) false
-     | P_vector_subrange (m, _, _) -> id_eqb n m
-     | P_tuple ps -> fold_left (||) (map (binds_id n) ps) false
-     | P_list ps -> fold_left (||) (map (binds_id n) ps) false
-     | P_cons (p1, p2) -> (||) (binds_id n p1) (binds_id n p2)
-     | P_string_append ps -> fold_left (||) (map (binds_id n) ps) false
-     | P_struct (_, ps, _) ->
-       fold_left (||) (map (fun fp -> binds_id n (snd fp)) ps) false
-     | _ -> false)
+  module PM = Make(Tannot)
 
   (** val substitute : id -> value -> 'a1 exp -> 'a1 exp **)
 
@@ -626,312 +400,10 @@ module Make =
      | L_true -> V_bool true
      | L_false -> V_bool false
      | L_num n -> V_int n
-     | L_hex h -> V_bitvector (bitlist_of_hex_lit h)
-     | L_bin b -> V_bitvector (bitlist_of_bin_lit b)
+     | L_hex h -> V_bitvector (of_hex_lit h)
+     | L_bin b -> V_bitvector (of_bin_lit b)
      | L_string s -> V_string s
      | L_real r -> V_real r)
-
-  (** val same_bits : bit list -> bit list -> bool **)
-
-  let same_bits bs vs =
-    fst
-      (fold_left (fun match_info b ->
-        let (y, y0) = match_info in
-        if y
-        then (match y0 with
-              | [] -> (false, [])
-              | y1 :: vs0 ->
-                (match y1 with
-                 | B0 -> (match b with
-                          | B0 -> (true, vs0)
-                          | B1 -> (false, []))
-                 | B1 -> (match b with
-                          | B0 -> (false, [])
-                          | B1 -> (true, vs0))))
-        else (false, [])) bs (true, vs))
-
-  type match_result =
-  | Matched of binding IdMap.t
-  | MaybeMatched of binding IdMap.t
-  | Unmatched
-
-  (** val match_result_rect :
-      (binding IdMap.t -> 'a1) -> (binding IdMap.t -> 'a1) -> 'a1 ->
-      match_result -> 'a1 **)
-
-  let match_result_rect f f0 f1 = function
-  | Matched t0 -> f t0
-  | MaybeMatched t0 -> f0 t0
-  | Unmatched -> f1
-
-  (** val match_result_rec :
-      (binding IdMap.t -> 'a1) -> (binding IdMap.t -> 'a1) -> 'a1 ->
-      match_result -> 'a1 **)
-
-  let match_result_rec f f0 f1 = function
-  | Matched t0 -> f t0
-  | MaybeMatched t0 -> f0 t0
-  | Unmatched -> f1
-
-  (** val merge_match_result :
-      match_result -> match_result -> match_result **)
-
-  let merge_match_result l r =
-    match l with
-    | Matched l_b ->
-      (match r with
-       | Matched r_b -> Matched (merge_bindings l_b r_b)
-       | MaybeMatched r_b -> MaybeMatched (merge_bindings l_b r_b)
-       | Unmatched -> Unmatched)
-    | MaybeMatched l_b ->
-      (match r with
-       | Matched r_b -> MaybeMatched (merge_bindings l_b r_b)
-       | MaybeMatched r_b -> MaybeMatched (merge_bindings l_b r_b)
-       | Unmatched -> Unmatched)
-    | Unmatched -> Unmatched
-
-  (** val empty_bindings : binding IdMap.t **)
-
-  let empty_bindings =
-    IdMap.empty
-
-  (** val simple_match : match_result **)
-
-  let simple_match =
-    Matched empty_bindings
-
-  (** val simple_match_if : bool -> match_result **)
-
-  let simple_match_if = function
-  | true -> simple_match
-  | false -> Unmatched
-
-  (** val match_binds : id -> binding -> match_result -> match_result **)
-
-  let match_binds name value0 = function
-  | Matched b -> Matched (IdMap.add name value0 b)
-  | MaybeMatched b -> MaybeMatched (IdMap.add name value0 b)
-  | Unmatched -> Unmatched
-
-  (** val neg_match : match_result -> match_result **)
-
-  let neg_match = function
-  | Matched _ -> Unmatched
-  | MaybeMatched b -> MaybeMatched b
-  | Unmatched -> simple_match
-
-  (** val or_match : match_result -> match_result -> match_result **)
-
-  let or_match l r =
-    match l with
-    | Matched l_b -> Matched l_b
-    | MaybeMatched l_b ->
-      (match r with
-       | Matched r_b -> Matched r_b
-       | _ -> MaybeMatched l_b)
-    | Unmatched -> r
-
-  (** val pattern_match_literal : lit -> value -> match_result **)
-
-  let pattern_match_literal l v =
-    let L_aux (aux, _) = l in
-    (match aux with
-     | L_unit ->
-       (match v with
-        | V_unit -> simple_match
-        | V_unknown -> MaybeMatched empty_bindings
-        | _ -> Unmatched)
-     | L_true ->
-       (match v with
-        | V_bool b -> if b then simple_match else Unmatched
-        | V_unknown -> MaybeMatched empty_bindings
-        | _ -> Unmatched)
-     | L_false ->
-       (match v with
-        | V_bool b -> if b then Unmatched else simple_match
-        | V_unknown -> MaybeMatched empty_bindings
-        | _ -> Unmatched)
-     | L_num n ->
-       (match v with
-        | V_int m -> simple_match_if (Z.eqb n m)
-        | V_unknown -> MaybeMatched empty_bindings
-        | _ -> Unmatched)
-     | L_hex s ->
-       (match v with
-        | V_bitvector vs ->
-          simple_match_if (same_bits (bitlist_of_hex_lit s) vs)
-        | V_unknown -> MaybeMatched empty_bindings
-        | _ -> Unmatched)
-     | L_bin s ->
-       (match v with
-        | V_bitvector vs ->
-          simple_match_if (same_bits (bitlist_of_bin_lit s) vs)
-        | V_unknown -> MaybeMatched empty_bindings
-        | _ -> Unmatched)
-     | L_string s1 ->
-       (match v with
-        | V_string s2 -> simple_match_if ((=) s1 s2)
-        | V_unknown -> MaybeMatched empty_bindings
-        | _ -> Unmatched)
-     | L_real r1 ->
-       (match v with
-        | V_real r2 -> simple_match_if (coq_Qeq_bool r1 r2)
-        | V_unknown -> MaybeMatched empty_bindings
-        | _ -> Unmatched))
-
-  (** val get_struct_field : id -> (id * value) list -> value **)
-
-  let rec get_struct_field name = function
-  | [] -> V_unit
-  | p :: rest_fields ->
-    let (name', v) = p in
-    if id_eqb name name' then v else get_struct_field name rest_fields
-
-  (** val complete_bindings : binding IdMap.t -> value IdMap.t **)
-
-  let complete_bindings m =
-    IdMap.map (fun b ->
-      match b with
-      | Complete v -> v
-      | Partial vs -> complete_value vs) m
-
-  (** val pattern_match : T.tannot pat -> value -> match_result **)
-
-  let rec pattern_match p v =
-    let P_aux (aux, annot0) = p in
-    (match aux with
-     | P_lit l -> pattern_match_literal l v
-     | P_or (lhs_p, rhs_p) ->
-       or_match (pattern_match lhs_p v) (pattern_match rhs_p v)
-     | P_not p0 -> neg_match (pattern_match p0 v)
-     | P_as (p0, n) -> match_binds n (Complete v) (pattern_match p0 v)
-     | P_typ (_, p0) -> pattern_match p0 v
-     | P_id n ->
-       (match T.get_id_type (snd annot0) n with
-        | Enum_member ->
-          (match v with
-           | V_member m -> simple_match_if (id_eqb n m)
-           | V_unknown -> MaybeMatched empty_bindings
-           | _ -> Unmatched)
-        | _ -> Matched (IdMap.add n (Complete v) empty_bindings))
-     | P_var (p0, _) -> pattern_match p0 v
-     | P_app (ctor, ps) ->
-       (match v with
-        | V_ctor (v_ctor, vs) ->
-          if id_eqb ctor v_ctor
-          then fst
-                 (fold_left (fun match_info p0 ->
-                   let (prev, y) = match_info in
-                   (match y with
-                    | [] -> (Unmatched, [])
-                    | v0 :: vs0 ->
-                      ((merge_match_result prev (pattern_match p0 v0)), vs0)))
-                   ps (simple_match, vs))
-          else Unmatched
-        | _ -> Unmatched)
-     | P_vector ps ->
-       (match to_gvector v with
-        | V_vector vs ->
-          fst
-            (fold_left (fun match_info p0 ->
-              let (prev, y) = match_info in
-              (match y with
-               | [] -> (Unmatched, [])
-               | v0 :: vs0 ->
-                 ((merge_match_result prev (pattern_match p0 v0)), vs0)))
-              ps (simple_match, vs))
-        | _ -> Unmatched)
-     | P_vector_concat ps ->
-       (match v with
-        | V_bitvector bs ->
-          fst
-            (fold_left (fun match_info p0 ->
-              let P_aux (_, annot1) = p0 in
-              (match T.get_split (snd annot1) with
-               | No_split -> (Unmatched, [])
-               | Split s ->
-                 let (prev, bs0) = match_info in
-                 (match bs0 with
-                  | [] -> (Unmatched, [])
-                  | _ :: _ ->
-                    let (bs_take, bs_drop) = take_drop s bs0 in
-                    ((merge_match_result prev
-                       (pattern_match p0 (V_bitvector bs_take))),
-                    bs_drop))))
-              ps (simple_match, bs))
-        | V_vector vs ->
-          fst
-            (fold_left (fun match_info p0 ->
-              let P_aux (_, annot1) = p0 in
-              (match T.get_split (snd annot1) with
-               | No_split -> (Unmatched, [])
-               | Split s ->
-                 let (prev, vs0) = match_info in
-                 (match vs0 with
-                  | [] -> (Unmatched, [])
-                  | _ :: _ ->
-                    let (vs_take, vs_drop) = take_drop s vs0 in
-                    ((merge_match_result prev
-                       (pattern_match p0 (V_vector vs_take))),
-                    vs_drop))))
-              ps (simple_match, vs))
-        | _ -> Unmatched)
-     | P_vector_subrange (id0, n, m) ->
-       Matched
-         (IdMap.add id0 (Partial (Non_empty (((v, n), m), [])))
-           empty_bindings)
-     | P_tuple ps ->
-       (match ps with
-        | [] ->
-          (match v with
-           | V_unit -> simple_match
-           | V_unknown -> simple_match
-           | _ -> Unmatched)
-        | _ :: _ ->
-          (match v with
-           | V_tuple vs ->
-             fst
-               (fold_left (fun match_info p0 ->
-                 let (prev, y) = match_info in
-                 (match y with
-                  | [] -> (Unmatched, [])
-                  | v0 :: vs0 ->
-                    ((merge_match_result prev (pattern_match p0 v0)), vs0)))
-                 ps (simple_match, vs))
-           | _ -> Unmatched))
-     | P_list ps ->
-       (match v with
-        | V_list vs ->
-          if Nat.eqb (length ps) (length vs)
-          then fst
-                 (fold_left (fun match_info p0 ->
-                   let (prev, y) = match_info in
-                   (match y with
-                    | [] -> (Unmatched, [])
-                    | v0 :: vs0 ->
-                      ((merge_match_result prev (pattern_match p0 v0)), vs0)))
-                   ps (simple_match, vs))
-          else Unmatched
-        | _ -> Unmatched)
-     | P_cons (p0, ps) ->
-       (match v with
-        | V_list l ->
-          (match l with
-           | [] -> Unmatched
-           | v0 :: vs ->
-             merge_match_result (pattern_match p0 v0)
-               (pattern_match ps (V_list vs)))
-        | _ -> Unmatched)
-     | P_struct (_, field_patterns, _) ->
-       (match v with
-        | V_record fields ->
-          fold_left (fun prev fp ->
-            let (name, p0) = fp in
-            let v0 = get_struct_field name fields in
-            merge_match_result prev (pattern_match p0 v0)) field_patterns
-            simple_match
-        | _ -> Unmatched)
-     | _ -> simple_match)
 
   (** val lookup_field :
       Parse_ast.l -> id -> (id * value) list -> value Monad.t **)
@@ -943,7 +415,7 @@ module Make =
     if id_eqb name name' then Monad.pure v else lookup_field l name fields0
 
   (** val destructuring_assignment :
-      T.tannot annot -> destructure -> value -> unit Monad.t **)
+      Tannot.t annot -> destructure -> value -> unit Monad.t **)
 
   let rec destructuring_assignment annot0 d v =
     match d with
@@ -1007,13 +479,13 @@ module Make =
        | _ -> Monad.Runtime_type_error (fst annot0))
     | DL_place p -> Monad.Write_var (p, v, (fun _ -> Monad.pure ()))
 
-  (** val lexp_to_destructure : T.tannot lexp -> destructure Monad.t **)
+  (** val lexp_to_destructure : Tannot.t lexp -> destructure Monad.t **)
 
   let rec lexp_to_destructure = function
   | LE_aux (aux, annot0) ->
     (match aux with
      | LE_id var ->
-       (match T.get_id_type (snd annot0) var with
+       (match Tannot.get_id_type (snd annot0) var with
         | Local_variable -> Monad.pure (DL_place (PL_id (var, Var_local)))
         | Global_register -> Monad.pure (DL_place (PL_id (var, Var_register)))
         | Enum_member -> Monad.Runtime_type_error (fst annot0))
@@ -1029,7 +501,7 @@ module Make =
        let evaluated0 = all_evaluated args in
        Monad.pure (DL_app (name, evaluated0))
      | LE_typ (_, var) ->
-       (match T.get_id_type (snd annot0) var with
+       (match Tannot.get_id_type (snd annot0) var with
         | Local_variable -> Monad.pure (DL_place (PL_id (var, Var_local)))
         | Global_register -> Monad.pure (DL_place (PL_id (var, Var_register)))
         | Enum_member -> Monad.Runtime_type_error (fst annot0))
@@ -1042,7 +514,7 @@ module Make =
            (map (fun l0 ->
              let LE_aux (_, annot1) = l0 in
              Monad.bind (lexp_to_destructure l0) (fun d ->
-               Monad.pure ((T.get_split (snd annot1)), d)))
+               Monad.pure ((Tannot.get_split (snd annot1)), d)))
              ls))
          (fun ds -> Monad.pure (DL_vector_concat ds))
      | LE_vector (l0, n) ->
@@ -1091,7 +563,7 @@ module Make =
     then (name, v) :: rest
     else (name', old_v) :: (update_field name v rest)
 
-  (** val step : T.tannot exp -> T.tannot exp Monad.t **)
+  (** val step : Tannot.t exp -> Tannot.t exp Monad.t **)
 
   let step =
     coq_Fix_sub (fun recarg step' ->
@@ -1318,7 +790,7 @@ module Make =
                else Monad.bind (step0 x0) (fun x' ->
                       wrap (E_block (x' :: xs0)))))
        | E_id id0 ->
-         let filtered_var = T.get_id_type (snd annot0) id0 in
+         let filtered_var = Tannot.get_id_type (snd annot0) id0 in
          (match filtered_var with
           | Local_variable ->
             Monad.Read_var ((PL_id (id0, Var_local)), (fun v ->
@@ -1463,7 +935,7 @@ module Make =
          let (evaluated0, unevaluated) = filtered_var in
          (match unevaluated with
           | [] ->
-            if T.is_bitvector (snd annot0)
+            if Tannot.is_bitvector (snd annot0)
             then Monad.bind
                    (bv_concat (fst annot0) (all_evaluated evaluated0))
                    (fun bits -> wrap (E_internal_value (V_bitvector bits)))
@@ -1552,21 +1024,20 @@ module Make =
                let Pat_aux (p0, pexp_annot) = p in
                (match p0 with
                 | Pat_exp (pat0, body) ->
-                  let filtered_var = pattern_match pat0 v in
+                  let filtered_var = PM.pattern_match pat0 v in
                   (match filtered_var with
                    | Matched arm_substs ->
                      Monad.pure
-                       (fold_right (fun s body0 ->
-                         substitute (fst s) (snd s) body0) body
-                         (complete_bindings arm_substs))
+                       (IdMap.fold substitute (complete_bindings arm_substs)
+                         body)
                    | _ -> wrap (E_match (head_exp, next_arms)))
                 | Pat_when (pat0, guard, body) ->
-                  let filtered_var = pattern_match pat0 v in
+                  let filtered_var = PM.pattern_match pat0 v in
                   (match filtered_var with
                    | Matched arm_substs ->
                      let guard0 =
-                       fold_right (fun s g -> substitute (fst s) (snd s) g)
-                         guard (complete_bindings arm_substs)
+                       IdMap.fold substitute (complete_bindings arm_substs)
+                         guard
                      in
                      let E_aux (e0, _) = guard0 in
                      (match e0 with
@@ -1574,13 +1045,12 @@ module Make =
                         (match v_guard with
                          | V_bool b ->
                            if b
-                           then let filtered_var0 = pattern_match pat0 v in
+                           then let filtered_var0 = PM.pattern_match pat0 v in
                                 (match filtered_var0 with
                                  | Matched arm_substs0 ->
                                    Monad.pure
-                                     (fold_right (fun s body0 ->
-                                       substitute (fst s) (snd s) body0) body
-                                       (complete_bindings arm_substs0))
+                                     (IdMap.fold substitute
+                                       (complete_bindings arm_substs0) body)
                                  | _ -> wrap (E_match (head_exp, next_arms)))
                            else wrap (E_match (head_exp, next_arms))
                          | _ -> Monad.Runtime_type_error (fst pexp_annot))
@@ -1597,12 +1067,11 @@ module Make =
          let E_aux (e, _) = x in
          (match e with
           | E_internal_value v ->
-            let filtered_var = pattern_match pat0 v in
+            let filtered_var = PM.pattern_match pat0 v in
             (match filtered_var with
              | Matched body_substs ->
                Monad.pure
-                 (fold_left (fun body0 s -> substitute (fst s) (snd s) body0)
-                   (complete_bindings body_substs) body)
+                 (IdMap.fold substitute (complete_bindings body_substs) body)
              | _ -> Monad.Match_failure (fst annot0))
           | _ ->
             Monad.bind (step0 x) (fun x' -> wrap (E_let (pat0, x', body))))
@@ -1651,7 +1120,7 @@ module Make =
               | Monad.Continue x'' -> wrap (E_try (x'', arms))
               | Monad.Caught exn ->
                 wrap (E_match ((E_aux ((E_internal_value exn), annot0)),
-                  (app arms (T.fallthrough :: []))))))
+                  (app arms (Tannot.fallthrough :: []))))))
        | E_assert (x, msg) ->
          Monad.bind (get_bool x) (fun b ->
            match b with
@@ -1670,8 +1139,8 @@ module Make =
        | E_var (l, x, body) ->
          wrap (E_block ((E_aux ((E_assign (l, x)), annot0)) :: (body :: [])))
        | E_undef ->
-         Monad.bind (Monad.get_undefined (T.get_type (snd annot0))) (fun u ->
-           wrap (E_internal_value u))
+         Monad.bind (Monad.get_undefined (Tannot.get_type (snd annot0)))
+           (fun u -> wrap (E_internal_value u))
        | E_internal_plet (_, _, _) -> Monad.Runtime_type_error (fst annot0)
        | E_internal_return _ -> Monad.Runtime_type_error (fst annot0)
        | E_internal_value v -> wrap (E_internal_value v)

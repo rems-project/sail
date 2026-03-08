@@ -32,17 +32,6 @@
  (files
   (%{workspace_root}/LICENSE as LICENSE)
   (%{workspace_root}/THIRD_PARTY_FILES.md as THIRD_PARTY_FILES.md)
-  (%{workspace_root}/src/lib/util.ml as src/lib/util.ml)
-  (%{workspace_root}/src/lib/sail_lib.ml as src/lib/sail_lib.ml)
-  (%{workspace_root}/src/lib/elf_loader.ml as src/lib/elf_loader.ml)
-  (glob_files
-   (%{workspace_root}/src/lib/extraction/*.ml with_prefix src/lib/extraction))
-  (glob_files
-   (%{workspace_root}/src/lib/extraction/*.mli
-    with_prefix
-    src/lib/extraction))
-  (%{workspace_root}/lib/_tags as lib/_tags)
-  (%{workspace_root}/lib/_tags_coverage as lib/_tags_coverage)
   (%{workspace_root}/lib/arith.sail as lib/arith.sail)
   (%{workspace_root}/lib/concurrency_interface.sail
    as

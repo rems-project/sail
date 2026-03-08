@@ -20,6 +20,7 @@ parser.add_argument("--update-expected", help="Update the expected file (where s
 parser.add_argument("--run-skips", help="Run tests that would otherwise be skipped", action="store_true")
 parser.add_argument("--test", help="Run only specified test.", action='append')
 parser.add_argument("--lean-local-support-library", help="Use a local Lean support library", action='store')
+parser.add_argument("--seq", help="Run sequentially", action='store_true')
 args = parser.parse_args()
 
 def is_compact():
@@ -82,6 +83,8 @@ def get_sail():
         return 'sail'
 
 def parallel():
+    if args.seq:
+        return 1
     try:
         return int(os.environ['TEST_PAR'])
     except Exception as e:

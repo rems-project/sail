@@ -1,3 +1,46 @@
+(* ************************************************************************ *)
+(*  Sail and the Sail architecture models here, comprising all files and    *)
+(*  directories except the ASL-derived Sail code in the aarch64 directory,  *)
+(*  are subject to the BSD two-clause licence below.                        *)
+(*                                                                          *)
+(*  The ASL derived parts of the ARMv8.3 specification in                   *)
+(*  aarch64/no_vector and aarch64/full are copyright ARM Ltd.               *)
+(*                                                                          *)
+(*  Copyright (c) 2013-2026                                                 *)
+(*    Kathyrn Gray                                                          *)
+(*    Shaked Flur                                                           *)
+(*    Stephen Kell                                                          *)
+(*    Gabriel Kerneis                                                       *)
+(*    Robert Norton-Wright                                                  *)
+(*    Christopher Pulte                                                     *)
+(*    Peter Sewell                                                          *)
+(*    Alasdair Armstrong                                                    *)
+(*    Brian Campbell                                                        *)
+(*    Thomas Bauereiss                                                      *)
+(*    Anthony Fox                                                           *)
+(*    Jon French                                                            *)
+(*    Dominic Mulligan                                                      *)
+(*    Stephen Kell                                                          *)
+(*    Mark Wassell                                                          *)
+(*    Alastair Reid (Arm Ltd)                                               *)
+(*                                                                          *)
+(*  All rights reserved.                                                    *)
+(*                                                                          *)
+(*  This work was partially supported by EPSRC grant EP/K008528/1 REMS:     *)
+(*  Rigorous Engineering for Mainstream Systems, an ARM iCASE award, EPSRC  *)
+(*  IAA KTF funding, and donations from Arm. This project has received      *)
+(*  funding from the European Research Council (ERC) under the European     *)
+(*  Union's Horizon 2020 research and innovation programme (grant agreement *)
+(*  No 789108, ELVER).                                                      *)
+(*                                                                          *)
+(*  This software was developed by SRI International and the University of  *)
+(*  Cambridge Computer Laboratory (Department of Computer Science and       *)
+(*  Technology) under DARPA/AFRL contracts FA8650-18-C-7809 ("CIFV")        *)
+(*  and FA8750-10-C-0237 ("CTSRD").                                         *)
+(*                                                                          *)
+(*  SPDX-License-Identifier: BSD-2-Clause                                   *)
+(* ************************************************************************ *)
+
 From Stdlib Require Import Lia.
 From Stdlib Require Import Lists.List.
 From Stdlib Require Import ZArith.
@@ -17,6 +60,72 @@ Import ListNotations.
    Sail AST constructor [X_whatever] is wrapped in an [X_aux] constructor
    that stores additional annotation data, and we can make our custom induction
    rules work around this. *)
+
+Section pat_ind_g.
+  Variables (A : Set)
+            (P : pat A -> Prop)
+            (H_lit : forall lit ann, P (P_aux (P_lit lit) ann))
+            (H_wild : forall ann, P (P_aux P_wild ann))
+            (H_or : forall pat1 pat2 ann, P pat1 -> P pat2 -> P (P_aux (P_or pat1 pat2) ann))
+            (H_not : forall pat ann, P pat -> P (P_aux (P_not pat) ann))
+            (H_as : forall pat id ann, P pat -> P (P_aux (P_as pat id) ann))
+            (H_typ : forall typ pat ann, P pat -> P (P_aux (P_typ typ pat) ann))
+            (H_id : forall id ann, P (P_aux (P_id id) ann))
+            (H_var : forall pat typ_pat ann, P pat -> P (P_aux (P_var pat typ_pat) ann))
+            (H_app : forall id pats ann, Forall P pats -> P (P_aux (P_app id pats) ann))
+            (H_vector : forall pats ann, Forall P pats -> P (P_aux (P_vector pats) ann))
+            (H_vector_concat : forall pats ann, Forall P pats -> P (P_aux (P_vector_concat pats) ann))
+            (H_vector_subrange : forall id n m ann, P (P_aux (P_vector_subrange id n m) ann))
+            (H_tuple : forall pats ann, Forall P pats -> P (P_aux (P_tuple pats) ann))
+            (H_list : forall pats ann, Forall P pats -> P (P_aux (P_list pats) ann))
+            (H_cons : forall pat1 pat2 ann, P pat1 -> P pat2 -> P (P_aux (P_cons pat1 pat2) ann))
+            (H_string_append : forall pats ann, Forall P pats -> P (P_aux (P_string_append pats) ann))
+            (H_struct : forall sname fields wild ann, Forall (fun f => P (snd f)) fields -> P (P_aux (P_struct sname fields wild) ann)).
+
+  Fixpoint pat_ind_g pat : P pat.
+  Proof using All.
+    destruct pat as [aux ann].
+    destruct aux.
+    - apply H_lit.
+    - apply H_wild.
+    - apply H_or; trivial.
+    - apply H_not; trivial.
+    - apply H_as; trivial.
+    - apply H_typ; trivial.
+    - apply H_id.
+    - apply H_var; trivial.
+    - apply H_app.
+      induction l.
+      + trivial.
+      + apply Forall_cons; [trivial | assumption].
+    - apply H_vector.
+      induction l.
+      + trivial.
+      + apply Forall_cons; [trivial | assumption].
+    - apply H_vector_concat.
+      induction l.
+      + trivial.
+      + apply Forall_cons; [trivial | assumption].
+    - apply H_vector_subrange.
+    - apply H_tuple.
+      induction l.
+      + trivial.
+      + apply Forall_cons; [trivial | assumption].
+    - apply H_list.
+      induction l.
+      + trivial.
+      + apply Forall_cons; [trivial | assumption].
+    - apply H_cons; trivial.
+    - apply H_string_append.
+      induction l.
+      + trivial.
+      + apply Forall_cons; [trivial | assumption].
+    - apply H_struct.
+      induction l.
+      + trivial.
+      + apply Forall_cons; [trivial | assumption].
+  Qed.
+End pat_ind_g.
 
 Section lexp_ind_g.
   Variables (A : Set)

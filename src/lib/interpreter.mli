@@ -49,7 +49,6 @@ open Ast_compare
 open Ast_util
 open Ast_defs
 open Type_check
-open Value_type
 open Value
 
 type gstate = {
@@ -69,7 +68,7 @@ type lstate = { locals : value Bindings.t }
 
 type state = lstate * gstate
 
-type return_value = Semantics.return_value
+type return_value = Extraction.Semantics.return_value
 
 module Monad : sig
   type 'a t

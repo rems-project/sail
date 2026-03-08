@@ -200,3 +200,88 @@ module Raw =
                | Some _ -> f o o'
                | None -> None)
  end
+
+module Make =
+ functor (X:OrderedType.OrderedType) ->
+ struct
+  module Raw = Raw(X)
+
+  module E = X
+
+  type key = E.t
+
+  type 'elt slist = { this : 'elt Raw.t }
+
+  (** val this : 'a1 slist -> 'a1 Raw.t **)
+
+  let this s =
+    s.this
+
+  type 'elt t = 'elt slist
+
+  (** val empty : 'a1 t **)
+
+  let empty =
+    { this = Raw.empty }
+
+  (** val is_empty : 'a1 t -> bool **)
+
+  let is_empty m =
+    Raw.is_empty m.this
+
+  (** val add : key -> 'a1 -> 'a1 t -> 'a1 t **)
+
+  let add x e m =
+    { this = (Raw.add x e m.this) }
+
+  (** val find : key -> 'a1 t -> 'a1 option **)
+
+  let find x m =
+    Raw.find x m.this
+
+  (** val remove : key -> 'a1 t -> 'a1 t **)
+
+  let remove x m =
+    { this = (Raw.remove x m.this) }
+
+  (** val mem : key -> 'a1 t -> bool **)
+
+  let mem x m =
+    Raw.mem x m.this
+
+  (** val map : ('a1 -> 'a2) -> 'a1 t -> 'a2 t **)
+
+  let map f m =
+    { this = (Raw.map f m.this) }
+
+  (** val mapi : (key -> 'a1 -> 'a2) -> 'a1 t -> 'a2 t **)
+
+  let mapi f m =
+    { this = (Raw.mapi f m.this) }
+
+  (** val map2 :
+      ('a1 option -> 'a2 option -> 'a3 option) -> 'a1 t -> 'a2 t -> 'a3 t **)
+
+  let map2 f m m' =
+    { this = (Raw.map2 f m.this m'.this) }
+
+  (** val elements : 'a1 t -> (key * 'a1) list **)
+
+  let elements m =
+    Raw.elements m.this
+
+  (** val cardinal : 'a1 t -> Big_int_Z.big_int **)
+
+  let cardinal m =
+    length m.this
+
+  (** val fold : (key -> 'a1 -> 'a2 -> 'a2) -> 'a1 t -> 'a2 -> 'a2 **)
+
+  let fold f m i =
+    Raw.fold f m.this i
+
+  (** val equal : ('a1 -> 'a1 -> bool) -> 'a1 t -> 'a1 t -> bool **)
+
+  let equal cmp m m' =
+    Raw.equal cmp m.this m'.this
+ end

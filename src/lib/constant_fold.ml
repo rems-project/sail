@@ -69,7 +69,7 @@ and exp_of_value = function
   | V_string str -> mk_lit_exp (L_string str)
   | V_record fields -> mk_exp (E_struct (SN_anon, List.map fexp_of_ctor fields))
   | V_bitvector bs -> (
-      match Semantics.hex_digits_of_bitlist bs with
+      match BitList.to_hex_digits bs with
       | Some hs -> mk_lit_exp (L_hex (non_empty_singleton hs))
       | None -> mk_lit_exp (L_bin (non_empty_singleton (List.map (function B0 -> Bin_0 | B1 -> Bin_1) bs)))
     )

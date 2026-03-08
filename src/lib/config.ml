@@ -524,7 +524,7 @@ let valid_hex_char c =
 let bin_digit_to_bit = function Bin_0 -> B0 | Bin_1 -> B1
 
 let fix_length ~at:l ~len bitlist =
-  let open Value_type in
+  let open Extraction.ValueType in
   match Primops.zero_extend (V_bitvector bitlist) (V_int (Big_int.of_int len)) with
   | Some (V_bitvector bitlist) -> bitlist
   | _ ->
@@ -544,7 +544,7 @@ let parse_json_string_to_bits ~at:l ~len str =
       Some (List.map bin_digit_to_bit bin_digits |> fix_length ~at:l ~len)
     else if str_len > 2 && String.sub str 0 2 = "0x" then
       let* hex_digits = Util.drop 2 chars |> List.filter_map valid_hex_char |> Util.option_all in
-      Some (List.map Semantics.bitlist_of_hex_digit hex_digits |> List.concat |> fix_length ~at:l ~len)
+      Some (List.map BitList.of_hex_digit hex_digits |> List.concat |> fix_length ~at:l ~len)
     else
       let* dec_chars = List.filter_map valid_dec_char chars |> Util.option_all in
       let n = List.to_seq dec_chars |> String.of_seq |> Big_int.of_string in
@@ -572,7 +572,7 @@ let parse_json_string_to_abstract_bits ~at:l ~len str =
     Some (List.map bin_digit_to_bit bin_digits |> mask)
   else if str_len > 2 && String.sub str 0 2 = "0x" then
     let* hex_digits = Util.drop 2 chars |> List.filter_map valid_hex_char |> Util.option_all in
-    Some (List.map Semantics.bitlist_of_hex_digit hex_digits |> List.concat |> mask)
+    Some (List.map BitList.of_hex_digit hex_digits |> List.concat |> mask)
   else
     let* dec_chars = List.filter_map valid_dec_char chars |> Util.option_all in
     let n = List.to_seq dec_chars |> String.of_seq |> Big_int.of_string in

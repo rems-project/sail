@@ -5,6 +5,15 @@ type l = Parse_ast.l
 
 type attribute_data = Parse_ast.Attribute_data.attribute_data
 
+type id_type =
+| Local_variable
+| Global_register
+| Enum_member
+
+type vector_concat_split =
+| No_split
+| Split of Big_int_Z.big_int
+
 type visibility =
 | Public
 | Private of Parse_ast.l

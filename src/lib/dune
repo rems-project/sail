@@ -24,7 +24,7 @@
    true
    %{jib_ott})))
 
-(copy_files extraction/*.{ml,mli})
+(include_subdirs qualified)
 
 (copy_files ../gen_lib/*.lem)
 

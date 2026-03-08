@@ -19,7 +19,7 @@ license: "BSD-2-Clause"
 homepage: "https://github.com/rems-project/sail"
 bug-reports: "https://github.com/rems-project/sail/issues"
 depends: [
-  "dune" {>= "3.11"}
+  "dune" {>= "3.21"}
   "ocaml" {>= "4.08.1"}
   "odoc" {with-doc}
 ]
@@ -40,3 +40,4 @@ build: [
   ["dune" "install" "-p" name "--create-install-files" name]
 ]
 dev-repo: "git+https://github.com/rems-project/sail.git"
+x-maintenance-intent: ["(latest)"]

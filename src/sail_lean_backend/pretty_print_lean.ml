@@ -542,10 +542,10 @@ and doc_vector_concat pats =
   let rec doc_part (P_aux (aux, (l, _)) as pat) =
     match aux with
     | P_lit (L_aux (L_bin bin, _)) ->
-        let bits = Semantics.bitlist_of_bin_lit bin in
+        let bits = BitList.of_bin_lit bin in
         concat_map (function B0 -> char '0' | B1 -> char '1') bits
     | P_lit (L_aux (L_hex hex, _)) ->
-        let bits = Semantics.bitlist_of_hex_lit hex in
+        let bits = BitList.of_hex_lit hex in
         concat_map (function B0 -> char '0' | B1 -> char '1') bits
     | P_id id -> (
         match destruct_bitvector (env_of_pat pat) (typ_of_pat pat) with
