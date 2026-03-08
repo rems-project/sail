@@ -1,9 +1,7 @@
 #!/usr/bin/env python3
 
 import os
-import re
 import sys
-import hashlib
 
 mydir = os.path.dirname(__file__)
 os.chdir(mydir)
@@ -11,50 +9,35 @@ sys.path.insert(0, os.path.realpath('..'))
 
 from sailtest import *
 
-sail_dir = get_sail_dir()
-sail = get_sail()
+class SailcovTests(SailTest):
+    def run(self):
+        sailcov = '{}/sailcov/sailcov'.format(self.sail_dir)
+        banner('Testing sailcov')
+        if not self._have_sailcov(sailcov):
+            print('Skipping because no sailcov executable found')
+            # Append an empty suite so tests.xml is still written
+            self._xml_parts.append(Results('sailcov').finish())
+            return
+        self.run_tests('sailcov', os.listdir('.'), self._make_test(sailcov))
 
-print("Sail is {}".format(sail))
-print("Sail dir is {}".format(sail_dir))
+    def _have_sailcov(self, sailcov):
+        try:
+            subprocess.call([sailcov, '--help'], stdout=subprocess.DEVNULL)
+            return True
+        except FileNotFoundError:
+            return False
 
-sailcov = '{}/sailcov/sailcov'.format(sail_dir)
+    def _make_test(self, sailcov):
+        def fn(filename, basename):
+            step('\'{}\' -no_warn -no_memo_z3 -c -c_include sail_coverage.h -c_coverage {}.branches {} -o {}'.format(
+                self.sail, basename, filename, basename))
+            step('cc {}.c \'{}\'/lib/*.c \'{}\'/lib/coverage/target/release/libsail_coverage.a -lgmp -lpthread -ldl -I \'{}\'/lib -o {}.bin'.format(
+                basename, self.sail_dir, self.sail_dir, self.sail_dir, basename))
+            step('./{}.bin -c {}.taken'.format(basename, basename))
+            step('\'{}\' --werror --all {}.branches --taken {}.taken {}'.format(
+                sailcov, basename, basename, filename))
+            step('diff {}.html {}.expect'.format(basename, basename))
+            step('rm {}.taken {}.bin {}.branches'.format(basename, basename, basename))
+        return fn
 
-def have_sailcov():
-    try:
-        subprocess.call([sailcov, '--help'], stdout=subprocess.DEVNULL)
-        return True
-    except FileNotFoundError:
-        return False
-
-def test_sailcov():
-    banner('Testing sailcov')
-    results = Results('sailcov')
-    if not have_sailcov():
-        print('Skipping because no sailcov executable found')
-        return results.finish()
-    for filenames in chunks(os.listdir('.'), parallel()):
-        tests = {}
-        for filename in filenames:
-            basename = os.path.splitext(os.path.basename(filename))[0]
-            tests[filename] = os.fork()
-            if tests[filename] == 0:
-                step('\'{}\' -no_warn -no_memo_z3 -c -c_include sail_coverage.h -c_coverage {}.branches {} -o {}'.format(sail, basename, filename, basename))
-                step('cc {}.c \'{}\'/lib/*.c \'{}\'/lib/coverage/target/release/libsail_coverage.a -lgmp -lpthread -ldl -I \'{}\'/lib -o {}.bin'.format(basename, sail_dir, sail_dir, sail_dir, basename))
-                step('./{}.bin -c {}.taken'.format(basename, basename))
-                step('\'{}\' --werror --all {}.branches --taken {}.taken {}'.format(sailcov, basename, basename, filename))
-                step('diff {}.html {}.expect'.format(basename, basename))
-                step('rm {}.taken {}.bin {}.branches'.format(basename, basename, basename))
-                print_ok(filename)
-                sys.exit()
-        results.collect(tests)
-    return results.finish()
-
-xml = '<testsuites>\n'
-
-xml += test_sailcov()
-
-xml += '</testsuites>\n'
-
-output = open('tests.xml', 'w')
-output.write(xml)
-output.close()
+SailcovTests().main()

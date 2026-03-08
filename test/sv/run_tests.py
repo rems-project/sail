@@ -1,18 +1,13 @@
 #!/usr/bin/env python3
 
 import os
-import re
 import sys
-import hashlib
 
 mydir = os.path.dirname(__file__)
 os.chdir(mydir)
 sys.path.insert(0, os.path.realpath('..'))
 
 from sailtest import *
-
-sail_dir = get_sail_dir()
-sail = get_sail()
 
 skip_tests = {
     'all_even_vector_length', # loops
@@ -39,43 +34,30 @@ skip_tests = {
     'mini_builtins', # unsupported builtins
 }
 
-print("Sail is {}".format(sail))
-print("Sail dir is {}".format(sail_dir))
+class SvTests(SailTest):
+    def run(self):
+        banner('Testing SystemVerilog with options:')
+        self.run_tests('SystemVerilog', os.listdir('../c'),
+                       self._make_test('', just_check=False),
+                       skip_set=skip_tests)
 
-def test_sv(name, opts, skip_list, just_check):
-    banner('Testing {} with options:{}'.format(name, opts))
-    results = Results(name)
-    for filenames in chunks(os.listdir('../c'), parallel()):
-        tests = {}
-        for filename in filenames:
-            basename = os.path.splitext(os.path.basename(filename))[0]
-            if basename in skip_list:
-                print_skip(filename)
-                continue
-            tests[filename] = os.fork()
-            if tests[filename] == 0:
-                step('rm -rf {}_obj_dir'.format(basename));
-                if basename.startswith('fail') or just_check:
-                    step('\'{}\' --no-warn --sv ../c/{} -o {} --sv-verilate compile{} --sv-verilate-jobs 1 > {}.out'.format(sail, filename, basename, opts, basename))
-                else:
-                    step('\'{}\' --no-warn --sv ../c/{} -o {} --sv-verilate run{} --sv-verilate-jobs 1 > {}.out'.format(sail, filename, basename, opts, basename))
-                    step('awk \'/SAIL START/{{flag=1;next}}/SAIL END/{{flag=0}}flag\' {}.out > {}.result'.format(basename, basename))
-                    step('diff ../c/{}.expect {}.result'.format(basename, basename))
-                print_ok(filename)
-                sys.exit()
-        results.collect(tests)
-    return results.finish()
+        banner('Testing SystemVerilog (nostrings) with options: --sv-no-strings')
+        self.run_tests('SystemVerilog (nostrings)', os.listdir('../c'),
+                       self._make_test(' --sv-no-strings', just_check=True),
+                       skip_set=skip_tests)
 
-xml = '<testsuites>\n'
+    def _make_test(self, opts, just_check):
+        def fn(filename, basename):
+            step('rm -rf {}_obj_dir'.format(basename))
+            if basename.startswith('fail') or just_check:
+                step('\'{}\' --no-warn --sv ../c/{} -o {} --sv-verilate compile{} --sv-verilate-jobs 1 > {}.out'.format(
+                    self.sail, filename, basename, opts, basename))
+            else:
+                step('\'{}\' --no-warn --sv ../c/{} -o {} --sv-verilate run{} --sv-verilate-jobs 1 > {}.out'.format(
+                    self.sail, filename, basename, opts, basename))
+                step('awk \'/SAIL START/{{flag=1;next}}/SAIL END/{{flag=0}}flag\' {}.out > {}.result'.format(
+                    basename, basename))
+                step('diff ../c/{}.expect {}.result'.format(basename, basename))
+        return fn
 
-xml += test_sv('SystemVerilog', '', skip_tests, False)
-xml += test_sv('SystemVerilog (nostrings)', ' --sv-no-strings', skip_tests, True)
-# xml += test_sv('SystemVerilog', ' -sv_padding', skip_tests)
-# xml += test_sv('SystemVerilog', ' --Oconstant-fold', skip_tests)
-# xml += test_sv('SystemVerilog', ' -sv_specialize 2', skip_tests)
-
-xml += '</testsuites>\n'
-
-output = open('tests.xml', 'w')
-output.write(xml)
-output.close()
+SvTests().main()

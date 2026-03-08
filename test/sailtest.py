@@ -210,3 +210,58 @@ class Results:
         suite = '  <testsuite name="{}" tests="{}" failures="{}" timestamp="{}">\n{}  </testsuite>\n'
         self.xml = suite.format(self.name, self.passes + self.failures, self.failures, time, self.xml)
         return self.xml
+
+
+class SailTest:
+    """Base class for Sail test runners.
+
+    Subclasses override run() to call self.run_tests() one or more times, then
+    invoke MyTests().main() at the bottom of the script.
+    """
+
+    def __init__(self):
+        self.sail = get_sail()
+        self.sail_dir = get_sail_dir()
+        self._xml_parts = []
+        print("Sail is {}".format(self.sail))
+        print("Sail dir is {}".format(self.sail_dir))
+
+    def run_tests(self, name, filenames, fn, expected_failures=None, skip_set=None, skip_fn=None, chunks_fn=None):
+        """Run a set of tests in parallel using fork/collect.
+
+        fn(filename, basename) is called in each child process and should use
+        step() for each command. The base class calls print_ok() and sys.exit(0)
+        after fn returns.
+
+        expected_failures: dict of {filename: reason} for known xfails
+        skip_set: set of basenames to skip before forking
+        skip_fn: callable(filename, basename) -> bool for complex skip logic
+        chunks_fn: replacement for the default chunks() function
+        """
+        results = Results(name)
+        if expected_failures:
+            for test, reason in expected_failures.items():
+                results.expect_failure(test, reason)
+        for chunk in (chunks_fn or chunks)(filenames, parallel()):
+            tests = {}
+            for filename in chunk:
+                basename = os.path.splitext(os.path.basename(filename))[0]
+                if (skip_set and basename in skip_set) or (skip_fn and skip_fn(filename, basename)):
+                    print_skip(filename)
+                    continue
+                tests[filename] = os.fork()
+                if tests[filename] == 0:
+                    fn(filename, basename)
+                    print_ok(filename)
+                    sys.exit(0)
+            results.collect(tests)
+        self._xml_parts.append(results.finish())
+
+    def run(self):
+        raise NotImplementedError
+
+    def main(self):
+        self.run()
+        xml = '<testsuites>\n' + ''.join(self._xml_parts) + '</testsuites>\n'
+        with open('tests.xml', 'w') as f:
+            f.write(xml)

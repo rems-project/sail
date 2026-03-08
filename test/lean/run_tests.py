@@ -1,10 +1,7 @@
 #!/usr/bin/env python3
 
 import os
-import re
 import sys
-import hashlib
-import argparse
 
 mydir = os.path.dirname(__file__)
 os.chdir(mydir)
@@ -12,16 +9,6 @@ sys.path.insert(0, os.path.realpath('..'))
 
 from sailtest import *
 
-update_expected = args.update_expected
-run_skips = args.run_skips
-local_support_lib = args.lean_local_support_library
-
-sail_dir = get_sail_dir()
-sail = get_sail()
-
-# Self-tests refers to self contained Sail programs in test/c/ which are Sail programs
-# that you can run to exercise the language and the extracted output.
-# Not all self-tests are supported.
 skip_selftests = {
     'outcome_impl', # custom outcome types (not expected to work)
     'outcome_impl_int', # custom outcome types (not expected to work)
@@ -52,109 +39,83 @@ skip_selftests = {
     'let_assert',
 }
 
-print("Sail is {}".format(sail))
-print("Sail dir is {}".format(sail_dir))
+class LeanTests(SailTest):
+    def run(self):
+        banner("Cloning the support library")
+        support_lib_lean = self._get_support_lib('lean')
+        print("...done!")
+        banner('Testing lean target (sub-directory: lean)')
+        self.run_tests('lean', os.listdir('../lean'),
+                       self._make_test('lean', support_lib_lean, runnable=False))
 
-def get_support_lib(subdir) -> str:
-    if local_support_lib:
-        return local_support_lib
-    else:
-        lean_path = f"../{subdir}"
-        lib_path = f"../{subdir}/support-lib"
-        step(f"rm -rf {lib_path} || true")
-        step(f"git clone https://github.com/rems-project/lean-sail.git {lib_path}")
+        banner("Cloning the support library")
+        support_lib_c = self._get_support_lib('c')
+        print("...done!")
+        banner('Testing lean target (sub-directory: c)')
+        self.run_tests('c (lean runnable)', os.listdir('../c'),
+                       self._make_test('c', support_lib_c, runnable=True, skip_list=skip_selftests),
+                       skip_fn=self._make_skip_fn(skip_selftests))
+
+    def _get_support_lib(self, subdir):
+        local = args.lean_local_support_library
+        if local:
+            return local
+        lib_path = '../{}/support-lib'.format(subdir)
+        step('rm -rf {} || true'.format(lib_path))
+        step('git clone https://github.com/rems-project/lean-sail.git {}'.format(lib_path))
         print("Building the support library")
-        step("lake build", cwd=lib_path)
-        return f"../../support-lib"
+        step('lake build', cwd=lib_path)
+        return '../../support-lib'
 
-def test_lean(subdir: str, skip_list = None, runnable: bool = False):
-    """
-    Run all Sail files available in the `subdir`.
-    If `runnable` is set to `True`, it will do `lake run`
-    instead of `lake build`.
-    """
-    banner("Cloning the support library")
-    support_lib = get_support_lib(subdir)
-    print("...done!")
-    banner(f'Testing lean target (sub-directory: {subdir})')
-    results = Results(subdir)
-    for filenames in chunks(os.listdir(f'../{subdir}'), parallel()):
-        tests = {}
-        for filename in filenames:
-            basename = os.path.splitext(os.path.basename(filename))[0]
-            is_skip = False
+    def _make_skip_fn(self, skip_list):
+        def skip_fn(filename, basename):
+            return not args.run_skips and basename in skip_list
+        return skip_fn
 
-            if skip_list is not None and basename in skip_list:
-                if run_skips:
-                    is_skip = True
-                else:
-                    print_skip(filename)
-                    continue
+    def _make_test(self, subdir, support_lib, runnable, skip_list=None):
+        def fn(filename, basename):
+            is_skip = skip_list is not None and basename in skip_list and args.run_skips
+            os.chdir('../{}'.format(subdir))
+            step('rm -rf {} || true'.format(basename))
+            step('mkdir -p {}'.format(basename))
+            extra_flags = (
+                ['--splice', 'coq-print.splice', '--strict-bitvector'] if runnable
+                else ['--lean-matchbv']
+            )
+            extra_flags_str = ' '.join(extra_flags)
+            step("'{}' {} {} --lean --lean-single-file --lean-executable --lean-output-dir {} --lean-lib-path {}".format(
+                self.sail, extra_flags_str, filename, basename, support_lib), name=filename)
+            step('lake update', cwd='{}/out'.format(basename), name=filename)
+            if runnable:
+                expected_status = 1 if basename.startswith('fail') else 0
+                step('lake exe run > expected 2> err_status',
+                     cwd='{}/out'.format(basename), name=filename,
+                     expected_status=expected_status,
+                     stderr_file='{}/out/err_status'.format(basename))
+            else:
+                step('lake update', cwd='{}/out'.format(basename), name=filename)
+                step('lake build', cwd='{}/out'.format(basename), name=filename)
 
-            tests[filename] = os.fork()
-            if tests[filename] == 0:
-                os.chdir(f'../{subdir}')
-                step('rm -rf {} || true'.format(basename))
-                step('mkdir -p {}'.format(basename))
-                # TODO: should probably be dependent on whether print should be pure or effectful.
-                extra_flags = [
-                    '--splice',
-                    'coq-print.splice',
-                    '--strict-bitvector',
-                ] if runnable else [ ]
-                if not runnable:
-                    extra_flags.append('--lean-matchbv')
-                extra_flags = ' '.join(extra_flags)
-                step("'{}' {} {} --lean --lean-single-file  --lean-executable --lean-output-dir {} --lean-lib-path {}".format(
-                    sail, extra_flags, filename, basename, support_lib), name=filename)
-                step('lake update', cwd=f'{basename}/out', name=filename)
-                expected_status = 0
-                if runnable and basename.startswith('fail'):
-                    expected_status = 1
-                if runnable:
-                    step(f'lake exe run > expected 2> err_status',
-                        cwd=f'{basename}/out',
-                        name=filename,
-                        expected_status=expected_status,
-                        stderr_file=f'{basename}/out/err_status')
-                else:
-                    # NOTE: lake --dir does not behave the same as cd $dir && lake build...
-                    step('lake update', cwd=f'{basename}/out', name=filename)
-                    step('lake build', cwd=f'{basename}/out', name=filename)
-
-                if not runnable:
-                    output = f"{basename}/output"
-                    step(f'cat {basename}/out/Out/Defs.lean > {output}')
-                    step(f'echo >> {output}; echo "XXXXXXXXX" >> {output}; echo >> {output}')
-                    step(f'cat {basename}/out/Out.lean >> {output}')
-                    status = step_with_status(f'diff {output} {basename}.expected.lean', name=filename)
-                    if status != 0:
-                        if update_expected:
-                            print(f'Overriding file {basename}.expected.lean')
-                            step(f'cp {output} {basename}.expected.lean')
-                        else:
-                            sys.exit(1)
-                else:
-                    status = step_with_status(f'diff {basename}/out/expected {basename}.expect', name=filename)
-                    if status != 0:
+            if not runnable:
+                output = '{}/output'.format(basename)
+                step('cat {}/out/Out/Defs.lean > {}'.format(basename, output))
+                step('echo >> {0}; echo "XXXXXXXXX" >> {0}; echo >> {0}'.format(output))
+                step('cat {}/out/Out.lean >> {}'.format(basename, output))
+                status = step_with_status('diff {} {}.expected.lean'.format(output, basename), name=filename)
+                if status != 0:
+                    if args.update_expected:
+                        print('Overriding file {}.expected.lean'.format(basename))
+                        step('cp {} {}.expected.lean'.format(output, basename))
+                    else:
                         sys.exit(1)
+            else:
+                status = step_with_status('diff {}/out/expected {}.expect'.format(basename, basename), name=filename)
+                if status != 0:
+                    sys.exit(1)
 
-                step('rm -rf {}'.format(basename))
+            step('rm -rf {}'.format(basename))
+            if is_skip:
+                print('{} now passes!'.format(basename))
+        return fn
 
-                if is_skip:
-                    print(f'{basename} now passes!')
-                print_ok(filename)
-                sys.exit(0)
-        results.collect(tests)
-    return results.finish()
-
-xml = '<testsuites>\n'
-
-xml += test_lean('lean')
-xml += test_lean('c', skip_list=skip_selftests, runnable=True)
-
-xml += '</testsuites>\n'
-
-output = open('tests.xml', 'w')
-output.write(xml)
-output.close()
+LeanTests().main()

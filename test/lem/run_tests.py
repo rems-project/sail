@@ -1,10 +1,7 @@
 #!/usr/bin/env python3
 
 import os
-import re
 import sys
-import hashlib
-
 from shutil import which
 
 mydir = os.path.dirname(__file__)
@@ -12,9 +9,6 @@ os.chdir(mydir)
 sys.path.insert(0, os.path.realpath('..'))
 
 from sailtest import *
-
-sail_dir = get_sail_dir()
-sail = get_sail()
 
 test_dir = '../typecheck/pass'
 
@@ -79,39 +73,28 @@ skip_tests_mwords = {
     'if_unify',
 }
 
-print('Sail is {}'.format(sail))
-print('Sail dir is {}'.format(sail_dir))
+class LemTests(SailTest):
+    def run(self):
+        if which('cvc4') is None:
+            skip_tests.add('type_pow_zero')
+            skip_tests_mwords.add('type_pow_zero')
 
-def test_lem(name, opts, skip_list):
-    if which('cvc4') is None:
-        skip_tests.add('type_pow_zero')
-        skip_tests_mwords.add('type_pow_zero')
-    banner('Testing Lem {}'.format(name))
-    results = Results(name)
-    for filenames in chunks(os.listdir(test_dir), parallel()):
-        tests = {}
-        for filename in filenames:
-            basename = os.path.splitext(os.path.basename(filename))[0]
-            if basename in skip_list:
-                print_skip(filename)
-                continue
-            tests[filename] = os.fork()
-            if tests[filename] == 0:
-                step('\'{}\' --lem {} --strict-bitvector -o {} {}/{}'.format(sail, opts, basename, test_dir, filename))
-                step('lem -lib \'{}\'/src/gen_lib {}_types.lem {}.lem'.format(sail_dir, basename, basename))
-                step('rm {}_types.lem {}.lem'.format(basename, basename))
-                print_ok(filename)
-                sys.exit(0)
-        results.collect(tests)
-    return results.finish()
+        banner('Testing Lem with bitlists')
+        self.run_tests('with bitlists', os.listdir(test_dir), self._make_test(''),
+                       skip_set=skip_tests)
 
-xml = '<testsuites>\n'
+        banner('Testing Lem with machine words')
+        self.run_tests('with machine words', os.listdir(test_dir),
+                       self._make_test('-lem_mwords -auto_mono'),
+                       skip_set=skip_tests_mwords)
 
-xml += test_lem('with bitlists', '', skip_tests)
-xml += test_lem('with machine words', '-lem_mwords -auto_mono', skip_tests_mwords)
+    def _make_test(self, opts):
+        def fn(filename, basename):
+            step('\'{}\' --lem {} --strict-bitvector -o {} {}/{}'.format(
+                self.sail, opts, basename, test_dir, filename))
+            step('lem -lib \'{}\'/src/gen_lib {}_types.lem {}.lem'.format(
+                self.sail_dir, basename, basename))
+            step('rm {}_types.lem {}.lem'.format(basename, basename))
+        return fn
 
-xml += '</testsuites>\n'
-
-output = open('tests.xml', 'w')
-output.write(xml)
-output.close()
+LemTests().main()
