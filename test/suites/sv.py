@@ -1,12 +1,12 @@
-#!/usr/bin/env python3
-
 import os
 import sys
 
 
 from sailtest import *
 
-_TEST_DIR = os.path.normpath(os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
+_TEST_DIR = os.path.normpath(
+    os.path.join(os.path.dirname(os.path.abspath(__file__)), "..")
+)
 _SUITE_DIR = os.path.join(_TEST_DIR, "sv")
 _EXEC_DIR = os.path.join(_SUITE_DIR, "..", "exec")
 
@@ -78,6 +78,3 @@ class SvTests(SailTest):
                 step(f"diff ../exec/{basename}.expect {basename}.result")
 
         return fn
-
-
-SvTests().main(xml_dir=_SUITE_DIR)

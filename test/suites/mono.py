@@ -1,12 +1,12 @@
-#!/usr/bin/env python3
-
 import os
 import sys
 
 
 from sailtest import *
 
-_TEST_DIR = os.path.normpath(os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
+_TEST_DIR = os.path.normpath(
+    os.path.join(os.path.dirname(os.path.abspath(__file__)), "..")
+)
 _SUITE_DIR = os.path.join(_TEST_DIR, "mono")
 _PASS_DIR = os.path.join(_SUITE_DIR, "pass")
 
@@ -30,7 +30,10 @@ class MonoTests(SailTest):
         self.banner("Monomorphisation tests")
         self.run_tests(
             "mono",
-            Batcher(_PASS_DIR, predicate=lambda f: not args.test or os.path.basename(f) in args.test),
+            Batcher(
+                _PASS_DIR,
+                predicate=lambda f: not args.test or os.path.basename(f) in args.test,
+            ),
             self._test,
             testdir=_SUITE_DIR,
         )
@@ -60,6 +63,3 @@ class MonoTests(SailTest):
         )
         os.chdir("..")
         step(f"rm -r _build_{filename}")
-
-
-MonoTests().main(xml_dir=_SUITE_DIR)

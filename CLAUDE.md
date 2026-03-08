@@ -28,6 +28,11 @@ dune fmt
 ```
 Config is in `.ocamlformat` (profile: default, version: 0.27.0, margin: 120).
 
+Python test scripts are formatted with `black`. Format with:
+```bash
+python3 -m black test/suites/*.py
+```
+
 ## Running Tests
 
 Use `SAIL=\`pwd\`/sail` to run tests — `sail` is a script in the repo root that invokes the dev build with plugins loaded and `SAIL_DIR` set automatically:
@@ -39,15 +44,15 @@ SAIL=`pwd`/sail test/run_core_tests.sh
 # All tests (requires z3, cvc4, etc.)
 SAIL=`pwd`/sail test/run_tests.sh
 
-# Individual test suites (all in test/suites/)
-SAIL=`pwd`/sail test/suites/typecheck.py
-SAIL=`pwd`/sail test/suites/exec.py
+# Individual test suites via runner.py
+SAIL=`pwd`/sail test/suites/runner.py -s typecheck
+SAIL=`pwd`/sail test/suites/runner.py -s exec
 
 # Run a single named test
-SAIL=`pwd`/sail test/suites/typecheck.py --test <testname>
+SAIL=`pwd`/sail test/suites/runner.py -s typecheck --test <testname>
 
 # Update expected output for a test
-SAIL=`pwd`/sail test/suites/typecheck.py --update-expected
+SAIL=`pwd`/sail test/suites/runner.py -s typecheck --update-expected
 ```
 
 The Makefile shortcuts use the same `sail` script:

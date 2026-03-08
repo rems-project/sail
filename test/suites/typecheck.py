@@ -1,5 +1,3 @@
-#!/usr/bin/env python3
-
 import os
 import sys
 from shutil import which
@@ -7,7 +5,9 @@ from shutil import which
 
 from sailtest import *
 
-_TEST_DIR = os.path.normpath(os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
+_TEST_DIR = os.path.normpath(
+    os.path.join(os.path.dirname(os.path.abspath(__file__)), "..")
+)
 _SUITE_DIR = os.path.join(_TEST_DIR, "typecheck")
 _PASS_DIR = os.path.join(_SUITE_DIR, "pass")
 _PROJECT_DIR = os.path.join(_SUITE_DIR, "project")
@@ -88,6 +88,3 @@ class TypecheckTests(SailTest):
         )
         step(f"diff fail/{basename}.error fail/{basename}.expect")
         step(f"rm fail/{basename}.error")
-
-
-TypecheckTests().main(xml_dir=_SUITE_DIR)

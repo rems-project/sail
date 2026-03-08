@@ -1,12 +1,12 @@
-#!/usr/bin/env python3
-
 import os
 import sys
 
 
 from sailtest import *
 
-_TEST_DIR = os.path.normpath(os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
+_TEST_DIR = os.path.normpath(
+    os.path.join(os.path.dirname(os.path.abspath(__file__)), "..")
+)
 _SUITE_DIR = os.path.join(_TEST_DIR, "lean")
 _EXEC_DIR = os.path.join(_SUITE_DIR, "..", "exec")
 
@@ -61,9 +61,7 @@ class LeanTests(SailTest):
         self.run_tests(
             "c (lean runnable)",
             Batcher(_EXEC_DIR),
-            self._make_test(
-                support_lib_exec, runnable=True, skip_list=skip_selftests
-            ),
+            self._make_test(support_lib_exec, runnable=True, skip_list=skip_selftests),
             testdir=_EXEC_DIR,
             skip_fn=self._make_skip_fn(skip_selftests),
         )
@@ -144,6 +142,3 @@ class LeanTests(SailTest):
                 print(f"{basename} now passes!")
 
         return fn
-
-
-LeanTests().main(xml_dir=_SUITE_DIR)

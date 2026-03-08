@@ -39,7 +39,8 @@ parser.add_argument(
 parser.add_argument(
     "-j", "--parallelism", help="Number of tests to run in parallel", type=int
 )
-args = parser.parse_args()
+args = None
+parallelism = None
 
 
 class Color:
@@ -53,17 +54,6 @@ class Color:
 def compact_char(code, char):
     print(f"{code}{char}{Color.END}", end="")
     sys.stdout.flush()
-
-
-# Compute parallelism once at startup so the message only prints once.
-if args.parallelism is not None:
-    parallelism = args.parallelism
-else:
-    try:
-        parallelism = int(os.environ["TEST_PAR"])
-    except (KeyError, ValueError):
-        print("Running 16 tests in parallel. Set TEST_PAR to configure")
-        parallelism = 16
 
 
 def sail_file(filename):

@@ -1,12 +1,12 @@
-#!/usr/bin/env python3
-
 import os
 import sys
 
 
 from sailtest import *
 
-_TEST_DIR = os.path.normpath(os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
+_TEST_DIR = os.path.normpath(
+    os.path.join(os.path.dirname(os.path.abspath(__file__)), "..")
+)
 _SUITE_DIR = os.path.join(_TEST_DIR, "sailcov")
 
 
@@ -50,6 +50,3 @@ class SailcovTests(SailTest):
             step(f"rm {basename}.taken {basename}.bin {basename}.branches")
 
         return fn
-
-
-SailcovTests().main(xml_dir=_SUITE_DIR)

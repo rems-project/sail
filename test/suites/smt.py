@@ -1,5 +1,3 @@
-#!/usr/bin/env python3
-
 import os
 import sys
 import shutil
@@ -7,7 +5,9 @@ import shutil
 
 from sailtest import *
 
-_TEST_DIR = os.path.normpath(os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
+_TEST_DIR = os.path.normpath(
+    os.path.join(os.path.dirname(os.path.abspath(__file__)), "..")
+)
 _SUITE_DIR = os.path.join(_TEST_DIR, "smt")
 
 # Maps replaced basename (dots→underscores) to the set of solvers to skip for
@@ -72,6 +72,3 @@ class SmtTests(SailTest):
                 step(f"grep -q ^unsat$ {basename}.out")
 
         return fn
-
-
-SmtTests().main(xml_dir=_SUITE_DIR)

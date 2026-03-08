@@ -1,12 +1,12 @@
-#!/usr/bin/env python3
-
 import os
 import sys
 
 
 from sailtest import *
 
-_TEST_DIR = os.path.normpath(os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
+_TEST_DIR = os.path.normpath(
+    os.path.join(os.path.dirname(os.path.abspath(__file__)), "..")
+)
 _SUITE_DIR = os.path.join(_TEST_DIR, "float")
 
 
@@ -17,7 +17,11 @@ class FloatTests(SailTest):
         )
         self.run_tests(
             "floating point c optimized",
-            Batcher(_SUITE_DIR, predicate=lambda f: sail_file(f) and os.path.splitext(f)[0].endswith("_test")),
+            Batcher(
+                _SUITE_DIR,
+                predicate=lambda f: sail_file(f)
+                and os.path.splitext(f)[0].endswith("_test"),
+            ),
             self._test,
             testdir=_SUITE_DIR,
         )
@@ -33,6 +37,3 @@ class FloatTests(SailTest):
         )
         step(f"diff {basename}.err_result no_error && rm {basename}.err_result")
         step(f"rm {basename}.c {basename}.h {basename}.bin {basename}.result")
-
-
-FloatTests().main(xml_dir=_SUITE_DIR)

@@ -1,12 +1,12 @@
-#!/usr/bin/env python3
-
 import os
 import sys
 
 
 from sailtest import *
 
-_TEST_DIR = os.path.normpath(os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
+_TEST_DIR = os.path.normpath(
+    os.path.join(os.path.dirname(os.path.abspath(__file__)), "..")
+)
 _SUITE_DIR = os.path.join(_TEST_DIR, "lexing")
 
 
@@ -19,6 +19,3 @@ class LexingTests(SailTest):
         step(f"'{self.sail}' {filename} 2> {basename}.error", expected_status=1)
         step(f"diff {basename}.expect {basename}.error")
         step(f"rm {basename}.error")
-
-
-LexingTests().main(xml_dir=_SUITE_DIR)

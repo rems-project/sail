@@ -1,5 +1,3 @@
-#!/usr/bin/env python3
-
 import os
 import sys
 from shutil import which
@@ -7,7 +5,9 @@ from shutil import which
 
 from sailtest import *
 
-_TEST_DIR = os.path.normpath(os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
+_TEST_DIR = os.path.normpath(
+    os.path.join(os.path.dirname(os.path.abspath(__file__)), "..")
+)
 _SUITE_DIR = os.path.join(_TEST_DIR, "lem")
 _TYPECHECK_PASS_DIR = os.path.join(_SUITE_DIR, "..", "typecheck", "pass")
 
@@ -110,6 +110,3 @@ class LemTests(SailTest):
             step(f"rm {basename}_types.lem {basename}.lem")
 
         return fn
-
-
-LemTests().main(xml_dir=_SUITE_DIR)

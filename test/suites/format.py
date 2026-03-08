@@ -1,12 +1,12 @@
-#!/usr/bin/env python3
-
 import os
 import sys
 
 
 from sailtest import *
 
-_TEST_DIR = os.path.normpath(os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
+_TEST_DIR = os.path.normpath(
+    os.path.join(os.path.dirname(os.path.abspath(__file__)), "..")
+)
 _SUITE_DIR = os.path.join(_TEST_DIR, "format")
 
 
@@ -14,7 +14,10 @@ class FormatTests(SailTest):
     def run(self):
         self.banner("Testing default")
         self.run_tests(
-            "default", Batcher(_SUITE_DIR), self._make_test("default"), testdir=_SUITE_DIR
+            "default",
+            Batcher(_SUITE_DIR),
+            self._make_test("default"),
+            testdir=_SUITE_DIR,
         )
 
         self.banner("Testing lw80_preserve")
@@ -45,6 +48,3 @@ class FormatTests(SailTest):
             step(f"rm {test_dir}/{filename}")
 
         return fn
-
-
-FormatTests().main(xml_dir=_SUITE_DIR)

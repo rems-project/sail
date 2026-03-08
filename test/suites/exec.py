@@ -1,12 +1,12 @@
-#!/usr/bin/env python3
-
 import os
 import sys
 
 
 from sailtest import *
 
-_TEST_DIR = os.path.normpath(os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
+_TEST_DIR = os.path.normpath(
+    os.path.join(os.path.dirname(os.path.abspath(__file__)), "..")
+)
 _SUITE_DIR = os.path.join(_TEST_DIR, "exec")
 
 _cpp_xfails = {
@@ -271,6 +271,3 @@ class ExecTests(SailTest):
             step(f"{filter_command} error.out | diff - ../{basename}.err_expect")
         os.chdir("..")
         step(f"rm -r _coqbuild_{basename}")
-
-
-ExecTests().main(xml_dir=_SUITE_DIR)

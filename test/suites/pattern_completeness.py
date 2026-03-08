@@ -1,12 +1,12 @@
-#!/usr/bin/env python3
-
 import os
 import sys
 
 
 from sailtest import *
 
-_TEST_DIR = os.path.normpath(os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
+_TEST_DIR = os.path.normpath(
+    os.path.join(os.path.dirname(os.path.abspath(__file__)), "..")
+)
 _SUITE_DIR = os.path.join(_TEST_DIR, "pattern_completeness")
 
 
@@ -30,6 +30,3 @@ class PatternCompletenessTests(SailTest):
             else:
                 sys.exit(1)
         step(f"rm {basename}.error")
-
-
-PatternCompletenessTests().main(xml_dir=_SUITE_DIR)

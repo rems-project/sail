@@ -1,12 +1,12 @@
-#!/usr/bin/env python3
-
 import os
 import sys
 
 
 from sailtest import *
 
-_TEST_DIR = os.path.normpath(os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
+_TEST_DIR = os.path.normpath(
+    os.path.join(os.path.dirname(os.path.abspath(__file__)), "..")
+)
 _SUITE_DIR = os.path.join(_TEST_DIR, "builtins")
 
 
@@ -118,6 +118,3 @@ class BuiltinsTests(SailTest):
             f" -A {basename}.ir -C '{isla_dir}'/configs/plain.toml main"
         )
         step(f"rm {basename}.ir")
-
-
-BuiltinsTests().main(xml_dir=_SUITE_DIR)
