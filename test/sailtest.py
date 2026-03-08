@@ -40,7 +40,7 @@ parser.add_argument("--seq", help="Run sequentially", action="store_true")
 args = parser.parse_args()
 
 
-class color:
+class Color:
     NOTICE = "\033[94m"
     PASS = "\033[92m"
     WARNING = "\033[93m"
@@ -49,7 +49,7 @@ class color:
 
 
 def compact_char(code, char):
-    print(f"{code}{char}{color.END}", end="")
+    print(f"{code}{char}{Color.END}", end="")
     sys.stdout.flush()
 
 
@@ -105,7 +105,8 @@ class Batcher:
                 if len(batch) >= parallelism:
                     batches.append(list(batch))
                     batch = []
-            batches.append(list(batch))
+            if batch:
+                batches.append(list(batch))
         finally:
             os.chdir(saved_cwd)
         return batches
@@ -115,18 +116,18 @@ def step_with_status(string, expected_status=0, cwd=None, name="", stderr_file="
     p = subprocess.run(string, shell=True, capture_output=True, text=True, cwd=cwd)
     if p.returncode != expected_status:
         if args.compact:
-            compact_char(color.FAIL, "X")
+            compact_char(Color.FAIL, "X")
         else:
-            print(f"{color.FAIL}Failed{color.END}: {name} {string}")
+            print(f"{Color.FAIL}Failed{Color.END}: {name} {string}")
         if not args.hide_error_output:
-            print(f"{color.NOTICE}stdout{color.END}:")
+            print(f"{Color.NOTICE}stdout{Color.END}:")
             print(p.stdout)
-            print(f"{color.NOTICE}stderr{color.END}:")
+            print(f"{Color.NOTICE}stderr{Color.END}:")
             print(p.stderr)
             if stderr_file:
                 try:
                     with open(stderr_file) as f:
-                        print(f"{color.NOTICE}stderr file{color.END}:")
+                        print(f"{Color.NOTICE}stderr file{Color.END}:")
                         print(f.read())
                 except FileNotFoundError:
                     print(f"File {stderr_file} not found")
@@ -194,9 +195,9 @@ class Results:
         if args.compact:
             print()
         print(
-            f"{color.NOTICE}{self.passes} passes and {self.failures} failures{xfail_msg}{color.END}"
+            f"{Color.NOTICE}{self.passes} passes and {self.failures} failures{xfail_msg}{Color.END}"
         )
-        time = datetime.datetime.utcnow()
+        time = datetime.datetime.now(datetime.timezone.utc)
         inner_xml = "".join(self._xml_lines)
         return (
             f'  <testsuite name="{self.name}" tests="{self.passes + self.failures}" '
@@ -228,18 +229,18 @@ class SailTest(ABC):
             p = subprocess.run([self.sail, "--dir"], capture_output=True, text=True)
         except Exception as e:
             print(
-                f"{color.FAIL}Unable to get Sail library directory from opam{color.END}"
+                f"{Color.FAIL}Unable to get Sail library directory from opam{Color.END}"
             )
             print(e)
             sys.exit(1)
         if p.returncode == 0:
             return p.stdout.strip()
         print(
-            f"{color.FAIL}Unable to get Sail library directory from sail --dir{color.END}"
+            f"{Color.FAIL}Unable to get Sail library directory from sail --dir{Color.END}"
         )
-        print(f"{color.NOTICE}stdout{color.END}:")
+        print(f"{Color.NOTICE}stdout{Color.END}:")
         print(p.stdout)
-        print(f"{color.NOTICE}stderr{color.END}:")
+        print(f"{Color.NOTICE}stderr{Color.END}:")
         print(p.stderr)
         sys.exit(1)
 
@@ -254,15 +255,15 @@ class SailTest(ABC):
 
     def _print_ok(self, name):
         if args.compact:
-            compact_char(color.PASS, ".")
+            compact_char(Color.PASS, ".")
         else:
-            print(f'{(name + " ").ljust(40, ".")} {color.PASS}ok{color.END}')
+            print(f'{(name + " ").ljust(40, ".")} {Color.PASS}ok{Color.END}')
 
     def _print_skip(self, name):
         if args.compact:
-            compact_char(color.WARNING, "s")
+            compact_char(Color.WARNING, "s")
         else:
-            print(f'{(name + " ").ljust(40, ".")} {color.WARNING}skip{color.END}')
+            print(f'{(name + " ").ljust(40, ".")} {Color.WARNING}skip{Color.END}')
 
     def run_tests(
         self,
