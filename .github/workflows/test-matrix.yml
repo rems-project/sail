@@ -157,8 +157,8 @@ jobs:
         export SAIL_DIR=$(pwd)
         etc/ci_coverage_tests.sh rocq
         # Workflows using the results assume filenames are unique
-        mkdir test/c-rocq
-        mv test/c/tests.xml test/c-rocq/tests.xml
+        mkdir test/exec-rocq
+        mv test/exec/tests.xml test/exec-rocq/tests.xml
         bisect-ppx-report merge --coverage-path=test/ test/suite-rocq.coverage
 
     - name: Upload test results

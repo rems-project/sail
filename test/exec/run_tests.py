@@ -28,7 +28,7 @@ def _no_valgrind():
         return True
 
 
-class CTests(SailTest):
+class ExecTests(SailTest):
     def run(self):
         targets = self.get_targets(["c", "cpp", "interpreter", "ocaml"])
         print(f"Targets: {targets}")
@@ -258,4 +258,4 @@ class CTests(SailTest):
         step(f"rm -r _coqbuild_{basename}")
 
 
-CTests().main()
+ExecTests().main()

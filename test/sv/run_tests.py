@@ -60,19 +60,19 @@ class SvTests(SailTest):
             step(f"rm -rf {basename}_obj_dir")
             if basename.startswith("fail") or just_check:
                 step(
-                    f"'{self.sail}' --no-warn --sv ../c/{filename} -o {basename}"
+                    f"'{self.sail}' --no-warn --sv ../exec/{filename} -o {basename}"
                     f" --sv-verilate compile{opts} --sv-verilate-jobs 1 > {basename}.out"
                 )
             else:
                 step(
-                    f"'{self.sail}' --no-warn --sv ../c/{filename} -o {basename}"
+                    f"'{self.sail}' --no-warn --sv ../exec/{filename} -o {basename}"
                     f" --sv-verilate run{opts} --sv-verilate-jobs 1 > {basename}.out"
                 )
                 step(
                     f"awk '/SAIL START/{{flag=1;next}}/SAIL END/{{flag=0}}flag'"
                     f" {basename}.out > {basename}.result"
                 )
-                step(f"diff ../c/{basename}.expect {basename}.result")
+                step(f"diff ../exec/{basename}.expect {basename}.result")
 
         return fn
 

@@ -10,7 +10,7 @@ if [ "$1" = "typecheck" ]; then
     test/typecheck/run_tests.py || returncode=1
 elif [ "$1" = "exec" ]; then
     test/ocaml/run_tests.py || returncode=1
-    test/c/run_tests.py || returncode=1
+    test/exec/run_tests.py || returncode=1
 elif [ "$1" = "sv" ]; then
     test/sv/run_tests.py || returncode=1
 elif [ "$1" = "lean" ]; then
@@ -28,7 +28,7 @@ elif [ "$1" = "other" ]; then
     test/float/run_tests.py || returncode=1
 elif [ "$1" = "rocq" ]; then
     test/coq/run_tests.py || returncode=1
-    test/c/run_tests.py --targets coq || returncode=1
+    test/exec/run_tests.py --targets coq || returncode=1
 fi
 
 exit $returncode

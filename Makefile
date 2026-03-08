@@ -1,4 +1,4 @@
-.PHONY: all isail sail install coverage clean asciidoc docker test core-tests c-tests extraction
+.PHONY: all isail sail install coverage clean asciidoc docker test core-tests exec-tests extraction
 
 all: sail
 
@@ -51,5 +51,5 @@ test:
 core-tests:
 	SAIL_DIR=`pwd` SAIL=`pwd`/sail test/run_core_tests.sh
 
-c-tests:
-	SAIL_DIR=`pwd` SAIL=`pwd`/sail test/c/run_tests.py
+exec-tests:
+	SAIL_DIR=`pwd` SAIL=`pwd`/sail test/exec/run_tests.py
