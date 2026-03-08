@@ -5,7 +5,6 @@ import sys
 
 os.environ["SAIL_NEW_CLI"] = "true"
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 from sailtest import *
 

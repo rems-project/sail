@@ -114,4 +114,4 @@ The `opt_` prefix convention is used throughout for mutable global option variab
 
 ### Test Infrastructure
 
-Test suite scripts live in `test/suites/` (e.g. `typecheck.py`, `exec.py`, `lean.py`) and use the shared `test/sailtest.py` helper. Test data remains in the per-backend directories (e.g. `test/typecheck/`, `test/exec/`). Tests fork processes and compare output against `.expect` files. The `--update-expected` flag regenerates expected output and `--test <name>` runs a single test.
+Test suite scripts live in `test/suites/` (e.g. `typecheck.py`, `exec.py`, `lean.py`) and use the shared `test/suites/sailtest.py` helper. Test data remains in the per-backend directories (e.g. `test/typecheck/`, `test/exec/`). Tests fork processes and compare output against `.expect` files. The `--update-expected` flag regenerates expected output and `--test <name>` runs a single test.
