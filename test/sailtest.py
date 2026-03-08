@@ -36,7 +36,9 @@ parser.add_argument(
     help="Use a local Lean support library",
     action="store",
 )
-parser.add_argument("--seq", help="Run sequentially", action="store_true")
+parser.add_argument(
+    "-j", "--parallelism", help="Number of tests to run in parallel", type=int
+)
 args = parser.parse_args()
 
 
@@ -54,8 +56,8 @@ def compact_char(code, char):
 
 
 # Compute parallelism once at startup so the message only prints once.
-if args.seq:
-    parallelism = 1
+if args.parallelism is not None:
+    parallelism = args.parallelism
 else:
     try:
         parallelism = int(os.environ["TEST_PAR"])
