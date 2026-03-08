@@ -16,12 +16,9 @@ class LexingTests(SailTest):
         self.run_tests("lex", os.listdir("."), self._test)
 
     def _test(self, filename, basename):
-        step(
-            "'{}' {} 2> {}.error".format(self.sail, filename, basename),
-            expected_status=1,
-        )
-        step("diff {}.expect {}.error".format(basename, basename))
-        step("rm {}.error".format(basename))
+        step(f"'{self.sail}' {filename} 2> {basename}.error", expected_status=1)
+        step(f"diff {basename}.expect {basename}.error")
+        step(f"rm {basename}.error")
 
 
 LexingTests().main()

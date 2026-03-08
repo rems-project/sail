@@ -12,7 +12,7 @@ from sailtest import *
 
 class SailcovTests(SailTest):
     def run(self):
-        sailcov = "{}/sailcov/sailcov".format(self.sail_dir)
+        sailcov = f"{self.sail_dir}/sailcov/sailcov"
         self.banner("Testing sailcov")
         if not self._have_sailcov(sailcov):
             print("Skipping because no sailcov executable found")
@@ -31,23 +31,21 @@ class SailcovTests(SailTest):
     def _make_test(self, sailcov):
         def fn(filename, basename):
             step(
-                "'{}' -no_warn -no_memo_z3 -c -c_include sail_coverage.h -c_coverage {}.branches {} -o {}".format(
-                    self.sail, basename, filename, basename
-                )
+                f"'{self.sail}' -no_warn -no_memo_z3 -c -c_include sail_coverage.h"
+                f" -c_coverage {basename}.branches {filename} -o {basename}"
             )
             step(
-                "cc {}.c '{}'/lib/*.c '{}'/lib/coverage/target/release/libsail_coverage.a -lgmp -lpthread -ldl -I '{}'/lib -o {}.bin".format(
-                    basename, self.sail_dir, self.sail_dir, self.sail_dir, basename
-                )
+                f"cc {basename}.c '{self.sail_dir}'/lib/*.c"
+                f" '{self.sail_dir}'/lib/coverage/target/release/libsail_coverage.a"
+                f" -lgmp -lpthread -ldl -I '{self.sail_dir}'/lib -o {basename}.bin"
             )
-            step("./{}.bin -c {}.taken".format(basename, basename))
+            step(f"./{basename}.bin -c {basename}.taken")
             step(
-                "'{}' --werror --all {}.branches --taken {}.taken {}".format(
-                    sailcov, basename, basename, filename
-                )
+                f"'{sailcov}' --werror --all {basename}.branches"
+                f" --taken {basename}.taken {filename}"
             )
-            step("diff {}.html {}.expect".format(basename, basename))
-            step("rm {}.taken {}.bin {}.branches".format(basename, basename, basename))
+            step(f"diff {basename}.html {basename}.expect")
+            step(f"rm {basename}.taken {basename}.bin {basename}.branches")
 
         return fn
 

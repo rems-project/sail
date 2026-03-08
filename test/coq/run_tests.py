@@ -46,64 +46,52 @@ _bbv_xfails = {
 
 class CoqTests(SailTest):
     def run(self):
-        self.banner("Testing Coq backend on typecheck tests with stdpp")
-        self.run_tests(
-            "typecheck tests on stdpp",
-            os.listdir("../typecheck/pass"),
-            self._make_test("../typecheck/pass", "stdpp"),
-            expected_failures=_common_xfails,
-            skip_set=skip_tests,
-        )
+        for lib in ["stdpp", "bbv"] if self._have_bbv() else ["stdpp"]:
+            xfails = (
+                {**_common_xfails, **_bbv_xfails} if lib == "bbv" else _common_xfails
+            )
+            self.banner(f"Testing Coq backend on typecheck tests with {lib}")
+            self.run_tests(
+                f"typecheck tests on {lib}",
+                os.listdir("../typecheck/pass"),
+                self._make_test("../typecheck/pass", lib),
+                expected_failures=xfails,
+                skip_set=skip_tests,
+            )
+            self.banner(f"Testing Coq backend on Coq specific tests with {lib}")
+            self.run_tests(
+                f"Coq specific tests on {lib}",
+                os.listdir("pass"),
+                self._make_test("pass", lib),
+                expected_failures=xfails,
+                skip_set=skip_tests,
+            )
 
-        self.banner("Testing Coq backend on Coq specific tests with stdpp")
-        self.run_tests(
-            "Coq specific tests on stdpp",
-            os.listdir("pass"),
-            self._make_test("pass", "stdpp"),
-            expected_failures=_common_xfails,
-            skip_set=skip_tests,
-        )
-
+    def _have_bbv(self):
         try:
             p = subprocess.run(["coqtop", "-require", "bbv.Word", "-batch"])
             if p.returncode == 0:
-                bbv_xfails = {**_common_xfails, **_bbv_xfails}
-                self.banner("Testing Coq backend on typecheck tests with bbv")
-                self.run_tests(
-                    "typecheck tests on bbv",
-                    os.listdir("../typecheck/pass"),
-                    self._make_test("../typecheck/pass", "bbv"),
-                    expected_failures=bbv_xfails,
-                    skip_set=skip_tests,
-                )
-
-                self.banner("Testing Coq backend on Coq specific tests with bbv")
-                self.run_tests(
-                    "Coq specific tests on bbv",
-                    os.listdir("pass"),
-                    self._make_test("pass", "bbv"),
-                    expected_failures=bbv_xfails,
-                    skip_set=skip_tests,
-                )
-            else:
-                print("bbv not found, skipping bbv tests")
+                return True
+            print("bbv not found, skipping bbv tests")
+            return False
         except Exception as e:
             print("Unable to check for bbv")
             print(e)
+            return False
 
     def _make_test(self, dir, lib):
         def fn(filename, basename):
-            step("mkdir -p _build_{}".format(basename))
+            step(f"mkdir -p _build_{basename}")
             step(
-                "'{}' --coq --coq-lib-style {} --dcoq-undef-axioms --strict-bitvector --coq-output-dir _build_{} -o out {}/{}".format(
-                    self.sail, lib, basename, dir, filename
-                )
+                f"'{self.sail}' --coq --coq-lib-style {lib} --dcoq-undef-axioms"
+                f" --strict-bitvector --coq-output-dir _build_{basename}"
+                f" -o out {dir}/{filename}"
             )
-            os.chdir("_build_{}".format(basename))
+            os.chdir(f"_build_{basename}")
             step("coqc out_types.v", name=basename)
             step("coqc out.v", name=basename)
             os.chdir("..")
-            step("rm -r _build_{}".format(basename))
+            step(f"rm -r _build_{basename}")
 
         return fn
 

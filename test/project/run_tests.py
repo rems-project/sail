@@ -19,11 +19,11 @@ class ProjectTests(SailTest):
 
     def _test(self, filename, basename):
         step(
-            "'{}' failure/{} 2> failure/{}.error".format(self.sail, filename, basename),
+            f"'{self.sail}' failure/{filename} 2> failure/{basename}.error",
             expected_status=1,
         )
-        step("diff failure/{}.expect failure/{}.error".format(basename, basename))
-        step("rm failure/{}.error".format(basename))
+        step(f"diff failure/{basename}.expect failure/{basename}.error")
+        step(f"rm failure/{basename}.error")
 
 
 ProjectTests().main()

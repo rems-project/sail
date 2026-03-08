@@ -80,35 +80,33 @@ class LemTests(SailTest):
             skip_tests.add("type_pow_zero")
             skip_tests_mwords.add("type_pow_zero")
 
-        self.banner("Testing Lem with bitlists")
+        opts = ""
+        self.banner(f"Testing Lem with bitlists (opts: '{opts}')")
         self.run_tests(
             "with bitlists",
             os.listdir(test_dir),
-            self._make_test(""),
+            self._make_test(opts),
             skip_set=skip_tests,
         )
 
-        self.banner("Testing Lem with machine words")
+        opts = "-lem_mwords -auto_mono"
+        self.banner(f"Testing Lem with machine words (opts: '{opts}')")
         self.run_tests(
             "with machine words",
             os.listdir(test_dir),
-            self._make_test("-lem_mwords -auto_mono"),
+            self._make_test(opts),
             skip_set=skip_tests_mwords,
         )
 
     def _make_test(self, opts):
         def fn(filename, basename):
             step(
-                "'{}' --lem {} --strict-bitvector -o {} {}/{}".format(
-                    self.sail, opts, basename, test_dir, filename
-                )
+                f"'{self.sail}' --lem {opts} --strict-bitvector -o {basename} {test_dir}/{filename}"
             )
             step(
-                "lem -lib '{}'/src/gen_lib {}_types.lem {}.lem".format(
-                    self.sail_dir, basename, basename
-                )
+                f"lem -lib '{self.sail_dir}'/src/gen_lib {basename}_types.lem {basename}.lem"
             )
-            step("rm {}_types.lem {}.lem".format(basename, basename))
+            step(f"rm {basename}_types.lem {basename}.lem")
 
         return fn
 

@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 
 import os
-import re
 import sys
 import shutil
 
@@ -39,9 +38,7 @@ class SmtTests(SailTest):
             )
         else:
             print(
-                "{}Cannot find SMT solver cvc4 skipping tests{}".format(
-                    color.WARNING, color.END
-                )
+                f"{color.WARNING}Cannot find SMT solver cvc4 skipping tests{color.END}"
             )
 
         if shutil.which("z3") is not None:
@@ -53,11 +50,7 @@ class SmtTests(SailTest):
                 skip_fn=self._make_skip_fn("z3"),
             )
         else:
-            print(
-                "{}Cannot find SMT solver z3 skipping tests{}".format(
-                    color.WARNING, color.END
-                )
-            )
+            print(f"{color.WARNING}Cannot find SMT solver z3 skipping tests{color.END}")
 
     def _make_skip_fn(self, solver_name):
         def skip_fn(filename, basename):
@@ -69,18 +62,12 @@ class SmtTests(SailTest):
     def _make_test(self, name, solver, sail_opts):
         def fn(filename, basename):
             basename = basename.replace(".", "_")
-            step(
-                "'{}' {} -smt {} -o {}".format(self.sail, sail_opts, filename, basename)
-            )
-            step(
-                "timeout 30s {} {}_prop.smt2 1> {}.out".format(
-                    solver, basename, basename
-                )
-            )
-            if re.match(r".+\.sat\.sail$", filename):
-                step("grep -q ^sat$ {}.out".format(basename))
+            step(f"'{self.sail}' {sail_opts} -smt {filename} -o {basename}")
+            step(f"timeout 30s {solver} {basename}_prop.smt2 1> {basename}.out")
+            if filename.endswith(".sat.sail"):
+                step(f"grep -q ^sat$ {basename}.out")
             else:
-                step("grep -q ^unsat$ {}.out".format(basename))
+                step(f"grep -q ^unsat$ {basename}.out")
 
         return fn
 

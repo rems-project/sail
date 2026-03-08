@@ -22,26 +22,16 @@ class FloatTests(SailTest):
         self.run_tests("floating point c optimized", test_files, self._test)
 
     def _test(self, filename, basename):
-        step("'{}' -no_warn -c {} -o {}".format(self.sail, filename, basename))
+        step(f"'{self.sail}' -no_warn -c {filename} -o {basename}")
         step(
-            "cc -O2 {}.c '{}'/lib/*.c -lgmp -I '{}'/lib -o {}.bin".format(
-                basename, self.sail_dir, self.sail_dir, basename
-            )
+            f"cc -O2 {basename}.c '{self.sail_dir}'/lib/*.c -lgmp -I '{self.sail_dir}'/lib -o {basename}.bin"
         )
         step(
-            "./{}.bin > {}.result 2> {}.err_result".format(
-                basename, basename, basename
-            ),
+            f"./{basename}.bin > {basename}.result 2> {basename}.err_result",
             expected_status=1 if basename.startswith("fail") else 0,
         )
-        step(
-            "diff {}.err_result no_error && rm {}.err_result".format(basename, basename)
-        )
-        step(
-            "rm {}.c {}.h {}.bin {}.result".format(
-                basename, basename, basename, basename
-            )
-        )
+        step(f"diff {basename}.err_result no_error && rm {basename}.err_result")
+        step(f"rm {basename}.c {basename}.h {basename}.bin {basename}.result")
 
 
 FloatTests().main()

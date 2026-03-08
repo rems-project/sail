@@ -13,7 +13,7 @@ from sailtest import *
 class OcamlTests(SailTest):
     def run(self):
         targets = self.get_targets(["ocaml", "ocaml_trace"])
-        print("Targets: {}".format(targets))
+        print(f"Targets: {targets}")
 
         if "ocaml" in targets:
             opts = ""

@@ -21,11 +21,7 @@ libraries = [
     "string",
     "undefined",
 ]
-joiner = " "
-libpaths = joiner.join(
-    ["{}/src/gen_lib/sail2_{}.lem".format("{}", lib) for lib in libraries]
-)
-libml = joiner.join(["sail2_{}.ml".format(lib) for lib in libraries])
+libml = " ".join(f"sail2_{lib}.ml" for lib in libraries)
 
 
 def _mono_chunks(filenames, cores):
@@ -48,30 +44,30 @@ class MonoTests(SailTest):
         self.run_tests("mono", os.listdir("pass"), self._test, chunks_fn=_mono_chunks)
 
     def _test(self, filename, basename):
-        with open("pass/{}".format(filename)) as f:
-            arguments = f.read()
-        step("mkdir -p _build_{}".format(filename))
-        step(
-            "'{}' --lem --lem-mwords --lem-lib Test_extra --lem-output-dir _build_{} -o out {}".format(
-                self.sail, filename, arguments
-            )
+        libpaths = " ".join(
+            f"{self.sail_dir}/src/gen_lib/sail2_{lib}.lem" for lib in libraries
         )
-        os.chdir("_build_{}".format(filename))
+        with open(f"pass/{filename}") as f:
+            arguments = f.read()
+        step(f"mkdir -p _build_{filename}")
         step(
-            "lem -ocaml -lib {}/src/lem_interp {} -outdir . ../test_extra.lem out_types.lem out.lem".format(
-                self.sail_dir, libpaths.format(self.sail_dir)
-            )
+            f"'{self.sail}' --lem --lem-mwords --lem-lib Test_extra"
+            f" --lem-output-dir _build_{filename} -o out {arguments}"
+        )
+        os.chdir(f"_build_{filename}")
+        step(
+            f"lem -ocaml -lib {self.sail_dir}/src/lem_interp {libpaths}"
+            f" -outdir . ../test_extra.lem out_types.lem out.lem"
         )
         step(
             "if grep -q initial_regstate out.lem; then cp ../test_with_state.ml test.ml; else cp ../test.ml test.ml; fi"
         )
         step(
-            "ocamlfind ocamlc -linkpkg -package zarith -package lem {} test_extra.ml out_types.ml out.ml test.ml".format(
-                libml
-            )
+            f"ocamlfind ocamlc -linkpkg -package zarith -package lem"
+            f" {libml} test_extra.ml out_types.ml out.ml test.ml"
         )
         os.chdir("..")
-        step("rm -r _build_{}".format(filename))
+        step(f"rm -r _build_{filename}")
 
 
 MonoTests().main()

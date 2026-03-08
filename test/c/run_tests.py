@@ -31,7 +31,7 @@ def _no_valgrind():
 class CTests(SailTest):
     def run(self):
         targets = self.get_targets(["c", "cpp", "interpreter", "ocaml"])
-        print("Targets: {}".format(targets))
+        print(f"Targets: {targets}")
 
         if "c" in targets:
             self._run_c_tests("unoptimized C", "", "--c-no-mangle", False)
@@ -164,54 +164,39 @@ class CTests(SailTest):
 
         def fn(filename, basename):
             step(
-                "'{}' --no-warn {} {} {} -o {}".format(
-                    self.sail, target_opt, sail_opts, filename, basename
-                )
+                f"'{self.sail}' --no-warn {target_opt} {sail_opts} {filename} -o {basename}"
             )
             step(
-                "{} {} {}.{} '{}'/lib/*.c -lgmp -I '{}'/lib -o {}.bin".format(
-                    compiler,
-                    c_opts,
-                    basename,
-                    extension,
-                    self.sail_dir,
-                    self.sail_dir,
-                    basename,
-                )
+                f"{compiler} {c_opts} {basename}.{extension}"
+                f" '{self.sail_dir}'/lib/*.c -lgmp -I '{self.sail_dir}'/lib -o {basename}.bin"
             )
             step(
-                "./{}.bin > {}.result 2> {}.err_result".format(
-                    basename, basename, basename
-                ),
+                f"./{basename}.bin > {basename}.result 2> {basename}.err_result",
                 expected_status=1 if basename.startswith("fail") else 0,
-                stderr_file="{}.err_result".format(basename),
+                stderr_file=f"{basename}.err_result",
             )
-            step("diff {}.result {}.expect".format(basename, basename))
-            if os.path.exists("{}.err_expect".format(basename)):
-                step("diff {}.err_result {}.err_expect".format(basename, basename))
+            step(f"diff {basename}.result {basename}.expect")
+            if os.path.exists(f"{basename}.err_expect"):
+                step(f"diff {basename}.err_result {basename}.err_expect")
             if valgrind and not basename.startswith("fail"):
                 step(
-                    "valgrind --leak-check=full --track-origins=yes --errors-for-leak-kinds=all --error-exitcode=2 ./{}.bin".format(
-                        basename
-                    ),
+                    f"valgrind --leak-check=full --track-origins=yes"
+                    f" --errors-for-leak-kinds=all --error-exitcode=2 ./{basename}.bin",
                     expected_status=1 if basename.startswith("fail") else 0,
                 )
             step(
-                "rm {}.{} {}.h {}.bin {}.result".format(
-                    basename, extension, basename, basename, basename
-                )
+                f"rm {basename}.{extension} {basename}.h {basename}.bin {basename}.result"
             )
 
         self.run_tests(name, os.listdir("."), fn, expected_failures=expected_failures)
 
     def _test_interpreter(self, filename, basename):
         step(
-            "timeout 10s '{}' -undefined_gen -is execute.isail -iout {}.iresult {}".format(
-                self.sail, basename, filename
-            )
+            f"timeout 10s '{self.sail}' -undefined_gen -is execute.isail"
+            f" -iout {basename}.iresult {filename}"
         )
-        step("diff {}.iresult {}.expect".format(basename, basename))
-        step("rm {}.iresult".format(basename))
+        step(f"diff {basename}.iresult {basename}.expect")
+        step(f"rm {basename}.iresult")
 
     def _test_ocaml(self, filename, basename):
         step(
@@ -227,62 +212,50 @@ class CTests(SailTest):
         step(f"rm {basename}.oresult")
 
     def _test_lem(self, filename, basename):
+        step(f"'{self.sail}' -lem -lem_lib Undefined_override -o {basename} {filename}")
+        step(f"mkdir -p _lbuild_{basename}")
+        step(f"mv {basename}.lem {basename}_types.lem _lbuild_{basename}")
+        step(f"rm {basename.capitalize()}_lemmas.thy")
+        step(f"cp lbuild/* _lbuild_{basename}")
+        os.chdir(f"_lbuild_{basename}")
         step(
-            "'{}' -lem -lem_lib Undefined_override -o {} {}".format(
-                self.sail, basename, filename
-            )
-        )
-        step("mkdir -p _lbuild_{}".format(basename))
-        step("mv {}.lem {}_types.lem _lbuild_{}".format(basename, basename, basename))
-        step("rm {}_lemmas.thy".format(basename.capitalize()))
-        step("cp lbuild/* _lbuild_{}".format(basename))
-        os.chdir("_lbuild_{}".format(basename))
-        step(
-            "../mk_lem_ocaml_main.sh {} {} {}".format(
-                basename, basename.capitalize(), self.sail_dir
-            )
+            f"../mk_lem_ocaml_main.sh {basename} {basename.capitalize()} {self.sail_dir}"
         )
         step("lem -lib .. -ocaml *.lem")
-        step("ocamlbuild -use-ocamlfind main.native".format(basename, basename))
+        step("ocamlbuild -use-ocamlfind main.native")
         step(
-            "./main.native 1> {}.lresult 2> {}.lerr".format(basename, basename),
+            f"./main.native 1> {basename}.lresult 2> {basename}.lerr",
             expected_status=1 if basename.startswith("fail") else 0,
         )
-        step("diff ../{}.expect {}.lresult".format(basename, basename))
-        if os.path.exists("../{}.err_expect".format(basename)):
-            step("diff {}.lerr ../{}.err_expect".format(basename, basename))
+        step(f"diff ../{basename}.expect {basename}.lresult")
+        if os.path.exists(f"../{basename}.err_expect"):
+            step(f"diff {basename}.lerr ../{basename}.err_expect")
         os.chdir("..")
-        step("rm -r _lbuild_{}".format(basename))
+        step(f"rm -r _lbuild_{basename}")
 
     def _test_coq(self, filename, basename):
         step(
-            "'{}' -coq -coq-record-update -D PRINT_EFFECTS -splice coq-print.splice -undefined_gen -o {} {}".format(
-                self.sail, basename, filename
-            )
+            f"'{self.sail}' -coq -coq-record-update -D PRINT_EFFECTS"
+            f" -splice coq-print.splice -undefined_gen -o {basename} {filename}"
         )
-        step("mkdir -p _coqbuild_{}".format(basename))
-        step("mv {}.v _coqbuild_{}".format(basename, basename))
-        step("mv {}_types.v _coqbuild_{}".format(basename, basename))
-        step("./mk_coq_main.sh {} {}".format(basename, basename.capitalize()))
-        os.chdir("_coqbuild_{}".format(basename))
-        step("coqc {}_types.v".format(basename))
-        step("coqc {}.v".format(basename))
+        step(f"mkdir -p _coqbuild_{basename}")
+        step(f"mv {basename}.v _coqbuild_{basename}")
+        step(f"mv {basename}_types.v _coqbuild_{basename}")
+        step(f"./mk_coq_main.sh {basename} {basename.capitalize()}")
+        os.chdir(f"_coqbuild_{basename}")
+        step(f"coqc {basename}_types.v")
+        step(f"coqc {basename}.v")
         step(
-            "coqtop -require-import {}_types -require-import {} -l main.v -batch | tee /dev/stderr | grep -q OK".format(
-                basename, basename
-            ),
+            f"coqtop -require-import {basename}_types -require-import {basename}"
+            f" -l main.v -batch | tee /dev/stderr | grep -q OK",
             expected_status=1 if basename.startswith("fail") else 0,
         )
         filter_command = "ocaml ../coq_output_filter.ml < "
-        step("{} output.out | diff - ../{}.expect".format(filter_command, basename))
-        if os.path.exists("../{}.err_expect".format(basename)):
-            step(
-                "{} error.out | diff - ../{}.err_expect".format(
-                    filter_command, basename
-                )
-            )
+        step(f"{filter_command} output.out | diff - ../{basename}.expect")
+        if os.path.exists(f"../{basename}.err_expect"):
+            step(f"{filter_command} error.out | diff - ../{basename}.err_expect")
         os.chdir("..")
-        step("rm -r _coqbuild_{}".format(basename))
+        step(f"rm -r _coqbuild_{basename}")
 
 
 CTests().main()

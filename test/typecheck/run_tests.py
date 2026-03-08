@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 
 import os
-import re
 import sys
 from shutil import which
 
@@ -37,57 +36,49 @@ class TypecheckTests(SailTest):
 
     def _test_pass(self, filename, basename):
         step(
-            "'{}' --no-memo-z3 --just-check --strict-bitvector --ddump-tc-ast pass/{} 1> rtpass/{}".format(
-                self.sail, filename, filename
-            )
+            f"'{self.sail}' --no-memo-z3 --just-check --strict-bitvector"
+            f" --ddump-tc-ast pass/{filename} 1> rtpass/{filename}"
         )
         step(
-            "'{}' --no-memo-z3 --just-check --strict-bitvector --ddump-tc-ast --dallow-internal rtpass/{} 1> rtpass2/{}".format(
-                self.sail, filename, filename
-            )
+            f"'{self.sail}' --no-memo-z3 --just-check --strict-bitvector"
+            f" --ddump-tc-ast --dallow-internal rtpass/{filename} 1> rtpass2/{filename}"
         )
-        step("diff rtpass/{} rtpass2/{}".format(filename, filename))
+        step(f"diff rtpass/{filename} rtpass2/{filename}")
         variantdir = os.path.join("pass", basename)
         for variantname in os.listdir(variantdir) if os.path.isdir(variantdir) else []:
-            if re.match(".+\\.sail$", variantname):
+            if variantname.endswith(".sail"):
                 variantbasename = os.path.splitext(os.path.basename(variantname))[0]
                 step(
-                    "'{}' --no-memo-z3 --strict-bitvector pass/{}/{} 2> pass/{}/{}.error".format(
-                        self.sail, basename, variantname, basename, variantbasename
-                    ),
+                    f"'{self.sail}' --no-memo-z3 --strict-bitvector"
+                    f" pass/{basename}/{variantname} 2> pass/{basename}/{variantbasename}.error",
                     expected_status=1,
                 )
                 step(
-                    "diff pass/{}/{}.error pass/{}/{}.expect".format(
-                        basename, variantbasename, basename, variantbasename
-                    )
+                    f"diff pass/{basename}/{variantbasename}.error"
+                    f" pass/{basename}/{variantbasename}.expect"
                 )
-                step("rm pass/{}/{}.error".format(basename, variantbasename))
+                step(f"rm pass/{basename}/{variantbasename}.error")
 
     def _test_project(self, filename, basename):
         if filename.startswith("fail"):
             step(
-                "'{}' --no-memo-z3 --strict-bitvector project/{} --all-modules 2> project/{}.error".format(
-                    self.sail, filename, basename
-                ),
+                f"'{self.sail}' --no-memo-z3 --strict-bitvector project/{filename}"
+                f" --all-modules 2> project/{basename}.error",
                 expected_status=1,
             )
-            step("diff project/{}.error project/{}.expect".format(basename, basename))
-            step("rm project/{}.error".format(basename))
+            step(f"diff project/{basename}.error project/{basename}.expect")
+            step(f"rm project/{basename}.error")
         else:
-            step(
-                "'{}' --no-memo-z3 project/{} --all-modules".format(self.sail, filename)
-            )
+            step(f"'{self.sail}' --no-memo-z3 project/{filename} --all-modules")
 
     def _test_fail(self, filename, basename):
         step(
-            "'{}' --no-memo-z3 --strict-bitvector fail/{} 2> fail/{}.error".format(
-                self.sail, filename, basename
-            ),
+            f"'{self.sail}' --no-memo-z3 --strict-bitvector fail/{filename}"
+            f" 2> fail/{basename}.error",
             expected_status=1,
         )
-        step("diff fail/{}.error fail/{}.expect".format(basename, basename))
-        step("rm fail/{}.error".format(basename))
+        step(f"diff fail/{basename}.error fail/{basename}.expect")
+        step(f"rm fail/{basename}.error")
 
 
 TypecheckTests().main()

@@ -69,13 +69,9 @@ class LeanTests(SailTest):
         local = args.lean_local_support_library
         if local:
             return local
-        lib_path = "../{}/support-lib".format(subdir)
-        step("rm -rf {} || true".format(lib_path))
-        step(
-            "git clone https://github.com/rems-project/lean-sail.git {}".format(
-                lib_path
-            )
-        )
+        lib_path = f"../{subdir}/support-lib"
+        step(f"rm -rf {lib_path} || true")
+        step(f"git clone https://github.com/rems-project/lean-sail.git {lib_path}")
         print("Building the support library")
         step("lake build", cwd=lib_path)
         return "../../support-lib"
@@ -89,9 +85,9 @@ class LeanTests(SailTest):
     def _make_test(self, subdir, support_lib, runnable, skip_list=None):
         def fn(filename, basename):
             is_skip = skip_list is not None and basename in skip_list and args.run_skips
-            os.chdir("../{}".format(subdir))
-            step("rm -rf {} || true".format(basename))
-            step("mkdir -p {}".format(basename))
+            os.chdir(f"../{subdir}")
+            step(f"rm -rf {basename} || true")
+            step(f"mkdir -p {basename}")
             extra_flags = (
                 ["--splice", "coq-print.splice", "--strict-bitvector"]
                 if runnable
@@ -99,50 +95,50 @@ class LeanTests(SailTest):
             )
             extra_flags_str = " ".join(extra_flags)
             step(
-                "'{}' {} {} --lean --lean-single-file --lean-executable --lean-output-dir {} --lean-lib-path {}".format(
-                    self.sail, extra_flags_str, filename, basename, support_lib
-                ),
+                f"'{self.sail}' {extra_flags_str} {filename} --lean --lean-single-file"
+                f" --lean-executable --lean-output-dir {basename} --lean-lib-path {support_lib}",
                 name=filename,
             )
-            step("lake update", cwd="{}/out".format(basename), name=filename)
+            step(f"lake update", cwd=f"{basename}/out", name=filename)
             if runnable:
                 expected_status = 1 if basename.startswith("fail") else 0
                 step(
                     "lake exe run > expected 2> err_status",
-                    cwd="{}/out".format(basename),
+                    cwd=f"{basename}/out",
                     name=filename,
                     expected_status=expected_status,
-                    stderr_file="{}/out/err_status".format(basename),
+                    stderr_file=f"{basename}/out/err_status",
                 )
             else:
-                step("lake update", cwd="{}/out".format(basename), name=filename)
-                step("lake build", cwd="{}/out".format(basename), name=filename)
+                step(f"lake update", cwd=f"{basename}/out", name=filename)
+                step(f"lake build", cwd=f"{basename}/out", name=filename)
 
             if not runnable:
-                output = "{}/output".format(basename)
-                step("cat {}/out/Out/Defs.lean > {}".format(basename, output))
-                step('echo >> {0}; echo "XXXXXXXXX" >> {0}; echo >> {0}'.format(output))
-                step("cat {}/out/Out.lean >> {}".format(basename, output))
+                output = f"{basename}/output"
+                step(f"cat {basename}/out/Out/Defs.lean > {output}")
+                step(
+                    f'echo >> {output}; echo "XXXXXXXXX" >> {output}; echo >> {output}'
+                )
+                step(f"cat {basename}/out/Out.lean >> {output}")
                 status = step_with_status(
-                    "diff {} {}.expected.lean".format(output, basename), name=filename
+                    f"diff {output} {basename}.expected.lean", name=filename
                 )
                 if status != 0:
                     if args.update_expected:
-                        print("Overriding file {}.expected.lean".format(basename))
-                        step("cp {} {}.expected.lean".format(output, basename))
+                        print(f"Overriding file {basename}.expected.lean")
+                        step(f"cp {output} {basename}.expected.lean")
                     else:
                         sys.exit(1)
             else:
                 status = step_with_status(
-                    "diff {}/out/expected {}.expect".format(basename, basename),
-                    name=filename,
+                    f"diff {basename}/out/expected {basename}.expect", name=filename
                 )
                 if status != 0:
                     sys.exit(1)
 
-            step("rm -rf {}".format(basename))
+            step(f"rm -rf {basename}")
             if is_skip:
-                print("{} now passes!".format(basename))
+                print(f"{basename} now passes!")
 
         return fn
 
