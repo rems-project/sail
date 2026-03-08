@@ -157,7 +157,7 @@ let rec run frame =
   | Interpreter.Effect_request _ -> assert false (* effectful, raise exception to abort constant folding *)
 
 (** This rewriting pass looks for function applications (E_app) expressions where every argument is a literal. It passes
-    these expressions to the OCaml interpreter in interpreter.ml, and reconstructs the values returned back into
+    these expressions to the Rocq-derived interpreter in interpreter.ml, and reconstructs the values returned back into
     expressions which are then re-typechecked and re-inserted back into the AST.
 
     We don't use the effect system to decide if expressions are safe to evaluate, because this ignores I/O, and would
