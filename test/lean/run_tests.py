@@ -42,20 +42,20 @@ skip_selftests = {
 
 class LeanTests(SailTest):
     def run(self):
-        banner("Cloning the support library")
+        self.banner("Cloning the support library")
         support_lib_lean = self._get_support_lib("lean")
         print("...done!")
-        banner("Testing lean target (sub-directory: lean)")
+        self.banner("Testing lean target (sub-directory: lean)")
         self.run_tests(
             "lean",
             os.listdir("../lean"),
             self._make_test("lean", support_lib_lean, runnable=False),
         )
 
-        banner("Cloning the support library")
+        self.banner("Cloning the support library")
         support_lib_c = self._get_support_lib("c")
         print("...done!")
-        banner("Testing lean target (sub-directory: c)")
+        self.banner("Testing lean target (sub-directory: c)")
         self.run_tests(
             "c (lean runnable)",
             os.listdir("../c"),

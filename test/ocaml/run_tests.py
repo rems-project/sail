@@ -12,11 +12,11 @@ from sailtest import *
 
 class OcamlTests(SailTest):
     def run(self):
-        targets = get_targets(["ocaml", "ocaml_trace"])
+        targets = self.get_targets(["ocaml", "ocaml_trace"])
         print("Targets: {}".format(targets))
 
         if "ocaml" in targets:
-            banner('Ocaml testing with options: ""')
+            self.banner('Ocaml testing with options: ""')
             self.run_tests(
                 "Ocaml testing",
                 os.listdir("."),
@@ -25,7 +25,7 @@ class OcamlTests(SailTest):
             )
 
         if "ocaml_trace" in targets:
-            banner('Ocaml trace testing with options: "--ocaml-trace"')
+            self.banner('Ocaml trace testing with options: "--ocaml-trace"')
             self.run_tests(
                 "Ocaml trace testing",
                 os.listdir("."),

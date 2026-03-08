@@ -21,10 +21,10 @@ class TypecheckTests(SailTest):
         if which("cvc4") is None:
             skip_pass.add("type_pow_zero")
 
-        banner("Testing passing programs")
+        self.banner("Testing passing programs")
         self.run_tests("pass", os.listdir("pass"), self._test_pass, skip_set=skip_pass)
 
-        banner("Testing multi-file projects")
+        self.banner("Testing multi-file projects")
         self.run_tests(
             "projects",
             os.listdir("project"),
@@ -32,7 +32,7 @@ class TypecheckTests(SailTest):
             chunks_fn=project_chunks,
         )
 
-        banner("Testing failing programs")
+        self.banner("Testing failing programs")
         self.run_tests("fail", os.listdir("fail"), self._test_fail)
 
     def _test_pass(self, filename, basename):

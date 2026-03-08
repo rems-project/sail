@@ -13,7 +13,7 @@ from sailtest import *
 class SailcovTests(SailTest):
     def run(self):
         sailcov = "{}/sailcov/sailcov".format(self.sail_dir)
-        banner("Testing sailcov")
+        self.banner("Testing sailcov")
         if not self._have_sailcov(sailcov):
             print("Skipping because no sailcov executable found")
             # Append an empty suite so tests.xml is still written

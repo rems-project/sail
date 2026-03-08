@@ -12,7 +12,7 @@ from sailtest import *
 
 class OneoffTests(SailTest):
     def run(self):
-        banner("Testing")
+        self.banner("Testing")
         self.run_tests(
             "one-off", os.listdir("."), self._test, chunks_fn=directory_chunks
         )

@@ -48,57 +48,9 @@ class color:
     END = "\033[0m"
 
 
-def is_compact():
-    return args.compact
-
-
-def get_targets(default_targets):
-    return args.targets or default_targets
-
-
 def compact_char(code, char):
     print(f"{code}{char}{color.END}", end="")
     sys.stdout.flush()
-
-
-def get_sail():
-    return os.environ.get("SAIL", "sail")
-
-
-def get_sail_dir():
-    sail_dir = os.environ.get("SAIL_DIR")
-    if sail_dir:
-        return sail_dir
-    try:
-        p = subprocess.run([get_sail(), "--dir"], capture_output=True, text=True)
-    except Exception as e:
-        print(f"{color.FAIL}Unable to get Sail library directory from opam{color.END}")
-        print(e)
-        sys.exit(1)
-    if p.returncode == 0:
-        return p.stdout.strip()
-    print(
-        f"{color.FAIL}Unable to get Sail library directory from sail --dir{color.END}"
-    )
-    print(f"{color.NOTICE}stdout{color.END}:")
-    print(p.stdout)
-    print(f"{color.NOTICE}stderr{color.END}:")
-    print(p.stderr)
-    sys.exit(1)
-
-
-def print_ok(name):
-    if args.compact:
-        compact_char(color.PASS, ".")
-    else:
-        print(f'{(name + " ").ljust(40, ".")} {color.PASS}ok{color.END}')
-
-
-def print_skip(name):
-    if args.compact:
-        compact_char(color.WARNING, "s")
-    else:
-        print(f'{(name + " ").ljust(40, ".")} {color.WARNING}skip{color.END}')
 
 
 # Compute parallelism once at startup so the message only prints once.
@@ -182,13 +134,6 @@ def step(string, expected_status=0, cwd=None, name="", stderr_file=""):
         sys.exit(1)
 
 
-def banner(string):
-    print("-" * len(string))
-    print(string)
-    print("-" * len(string))
-    sys.stdout.flush()
-
-
 class Results:
     def __init__(self, name):
         self.passes = 0
@@ -256,11 +201,55 @@ class SailTest(ABC):
     """
 
     def __init__(self):
-        self.sail = get_sail()
-        self.sail_dir = get_sail_dir()
+        self.sail = os.environ.get("SAIL", "sail")
+        self.sail_dir = self._get_sail_dir()
         self._xml_parts = []
         print(f"Sail is {self.sail}")
         print(f"Sail dir is {self.sail_dir}")
+
+    def _get_sail_dir(self):
+        sail_dir = os.environ.get("SAIL_DIR")
+        if sail_dir:
+            return sail_dir
+        try:
+            p = subprocess.run([self.sail, "--dir"], capture_output=True, text=True)
+        except Exception as e:
+            print(
+                f"{color.FAIL}Unable to get Sail library directory from opam{color.END}"
+            )
+            print(e)
+            sys.exit(1)
+        if p.returncode == 0:
+            return p.stdout.strip()
+        print(
+            f"{color.FAIL}Unable to get Sail library directory from sail --dir{color.END}"
+        )
+        print(f"{color.NOTICE}stdout{color.END}:")
+        print(p.stdout)
+        print(f"{color.NOTICE}stderr{color.END}:")
+        print(p.stderr)
+        sys.exit(1)
+
+    def get_targets(self, default_targets):
+        return args.targets or default_targets
+
+    def banner(self, string):
+        print("-" * len(string))
+        print(string)
+        print("-" * len(string))
+        sys.stdout.flush()
+
+    def _print_ok(self, name):
+        if args.compact:
+            compact_char(color.PASS, ".")
+        else:
+            print(f'{(name + " ").ljust(40, ".")} {color.PASS}ok{color.END}')
+
+    def _print_skip(self, name):
+        if args.compact:
+            compact_char(color.WARNING, "s")
+        else:
+            print(f'{(name + " ").ljust(40, ".")} {color.WARNING}skip{color.END}')
 
     def run_tests(
         self,
@@ -275,7 +264,7 @@ class SailTest(ABC):
         """Run a set of tests in parallel using fork/collect.
 
         fn(filename, basename) is called in each child process and should use
-        step() for each command. The base class calls print_ok() and sys.exit(0)
+        step() for each command. The base class calls _print_ok() and sys.exit(0)
         after fn returns.
 
         expected_failures: dict of {filename: reason} for known xfails
@@ -294,12 +283,12 @@ class SailTest(ABC):
                 if (skip_set and basename in skip_set) or (
                     skip_fn and skip_fn(filename, basename)
                 ):
-                    print_skip(filename)
+                    self._print_skip(filename)
                     continue
                 tests[filename] = os.fork()
                 if tests[filename] == 0:
                     fn(filename, basename)
-                    print_ok(filename)
+                    self._print_ok(filename)
                     sys.exit(0)
             results.collect(tests)
         self._xml_parts.append(results.finish())

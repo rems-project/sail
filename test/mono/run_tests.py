@@ -44,7 +44,7 @@ def _mono_chunks(filenames, cores):
 
 class MonoTests(SailTest):
     def run(self):
-        banner("Monomorphisation tests")
+        self.banner("Monomorphisation tests")
         self.run_tests("mono", os.listdir("pass"), self._test, chunks_fn=_mono_chunks)
 
     def _test(self, filename, basename):

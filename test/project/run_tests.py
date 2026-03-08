@@ -14,7 +14,7 @@ from sailtest import *
 
 class ProjectTests(SailTest):
     def run(self):
-        banner("Testing project")
+        self.banner("Testing project")
         self.run_tests("project", os.listdir("failure"), self._test)
 
     def _test(self, filename, basename):

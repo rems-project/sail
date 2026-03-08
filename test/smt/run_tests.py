@@ -30,7 +30,7 @@ _skip_tests = {
 class SmtTests(SailTest):
     def run(self):
         if shutil.which("cvc4") is not None:
-            banner("Testing SMT: cvc4")
+            self.banner("Testing SMT: cvc4")
             self.run_tests(
                 "cvc4",
                 os.listdir("."),
@@ -45,7 +45,7 @@ class SmtTests(SailTest):
             )
 
         if shutil.which("z3") is not None:
-            banner("Testing SMT: z3")
+            self.banner("Testing SMT: z3")
             self.run_tests(
                 "z3",
                 os.listdir("."),

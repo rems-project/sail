@@ -12,7 +12,7 @@ from sailtest import *
 
 class LexingTests(SailTest):
     def run(self):
-        banner("Testing lexer")
+        self.banner("Testing lexer")
         self.run_tests("lex", os.listdir("."), self._test)
 
     def _test(self, filename, basename):

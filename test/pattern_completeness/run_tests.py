@@ -12,7 +12,7 @@ from sailtest import *
 
 class PatternCompletenessTests(SailTest):
     def run(self):
-        banner("Testing pattern completeness checker")
+        self.banner("Testing pattern completeness checker")
         self.run_tests("completeness", os.listdir("."), self._test)
 
     def _test(self, filename, basename):

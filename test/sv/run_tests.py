@@ -37,7 +37,7 @@ skip_tests = {
 
 class SvTests(SailTest):
     def run(self):
-        banner("Testing SystemVerilog with options:")
+        self.banner("Testing SystemVerilog with options:")
         self.run_tests(
             "SystemVerilog",
             os.listdir("../c"),
@@ -45,7 +45,7 @@ class SvTests(SailTest):
             skip_set=skip_tests,
         )
 
-        banner("Testing SystemVerilog (nostrings) with options: --sv-no-strings")
+        self.banner("Testing SystemVerilog (nostrings) with options: --sv-no-strings")
         self.run_tests(
             "SystemVerilog (nostrings)",
             os.listdir("../c"),

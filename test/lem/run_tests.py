@@ -80,7 +80,7 @@ class LemTests(SailTest):
             skip_tests.add("type_pow_zero")
             skip_tests_mwords.add("type_pow_zero")
 
-        banner("Testing Lem with bitlists")
+        self.banner("Testing Lem with bitlists")
         self.run_tests(
             "with bitlists",
             os.listdir(test_dir),
@@ -88,7 +88,7 @@ class LemTests(SailTest):
             skip_set=skip_tests,
         )
 
-        banner("Testing Lem with machine words")
+        self.banner("Testing Lem with machine words")
         self.run_tests(
             "with machine words",
             os.listdir(test_dir),

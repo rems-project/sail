@@ -12,7 +12,9 @@ from sailtest import *
 
 class FloatTests(SailTest):
     def run(self):
-        banner("Testing floating point c optimized with C options: -O2 Sail options: ")
+        self.banner(
+            "Testing floating point c optimized with C options: -O2 Sail options: "
+        )
         # Only files ending in _test are actual tests
         test_files = [
             f for f in os.listdir(".") if os.path.splitext(f)[0].endswith("_test")

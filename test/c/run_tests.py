@@ -30,38 +30,38 @@ def _no_valgrind():
 
 class CTests(SailTest):
     def run(self):
-        targets = get_targets(["c", "cpp", "interpreter", "ocaml"])
+        targets = self.get_targets(["c", "cpp", "interpreter", "ocaml"])
         print("Targets: {}".format(targets))
 
         if "c" in targets:
-            banner(
+            self.banner(
                 "Testing unoptimized C with C options:  Sail options: --c-no-mangle valgrind: False"
             )
             self._run_c_tests("unoptimized C", "", "--c-no-mangle", False)
 
-            banner(
+            self.banner(
                 "Testing unoptimized C with C options:  Sail options:  valgrind: False"
             )
             self._run_c_tests("unoptimized C", "", "", False)
 
-            banner(
+            self.banner(
                 "Testing optimized C with C options: -O2 Sail options: -O valgrind: True"
             )
             self._run_c_tests("optimized C", "-O2", "-O", True)
 
-            banner(
+            self.banner(
                 "Testing constant folding with C options:  Sail options: -Oconstant_fold valgrind: False"
             )
             self._run_c_tests("constant folding", "", "-Oconstant_fold", False)
 
-            banner(
+            self.banner(
                 "Testing undefined behavior sanitised with C options: -O2 -fsanitize=undefined Sail options: -O valgrind: False"
             )
             self._run_c_tests(
                 "undefined behavior sanitised", "-O2 -fsanitize=undefined", "-O", False
             )
 
-            banner(
+            self.banner(
                 "Testing address sanitised with C options: -O2 -fsanitize=address -g Sail options: -O valgrind: False"
             )
             self._run_c_tests(
@@ -70,14 +70,14 @@ class CTests(SailTest):
 
         if "cpp" in targets:
             # Compiling the C as if it was C++.
-            banner(
+            self.banner(
                 "Testing unoptimized C with C++ compiler with C options: -xc++ Sail options:  valgrind: False"
             )
             self._run_c_tests(
                 "unoptimized C with C++ compiler", "-xc++", "", False, compiler="c++"
             )
 
-            banner(
+            self.banner(
                 "Testing optimized C with C++ compiler with C options: -xc++ -O2 Sail options: -O valgrind: True"
             )
             self._run_c_tests(
@@ -85,7 +85,7 @@ class CTests(SailTest):
             )
 
             # Actual C++ output.
-            banner(
+            self.banner(
                 "Testing unoptimized C++ with C options:  Sail options:  valgrind: False"
             )
             self._run_c_tests(
@@ -98,7 +98,7 @@ class CTests(SailTest):
                 expected_failures=_cpp_xfails,
             )
 
-            banner(
+            self.banner(
                 "Testing optimized C++ with C options: -O2 Sail options: -O valgrind: True"
             )
             self._run_c_tests(
@@ -113,7 +113,7 @@ class CTests(SailTest):
 
         if "interpreter" in targets:
             if os.name == "posix":
-                banner("Testing interpreter")
+                self.banner("Testing interpreter")
                 self.run_tests("interpreter", os.listdir("."), self._test_interpreter)
             else:
                 print(
@@ -121,11 +121,11 @@ class CTests(SailTest):
                 )
 
         if "ocaml" in targets:
-            banner("Testing OCaml")
+            self.banner("Testing OCaml")
             self.run_tests("OCaml", os.listdir("."), self._test_ocaml)
 
         if "lem" in targets:
-            banner("Testing lem")
+            self.banner("Testing lem")
             self.run_tests(
                 "lem",
                 os.listdir("."),
@@ -152,7 +152,7 @@ class CTests(SailTest):
             )
 
         if "coq" in targets:
-            banner("Testing coq")
+            self.banner("Testing coq")
             self.run_tests(
                 "coq",
                 os.listdir("."),

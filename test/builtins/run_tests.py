@@ -12,19 +12,19 @@ from sailtest import *
 
 class BuiltinsTests(SailTest):
     def run(self):
-        targets = get_targets(["c", "ocaml"])
+        targets = self.get_targets(["c", "ocaml"])
         print("Targets: {}".format(targets))
 
         if "c" in targets:
-            banner("Testing builtins: C, No optimisations Sail options: ")
+            self.banner("Testing builtins: C, No optimisations Sail options: ")
             self.run_tests(
                 "C, No optimisations", os.listdir("."), self._make_c_test("")
             )
 
-            banner("Testing builtins: C, Optimisations Sail options: -O")
+            self.banner("Testing builtins: C, Optimisations Sail options: -O")
             self.run_tests("C, Optimisations", os.listdir("."), self._make_c_test("-O"))
 
-            banner(
+            self.banner(
                 "Testing builtins: C, Constant folding Sail options: -Oconstant_fold"
             )
             self.run_tests(
@@ -34,19 +34,19 @@ class BuiltinsTests(SailTest):
             )
 
         if "ocaml" in targets:
-            banner("Testing builtins: OCaml Sail options: ")
+            self.banner("Testing builtins: OCaml Sail options: ")
             self.run_tests("OCaml", os.listdir("."), self._test_ocaml)
 
         if "lem" in targets:
-            banner("Testing builtins: Lem to OCaml")
+            self.banner("Testing builtins: Lem to OCaml")
             self.run_tests("Lem to OCaml", os.listdir("."), self._test_lem)
 
         if "coq" in targets:
-            banner("Testing builtins: Coq")
+            self.banner("Testing builtins: Coq")
             self.run_tests("Coq", os.listdir("."), self._test_coq)
 
         if "isla" in targets:
-            banner("Testing builtins: Isla")
+            self.banner("Testing builtins: Isla")
             self.run_tests("Isla", os.listdir("."), self._test_isla)
 
     def _make_c_test(self, sail_opts):

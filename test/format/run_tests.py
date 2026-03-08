@@ -12,10 +12,10 @@ from sailtest import *
 
 class FormatTests(SailTest):
     def run(self):
-        banner("Testing default")
+        self.banner("Testing default")
         self.run_tests("default", os.listdir("."), self._make_test("default"))
 
-        banner("Testing lw80_preserve")
+        self.banner("Testing lw80_preserve")
         self.run_tests(
             "lw80_preserve", os.listdir("."), self._make_test("lw80_preserve")
         )

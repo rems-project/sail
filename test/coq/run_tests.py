@@ -46,7 +46,7 @@ _bbv_xfails = {
 
 class CoqTests(SailTest):
     def run(self):
-        banner("Testing Coq backend on typecheck tests with stdpp")
+        self.banner("Testing Coq backend on typecheck tests with stdpp")
         self.run_tests(
             "typecheck tests on stdpp",
             os.listdir("../typecheck/pass"),
@@ -55,7 +55,7 @@ class CoqTests(SailTest):
             skip_set=skip_tests,
         )
 
-        banner("Testing Coq backend on Coq specific tests with stdpp")
+        self.banner("Testing Coq backend on Coq specific tests with stdpp")
         self.run_tests(
             "Coq specific tests on stdpp",
             os.listdir("pass"),
@@ -68,7 +68,7 @@ class CoqTests(SailTest):
             p = subprocess.run(["coqtop", "-require", "bbv.Word", "-batch"])
             if p.returncode == 0:
                 bbv_xfails = {**_common_xfails, **_bbv_xfails}
-                banner("Testing Coq backend on typecheck tests with bbv")
+                self.banner("Testing Coq backend on typecheck tests with bbv")
                 self.run_tests(
                     "typecheck tests on bbv",
                     os.listdir("../typecheck/pass"),
@@ -77,7 +77,7 @@ class CoqTests(SailTest):
                     skip_set=skip_tests,
                 )
 
-                banner("Testing Coq backend on Coq specific tests with bbv")
+                self.banner("Testing Coq backend on Coq specific tests with bbv")
                 self.run_tests(
                     "Coq specific tests on bbv",
                     os.listdir("pass"),
