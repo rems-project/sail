@@ -34,35 +34,12 @@ class CTests(SailTest):
         print("Targets: {}".format(targets))
 
         if "c" in targets:
-            self.banner(
-                "Testing unoptimized C with C options:  Sail options: --c-no-mangle valgrind: False"
-            )
             self._run_c_tests("unoptimized C", "", "--c-no-mangle", False)
-
-            self.banner(
-                "Testing unoptimized C with C options:  Sail options:  valgrind: False"
-            )
             self._run_c_tests("unoptimized C", "", "", False)
-
-            self.banner(
-                "Testing optimized C with C options: -O2 Sail options: -O valgrind: True"
-            )
             self._run_c_tests("optimized C", "-O2", "-O", True)
-
-            self.banner(
-                "Testing constant folding with C options:  Sail options: -Oconstant_fold valgrind: False"
-            )
             self._run_c_tests("constant folding", "", "-Oconstant_fold", False)
-
-            self.banner(
-                "Testing undefined behavior sanitised with C options: -O2 -fsanitize=undefined Sail options: -O valgrind: False"
-            )
             self._run_c_tests(
                 "undefined behavior sanitised", "-O2 -fsanitize=undefined", "-O", False
-            )
-
-            self.banner(
-                "Testing address sanitised with C options: -O2 -fsanitize=address -g Sail options: -O valgrind: False"
             )
             self._run_c_tests(
                 "address sanitised", "-O2 -fsanitize=address -g", "-O", False
@@ -70,24 +47,14 @@ class CTests(SailTest):
 
         if "cpp" in targets:
             # Compiling the C as if it was C++.
-            self.banner(
-                "Testing unoptimized C with C++ compiler with C options: -xc++ Sail options:  valgrind: False"
-            )
             self._run_c_tests(
                 "unoptimized C with C++ compiler", "-xc++", "", False, compiler="c++"
-            )
-
-            self.banner(
-                "Testing optimized C with C++ compiler with C options: -xc++ -O2 Sail options: -O valgrind: True"
             )
             self._run_c_tests(
                 "optimized C with C++ compiler", "-xc++ -O2", "-O", True, compiler="c++"
             )
 
             # Actual C++ output.
-            self.banner(
-                "Testing unoptimized C++ with C options:  Sail options:  valgrind: False"
-            )
             self._run_c_tests(
                 "unoptimized C++",
                 "",
@@ -96,10 +63,6 @@ class CTests(SailTest):
                 compiler="c++",
                 actually_cpp=True,
                 expected_failures=_cpp_xfails,
-            )
-
-            self.banner(
-                "Testing optimized C++ with C options: -O2 Sail options: -O valgrind: True"
             )
             self._run_c_tests(
                 "optimized C++",
@@ -189,6 +152,9 @@ class CTests(SailTest):
         expected_failures=None,
     ):
         """Run a C/C++ test suite, handling the valgrind-unavailable case."""
+        self.banner(
+            f"Testing {name} with C options: {c_opts} Sail options: {sail_opts} valgrind: {valgrind}"
+        )
         if valgrind and _no_valgrind():
             print("skipping because no valgrind found")
             self._xml_parts.append(Results(name).finish())

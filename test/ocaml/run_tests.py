@@ -16,20 +16,22 @@ class OcamlTests(SailTest):
         print("Targets: {}".format(targets))
 
         if "ocaml" in targets:
-            self.banner('Ocaml testing with options: ""')
+            opts = ""
+            self.banner(f'Ocaml testing with options: "{opts}"')
             self.run_tests(
                 "Ocaml testing",
                 os.listdir("."),
-                self._make_test(""),
+                self._make_test(opts),
                 chunks_fn=directory_chunks,
             )
 
         if "ocaml_trace" in targets:
-            self.banner('Ocaml trace testing with options: "--ocaml-trace"')
+            opts = "--ocaml-trace"
+            self.banner(f'Ocaml trace testing with options: "{opts}"')
             self.run_tests(
                 "Ocaml trace testing",
                 os.listdir("."),
-                self._make_test("--ocaml-trace"),
+                self._make_test(opts),
                 chunks_fn=directory_chunks,
             )
 

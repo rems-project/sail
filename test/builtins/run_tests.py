@@ -16,25 +16,18 @@ class BuiltinsTests(SailTest):
         print("Targets: {}".format(targets))
 
         if "c" in targets:
-            self.banner("Testing builtins: C, No optimisations Sail options: ")
-            self.run_tests(
-                "C, No optimisations", os.listdir("."), self._make_c_test("")
-            )
-
-            self.banner("Testing builtins: C, Optimisations Sail options: -O")
-            self.run_tests("C, Optimisations", os.listdir("."), self._make_c_test("-O"))
-
-            self.banner(
-                "Testing builtins: C, Constant folding Sail options: -Oconstant_fold"
-            )
-            self.run_tests(
-                "C, Constant folding",
-                os.listdir("."),
-                self._make_c_test("-Oconstant_fold"),
-            )
+            for name, sail_opts in [
+                ("No optimisations", ""),
+                ("Optimisations", "-O"),
+                ("Constant folding", "-Oconstant_fold"),
+            ]:
+                self.banner(f"Testing builtins: C, {name} Sail options: {sail_opts}")
+                self.run_tests(
+                    f"C, {name}", os.listdir("."), self._make_c_test(sail_opts)
+                )
 
         if "ocaml" in targets:
-            self.banner("Testing builtins: OCaml Sail options: ")
+            self.banner("Testing builtins: OCaml")
             self.run_tests("OCaml", os.listdir("."), self._test_ocaml)
 
         if "lem" in targets:

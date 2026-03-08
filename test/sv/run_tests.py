@@ -37,19 +37,21 @@ skip_tests = {
 
 class SvTests(SailTest):
     def run(self):
-        self.banner("Testing SystemVerilog with options:")
+        opts = ""
+        self.banner(f"Testing SystemVerilog with options: {opts}")
         self.run_tests(
             "SystemVerilog",
             os.listdir("../c"),
-            self._make_test("", just_check=False),
+            self._make_test(opts, just_check=False),
             skip_set=skip_tests,
         )
 
-        self.banner("Testing SystemVerilog (nostrings) with options: --sv-no-strings")
+        opts = "--sv-no-strings"
+        self.banner(f"Testing SystemVerilog (nostrings) with options: {opts}")
         self.run_tests(
             "SystemVerilog (nostrings)",
             os.listdir("../c"),
-            self._make_test(" --sv-no-strings", just_check=True),
+            self._make_test(f" {opts}", just_check=True),
             skip_set=skip_tests,
         )
 
