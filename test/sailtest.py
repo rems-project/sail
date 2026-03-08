@@ -256,6 +256,8 @@ class SailTest(ABC):
         name,
         filenames,
         fn,
+        *,
+        testdir,
         expected_failures=None,
         skip_set=None,
         skip_fn=None,
@@ -264,9 +266,12 @@ class SailTest(ABC):
         """Run a set of tests in parallel using fork/collect.
 
         fn(filename, basename) is called in each child process and should use
-        step() for each command. The base class calls _print_ok() and sys.exit(0)
+        step() for each command. The child's working directory is set to testdir
+        before fn is called. The base class calls _print_ok() and sys.exit(0)
         after fn returns.
 
+        testdir: absolute path; the working directory for each test child process.
+                 Also used as the base for resolving relative filenames in chunks_fn.
         expected_failures: dict of {filename: reason} for known xfails
         skip_set: set of basenames to skip before forking
         skip_fn: callable(filename, basename) -> bool for complex skip logic
@@ -276,7 +281,15 @@ class SailTest(ABC):
         if expected_failures:
             for test, reason in expected_failures.items():
                 results.expect_failure(test, reason)
-        for chunk in (chunks_fn or chunks)(filenames, parallel()):
+        # Temporarily chdir to testdir so that chunks_fn predicates like
+        # os.path.isdir() resolve correctly against the test data directory.
+        saved_cwd = os.getcwd()
+        try:
+            os.chdir(testdir)
+            all_chunks = (chunks_fn or chunks)(filenames, parallel())
+        finally:
+            os.chdir(saved_cwd)
+        for chunk in all_chunks:
             tests = {}
             for filename in chunk:
                 basename = os.path.splitext(os.path.basename(filename))[0]
@@ -287,6 +300,7 @@ class SailTest(ABC):
                     continue
                 tests[filename] = os.fork()
                 if tests[filename] == 0:
+                    os.chdir(testdir)
                     fn(filename, basename)
                     self._print_ok(filename)
                     sys.exit(0)
@@ -297,8 +311,9 @@ class SailTest(ABC):
     def run(self):
         pass
 
-    def main(self):
+    def main(self, xml_dir=None):
         self.run()
         xml = "<testsuites>\n" + "".join(self._xml_parts) + "</testsuites>\n"
-        with open("tests.xml", "w") as f:
+        out = os.path.join(xml_dir, "tests.xml") if xml_dir else "tests.xml"
+        with open(out, "w") as f:
             f.write(xml)

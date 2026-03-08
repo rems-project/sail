@@ -3,17 +3,19 @@
 import os
 import sys
 
-mydir = os.path.dirname(__file__)
-os.chdir(mydir)
-sys.path.insert(0, os.path.realpath(".."))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 from sailtest import *
+
+_SUITE_DIR = os.path.dirname(os.path.abspath(__file__))
 
 
 class PatternCompletenessTests(SailTest):
     def run(self):
         self.banner("Testing pattern completeness checker")
-        self.run_tests("completeness", os.listdir("."), self._test)
+        self.run_tests(
+            "completeness", os.listdir(_SUITE_DIR), self._test, testdir=_SUITE_DIR
+        )
 
     def _test(self, filename, basename):
         step(f"'{self.sail}' --just-check {filename} 2> {basename}.error")
@@ -30,4 +32,4 @@ class PatternCompletenessTests(SailTest):
         step(f"rm {basename}.error")
 
 
-PatternCompletenessTests().main()
+PatternCompletenessTests().main(xml_dir=_SUITE_DIR)

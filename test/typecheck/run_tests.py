@@ -4,35 +4,45 @@ import os
 import sys
 from shutil import which
 
-mydir = os.path.dirname(__file__)
-os.chdir(mydir)
-sys.path.insert(0, os.path.realpath(".."))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 from sailtest import *
+
+_SUITE_DIR = os.path.dirname(os.path.abspath(__file__))
+_PASS_DIR = os.path.join(_SUITE_DIR, "pass")
+_PROJECT_DIR = os.path.join(_SUITE_DIR, "project")
+_FAIL_DIR = os.path.join(_SUITE_DIR, "fail")
 
 
 class TypecheckTests(SailTest):
     def run(self):
-        step("mkdir -p rtpass")
-        step("mkdir -p rtpass2")
+        os.makedirs(os.path.join(_SUITE_DIR, "rtpass"), exist_ok=True)
+        os.makedirs(os.path.join(_SUITE_DIR, "rtpass2"), exist_ok=True)
 
         skip_pass = set()
         if which("cvc4") is None:
             skip_pass.add("type_pow_zero")
 
         self.banner("Testing passing programs")
-        self.run_tests("pass", os.listdir("pass"), self._test_pass, skip_set=skip_pass)
+        self.run_tests(
+            "pass",
+            os.listdir(_PASS_DIR),
+            self._test_pass,
+            testdir=_SUITE_DIR,
+            skip_set=skip_pass,
+        )
 
         self.banner("Testing multi-file projects")
         self.run_tests(
             "projects",
-            os.listdir("project"),
+            os.listdir(_PROJECT_DIR),
             self._test_project,
+            testdir=_SUITE_DIR,
             chunks_fn=project_chunks,
         )
 
         self.banner("Testing failing programs")
-        self.run_tests("fail", os.listdir("fail"), self._test_fail)
+        self.run_tests("fail", os.listdir(_FAIL_DIR), self._test_fail, testdir=_SUITE_DIR)
 
     def _test_pass(self, filename, basename):
         step(
@@ -81,4 +91,4 @@ class TypecheckTests(SailTest):
         step(f"rm fail/{basename}.error")
 
 
-TypecheckTests().main()
+TypecheckTests().main(xml_dir=_SUITE_DIR)

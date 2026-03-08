@@ -3,11 +3,12 @@
 import os
 import sys
 
-mydir = os.path.dirname(__file__)
-os.chdir(mydir)
-sys.path.insert(0, os.path.realpath(".."))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 from sailtest import *
+
+_SUITE_DIR = os.path.dirname(os.path.abspath(__file__))
+_EXEC_DIR = os.path.join(_SUITE_DIR, "..", "exec")
 
 skip_tests = {
     "all_even_vector_length",  # loops
@@ -41,8 +42,9 @@ class SvTests(SailTest):
         self.banner(f"Testing SystemVerilog with options: {opts}")
         self.run_tests(
             "SystemVerilog",
-            os.listdir("../c"),
+            os.listdir(_EXEC_DIR),
             self._make_test(opts, just_check=False),
+            testdir=_SUITE_DIR,
             skip_set=skip_tests,
         )
 
@@ -50,8 +52,9 @@ class SvTests(SailTest):
         self.banner(f"Testing SystemVerilog (nostrings) with options: {opts}")
         self.run_tests(
             "SystemVerilog (nostrings)",
-            os.listdir("../c"),
+            os.listdir(_EXEC_DIR),
             self._make_test(f" {opts}", just_check=True),
+            testdir=_SUITE_DIR,
             skip_set=skip_tests,
         )
 
@@ -77,4 +80,4 @@ class SvTests(SailTest):
         return fn
 
 
-SvTests().main()
+SvTests().main(xml_dir=_SUITE_DIR)

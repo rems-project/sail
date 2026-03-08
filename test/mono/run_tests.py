@@ -3,11 +3,12 @@
 import os
 import sys
 
-mydir = os.path.dirname(__file__)
-os.chdir(mydir)
-sys.path.insert(0, os.path.realpath(".."))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 from sailtest import *
+
+_SUITE_DIR = os.path.dirname(os.path.abspath(__file__))
+_PASS_DIR = os.path.join(_SUITE_DIR, "pass")
 
 libraries = [
     "values",
@@ -41,7 +42,13 @@ def _mono_chunks(filenames, cores):
 class MonoTests(SailTest):
     def run(self):
         self.banner("Monomorphisation tests")
-        self.run_tests("mono", os.listdir("pass"), self._test, chunks_fn=_mono_chunks)
+        self.run_tests(
+            "mono",
+            os.listdir(_PASS_DIR),
+            self._test,
+            testdir=_SUITE_DIR,
+            chunks_fn=_mono_chunks,
+        )
 
     def _test(self, filename, basename):
         libpaths = " ".join(
@@ -70,4 +77,4 @@ class MonoTests(SailTest):
         step(f"rm -r _build_{filename}")
 
 
-MonoTests().main()
+MonoTests().main(xml_dir=_SUITE_DIR)

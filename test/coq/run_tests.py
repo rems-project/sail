@@ -3,11 +3,13 @@
 import os
 import sys
 
-mydir = os.path.dirname(__file__)
-os.chdir(mydir)
-sys.path.insert(0, os.path.realpath(".."))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 from sailtest import *
+
+_SUITE_DIR = os.path.dirname(os.path.abspath(__file__))
+_TYPECHECK_PASS_DIR = os.path.join(_SUITE_DIR, "..", "typecheck", "pass")
+_COQ_PASS_DIR = os.path.join(_SUITE_DIR, "pass")
 
 skip_tests = {
     "while_PM",  # Not currently in a useful state
@@ -53,16 +55,18 @@ class CoqTests(SailTest):
             self.banner(f"Testing Coq backend on typecheck tests with {lib}")
             self.run_tests(
                 f"typecheck tests on {lib}",
-                os.listdir("../typecheck/pass"),
-                self._make_test("../typecheck/pass", lib),
+                os.listdir(_TYPECHECK_PASS_DIR),
+                self._make_test(_TYPECHECK_PASS_DIR, lib),
+                testdir=_SUITE_DIR,
                 expected_failures=xfails,
                 skip_set=skip_tests,
             )
             self.banner(f"Testing Coq backend on Coq specific tests with {lib}")
             self.run_tests(
                 f"Coq specific tests on {lib}",
-                os.listdir("pass"),
-                self._make_test("pass", lib),
+                os.listdir(_COQ_PASS_DIR),
+                self._make_test(_COQ_PASS_DIR, lib),
+                testdir=_SUITE_DIR,
                 expected_failures=xfails,
                 skip_set=skip_tests,
             )
@@ -79,13 +83,13 @@ class CoqTests(SailTest):
             print(e)
             return False
 
-    def _make_test(self, dir, lib):
+    def _make_test(self, src_dir, lib):
         def fn(filename, basename):
             step(f"mkdir -p _build_{basename}")
             step(
                 f"'{self.sail}' --coq --coq-lib-style {lib} --dcoq-undef-axioms"
                 f" --strict-bitvector --coq-output-dir _build_{basename}"
-                f" -o out {dir}/{filename}"
+                f" -o out {src_dir}/{filename}"
             )
             os.chdir(f"_build_{basename}")
             step("coqc out_types.v", name=basename)
@@ -96,4 +100,4 @@ class CoqTests(SailTest):
         return fn
 
 
-CoqTests().main()
+CoqTests().main(xml_dir=_SUITE_DIR)

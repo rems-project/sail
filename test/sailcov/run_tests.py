@@ -3,11 +3,11 @@
 import os
 import sys
 
-mydir = os.path.dirname(__file__)
-os.chdir(mydir)
-sys.path.insert(0, os.path.realpath(".."))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 from sailtest import *
+
+_SUITE_DIR = os.path.dirname(os.path.abspath(__file__))
 
 
 class SailcovTests(SailTest):
@@ -19,7 +19,9 @@ class SailcovTests(SailTest):
             # Append an empty suite so tests.xml is still written
             self._xml_parts.append(Results("sailcov").finish())
             return
-        self.run_tests("sailcov", os.listdir("."), self._make_test(sailcov))
+        self.run_tests(
+            "sailcov", os.listdir(_SUITE_DIR), self._make_test(sailcov), testdir=_SUITE_DIR
+        )
 
     def _have_sailcov(self, sailcov):
         try:
@@ -50,4 +52,4 @@ class SailcovTests(SailTest):
         return fn
 
 
-SailcovTests().main()
+SailcovTests().main(xml_dir=_SUITE_DIR)

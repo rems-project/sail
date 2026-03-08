@@ -3,11 +3,11 @@
 import os
 import sys
 
-mydir = os.path.dirname(__file__)
-os.chdir(mydir)
-sys.path.insert(0, os.path.realpath(".."))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 from sailtest import *
+
+_SUITE_DIR = os.path.dirname(os.path.abspath(__file__))
 
 
 class OcamlTests(SailTest):
@@ -20,8 +20,9 @@ class OcamlTests(SailTest):
             self.banner(f'Ocaml testing with options: "{opts}"')
             self.run_tests(
                 "Ocaml testing",
-                os.listdir("."),
+                os.listdir(_SUITE_DIR),
                 self._make_test(opts),
+                testdir=_SUITE_DIR,
                 chunks_fn=directory_chunks,
             )
 
@@ -30,8 +31,9 @@ class OcamlTests(SailTest):
             self.banner(f'Ocaml trace testing with options: "{opts}"')
             self.run_tests(
                 "Ocaml trace testing",
-                os.listdir("."),
+                os.listdir(_SUITE_DIR),
                 self._make_test(opts),
+                testdir=_SUITE_DIR,
                 chunks_fn=directory_chunks,
             )
 
@@ -51,4 +53,4 @@ class OcamlTests(SailTest):
         return fn
 
 
-OcamlTests().main()
+OcamlTests().main(xml_dir=_SUITE_DIR)

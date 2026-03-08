@@ -3,18 +3,22 @@
 import os
 import sys
 
-mydir = os.path.dirname(__file__)
-os.chdir(mydir)
-sys.path.insert(0, os.path.realpath(".."))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 from sailtest import *
+
+_SUITE_DIR = os.path.dirname(os.path.abspath(__file__))
 
 
 class OneoffTests(SailTest):
     def run(self):
         self.banner("Testing")
         self.run_tests(
-            "one-off", os.listdir("."), self._test, chunks_fn=directory_chunks
+            "one-off",
+            os.listdir(_SUITE_DIR),
+            self._test,
+            testdir=_SUITE_DIR,
+            chunks_fn=directory_chunks,
         )
 
     def _test(self, dir, basename):
@@ -22,4 +26,4 @@ class OneoffTests(SailTest):
         step("./test.sh", name=dir)
 
 
-OneoffTests().main()
+OneoffTests().main(xml_dir=_SUITE_DIR)

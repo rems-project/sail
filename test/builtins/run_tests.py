@@ -3,11 +3,11 @@
 import os
 import sys
 
-mydir = os.path.dirname(__file__)
-os.chdir(mydir)
-sys.path.insert(0, os.path.join(mydir, ".."))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 from sailtest import *
+
+_SUITE_DIR = os.path.dirname(os.path.abspath(__file__))
 
 
 class BuiltinsTests(SailTest):
@@ -23,24 +23,35 @@ class BuiltinsTests(SailTest):
             ]:
                 self.banner(f"Testing builtins: C, {name} Sail options: {sail_opts}")
                 self.run_tests(
-                    f"C, {name}", os.listdir("."), self._make_c_test(sail_opts)
+                    f"C, {name}",
+                    os.listdir(_SUITE_DIR),
+                    self._make_c_test(sail_opts),
+                    testdir=_SUITE_DIR,
                 )
 
         if "ocaml" in targets:
             self.banner("Testing builtins: OCaml")
-            self.run_tests("OCaml", os.listdir("."), self._test_ocaml)
+            self.run_tests(
+                "OCaml", os.listdir(_SUITE_DIR), self._test_ocaml, testdir=_SUITE_DIR
+            )
 
         if "lem" in targets:
             self.banner("Testing builtins: Lem to OCaml")
-            self.run_tests("Lem to OCaml", os.listdir("."), self._test_lem)
+            self.run_tests(
+                "Lem to OCaml", os.listdir(_SUITE_DIR), self._test_lem, testdir=_SUITE_DIR
+            )
 
         if "coq" in targets:
             self.banner("Testing builtins: Coq")
-            self.run_tests("Coq", os.listdir("."), self._test_coq)
+            self.run_tests(
+                "Coq", os.listdir(_SUITE_DIR), self._test_coq, testdir=_SUITE_DIR
+            )
 
         if "isla" in targets:
             self.banner("Testing builtins: Isla")
-            self.run_tests("Isla", os.listdir("."), self._test_isla)
+            self.run_tests(
+                "Isla", os.listdir(_SUITE_DIR), self._test_isla, testdir=_SUITE_DIR
+            )
 
     def _make_c_test(self, sail_opts):
         def fn(filename, basename):
@@ -109,4 +120,4 @@ class BuiltinsTests(SailTest):
         step(f"rm {basename}.ir")
 
 
-BuiltinsTests().main()
+BuiltinsTests().main(xml_dir=_SUITE_DIR)

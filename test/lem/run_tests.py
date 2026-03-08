@@ -4,13 +4,12 @@ import os
 import sys
 from shutil import which
 
-mydir = os.path.dirname(__file__)
-os.chdir(mydir)
-sys.path.insert(0, os.path.realpath(".."))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 from sailtest import *
 
-test_dir = "../typecheck/pass"
+_SUITE_DIR = os.path.dirname(os.path.abspath(__file__))
+_TYPECHECK_PASS_DIR = os.path.join(_SUITE_DIR, "..", "typecheck", "pass")
 
 skip_tests = {
     "phantom_option",
@@ -84,8 +83,9 @@ class LemTests(SailTest):
         self.banner(f"Testing Lem with bitlists (opts: '{opts}')")
         self.run_tests(
             "with bitlists",
-            os.listdir(test_dir),
+            os.listdir(_TYPECHECK_PASS_DIR),
             self._make_test(opts),
+            testdir=_SUITE_DIR,
             skip_set=skip_tests,
         )
 
@@ -93,15 +93,16 @@ class LemTests(SailTest):
         self.banner(f"Testing Lem with machine words (opts: '{opts}')")
         self.run_tests(
             "with machine words",
-            os.listdir(test_dir),
+            os.listdir(_TYPECHECK_PASS_DIR),
             self._make_test(opts),
+            testdir=_SUITE_DIR,
             skip_set=skip_tests_mwords,
         )
 
     def _make_test(self, opts):
         def fn(filename, basename):
             step(
-                f"'{self.sail}' --lem {opts} --strict-bitvector -o {basename} {test_dir}/{filename}"
+                f"'{self.sail}' --lem {opts} --strict-bitvector -o {basename} {_TYPECHECK_PASS_DIR}/{filename}"
             )
             step(
                 f"lem -lib '{self.sail_dir}'/src/gen_lib {basename}_types.lem {basename}.lem"
@@ -111,4 +112,4 @@ class LemTests(SailTest):
         return fn
 
 
-LemTests().main()
+LemTests().main(xml_dir=_SUITE_DIR)

@@ -3,21 +3,26 @@
 import os
 import sys
 
-mydir = os.path.dirname(__file__)
-os.chdir(mydir)
-sys.path.insert(0, os.path.realpath(".."))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 from sailtest import *
+
+_SUITE_DIR = os.path.dirname(os.path.abspath(__file__))
 
 
 class FormatTests(SailTest):
     def run(self):
         self.banner("Testing default")
-        self.run_tests("default", os.listdir("."), self._make_test("default"))
+        self.run_tests(
+            "default", os.listdir(_SUITE_DIR), self._make_test("default"), testdir=_SUITE_DIR
+        )
 
         self.banner("Testing lw80_preserve")
         self.run_tests(
-            "lw80_preserve", os.listdir("."), self._make_test("lw80_preserve")
+            "lw80_preserve",
+            os.listdir(_SUITE_DIR),
+            self._make_test("lw80_preserve"),
+            testdir=_SUITE_DIR,
         )
 
     def _make_test(self, test_dir):
@@ -42,4 +47,4 @@ class FormatTests(SailTest):
         return fn
 
 
-FormatTests().main()
+FormatTests().main(xml_dir=_SUITE_DIR)

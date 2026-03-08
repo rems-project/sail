@@ -3,11 +3,11 @@
 import os
 import sys
 
-mydir = os.path.dirname(__file__)
-os.chdir(mydir)
-sys.path.insert(0, os.path.realpath(".."))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 from sailtest import *
+
+_SUITE_DIR = os.path.dirname(os.path.abspath(__file__))
 
 
 class FloatTests(SailTest):
@@ -17,9 +17,11 @@ class FloatTests(SailTest):
         )
         # Only files ending in _test are actual tests
         test_files = [
-            f for f in os.listdir(".") if os.path.splitext(f)[0].endswith("_test")
+            f for f in os.listdir(_SUITE_DIR) if os.path.splitext(f)[0].endswith("_test")
         ]
-        self.run_tests("floating point c optimized", test_files, self._test)
+        self.run_tests(
+            "floating point c optimized", test_files, self._test, testdir=_SUITE_DIR
+        )
 
     def _test(self, filename, basename):
         step(f"'{self.sail}' -no_warn -c {filename} -o {basename}")
@@ -34,4 +36,4 @@ class FloatTests(SailTest):
         step(f"rm {basename}.c {basename}.h {basename}.bin {basename}.result")
 
 
-FloatTests().main()
+FloatTests().main(xml_dir=_SUITE_DIR)

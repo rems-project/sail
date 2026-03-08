@@ -5,17 +5,20 @@ import sys
 
 os.environ["SAIL_NEW_CLI"] = "true"
 
-mydir = os.path.dirname(__file__)
-os.chdir(mydir)
-sys.path.insert(0, os.path.realpath(".."))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 from sailtest import *
+
+_SUITE_DIR = os.path.dirname(os.path.abspath(__file__))
+_FAILURE_DIR = os.path.join(_SUITE_DIR, "failure")
 
 
 class ProjectTests(SailTest):
     def run(self):
         self.banner("Testing project")
-        self.run_tests("project", os.listdir("failure"), self._test)
+        self.run_tests(
+            "project", os.listdir(_FAILURE_DIR), self._test, testdir=_SUITE_DIR
+        )
 
     def _test(self, filename, basename):
         step(
@@ -26,4 +29,4 @@ class ProjectTests(SailTest):
         step(f"rm failure/{basename}.error")
 
 
-ProjectTests().main()
+ProjectTests().main(xml_dir=_SUITE_DIR)

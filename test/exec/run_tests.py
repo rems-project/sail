@@ -3,11 +3,11 @@
 import os
 import sys
 
-mydir = os.path.dirname(__file__)
-os.chdir(mydir)
-sys.path.insert(0, os.path.realpath(".."))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 from sailtest import *
+
+_SUITE_DIR = os.path.dirname(os.path.abspath(__file__))
 
 _cpp_xfails = {
     "cabbrev.sail": "my_pair_in_c is declared in a namespace in C++",
@@ -77,7 +77,12 @@ class ExecTests(SailTest):
         if "interpreter" in targets:
             if os.name == "posix":
                 self.banner("Testing interpreter")
-                self.run_tests("interpreter", os.listdir("."), self._test_interpreter)
+                self.run_tests(
+                    "interpreter",
+                    os.listdir(_SUITE_DIR),
+                    self._test_interpreter,
+                    testdir=_SUITE_DIR,
+                )
             else:
                 print(
                     "Skipping interpreter tests because the interpreter is only supported on Unix-like platforms"
@@ -85,14 +90,17 @@ class ExecTests(SailTest):
 
         if "ocaml" in targets:
             self.banner("Testing OCaml")
-            self.run_tests("OCaml", os.listdir("."), self._test_ocaml)
+            self.run_tests(
+                "OCaml", os.listdir(_SUITE_DIR), self._test_ocaml, testdir=_SUITE_DIR
+            )
 
         if "lem" in targets:
             self.banner("Testing lem")
             self.run_tests(
                 "lem",
-                os.listdir("."),
+                os.listdir(_SUITE_DIR),
                 self._test_lem,
+                testdir=_SUITE_DIR,
                 expected_failures={
                     "inc_tests.sail": "missing built-in functions for increasing vectors in Lem library",
                     "read_write_ram.sail": "uses memory primitives not provided by default in Lem",
@@ -118,8 +126,9 @@ class ExecTests(SailTest):
             self.banner("Testing coq")
             self.run_tests(
                 "coq",
-                os.listdir("."),
+                os.listdir(_SUITE_DIR),
                 self._test_coq,
+                testdir=_SUITE_DIR,
                 expected_failures={
                     "inc_tests.sail": "missing built-in functions for increasing vectors in Coq library",
                     "read_write_ram.sail": "uses memory primitives not provided by default in Coq",
@@ -188,7 +197,13 @@ class ExecTests(SailTest):
                 f"rm {basename}.{extension} {basename}.h {basename}.bin {basename}.result"
             )
 
-        self.run_tests(name, os.listdir("."), fn, expected_failures=expected_failures)
+        self.run_tests(
+            name,
+            os.listdir(_SUITE_DIR),
+            fn,
+            testdir=_SUITE_DIR,
+            expected_failures=expected_failures,
+        )
 
     def _test_interpreter(self, filename, basename):
         step(
@@ -258,4 +273,4 @@ class ExecTests(SailTest):
         step(f"rm -r _coqbuild_{basename}")
 
 
-ExecTests().main()
+ExecTests().main(xml_dir=_SUITE_DIR)

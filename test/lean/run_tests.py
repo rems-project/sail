@@ -3,11 +3,12 @@
 import os
 import sys
 
-mydir = os.path.dirname(__file__)
-os.chdir(mydir)
-sys.path.insert(0, os.path.realpath(".."))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 from sailtest import *
+
+_SUITE_DIR = os.path.dirname(os.path.abspath(__file__))
+_EXEC_DIR = os.path.join(_SUITE_DIR, "..", "exec")
 
 skip_selftests = {
     "outcome_impl",  # custom outcome types (not expected to work)
@@ -43,35 +44,37 @@ skip_selftests = {
 class LeanTests(SailTest):
     def run(self):
         self.banner("Cloning the support library")
-        support_lib_lean = self._get_support_lib("lean")
+        support_lib_lean = self._get_support_lib(_SUITE_DIR)
         print("...done!")
         self.banner("Testing lean target (sub-directory: lean)")
         self.run_tests(
             "lean",
-            os.listdir("../lean"),
-            self._make_test("lean", support_lib_lean, runnable=False),
+            os.listdir(_SUITE_DIR),
+            self._make_test(support_lib_lean, runnable=False),
+            testdir=_SUITE_DIR,
         )
 
         self.banner("Cloning the support library")
-        support_lib_c = self._get_support_lib("c")
+        support_lib_exec = self._get_support_lib(_EXEC_DIR)
         print("...done!")
-        self.banner("Testing lean target (sub-directory: c)")
+        self.banner("Testing lean target (sub-directory: exec)")
         self.run_tests(
             "c (lean runnable)",
-            os.listdir("../exec"),
+            os.listdir(_EXEC_DIR),
             self._make_test(
-                "c", support_lib_c, runnable=True, skip_list=skip_selftests
+                support_lib_exec, runnable=True, skip_list=skip_selftests
             ),
+            testdir=_EXEC_DIR,
             skip_fn=self._make_skip_fn(skip_selftests),
         )
 
-    def _get_support_lib(self, subdir):
+    def _get_support_lib(self, testdir):
         local = args.lean_local_support_library
         if local:
             return local
-        lib_path = f"../{subdir}/support-lib"
-        step(f"rm -rf {lib_path} || true")
-        step(f"git clone https://github.com/rems-project/lean-sail.git {lib_path}")
+        lib_path = os.path.join(testdir, "support-lib")
+        step(f"rm -rf '{lib_path}' || true")
+        step(f"git clone https://github.com/rems-project/lean-sail.git '{lib_path}'")
         print("Building the support library")
         step("lake build", cwd=lib_path)
         return "../../support-lib"
@@ -82,10 +85,10 @@ class LeanTests(SailTest):
 
         return skip_fn
 
-    def _make_test(self, subdir, support_lib, runnable, skip_list=None):
+    def _make_test(self, support_lib, runnable, skip_list=None):
         def fn(filename, basename):
             is_skip = skip_list is not None and basename in skip_list and args.run_skips
-            os.chdir(f"../{subdir}")
+            # The forked child's cwd is already set to testdir by run_tests().
             step(f"rm -rf {basename} || true")
             step(f"mkdir -p {basename}")
             extra_flags = (
@@ -143,4 +146,4 @@ class LeanTests(SailTest):
         return fn
 
 
-LeanTests().main()
+LeanTests().main(xml_dir=_SUITE_DIR)

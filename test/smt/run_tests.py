@@ -4,11 +4,11 @@ import os
 import sys
 import shutil
 
-mydir = os.path.dirname(__file__)
-os.chdir(mydir)
-sys.path.insert(0, os.path.join(mydir, ".."))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 from sailtest import *
+
+_SUITE_DIR = os.path.dirname(os.path.abspath(__file__))
 
 # Maps replaced basename (dots→underscores) to the set of solvers to skip for
 _skip_tests = {
@@ -32,8 +32,9 @@ class SmtTests(SailTest):
             self.banner("Testing SMT: cvc4")
             self.run_tests(
                 "cvc4",
-                os.listdir("."),
+                os.listdir(_SUITE_DIR),
                 self._make_test("cvc4", "cvc4 --lang=smt2.6", ""),
+                testdir=_SUITE_DIR,
                 skip_fn=self._make_skip_fn("cvc4"),
             )
         else:
@@ -45,8 +46,9 @@ class SmtTests(SailTest):
             self.banner("Testing SMT: z3")
             self.run_tests(
                 "z3",
-                os.listdir("."),
+                os.listdir(_SUITE_DIR),
                 self._make_test("z3", "z3", ""),
+                testdir=_SUITE_DIR,
                 skip_fn=self._make_skip_fn("z3"),
             )
         else:
@@ -72,4 +74,4 @@ class SmtTests(SailTest):
         return fn
 
 
-SmtTests().main()
+SmtTests().main(xml_dir=_SUITE_DIR)
