@@ -103,7 +103,6 @@ module type CONFIG = sig
   val no_packed : bool
   val no_assertions : bool
   val never_pack_unions : bool
-  val union_padding : bool
   val no_unions : bool
   val unreachable : string list
   val no_write_flush : bool
@@ -184,14 +183,19 @@ module Make (Config : CONFIG) = struct
   let rec bit_width ctx = function
     | CT_unit | CT_bool -> Some 1
     | CT_fbits len -> Some len
-    | CT_lbits -> Some Config.max_unknown_bitvector_width
+    | CT_lbits ->
+        let w = Config.max_unknown_bitvector_width in
+        Some (required_width (Big_int.of_int (w - 1)) + 1 + w)
     | CT_enum enum_id ->
         let members = Jib_compile.enum_members Parse_ast.Unknown ctx enum_id in
         Some (required_width (Big_int.of_int (IdSet.cardinal members - 1)))
     | CT_constant c -> Some (required_width c)
     | CT_variant _ as ctyp ->
+        let open Util.Option_monad in
         let ctors = Jib_compile.variant_constructor_bindings Parse_ast.Unknown ctx ctyp |> snd |> Bindings.bindings in
-        List.map (fun (_, ctyp) -> bit_width ctx ctyp) ctors |> Util.option_all |> Option.map (List.fold_left max 1)
+        let* ctor_widths = List.map (fun (_, ctyp) -> bit_width ctx ctyp) ctors |> Util.option_all in
+        let max_width = List.fold_left max 1 ctor_widths in
+        Some (max_width + required_width (Big_int.of_int (List.length ctors - 1)))
     | CT_struct _ as ctyp ->
         let fields = Jib_compile.struct_field_bindings Parse_ast.Unknown ctx ctyp |> snd |> Bindings.bindings in
         List.map (fun (_, ctyp) -> bit_width ctx ctyp) fields |> Util.option_all |> Option.map (List.fold_left ( + ) 0)
@@ -319,7 +323,9 @@ module Make (Config : CONFIG) = struct
         Reporting.unreachable (id_loc id) __POS__ "Abstract types not supported for SystemVerilog target"
     | CTD_abbrev _ -> empty
     | CTD_enum (id, ids) ->
-        string "typedef" ^^ space ^^ string "enum" ^^ space
+        let width = required_width (Big_int.of_int (List.length ids - 1)) in
+        let width_doc = lbracket ^^ string (string_of_int (width - 1)) ^^ colon ^^ char '0' ^^ rbracket in
+        string "typedef" ^^ space ^^ string "enum" ^^ space ^^ width_doc ^^ space
         ^^ group (lbrace ^^ nest 4 (hardline ^^ separate_map (comma ^^ hardline) pp_id ids) ^^ hardline ^^ rbrace)
         ^^ space ^^ sv_type_id id ^^ semi
     | CTD_struct (id, _, fields) ->
@@ -339,11 +345,13 @@ module Make (Config : CONFIG) = struct
         let sv_ctor (id, ctyp) = wrap_type ctyp (pp_id id) in
         let tag_type = string ("sailtag_" ^ pp_id_string id) in
         let value_type = string ("sailunion_" ^ pp_id_string id) in
+        let tag_width = required_width (Big_int.of_int (List.length ctors - 1)) in
         let kind_enum =
           separate space
             [
               string "typedef";
               string "enum";
+              lbracket ^^ string (string_of_int (tag_width - 1)) ^^ colon ^^ char '0' ^^ rbracket;
               group (lbrace ^^ nest 4 (hardline ^^ separate_map (comma ^^ hardline) kind_id ctors) ^^ hardline ^^ rbrace);
               tag_type ^^ semi;
             ]
@@ -393,71 +401,46 @@ module Make (Config : CONFIG) = struct
               ctors
           in
           let constructors =
-            if Config.union_padding then
-              List.map
-                (fun (_, (ctor_id, ctyp, padding_type, required_padding)) ->
-                  separate space [string "function"; string "automatic"; sv_type_id id; pp_id ctor_id]
-                  ^^ parens (wrap_type ctyp (char 'v'))
-                  ^^ semi
-                  ^^ nest 4
-                       (hardline ^^ sv_type_id id ^^ space ^^ char 'r' ^^ semi ^^ hardline
-                       ^^ string ("sailunion_" ^ pp_id_string id)
-                       ^^ space ^^ char 'u' ^^ semi ^^ hardline ^^ padding_type ^^ space ^^ char 'p' ^^ semi ^^ hardline
-                       ^^ separate space
-                            [
-                              string "r.tag";
-                              equals;
-                              string_of_id ctor_id |> Util.zencode_string |> String.uppercase_ascii |> string;
-                            ]
-                       ^^ semi ^^ hardline
-                       ^^ separate space [char 'p' ^^ dot ^^ pp_id ctor_id; equals; char 'v']
-                       ^^ semi ^^ hardline
-                       ^^ ( if required_padding > 0 then
-                              separate space
-                                [
-                                  char 'p' ^^ dot ^^ string "padding";
-                                  equals;
-                                  ksprintf string "%d'b%s" required_padding (String.make required_padding '0');
-                                ]
-                              ^^ semi ^^ hardline
-                            else empty
-                          )
-                       ^^ separate space [char 'u' ^^ dot ^^ pp_id ctor_id; equals; char 'p']
-                       ^^ semi ^^ hardline
-                       ^^ separate space [string "r.value"; equals; char 'u']
-                       ^^ semi ^^ hardline ^^ string "return" ^^ space ^^ char 'r' ^^ semi
-                       )
-                  ^^ hardline ^^ string "endfunction"
-                )
-                padding_structs
-            else
-              List.map
-                (fun (ctor_id, ctyp) ->
-                  separate space [string "function"; string "automatic"; sv_type_id id; pp_id ctor_id]
-                  ^^ parens (wrap_type ctyp (char 'v'))
-                  ^^ semi
-                  ^^ nest 4
-                       (hardline ^^ sv_type_id id ^^ space ^^ char 'r' ^^ semi ^^ hardline
-                       ^^ string ("sailunion_" ^ pp_id_string id)
-                       ^^ space ^^ char 'u' ^^ semi ^^ hardline
-                       ^^ separate space
-                            [
-                              string "r.tag";
-                              equals;
-                              string_of_id ctor_id |> Util.zencode_string |> String.uppercase_ascii |> string;
-                            ]
-                       ^^ semi ^^ hardline
-                       ^^ separate space [char 'u' ^^ dot ^^ pp_id ctor_id; equals; char 'v']
-                       ^^ semi ^^ hardline
-                       ^^ separate space [string "r.value"; equals; char 'u']
-                       ^^ semi ^^ hardline ^^ string "return" ^^ space ^^ char 'r' ^^ semi
-                       )
-                  ^^ hardline ^^ string "endfunction"
-                )
-                ctors
+            List.map
+              (fun (_, (ctor_id, ctyp, padding_type, required_padding)) ->
+                separate space [string "function"; string "automatic"; sv_type_id id; pp_id ctor_id]
+                ^^ parens (wrap_type ctyp (char 'v'))
+                ^^ semi
+                ^^ nest 4
+                     (hardline ^^ sv_type_id id ^^ space ^^ char 'r' ^^ semi ^^ hardline
+                     ^^ string ("sailunion_" ^ pp_id_string id)
+                     ^^ space ^^ char 'u' ^^ semi ^^ hardline ^^ padding_type ^^ space ^^ char 'p' ^^ semi ^^ hardline
+                     ^^ separate space
+                          [
+                            string "r.tag";
+                            equals;
+                            string_of_id ctor_id |> Util.zencode_string |> String.uppercase_ascii |> string;
+                          ]
+                     ^^ semi ^^ hardline
+                     ^^ separate space [char 'p' ^^ dot ^^ pp_id ctor_id; equals; char 'v']
+                     ^^ semi ^^ hardline
+                     ^^ ( if required_padding > 0 then
+                            separate space
+                              [
+                                char 'p' ^^ dot ^^ string "padding";
+                                equals;
+                                ksprintf string "%d'b%s" required_padding (String.make required_padding '0');
+                              ]
+                            ^^ semi ^^ hardline
+                          else empty
+                        )
+                     ^^ separate space [char 'u' ^^ dot ^^ pp_id ctor_id; equals; char 'p']
+                     ^^ semi ^^ hardline
+                     ^^ separate space [string "r.value"; equals; char 'u']
+                     ^^ semi ^^ hardline ^^ string "return" ^^ space ^^ char 'r' ^^ semi
+                     )
+                ^^ hardline ^^ string "endfunction"
+              )
+              padding_structs
           in
           let sv_padded_ctor (_, (ctor_id, _, padding_type, _)) = padding_type ^^ space ^^ pp_id ctor_id in
-          (if Config.union_padding then separate_map (twice hardline) fst padding_structs ^^ twice hardline else empty)
+          separate_map (twice hardline) fst padding_structs
+          ^^ twice hardline
           ^^ separate space
                [
                  string "typedef";
@@ -465,12 +448,7 @@ module Make (Config : CONFIG) = struct
                  string "packed";
                  group
                    (lbrace
-                   ^^ nest 4
-                        (hardline
-                        ^^
-                        if Config.union_padding then separate_map (semi ^^ hardline) sv_padded_ctor padding_structs
-                        else separate_map (semi ^^ hardline) sv_ctor ctors
-                        )
+                   ^^ nest 4 (hardline ^^ separate_map (semi ^^ hardline) sv_padded_ctor padding_structs)
                    ^^ semi ^^ hardline ^^ rbrace
                    );
                  value_type ^^ semi;
@@ -666,7 +644,7 @@ module Make (Config : CONFIG) = struct
              [pp_smt v ^^ dot ^^ string "tag"; string "=="; string (ctor |> zencode_id |> String.uppercase_ascii)]
           )
     | Unwrap (ctor, packed, v) ->
-        let packed_ctor = if Config.union_padding then pp_id ctor ^^ dot ^^ pp_id ctor else pp_id ctor in
+        let packed_ctor = pp_id ctor ^^ dot ^^ pp_id ctor in
         if packed then pp_smt v ^^ dot ^^ string "value" ^^ dot ^^ packed_ctor else pp_smt v ^^ dot ^^ pp_id ctor
     | Field (_, field, v) -> pp_smt v ^^ dot ^^ pp_id field
     | Ite (cond, then_exp, else_exp) ->
