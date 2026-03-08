@@ -94,21 +94,16 @@ class Batcher:
 
     def batch(self, parallelism):
         """List the directory, filter by predicate, and split into batches of at most `parallelism` items."""
-        saved_cwd = os.getcwd()
-        try:
-            os.chdir(self.directory)
-            batches = []
-            batch = []
-            for filename in os.listdir("."):
-                if self._predicate(filename):
-                    batch.append(filename)
-                if len(batch) >= parallelism:
-                    batches.append(list(batch))
-                    batch = []
-            if batch:
+        batches = []
+        batch = []
+        for filename in os.listdir(self.directory):
+            if self._predicate(os.path.join(self.directory, filename)):
+                batch.append(filename)
+            if len(batch) >= parallelism:
                 batches.append(list(batch))
-        finally:
-            os.chdir(saved_cwd)
+                batch = []
+        if batch:
+            batches.append(list(batch))
         return batches
 
 

@@ -31,7 +31,7 @@ class MonoTests(SailTest):
         self.banner("Monomorphisation tests")
         self.run_tests(
             "mono",
-            Batcher(_PASS_DIR, predicate=lambda f: not args.test or f in args.test),
+            Batcher(_PASS_DIR, predicate=lambda f: not args.test or os.path.basename(f) in args.test),
             self._test,
             testdir=_SUITE_DIR,
         )
