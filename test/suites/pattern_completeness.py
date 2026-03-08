@@ -15,7 +15,7 @@ class PatternCompletenessTests(SailTest):
     def run(self):
         self.banner("Testing pattern completeness checker")
         self.run_tests(
-            "completeness", os.listdir(_SUITE_DIR), self._test, testdir=_SUITE_DIR
+            "completeness", Batcher(_SUITE_DIR), self._test, testdir=_SUITE_DIR
         )
 
     def _test(self, filename, basename):

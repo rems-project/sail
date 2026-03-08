@@ -27,7 +27,7 @@ class TypecheckTests(SailTest):
         self.banner("Testing passing programs")
         self.run_tests(
             "pass",
-            os.listdir(_PASS_DIR),
+            Batcher(_PASS_DIR),
             self._test_pass,
             testdir=_SUITE_DIR,
             skip_set=skip_pass,
@@ -36,14 +36,13 @@ class TypecheckTests(SailTest):
         self.banner("Testing multi-file projects")
         self.run_tests(
             "projects",
-            os.listdir(_PROJECT_DIR),
+            Batcher.projects(_PROJECT_DIR),
             self._test_project,
             testdir=_SUITE_DIR,
-            chunks_fn=project_chunks,
         )
 
         self.banner("Testing failing programs")
-        self.run_tests("fail", os.listdir(_FAIL_DIR), self._test_fail, testdir=_SUITE_DIR)
+        self.run_tests("fail", Batcher(_FAIL_DIR), self._test_fail, testdir=_SUITE_DIR)
 
     def _test_pass(self, filename, basename):
         step(

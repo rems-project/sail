@@ -33,7 +33,7 @@ class SmtTests(SailTest):
             self.banner("Testing SMT: cvc4")
             self.run_tests(
                 "cvc4",
-                os.listdir(_SUITE_DIR),
+                Batcher(_SUITE_DIR),
                 self._make_test("cvc4", "cvc4 --lang=smt2.6", ""),
                 testdir=_SUITE_DIR,
                 skip_fn=self._make_skip_fn("cvc4"),
@@ -47,7 +47,7 @@ class SmtTests(SailTest):
             self.banner("Testing SMT: z3")
             self.run_tests(
                 "z3",
-                os.listdir(_SUITE_DIR),
+                Batcher(_SUITE_DIR),
                 self._make_test("z3", "z3", ""),
                 testdir=_SUITE_DIR,
                 skip_fn=self._make_skip_fn("z3"),

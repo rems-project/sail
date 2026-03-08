@@ -56,7 +56,7 @@ class CoqTests(SailTest):
             self.banner(f"Testing Coq backend on typecheck tests with {lib}")
             self.run_tests(
                 f"typecheck tests on {lib}",
-                os.listdir(_TYPECHECK_PASS_DIR),
+                Batcher(_TYPECHECK_PASS_DIR),
                 self._make_test(_TYPECHECK_PASS_DIR, lib),
                 testdir=_SUITE_DIR,
                 expected_failures=xfails,
@@ -65,7 +65,7 @@ class CoqTests(SailTest):
             self.banner(f"Testing Coq backend on Coq specific tests with {lib}")
             self.run_tests(
                 f"Coq specific tests on {lib}",
-                os.listdir(_COQ_PASS_DIR),
+                Batcher(_COQ_PASS_DIR),
                 self._make_test(_COQ_PASS_DIR, lib),
                 testdir=_SUITE_DIR,
                 expected_failures=xfails,

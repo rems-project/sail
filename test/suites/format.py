@@ -15,13 +15,13 @@ class FormatTests(SailTest):
     def run(self):
         self.banner("Testing default")
         self.run_tests(
-            "default", os.listdir(_SUITE_DIR), self._make_test("default"), testdir=_SUITE_DIR
+            "default", Batcher(_SUITE_DIR), self._make_test("default"), testdir=_SUITE_DIR
         )
 
         self.banner("Testing lw80_preserve")
         self.run_tests(
             "lw80_preserve",
-            os.listdir(_SUITE_DIR),
+            Batcher(_SUITE_DIR),
             self._make_test("lw80_preserve"),
             testdir=_SUITE_DIR,
         )

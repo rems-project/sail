@@ -43,7 +43,7 @@ class SvTests(SailTest):
         self.banner(f"Testing SystemVerilog with options: {opts}")
         self.run_tests(
             "SystemVerilog",
-            os.listdir(_EXEC_DIR),
+            Batcher(_EXEC_DIR),
             self._make_test(opts, just_check=False),
             testdir=_SUITE_DIR,
             skip_set=skip_tests,
@@ -53,7 +53,7 @@ class SvTests(SailTest):
         self.banner(f"Testing SystemVerilog (nostrings) with options: {opts}")
         self.run_tests(
             "SystemVerilog (nostrings)",
-            os.listdir(_EXEC_DIR),
+            Batcher(_EXEC_DIR),
             self._make_test(f" {opts}", just_check=True),
             testdir=_SUITE_DIR,
             skip_set=skip_tests,

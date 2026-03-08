@@ -21,10 +21,9 @@ class OcamlTests(SailTest):
             self.banner(f'Ocaml testing with options: "{opts}"')
             self.run_tests(
                 "Ocaml testing",
-                os.listdir(_SUITE_DIR),
+                Batcher.directories(_SUITE_DIR),
                 self._make_test(opts),
                 testdir=_SUITE_DIR,
-                chunks_fn=directory_chunks,
             )
 
         if "ocaml_trace" in targets:
@@ -32,10 +31,9 @@ class OcamlTests(SailTest):
             self.banner(f'Ocaml trace testing with options: "{opts}"')
             self.run_tests(
                 "Ocaml trace testing",
-                os.listdir(_SUITE_DIR),
+                Batcher.directories(_SUITE_DIR),
                 self._make_test(opts),
                 testdir=_SUITE_DIR,
-                chunks_fn=directory_chunks,
             )
 
     def _make_test(self, opts):

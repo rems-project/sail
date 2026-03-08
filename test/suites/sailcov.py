@@ -21,7 +21,7 @@ class SailcovTests(SailTest):
             self._xml_parts.append(Results("sailcov").finish())
             return
         self.run_tests(
-            "sailcov", os.listdir(_SUITE_DIR), self._make_test(sailcov), testdir=_SUITE_DIR
+            "sailcov", Batcher(_SUITE_DIR), self._make_test(sailcov), testdir=_SUITE_DIR
         )
 
     def _have_sailcov(self, sailcov):

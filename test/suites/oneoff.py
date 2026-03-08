@@ -16,10 +16,9 @@ class OneoffTests(SailTest):
         self.banner("Testing")
         self.run_tests(
             "one-off",
-            os.listdir(_SUITE_DIR),
+            Batcher.directories(_SUITE_DIR),
             self._test,
             testdir=_SUITE_DIR,
-            chunks_fn=directory_chunks,
         )
 
     def _test(self, dir, basename):

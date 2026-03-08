@@ -50,7 +50,7 @@ class LeanTests(SailTest):
         self.banner("Testing lean target (sub-directory: lean)")
         self.run_tests(
             "lean",
-            os.listdir(_SUITE_DIR),
+            Batcher(_SUITE_DIR),
             self._make_test(support_lib_lean, runnable=False),
             testdir=_SUITE_DIR,
         )
@@ -61,7 +61,7 @@ class LeanTests(SailTest):
         self.banner("Testing lean target (sub-directory: exec)")
         self.run_tests(
             "c (lean runnable)",
-            os.listdir(_EXEC_DIR),
+            Batcher(_EXEC_DIR),
             self._make_test(
                 support_lib_exec, runnable=True, skip_list=skip_selftests
             ),

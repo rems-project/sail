@@ -18,7 +18,7 @@ class ProjectTests(SailTest):
     def run(self):
         self.banner("Testing project")
         self.run_tests(
-            "project", os.listdir(_FAILURE_DIR), self._test, testdir=_SUITE_DIR
+            "project", Batcher(_FAILURE_DIR), self._test, testdir=_SUITE_DIR
         )
 
     def _test(self, filename, basename):

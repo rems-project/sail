@@ -84,7 +84,7 @@ class LemTests(SailTest):
         self.banner(f"Testing Lem with bitlists (opts: '{opts}')")
         self.run_tests(
             "with bitlists",
-            os.listdir(_TYPECHECK_PASS_DIR),
+            Batcher(_TYPECHECK_PASS_DIR),
             self._make_test(opts),
             testdir=_SUITE_DIR,
             skip_set=skip_tests,
@@ -94,7 +94,7 @@ class LemTests(SailTest):
         self.banner(f"Testing Lem with machine words (opts: '{opts}')")
         self.run_tests(
             "with machine words",
-            os.listdir(_TYPECHECK_PASS_DIR),
+            Batcher(_TYPECHECK_PASS_DIR),
             self._make_test(opts),
             testdir=_SUITE_DIR,
             skip_set=skip_tests_mwords,

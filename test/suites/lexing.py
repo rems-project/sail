@@ -14,7 +14,7 @@ _SUITE_DIR = os.path.join(_TEST_DIR, "lexing")
 class LexingTests(SailTest):
     def run(self):
         self.banner("Testing lexer")
-        self.run_tests("lex", os.listdir(_SUITE_DIR), self._test, testdir=_SUITE_DIR)
+        self.run_tests("lex", Batcher(_SUITE_DIR), self._test, testdir=_SUITE_DIR)
 
     def _test(self, filename, basename):
         step(f"'{self.sail}' {filename} 2> {basename}.error", expected_status=1)

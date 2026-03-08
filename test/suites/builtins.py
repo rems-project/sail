@@ -25,7 +25,7 @@ class BuiltinsTests(SailTest):
                 self.banner(f"Testing builtins: C, {name} Sail options: {sail_opts}")
                 self.run_tests(
                     f"C, {name}",
-                    os.listdir(_SUITE_DIR),
+                    Batcher(_SUITE_DIR),
                     self._make_c_test(sail_opts),
                     testdir=_SUITE_DIR,
                 )
@@ -33,25 +33,25 @@ class BuiltinsTests(SailTest):
         if "ocaml" in targets:
             self.banner("Testing builtins: OCaml")
             self.run_tests(
-                "OCaml", os.listdir(_SUITE_DIR), self._test_ocaml, testdir=_SUITE_DIR
+                "OCaml", Batcher(_SUITE_DIR), self._test_ocaml, testdir=_SUITE_DIR
             )
 
         if "lem" in targets:
             self.banner("Testing builtins: Lem to OCaml")
             self.run_tests(
-                "Lem to OCaml", os.listdir(_SUITE_DIR), self._test_lem, testdir=_SUITE_DIR
+                "Lem to OCaml", Batcher(_SUITE_DIR), self._test_lem, testdir=_SUITE_DIR
             )
 
         if "coq" in targets:
             self.banner("Testing builtins: Coq")
             self.run_tests(
-                "Coq", os.listdir(_SUITE_DIR), self._test_coq, testdir=_SUITE_DIR
+                "Coq", Batcher(_SUITE_DIR), self._test_coq, testdir=_SUITE_DIR
             )
 
         if "isla" in targets:
             self.banner("Testing builtins: Isla")
             self.run_tests(
-                "Isla", os.listdir(_SUITE_DIR), self._test_isla, testdir=_SUITE_DIR
+                "Isla", Batcher(_SUITE_DIR), self._test_isla, testdir=_SUITE_DIR
             )
 
     def _make_c_test(self, sail_opts):

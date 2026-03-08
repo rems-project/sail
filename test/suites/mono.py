@@ -26,29 +26,14 @@ libraries = [
 libml = " ".join(f"sail2_{lib}.ml" for lib in libraries)
 
 
-def _mono_chunks(filenames, cores):
-    """Custom chunking for mono tests: files in pass/ have no extension and aren't .sail files."""
-    ys = []
-    chunk = []
-    for filename in filenames:
-        if not args.test or filename in args.test:
-            chunk.append(filename)
-        if len(chunk) >= cores:
-            ys.append(list(chunk))
-            chunk = []
-    ys.append(list(chunk))
-    return ys
-
-
 class MonoTests(SailTest):
     def run(self):
         self.banner("Monomorphisation tests")
         self.run_tests(
             "mono",
-            os.listdir(_PASS_DIR),
+            Batcher(_PASS_DIR, predicate=lambda f: not args.test or f in args.test),
             self._test,
             testdir=_SUITE_DIR,
-            chunks_fn=_mono_chunks,
         )
 
     def _test(self, filename, basename):

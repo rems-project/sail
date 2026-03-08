@@ -68,34 +68,47 @@ def parallel():
     return _parallel_count
 
 
-def _make_chunks(predicate):
-    """Return a chunker function that batches filenames satisfying predicate."""
-
-    def chunker(filenames, cores):
-        ys = []
-        chunk = []
-        for filename in filenames:
-            if predicate(filename):
-                chunk.append(filename)
-            if len(chunk) >= cores:
-                ys.append(list(chunk))
-                chunk = []
-        ys.append(list(chunk))
-        return ys
-
-    return chunker
-
-
-def _sail_file(filename):
+def sail_file(filename):
     basename = os.path.splitext(os.path.basename(filename))[0]
     return (filename.endswith(".sail") or filename.endswith(".sail_project")) and (
         not args.test or basename in args.test
     )
 
 
-chunks = _make_chunks(_sail_file)
-directory_chunks = _make_chunks(os.path.isdir)
-project_chunks = _make_chunks(lambda f: f.endswith(".sail_project"))
+class Batcher:
+    """Encapsulates a directory and a predicate for batching its entries into parallel chunks."""
+
+    def __init__(self, directory, predicate=None):
+        self.directory = directory
+        self._predicate = predicate if predicate is not None else sail_file
+
+    @classmethod
+    def directories(cls, directory):
+        """Batcher that matches subdirectories."""
+        return cls(directory, predicate=os.path.isdir)
+
+    @classmethod
+    def projects(cls, directory):
+        """Batcher that matches .sail_project files."""
+        return cls(directory, predicate=lambda f: f.endswith(".sail_project"))
+
+    def batch(self, parallelism):
+        """List the directory, filter by predicate, and split into batches of at most `parallelism` items."""
+        saved_cwd = os.getcwd()
+        try:
+            os.chdir(self.directory)
+            batches = []
+            batch = []
+            for filename in os.listdir("."):
+                if self._predicate(filename):
+                    batch.append(filename)
+                if len(batch) >= parallelism:
+                    batches.append(list(batch))
+                    batch = []
+            batches.append(list(batch))
+        finally:
+            os.chdir(saved_cwd)
+        return batches
 
 
 def step_with_status(string, expected_status=0, cwd=None, name="", stderr_file=""):
@@ -254,14 +267,13 @@ class SailTest(ABC):
     def run_tests(
         self,
         name,
-        filenames,
+        batcher,
         fn,
         *,
         testdir,
         expected_failures=None,
         skip_set=None,
         skip_fn=None,
-        chunks_fn=None,
     ):
         """Run a set of tests in parallel using fork/collect.
 
@@ -270,28 +282,21 @@ class SailTest(ABC):
         before fn is called. The base class calls _print_ok() and sys.exit(0)
         after fn returns.
 
+        batcher: a Batcher instance that provides the files to test and how to
+                 batch them. Its directory is listed and filtered by its predicate.
         testdir: absolute path; the working directory for each test child process.
-                 Also used as the base for resolving relative filenames in chunks_fn.
         expected_failures: dict of {filename: reason} for known xfails
         skip_set: set of basenames to skip before forking
         skip_fn: callable(filename, basename) -> bool for complex skip logic
-        chunks_fn: replacement for the default chunks() function
         """
         results = Results(name)
         if expected_failures:
             for test, reason in expected_failures.items():
                 results.expect_failure(test, reason)
-        # Temporarily chdir to testdir so that chunks_fn predicates like
-        # os.path.isdir() resolve correctly against the test data directory.
-        saved_cwd = os.getcwd()
-        try:
-            os.chdir(testdir)
-            all_chunks = (chunks_fn or chunks)(filenames, parallel())
-        finally:
-            os.chdir(saved_cwd)
-        for chunk in all_chunks:
+        batches = batcher.batch(parallel())
+        for batch in batches:
             tests = {}
-            for filename in chunk:
+            for filename in batch:
                 basename = os.path.splitext(os.path.basename(filename))[0]
                 if (skip_set and basename in skip_set) or (
                     skip_fn and skip_fn(filename, basename)

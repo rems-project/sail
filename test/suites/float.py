@@ -16,12 +16,11 @@ class FloatTests(SailTest):
         self.banner(
             "Testing floating point c optimized with C options: -O2 Sail options: "
         )
-        # Only files ending in _test are actual tests
-        test_files = [
-            f for f in os.listdir(_SUITE_DIR) if os.path.splitext(f)[0].endswith("_test")
-        ]
         self.run_tests(
-            "floating point c optimized", test_files, self._test, testdir=_SUITE_DIR
+            "floating point c optimized",
+            Batcher(_SUITE_DIR, predicate=lambda f: sail_file(f) and os.path.splitext(f)[0].endswith("_test")),
+            self._test,
+            testdir=_SUITE_DIR,
         )
 
     def _test(self, filename, basename):

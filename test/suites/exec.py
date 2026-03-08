@@ -80,7 +80,7 @@ class ExecTests(SailTest):
                 self.banner("Testing interpreter")
                 self.run_tests(
                     "interpreter",
-                    os.listdir(_SUITE_DIR),
+                    Batcher(_SUITE_DIR),
                     self._test_interpreter,
                     testdir=_SUITE_DIR,
                 )
@@ -92,14 +92,14 @@ class ExecTests(SailTest):
         if "ocaml" in targets:
             self.banner("Testing OCaml")
             self.run_tests(
-                "OCaml", os.listdir(_SUITE_DIR), self._test_ocaml, testdir=_SUITE_DIR
+                "OCaml", Batcher(_SUITE_DIR), self._test_ocaml, testdir=_SUITE_DIR
             )
 
         if "lem" in targets:
             self.banner("Testing lem")
             self.run_tests(
                 "lem",
-                os.listdir(_SUITE_DIR),
+                Batcher(_SUITE_DIR),
                 self._test_lem,
                 testdir=_SUITE_DIR,
                 expected_failures={
@@ -127,7 +127,7 @@ class ExecTests(SailTest):
             self.banner("Testing coq")
             self.run_tests(
                 "coq",
-                os.listdir(_SUITE_DIR),
+                Batcher(_SUITE_DIR),
                 self._test_coq,
                 testdir=_SUITE_DIR,
                 expected_failures={
@@ -200,7 +200,7 @@ class ExecTests(SailTest):
 
         self.run_tests(
             name,
-            os.listdir(_SUITE_DIR),
+            Batcher(_SUITE_DIR),
             fn,
             testdir=_SUITE_DIR,
             expected_failures=expected_failures,
