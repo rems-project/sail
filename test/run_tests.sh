@@ -10,13 +10,13 @@ printf "\n==========================================\n"
 printf "Lem tests\n"
 printf "==========================================\n"
 
-./lem/run_tests.py
+./suites/lem.py
 
 printf "\n==========================================\n"
 printf "Monomorphisation tests\n"
 printf "==========================================\n"
 
-./mono/run_tests.py
+./suites/mono.py
 
 printf "\n==========================================\n"
 printf "LaTeX tests\n"
@@ -28,19 +28,19 @@ printf "\n==========================================\n"
 printf "Exec tests\n"
 printf "==========================================\n"
 
-TEST_PAR=8 ./exec/run_tests.py
+TEST_PAR=8 ./suites/exec.py
 
 printf "\n==========================================\n"
 printf "SMT tests\n"
 printf "==========================================\n"
 
-TEST_PAR=8 ./smt/run_tests.py
+TEST_PAR=8 ./suites/smt.py
 
 printf "\n==========================================\n"
 printf "Builtins tests\n"
 printf "==========================================\n"
 
-TEST_PAR=4 ./builtins/run_tests.py
+TEST_PAR=4 ./suites/builtins.py
 
 printf "\n==========================================\n"
 printf "ARM spec tests\n"
@@ -52,7 +52,7 @@ printf "\n==========================================\n"
 printf "Lean tests\n"
 printf "==========================================\n"
 
-./lean/run_tests.py
+./suites/lean.py
 
 # This specification has bitrotted
 #

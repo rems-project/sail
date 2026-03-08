@@ -15,30 +15,30 @@ printf "\n==========================================\n"
 printf "Lexing tests\n"
 printf "==========================================\n"
 
-./lexing/run_tests.py || returncode=1
+./suites/lexing.py || returncode=1
 
 printf "\n==========================================\n"
 printf "Pattern completeness tests\n"
 printf "==========================================\n"
 
-./pattern_completeness/run_tests.py || returncode=1
+./suites/pattern_completeness.py || returncode=1
 
 printf "\n==========================================\n"
 printf "Typechecking tests\n"
 printf "==========================================\n"
 
-./typecheck/run_tests.py || returncode=1
+./suites/typecheck.py || returncode=1
 
 printf "\n==========================================\n"
 printf "OCaml tests\n"
 printf "==========================================\n"
 
-./ocaml/run_tests.py || returncode=1
+./suites/ocaml.py || returncode=1
 
 printf "\n==========================================\n"
 printf "Floating point tests\n"
 printf "==========================================\n"
 
-./float/run_tests.py || returncode=1
+./suites/float.py || returncode=1
 
 exit $returncode

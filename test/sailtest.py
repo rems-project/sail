@@ -14,7 +14,7 @@ def signal_handler(sig, frame):
 
 signal.signal(signal.SIGINT, signal_handler)
 
-parser = argparse.ArgumentParser("run_tests.py")
+parser = argparse.ArgumentParser()
 parser.add_argument(
     "--hide-error-output", help="Hide error information.", action="store_true"
 )

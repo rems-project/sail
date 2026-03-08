@@ -39,15 +39,15 @@ SAIL_DIR=`pwd` SAIL=`pwd`/_build/install/default/bin/sail test/run_core_tests.sh
 # All tests (requires z3, cvc4, etc.)
 SAIL_DIR=`pwd` SAIL=`pwd`/_build/install/default/bin/sail test/run_tests.sh
 
-# Individual test suites
-SAIL_DIR=`pwd` SAIL=`pwd`/_build/install/default/bin/sail test/typecheck/run_tests.py
-SAIL_DIR=`pwd` SAIL=`pwd`/_build/install/default/bin/sail test/exec/run_tests.py
+# Individual test suites (all in test/suites/)
+SAIL_DIR=`pwd` SAIL=`pwd`/_build/install/default/bin/sail test/suites/typecheck.py
+SAIL_DIR=`pwd` SAIL=`pwd`/_build/install/default/bin/sail test/suites/exec.py
 
 # Run a single named test
-test/typecheck/run_tests.py --test <testname>
+test/suites/typecheck.py --test <testname>
 
 # Update expected output for a test
-test/typecheck/run_tests.py --update-expected
+test/suites/typecheck.py --update-expected
 ```
 
 The Makefile shortcuts assume `sail` is a symlink in the repo root:
@@ -114,4 +114,4 @@ The `opt_` prefix convention is used throughout for mutable global option variab
 
 ### Test Infrastructure
 
-Tests are Python scripts (`run_tests.py`) using the shared `test/sailtest.py` helper. Tests fork processes and compare output against `.expect` files. The `--update-expected` flag regenerates expected output and `--test <name>` runs a single test.
+Test suite scripts live in `test/suites/` (e.g. `typecheck.py`, `exec.py`, `lean.py`) and use the shared `test/sailtest.py` helper. Test data remains in the per-backend directories (e.g. `test/typecheck/`, `test/exec/`). Tests fork processes and compare output against `.expect` files. The `--update-expected` flag regenerates expected output and `--test <name>` runs a single test.

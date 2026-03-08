@@ -11,43 +11,43 @@ printf "\n==========================================\n"
 printf "Lexing tests\n"
 printf "==========================================\n"
 
-./lexing/run_tests.py || returncode=1
+./suites/lexing.py || returncode=1
 
 printf "\n==========================================\n"
 printf "Pattern completeness tests\n"
 printf "==========================================\n"
 
-./pattern_completeness/run_tests.py || returncode=1
+./suites/pattern_completeness.py || returncode=1
 
 printf "\n==========================================\n"
 printf "Typechecking tests\n"
 printf "==========================================\n"
 
-./typecheck/run_tests.py || returncode=1
+./suites/typecheck.py || returncode=1
 
 printf "\n==========================================\n"
 printf "OCaml tests\n"
 printf "==========================================\n"
 
-./ocaml/run_tests.py || returncode=1
+./suites/ocaml.py || returncode=1
 
 printf "\n==========================================\n"
 printf "Lem tests\n"
 printf "==========================================\n"
 
-./lem/run_tests.py || returncode=1
+./suites/lem.py || returncode=1
 
 printf "\n==========================================\n"
 printf "Exec tests\n"
 printf "==========================================\n"
 
-./exec/run_tests.py || returncode=1
+./suites/exec.py || returncode=1
 
 printf "\n==========================================\n"
 printf "SMT tests\n"
 printf "==========================================\n"
 
-./smt/run_tests.py || returncode=1
+./suites/smt.py || returncode=1
 
 printf "\n==========================================\n"
 printf "SystemVerilog tests\n"
@@ -55,30 +55,30 @@ printf "==========================================\n"
 
 verilator --version || returncode=1
 
-./sv/run_tests.py || returncode=1
+./suites/sv.py || returncode=1
 
 printf "\n==========================================\n"
 printf "Lean tests\n"
 printf "==========================================\n"
 
-./lean/run_tests.py || returncode=1
+./suites/lean.py || returncode=1
 
 printf "\n==========================================\n"
 printf "sailcov tests\n"
 printf "==========================================\n"
 
-./sailcov/run_tests.py || returncode=1
+./suites/sailcov.py || returncode=1
 
 printf "\n==========================================\n"
 printf "Formatting tests\n"
 printf "==========================================\n"
 
-./format/run_tests.py || returncode=1
+./suites/format.py || returncode=1
 
 printf "\n==========================================\n"
 printf "One-off tests\n"
 printf "==========================================\n"
 
-./oneoff/run_tests.py || returncode=1
+./suites/oneoff.py || returncode=1
 
 exit $returncode

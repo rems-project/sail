@@ -8,7 +8,8 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 from sailtest import *
 
-_SUITE_DIR = os.path.dirname(os.path.abspath(__file__))
+_TEST_DIR = os.path.normpath(os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
+_SUITE_DIR = os.path.join(_TEST_DIR, "typecheck")
 _PASS_DIR = os.path.join(_SUITE_DIR, "pass")
 _PROJECT_DIR = os.path.join(_SUITE_DIR, "project")
 _FAIL_DIR = os.path.join(_SUITE_DIR, "fail")

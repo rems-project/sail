@@ -8,7 +8,8 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 from sailtest import *
 
-_SUITE_DIR = os.path.dirname(os.path.abspath(__file__))
+_TEST_DIR = os.path.normpath(os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
+_SUITE_DIR = os.path.join(_TEST_DIR, "smt")
 
 # Maps replaced basename (dots→underscores) to the set of solvers to skip for
 _skip_tests = {

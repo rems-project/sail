@@ -52,4 +52,4 @@ core-tests:
 	SAIL_DIR=`pwd` SAIL=`pwd`/sail test/run_core_tests.sh
 
 exec-tests:
-	SAIL_DIR=`pwd` SAIL=`pwd`/sail test/exec/run_tests.py
+	SAIL_DIR=`pwd` SAIL=`pwd`/sail test/suites/exec.py
