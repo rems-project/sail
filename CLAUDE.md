@@ -30,29 +30,29 @@ Config is in `.ocamlformat` (profile: default, version: 0.27.0, margin: 120).
 
 ## Running Tests
 
-Tests require the `SAIL_DIR` and `SAIL` environment variables pointing to the repo root and the built binary:
+Use `SAIL=\`pwd\`/sail` to run tests — `sail` is a script in the repo root that invokes the dev build with plugins loaded and `SAIL_DIR` set automatically:
 
 ```bash
 # Core tests (no external tool deps: lexing, typechecking, OCaml, float, pattern completeness)
-SAIL_DIR=`pwd` SAIL=`pwd`/_build/install/default/bin/sail test/run_core_tests.sh
+SAIL=`pwd`/sail test/run_core_tests.sh
 
 # All tests (requires z3, cvc4, etc.)
-SAIL_DIR=`pwd` SAIL=`pwd`/_build/install/default/bin/sail test/run_tests.sh
+SAIL=`pwd`/sail test/run_tests.sh
 
 # Individual test suites (all in test/suites/)
-SAIL_DIR=`pwd` SAIL=`pwd`/_build/install/default/bin/sail test/suites/typecheck.py
-SAIL_DIR=`pwd` SAIL=`pwd`/_build/install/default/bin/sail test/suites/exec.py
+SAIL=`pwd`/sail test/suites/typecheck.py
+SAIL=`pwd`/sail test/suites/exec.py
 
 # Run a single named test
-test/suites/typecheck.py --test <testname>
+SAIL=`pwd`/sail test/suites/typecheck.py --test <testname>
 
 # Update expected output for a test
-test/suites/typecheck.py --update-expected
+SAIL=`pwd`/sail test/suites/typecheck.py --update-expected
 ```
 
-The Makefile shortcuts assume `sail` is a symlink in the repo root:
+The Makefile shortcuts use the same `sail` script:
 ```bash
-make core-tests   # equivalent to SAIL_DIR=`pwd` SAIL=`pwd`/sail test/run_core_tests.sh
+make core-tests   # equivalent to SAIL=`pwd`/sail test/run_core_tests.sh
 make test         # all tests
 make exec-tests   # exec backend tests only
 ```
