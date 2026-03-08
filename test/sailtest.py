@@ -55,17 +55,13 @@ def compact_char(code, char):
 
 # Compute parallelism once at startup so the message only prints once.
 if args.seq:
-    _parallel_count = 1
+    parallelism = 1
 else:
     try:
-        _parallel_count = int(os.environ["TEST_PAR"])
+        parallelism = int(os.environ["TEST_PAR"])
     except (KeyError, ValueError):
         print("Running 16 tests in parallel. Set TEST_PAR to configure")
-        _parallel_count = 16
-
-
-def parallel():
-    return _parallel_count
+        parallelism = 16
 
 
 def sail_file(filename):
@@ -289,7 +285,7 @@ class SailTest(ABC):
         if expected_failures:
             for test, reason in expected_failures.items():
                 results.expect_failure(test, reason)
-        batches = batcher.batch(parallel())
+        batches = batcher.batch(parallelism)
         for batch in batches:
             tests = {}
             for filename in batch:
