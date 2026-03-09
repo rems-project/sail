@@ -24,11 +24,11 @@ parallelism = None
 _suite_registry = {}
 
 
-def suite(name, xml_dir):
+def suite(name):
     """Decorator that registers a SailTest subclass under the given name."""
 
     def decorator(cls):
-        _suite_registry[name] = (cls, xml_dir)
+        _suite_registry[name] = cls
         return cls
 
     return decorator
@@ -297,9 +297,8 @@ class SailTest(ABC):
     def run(self):
         pass
 
-    def main(self, xml_dir=None, name="tests"):
+    def main(self, name):
         self.run()
         xml = "<testsuites>\n" + "".join(self._xml_parts) + "</testsuites>\n"
-        out = os.path.join(xml_dir, f"{name}.xml") if xml_dir else f"{name}.xml"
-        with open(out, "w") as f:
+        with open(os.path.join(run_dir, f"{name}.xml"), "w") as f:
             f.write(xml)

@@ -7,7 +7,7 @@ from sailtest import *
 _SUITE_DIR = os.path.join(TEST_DIR, "lexing")
 
 
-@suite("lexing", _SUITE_DIR)
+@suite("lexing")
 class LexingTests(SailTest):
     def run(self):
         self.banner("Testing lexer")

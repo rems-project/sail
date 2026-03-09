@@ -97,7 +97,7 @@ for _path in glob.glob(os.path.join(_suites_dir, "*.py")):
         _spec.loader.exec_module(_module)
 
 if sailtest.args.list_suites:
-    _print_tree(_build_tree(sailtest._suite_registry))
+    _print_tree(_build_tree(sailtest._suite_registry.keys()))
     sys.exit(0)
 
 _ADJECTIVES = ["brave", "bright", "calm", "clever", "curious", "gentle", "keen", "quiet", "swift", "wild"]
@@ -113,13 +113,13 @@ print(f"Run directory: {sailtest.run_dir}")
 
 for suite_name in sailtest.args.suite:
     matches = [
-        (name, cls, xml_dir)
-        for name, (cls, xml_dir) in sailtest._suite_registry.items()
+        (name, cls)
+        for name, cls in sailtest._suite_registry.items()
         if _matches_prefix(name, suite_name)
     ]
     if not matches:
         print(f"Unknown suite: {suite_name}")
         print(f"Available suites: {', '.join(sorted(sailtest._suite_registry))}")
         sys.exit(1)
-    for name, cls, xml_dir in matches:
-        cls().main(xml_dir=xml_dir, name=name)
+    for name, cls in matches:
+        cls().main(name=name)

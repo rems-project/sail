@@ -7,7 +7,7 @@ from sailtest import *
 _SUITE_DIR = os.path.join(TEST_DIR, "oneoff")
 
 
-@suite("oneoff", _SUITE_DIR)
+@suite("oneoff")
 class OneoffTests(SailTest):
     def run(self):
         self.banner("Testing")

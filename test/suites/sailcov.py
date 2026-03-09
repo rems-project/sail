@@ -7,7 +7,7 @@ from sailtest import *
 _SUITE_DIR = os.path.join(TEST_DIR, "sailcov")
 
 
-@suite("sailcov", _SUITE_DIR)
+@suite("sailcov")
 class SailcovTests(SailTest):
     def run(self):
         sailcov = f"{self.sail_dir}/sailcov/sailcov"

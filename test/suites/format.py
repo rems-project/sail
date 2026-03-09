@@ -7,7 +7,7 @@ from sailtest import *
 _SUITE_DIR = os.path.join(TEST_DIR, "format")
 
 
-@suite("format", _SUITE_DIR)
+@suite("format")
 class FormatTests(SailTest):
     def run(self):
         self.banner("Testing default")

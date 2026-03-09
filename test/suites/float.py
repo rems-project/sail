@@ -7,7 +7,7 @@ from sailtest import *
 _SUITE_DIR = os.path.join(TEST_DIR, "float")
 
 
-@suite("float", _SUITE_DIR)
+@suite("float")
 class FloatTests(SailTest):
     def run(self):
         self.banner(

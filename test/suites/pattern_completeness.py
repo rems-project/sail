@@ -7,7 +7,7 @@ from sailtest import *
 _SUITE_DIR = os.path.join(TEST_DIR, "pattern_completeness")
 
 
-@suite("pattern_completeness", _SUITE_DIR)
+@suite("pattern_completeness")
 class PatternCompletenessTests(SailTest):
     def run(self):
         self.banner("Testing pattern completeness checker")

@@ -33,7 +33,7 @@ skip_tests = {
 }
 
 
-@suite("sv", _SUITE_DIR)
+@suite("sv")
 class SvTests(SailTest):
     def run(self):
         opts = ""

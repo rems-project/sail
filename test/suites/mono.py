@@ -22,7 +22,7 @@ libraries = [
 libml = " ".join(f"sail2_{lib}.ml" for lib in libraries)
 
 
-@suite("mono", _SUITE_DIR)
+@suite("mono")
 class MonoTests(SailTest):
     def run(self):
         self.banner("Monomorphisation tests")

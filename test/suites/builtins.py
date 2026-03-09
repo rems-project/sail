@@ -7,7 +7,7 @@ from sailtest import *
 _SUITE_DIR = os.path.join(TEST_DIR, "builtins")
 
 
-@suite("builtins.c", _SUITE_DIR)
+@suite("builtins.c")
 class BuiltinsCTests(SailTest):
     def run(self):
         for name, sail_opts in [
@@ -32,7 +32,7 @@ class BuiltinsCTests(SailTest):
         self.run_tests(name, Batcher(_SUITE_DIR), fn, testdir=_SUITE_DIR)
 
 
-@suite("builtins.ocaml", _SUITE_DIR)
+@suite("builtins.ocaml")
 class BuiltinsOcamlTests(SailTest):
     def run(self):
         self.banner("Testing builtins: OCaml")
@@ -49,7 +49,7 @@ class BuiltinsOcamlTests(SailTest):
         step(f"rm {test.basename}")
 
 
-@suite("builtins.lem", _SUITE_DIR)
+@suite("builtins.lem")
 class BuiltinsLemTests(SailTest):
     def run(self):
         self.banner("Testing builtins: Lem to OCaml")
@@ -71,7 +71,7 @@ class BuiltinsLemTests(SailTest):
         step(f"rm -r _lbuild_{test.basename}")
 
 
-@suite("builtins.coq", _SUITE_DIR)
+@suite("builtins.coq")
 class BuiltinsCoqTests(SailTest):
     def run(self):
         self.banner("Testing builtins: Coq")
@@ -99,7 +99,7 @@ class BuiltinsCoqTests(SailTest):
         step(f"rm -r _coqbuild_{test.basename}")
 
 
-@suite("builtins.isla", _SUITE_DIR)
+@suite("builtins.isla")
 class BuiltinsIslaTests(SailTest):
     def run(self):
         self.banner("Testing builtins: Isla")

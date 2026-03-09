@@ -8,7 +8,7 @@ _SUITE_DIR = os.path.join(TEST_DIR, "project")
 _FAILURE_DIR = os.path.join(_SUITE_DIR, "failure")
 
 
-@suite("project", _SUITE_DIR)
+@suite("project")
 class ProjectTests(SailTest):
     def run(self):
         self.banner("Testing project")

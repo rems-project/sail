@@ -43,7 +43,7 @@ _bbv_xfails = {
 }
 
 
-@suite("coq", _SUITE_DIR)
+@suite("coq")
 class CoqTests(SailTest):
     def run(self):
         for lib in ["stdpp", "bbv"] if self._have_bbv() else ["stdpp"]:

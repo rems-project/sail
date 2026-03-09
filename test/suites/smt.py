@@ -23,7 +23,7 @@ _skip_tests = {
 }
 
 
-@suite("smt", _SUITE_DIR)
+@suite("smt")
 class SmtTests(SailTest):
     def run(self):
         if shutil.which("cvc4") is not None:

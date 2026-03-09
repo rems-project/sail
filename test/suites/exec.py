@@ -73,7 +73,7 @@ class _ExecCBase(SailTest):
         )
 
 
-@suite("exec.c", _SUITE_DIR)
+@suite("exec.c")
 class ExecCTests(_ExecCBase):
     def run(self):
         self._run_c_tests("unoptimized C", "", "--c-no-mangle", False)
@@ -88,7 +88,7 @@ class ExecCTests(_ExecCBase):
         )
 
 
-@suite("exec.cpp", _SUITE_DIR)
+@suite("exec.cpp")
 class ExecCppTests(_ExecCBase):
     _xfails = {
         "cabbrev.sail": "my_pair_in_c is declared in a namespace in C++",
@@ -127,7 +127,7 @@ class ExecCppTests(_ExecCBase):
         )
 
 
-@suite("exec.interpreter", _SUITE_DIR)
+@suite("exec.interpreter")
 class ExecInterpreterTests(SailTest):
     def run(self):
         if os.name == "posix":
@@ -152,7 +152,7 @@ class ExecInterpreterTests(SailTest):
         step(f"rm {test.basename}.iresult")
 
 
-@suite("exec.ocaml", _SUITE_DIR)
+@suite("exec.ocaml")
 class ExecOcamlTests(SailTest):
     def run(self):
         self.banner("Testing OCaml")
@@ -174,7 +174,7 @@ class ExecOcamlTests(SailTest):
         step(f"rm {test.basename}.oresult")
 
 
-@suite("exec.lem", _SUITE_DIR)
+@suite("exec.lem")
 class ExecLemTests(SailTest):
     def run(self):
         self.banner("Testing lem")
@@ -227,7 +227,7 @@ class ExecLemTests(SailTest):
         step(f"rm -r _lbuild_{test.basename}")
 
 
-@suite("exec.coq", _SUITE_DIR)
+@suite("exec.coq")
 class ExecCoqTests(SailTest):
     def run(self):
         self.banner("Testing coq")

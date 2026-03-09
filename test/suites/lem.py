@@ -70,7 +70,7 @@ skip_tests_mwords = {
 }
 
 
-@suite("lem", _SUITE_DIR)
+@suite("lem")
 class LemTests(SailTest):
     def run(self):
         if which("cvc4") is None:
