@@ -10,51 +10,18 @@ _TEST_DIR = os.path.normpath(
 _SUITE_DIR = os.path.join(_TEST_DIR, "builtins")
 
 
-@suite("builtins", _SUITE_DIR)
-class BuiltinsTests(SailTest):
+@suite("builtins.c", _SUITE_DIR)
+class BuiltinsCTests(SailTest):
     def run(self):
-        targets = self.get_targets(["c", "ocaml"])
-        print(f"Targets: {targets}")
+        for name, sail_opts in [
+            ("No optimisations", ""),
+            ("Optimisations", "-O"),
+            ("Constant folding", "-Oconstant_fold"),
+        ]:
+            self.banner(f"Testing builtins: C, {name} Sail options: {sail_opts}")
+            self._run_c_tests(f"C, {name}", sail_opts)
 
-        if "c" in targets:
-            for name, sail_opts in [
-                ("No optimisations", ""),
-                ("Optimisations", "-O"),
-                ("Constant folding", "-Oconstant_fold"),
-            ]:
-                self.banner(f"Testing builtins: C, {name} Sail options: {sail_opts}")
-                self.run_tests(
-                    f"C, {name}",
-                    Batcher(_SUITE_DIR),
-                    self._make_c_test(sail_opts),
-                    testdir=_SUITE_DIR,
-                )
-
-        if "ocaml" in targets:
-            self.banner("Testing builtins: OCaml")
-            self.run_tests(
-                "OCaml", Batcher(_SUITE_DIR), self._test_ocaml, testdir=_SUITE_DIR
-            )
-
-        if "lem" in targets:
-            self.banner("Testing builtins: Lem to OCaml")
-            self.run_tests(
-                "Lem to OCaml", Batcher(_SUITE_DIR), self._test_lem, testdir=_SUITE_DIR
-            )
-
-        if "coq" in targets:
-            self.banner("Testing builtins: Coq")
-            self.run_tests(
-                "Coq", Batcher(_SUITE_DIR), self._test_coq, testdir=_SUITE_DIR
-            )
-
-        if "isla" in targets:
-            self.banner("Testing builtins: Isla")
-            self.run_tests(
-                "Isla", Batcher(_SUITE_DIR), self._test_isla, testdir=_SUITE_DIR
-            )
-
-    def _make_c_test(self, sail_opts):
+    def _run_c_tests(self, name, sail_opts):
         def fn(filename, basename):
             step(f"'{self.sail}' -no_warn -c {sail_opts} {filename} -o {basename}")
             step(
@@ -65,9 +32,18 @@ class BuiltinsTests(SailTest):
             step(f"rm {basename}.h")
             step(f"rm {basename}")
 
-        return fn
+        self.run_tests(name, Batcher(_SUITE_DIR), fn, testdir=_SUITE_DIR)
 
-    def _test_ocaml(self, filename, basename):
+
+@suite("builtins.ocaml", _SUITE_DIR)
+class BuiltinsOcamlTests(SailTest):
+    def run(self):
+        self.banner("Testing builtins: OCaml")
+        self.run_tests(
+            "OCaml", Batcher(_SUITE_DIR), self._test, testdir=_SUITE_DIR
+        )
+
+    def _test(self, filename, basename):
         step(
             f"'{self.sail}' -no_warn -ocaml -ocaml_build_dir _sbuild_{basename} -o {basename} {filename}"
         )
@@ -75,7 +51,16 @@ class BuiltinsTests(SailTest):
         step(f"rm -r _sbuild_{basename}")
         step(f"rm {basename}")
 
-    def _test_lem(self, filename, basename):
+
+@suite("builtins.lem", _SUITE_DIR)
+class BuiltinsLemTests(SailTest):
+    def run(self):
+        self.banner("Testing builtins: Lem to OCaml")
+        self.run_tests(
+            "Lem to OCaml", Batcher(_SUITE_DIR), self._test, testdir=_SUITE_DIR
+        )
+
+    def _test(self, filename, basename):
         step(f"'{self.sail}' -no_warn -lem -o {basename} {filename}")
         step(f"mkdir -p _lbuild_{basename}")
         step(f"mv {basename}.lem _lbuild_{basename}")
@@ -88,7 +73,16 @@ class BuiltinsTests(SailTest):
         os.chdir("..")
         step(f"rm -r _lbuild_{basename}")
 
-    def _test_coq(self, filename, basename):
+
+@suite("builtins.coq", _SUITE_DIR)
+class BuiltinsCoqTests(SailTest):
+    def run(self):
+        self.banner("Testing builtins: Coq")
+        self.run_tests(
+            "Coq", Batcher(_SUITE_DIR), self._test, testdir=_SUITE_DIR
+        )
+
+    def _test(self, filename, basename):
         step(
             f"'{self.sail}' --no-warn --coq --coq-lib-style stdpp --coq-record-update"
             f" --undefined-gen -o {basename} {filename}"
@@ -107,7 +101,16 @@ class BuiltinsTests(SailTest):
         os.chdir("..")
         step(f"rm -r _coqbuild_{basename}")
 
-    def _test_isla(self, filename, basename):
+
+@suite("builtins.isla", _SUITE_DIR)
+class BuiltinsIslaTests(SailTest):
+    def run(self):
+        self.banner("Testing builtins: Isla")
+        self.run_tests(
+            "Isla", Batcher(_SUITE_DIR), self._test, testdir=_SUITE_DIR
+        )
+
+    def _test(self, filename, basename):
         isla_dir = os.environ["ISLA_DIR"]
         step(
             f"'{isla_dir}'/isla-sail/isla-sail {filename}"

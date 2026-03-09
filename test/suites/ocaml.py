@@ -10,43 +10,38 @@ _TEST_DIR = os.path.normpath(
 _SUITE_DIR = os.path.join(_TEST_DIR, "ocaml")
 
 
-@suite("ocaml", _SUITE_DIR)
-class OcamlTests(SailTest):
+class _OcamlBase(SailTest):
+    """Shared test logic for OCaml sub-suites. Not registered."""
+
+    _opts = ""
+
     def run(self):
-        targets = self.get_targets(["ocaml", "ocaml_trace"])
-        print(f"Targets: {targets}")
+        self.banner(f'Ocaml testing with options: "{self._opts}"')
+        self.run_tests(
+            "Ocaml testing",
+            Batcher.directories(_SUITE_DIR),
+            self._test,
+            testdir=_SUITE_DIR,
+        )
 
-        if "ocaml" in targets:
-            opts = ""
-            self.banner(f'Ocaml testing with options: "{opts}"')
-            self.run_tests(
-                "Ocaml testing",
-                Batcher.directories(_SUITE_DIR),
-                self._make_test(opts),
-                testdir=_SUITE_DIR,
-            )
+    def _test(self, dir, basename):
+        step(
+            f"{self.sail} --strict-bitvector --no-warn -o out --ocaml {self._opts} ../prelude.sail *.sail",
+            cwd=dir,
+        )
+        step(
+            "dune exec --release out > ../result 2> /dev/null", cwd=f"{dir}/_sbuild"
+        )
+        step("diff expect result", cwd=dir)
+        step("rm result", cwd=dir)
+        step("rm -rf _sbuild", cwd=dir)
 
-        if "ocaml_trace" in targets:
-            opts = "--ocaml-trace"
-            self.banner(f'Ocaml trace testing with options: "{opts}"')
-            self.run_tests(
-                "Ocaml trace testing",
-                Batcher.directories(_SUITE_DIR),
-                self._make_test(opts),
-                testdir=_SUITE_DIR,
-            )
 
-    def _make_test(self, opts):
-        def fn(dir, basename):
-            step(
-                f"{self.sail} --strict-bitvector --no-warn -o out --ocaml {opts} ../prelude.sail *.sail",
-                cwd=dir,
-            )
-            step(
-                "dune exec --release out > ../result 2> /dev/null", cwd=f"{dir}/_sbuild"
-            )
-            step("diff expect result", cwd=dir)
-            step("rm result", cwd=dir)
-            step("rm -rf _sbuild", cwd=dir)
+@suite("ocaml.default", _SUITE_DIR)
+class OcamlTests(_OcamlBase):
+    pass
 
-        return fn
+
+@suite("ocaml.trace", _SUITE_DIR)
+class OcamlTraceTests(_OcamlBase):
+    _opts = "--ocaml-trace"

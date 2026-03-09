@@ -20,9 +20,6 @@ parser.add_argument(
 )
 parser.add_argument("--compact", help="Compact output.", action="store_true")
 parser.add_argument(
-    "-t", "--targets", help="Targets to use (where supported).", action="append"
-)
-parser.add_argument(
     "--update-expected",
     help="Update the expected file (where supported)",
     action="store_true",
@@ -240,9 +237,6 @@ class SailTest(ABC):
         print(f"{Color.NOTICE}stderr{Color.END}:")
         print(p.stderr)
         sys.exit(1)
-
-    def get_targets(self, default_targets):
-        return args.targets or default_targets
 
     def banner(self, string):
         print("-" * len(string))
