@@ -4,10 +4,7 @@ import sys
 
 from sailtest import *
 
-_TEST_DIR = os.path.normpath(
-    os.path.join(os.path.dirname(os.path.abspath(__file__)), "..")
-)
-_SUITE_DIR = os.path.join(_TEST_DIR, "coq")
+_SUITE_DIR = os.path.join(TEST_DIR, "coq")
 _TYPECHECK_PASS_DIR = os.path.join(_SUITE_DIR, "..", "typecheck", "pass")
 _COQ_PASS_DIR = os.path.join(_SUITE_DIR, "pass")
 

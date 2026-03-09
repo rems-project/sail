@@ -5,10 +5,7 @@ from shutil import which
 
 from sailtest import *
 
-_TEST_DIR = os.path.normpath(
-    os.path.join(os.path.dirname(os.path.abspath(__file__)), "..")
-)
-_SUITE_DIR = os.path.join(_TEST_DIR, "typecheck")
+_SUITE_DIR = os.path.join(TEST_DIR, "typecheck")
 _PASS_DIR = os.path.join(_SUITE_DIR, "pass")
 _PROJECT_DIR = os.path.join(_SUITE_DIR, "project")
 _FAIL_DIR = os.path.join(_SUITE_DIR, "fail")

@@ -4,10 +4,7 @@ import sys
 
 from sailtest import *
 
-_TEST_DIR = os.path.normpath(
-    os.path.join(os.path.dirname(os.path.abspath(__file__)), "..")
-)
-_SUITE_DIR = os.path.join(_TEST_DIR, "format")
+_SUITE_DIR = os.path.join(TEST_DIR, "format")
 
 
 @suite("format", _SUITE_DIR)

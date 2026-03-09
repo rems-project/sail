@@ -14,6 +14,8 @@ def signal_handler(sig, frame):
 
 signal.signal(signal.SIGINT, signal_handler)
 
+TEST_DIR = os.path.normpath(os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
+
 parser = argparse.ArgumentParser()
 # args and parallelism are set by runner.py after argument parsing.
 args = None
