@@ -101,7 +101,6 @@ let opt_no_strings = ref false
 let opt_no_packed = ref false
 let opt_no_assertions = ref false
 let opt_never_pack_unions = ref false
-let opt_padding = ref false
 let opt_no_unions = ref false
 let opt_nomem = ref false
 let opt_no_assert_fatal = ref false
@@ -198,7 +197,6 @@ let verilog_options =
     (Flag.create ~prefix:["sv"] "no_packed", Arg.Set opt_no_packed, "don't emit packed datastructures");
     (Flag.create ~prefix:["sv"] "no_assertions", Arg.Set opt_no_assertions, "ignore all Sail asserts");
     (Flag.create ~prefix:["sv"] "never_pack_unions", Arg.Set opt_never_pack_unions, "never emit a packed union");
-    (Flag.create ~prefix:["sv"] "padding", Arg.Set opt_padding, "add padding on packed unions");
     ( Flag.create ~prefix:["sv"] ~arg:"functionname" "unreachable",
       Arg.String (fun fn -> opt_unreachable := fn :: !opt_unreachable),
       "Mark function as unreachable."
@@ -486,7 +484,6 @@ let verilog_target out_opt { ast; effect_info; env; default_sail_dir; _ } =
     let no_packed = !opt_no_packed
     let no_assertions = !opt_no_assertions
     let never_pack_unions = !opt_never_pack_unions
-    let union_padding = !opt_padding
     let no_unions = !opt_no_unions
     let unreachable = !opt_unreachable
     let comb = !opt_comb

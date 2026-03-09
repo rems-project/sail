@@ -78,7 +78,6 @@ module type CONFIG = sig
   val no_assertions : bool
 
   val never_pack_unions : bool
-  val union_padding : bool
   val no_unions : bool
   val unreachable : string list
   val no_write_flush : bool

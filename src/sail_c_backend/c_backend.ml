@@ -989,7 +989,8 @@ module Codegen (Config : CODEGEN_CONFIG) = struct
   let has_prefix prefix s =
     if String.length s < String.length prefix then false else String.sub s 0 (String.length prefix) = prefix
 
-  let has_sail_prefix s = has_prefix "sail_" s || has_prefix "Sail_" s || has_prefix "SAIL_" s
+  let has_bad_prefix s =
+    has_prefix "sail_" s || has_prefix "Sail_" s || has_prefix "SAIL_" s || has_prefix "undefined_" s
 
   (* Prefix to function name in definitions. *)
   let class_impl_prefix () = if Config.cpp then Config.cpp_class_name ^ "::" else ""
@@ -1013,7 +1014,7 @@ module Codegen (Config : CODEGEN_CONFIG) = struct
             && (not (Util.StringSet.mem s Keywords.c_reserved_words))
             && (not (Util.StringSet.mem s Keywords.c_used_words))
             && (not (Util.StringSet.mem s Config.reserved_words))
-            && (not (has_sail_prefix s))
+            && (not (has_bad_prefix s))
             && not (c_int_type_name s)
           in
           (not Config.no_mangle) || valid_name s

@@ -157,43 +157,27 @@ module Make
             (* If the width is a multiple of four, format as hexadecimal.
              We take care to ensure the formatting is identical to other
              Sail backends. *)
-            let zeros = Jib_util.name (mk_id "zeros") in
             let bstr = Jib_util.name (mk_id "bstr") in
             if width mod 4 = 0 then (
               let zeros_init = String.make (width / 4) '0' in
               [
-                SVS_var (zeros, CT_string, None);
                 SVS_var (bstr, CT_string, None);
-                svs_raw "bstr.hextoa(b)" ~inputs:[b] ~outputs:[bstr];
-                svs_raw (sprintf "zeros = \"%s\"" zeros_init) ~outputs:[zeros];
-                svs_raw
-                  (sprintf
-                     "out_str = {in_str, s, $sformatf(\"0x%%s\", zeros.substr(0, %d - bstr.len()), bstr.toupper()), \
-                      \"\\n\"}"
-                     ((width / 4) - 1)
-                  )
-                  ~inputs:[in_str; s; zeros; bstr] ~outputs:[out_str];
+                svs_raw "bstr = $sformatf(\"%h\", b)" ~inputs:[b] ~outputs:[bstr];
+                svs_raw "out_str = {in_str, s, \"0x\", bstr.toupper(), \"\\n\"}" ~inputs:[in_str; s; bstr]
+                  ~outputs:[out_str];
                 SVS_assign (SVP_id Jib_util.return, Unit);
               ]
               |> List.map mk_statement
             )
-            else (
-              let zeros_init = String.make width '0' in
+            else
               [
-                SVS_var (zeros, CT_string, None);
                 SVS_var (bstr, CT_string, None);
-                svs_raw "bstr.bintoa(b)" ~inputs:[b] ~outputs:[bstr];
-                svs_raw (sprintf "zeros = \"%s\"" zeros_init) ~outputs:[zeros];
-                svs_raw
-                  (sprintf
-                     "out_str = {in_str, s, $sformatf(\"0b%%s\", zeros.substr(0, %d - bstr.len())), bstr, \"\\n\"}"
-                     (width - 1)
-                  )
-                  ~inputs:[in_str; s; bstr; zeros] ~outputs:[out_str];
+                svs_raw "bstr = $sformatf(\"%b\", b)" ~inputs:[b] ~outputs:[bstr];
+                svs_raw "out_str = {in_str, s, \"0b\", bstr.toupper(), \"\\n\"}" ~inputs:[in_str; s; bstr]
+                  ~outputs:[out_str];
                 SVS_assign (SVP_id Jib_util.return, Unit);
               ]
               |> List.map mk_statement
-            )
           )
         in
         SVD_module
@@ -231,8 +215,8 @@ module Make
                         (List.map mk_statement
                            [
                              svs_raw (sprintf "zeros = \"%s\"" (String.make width '0')) ~outputs:[zeros];
-                             svs_raw (sprintf "hexstr.hextoa(b.sb_bits)") ~inputs:[b] ~outputs:[hexstr];
-                             svs_raw (sprintf "binstr.bintoa(b.sb_bits)") ~inputs:[b] ~outputs:[binstr];
+                             svs_raw (sprintf "hexstr.hextoa(int'(b.sb_bits))") ~inputs:[b] ~outputs:[hexstr];
+                             svs_raw (sprintf "binstr.bintoa(int'(b.sb_bits))") ~inputs:[b] ~outputs:[binstr];
                              svs_raw
                                (sprintf "%s = {in_str, s}" (string_of_name ~zencode:false (tempstr 0)))
                                ~inputs:[in_str; s]
@@ -306,7 +290,7 @@ module Make
           if Config.no_strings then [svs_raw "return SAIL_UNIT"]
           else if width mod 4 = 0 then
             [
-              svs_raw "bstr.hextoa(b)" ~inputs:[b] ~outputs:[bstr];
+              svs_raw "bstr.hextoa(int'(b))" ~inputs:[b] ~outputs:[bstr];
               svs_raw (pf "zeros = \"%s\"" (String.make (width / 4) '0')) ~outputs:[zeros];
               svs_raw
                 (pf "return {\"0x\", zeros.substr(0, %d - bstr.len()), bstr.toupper()}" ((width / 4) - 1))
@@ -314,7 +298,7 @@ module Make
             ]
           else
             [
-              svs_raw "bstr.bintoa(b)" ~inputs:[b] ~outputs:[bstr];
+              svs_raw "bstr.bintoa(int'(b))" ~inputs:[b] ~outputs:[bstr];
               svs_raw (pf "zeros = \"%s\"" (String.make width '0')) ~outputs:[zeros];
               svs_raw (pf "return {\"0b\", zeros.substr(0, %d - bstr.len()), bstr}" (width - 1)) ~inputs:[zeros; bstr];
             ]
@@ -374,7 +358,7 @@ module Make
                             SVS_var (n, CT_bool, None);
                             SVS_var (p, CT_string, None);
                             svs_raw "is_negative = signed'(i) < 0" ~inputs:[i] ~outputs:[n];
-                            svs_raw "s.hextoa(is_negative ? (-i) : i)" ~inputs:[i; n] ~outputs:[s];
+                            svs_raw "s = $sformatf(\"%0h\", is_negative ? (-i) : i)" ~inputs:[i; n] ~outputs:[s];
                             svs_raw "prefix = is_negative ? \"-0x\" : \"0x\"" ~inputs:[n] ~outputs:[p];
                             SVS_return (Fn ("str.++", [Var p; Var s]));
                           ]
@@ -407,7 +391,7 @@ module Make
                             SVS_var (n, CT_bool, None);
                             SVS_var (p, CT_string, None);
                             svs_raw "is_negative = signed'(i) < 0" ~inputs:[i] ~outputs:[n];
-                            svs_raw "s.hextoa(is_negative ? (-i) : i)" ~inputs:[i; n] ~outputs:[s];
+                            svs_raw "s = $sformatf(\"%0h\", is_negative ? (-i) : i)" ~inputs:[i; n] ~outputs:[s];
                             svs_raw "s = s.toupper()" ~inputs:[s] ~outputs:[s];
                             svs_raw "prefix = is_negative ? \"-0x\" : \"0x\"" ~inputs:[n] ~outputs:[p];
                             SVS_return (Fn ("str.++", [Var p; Var s]));
@@ -436,7 +420,7 @@ module Make
                        (List.map mk_statement
                           [
                             SVS_var (s, CT_string, None);
-                            svs_raw "s.itoa(i)" ~inputs:[i] ~outputs:[s];
+                            svs_raw "s = $sformatf(\"%0d\", i)" ~inputs:[i] ~outputs:[s];
                             SVS_return (Var s);
                           ]
                        )
