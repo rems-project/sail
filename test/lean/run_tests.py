@@ -99,7 +99,7 @@ def test_lean(subdir: str, skip_list = None, runnable: bool = False):
                 # TODO: should probably be dependent on whether print should be pure or effectful.
                 extra_flags = [
                     '--splice',
-                    'coq-print.splice',
+                    'rocq-print.splice',
                     '--strict-bitvector',
                 ] if runnable else [ ]
                 if not runnable:

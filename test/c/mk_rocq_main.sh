@@ -1,12 +1,12 @@
 #!/bin/bash
 
-OUT="_coqbuild_$1/main.v"
+OUT="_rocqbuild_$1/main.v"
 
-if grep -q 'ConcurrencyInterface' "_coqbuild_$1/$1.v"; then
-  if grep -q 'ConcurrencyInterfaceV2' "_coqbuild_$1/$1.v"; then
+if grep -q 'ConcurrencyInterface' "_rocqbuild_$1/$1.v"; then
+  if grep -q 'ConcurrencyInterfaceV2' "_rocqbuild_$1/$1.v"; then
     V2=true
   fi
-  if grep -q 'sail_model_init.*: unit :=' "_coqbuild_$1/$1.v"; then
+  if grep -q 'sail_model_init.*: unit :=' "_rocqbuild_$1/$1.v"; then
     RUN="main tt"
   else
     RUN="Defs.bind0 (sail_model_init tt) (main tt)"
@@ -160,7 +160,7 @@ else
   
   Goal True.
 EOF
-  if grep -q "Definition main '(tt : unit) : unit :=" "_coqbuild_$1/$1.v"; then
+  if grep -q "Definition main '(tt : unit) : unit :=" "_rocqbuild_$1/$1.v"; then
     cat <<EOF >> "$OUT"
   let result := eval vm_compute in (main tt) in
   match result with
@@ -171,12 +171,12 @@ EOF
   Qed.
 EOF
   else
-    if grep -q 'initial_regstate' "_coqbuild_$1/$1.v"; then
+    if grep -q 'initial_regstate' "_rocqbuild_$1/$1.v"; then
       REGSTATE="initial_regstate"
     else
       REGSTATE='init_regstate'
     fi
-    if grep -q 'sail_model_init.*: unit :=' "_coqbuild_$1/$1.v"; then
+    if grep -q 'sail_model_init.*: unit :=' "_rocqbuild_$1/$1.v"; then
       RUN="main tt"
     else
       RUN="Prompt_monad.bind0 (sail_model_init tt) (main tt)"

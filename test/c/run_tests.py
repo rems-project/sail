@@ -158,7 +158,7 @@ def test_lem(name):
         results.collect(tests)
     return results.finish()
 
-def test_coq(name):
+def test_rocq(name):
     banner('Testing {}'.format(name))
     results = Results(name)
     results.expect_failure("inc_tests.sail", "missing built-in functions for increasing vectors in Coq library")
@@ -186,24 +186,24 @@ def test_coq(name):
             tests[filename] = os.fork()
             if tests[filename] == 0:
                 # Generate Coq from Sail
-                step('\'{}\' -coq -coq-record-update -D PRINT_EFFECTS -splice coq-print.splice -undefined_gen -o {} {}'.format(sail, basename, filename))
+                step('\'{}\' --rocq --rocq-record-update -D PRINT_EFFECTS --splice rocq-print.splice --undefined-gen -o {} {}'.format(sail, basename, filename))
 
-                step('mkdir -p _coqbuild_{}'.format(basename))
-                step('mv {}.v _coqbuild_{}'.format(basename, basename))
-                step('mv {}_types.v _coqbuild_{}'.format(basename, basename))
-                step('./mk_coq_main.sh {} {}'.format(basename, basename.capitalize()))
-                os.chdir('_coqbuild_{}'.format(basename))
+                step('mkdir -p _rocqbuild_{}'.format(basename))
+                step('mv {}.v _rocqbuild_{}'.format(basename, basename))
+                step('mv {}_types.v _rocqbuild_{}'.format(basename, basename))
+                step('./mk_rocq_main.sh {} {}'.format(basename, basename.capitalize()))
+                os.chdir('_rocqbuild_{}'.format(basename))
 
                 step('coqc {}_types.v'.format(basename))
                 step('coqc {}.v'.format(basename))
                 step('coqtop -require-import {}_types -require-import {} -l main.v -batch | tee /dev/stderr | grep -q OK'.format(basename,basename), expected_status = 1 if basename.startswith('fail') else 0)
-                filter_command = '''ocaml ../coq_output_filter.ml < '''
+                filter_command = '''ocaml ../rocq_output_filter.ml < '''
                 step('''{} output.out | diff - ../{}.expect'''.format(filter_command, basename, basename))
                 if os.path.exists('../{}.err_expect'.format(basename)):
                     step('''{} error.out | diff - ../{}.err_expect'''.format(filter_command, basename, basename))
 
                 os.chdir('..')
-                step('rm -r _coqbuild_{}'.format(basename))
+                step('rm -r _rocqbuild_{}'.format(basename))
                 print('{} {}{}{}'.format(filename, color.PASS, 'ok', color.END))
                 sys.exit()
         results.collect(tests)
@@ -241,8 +241,8 @@ if 'ocaml' in targets:
 if 'lem' in targets:
     xml += test_lem('lem')
 
-if 'coq' in targets:
-    xml += test_coq('coq')
+if 'rocq' in targets or 'coq' in targets:
+    xml += test_rocq('rocq')
 
 xml += '</testsuites>\n'
 

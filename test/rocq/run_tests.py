@@ -23,7 +23,7 @@ skip_tests = {
 }
 
 def test(name, dir, lib):
-    banner('Testing Coq backend on {} with {}'.format(name, lib))
+    banner('Testing Rocq backend on {} with {}'.format(name, lib))
     results = Results('{} on {}'.format(name, lib))
     results.expect_failure('exist1.sail', 'Needs an existential witness')
     results.expect_failure('while_MM.sail', 'Non-terminating loops - I\'ve written terminating versions of these')
@@ -60,7 +60,7 @@ def test(name, dir, lib):
             tests[filename] = os.fork()
             if tests[filename] == 0:
                 step('mkdir -p _build_{}'.format(basename))
-                step('\'{}\' --coq --coq-lib-style {} --dcoq-undef-axioms --strict-bitvector --coq-output-dir _build_{} -o out {}/{}'.format(sail, lib, basename, dir, filename))
+                step('\'{}\' --rocq --rocq-lib-style {} --rocq-undef-axioms --strict-bitvector --rocq-output-dir _build_{} -o out {}/{}'.format(sail, lib, basename, dir, filename))
                 os.chdir('_build_{}'.format(basename))
                 step('coqc out_types.v', name=basename)
                 step('coqc out.v', name=basename)
