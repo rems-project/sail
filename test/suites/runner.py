@@ -7,6 +7,7 @@ import importlib.util
 import os
 import random
 import sys
+import tempfile
 
 import sailtest
 
@@ -41,6 +42,11 @@ sailtest.parser.add_argument(
 sailtest.parser.add_argument(
     "--list-suites",
     help="Print available test suites as a tree and exit",
+    action="store_true",
+)
+sailtest.parser.add_argument(
+    "--no-tmpdir",
+    help="Create run directory directly in _runs rather than in a temp directory",
     action="store_true",
 )
 
@@ -107,8 +113,13 @@ _ANIMALS = ["bear", "crane", "deer", "fox", "hawk", "lynx", "owl", "raven", "sea
 _timestamp = datetime.datetime.now().strftime("%Y-%m-%dT%H-%M-%S")
 _run_name = "-".join([_timestamp, random.choice(_ADJECTIVES), random.choice(_COLOURS), random.choice(_ANIMALS)])
 _runs_dir = os.path.join(sailtest.TEST_DIR, "_runs")
-_run_dir = os.path.join(_runs_dir, _run_name)
-os.makedirs(_run_dir)
+os.makedirs(_runs_dir, exist_ok=True)
+if sailtest.args.no_tmpdir:
+    _run_dir = os.path.join(_runs_dir, _run_name)
+    os.makedirs(_run_dir)
+else:
+    _run_dir = tempfile.mkdtemp(prefix=f"{_run_name}-")
+    os.symlink(_run_dir, os.path.join(_runs_dir, _run_name))
 print(f"Run directory: {_run_dir}")
 
 for suite_name in sailtest.args.suite:
