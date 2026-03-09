@@ -1,12 +1,12 @@
 [93mType error[0m:
-[96mfail/unbound_tyvar.sail[0m:5.0-7.1:
+[96munbound_tyvar.sail[0m:5.0-7.1:
 5[96m |[0mfunction foo() -> bits(definitelydoesntexist) = {
  [91m |[0m[91m^------------------------------------------------[0m
 7[96m |[0m}
  [91m |[0m[91m^[0m
  [91m |[0m Well-formedness check failed for type here
  [91m |[0m 
- [91m |[0m [93mCaused by [0m[96mfail/unbound_tyvar.sail[0m:5.23-44:
+ [91m |[0m [93mCaused by [0m[96munbound_tyvar.sail[0m:5.23-44:
  [91m |[0m 5[96m |[0mfunction foo() -> bits(definitelydoesntexist) = {
  [91m |[0m  [91m |[0m                       [91m^-------------------^[0m
  [91m |[0m  [91m |[0m No numeric type named definitelydoesntexist in scope

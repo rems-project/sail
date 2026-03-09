@@ -6,7 +6,7 @@ $iftarget c cpp
 $c_in_main sail_config_set_file("config_map_guard.json");
 $c_in_main_post sail_config_cleanup();
 $else
-$option --config ../exec/config_map_guard.json
+$option --config config_map_guard.json
 $endif
 
 struct S = {

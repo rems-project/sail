@@ -33,10 +33,10 @@ class MonoTests(SailTest):
                 predicate=lambda f: not args.test or os.path.basename(f) in args.test,
             ),
             self._test,
-            testdir=_SUITE_DIR,
         )
 
     def _test(self, test):
+        os.chdir(_SUITE_DIR)
         libpaths = " ".join(
             f"{self.sail_dir}/src/gen_lib/sail2_{lib}.lem" for lib in libraries
         )

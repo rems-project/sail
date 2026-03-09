@@ -1,5 +1,5 @@
 [93mType error[0m:
-[96mfail/implicit_loc.sail[0m:11.16-20:
+[96mimplicit_loc.sail[0m:11.16-20:
 11[96m |[0mfunction g(x) = f(x)
   [91m |[0m                [91m^--^[0m
   [91m |[0m Unable to solve implicit function argument

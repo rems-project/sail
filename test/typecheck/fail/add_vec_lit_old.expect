@@ -1,11 +1,11 @@
-[93mWarning[0m: Deprecated [96mfail/add_vec_lit_old.sail[0m:9.4-8:
+[93mWarning[0m: Deprecated [96madd_vec_lit_old.sail[0m:9.4-8:
 9[96m |[0mval cast unsigned : forall 'n.
  [91m |[0m    [91m^--^[0m
  [91m |[0m 
 Cast annotations are deprecated. They will be removed in a future version of the language.
 
 [93mType error[0m:
-[96mfail/add_vec_lit_old.sail[0m:14.23-32:
+[96madd_vec_lit_old.sail[0m:14.23-32:
 14[96m |[0mlet x : range(0, 30) = 0xF + 0x2
   [91m |[0m                       [91m^-------^[0m
   [91m |[0m Type mismatch between int('ex5#) and bitvector(4)

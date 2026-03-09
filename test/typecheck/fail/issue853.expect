@@ -1,5 +1,5 @@
 [93mType error[0m:
-[96mfail/issue853.sail[0m:4.13-33:
+[96missue853.sail[0m:4.13-33:
 4[96m |[0mfunction foo(addr : bitvector(64)) -> unit = ()
  [91m |[0m             [91m^------------------^[0m
  [91m |[0m Failed to prove constraint: 32 == 64, as it simplifies directly to false

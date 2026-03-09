@@ -5,6 +5,7 @@ import datetime
 import argparse
 import signal
 import html
+import shutil
 from abc import ABC, abstractmethod
 
 
@@ -69,10 +70,23 @@ class Test:
     """Represents a single test file."""
 
     def __init__(self, directory, filename):
+        self.directory = directory
         self.path = os.path.join(directory, filename)
         self.filename = filename
         self.basename = os.path.splitext(os.path.basename(filename))[0]
+        self.expect = os.path.join(directory, f"{self.basename}.expect")
+        self.err_expect = os.path.join(directory, f"{self.basename}.err_expect")
+        self.error = f"{self.basename}.error"
 
+    def copy_filename(self):
+        shutil.copy(self.path, self.filename)
+        # Some sail file tests have an associated JSON config, so copy that too if it exists.
+        jsonfile = os.path.join(self.directory, f"{self.basename}.json")
+        if os.path.exists(jsonfile):
+            shutil.copy(jsonfile, f"{self.basename}.json")
+
+    def copy_directory(self):
+        shutil.copytree(self.path, self.filename)
 
 class Batcher:
     """Encapsulates a directory and a predicate for batching its entries into parallel chunks."""
@@ -258,13 +272,15 @@ class SailTest(ABC):
         else:
             print(f'{(name + " ").ljust(40, ".")} {Color.WARNING}skip{Color.END}')
 
+    def prepare(self):
+        pass
+
     def run_tests(
         self,
         name,
         batcher,
         fn,
         *,
-        testdir,
         expected_failures=None,
         skip_set=None,
         skip_fn=None,
@@ -272,12 +288,11 @@ class SailTest(ABC):
         """Run a set of tests in parallel using fork/collect.
 
         fn(test) is called in each child process and should use step() for each
-        command. The child's working directory is set to testdir before fn is
+        command. The child's working directory is set to work_dir before fn is
         called. The base class calls _print_ok() and sys.exit(0) after fn returns.
 
         batcher: a Batcher instance that provides the files to test and how to
                  batch them. Its directory is listed and filtered by its predicate.
-        testdir: absolute path; the working directory for each test child process.
         expected_failures: dict of {filename: reason} for known xfails
         skip_set: set of basenames to skip before forking
         skip_fn: callable(test) -> bool for complex skip logic
@@ -287,6 +302,7 @@ class SailTest(ABC):
             for test, reason in expected_failures.items():
                 results.expect_failure(test, reason)
         batches = batcher.batch(parallelism)
+        self.prepare()
         for batch in batches:
             tests = {}
             for test in batch:
@@ -297,7 +313,7 @@ class SailTest(ABC):
                     continue
                 tests[test.filename] = os.fork()
                 if tests[test.filename] == 0:
-                    os.chdir(testdir)
+                    os.chdir(self.work_dir)
                     fn(test)
                     self._print_ok(test.filename)
                     sys.exit(0)

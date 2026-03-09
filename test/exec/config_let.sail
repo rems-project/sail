@@ -6,7 +6,7 @@ $iftarget c cpp
 $c_in_main sail_config_set_file("config_let.json");
 $c_in_main_post sail_config_cleanup();
 $else
-$option --config ../exec/config_let.json
+$option --config config_let.json
 $endif
 
 let x : int = config y

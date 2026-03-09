@@ -1,5 +1,5 @@
 [93mType error[0m:
-[96mfail/no_function2.sail[0m:8.10-17:
+[96mno_function2.sail[0m:8.10-17:
 8[96m |[0m  let _ = foo_baz()
  [91m |[0m          [91m^-----^[0m
  [91m |[0m Function foo_baz not found. Did you mean foo_quux?

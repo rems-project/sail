@@ -6,7 +6,7 @@ $iftarget c cpp
 $c_in_main sail_config_set_file("config_int.json");
 $c_in_main_post sail_config_cleanup();
 $else
-$option --config ../exec/config_int.json
+$option --config config_int.json
 $endif
 
 $option --sv-int-size 256

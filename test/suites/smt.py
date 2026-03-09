@@ -23,34 +23,20 @@ _skip_tests = {
 }
 
 
-@suite("smt")
-class SmtTests(SailTest):
-    def run(self):
-        if shutil.which("cvc4") is not None:
-            self.banner("Testing SMT: cvc4")
+class _SmtTests(SailTest):
+    def run_with_solver(self, solver, command):
+        if shutil.which(solver) is not None:
+            self.banner(f"Testing SMT: {solver}")
             self.run_tests(
-                "cvc4",
+                solver,
                 Batcher(_SUITE_DIR),
-                self._make_test("cvc4", "cvc4 --lang=smt2.6", ""),
-                testdir=_SUITE_DIR,
-                skip_fn=self._make_skip_fn("cvc4"),
+                self._make_test(solver, command, ""),
+                skip_fn=self._make_skip_fn(solver),
             )
         else:
             print(
-                f"{color.WARNING}Cannot find SMT solver cvc4 skipping tests{color.END}"
+                f"{Color.WARNING}Cannot find SMT solver {solver} skipping tests{Color.END}"
             )
-
-        if shutil.which("z3") is not None:
-            self.banner("Testing SMT: z3")
-            self.run_tests(
-                "z3",
-                Batcher(_SUITE_DIR),
-                self._make_test("z3", "z3", ""),
-                testdir=_SUITE_DIR,
-                skip_fn=self._make_skip_fn("z3"),
-            )
-        else:
-            print(f"{color.WARNING}Cannot find SMT solver z3 skipping tests{color.END}")
 
     def _make_skip_fn(self, solver_name):
         def skip_fn(test):
@@ -61,6 +47,7 @@ class SmtTests(SailTest):
 
     def _make_test(self, name, solver, sail_opts):
         def fn(test):
+            test.copy_filename()
             basename = test.basename.replace(".", "_")
             step(f"'{self.sail}' {sail_opts} -smt {test.filename} -o {basename}")
             step(f"timeout 30s {solver} {basename}_prop.smt2 1> {basename}.out")
@@ -70,3 +57,13 @@ class SmtTests(SailTest):
                 step(f"grep -q ^unsat$ {basename}.out")
 
         return fn
+
+@suite("smt.z3")
+class Z3Tests(_SmtTests):
+    def run(self):
+        self.run_with_solver("z3", "z3")
+
+@suite("smt.cvc4")
+class Cvc4Tests(_SmtTests):
+    def run(self):
+        self.run_with_solver("cvc4", "cvc4 --lang=smt2.6")

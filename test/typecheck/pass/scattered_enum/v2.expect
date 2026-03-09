@@ -1,8 +1,8 @@
 [93mType error[0m:
-[96mpass/scattered_enum/v2.sail[0m:2.5-6:
+[96mscattered_enum/v2.sail[0m:2.5-6:
 2[96m |[0menum E = D | E | F
  [92m |[0m     [92m^[0m [92mDeclared as regular enumeration here[0m
-[96mpass/scattered_enum/v2.sail[0m:4.12-13:
+[96mscattered_enum/v2.sail[0m:4.12-13:
 4[96m |[0menum clause E = A
  [91m |[0m            [91m^[0m
  [91m |[0m Enumeration E is not scattered - cannot add a new member with 'enum clause'

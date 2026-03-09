@@ -1,5 +1,6 @@
 import os
 import sys
+import shutil
 
 
 from sailtest import *
@@ -13,8 +14,16 @@ def _no_valgrind():
     except FileNotFoundError:
         return True
 
+class _ExecBase(SailTest):
+    """Shared helper for all exec sub-suites. Not registered."""
 
-class _ExecCBase(SailTest):
+    def prepare(self):
+        includes = os.path.join(_SUITE_DIR, "includes")
+        work_includes = os.path.join(self.work_dir, "includes")
+        if os.path.exists(includes) and not os.path.exists(work_includes):
+            shutil.copytree(includes, work_includes)
+
+class _ExecCBase(_ExecBase):
     """Shared helper for the C and C++ exec sub-suites. Not registered."""
 
     def _run_c_tests(
@@ -39,6 +48,7 @@ class _ExecCBase(SailTest):
         target_opt = "--cpp" if actually_cpp else "-c"
 
         def fn(test):
+            test.copy_filename()
             step(
                 f"'{self.sail}' --no-warn {target_opt} {sail_opts} {test.filename} -o {test.basename}"
             )
@@ -51,62 +61,96 @@ class _ExecCBase(SailTest):
                 expected_status=1 if test.basename.startswith("fail") else 0,
                 stderr_file=f"{test.basename}.err_result",
             )
-            step(f"diff {test.basename}.result {test.basename}.expect")
-            if os.path.exists(f"{test.basename}.err_expect"):
-                step(f"diff {test.basename}.err_result {test.basename}.err_expect")
+            step(f"diff {test.basename}.result {test.expect}")
+            if os.path.exists(test.err_expect):
+                step(f"diff {test.basename}.err_result {test.err_expect}")
             if valgrind and not test.basename.startswith("fail"):
                 step(
                     f"valgrind --leak-check=full --track-origins=yes"
                     f" --errors-for-leak-kinds=all --error-exitcode=2 ./{test.basename}.bin",
                     expected_status=1 if test.basename.startswith("fail") else 0,
                 )
-            step(
-                f"rm {test.basename}.{extension} {test.basename}.h {test.basename}.bin {test.basename}.result"
-            )
 
         self.run_tests(
             name,
             Batcher(_SUITE_DIR),
             fn,
-            testdir=_SUITE_DIR,
             expected_failures=expected_failures,
         )
 
+@suite("exec.c.unopt.default")
+class ExecCUnoptTests(_ExecCBase):
+    def run(self):
+        self._run_c_tests("unoptimized C", "", "", False)
 
-@suite("exec.c")
-class ExecCTests(_ExecCBase):
+@suite("exec.c.unopt.nomangle")
+class ExecCUnoptTests(_ExecCBase):
     def run(self):
         self._run_c_tests("unoptimized C", "", "--c-no-mangle", False)
-        self._run_c_tests("unoptimized C", "", "", False)
-        self._run_c_tests("optimized C", "-O2", "-O", True)
+
+@suite("exec.c.constant_fold")
+class ExecCConstantFoldTests(_ExecCBase):
+    def run(self):
         self._run_c_tests("constant folding", "", "-Oconstant_fold", False)
+
+@suite("exec.c.opt.default")
+class ExecCOptTests(_ExecCBase):
+    def run(self):
+        self._run_c_tests("optimized C", "-O2", "-O", False)
+
+@suite("exec.c.opt.valgrind")
+class ExecCOptValgrindTests(_ExecCBase):
+    def run(self):
+        self._run_c_tests("optimized C", "-O2", "-O", True)
+
+@suite("exec.c.opt.ubsan")
+class ExecCUBSanTests(_ExecCBase):
+    def run(self):
         self._run_c_tests(
             "undefined behavior sanitised", "-O2 -fsanitize=undefined", "-O", False
         )
+
+@suite("exec.c.opt.asan")
+class ExecCASanTests(_ExecCBase):
+    def run(self):
         self._run_c_tests(
             "address sanitised", "-O2 -fsanitize=address -g", "-O", False
         )
 
+_cpp_xfails = {
+    "cabbrev.sail": "my_pair_in_c is declared in a namespace in C++",
+    "xlen_val.sail": "assumes variables are still global",
+    # TODO: These use `$c_in_main` to add a call to `sail_set_abstract_xlen(32)` to `main()`
+    # but for C++ it needs to go in `model_main()` and be `model.sail_set_abstract_xlen(32)`.
+    "abstract_sizeof_no_use.sail": "difficult to call model.sail_set_abstract_... in the right place",
+    "abstract_type.sail": "difficult to call model.sail_set_abstract_... in the right place",
+    "tl_let_flow_change.sail": "difficult to call model.sail_set_abstract_... in the right place",
+}
 
-@suite("exec.cpp")
-class ExecCppTests(_ExecCBase):
-    _xfails = {
-        "cabbrev.sail": "my_pair_in_c is declared in a namespace in C++",
-        "xlen_val.sail": "assumes variables are still global",
-        # TODO: These use `$c_in_main` to add a call to `sail_set_abstract_xlen(32)` to `main()`
-        # but for C++ it needs to go in `model_main()` and be `model.sail_set_abstract_xlen(32)`.
-        "abstract_sizeof_no_use.sail": "difficult to call model.sail_set_abstract_... in the right place",
-        "abstract_type.sail": "difficult to call model.sail_set_abstract_... in the right place",
-        "tl_let_flow_change.sail": "difficult to call model.sail_set_abstract_... in the right place",
-    }
-
+@suite("exec.c.with_cpp.unopt")
+class ExecCCppUnoptTests(_ExecCBase):
     def run(self):
         self._run_c_tests(
             "unoptimized C with C++ compiler", "-xc++", "", False, compiler="c++"
         )
+
+@suite("exec.c.with_cpp.opt")
+class ExecCCppOptTests(_ExecCBase):
+    def run(self):
+        self._run_c_tests(
+            "optimized C with C++ compiler", "-xc++ -O2", "-O", False, compiler="c++"
+        )
+
+@suite("exec.c.with_cpp.valgrind")
+class ExecCCppOptValgrindTests(_ExecCBase):
+    def run(self):
         self._run_c_tests(
             "optimized C with C++ compiler", "-xc++ -O2", "-O", True, compiler="c++"
         )
+
+@suite("exec.cpp.unopt")
+class ExecCppUnoptTests(_ExecCBase):
+    def run(self):
         self._run_c_tests(
             "unoptimized C++",
             "",
@@ -114,8 +158,12 @@ class ExecCppTests(_ExecCBase):
             False,
             compiler="c++",
             actually_cpp=True,
-            expected_failures=self._xfails,
+            expected_failures=_cpp_xfails,
         )
+
+@suite("exec.cpp.opt")
+class ExecCppOptTests(_ExecCBase):
+    def run(self):
         self._run_c_tests(
             "optimized C++",
             "-O2",
@@ -123,12 +171,18 @@ class ExecCppTests(_ExecCBase):
             True,
             compiler="c++",
             actually_cpp=True,
-            expected_failures=self._xfails,
+            expected_failures=_cpp_xfails,
         )
 
 
 @suite("exec.interpreter")
-class ExecInterpreterTests(SailTest):
+class ExecInterpreterTests(_ExecBase):
+    def prepare(self):
+        super(ExecInterpreterTests, self).prepare(_SUITE_DIR)
+        commands = os.path.join(_SUITE_DIR, "execute.isail")
+        work_commands = os.path.join(self.work_dir, "execute.isail")
+        shutil.copy(commands, work_commands)
+
     def run(self):
         if os.name == "posix":
             self.banner("Testing interpreter")
@@ -136,7 +190,6 @@ class ExecInterpreterTests(SailTest):
                 "interpreter",
                 Batcher(_SUITE_DIR),
                 self._test,
-                testdir=_SUITE_DIR,
             )
         else:
             print(
@@ -144,23 +197,24 @@ class ExecInterpreterTests(SailTest):
             )
 
     def _test(self, test):
+        test.copy_filename()
         step(
             f"timeout 10s '{self.sail}' -undefined_gen -is execute.isail"
             f" -iout {test.basename}.iresult {test.filename}"
         )
-        step(f"diff {test.basename}.iresult {test.basename}.expect")
-        step(f"rm {test.basename}.iresult")
+        step(f"diff {test.basename}.iresult {test.expect}")
 
 
 @suite("exec.ocaml")
-class ExecOcamlTests(SailTest):
+class ExecOcamlTests(_ExecBase):
     def run(self):
         self.banner("Testing OCaml")
         self.run_tests(
-            "OCaml", Batcher(_SUITE_DIR), self._test, testdir=_SUITE_DIR
+            "OCaml", Batcher(_SUITE_DIR), self._test
         )
 
     def _test(self, test):
+        test.copy_filename()
         step(
             f"'{self.sail}' --ocaml --ocaml-build-dir _sbuild_{test.basename} -o {test.basename}_ocaml {test.filename}"
         )
@@ -169,20 +223,26 @@ class ExecOcamlTests(SailTest):
             expected_status=1 if test.basename.startswith("fail") else 0,
             cwd=f"_sbuild_{test.basename}",
         )
-        step(f"diff {test.basename}.oresult {test.basename}.expect")
-        step(f"rm -rf _sbuild_{test.basename}")
-        step(f"rm {test.basename}.oresult")
+        step(f"diff {test.basename}.oresult {test.expect}")
 
 
 @suite("exec.lem")
-class ExecLemTests(SailTest):
+class ExecLemTests(_ExecBase):
+    def prepare(self):
+        super(ExecLemTests, self).prepare(_SUITE_DIR)
+        commands = os.path.join(_SUITE_DIR, "mk_lem_ocaml_main.sh")
+        work_commands = os.path.join(self.work_dir, "mk_lem_ocaml_main.sh")
+        shutil.copy(commands, work_commands)
+        commands = os.path.join(_SUITE_DIR, "lem-ocaml-template.ml")
+        work_commands = os.path.join(self.work_dir, "lem-ocaml-template.ml")
+        shutil.copy(commands, work_commands)
+
     def run(self):
         self.banner("Testing lem")
         self.run_tests(
             "lem",
             Batcher(_SUITE_DIR),
             self._test,
-            testdir=_SUITE_DIR,
             expected_failures={
                 "inc_tests.sail": "missing built-in functions for increasing vectors in Lem library",
                 "read_write_ram.sail": "uses memory primitives not provided by default in Lem",
@@ -205,11 +265,12 @@ class ExecLemTests(SailTest):
         )
 
     def _test(self, test):
+        test.copy_filename()
         step(f"'{self.sail}' -lem -lem_lib Undefined_override -o {test.basename} {test.filename}")
         step(f"mkdir -p _lbuild_{test.basename}")
         step(f"mv {test.basename}.lem {test.basename}_types.lem _lbuild_{test.basename}")
         step(f"rm {test.basename.capitalize()}_lemmas.thy")
-        step(f"cp lbuild/* _lbuild_{test.basename}")
+        step(f"cp {test.directory}/lbuild/* _lbuild_{test.basename}")
         os.chdir(f"_lbuild_{test.basename}")
         step(
             f"../mk_lem_ocaml_main.sh {test.basename} {test.basename.capitalize()} {self.sail_dir}"
@@ -220,15 +281,14 @@ class ExecLemTests(SailTest):
             f"./main.native 1> {test.basename}.lresult 2> {test.basename}.lerr",
             expected_status=1 if test.basename.startswith("fail") else 0,
         )
-        step(f"diff ../{test.basename}.expect {test.basename}.lresult")
-        if os.path.exists(f"../{test.basename}.err_expect"):
-            step(f"diff {test.basename}.lerr ../{test.basename}.err_expect")
+        step(f"diff {test.expect} {test.basename}.lresult")
+        if os.path.exists(test.err_expect):
+            step(f"diff {test.basename}.lerr {test.err_expect}")
         os.chdir("..")
-        step(f"rm -r _lbuild_{test.basename}")
 
 
 @suite("exec.coq")
-class ExecCoqTests(SailTest):
+class ExecCoqTests(_ExecBase):
     def run(self):
         self.banner("Testing coq")
         self.run_tests(

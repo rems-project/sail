@@ -2,7 +2,7 @@ default Order dec
 
 $include <prelude.sail>
 
-$option --config ../typecheck/pass/config_bits_types.json
+$option --config config_bits_types.json
 
 type xlen = 32
 

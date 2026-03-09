@@ -1,5 +1,5 @@
 [93mType error[0m:
-[96mfail/shadow_leak_infer.sail[0m:21.2-30:
+[96mshadow_leak_infer.sail[0m:21.2-30:
 21[96m |[0m  _prove(constraint('x == 'y));
   [91m |[0m  [91m^--------------------------^[0m
   [91m |[0m Cannot prove 'x == 'y

@@ -2,7 +2,7 @@ default Order dec
 
 $include <prelude.sail>
 
-$option --config ../typecheck/pass/config_int_types.json
+$option --config config_int_types.json
 
 type len = 32
 

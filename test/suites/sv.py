@@ -33,46 +33,53 @@ skip_tests = {
 }
 
 
-@suite("sv")
-class SvTests(SailTest):
-    def run(self):
-        opts = ""
-        self.banner(f"Testing SystemVerilog with options: {opts}")
-        self.run_tests(
-            "SystemVerilog",
-            Batcher(_EXEC_DIR),
-            self._make_test(opts, just_check=False),
-            testdir=_SUITE_DIR,
-            skip_set=skip_tests,
-        )
+class _SvTests(SailTest):
+    def prepare(self):
+        exec_includes = os.path.join(_EXEC_DIR, "includes")
+        work_exec_includes = os.path.join(self.work_dir, "includes")
+        if os.path.exists(exec_includes) and not os.path.exists(work_exec_includes):
+            shutil.copytree(exec_includes, work_exec_includes)
+        sv_include = os.path.join(_SUITE_DIR, "include")
+        work_sv_include = os.path.join(self.work_dir, "include")
+        if os.path.exists(sv_include) and not os.path.exists(work_sv_include):
+            shutil.copytree(sv_include, work_sv_include)
 
-        opts = "--sv-no-strings"
-        self.banner(f"Testing SystemVerilog (nostrings) with options: {opts}")
+    def run_with_opts(self, name, opts, just_check):
+        self.banner(f"Testing {name} with options:{opts}")
         self.run_tests(
-            "SystemVerilog (nostrings)",
+            name,
             Batcher(_EXEC_DIR),
-            self._make_test(f" {opts}", just_check=True),
-            testdir=_SUITE_DIR,
+            self._make_test(opts, just_check=just_check),
             skip_set=skip_tests,
         )
 
     def _make_test(self, opts, just_check):
         def fn(test):
-            step(f"rm -rf {test.basename}_obj_dir")
+            test.copy_filename()
             if test.basename.startswith("fail") or just_check:
                 step(
-                    f"'{self.sail}' --no-warn --sv ../exec/{test.filename} -o {test.basename}"
+                    f"'{self.sail}' --no-warn --sv {test.filename} -o {test.basename}"
                     f" --sv-verilate compile{opts} --sv-verilate-jobs 1 > {test.basename}.out"
                 )
             else:
                 step(
-                    f"'{self.sail}' --no-warn --sv ../exec/{test.filename} -o {test.basename}"
+                    f"'{self.sail}' --no-warn --sv {test.filename} -o {test.basename}"
                     f" --sv-verilate run{opts} --sv-verilate-jobs 1 > {test.basename}.out"
                 )
                 step(
                     f"awk '/SAIL START/{{flag=1;next}}/SAIL END/{{flag=0}}flag'"
                     f" {test.basename}.out > {test.basename}.result"
                 )
-                step(f"diff ../exec/{test.basename}.expect {test.basename}.result")
+                step(f"diff {test.expect} {test.basename}.result")
 
         return fn
+
+@suite("sv.default")
+class SvDefaultTests(_SvTests):
+    def run(self):
+        self.run_with_opts("SystemVerilog", "", False)
+
+@suite("sv.nostrings")
+class SvNoStringsTests(_SvTests):
+    def run(self):
+        self.run_with_opts("SystemVerilog (no-strings)", " --sv-no-strings", True)

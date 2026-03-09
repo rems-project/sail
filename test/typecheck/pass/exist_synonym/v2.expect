@@ -1,10 +1,10 @@
 [93mType error[0m:
-[96mpass/exist_synonym/v2.sail[0m:6.8-37:
+[96mexist_synonym/v2.sail[0m:6.8-37:
 6[96m |[0mlet x : {'n, 0 <= 'n <= 8. regno('n)} = 4
  [91m |[0m        [91m^---------------------------^[0m
  [91m |[0m Well-formedness check failed for type
  [91m |[0m 
- [91m |[0m [93mCaused by [0m[96mpass/exist_synonym/v2.sail[0m:6.27-32:
+ [91m |[0m [93mCaused by [0m[96mexist_synonym/v2.sail[0m:6.27-32:
  [91m |[0m 6[96m |[0mlet x : {'n, 0 <= 'n <= 8. regno('n)} = 4
  [91m |[0m  [91m |[0m                           [91m^---^[0m
  [91m |[0m  [91m |[0m Could not prove (0 <= 'n & 'n < 2) for type constructor regno

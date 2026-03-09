@@ -5,8 +5,7 @@ from shutil import which
 
 from sailtest import *
 
-_SUITE_DIR = os.path.join(TEST_DIR, "lem")
-_TYPECHECK_PASS_DIR = os.path.join(_SUITE_DIR, "..", "typecheck", "pass")
+_TYPECHECK_PASS_DIR = os.path.join(TEST_DIR, "typecheck", "pass")
 
 skip_tests = {
     "phantom_option",
@@ -70,41 +69,38 @@ skip_tests_mwords = {
 }
 
 
-@suite("lem")
-class LemTests(SailTest):
-    def run(self):
+class _LemTests(SailTest):
+    def _run_with_opts(self, name, opts, skip):
         if which("cvc4") is None:
             skip_tests.add("type_pow_zero")
             skip_tests_mwords.add("type_pow_zero")
 
-        opts = ""
-        self.banner(f"Testing Lem with bitlists (opts: '{opts}')")
+        self.banner(f"Testing Lem with {name} (opts: '{opts}')")
         self.run_tests(
-            "with bitlists",
+            name,
             Batcher(_TYPECHECK_PASS_DIR),
             self._make_test(opts),
-            testdir=_SUITE_DIR,
-            skip_set=skip_tests,
-        )
-
-        opts = "-lem_mwords -auto_mono"
-        self.banner(f"Testing Lem with machine words (opts: '{opts}')")
-        self.run_tests(
-            "with machine words",
-            Batcher(_TYPECHECK_PASS_DIR),
-            self._make_test(opts),
-            testdir=_SUITE_DIR,
-            skip_set=skip_tests_mwords,
+            skip_set=skip,
         )
 
     def _make_test(self, opts):
         def fn(test):
+            test.copy_filename()
             step(
-                f"'{self.sail}' --lem {opts} --strict-bitvector -o {test.basename} {_TYPECHECK_PASS_DIR}/{test.filename}"
+                f"'{self.sail}' --lem{opts} --strict-bitvector -o {test.basename} {test.filename}"
             )
             step(
                 f"lem -lib '{self.sail_dir}'/src/gen_lib {test.basename}_types.lem {test.basename}.lem"
             )
-            step(f"rm {test.basename}_types.lem {test.basename}.lem")
 
         return fn
+
+@suite("lem.bitlists")
+class LemBitlistsTests(_LemTests):
+    def run(self):
+        self._run_with_opts("bitlists", "", skip_tests)
+
+@suite("lem.mwords")
+class LemMachineWordsTests(_LemTests):
+    def run(self):
+        self._run_with_opts("machine words", " --lem-mwords --auto-mono", skip_tests_mwords)

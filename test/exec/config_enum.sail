@@ -7,7 +7,7 @@ $iftarget c cpp
 $c_in_main sail_config_set_file("config_enum.json");
 $c_in_main_post sail_config_cleanup();
 $else
-$option --config ../exec/config_enum.json
+$option --config config_enum.json
 $endif
 
 enum E = {A, B, C}

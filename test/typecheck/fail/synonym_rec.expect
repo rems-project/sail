@@ -1,5 +1,5 @@
 [93mType error[0m:
-[96mfail/synonym_rec.sail[0m:2.9-10:
+[96msynonym_rec.sail[0m:2.9-10:
 2[96m |[0mtype T = T
  [91m |[0m         [91m^[0m
  [91m |[0m Failed to infer kind for this type

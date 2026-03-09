@@ -4,45 +4,43 @@ import sys
 
 from sailtest import *
 
-_SUITE_DIR = os.path.join(TEST_DIR, "format")
-
-
-@suite("format")
-class FormatTests(SailTest):
-    def run(self):
-        self.banner("Testing default")
+class _FormatTests(SailTest):
+    def run_with_dir(self, dir):
+        self.banner(f"Testing {dir}")
         self.run_tests(
-            "default",
-            Batcher(_SUITE_DIR),
-            self._make_test("default"),
-            testdir=_SUITE_DIR,
-        )
-
-        self.banner("Testing lw80_preserve")
-        self.run_tests(
-            "lw80_preserve",
-            Batcher(_SUITE_DIR),
-            self._make_test("lw80_preserve"),
-            testdir=_SUITE_DIR,
+            dir,
+            Batcher(os.path.join(TEST_DIR, "format")),
+            self._make_test(dir),
         )
 
     def _make_test(self, test_dir):
         def fn(test):
-            step(f"cp {test.filename} {test_dir}/{test.filename}")
+            config = f"{test.directory}/{test_dir}/config.json"
+            expect = f"{test.directory}/{test_dir}/{test.basename}.expect"
+            test.copy_filename()
             step(
-                f"'{self.sail}' --sail-config {test_dir}/config.json --fmt {test_dir}/{test.filename}"
+                f"'{self.sail}' --sail-config {config} --fmt {test.filename}"
             )
             status = step_with_status(
-                f"diff {test_dir}/{test.filename} {test_dir}/{test.basename}.expect"
+                f"diff {test.filename} {expect}"
             )
             if status != 0:
                 if args.update_expected:
-                    print(f"Overriding file {test_dir}/{test.basename}.expected")
+                    print(f"Overriding file {expect}")
                     step(
-                        f"'{self.sail}' --sail-config {test_dir}/config.json --fmt {test.filename} --fmt-emit stdout > {test_dir}/{test.basename}.expect"
+                        f"'{self.sail}' --sail-config {config} --fmt {test.filename} --fmt-emit stdout > {expect}"
                     )
                 else:
                     sys.exit(1)
-            step(f"rm {test_dir}/{test.filename}")
 
         return fn
+
+@suite("format.default")
+class FormatDefaultTests(_FormatTests):
+    def run(self):
+        self.run_with_dir("default")
+
+@suite("format.lw80_preserve")
+class FormatLw80PreserveTests(_FormatTests):
+    def run(self):
+        self.run_with_dir("lw80_preserve")

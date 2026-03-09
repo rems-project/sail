@@ -15,9 +15,9 @@ class OneoffTests(SailTest):
             "one-off",
             Batcher.directories(_SUITE_DIR),
             self._test,
-            testdir=_SUITE_DIR,
         )
 
     def _test(self, test):
-        os.chdir(test.path)
+        test.copy_directory()
+        os.chdir(test.filename)
         step("./test.sh", name=test.filename)

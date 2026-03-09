@@ -1,5 +1,5 @@
 [93mType error[0m:
-[96mfail/issue853_3.sail[0m:19.23-43:
+[96missue853_3.sail[0m:19.23-43:
 19[96m |[0m    physical_address = physaddr_bits(paddr),
   [91m |[0m                       [91m^------------------^[0m
   [91m |[0m Failed to prove constraint: 34 == 32, as it simplifies directly to false
