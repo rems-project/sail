@@ -10,6 +10,7 @@ _TEST_DIR = os.path.normpath(
 _SUITE_DIR = os.path.join(_TEST_DIR, "format")
 
 
+@suite("format", _SUITE_DIR)
 class FormatTests(SailTest):
     def run(self):
         self.banner("Testing default")

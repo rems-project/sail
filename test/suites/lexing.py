@@ -10,6 +10,7 @@ _TEST_DIR = os.path.normpath(
 _SUITE_DIR = os.path.join(_TEST_DIR, "lexing")
 
 
+@suite("lexing", _SUITE_DIR)
 class LexingTests(SailTest):
     def run(self):
         self.banner("Testing lexer")

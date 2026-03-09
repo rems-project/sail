@@ -28,6 +28,7 @@ def _no_valgrind():
         return True
 
 
+@suite("exec", _SUITE_DIR)
 class ExecTests(SailTest):
     def run(self):
         targets = self.get_targets(["c", "cpp", "interpreter", "ocaml"])

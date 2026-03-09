@@ -10,6 +10,7 @@ _TEST_DIR = os.path.normpath(
 _SUITE_DIR = os.path.join(_TEST_DIR, "float")
 
 
+@suite("float", _SUITE_DIR)
 class FloatTests(SailTest):
     def run(self):
         self.banner(

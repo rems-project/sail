@@ -14,6 +14,7 @@ _PROJECT_DIR = os.path.join(_SUITE_DIR, "project")
 _FAIL_DIR = os.path.join(_SUITE_DIR, "fail")
 
 
+@suite("typecheck", _SUITE_DIR)
 class TypecheckTests(SailTest):
     def run(self):
         os.makedirs(os.path.join(_SUITE_DIR, "rtpass"), exist_ok=True)

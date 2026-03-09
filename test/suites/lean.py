@@ -41,6 +41,7 @@ skip_selftests = {
 }
 
 
+@suite("lean", _SUITE_DIR)
 class LeanTests(SailTest):
     def run(self):
         self.banner("Cloning the support library")

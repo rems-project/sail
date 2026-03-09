@@ -42,6 +42,18 @@ parser.add_argument(
 args = None
 parallelism = None
 
+_suite_registry = {}
+
+
+def suite(name, xml_dir):
+    """Decorator that registers a SailTest subclass under the given name."""
+
+    def decorator(cls):
+        _suite_registry[name] = (cls, xml_dir)
+        return cls
+
+    return decorator
+
 
 class Color:
     NOTICE = "\033[94m"

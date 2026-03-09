@@ -10,6 +10,7 @@ _TEST_DIR = os.path.normpath(
 _SUITE_DIR = os.path.join(_TEST_DIR, "builtins")
 
 
+@suite("builtins", _SUITE_DIR)
 class BuiltinsTests(SailTest):
     def run(self):
         targets = self.get_targets(["c", "ocaml"])

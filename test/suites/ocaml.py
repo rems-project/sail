@@ -10,6 +10,7 @@ _TEST_DIR = os.path.normpath(
 _SUITE_DIR = os.path.join(_TEST_DIR, "ocaml")
 
 
+@suite("ocaml", _SUITE_DIR)
 class OcamlTests(SailTest):
     def run(self):
         targets = self.get_targets(["ocaml", "ocaml_trace"])

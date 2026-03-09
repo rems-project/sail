@@ -10,6 +10,7 @@ _TEST_DIR = os.path.normpath(
 _SUITE_DIR = os.path.join(_TEST_DIR, "pattern_completeness")
 
 
+@suite("pattern_completeness", _SUITE_DIR)
 class PatternCompletenessTests(SailTest):
     def run(self):
         self.banner("Testing pattern completeness checker")

@@ -10,6 +10,7 @@ _TEST_DIR = os.path.normpath(
 _SUITE_DIR = os.path.join(_TEST_DIR, "sailcov")
 
 
+@suite("sailcov", _SUITE_DIR)
 class SailcovTests(SailTest):
     def run(self):
         sailcov = f"{self.sail_dir}/sailcov/sailcov"
