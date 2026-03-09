@@ -107,8 +107,9 @@ class Batcher:
         return batches
 
 
-def step_with_status(string, expected_status=0, cwd=None, name="", stderr_file=""):
-    p = subprocess.run(string, shell=True, capture_output=True, text=True, cwd=cwd)
+def step_with_status(string, expected_status=0, cwd=None, name="", stderr_file="", env=None):
+    merged_env = {**os.environ, **env} if env else None
+    p = subprocess.run(string, shell=True, capture_output=True, text=True, cwd=cwd, env=merged_env)
     if p.returncode != expected_status:
         if args.compact:
             compact_char(Color.FAIL, "X")
@@ -129,7 +130,7 @@ def step_with_status(string, expected_status=0, cwd=None, name="", stderr_file="
     return p.returncode
 
 
-def step(string, expected_status=0, cwd=None, name="", stderr_file=""):
+def step(string, expected_status=0, cwd=None, name="", stderr_file="", env=None):
     if (
         step_with_status(
             string,
@@ -137,6 +138,7 @@ def step(string, expected_status=0, cwd=None, name="", stderr_file=""):
             cwd=cwd,
             name=name,
             stderr_file=stderr_file,
+            env=env,
         )
         != expected_status
     ):
@@ -312,9 +314,9 @@ class SailTest(ABC):
     def run(self):
         pass
 
-    def main(self, xml_dir=None):
+    def main(self, xml_dir=None, name="tests"):
         self.run()
         xml = "<testsuites>\n" + "".join(self._xml_parts) + "</testsuites>\n"
-        out = os.path.join(xml_dir, "tests.xml") if xml_dir else "tests.xml"
+        out = os.path.join(xml_dir, f"{name}.xml") if xml_dir else f"{name}.xml"
         with open(out, "w") as f:
             f.write(xml)

@@ -14,8 +14,8 @@ _PROJECT_DIR = os.path.join(_SUITE_DIR, "project")
 _FAIL_DIR = os.path.join(_SUITE_DIR, "fail")
 
 
-@suite("typecheck", _SUITE_DIR)
-class TypecheckTests(SailTest):
+@suite("typecheck.pass", _SUITE_DIR)
+class TypecheckPassTests(SailTest):
     def run(self):
         os.makedirs(os.path.join(_SUITE_DIR, "rtpass"), exist_ok=True)
         os.makedirs(os.path.join(_SUITE_DIR, "rtpass2"), exist_ok=True)
@@ -28,23 +28,12 @@ class TypecheckTests(SailTest):
         self.run_tests(
             "pass",
             Batcher(_PASS_DIR),
-            self._test_pass,
+            self._test,
             testdir=_SUITE_DIR,
             skip_set=skip_pass,
         )
 
-        self.banner("Testing multi-file projects")
-        self.run_tests(
-            "projects",
-            Batcher.projects(_PROJECT_DIR),
-            self._test_project,
-            testdir=_SUITE_DIR,
-        )
-
-        self.banner("Testing failing programs")
-        self.run_tests("fail", Batcher(_FAIL_DIR), self._test_fail, testdir=_SUITE_DIR)
-
-    def _test_pass(self, filename, basename):
+    def _test(self, filename, basename):
         step(
             f"'{self.sail}' --no-memo-z3 --just-check --strict-bitvector"
             f" --ddump-tc-ast pass/{filename} 1> rtpass/{filename}"
@@ -69,7 +58,19 @@ class TypecheckTests(SailTest):
                 )
                 step(f"rm pass/{basename}/{variantbasename}.error")
 
-    def _test_project(self, filename, basename):
+
+@suite("typecheck.project", _SUITE_DIR)
+class TypecheckProjectTests(SailTest):
+    def run(self):
+        self.banner("Testing multi-file projects")
+        self.run_tests(
+            "projects",
+            Batcher.projects(_PROJECT_DIR),
+            self._test,
+            testdir=_SUITE_DIR,
+        )
+
+    def _test(self, filename, basename):
         if filename.startswith("fail"):
             step(
                 f"'{self.sail}' --no-memo-z3 --strict-bitvector project/{filename}"
@@ -81,7 +82,14 @@ class TypecheckTests(SailTest):
         else:
             step(f"'{self.sail}' --no-memo-z3 project/{filename} --all-modules")
 
-    def _test_fail(self, filename, basename):
+
+@suite("typecheck.fail", _SUITE_DIR)
+class TypecheckFailTests(SailTest):
+    def run(self):
+        self.banner("Testing failing programs")
+        self.run_tests("fail", Batcher(_FAIL_DIR), self._test, testdir=_SUITE_DIR)
+
+    def _test(self, filename, basename):
         step(
             f"'{self.sail}' --no-memo-z3 --strict-bitvector fail/{filename}"
             f" 2> fail/{basename}.error",

@@ -1,8 +1,6 @@
 import os
 import sys
 
-os.environ["SAIL_NEW_CLI"] = "true"
-
 
 from sailtest import *
 
@@ -23,6 +21,7 @@ class ProjectTests(SailTest):
         step(
             f"'{self.sail}' failure/{filename} 2> failure/{basename}.error",
             expected_status=1,
+            env={"SAIL_NEW_CLI": "true"},
         )
         step(f"diff failure/{basename}.expect failure/{basename}.error")
         step(f"rm failure/{basename}.error")
