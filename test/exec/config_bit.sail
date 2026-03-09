@@ -6,7 +6,7 @@ $iftarget c cpp
 $c_in_main sail_config_set_file("config_bit.json");
 $c_in_main_post sail_config_cleanup();
 $else
-$option --config ../c/config_bit.json
+$option --config ../exec/config_bit.json
 $endif
 
 val main : unit -> unit

@@ -4,7 +4,7 @@ $iftarget c cpp
 $c_in_main sail_config_set_file("config_xlen.json");
 $c_in_main_post sail_config_cleanup();
 $else
-$option --config ../c/config_xlen.json
+$option --config ../exec/config_xlen.json
 $endif
 
 $include <prelude.sail>

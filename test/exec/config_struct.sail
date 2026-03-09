@@ -6,7 +6,7 @@ $iftarget c cpp
 $c_in_main sail_config_set_file("config_struct.json");
 $c_in_main_post sail_config_cleanup();
 $else
-$option --config ../c/config_struct.json
+$option --config ../exec/config_struct.json
 $endif
 
 struct S1('n) = {

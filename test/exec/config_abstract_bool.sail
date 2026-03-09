@@ -6,7 +6,7 @@ $iftarget c cpp
 $c_in_main sail_config_set_file("config_abstract_bool.json");
 $c_in_main_post sail_config_cleanup();
 $else
-$option --config ../c/config_abstract_bool.json
+$option --config ../exec/config_abstract_bool.json
 $endif
 
 type have_ext : Bool = config have.ext
