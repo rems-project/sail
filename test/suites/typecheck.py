@@ -11,7 +11,7 @@ _PROJECT_DIR = os.path.join(_SUITE_DIR, "project")
 _FAIL_DIR = os.path.join(_SUITE_DIR, "fail")
 
 
-@suite("typecheck.pass")
+@suite("typecheck.pass", work_dir="tcpass")
 class TypecheckPassTests(SailTest):
     def run(self):
         os.makedirs(os.path.join(_SUITE_DIR, "rtpass"), exist_ok=True)
@@ -56,7 +56,7 @@ class TypecheckPassTests(SailTest):
                 step(f"rm pass/{test.basename}/{variantbasename}.error")
 
 
-@suite("typecheck.project")
+@suite("typecheck.project", work_dir="tcproj")
 class TypecheckProjectTests(SailTest):
     def run(self):
         self.banner("Testing multi-file projects")
@@ -80,7 +80,7 @@ class TypecheckProjectTests(SailTest):
             step(f"'{self.sail}' --no-memo-z3 project/{test.filename} --all-modules")
 
 
-@suite("typecheck.fail")
+@suite("typecheck.fail", work_dir="tcfail")
 class TypecheckFailTests(SailTest):
     def run(self):
         self.banner("Testing failing programs")

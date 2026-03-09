@@ -34,11 +34,11 @@ class _OcamlBase(SailTest):
         step("rm -rf _sbuild", cwd=test.path)
 
 
-@suite("ocaml.default")
+@suite("ocaml.default", work_dir="ocaml")
 class OcamlTests(_OcamlBase):
     pass
 
 
-@suite("ocaml.trace")
+@suite("ocaml.trace", work_dir="ocaml_trace")
 class OcamlTraceTests(_OcamlBase):
     _opts = "--ocaml-trace"
