@@ -20,7 +20,7 @@ parser.add_argument(
 )
 parser.add_argument("--compact", help="Compact output.", action="store_true")
 parser.add_argument(
-    "--targets", help="Targets to use (where supported).", action="append"
+    "-t", "--targets", help="Targets to use (where supported).", action="append"
 )
 parser.add_argument(
     "--update-expected",
