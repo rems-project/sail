@@ -6,7 +6,13 @@ import sys
 
 import sailtest
 
-sailtest.parser.add_argument("-s", "--suite", help="Test suite to run", required=True)
+sailtest.parser.add_argument(
+    "-s",
+    "--suite",
+    help="Test suite to run (may be passed multiple times)",
+    action="append",
+    required=True,
+)
 
 sailtest.args = sailtest.parser.parse_args()
 
@@ -19,13 +25,13 @@ else:
         print("Running 16 tests in parallel. Set TEST_PAR to configure")
         sailtest.parallelism = 16
 
-module = importlib.import_module(sailtest.args.suite)
-
-for obj in vars(module).values():
-    if (
-        isinstance(obj, type)
-        and issubclass(obj, sailtest.SailTest)
-        and obj is not sailtest.SailTest
-    ):
-        obj().main(xml_dir=module._SUITE_DIR)
-        break
+for suite in sailtest.args.suite:
+    module = importlib.import_module(suite)
+    for obj in vars(module).values():
+        if (
+            isinstance(obj, type)
+            and issubclass(obj, sailtest.SailTest)
+            and obj is not sailtest.SailTest
+        ):
+            obj().main(xml_dir=module._SUITE_DIR)
+            break
