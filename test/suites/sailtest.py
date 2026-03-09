@@ -24,11 +24,22 @@ parallelism = None
 _suite_registry = {}
 
 
-def suite(name):
-    """Decorator that registers a SailTest subclass under the given name."""
+def suite(name, work_dir=None):
+    """Decorator that registers a SailTest subclass under the given name.
+
+    work_dir is the subdirectory created inside run_dir for this suite's
+    working files. Defaults to the suite name. No two suites may share
+    the same work_dir.
+    """
+    resolved = work_dir if work_dir is not None else name
 
     def decorator(cls):
-        _suite_registry[name] = cls
+        for registered_name, (_, existing_work_dir) in _suite_registry.items():
+            if existing_work_dir == resolved:
+                raise ValueError(
+                    f"Suite '{name}' and '{registered_name}' both use work_dir '{resolved}'"
+                )
+        _suite_registry[name] = (cls, resolved)
         return cls
 
     return decorator
@@ -297,9 +308,10 @@ class SailTest(ABC):
     def run(self):
         pass
 
-    def main(self, name, run_dir):
-        self.run_dir = run_dir
+    def main(self, name, work_dir, run_dir):
+        self.work_dir = os.path.join(run_dir, work_dir)
+        os.makedirs(self.work_dir)
         self.run()
         xml = "<testsuites>\n" + "".join(self._xml_parts) + "</testsuites>\n"
-        with open(os.path.join(self.run_dir, f"{name}.xml"), "w") as f:
+        with open(os.path.join(run_dir, f"{name}.xml"), "w") as f:
             f.write(xml)

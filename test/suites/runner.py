@@ -113,13 +113,13 @@ print(f"Run directory: {_run_dir}")
 
 for suite_name in sailtest.args.suite:
     matches = [
-        (name, cls)
-        for name, cls in sailtest._suite_registry.items()
+        (name, cls, work_dir)
+        for name, (cls, work_dir) in sailtest._suite_registry.items()
         if _matches_prefix(name, suite_name)
     ]
     if not matches:
         print(f"Unknown suite: {suite_name}")
         print(f"Available suites: {', '.join(sorted(sailtest._suite_registry))}")
         sys.exit(1)
-    for name, cls in matches:
-        cls().main(name=name, run_dir=_run_dir)
+    for name, cls, work_dir in matches:
+        cls().main(name=name, work_dir=work_dir, run_dir=_run_dir)
