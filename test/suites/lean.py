@@ -83,7 +83,9 @@ class LeanTests(SailTest):
 
     def _make_test(self, support_lib, runnable, skip_list=None):
         def fn(test):
-            is_skip = skip_list is not None and test.basename in skip_list and args.run_skips
+            is_skip = (
+                skip_list is not None and test.basename in skip_list and args.run_skips
+            )
             # The forked child's cwd is already set to testdir by run_tests().
             step(f"rm -rf {test.basename} || true")
             step(f"mkdir -p {test.basename}")
@@ -130,7 +132,8 @@ class LeanTests(SailTest):
                         sys.exit(1)
             else:
                 status = step_with_status(
-                    f"diff {test.basename}/out/expected {test.basename}.expect", name=test.filename
+                    f"diff {test.basename}/out/expected {test.basename}.expect",
+                    name=test.filename,
                 )
                 if status != 0:
                     sys.exit(1)

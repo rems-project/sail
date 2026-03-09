@@ -15,7 +15,9 @@ def signal_handler(sig, frame):
 
 signal.signal(signal.SIGINT, signal_handler)
 
-TEST_DIR = os.path.normpath(os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
+TEST_DIR = os.path.normpath(
+    os.path.join(os.path.dirname(os.path.abspath(__file__)), "..")
+)
 
 parser = argparse.ArgumentParser()
 # args and parallelism are set by runner.py after argument parsing.
@@ -88,6 +90,7 @@ class Test:
     def copy_directory(self):
         shutil.copytree(self.path, self.filename)
 
+
 class Batcher:
     """Encapsulates a directory and a predicate for batching its entries into parallel chunks."""
 
@@ -120,9 +123,13 @@ class Batcher:
         return batches
 
 
-def step_with_status(string, expected_status=0, cwd=None, name="", stderr_file="", env=None):
+def step_with_status(
+    string, expected_status=0, cwd=None, name="", stderr_file="", env=None
+):
     merged_env = {**os.environ, **env} if env else None
-    p = subprocess.run(string, shell=True, capture_output=True, text=True, cwd=cwd, env=merged_env)
+    p = subprocess.run(
+        string, shell=True, capture_output=True, text=True, cwd=cwd, env=merged_env
+    )
     if p.returncode != expected_status:
         if args.compact:
             compact_char(Color.FAIL, "X")

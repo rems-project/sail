@@ -74,10 +74,12 @@ class _SvTests(SailTest):
 
         return fn
 
+
 @suite("sv.default")
 class SvDefaultTests(_SvTests):
     def run(self):
         self.run_with_opts("SystemVerilog", "", False)
+
 
 @suite("sv.nostrings")
 class SvNoStringsTests(_SvTests):

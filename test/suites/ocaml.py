@@ -27,7 +27,8 @@ class _OcamlBase(SailTest):
             cwd=test.path,
         )
         step(
-            "dune exec --release out > ../result 2> /dev/null", cwd=f"{test.path}/_sbuild"
+            "dune exec --release out > ../result 2> /dev/null",
+            cwd=f"{test.path}/_sbuild",
         )
         step("diff expect result", cwd=test.path)
         step("rm result", cwd=test.path)

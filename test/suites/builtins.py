@@ -20,7 +20,9 @@ class BuiltinsCTests(SailTest):
 
     def _run_c_tests(self, name, sail_opts):
         def fn(test):
-            step(f"'{self.sail}' -no_warn -c {sail_opts} {test.filename} -o {test.basename}")
+            step(
+                f"'{self.sail}' -no_warn -c {sail_opts} {test.filename} -o {test.basename}"
+            )
             step(
                 f"gcc {test.basename}.c '{self.sail_dir}'/lib/*.c -lgmp -I '{self.sail_dir}'/lib -o {test.basename}"
             )
@@ -36,9 +38,7 @@ class BuiltinsCTests(SailTest):
 class BuiltinsOcamlTests(SailTest):
     def run(self):
         self.banner("Testing builtins: OCaml")
-        self.run_tests(
-            "OCaml", Batcher(_SUITE_DIR), self._test, testdir=_SUITE_DIR
-        )
+        self.run_tests("OCaml", Batcher(_SUITE_DIR), self._test, testdir=_SUITE_DIR)
 
     def _test(self, test):
         step(
@@ -75,9 +75,7 @@ class BuiltinsLemTests(SailTest):
 class BuiltinsCoqTests(SailTest):
     def run(self):
         self.banner("Testing builtins: Coq")
-        self.run_tests(
-            "Coq", Batcher(_SUITE_DIR), self._test, testdir=_SUITE_DIR
-        )
+        self.run_tests("Coq", Batcher(_SUITE_DIR), self._test, testdir=_SUITE_DIR)
 
     def _test(self, test):
         step(
@@ -103,9 +101,7 @@ class BuiltinsCoqTests(SailTest):
 class BuiltinsIslaTests(SailTest):
     def run(self):
         self.banner("Testing builtins: Isla")
-        self.run_tests(
-            "Isla", Batcher(_SUITE_DIR), self._test, testdir=_SUITE_DIR
-        )
+        self.run_tests("Isla", Batcher(_SUITE_DIR), self._test, testdir=_SUITE_DIR)
 
     def _test(self, test):
         isla_dir = os.environ["ISLA_DIR"]

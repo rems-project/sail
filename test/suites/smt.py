@@ -58,10 +58,12 @@ class _SmtTests(SailTest):
 
         return fn
 
+
 @suite("smt.z3")
 class Z3Tests(_SmtTests):
     def run(self):
         self.run_with_solver("z3", "z3")
+
 
 @suite("smt.cvc4")
 class Cvc4Tests(_SmtTests):

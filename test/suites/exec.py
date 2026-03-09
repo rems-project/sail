@@ -7,12 +7,14 @@ from sailtest import *
 
 _SUITE_DIR = os.path.join(TEST_DIR, "exec")
 
+
 def _no_valgrind():
     try:
         subprocess.call(["valgrind", "--version"])
         return False
     except FileNotFoundError:
         return True
+
 
 class _ExecBase(SailTest):
     """Shared helper for all exec sub-suites. Not registered."""
@@ -22,6 +24,7 @@ class _ExecBase(SailTest):
         work_includes = os.path.join(self.work_dir, "includes")
         if os.path.exists(includes) and not os.path.exists(work_includes):
             shutil.copytree(includes, work_includes)
+
 
 class _ExecCBase(_ExecBase):
     """Shared helper for the C and C++ exec sub-suites. Not registered."""
@@ -78,30 +81,36 @@ class _ExecCBase(_ExecBase):
             expected_failures=expected_failures,
         )
 
+
 @suite("exec.c.unopt.default")
 class ExecCUnoptTests(_ExecCBase):
     def run(self):
         self._run_c_tests("unoptimized C", "", "", False)
+
 
 @suite("exec.c.unopt.nomangle")
 class ExecCUnoptTests(_ExecCBase):
     def run(self):
         self._run_c_tests("unoptimized C", "", "--c-no-mangle", False)
 
+
 @suite("exec.c.constant_fold")
 class ExecCConstantFoldTests(_ExecCBase):
     def run(self):
         self._run_c_tests("constant folding", "", "-Oconstant_fold", False)
+
 
 @suite("exec.c.opt.default")
 class ExecCOptTests(_ExecCBase):
     def run(self):
         self._run_c_tests("optimized C", "-O2", "-O", False)
 
+
 @suite("exec.c.opt.valgrind")
 class ExecCOptValgrindTests(_ExecCBase):
     def run(self):
         self._run_c_tests("optimized C", "-O2", "-O", True)
+
 
 @suite("exec.c.opt.ubsan")
 class ExecCUBSanTests(_ExecCBase):
@@ -110,12 +119,12 @@ class ExecCUBSanTests(_ExecCBase):
             "undefined behavior sanitised", "-O2 -fsanitize=undefined", "-O", False
         )
 
+
 @suite("exec.c.opt.asan")
 class ExecCASanTests(_ExecCBase):
     def run(self):
-        self._run_c_tests(
-            "address sanitised", "-O2 -fsanitize=address -g", "-O", False
-        )
+        self._run_c_tests("address sanitised", "-O2 -fsanitize=address -g", "-O", False)
+
 
 _cpp_xfails = {
     "cabbrev.sail": "my_pair_in_c is declared in a namespace in C++",
@@ -127,12 +136,14 @@ _cpp_xfails = {
     "tl_let_flow_change.sail": "difficult to call model.sail_set_abstract_... in the right place",
 }
 
+
 @suite("exec.c.with_cpp.unopt")
 class ExecCCppUnoptTests(_ExecCBase):
     def run(self):
         self._run_c_tests(
             "unoptimized C with C++ compiler", "-xc++", "", False, compiler="c++"
         )
+
 
 @suite("exec.c.with_cpp.opt")
 class ExecCCppOptTests(_ExecCBase):
@@ -141,12 +152,14 @@ class ExecCCppOptTests(_ExecCBase):
             "optimized C with C++ compiler", "-xc++ -O2", "-O", False, compiler="c++"
         )
 
+
 @suite("exec.c.with_cpp.valgrind")
 class ExecCCppOptValgrindTests(_ExecCBase):
     def run(self):
         self._run_c_tests(
             "optimized C with C++ compiler", "-xc++ -O2", "-O", True, compiler="c++"
         )
+
 
 @suite("exec.cpp.unopt")
 class ExecCppUnoptTests(_ExecCBase):
@@ -160,6 +173,7 @@ class ExecCppUnoptTests(_ExecCBase):
             actually_cpp=True,
             expected_failures=_cpp_xfails,
         )
+
 
 @suite("exec.cpp.opt")
 class ExecCppOptTests(_ExecCBase):
@@ -209,9 +223,7 @@ class ExecInterpreterTests(_ExecBase):
 class ExecOcamlTests(_ExecBase):
     def run(self):
         self.banner("Testing OCaml")
-        self.run_tests(
-            "OCaml", Batcher(_SUITE_DIR), self._test
-        )
+        self.run_tests("OCaml", Batcher(_SUITE_DIR), self._test)
 
     def _test(self, test):
         test.copy_filename()
@@ -266,9 +278,13 @@ class ExecLemTests(_ExecBase):
 
     def _test(self, test):
         test.copy_filename()
-        step(f"'{self.sail}' -lem -lem_lib Undefined_override -o {test.basename} {test.filename}")
+        step(
+            f"'{self.sail}' -lem -lem_lib Undefined_override -o {test.basename} {test.filename}"
+        )
         step(f"mkdir -p _lbuild_{test.basename}")
-        step(f"mv {test.basename}.lem {test.basename}_types.lem _lbuild_{test.basename}")
+        step(
+            f"mv {test.basename}.lem {test.basename}_types.lem _lbuild_{test.basename}"
+        )
         step(f"rm {test.basename.capitalize()}_lemmas.thy")
         step(f"cp {test.directory}/lbuild/* _lbuild_{test.basename}")
         os.chdir(f"_lbuild_{test.basename}")

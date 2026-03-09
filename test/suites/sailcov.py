@@ -45,6 +45,8 @@ class SailcovTests(SailTest):
                 f" --taken {test.basename}.taken {test.filename}"
             )
             step(f"diff {test.basename}.html {test.basename}.expect")
-            step(f"rm {test.basename}.taken {test.basename}.bin {test.basename}.branches")
+            step(
+                f"rm {test.basename}.taken {test.basename}.bin {test.basename}.branches"
+            )
 
         return fn

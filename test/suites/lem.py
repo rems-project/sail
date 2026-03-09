@@ -95,12 +95,16 @@ class _LemTests(SailTest):
 
         return fn
 
+
 @suite("lem.bitlists")
 class LemBitlistsTests(_LemTests):
     def run(self):
         self._run_with_opts("bitlists", "", skip_tests)
 
+
 @suite("lem.mwords")
 class LemMachineWordsTests(_LemTests):
     def run(self):
-        self._run_with_opts("machine words", " --lem-mwords --auto-mono", skip_tests_mwords)
+        self._run_with_opts(
+            "machine words", " --lem-mwords --auto-mono", skip_tests_mwords
+        )

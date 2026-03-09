@@ -44,7 +44,9 @@ class TypecheckPassTests(SailTest):
         if os.path.isdir(variant_dir):
             os.makedirs(os.path.join(self.work_dir, test.basename), exist_ok=True)
             variant_work_dir = os.path.join(self.work_dir, test.basename)
-            for variant_name in os.listdir(variant_dir) if os.path.isdir(variant_dir) else []:
+            for variant_name in (
+                os.listdir(variant_dir) if os.path.isdir(variant_dir) else []
+            ):
                 if not variant_name.endswith(".sail"):
                     continue
                 variant_basename = os.path.splitext(os.path.basename(variant_name))[0]
@@ -89,7 +91,9 @@ class TypecheckProjectTests(SailTest):
                 f" --all-modules 2> {self.work_dir}/{test.error}",
                 expected_status=1,
             )
-            status = step_with_status(f"diff {self.work_dir}/{test.error} {test.expect}")
+            status = step_with_status(
+                f"diff {self.work_dir}/{test.error} {test.expect}"
+            )
             if status != 0:
                 if args.update_expected:
                     print(f"Overriding file {test.expect}")
@@ -122,7 +126,8 @@ class TypecheckFailTests(SailTest):
             if args.update_expected:
                 print(f"Overriding file {test.expect}")
                 step(
-                    f"'{self.sail}' --no-memo-z3 --strict-bitvector {test.filename} 2> {test.expect}", expected_status=1
+                    f"'{self.sail}' --no-memo-z3 --strict-bitvector {test.filename} 2> {test.expect}",
+                    expected_status=1,
                 )
             else:
                 sys.exit(1)
