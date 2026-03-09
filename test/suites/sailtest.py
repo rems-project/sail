@@ -297,8 +297,9 @@ class SailTest(ABC):
     def run(self):
         pass
 
-    def main(self, name):
+    def main(self, name, run_dir):
+        self.run_dir = run_dir
         self.run()
         xml = "<testsuites>\n" + "".join(self._xml_parts) + "</testsuites>\n"
-        with open(os.path.join(run_dir, f"{name}.xml"), "w") as f:
+        with open(os.path.join(self.run_dir, f"{name}.xml"), "w") as f:
             f.write(xml)

@@ -107,9 +107,9 @@ _ANIMALS = ["bear", "crane", "deer", "fox", "hawk", "lynx", "owl", "raven", "sea
 _timestamp = datetime.datetime.now().strftime("%Y-%m-%dT%H-%M-%S")
 _run_name = "-".join([_timestamp, random.choice(_ADJECTIVES), random.choice(_COLOURS), random.choice(_ANIMALS)])
 _runs_dir = os.path.join(sailtest.TEST_DIR, "_runs")
-sailtest.run_dir = os.path.join(_runs_dir, _run_name)
-os.makedirs(sailtest.run_dir)
-print(f"Run directory: {sailtest.run_dir}")
+_run_dir = os.path.join(_runs_dir, _run_name)
+os.makedirs(_run_dir)
+print(f"Run directory: {_run_dir}")
 
 for suite_name in sailtest.args.suite:
     matches = [
@@ -122,4 +122,4 @@ for suite_name in sailtest.args.suite:
         print(f"Available suites: {', '.join(sorted(sailtest._suite_registry))}")
         sys.exit(1)
     for name, cls in matches:
-        cls().main(name=name)
+        cls().main(name=name, run_dir=_run_dir)
