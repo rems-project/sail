@@ -9,17 +9,6 @@ _TEST_DIR = os.path.normpath(
 )
 _SUITE_DIR = os.path.join(_TEST_DIR, "exec")
 
-_cpp_xfails = {
-    "cabbrev.sail": "my_pair_in_c is declared in a namespace in C++",
-    "xlen_val.sail": "assumes variables are still global",
-    # TODO: These use `$c_in_main` to add a call to `sail_set_abstract_xlen(32)` to `main()`
-    # but for C++ it needs to go in `model_main()` and be `model.sail_set_abstract_xlen(32)`.
-    "abstract_sizeof_no_use.sail": "difficult to call model.sail_set_abstract_... in the right place",
-    "abstract_type.sail": "difficult to call model.sail_set_abstract_... in the right place",
-    "tl_let_flow_change.sail": "difficult to call model.sail_set_abstract_... in the right place",
-}
-
-
 def _no_valgrind():
     try:
         subprocess.call(["valgrind", "--version"])
@@ -28,128 +17,8 @@ def _no_valgrind():
         return True
 
 
-@suite("exec", _SUITE_DIR)
-class ExecTests(SailTest):
-    def run(self):
-        targets = self.get_targets(["c", "cpp", "interpreter", "ocaml"])
-        print(f"Targets: {targets}")
-
-        if "c" in targets:
-            self._run_c_tests("unoptimized C", "", "--c-no-mangle", False)
-            self._run_c_tests("unoptimized C", "", "", False)
-            self._run_c_tests("optimized C", "-O2", "-O", True)
-            self._run_c_tests("constant folding", "", "-Oconstant_fold", False)
-            self._run_c_tests(
-                "undefined behavior sanitised", "-O2 -fsanitize=undefined", "-O", False
-            )
-            self._run_c_tests(
-                "address sanitised", "-O2 -fsanitize=address -g", "-O", False
-            )
-
-        if "cpp" in targets:
-            # Compiling the C as if it was C++.
-            self._run_c_tests(
-                "unoptimized C with C++ compiler", "-xc++", "", False, compiler="c++"
-            )
-            self._run_c_tests(
-                "optimized C with C++ compiler", "-xc++ -O2", "-O", True, compiler="c++"
-            )
-
-            # Actual C++ output.
-            self._run_c_tests(
-                "unoptimized C++",
-                "",
-                "",
-                False,
-                compiler="c++",
-                actually_cpp=True,
-                expected_failures=_cpp_xfails,
-            )
-            self._run_c_tests(
-                "optimized C++",
-                "-O2",
-                "-O",
-                True,
-                compiler="c++",
-                actually_cpp=True,
-                expected_failures=_cpp_xfails,
-            )
-
-        if "interpreter" in targets:
-            if os.name == "posix":
-                self.banner("Testing interpreter")
-                self.run_tests(
-                    "interpreter",
-                    Batcher(_SUITE_DIR),
-                    self._test_interpreter,
-                    testdir=_SUITE_DIR,
-                )
-            else:
-                print(
-                    "Skipping interpreter tests because the interpreter is only supported on Unix-like platforms"
-                )
-
-        if "ocaml" in targets:
-            self.banner("Testing OCaml")
-            self.run_tests(
-                "OCaml", Batcher(_SUITE_DIR), self._test_ocaml, testdir=_SUITE_DIR
-            )
-
-        if "lem" in targets:
-            self.banner("Testing lem")
-            self.run_tests(
-                "lem",
-                Batcher(_SUITE_DIR),
-                self._test_lem,
-                testdir=_SUITE_DIR,
-                expected_failures={
-                    "inc_tests.sail": "missing built-in functions for increasing vectors in Lem library",
-                    "read_write_ram.sail": "uses memory primitives not provided by default in Lem",
-                    "fail_exception.sail": "try-blocks around pure expressions not supported in Lem (and a little silly)",
-                    "loop_exception.sail": "try-blocks around pure expressions not supported in Lem (and a little silly)",
-                    "real.sail": "print_real not available for Lem at present",
-                    "real_prop.sail": "print_real not available for Lem at present",
-                    "concurrency_interface.sail": "test doesn't meet Lem library's expectations for the concurrency interface",
-                    "concurrency_interface_v2.sail": "test doesn't meet Lem library's expectations for the concurrency interface",
-                    "concurrency_interface_write.sail": "test harness doesn't meet Lem library's expectations for the concurrency interface",
-                    "pc_no_wildcard.sail": "register type unsupported by Lem backend",
-                    "cheri_capreg.sail": "test has strange 'pure' reg_deref",
-                    "constructor247.sail": "don't attempt to support so many constructors in lem -> ocaml builds",
-                    "either.sail": "Lem breaks because it has the same name as a library module",
-                    "poly_outcome.sail": "test doesn't meet Lem library's expectations for the concurrency interface",
-                    "config_abstract_bool.sail": "type-level if not yet supported",
-                    "outcome_impl_int.sail": "unsupported outcome",
-                    "outcome_impl_bool.sail": "unsupported outcome",
-                },
-            )
-
-        if "coq" in targets:
-            self.banner("Testing coq")
-            self.run_tests(
-                "coq",
-                Batcher(_SUITE_DIR),
-                self._test_coq,
-                testdir=_SUITE_DIR,
-                expected_failures={
-                    "inc_tests.sail": "missing built-in functions for increasing vectors in Coq library",
-                    "read_write_ram.sail": "uses memory primitives not provided by default in Coq",
-                    "fail_exception.sail": "test harness can't produce expected output for uncaught exception",
-                    "loop_exception.sail": "Loop requiring termination measure with a register read",
-                    "outcome_impl.sail": "test doesn't meet Coq backend's expectations for the concurrency interface",
-                    "outcome_impl_int.sail": "test doesn't meet Coq backend's expectations for the concurrency interface",
-                    "outcome_impl_bool.sail": "test doesn't meet Coq backend's expectations for the concurrency interface",
-                    "pc_no_wildcard.sail": "register type unsupported by Coq backend",
-                    "poly_outcome.sail": "test doesn't meet Coq library's expectations for the concurrency interface",
-                    "poly_mapping.sail": "test requires non-standard hex built-ins",
-                    "real.sail": "print_real not available for Coq at present",
-                    "real_prop.sail": "random_real not available for Coq at present",
-                    "for_shadow.sail": "bug: remove_e_assign rewrite assumes <= available",
-                    "newtype.sail": "Type definition with a parameter that should be merged, inferred, or made explicit",
-                    "simple_while.sail": "Loop without termination measure",
-                    "simple_while2.sail": "Loop without termination measure",
-                    "simple_while3.sail": "Loop without termination measure",
-                },
-            )
+class _ExecCBase(SailTest):
+    """Shared helper for the C and C++ exec sub-suites. Not registered."""
 
     def _run_c_tests(
         self,
@@ -206,7 +75,78 @@ class ExecTests(SailTest):
             expected_failures=expected_failures,
         )
 
-    def _test_interpreter(self, filename, basename):
+
+@suite("exec.c", _SUITE_DIR)
+class ExecCTests(_ExecCBase):
+    def run(self):
+        self._run_c_tests("unoptimized C", "", "--c-no-mangle", False)
+        self._run_c_tests("unoptimized C", "", "", False)
+        self._run_c_tests("optimized C", "-O2", "-O", True)
+        self._run_c_tests("constant folding", "", "-Oconstant_fold", False)
+        self._run_c_tests(
+            "undefined behavior sanitised", "-O2 -fsanitize=undefined", "-O", False
+        )
+        self._run_c_tests(
+            "address sanitised", "-O2 -fsanitize=address -g", "-O", False
+        )
+
+
+@suite("exec.cpp", _SUITE_DIR)
+class ExecCppTests(_ExecCBase):
+    _xfails = {
+        "cabbrev.sail": "my_pair_in_c is declared in a namespace in C++",
+        "xlen_val.sail": "assumes variables are still global",
+        # TODO: These use `$c_in_main` to add a call to `sail_set_abstract_xlen(32)` to `main()`
+        # but for C++ it needs to go in `model_main()` and be `model.sail_set_abstract_xlen(32)`.
+        "abstract_sizeof_no_use.sail": "difficult to call model.sail_set_abstract_... in the right place",
+        "abstract_type.sail": "difficult to call model.sail_set_abstract_... in the right place",
+        "tl_let_flow_change.sail": "difficult to call model.sail_set_abstract_... in the right place",
+    }
+
+    def run(self):
+        self._run_c_tests(
+            "unoptimized C with C++ compiler", "-xc++", "", False, compiler="c++"
+        )
+        self._run_c_tests(
+            "optimized C with C++ compiler", "-xc++ -O2", "-O", True, compiler="c++"
+        )
+        self._run_c_tests(
+            "unoptimized C++",
+            "",
+            "",
+            False,
+            compiler="c++",
+            actually_cpp=True,
+            expected_failures=self._xfails,
+        )
+        self._run_c_tests(
+            "optimized C++",
+            "-O2",
+            "-O",
+            True,
+            compiler="c++",
+            actually_cpp=True,
+            expected_failures=self._xfails,
+        )
+
+
+@suite("exec.interpreter", _SUITE_DIR)
+class ExecInterpreterTests(SailTest):
+    def run(self):
+        if os.name == "posix":
+            self.banner("Testing interpreter")
+            self.run_tests(
+                "interpreter",
+                Batcher(_SUITE_DIR),
+                self._test,
+                testdir=_SUITE_DIR,
+            )
+        else:
+            print(
+                "Skipping interpreter tests because the interpreter is only supported on Unix-like platforms"
+            )
+
+    def _test(self, filename, basename):
         step(
             f"timeout 10s '{self.sail}' -undefined_gen -is execute.isail"
             f" -iout {basename}.iresult {filename}"
@@ -214,7 +154,16 @@ class ExecTests(SailTest):
         step(f"diff {basename}.iresult {basename}.expect")
         step(f"rm {basename}.iresult")
 
-    def _test_ocaml(self, filename, basename):
+
+@suite("exec.ocaml", _SUITE_DIR)
+class ExecOcamlTests(SailTest):
+    def run(self):
+        self.banner("Testing OCaml")
+        self.run_tests(
+            "OCaml", Batcher(_SUITE_DIR), self._test, testdir=_SUITE_DIR
+        )
+
+    def _test(self, filename, basename):
         step(
             f"'{self.sail}' --ocaml --ocaml-build-dir _sbuild_{basename} -o {basename}_ocaml {filename}"
         )
@@ -227,7 +176,38 @@ class ExecTests(SailTest):
         step(f"rm -rf _sbuild_{basename}")
         step(f"rm {basename}.oresult")
 
-    def _test_lem(self, filename, basename):
+
+@suite("exec.lem", _SUITE_DIR)
+class ExecLemTests(SailTest):
+    def run(self):
+        self.banner("Testing lem")
+        self.run_tests(
+            "lem",
+            Batcher(_SUITE_DIR),
+            self._test,
+            testdir=_SUITE_DIR,
+            expected_failures={
+                "inc_tests.sail": "missing built-in functions for increasing vectors in Lem library",
+                "read_write_ram.sail": "uses memory primitives not provided by default in Lem",
+                "fail_exception.sail": "try-blocks around pure expressions not supported in Lem (and a little silly)",
+                "loop_exception.sail": "try-blocks around pure expressions not supported in Lem (and a little silly)",
+                "real.sail": "print_real not available for Lem at present",
+                "real_prop.sail": "print_real not available for Lem at present",
+                "concurrency_interface.sail": "test doesn't meet Lem library's expectations for the concurrency interface",
+                "concurrency_interface_v2.sail": "test doesn't meet Lem library's expectations for the concurrency interface",
+                "concurrency_interface_write.sail": "test harness doesn't meet Lem library's expectations for the concurrency interface",
+                "pc_no_wildcard.sail": "register type unsupported by Lem backend",
+                "cheri_capreg.sail": "test has strange 'pure' reg_deref",
+                "constructor247.sail": "don't attempt to support so many constructors in lem -> ocaml builds",
+                "either.sail": "Lem breaks because it has the same name as a library module",
+                "poly_outcome.sail": "test doesn't meet Lem library's expectations for the concurrency interface",
+                "config_abstract_bool.sail": "type-level if not yet supported",
+                "outcome_impl_int.sail": "unsupported outcome",
+                "outcome_impl_bool.sail": "unsupported outcome",
+            },
+        )
+
+    def _test(self, filename, basename):
         step(f"'{self.sail}' -lem -lem_lib Undefined_override -o {basename} {filename}")
         step(f"mkdir -p _lbuild_{basename}")
         step(f"mv {basename}.lem {basename}_types.lem _lbuild_{basename}")
@@ -249,7 +229,38 @@ class ExecTests(SailTest):
         os.chdir("..")
         step(f"rm -r _lbuild_{basename}")
 
-    def _test_coq(self, filename, basename):
+
+@suite("exec.coq", _SUITE_DIR)
+class ExecCoqTests(SailTest):
+    def run(self):
+        self.banner("Testing coq")
+        self.run_tests(
+            "coq",
+            Batcher(_SUITE_DIR),
+            self._test,
+            testdir=_SUITE_DIR,
+            expected_failures={
+                "inc_tests.sail": "missing built-in functions for increasing vectors in Coq library",
+                "read_write_ram.sail": "uses memory primitives not provided by default in Coq",
+                "fail_exception.sail": "test harness can't produce expected output for uncaught exception",
+                "loop_exception.sail": "Loop requiring termination measure with a register read",
+                "outcome_impl.sail": "test doesn't meet Coq backend's expectations for the concurrency interface",
+                "outcome_impl_int.sail": "test doesn't meet Coq backend's expectations for the concurrency interface",
+                "outcome_impl_bool.sail": "test doesn't meet Coq backend's expectations for the concurrency interface",
+                "pc_no_wildcard.sail": "register type unsupported by Coq backend",
+                "poly_outcome.sail": "test doesn't meet Coq library's expectations for the concurrency interface",
+                "poly_mapping.sail": "test requires non-standard hex built-ins",
+                "real.sail": "print_real not available for Coq at present",
+                "real_prop.sail": "random_real not available for Coq at present",
+                "for_shadow.sail": "bug: remove_e_assign rewrite assumes <= available",
+                "newtype.sail": "Type definition with a parameter that should be merged, inferred, or made explicit",
+                "simple_while.sail": "Loop without termination measure",
+                "simple_while2.sail": "Loop without termination measure",
+                "simple_while3.sail": "Loop without termination measure",
+            },
+        )
+
+    def _test(self, filename, basename):
         step(
             f"'{self.sail}' -coq -coq-record-update -D PRINT_EFFECTS"
             f" -splice coq-print.splice -undefined_gen -o {basename} {filename}"
