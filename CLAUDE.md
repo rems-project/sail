@@ -119,4 +119,19 @@ The `opt_` prefix convention is used throughout for mutable global option variab
 
 ### Test Infrastructure
 
-Test suite scripts live in `test/suites/` (e.g. `typecheck.py`, `exec.py`, `lean.py`) and use the shared `test/suites/sailtest.py` helper. Test data remains in the per-backend directories (e.g. `test/typecheck/`, `test/exec/`). Tests fork processes and compare output against `.expect` files. The `--update-expected` flag regenerates expected output and `--test <name>` runs a single test.
+Test suite scripts live in `test/suites/` and use the shared `test/suites/sailtest.py` helper. Test data remains in the per-backend directories (e.g. `test/typecheck/`, `test/exec/`). Each run creates a timestamped directory (by default in the system temp dir, symlinked from `test/_runs/`; pass `--no-tmpdir` to create directly in `test/_runs/`). Each suite gets its own `work_dir` subdirectory inside the run directory where all build artifacts are written.
+
+**`Test` object** (passed to every `fn(test)`):
+- `test.path` — absolute path to the source file
+- `test.directory` — absolute path to the source directory
+- `test.filename`, `test.basename` — relative filename and name without extension
+- `test.expect`, `test.err_expect` — absolute paths to `.expect`/`.err_expect` files in the source tree
+- `test.error` — relative `{basename}.error` filename (written to `work_dir`)
+- `test.copy_filename()` — copies the source file (and optional `.json` config) into `work_dir` so commands can reference `test.filename` as a relative path
+- `test.copy_directory()` — copies the source directory tree into `work_dir`
+
+**`SailTest.prepare()`** — overridable hook called once before forking; used to copy shared resources (scripts, include dirs) into `work_dir`.
+
+Suites are registered with `@suite(name, work_dir=None)` and selected hierarchically: `-s typecheck` runs all `typecheck.*` sub-suites. Available suites include `typecheck.pass`, `typecheck.fail`, `typecheck.project`, `exec.c`, `exec.cpp`, `exec.interpreter`, `exec.ocaml`, `exec.lem`, `exec.coq`, `ocaml.default`, `ocaml.trace`, `builtins.c`, `builtins.ocaml`, `builtins.lem`, `builtins.coq`, `builtins.isla`, `smt.z3`, `smt.cvc4`, `lem.bitlists`, `lem.mwords`, `format.default`, `format.lw80_preserve`, `coq`, `lean`, `sv`, `float`, `lexing`, `pattern_completeness`, `project`, `mono`, `oneoff`, `sailcov`. Run `runner.py --list-suites` to see the full tree.
+
+The `--update-expected` flag regenerates expected output and `--test <name>` runs a single test.
