@@ -15,27 +15,7 @@ def signal_handler(sig, frame):
 signal.signal(signal.SIGINT, signal_handler)
 
 parser = argparse.ArgumentParser()
-parser.add_argument(
-    "--hide-error-output", help="Hide error information.", action="store_true"
-)
-parser.add_argument("--compact", help="Compact output.", action="store_true")
-parser.add_argument(
-    "--update-expected",
-    help="Update the expected file (where supported)",
-    action="store_true",
-)
-parser.add_argument(
-    "--run-skips", help="Run tests that would otherwise be skipped", action="store_true"
-)
-parser.add_argument("--test", help="Run only specified test.", action="append")
-parser.add_argument(
-    "--lean-local-support-library",
-    help="Use a local Lean support library",
-    action="store",
-)
-parser.add_argument(
-    "-j", "--parallelism", help="Number of tests to run in parallel", type=int
-)
+# args and parallelism are set by runner.py after argument parsing.
 args = None
 parallelism = None
 

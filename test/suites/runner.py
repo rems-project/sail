@@ -9,6 +9,27 @@ import sys
 import sailtest
 
 sailtest.parser.add_argument(
+    "--hide-error-output", help="Hide error information.", action="store_true"
+)
+sailtest.parser.add_argument("--compact", help="Compact output.", action="store_true")
+sailtest.parser.add_argument(
+    "--update-expected",
+    help="Update the expected file (where supported)",
+    action="store_true",
+)
+sailtest.parser.add_argument(
+    "--run-skips", help="Run tests that would otherwise be skipped", action="store_true"
+)
+sailtest.parser.add_argument("--test", help="Run only specified test.", action="append")
+sailtest.parser.add_argument(
+    "--lean-local-support-library",
+    help="Use a local Lean support library",
+    action="store",
+)
+sailtest.parser.add_argument(
+    "-j", "--parallelism", help="Number of tests to run in parallel", type=int
+)
+sailtest.parser.add_argument(
     "-s",
     "--suite",
     help="Test suite to run (may be passed multiple times)",
