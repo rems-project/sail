@@ -57,69 +57,75 @@ let opt_coq_isla : string option ref = ref None
 let opt_coq_lib_style : Pretty_print_coq.library_style option ref = ref None
 let opt_separate_interface_file = ref false
 
-let coq_options =
+let make_options prefix hide =
   [
-    ( Flag.create ~prefix:["coq"] ~arg:"directory" "output_dir",
+    ( Flag.create ~prefix ~hide ~arg:"directory" "output_dir",
       Arg.String (fun dir -> opt_coq_output_dir := Some dir),
-      "set a custom directory to output generated Coq"
+      "set a custom directory to output generated Rocq"
     );
-    ( Flag.create ~prefix:["coq"] ~arg:"filename" "lib",
+    ( Flag.create ~prefix ~hide ~arg:"filename" "lib",
       Arg.String (fun l -> opt_libs_coq := l :: !opt_libs_coq),
-      "provide additional library to open in Coq output"
+      "provide additional library to open in Rocq output"
     );
-    ( Flag.create ~prefix:["coq"] ~arg:"filename" "alt_modules",
+    ( Flag.create ~prefix ~hide ~arg:"filename" "alt_modules",
       Arg.String (fun l -> opt_alt_modules_coq := l :: !opt_alt_modules_coq),
-      "provide alternative modules to open in Coq output"
+      "provide alternative modules to open in Rocq output"
     );
-    ( Flag.create ~prefix:["coq"] ~arg:"filename" "alt_modules2",
+    ( Flag.create ~prefix ~hide ~arg:"filename" "alt_modules2",
       Arg.String (fun l -> opt_alt_modules2_coq := l :: !opt_alt_modules2_coq),
-      "provide additional alternative modules to open only in main (non-_types) Coq output, and suppress default \
+      "provide additional alternative modules to open only in main (non-_types) Rocq output, and suppress default \
        definitions of MR and M monads"
     );
-    ( Flag.create ~prefix:["coq"] ~arg:"typename" "extern_type",
+    ( Flag.create ~prefix ~hide ~arg:"typename" "extern_type",
       Arg.String Pretty_print_coq.(fun ty -> opt_extern_types := ty :: !opt_extern_types),
       "do not generate a definition for the type"
     );
-    ( Flag.create ~prefix:["coq"] "generate_extern_types",
+    ( Flag.create ~prefix ~hide "generate_extern_types",
       Arg.Set Pretty_print_coq.opt_generate_extern_types,
       "generate only extern types rather than suppressing them"
     );
-    ( Flag.create ~prefix:["coq"] ~arg:"filename" "isla",
+    ( Flag.create ~prefix ~hide ~arg:"filename" "isla",
       Arg.String (fun fname -> opt_coq_isla := Some fname),
-      "generate Coq code for decoding Isla trace values"
+      "generate Rocq code for decoding Isla trace values"
     );
-    ( Flag.create ~prefix:["coq"] "record_update",
+    ( Flag.create ~prefix ~hide "record_update",
       Arg.Set Pretty_print_coq.opt_coq_record_update,
       "use coq-record-update package's syntax for record updates"
     );
-    ( Flag.create ~prefix:["coq"] "lib_style",
+    ( Flag.create ~prefix ~hide "lib_style",
       Arg.Symbol
         ( ["bbv"; "stdpp"],
           fun s -> opt_coq_lib_style := match s with "bbv" -> Some BBV | "stdpp" -> Some Stdpp | _ -> assert false
         ),
-      "select which style of Coq library to use (default: stdpp when the concurrency interfaces is used, bbv otherwise)"
+      "select which style of Rocq library to use (default: stdpp when the concurrency interfaces is used, bbv \
+       otherwise)"
     );
-    ( Flag.create ~prefix:["coq"] ~debug:true "undef_axioms",
+    ( Flag.create ~prefix ~hide "undef_axioms",
       Arg.Set Pretty_print_coq.opt_undef_axioms,
       "generate axioms for functions that are declared but not defined"
     );
-    ( Flag.create ~prefix:["coq"] "minimal_eq_dec",
+    (* Old debug form of option *)
+    (Flag.create ~prefix ~hide:true ~debug:true "undef_axioms", Arg.Set Pretty_print_coq.opt_undef_axioms, "");
+    ( Flag.create ~prefix ~hide "minimal_eq_dec",
       Arg.Clear Pretty_print_coq.opt_coq_all_eq_dec,
       " generate decidable equality instances only when necessary"
     );
-    ( Flag.create ~prefix:["coq"] ~debug:true "warn_nonex",
+    ( Flag.create ~prefix ~hide ~debug:true "warn_nonex",
       Arg.Set Rewrites.opt_coq_warn_nonexhaustive,
-      "generate warnings for non-exhaustive pattern matches in the Coq backend"
+      "generate warnings for non-exhaustive pattern matches in the Rocq backend"
     );
-    ( Flag.create ~prefix:["coq"] ~arg:"function" ~debug:true "debug_on",
+    ( Flag.create ~prefix ~hide ~arg:"function" ~debug:true "debug_on",
       Arg.String (fun f -> Pretty_print_coq.opt_debug_on := f :: !Pretty_print_coq.opt_debug_on),
-      "produce debug messages for Coq output on given function"
+      "produce debug messages for Rocq output on given function"
     );
-    ( Flag.create ~prefix:["coq"] "separate_interface_file",
+    ( Flag.create ~prefix ~hide "separate_interface_file",
       Arg.Set opt_separate_interface_file,
       "create separate file for concurrency interface definitions"
     );
   ]
+
+let rocq_options = make_options ["rocq"] false
+let coq_options = make_options ["coq"] true |> List.map (fun (fl, arg, _desc) -> (fl, arg, ""))
 
 let coq_rewrites =
   let open Rewrites in
@@ -251,7 +257,7 @@ let output libs files =
 
 let ignore_grouped_regstate () =
   if !State.opt_type_grouped_regstate then begin
-    Reporting.simple_warn "-grouped-regstate option not supported in the Coq back-end, ignoring";
+    Reporting.simple_warn "-grouped-regstate option not supported in the Rocq back-end, ignoring";
     State.opt_type_grouped_regstate := false
   end
 
@@ -260,5 +266,11 @@ let coq_target out_file { ctx; ast; effect_info; env; _ } =
   output !opt_libs_coq [(out_file, ctx, effect_info, env, ast)]
 
 let _ =
-  Target.register ~name:"coq" ~options:coq_options ~pre_parse_hook:ignore_grouped_regstate ~rewrites:coq_rewrites
-    ~asserts_termination:true coq_target
+  ignore
+    (Target.register ~name:"rocq" ~options:rocq_options ~pre_parse_hook:ignore_grouped_regstate ~rewrites:coq_rewrites
+       ~asserts_termination:true coq_target
+    );
+  ignore
+    (Target.register ~name:"coq" ~options:coq_options ~pre_parse_hook:ignore_grouped_regstate ~rewrites:coq_rewrites
+       ~asserts_termination:true coq_target
+    )
