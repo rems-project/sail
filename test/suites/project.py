@@ -14,11 +14,11 @@ class ProjectTests(SailTest):
         self.banner("Testing project")
         self.run_tests("project", Batcher(_FAILURE_DIR), self._test, testdir=_SUITE_DIR)
 
-    def _test(self, filename, basename):
+    def _test(self, test):
         step(
-            f"'{self.sail}' failure/{filename} 2> failure/{basename}.error",
+            f"'{self.sail}' failure/{test.filename} 2> failure/{test.basename}.error",
             expected_status=1,
             env={"SAIL_NEW_CLI": "true"},
         )
-        step(f"diff failure/{basename}.expect failure/{basename}.error")
-        step(f"rm failure/{basename}.error")
+        step(f"diff failure/{test.basename}.expect failure/{test.basename}.error")
+        step(f"rm failure/{test.basename}.error")

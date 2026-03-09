@@ -21,17 +21,17 @@ class _OcamlBase(SailTest):
             testdir=_SUITE_DIR,
         )
 
-    def _test(self, dir, basename):
+    def _test(self, test):
         step(
             f"{self.sail} --strict-bitvector --no-warn -o out --ocaml {self._opts} ../prelude.sail *.sail",
-            cwd=dir,
+            cwd=test.path,
         )
         step(
-            "dune exec --release out > ../result 2> /dev/null", cwd=f"{dir}/_sbuild"
+            "dune exec --release out > ../result 2> /dev/null", cwd=f"{test.path}/_sbuild"
         )
-        step("diff expect result", cwd=dir)
-        step("rm result", cwd=dir)
-        step("rm -rf _sbuild", cwd=dir)
+        step("diff expect result", cwd=test.path)
+        step("rm result", cwd=test.path)
+        step("rm -rf _sbuild", cwd=test.path)
 
 
 @suite("ocaml.default", _SUITE_DIR)

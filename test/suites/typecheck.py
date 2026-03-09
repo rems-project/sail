@@ -30,30 +30,30 @@ class TypecheckPassTests(SailTest):
             skip_set=skip_pass,
         )
 
-    def _test(self, filename, basename):
+    def _test(self, test):
         step(
             f"'{self.sail}' --no-memo-z3 --just-check --strict-bitvector"
-            f" --ddump-tc-ast pass/{filename} 1> rtpass/{filename}"
+            f" --ddump-tc-ast pass/{test.filename} 1> rtpass/{test.filename}"
         )
         step(
             f"'{self.sail}' --no-memo-z3 --just-check --strict-bitvector"
-            f" --ddump-tc-ast --dallow-internal rtpass/{filename} 1> rtpass2/{filename}"
+            f" --ddump-tc-ast --dallow-internal rtpass/{test.filename} 1> rtpass2/{test.filename}"
         )
-        step(f"diff rtpass/{filename} rtpass2/{filename}")
-        variantdir = os.path.join("pass", basename)
+        step(f"diff rtpass/{test.filename} rtpass2/{test.filename}")
+        variantdir = os.path.join("pass", test.basename)
         for variantname in os.listdir(variantdir) if os.path.isdir(variantdir) else []:
             if variantname.endswith(".sail"):
                 variantbasename = os.path.splitext(os.path.basename(variantname))[0]
                 step(
                     f"'{self.sail}' --no-memo-z3 --strict-bitvector"
-                    f" pass/{basename}/{variantname} 2> pass/{basename}/{variantbasename}.error",
+                    f" pass/{test.basename}/{variantname} 2> pass/{test.basename}/{variantbasename}.error",
                     expected_status=1,
                 )
                 step(
-                    f"diff pass/{basename}/{variantbasename}.error"
-                    f" pass/{basename}/{variantbasename}.expect"
+                    f"diff pass/{test.basename}/{variantbasename}.error"
+                    f" pass/{test.basename}/{variantbasename}.expect"
                 )
-                step(f"rm pass/{basename}/{variantbasename}.error")
+                step(f"rm pass/{test.basename}/{variantbasename}.error")
 
 
 @suite("typecheck.project", _SUITE_DIR)
@@ -67,17 +67,17 @@ class TypecheckProjectTests(SailTest):
             testdir=_SUITE_DIR,
         )
 
-    def _test(self, filename, basename):
-        if filename.startswith("fail"):
+    def _test(self, test):
+        if test.filename.startswith("fail"):
             step(
-                f"'{self.sail}' --no-memo-z3 --strict-bitvector project/{filename}"
-                f" --all-modules 2> project/{basename}.error",
+                f"'{self.sail}' --no-memo-z3 --strict-bitvector project/{test.filename}"
+                f" --all-modules 2> project/{test.basename}.error",
                 expected_status=1,
             )
-            step(f"diff project/{basename}.error project/{basename}.expect")
-            step(f"rm project/{basename}.error")
+            step(f"diff project/{test.basename}.error project/{test.basename}.expect")
+            step(f"rm project/{test.basename}.error")
         else:
-            step(f"'{self.sail}' --no-memo-z3 project/{filename} --all-modules")
+            step(f"'{self.sail}' --no-memo-z3 project/{test.filename} --all-modules")
 
 
 @suite("typecheck.fail", _SUITE_DIR)
@@ -86,11 +86,11 @@ class TypecheckFailTests(SailTest):
         self.banner("Testing failing programs")
         self.run_tests("fail", Batcher(_FAIL_DIR), self._test, testdir=_SUITE_DIR)
 
-    def _test(self, filename, basename):
+    def _test(self, test):
         step(
-            f"'{self.sail}' --no-memo-z3 --strict-bitvector fail/{filename}"
-            f" 2> fail/{basename}.error",
+            f"'{self.sail}' --no-memo-z3 --strict-bitvector fail/{test.filename}"
+            f" 2> fail/{test.basename}.error",
             expected_status=1,
         )
-        step(f"diff fail/{basename}.error fail/{basename}.expect")
-        step(f"rm fail/{basename}.error")
+        step(f"diff fail/{test.basename}.error fail/{test.basename}.expect")
+        step(f"rm fail/{test.basename}.error")

@@ -15,16 +15,16 @@ class PatternCompletenessTests(SailTest):
             "completeness", Batcher(_SUITE_DIR), self._test, testdir=_SUITE_DIR
         )
 
-    def _test(self, filename, basename):
-        step(f"'{self.sail}' --just-check {filename} 2> {basename}.error")
-        if filename.startswith("warn"):
-            status = step_with_status(f"diff {basename}.error {basename}.expect")
+    def _test(self, test):
+        step(f"'{self.sail}' --just-check {test.filename} 2> {test.basename}.error")
+        if test.filename.startswith("warn"):
+            status = step_with_status(f"diff {test.basename}.error {test.basename}.expect")
         else:
-            status = step_with_status(f"diff {basename}.error no_error")
+            status = step_with_status(f"diff {test.basename}.error no_error")
         if status != 0:
-            if args.update_expected and filename.startswith("warn"):
-                print(f"Overriding file {basename}.expected")
-                step(f"'{self.sail}' --just-check {filename} 2> {basename}.expect")
+            if args.update_expected and test.filename.startswith("warn"):
+                print(f"Overriding file {test.basename}.expected")
+                step(f"'{self.sail}' --just-check {test.filename} 2> {test.basename}.expect")
             else:
                 sys.exit(1)
-        step(f"rm {basename}.error")
+        step(f"rm {test.basename}.error")

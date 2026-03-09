@@ -24,14 +24,14 @@ class FloatTests(SailTest):
             testdir=_SUITE_DIR,
         )
 
-    def _test(self, filename, basename):
-        step(f"'{self.sail}' -no_warn -c {filename} -o {basename}")
+    def _test(self, test):
+        step(f"'{self.sail}' -no_warn -c {test.filename} -o {test.basename}")
         step(
-            f"cc -O2 {basename}.c '{self.sail_dir}'/lib/*.c -lgmp -I '{self.sail_dir}'/lib -o {basename}.bin"
+            f"cc -O2 {test.basename}.c '{self.sail_dir}'/lib/*.c -lgmp -I '{self.sail_dir}'/lib -o {test.basename}.bin"
         )
         step(
-            f"./{basename}.bin > {basename}.result 2> {basename}.err_result",
-            expected_status=1 if basename.startswith("fail") else 0,
+            f"./{test.basename}.bin > {test.basename}.result 2> {test.basename}.err_result",
+            expected_status=1 if test.basename.startswith("fail") else 0,
         )
-        step(f"diff {basename}.err_result no_error && rm {basename}.err_result")
-        step(f"rm {basename}.c {basename}.h {basename}.bin {basename}.result")
+        step(f"diff {test.basename}.err_result no_error && rm {test.basename}.err_result")
+        step(f"rm {test.basename}.c {test.basename}.h {test.basename}.bin {test.basename}.result")

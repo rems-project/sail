@@ -19,15 +19,15 @@ class BuiltinsCTests(SailTest):
             self._run_c_tests(f"C, {name}", sail_opts)
 
     def _run_c_tests(self, name, sail_opts):
-        def fn(filename, basename):
-            step(f"'{self.sail}' -no_warn -c {sail_opts} {filename} -o {basename}")
+        def fn(test):
+            step(f"'{self.sail}' -no_warn -c {sail_opts} {test.filename} -o {test.basename}")
             step(
-                f"gcc {basename}.c '{self.sail_dir}'/lib/*.c -lgmp -I '{self.sail_dir}'/lib -o {basename}"
+                f"gcc {test.basename}.c '{self.sail_dir}'/lib/*.c -lgmp -I '{self.sail_dir}'/lib -o {test.basename}"
             )
-            step(f"./{basename}")
-            step(f"rm {basename}.c")
-            step(f"rm {basename}.h")
-            step(f"rm {basename}")
+            step(f"./{test.basename}")
+            step(f"rm {test.basename}.c")
+            step(f"rm {test.basename}.h")
+            step(f"rm {test.basename}")
 
         self.run_tests(name, Batcher(_SUITE_DIR), fn, testdir=_SUITE_DIR)
 
@@ -40,13 +40,13 @@ class BuiltinsOcamlTests(SailTest):
             "OCaml", Batcher(_SUITE_DIR), self._test, testdir=_SUITE_DIR
         )
 
-    def _test(self, filename, basename):
+    def _test(self, test):
         step(
-            f"'{self.sail}' -no_warn -ocaml -ocaml_build_dir _sbuild_{basename} -o {basename} {filename}"
+            f"'{self.sail}' -no_warn -ocaml -ocaml_build_dir _sbuild_{test.basename} -o {test.basename} {test.filename}"
         )
-        step(f"./{basename}")
-        step(f"rm -r _sbuild_{basename}")
-        step(f"rm {basename}")
+        step(f"./{test.basename}")
+        step(f"rm -r _sbuild_{test.basename}")
+        step(f"rm {test.basename}")
 
 
 @suite("builtins.lem", _SUITE_DIR)
@@ -57,18 +57,18 @@ class BuiltinsLemTests(SailTest):
             "Lem to OCaml", Batcher(_SUITE_DIR), self._test, testdir=_SUITE_DIR
         )
 
-    def _test(self, filename, basename):
-        step(f"'{self.sail}' -no_warn -lem -o {basename} {filename}")
-        step(f"mkdir -p _lbuild_{basename}")
-        step(f"mv {basename}.lem _lbuild_{basename}")
-        step(f"mv {basename}_types.lem _lbuild_{basename}")
-        step(f"cp myocamlbuild.ml _lbuild_{basename}")
-        step(f"cp '{self.sail_dir}'/src/gen_lib/*.lem _lbuild_{basename}")
-        os.chdir(f"_lbuild_{basename}")
-        step(f"ocamlbuild -package lem {basename}.native")
-        step(f"./{basename}.native")
+    def _test(self, test):
+        step(f"'{self.sail}' -no_warn -lem -o {test.basename} {test.filename}")
+        step(f"mkdir -p _lbuild_{test.basename}")
+        step(f"mv {test.basename}.lem _lbuild_{test.basename}")
+        step(f"mv {test.basename}_types.lem _lbuild_{test.basename}")
+        step(f"cp myocamlbuild.ml _lbuild_{test.basename}")
+        step(f"cp '{self.sail_dir}'/src/gen_lib/*.lem _lbuild_{test.basename}")
+        os.chdir(f"_lbuild_{test.basename}")
+        step(f"ocamlbuild -package lem {test.basename}.native")
+        step(f"./{test.basename}.native")
         os.chdir("..")
-        step(f"rm -r _lbuild_{basename}")
+        step(f"rm -r _lbuild_{test.basename}")
 
 
 @suite("builtins.coq", _SUITE_DIR)
@@ -79,24 +79,24 @@ class BuiltinsCoqTests(SailTest):
             "Coq", Batcher(_SUITE_DIR), self._test, testdir=_SUITE_DIR
         )
 
-    def _test(self, filename, basename):
+    def _test(self, test):
         step(
             f"'{self.sail}' --no-warn --coq --coq-lib-style stdpp --coq-record-update"
-            f" --undefined-gen -o {basename} {filename}"
+            f" --undefined-gen -o {test.basename} {test.filename}"
         )
-        step(f"mkdir -p _coqbuild_{basename}")
-        step(f"mv {basename}.v _coqbuild_{basename}")
-        step(f"mv {basename}_types.v _coqbuild_{basename}")
-        step(f"cp test.v _coqbuild_{basename}")
-        os.chdir(f"_coqbuild_{basename}")
-        step(f"coqc {basename}_types.v")
-        step(f"coqc {basename}.v")
+        step(f"mkdir -p _coqbuild_{test.basename}")
+        step(f"mv {test.basename}.v _coqbuild_{test.basename}")
+        step(f"mv {test.basename}_types.v _coqbuild_{test.basename}")
+        step(f"cp test.v _coqbuild_{test.basename}")
+        os.chdir(f"_coqbuild_{test.basename}")
+        step(f"coqc {test.basename}_types.v")
+        step(f"coqc {test.basename}.v")
         step(
-            f"coqtop -require-import {basename}_types -require-import {basename}"
+            f"coqtop -require-import {test.basename}_types -require-import {test.basename}"
             f" -l test.v -batch | tee /dev/stderr | grep -q OK"
         )
         os.chdir("..")
-        step(f"rm -r _coqbuild_{basename}")
+        step(f"rm -r _coqbuild_{test.basename}")
 
 
 @suite("builtins.isla", _SUITE_DIR)
@@ -107,15 +107,15 @@ class BuiltinsIslaTests(SailTest):
             "Isla", Batcher(_SUITE_DIR), self._test, testdir=_SUITE_DIR
         )
 
-    def _test(self, filename, basename):
+    def _test(self, test):
         isla_dir = os.environ["ISLA_DIR"]
         step(
-            f"'{isla_dir}'/isla-sail/isla-sail {filename}"
+            f"'{isla_dir}'/isla-sail/isla-sail {test.filename}"
             f" '{self.sail_dir}'/lib/vector_dec.sail"
-            f" '{isla_dir}'/test/property/include/config.sail -o {basename}"
+            f" '{isla_dir}'/test/property/include/config.sail -o {test.basename}"
         )
         step(
             f"'{isla_dir}'/target/release/isla-execute-function"
-            f" -A {basename}.ir -C '{isla_dir}'/configs/plain.toml main"
+            f" -A {test.basename}.ir -C '{isla_dir}'/configs/plain.toml main"
         )
-        step(f"rm {basename}.ir")
+        step(f"rm {test.basename}.ir")

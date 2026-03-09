@@ -76,17 +76,17 @@ class LeanTests(SailTest):
         return "../../support-lib"
 
     def _make_skip_fn(self, skip_list):
-        def skip_fn(filename, basename):
-            return not args.run_skips and basename in skip_list
+        def skip_fn(test):
+            return not args.run_skips and test.basename in skip_list
 
         return skip_fn
 
     def _make_test(self, support_lib, runnable, skip_list=None):
-        def fn(filename, basename):
-            is_skip = skip_list is not None and basename in skip_list and args.run_skips
+        def fn(test):
+            is_skip = skip_list is not None and test.basename in skip_list and args.run_skips
             # The forked child's cwd is already set to testdir by run_tests().
-            step(f"rm -rf {basename} || true")
-            step(f"mkdir -p {basename}")
+            step(f"rm -rf {test.basename} || true")
+            step(f"mkdir -p {test.basename}")
             extra_flags = (
                 ["--splice", "coq-print.splice", "--strict-bitvector"]
                 if runnable
@@ -94,49 +94,49 @@ class LeanTests(SailTest):
             )
             extra_flags_str = " ".join(extra_flags)
             step(
-                f"'{self.sail}' {extra_flags_str} {filename} --lean --lean-single-file"
-                f" --lean-executable --lean-output-dir {basename} --lean-lib-path {support_lib}",
-                name=filename,
+                f"'{self.sail}' {extra_flags_str} {test.filename} --lean --lean-single-file"
+                f" --lean-executable --lean-output-dir {test.basename} --lean-lib-path {support_lib}",
+                name=test.filename,
             )
-            step(f"lake update", cwd=f"{basename}/out", name=filename)
+            step(f"lake update", cwd=f"{test.basename}/out", name=test.filename)
             if runnable:
-                expected_status = 1 if basename.startswith("fail") else 0
+                expected_status = 1 if test.basename.startswith("fail") else 0
                 step(
                     "lake exe run > expected 2> err_status",
-                    cwd=f"{basename}/out",
-                    name=filename,
+                    cwd=f"{test.basename}/out",
+                    name=test.filename,
                     expected_status=expected_status,
-                    stderr_file=f"{basename}/out/err_status",
+                    stderr_file=f"{test.basename}/out/err_status",
                 )
             else:
-                step(f"lake update", cwd=f"{basename}/out", name=filename)
-                step(f"lake build", cwd=f"{basename}/out", name=filename)
+                step(f"lake update", cwd=f"{test.basename}/out", name=test.filename)
+                step(f"lake build", cwd=f"{test.basename}/out", name=test.filename)
 
             if not runnable:
-                output = f"{basename}/output"
-                step(f"cat {basename}/out/Out/Defs.lean > {output}")
+                output = f"{test.basename}/output"
+                step(f"cat {test.basename}/out/Out/Defs.lean > {output}")
                 step(
                     f'echo >> {output}; echo "XXXXXXXXX" >> {output}; echo >> {output}'
                 )
-                step(f"cat {basename}/out/Out.lean >> {output}")
+                step(f"cat {test.basename}/out/Out.lean >> {output}")
                 status = step_with_status(
-                    f"diff {output} {basename}.expected.lean", name=filename
+                    f"diff {output} {test.basename}.expected.lean", name=test.filename
                 )
                 if status != 0:
                     if args.update_expected:
-                        print(f"Overriding file {basename}.expected.lean")
-                        step(f"cp {output} {basename}.expected.lean")
+                        print(f"Overriding file {test.basename}.expected.lean")
+                        step(f"cp {output} {test.basename}.expected.lean")
                     else:
                         sys.exit(1)
             else:
                 status = step_with_status(
-                    f"diff {basename}/out/expected {basename}.expect", name=filename
+                    f"diff {test.basename}/out/expected {test.basename}.expect", name=test.filename
                 )
                 if status != 0:
                     sys.exit(1)
 
-            step(f"rm -rf {basename}")
+            step(f"rm -rf {test.basename}")
             if is_skip:
-                print(f"{basename} now passes!")
+                print(f"{test.basename} now passes!")
 
         return fn

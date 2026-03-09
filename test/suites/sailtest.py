@@ -54,6 +54,15 @@ def sail_file(filename):
     )
 
 
+class Test:
+    """Represents a single test file."""
+
+    def __init__(self, directory, filename):
+        self.path = os.path.join(directory, filename)
+        self.filename = filename
+        self.basename = os.path.splitext(os.path.basename(filename))[0]
+
+
 class Batcher:
     """Encapsulates a directory and a predicate for batching its entries into parallel chunks."""
 
@@ -77,7 +86,7 @@ class Batcher:
         batch = []
         for filename in os.listdir(self.directory):
             if self._predicate(os.path.join(self.directory, filename)):
-                batch.append(filename)
+                batch.append(Test(self.directory, filename))
             if len(batch) >= parallelism:
                 batches.append(list(batch))
                 batch = []
@@ -251,17 +260,16 @@ class SailTest(ABC):
     ):
         """Run a set of tests in parallel using fork/collect.
 
-        fn(filename, basename) is called in each child process and should use
-        step() for each command. The child's working directory is set to testdir
-        before fn is called. The base class calls _print_ok() and sys.exit(0)
-        after fn returns.
+        fn(test) is called in each child process and should use step() for each
+        command. The child's working directory is set to testdir before fn is
+        called. The base class calls _print_ok() and sys.exit(0) after fn returns.
 
         batcher: a Batcher instance that provides the files to test and how to
                  batch them. Its directory is listed and filtered by its predicate.
         testdir: absolute path; the working directory for each test child process.
         expected_failures: dict of {filename: reason} for known xfails
         skip_set: set of basenames to skip before forking
-        skip_fn: callable(filename, basename) -> bool for complex skip logic
+        skip_fn: callable(test) -> bool for complex skip logic
         """
         results = Results(name)
         if expected_failures:
@@ -270,18 +278,17 @@ class SailTest(ABC):
         batches = batcher.batch(parallelism)
         for batch in batches:
             tests = {}
-            for filename in batch:
-                basename = os.path.splitext(os.path.basename(filename))[0]
-                if (skip_set and basename in skip_set) or (
-                    skip_fn and skip_fn(filename, basename)
+            for test in batch:
+                if (skip_set and test.basename in skip_set) or (
+                    skip_fn and skip_fn(test)
                 ):
-                    self._print_skip(filename)
+                    self._print_skip(test.filename)
                     continue
-                tests[filename] = os.fork()
-                if tests[filename] == 0:
+                tests[test.filename] = os.fork()
+                if tests[test.filename] == 0:
                     os.chdir(testdir)
-                    fn(filename, basename)
-                    self._print_ok(filename)
+                    fn(test)
+                    self._print_ok(test.filename)
                     sys.exit(0)
             results.collect(tests)
         self._xml_parts.append(results.finish())

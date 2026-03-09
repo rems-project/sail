@@ -57,22 +57,22 @@ class SvTests(SailTest):
         )
 
     def _make_test(self, opts, just_check):
-        def fn(filename, basename):
-            step(f"rm -rf {basename}_obj_dir")
-            if basename.startswith("fail") or just_check:
+        def fn(test):
+            step(f"rm -rf {test.basename}_obj_dir")
+            if test.basename.startswith("fail") or just_check:
                 step(
-                    f"'{self.sail}' --no-warn --sv ../exec/{filename} -o {basename}"
-                    f" --sv-verilate compile{opts} --sv-verilate-jobs 1 > {basename}.out"
+                    f"'{self.sail}' --no-warn --sv ../exec/{test.filename} -o {test.basename}"
+                    f" --sv-verilate compile{opts} --sv-verilate-jobs 1 > {test.basename}.out"
                 )
             else:
                 step(
-                    f"'{self.sail}' --no-warn --sv ../exec/{filename} -o {basename}"
-                    f" --sv-verilate run{opts} --sv-verilate-jobs 1 > {basename}.out"
+                    f"'{self.sail}' --no-warn --sv ../exec/{test.filename} -o {test.basename}"
+                    f" --sv-verilate run{opts} --sv-verilate-jobs 1 > {test.basename}.out"
                 )
                 step(
                     f"awk '/SAIL START/{{flag=1;next}}/SAIL END/{{flag=0}}flag'"
-                    f" {basename}.out > {basename}.result"
+                    f" {test.basename}.out > {test.basename}.result"
                 )
-                step(f"diff ../exec/{basename}.expect {basename}.result")
+                step(f"diff ../exec/{test.basename}.expect {test.basename}.result")
 
         return fn

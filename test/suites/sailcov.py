@@ -29,22 +29,22 @@ class SailcovTests(SailTest):
             return False
 
     def _make_test(self, sailcov):
-        def fn(filename, basename):
+        def fn(test):
             step(
                 f"'{self.sail}' -no_warn -no_memo_z3 -c -c_include sail_coverage.h"
-                f" -c_coverage {basename}.branches {filename} -o {basename}"
+                f" -c_coverage {test.basename}.branches {test.filename} -o {test.basename}"
             )
             step(
-                f"cc {basename}.c '{self.sail_dir}'/lib/*.c"
+                f"cc {test.basename}.c '{self.sail_dir}'/lib/*.c"
                 f" '{self.sail_dir}'/lib/coverage/target/release/libsail_coverage.a"
-                f" -lgmp -lpthread -ldl -I '{self.sail_dir}'/lib -o {basename}.bin"
+                f" -lgmp -lpthread -ldl -I '{self.sail_dir}'/lib -o {test.basename}.bin"
             )
-            step(f"./{basename}.bin -c {basename}.taken")
+            step(f"./{test.basename}.bin -c {test.basename}.taken")
             step(
-                f"'{sailcov}' --werror --all {basename}.branches"
-                f" --taken {basename}.taken {filename}"
+                f"'{sailcov}' --werror --all {test.basename}.branches"
+                f" --taken {test.basename}.taken {test.filename}"
             )
-            step(f"diff {basename}.html {basename}.expect")
-            step(f"rm {basename}.taken {basename}.bin {basename}.branches")
+            step(f"diff {test.basename}.html {test.basename}.expect")
+            step(f"rm {test.basename}.taken {test.basename}.bin {test.basename}.branches")
 
         return fn

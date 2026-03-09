@@ -98,13 +98,13 @@ class LemTests(SailTest):
         )
 
     def _make_test(self, opts):
-        def fn(filename, basename):
+        def fn(test):
             step(
-                f"'{self.sail}' --lem {opts} --strict-bitvector -o {basename} {_TYPECHECK_PASS_DIR}/{filename}"
+                f"'{self.sail}' --lem {opts} --strict-bitvector -o {test.basename} {_TYPECHECK_PASS_DIR}/{test.filename}"
             )
             step(
-                f"lem -lib '{self.sail_dir}'/src/gen_lib {basename}_types.lem {basename}.lem"
+                f"lem -lib '{self.sail_dir}'/src/gen_lib {test.basename}_types.lem {test.basename}.lem"
             )
-            step(f"rm {basename}_types.lem {basename}.lem")
+            step(f"rm {test.basename}_types.lem {test.basename}.lem")
 
         return fn

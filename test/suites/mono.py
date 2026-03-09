@@ -36,18 +36,18 @@ class MonoTests(SailTest):
             testdir=_SUITE_DIR,
         )
 
-    def _test(self, filename, basename):
+    def _test(self, test):
         libpaths = " ".join(
             f"{self.sail_dir}/src/gen_lib/sail2_{lib}.lem" for lib in libraries
         )
-        with open(f"pass/{filename}") as f:
+        with open(f"pass/{test.filename}") as f:
             arguments = f.read()
-        step(f"mkdir -p _build_{filename}")
+        step(f"mkdir -p _build_{test.filename}")
         step(
             f"'{self.sail}' --lem --lem-mwords --lem-lib Test_extra"
-            f" --lem-output-dir _build_{filename} -o out {arguments}"
+            f" --lem-output-dir _build_{test.filename} -o out {arguments}"
         )
-        os.chdir(f"_build_{filename}")
+        os.chdir(f"_build_{test.filename}")
         step(
             f"lem -ocaml -lib {self.sail_dir}/src/lem_interp {libpaths}"
             f" -outdir . ../test_extra.lem out_types.lem out.lem"
@@ -60,4 +60,4 @@ class MonoTests(SailTest):
             f" {libml} test_extra.ml out_types.ml out.ml test.ml"
         )
         os.chdir("..")
-        step(f"rm -r _build_{filename}")
+        step(f"rm -r _build_{test.filename}")

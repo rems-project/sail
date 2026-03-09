@@ -82,17 +82,17 @@ class CoqTests(SailTest):
             return False
 
     def _make_test(self, src_dir, lib):
-        def fn(filename, basename):
-            step(f"mkdir -p _build_{basename}")
+        def fn(test):
+            step(f"mkdir -p _build_{test.basename}")
             step(
                 f"'{self.sail}' --coq --coq-lib-style {lib} --dcoq-undef-axioms"
-                f" --strict-bitvector --coq-output-dir _build_{basename}"
-                f" -o out {src_dir}/{filename}"
+                f" --strict-bitvector --coq-output-dir _build_{test.basename}"
+                f" -o out {src_dir}/{test.filename}"
             )
-            os.chdir(f"_build_{basename}")
-            step("coqc out_types.v", name=basename)
-            step("coqc out.v", name=basename)
+            os.chdir(f"_build_{test.basename}")
+            step("coqc out_types.v", name=test.basename)
+            step("coqc out.v", name=test.basename)
             os.chdir("..")
-            step(f"rm -r _build_{basename}")
+            step(f"rm -r _build_{test.basename}")
 
         return fn

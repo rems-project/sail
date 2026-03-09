@@ -38,30 +38,30 @@ class _ExecCBase(SailTest):
         extension = "cpp" if actually_cpp else "c"
         target_opt = "--cpp" if actually_cpp else "-c"
 
-        def fn(filename, basename):
+        def fn(test):
             step(
-                f"'{self.sail}' --no-warn {target_opt} {sail_opts} {filename} -o {basename}"
+                f"'{self.sail}' --no-warn {target_opt} {sail_opts} {test.filename} -o {test.basename}"
             )
             step(
-                f"{compiler} {c_opts} {basename}.{extension}"
-                f" '{self.sail_dir}'/lib/*.c -lgmp -I '{self.sail_dir}'/lib -o {basename}.bin"
+                f"{compiler} {c_opts} {test.basename}.{extension}"
+                f" '{self.sail_dir}'/lib/*.c -lgmp -I '{self.sail_dir}'/lib -o {test.basename}.bin"
             )
             step(
-                f"./{basename}.bin > {basename}.result 2> {basename}.err_result",
-                expected_status=1 if basename.startswith("fail") else 0,
-                stderr_file=f"{basename}.err_result",
+                f"./{test.basename}.bin > {test.basename}.result 2> {test.basename}.err_result",
+                expected_status=1 if test.basename.startswith("fail") else 0,
+                stderr_file=f"{test.basename}.err_result",
             )
-            step(f"diff {basename}.result {basename}.expect")
-            if os.path.exists(f"{basename}.err_expect"):
-                step(f"diff {basename}.err_result {basename}.err_expect")
-            if valgrind and not basename.startswith("fail"):
+            step(f"diff {test.basename}.result {test.basename}.expect")
+            if os.path.exists(f"{test.basename}.err_expect"):
+                step(f"diff {test.basename}.err_result {test.basename}.err_expect")
+            if valgrind and not test.basename.startswith("fail"):
                 step(
                     f"valgrind --leak-check=full --track-origins=yes"
-                    f" --errors-for-leak-kinds=all --error-exitcode=2 ./{basename}.bin",
-                    expected_status=1 if basename.startswith("fail") else 0,
+                    f" --errors-for-leak-kinds=all --error-exitcode=2 ./{test.basename}.bin",
+                    expected_status=1 if test.basename.startswith("fail") else 0,
                 )
             step(
-                f"rm {basename}.{extension} {basename}.h {basename}.bin {basename}.result"
+                f"rm {test.basename}.{extension} {test.basename}.h {test.basename}.bin {test.basename}.result"
             )
 
         self.run_tests(
@@ -143,13 +143,13 @@ class ExecInterpreterTests(SailTest):
                 "Skipping interpreter tests because the interpreter is only supported on Unix-like platforms"
             )
 
-    def _test(self, filename, basename):
+    def _test(self, test):
         step(
             f"timeout 10s '{self.sail}' -undefined_gen -is execute.isail"
-            f" -iout {basename}.iresult {filename}"
+            f" -iout {test.basename}.iresult {test.filename}"
         )
-        step(f"diff {basename}.iresult {basename}.expect")
-        step(f"rm {basename}.iresult")
+        step(f"diff {test.basename}.iresult {test.basename}.expect")
+        step(f"rm {test.basename}.iresult")
 
 
 @suite("exec.ocaml", _SUITE_DIR)
@@ -160,18 +160,18 @@ class ExecOcamlTests(SailTest):
             "OCaml", Batcher(_SUITE_DIR), self._test, testdir=_SUITE_DIR
         )
 
-    def _test(self, filename, basename):
+    def _test(self, test):
         step(
-            f"'{self.sail}' --ocaml --ocaml-build-dir _sbuild_{basename} -o {basename}_ocaml {filename}"
+            f"'{self.sail}' --ocaml --ocaml-build-dir _sbuild_{test.basename} -o {test.basename}_ocaml {test.filename}"
         )
         step(
-            f"dune exec --release {basename}_ocaml 1> ../{basename}.oresult",
-            expected_status=1 if basename.startswith("fail") else 0,
-            cwd=f"_sbuild_{basename}",
+            f"dune exec --release {test.basename}_ocaml 1> ../{test.basename}.oresult",
+            expected_status=1 if test.basename.startswith("fail") else 0,
+            cwd=f"_sbuild_{test.basename}",
         )
-        step(f"diff {basename}.oresult {basename}.expect")
-        step(f"rm -rf _sbuild_{basename}")
-        step(f"rm {basename}.oresult")
+        step(f"diff {test.basename}.oresult {test.basename}.expect")
+        step(f"rm -rf _sbuild_{test.basename}")
+        step(f"rm {test.basename}.oresult")
 
 
 @suite("exec.lem", _SUITE_DIR)
@@ -204,27 +204,27 @@ class ExecLemTests(SailTest):
             },
         )
 
-    def _test(self, filename, basename):
-        step(f"'{self.sail}' -lem -lem_lib Undefined_override -o {basename} {filename}")
-        step(f"mkdir -p _lbuild_{basename}")
-        step(f"mv {basename}.lem {basename}_types.lem _lbuild_{basename}")
-        step(f"rm {basename.capitalize()}_lemmas.thy")
-        step(f"cp lbuild/* _lbuild_{basename}")
-        os.chdir(f"_lbuild_{basename}")
+    def _test(self, test):
+        step(f"'{self.sail}' -lem -lem_lib Undefined_override -o {test.basename} {test.filename}")
+        step(f"mkdir -p _lbuild_{test.basename}")
+        step(f"mv {test.basename}.lem {test.basename}_types.lem _lbuild_{test.basename}")
+        step(f"rm {test.basename.capitalize()}_lemmas.thy")
+        step(f"cp lbuild/* _lbuild_{test.basename}")
+        os.chdir(f"_lbuild_{test.basename}")
         step(
-            f"../mk_lem_ocaml_main.sh {basename} {basename.capitalize()} {self.sail_dir}"
+            f"../mk_lem_ocaml_main.sh {test.basename} {test.basename.capitalize()} {self.sail_dir}"
         )
         step("lem -lib .. -ocaml *.lem")
         step("ocamlbuild -use-ocamlfind main.native")
         step(
-            f"./main.native 1> {basename}.lresult 2> {basename}.lerr",
-            expected_status=1 if basename.startswith("fail") else 0,
+            f"./main.native 1> {test.basename}.lresult 2> {test.basename}.lerr",
+            expected_status=1 if test.basename.startswith("fail") else 0,
         )
-        step(f"diff ../{basename}.expect {basename}.lresult")
-        if os.path.exists(f"../{basename}.err_expect"):
-            step(f"diff {basename}.lerr ../{basename}.err_expect")
+        step(f"diff ../{test.basename}.expect {test.basename}.lresult")
+        if os.path.exists(f"../{test.basename}.err_expect"):
+            step(f"diff {test.basename}.lerr ../{test.basename}.err_expect")
         os.chdir("..")
-        step(f"rm -r _lbuild_{basename}")
+        step(f"rm -r _lbuild_{test.basename}")
 
 
 @suite("exec.coq", _SUITE_DIR)
@@ -257,26 +257,26 @@ class ExecCoqTests(SailTest):
             },
         )
 
-    def _test(self, filename, basename):
+    def _test(self, test):
         step(
             f"'{self.sail}' -coq -coq-record-update -D PRINT_EFFECTS"
-            f" -splice coq-print.splice -undefined_gen -o {basename} {filename}"
+            f" -splice coq-print.splice -undefined_gen -o {test.basename} {test.filename}"
         )
-        step(f"mkdir -p _coqbuild_{basename}")
-        step(f"mv {basename}.v _coqbuild_{basename}")
-        step(f"mv {basename}_types.v _coqbuild_{basename}")
-        step(f"./mk_coq_main.sh {basename} {basename.capitalize()}")
-        os.chdir(f"_coqbuild_{basename}")
-        step(f"coqc {basename}_types.v")
-        step(f"coqc {basename}.v")
+        step(f"mkdir -p _coqbuild_{test.basename}")
+        step(f"mv {test.basename}.v _coqbuild_{test.basename}")
+        step(f"mv {test.basename}_types.v _coqbuild_{test.basename}")
+        step(f"./mk_coq_main.sh {test.basename} {test.basename.capitalize()}")
+        os.chdir(f"_coqbuild_{test.basename}")
+        step(f"coqc {test.basename}_types.v")
+        step(f"coqc {test.basename}.v")
         step(
-            f"coqtop -require-import {basename}_types -require-import {basename}"
+            f"coqtop -require-import {test.basename}_types -require-import {test.basename}"
             f" -l main.v -batch | tee /dev/stderr | grep -q OK",
-            expected_status=1 if basename.startswith("fail") else 0,
+            expected_status=1 if test.basename.startswith("fail") else 0,
         )
         filter_command = "ocaml ../coq_output_filter.ml < "
-        step(f"{filter_command} output.out | diff - ../{basename}.expect")
-        if os.path.exists(f"../{basename}.err_expect"):
-            step(f"{filter_command} error.out | diff - ../{basename}.err_expect")
+        step(f"{filter_command} output.out | diff - ../{test.basename}.expect")
+        if os.path.exists(f"../{test.basename}.err_expect"):
+            step(f"{filter_command} error.out | diff - ../{test.basename}.err_expect")
         os.chdir("..")
-        step(f"rm -r _coqbuild_{basename}")
+        step(f"rm -r _coqbuild_{test.basename}")

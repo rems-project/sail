@@ -18,6 +18,6 @@ class OneoffTests(SailTest):
             testdir=_SUITE_DIR,
         )
 
-    def _test(self, dir, basename):
-        os.chdir(dir)
-        step("./test.sh", name=dir)
+    def _test(self, test):
+        os.chdir(test.path)
+        step("./test.sh", name=test.filename)

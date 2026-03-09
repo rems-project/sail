@@ -7,7 +7,7 @@ from sailtest import *
 
 _SUITE_DIR = os.path.join(TEST_DIR, "smt")
 
-# Maps replaced basename (dots→underscores) to the set of solvers to skip for
+# Maps replaced test.basename (dots→underscores) to the set of solvers to skip for
 _skip_tests = {
     "assembly_mapping_sat": {"z3", "cvc4"},  # This test using unsupported CVC4 features
     "arith_unsat": {"z3", "cvc4"},
@@ -53,18 +53,18 @@ class SmtTests(SailTest):
             print(f"{color.WARNING}Cannot find SMT solver z3 skipping tests{color.END}")
 
     def _make_skip_fn(self, solver_name):
-        def skip_fn(filename, basename):
-            replaced = basename.replace(".", "_")
+        def skip_fn(test):
+            replaced = test.basename.replace(".", "_")
             return replaced in _skip_tests and solver_name in _skip_tests[replaced]
 
         return skip_fn
 
     def _make_test(self, name, solver, sail_opts):
-        def fn(filename, basename):
-            basename = basename.replace(".", "_")
-            step(f"'{self.sail}' {sail_opts} -smt {filename} -o {basename}")
+        def fn(test):
+            basename = test.basename.replace(".", "_")
+            step(f"'{self.sail}' {sail_opts} -smt {test.filename} -o {basename}")
             step(f"timeout 30s {solver} {basename}_prop.smt2 1> {basename}.out")
-            if filename.endswith(".sat.sail"):
+            if test.filename.endswith(".sat.sail"):
                 step(f"grep -q ^sat$ {basename}.out")
             else:
                 step(f"grep -q ^unsat$ {basename}.out")
