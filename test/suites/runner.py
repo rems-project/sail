@@ -1,9 +1,11 @@
 #!/usr/bin/env python3
 
+import datetime
 import glob
 import importlib
 import importlib.util
 import os
+import random
 import sys
 
 import sailtest
@@ -97,6 +99,17 @@ for _path in glob.glob(os.path.join(_suites_dir, "*.py")):
 if sailtest.args.list_suites:
     _print_tree(_build_tree(sailtest._suite_registry))
     sys.exit(0)
+
+_ADJECTIVES = ["brave", "bright", "calm", "clever", "curious", "gentle", "keen", "quiet", "swift", "wild"]
+_COLOURS = ["amber", "coral", "crimson", "golden", "green", "silver", "teal", "blue", "violet", "rose"]
+_ANIMALS = ["bear", "crane", "deer", "fox", "hawk", "lynx", "owl", "raven", "seal", "wolf"]
+
+_timestamp = datetime.datetime.now().strftime("%Y-%m-%dT%H-%M-%S")
+_run_name = "-".join([_timestamp, random.choice(_ADJECTIVES), random.choice(_COLOURS), random.choice(_ANIMALS)])
+_runs_dir = os.path.join(sailtest.TEST_DIR, "_runs")
+sailtest.run_dir = os.path.join(_runs_dir, _run_name)
+os.makedirs(sailtest.run_dir)
+print(f"Run directory: {sailtest.run_dir}")
 
 for suite_name in sailtest.args.suite:
     matches = [

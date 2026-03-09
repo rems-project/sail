@@ -146,3 +146,4 @@ lib/hol/sail-heap
 /x86/x86_embed_sequential.lem
 /x86/x86_embed_types.lem
 /x86/x86_toFromInterp.lem
+test/_runs/
