@@ -160,7 +160,7 @@ if sailtest.args.no_tmpdir:
 else:
     _run_dir = tempfile.mkdtemp(prefix=f"{_run_name}-")
     os.symlink(_run_dir, os.path.join(_runs_dir, _run_name))
-print(f"Run directory: {_run_dir}")
+print(f"Run name: {_run_name}")
 
 for suite_name in sailtest.args.suite:
     matches = [
