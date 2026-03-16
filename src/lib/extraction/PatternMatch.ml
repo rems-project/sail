@@ -12,12 +12,12 @@ open PeanoNat
 open QArith_base
 open TypeAnnot
 
-type binding =
+type 'v binding =
 | Complete of value
-| Partial of ((value * Big_int_Z.big_int) * Big_int_Z.big_int) non_empty
+| Partial of (('v * Big_int_Z.big_int) * Big_int_Z.big_int) non_empty
 
 (** val combine_binding :
-    binding option -> binding option -> binding option **)
+    'a1 binding option -> 'a1 binding option -> 'a1 binding option **)
 
 let combine_binding l r =
   match l with
@@ -37,7 +37,7 @@ let combine_binding l r =
   | None -> r
 
 (** val merge_bindings :
-    binding IdMap.t -> binding IdMap.t -> binding IdMap.t **)
+    'a1 binding IdMap.t -> 'a1 binding IdMap.t -> 'a1 binding IdMap.t **)
 
 let merge_bindings l r =
   IdMap.map2 combine_binding l r
@@ -86,7 +86,7 @@ let complete_value = function
   in
   V_bitvector value0
 
-(** val complete_bindings : binding IdMap.t -> value IdMap.t **)
+(** val complete_bindings : value binding IdMap.t -> value IdMap.t **)
 
 let complete_bindings m =
   IdMap.map (fun b ->
@@ -94,12 +94,13 @@ let complete_bindings m =
     | Complete v -> v
     | Partial vs -> complete_value vs) m
 
-type match_result =
-| Matched of binding IdMap.t
-| MaybeMatched of binding IdMap.t
+type 'v match_result =
+| Matched of 'v binding IdMap.t
+| MaybeMatched of 'v binding IdMap.t
 | Unmatched
 
-(** val merge_match_result : match_result -> match_result -> match_result **)
+(** val merge_match_result :
+    value match_result -> value match_result -> value match_result **)
 
 let merge_match_result l r =
   match l with
@@ -115,37 +116,39 @@ let merge_match_result l r =
      | Unmatched -> Unmatched)
   | Unmatched -> Unmatched
 
-(** val empty_bindings : binding IdMap.t **)
+(** val empty_bindings : value binding IdMap.t **)
 
 let empty_bindings =
   IdMap.empty
 
-(** val simple_match : match_result **)
+(** val simple_match : value match_result **)
 
 let simple_match =
   Matched empty_bindings
 
-(** val simple_match_when : bool -> match_result **)
+(** val simple_match_when : bool -> value match_result **)
 
 let simple_match_when = function
 | true -> simple_match
 | false -> Unmatched
 
-(** val add_match : id -> binding -> match_result -> match_result **)
+(** val add_match :
+    id -> value binding -> value match_result -> value match_result **)
 
 let add_match k v = function
 | Matched b -> Matched (IdMap.add k v b)
 | MaybeMatched b -> MaybeMatched (IdMap.add k v b)
 | Unmatched -> Unmatched
 
-(** val neg_match : match_result -> match_result **)
+(** val neg_match : value match_result -> value match_result **)
 
 let neg_match = function
 | Matched _ -> Unmatched
 | MaybeMatched b -> MaybeMatched b
 | Unmatched -> simple_match
 
-(** val or_match : match_result -> match_result -> match_result **)
+(** val or_match :
+    value match_result -> value match_result -> value match_result **)
 
 let or_match l r =
   match l with
@@ -178,7 +181,7 @@ let rec binds_id n = function
      fold_left (||) (map (fun fp -> binds_id n (snd fp)) ps) false
    | _ -> false)
 
-(** val pattern_match_literal : lit -> value -> match_result **)
+(** val pattern_match_literal : lit -> value -> value match_result **)
 
 let pattern_match_literal l v =
   let L_aux (aux, _) = l in
@@ -236,8 +239,8 @@ module Make =
  functor (Tannot:S) ->
  struct
   (** val fold_match :
-      (Tannot.t pat -> value -> match_result) -> Tannot.t pat list ->
-      (match_result * value list) -> match_result * value list **)
+      (Tannot.t pat -> value -> value match_result) -> Tannot.t pat list ->
+      (value match_result * value list) -> value match_result * value list **)
 
   let rec fold_match f ps match_info =
     match ps with
@@ -251,7 +254,7 @@ module Make =
       in
       fold_match f ps0 match_info0
 
-  (** val pattern_match : Tannot.t pat -> value -> match_result **)
+  (** val pattern_match : Tannot.t pat -> value -> value match_result **)
 
   let rec pattern_match p v =
     let P_aux (aux, annot) = p in

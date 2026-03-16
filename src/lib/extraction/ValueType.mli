@@ -1,9 +1,22 @@
 open Ast
 open BinInt
 open Bit
+open BitList
+open Bool
 open Datatypes
+open IdUtil
 open ListDef
+open ListUtil
 open PeanoNat
+open QArith_base
+
+val value_of_lit : lit -> value
+
+val value_cmp : (value -> bool) -> value -> value -> bool
+
+val is_unknown : value -> bool
+
+val value_eqb : value -> value -> bool
 
 module Primops :
  sig

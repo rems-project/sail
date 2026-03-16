@@ -12,13 +12,15 @@ open PeanoNat
 open QArith_base
 open TypeAnnot
 
-type binding =
+type 'v binding =
 | Complete of value
-| Partial of ((value * Big_int_Z.big_int) * Big_int_Z.big_int) non_empty
+| Partial of (('v * Big_int_Z.big_int) * Big_int_Z.big_int) non_empty
 
-val combine_binding : binding option -> binding option -> binding option
+val combine_binding :
+  'a1 binding option -> 'a1 binding option -> 'a1 binding option
 
-val merge_bindings : binding IdMap.t -> binding IdMap.t -> binding IdMap.t
+val merge_bindings :
+  'a1 binding IdMap.t -> 'a1 binding IdMap.t -> 'a1 binding IdMap.t
 
 val update_list : bit list -> Big_int_Z.big_int -> bit -> bit list
 
@@ -27,30 +29,32 @@ val update_subrange : bit list -> Big_int_Z.big_int -> bit list -> bit list
 val complete_value :
   ((value * Big_int_Z.big_int) * Big_int_Z.big_int) non_empty -> value
 
-val complete_bindings : binding IdMap.t -> value IdMap.t
+val complete_bindings : value binding IdMap.t -> value IdMap.t
 
-type match_result =
-| Matched of binding IdMap.t
-| MaybeMatched of binding IdMap.t
+type 'v match_result =
+| Matched of 'v binding IdMap.t
+| MaybeMatched of 'v binding IdMap.t
 | Unmatched
 
-val merge_match_result : match_result -> match_result -> match_result
+val merge_match_result :
+  value match_result -> value match_result -> value match_result
 
-val empty_bindings : binding IdMap.t
+val empty_bindings : value binding IdMap.t
 
-val simple_match : match_result
+val simple_match : value match_result
 
-val simple_match_when : bool -> match_result
+val simple_match_when : bool -> value match_result
 
-val add_match : id -> binding -> match_result -> match_result
+val add_match :
+  id -> value binding -> value match_result -> value match_result
 
-val neg_match : match_result -> match_result
+val neg_match : value match_result -> value match_result
 
-val or_match : match_result -> match_result -> match_result
+val or_match : value match_result -> value match_result -> value match_result
 
 val binds_id : id -> 'a1 pat -> bool
 
-val pattern_match_literal : lit -> value -> match_result
+val pattern_match_literal : lit -> value -> value match_result
 
 val get_struct_field : id -> (id * value) list -> value
 
@@ -58,8 +62,8 @@ module Make :
  functor (Tannot:S) ->
  sig
   val fold_match :
-    (Tannot.t pat -> value -> match_result) -> Tannot.t pat list ->
-    (match_result * value list) -> match_result * value list
+    (Tannot.t pat -> value -> value match_result) -> Tannot.t pat list ->
+    (value match_result * value list) -> value match_result * value list
 
-  val pattern_match : Tannot.t pat -> value -> match_result
+  val pattern_match : Tannot.t pat -> value -> value match_result
  end

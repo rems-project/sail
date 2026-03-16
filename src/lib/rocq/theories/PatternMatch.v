@@ -74,9 +74,12 @@ turned into a complete binding for the << ys >> variable. See the
 [complete_bindings] function later in this module.
 *)
 
-Inductive binding :=
-| Complete : value -> binding
-| Partial : non_empty (value * Z * Z) -> binding.
+Inductive binding (V : Set) :=
+| Complete : value -> binding V
+| Partial : non_empty (V * Z * Z) -> binding V.
+
+Arguments Complete {_}.
+Arguments Partial {_}.
 
 (** Now we define an equality predicate [binding_eqb] for the [binding] type. *)
 
@@ -85,7 +88,7 @@ Definition binding_part_eqb (l r : value * Z * Z) :=
   let '(rv, rn, rm) := r in
   value_eqb lv rv && (ln =? rn)%Z && (lm =? rm)%Z.
 
-Definition binding_eqb (l r : binding) : bool :=
+Definition binding_eqb (l r : binding value) : bool :=
   match (l, r) with
   | (Complete lv, Complete rv) => value_eqb lv rv
   | (Partial (Non_empty lv lvs), Partial (Non_empty rv rvs)) =>
@@ -131,7 +134,7 @@ binding for a variable. The only special case is for the vector
 range patterns above, where we combine the partial matches.
 *)
 
-Definition combine_binding (l r : option binding) : option binding :=
+Definition combine_binding {V} (l r : option (binding V)) : option (binding V) :=
   match (l, r) with
   | (None, None) => None
   | (Some b, None) => Some b
@@ -145,19 +148,19 @@ Definition combine_binding (l r : option binding) : option binding :=
       end
   end.
 
-Lemma combine_binding_none_left : forall b, combine_binding None b = b.
+Lemma combine_binding_none_left : forall {V} (b : option (binding V)), combine_binding None b = b.
 Proof.
-  intros b; destruct b; cbn; reflexivity.
+  intros ? b; destruct b; cbn; reflexivity.
 Qed.
 
-Lemma combine_binding_none_right : forall b, combine_binding b None = b.
+Lemma combine_binding_none_right : forall {V} (b : option (binding V)), combine_binding b None = b.
 Proof.
-  intros b; destruct b; cbn; reflexivity.
+  intros ? b; destruct b; cbn; reflexivity.
 Qed.
 
-Lemma combine_binding_assoc : forall a b c, combine_binding (combine_binding a b) c = combine_binding a (combine_binding b c).
+Lemma combine_binding_assoc : forall {V} (a b c : option (binding V)), combine_binding (combine_binding a b) c = combine_binding a (combine_binding b c).
 Proof.
-  intros a b c.
+  intros ? a b c.
   (destruct a as [a |]; [destruct a | idtac]);
   (destruct b as [b |]; [destruct b | idtac]);
   (destruct c as [c |]; [destruct c | idtac]).
@@ -177,7 +180,7 @@ We now lift [combine_binding] to the sets of identifiers being
 bound by different subpatterns using [IdMap.map2].
 *)
 
-Definition merge_bindings (l r : IdMap.t binding) : IdMap.t binding :=
+Definition merge_bindings {V} (l r : IdMap.t (binding V)) : IdMap.t (binding V) :=
   IdMap.map2 combine_binding l r.
 
 Definition unwrap_default {A : Set} (default : A) (opt : option A) : A :=
@@ -186,9 +189,10 @@ Definition unwrap_default {A : Set} (default : A) (opt : option A) : A :=
   | Some x => x
   end.
 
-Lemma merge_bindings_in_left : forall {k x} y, IdMap.In k x -> IdMap.In k (merge_bindings x y).
+Lemma merge_bindings_in_left : forall {V k} {x y : IdMap.t (binding V)},
+  IdMap.In k x -> IdMap.In k (merge_bindings x y).
 Proof.
-  intros k x y H.
+  intros ? k x y H.
   pose proof H as H_in.
   change (exists e, IdMap.MapsTo k e x) in H.
   destruct H as [b H].
@@ -209,9 +213,9 @@ Proof.
   - tauto.
 Qed.
 
-Lemma merge_bindings_in_right : forall {k y} x, IdMap.In k y -> IdMap.In k (merge_bindings x y).
+Lemma merge_bindings_in_right : forall {V k} {y x : IdMap.t (binding V)}, IdMap.In k y -> IdMap.In k (merge_bindings x y).
 Proof.
-  intros k y x H.
+  intros ? k y x H.
   pose proof H as H_in.
   change (exists e, IdMap.MapsTo k e y) in H.
   destruct H as [b H].
@@ -232,15 +236,15 @@ Proof.
   - tauto.
 Qed.
 
-Lemma merge_bindings_in_iff : forall {k x y}, IdMap.In k (merge_bindings x y) <-> IdMap.In k x \/ IdMap.In k y.
+Lemma merge_bindings_in_iff : forall {V k} {x y : IdMap.t (binding V)}, IdMap.In k (merge_bindings x y) <-> IdMap.In k x \/ IdMap.In k y.
 Proof.
-  intros k x y.
+  intros ? k x y.
   split; intros H.
   - unfold merge_bindings.
     apply (IdMap.map2_2 H).
   - destruct H as [Hx | Hy].
-    + apply (merge_bindings_in_left _ Hx).
-    + apply (merge_bindings_in_right _ Hy).
+    + apply (merge_bindings_in_left Hx).
+    + apply (merge_bindings_in_right Hy).
 Qed.
 
 Lemma not_in_map2 : forall A k (x y : IdMap.t A) f, ~ IdMap.In k x -> ~ IdMap.In k y -> ~ IdMap.In (elt:=A) k (IdMap.map2 f x y).
@@ -445,7 +449,7 @@ Definition complete_value (partial_values : non_empty (value * Z * Z)) : value :
     in
     V_bitvector value.
 
-Definition complete_bindings (m : IdMap.t binding) : IdMap.t value :=
+Definition complete_bindings (m : IdMap.t (binding value)) : IdMap.t value :=
   IdMap.map
     (fun b =>
        match b with
@@ -455,12 +459,14 @@ Definition complete_bindings (m : IdMap.t binding) : IdMap.t value :=
     )
     m.
 
-Inductive match_result : Type :=
-| Matched : IdMap.t binding -> match_result
-| MaybeMatched : IdMap.t binding -> match_result
+Inductive match_result {V : Set} : Type :=
+| Matched : IdMap.t (binding V) -> match_result
+| MaybeMatched : IdMap.t (binding V) -> match_result
 | Unmatched : match_result.
 
-Definition match_result_eq (l r : match_result) : Prop :=
+Arguments match_result V : clear implicits.
+
+Definition match_result_eq (l r : match_result value) : Prop :=
   match (l, r) with
   | (Unmatched, Unmatched) => True
   | (Matched l_b, Matched r_b) => IdMap.Equivb binding_eqb l_b r_b
@@ -468,7 +474,7 @@ Definition match_result_eq (l r : match_result) : Prop :=
   | _ => False
   end.
 
-Definition merge_match_result (l r : match_result) : match_result :=
+Definition merge_match_result (l r : match_result value) : match_result value :=
   match (l, r) with
   | (Unmatched, _) => Unmatched
   | (_, Unmatched) => Unmatched
@@ -487,34 +493,34 @@ Proof.
   all: cbn; try reflexivity; apply merge_bindings_assoc.
 Qed.
 
-Definition empty_bindings : IdMap.t binding := @IdMap.empty binding.
+Definition empty_bindings : IdMap.t (binding value) := @IdMap.empty (binding value).
 
-Definition simple_match : match_result := Matched empty_bindings.
+Definition simple_match : match_result value := Matched empty_bindings.
 
-Definition simple_match_when (b : bool) : match_result :=
+Definition simple_match_when (b : bool) : match_result value :=
   if b then simple_match else Unmatched.
 
-Definition add_match (k : id) (v : binding) (r : match_result) : match_result :=
+Definition add_match (k : id) (v : binding value) (r : match_result value) : match_result value :=
   match r with
   | Unmatched => Unmatched
   | MaybeMatched b => MaybeMatched (IdMap.add k v b)
   | Matched b => Matched (IdMap.add k v b)
   end.
 
-Definition fully_matched (r : match_result) : Prop :=
+Definition fully_matched (r : match_result value) : Prop :=
   match r with
   | MaybeMatched _ => False
   | _ => True
   end.
 
-Definition neg_match (r : match_result) : match_result :=
+Definition neg_match (r : match_result value) : match_result value :=
   match r with
   | Unmatched => simple_match
   | MaybeMatched b => MaybeMatched b
   | Matched _ => Unmatched
   end.
 
-Definition or_match (l r : match_result) : match_result :=
+Definition or_match (l r : match_result value) : match_result value :=
   match (l, r) with
   | (Matched l_b, _) => Matched l_b
   | (_, Matched r_b) => Matched r_b
@@ -538,7 +544,7 @@ Fixpoint binds_id {A} (n : Ast.id) (p : Ast.pat A) : bool :=
   end.
 
 
-Definition pattern_match_literal (l : Ast.lit) (v : value) : match_result :=
+Definition pattern_match_literal (l : Ast.lit) (v : value) : match_result value :=
   let 'L_aux aux annot := l in
   match (aux, v) with
   | (L_unit,      V_unit        ) => simple_match
@@ -566,10 +572,10 @@ Fixpoint get_struct_field (name : id) (fields : list (id * value)) {struct field
 Module Make (Tannot : TypeAnnot.S).
 
   Fixpoint fold_match
-      (f : pat Tannot.t -> value -> match_result)
+      (f : pat Tannot.t -> value -> match_result value)
       (ps : list (pat Tannot.t))
-      (match_info : match_result * list value)
-      : match_result * list value :=
+      (match_info : match_result value * list value)
+      : match_result value * list value :=
     match ps with
     | [] => match_info
     | p :: ps =>
@@ -582,7 +588,7 @@ Module Make (Tannot : TypeAnnot.S).
         fold_match f ps match_info
     end.
 
-  Fixpoint pattern_match (p : Ast.pat Tannot.t) (v : value) {struct p} : match_result :=
+  Fixpoint pattern_match (p : Ast.pat Tannot.t) (v : value) {struct p} : match_result value :=
     let 'P_aux aux annot := p in
     match aux with
     | P_wild => simple_match
@@ -729,10 +735,10 @@ Module Make (Tannot : TypeAnnot.S).
           apply fm_fold_unmatched.
   Qed.
 
-  Definition MatcherResult {A} (xs : list A) (m : match_result * list A) : Prop :=
+  Definition MatcherResult {A} (xs : list A) (m : match_result value * list A) : Prop :=
     fully_matched (fst m) /\ Suffix (snd m) xs.
 
-  Lemma fm_fold_left_matched : forall [A B] (pats : list B) (matcher : (match_result * list A) -> B -> (match_result * list A)) vs m,
+  Lemma fm_fold_left_matched : forall [A B] (pats : list B) (matcher : (match_result value * list A) -> B -> (match_result value * list A)) vs m,
     Forall
       (fun p =>
         forall m vs', fully_matched m -> Suffix vs' vs -> MatcherResult vs' (matcher (m, vs') p))

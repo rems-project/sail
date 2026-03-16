@@ -41,26 +41,97 @@
 (*  SPDX-License-Identifier: BSD-2-Clause                                   *)
 (* ************************************************************************ *)
 
-Require Extraction.
-
-Set Extraction KeepSingleton.
-Set Extraction Output Directory ".".
-
-From Stdlib Require ExtrOcamlBasic.
-From Stdlib Require ExtrOcamlNatBigInt.
-From Stdlib Require ExtrOcamlNativeString.
-From Stdlib Require ExtrOcamlZBigInt.
+From Stdlib Require Import List.
 
 Require Import Ast.
-Require Import AstInduction.
-Require Import Bit.
 Require Import IdUtil.
-Require Import PatternMatch.
-Require Import Semantics.
 Require Import ValueType.
-Require ValueSemilattice.
-Require ZAst.
+Require PatternMatch.
+Require TypeAnnot.
 
-Extraction Blacklist Nat List String.
+Import ListNotations.
 
-Separate Extraction Primops l attribute_data BitList.to_hex_digits def impldef opt_default Semantics.Make ZAst.Make ZAst.Residual ZAst.ExpBuilder ValueSemilattice.Value IdMap.
+Module Type S (Tannot : TypeAnnot.S).
+  Parameter t : Set.
+
+  Parameter join : t -> t -> t.
+
+  Infix "⊔" := join (left associativity, at level 50).
+
+  Parameter v_unit : t.
+  Parameter v_list : list t -> t.
+  Parameter v_tuple : list t -> t.
+  Parameter v_vector : list t -> t.
+  Parameter v_ref : id -> t.
+
+  Parameter of_lit : lit -> t.
+
+  Parameter is_unit : t -> bool.
+  Parameter is_true : t -> bool.
+  Parameter is_false : t -> bool.
+
+  Parameter lookup_field : t -> Ast.id -> t.
+
+  Parameter pattern_match : pat Tannot.t -> t -> PatternMatch.match_result t.
+  Parameter complete : PatternMatch.binding t -> t.
+
+  Parameter v_unit_is_unit : is_unit v_unit = true.
+
+(*
+  Parameter assoc : forall x y z, (x ⊔ y) ⊔ z = x ⊔ (y ⊔ z).
+
+  Parameter comm : forall x y, x ⊔ y = y ⊔ x.
+
+  Parameter idem : forall x, x ⊔ x = x.
+*)
+End S.
+
+Module Value (Tannot : TypeAnnot.S) <: S Tannot.
+  Definition t : Set := Ast.value.
+
+  Definition join (x y : t) : t := if value_eqb x y then x else V_unknown.
+
+  Infix "⊔" := join (left associativity, at level 50).
+
+  Definition v_unit := V_unit.
+  Definition v_list := V_list.
+  Definition v_tuple := V_tuple.
+  Definition v_vector := V_vector.
+  Definition v_ref := V_ref.
+
+  Definition of_lit := value_of_lit.
+
+  Definition is_unit (v : t) : bool := match v with V_unit => true | _ => false end.
+  Definition is_true (v : t) : bool := match v with V_bool true => true | _ => false end.
+  Definition is_false (v : t) : bool := match v with V_bool false => true | _ => false end.
+
+  Fixpoint lookup_field' (fields : list (id * t)) (name : id) {struct fields} : t :=
+    match fields with
+    | [] => V_unknown
+    | (name', v) :: fields =>
+        if id_eqb name name' then
+          v
+        else
+          lookup_field' fields name
+    end.
+
+  Definition lookup_field (rec : t) (name : id) : t :=
+    match rec with
+    | V_record fields => lookup_field' fields name
+    | _ => V_unknown
+    end.
+
+  Module PM := PatternMatch.Make Tannot.
+
+  Definition pattern_match (p : pat Tannot.t) (v : t) : PatternMatch.match_result t :=
+    PM.pattern_match p v.
+
+  Definition complete (b : PatternMatch.binding t) : t :=
+    match b with
+    | PatternMatch.Complete v => v
+    | PatternMatch.Partial vs => PatternMatch.complete_value vs
+    end.
+
+  Lemma v_unit_is_unit : is_unit v_unit = true.
+  Proof. reflexivity. Qed.
+End Value.

@@ -53,11 +53,25 @@ Require Import AstInduction.
 Require Import Bit.
 Require Import IdUtil.
 Require Import ListUtil.
+Require BitList.
 
 Import ListNotations.
 
 Declare Scope Value_scope.
 Delimit Scope Value_scope with value.
+
+Definition value_of_lit (lit : Ast.lit) : value :=
+  let 'L_aux aux _ := lit in
+  match aux with
+  | L_unit => V_unit
+  | L_true => V_bool true
+  | L_false => V_bool false
+  | L_num n => V_int n
+  | L_hex h => V_bitvector (BitList.of_hex_lit h)
+  | L_bin b => V_bitvector (BitList.of_bin_lit b)
+  | L_real r => V_real r
+  | L_string s => V_string s
+  end.
 
 (* A value is fully defined if it contains no unknown values *)
 Fixpoint fully_defined (v : value) : bool :=
