@@ -51,16 +51,29 @@ From Stdlib Require ExtrOcamlNatBigInt.
 From Stdlib Require ExtrOcamlNativeString.
 From Stdlib Require ExtrOcamlZBigInt.
 
-Require Import Ast.
-Require Import AstInduction.
-Require Import Bit.
-Require Import IdUtil.
-Require Import PatternMatch.
-Require Import Semantics.
-Require Import ValueType.
-Require ValueSemilattice.
-Require ZAst.
+From Sail Require Import Ast.
+From Sail Require Import AstInduction.
+From Sail Require Import Bit.
+From Sail Require Import IdUtil.
+From Sail Require Import PatternMatch.
+From Sail Require Import Semantics.
+From Sail Require Import ValueType.
+From Sail Require ValueSemilattice.
+From Sail Require ZAst.
 
 Extraction Blacklist Nat List String.
 
-Separate Extraction Primops l attribute_data BitList.to_hex_digits def impldef opt_default Semantics.Make ZAst.Make ZAst.Residual ZAst.ExpBuilder ValueSemilattice.Value IdMap.
+Separate Extraction
+  BitList.to_hex_digits
+  IdMap
+  Primops
+  Semantics.Make
+  ValueSemilattice.Value
+  ZAst.ExpBuilder
+  ZAst.Make
+  ZAst.Residual
+  attribute_data
+  def
+  impldef
+  l
+  opt_default.

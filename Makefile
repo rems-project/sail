@@ -15,9 +15,7 @@ libsail_coverage:
 
 # TODO: Make this work on Windows.
 extraction:
-	$(MAKE) -C src/lib/rocq
-	mv src/lib/rocq/*.mli src/lib/extraction
-	mv src/lib/rocq/*.ml src/lib/extraction
+	$(MAKE) -C src/rocq extraction
 
 # Build binary tarball. The lib directory is very large and not needed
 # for running the compiler. Z3_EXE can be used to bundle a z3 binary.

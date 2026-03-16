@@ -43,7 +43,7 @@
 
 From Stdlib Require Import List.
 
-Require Import Tactics.
+From Sail Require Import Tactics.
 
 Import ListNotations.
 

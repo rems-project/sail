@@ -1,0 +1,20 @@
+(rocq.theory
+ (name Sail)
+ (modules
+  Ast
+  AstInduction
+  Bit
+  BitList
+  IdUtil
+  Lattice
+  ListUtil
+  OptionUtil
+  PatternMatch
+  Semantics
+  Tactics
+  TypeAnnot
+  ValueSemilattice
+  ValueType
+  ZAst)
+ (package rocq_sail)
+ (theories Stdlib Ltac2))

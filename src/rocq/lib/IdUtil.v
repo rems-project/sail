@@ -51,7 +51,7 @@ From Stdlib Require Import String.
 From Stdlib Require Import RelationClasses.
 From Stdlib Require Import Morphisms.
 
-Require Import Ast.
+From Sail Require Import Ast.
 
 Lemma string_ltb_trans : forall (s1 s2 s3 : String.string),
   String.ltb s1 s2 = true -> String.ltb s2 s3 = true -> String.ltb s1 s3 = true.

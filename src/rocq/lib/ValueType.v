@@ -48,12 +48,12 @@ From Stdlib Require Import QArith.
 From Stdlib Require Import OrderedType.
 From Stdlib Require Import RelationClasses.
 
-Require Import Ast.
-Require Import AstInduction.
-Require Import Bit.
-Require Import IdUtil.
-Require Import ListUtil.
-Require BitList.
+From Sail Require Import Ast.
+From Sail Require Import AstInduction.
+From Sail Require Import Bit.
+From Sail Require Import IdUtil.
+From Sail Require Import ListUtil.
+From Sail Require BitList.
 
 Import ListNotations.
 

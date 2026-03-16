@@ -43,8 +43,8 @@
 
 From Stdlib Require Import Lists.List.
 
-Require Import Ast.
-Require Import Bit.
+From Sail Require Import Ast.
+From Sail Require Import Bit.
 
 Import ListNotations.
 
