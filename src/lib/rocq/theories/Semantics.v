@@ -533,19 +533,6 @@ Module Make (Tannot : TypeAnnot.S).
     | _ :: _ => Runtime_type_error l
     end.
 
-  Definition value_of_lit (lit : Ast.lit) : value :=
-    let 'L_aux aux _ := lit in
-    match aux with
-    | L_unit => V_unit
-    | L_true => V_bool true
-    | L_false => V_bool false
-    | L_num n => V_int n
-    | L_hex h => V_bitvector (BitList.of_hex_lit h)
-    | L_bin b => V_bitvector (BitList.of_bin_lit b)
-    | L_real r => V_real r
-    | L_string s => V_string s
-    end.
-
   Fixpoint lookup_field (l : Ast.loc) (name : id) (fields : list (id * value)) {struct fields} : t value :=
       match fields with
       | [] => Runtime_type_error l

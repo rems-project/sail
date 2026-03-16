@@ -1,6 +1,3 @@
-From Stdlib Require Import Bool.
-From Stdlib Require Import Lists.List.
-From Stdlib Require Import ZArith.
 (* ************************************************************************ *)
 (*  Sail and the Sail architecture models here, comprising all files and    *)
 (*  directories except the ASL-derived Sail code in the aarch64 directory,  *)
@@ -44,7 +41,12 @@ From Stdlib Require Import ZArith.
 (*  SPDX-License-Identifier: BSD-2-Clause                                   *)
 (* ************************************************************************ *)
 
+From Stdlib Require Import Bool.
+From Stdlib Require Import Lists.List.
+From Stdlib Require Import ZArith.
+
 Require Import Ast.
+Require Import Tactics.
 
 Import ListNotations.
 
@@ -244,14 +246,14 @@ Proof with tauto.
 Qed.
 
 (* * Zipping multiple lists together *)
-Fixpoint zip {A : Set} (xs ys : list A) : list (A * A) :=
+Fixpoint zip {A} (xs ys : list A) : list (A * A) :=
   match (xs, ys) with
   | (x :: xs, y :: ys) => (x, y) :: zip xs ys
   | ([], _) => []
   | (_, []) => []
   end.
 
-Lemma map_fst_zip : forall [A : Set] (xs ys : list A), length xs = length ys -> map fst (zip xs ys) = xs.
+Lemma map_fst_zip : forall [A] (xs ys : list A), length xs = length ys -> map fst (zip xs ys) = xs.
 Proof.
   intros A xs.
   induction xs as [| x xs]; intro ys; destruct ys as [| y ys]; try easy.
@@ -262,7 +264,7 @@ Proof.
   reflexivity.
 Qed.
 
-Lemma map_snd_zip : forall [A : Set] (xs ys : list A), length xs = length ys -> map snd (zip xs ys) = ys.
+Lemma map_snd_zip : forall [A] (xs ys : list A), length xs = length ys -> map snd (zip xs ys) = ys.
 Proof.
   intros A xs.
   induction xs as [| x xs]; intro ys; destruct ys as [| y ys]; try easy.
@@ -563,3 +565,45 @@ Ltac suffix_solve :=
 
   | |- Suffix (drop ?n ?xs) ?xs => exact (Suffix_drop n xs)
   end.
+
+Definition consume {A B C} (f : list C -> A -> option B * list C) (acc : option (list B) * list C) (x : A) :=
+  match acc with
+  | (Some rs, xs) =>
+      match f xs x with
+      | (Some r, xs) => (Some (r :: rs), xs)
+      | (None, xs) => (None, xs)
+      end
+  | (None, xs) => (None, xs)
+  end.
+
+Lemma foldl_consume_none : forall {A B C} (f : list C -> A -> option B * list C) xs ys,
+  fold_left (consume f) ys (None, xs) = (None, xs).
+Proof.
+  intros A B C f xs ys.
+  revert xs.
+  induction ys as [|y ys].
+  - reflexivity.
+  - exact IHys.
+Qed.
+
+Lemma foldl_consume : forall {A B C} (f : list C -> A -> option B * list C) rs xs ys,
+  fold_left (consume f) ys (Some rs, xs) =
+  match fold_left (consume f) ys (Some [], xs) with
+  | (Some rs', ys') => (Some (rs' ++ rs), ys')
+  | (None, ys') => (None, ys')
+  end.
+Proof.
+  intros A B C f rs xs ys.
+  revert xs rs.
+  induction ys as [| y ys].
+  - reflexivity.
+  - intros xs rs.
+    cbn.
+    destruct (f xs y) as [o xs'].
+    destruct o as [r |].
+    + rewrite IHys.
+      rewrite (IHys xs' [r]).
+      destruct_match; try rewrite <- app_assoc; reflexivity.
+    + rewrite foldl_consume_none.
+      reflexivity.
+Qed.

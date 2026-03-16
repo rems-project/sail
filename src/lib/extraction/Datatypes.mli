@@ -1,4 +1,12 @@
 
+val negb : bool -> bool
+
+val option_map : ('a1 -> 'a2) -> 'a1 option -> 'a2 option
+
+type ('a, 'b) sum =
+| Coq_inl of 'a
+| Coq_inr of 'b
+
 val fst : ('a1 * 'a2) -> 'a1
 
 val snd : ('a1 * 'a2) -> 'a2

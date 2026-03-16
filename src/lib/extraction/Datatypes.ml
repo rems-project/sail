@@ -1,4 +1,20 @@
 
+(** val negb : bool -> bool **)
+
+let negb = function
+| true -> false
+| false -> true
+
+(** val option_map : ('a1 -> 'a2) -> 'a1 option -> 'a2 option **)
+
+let option_map f = function
+| Some a -> Some (f a)
+| None -> None
+
+type ('a, 'b) sum =
+| Coq_inl of 'a
+| Coq_inr of 'b
+
 (** val fst : ('a1 * 'a2) -> 'a1 **)
 
 let fst = function

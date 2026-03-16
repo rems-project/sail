@@ -1,7 +1,6 @@
 open Ast
 open AstInduction
 open Bit
-open BitList
 open Datatypes
 open IdUtil
 open List0
@@ -113,10 +112,10 @@ module Make :
   module PM :
    sig
     val fold_match :
-      (Tannot.t pat -> value -> match_result) -> Tannot.t pat list ->
-      (match_result * value list) -> match_result * value list
+      (Tannot.t pat -> value -> value match_result) -> Tannot.t pat list ->
+      (value match_result * value list) -> value match_result * value list
 
-    val pattern_match : Tannot.t pat -> value -> match_result
+    val pattern_match : Tannot.t pat -> value -> value match_result
    end
 
   val substitute : id -> value -> 'a1 exp -> 'a1 exp
@@ -126,8 +125,6 @@ module Make :
   val substitute_lexp : id -> value -> 'a1 lexp -> 'a1 lexp
 
   val bv_concat : Parse_ast.l -> value list -> bit list Monad.t
-
-  val value_of_lit : lit -> value
 
   val lookup_field : Parse_ast.l -> id -> (id * value) list -> value Monad.t
 

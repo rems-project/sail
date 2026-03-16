@@ -6,6 +6,12 @@ let tl = function
 | [] -> []
 | _ :: l' -> l'
 
+(** val rev : 'a1 list -> 'a1 list **)
+
+let rec rev = function
+| [] -> []
+| x :: l' -> app (rev l') (x :: [])
+
 (** val concat : 'a1 list list -> 'a1 list **)
 
 let rec concat = function

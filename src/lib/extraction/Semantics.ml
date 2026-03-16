@@ -1,7 +1,6 @@
 open Ast
 open AstInduction
 open Bit
-open BitList
 open Datatypes
 open IdUtil
 open List0
@@ -390,20 +389,6 @@ module Make =
      | V_bitvector bs ->
        Monad.bind (bv_concat l rest) (fun rest' -> Monad.pure (app bs rest'))
      | _ -> Monad.Runtime_type_error l)
-
-  (** val value_of_lit : lit -> value **)
-
-  let value_of_lit = function
-  | L_aux (aux, _) ->
-    (match aux with
-     | L_unit -> V_unit
-     | L_true -> V_bool true
-     | L_false -> V_bool false
-     | L_num n -> V_int n
-     | L_hex h -> V_bitvector (of_hex_lit h)
-     | L_bin b -> V_bitvector (of_bin_lit b)
-     | L_string s -> V_string s
-     | L_real r -> V_real r)
 
   (** val lookup_field :
       Parse_ast.l -> id -> (id * value) list -> value Monad.t **)
@@ -799,7 +784,7 @@ module Make =
             Monad.Read_var ((PL_id (id0, Var_register)), (fun v ->
               wrap (E_internal_value v)))
           | Enum_member -> wrap (E_internal_value (V_member id0)))
-       | E_lit lit0 -> wrap (E_internal_value (value_of_lit lit0))
+       | E_lit lit -> wrap (E_internal_value (value_of_lit lit))
        | E_typ (_, x) -> step0 x
        | E_app (id0, args) ->
          let Id_aux (i, _) = id0 in

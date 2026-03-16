@@ -53,9 +53,9 @@ Ltac2 ltac1_to_list (f : Ltac1.t -> 'a) (t : Ltac1.t) : 'a list :=
 
 (**
 The [reintros] tactic is used to rename generated hypothesis names.
-[reintros x y] will revert the last two hypotheses, then call [intros
-x y] to reintroduce them with new names. If either [x] or [y] already
-exist, then they will be renamed.
+[reintros x y] will revert the last two hypotheses, then call
+[intros x y] to reintroduce them with new names. If either [x] or
+[y] already exist, then they will be renamed.
 *)
 
 Ltac2 rec revert_n (n : int) :=
@@ -99,7 +99,11 @@ Tactic Notation "reintros" simple_intropattern_list(names) :=
 
 (**
 The [destruct_match] tactic agressively performs case splitting on
-the head expression of match statements that appear in the goal.
+the head expression of any match statements that appear in the goal.
+
+This can cause the number of subgoals to explode, and creates a lot of
+generated names - but when they can all be solved trivially it can
+lead to much more succinct proofs than manually case splitting.
 *)
 
 Ltac2 rec destruct_match () :=
@@ -114,3 +118,17 @@ Ltac2 rec destruct_match () :=
   in Control.enter destruct_match'.
 
 Ltac destruct_match := ltac2:(destruct_match ()).
+
+Ltac2 rec destruct_match_goal () :=
+  let destruct_match' () :=
+    match! goal with
+    | [ |- context [ match ?v with _ => _ end ] ] =>
+        let e := Fresh.in_goal (Option.get (Ident.of_string "C")) in
+        destruct $v eqn : $e;
+        revert $e;
+        destruct_match_goal ()
+    | [ |- _ ] => ()
+    end
+  in Control.enter destruct_match'.
+
+Ltac destruct_match_goal := ltac2:(destruct_match_goal ()).
