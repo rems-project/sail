@@ -294,75 +294,61 @@ let () =
         { fixed with fields = Bindings.add id updated_fields fixed.fields }
   in
 
-  ArgString
-    ( "target",
-      fun target ->
-        ArgString
-          ( "assignments",
-            fun assignments ->
-              Action
-                (fun istate ->
-                  let assignments = Str.split (Str.regexp " +") assignments in
-                  let assignments =
-                    List.map
-                      (fun assignment ->
-                        match String.split_on_char '=' assignment with
-                        | [reg; value] -> begin
-                            match String.split_on_char '.' reg with
-                            | [reg; field] ->
-                                let reg = mk_id reg in
-                                let field = mk_id field in
-                                begin
-                                  match Env.lookup_id reg istate.env with
-                                  | Register (Typ_aux (Typ_id rec_id, _)) ->
-                                      let _, fields = Env.get_record rec_id istate.env in
-                                      let typ =
-                                        match List.find_opt (fun (typ, id) -> Id.compare id field = 0) fields with
-                                        | Some (typ, _) -> typ
-                                        | None ->
-                                            failwith
-                                              (sprintf "Register %s does not have a field %s" (string_of_id reg)
-                                                 (string_of_id field)
-                                              )
-                                      in
-                                      let exp = Initial_check.exp_of_string value in
-                                      let exp = check_exp istate.env exp typ in
-                                      Register_field (reg, field, typ, exp)
-                                  | _ ->
-                                      failwith
-                                        (sprintf "Register %s is not defined as a record in the current environment"
-                                           (string_of_id reg)
-                                        )
-                                end
-                            | _ ->
-                                let reg = mk_id reg in
-                                begin
-                                  match Env.lookup_id reg istate.env with
-                                  | Register typ ->
-                                      let exp = Initial_check.exp_of_string value in
-                                      let exp = check_exp istate.env exp typ in
-                                      Register (reg, typ, exp)
-                                  | _ ->
-                                      failwith
-                                        (sprintf "Register %s is not defined in the current environment"
-                                           (string_of_id reg)
-                                        )
-                                end
-                          end
-                        | _ -> failwith (sprintf "Could not parse '%s' as an assignment <register>=<value>" assignment)
-                      )
-                      assignments
-                  in
-                  let assignments = List.fold_left update_fixed no_fixed assignments in
+  register_command ~name:"fix_registers"
+    ~help:
+      "Fix the value of specified registers, specified as a list of <register>=<value>. Can also fix a specific \
+       register field as <register>.<field>=<value>. Note that this is not used to set registers normally, but instead \
+       fixes their value such that the constant folding rewrite (which is subsequently invoked by this command) will \
+       replace register reads with the fixed values. Requires a target (c, lem, etc.), as the set of functions that \
+       can be constant folded can differ on a per-target basis."
+  @@ let@ target = Arg.String "target" in
+     let@ assignments = Arg.String "assignments" in
+     let@ istate = Arg.Update in
+     let assignments = Str.split (Str.regexp " +") assignments in
+     let assignments =
+       List.map
+         (fun assignment ->
+           match String.split_on_char '=' assignment with
+           | [reg; value] -> begin
+               match String.split_on_char '.' reg with
+               | [reg; field] ->
+                   let reg = mk_id reg in
+                   let field = mk_id field in
+                   begin
+                     match Env.lookup_id reg istate.env with
+                     | Register (Typ_aux (Typ_id rec_id, _)) ->
+                         let _, fields = Env.get_record rec_id istate.env in
+                         let typ =
+                           match List.find_opt (fun (typ, id) -> Id.compare id field = 0) fields with
+                           | Some (typ, _) -> typ
+                           | None ->
+                               failwith
+                                 (sprintf "Register %s does not have a field %s" (string_of_id reg) (string_of_id field))
+                         in
+                         let exp = Initial_check.exp_of_string value in
+                         let exp = check_exp istate.env exp typ in
+                         Register_field (reg, field, typ, exp)
+                     | _ ->
+                         failwith
+                           (sprintf "Register %s is not defined as a record in the current environment"
+                              (string_of_id reg)
+                           )
+                   end
+               | _ ->
+                   let reg = mk_id reg in
+                   begin
+                     match Env.lookup_id reg istate.env with
+                     | Register typ ->
+                         let exp = Initial_check.exp_of_string value in
+                         let exp = check_exp istate.env exp typ in
+                         Register (reg, typ, exp)
+                     | _ -> failwith (sprintf "Register %s is not defined in the current environment" (string_of_id reg))
+                   end
+             end
+           | _ -> failwith (sprintf "Could not parse '%s' as an assignment <register>=<value>" assignment)
+         )
+         assignments
+     in
+     let assignments = List.fold_left update_fixed no_fixed assignments in
 
-                  { istate with ast = rewrite_constant_function_calls' assignments target istate.env istate.ast }
-                )
-          )
-    )
-  |> register_command ~name:"fix_registers"
-       ~help:
-         "Fix the value of specified registers, specified as a list of <register>=<value>. Can also fix a specific \
-          register field as <register>.<field>=<value>. Note that this is not used to set registers normally, but \
-          instead fixes their value such that the constant folding rewrite (which is subsequently invoked by this \
-          command) will replace register reads with the fixed values. Requires a target (c, lem, etc.), as the set of \
-          functions that can be constant folded can differ on a per-target basis."
+     { istate with ast = rewrite_constant_function_calls' assignments target istate.env istate.ast }

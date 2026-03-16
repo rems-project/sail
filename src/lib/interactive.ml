@@ -84,6 +84,20 @@ type action =
   | Action of (State.istate -> State.istate)
   | ActionUnit of (State.istate -> unit)
 
+module Arg = struct
+  type (_, _) t =
+    | String : string -> (string, action) t
+    | Int : string -> (int, action) t
+    | Update : (State.istate, State.istate) t
+    | Get : (State.istate, unit) t
+end
+
+let ( let@ ) : type a b. (a, b) Arg.t -> (a -> b) -> action = function
+  | Arg.String s -> fun f -> ArgString (s, f)
+  | Arg.Int s -> fun f -> ArgInt (s, f)
+  | Arg.Update -> fun f -> Action f
+  | Arg.Get -> fun f -> ActionUnit f
+
 let commands = ref []
 
 let get_command cmd = List.assoc_opt cmd !commands

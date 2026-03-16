@@ -74,6 +74,16 @@ type action =
   | Action of (State.istate -> State.istate)
   | ActionUnit of (State.istate -> unit)
 
+module Arg : sig
+  type (_, _) t =
+    | String : string -> (string, action) t
+    | Int : string -> (int, action) t
+    | Update : (State.istate, State.istate) t
+    | Get : (State.istate, unit) t
+end
+
+val ( let@ ) : ('a, 'b) Arg.t -> ('a -> 'b) -> action
+
 val reflect_typ : action -> typ
 
 val get_command : string -> (string * action) option
