@@ -45,8 +45,8 @@ From Stdlib Require Import Bool.
 From Stdlib Require Import Lists.List.
 From Stdlib Require Import ZArith.
 
-Require Import Ast.
-Require Import Tactics.
+From Sail Require Import Ast.
+From Sail Require Import Tactics.
 
 Import ListNotations.
 

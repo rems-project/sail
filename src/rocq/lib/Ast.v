@@ -47,7 +47,7 @@ From Stdlib Require Import String.
 From Stdlib Require Import ZArith.
 From Stdlib Require Import QArith.
 
-Require Import Bit.
+From Sail Require Import Bit.
 
 Parameter loc : Set.
 

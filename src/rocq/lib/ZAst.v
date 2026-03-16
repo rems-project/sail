@@ -44,16 +44,16 @@
 From Stdlib Require Import List.
 From Stdlib Require Import String.
 
-Require Import Ast.
-Require Import AstInduction.
-Require Import IdUtil.
-Require Import ListUtil.
-Require Import OptionUtil.
-Require Import Tactics.
-Require Import ValueType.
-Require ValueSemilattice.
-Require PatternMatch.
-Require TypeAnnot.
+From Sail Require Import Ast.
+From Sail Require Import AstInduction.
+From Sail Require Import IdUtil.
+From Sail Require Import ListUtil.
+From Sail Require Import OptionUtil.
+From Sail Require Import Tactics.
+From Sail Require Import ValueType.
+From Sail Require ValueSemilattice.
+From Sail Require PatternMatch.
+From Sail Require TypeAnnot.
 
 Import ListNotations.
 

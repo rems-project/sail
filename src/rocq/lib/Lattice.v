@@ -52,11 +52,11 @@ From Stdlib Require Import Sets.Ensembles.
 From Stdlib Require Import String.
 From Stdlib Require Import ZArith.
 
-Require Import IdUtil.
-Require Import ListUtil.
-Require Import OptionUtil.
-Require Import Tactics.
-Require Ast.
+From Sail Require Import IdUtil.
+From Sail Require Import ListUtil.
+From Sail Require Import OptionUtil.
+From Sail Require Import Tactics.
+From Sail Require Ast.
 
 Import ListNotations.
 

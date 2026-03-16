@@ -45,8 +45,8 @@ From Stdlib Require Import Lia.
 From Stdlib Require Import Lists.List.
 From Stdlib Require Import ZArith.
 
-Require Import Ast.
-Require Import ListUtil.
+From Sail Require Import Ast.
+From Sail Require Import ListUtil.
 
 Import ListNotations.
 

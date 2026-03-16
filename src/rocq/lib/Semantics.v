@@ -53,14 +53,14 @@ From Stdlib Require QArith.
 From Stdlib Require Import Setoid.
 From Stdlib Require Import Morphisms.
 
-Require Import Ast.
-Require Import AstInduction.
-Require Import Bit.
-Require Import IdUtil.
-Require Import ListUtil.
-Require Import PatternMatch.
-Require Import ValueType.
-Require TypeAnnot.
+From Sail Require Import Ast.
+From Sail Require Import AstInduction.
+From Sail Require Import Bit.
+From Sail Require Import IdUtil.
+From Sail Require Import ListUtil.
+From Sail Require Import PatternMatch.
+From Sail Require Import ValueType.
+From Sail Require TypeAnnot.
 
 Import ListNotations.
 

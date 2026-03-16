@@ -43,11 +43,11 @@
 
 From Stdlib Require Import List.
 
-Require Import Ast.
-Require Import IdUtil.
-Require Import ValueType.
-Require PatternMatch.
-Require TypeAnnot.
+From Sail Require Import Ast.
+From Sail Require Import IdUtil.
+From Sail Require Import ValueType.
+From Sail Require PatternMatch.
+From Sail Require TypeAnnot.
 
 Import ListNotations.
 

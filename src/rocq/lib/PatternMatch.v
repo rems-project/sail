@@ -45,16 +45,16 @@ From Stdlib Require Import Bool.
 From Stdlib Require Import Lists.List.
 From Stdlib Require Import ZArith.
 
-Require Import Tactics.
-Require Import Ast.
-Require Import AstInduction.
-Require Import Bit.
-Require Import IdUtil.
-Require Import ListUtil.
-Require Import ValueType.
+From Sail Require Import Tactics.
+From Sail Require Import Ast.
+From Sail Require Import AstInduction.
+From Sail Require Import Bit.
+From Sail Require Import IdUtil.
+From Sail Require Import ListUtil.
+From Sail Require Import ValueType.
 
-Require BitList.
-Require TypeAnnot.
+From Sail Require BitList.
+From Sail Require TypeAnnot.
 
 Import ListNotations.
 
