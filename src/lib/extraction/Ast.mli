@@ -112,7 +112,6 @@ type value =
 | V_member of id
 | V_ctor of id * value list
 | V_record of (id * value) list
-| V_unknown
 
 type lit_aux =
 | L_unit

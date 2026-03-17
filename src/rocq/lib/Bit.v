@@ -42,8 +42,8 @@
 (* ************************************************************************ *)
 
 Inductive bit : Set :=
-| B0 : bit
-| B1 : bit.
+  | B0 : bit
+  | B1 : bit.
 
 Definition bit_eqb (lhs rhs : bit) : bool :=
   match (lhs, rhs) with
@@ -56,3 +56,111 @@ Lemma bit_eqb_refl : forall b, bit_eqb b b = true.
 Proof.
   destruct b; reflexivity.
 Qed.
+
+Lemma bit_eqb_comm : forall {x y}, bit_eqb x y = bit_eqb y x.
+Proof. intros x y; destruct x, y; reflexivity. Qed.
+
+Module Three.
+  Inductive bitU : Set :=
+    | B0 : bitU
+    | B1 : bitU
+    | BU : bitU.
+
+  Module Notations.
+    Notation "0" := B0.
+    Notation "1" := B1.
+    Notation "?" := BU.
+  End Notations.
+
+  Import Notations.
+
+  Definition bit_not (b : bitU) : bitU :=
+    match b with
+    | 0 => 1
+    | 1 => 0
+    | ? => ?
+    end.
+
+  Definition bit_or (lhs rhs : bitU) : bitU :=
+    match (lhs, rhs) with
+    | (0, 0) => 0
+    | (0, 1) => 1
+    | (0, ?) => ?
+    | (1, 0) => 1
+    | (1, 1) => 1
+    | (1, ?) => 1
+    | (?, 0) => ?
+    | (?, 1) => 1
+    | (?, ?) => ?
+    end.
+
+  Lemma bit_or_comm : forall (x y : bitU), bit_or x y = bit_or y x.
+  Proof. intros x y; destruct x, y; reflexivity. Qed.
+
+  Lemma bit_or_assoc : forall x y z, bit_or x (bit_or y z) = bit_or (bit_or x y) z.
+  Proof. intros x y z; destruct x, y, z; reflexivity. Qed.
+
+  Definition bit_and (lhs rhs : bitU) : bitU :=
+    match (lhs, rhs) with
+    | (0, 0) => 0
+    | (0, 1) => 0
+    | (0, ?) => 0
+    | (1, 0) => 0
+    | (1, 1) => 1
+    | (1, ?) => ?
+    | (?, 0) => 0
+    | (?, 1) => ?
+    | (?, ?) => ?
+    end.
+
+  Lemma bit_and_comm : forall (x y : bitU), bit_and x y = bit_and y x.
+  Proof. intros x y; destruct x, y; reflexivity. Qed.
+
+  Lemma bit_and_assoc : forall x y z, bit_and x (bit_and y z) = bit_and (bit_and x y) z.
+  Proof. intros x y z; destruct x, y, z; reflexivity. Qed.
+
+  Lemma de_morgan_not_or : forall x y, bit_not (bit_or x y) = bit_and (bit_not x) (bit_not y).
+  Proof. intros x y; destruct x, y; reflexivity. Qed.
+
+  Lemma de_morgan_not_and : forall x y, bit_not (bit_and x y) = bit_or (bit_not x) (bit_not y).
+  Proof. intros x y; destruct x, y; reflexivity. Qed.
+
+  Definition bit_xor (lhs rhs : bitU) : bitU :=
+    match (lhs, rhs) with
+    | (0, 0) => 0
+    | (0, 1) => 1
+    | (0, ?) => ?
+    | (1, 0) => 1
+    | (1, 1) => 0
+    | (1, ?) => ?
+    | (?, 0) => ?
+    | (?, 1) => ?
+    | (?, ?) => ?
+    end.
+
+  Lemma bit_xor_comm : forall (x y : bitU), bit_xor x y = bit_xor y x.
+  Proof. intros x y; destruct x, y; reflexivity. Qed.
+
+  Lemma bit_xor_assoc : forall x y z, bit_xor x (bit_xor y z) = bit_xor (bit_xor x y) z.
+  Proof. intros x y z; destruct x, y, z; reflexivity. Qed.
+
+  Lemma bit_xor_alt: forall (x y : bitU),
+    bit_or (bit_and (bit_not x) y) (bit_and x (bit_not y)) = bit_xor x y.
+  Proof. intros x y; destruct x, y; reflexivity. Qed.
+
+  Definition bit_add (lhs rhs : bitU) : bitU * bitU :=
+    match (lhs, rhs) with
+    | (0, 0) => (0, 0)
+    | (0, 1) => (1, 0)
+    | (0, ?) => (?, 0)
+    | (1, 0) => (1, 0)
+    | (1, 1) => (0, 1)
+    | (1, ?) => (?, ?)
+    | (?, 0) => (?, 0)
+    | (?, 1) => (?, ?)
+    | (?, ?) => (?, ?)
+    end.
+
+  Lemma bit_add_comm : forall (x y : bitU), bit_add x y = bit_add y x.
+  Proof. intros x y; destruct x, y; reflexivity. Qed.
+End Three.

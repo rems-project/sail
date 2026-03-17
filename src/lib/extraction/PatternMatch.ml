@@ -186,45 +186,36 @@ let rec binds_id n = function
 let pattern_match_literal l v =
   let L_aux (aux, _) = l in
   (match aux with
-   | L_unit ->
-     (match v with
-      | V_unit -> simple_match
-      | V_unknown -> MaybeMatched empty_bindings
-      | _ -> Unmatched)
+   | L_unit -> (match v with
+                | V_unit -> simple_match
+                | _ -> Unmatched)
    | L_true ->
      (match v with
       | V_bool b -> if b then simple_match else Unmatched
-      | V_unknown -> MaybeMatched empty_bindings
       | _ -> Unmatched)
    | L_false ->
      (match v with
       | V_bool b -> if b then Unmatched else simple_match
-      | V_unknown -> MaybeMatched empty_bindings
       | _ -> Unmatched)
    | L_num n ->
      (match v with
       | V_int m -> simple_match_when (Z.eqb n m)
-      | V_unknown -> MaybeMatched empty_bindings
       | _ -> Unmatched)
    | L_hex s ->
      (match v with
       | V_bitvector vs -> simple_match_when (same_bits (of_hex_lit s) vs)
-      | V_unknown -> MaybeMatched empty_bindings
       | _ -> Unmatched)
    | L_bin s ->
      (match v with
       | V_bitvector vs -> simple_match_when (same_bits (of_bin_lit s) vs)
-      | V_unknown -> MaybeMatched empty_bindings
       | _ -> Unmatched)
    | L_string s1 ->
      (match v with
       | V_string s2 -> simple_match_when ((=) s1 s2)
-      | V_unknown -> MaybeMatched empty_bindings
       | _ -> Unmatched)
    | L_real r1 ->
      (match v with
       | V_real r2 -> simple_match_when (coq_Qeq_bool r1 r2)
-      | V_unknown -> MaybeMatched empty_bindings
       | _ -> Unmatched))
 
 (** val get_struct_field : id -> (id * value) list -> value **)
@@ -270,7 +261,6 @@ module Make =
         | Enum_member ->
           (match v with
            | V_member m -> simple_match_when (id_eqb n m)
-           | V_unknown -> MaybeMatched empty_bindings
            | _ -> Unmatched)
         | _ -> Matched (IdMap.add n (Complete v) empty_bindings))
      | P_var (p0, _) -> pattern_match p0 v
@@ -326,11 +316,9 @@ module Make =
            empty_bindings)
      | P_tuple ps ->
        (match ps with
-        | [] ->
-          (match v with
-           | V_unit -> simple_match
-           | V_unknown -> simple_match
-           | _ -> Unmatched)
+        | [] -> (match v with
+                 | V_unit -> simple_match
+                 | _ -> Unmatched)
         | _ :: _ ->
           (match v with
            | V_tuple vs ->

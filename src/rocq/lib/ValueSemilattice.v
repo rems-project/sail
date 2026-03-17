@@ -89,7 +89,7 @@ End S.
 Module Value (Tannot : TypeAnnot.S) <: S Tannot.
   Definition t : Set := Ast.value.
 
-  Definition join (x y : t) : t := if value_eqb x y then x else V_unknown.
+  Definition join (x y : t) : t := if value_eqb x y then x else V_unit.
 
   Infix "⊔" := join (left associativity, at level 50).
 
@@ -107,7 +107,7 @@ Module Value (Tannot : TypeAnnot.S) <: S Tannot.
 
   Fixpoint lookup_field' (fields : list (id * t)) (name : id) {struct fields} : t :=
     match fields with
-    | [] => V_unknown
+    | [] => V_unit
     | (name', v) :: fields =>
         if id_eqb name name' then
           v
@@ -118,7 +118,7 @@ Module Value (Tannot : TypeAnnot.S) <: S Tannot.
   Definition lookup_field (rec : t) (name : id) : t :=
     match rec with
     | V_record fields => lookup_field' fields name
-    | _ => V_unknown
+    | _ => V_unit
     end.
 
   Module PM := PatternMatch.Make Tannot.
