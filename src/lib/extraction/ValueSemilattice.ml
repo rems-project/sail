@@ -12,7 +12,7 @@ module Value =
   (** val join : t -> t -> t **)
 
   let join x y =
-    if value_eqb x y then x else V_unknown
+    if value_eqb x y then x else V_unit
 
   (** val v_unit : value **)
 
@@ -66,7 +66,7 @@ module Value =
 
   let rec lookup_field' fields name =
     match fields with
-    | [] -> V_unknown
+    | [] -> V_unit
     | p :: fields0 ->
       let (name', v) = p in
       if id_eqb name name' then v else lookup_field' fields0 name
@@ -76,7 +76,7 @@ module Value =
   let lookup_field rec0 name =
     match rec0 with
     | V_record fields -> lookup_field' fields name
-    | _ -> V_unknown
+    | _ -> V_unit
 
   module PM = Make(Tannot)
 

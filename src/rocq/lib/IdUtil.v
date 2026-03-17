@@ -142,6 +142,36 @@ Proof.
   reflexivity.
 Qed.
 
+Definition unwrap_id (id : Ast.id) : id_aux :=
+  match id with
+  | Id_aux aux _ => aux
+  end.
+
+Module Aux.
+  Definition t := id_aux.
+
+  Definition unwrap (id : Ast.id) : id_aux :=
+    match id with
+    | Id_aux aux _ => aux
+    end.
+
+  Definition eqb (id1 id2 : t) : bool :=
+    match (id1, id2) with
+    | (And_bool, And_bool) => true
+    | (Or_bool, Or_bool) => true
+    | (Id s1, Id s2) => String.eqb s1 s2
+    | (Operator s1, Operator s2) => String.eqb s1 s2
+    | _ => false
+    end.
+
+  Lemma eqb_eq : forall id1 id2, eqb id1 id2 = true <-> id1 = id2.
+  Proof.
+    intros id1 id2.
+    destruct id1, id2; split; intros H; cbn in *.
+    all: try (inversion H + rewrite String.eqb_eq in H; subst); discriminate + reflexivity + apply String.eqb_refl.
+  Qed.
+End Aux.
+
 Definition id_eqb (id1 : id) (id2 : id) : bool :=
   match (id1, id2) with
   | (Id_aux And_bool _, Id_aux And_bool _) => true

@@ -569,11 +569,11 @@ Module Interval <: DOMAIN BinInt.Z.
   Qed.
 End Interval.
 
-(*
 Module Value.
   Definition t := Ast.value.
 End Value.
 
+(*
 Module AbsValue (DZ : DOMAIN BinInt.Z) <: DOMAIN Value.
   Inductive value : Type :=
     | V_bitvector : list Bit.bit -> value
@@ -592,7 +592,59 @@ Module AbsValue (DZ : DOMAIN BinInt.Z) <: DOMAIN Value.
     | V_top : value
     | V_bot : value.
 
-  Search ((?A -> bool) -> list ?A -> bool).
+  (* Induction rule for abstract values, needed as they contain nested lists of values *)
+  Section abs_value_ind.
+    Variables (P : value -> Prop)
+              (H_bitvector : forall bv, P (V_bitvector bv))
+              (H_vector : forall vs, Forall P vs -> P (V_vector vs))
+              (H_list : forall vs, Forall P vs -> P (V_list vs))
+              (H_int : forall i, P (V_int i))
+              (H_real : forall r, P (V_real r))
+              (H_bool : forall b, P (V_bool b))
+              (H_tuple : forall vs, Forall P vs -> P (V_tuple vs))
+              (H_unit : P V_unit)
+              (H_string : forall str, P (V_string str))
+              (H_ref : forall id, P (V_ref id))
+              (H_member : forall id, P (V_member id))
+              (H_ctor : forall id vs, Forall P vs -> P (V_ctor id vs))
+              (H_record : forall fields, Forall (fun f => P (snd f)) fields -> P (V_record fields))
+              (H_top : P V_top)
+              (H_bot : P V_bot).
+
+    Fixpoint abs_value_ind v : P v.
+      destruct v.
+      - apply H_bitvector.
+      - apply H_vector.
+        induction l.
+        + trivial.
+        + rewrite Forall_cons_iff. easy.
+      - apply H_list.
+        induction l.
+        + trivial.
+        + rewrite Forall_cons_iff. easy.
+      - apply H_int.
+      - apply H_real.
+      - apply H_bool.
+      - apply H_tuple.
+        induction l.
+        + trivial.
+        + rewrite Forall_cons_iff. easy.
+      - apply H_unit.
+      - apply H_string.
+      - apply H_ref.
+      - apply H_member.
+      - apply H_ctor.
+        induction l.
+        + trivial.
+        + rewrite Forall_cons_iff. easy.
+      - apply H_record.
+        induction l.
+        + trivial.
+        + rewrite Forall_cons_iff. easy.
+      - apply H_top.
+      - apply H_bot.
+    Qed.
+  End abs_value_ind.
 
   Fixpoint is_bot (v : value) : bool :=
     match v with
@@ -609,45 +661,134 @@ Module AbsValue (DZ : DOMAIN BinInt.Z) <: DOMAIN Value.
 
   Definition t := value.
 
+  Definition top := V_top.
+  Definition bot := V_bot.
+
   Notation "⊤" := V_top.
   Notation "⊥" := V_bot.
 
-  Search ((?a -> ?b -> ?c) -> list ?a -> list ?b -> list ?c).
-
-  Search "zip".
-
-  Definition join_consumer (f : value -> value -> value) (vs : list value) (v : value) : option value * list value :=
-    match vs with
-    | [] => (None, [])
-    | v' :: vs => (Some (f v v'), vs)
+  Fixpoint map2 {A B C} (f : A -> B -> C) (xs : list A) (ys : list B) : option (list C) :=
+    match xs with
+    | [] =>
+        match ys with
+        | [] => Some []
+        | _  => None
+        end
+    | x :: xs =>
+        match ys with
+        | []      => None
+        | y :: ys =>
+            match map2 f xs ys with
+            | Some zs => Some (f x y :: zs)
+            | None    => None
+            end
+        end
     end.
 
   Fixpoint join (v₁ v₂ : value) {struct v₁} : value :=
     match (v₁, v₂) with
     | (V_bitvector bv₁, V_bitvector bv₂) => if list_eqb Bit.bit_eqb bv₁ bv₂ then V_bitvector bv₁ else ⊤
-    | (V_vector vs₁, V_vector vs₂) =>
-        match fold_left (consume (join_consumer join)) vs₁ (Some [], vs₁) with
-        | (Some vsᵣ, []) => V_vector vsᵣ
-        | _ => ⊤
-        end
-    | (V_list vs₁, V_list vs₂) =>
-        match fold_left (consume (join_consumer join)) vs₁ (Some [], vs₁) with
-        | (Some vsᵣ, []) => V_list vsᵣ
-        | _ => ⊤
-        end
+    | (V_vector vs₁, V_vector vs₂) => match map2 join vs₁ vs₂ with Some vsᵣ => V_vector vsᵣ | None => ⊤ end
+    | (V_list vs₁, V_list vs₂) => match map2 join vs₁ vs₂ with Some vsᵣ => V_list vsᵣ | None => ⊤ end
     | (V_int i₁, V_int i₂) => V_int (DZ.join i₁ i₂)
     | (V_real r₁, V_real r₂) => if Qeq_bool (this r₁) (this r₂) then V_real r₁ else ⊤
     | (V_bool b₁, V_bool b₂) => if Bool.eqb b₁ b₂ then V_bool b₁ else ⊤
-    | (V_tuple vs₁, V_tuple vs₂) =>
-        match fold_left (consume (join_consumer join)) vs₁ (Some [], vs₁) with
-        | (Some vsᵣ, []) => V_tuple vsᵣ
-        | _ => ⊤
-        end
+    | (V_tuple vs₁, V_tuple vs₂) => match map2 join vs₁ vs₂ with Some vsᵣ => V_tuple vsᵣ | None => ⊤ end
     | (V_unit, V_unit) => V_unit
     | (V_string s₁, V_string s₂) => if (s₁ =? s₂)%string then V_string s₁ else ⊤
     | (⊥, v) => v
     | (v, ⊥) => v
     | (_, _) => ⊤
     end.
+
+  Fixpoint meet (v₁ v₂ : value) {struct v₁} : value :=
+    match (v₁, v₂) with
+    | (V_bitvector bv₁, V_bitvector bv₂) => if list_eqb Bit.bit_eqb bv₁ bv₂ then V_bitvector bv₁ else ⊥
+    | (V_vector vs₁, V_vector vs₂) => match map2 meet vs₁ vs₂ with Some vsᵣ => V_vector vsᵣ | None => ⊥ end
+    | (V_list vs₁, V_list vs₂) => match map2 meet vs₁ vs₂ with Some vsᵣ => V_list vsᵣ | None => ⊥ end
+    | (V_int i₁, V_int i₂) => V_int (DZ.meet i₁ i₂)
+    | (V_real r₁, V_real r₂) => if Qeq_bool (this r₁) (this r₂) then V_real r₁ else ⊥
+    | (V_bool b₁, V_bool b₂) => if Bool.eqb b₁ b₂ then V_bool b₁ else ⊥
+    | (V_tuple vs₁, V_tuple vs₂) => match map2 meet vs₁ vs₂ with Some vsᵣ => V_tuple vsᵣ | None => ⊥ end
+    | (V_unit, V_unit) => V_unit
+    | (V_string s₁, V_string s₂) => if (s₁ =? s₂)%string then V_string s₁ else ⊥
+    | (⊤, v) => v
+    | (v, ⊤) => v
+    | (_, _) => ⊥
+    end.
+
+  Lemma eq_comm : forall {A} {x y : A}, x = y <-> y = x.
+  Proof.
+    split; apply eq_sym.
+  Qed.
+
+  Lemma map2_comm : forall {A} {xs ys : list A} {f : A -> A -> A}
+      (f_comm : forall {x y : A}, List.In x xs -> List.In y ys -> f x y = f y x),
+    map2 f xs ys = map2 f ys xs.
+  Proof.
+    intros A xs ys f f_comm.
+    generalize dependent ys.
+    induction xs as [| x xs IH]; destruct ys as [| y ys].
+    all: try (intros; reflexivity).
+    intros f_comm.
+    cbn.
+    rewrite f_comm; try apply in_eq.
+    rewrite IH.
+    + reflexivity.
+    + intros x' y' In_xs In_ys.
+      apply (f_comm x' y' (in_cons _ _ _ In_xs) (in_cons _ _ _ In_ys)).
+  Qed.
+
+  Lemma join_comm : forall x y, join x y = join y x.
+  Proof.
+    intros x;
+    induction x using abs_value_ind;
+    intros y; destruct y; cbn [join]; try reflexivity.
+    - reintros x y.
+      rewrite (list_eqb_comm _ Bit.bit_eqb _ _ (@Bit.bit_eqb_comm)).
+      destruct (list_eqb Bit.bit_eqb y x) eqn : Eq; try reflexivity.
+      apply list_eqb_eq in Eq.
+      + rewrite Eq; reflexivity.
+      + intros b1 b2 _; destruct b1, b2; split; intros BitEq; reflexivity + (cbn in BitEq; discriminate).
+    - reintros xs IH ys.
+      rewrite map2_comm.
+      + reflexivity.
+      + intros x y In_xs In_ys.
+        apply (Forall_in _ _ _ IH In_xs).
+    - reintros xs IH ys.
+      rewrite map2_comm.
+      + reflexivity.
+      + intros x y In_xs In_ys.
+        apply (Forall_in _ _ _ IH In_xs).
+    - f_equal; apply DZ.join_comm.
+    - rewrite Qeq_bool_comm.
+      destruct (Qeq_bool q r) eqn : Eq; try reflexivity.
+      f_equal.
+      apply Qc_is_canon.
+      apply Qeq_bool_eq.
+      rewrite Qeq_bool_comm.
+      apply Eq.
+    - reintros x y; destruct x, y; reflexivity.
+    - reintros xs IH ys.
+      rewrite map2_comm.
+      + reflexivity.
+      + intros x y In_xs In_ys.
+        apply (Forall_in _ _ _ IH In_xs).
+    - reintros sx sy.
+      destruct (sx =? sy)%string eqn : Eq.
+      + rewrite String.eqb_eq in Eq; subst.
+        rewrite String.eqb_refl; reflexivity.
+      + rewrite String.eqb_neq, eq_comm, <- String.eqb_neq in Eq.
+        rewrite Eq; reflexivity.
+  Qed.
+
+  Lemma join_assoc : forall x y z, join x (join y z) = join (join x y) z.
+  Admitted.
+
+  Lemma meet_comm : forall x y, meet x y = meet y x.
+  Admitted.
+
+  Lemma meet_assoc : forall x y z, meet x (meet y z) = meet (meet x y) z.
+  Admitted.
 End AbsValue.
 *)
