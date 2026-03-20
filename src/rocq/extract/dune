@@ -35,4 +35,4 @@
   ValueType
   Wf
   ZAst)
- (theories Stdlib Sail Ltac2))
+ (theories Stdlib Sail Ltac2 stdpp))

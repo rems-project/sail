@@ -71,6 +71,12 @@ Definition option_join {A} (f : A -> A -> A) (o₁ o₂ : option A) : option A :
   | (Some x, Some y) => Some (f x y)
   end.
 
+Definition option_bind2 {A} (f : A -> A -> option A) (o₁ o₂ : option A) : option A :=
+  match (o₁, o₂) with
+  | (Some x, Some y) => f x y
+  | _ => None
+  end.
+
 Section option_join.
   Context {A : Type}.
   Context {f : A -> A -> A}.
@@ -168,6 +174,24 @@ Proof.
   rewrite (option_all_prime_is_alt []).
   unfold option_map.
   destruct_match; reflexivity.
+Qed.
+
+Lemma option_all_length : forall {A} {xs : list (option A)} {ys : list A},
+  option_all xs = Some ys -> List.length xs = List.length ys.
+Proof.
+  intros A xs.
+  induction xs as [| x xs IH]; intros ys H.
+  - cbn in H; inversion H; reflexivity.
+  - rewrite option_all_is_alt in H.
+    rewrite option_all_is_alt in IH.
+    cbn in H.
+    destruct x; try discriminate.
+    destruct (option_all_alt xs); try discriminate.
+    destruct ys; try discriminate.
+    cbn.
+    apply eq_S, IH.
+    inversion H.
+    reflexivity.
 Qed.
 
 Definition option_is {A} (f : A -> bool) (o : option A) : bool :=

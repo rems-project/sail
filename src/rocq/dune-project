@@ -5,4 +5,5 @@
  (name rocq_sail)
  (synopsis "Sail core definitions in Rocq")
  (depends
-  (rocq-stdlib (>= 9.1.1))))
+  (rocq-stdlib (>= 9.1.1))
+  (rocq-stdpp (>= 1.13.0))))
