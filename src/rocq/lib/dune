@@ -17,4 +17,4 @@
   ValueType
   ZAst)
  (package rocq_sail)
- (theories Stdlib Ltac2))
+ (theories Stdlib Ltac2 stdpp))

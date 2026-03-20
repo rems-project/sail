@@ -61,10 +61,10 @@ Lemma bit_eqb_comm : forall {x y}, bit_eqb x y = bit_eqb y x.
 Proof. intros x y; destruct x, y; reflexivity. Qed.
 
 Module Three.
-  Inductive bitU : Set :=
-    | B0 : bitU
-    | B1 : bitU
-    | BU : bitU.
+  Inductive ubit : Set :=
+    | B0 : ubit
+    | B1 : ubit
+    | BU : ubit.
 
   Module Notations.
     Notation "0" := B0.
@@ -74,14 +74,20 @@ Module Three.
 
   Import Notations.
 
-  Definition bit_not (b : bitU) : bitU :=
+  Definition from_bit (b : bit) : ubit :=
+    match b with
+    | Bit.B0 => 0
+    | Bit.B1 => 1
+    end.
+
+  Definition bit_not (b : ubit) : ubit :=
     match b with
     | 0 => 1
     | 1 => 0
     | ? => ?
     end.
 
-  Definition bit_or (lhs rhs : bitU) : bitU :=
+  Definition bit_or (lhs rhs : ubit) : ubit :=
     match (lhs, rhs) with
     | (0, 0) => 0
     | (0, 1) => 1
@@ -94,13 +100,13 @@ Module Three.
     | (?, ?) => ?
     end.
 
-  Lemma bit_or_comm : forall (x y : bitU), bit_or x y = bit_or y x.
+  Lemma bit_or_comm : forall (x y : ubit), bit_or x y = bit_or y x.
   Proof. intros x y; destruct x, y; reflexivity. Qed.
 
   Lemma bit_or_assoc : forall x y z, bit_or x (bit_or y z) = bit_or (bit_or x y) z.
   Proof. intros x y z; destruct x, y, z; reflexivity. Qed.
 
-  Definition bit_and (lhs rhs : bitU) : bitU :=
+  Definition bit_and (lhs rhs : ubit) : ubit :=
     match (lhs, rhs) with
     | (0, 0) => 0
     | (0, 1) => 0
@@ -113,7 +119,7 @@ Module Three.
     | (?, ?) => ?
     end.
 
-  Lemma bit_and_comm : forall (x y : bitU), bit_and x y = bit_and y x.
+  Lemma bit_and_comm : forall (x y : ubit), bit_and x y = bit_and y x.
   Proof. intros x y; destruct x, y; reflexivity. Qed.
 
   Lemma bit_and_assoc : forall x y z, bit_and x (bit_and y z) = bit_and (bit_and x y) z.
@@ -125,7 +131,7 @@ Module Three.
   Lemma de_morgan_not_and : forall x y, bit_not (bit_and x y) = bit_or (bit_not x) (bit_not y).
   Proof. intros x y; destruct x, y; reflexivity. Qed.
 
-  Definition bit_xor (lhs rhs : bitU) : bitU :=
+  Definition bit_xor (lhs rhs : ubit) : ubit :=
     match (lhs, rhs) with
     | (0, 0) => 0
     | (0, 1) => 1
@@ -138,17 +144,17 @@ Module Three.
     | (?, ?) => ?
     end.
 
-  Lemma bit_xor_comm : forall (x y : bitU), bit_xor x y = bit_xor y x.
+  Lemma bit_xor_comm : forall (x y : ubit), bit_xor x y = bit_xor y x.
   Proof. intros x y; destruct x, y; reflexivity. Qed.
 
   Lemma bit_xor_assoc : forall x y z, bit_xor x (bit_xor y z) = bit_xor (bit_xor x y) z.
   Proof. intros x y z; destruct x, y, z; reflexivity. Qed.
 
-  Lemma bit_xor_alt: forall (x y : bitU),
+  Lemma bit_xor_alt: forall (x y : ubit),
     bit_or (bit_and (bit_not x) y) (bit_and x (bit_not y)) = bit_xor x y.
   Proof. intros x y; destruct x, y; reflexivity. Qed.
 
-  Definition bit_add (lhs rhs : bitU) : bitU * bitU :=
+  Definition bit_add (lhs rhs : ubit) : ubit * ubit :=
     match (lhs, rhs) with
     | (0, 0) => (0, 0)
     | (0, 1) => (1, 0)
@@ -161,6 +167,42 @@ Module Three.
     | (?, ?) => (?, ?)
     end.
 
-  Lemma bit_add_comm : forall (x y : bitU), bit_add x y = bit_add y x.
+  Lemma bit_add_comm : forall (x y : ubit), bit_add x y = bit_add y x.
   Proof. intros x y; destruct x, y; reflexivity. Qed.
+
+  Definition bit_join (x y : ubit) : ubit :=
+    match (x, y) with
+    | (0, 0) => 0
+    | (1, 1) => 1
+    | _  => ?
+    end.
+
+  Lemma bit_join_comm : forall (x y : ubit), bit_join x y = bit_join y x.
+  Proof. intros x y; destruct x, y; reflexivity. Qed.
+
+  Lemma bit_join_assoc: forall x y z, bit_join x (bit_join y z) = bit_join (bit_join x y) z.
+  Proof. intros x y z; destruct x, y, z; reflexivity. Qed.
+
+  Definition bit_meet (x y : ubit) : option ubit :=
+    match (x, y) with
+    | (0, 0) => Some 0
+    | (0, ?) => Some 0
+    | (?, 0) => Some 0
+    | (1, 1) => Some 1
+    | (1, ?) => Some 1
+    | (?, 1) => Some 1
+    | (?, ?) => Some ?
+    | _ => None
+    end.
+
+  Lemma bit_meet_comm : forall (x y : ubit), bit_meet x y = bit_meet y x.
+  Proof. intros x y; destruct x, y; reflexivity. Qed.
+
+  Definition bit_leb (x y : ubit) : bool :=
+    match (x, y) with
+    | (0, 0) => true
+    | (1, 1) => true
+    | (_, ?) => true
+    | _ => false
+    end.
 End Three.

@@ -48,8 +48,12 @@ From Stdlib Require Import Structures.OrdersAlt.
 From Stdlib Require Import Structures.OrdersEx.
 From Stdlib Require Import Lia.
 From Stdlib Require Import String.
+From Stdlib Require Import Strings.Ascii.
 From Stdlib Require Import RelationClasses.
 From Stdlib Require Import Morphisms.
+
+From stdpp Require Import countable.
+From stdpp Require Import strings.
 
 From Sail Require Import Ast.
 
@@ -142,18 +146,20 @@ Proof.
   reflexivity.
 Qed.
 
-Definition unwrap_id (id : Ast.id) : id_aux :=
-  match id with
-  | Id_aux aux _ => aux
-  end.
+Lemma compare_string_refl : forall s, (s ?= s)%string = Eq.
+Proof.
+  induction s as [| char s' IH].
+  - reflexivity.
+  - cbn.
+    rewrite IH.
+    destruct char as [[] [] [] [] [] [] [] []].
+    all: reflexivity.
+Qed.
 
-Module Aux.
+Module Aux <: Orders.OrderedType.
   Definition t := id_aux.
 
-  Definition unwrap (id : Ast.id) : id_aux :=
-    match id with
-    | Id_aux aux _ => aux
-    end.
+  Definition unwrap (id : Ast.id) : t := let 'Id_aux aux _ := id in aux.
 
   Definition eqb (id1 id2 : t) : bool :=
     match (id1, id2) with
@@ -164,13 +170,258 @@ Module Aux.
     | _ => false
     end.
 
+  Definition ltb (id1 : t) (id2 : t) : bool :=
+    match (id1, id2) with
+    | (Id s1, Id s2) => String.ltb s1 s2
+    | (Operator s1, Operator s2) => String.ltb s1 s2
+    | (Id _, Operator _) => true
+    | (Operator _, Id _) => false
+    | (And_bool, _) => false
+    | (_, And_bool) => true
+    | (Or_bool, _) => false
+    | (_, Or_bool) => true
+    end.
+
   Lemma eqb_eq : forall id1 id2, eqb id1 id2 = true <-> id1 = id2.
   Proof.
     intros id1 id2.
     destruct id1, id2; split; intros H; cbn in *.
     all: try (inversion H + rewrite String.eqb_eq in H; subst); discriminate + reflexivity + apply String.eqb_refl.
   Qed.
+
+  Definition eq (id1 : t) (id2 : t) : Prop := Is_true (eqb id1 id2).
+
+  Definition lt (id1 : t) (id2 : t) : Prop := Is_true (ltb id1 id2).
+
+  Definition to_gen_tree (id : t) : gen_tree (() + () + string + string) :=
+    match id with
+    | Operator s => GenLeaf (inr s)
+    | Id s => GenLeaf (inl $ inr s)
+    | Or_bool => GenLeaf (inl $ inl $ inr ())
+    | And_bool => GenLeaf (inl $ inl $ inl ())
+    end.
+
+  Definition from_gen_tree (tree : gen_tree (() + () + string + string)) : option t :=
+    match tree with
+    | GenLeaf (inr s) => Some (Operator s)
+    | GenLeaf (inl (inr s)) => Some (Id s)
+    | GenLeaf (inl (inl (inr ()))) => Some Or_bool
+    | GenLeaf (inl (inl (inl ()))) => Some And_bool
+    | GenNode _ _ => None
+    end.
+
+  Definition encode_id_aux (id : t) : positive := encode (to_gen_tree id).
+
+  Definition decode_id_aux (p : positive) : option t := decode p ≫= from_gen_tree.
+
+  Lemma id_aux_decode_encode : ∀ id, decode_id_aux (encode_id_aux id) = Some id.
+  Proof.
+    intros id.
+    unfold encode_id_aux, decode_id_aux.
+    rewrite decode_encode.
+    unfold mbind, option_bind.
+    destruct id; reflexivity.
+  Qed.
+
+  Lemma eq_dec : forall x y : t, { eq x y } + { ~ (eq x y) }.
+  Proof.
+    intros x y.
+    destruct x as [| | x_s | x_s]; destruct y as [| | y_s | y_s].
+    all: cbn.
+    all: try (apply left; tauto).
+    all: try (apply right; tauto).
+    - case_eq (String.eqb x_s y_s); intros H.
+      + apply left. apply Is_true_eq_left. cbn. assumption.
+      + apply right. apply negb_prop_elim, Is_true_eq_left, negb_true_iff. cbn. assumption.
+    - case_eq (String.eqb x_s y_s); intros H.
+      + apply left. apply Is_true_eq_left. cbn. assumption.
+      + apply right. apply negb_prop_elim, Is_true_eq_left, negb_true_iff. cbn. assumption.
+  Defined.
+
+  #[global]
+  Instance eq_eqdec : EqDecision t.
+  Proof.
+    intros x y.
+    unfold Decision.
+    pose proof (eq_dec x y) as H.
+    destruct H as [H | H].
+    - left. unfold eq in H. rewrite Is_true_true, eqb_eq in H. exact H.
+    - right. unfold eq in H. rewrite Is_true_true, eqb_eq in H. exact H.
+  Qed.
+
+  #[global]
+  Instance id_aux_countable : Countable t := {|
+      encode := encode_id_aux;
+      decode := decode_id_aux;
+      decode_encode := id_aux_decode_encode
+    |}.
+
+  Lemma eq_refl : forall x, eq x x.
+  Proof.
+    intros.
+    unfold eq.
+    apply Is_true_eq_left.
+    destruct x; reflexivity + apply String.eqb_refl.
+  Qed.
+
+  Lemma eq_sym : forall x y, eq x y -> eq y x.
+  Proof.
+    intros x y H.
+    unfold eq in *.
+    apply Is_true_eq_left.
+    apply Is_true_eq_true in H.
+    destruct x, y; cbn in *; try (discriminate + reflexivity); rewrite String.eqb_sym; exact H.
+  Qed.
+
+  Lemma eq_trans : forall x y z, eq x y -> eq y z -> eq x z.
+  Proof.
+    intros x y z H1 H2.
+    unfold eq in *.
+    apply Is_true_eq_left.
+    apply Is_true_eq_true in H1.
+    apply Is_true_eq_true in H2.
+    destruct x, y, z; cbn in *; try (discriminate + reflexivity).
+    all: rewrite String.eqb_eq in *; apply (eq_trans H1 H2).
+  Qed.
+
+  Instance eq_equiv : Equivalence eq.
+  Proof.
+    split.
+    - intro x; apply eq_refl.
+    - intros x y H; apply (eq_sym _ _ H).
+    - intros x y z H1 H2; apply (eq_trans _ _ _ H1 H2).
+  Qed.
+
+  Lemma lt_trans : forall x y z, lt x y -> lt y z -> lt x z.
+  Proof.
+    destruct x as [| | x_s | x_s]; destruct y as [| | y_s | y_s]; destruct z as [| | z_s | z_s].
+    all: cbn.
+    all: try easy.
+    all: intros A B.
+    all: apply Is_true_eq_left.
+    all: apply Is_true_eq_true in A.
+    all: apply Is_true_eq_true in B.
+    all: apply (string_ltb_trans _ y_s _); easy.
+  Qed.
+
+  Lemma lt_not_eq : forall x y, lt x y -> ~ eq x y.
+  Proof.
+    destruct x as [| | x_s | x_s]; destruct y as [| | y_s | y_s].
+    all: cbn.
+    all: try easy.
+    all: intros A.
+    all: apply Is_true_eq_true in A.
+    all: apply string_ltb_not_eqb in A.
+    all: apply negb_prop_elim.
+    all: cbn.
+    all: rewrite A.
+    all: reflexivity.
+  Qed.
+
+  Instance lt_strorder : StrictOrder lt.
+  Proof.
+    split.
+    - intro x; unfold complement.
+      destruct x as [| | x_s | x_s]; intros H.
+      all: cbn in H; try assumption.
+      all: apply Is_true_eq_true in H.
+      all: cbn in H; unfold String.ltb in H.
+      all: rewrite compare_string_refl in H; congruence.
+    - intros x y z H1 H2.
+      apply (lt_trans _ _ _ H1 H2).
+  Qed.
+
+  Lemma eq_lt_compat_left : forall x y z, eq x y -> lt x z -> lt y z.
+  Proof.
+    destruct x as [| | x_s | x_s]; destruct y as [| | y_s | y_s]; destruct z as [| | z_s | z_s].
+    all: cbn; try easy.
+    all: (
+      intros H;
+      unfold eq in H;
+      apply Is_true_eq_true in H;
+      apply eqb_eq in H; inversion H; subst;
+      tauto
+    ).
+  Qed.
+
+  Lemma eq_lt_compat_right : forall x y z, eq x y -> lt z x -> lt z y.
+  Proof.
+    destruct x as [| | x_s | x_s]; destruct y as [| | y_s | y_s]; destruct z as [| | z_s | z_s].
+    all: cbn; try easy.
+    all: (
+      intros H;
+      unfold eq in H;
+      apply Is_true_eq_true in H;
+      apply eqb_eq in H; inversion H; subst;
+      tauto
+    ).
+  Qed.
+
+  Instance lt_compat : Proper (eq ==> eq ==> iff) lt.
+  Proof.
+    unfold Proper, respectful.
+    intros x y XY w z WZ.
+    split.
+    - intro XW.
+      apply (eq_lt_compat_left x y z XY).
+      apply (eq_lt_compat_right w z x WZ XW).
+    - intro YZ.
+      apply (eq_lt_compat_left y x w (eq_sym _ _ XY)).
+      apply (eq_lt_compat_right z w y (eq_sym _ _ WZ) YZ).
+  Qed.
+
+  Definition compare (x y : t) : comparison :=
+    if eqb x y then Eq else if ltb x y then Lt else Gt.
+
+  Lemma compare_spec : forall x y, CompSpec eq lt x y (compare x y).
+  Proof.
+    intros x y.
+    destruct x as [| | x_s | x_s]; destruct y as [| | y_s | y_s].
+    all: try (apply CompLt; reflexivity).
+    all: try (apply CompEq; reflexivity).
+    all: try (apply CompGt; reflexivity).
+    - case_eq (String.eqb x_s y_s); intros Heq; cbn.
+      + unfold compare; cbn; rewrite Heq.
+        apply CompEq.
+        apply Is_true_eq_left.
+        cbn.
+        assumption.
+      + case_eq (String.ltb x_s y_s); intros Hlt.
+        * unfold compare; cbn; rewrite Heq, Hlt.
+          apply CompLt.
+          apply Is_true_eq_left.
+          cbn.
+          assumption.
+        * unfold compare; cbn; rewrite Heq, Hlt.
+          apply CompGt.
+          apply Is_true_eq_left.
+          cbn.
+          apply (string_ltb_as_gtb _ _ Hlt Heq).
+    - case_eq (String.eqb x_s y_s); intros Heq; cbn.
+      + unfold compare; cbn; rewrite Heq.
+        apply CompEq.
+        apply Is_true_eq_left.
+        cbn.
+        assumption.
+      + case_eq (String.ltb x_s y_s); intros Hlt.
+        * unfold compare; cbn; rewrite Heq, Hlt.
+          apply CompLt.
+          apply Is_true_eq_left.
+          cbn.
+          assumption.
+        * unfold compare; cbn; rewrite Heq, Hlt.
+          apply CompGt.
+          apply Is_true_eq_left.
+          cbn.
+          apply (string_ltb_as_gtb _ _ Hlt Heq).
+  Defined.
 End Aux.
+
+Module IdAuxOrderOrig := Backport_OT(Aux).
+
+Module IdAuxMap := FMapList.Make(IdAuxOrderOrig).
+
+Module IdAuxMapP := OrdProperties(IdAuxMap).
 
 Definition id_eqb (id1 : id) (id2 : id) : bool :=
   match (id1, id2) with
@@ -231,21 +482,6 @@ Proof.
   all: try easy.
   all: rewrite String.eqb_eq in *.
   all: congruence.
-Qed.
-
-Lemma compare_string_refl : forall s, (s ?= s)%string = Eq.
-Proof.
-  induction s as [| char s'].
-  - reflexivity.
-  - cbn.
-    rewrite IHs'.
-    destruct char as [b0 b1 b2 b3 b4 b5 b6 b7].
-    repeat (
-      match goal with
-      | [ b : bool |- _ ] => destruct b
-      end
-    ).
-    all: reflexivity.
 Qed.
 
 Module IdOrdered <: Orders.OrderedType.
