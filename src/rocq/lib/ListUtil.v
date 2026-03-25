@@ -45,6 +45,9 @@ From Stdlib Require Import Bool.
 From Stdlib Require Import Lists.List.
 From Stdlib Require Import ZArith.
 
+From stdpp Require Import base.
+From stdpp Require Import list.
+
 From Sail Require Import Ast.
 From Sail Require Import Tactics.
 
@@ -172,7 +175,7 @@ Lemma Forall_impl_in: forall [A : Type] [P : A -> Prop] (Q : A -> Prop) [l : lis
 Proof.
   intros A P Q l impl FP.
   induction l as [|x xs IH].
-  - apply Forall_nil.
+  - apply Forall_nil. reflexivity.
   - rewrite Forall_cons_iff in *.
     destruct FP as [Px Pxs].
     split.
@@ -505,7 +508,7 @@ Proof.
   tauto.
 Qed.
 
-Lemma list_eqb_same_length : forall [A : Set] f (xs ys : list A), list_eqb f xs ys = true -> length xs = length ys.
+Lemma list_eqb_same_length : forall {A} f {xs ys : list A}, list_eqb f xs ys = true -> length xs = length ys.
 Proof.
   intros A f xs.
   induction xs as [| x xs]; intros ys; destruct ys as [| y ys]; try easy.
@@ -606,4 +609,143 @@ Proof.
       destruct_match; try rewrite <- app_assoc; reflexivity.
     + rewrite foldl_consume_none.
       reflexivity.
+Qed.
+
+Lemma zip_with_comm : ∀ {A B} {f : A → A → B} {xs ys},
+  (∀ x y, x ∈ xs → y ∈ ys → f x y = f y x) →
+  zip_with f xs ys = zip_with f ys xs.
+Proof.
+  intros A B f xs.
+  induction xs as [| x xs IH]; intros ys.
+  - intros. rewrite zip_with_nil_r. reflexivity.
+  - intros H.
+    destruct ys as [| y ys].
+    + rewrite zip_with_nil_r. reflexivity.
+    + cbn. f_equal.
+      * apply H; apply list_elem_of_here.
+      * apply IH. intros.
+        apply H; apply list_elem_of_further; assumption.
+Qed.
+
+Lemma zip_with_assoc : ∀ {A} {f : A → A → A} {xs ys zs},
+  (∀ x y z, x ∈ xs → y ∈ ys → z ∈ zs → f x (f y z) = f (f x y) z) →
+  zip_with f xs (zip_with f ys zs) = zip_with f (zip_with f xs ys) zs.
+Proof.
+  intros A f xs ys.
+  revert xs.
+  induction ys as [| y ys IH]; intros xs zs H.
+  - cbn. repeat rewrite zip_with_nil_r. reflexivity.
+  - destruct xs as [| x xs]; destruct zs as [| z zs]; try reflexivity.
+    cbn. f_equal.
+    + apply H; apply list_elem_of_here.
+    + apply IH. intros.
+      apply H; apply list_elem_of_further; assumption.
+Qed.
+
+Lemma zip_with_idemp : ∀ {A} {f : A → A → A} {xs},
+  (∀ x, x ∈ xs → f x x = x) → zip_with f xs xs = xs.
+Proof.
+  intros A f xs H.
+  induction xs as [| x xs IH].
+  - reflexivity.
+  - cbn.
+    rewrite H; [ rewrite IH; try reflexivity | apply list_elem_of_here ].
+    intros x' elem_xs.
+    apply H, list_elem_of_further, elem_xs.
+Qed.
+
+Fixpoint zip_with_opt {A B C} (f : A -> B -> C) (xs : list A) (ys : list B) : option (list C) :=
+  match xs with
+  | [] =>
+      match ys with
+      | [] => Some []
+      | _ => None
+      end
+  | x :: xs =>
+      match ys with
+      | [] => None
+      | y :: ys =>
+          match zip_with_opt f xs ys with
+          | Some zs => Some (f x y :: zs)
+          | None => None
+          end
+      end
+  end.
+
+Lemma zip_with_opt_comm : ∀ {A B} {f : A -> A -> B} {xs ys},
+  (∀ x y, x ∈ xs → y ∈ ys → f x y = f y x) →
+  zip_with_opt f xs ys = zip_with_opt f ys xs.
+Proof.
+  intros A B f xs.
+  induction xs as [| x xs IH]; intros ys.
+  - intros. destruct ys; reflexivity.
+  - intros H.
+    destruct ys as [| y ys]; try reflexivity.
+    cbn.
+    rewrite IH.
+    + destruct (zip_with_opt f ys xs); try reflexivity.
+      rewrite H; try reflexivity; apply list_elem_of_here.
+    + intros x' y' In_xs In_ys.
+      apply H; apply list_elem_of_further; assumption.
+Qed.
+
+Lemma zip_with_opt_some_length : ∀ {A B C} {f : A → B → C} {xs ys zs},
+  zip_with_opt f xs ys = Some zs → length xs = length ys ∧ length xs = length zs ∧ length ys = length zs.
+Proof.
+  intros ??? f xs.
+  induction xs as [| x xs IH]; intros ys zs; destruct ys as [| y ys]; destruct zs as [| z zs]; cbn; intros; try (reflexivity + discriminate).
+  - repeat (split; try reflexivity).
+  - destruct (zip_with_opt f xs ys); discriminate.
+  - destruct (zip_with_opt f xs ys) eqn : E.
+    + specialize (IH _ _ E).
+      destruct IH as [IH1 [IH2 IH3]].
+      inversion H. subst.
+      rewrite IH1, IH3.
+      repeat (split; try reflexivity).
+    + discriminate.
+Qed.
+
+Lemma zip_with_opt_none_iff : ∀ {A B C} (f : A → B → C) {xs ys},
+  zip_with_opt f xs ys = None ↔ length xs ≠ length ys.
+Proof.
+  intros ??? f xs.
+  induction xs as [| x xs IH]; intros ys; destruct ys as [| y ys]; cbn; split; intros H; try (reflexivity + discriminate).
+  - exfalso. apply H. reflexivity.
+  - specialize (IH ys).
+    destruct (zip_with_opt f xs ys).
+    + discriminate.
+    + apply not_eq_S, IH, H.
+  - destruct (zip_with_opt f xs ys) eqn : E.
+    + rewrite Nat.succ_inj_wd_neg in H.
+      rewrite <- (IH ys), E in H.
+      discriminate.
+    + reflexivity.
+Qed.
+
+Lemma zip_with_opt_to_zip_with : ∀ {A B C} {f : A → B → C} {xs ys zs},
+  zip_with_opt f xs ys = Some zs → zip_with f xs ys = zs.
+Proof.
+  intros ??? f xs.
+  induction xs as [| x xs IH]; intros ys zs; destruct ys as [| y ys]; destruct zs as [| z zs]; cbn; intros; try (reflexivity + discriminate).
+  - destruct (zip_with_opt f xs ys); discriminate.
+  - destruct (zip_with_opt f xs ys) eqn : E.
+    + specialize (IH _ _ E).
+      inversion H. subst.
+      reflexivity.
+    + discriminate.
+Qed.
+
+Lemma from_zip_with_opt : ∀ {A B C D} {f : A → B → C} {g : list C → D} {e : D} {xs ys},
+ length xs = length ys →
+ from_option g e (zip_with_opt f xs ys) = g (zip_with f xs ys).
+Proof.
+  intros ???? f g e xs.
+  generalize dependent g.
+  induction xs as [| x xs IH]; intros g ys H.
+  - destruct ys as [| y ys]; done.
+  - destruct ys as [| y ys]; [ done | idtac ].
+    cbn in H. apply eq_add_S in H.
+    specialize (IH (fun zs => g (f x y :: zs)) ys H).
+    cbn.
+    destruct (zip_with_opt f xs ys); apply IH.
 Qed.

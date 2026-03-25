@@ -41,93 +41,84 @@
 (*  SPDX-License-Identifier: BSD-2-Clause                                   *)
 (* ************************************************************************ *)
 
-From Sail Require Import Base.
+From Stdlib Require Import String.
+From Stdlib Require Import QArith.
+From Stdlib Require Import QArith.Qcanon.
 
-Import Ltac2.Std.
+From Ltac2 Require Import Ltac2.
 
-Ltac2 ltac1_to_intro_pattern x := Option.get (Ltac1.to_intro_pattern x).
-Ltac2 ltac1_to_list (f : Ltac1.t -> 'a) (t : Ltac1.t) : 'a list :=
-  List.map f (Option.get (Ltac1.to_list t)).
+From stdpp Require Import base.
 
-(**
-The [reintros] tactic is used to rename generated hypothesis names.
-[reintros x y] will revert the last two hypotheses, then call
-[intros x y] to reintroduce them with new names. If either [x] or
-[y] already exist, then they will be renamed.
-*)
+(** Export Ltac2, so we can use Ltac2 as the default language for
+defining tactics, without having to reset the default proof mode after
+importing from Ltac2. *)
+Export Ltac2.
 
-Ltac2 rec revert_n (n : int) :=
-  if Int.gt n 0 then
+#[export] Set Default Proof Mode "Classic".
+
+Declare Scope sail_scope.
+Delimit Scope sail_scope with sail.
+#[global] Open Scope sail_scope.
+
+Class EqDecb (A : Type) := {
+  eqb : A → A → bool;
+  eqb_true_iff : ∀ x y, eqb x y = true ↔ x = y
+}.
+
+Infix "==" := eqb (at level 70, no associativity) : sail_scope.
+
+#[global] Instance nat_eqdecb : EqDecb nat := {
+  eqb := Nat.eqb;
+  eqb_true_iff := PeanoNat.Nat.eqb_eq
+}.
+
+#[global] Instance string_eqdecb : EqDecb string := {
+  eqb := String.eqb;
+  eqb_true_iff := String.eqb_eq
+}.
+
+#[global] Instance bool_eqdecb : EqDecb bool := {
+  eqb := Bool.eqb;
+  eqb_true_iff := Bool.eqb_true_iff
+}.
+
+Lemma Qc_eqb_true_iff : ∀ x y, Qeq_bool (this x) (this y) = true ↔ x = y.
+Proof.
+  split; intros H.
+  - apply Qc_is_canon, Qeq_bool_iff, H.
+  - subst. apply Qeq_bool_refl.
+Qed.
+
+#[global] Instance Qc_eqdecb : EqDecb Qc := {
+  eqb := (fun x y => Qeq_bool (this x) (this y));
+  eqb_true_iff := Qc_eqb_true_iff
+}.
+
+Lemma eqb_refl : ∀ {A} `{EqDecb A} (x : A), (x == x) = true.
+Proof. intros ?? x. rewrite (eqb_true_iff x x). reflexivity. Qed.
+
+Lemma eqb_false_iff : ∀ {A} `{EqDecb A} (x y : A), (x == y) = false ↔ x ≠ y.
+Proof.
+  intros ?? x y.
+  split.
+  - intros N xy.
+    rewrite <- xy, (eqb_refl x) in N. discriminate.
+  - intros N.
+    destruct (x == y) eqn : E; try reflexivity.
+    exfalso.
+    rewrite eqb_true_iff in E.
+    apply N in E.
+    exact E.
+Qed.
+
+Ltac2 eqb_to_eq () :=
+  repeat (
     lazy_match! goal with
-    | [ h : _ |- _ ] =>
-        revert $h; revert_n (Int.sub n 1)
+    | [ h : context [ (?x == ?y) = true ] |- _ ] => rewrite (eqb_true_iff $x $y) in $h
+    | [ h : context [ (?x == ?y) = false ] |- _ ] => rewrite (eqb_false_iff $x $y) in $h
+    | [ |- context [ (?x == ?y) = true ] ] => rewrite (eqb_true_iff $x $y)
+    | [ |- context [ (?x == ?y) = false ] ] => rewrite (eqb_false_iff $x $y)
     end
-  else ().
+  ).
 
-Ltac2 reintros0 (ips : intro_pattern list) :=
-  let hs := Control.hyps () in
-  let names :=
-    List.flat_map (fun ip =>
-      match ip with
-      | IntroNaming (IntroIdentifier n) => [n]
-      | _ => []
-      end
-    ) ips
-  in
-  let frees := List.append (List.map (fun (n, _, _) => n) hs) names in
-  (* Rename any hypotheses we are about to clobber. *)
-  let _ :=
-    List.fold_left (fun frees name =>
-      List.fold_left (fun frees (hyp_name, _, _) =>
-        if Ident.equal name hyp_name then
-          let f := Fresh.fresh (Fresh.Free.of_ids frees) hyp_name in
-          Std.rename [(hyp_name, f)];
-          f :: frees
-        else frees
-      ) frees hs
-    ) frees names
-  in
-  revert_n (List.length ips);
-  Std.intros false ips.
-
-Ltac2 Notation "reintros" names(list1(intropattern)) := Control.enter (fun () => reintros0 names).
-
-Tactic Notation "reintros" simple_intropattern_list(names) :=
-  let f := ltac2:(l |- reintros0 (ltac1_to_list ltac1_to_intro_pattern l)) in f names.
-
-(**
-The [destruct_match] tactic agressively performs case splitting on
-the head expression of any match statements that appear in the goal.
-
-This can cause the number of subgoals to explode, and creates a lot of
-generated names - but when they can all be solved trivially it can
-lead to much more succinct proofs than manually case splitting.
-*)
-
-Ltac2 rec destruct_match () :=
-  let destruct_match' () :=
-    match! goal with
-    | [ |- context [ match ?v with _ => _ end ] ] =>
-        let e := Fresh.in_goal (Option.get (Ident.of_string "C")) in
-        destruct $v eqn : $e;
-        destruct_match ()
-    | [ |- _ ] => ()
-    end
-  in Control.enter destruct_match'.
-
-Ltac destruct_match := ltac2:(destruct_match ()).
-
-Ltac2 rec destruct_match_goal () :=
-  let destruct_match' () :=
-    match! goal with
-    | [ |- context [ match ?v with _ => _ end ] ] =>
-        let e := Fresh.in_goal (Option.get (Ident.of_string "C")) in
-        destruct $v eqn : $e;
-        try (reflexivity ());
-        revert $e;
-        destruct_match_goal ()
-    | [ |- _ ] => ()
-    end
-  in Control.enter destruct_match'.
-
-Ltac destruct_match_goal := ltac2:(destruct_match_goal ()).
+Ltac eqb_to_eq := ltac2:(eqb_to_eq ()).
