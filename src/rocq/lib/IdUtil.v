@@ -56,6 +56,7 @@ From stdpp Require Import countable.
 From stdpp Require Import strings.
 
 From Sail Require Import Ast.
+From Sail Require Import Base.
 
 Lemma string_ltb_trans : forall (s1 s2 s3 : String.string),
   String.ltb s1 s2 = true -> String.ltb s2 s3 = true -> String.ltb s1 s3 = true.
@@ -170,6 +171,28 @@ Module Aux <: Orders.OrderedType.
     | _ => false
     end.
 
+  Lemma eqb_eq : forall id1 id2, eqb id1 id2 = true <-> id1 = id2.
+  Proof.
+    intros id1 id2.
+    destruct id1, id2; split; intros H; cbn in *.
+    all: try (inversion H + rewrite String.eqb_eq in H; subst); discriminate + reflexivity + apply String.eqb_refl.
+  Qed.
+
+  #[global]
+  Instance id_aux_eqdecb : EqDecb t := {
+    eqb := eqb;
+    eqb_true_iff := eqb_eq
+  }.
+
+  Lemma eqb_comm : forall id1 id2, eqb id1 id2 = eqb id2 id1.
+  Proof.
+    intros id1 id2.
+    destruct id1, id2; try reflexivity.
+    all: cbn; apply String.eqb_sym.
+  Qed.
+
+  Definition eq (id1 : t) (id2 : t) : Prop := Is_true (eqb id1 id2).
+
   Definition ltb (id1 : t) (id2 : t) : bool :=
     match (id1, id2) with
     | (Id s1, Id s2) => String.ltb s1 s2
@@ -181,15 +204,6 @@ Module Aux <: Orders.OrderedType.
     | (Or_bool, _) => false
     | (_, Or_bool) => true
     end.
-
-  Lemma eqb_eq : forall id1 id2, eqb id1 id2 = true <-> id1 = id2.
-  Proof.
-    intros id1 id2.
-    destruct id1, id2; split; intros H; cbn in *.
-    all: try (inversion H + rewrite String.eqb_eq in H; subst); discriminate + reflexivity + apply String.eqb_refl.
-  Qed.
-
-  Definition eq (id1 : t) (id2 : t) : Prop := Is_true (eqb id1 id2).
 
   Definition lt (id1 : t) (id2 : t) : Prop := Is_true (ltb id1 id2).
 

@@ -3,6 +3,7 @@
  (modules
   Ast
   AstInduction
+  Base
   Bit
   BitList
   IdUtil
