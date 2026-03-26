@@ -51,7 +51,10 @@ From Sail Require Import ListUtil.
 From Sail Require Import OptionUtil.
 From Sail Require Import Tactics.
 From Sail Require Import ValueType.
-From Sail Require ValueSemilattice.
+From Sail Require Import Domain.Lattice.
+From Sail Require Domain.AbsValue.
+From Sail Require Domain.AbsBitvector.
+From Sail Require Domain.Interval.
 From Sail Require PatternMatch.
 From Sail Require TypeAnnot.
 
@@ -459,7 +462,9 @@ Module ExpBuilder (Tannot : TypeAnnot.S) <: Builder(Tannot).
   Definition mk_undef (ann : annot Tannot.t) := E_aux E_undef ann.
 End ExpBuilder.
 
-Module Residual (Tannot : TypeAnnot.S) (L : ValueSemilattice.S Tannot) (B : Builder Tannot).
+Module Residual (Tannot : TypeAnnot.S) (B : Builder Tannot).
+  Module L := AbsValue.Dom Interval.Dom AbsBitvector.Dom.
+
   Record value := {
       (* The actual value returned by some expression. [None] acts a
          bottom value for expressions that don't have a value like
@@ -498,7 +503,7 @@ Module Residual (Tannot : TypeAnnot.S) (L : ValueSemilattice.S Tannot) (B : Buil
 
   Definition mk_block (ann : annot Tannot.t) (rs : list t) :=
     match rs with
-    | [] => ({| this := Some L.v_unit; exn := ⊥; eff := false |}, B.mk_block ann [])
+    | [] => ({| this := Some L.V_unit; exn := ⊥; eff := false |}, B.mk_block ann [])
     | r :: _ => (
         {|
           this := this (fst r);
@@ -527,9 +532,9 @@ Module Residual (Tannot : TypeAnnot.S) (L : ValueSemilattice.S Tannot) (B : Buil
 
   Definition mk_list (ann : annot Tannot.t) (c : list_case) (rs : list t) :=
     let ctor := match c with
-      | List => L.v_list
-      | Tuple => L.v_tuple
-      | Vector => L.v_vector
+      | List => L.V_list
+      | Tuple => L.V_tuple
+      | Vector => L.V_vector
       end
     in (
       {|
@@ -593,13 +598,13 @@ Module Residual (Tannot : TypeAnnot.S) (L : ValueSemilattice.S Tannot) (B : Buil
   Definition mk_pair (ann : annot Tannot.t) (c : pair_case) (x : t) (y : t) :=
     let b := B.mk_pair ann c (snd x) (snd y) in
     match c with
-    | Assert => ({| this := Some L.v_unit; exn := exn (fst x) ⊔ exn (fst y); eff := true |}, b)
+    | Assert => ({| this := Some L.V_unit; exn := exn (fst x) ⊔ exn (fst y); eff := true |}, b)
     | Vector_append => ({| this := ⊥; exn := ⊥; eff := false |}, b)
     | Cons => ({| this := ⊥; exn := ⊥; eff := false |}, b)
     end.
 
   Definition mk_ref (ann : annot Tannot.t) (id : Ast.id) :=
-    ({| this := Some (L.v_ref id); exn := ⊥; eff := false |}, B.mk_ref ann id).
+    ({| this := Some (L.V_ref (Aux.unwrap id)); exn := ⊥; eff := false |}, B.mk_ref ann id).
 
   Definition mk_return (ann : annot Tannot.t) (r : t) :=
     ({| this := ⊥; exn := exn (fst r); eff := true |}, B.mk_return ann (snd r)).
@@ -610,7 +615,7 @@ Module Residual (Tannot : TypeAnnot.S) (L : ValueSemilattice.S Tannot) (B : Buil
     | Field fld =>
         match this (fst r) with
         | Some rec =>
-            ({| this := Some (L.lookup_field rec fld); exn := exn (fst r); eff := eff (fst r) |}, b)
+            ({| this := Some (L.lookup_field rec (Aux.unwrap fld)); exn := exn (fst r); eff := eff (fst r) |}, b)
         | ⊥ =>
             ({| this := ⊥; exn := exn (fst r); eff := eff (fst r) |}, b)
         end
@@ -625,7 +630,7 @@ Module Residual (Tannot : TypeAnnot.S) (L : ValueSemilattice.S Tannot) (B : Buil
 
   Definition mk_assign (ann : annot Tannot.t) (zl : zlexp Tannot.t) (rs : list t) (exp : t) := (
       {|
-        this := Some L.v_unit;
+        this := Some L.V_unit;
         exn := List.fold_left bounded_join (List.map (fun r => exn (fst r)) rs) (exn (fst exp));
         eff := true
       |},
@@ -650,7 +655,7 @@ Module Residual (Tannot : TypeAnnot.S) (L : ValueSemilattice.S Tannot) (B : Buil
     in
     match h with
     | ⊥ => inl l
-    | Some v => inr (L.pattern_match pat v)
+    | Some v => inl l (* FIXME: inr (L.pattern_match pat v) *)
     end.
 
   Definition end_match (c : match_case) (_ : option state) (_ : list state) : state := empty.
@@ -668,8 +673,9 @@ Module Residual (Tannot : TypeAnnot.S) (L : ValueSemilattice.S Tannot) (B : Buil
   Definition assign (zl : zlexp Tannot.t) (rs : list t) (exp : t) (σ : state) : state := empty.
 End Residual.
 
-Module Make (Tannot : TypeAnnot.S) (L : ValueSemilattice.S Tannot) (B : Builder Tannot).
-  Module R := Residual Tannot L B.
+Module Make (Tannot : TypeAnnot.S) (B : Builder Tannot).
+  Module R := Residual Tannot B.
+  Module L := R.L.
 
   Module Monad.
     (* TODO: Find a way to share the monad with Semantics.v *)

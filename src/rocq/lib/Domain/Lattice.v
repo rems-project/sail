@@ -41,97 +41,117 @@
 (*  SPDX-License-Identifier: BSD-2-Clause                                   *)
 (* ************************************************************************ *)
 
-From Stdlib Require Import List.
+From stdpp Require Import base.
 
-From Sail Require Import Ast.
-From Sail Require Import IdUtil.
-From Sail Require Import ValueType.
-From Sail Require PatternMatch.
-From Sail Require TypeAnnot.
+Module Type CONCRETE.
+  Parameter t : Set.
+End CONCRETE.
 
-Import ListNotations.
-
-Module Type S (Tannot : TypeAnnot.S).
+Module Type DOMAIN (C : CONCRETE).
   Parameter t : Set.
 
-  Parameter join : t -> t -> t.
+  Parameter join : t → t → t.
+  Parameter meet : t → t → t.
+  Parameter top : t.
+  Parameter bot : t.
 
-  Infix "⊔" := join (left associativity, at level 50).
+  Notation "⊤" := top.
+  Notation "⊥" := bot.
 
-  Parameter v_unit : t.
-  Parameter v_list : list t -> t.
-  Parameter v_tuple : list t -> t.
-  Parameter v_vector : list t -> t.
-  Parameter v_ref : id -> t.
+  Infix "⊔" := join (no associativity, at level 50).
+  Infix "⊓" := meet (no associativity, at level 40).
 
-  Parameter of_lit : lit -> t.
+  Parameter join_comm : ∀ x y, x ⊔ y = y ⊔ x.
+  Parameter join_assoc : ∀ x y z, x ⊔ (y ⊔ z) = (x ⊔ y) ⊔ z.
 
-  Parameter is_unit : t -> bool.
-  Parameter is_true : t -> bool.
-  Parameter is_false : t -> bool.
+  Parameter meet_comm : ∀ x y, x ⊓ y = y ⊓ x.
+  Parameter meet_assoc : ∀ x y z, x ⊓ (y ⊓ z) = (x ⊓ y) ⊓ z.
 
-  Parameter lookup_field : t -> Ast.id -> t.
+  Parameter absorption_join_meet : ∀ x y, x ⊔ (x ⊓ y) = x.
+  Parameter absorption_meet_join : ∀ x y, x ⊓ (x ⊔ y) = x.
 
-  Parameter pattern_match : pat Tannot.t -> t -> PatternMatch.match_result t.
-  Parameter complete : PatternMatch.binding t -> t.
+  Parameter join_id : ∀ x, x ⊔ ⊥ = x.
+  Parameter meet_id : ∀ x, x ⊓ ⊤ = x.
 
-  Parameter v_unit_is_unit : is_unit v_unit = true.
+  Parameter leb : t → t → bool.
+  Parameter le : t → t → Prop.
 
-(*
-  Parameter assoc : forall x y z, (x ⊔ y) ⊔ z = x ⊔ (y ⊔ z).
+  Infix "⊑" := le (right associativity, at level 70).
 
-  Parameter comm : forall x y, x ⊔ y = y ⊔ x.
+  Parameter leb_le : ∀ x y, leb x y = true ↔ x ⊑ y.
+  Parameter le_join_def : ∀ x y, x ⊑ y ↔ y = x ⊔ y.
 
-  Parameter idem : forall x, x ⊔ x = x.
-*)
-End S.
+  Parameter α : C.t → t.
+End DOMAIN.
 
-Module Value (Tannot : TypeAnnot.S) <: S Tannot.
-  Definition t : Set := Ast.value.
+Module DomainProperties (C : CONCRETE) (D : DOMAIN C).
+  Import D.
 
-  Definition join (x y : t) : t := if value_eqb x y then x else V_unit.
+  (** [le] can be equivalently defined in terms of [meet] *)
+  Lemma le_meet_def : ∀ x y, x ⊑ y ↔ x = x ⊓ y.
+  Proof.
+    intros x y.
+    rewrite le_join_def.
+    split.
+    - intros J.
+      assert (S : x = x ⊓ (x ⊔ y)). { exact (eq_sym (absorption_meet_join x y)). }
+      rewrite <- J in S.
+      exact S.
+    - intros M.
+      assert (S : y = y ⊔ (y ⊓ x)). { exact (eq_sym (absorption_join_meet y x)). }
+      rewrite meet_comm, <- M, join_comm in S.
+      exact S.
+  Qed.
 
-  Infix "⊔" := join (left associativity, at level 50).
+  Lemma join_idem : ∀ x, x ⊔ x = x.
+  Proof.
+    intros x.
+    rewrite <- (absorption_join_meet x (x ⊔ x)) at 3.
+    rewrite absorption_meet_join.
+    reflexivity.
+  Qed.
 
-  Definition v_unit := V_unit.
-  Definition v_list := V_list.
-  Definition v_tuple := V_tuple.
-  Definition v_vector := V_vector.
-  Definition v_ref := V_ref.
+  Lemma meet_idem : ∀ x, x ⊓ x = x.
+  Proof.
+    intros x.
+    rewrite <- (absorption_meet_join x (x ⊓ x)) at 3.
+    rewrite absorption_join_meet.
+    reflexivity.
+  Qed.
 
-  Definition of_lit := value_of_lit.
+  Lemma le_refl : ∀ x, x ⊑ x.
+  Proof.
+    intros x.
+    rewrite le_join_def.
+    exact (eq_sym (join_idem x)).
+  Qed.
 
-  Definition is_unit (v : t) : bool := match v with V_unit => true | _ => false end.
-  Definition is_true (v : t) : bool := match v with V_bool true => true | _ => false end.
-  Definition is_false (v : t) : bool := match v with V_bool false => true | _ => false end.
+  Lemma le_trans : ∀ x y z, x ⊑ y → y ⊑ z → x ⊑ z.
+  Proof.
+    intros x y z.
+    repeat rewrite le_join_def; intros XY YZ.
+    rewrite YZ.
+    rewrite join_assoc.
+    rewrite <- XY.
+    reflexivity.
+  Qed.
 
-  Fixpoint lookup_field' (fields : list (id * t)) (name : id) {struct fields} : t :=
-    match fields with
-    | [] => V_unit
-    | (name', v) :: fields =>
-        if id_eqb name name' then
-          v
-        else
-          lookup_field' fields name
-    end.
+  Lemma le_antisym : ∀ x y, x ⊑ y → y ⊑ x → x = y.
+  Proof.
+    intros x y L R.
+    rewrite le_join_def in *.
+    rewrite L.
+    rewrite R at 1.
+    exact (join_comm y x).
+  Qed.
 
-  Definition lookup_field (rec : t) (name : id) : t :=
-    match rec with
-    | V_record fields => lookup_field' fields name
-    | _ => V_unit
-    end.
-
-  Module PM := PatternMatch.Make Tannot.
-
-  Definition pattern_match (p : pat Tannot.t) (v : t) : PatternMatch.match_result t :=
-    PM.pattern_match p v.
-
-  Definition complete (b : PatternMatch.binding t) : t :=
-    match b with
-    | PatternMatch.Complete v => v
-    | PatternMatch.Partial vs => PatternMatch.complete_value vs
-    end.
-
-  Lemma v_unit_is_unit : is_unit v_unit = true.
-  Proof. reflexivity. Qed.
-End Value.
+  Lemma leb_bot : ∀ x, leb x ⊥ = true ↔ x = ⊥.
+  Proof.
+    intros x.
+    split; intros H.
+    - rewrite leb_le, le_join_def, join_id in H.
+      exact (eq_sym H).
+    - rewrite H, leb_le.
+      apply le_refl.
+  Qed.
+End DomainProperties.

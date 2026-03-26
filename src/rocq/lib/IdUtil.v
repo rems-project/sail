@@ -261,7 +261,7 @@ Module Aux <: Orders.OrderedType.
     destruct H as [H | H].
     - left. unfold eq in H. rewrite Is_true_true, eqb_eq in H. exact H.
     - right. unfold eq in H. rewrite Is_true_true, eqb_eq in H. exact H.
-  Qed.
+  Defined.
 
   #[global]
   Instance id_aux_countable : Countable t := {|
