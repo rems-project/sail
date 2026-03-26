@@ -1,3 +1,5 @@
+(include_subdirs qualified)
+
 (rocq.theory
  (name Sail)
  (modules
@@ -6,8 +8,11 @@
   Base
   Bit
   BitList
+  Domain.Lattice
+  Domain.Interval
+  Domain.AbsBitvector
+  Domain.AbsValue
   IdUtil
-  Lattice
   ListUtil
   OptionUtil
   PatternMatch
