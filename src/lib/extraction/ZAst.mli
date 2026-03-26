@@ -1,13 +1,19 @@
+open AbsBitvector
+open AbsValue
 open Ast
 open AstInduction
 open Datatypes
 open IdUtil
+open Interval
 open List0
 open ListDef
 open ListUtil
 open OptionUtil
 open PatternMatch
+open Qcanon
+open SailBase
 open TypeAnnot
+open Gmap
 
 type 'a zlexp_aux =
 | LZ_id of id
@@ -131,35 +137,6 @@ module ExpBuilder :
 
 module Residual :
  functor (Tannot:S) ->
- functor (L:sig
-  type t
-
-  val join : t -> t -> t
-
-  val v_unit : t
-
-  val v_list : t list -> t
-
-  val v_tuple : t list -> t
-
-  val v_vector : t list -> t
-
-  val v_ref : id -> t
-
-  val of_lit : lit -> t
-
-  val is_unit : t -> bool
-
-  val is_true : t -> bool
-
-  val is_false : t -> bool
-
-  val lookup_field : t -> id -> t
-
-  val pattern_match : Tannot.t pat -> t -> t match_result
-
-  val complete : t binding -> t
- end) ->
  functor (B:sig
   type t
 
@@ -198,6 +175,83 @@ module Residual :
   val mk_undef : Tannot.t annot -> t
  end) ->
  sig
+  module L :
+   sig
+    module DZP :
+     sig
+     end
+
+    module DbvP :
+     sig
+     end
+
+    type value =
+    | V_bitvector of AbsBitvector.Dom.t
+    | V_vector of value list
+    | V_list of value list
+    | V_int of Dom.t
+    | V_real of coq_Qc
+    | V_bool of bool
+    | V_tuple of value list
+    | V_unit
+    | V_string of string
+    | V_ref of id_aux
+    | V_member of id_aux gset
+    | V_ctor of (id_aux, value list) gmap
+    | V_record of (id_aux, value) gmap
+    | V_top
+    | V_bot
+
+    val value_rect :
+      (AbsBitvector.Dom.t -> 'a1) -> (value list -> 'a1) -> (value list ->
+      'a1) -> (Dom.t -> 'a1) -> (coq_Qc -> 'a1) -> (bool -> 'a1) -> (value
+      list -> 'a1) -> 'a1 -> (string -> 'a1) -> (id_aux -> 'a1) -> (id_aux
+      gset -> 'a1) -> ((id_aux, value list) gmap -> 'a1) -> ((id_aux, value)
+      gmap -> 'a1) -> 'a1 -> 'a1 -> value -> 'a1
+
+    val value_rec :
+      (AbsBitvector.Dom.t -> 'a1) -> (value list -> 'a1) -> (value list ->
+      'a1) -> (Dom.t -> 'a1) -> (coq_Qc -> 'a1) -> (bool -> 'a1) -> (value
+      list -> 'a1) -> 'a1 -> (string -> 'a1) -> (id_aux -> 'a1) -> (id_aux
+      gset -> 'a1) -> ((id_aux, value list) gmap -> 'a1) -> ((id_aux, value)
+      gmap -> 'a1) -> 'a1 -> 'a1 -> value -> 'a1
+
+    val is_unit : value -> bool
+
+    val is_true : value -> bool
+
+    val is_false : value -> bool
+
+    type t = value
+
+    val top : value
+
+    val bot : t
+
+    val vdepth : value -> Big_int_Z.big_int
+
+    val same_keys : (id_aux, 'a1) gmap -> (id_aux, 'a1) gmap -> bool
+
+    val ctor_compat :
+      (id_aux, value list) gmap -> (id_aux, value list) gmap -> bool
+
+    val same_or : 'a1 coq_EqDecb -> t -> ('a1 -> t) -> 'a1 -> 'a1 -> t
+
+    val join : value -> value -> value
+
+    val meet : value -> value -> value
+
+    val leb : value -> value -> bool
+
+    val _UU03b1_ : Ast.value -> value
+
+    val of_lit : lit -> value
+
+    val lookup_field : value -> id_aux -> value
+
+    val complete : t binding -> t
+   end
+
   type value = { this : L.t option; exn : L.t option; eff : bool }
 
   val this : value -> L.t option
@@ -279,35 +333,6 @@ module Residual :
 
 module Make :
  functor (Tannot:S) ->
- functor (L:sig
-  type t
-
-  val join : t -> t -> t
-
-  val v_unit : t
-
-  val v_list : t list -> t
-
-  val v_tuple : t list -> t
-
-  val v_vector : t list -> t
-
-  val v_ref : id -> t
-
-  val of_lit : lit -> t
-
-  val is_unit : t -> bool
-
-  val is_true : t -> bool
-
-  val is_false : t -> bool
-
-  val lookup_field : t -> id -> t
-
-  val pattern_match : Tannot.t pat -> t -> t match_result
-
-  val complete : t binding -> t
- end) ->
  functor (B:sig
   type t
 
@@ -348,6 +373,83 @@ module Make :
  sig
   module R :
    sig
+    module L :
+     sig
+      module DZP :
+       sig
+       end
+
+      module DbvP :
+       sig
+       end
+
+      type value =
+      | V_bitvector of AbsBitvector.Dom.t
+      | V_vector of value list
+      | V_list of value list
+      | V_int of Dom.t
+      | V_real of coq_Qc
+      | V_bool of bool
+      | V_tuple of value list
+      | V_unit
+      | V_string of string
+      | V_ref of id_aux
+      | V_member of id_aux gset
+      | V_ctor of (id_aux, value list) gmap
+      | V_record of (id_aux, value) gmap
+      | V_top
+      | V_bot
+
+      val value_rect :
+        (AbsBitvector.Dom.t -> 'a1) -> (value list -> 'a1) -> (value list ->
+        'a1) -> (Dom.t -> 'a1) -> (coq_Qc -> 'a1) -> (bool -> 'a1) -> (value
+        list -> 'a1) -> 'a1 -> (string -> 'a1) -> (id_aux -> 'a1) -> (id_aux
+        gset -> 'a1) -> ((id_aux, value list) gmap -> 'a1) -> ((id_aux,
+        value) gmap -> 'a1) -> 'a1 -> 'a1 -> value -> 'a1
+
+      val value_rec :
+        (AbsBitvector.Dom.t -> 'a1) -> (value list -> 'a1) -> (value list ->
+        'a1) -> (Dom.t -> 'a1) -> (coq_Qc -> 'a1) -> (bool -> 'a1) -> (value
+        list -> 'a1) -> 'a1 -> (string -> 'a1) -> (id_aux -> 'a1) -> (id_aux
+        gset -> 'a1) -> ((id_aux, value list) gmap -> 'a1) -> ((id_aux,
+        value) gmap -> 'a1) -> 'a1 -> 'a1 -> value -> 'a1
+
+      val is_unit : value -> bool
+
+      val is_true : value -> bool
+
+      val is_false : value -> bool
+
+      type t = value
+
+      val top : value
+
+      val bot : t
+
+      val vdepth : value -> Big_int_Z.big_int
+
+      val same_keys : (id_aux, 'a1) gmap -> (id_aux, 'a1) gmap -> bool
+
+      val ctor_compat :
+        (id_aux, value list) gmap -> (id_aux, value list) gmap -> bool
+
+      val same_or : 'a1 coq_EqDecb -> t -> ('a1 -> t) -> 'a1 -> 'a1 -> t
+
+      val join : value -> value -> value
+
+      val meet : value -> value -> value
+
+      val leb : value -> value -> bool
+
+      val _UU03b1_ : Ast.value -> value
+
+      val of_lit : lit -> value
+
+      val lookup_field : value -> id_aux -> value
+
+      val complete : t binding -> t
+     end
+
     type value = { this : L.t option; exn : L.t option; eff : bool }
 
     val this : value -> L.t option
@@ -425,6 +527,83 @@ module Make :
     val lookup : Parse_ast.l -> state -> id -> (Parse_ast.l, L.t) sum
 
     val assign : Tannot.t zlexp -> t list -> t -> state -> state
+   end
+
+  module L :
+   sig
+    module DZP :
+     sig
+     end
+
+    module DbvP :
+     sig
+     end
+
+    type value = R.L.value =
+    | V_bitvector of AbsBitvector.Dom.t
+    | V_vector of value list
+    | V_list of value list
+    | V_int of Dom.t
+    | V_real of coq_Qc
+    | V_bool of bool
+    | V_tuple of value list
+    | V_unit
+    | V_string of string
+    | V_ref of id_aux
+    | V_member of id_aux gset
+    | V_ctor of (id_aux, value list) gmap
+    | V_record of (id_aux, value) gmap
+    | V_top
+    | V_bot
+
+    val value_rect :
+      (AbsBitvector.Dom.t -> 'a1) -> (value list -> 'a1) -> (value list ->
+      'a1) -> (Dom.t -> 'a1) -> (coq_Qc -> 'a1) -> (bool -> 'a1) -> (value
+      list -> 'a1) -> 'a1 -> (string -> 'a1) -> (id_aux -> 'a1) -> (id_aux
+      gset -> 'a1) -> ((id_aux, value list) gmap -> 'a1) -> ((id_aux, value)
+      gmap -> 'a1) -> 'a1 -> 'a1 -> value -> 'a1
+
+    val value_rec :
+      (AbsBitvector.Dom.t -> 'a1) -> (value list -> 'a1) -> (value list ->
+      'a1) -> (Dom.t -> 'a1) -> (coq_Qc -> 'a1) -> (bool -> 'a1) -> (value
+      list -> 'a1) -> 'a1 -> (string -> 'a1) -> (id_aux -> 'a1) -> (id_aux
+      gset -> 'a1) -> ((id_aux, value list) gmap -> 'a1) -> ((id_aux, value)
+      gmap -> 'a1) -> 'a1 -> 'a1 -> value -> 'a1
+
+    val is_unit : value -> bool
+
+    val is_true : value -> bool
+
+    val is_false : value -> bool
+
+    type t = value
+
+    val top : value
+
+    val bot : t
+
+    val vdepth : value -> Big_int_Z.big_int
+
+    val same_keys : (id_aux, 'a1) gmap -> (id_aux, 'a1) gmap -> bool
+
+    val ctor_compat :
+      (id_aux, value list) gmap -> (id_aux, value list) gmap -> bool
+
+    val same_or : 'a1 coq_EqDecb -> t -> ('a1 -> t) -> 'a1 -> 'a1 -> t
+
+    val join : value -> value -> value
+
+    val meet : value -> value -> value
+
+    val leb : value -> value -> bool
+
+    val _UU03b1_ : Ast.value -> value
+
+    val of_lit : lit -> value
+
+    val lookup_field : value -> id_aux -> value
+
+    val complete : t binding -> t
    end
 
   module Monad :

@@ -4,10 +4,14 @@
 .#*
 *.bak
 
+.lia.cache
+
 *.native
 *.byte
 
 *.install
+
+*.conflicts
 
 a.out
 *.gch

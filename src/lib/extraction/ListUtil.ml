@@ -36,3 +36,19 @@ let consume f acc x =
       | Some r -> ((Some (r :: rs)), xs0)
       | None -> (None, xs0))
    | None -> (None, xs))
+
+(** val zip_with_opt :
+    ('a1 -> 'a2 -> 'a3) -> 'a1 list -> 'a2 list -> 'a3 list option **)
+
+let rec zip_with_opt f xs ys =
+  match xs with
+  | [] -> (match ys with
+           | [] -> Some []
+           | _ :: _ -> None)
+  | x :: xs0 ->
+    (match ys with
+     | [] -> None
+     | y :: ys0 ->
+       (match zip_with_opt f xs0 ys0 with
+        | Some zs -> Some ((f x y) :: zs)
+        | None -> None))

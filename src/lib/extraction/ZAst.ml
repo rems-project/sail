@@ -1,13 +1,19 @@
+open AbsBitvector
+open AbsValue
 open Ast
 open AstInduction
 open Datatypes
 open IdUtil
+open Interval
 open List0
 open ListDef
 open ListUtil
 open OptionUtil
 open PatternMatch
+open Qcanon
+open SailBase
 open TypeAnnot
+open Gmap
 
 type 'a zlexp_aux =
 | LZ_id of id
@@ -307,35 +313,6 @@ module ExpBuilder =
 
 module Residual =
  functor (Tannot:S) ->
- functor (L:sig
-  type t
-
-  val join : t -> t -> t
-
-  val v_unit : t
-
-  val v_list : t list -> t
-
-  val v_tuple : t list -> t
-
-  val v_vector : t list -> t
-
-  val v_ref : id -> t
-
-  val of_lit : lit -> t
-
-  val is_unit : t -> bool
-
-  val is_true : t -> bool
-
-  val is_false : t -> bool
-
-  val lookup_field : t -> id -> t
-
-  val pattern_match : Tannot.t pat -> t -> t match_result
-
-  val complete : t binding -> t
- end) ->
  functor (B:sig
   type t
 
@@ -374,6 +351,8 @@ module Residual =
   val mk_undef : Tannot.t annot -> t
  end) ->
  struct
+  module L = AbsValue.Dom(Dom)(AbsBitvector.Dom)
+
   type value = { this : L.t option; exn : L.t option; eff : bool }
 
   (** val this : value -> L.t option **)
@@ -429,7 +408,7 @@ module Residual =
 
   let mk_block ann rs = match rs with
   | [] ->
-    ({ this = (Some L.v_unit); exn = None; eff = false }, (B.mk_block ann []))
+    ({ this = (Some L.V_unit); exn = None; eff = false }, (B.mk_block ann []))
   | r :: _ ->
     ({ this = (fst r).this; exn =
       (fold_left bounded_join (map (fun r0 -> (fst r0).exn) rs) None); eff =
@@ -456,11 +435,11 @@ module Residual =
   (** val mk_list : Tannot.t annot -> list_case -> t list -> value * B.t **)
 
   let mk_list ann c rs =
-    let ctor =
+    let ctor = fun x ->
       match c with
-      | List -> L.v_list
-      | Tuple -> L.v_tuple
-      | Vector -> L.v_vector
+      | List -> L.V_list x
+      | Tuple -> L.V_tuple x
+      | Vector -> L.V_vector x
     in
     ({ this =
     (option_map ctor (option_all (rev (map (fun r -> (fst r).this) rs))));
@@ -550,14 +529,14 @@ module Residual =
     let b = B.mk_pair ann c (snd x) (snd y) in
     (match c with
      | Assert ->
-       ({ this = (Some L.v_unit); exn =
+       ({ this = (Some L.V_unit); exn =
          (bounded_join (fst x).exn (fst y).exn); eff = true }, b)
      | _ -> ({ this = None; exn = None; eff = false }, b))
 
   (** val mk_ref : Tannot.t annot -> id -> value * B.t **)
 
   let mk_ref ann id0 =
-    ({ this = (Some (L.v_ref id0)); exn = None; eff = false },
+    ({ this = (Some (L.V_ref (Aux.unwrap id0))); exn = None; eff = false },
       (B.mk_ref ann id0))
 
   (** val mk_return : Tannot.t annot -> t -> value * B.t **)
@@ -574,8 +553,8 @@ module Residual =
      | Field fld ->
        (match (fst r).this with
         | Some rec0 ->
-          ({ this = (Some (L.lookup_field rec0 fld)); exn = (fst r).exn;
-            eff = (fst r).eff }, b)
+          ({ this = (Some (L.lookup_field rec0 (Aux.unwrap fld))); exn =
+            (fst r).exn; eff = (fst r).eff }, b)
         | None -> ({ this = None; exn = (fst r).exn; eff = (fst r).eff }, b))
      | Throw ->
        ({ this = None; exn = (bounded_join (fst r).this (fst r).exn); eff =
@@ -592,7 +571,7 @@ module Residual =
       Tannot.t annot -> Tannot.t zlexp -> t list -> t -> value * B.t **)
 
   let mk_assign ann zl rs exp0 =
-    ({ this = (Some L.v_unit); exn =
+    ({ this = (Some L.V_unit); exn =
       (fold_left bounded_join (map (fun r -> (fst r).exn) rs) (fst exp0).exn);
       eff = true }, (B.mk_assign ann zl (map snd rs) (snd exp0)))
 
@@ -620,14 +599,8 @@ module Residual =
       l -> match_case -> Tannot.t pat -> t -> (Parse_ast.l, L.t match_result)
       sum **)
 
-  let pattern_match l0 c pat0 head_exp =
-    let h = match c with
-            | Try -> (fst head_exp).exn
-            | _ -> (fst head_exp).this
-    in
-    (match h with
-     | Some v -> Coq_inr (L.pattern_match pat0 v)
-     | None -> Coq_inl l0)
+  let pattern_match l0 _ _ _ =
+    Coq_inl l0
 
   (** val end_match : match_case -> state option -> state list -> state **)
 
@@ -652,35 +625,6 @@ module Residual =
 
 module Make =
  functor (Tannot:S) ->
- functor (L:sig
-  type t
-
-  val join : t -> t -> t
-
-  val v_unit : t
-
-  val v_list : t list -> t
-
-  val v_tuple : t list -> t
-
-  val v_vector : t list -> t
-
-  val v_ref : id -> t
-
-  val of_lit : lit -> t
-
-  val is_unit : t -> bool
-
-  val is_true : t -> bool
-
-  val is_false : t -> bool
-
-  val lookup_field : t -> id -> t
-
-  val pattern_match : Tannot.t pat -> t -> t match_result
-
-  val complete : t binding -> t
- end) ->
  functor (B:sig
   type t
 
@@ -719,7 +663,9 @@ module Make =
   val mk_undef : Tannot.t annot -> t
  end) ->
  struct
-  module R = Residual(Tannot)(L)(B)
+  module R = Residual(Tannot)(B)
+
+  module L = R.L
 
   module Monad =
    struct

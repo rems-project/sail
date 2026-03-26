@@ -41,6 +41,8 @@
 (*  SPDX-License-Identifier: BSD-2-Clause                                   *)
 (* ************************************************************************ *)
 
+Require Extraction.
+
 From Stdlib Require Import String.
 From Stdlib Require Import QArith.
 From Stdlib Require Import QArith.Qcanon.
@@ -48,6 +50,8 @@ From Stdlib Require Import QArith.Qcanon.
 From Ltac2 Require Import Ltac2.
 
 From stdpp Require Import base.
+From stdpp Require Import countable.
+From stdpp Require Import strings.
 
 (** Export Ltac2, so we can use Ltac2 as the default language for
 defining tactics, without having to reset the default proof mode after
@@ -55,6 +59,50 @@ importing from Ltac2. *)
 Export Ltac2.
 
 #[export] Set Default Proof Mode "Classic".
+
+(** The stdpp [Countable] instance is unusable for extracted code, and
+we can't override it because the functions that encode and decode
+strings are declared as local.
+
+As a workaround, declare an [extstring] wrapper, with encode/decode
+functions that extract directly to OCaml functions. *)
+
+Inductive extstring :=
+  | Extstring : string → extstring.
+
+Extract Inductive extstring => "string" [ "" ].
+
+Definition extstring_encode (str : extstring) := let 'Extstring str := str in encode str.
+Definition extstring_decode (p : positive) := Extstring <$> decode p.
+
+Extract Constant extstring_encode => "Extr_util.String_encoding.encode".
+Extract Constant extstring_decode => "Extr_util.String_encoding.decode".
+
+Lemma extstring_decode_encode : ∀ str, extstring_decode (extstring_encode str) = Some str.
+Proof.
+  intros str. destruct str.
+  unfold extstring_decode. cbn. rewrite decode_encode.
+  reflexivity.
+Qed.
+
+#[global]
+Instance extstring_eqdec : EqDecision extstring.
+Proof.
+  intros x y. destruct x as [x]. destruct y as [y].
+  unfold Decision.
+  destruct (decide (x = y)) as [Eq | Neq].
+  - left. rewrite Eq. reflexivity.
+  - right. intros H. inversion H. done.
+Defined.
+
+#[global]
+Instance extstring_countable : Countable extstring := {|
+  encode := extstring_encode;
+  decode := extstring_decode;
+  decode_encode := extstring_decode_encode;
+|}.
+
+(** Declare a notation scope for this development. *)
 
 Declare Scope sail_scope.
 Delimit Scope sail_scope with sail.

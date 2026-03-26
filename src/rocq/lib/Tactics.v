@@ -41,7 +41,7 @@
 (*  SPDX-License-Identifier: BSD-2-Clause                                   *)
 (* ************************************************************************ *)
 
-From Sail Require Import Base.
+From Sail Require Import SailBase.
 
 Import Ltac2.Std.
 

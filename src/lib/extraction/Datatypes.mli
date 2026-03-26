@@ -1,4 +1,10 @@
 
+type __ = Obj.t
+
+type reflect =
+| ReflectT
+| ReflectF
+
 val negb : bool -> bool
 
 val option_map : ('a1 -> 'a2) -> 'a1 option -> 'a2 option
@@ -30,3 +36,5 @@ val coq_CompareSpec2Type : comparison -> coq_CompareSpecT
 type 'a coq_CompSpecT = coq_CompareSpecT
 
 val coq_CompSpec2Type : 'a1 -> 'a1 -> comparison -> 'a1 coq_CompSpecT
+
+val id : __ -> __

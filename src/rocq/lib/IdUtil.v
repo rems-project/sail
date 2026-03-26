@@ -56,7 +56,7 @@ From stdpp Require Import countable.
 From stdpp Require Import strings.
 
 From Sail Require Import Ast.
-From Sail Require Import Base.
+From Sail Require Import SailBase.
 
 Lemma string_ltb_trans : forall (s1 s2 s3 : String.string),
   String.ltb s1 s2 = true -> String.ltb s2 s3 = true -> String.ltb s1 s3 = true.
@@ -207,34 +207,53 @@ Module Aux <: Orders.OrderedType.
 
   Definition lt (id1 : t) (id2 : t) : Prop := Is_true (ltb id1 id2).
 
-  Definition to_gen_tree (id : t) : gen_tree (() + () + string + string) :=
+  Definition to_gen_tree (id : t) : gen_tree (() + () + extstring + extstring) :=
     match id with
-    | Operator s => GenLeaf (inr s)
-    | Id s => GenLeaf (inl $ inr s)
+    | Operator s => GenLeaf (inr (Extstring s))
+    | Id s => GenLeaf (inl $ inr (Extstring s))
     | Or_bool => GenLeaf (inl $ inl $ inr ())
     | And_bool => GenLeaf (inl $ inl $ inl ())
     end.
 
-  Definition from_gen_tree (tree : gen_tree (() + () + string + string)) : option t :=
+  Definition from_gen_tree (tree : gen_tree (() + () + extstring + extstring)) : option t :=
     match tree with
-    | GenLeaf (inr s) => Some (Operator s)
-    | GenLeaf (inl (inr s)) => Some (Id s)
+    | GenLeaf (inr (Extstring s)) => Some (Operator s)
+    | GenLeaf (inl (inr (Extstring s))) => Some (Id s)
     | GenLeaf (inl (inl (inr ()))) => Some Or_bool
     | GenLeaf (inl (inl (inl ()))) => Some And_bool
     | GenNode _ _ => None
     end.
 
-  Definition encode_id_aux (id : t) : positive := encode (to_gen_tree id).
+  Definition encode_id_aux (id : t) : positive :=
+    match id with
+    | And_bool   => xH
+    | Or_bool    => xO $ xH
+    | Id s       => xO $ xO $ extstring_encode (Extstring s)
+    | Operator s => xO $ xI $ extstring_encode (Extstring s)
+    end.
 
-  Definition decode_id_aux (p : positive) : option t := decode p ≫= from_gen_tree.
+  Definition decode_id_aux (p : positive) : option t :=
+    match p with
+    | xH => Some And_bool
+    | xO xH => Some Or_bool
+    | xO (xO p) =>
+        match extstring_decode p with
+        | Some (Extstring str) => Some (Id str)
+        | None => None
+        end
+    | xO (xI p) =>
+        match extstring_decode p with
+        | Some (Extstring str) => Some (Operator str)
+        | None => None
+        end
+    | xI _ => None
+    end.
 
   Lemma id_aux_decode_encode : ∀ id, decode_id_aux (encode_id_aux id) = Some id.
   Proof.
-    intros id.
-    unfold encode_id_aux, decode_id_aux.
-    rewrite decode_encode.
-    unfold mbind, option_bind.
-    destruct id; reflexivity.
+    intros id. destruct id as [| | s | s]; try reflexivity.
+    - cbn. unfold extstring_decode. rewrite decode_encode. reflexivity.
+    - cbn. unfold extstring_decode. rewrite decode_encode. reflexivity.
   Qed.
 
   Lemma eq_dec : forall x y : t, { eq x y } + { ~ (eq x y) }.

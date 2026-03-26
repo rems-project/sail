@@ -2,7 +2,31 @@ open Ast
 open Datatypes
 open FMapList
 open OrdersAlt
+open SailBase
 open String0
+open Base
+open Countable
+
+module Aux :
+ sig
+  type t = id_aux
+
+  val unwrap : id -> t
+
+  val eqb : t -> t -> bool
+
+  val id_aux_eqdecb : t coq_EqDecb
+
+  val encode_id_aux : t -> Big_int_Z.big_int
+
+  val decode_id_aux : Big_int_Z.big_int -> t option
+
+  val eq_dec : t -> t -> bool
+
+  val eq_eqdec : (t, t) coq_RelDecision
+
+  val id_aux_countable : t coq_Countable
+ end
 
 val id_eqb : id -> id -> bool
 

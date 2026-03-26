@@ -572,6 +572,18 @@ let handle_input' istate input =
                 )
               )
               istate args
+        | ":rocq_encode_str" ->
+            let arg = String.trim arg in
+            print_endline (Big_int.to_string (Extraction.Extr_util.String_encoding.encode arg));
+            istate
+        | ":rocq_decode_str" -> (
+            let arg = Z.of_string @@ String.trim arg in
+            match Extraction.Extr_util.String_encoding.decode arg with
+            | Some str ->
+                print_endline str;
+                istate
+            | None -> istate
+          )
         | _ ->
             recognised := false;
             istate
