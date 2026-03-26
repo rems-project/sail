@@ -5,7 +5,6 @@
  (modules
   Ast
   AstInduction
-  Base
   Bit
   BitList
   Domain.Lattice
@@ -16,10 +15,10 @@
   ListUtil
   OptionUtil
   PatternMatch
+  SailBase
   Semantics
   Tactics
   TypeAnnot
-  ValueSemilattice
   ValueType
   ZAst)
  (package rocq_sail)

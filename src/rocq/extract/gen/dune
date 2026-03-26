@@ -1,0 +1,7 @@
+(rule
+ (target modules.sexp)
+ (deps modules.txt gen.ml)
+ (action
+  (with-stdout-to
+   %{target}
+   (run ocaml gen.ml))))

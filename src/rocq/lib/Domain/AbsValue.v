@@ -51,7 +51,7 @@ From stdpp Require Import gmap.
 From stdpp Require Import list.
 From stdpp Require Import mapset.
 
-From Sail Require Import Base.
+From Sail Require Import SailBase.
 From Sail Require Import IdUtil.
 From Sail Require Import ListUtil.
 From Sail Require Import OptionUtil.

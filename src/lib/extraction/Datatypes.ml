@@ -1,4 +1,10 @@
 
+type __ = Obj.t
+
+type reflect =
+| ReflectT
+| ReflectF
+
 (** val negb : bool -> bool **)
 
 let negb = function
@@ -61,3 +67,8 @@ type 'a coq_CompSpecT = coq_CompareSpecT
 
 let coq_CompSpec2Type _ _ =
   coq_CompareSpec2Type
+
+(** val id : __ -> __ **)
+
+let id x =
+  x

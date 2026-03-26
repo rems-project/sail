@@ -30,3 +30,9 @@ let rec fold_left f l a0 =
 let rec fold_right f a0 = function
 | [] -> a0
 | b :: l0 -> f b (fold_right f a0 l0)
+
+(** val forallb : ('a1 -> bool) -> 'a1 list -> bool **)
+
+let rec forallb f = function
+| [] -> true
+| a :: l0 -> (&&) (f a) (forallb f l0)
