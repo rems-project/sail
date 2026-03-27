@@ -42,7 +42,6 @@
 (* ************************************************************************ *)
 
 From Stdlib Require Import Bool.
-From Stdlib Require Import Lists.List.
 From Stdlib Require Import ZArith.
 
 From stdpp Require Import base.
@@ -50,8 +49,6 @@ From stdpp Require Import list.
 
 From Sail Require Import Ast.
 From Sail Require Import Tactics.
-
-Import ListNotations.
 
 (* * Utilities for working with lists
 
@@ -87,7 +84,7 @@ Fixpoint drop {A : Set} (n : nat) (xs : list A) : list A :=
   | (S m, _ :: xs) => drop m xs
   end.
 
-Lemma take_drop_all : forall [A : Set] (xs : list A),
+Lemma take_drop_all : ∀ [A : Set] (xs : list A),
     take_drop (length xs) xs = (xs, []).
 Proof.
   induction xs.
@@ -95,7 +92,7 @@ Proof.
   - cbn. rewrite IHxs. reflexivity.
 Qed.
 
-Lemma take_drop_app : forall [A : Set] (xs ys : list A),
+Lemma take_drop_app : ∀ [A : Set] (xs ys : list A),
     take_drop (length xs) (xs ++ ys) = (xs, ys).
 Proof.
   induction xs.
@@ -103,7 +100,7 @@ Proof.
   - cbn. intros. rewrite IHxs. reflexivity.
 Qed.
 
-Lemma take_app_drop_h : forall [A : Set] n (xs ys : list A),
+Lemma take_app_drop_h : ∀ [A : Set] n (xs ys : list A),
   xs ++ ys = take n xs ++ drop n xs ++ ys.
 Proof with reflexivity.
   intros A n.
@@ -115,7 +112,7 @@ Proof with reflexivity.
       rewrite IHn at 1...
 Qed.
 
-Lemma take_app_drop : forall [A : Set] n (xs : list A), xs = take n xs ++ drop n xs.
+Lemma take_app_drop : ∀ [A : Set] n (xs : list A), xs = take n xs ++ drop n xs.
 Proof.
   intros A n xs.
   assert (H := take_app_drop_h n xs []).
@@ -123,8 +120,8 @@ Proof.
   assumption.
 Qed.
 
-Lemma take_length : forall [A : Set] n (xs : list A),
-  (n <= length xs)%nat -> length (take n xs) = n.
+Lemma take_length : ∀ [A : Set] n (xs : list A),
+  (n <= length xs)%nat → length (take n xs) = n.
 Proof.
   intros A n.
   induction n; intros xs H.
@@ -138,7 +135,7 @@ Proof.
       apply (IHn _ (le_S_n _ _ H)).
 Qed.
 
-Lemma take_drop_split : forall [A : Set] n (xs : list A),
+Lemma take_drop_split : ∀ [A : Set] n (xs : list A),
   take_drop n xs = (take n xs, drop n xs).
 Proof with reflexivity.
   intros A n.
@@ -147,7 +144,7 @@ Proof with reflexivity.
   - destruct xs as [| x xs]; cbn; [ idtac | rewrite IHn ]...
 Qed.
 
-Lemma drop_drop_add : forall [A] n m (xs : list A), drop m (drop n xs) = drop (n + m) xs.
+Lemma drop_drop_add : ∀ [A] n m (xs : list A), drop m (drop n xs) = drop (n + m) xs.
 Proof.
   intros A n m.
   induction n as [| n IH]; intros xs.
@@ -158,7 +155,7 @@ Proof.
 Qed.
 
 (* This theorem about [Forall] and [In] is useful. *)
-Lemma Forall_in : forall [A] P (x : A) xs, Forall P xs -> In x xs -> P x.
+Lemma Forall_in : ∀ [A] P (x : A) xs, Forall P xs → In x xs → P x.
 Proof.
   induction xs.
   - easy.
@@ -170,8 +167,8 @@ Proof.
     + apply (fun Q => IHxs Q H0). easy.
 Qed.
 
-Lemma Forall_impl_in: forall [A : Type] [P : A -> Prop] (Q : A -> Prop) [l : list A],
-  (forall a : A, In a l -> P a -> Q a) -> Forall P l -> Forall Q l.
+Lemma Forall_impl_in: ∀ [A : Type] [P : A → Prop] (Q : A → Prop) [l : list A],
+  (∀ a : A, In a l → P a → Q a) → Forall P l → Forall Q l.
 Proof.
   intros A P Q l impl FP.
   induction l as [|x xs IH].
@@ -185,35 +182,35 @@ Proof.
       exact (impl x' (in_cons _ _ _ In_xs) Px').
 Qed.
 
-Lemma forallb_take: forall [A] [n] [xs : list A] [P : A -> bool], forallb P xs = true -> forallb P (take n xs) = true.
+Lemma forallb_take: ∀ [A] [n] [xs : list A] [P : A → bool], forallb P xs = true → forallb P (take n xs) = true.
 Proof.
   intros A n xs P All_xs.
   rewrite (take_app_drop n xs), forallb_app, andb_true_iff in All_xs.
   easy.
 Qed.
 
-Lemma forallb_drop: forall [A] [n] [xs : list A] [P : A -> bool], forallb P xs = true -> forallb P (drop n xs) = true.
+Lemma forallb_drop: ∀ [A] [n] [xs : list A] [P : A → bool], forallb P xs = true → forallb P (drop n xs) = true.
 Proof.
   intros A n xs P All_xs.
   rewrite (take_app_drop n xs), forallb_app, andb_true_iff in All_xs.
   easy.
 Qed.
 
-Lemma Forall_take: forall [A] [n] [xs : list A] [P : A -> Prop], Forall P xs -> Forall P (take n xs).
+Lemma Forall_take: ∀ [A] [n] [xs : list A] [P : A → Prop], Forall P xs → Forall P (take n xs).
 Proof.
   intros A n xs P All_xs.
   rewrite (take_app_drop n xs), Forall_app in All_xs.
   easy.
 Qed.
 
-Lemma Forall_drop: forall [A] [n] [xs : list A] [P : A -> Prop], Forall P xs -> Forall P (drop n xs).
+Lemma Forall_drop: ∀ [A] [n] [xs : list A] [P : A → Prop], Forall P xs → Forall P (drop n xs).
 Proof.
   intros A n xs P All_xs.
   rewrite (take_app_drop n xs), Forall_app in All_xs.
   easy.
 Qed.
 
-Lemma in_app_split : forall [A : Set] (x : A) xs, In x xs -> exists ys zs, xs = ys ++ (x :: zs).
+Lemma in_app_split : ∀ [A : Set] (x : A) xs, In x xs → exists ys zs, xs = ys ++ (x :: zs).
 Proof with reflexivity.
   intros A x xs x_in_xs.
   induction xs as [| y ys].
@@ -232,7 +229,7 @@ Proof with reflexivity.
       rewrite H...
 Qed.
 
-Lemma app_cons_in : forall [A : Set] (x : A) xs ys zs, xs = ys ++ (x :: zs) -> In x xs.
+Lemma app_cons_in : ∀ [A : Set] (x : A) xs ys zs, xs = ys ++ (x :: zs) → In x xs.
 Proof with tauto.
   intros A x xs.
   induction xs as [| w ws]; intros ys zs H.
@@ -256,7 +253,7 @@ Fixpoint zip {A} (xs ys : list A) : list (A * A) :=
   | (_, []) => []
   end.
 
-Lemma map_fst_zip : forall [A] (xs ys : list A), length xs = length ys -> map fst (zip xs ys) = xs.
+Lemma map_fst_zip : ∀ [A] (xs ys : list A), length xs = length ys → map fst (zip xs ys) = xs.
 Proof.
   intros A xs.
   induction xs as [| x xs]; intro ys; destruct ys as [| y ys]; try easy.
@@ -267,7 +264,7 @@ Proof.
   reflexivity.
 Qed.
 
-Lemma map_snd_zip : forall [A] (xs ys : list A), length xs = length ys -> map snd (zip xs ys) = ys.
+Lemma map_snd_zip : ∀ [A] (xs ys : list A), length xs = length ys → map snd (zip xs ys) = ys.
 Proof.
   intros A xs.
   induction xs as [| x xs]; intro ys; destruct ys as [| y ys]; try easy.
@@ -278,9 +275,9 @@ Proof.
   reflexivity.
 Qed.
 
-Lemma zip_fst_snd : forall [A : Set] (xs ys: list A) zs,
-  length xs = length ys ->
-  zip xs ys = zs <-> xs = List.map fst zs /\ ys = List.map snd zs.
+Lemma zip_fst_snd : ∀ [A : Set] (xs ys: list A) zs,
+  length xs = length ys →
+  zip xs ys = zs ↔ xs = List.map fst zs ∧ ys = List.map snd zs.
 Proof.
   intros A xs ys zs.
   revert xs ys.
@@ -309,7 +306,7 @@ Qed.
 
    Compare two lists, returning true if both lists have the same
    length and are pointwise equal according to some predicate. *)
-Fixpoint list_eqb {A} (pred : A -> A -> bool) (lhs rhs : list A) : bool :=
+Fixpoint list_eqb {A} (pred : A → A → bool) (lhs rhs : list A) : bool :=
   match (lhs, rhs) with
   | ([], []) => true
   | ([], _) => false
@@ -317,9 +314,9 @@ Fixpoint list_eqb {A} (pred : A -> A -> bool) (lhs rhs : list A) : bool :=
   | (x :: xs, y :: ys) => pred x y && list_eqb pred xs ys
   end.
 
-Lemma list_eqb_eq_right : forall A (pred : A -> A -> bool) lhs rhs,
-  (forall x y, In x lhs -> pred x y = true -> x = y) ->
-  list_eqb pred lhs rhs = true -> lhs = rhs.
+Lemma list_eqb_eq_right : ∀ A (pred : A → A → bool) lhs rhs,
+  (∀ x y, In x lhs → pred x y = true → x = y) →
+  list_eqb pred lhs rhs = true → lhs = rhs.
 Proof.
   intros A pred lhs rhs H.
   revert rhs.
@@ -340,8 +337,8 @@ Proof.
       apply (H _ _ In_x_l XY).
 Qed.
 
-Lemma list_eqb_refl: forall A (pred : A -> A -> bool) xs,
-  (forall x, In x xs -> pred x x = true) -> list_eqb pred xs xs = true.
+Lemma list_eqb_refl: ∀ A (pred : A → A → bool) xs,
+  (∀ x, In x xs → pred x x = true) → list_eqb pred xs xs = true.
 Proof.
   intros A pred xs H.
   induction xs as [| x xs].
@@ -356,9 +353,9 @@ Qed.
 
 (* If the predicate is definitional equality (for the elements in the
    list at least), then list_eqb is too. *)
-Lemma list_eqb_eq : forall A (pred : A -> A -> bool) lhs rhs,
-  (forall x y, In x lhs -> pred x y = true <-> x = y) ->
-  list_eqb pred lhs rhs = true <-> lhs = rhs.
+Lemma list_eqb_eq : ∀ A (pred : A → A → bool) lhs rhs,
+  (∀ x y, In x lhs → pred x y = true ↔ x = y) →
+  list_eqb pred lhs rhs = true ↔ lhs = rhs.
 Proof.
   intros A pred lhs rhs H.
   split.
@@ -370,8 +367,8 @@ Proof.
     apply (proj2 (H x x In_rhs) eq_refl).
 Qed.
 
-Lemma list_eqb_sym: forall A (eq : A -> A -> bool) xs ys,
-  (forall x y, eq x y = eq y x) -> list_eqb eq xs ys = true -> list_eqb eq ys xs = true.
+Lemma list_eqb_sym: ∀ A (eq : A → A → bool) xs ys,
+  (∀ x y, eq x y = eq y x) → list_eqb eq xs ys = true → list_eqb eq ys xs = true.
 Proof.
   intros A eq xs ys eq_sym.
   revert ys.
@@ -390,8 +387,8 @@ Proof.
       * apply H2.
 Qed.
 
-Lemma list_eqb_comm: forall A (eq : A -> A -> bool) xs ys,
-  (forall x y, eq x y = eq y x) -> list_eqb eq xs ys = list_eqb eq ys xs.
+Lemma list_eqb_comm: ∀ A (eq : A → A → bool) xs ys,
+  (∀ x y, eq x y = eq y x) → list_eqb eq xs ys = list_eqb eq ys xs.
 Proof.
   intros A eq xs ys eq_sym.
   apply eq_true_iff_eq.
@@ -400,8 +397,8 @@ Proof.
   - apply (list_eqb_sym A eq ys xs eq_sym).
 Qed.
 
-Lemma list_eqb_comm_in: forall A (eq : A -> A -> bool) xs ys,
-  (forall x y, In x xs -> eq x y = eq y x) -> list_eqb eq xs ys = list_eqb eq ys xs.
+Lemma list_eqb_comm_in: ∀ A (eq : A → A → bool) xs ys,
+  (∀ x y, In x xs → eq x y = eq y x) → list_eqb eq xs ys = list_eqb eq ys xs.
 Proof.
   intros A eq xs ys eq_sym.
   revert ys.
@@ -423,10 +420,10 @@ Proof.
       easy.
 Qed.
 
-Lemma list_eqb_trans_in : forall A (eq : A -> A -> bool) xs ys zs,
-  (forall x y z, In y ys -> eq x y = true -> eq y z = true -> eq x z = true) ->
-  list_eqb eq xs ys = true ->
-  list_eqb eq ys zs = true ->
+Lemma list_eqb_trans_in : ∀ A (eq : A → A → bool) xs ys zs,
+  (∀ x y z, In y ys → eq x y = true → eq y z = true → eq x z = true) →
+  list_eqb eq xs ys = true →
+  list_eqb eq ys zs = true →
   list_eqb eq xs zs = true.
 Proof.
   intros A eq xs ys zs eq_sym.
@@ -457,10 +454,10 @@ Proof.
         apply (eq_sym x' y' z' (in_cons _ _ _ In_y') Eq_xy' Eq_yz').
 Qed.
 
-Lemma list_eqb_trans : forall A (eq : A -> A -> bool) xs ys zs,
-  (forall x y z, eq x y = true -> eq y z = true -> eq x z = true) ->
-  list_eqb eq xs ys = true ->
-  list_eqb eq ys zs = true ->
+Lemma list_eqb_trans : ∀ A (eq : A → A → bool) xs ys zs,
+  (∀ x y z, eq x y = true → eq y z = true → eq x z = true) →
+  list_eqb eq xs ys = true →
+  list_eqb eq ys zs = true →
   list_eqb eq xs zs = true.
 Proof.
   intros A eq xs ys zs eq_sym XY YZ.
@@ -469,8 +466,8 @@ Proof.
   apply (eq_sym _ y _); assumption.
 Qed.
 
-Lemma list_eqb_false : forall [A : Set] f (xs ys : list A),
-  length xs = length ys -> list_eqb f xs ys = false <-> Exists (fun '(x, y) => f x y = false) (zip xs ys).
+Lemma list_eqb_false : ∀ [A : Set] f (xs ys : list A),
+  length xs = length ys → list_eqb f xs ys = false ↔ Exists (fun '(x, y) => f x y = false) (zip xs ys).
 Proof.
   intros A f xs.
   induction xs as [| x xs]; intro ys; destruct ys as [| y ys]; try discriminate.
@@ -484,8 +481,8 @@ Proof.
     apply (Nat.succ_inj _ _ Same_length).
 Qed.
 
-Lemma list_eqb_false_app_r : forall [A : Set] f (xs ys zs : list A),
-  list_eqb f (drop (length ys) xs) zs = false -> list_eqb f xs (ys ++ zs) = false.
+Lemma list_eqb_false_app_r : ∀ [A : Set] f (xs ys zs : list A),
+  list_eqb f (drop (length ys) xs) zs = false → list_eqb f xs (ys ++ zs) = false.
 Proof.
   intros A f xs ys zs.
   revert xs zs.
@@ -493,9 +490,9 @@ Proof.
   all: cbn; rewrite andb_false_iff; intros H; apply or_intror; apply (IHys _ _ H).
 Qed.
 
-Lemma list_eqb_app : forall [A : Set] f (xs ys zs ws : list A),
-  length xs = length zs ->
-  list_eqb f (xs ++ ys) (zs ++ ws) = true ->
+Lemma list_eqb_app : ∀ [A : Set] f (xs ys zs ws : list A),
+  length xs = length zs →
+  list_eqb f (xs ++ ys) (zs ++ ws) = true →
   list_eqb f ys ws = true.
 Proof.
   intros A f xs ys zs ws.
@@ -508,7 +505,7 @@ Proof.
   tauto.
 Qed.
 
-Lemma list_eqb_same_length : forall {A} f {xs ys : list A}, list_eqb f xs ys = true -> length xs = length ys.
+Lemma list_eqb_same_length : ∀ {A} f {xs ys : list A}, list_eqb f xs ys = true → length xs = length ys.
 Proof.
   intros A f xs.
   induction xs as [| x xs]; intros ys; destruct ys as [| y ys]; try easy.
@@ -522,14 +519,14 @@ Qed.
 
 Definition Suffix {A} (xs ys : list A) : Prop := exists n, xs = drop n ys.
 
-Lemma Suffix_refl : forall {A} (xs : list A), Suffix xs xs.
+Lemma Suffix_refl : ∀ {A} (xs : list A), Suffix xs xs.
 Proof with reflexivity.
   intros A xs.
   unfold Suffix.
   exists 0...
 Qed.
 
-Lemma Suffix_nil : forall {A} (xs : list A), Suffix [] xs.
+Lemma Suffix_nil : ∀ {A} (xs : list A), Suffix [] xs.
 Proof.
   intros A xs.
   unfold Suffix.
@@ -540,15 +537,15 @@ Proof.
     exact IHxs.
 Qed.
 
-Lemma Suffix_drop : forall {A} n (xs : list A), Suffix (drop n xs) xs.
+Lemma Suffix_drop : ∀ {A} n (xs : list A), Suffix (drop n xs) xs.
 Proof with reflexivity.
   intros A n xs.
   unfold Suffix.
   exists n...
 Qed.
 
-Lemma Suffix_forallb: forall [A] [xs ys : list A] [P : A -> bool],
-  Suffix xs ys -> forallb P ys = true  -> forallb P xs = true.
+Lemma Suffix_forallb: ∀ [A] [xs ys : list A] [P : A → bool],
+  Suffix xs ys → forallb P ys = true  → forallb P xs = true.
 Proof.
   intros A xs ys P S All_ys.
   unfold Suffix in S.
@@ -569,7 +566,7 @@ Ltac suffix_solve :=
   | |- Suffix (drop ?n ?xs) ?xs => exact (Suffix_drop n xs)
   end.
 
-Definition consume {A B C} (f : list C -> A -> option B * list C) (acc : option (list B) * list C) (x : A) :=
+Definition consume {A B C} (f : list C → A → option B * list C) (acc : option (list B) * list C) (x : A) :=
   match acc with
   | (Some rs, xs) =>
       match f xs x with
@@ -579,7 +576,7 @@ Definition consume {A B C} (f : list C -> A -> option B * list C) (acc : option 
   | (None, xs) => (None, xs)
   end.
 
-Lemma foldl_consume_none : forall {A B C} (f : list C -> A -> option B * list C) xs ys,
+Lemma foldl_consume_none : ∀ {A B C} (f : list C → A → option B * list C) xs ys,
   fold_left (consume f) ys (None, xs) = (None, xs).
 Proof.
   intros A B C f xs ys.
@@ -589,7 +586,7 @@ Proof.
   - exact IHys.
 Qed.
 
-Lemma foldl_consume : forall {A B C} (f : list C -> A -> option B * list C) rs xs ys,
+Lemma foldl_consume : ∀ {A B C} (f : list C → A → option B * list C) rs xs ys,
   fold_left (consume f) ys (Some rs, xs) =
   match fold_left (consume f) ys (Some [], xs) with
   | (Some rs', ys') => (Some (rs' ++ rs), ys')
@@ -654,7 +651,7 @@ Proof.
     apply H, list_elem_of_further, elem_xs.
 Qed.
 
-Fixpoint zip_with_opt {A B C} (f : A -> B -> C) (xs : list A) (ys : list B) : option (list C) :=
+Fixpoint zip_with_opt {A B C} (f : A → B → C) (xs : list A) (ys : list B) : option (list C) :=
   match xs with
   | [] =>
       match ys with
@@ -672,7 +669,7 @@ Fixpoint zip_with_opt {A B C} (f : A -> B -> C) (xs : list A) (ys : list B) : op
       end
   end.
 
-Lemma zip_with_opt_comm : ∀ {A B} {f : A -> A -> B} {xs ys},
+Lemma zip_with_opt_comm : ∀ {A B} {f : A → A → B} {xs ys},
   (∀ x y, x ∈ xs → y ∈ ys → f x y = f y x) →
   zip_with_opt f xs ys = zip_with_opt f ys xs.
 Proof.

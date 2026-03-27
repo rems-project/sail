@@ -41,29 +41,27 @@
 (*  SPDX-License-Identifier: BSD-2-Clause                                   *)
 (* ************************************************************************ *)
 
-From Stdlib Require Import List.
+From stdpp Require Import base.
 
 From Sail Require Import Tactics.
-
-Import ListNotations.
 
 Definition is_none {A} (o : option A) : bool := match o with Some _ => false | None => true end.
 Definition is_some {A} (o : option A) : bool := match o with Some _ => true | None => false end.
 
-Definition option_bind {A B} (o : option A) (f : A -> option B) : option B :=
+Definition option_bind {A B} (o : option A) (f : A → option B) : option B :=
   match o with
   | Some x => f x
   | None => None
   end.
 
-Definition option_map2 {A B C} (f : A -> B -> C) (o₁ : option A) (o₂ : option B) : option C :=
+Definition option_map2 {A B C} (f : A → B → C) (o₁ : option A) (o₂ : option B) : option C :=
   match (o₁, o₂) with
   | (None, _) => None
   | (_, None) => None
   | (Some x, Some y) => Some (f x y)
   end.
 
-Definition option_join {A} (f : A -> A -> A) (o₁ o₂ : option A) : option A :=
+Definition option_join {A} (f : A → A → A) (o₁ o₂ : option A) : option A :=
   match (o₁, o₂) with
   | (None, None) => None
   | (Some x, None) => Some x
@@ -71,7 +69,7 @@ Definition option_join {A} (f : A -> A -> A) (o₁ o₂ : option A) : option A :
   | (Some x, Some y) => Some (f x y)
   end.
 
-Definition option_bind2 {A} (f : A -> A -> option A) (o₁ o₂ : option A) : option A :=
+Definition option_bind2 {A} (f : A → A → option A) (o₁ o₂ : option A) : option A :=
   match (o₁, o₂) with
   | (Some x, Some y) => f x y
   | _ => None
@@ -79,9 +77,9 @@ Definition option_bind2 {A} (f : A -> A -> option A) (o₁ o₂ : option A) : op
 
 Section option_join.
   Context {A : Type}.
-  Context {f : A -> A -> A}.
+  Context {f : A → A → A}.
 
-  Lemma option_join_idem : forall (f_idem : forall x, f x x = x) {x : option A},
+  Lemma option_join_idem : ∀ (f_idem : ∀ x, f x x = x) {x : option A},
     option_join f x x = x.
   Proof using A f.
     intros f_idem x.
@@ -91,7 +89,7 @@ Section option_join.
     reflexivity.
   Qed.
 
-  Lemma option_join_comm : forall (f_sym : forall x y, f x y = f y x) {x y : option A},
+  Lemma option_join_comm : ∀ (f_sym : ∀ x y, f x y = f y x) {x y : option A},
     option_join f x y = option_join f y x.
   Proof using A f.
     intros f_sym x y.
@@ -101,7 +99,7 @@ Section option_join.
     reflexivity.
   Qed.
 
-  Lemma option_join_assoc : forall (f_assoc : forall x y z, f (f x y) z = f x (f y z)) {x y z : option A},
+  Lemma option_join_assoc : ∀ (f_assoc : ∀ x y z, f (f x y) z = f x (f y z)) {x y z : option A},
     option_join f (option_join f x y) z = option_join f x (option_join f y z).
   Proof using A f.
     intros f_assoc x y z.
@@ -111,10 +109,10 @@ Section option_join.
     reflexivity.
   Qed.
 
-  Lemma option_join_bounded_r : forall {x : option A}, option_join f x None = x.
+  Lemma option_join_bounded_r : ∀ {x : option A}, option_join f x None = x.
   Proof using A f. intros x; destruct x; reflexivity. Qed.
 
-  Lemma option_join_bounded_l : forall {x : option A}, option_join f None x = x.
+  Lemma option_join_bounded_l : ∀ {x : option A}, option_join f None x = x.
   Proof using A f. intros x; destruct x; reflexivity. Qed.
 End option_join.
 
@@ -155,7 +153,7 @@ Fixpoint option_all_alt {A} (xs : list (option A)) : option (list A) :=
       end
   end.
 
-Lemma option_all_prime_is_alt : forall {A} {xs : list (option A)} (ys : list A),
+Lemma option_all_prime_is_alt : ∀ {A} {xs : list (option A)} (ys : list A),
   option_all' (Some ys) xs = option_map (fun zs => rev ys ++ zs) (option_all_alt xs).
 Proof.
   intros A xs.
@@ -167,7 +165,7 @@ Proof.
     reflexivity.
 Qed.
 
-Lemma option_all_is_alt : forall {A} {xs : list (option A)}, option_all xs = option_all_alt xs.
+Lemma option_all_is_alt : ∀ {A} {xs : list (option A)}, option_all xs = option_all_alt xs.
 Proof.
   intros A xs.
   unfold option_all.
@@ -176,8 +174,8 @@ Proof.
   destruct_match; reflexivity.
 Qed.
 
-Lemma option_all_length : forall {A} {xs : list (option A)} {ys : list A},
-  option_all xs = Some ys -> List.length xs = List.length ys.
+Lemma option_all_length : ∀ {A} {xs : list (option A)} {ys : list A},
+  option_all xs = Some ys → List.length xs = List.length ys.
 Proof.
   intros A xs.
   induction xs as [| x xs IH]; intros ys H.
@@ -194,7 +192,7 @@ Proof.
     reflexivity.
 Qed.
 
-Definition option_is {A} (f : A -> bool) (o : option A) : bool :=
+Definition option_is {A} (f : A → bool) (o : option A) : bool :=
   match o with
   | Some x => f x
   | None   => false
