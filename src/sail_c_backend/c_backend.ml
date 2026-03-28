@@ -144,6 +144,13 @@ let literal_to_fragment (L_aux (l_aux, _)) =
   match l_aux with
   | L_num n when Big_int.less_equal (min_int 64) n && Big_int.less_equal n (max_int 64) ->
       Some (V_lit (VL_int n, CT_fint 64))
+  | L_bin bin ->
+      let len = bin_lit_length bin in
+      if len <= 64 then (
+        let content = BitList.of_bin_lit bin |> List.map (function B0 -> Sail2_values.B0 | B1 -> Sail2_values.B1) in
+        Some (V_lit (VL_bits content, CT_fbits len))
+      )
+      else None
   | L_hex hex ->
       let len = hex_lit_length hex in
       if len <= 64 then (
