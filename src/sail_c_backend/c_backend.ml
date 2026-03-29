@@ -520,18 +520,19 @@ end) : CONFIG = struct
           )
         | None -> no_change
       )
-    | "add_int", [AV_cval (op1, _); AV_cval (op2, _)] -> begin
+    | (("add_int" | "sub_int") as f), [AV_cval (op1, _); AV_cval (op2, _)] -> begin
+        let f = if f = "add_int" then Iadd else Isub in
         match destruct_range ctx.local_env typ with
         | None -> no_change
         | Some (_, _, n, m) -> (
             match (nexp_simp n, nexp_simp m) with
             | Nexp_aux (Nexp_constant n, _), Nexp_aux (Nexp_constant m, _)
               when Big_int.less_equal (min_int 64) n && Big_int.less_equal m (max_int 64) ->
-                AE_val (AV_cval (V_call (Iadd, [op1; op2]), typ))
+                AE_val (AV_cval (V_call (f, [op1; op2]), typ))
             | n, m
               when prove __POS__ ctx.local_env (nc_lteq (nconstant (min_int 64)) n)
                    && prove __POS__ ctx.local_env (nc_lteq m (nconstant (max_int 64))) ->
-                AE_val (AV_cval (V_call (Iadd, [op1; op2]), typ))
+                AE_val (AV_cval (V_call (f, [op1; op2]), typ))
             | _ -> no_change
           )
       end
