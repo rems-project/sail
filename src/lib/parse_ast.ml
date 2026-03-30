@@ -78,7 +78,7 @@ open Attribute_data
 type 'a annot = l * 'a
 
 type 'a field_annot =
-  | Ann_attribute of string * attribute_data option * 'a field_annot * l
+  | Ann_attribute of (l * string * attribute_data option) list * 'a field_annot * l
   | Ann_doc of doc_comment * 'a field_annot * l
   | Ann_item of 'a
 
@@ -197,7 +197,7 @@ type pat_aux =
   | P_cons of pat * pat (* cons pattern *)
   | P_string_append of pat list (* string append pattern, x ^^ y *)
   | P_struct of id option * fpat list (* struct pattern *)
-  | P_attribute of string * attribute_data option * pat
+  | P_attribute of (l * string * attribute_data option) list * pat
 
 and pat = P_aux of pat_aux * l
 
@@ -258,7 +258,7 @@ and exp_aux =
   | E_assert of exp * exp
   | E_var of exp * exp * exp
   | E_undef
-  | E_attribute of string * attribute_data option * exp
+  | E_attribute of (l * string * attribute_data option) list * exp
   | E_internal_plet of pat * exp * exp
   | E_internal_return of exp
   | E_internal_assume of atyp * exp
@@ -276,7 +276,7 @@ and pexp_aux =
   (* Pattern match *)
   | Pat_exp of pat * exp
   | Pat_when of pat * exp * exp
-  | Pat_attribute of string * attribute_data option * pexp
+  | Pat_attribute of (l * string * attribute_data option) list * pexp
 
 and pexp = Pat_aux of pexp_aux * l
 
@@ -295,7 +295,7 @@ type funcl = FCL_aux of funcl_aux * l
 and funcl_aux =
   (* Function clause *)
   | FCL_private of funcl
-  | FCL_attribute of string * attribute_data option * funcl
+  | FCL_attribute of (l * string * attribute_data option) list * funcl
   | FCL_doc of doc_comment * funcl
   | FCL_funcl of id * pexp
 
@@ -304,7 +304,7 @@ type type_union = Tu_aux of type_union_aux * l
 and type_union_aux =
   (* Type union constructors *)
   | Tu_private of type_union
-  | Tu_attribute of string * attribute_data option * type_union
+  | Tu_attribute of (l * string * attribute_data option) list * type_union
   | Tu_doc of doc_comment * type_union
   | Tu_ty_id of atyp * id
   | Tu_ty_anon_rec of (id * atyp) field_annot list * id
@@ -358,7 +358,7 @@ type mapcl = MCL_aux of mapcl_aux * l
 
 and mapcl_aux =
   (* mapping clause (bidirectional pattern-match) *)
-  | MCL_attribute of string * attribute_data option * mapcl
+  | MCL_attribute of (l * string * attribute_data option) list * mapcl
   | MCL_doc of doc_comment * mapcl
   | MCL_bidir of mpexp * mpexp
   | MCL_forwards_deprecated of mpexp * exp
@@ -455,7 +455,7 @@ type def_aux =
   | DEF_register of dec_spec (* register declaration *)
   | DEF_pragma of string * pragma
   | DEF_private of def
-  | DEF_attribute of string * attribute_data option * def
+  | DEF_attribute of (l * string * attribute_data option) list * def
   | DEF_doc of doc_comment * def
   | DEF_internal_mutrec of fundef list
 

@@ -82,7 +82,7 @@ and chunk =
   | Comment of comment_type * int * int * string * bool
   | Doc_comment of doc_comment
   | Spacer of bool * int
-  | Attribute of string * chunks
+  | Attributes of (string * chunks option) list
   | Function of {
       id : id;
       clause : bool;
@@ -146,9 +146,14 @@ let rec prerr_chunk indent = function
       Printf.eprintf "%sComment: blank=%d col=%d trailing=%b %s%s%s\n" indent n col trailing s contents e
   | Doc_comment { contents; _ } -> Printf.eprintf "%sDoc_comment: /*!%s*/\n" indent contents
   | Spacer (line, w) -> Printf.eprintf "%sSpacer:%b %d\n" indent line w
-  | Attribute (attr, chunks) ->
-      Printf.eprintf "%sAttribute:%s\n" indent attr;
-      Queue.iter (prerr_chunk (indent ^ "    ")) chunks
+  | Attributes attrs ->
+      Printf.eprintf "%sAttributes:\n" indent;
+      List.iter
+        (fun (attr, chunks_opt) ->
+          Printf.eprintf "%s  %s:" indent attr;
+          match chunks_opt with Some chunks -> Queue.iter (prerr_chunk (indent ^ "    ")) chunks | None -> ()
+        )
+        attrs
   | Atom str -> Printf.eprintf "%sAtom:%s\n" indent str
   | String_literal str -> Printf.eprintf "%sString_literal:%s\n" indent str
   | Multiline_string_literal lines ->
@@ -663,13 +668,20 @@ let rec chunk_attribute_data comments chunks (AD_aux (aux, l)) =
       else if bare_attribute_string s then Queue.add (Atom s) chunks
       else Queue.add (String_literal s) chunks
 
-let chunk_attribute comments chunks attr arg =
-  match arg with
-  | None -> Queue.add (Atom (Printf.sprintf "$[%s]" attr)) chunks
-  | Some adata ->
-      let inner_chunks = Queue.create () in
-      chunk_attribute_data comments inner_chunks adata;
-      Queue.add (Attribute (attr, inner_chunks)) chunks
+let chunk_attributes comments chunks attrs =
+  let attrs =
+    List.map
+      (fun (_, attr, arg) ->
+        match arg with
+        | None -> (attr, None)
+        | Some adata ->
+            let inner_chunks = Queue.create () in
+            chunk_attribute_data comments inner_chunks adata;
+            (attr, Some inner_chunks)
+      )
+      attrs
+  in
+  Queue.add (Attributes attrs) chunks
 
 let rec chunk_atyp comments chunks (ATyp_aux (aux, l)) =
   pop_comments comments chunks l;
@@ -840,8 +852,8 @@ let rec chunk_pat comments chunks (P_aux (aux, l)) =
         chunk_delimit ~within:l ~delim:"," ~get_loc:(fun (FP_aux (_, l)) -> l) ~chunk:chunk_fpat comments fpats
       in
       Queue.add (Tuple ("struct {", "}", 1, fpats)) chunks
-  | P_attribute (attr, arg, pat) ->
-      chunk_attribute comments chunks attr arg;
+  | P_attribute (attrs, pat) ->
+      chunk_attributes comments chunks attrs;
       Queue.add (Spacer (false, 1)) chunks;
       chunk_pat comments chunks pat
 
@@ -876,7 +888,7 @@ let flatten_block exps =
 (* Check if a sequence of cases in a match or try statement is aligned *)
 let is_aligned pexps =
   let rec pexp_exp_column = function
-    | Pat_aux (Pat_attribute (_, _, pexp), _) -> pexp_exp_column pexp
+    | Pat_aux (Pat_attribute (_, pexp), _) -> pexp_exp_column pexp
     | Pat_aux (Pat_exp (_, E_aux (_, l)), _) -> starting_column_num l
     | Pat_aux (Pat_when (_, _, E_aux (_, l)), _) -> starting_column_num l
   in
@@ -910,8 +922,8 @@ let rec chunk_exp comments chunks (E_aux (aux, l)) =
   | E_config s -> Queue.add (Atom ("config " ^ s)) chunks
   | E_undef -> Queue.add (Atom "undefined") chunks
   | E_lit lit -> Queue.add (chunk_of_lit lit) chunks
-  | E_attribute (attr, arg, exp) ->
-      chunk_attribute comments chunks attr arg;
+  | E_attribute (attrs, exp) ->
+      chunk_attributes comments chunks attrs;
       Queue.add (Spacer (false, 1)) chunks;
       chunk_exp comments chunks exp
   | E_app (id, [E_aux (E_lit (L_aux (L_unit, _)), _)]) -> Queue.add (App (id, [])) chunks
@@ -1204,9 +1216,9 @@ and chunk_vector_update comments (E_aux (aux, l) as exp) =
 
 and chunk_pexp ?attr_chunks ?delim comments chunks (Pat_aux (aux, l)) =
   match aux with
-  | Pat_attribute (attr, arg, pexp) ->
+  | Pat_attribute (attrs, pexp) ->
       let chunks = match attr_chunks with Some chunks -> chunks | None -> Queue.create () in
-      chunk_attribute comments chunks attr arg;
+      chunk_attributes comments chunks attrs;
       Queue.add (Spacer (false, 1)) chunks;
       chunk_pexp ~attr_chunks:chunks ?delim comments chunks pexp
   | Pat_exp (pat, exp) ->
@@ -1239,8 +1251,8 @@ let chunk_funcl comments funcl =
         Queue.add (Atom "private") chunks;
         Queue.add (Spacer (false, 1)) chunks;
         chunk_funcl' comments funcl
-    | FCL_attribute (attr, arg, funcl) ->
-        chunk_attribute comments chunks attr arg;
+    | FCL_attribute (attrs, funcl) ->
+        chunk_attributes comments chunks attrs;
         Queue.add (Spacer (false, 1)) chunks;
         chunk_funcl' comments funcl
     | FCL_doc (_, funcl) -> chunk_funcl' comments funcl
@@ -1298,7 +1310,7 @@ let rec is_hanging_fundef l = function
   | Pat_aux (Pat_exp (_, E_aux (_, exp_l)), _) | Pat_aux (Pat_when (_, _, E_aux (_, exp_l)), _) ->
       let line = starting_line_num l in
       Option.is_some line && line = starting_line_num exp_l
-  | Pat_aux (Pat_attribute (_, _, pexp), _) -> is_hanging_fundef l pexp
+  | Pat_aux (Pat_attribute (_, pexp), _) -> is_hanging_fundef l pexp
 
 let chunk_fundef comments chunks (FD_aux (FD_function (rec_opt, tannot_opt, funcls), l)) =
   pop_comments comments chunks l;
@@ -1405,9 +1417,9 @@ let build_def chunks fs =
   finish_def def_chunks chunks
 
 let rec chunk_annotations f comments chunks = function
-  | Ann_attribute (attr, arg, anns, l) ->
+  | Ann_attribute (attrs, anns, l) ->
       pop_comments comments chunks l;
-      chunk_attribute comments chunks attr arg;
+      chunk_attributes comments chunks attrs;
       Queue.add (Spacer (true, 1)) chunks;
       chunk_annotations f comments chunks anns
   | Ann_doc (doc, anns, l) ->
@@ -1416,7 +1428,7 @@ let rec chunk_annotations f comments chunks = function
       chunk_annotations f comments chunks anns
   | Ann_item x -> f comments chunks x
 
-let rec ann_item = function Ann_attribute (_, _, anns, _) | Ann_doc (_, anns, _) -> ann_item anns | Ann_item x -> x
+let rec ann_item = function Ann_attribute (_, anns, _) | Ann_doc (_, anns, _) -> ann_item anns | Ann_item x -> x
 
 let chunk_type_def comments chunks (TD_aux (aux, l)) =
   pop_comments comments chunks l;
@@ -1499,6 +1511,11 @@ let can_handle_td (TD_aux (aux, _)) = match aux with TD_enum _ -> true | _ -> fa
 let can_handle_sd (SD_aux (aux, _)) =
   match aux with SD_funcl _ | SD_end _ | SD_function _ | SD_enum _ | SD_enumcl _ -> true | _ -> false
 
+let rec has_skip_attr skip = function
+  | [] -> skip
+  | (_, "fmt", Some (AD_aux (AD_string "skip", _))) :: _ -> true
+  | _ :: attrs -> has_skip_attr skip attrs
+
 let rec chunk_def skip source last_line_span comments chunks (DEF_aux (def, l)) =
   let line_span = (starting_line_num l, ending_line_num l) in
   let spacing = def_spacer last_line_span line_span in
@@ -1524,11 +1541,11 @@ let rec chunk_def skip source last_line_span comments chunks (DEF_aux (def, l)) 
       pop_comments comments chunks l;
       Queue.add (Doc_comment doc) chunks;
       chunk_def skip source last_line_span comments chunks def
-  | DEF_attribute (attr, arg, def) ->
+  | DEF_attribute (attrs, def) ->
       pop_comments comments chunks l;
-      chunk_attribute comments chunks attr arg;
+      chunk_attributes comments chunks attrs;
       Queue.add (Spacer (false, 1)) chunks;
-      let skip = match (attr, arg) with "fmt", Some (AD_aux (AD_string "skip", _)) -> true | _ -> skip in
+      let skip = has_skip_attr skip attrs in
       chunk_def skip source last_line_span comments chunks def
   | def ->
       if skip then raw_source ()

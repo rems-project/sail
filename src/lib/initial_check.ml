@@ -376,9 +376,9 @@ module KindInference = struct
     | P.Ann_doc (doc, x, l) ->
         let* y = mapM_field_item f x in
         return (P.Ann_doc (doc, y, l))
-    | P.Ann_attribute (attr, arg, x, l) ->
+    | P.Ann_attribute (attrs, x, l) ->
         let* y = mapM_field_item f x in
-        return (P.Ann_attribute (attr, arg, y, l))
+        return (P.Ann_attribute (attrs, y, l))
     | P.Ann_item x ->
         let* y = f x in
         return (P.Ann_item y)
@@ -730,16 +730,16 @@ module KindInference = struct
             fpats
         in
         wrap (P.P_struct (struct_name, fpats))
-    | P.P_attribute (attr, arg, pat) ->
+    | P.P_attribute (attrs, pat) ->
         let* pat = infer_pat ctx pat in
-        wrap (P.P_attribute (attr, arg, pat))
+        wrap (P.P_attribute (attrs, pat))
 
   let rec infer_case ctx (P.Pat_aux (pexp, l)) =
     let wrap aux = return (P.Pat_aux (aux, l)) in
     match pexp with
-    | P.Pat_attribute (attr, arg, pexp) ->
+    | P.Pat_attribute (attrs, pexp) ->
         let* pexp = infer_case ctx pexp in
-        wrap (P.Pat_attribute (attr, arg, pexp))
+        wrap (P.Pat_attribute (attrs, pexp))
     | P.Pat_exp (pat, exp) ->
         let* pat = infer_pat ctx pat in
         wrap (P.Pat_exp (pat, exp))
@@ -753,9 +753,9 @@ module KindInference = struct
     | P.FCL_private fcl ->
         let* fcl = infer_funcl ctx fcl in
         wrap (P.FCL_private fcl)
-    | P.FCL_attribute (attr, arg, fcl) ->
+    | P.FCL_attribute (attrs, fcl) ->
         let* fcl = infer_funcl ctx fcl in
-        wrap (P.FCL_attribute (attr, arg, fcl))
+        wrap (P.FCL_attribute (attrs, fcl))
     | P.FCL_doc (doc_comment, fcl) ->
         let* fcl = infer_funcl ctx fcl in
         wrap (P.FCL_doc (doc_comment, fcl))
@@ -774,9 +774,9 @@ module KindInference = struct
     | P.Tu_private tu ->
         let* tu = infer_constructor ctx tu in
         wrap (P.Tu_private tu)
-    | P.Tu_attribute (attr, arg, tu) ->
+    | P.Tu_attribute (attrs, tu) ->
         let* tu = infer_constructor ctx tu in
-        wrap (P.Tu_attribute (attr, arg, tu))
+        wrap (P.Tu_attribute (attrs, tu))
     | P.Tu_doc (doc_comment, tu) ->
         let* tu = infer_constructor ctx tu in
         wrap (P.Tu_doc (doc_comment, tu))
@@ -1110,7 +1110,7 @@ module ConvertType = struct
         | Some _ -> raise (Reporting.err_general l "Union constructor has multiple documentation comments")
         | None -> to_ast_type_union kenv (Some doc_comment) attrs vis ctx tu
       end
-    | P.Tu_aux (P.Tu_attribute (attr, arg, tu), l) -> to_ast_type_union kenv doc (attrs @ [(l, attr, arg)]) vis ctx tu
+    | P.Tu_aux (P.Tu_attribute (attrs', tu), _) -> to_ast_type_union kenv doc (attrs @ attrs') vis ctx tu
     | P.Tu_aux (P.Tu_ty_id (atyp, id), l) ->
         let typ = to_ast_typ kenv ctx atyp in
         Tu_aux (Tu_ty_id (typ, to_ast_id ctx id), mk_def_annot ?doc ~attrs ?visibility:vis l ())
@@ -1312,12 +1312,13 @@ let check_duplicate_fields ~error ~field_id fields =
     IdSet.empty fields
   |> ignore
 
+let add_attributes attrs annot = List.fold_left (fun annot (l, attr, arg) -> add_attribute l attr arg annot) annot attrs
+
 let rec to_ast_pat ctx (P.P_aux (aux, l)) =
   match aux with
-  | P.P_attribute (attr, arg, pat) ->
+  | P.P_attribute (attrs, pat) ->
       let (P_aux (aux, (pat_l, annot))) = to_ast_pat ctx pat in
-      (* The location of an E_attribute node is just the attribute by itself *)
-      let annot = add_attribute l attr arg annot in
+      let annot = add_attributes attrs annot in
       P_aux (aux, (pat_l, annot))
   | _ ->
       let aux =
@@ -1402,10 +1403,10 @@ let rec to_ast_exp ctx exp =
   match exp with
   (* Will have just been removed by parse_infix_exp *)
   | P.E_infix _ -> assert false
-  | P.E_attribute (attr, arg, exp) ->
+  | P.E_attribute (attrs, exp) ->
       let (E_aux (exp, (exp_l, annot))) = to_ast_exp ctx exp in
       (* The location of an E_attribute node is just the attribute itself *)
-      let annot = add_attribute l attr arg annot in
+      let annot = add_attributes attrs annot in
       E_aux (exp, (exp_l, annot))
   | P.E_block exps -> (
       match to_ast_fexps false ctx exps with
@@ -1566,9 +1567,9 @@ and to_ast_lexp_vector_concat ctx (P.E_aux (exp_aux, l) as exp) =
 
 and to_ast_case ctx (P.Pat_aux (pexp_aux, l) : P.pexp) : uannot pexp =
   match pexp_aux with
-  | P.Pat_attribute (attr, arg, pexp) ->
+  | P.Pat_attribute (attrs, pexp) ->
       let (Pat_aux (pexp, (pexp_l, annot))) = to_ast_case ctx pexp in
-      let annot = add_attribute l attr arg annot in
+      let annot = add_attributes attrs annot in
       Pat_aux (pexp, (pexp_l, annot))
   | P.Pat_exp (pat, exp) -> Pat_aux (Pat_exp (to_ast_pat ctx pat, to_ast_exp ctx exp), (l, empty_uannot))
   | P.Pat_when (pat, guard, exp) ->
@@ -1696,9 +1697,9 @@ let rec type_union_strip = function
   | P.Tu_aux (P.Tu_private tu, l) ->
       let unstrip, tu = type_union_strip tu in
       ((fun tu -> P.Tu_aux (P.Tu_private (unstrip tu), l)), tu)
-  | P.Tu_aux (P.Tu_attribute (attr, arg, tu), l) ->
+  | P.Tu_aux (P.Tu_attribute (attrs, tu), l) ->
       let unstrip, tu = type_union_strip tu in
-      ((fun tu -> P.Tu_aux (P.Tu_attribute (attr, arg, unstrip tu), l)), tu)
+      ((fun tu -> P.Tu_aux (P.Tu_attribute (attrs, unstrip tu), l)), tu)
   | P.Tu_aux (P.Tu_doc (doc, tu), l) ->
       let unstrip, tu = type_union_strip tu in
       ((fun tu -> P.Tu_aux (P.Tu_doc (doc, unstrip tu), l)), tu)
@@ -1802,7 +1803,7 @@ let to_ast_reserved_type_id ctx id =
   else id
 
 let rec to_ast_field f doc attrs = function
-  | P.Ann_attribute (attr, arg, x, l) -> to_ast_field f doc (attrs @ [(l, attr, arg)]) x
+  | P.Ann_attribute (attrs', x, l) -> to_ast_field f doc (attrs @ attrs') x
   | P.Ann_doc (doc_comment, x, l) -> (
       match doc with
       | Some _ -> raise (Reporting.err_general l "Field has multiple documentation comments")
@@ -2008,7 +2009,7 @@ let use_function_type_variables id ctx =
 let rec to_ast_funcl doc attrs ctx (P.FCL_aux (fcl, l) : P.funcl) : uannot funcl =
   match fcl with
   | P.FCL_private fcl -> raise (Reporting.err_general l "private visibility modifier on function clause")
-  | P.FCL_attribute (attr, arg, fcl) -> to_ast_funcl doc (attrs @ [(l, attr, arg)]) ctx fcl
+  | P.FCL_attribute (attrs', fcl) -> to_ast_funcl doc (attrs @ attrs') ctx fcl
   | P.FCL_doc (doc_comment, fcl) -> begin
       match doc with
       | Some _ -> raise (Reporting.err_general l "Function clause has multiple documentation comments")
@@ -2100,7 +2101,7 @@ let apply_when_guard guard (MCL_aux (mcl, annot)) =
 
 let rec to_ast_mapcl doc attrs ctx (P.MCL_aux (mcl, l)) =
   match mcl with
-  | P.MCL_attribute (attr, arg, mcl) -> to_ast_mapcl doc (attrs @ [(l, attr, arg)]) ctx mcl
+  | P.MCL_attribute (attrs', mcl) -> to_ast_mapcl doc (attrs @ attrs') ctx mcl
   | P.MCL_doc (doc_comment, mcl) -> (
       match doc with
       | Some _ -> raise (Reporting.err_general l "Function clause has multiple documentation comments")
@@ -2231,7 +2232,7 @@ let rec to_ast_def doc attrs vis ctx (P.DEF_aux (def, l)) : untyped_def list ctx
       | Some _ -> raise (Reporting.err_general l "Toplevel definition has multiple visibility modifiers")
       | None -> to_ast_def doc attrs (Some (Private l)) ctx def
     end
-  | P.DEF_attribute (attr, arg, def) -> to_ast_def doc (attrs @ [(l, attr, arg)]) vis ctx def
+  | P.DEF_attribute (attrs', def) -> to_ast_def doc (attrs @ attrs') vis ctx def
   | P.DEF_doc (doc_comment, def) -> begin
       match doc with
       | Some _ -> raise (Reporting.err_general l "Toplevel definition has multiple documentation comments")

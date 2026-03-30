@@ -518,8 +518,8 @@ pat1:
 pat:
   | pat1
     { $1 }
-  | attribute pat
-    { mk_pat (P_attribute (fst $1, snd $1, $2)) $startpos $endpos($1) }
+  | attributes pat
+    { mk_pat (P_attribute ($1, $2)) $startpos $endpos($1) }
   | pat1 As typ
     { mk_pat (P_var ($1, $3)) $startpos $endpos }
   | pat1 Match typ
@@ -645,8 +645,8 @@ loop_exp:
 exp:
   | exp0
     { $1 }
-  | attribute exp
-    { mk_exp (E_attribute (fst $1, snd $1, $2)) $startpos $endpos($1) }
+  | attributes exp
+    { mk_exp (E_attribute ($1, $2)) $startpos $endpos($1) }
   | exp0 Eq exp
     { mk_exp (E_assign ($1, $3)) $startpos $endpos }
   | Let_ letbind In exp
@@ -725,14 +725,14 @@ case:
     { mk_pexp (Pat_exp (p, body)) $startpos $endpos }
   | p = pat; If_; guard = exp; EqGt; body = exp
     { mk_pexp (Pat_when (p, guard, body)) $startpos $endpos }
-  | a = attribute; c = attr_case
-    { mk_pexp (Pat_attribute (fst a, snd a, c)) $startpos $endpos(a) }
+  | attrs = attributes; c = attr_case
+    { mk_pexp (Pat_attribute (attrs, c)) $startpos $endpos(attrs) }
 
 attr_case:
   | Lparen; c = case; Rparen
     { c }
-  | a = attribute; c = attr_case
-    { mk_pexp (Pat_attribute (fst a, snd a, c)) $startpos $endpos(a) }
+  | attrs = attributes; c = attr_case
+    { mk_pexp (Pat_attribute (attrs, c)) $startpos $endpos(attrs) }
 
 case_list:
   | case
@@ -888,11 +888,17 @@ attribute_data:
   | Lsquare; xs = separated_list_trailing(Comma, attribute_data) Rsquare
     { AD_aux (AD_list xs, loc $startpos $endpos) }
 
-attribute:
-  | attr = Attribute; Rsquare
-    { (attr, None) }
-  | attr = Attribute; d = attribute_data; Rsquare
-    { (attr, Some d) }
+comma_attributes:
+  | attr = Id; d = attribute_data?; Comma; attrs = comma_attributes
+    { (loc $startpos $endpos(d), attr, d) :: attrs }
+  | attr = Id; d = attribute_data?; Rsquare
+    { [(loc $startpos $endpos(d), attr, d)] }
+
+attributes:
+  | attr = Attribute; d = attribute_data?; Comma; attrs = comma_attributes
+    { (loc $startpos $endpos(d), attr, d) :: attrs }
+  | attr = Attribute; d = attribute_data?; Rsquare
+    { [(loc $startpos $endpos, attr, d)] }
 
 attribute_data_eof:
   | d = attribute_data; Eof
@@ -907,8 +913,8 @@ doc_comment:
 funcl_annotation:
   | visibility = Private
     { (fun funcl -> FCL_aux (FCL_private funcl, loc $startpos(visibility) $endpos(visibility))) }
-  | attr = attribute
-    { (fun funcl -> FCL_aux (FCL_attribute (fst attr, snd attr, funcl), loc $startpos(attr) $endpos(attr))) }
+  | attrs = attributes
+    { (fun funcl -> FCL_aux (FCL_attribute (attrs, funcl), loc $startpos(attrs) $endpos(attrs))) }
   | doc = doc_comment
     { (fun funcl -> FCL_aux (FCL_doc (doc, funcl), loc $startpos(doc) $endpos(doc))) }
 
@@ -983,8 +989,8 @@ atomic_index_range:
 r_id_def:
   | doc = doc_comment; r = r_id_def
     { Ann_doc (doc, r, loc $startpos(doc) $endpos(doc)) }
-  | attr = attribute; r = r_id_def
-    { Ann_attribute (fst attr, snd attr, r, loc $startpos(attr) $endpos(attr)) }
+  | attrs = attributes; r = r_id_def
+    { Ann_attribute (attrs, r, loc $startpos(attrs) $endpos(attrs)) }
   | n = id; Colon; r = index_range
     { Ann_item (n, r) }
 
@@ -1074,8 +1080,8 @@ enum_functions:
 enum_member:
   | doc = doc_comment; e = enum_member
     { Ann_doc (doc, e, loc $startpos(doc) $endpos(doc)) }
-  | attr = attribute; e = enum_member
-    { Ann_attribute (fst attr, snd attr, e, loc $startpos(attr) $endpos(attr)) }
+  | attrs = attributes; e = enum_member
+    { Ann_attribute (attrs, e, loc $startpos(attrs) $endpos(attrs)) }
   | e = id
     { Ann_item e }
 
@@ -1098,8 +1104,8 @@ enum:
 struct_field:
   | doc = doc_comment; f = struct_field
     { Ann_doc (doc, f, loc $startpos(doc) $endpos(doc)) }
-  | attr = attribute; f = struct_field
-    { Ann_attribute (fst attr, snd attr, f, loc $startpos(attr) $endpos(attr)) }
+  | attrs = attributes; f = struct_field
+    { Ann_attribute (attrs, f, loc $startpos(attrs) $endpos(attrs)) }
   | n = id; Colon; t = typ
     { Ann_item (n, t) }
 
@@ -1114,8 +1120,8 @@ struct_fields:
 type_union:
   | visibility = Private; tu = type_union
     { Tu_aux (Tu_private tu, loc $startpos(visibility) $endpos(visibility)) }
-  | attr = attribute; tu = type_union
-    { Tu_aux (Tu_attribute (fst attr, snd attr, tu), loc $startpos(attr) $endpos(attr)) }
+  | attrs = attributes; tu = type_union
+    { Tu_aux (Tu_attribute (attrs, tu), loc $startpos(attrs) $endpos(attrs)) }
   | doc = doc_comment; tu = type_union
     { Tu_aux (Tu_doc (doc, tu), loc $startpos(doc) $endpos(doc)) }
   | id Colon typ
@@ -1216,8 +1222,8 @@ fmpat:
     { mk_mpexp (MPat_when ($1, $3)) $startpos $endpos }
 
 mapcl:
-  | attr = attribute; mcl = mapcl
-    { MCL_aux (MCL_attribute (fst attr, snd attr, mcl), loc $startpos(attr) $endpos(attr)) }
+  | attrs = attributes; mcl = mapcl
+    { MCL_aux (MCL_attribute (attrs, mcl), loc $startpos(attrs) $endpos(attrs)) }
   | doc = doc_comment; mcl = mapcl
     { MCL_aux (MCL_doc (doc, mcl), loc $startpos(doc) $endpos(doc)) }
   | mcl = mapcl0
@@ -1430,8 +1436,8 @@ def_aux:
 def(AUX):
   | visibility = Private; def = def(AUX)
     { DEF_aux (DEF_private def, loc $startpos(visibility) $endpos(visibility)) }
-  | attr = attribute; def = def(AUX)
-    { DEF_aux (DEF_attribute (fst attr, snd attr, def), loc $startpos(attr) $endpos(attr)) }
+  | attrs = attributes; def = def(AUX)
+    { DEF_aux (DEF_attribute (attrs, def), loc $startpos(attrs) $endpos(attrs)) }
   | doc = doc_comment; def = def(AUX)
     { DEF_aux (DEF_doc (doc, def), loc $startpos(doc) $endpos(doc)) }
   | d = AUX

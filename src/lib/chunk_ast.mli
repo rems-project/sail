@@ -68,7 +68,7 @@ and chunk =
   | Comment of Parse_ast.comment_type * int * int * string * bool
   | Doc_comment of Parse_ast.doc_comment
   | Spacer of bool * int
-  | Attribute of string * chunks
+  | Attributes of (string * chunks option) list
   | Function of {
       id : Parse_ast.id;
       clause : bool;
