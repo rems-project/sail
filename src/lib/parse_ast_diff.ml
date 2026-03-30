@@ -220,6 +220,11 @@ let rec diff_attribute_data (AD_aux (lhs, l)) (AD_aux (rhs, _)) =
   | AD_string _ -> diff_eq ~at:l lhs rhs
   | AD_bool _ -> diff_eq ~at:l lhs rhs
 
+let diff_attribute (l, attr1, arg1) (_, attr2, arg2) =
+  diff_eq ~at:l attr1 attr2 &&& lazy (diff_option ~at:l diff_attribute_data arg1 arg2)
+
+let diff_attributes ~at:l attrs1 attrs2 = diff_list ~at:l diff_attribute attrs1 attrs2
+
 let rec diff_pat (P_aux (lhs, l)) (P_aux (rhs, _)) =
   match lhs with
   | P_lit lit1 -> (
@@ -267,10 +272,9 @@ let rec diff_pat (P_aux (lhs, l)) (P_aux (rhs, _)) =
           diff_option ~at:l diff_id id_opt1 id_opt2 &&& lazy (diff_list ~at:l diff_fpat fps1 fps2)
       | _ -> Some l
     )
-  | P_attribute (attr1, arg1, p1) -> (
+  | P_attribute (attrs1, p1) -> (
       match rhs with
-      | P_attribute (attr2, arg2, p2) ->
-          diff_eq ~at:l attr1 attr2 &&& lazy (diff_option ~at:l diff_attribute_data arg1 arg2) &&& lazy (diff_pat p1 p2)
+      | P_attribute (attrs2, p2) -> diff_attributes ~at:l attrs1 attrs2 &&& lazy (diff_pat p1 p2)
       | _ -> Some l
     )
 
@@ -439,12 +443,9 @@ let rec diff_exp lhs rhs =
       | E_var (lexp2, v2, body2) -> diff_exp lexp1 lexp2 &&& lazy (diff_exp v1 v2) &&& lazy (diff_exp body1 body2)
       | _ -> Some l
     )
-  | E_attribute (attr1, arg1, exp1) -> (
+  | E_attribute (attrs1, exp1) -> (
       match rhs with
-      | E_attribute (attr2, arg2, exp2) ->
-          diff_eq ~at:l attr1 attr2
-          &&& lazy (diff_option ~at:l diff_attribute_data arg1 arg2)
-          &&& lazy (diff_exp exp1 exp2)
+      | E_attribute (attrs2, exp2) -> diff_attributes ~at:l attrs1 attrs2 &&& lazy (diff_exp exp1 exp2)
       | _ -> Some l
     )
   | E_internal_plet (pat1, v1, body1) -> (
@@ -479,12 +480,9 @@ and diff_pexp (Pat_aux (lhs, l)) (Pat_aux (rhs, _)) =
           diff_pat pat1 pat2 &&& lazy (diff_exp guard1 guard2) &&& lazy (diff_exp exp1 exp2)
       | _ -> Some l
     )
-  | Pat_attribute (attr1, arg1, pexp1) -> (
+  | Pat_attribute (attrs1, pexp1) -> (
       match rhs with
-      | Pat_attribute (attr2, arg2, pexp2) ->
-          diff_eq ~at:l attr1 attr2
-          &&& lazy (diff_option ~at:l diff_attribute_data arg1 arg2)
-          &&& lazy (diff_pexp pexp1 pexp2)
+      | Pat_attribute (attrs2, pexp2) -> diff_attributes ~at:l attrs1 attrs2 &&& lazy (diff_pexp pexp1 pexp2)
       | _ -> Some l
     )
 
@@ -547,12 +545,9 @@ let diff_mpexp (MPat_aux (lhs, l)) (MPat_aux (rhs, _)) =
 
 let rec diff_mapcl (MCL_aux (lhs, l)) (MCL_aux (rhs, _)) =
   match lhs with
-  | MCL_attribute (attr1, arg1, mcl1) -> (
+  | MCL_attribute (attrs1, mcl1) -> (
       match rhs with
-      | MCL_attribute (attr2, arg2, mcl2) ->
-          diff_eq ~at:l attr1 attr2
-          &&& lazy (diff_option ~at:l diff_attribute_data arg1 arg2)
-          &&& lazy (diff_mapcl mcl1 mcl2)
+      | MCL_attribute (attrs2, mcl2) -> diff_attributes ~at:l attrs1 attrs2 &&& lazy (diff_mapcl mcl1 mcl2)
       | _ -> Some l
     )
   | MCL_doc (comment1, mcl1) -> (
@@ -598,12 +593,10 @@ let diff_val_spec (VS_aux (lhs, l)) (VS_aux (rhs, _)) =
 
 let rec diff_field_annot ~at:outer_l f lhs rhs =
   match lhs with
-  | Ann_attribute (attr1, arg1, x1, l) -> (
+  | Ann_attribute (attrs1, x1, l) -> (
       match rhs with
-      | Ann_attribute (attr2, arg2, x2, _) ->
-          diff_eq ~at:l attr1 attr2
-          &&& lazy (diff_option ~at:l diff_attribute_data arg1 arg2)
-          &&& lazy (diff_field_annot ~at:outer_l f x1 x2)
+      | Ann_attribute (attrs2, x2, _) ->
+          diff_attributes ~at:l attrs1 attrs2 &&& lazy (diff_field_annot ~at:outer_l f x1 x2)
       | _ -> Some l
     )
   | Ann_doc (comment1, x1, l) -> (
@@ -636,12 +629,9 @@ let rec diff_funcl (FCL_aux (lhs, l)) (FCL_aux (rhs, _)) =
   | FCL_private fcl1 -> (
       match rhs with FCL_private fcl2 -> diff_funcl fcl1 fcl2 | _ -> Some l
     )
-  | FCL_attribute (attr1, arg1, fcl1) -> (
+  | FCL_attribute (attrs1, fcl1) -> (
       match rhs with
-      | FCL_attribute (attr2, arg2, fcl2) ->
-          diff_eq ~at:l attr1 attr2
-          &&& lazy (diff_option ~at:l diff_attribute_data arg1 arg2)
-          &&& lazy (diff_funcl fcl1 fcl2)
+      | FCL_attribute (attrs2, fcl2) -> diff_attributes ~at:l attrs1 attrs2 &&& lazy (diff_funcl fcl1 fcl2)
       | _ -> Some l
     )
   | FCL_doc (comment1, fcl1) -> (
@@ -658,12 +648,9 @@ let rec diff_type_union (Tu_aux (lhs, l)) (Tu_aux (rhs, _)) =
   | Tu_private tu1 -> (
       match rhs with Tu_private tu2 -> diff_type_union tu1 tu2 | _ -> Some l
     )
-  | Tu_attribute (attr1, arg1, tu1) -> (
+  | Tu_attribute (attrs1, tu1) -> (
       match rhs with
-      | Tu_attribute (attr2, arg2, tu2) ->
-          diff_eq ~at:l attr1 attr2
-          &&& lazy (diff_option ~at:l diff_attribute_data arg1 arg2)
-          &&& lazy (diff_type_union tu1 tu2)
+      | Tu_attribute (attrs2, tu2) -> diff_attributes ~at:l attrs1 attrs2 &&& lazy (diff_type_union tu1 tu2)
       | _ -> Some l
     )
   | Tu_doc (comment1, tu1) -> (
@@ -922,12 +909,9 @@ let rec diff_def (DEF_aux (lhs, l)) (DEF_aux (rhs, _)) =
   | DEF_private def1 -> (
       match rhs with DEF_private def2 -> diff_def def1 def2 | _ -> Some l
     )
-  | DEF_attribute (attr1, arg1, def1) -> (
+  | DEF_attribute (attrs1, def1) -> (
       match rhs with
-      | DEF_attribute (attr2, arg2, def2) ->
-          diff_eq ~at:l attr1 attr2
-          &&& lazy (diff_option ~at:l diff_attribute_data arg1 arg2)
-          &&& lazy (diff_def def1 def2)
+      | DEF_attribute (attrs2, def2) -> diff_attributes ~at:l attrs1 attrs2 &&& lazy (diff_def def1 def2)
       | _ -> Some l
     )
   | DEF_doc (comment1, def1) -> (

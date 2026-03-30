@@ -524,10 +524,18 @@ module Make (Config : CONFIG) = struct
     | String_literal s -> utf8string ("\"" ^ String.escaped s ^ "\"")
     | Multiline_string_literal lines ->
         string "\"\"\"" ^^ hardline ^^ separate_map hardline string lines ^^ hardline ^^ string "\"\"\""
-    | Attribute (attr, arg) ->
+    | Attributes attrs ->
         (* Reset opts to defaults, so attributes are always formatted
           the same no matter where they appear. *)
-        string "$[" ^^ string attr ^^ space ^^ doc_chunks default_opts arg ^^ char ']'
+        let body =
+          separate_map
+            (char ',' ^^ space)
+            (fun (attr, arg_opt) ->
+              match arg_opt with None -> string attr | Some arg -> string attr ^^ space ^^ doc_chunks default_opts arg
+            )
+            attrs
+        in
+        string "$[" ^^ body ^^ char ']'
     | App (id, args) -> (
         match args with
         | [] -> doc_id id ^^ string "()"
