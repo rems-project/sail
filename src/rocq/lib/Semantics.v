@@ -45,13 +45,14 @@ From Stdlib Require Import Bool.
 From Stdlib Require Import FMapList.
 From Stdlib Require Import FunctionalExtensionality.
 From Stdlib Require Import Lia.
-From Stdlib Require Import Lists.List.
 From Stdlib Require Import Program.
 From Stdlib Require Import String.
 From Stdlib Require Import ZArith.
 From Stdlib Require QArith.
 From Stdlib Require Import Setoid.
 From Stdlib Require Import Morphisms.
+
+From stdpp Require Import base.
 
 From Sail Require Import Ast.
 From Sail Require Import AstInduction.
@@ -62,8 +63,6 @@ From Sail Require Import PatternMatch.
 From Sail Require Import ValueType.
 From Sail Require TypeAnnot.
 
-Import ListNotations.
-
 Definition is_value {A : Set} (exp : exp A) : bool :=
   match exp with
   | E_aux (E_internal_value _) _ => true
@@ -71,38 +70,38 @@ Definition is_value {A : Set} (exp : exp A) : bool :=
   end.
 
 Inductive return_value : Set :=
-| Return_ok : value -> return_value
-| Return_exception : value -> return_value.
+| Return_ok : value → return_value
+| Return_exception : value → return_value.
 
 Inductive var_type : Set :=
 | Var_local : var_type
 | Var_register : var_type.
 
 Inductive place : Set :=
-| PL_id : id -> var_type -> place
-| PL_register : id -> place
-| PL_vector : place -> Z -> place
-| PL_vector_range : place -> Z -> Z -> place
-| PL_field : place -> id -> place.
+| PL_id : id → var_type → place
+| PL_register : id → place
+| PL_vector : place → Z → place
+| PL_vector_range : place → Z → Z → place
+| PL_field : place → id → place.
 
 Inductive destructure : Set :=
-| DL_app : id -> list value -> destructure
-| DL_tuple : list destructure -> destructure
-| DL_vector_concat : list (vector_concat_split * destructure) -> destructure
-| DL_place : place -> destructure.
+| DL_app : id → list value → destructure
+| DL_tuple : list destructure → destructure
+| DL_vector_concat : list (vector_concat_split * destructure) → destructure
+| DL_place : place → destructure.
 
 Module Monad.
   Inductive t (a : Set) : Set :=
-  | Pure : a -> t a
-  | Early_return : value -> t a
-  | Exception : value -> t a
-  | Runtime_type_error : Ast.loc -> t a
-  | Match_failure : Ast.loc -> t a
-  | Assertion_failed : string -> t a
-  | Call : id -> list value -> (return_value -> t a) -> t a
-  | Read_var : place -> (value -> t a) -> t a
-  | Write_var : place -> value -> (unit -> t a) -> t a
-  | Get_undefined : typ -> (value -> t a) -> t a.
+  | Pure : a → t a
+  | Early_return : value → t a
+  | Exception : value → t a
+  | Runtime_type_error : Ast.loc → t a
+  | Match_failure : Ast.loc → t a
+  | Assertion_failed : string → t a
+  | Call : id → list value → (return_value → t a) → t a
+  | Read_var : place → (value → t a) → t a
+  | Write_var : place → value → (unit → t a) → t a
+  | Get_undefined : typ → (value → t a) → t a.
 
   Arguments Pure {_}.
   Arguments Early_return {_}.
@@ -115,7 +114,7 @@ Module Monad.
   Arguments Write_var {_}.
   Arguments Get_undefined {_}.
 
-  Fixpoint bind {A B : Set} (m : t A) (f : A -> t B) : t B :=
+  Fixpoint bind {A B : Set} (m : t A) (f : A → t B) : t B :=
     match m with
     | Pure x => f x
     | Early_return v => Early_return v
@@ -132,7 +131,7 @@ Module Monad.
   Notation "x ← y ; z" := (bind y (fun x : _ => z))
     (at level 20, y at level 100, z at level 200, only parsing).
 
-  Fixpoint fmap {A B : Set} (f : A -> B) (m : t A) : t B :=
+  Fixpoint fmap {A B : Set} (f : A → B) (m : t A) : t B :=
     match m with
     | Pure x => Pure (f x)
     | Early_return v => Early_return v
@@ -168,8 +167,8 @@ Module Monad.
   Definition throw {A : Set} (v : value) : t A := Exception v.
 
   Inductive caught (a : Set) : Set :=
-  | Continue : a -> caught a
-  | Caught : value -> caught a.
+  | Continue : a → caught a
+  | Caught : value → caught a.
 
   Arguments Continue {_}.
   Arguments Caught {_}.
@@ -188,12 +187,12 @@ Module Monad.
     | Get_undefined t cont => Get_undefined t (fun v => fmap Continue (cont v))
     end.
 
-  Lemma bind_left_id : forall (A B : Set) (f : A -> t B) (x : A), bind (pure x) f = f x.
+  Lemma bind_left_id : ∀ (A B : Set) (f : A → t B) (x : A), bind (pure x) f = f x.
   Proof.
     cbn. reflexivity.
   Qed.
 
-  Lemma bind_right_id : forall (A : Set) (m : t A), bind m pure = m.
+  Lemma bind_right_id : ∀ (A : Set) (m : t A), bind m pure = m.
   Proof.
     intros A m.
     induction m as [| | | | | | ? ? cont H | ? cont H | ? ? cont H | ? cont H]; try easy.
@@ -205,7 +204,7 @@ Module Monad.
     all: assumption.
   Qed.
 
-  Lemma bind_assoc : forall (A B C : Set) (f : A -> t B) (g : B -> t C) (x : t A),
+  Lemma bind_assoc : ∀ (A B C : Set) (f : A → t B) (g : B → t C) (x : t A),
       bind (bind x f) g = bind x (fun y => bind (f y) g).
   Proof.
     intros A B C f g x.
@@ -225,7 +224,7 @@ End Monad.
 Import Monad.
 
 Inductive evaluated (a : Set) : Set :=
-| Evaluated : a -> evaluated a
+| Evaluated : a → evaluated a
 | Unevaluated : evaluated a.
 
 Arguments Evaluated {a} _.
@@ -274,7 +273,7 @@ Fixpoint drop_evaluated {A : Set} (xs : list (exp A)) : list (exp A) :=
   | x :: xs => x :: xs
   end.
 
-Lemma take_drop_evaluated_concat : forall (A : Set) (xs : list (exp A)),
+Lemma take_drop_evaluated_concat : ∀ (A : Set) (xs : list (exp A)),
     take_evaluated xs ++ drop_evaluated xs = xs.
 Proof.
   intros A xs.
@@ -303,7 +302,7 @@ Fixpoint left_to_right {A : Set} (xs : list (exp A)) {struct xs} : (list (exp A)
   | x :: xs => ([], x :: xs)
   end.
 
-Lemma ltr_tuple : forall (A : Set) (xs : list (exp A)),
+Lemma ltr_tuple : ∀ (A : Set) (xs : list (exp A)),
     left_to_right xs = (take_evaluated xs, drop_evaluated xs).
 Proof.
   intros A xs.
@@ -350,7 +349,7 @@ Fixpoint left_to_right_fields {A : Set} (xs : list (fexp A)) {struct xs} : (list
   | x :: xs => ([], x :: xs)
   end.
 
-Lemma take_drop_evaluated_fields_concat : forall (A : Set) (fxs : list (fexp A)),
+Lemma take_drop_evaluated_fields_concat : ∀ (A : Set) (fxs : list (fexp A)),
   take_evaluated_fields fxs ++ drop_evaluated_fields fxs = fxs.
 Proof.
   intros A fxs.
@@ -364,7 +363,7 @@ Proof.
     cbn. rewrite IHfxs. reflexivity.
 Qed.
 
-Lemma ltr_fields_tuple : forall (A : Set) (fxs : list (fexp A)),
+Lemma ltr_fields_tuple : ∀ (A : Set) (fxs : list (fexp A)),
   left_to_right_fields fxs = (take_evaluated_fields fxs, drop_evaluated_fields fxs).
 Proof.
   intros A fxs.
@@ -379,9 +378,9 @@ Proof.
 Qed.
 
 Inductive ltr2 (A : Set) : Set :=
-| LTR2_0 : exp A -> exp A -> ltr2 A
-| LTR2_1 : value -> exp A -> ltr2 A
-| LTR2_2 : value -> value -> ltr2 A.
+| LTR2_0 : exp A → exp A → ltr2 A
+| LTR2_1 : value → exp A → ltr2 A
+| LTR2_2 : value → value → ltr2 A.
 
 Arguments LTR2_0 {_}.
 Arguments LTR2_1 {_}.
@@ -395,10 +394,10 @@ Definition left_to_right2 {A : Set} (x y : exp A) : ltr2 A :=
   end.
 
 Inductive ltr3 (A : Set) : Set :=
-| LTR3_0 : exp A -> exp A -> exp A -> ltr3 A
-| LTR3_1 : value -> exp A -> exp A -> ltr3 A
-| LTR3_2 : value -> value -> exp A -> ltr3 A
-| LTR3_3 : value -> value -> value -> ltr3 A.
+| LTR3_0 : exp A → exp A → exp A → ltr3 A
+| LTR3_1 : value → exp A → exp A → ltr3 A
+| LTR3_2 : value → value → exp A → ltr3 A
+| LTR3_3 : value → value → value → ltr3 A.
 
 Arguments LTR3_0 {_}.
 Arguments LTR3_1 {_}.
@@ -413,13 +412,13 @@ Definition left_to_right3 {A : Set} (x y z : exp A) : ltr3 A :=
   | (_, _, _) => LTR3_0 x y z
   end.
 
-Lemma fold_right_max_acc : forall x y zs, x <= y -> x < fold_right max y zs + 1.
+Lemma fold_right_max_acc : ∀ x y zs, x ≤ y → x < fold_right max y zs + 1.
 Proof.
   intros ? ? zs.
   induction zs; cbn; lia.
 Qed.
 
-Lemma fold_right_max_acc2 : forall x y zs, x <= y -> x <= fold_right max y zs.
+Lemma fold_right_max_acc2 : ∀ x y zs, x ≤ y → x ≤ fold_right max y zs.
 Proof.
   intros ? ? zs.
   induction zs; cbn; lia.
@@ -543,17 +542,17 @@ Module Make (Tannot : TypeAnnot.S).
             lookup_field l name fields
       end.
 
-  Lemma max_lhs_plus_1_le : forall x y z, x <= y -> x < max y z + 1.
+  Lemma max_lhs_plus_1_le : ∀ x y z, x ≤ y → x < max y z + 1.
   Proof.
     lia.
   Qed.
 
-  Lemma depth_if : forall (b : bool) (x y : exp Tannot.t), depth (if b then x else y) <= max (depth x) (depth y).
+  Lemma depth_if : ∀ (b : bool) (x y : exp Tannot.t), depth (if b then x else y) ≤ max (depth x) (depth y).
   Proof.
     intro b; destruct b; lia.
   Qed.
 
-  Lemma fexp_subst : forall f (lx : fexp Tannot.t),
+  Lemma fexp_subst : ∀ f (lx : fexp Tannot.t),
     (let 'FE_aux (FE_fexp id x) ann := lx in FE_aux (FE_fexp id (f x)) ann) =
     FE_aux (FE_fexp (fexp_name lx) (f (fexp_exp lx))) (fexp_annot lx).
   Proof.
@@ -564,12 +563,12 @@ Module Make (Tannot : TypeAnnot.S).
     reflexivity.
   Qed.
 
-  Lemma depth_subst_helper : forall x y z w, x <= z -> y + 1 <= w + 1 -> max x y + 1 <= max z w + 1.
+  Lemma depth_subst_helper : ∀ x y z w, x ≤ z → y + 1 ≤ w + 1 → max x y + 1 ≤ max z w + 1.
   Proof.
     lia.
   Qed.
 
-  Lemma depth_subst : forall n v (x : exp Tannot.t), depth (substitute n v x) <= depth x.
+  Lemma depth_subst : ∀ n v (x : exp Tannot.t), depth (substitute n v x) ≤ depth x.
   Proof with lia.
     intros n v x.
     einduction x using exp_ind_mutual_g.
@@ -835,16 +834,16 @@ Module Make (Tannot : TypeAnnot.S).
     | [] => []
     end.
 
-  Lemma NoDupA_cons : forall [A] [eqA : A -> A -> Prop] (E : RelationClasses.Equivalence eqA) [x : A] [xs : list A],
-    SetoidList.NoDupA eqA (x :: xs) -> SetoidList.NoDupA eqA xs.
+  Lemma NoDupA_cons : ∀ [A] [eqA : A → A → Prop] (E : RelationClasses.Equivalence eqA) [x : A] [xs : list A],
+    SetoidList.NoDupA eqA (x :: xs) → SetoidList.NoDupA eqA xs.
   Proof.
     intros A eqA E x xs H.
     change (SetoidList.NoDupA eqA ([] ++ x :: xs)) in H.
     apply (SetoidList.NoDupA_split H).
   Qed.
 
-  Lemma NoDupA_eqA_h : forall [A] [eqA : A -> A -> Prop] (E : RelationClasses.Equivalence eqA) [x x' : A] [xs xs' : list A],
-    xs = (x :: x' :: xs') -> SetoidList.NoDupA eqA xs -> ~ (eqA x x').
+  Lemma NoDupA_eqA_h : ∀ [A] [eqA : A → A → Prop] (E : RelationClasses.Equivalence eqA) [x x' : A] [xs xs' : list A],
+    xs = (x :: x' :: xs') → SetoidList.NoDupA eqA xs → ~ (eqA x x').
   Proof.
     intros A eqA E x x' xs xs' X ND.
     rewrite SetoidList.NoDupA_altdef in ND.
@@ -860,15 +859,15 @@ Module Make (Tannot : TypeAnnot.S).
       tauto.
   Qed.
 
-  Lemma NoDupA_eqA : forall [A] [eqA : A -> A -> Prop] (E : RelationClasses.Equivalence eqA) [x x' : A] [xs : list A],
-    SetoidList.NoDupA eqA (x :: x' :: xs) -> ~ (eqA x x').
+  Lemma NoDupA_eqA : ∀ [A] [eqA : A → A → Prop] (E : RelationClasses.Equivalence eqA) [x x' : A] [xs : list A],
+    SetoidList.NoDupA eqA (x :: x' :: xs) → ~ (eqA x x').
   Proof.
     intros A eqA E x x' xs H.
     apply (NoDupA_eqA_h E eq_refl H).
   Qed.
 
-  Lemma NoDupA_in_tl : forall [A] [eqA : A -> A -> Prop] (E : RelationClasses.Equivalence eqA) [x x' : A] (xs : list A),
-    SetoidList.NoDupA eqA (x :: xs) -> SetoidList.InA eqA x' xs -> ~ (eqA x x').
+  Lemma NoDupA_in_tl : ∀ [A] [eqA : A → A → Prop] (E : RelationClasses.Equivalence eqA) [x x' : A] (xs : list A),
+    SetoidList.NoDupA eqA (x :: xs) → SetoidList.InA eqA x' xs → ~ (eqA x x').
   Proof.
     intros A eqA E x x' xs.
     revert x'.
@@ -893,8 +892,8 @@ Module Make (Tannot : TypeAnnot.S).
         tauto.
   Qed.
 
-  Lemma fold_right_last_to_first : forall [A B] [eqB : B -> B -> Prop] (E : RelationClasses.Equivalence eqB) (f : B -> A -> A) (acc : A) (x : B) xs,
-    (forall y z, SetoidList.InA eqB y xs -> f y (f x z) = f x (f y z)) ->
+  Lemma fold_right_last_to_first : ∀ [A B] [eqB : B → B → Prop] (E : RelationClasses.Equivalence eqB) (f : B → A → A) (acc : A) (x : B) xs,
+    (∀ y z, SetoidList.InA eqB y xs → f y (f x z) = f x (f y z)) →
     fold_right f (f x acc) xs = f x (fold_right f acc xs).
   Proof.
     intros A B eqB E f acc x xs H.
@@ -910,7 +909,7 @@ Module Make (Tannot : TypeAnnot.S).
         apply SetoidList.InA_cons_tl; assumption.
   Qed.
 
-  Lemma id_eqb_sym_neg : forall x y, id_eqb x y = false -> id_eqb y x = false.
+  Lemma id_eqb_sym_neg : ∀ x y, id_eqb x y = false → id_eqb y x = false.
   Proof.
     intros x y.
     destruct x as [x_aux ?].
@@ -921,8 +920,8 @@ Module Make (Tannot : TypeAnnot.S).
     all: congruence.
   Qed.
 
-  Lemma substitute_swap : forall [A] id1 id2 v1 v2 (exp : exp A),
-    id_eqb id1 id2 = false ->
+  Lemma substitute_swap : ∀ [A] id1 id2 v1 v2 (exp : exp A),
+    id_eqb id1 id2 = false →
     substitute id1 v1 (substitute id2 v2 exp) = substitute id2 v2 (substitute id1 v1 exp).
   Proof.
     intros A id1 id2 v1 v2 exp NE.
@@ -1033,8 +1032,8 @@ Module Make (Tannot : TypeAnnot.S).
         all: reflexivity.
   Qed.
 
-  Lemma substitute_fold : forall substs (exp : exp Tannot.t),
-    SetoidList.NoDupA (IdMap.eq_key (elt:=value)) substs ->
+  Lemma substitute_fold : ∀ substs (exp : exp Tannot.t),
+    SetoidList.NoDupA (IdMap.eq_key (elt:=value)) substs →
     fold_left (fun exp s => substitute (fst s) (snd s) exp) substs exp =
     fold_right (fun s exp => substitute (fst s) (snd s) exp) exp substs.
   Proof.
@@ -1073,16 +1072,16 @@ Module Make (Tannot : TypeAnnot.S).
 
   Ltac is_true_solve := solve [ intros; repeat is_true_step ].
 
-  Lemma not_find_in_iff_r: forall [elt : Type] (m : IdMap.t elt) (x : IdMap.key),
-    ~ IdMap.In (elt:=elt) x m -> IdMap.find (elt:=elt) x m = None.
+  Lemma not_find_in_iff_r: ∀ [elt : Type] (m : IdMap.t elt) (x : IdMap.key),
+    ~ IdMap.In (elt:=elt) x m → IdMap.find (elt:=elt) x m = None.
   Proof.
     intros.
     apply IdMapP.P.F.not_find_in_iff.
     assumption.
   Qed.
 
-  Lemma not_in_remove : forall [A : Type] (m : IdMap.t A) (x y : IdMap.key),
-    ~ (IdMap.In x m) -> ~ (IdMap.In x (IdMap.remove y m)).
+  Lemma not_in_remove : ∀ [A : Type] (m : IdMap.t A) (x y : IdMap.key),
+    ~ (IdMap.In x m) → ~ (IdMap.In x (IdMap.remove y m)).
   Proof.
     intros A m x y H.
     case_eq (id_eqb y x); intros.
@@ -1114,7 +1113,7 @@ Module Make (Tannot : TypeAnnot.S).
     + is_true_simp.
   Qed.
 
-  Lemma Empty_Equal_empty : forall [A m], IdMap.Empty (elt:=A) m -> IdMap.Equal m (IdMap.empty _).
+  Lemma Empty_Equal_empty : ∀ [A m], IdMap.Empty (elt:=A) m → IdMap.Equal m (IdMap.empty _).
   Proof.
     intros.
     rewrite IdMapP.P.F.Equal_mapsto_iff.
@@ -1136,7 +1135,7 @@ Module Make (Tannot : TypeAnnot.S).
       discriminate.
   Qed.
 
-  Lemma find_map_remove_comm : forall [A B] (f : A -> B) k m x,
+  Lemma find_map_remove_comm : ∀ [A B] (f : A → B) k m x,
     IdMap.find x (IdMap.map f (IdMap.remove k m)) = IdMap.find x (IdMap.remove k (IdMap.map f m)).
   Proof.
     intros A B f k m x.
@@ -1195,8 +1194,8 @@ Module Make (Tannot : TypeAnnot.S).
         * is_true_simp.
   Qed.
 
-  Lemma equiv_cong : forall [A]  [eqA : A -> A -> Prop] (E : Equivalence eqA) (x y : A),
-    x = y -> eqA x y.
+  Lemma equiv_cong : ∀ [A]  [eqA : A → A → Prop] (E : Equivalence eqA) (x y : A),
+    x = y → eqA x y.
   Proof.
     intros A eqA E x y H. rewrite H. setoid_reflexivity.
   Qed.
@@ -1225,8 +1224,8 @@ Module Make (Tannot : TypeAnnot.S).
       transitivity (snd (i0, a0)); assumption.
   Qed.
 
-  Lemma NoDupA_app_cons_swap_h : forall [A] [eqA : A -> A -> Prop] (E : RelationClasses.Equivalence eqA) [x : A] [xs : list A],
-    SetoidList.NoDupA eqA (x :: xs) -> SetoidList.NoDupA eqA (xs ++ [x]).
+  Lemma NoDupA_app_cons_swap_h : ∀ [A] [eqA : A → A → Prop] (E : RelationClasses.Equivalence eqA) [x : A] [xs : list A],
+    SetoidList.NoDupA eqA (x :: xs) → SetoidList.NoDupA eqA (xs ++ [x]).
   Proof.
     intros A eqA E x xs H.
     induction xs as [| x' xs].
@@ -1270,8 +1269,8 @@ Module Make (Tannot : TypeAnnot.S).
           tauto.
   Qed.
 
-  Lemma NoDupA_app_cons_swap : forall [A] [eqA : A -> A -> Prop] (E : RelationClasses.Equivalence eqA) (x : A) (xs : list A),
-    SetoidList.NoDupA eqA (x :: xs) <-> SetoidList.NoDupA eqA (xs ++ [x]).
+  Lemma NoDupA_app_cons_swap : ∀ [A] [eqA : A → A → Prop] (E : RelationClasses.Equivalence eqA) (x : A) (xs : list A),
+    SetoidList.NoDupA eqA (x :: xs) ↔ SetoidList.NoDupA eqA (xs ++ [x]).
   Proof.
     intros.
     split; intro H.
@@ -1281,8 +1280,8 @@ Module Make (Tannot : TypeAnnot.S).
       assumption.
   Qed.
 
-  Lemma NoDupA_app_comm : forall [A] [eqA : A -> A -> Prop] (E : RelationClasses.Equivalence eqA) (xs ys : list A),
-    SetoidList.NoDupA eqA (xs ++ ys) <-> SetoidList.NoDupA eqA (ys ++ xs).
+  Lemma NoDupA_app_comm : ∀ [A] [eqA : A → A → Prop] (E : RelationClasses.Equivalence eqA) (xs ys : list A),
+    SetoidList.NoDupA eqA (xs ++ ys) ↔ SetoidList.NoDupA eqA (ys ++ xs).
   Proof.
     intros A eqA E xs ys.
     revert xs.
@@ -1292,13 +1291,13 @@ Module Make (Tannot : TypeAnnot.S).
       rewrite <- app_comm_cons.
       rewrite (NoDupA_app_cons_swap E).
       rewrite <- app_assoc.
-      change (SetoidList.NoDupA eqA (xs ++ [y] ++ ys) <-> SetoidList.NoDupA eqA (ys ++ xs ++ [y])).
+      change (SetoidList.NoDupA eqA (xs ++ [y] ++ ys) ↔ SetoidList.NoDupA eqA (ys ++ xs ++ [y])).
       rewrite app_assoc.
       rewrite IHys.
       reflexivity.
   Qed.
 
-  Lemma proper_eqlist_NoDupA : forall [A] [eqA : A -> A -> Prop]
+  Lemma proper_eqlist_NoDupA : ∀ [A] [eqA : A → A → Prop]
     (E : RelationClasses.Equivalence eqA),
     Proper (SetoidList.eqlistA eqA ==> flip impl) (SetoidList.NoDupA eqA).
   Proof.
@@ -1318,20 +1317,20 @@ Module Make (Tannot : TypeAnnot.S).
         apply (NoDupA_cons E NoDup).
   Qed.
 
-  Lemma eqlistA_cons_iff : forall [A] [eqA : A -> A -> Prop] (E : Equivalence eqA) x xs y ys,
-    SetoidList.eqlistA eqA (x :: xs) (y :: ys) <-> eqA x y /\ SetoidList.eqlistA eqA xs ys.
+  Lemma eqlistA_cons_iff : ∀ [A] [eqA : A → A → Prop] (E : Equivalence eqA) x xs y ys,
+    SetoidList.eqlistA eqA (x :: xs) (y :: ys) ↔ eqA x y ∧ SetoidList.eqlistA eqA xs ys.
   Proof.
     intros.
     repeat rewrite SetoidList.eqlistA_altdef.
     apply Forall2_cons_iff.
   Qed.
 
-  Lemma eqlistA_weaken : forall [A] [eqA eqB : A -> A -> Prop]
+  Lemma eqlistA_weaken : ∀ [A] [eqA eqB : A → A → Prop]
     (EA : RelationClasses.Equivalence eqA)
     (EB : RelationClasses.Equivalence eqB)
-    (Weak : forall x y, eqA x y -> eqB x y)
+    (Weak : ∀ x y, eqA x y → eqB x y)
     [xs ys],
-    SetoidList.eqlistA eqA xs ys -> SetoidList.eqlistA eqB xs ys.
+    SetoidList.eqlistA eqA xs ys → SetoidList.eqlistA eqB xs ys.
   Proof.
     intros A eqA eqB EA EB Weak xs ys H.
     induction H as [| x y xs ys IH H Tl].
@@ -1342,10 +1341,10 @@ Module Make (Tannot : TypeAnnot.S).
       + apply Tl.
   Qed.
 
-  Lemma proper_eqlist_NoDupA_Weak : forall [A] [eqA eqB : A -> A -> Prop]
+  Lemma proper_eqlist_NoDupA_Weak : ∀ [A] [eqA eqB : A → A → Prop]
     (EA : RelationClasses.Equivalence eqA)
     (EB : RelationClasses.Equivalence eqB)
-    (Weak : forall x y, eqA x y -> eqB x y),
+    (Weak : ∀ x y, eqA x y → eqB x y),
     Proper (SetoidList.eqlistA eqA ==> flip impl) (SetoidList.NoDupA eqB).
   Proof.
     intros A eqA eqB EA EB Weak xs ys Hxy.
@@ -1376,7 +1375,7 @@ Module Make (Tannot : TypeAnnot.S).
     : Proper (SetoidList.eqlistA (IdMapP.O.eqke (elt:=value)) ==> flip impl) (SetoidList.NoDupA (IdMapP.O.eqke (elt:=value))) :=
     proper_eqlist_NoDupA (key_value_equiv value).
 
-  Lemma eqke_is_eqk : forall x y, IdMapP.O.eqke (elt:=value) x y -> IdMap.eq_key (elt:=value) x y.
+  Lemma eqke_is_eqk : ∀ x y, IdMapP.O.eqke (elt:=value) x y → IdMap.eq_key (elt:=value) x y.
   Proof.
     unfold IdMapP.O.eqke, IdMap.eq_key, IdMap.Raw.PX.eqk.
     easy.
@@ -1386,7 +1385,7 @@ Module Make (Tannot : TypeAnnot.S).
     : Proper (SetoidList.eqlistA (IdMapP.O.eqke (elt:=value)) ==> flip impl) (SetoidList.NoDupA (IdMap.eq_key (elt:=value))) :=
     proper_eqlist_NoDupA_Weak (key_value_equiv value) (key_equiv value) eqke_is_eqk.
 
-  Lemma min_elt_None_iff : forall [A] (m : IdMap.t A), IdMapP.min_elt m = None <-> IdMap.Empty (elt:=A) m.
+  Lemma min_elt_None_iff : ∀ [A] (m : IdMap.t A), IdMapP.min_elt m = None ↔ IdMap.Empty (elt:=A) m.
   Proof.
     intros A m.
     split.
@@ -1398,7 +1397,7 @@ Module Make (Tannot : TypeAnnot.S).
       reflexivity.
   Qed.
 
-  Lemma min_elt_elements_iff : forall [A] (m : IdMap.t A), IdMapP.min_elt m = None <-> IdMap.elements m = [].
+  Lemma min_elt_elements_iff : ∀ [A] (m : IdMap.t A), IdMapP.min_elt m = None ↔ IdMap.elements m = [].
   Proof.
     intros A m.
     unfold IdMapP.min_elt.
@@ -1408,8 +1407,8 @@ Module Make (Tannot : TypeAnnot.S).
       destruct kv; split; intros; discriminate.
   Qed.
 
-  Lemma min_elt_elements : forall [A] (m : IdMap.t A) k v,
-    IdMapP.min_elt m = Some (k, v) <-> IdMap.elements m = (k, v) :: tl (IdMap.elements m).
+  Lemma min_elt_elements : ∀ [A] (m : IdMap.t A) k v,
+    IdMapP.min_elt m = Some (k, v) ↔ IdMap.elements m = (k, v) :: tl (IdMap.elements m).
   Proof.
     intros A m k v.
     split; intros H.
@@ -1438,14 +1437,14 @@ Module Make (Tannot : TypeAnnot.S).
         reflexivity.
   Qed.
 
-  Lemma min_elt_elements_right : forall [A] (m : IdMap.t A) k v,
-    IdMapP.min_elt m = Some (k, v) -> IdMap.elements m = (k, v) :: tl (IdMap.elements m).
+  Lemma min_elt_elements_right : ∀ [A] (m : IdMap.t A) k v,
+    IdMapP.min_elt m = Some (k, v) → IdMap.elements m = (k, v) :: tl (IdMap.elements m).
   Proof.
     intros A m k v.
     apply min_elt_elements.
   Qed.
 
-  Lemma find_none_Empty : forall [A] (m : IdMap.t A), (forall k, IdMap.find k m = None) <-> IdMap.Empty m.
+  Lemma find_none_Empty : ∀ [A] (m : IdMap.t A), (∀ k, IdMap.find k m = None) ↔ IdMap.Empty m.
   Proof.
     intros A m.
     split; intros H.
@@ -1469,7 +1468,7 @@ Module Make (Tannot : TypeAnnot.S).
       apply IdMapP.P.F.empty_o.
   Qed.
 
-  Lemma Equal_add_remove : forall [A] k v (m : IdMap.t A), IdMap.MapsTo k v m -> IdMap.Equal m (IdMap.add k v (IdMap.remove k m)).
+  Lemma Equal_add_remove : ∀ [A] k v (m : IdMap.t A), IdMap.MapsTo k v m → IdMap.Equal m (IdMap.add k v (IdMap.remove k m)).
   Proof.
     intros A k v m H.
     rewrite IdMapP.P.F.Equal_mapsto_iff.
@@ -1527,10 +1526,10 @@ Module Make (Tannot : TypeAnnot.S).
           tauto.
   Qed.
 
-  Lemma elements_cons_mapsto : forall [A] [k v] [m : IdMap.t A] elems,
+  Lemma elements_cons_mapsto : ∀ [A] [k v] [m : IdMap.t A] elems,
     SetoidList.eqlistA (IdMapP.O.eqke (elt:=A))
       (IdMap.elements m)
-      ((k, v) :: elems) ->
+      ((k, v) :: elems) →
     IdMap.MapsTo k v m.
   Proof.
     intros A k v m elems H.
@@ -1559,14 +1558,14 @@ Module Make (Tannot : TypeAnnot.S).
       easy.
   Qed.
 
-  Lemma add_empty : forall {A k v}, IdMap.elements (IdMap.add k v (IdMap.empty A)) = [(k, v)].
+  Lemma add_empty : ∀ {A k v}, IdMap.elements (IdMap.add k v (IdMap.empty A)) = [(k, v)].
   Proof.
     intros A k v.
     unfold IdMap.empty, IdMap.add, IdMap.elements, IdMap.Raw.elements.
     reflexivity.
   Qed.
 
-  Lemma In_key_diff : forall [A] [m : IdMap.t A] [k k' : id], ~ IdMap.In k m -> IdMap.In k' m -> id_eqb k k' = false.
+  Lemma In_key_diff : ∀ [A] [m : IdMap.t A] [k k' : id], ~ IdMap.In k m → IdMap.In k' m → id_eqb k k' = false.
   Proof.
     intros A m k k' NI I.
     apply IdMapP.P.F.not_find_in_iff in NI.
@@ -1580,7 +1579,7 @@ Module Make (Tannot : TypeAnnot.S).
     - reflexivity.
   Qed.
 
-  Lemma id_eqb_ltb_compat_left : forall x y z, id_eqb x y = true -> id_ltb x z = true -> id_ltb y z = true.
+  Lemma id_eqb_ltb_compat_left : ∀ x y z, id_eqb x y = true → id_ltb x z = true → id_ltb y z = true.
   Proof.
     destruct x as [x_aux x_l].
     destruct y as [y_aux y_l].
@@ -1595,11 +1594,11 @@ Module Make (Tannot : TypeAnnot.S).
     ).
   Qed.
 
-  Lemma sorted_keys : forall [A] [k k' v v' xs ys],
-    id_eqb k k' = false ->
-    Sorted.Sorted (IdMap.lt_key (elt:=A)) xs ->
-    SetoidList.InA (IdMapP.O.eqke (elt:=A)) (k', v') xs ->
-    SetoidList.eqlistA (IdMapP.O.eqke (elt:=A)) xs ((k, v) :: ys) ->
+  Lemma sorted_keys : ∀ [A] [k k' v v' xs ys],
+    id_eqb k k' = false →
+    Sorted.Sorted (IdMap.lt_key (elt:=A)) xs →
+    SetoidList.InA (IdMapP.O.eqke (elt:=A)) (k', v') xs →
+    SetoidList.eqlistA (IdMapP.O.eqke (elt:=A)) xs ((k, v) :: ys) →
     id_ltb k k' = true.
   Proof.
     intros A k k' v v' xs ys Key_neq Sorted_xs In_xs Eq.
@@ -1637,7 +1636,7 @@ Module Make (Tannot : TypeAnnot.S).
         apply (id_eqb_ltb_compat_left _ _ _ Eq_hd L).
   Qed.
 
-  Lemma in_elements : forall [A] [m : IdMap.t A] [k], IdMap.In k m -> exists v, SetoidList.InA (IdMapP.O.eqke (elt:=A)) (k, v) (IdMap.elements m).
+  Lemma in_elements : ∀ [A] [m : IdMap.t A] [k], IdMap.In k m → exists v, SetoidList.InA (IdMapP.O.eqke (elt:=A)) (k, v) (IdMap.elements m).
   Proof.
     intros A m k H.
     change (exists v, IdMap.MapsTo k v m) in H.
@@ -1646,8 +1645,8 @@ Module Make (Tannot : TypeAnnot.S).
     apply (IdMap.elements_1 H).
   Qed.
 
-  Lemma elements_csubsts_remove_h : forall substs k v elems,
-    SetoidList.eqlistA (IdMapP.O.eqke (elt:=value)) (IdMap.elements substs) ((k, v) :: elems) ->
+  Lemma elements_csubsts_remove_h : ∀ substs k v elems,
+    SetoidList.eqlistA (IdMapP.O.eqke (elt:=value)) (IdMap.elements substs) ((k, v) :: elems) →
     SetoidList.eqlistA (IdMapP.O.eqke (elt:=value)) (IdMap.elements (IdMap.remove k substs)) elems.
   Proof.
     intros substs k v elems H.
@@ -1687,7 +1686,7 @@ Module Make (Tannot : TypeAnnot.S).
     setoid_reflexivity.
   Qed.
 
-  Lemma eqlistA_map_remove_comm : forall [A B] [f : A -> B] [k : IdMap.key] (m : IdMap.t A),
+  Lemma eqlistA_map_remove_comm : ∀ [A B] [f : A → B] [k : IdMap.key] (m : IdMap.t A),
     SetoidList.eqlistA (IdMapP.O.eqke (elt:=B))
       (IdMap.elements (IdMap.map f (IdMap.remove k m)))
       (IdMap.elements (IdMap.remove k (IdMap.map f m))).
@@ -1698,8 +1697,8 @@ Module Make (Tannot : TypeAnnot.S).
     apply find_map_remove_comm.
   Qed.
 
-  Lemma elements_complete_substs_remove : forall substs k v elems,
-    SetoidList.eqlistA (IdMapP.O.eqke (elt:=value)) (IdMap.elements (complete_bindings substs)) ((k, v) :: elems) ->
+  Lemma elements_complete_substs_remove : ∀ substs k v elems,
+    SetoidList.eqlistA (IdMapP.O.eqke (elt:=value)) (IdMap.elements (complete_bindings substs)) ((k, v) :: elems) →
     SetoidList.eqlistA (IdMapP.O.eqke (elt:=value)) (IdMap.elements (complete_bindings (IdMap.remove k substs))) elems.
   Proof.
     intros substs k v elems H.

@@ -41,6 +41,8 @@
 (*  SPDX-License-Identifier: BSD-2-Clause                                   *)
 (* ************************************************************************ *)
 
+From stdpp Require Import base.
+
 Inductive bit : Set :=
   | B0 : bit
   | B1 : bit.
@@ -52,12 +54,12 @@ Definition bit_eqb (lhs rhs : bit) : bool :=
   | _ => false
   end.
 
-Lemma bit_eqb_refl : forall b, bit_eqb b b = true.
+Lemma bit_eqb_refl : ∀ b, bit_eqb b b = true.
 Proof.
   destruct b; reflexivity.
 Qed.
 
-Lemma bit_eqb_comm : forall {x y}, bit_eqb x y = bit_eqb y x.
+Lemma bit_eqb_comm : ∀ {x y}, bit_eqb x y = bit_eqb y x.
 Proof. intros x y; destruct x, y; reflexivity. Qed.
 
 Module Three.
@@ -100,10 +102,10 @@ Module Three.
     | (?, ?) => ?
     end.
 
-  Lemma bit_or_comm : forall (x y : ubit), bit_or x y = bit_or y x.
+  Lemma bit_or_comm : ∀ (x y : ubit), bit_or x y = bit_or y x.
   Proof. intros x y; destruct x, y; reflexivity. Qed.
 
-  Lemma bit_or_assoc : forall x y z, bit_or x (bit_or y z) = bit_or (bit_or x y) z.
+  Lemma bit_or_assoc : ∀ x y z, bit_or x (bit_or y z) = bit_or (bit_or x y) z.
   Proof. intros x y z; destruct x, y, z; reflexivity. Qed.
 
   Definition bit_and (lhs rhs : ubit) : ubit :=
@@ -119,16 +121,16 @@ Module Three.
     | (?, ?) => ?
     end.
 
-  Lemma bit_and_comm : forall (x y : ubit), bit_and x y = bit_and y x.
+  Lemma bit_and_comm : ∀ (x y : ubit), bit_and x y = bit_and y x.
   Proof. intros x y; destruct x, y; reflexivity. Qed.
 
-  Lemma bit_and_assoc : forall x y z, bit_and x (bit_and y z) = bit_and (bit_and x y) z.
+  Lemma bit_and_assoc : ∀ x y z, bit_and x (bit_and y z) = bit_and (bit_and x y) z.
   Proof. intros x y z; destruct x, y, z; reflexivity. Qed.
 
-  Lemma de_morgan_not_or : forall x y, bit_not (bit_or x y) = bit_and (bit_not x) (bit_not y).
+  Lemma de_morgan_not_or : ∀ x y, bit_not (bit_or x y) = bit_and (bit_not x) (bit_not y).
   Proof. intros x y; destruct x, y; reflexivity. Qed.
 
-  Lemma de_morgan_not_and : forall x y, bit_not (bit_and x y) = bit_or (bit_not x) (bit_not y).
+  Lemma de_morgan_not_and : ∀ x y, bit_not (bit_and x y) = bit_or (bit_not x) (bit_not y).
   Proof. intros x y; destruct x, y; reflexivity. Qed.
 
   Definition bit_xor (lhs rhs : ubit) : ubit :=
@@ -144,13 +146,13 @@ Module Three.
     | (?, ?) => ?
     end.
 
-  Lemma bit_xor_comm : forall (x y : ubit), bit_xor x y = bit_xor y x.
+  Lemma bit_xor_comm : ∀ (x y : ubit), bit_xor x y = bit_xor y x.
   Proof. intros x y; destruct x, y; reflexivity. Qed.
 
-  Lemma bit_xor_assoc : forall x y z, bit_xor x (bit_xor y z) = bit_xor (bit_xor x y) z.
+  Lemma bit_xor_assoc : ∀ x y z, bit_xor x (bit_xor y z) = bit_xor (bit_xor x y) z.
   Proof. intros x y z; destruct x, y, z; reflexivity. Qed.
 
-  Lemma bit_xor_alt: forall (x y : ubit),
+  Lemma bit_xor_alt: ∀ (x y : ubit),
     bit_or (bit_and (bit_not x) y) (bit_and x (bit_not y)) = bit_xor x y.
   Proof. intros x y; destruct x, y; reflexivity. Qed.
 
@@ -167,7 +169,7 @@ Module Three.
     | (?, ?) => (?, ?)
     end.
 
-  Lemma bit_add_comm : forall (x y : ubit), bit_add x y = bit_add y x.
+  Lemma bit_add_comm : ∀ (x y : ubit), bit_add x y = bit_add y x.
   Proof. intros x y; destruct x, y; reflexivity. Qed.
 
   Definition bit_join (x y : ubit) : ubit :=
@@ -177,10 +179,10 @@ Module Three.
     | _  => ?
     end.
 
-  Lemma bit_join_comm : forall (x y : ubit), bit_join x y = bit_join y x.
+  Lemma bit_join_comm : ∀ (x y : ubit), bit_join x y = bit_join y x.
   Proof. intros x y; destruct x, y; reflexivity. Qed.
 
-  Lemma bit_join_assoc: forall x y z, bit_join x (bit_join y z) = bit_join (bit_join x y) z.
+  Lemma bit_join_assoc: ∀ x y z, bit_join x (bit_join y z) = bit_join (bit_join x y) z.
   Proof. intros x y z; destruct x, y, z; reflexivity. Qed.
 
   Definition bit_meet (x y : ubit) : option ubit :=
@@ -195,7 +197,7 @@ Module Three.
     | _ => None
     end.
 
-  Lemma bit_meet_comm : forall (x y : ubit), bit_meet x y = bit_meet y x.
+  Lemma bit_meet_comm : ∀ (x y : ubit), bit_meet x y = bit_meet y x.
   Proof. intros x y; destruct x, y; reflexivity. Qed.
 
   Definition bit_leb (x y : ubit) : bool :=

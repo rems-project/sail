@@ -45,6 +45,8 @@ From Stdlib Require Import Bool.
 From Stdlib Require Import Lists.List.
 From Stdlib Require Import ZArith.
 
+From stdpp Require Import base.
+
 From Sail Require Import Tactics.
 From Sail Require Import Ast.
 From Sail Require Import AstInduction.
@@ -55,8 +57,6 @@ From Sail Require Import ValueType.
 
 From Sail Require BitList.
 From Sail Require TypeAnnot.
-
-Import ListNotations.
 
 (**
 A [binding] is something an identifier in a pattern can bind with
@@ -75,8 +75,8 @@ turned into a complete binding for the << ys >> variable. See the
 *)
 
 Inductive binding (V : Set) :=
-| Complete : value -> binding V
-| Partial : non_empty (V * Z * Z) -> binding V.
+| Complete : value → binding V
+| Partial : non_empty (V * Z * Z) → binding V.
 
 Arguments Complete {_}.
 Arguments Partial {_}.
@@ -96,7 +96,7 @@ Definition binding_eqb (l r : binding value) : bool :=
   | _ => false
   end.
 
-Lemma binding_part_eqb_refl : forall p, binding_part_eqb p p = true.
+Lemma binding_part_eqb_refl : ∀ p, binding_part_eqb p p = true.
 Proof.
   intros p.
   destruct p as (vn, m).
@@ -108,7 +108,7 @@ Proof.
   - apply Z.eqb_refl.
 Qed.
 
-Lemma binding_eqb_refl : forall b, binding_eqb b b = true.
+Lemma binding_eqb_refl : ∀ b, binding_eqb b b = true.
 Proof.
   intros b.
   destruct b as [b | p].
@@ -148,17 +148,17 @@ Definition combine_binding {V} (l r : option (binding V)) : option (binding V) :
       end
   end.
 
-Lemma combine_binding_none_left : forall {V} (b : option (binding V)), combine_binding None b = b.
+Lemma combine_binding_none_left : ∀ {V} (b : option (binding V)), combine_binding None b = b.
 Proof.
   intros ? b; destruct b; cbn; reflexivity.
 Qed.
 
-Lemma combine_binding_none_right : forall {V} (b : option (binding V)), combine_binding b None = b.
+Lemma combine_binding_none_right : ∀ {V} (b : option (binding V)), combine_binding b None = b.
 Proof.
   intros ? b; destruct b; cbn; reflexivity.
 Qed.
 
-Lemma combine_binding_assoc : forall {V} (a b c : option (binding V)), combine_binding (combine_binding a b) c = combine_binding a (combine_binding b c).
+Lemma combine_binding_assoc : ∀ {V} (a b c : option (binding V)), combine_binding (combine_binding a b) c = combine_binding a (combine_binding b c).
 Proof.
   intros ? a b c.
   (destruct a as [a |]; [destruct a | idtac]);
@@ -189,8 +189,8 @@ Definition unwrap_default {A : Set} (default : A) (opt : option A) : A :=
   | Some x => x
   end.
 
-Lemma merge_bindings_in_left : forall {V k} {x y : IdMap.t (binding V)},
-  IdMap.In k x -> IdMap.In k (merge_bindings x y).
+Lemma merge_bindings_in_left : ∀ {V k} {x y : IdMap.t (binding V)},
+  IdMap.In k x → IdMap.In k (merge_bindings x y).
 Proof.
   intros ? k x y H.
   pose proof H as H_in.
@@ -213,7 +213,7 @@ Proof.
   - tauto.
 Qed.
 
-Lemma merge_bindings_in_right : forall {V k} {y x : IdMap.t (binding V)}, IdMap.In k y -> IdMap.In k (merge_bindings x y).
+Lemma merge_bindings_in_right : ∀ {V k} {y x : IdMap.t (binding V)}, IdMap.In k y → IdMap.In k (merge_bindings x y).
 Proof.
   intros ? k y x H.
   pose proof H as H_in.
@@ -236,7 +236,7 @@ Proof.
   - tauto.
 Qed.
 
-Lemma merge_bindings_in_iff : forall {V k} {x y : IdMap.t (binding V)}, IdMap.In k (merge_bindings x y) <-> IdMap.In k x \/ IdMap.In k y.
+Lemma merge_bindings_in_iff : ∀ {V k} {x y : IdMap.t (binding V)}, IdMap.In k (merge_bindings x y) ↔ IdMap.In k x ∨ IdMap.In k y.
 Proof.
   intros ? k x y.
   split; intros H.
@@ -247,7 +247,7 @@ Proof.
     + apply (merge_bindings_in_right Hy).
 Qed.
 
-Lemma not_in_map2 : forall A k (x y : IdMap.t A) f, ~ IdMap.In k x -> ~ IdMap.In k y -> ~ IdMap.In (elt:=A) k (IdMap.map2 f x y).
+Lemma not_in_map2 : ∀ A k (x y : IdMap.t A) f, ~ IdMap.In k x → ~ IdMap.In k y → ~ IdMap.In (elt:=A) k (IdMap.map2 f x y).
 Proof.
   intros A k x y f Not_in_x Not_in_y.
   unfold not.
@@ -256,7 +256,7 @@ Proof.
   tauto.
 Qed.
 
-Lemma not_in_find_none : forall [A k] (x : IdMap.t A), ~ IdMap.In k x <-> IdMap.find k x = None.
+Lemma not_in_find_none : ∀ [A k] (x : IdMap.t A), ~ IdMap.In k x ↔ IdMap.find k x = None.
 Proof.
   intros A k x.
   split; intros H.
@@ -279,9 +279,9 @@ Proof.
     discriminate H.
 Qed.
 
-Lemma map2_none_none : forall [A k] (x y : IdMap.t A) f,
-  IdMap.find k x = None ->
-  IdMap.find k y = None ->
+Lemma map2_none_none : ∀ [A k] (x y : IdMap.t A) f,
+  IdMap.find k x = None →
+  IdMap.find k y = None →
   IdMap.find (elt:=A) k (IdMap.map2 f x y) = None.
 Proof.
   intros A k x y f.
@@ -320,10 +320,10 @@ Ltac idmap_in_step :=
   | [ H : IdMap.find ?k ?x = Some _ |- IdMap.In ?k (merge_bindings ?x ?y) ] => apply merge_bindings_in_left
   | [ H : IdMap.find ?k ?y = Some _ |- IdMap.In ?k (merge_bindings ?x ?y) ] => apply merge_bindings_in_right
 
-  | [ H : IdMap.find ?k ?x = None |- IdMap.In ?k ?x \/ IdMap.In ?k _ ] => apply or_intror
-  | [ H : IdMap.find ?k ?y = None |- IdMap.In ?k _ \/ IdMap.In ?k ?y ] => apply or_introl
-  | [ H : IdMap.find ?k ?x = Some _ |- IdMap.In ?k ?x \/ IdMap.In ?k _ ] => apply or_introl
-  | [ H : IdMap.find ?k ?y = Some _ |- IdMap.In ?k _ \/ IdMap.In ?k ?y ] => apply or_intror
+  | [ H : IdMap.find ?k ?x = None |- IdMap.In ?k ?x ∨ IdMap.In ?k _ ] => apply or_intror
+  | [ H : IdMap.find ?k ?y = None |- IdMap.In ?k _ ∨ IdMap.In ?k ?y ] => apply or_introl
+  | [ H : IdMap.find ?k ?x = Some _ |- IdMap.In ?k ?x ∨ IdMap.In ?k _ ] => apply or_introl
+  | [ H : IdMap.find ?k ?y = Some _ |- IdMap.In ?k _ ∨ IdMap.In ?k ?y ] => apply or_intror
 
   | [ H : IdMap.find ?k ?x = Some ?b |- IdMap.In ?k ?x ] =>
       change (exists b, IdMap.MapsTo k b x);
@@ -360,16 +360,16 @@ Ltac binding_eqb_solve := solve [ repeat binding_eqb_solve_step ].
 Merging binding maps is associative.
 *)
 
-Lemma merge_bindings_assoc : forall x y z,
+Lemma merge_bindings_assoc : ∀ x y z,
   IdMap.Equivb binding_eqb (merge_bindings (merge_bindings x y) z) (merge_bindings x (merge_bindings y z)).
 Proof.
   intros x y z.
   split.
 
   - intro k.
-    change (IdMap.In k (merge_bindings (merge_bindings x y) z) <-> IdMap.In k (merge_bindings x (merge_bindings y z))).
+    change (IdMap.In k (merge_bindings (merge_bindings x y) z) ↔ IdMap.In k (merge_bindings x (merge_bindings y z))).
     repeat rewrite merge_bindings_in_iff.
-    rewrite or_assoc.
+    rewrite Logic.or_assoc.
     reflexivity.
 
   (* If M is the merge bindings function, we must prove:
@@ -460,8 +460,8 @@ Definition complete_bindings (m : IdMap.t (binding value)) : IdMap.t value :=
     m.
 
 Inductive match_result {V : Set} : Type :=
-| Matched : IdMap.t (binding V) -> match_result
-| MaybeMatched : IdMap.t (binding V) -> match_result
+| Matched : IdMap.t (binding V) → match_result
+| MaybeMatched : IdMap.t (binding V) → match_result
 | Unmatched : match_result.
 
 Arguments match_result V : clear implicits.
@@ -486,7 +486,7 @@ Definition merge_match_result (l r : match_result value) : match_result value :=
 
 Infix "⋈" := merge_match_result (right associativity, at level 60).
 
-Lemma merge_match_result_assoc : forall a b c, match_result_eq ((a ⋈ b) ⋈ c) (a ⋈ (b ⋈ c)).
+Lemma merge_match_result_assoc : ∀ a b c, match_result_eq ((a ⋈ b) ⋈ c) (a ⋈ (b ⋈ c)).
 Proof.
   intros a b c.
   destruct a as [a | a |]; destruct b as [b | b |]; destruct c as [c | c |].
@@ -571,7 +571,7 @@ Fixpoint get_struct_field (name : id) (fields : list (id * value)) {struct field
 Module Make (Tannot : TypeAnnot.S).
 
   Fixpoint fold_match
-      (f : pat Tannot.t -> value -> match_result value)
+      (f : pat Tannot.t → value → match_result value)
       (ps : list (pat Tannot.t))
       (match_info : match_result value * list value)
       : match_result value * list value :=
