@@ -41,12 +41,10 @@
 (*  SPDX-License-Identifier: BSD-2-Clause                                   *)
 (* ************************************************************************ *)
 
-From Stdlib Require Import Lists.List.
+From stdpp Require Import base.
 
 From Sail Require Import Ast.
 From Sail Require Import Bit.
-
-Import ListNotations.
 
 Definition same_bits (bs : list bit) (vs : list bit) : bool :=
   fst (fold_left
@@ -69,7 +67,7 @@ Definition same_bits (bs : list bit) (vs : list bit) : bool :=
          bs
          (true, vs)).
 
-Lemma same_bits_cons : forall (b : bit) (bs : list bit),
+Lemma same_bits_cons : ∀ (b : bit) (bs : list bit),
     same_bits (b :: bs) (b :: bs) = same_bits bs bs.
 Proof.
   intros b bs.
@@ -79,7 +77,7 @@ Proof.
   all: reflexivity.
 Qed.
 
-Lemma same_bits_refl : forall (bs : list bit),
+Lemma same_bits_refl : ∀ (bs : list bit),
     same_bits bs bs = true.
 Proof.
   intros bs.
@@ -148,7 +146,7 @@ Definition of_hex_lit (hex : list (non_empty hex_digit)) : list bit :=
   let digits := List.concat (List.map non_empty_to_list hex) in
   List.concat (List.map of_hex_digit digits).
 
-Lemma hex_lit_bitlist_rt : forall (d : hex_digit), to_hex_digits (of_hex_lit [Non_empty d []]) = Some [d].
+Lemma hex_lit_bitlist_rt : ∀ (d : hex_digit), to_hex_digits (of_hex_lit [Non_empty d []]) = Some [d].
 Proof.
   intros d.
   induction d; cbn; reflexivity.

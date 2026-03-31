@@ -41,8 +41,9 @@
 (*  SPDX-License-Identifier: BSD-2-Clause                                   *)
 (* ************************************************************************ *)
 
-From Stdlib Require Import List.
 From Stdlib Require Import String.
+
+From stdpp Require Import base.
 
 From Sail Require Import Ast.
 From Sail Require Import AstInduction.
@@ -58,8 +59,6 @@ From Sail Require Domain.Interval.
 From Sail Require PatternMatch.
 From Sail Require TypeAnnot.
 
-Import ListNotations.
-
 (**
 We start by re-defining l-expressions such that they contain no
 embedded expressions. The type [zlexp A] is like [lexp A] but
@@ -72,18 +71,18 @@ The end goal is to be able to losslessly transform [lexp A] into
 *)
 
 Inductive zlexp_aux {A : Set} : Set :=
-| LZ_id : id -> zlexp_aux
+| LZ_id : id → zlexp_aux
 | LZ_deref : zlexp_aux
-| LZ_app : id -> nat -> zlexp_aux
-| LZ_typ : typ -> id -> zlexp_aux
-| LZ_tuple : list zlexp -> zlexp_aux
-| LZ_vector_concat : list zlexp -> zlexp_aux
-| LZ_vector : zlexp -> zlexp_aux
-| LZ_vector_range : zlexp -> zlexp_aux
-| LZ_field : zlexp -> id -> zlexp_aux
+| LZ_app : id → nat → zlexp_aux
+| LZ_typ : typ → id → zlexp_aux
+| LZ_tuple : list zlexp → zlexp_aux
+| LZ_vector_concat : list zlexp → zlexp_aux
+| LZ_vector : zlexp → zlexp_aux
+| LZ_vector_range : zlexp → zlexp_aux
+| LZ_field : zlexp → id → zlexp_aux
 
 with zlexp {A : Set} : Set :=
-| LZ_aux : zlexp_aux -> annot A -> zlexp.
+| LZ_aux : zlexp_aux → annot A → zlexp.
 
 Arguments zlexp_aux A : clear implicits.
 Arguments zlexp A : clear implicits.
@@ -144,7 +143,7 @@ Fixpoint update_zlexp_subexps {A : Set} (xs : list (exp A)) (l : zlexp A) : opti
       end
   end.
 
-Lemma update_zlexp_identity_g : forall {A} (l : lexp A) (es : list (exp A)),
+Lemma update_zlexp_identity_g : ∀ {A} (l : lexp A) (es : list (exp A)),
   update_zlexp_subexps (lexp_subexps l ++ es) (lexp_to_z l) = (Some l, es).
 Proof with reflexivity.
   intros A l.
@@ -198,7 +197,7 @@ Qed.
 Now we can prove the key property for the [zlexp] type, that we can
 map it to and from an l-expression [l].
 *)
-Lemma update_zlexp_identity : forall {A} (l : lexp A),
+Lemma update_zlexp_identity : ∀ {A} (l : lexp A),
   update_zlexp_subexps (lexp_subexps l) (lexp_to_z l) = (Some l, []).
 Proof.
   intros A l.
@@ -241,11 +240,11 @@ defining this type awkward.
 *)
 
 Inductive single_case : Set :=
-| Field : id -> single_case
-| Internal_assume : n_constraint -> single_case
+| Field : id → single_case
+| Internal_assume : n_constraint → single_case
 | Internal_return : single_case
 | Throw : single_case
-| Typ : typ -> single_case.
+| Typ : typ → single_case.
 
 Inductive pair_case : Set :=
 | Assert : pair_case
@@ -264,49 +263,49 @@ Inductive match_case : Set :=
 | Internal_plet : match_case.
 
 Inductive zexp_aux {V : Type} {R : Set} {S : Type} {A : Set} : Type :=
-| Z_single : zexp -> single_case -> zexp_aux
-| Z_return : zexp -> zexp_aux
-| Z_exit : zexp -> zexp_aux
-| Z_pair_1 : zexp -> pair_case -> exp A -> zexp_aux
-| Z_pair_2 : zexp -> pair_case -> R -> zexp_aux
-| Z_list : zexp -> list_case -> list R -> list (exp A) -> zexp_aux
-| Z_app : zexp -> id -> list R -> list (exp A) -> zexp_aux
-| Z_block : zexp -> list R -> list (exp A) -> zexp_aux
-| Z_if_cond : zexp -> exp A -> exp A -> zexp_aux
-| Z_if_then : zexp -> S * R -> exp A -> zexp_aux
-| Z_if_else : zexp -> R -> S * R -> zexp_aux
-| Z_match_head : zexp ->
-                 match_case ->
-                 list (S * pat A * option R * R) ->
-                 option (list (pat A * option (exp A) * exp A)) ->
+| Z_single : zexp → single_case → zexp_aux
+| Z_return : zexp → zexp_aux
+| Z_exit : zexp → zexp_aux
+| Z_pair_1 : zexp → pair_case → exp A → zexp_aux
+| Z_pair_2 : zexp → pair_case → R → zexp_aux
+| Z_list : zexp → list_case → list R → list (exp A) → zexp_aux
+| Z_app : zexp → id → list R → list (exp A) → zexp_aux
+| Z_block : zexp → list R → list (exp A) → zexp_aux
+| Z_if_cond : zexp → exp A → exp A → zexp_aux
+| Z_if_then : zexp → S * R → exp A → zexp_aux
+| Z_if_else : zexp → R → S * R → zexp_aux
+| Z_match_head : zexp →
+                 match_case →
+                 list (S * pat A * option R * R) →
+                 option (list (pat A * option (exp A) * exp A)) →
                  zexp_aux
-| Z_match_arms_guard : zexp ->
-                       match_case ->
-                       V ->
-                       S * R ->
-                       list (S * pat A * option R * R) ->
-                       pat A ->
-                       bool ->
-                       exp A ->
-                       option (list (pat A * option (exp A) * exp A)) ->
+| Z_match_arms_guard : zexp →
+                       match_case →
+                       V →
+                       S * R →
+                       list (S * pat A * option R * R) →
+                       pat A →
+                       bool →
+                       exp A →
+                       option (list (pat A * option (exp A) * exp A)) →
                        zexp_aux
-| Z_match_arms_body : zexp ->
-                      match_case ->
-                      V ->
-                      S * R ->
-                      list (S * pat A * option R * R) ->
-                      pat A ->
-                      option R ->
-                      option (list (pat A * option (exp A) * exp A)) ->
+| Z_match_arms_body : zexp →
+                      match_case →
+                      V →
+                      S * R →
+                      list (S * pat A * option R * R) →
+                      pat A →
+                      option R →
+                      option (list (pat A * option (exp A) * exp A)) →
                       zexp_aux
-| Z_assign_left : zexp -> zlexp A -> list R -> list (exp A) -> exp A -> zexp_aux
-| Z_assign_right : zexp -> zlexp A -> list R -> zexp_aux
-| Z_var_left : zexp -> zlexp A -> list R -> list (exp A) -> exp A -> exp A -> zexp_aux
-| Z_var_right : zexp -> zlexp A -> list R -> exp A -> zexp_aux
-| Z_var_body : zexp -> zlexp A -> list R -> R -> zexp_aux
+| Z_assign_left : zexp → zlexp A → list R → list (exp A) → exp A → zexp_aux
+| Z_assign_right : zexp → zlexp A → list R → zexp_aux
+| Z_var_left : zexp → zlexp A → list R → list (exp A) → exp A → exp A → zexp_aux
+| Z_var_right : zexp → zlexp A → list R → exp A → zexp_aux
+| Z_var_body : zexp → zlexp A → list R → R → zexp_aux
 
 with zexp {V : Type} {R : Set} {S : Type} {A : Set} : Type :=
-| Z_aux : zexp_aux -> annot A -> zexp
+| Z_aux : zexp_aux → annot A → zexp
 | Z_top : zexp.
 
 Arguments zexp_aux V R S A : clear implicits.
@@ -340,22 +339,22 @@ the lists.
 Module Type Builder (Tannot : TypeAnnot.S).
   Parameter t : Set.
 
-  Parameter mk_app     : annot Tannot.t -> id -> list t -> t.
-  Parameter mk_config  : annot Tannot.t -> list string -> t.
-  Parameter mk_id      : annot Tannot.t -> id -> t.
-  Parameter mk_block   : annot Tannot.t -> list t -> t.
-  Parameter mk_exit    : annot Tannot.t -> t -> t.
-  Parameter mk_ite     : annot Tannot.t -> t -> t -> t -> t.
-  Parameter mk_list    : annot Tannot.t -> list_case -> list t -> t.
-  Parameter mk_literal : annot Tannot.t -> lit -> t.
-  Parameter mk_match   : annot Tannot.t -> match_case -> t -> list (pat Tannot.t * option t * t) -> t.
-  Parameter mk_pair    : annot Tannot.t -> pair_case -> t -> t -> t.
-  Parameter mk_ref     : annot Tannot.t -> id -> t.
-  Parameter mk_return  : annot Tannot.t -> t -> t.
-  Parameter mk_single  : annot Tannot.t -> single_case -> t -> t.
-  Parameter mk_var     : annot Tannot.t -> zlexp Tannot.t -> list t -> t -> t -> t.
-  Parameter mk_assign  : annot Tannot.t -> zlexp Tannot.t -> list t -> t -> t.
-  Parameter mk_undef   : annot Tannot.t -> t.
+  Parameter mk_app     : annot Tannot.t → id → list t → t.
+  Parameter mk_config  : annot Tannot.t → list string → t.
+  Parameter mk_id      : annot Tannot.t → id → t.
+  Parameter mk_block   : annot Tannot.t → list t → t.
+  Parameter mk_exit    : annot Tannot.t → t → t.
+  Parameter mk_ite     : annot Tannot.t → t → t → t → t.
+  Parameter mk_list    : annot Tannot.t → list_case → list t → t.
+  Parameter mk_literal : annot Tannot.t → lit → t.
+  Parameter mk_match   : annot Tannot.t → match_case → t → list (pat Tannot.t * option t * t) → t.
+  Parameter mk_pair    : annot Tannot.t → pair_case → t → t → t.
+  Parameter mk_ref     : annot Tannot.t → id → t.
+  Parameter mk_return  : annot Tannot.t → t → t.
+  Parameter mk_single  : annot Tannot.t → single_case → t → t.
+  Parameter mk_var     : annot Tannot.t → zlexp Tannot.t → list t → t → t → t.
+  Parameter mk_assign  : annot Tannot.t → zlexp Tannot.t → list t → t → t.
+  Parameter mk_undef   : annot Tannot.t → t.
 End Builder.
 
 Module UnitBuilder (Tannot : TypeAnnot.S) <: Builder(Tannot).
@@ -496,7 +495,7 @@ Module Residual (Tannot : TypeAnnot.S) (B : Builder Tannot).
 
   Definition bounded_join (o₁ o₂ : option L.t) : option L.t := option_join L.join o₁ o₂.
 
-  Infix "⊔" := bounded_join (left associativity, at level 50).
+  Infix "⊔" := bounded_join (no associativity, at level 50).
   Notation "⊥" := None.
 
   Open Scope bool_scope.
@@ -680,17 +679,17 @@ Module Make (Tannot : TypeAnnot.S) (B : Builder Tannot).
   Module Monad.
     (* TODO: Find a way to share the monad with Semantics.v *)
     Inductive t {A : Type} : Type :=
-    | Pure : A -> t
-    | Early_return : R.value -> (unit -> t) -> t
-    | Exit : R.value -> (unit -> t) -> t
-    | Call : id -> list R.value -> (R.value -> t) -> t
-    | Get_config : list string -> (R.value -> t) -> t
-    | Runtime_type_error : Ast.loc -> t
-    | Get_undefined : typ -> (R.value -> t) -> t.
+    | Pure : A → t
+    | Early_return : R.value → (unit → t) → t
+    | Exit : R.value → (unit → t) → t
+    | Call : id → list R.value → (R.value → t) → t
+    | Get_config : list string → (R.value → t) → t
+    | Runtime_type_error : Ast.loc → t
+    | Get_undefined : typ → (R.value → t) → t.
 
     Arguments t A : clear implicits.
 
-    Fixpoint bind {A B : Type} (m : t A) (f : A -> t B) : t B :=
+    Fixpoint bind {A B : Type} (m : t A) (f : A → t B) : t B :=
       match m with
       | Pure x => f x
       | Early_return v cont => Early_return v (fun v => bind (cont tt) f)

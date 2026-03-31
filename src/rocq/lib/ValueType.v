@@ -48,6 +48,8 @@ From Stdlib Require Import QArith.
 From Stdlib Require Import OrderedType.
 From Stdlib Require Import RelationClasses.
 
+From stdpp Require Import base.
+
 From Sail Require Import Ast.
 From Sail Require Import AstInduction.
 From Sail Require Import Bit.
@@ -55,8 +57,6 @@ From Sail Require Import IdUtil.
 From Sail Require Import ListUtil.
 From Sail Require Import Tactics.
 From Sail Require BitList.
-
-Import ListNotations.
 
 Declare Scope Value_scope.
 Delimit Scope Value_scope with value.
@@ -76,20 +76,20 @@ Definition value_of_lit (lit : Ast.lit) : value :=
 
 (* Induction rule for values, needed as they contain nested lists of values *)
 Section value_ind.
-  Variables (P : value -> Prop)
-            (H_bitvector : forall bv, P (V_bitvector bv))
-            (H_vector : forall vs, Forall P vs -> P (V_vector vs))
-            (H_list : forall vs, Forall P vs -> P (V_list vs))
-            (H_int : forall i, P (V_int i))
-            (H_real : forall r, P (V_real r))
-            (H_bool : forall b, P (V_bool b))
-            (H_tuple : forall vs, Forall P vs -> P (V_tuple vs))
+  Variables (P : value → Prop)
+            (H_bitvector : ∀ bv, P (V_bitvector bv))
+            (H_vector : ∀ vs, Forall P vs → P (V_vector vs))
+            (H_list : ∀ vs, Forall P vs → P (V_list vs))
+            (H_int : ∀ i, P (V_int i))
+            (H_real : ∀ r, P (V_real r))
+            (H_bool : ∀ b, P (V_bool b))
+            (H_tuple : ∀ vs, Forall P vs → P (V_tuple vs))
             (H_unit : P V_unit)
-            (H_string : forall str, P (V_string str))
-            (H_ref : forall id, P (V_ref id))
-            (H_member : forall id, P (V_member id))
-            (H_ctor : forall id vs, Forall P vs -> P (V_ctor id vs))
-            (H_record : forall fields, Forall (fun f => P (snd f)) fields -> P (V_record fields)).
+            (H_string : ∀ str, P (V_string str))
+            (H_ref : ∀ id, P (V_ref id))
+            (H_member : ∀ id, P (V_member id))
+            (H_ctor : ∀ id vs, Forall P vs → P (V_ctor id vs))
+            (H_record : ∀ fields, Forall (λ f, P (snd f)) fields → P (V_record fields)).
 
   Fixpoint value_ind v : P v.
   Proof using All.
@@ -157,7 +157,7 @@ Hint Immediate String.eqb_refl : sail.
 Hint Resolve list_eqb_refl : sail.
 Hint Resolve Forall_cons_iff : sail.
 
-Lemma value_eqb_refl : forall v, (v =? v)%value = true.
+Lemma value_eqb_refl : ∀ v, (v =? v)%value = true.
 Proof.
   intros v.
   induction v using value_ind.
@@ -185,7 +185,7 @@ Proof.
       destruct H as (H1 & H2).
       change (id_eqb id id && (value_eqb v v && list_eqb value_eqb vs vs) = true).
       rewrite H1.
-      change (Forall (fun v : value => value_eqb v v = true) vs ->
+      change (Forall (fun v : value => value_eqb v v = true) vs →
               id_eqb id id && list_eqb value_eqb vs vs = true) in IHvs.
       auto with sail bool.
   - induction fields as [| fld flds].
@@ -199,7 +199,7 @@ Proof.
       auto with sail bool.
 Qed.
 
-Lemma value_eqb_comm : forall v1 v2, (v1 =? v2)%value = (v2 =? v1)%value.
+Lemma value_eqb_comm : ∀ v1 v2, (v1 =? v2)%value = (v2 =? v1)%value.
 Proof.
   intros x;
   induction x as [ xbv | xs | xs | xi | xr | xb | xs | | xstr | xid | xid | xid xs | xfields ] using value_ind;
@@ -238,12 +238,13 @@ Proof.
       apply H.
 Qed.
 
-Lemma value_cmp_ctor : forall lid lvs rid rvs, value_eqb (V_ctor lid lvs) (V_ctor rid rvs) = true <-> (id_eqb lid rid = true /\ list_eqb value_eqb lvs rvs = true).
+Lemma value_cmp_ctor : ∀ lid lvs rid rvs,
+  value_eqb (V_ctor lid lvs) (V_ctor rid rvs) = true ↔ (id_eqb lid rid = true ∧ list_eqb value_eqb lvs rvs = true).
 Proof.
   split; cbn in *; rewrite andb_true_iff in *; easy.
 Qed.
 
-Lemma value_eqb_trans : forall x y z, (x =? y)%value = true -> (y =? z)%value = true -> (x =? z)%value = true.
+Lemma value_eqb_trans : ∀ x y z, (x =? y)%value = true → (y =? z)%value = true → (x =? z)%value = true.
 Proof.
   intros x y z.
   revert x z.

@@ -42,13 +42,12 @@
 (* ************************************************************************ *)
 
 From Stdlib Require Import Lia.
-From Stdlib Require Import Lists.List.
 From Stdlib Require Import ZArith.
+
+From stdpp Require Import base.
 
 From Sail Require Import Ast.
 From Sail Require Import ListUtil.
-
-Import ListNotations.
 
 (* * Induction principles for AST nodes
 
@@ -63,24 +62,24 @@ Import ListNotations.
 
 Section pat_ind_g.
   Variables (A : Set)
-            (P : pat A -> Prop)
-            (H_lit : forall lit ann, P (P_aux (P_lit lit) ann))
-            (H_wild : forall ann, P (P_aux P_wild ann))
-            (H_or : forall pat1 pat2 ann, P pat1 -> P pat2 -> P (P_aux (P_or pat1 pat2) ann))
-            (H_not : forall pat ann, P pat -> P (P_aux (P_not pat) ann))
-            (H_as : forall pat id ann, P pat -> P (P_aux (P_as pat id) ann))
-            (H_typ : forall typ pat ann, P pat -> P (P_aux (P_typ typ pat) ann))
-            (H_id : forall id ann, P (P_aux (P_id id) ann))
-            (H_var : forall pat typ_pat ann, P pat -> P (P_aux (P_var pat typ_pat) ann))
-            (H_app : forall id pats ann, Forall P pats -> P (P_aux (P_app id pats) ann))
-            (H_vector : forall pats ann, Forall P pats -> P (P_aux (P_vector pats) ann))
-            (H_vector_concat : forall pats ann, Forall P pats -> P (P_aux (P_vector_concat pats) ann))
-            (H_vector_subrange : forall id n m ann, P (P_aux (P_vector_subrange id n m) ann))
-            (H_tuple : forall pats ann, Forall P pats -> P (P_aux (P_tuple pats) ann))
-            (H_list : forall pats ann, Forall P pats -> P (P_aux (P_list pats) ann))
-            (H_cons : forall pat1 pat2 ann, P pat1 -> P pat2 -> P (P_aux (P_cons pat1 pat2) ann))
-            (H_string_append : forall pats ann, Forall P pats -> P (P_aux (P_string_append pats) ann))
-            (H_struct : forall sname fields wild ann, Forall (fun f => P (snd f)) fields -> P (P_aux (P_struct sname fields wild) ann)).
+            (P : pat A → Prop)
+            (H_lit : ∀ lit ann, P (P_aux (P_lit lit) ann))
+            (H_wild : ∀ ann, P (P_aux P_wild ann))
+            (H_or : ∀ pat1 pat2 ann, P pat1 → P pat2 → P (P_aux (P_or pat1 pat2) ann))
+            (H_not : ∀ pat ann, P pat → P (P_aux (P_not pat) ann))
+            (H_as : ∀ pat id ann, P pat → P (P_aux (P_as pat id) ann))
+            (H_typ : ∀ typ pat ann, P pat → P (P_aux (P_typ typ pat) ann))
+            (H_id : ∀ id ann, P (P_aux (P_id id) ann))
+            (H_var : ∀ pat typ_pat ann, P pat → P (P_aux (P_var pat typ_pat) ann))
+            (H_app : ∀ id pats ann, Forall P pats → P (P_aux (P_app id pats) ann))
+            (H_vector : ∀ pats ann, Forall P pats → P (P_aux (P_vector pats) ann))
+            (H_vector_concat : ∀ pats ann, Forall P pats → P (P_aux (P_vector_concat pats) ann))
+            (H_vector_subrange : ∀ id n m ann, P (P_aux (P_vector_subrange id n m) ann))
+            (H_tuple : ∀ pats ann, Forall P pats → P (P_aux (P_tuple pats) ann))
+            (H_list : ∀ pats ann, Forall P pats → P (P_aux (P_list pats) ann))
+            (H_cons : ∀ pat1 pat2 ann, P pat1 → P pat2 → P (P_aux (P_cons pat1 pat2) ann))
+            (H_string_append : ∀ pats ann, Forall P pats → P (P_aux (P_string_append pats) ann))
+            (H_struct : ∀ sname fields wild ann, Forall (fun f => P (snd f)) fields → P (P_aux (P_struct sname fields wild) ann)).
 
   Fixpoint pat_ind_g pat : P pat.
   Proof using All.
@@ -129,16 +128,16 @@ End pat_ind_g.
 
 Section lexp_ind_g.
   Variables (A : Set)
-            (P : lexp A -> Prop)
-            (H_id : forall id ann, P (LE_aux (LE_id id) ann))
-            (H_deref : forall x ann, P (LE_aux (LE_deref x) ann))
-            (H_app : forall f xs ann, P (LE_aux (LE_app f xs) ann))
-            (H_typ : forall id typ ann, P (LE_aux (LE_typ typ id) ann))
-            (H_tuple : forall ls ann, Forall P ls -> P (LE_aux (LE_tuple ls) ann))
-            (H_vector_concat : forall ls ann, Forall P ls -> P (LE_aux (LE_vector_concat ls) ann))
-            (H_vector : forall l n ann, P l -> P (LE_aux (LE_vector l n) ann))
-            (H_vector_range : forall l n m ann, P l -> P (LE_aux (LE_vector_range l n m) ann))
-            (H_field : forall (l : lexp A) f ann, P l -> P (LE_aux (LE_field l f) ann)).
+            (P : lexp A → Prop)
+            (H_id : ∀ id ann, P (LE_aux (LE_id id) ann))
+            (H_deref : ∀ x ann, P (LE_aux (LE_deref x) ann))
+            (H_app : ∀ f xs ann, P (LE_aux (LE_app f xs) ann))
+            (H_typ : ∀ id typ ann, P (LE_aux (LE_typ typ id) ann))
+            (H_tuple : ∀ ls ann, Forall P ls → P (LE_aux (LE_tuple ls) ann))
+            (H_vector_concat : ∀ ls ann, Forall P ls → P (LE_aux (LE_vector_concat ls) ann))
+            (H_vector : ∀ l n ann, P l → P (LE_aux (LE_vector l n) ann))
+            (H_vector_range : ∀ l n m ann, P l → P (LE_aux (LE_vector_range l n m) ann))
+            (H_field : ∀ (l : lexp A) f ann, P l → P (LE_aux (LE_field l f) ann)).
 
   Fixpoint lexp_ind_g l : P l.
   Proof using All.
@@ -171,10 +170,10 @@ Definition fexp_exp {A : Set} (f : fexp A) : exp A :=
 Definition fexp_annot {A : Set} (f : fexp A) : annot A :=
   let 'FE_aux (FE_fexp _ _) ann := f in ann.
 
-Definition MatchArm {A : Set} (P : exp A -> Prop) (arm : pexp A) : Prop :=
+Definition MatchArm {A : Set} (P : exp A → Prop) (arm : pexp A) : Prop :=
   match arm with
   | Pat_aux (Pat_exp _ x) _ => P x
-  | Pat_aux (Pat_when _ g x) _ => P g /\ P x
+  | Pat_aux (Pat_when _ g x) _ => P g ∧ P x
   end.
 
 (* ** L-expression subexpressions
@@ -251,21 +250,21 @@ Fixpoint update_lexp_subexps {A : Set} (xs : list (exp A)) (l : lexp A) : lexp A
       end
   end.
 
-Lemma fst_let_fx : forall A B C (P : A * B) (f : A -> C), fst (let '(x, y) := P in (f x, y)) = f (fst P).
+Lemma fst_let_fx : ∀ A B C (P : A * B) (f : A → C), fst (let '(x, y) := P in (f x, y)) = f (fst P).
 Proof.
   intros.
   destruct P.
   reflexivity.
 Qed.
 
-Lemma snd_let_fx : forall A B C (P : A * B) (f : A -> C), snd (let '(x, y) := P in (f x, y)) = snd P.
+Lemma snd_let_fx : ∀ A B C (P : A * B) (f : A → C), snd (let '(x, y) := P in (f x, y)) = snd P.
 Proof.
   intros.
   destruct P.
   reflexivity.
 Qed.
 
-Lemma foldl_acc_h1 : forall A B C (xs : list A) (y : B) (ys : list B) (zs : list C) (f : list C -> A -> B * list C),
+Lemma foldl_acc_h1 : ∀ A B C (xs : list A) (y : B) (ys : list B) (zs : list C) (f : list C → A → B * list C),
   y ::
   fst
     (fold_left
@@ -289,7 +288,7 @@ Proof.
     reflexivity.
 Qed.
 
-Lemma foldl_acc_h2 : forall A B C (xs : list A) (ys1 ys2 : list B) (zs : list C) (f : list C -> A -> B * list C),
+Lemma foldl_acc_h2 : ∀ A B C (xs : list A) (ys1 ys2 : list B) (zs : list C) (f : list C → A → B * list C),
   snd
     (fold_left
        (fun (acc : list B * list C) (x0 : A) =>
@@ -312,7 +311,7 @@ Proof.
     reflexivity.
 Qed.
 
-Lemma foldl_acc : forall A B C (xs : list A) (ys : list B) (zs : list C) (f : list C -> A -> B * list C),
+Lemma foldl_acc : ∀ A B C (xs : list A) (ys : list B) (zs : list C) (f : list C → A → B * list C),
   fold_left
     (fun acc x =>
        let '(ys, zs) := acc in
@@ -360,7 +359,7 @@ Definition cons_lexp {A : Set} (lx : lexp A) (acc : lexp A * list (exp A)) : lex
   | _ => acc
   end.
 
-Lemma cons_lexp_tuple : forall (A : Set) (P : list (lexp A) * list (exp A)) (a : lexp A) ann,
+Lemma cons_lexp_tuple : ∀ (A : Set) (P : list (lexp A) * list (exp A)) (a : lexp A) ann,
   (let '(ls0, xs) := let '(a0, b) := P in (a :: a0, b) in (LE_aux (LE_tuple ls0) ann, xs))
   = cons_lexp a (let '(a0, b) := P in (LE_aux (LE_tuple a0) ann, b)).
 Proof.
@@ -368,7 +367,7 @@ Proof.
   reflexivity.
 Qed.
 
-Lemma cons_lexp_vector_concat : forall (A : Set) (P : list (lexp A) * list (exp A)) (a : lexp A) ann,
+Lemma cons_lexp_vector_concat : ∀ (A : Set) (P : list (lexp A) * list (exp A)) (a : lexp A) ann,
   (let '(ls0, xs) := let '(a0, b) := P in (a :: a0, b) in (LE_aux (LE_vector_concat ls0) ann, xs))
   = cons_lexp a (let '(a0, b) := P in (LE_aux (LE_vector_concat a0) ann, b)).
 Proof.
@@ -376,7 +375,7 @@ Proof.
   cbn. reflexivity.
 Qed.
 
-Lemma lexp_subexps_identity_g : forall (A : Set) (l : lexp A) (es : list (exp A)), update_lexp_subexps (lexp_subexps l ++ es) l = (l, es).
+Lemma lexp_subexps_identity_g : ∀ (A : Set) (l : lexp A) (es : list (exp A)), update_lexp_subexps (lexp_subexps l ++ es) l = (l, es).
 Proof.
   induction l using lexp_ind_g.
   all: try reflexivity.
@@ -416,7 +415,7 @@ Proof.
   - cbn. intros. rewrite IHl. reflexivity.
 Qed.
 
-Lemma lexp_subexps_identity : forall (A : Set) (l : lexp A), update_lexp_subexps (lexp_subexps l) l = (l, []).
+Lemma lexp_subexps_identity : ∀ (A : Set) (l : lexp A), update_lexp_subexps (lexp_subexps l) l = (l, []).
 Proof.
   intros A l.
   pose proof (lexp_subexps_identity_g A l []) as H.
@@ -427,41 +426,41 @@ Qed.
 Section exp_ind_g.
   Variables
     (A : Set)
-    (P : exp A -> Prop)
-    (H_block : forall xs ann, Forall P xs -> P (E_aux (E_block xs) ann))
-    (H_id : forall id ann, P (E_aux (E_id id) ann))
-    (H_lit : forall lit ann, P (E_aux (E_lit lit) ann))
-    (H_typ : forall t x ann, P x -> P (E_aux (E_typ t x) ann))
-    (H_app : forall f xs ann, Forall P xs -> P (E_aux (E_app f xs) ann))
-    (H_tuple : forall xs ann, Forall P xs -> P (E_aux (E_tuple xs) ann))
-    (H_if : forall i t e ann, P i -> P t -> P e -> P (E_aux (E_if i t e) ann))
-    (H_loop : forall lt measure cond body ann, P cond -> P body -> P (E_aux (E_loop lt measure cond body) ann))
-    (H_for : forall id from to amount ord body ann, P from -> P to -> P amount -> P body -> P (E_aux (E_for id from to amount ord body) ann))
-    (H_vector : forall xs ann, Forall P xs -> P (E_aux (E_vector xs) ann))
-    (H_vector_append : forall x y ann, P x -> P y -> P (E_aux (E_vector_append x y) ann))
-    (H_list : forall xs ann, Forall P xs -> P (E_aux (E_list xs) ann))
-    (H_cons : forall x xs ann, P x -> P xs -> P (E_aux (E_cons x xs) ann))
-    (H_struct : forall name fields ann, Forall (fun f => P (fexp_exp f)) fields -> P (E_aux (E_struct name fields) ann))
-    (H_struct_update : forall x fields ann, P x -> Forall (fun f => P (fexp_exp f)) fields -> P (E_aux (E_struct_update x fields) ann))
-    (H_field : forall x f ann, P x -> P (E_aux (E_field x f) ann))
-    (H_match : forall x arms ann, P x -> Forall (MatchArm P) arms -> P (E_aux (E_match x arms) ann))
-    (H_let : forall p x body ann, P x -> P body -> P (E_aux (E_let p x body) ann))
-    (H_assign : forall lx x ann, P x -> P (E_aux (E_assign lx x) ann))
-    (H_sizeof : forall n ann, P (E_aux (E_sizeof n) ann))
-    (H_return : forall x ann, P x -> P (E_aux (E_return x) ann))
-    (H_exit : forall x ann, P x -> P (E_aux (E_exit x) ann))
-    (H_config : forall opt ann, P (E_aux (E_config opt) ann))
-    (H_ref : forall id ann, P (E_aux (E_ref id) ann))
-    (H_throw : forall x ann, P (E_aux (E_throw x) ann))
-    (H_try : forall x arms ann, P x -> Forall (MatchArm P) arms -> P (E_aux (E_try x arms) ann))
-    (H_assert : forall x msg ann, P x -> P msg -> P (E_aux (E_assert x msg) ann))
-    (H_var : forall lx x body ann, P x -> P body -> P (E_aux (E_var lx x body) ann))
-    (H_undef : forall ann, P (E_aux E_undef ann))
-    (H_internal_plet : forall p x y ann, P x -> P y -> P (E_aux (E_internal_plet p x y) ann))
-    (H_internal_return : forall x ann, P x -> P (E_aux (E_internal_return x) ann))
-    (H_internal_value : forall v ann, P (E_aux (E_internal_value v) ann))
-    (H_internal_assume : forall c x ann, P x -> P (E_aux (E_internal_assume c x) ann))
-    (H_constraint : forall c ann, P (E_aux (E_constraint c) ann)).
+    (P : exp A → Prop)
+    (H_block : ∀ xs ann, Forall P xs → P (E_aux (E_block xs) ann))
+    (H_id : ∀ id ann, P (E_aux (E_id id) ann))
+    (H_lit : ∀ lit ann, P (E_aux (E_lit lit) ann))
+    (H_typ : ∀ t x ann, P x → P (E_aux (E_typ t x) ann))
+    (H_app : ∀ f xs ann, Forall P xs → P (E_aux (E_app f xs) ann))
+    (H_tuple : ∀ xs ann, Forall P xs → P (E_aux (E_tuple xs) ann))
+    (H_if : ∀ i t e ann, P i → P t → P e → P (E_aux (E_if i t e) ann))
+    (H_loop : ∀ lt measure cond body ann, P cond → P body → P (E_aux (E_loop lt measure cond body) ann))
+    (H_for : ∀ id from to amount ord body ann, P from → P to → P amount → P body → P (E_aux (E_for id from to amount ord body) ann))
+    (H_vector : ∀ xs ann, Forall P xs → P (E_aux (E_vector xs) ann))
+    (H_vector_append : ∀ x y ann, P x → P y → P (E_aux (E_vector_append x y) ann))
+    (H_list : ∀ xs ann, Forall P xs → P (E_aux (E_list xs) ann))
+    (H_cons : ∀ x xs ann, P x → P xs → P (E_aux (E_cons x xs) ann))
+    (H_struct : ∀ name fields ann, Forall (fun f => P (fexp_exp f)) fields → P (E_aux (E_struct name fields) ann))
+    (H_struct_update : ∀ x fields ann, P x → Forall (fun f => P (fexp_exp f)) fields → P (E_aux (E_struct_update x fields) ann))
+    (H_field : ∀ x f ann, P x → P (E_aux (E_field x f) ann))
+    (H_match : ∀ x arms ann, P x → Forall (MatchArm P) arms → P (E_aux (E_match x arms) ann))
+    (H_let : ∀ p x body ann, P x → P body → P (E_aux (E_let p x body) ann))
+    (H_assign : ∀ lx x ann, P x → P (E_aux (E_assign lx x) ann))
+    (H_sizeof : ∀ n ann, P (E_aux (E_sizeof n) ann))
+    (H_return : ∀ x ann, P x → P (E_aux (E_return x) ann))
+    (H_exit : ∀ x ann, P x → P (E_aux (E_exit x) ann))
+    (H_config : ∀ opt ann, P (E_aux (E_config opt) ann))
+    (H_ref : ∀ id ann, P (E_aux (E_ref id) ann))
+    (H_throw : ∀ x ann, P (E_aux (E_throw x) ann))
+    (H_try : ∀ x arms ann, P x → Forall (MatchArm P) arms → P (E_aux (E_try x arms) ann))
+    (H_assert : ∀ x msg ann, P x → P msg → P (E_aux (E_assert x msg) ann))
+    (H_var : ∀ lx x body ann, P x → P body → P (E_aux (E_var lx x body) ann))
+    (H_undef : ∀ ann, P (E_aux E_undef ann))
+    (H_internal_plet : ∀ p x y ann, P x → P y → P (E_aux (E_internal_plet p x y) ann))
+    (H_internal_return : ∀ x ann, P x → P (E_aux (E_internal_return x) ann))
+    (H_internal_value : ∀ v ann, P (E_aux (E_internal_value v) ann))
+    (H_internal_assume : ∀ c x ann, P x → P (E_aux (E_internal_assume c x) ann))
+    (H_constraint : ∀ c ann, P (E_aux (E_constraint c) ann)).
 
   Fixpoint exp_ind_g x : P x.
   Proof using All.
@@ -549,51 +548,51 @@ End exp_ind_g.
 Section exp_and_lexp_ind_g.
   Variables
     (A : Set)
-    (Q : lexp A -> Prop)
-    (P : exp A -> Prop)
-    (H_block : forall xs ann, Forall P xs -> P (E_aux (E_block xs) ann))
-    (H_id : forall id ann, P (E_aux (E_id id) ann))
-    (H_lit : forall lit ann, P (E_aux (E_lit lit) ann))
-    (H_typ : forall t x ann, P x -> P (E_aux (E_typ t x) ann))
-    (H_app : forall f xs ann, Forall P xs -> P (E_aux (E_app f xs) ann))
-    (H_tuple : forall xs ann, Forall P xs -> P (E_aux (E_tuple xs) ann))
-    (H_if : forall i t e ann, P i -> P t -> P e -> P (E_aux (E_if i t e) ann))
-    (H_loop : forall lt measure cond body ann, P cond -> P body -> P (E_aux (E_loop lt measure cond body) ann))
-    (H_for : forall id from to amount ord body ann, P from -> P to -> P amount -> P body -> P (E_aux (E_for id from to amount ord body) ann))
-    (H_vector : forall xs ann, Forall P xs -> P (E_aux (E_vector xs) ann))
-    (H_vector_append : forall x y ann, P x -> P y -> P (E_aux (E_vector_append x y) ann))
-    (H_list : forall xs ann, Forall P xs -> P (E_aux (E_list xs) ann))
-    (H_cons : forall x xs ann, P x -> P xs -> P (E_aux (E_cons x xs) ann))
-    (H_struct : forall name fields ann, Forall (fun f => P (fexp_exp f)) fields -> P (E_aux (E_struct name fields) ann))
-    (H_struct_update : forall x fields ann, P x -> Forall (fun f => P (fexp_exp f)) fields -> P (E_aux (E_struct_update x fields) ann))
-    (H_field : forall x f ann, P x -> P (E_aux (E_field x f) ann))
-    (H_match : forall x arms ann, P x -> Forall (MatchArm P) arms -> P (E_aux (E_match x arms) ann))
-    (H_let : forall p x body ann, P x -> P body -> P (E_aux (E_let p x body) ann))
-    (H_assign : forall lx x ann, Q lx -> P x -> P (E_aux (E_assign lx x) ann))
-    (H_sizeof : forall n ann, P (E_aux (E_sizeof n) ann))
-    (H_return : forall x ann, P x -> P (E_aux (E_return x) ann))
-    (H_exit : forall x ann, P x -> P (E_aux (E_exit x) ann))
-    (H_config : forall opt ann, P (E_aux (E_config opt) ann))
-    (H_ref : forall id ann, P (E_aux (E_ref id) ann))
-    (H_throw : forall x ann, P x -> P (E_aux (E_throw x) ann))
-    (H_try : forall x arms ann, P x -> Forall (MatchArm P) arms -> P (E_aux (E_try x arms) ann))
-    (H_assert : forall x msg ann, P x -> P msg -> P (E_aux (E_assert x msg) ann))
-    (H_var : forall lx x body ann, Q lx -> P x -> P body -> P (E_aux (E_var lx x body) ann))
-    (H_undef : forall ann, P (E_aux E_undef ann))
-    (H_internal_plet : forall p x y ann, P x -> P y -> P (E_aux (E_internal_plet p x y) ann))
-    (H_internal_return : forall x ann, P x -> P (E_aux (E_internal_return x) ann))
-    (H_internal_value : forall v ann, P (E_aux (E_internal_value v) ann))
-    (H_internal_assume : forall c x ann, P x -> P (E_aux (E_internal_assume c x) ann))
-    (H_constraint : forall c ann, P (E_aux (E_constraint c) ann))
-    (HL_id : forall id ann, Q (LE_aux (LE_id id) ann))
-    (HL_deref : forall x ann, P x -> Q (LE_aux (LE_deref x) ann))
-    (HL_app : forall f xs ann, Forall P xs -> Q (LE_aux (LE_app f xs) ann))
-    (HL_typ : forall typ id ann, Q (LE_aux (LE_typ typ id) ann))
-    (HL_tuple : forall lxs ann, Forall Q lxs -> Q (LE_aux (LE_tuple lxs) ann))
-    (HL_vector_concat : forall lxs ann, Forall Q lxs -> Q (LE_aux (LE_vector_concat lxs) ann))
-    (HL_vector : forall lx x ann, Q lx -> P x -> Q (LE_aux (LE_vector lx x) ann))
-    (HL_vector_range : forall lx x y ann, Q lx -> P x -> P y -> Q (LE_aux (LE_vector_range lx x y) ann))
-    (HL_field : forall lx f ann, Q lx -> Q (LE_aux (LE_field lx f) ann)).
+    (Q : lexp A → Prop)
+    (P : exp A → Prop)
+    (H_block : ∀ xs ann, Forall P xs → P (E_aux (E_block xs) ann))
+    (H_id : ∀ id ann, P (E_aux (E_id id) ann))
+    (H_lit : ∀ lit ann, P (E_aux (E_lit lit) ann))
+    (H_typ : ∀ t x ann, P x → P (E_aux (E_typ t x) ann))
+    (H_app : ∀ f xs ann, Forall P xs → P (E_aux (E_app f xs) ann))
+    (H_tuple : ∀ xs ann, Forall P xs → P (E_aux (E_tuple xs) ann))
+    (H_if : ∀ i t e ann, P i → P t → P e → P (E_aux (E_if i t e) ann))
+    (H_loop : ∀ lt measure cond body ann, P cond → P body → P (E_aux (E_loop lt measure cond body) ann))
+    (H_for : ∀ id from to amount ord body ann, P from → P to → P amount → P body → P (E_aux (E_for id from to amount ord body) ann))
+    (H_vector : ∀ xs ann, Forall P xs → P (E_aux (E_vector xs) ann))
+    (H_vector_append : ∀ x y ann, P x → P y → P (E_aux (E_vector_append x y) ann))
+    (H_list : ∀ xs ann, Forall P xs → P (E_aux (E_list xs) ann))
+    (H_cons : ∀ x xs ann, P x → P xs → P (E_aux (E_cons x xs) ann))
+    (H_struct : ∀ name fields ann, Forall (fun f => P (fexp_exp f)) fields → P (E_aux (E_struct name fields) ann))
+    (H_struct_update : ∀ x fields ann, P x → Forall (fun f => P (fexp_exp f)) fields → P (E_aux (E_struct_update x fields) ann))
+    (H_field : ∀ x f ann, P x → P (E_aux (E_field x f) ann))
+    (H_match : ∀ x arms ann, P x → Forall (MatchArm P) arms → P (E_aux (E_match x arms) ann))
+    (H_let : ∀ p x body ann, P x → P body → P (E_aux (E_let p x body) ann))
+    (H_assign : ∀ lx x ann, Q lx → P x → P (E_aux (E_assign lx x) ann))
+    (H_sizeof : ∀ n ann, P (E_aux (E_sizeof n) ann))
+    (H_return : ∀ x ann, P x → P (E_aux (E_return x) ann))
+    (H_exit : ∀ x ann, P x → P (E_aux (E_exit x) ann))
+    (H_config : ∀ opt ann, P (E_aux (E_config opt) ann))
+    (H_ref : ∀ id ann, P (E_aux (E_ref id) ann))
+    (H_throw : ∀ x ann, P x → P (E_aux (E_throw x) ann))
+    (H_try : ∀ x arms ann, P x → Forall (MatchArm P) arms → P (E_aux (E_try x arms) ann))
+    (H_assert : ∀ x msg ann, P x → P msg → P (E_aux (E_assert x msg) ann))
+    (H_var : ∀ lx x body ann, Q lx → P x → P body → P (E_aux (E_var lx x body) ann))
+    (H_undef : ∀ ann, P (E_aux E_undef ann))
+    (H_internal_plet : ∀ p x y ann, P x → P y → P (E_aux (E_internal_plet p x y) ann))
+    (H_internal_return : ∀ x ann, P x → P (E_aux (E_internal_return x) ann))
+    (H_internal_value : ∀ v ann, P (E_aux (E_internal_value v) ann))
+    (H_internal_assume : ∀ c x ann, P x → P (E_aux (E_internal_assume c x) ann))
+    (H_constraint : ∀ c ann, P (E_aux (E_constraint c) ann))
+    (HL_id : ∀ id ann, Q (LE_aux (LE_id id) ann))
+    (HL_deref : ∀ x ann, P x → Q (LE_aux (LE_deref x) ann))
+    (HL_app : ∀ f xs ann, Forall P xs → Q (LE_aux (LE_app f xs) ann))
+    (HL_typ : ∀ typ id ann, Q (LE_aux (LE_typ typ id) ann))
+    (HL_tuple : ∀ lxs ann, Forall Q lxs → Q (LE_aux (LE_tuple lxs) ann))
+    (HL_vector_concat : ∀ lxs ann, Forall Q lxs → Q (LE_aux (LE_vector_concat lxs) ann))
+    (HL_vector : ∀ lx x ann, Q lx → P x → Q (LE_aux (LE_vector lx x) ann))
+    (HL_vector_range : ∀ lx x y ann, Q lx → P x → P y → Q (LE_aux (LE_vector_range lx x y) ann))
+    (HL_field : ∀ lx f ann, Q lx → Q (LE_aux (LE_field lx f) ann)).
 
   Fixpoint exp_ind_mutual_g x : P x
   with lexp_ind_mutual_g lx : Q lx.
@@ -777,7 +776,7 @@ with lexp_depth {A : Set} (l : lexp A) {struct l} : nat :=
   | LE_id _ | LE_typ _ _ => 0
   end.
 
-Lemma fold_max_app : forall xs ys, fold_right max 0 (xs ++ ys) = max (fold_right max 0 xs) (fold_right max 0 ys).
+Lemma fold_max_app : ∀ xs ys, fold_right max 0 (xs ++ ys) = max (fold_right max 0 xs) (fold_right max 0 ys).
 Proof.
   induction xs.
   - reflexivity.
@@ -787,8 +786,8 @@ Proof.
     lia.
 Qed.
 
-Lemma lexp_subexps_depth : forall (A : Set) (l : lexp A),
-  fold_right max 0 (map depth (lexp_subexps l)) <= lexp_depth l.
+Lemma lexp_subexps_depth : ∀ (A : Set) (l : lexp A),
+  fold_right max 0 (map depth (lexp_subexps l)) ≤ lexp_depth l.
 Proof.
    intros.
    induction l using lexp_ind_g.

@@ -58,8 +58,8 @@ From stdpp Require Import strings.
 From Sail Require Import Ast.
 From Sail Require Import SailBase.
 
-Lemma string_ltb_trans : forall (s1 s2 s3 : String.string),
-  String.ltb s1 s2 = true -> String.ltb s2 s3 = true -> String.ltb s1 s3 = true.
+Lemma string_ltb_trans : ∀ (s1 s2 s3 : String.string),
+  String.ltb s1 s2 = true → String.ltb s2 s3 = true → String.ltb s1 s3 = true.
 Proof.
   induction s1 as [| c1 s1 ];
   induction s2 as [| c2 s2 ];
@@ -81,7 +81,7 @@ Proof.
   reflexivity.
 Qed.
 
-Lemma string_ltb_not_eqb : forall s1 s2, String.ltb s1 s2 = true -> String.eqb s1 s2 = false.
+Lemma string_ltb_not_eqb : ∀ s1 s2, String.ltb s1 s2 = true → String.eqb s1 s2 = false.
 Proof.
   induction s1 as [| c1 s1 ];
   induction s2 as [| c2 s2 ].
@@ -103,7 +103,7 @@ Proof.
   lia.
 Qed.
 
-Lemma N_of_ascii_inj : forall c1 c2, Ascii.N_of_ascii c1 = Ascii.N_of_ascii c2 -> c1 = c2.
+Lemma N_of_ascii_inj : ∀ c1 c2, Ascii.N_of_ascii c1 = Ascii.N_of_ascii c2 → c1 = c2.
 Proof.
   intros c1 c2 H.
   rewrite <- (Ascii.ascii_N_embedding c1).
@@ -112,14 +112,14 @@ Proof.
   reflexivity.
 Qed.
 
-Lemma N_of_ascii_inj_contra : forall c1 c2, c1 <> c2 -> Ascii.N_of_ascii c1 <> Ascii.N_of_ascii c2.
+Lemma N_of_ascii_inj_contra : ∀ c1 c2, c1 <> c2 → Ascii.N_of_ascii c1 <> Ascii.N_of_ascii c2.
 Proof.
   intros c1 c2 H1 H2.
   apply N_of_ascii_inj in H2.
   tauto.
 Qed.
 
-Lemma string_ltb_as_gtb : forall s1 s2, String.ltb s1 s2 = false -> String.eqb s1 s2 = false -> String.ltb s2 s1 = true.
+Lemma string_ltb_as_gtb : ∀ s1 s2, String.ltb s1 s2 = false → String.eqb s1 s2 = false → String.ltb s2 s1 = true.
 Proof.
   induction s1 as [| c1 s1 ];
   induction s2 as [| c2 s2 ].
@@ -147,7 +147,7 @@ Proof.
   reflexivity.
 Qed.
 
-Lemma compare_string_refl : forall s, (s ?= s)%string = Eq.
+Lemma compare_string_refl : ∀ s, (s ?= s)%string = Eq.
 Proof.
   induction s as [| char s' IH].
   - reflexivity.
@@ -171,7 +171,7 @@ Module Aux <: Orders.OrderedType.
     | _ => false
     end.
 
-  Lemma eqb_eq : forall id1 id2, eqb id1 id2 = true <-> id1 = id2.
+  Lemma eqb_eq : ∀ id1 id2, eqb id1 id2 = true ↔ id1 = id2.
   Proof.
     intros id1 id2.
     destruct id1, id2; split; intros H; cbn in *.
@@ -184,7 +184,7 @@ Module Aux <: Orders.OrderedType.
     eqb_true_iff := eqb_eq
   }.
 
-  Lemma eqb_comm : forall id1 id2, eqb id1 id2 = eqb id2 id1.
+  Lemma eqb_comm : ∀ id1 id2, eqb id1 id2 = eqb id2 id1.
   Proof.
     intros id1 id2.
     destruct id1, id2; try reflexivity.
@@ -256,7 +256,7 @@ Module Aux <: Orders.OrderedType.
     - cbn. unfold extstring_decode. rewrite decode_encode. reflexivity.
   Qed.
 
-  Lemma eq_dec : forall x y : t, { eq x y } + { ~ (eq x y) }.
+  Lemma eq_dec : ∀ x y : t, { eq x y } + { ~ (eq x y) }.
   Proof.
     intros x y.
     destruct x as [| | x_s | x_s]; destruct y as [| | y_s | y_s].
@@ -289,7 +289,7 @@ Module Aux <: Orders.OrderedType.
       decode_encode := id_aux_decode_encode
     |}.
 
-  Lemma eq_refl : forall x, eq x x.
+  Lemma eq_refl : ∀ x, eq x x.
   Proof.
     intros.
     unfold eq.
@@ -297,7 +297,7 @@ Module Aux <: Orders.OrderedType.
     destruct x; reflexivity + apply String.eqb_refl.
   Qed.
 
-  Lemma eq_sym : forall x y, eq x y -> eq y x.
+  Lemma eq_sym : ∀ x y, eq x y → eq y x.
   Proof.
     intros x y H.
     unfold eq in *.
@@ -306,7 +306,7 @@ Module Aux <: Orders.OrderedType.
     destruct x, y; cbn in *; try (discriminate + reflexivity); rewrite String.eqb_sym; exact H.
   Qed.
 
-  Lemma eq_trans : forall x y z, eq x y -> eq y z -> eq x z.
+  Lemma eq_trans : ∀ x y z, eq x y → eq y z → eq x z.
   Proof.
     intros x y z H1 H2.
     unfold eq in *.
@@ -325,7 +325,7 @@ Module Aux <: Orders.OrderedType.
     - intros x y z H1 H2; apply (eq_trans _ _ _ H1 H2).
   Qed.
 
-  Lemma lt_trans : forall x y z, lt x y -> lt y z -> lt x z.
+  Lemma lt_trans : ∀ x y z, lt x y → lt y z → lt x z.
   Proof.
     destruct x as [| | x_s | x_s]; destruct y as [| | y_s | y_s]; destruct z as [| | z_s | z_s].
     all: cbn.
@@ -337,7 +337,7 @@ Module Aux <: Orders.OrderedType.
     all: apply (string_ltb_trans _ y_s _); easy.
   Qed.
 
-  Lemma lt_not_eq : forall x y, lt x y -> ~ eq x y.
+  Lemma lt_not_eq : ∀ x y, lt x y → ~ eq x y.
   Proof.
     destruct x as [| | x_s | x_s]; destruct y as [| | y_s | y_s].
     all: cbn.
@@ -364,7 +364,7 @@ Module Aux <: Orders.OrderedType.
       apply (lt_trans _ _ _ H1 H2).
   Qed.
 
-  Lemma eq_lt_compat_left : forall x y z, eq x y -> lt x z -> lt y z.
+  Lemma eq_lt_compat_left : ∀ x y z, eq x y → lt x z → lt y z.
   Proof.
     destruct x as [| | x_s | x_s]; destruct y as [| | y_s | y_s]; destruct z as [| | z_s | z_s].
     all: cbn; try easy.
@@ -377,7 +377,7 @@ Module Aux <: Orders.OrderedType.
     ).
   Qed.
 
-  Lemma eq_lt_compat_right : forall x y z, eq x y -> lt z x -> lt z y.
+  Lemma eq_lt_compat_right : ∀ x y z, eq x y → lt z x → lt z y.
   Proof.
     destruct x as [| | x_s | x_s]; destruct y as [| | y_s | y_s]; destruct z as [| | z_s | z_s].
     all: cbn; try easy.
@@ -406,7 +406,7 @@ Module Aux <: Orders.OrderedType.
   Definition compare (x y : t) : comparison :=
     if eqb x y then Eq else if ltb x y then Lt else Gt.
 
-  Lemma compare_spec : forall x y, CompSpec eq lt x y (compare x y).
+  Lemma compare_spec : ∀ x y, CompSpec eq lt x y (compare x y).
   Proof.
     intros x y.
     destruct x as [| | x_s | x_s]; destruct y as [| | y_s | y_s].
@@ -477,7 +477,7 @@ Definition id_ltb (id1 : id) (id2 : id) : bool :=
   | (_, Id_aux Or_bool _) => true
   end.
 
-Lemma id_eqb_string_is_eq : forall s1 s2 l1 l2, id_eqb (Id_aux (Id s1) l1) (Id_aux (Id s2) l2) = true -> s1 = s2.
+Lemma id_eqb_string_is_eq : ∀ s1 s2 l1 l2, id_eqb (Id_aux (Id s1) l1) (Id_aux (Id s2) l2) = true → s1 = s2.
 Proof.
   intros s1 s2 l1 l2.
   cbn.
@@ -485,27 +485,27 @@ Proof.
   tauto.
 Qed.
 
-Lemma id_eqb_refl : forall x, id_eqb x x = true.
+Lemma id_eqb_refl : ∀ x, id_eqb x x = true.
 Proof.
   destruct x as [aux ?].
   destruct aux; cbn; try trivial; rewrite String.eqb_refl; reflexivity.
 Qed.
 
-Lemma id_eqb_comm : forall x y, id_eqb x y = id_eqb y x.
+Lemma id_eqb_comm : ∀ x y, id_eqb x y = id_eqb y x.
 Proof.
   destruct x as [x_aux ?].
   destruct y as [y_aux ?].
   destruct x_aux as [| | x_s | x_s]; destruct y_aux as [| | y_s | y_s]; cbn; try trivial; rewrite String.eqb_sym; easy.
 Qed.
 
-Lemma id_eqb_sym : forall x y, id_eqb x y = true -> id_eqb y x = true.
+Lemma id_eqb_sym : ∀ x y, id_eqb x y = true → id_eqb y x = true.
 Proof.
   destruct x as [x_aux ?].
   destruct y as [y_aux ?].
   destruct x_aux as [| | x_s | x_s]; destruct y_aux as [| | y_s | y_s]; cbn; try trivial; rewrite String.eqb_sym; easy.
 Qed.
 
-Lemma id_eqb_trans : forall x y z, id_eqb x y = true -> id_eqb y z = true -> id_eqb x z = true.
+Lemma id_eqb_trans : ∀ x y z, id_eqb x y = true → id_eqb y z = true → id_eqb x z = true.
 Proof.
   destruct x as [x_aux ?].
   destruct y as [y_aux ?].
@@ -524,7 +524,7 @@ Module IdOrdered <: Orders.OrderedType.
 
   Definition lt (id1 : id) (id2 : id) : Prop := Is_true (id_ltb id1 id2).
 
-  Lemma eq_refl : forall x, eq x x.
+  Lemma eq_refl : ∀ x, eq x x.
   Proof.
     intros.
     unfold eq.
@@ -532,7 +532,7 @@ Module IdOrdered <: Orders.OrderedType.
     apply (id_eqb_refl x).
   Qed.
 
-  Lemma eq_sym : forall x y, eq x y -> eq y x.
+  Lemma eq_sym : ∀ x y, eq x y → eq y x.
   Proof.
     intros x y H.
     unfold eq in *.
@@ -541,7 +541,7 @@ Module IdOrdered <: Orders.OrderedType.
     apply (id_eqb_sym x y H).
   Qed.
 
-  Lemma eq_trans : forall x y z, eq x y -> eq y z -> eq x z.
+  Lemma eq_trans : ∀ x y z, eq x y → eq y z → eq x z.
   Proof.
     intros x y z H1 H2.
     unfold eq in *.
@@ -559,7 +559,7 @@ Module IdOrdered <: Orders.OrderedType.
     - intros x y z H1 H2; apply (eq_trans _ _ _ H1 H2).
   Qed.
 
-  Lemma lt_trans : forall x y z, lt x y -> lt y z -> lt x z.
+  Lemma lt_trans : ∀ x y z, lt x y → lt y z → lt x z.
   Proof.
     destruct x as [x_aux ?].
     destruct y as [y_aux ?].
@@ -574,7 +574,7 @@ Module IdOrdered <: Orders.OrderedType.
     all: apply (string_ltb_trans _ y_s _); easy.
   Qed.
 
-  Lemma lt_not_eq : forall x y, lt x y -> ~ eq x y.
+  Lemma lt_not_eq : ∀ x y, lt x y → ~ eq x y.
   Proof.
     destruct x as [x_aux ?].
     destruct y as [y_aux ?].
@@ -604,7 +604,7 @@ Module IdOrdered <: Orders.OrderedType.
       apply (lt_trans _ _ _ H1 H2).
   Qed.
 
-  Lemma eq_lt_compat_left : forall x y z, eq x y -> lt x z -> lt y z.
+  Lemma eq_lt_compat_left : ∀ x y z, eq x y → lt x z → lt y z.
   Proof.
     destruct x as [x_aux x_l].
     destruct y as [y_aux y_l].
@@ -621,7 +621,7 @@ Module IdOrdered <: Orders.OrderedType.
     ).
   Qed.
 
-  Lemma eq_lt_compat_right : forall x y z, eq x y -> lt z x -> lt z y.
+  Lemma eq_lt_compat_right : ∀ x y z, eq x y → lt z x → lt z y.
   Proof.
     destruct x as [x_aux x_l].
     destruct y as [y_aux y_l].
@@ -654,7 +654,7 @@ Module IdOrdered <: Orders.OrderedType.
   Definition compare (x y : id) : comparison :=
     if id_eqb x y then Eq else if id_ltb x y then Lt else Gt.
 
-  Lemma compare_spec : forall x y, CompSpec eq lt x y (compare x y).
+  Lemma compare_spec : ∀ x y, CompSpec eq lt x y (compare x y).
   Proof.
     intros x y.
     destruct x as [x_aux ?].
@@ -699,7 +699,7 @@ Module IdOrdered <: Orders.OrderedType.
           apply (string_ltb_as_gtb _ _ Hlt Heq).
   Defined.
 
-  Lemma eq_dec : forall x y : t, { eq x y } + { ~ (eq x y) }.
+  Lemma eq_dec : ∀ x y : t, { eq x y } + { ~ (eq x y) }.
   Proof.
     intros x y.
     destruct x as [x_aux ?].
