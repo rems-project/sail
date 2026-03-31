@@ -41,6 +41,8 @@
 (*  SPDX-License-Identifier: BSD-2-Clause                                   *)
 (* ************************************************************************ *)
 
+(** This file defines the Sail abstract syntax tree (AST) *)
+
 Require Extraction.
 
 From Stdlib Require Import Unicode.Utf8.
@@ -50,7 +52,15 @@ From Stdlib Require Import QArith.
 
 From Sail Require Import Bit.
 
+(** We start by defining some external types that are not formalised
+in Rocq. *)
+
 Parameter loc : Set.
+
+(** Locations are ultimately derived from OCamllex positions. Within
+the Rocq semantics, we need to preserve them wherever possible for
+error reporting, but otherwise we don't need to know anything about
+them. *)
 
 Definition l := loc.
 
@@ -60,9 +70,20 @@ Parameter ext_unknown_loc : loc.
 
 Extract Inlined Constant ext_unknown_loc => "Parse_ast.Unknown".
 
+(** Documentation comments. *)
+
 Parameter ext_doc_comment : Set.
 
 Extract Inlined Constant ext_doc_comment => "Parse_ast.doc_comment".
+
+(** Sail attribute data. For an attribute like
+
+<<
+$[attr <foo>]
+>>
+
+we can detect whether << attr >> is present, but the attribute data << foo >>
+is an external opaque type from the perspective of Rocq. *)
 
 Parameter ext_attribute_data : Set.
 
