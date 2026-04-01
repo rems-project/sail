@@ -52,7 +52,7 @@ open Ast_compare
 open Ast_defs
 open Ast_util
 
-let fun_typschm arg_typs ret_typ = mk_typschm (mk_typquant []) (function_typ arg_typs ret_typ)
+let fun_typschm arg_typs ret_typ = mk_typschm [] (function_typ arg_typs ret_typ)
 
 let mk_sizeof_exp i = mk_exp (E_sizeof i)
 let mk_id_exp id = mk_exp (E_id id)

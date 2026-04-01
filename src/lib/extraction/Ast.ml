@@ -305,21 +305,16 @@ and 'a pexp_aux =
 and 'a pexp =
 | Pat_aux of 'a pexp_aux * 'a annot
 
-type typquant_aux =
-| TypQ_tq of quant_item list
-| TypQ_no_forall
-
 type 'a mpexp_aux =
 | MPat_pat of 'a mpat
 | MPat_when of 'a mpat * 'a exp
-
-type typquant =
-| TypQ_aux of typquant_aux * Parse_ast.l
 
 type 'a mpexp =
 | MPat_aux of 'a mpexp_aux * 'a annot
 
 type 'a pexp_funcl = 'a pexp
+
+type typquant = quant_item list
 
 type typschm_aux =
 | TypSchm_ts of typquant * typ

@@ -639,9 +639,6 @@ let nc_not nc = mk_nc (NC_app (mk_id "not", [arg_bool nc]))
 
 let mk_typschm ?loc:(l = Parse_ast.Unknown) typq typ = TypSchm_aux (TypSchm_ts (typq, typ), l)
 
-let mk_empty_typquant ~loc:l = TypQ_aux (TypQ_no_forall, l)
-let mk_typquant ?loc:(l = Parse_ast.Unknown) qis = TypQ_aux (TypQ_tq qis, l)
-
 let mk_fexp ?loc:(l = Parse_ast.Unknown) id exp = FE_aux (FE_fexp (id, exp), (l, empty_uannot))
 
 type effects = bool
@@ -650,35 +647,19 @@ let no_effect = false
 let monadic_effect = true
 
 let quant_add qi typq =
-  match (qi, typq) with
-  | QI_aux (QI_constraint (NC_aux (NC_true, _)), _), _ -> typq
-  | QI_aux (QI_id _, _), TypQ_aux (TypQ_tq qis, l) -> TypQ_aux (TypQ_tq (qi :: qis), l)
-  | QI_aux (QI_constraint _, _), TypQ_aux (TypQ_tq qis, l) -> TypQ_aux (TypQ_tq (qis @ [qi]), l)
-  | _, TypQ_aux (TypQ_no_forall, l) -> TypQ_aux (TypQ_tq [qi], l)
-
-let quant_items : typquant -> quant_item list = function
-  | TypQ_aux (TypQ_tq qis, _) -> qis
-  | TypQ_aux (TypQ_no_forall, _) -> []
+  match qi with
+  | QI_aux (QI_constraint (NC_aux (NC_true, _)), _) -> typq
+  | QI_aux (QI_id _, _) -> qi :: typq
+  | QI_aux (QI_constraint _, _) -> typq @ [qi]
 
 let quant_kopts typq =
   let qi_kopt = function QI_aux (QI_id kopt, _) -> [kopt] | QI_aux _ -> [] in
-  quant_items typq |> List.map qi_kopt |> List.concat
+  List.map qi_kopt typq |> List.concat
 
 let quant_split typq =
   let qi_kopt = function QI_aux (QI_id kopt, _) -> [kopt] | _ -> [] in
   let qi_nc = function QI_aux (QI_constraint nc, _) -> [nc] | _ -> [] in
-  let qis = quant_items typq in
-  (List.concat (List.map qi_kopt qis), List.concat (List.map qi_nc qis))
-
-let quant_map_items f = function
-  | TypQ_aux (TypQ_no_forall, l) -> TypQ_aux (TypQ_no_forall, l)
-  | TypQ_aux (TypQ_tq qis, l) -> TypQ_aux (TypQ_tq (List.map f qis), l)
-
-let quant_fold_map_items f acc = function
-  | TypQ_aux (TypQ_no_forall, l) -> (acc, TypQ_aux (TypQ_no_forall, l))
-  | TypQ_aux (TypQ_tq qis, l) ->
-      let acc, qis = Util.fold_left_map f acc qis in
-      (acc, TypQ_aux (TypQ_tq qis, l))
+  (List.concat (List.map qi_kopt typq), List.concat (List.map qi_nc typq))
 
 let is_quant_kopt = function QI_aux (QI_id _, _) -> true | _ -> false
 
@@ -1103,11 +1084,7 @@ let string_of_quant_item_aux = function
 
 let string_of_quant_item = function QI_aux (qi, _) -> string_of_quant_item_aux qi
 
-let string_of_typquant_aux = function
-  | TypQ_tq quants -> "forall " ^ string_of_list ", " string_of_quant_item quants
-  | TypQ_no_forall -> ""
-
-let string_of_typquant = function TypQ_aux (quant, _) -> string_of_typquant_aux quant
+let string_of_typquant = function [] -> "" | typq -> "forall " ^ string_of_list ", " string_of_quant_item typq
 
 let string_of_typschm (TypSchm_aux (TypSchm_ts (quant, typ), _)) = string_of_typquant quant ^ ". " ^ string_of_typ typ
 
@@ -2054,18 +2031,13 @@ and typ_arg_subst_aux sv subst = function
   | A_typ typ -> A_typ (typ_subst sv subst typ)
   | A_bool nc -> A_bool (constraint_subst sv subst nc)
 
-let typquant_subst sv subst = function
-  | TypQ_aux (TypQ_no_forall, l) -> TypQ_aux (TypQ_no_forall, l)
-  | TypQ_aux (TypQ_tq qis, l) ->
-      let rec subst_qis = function
-        | [] -> []
-        | QI_aux (QI_id kopt, l) :: qis ->
-            if Kid.compare (kopt_kid kopt) sv = 0 then QI_aux (QI_id kopt, l) :: qis
-            else QI_aux (QI_id kopt, l) :: subst_qis qis
-        | QI_aux (QI_constraint nc, l) :: qis ->
-            QI_aux (QI_constraint (constraint_subst sv subst nc), l) :: subst_qis qis
-      in
-      TypQ_aux (TypQ_tq (subst_qis qis), l)
+let rec typquant_subst sv subst = function
+  | [] -> []
+  | QI_aux (QI_id kopt, l) :: qis ->
+      if Kid.compare (kopt_kid kopt) sv = 0 then QI_aux (QI_id kopt, l) :: qis
+      else QI_aux (QI_id kopt, l) :: typquant_subst sv subst qis
+  | QI_aux (QI_constraint nc, l) :: qis ->
+      QI_aux (QI_constraint (constraint_subst sv subst nc), l) :: typquant_subst sv subst qis
 
 let subst_kid subst sv v x =
   x
@@ -2082,11 +2054,7 @@ let quant_item_subst_kid_aux sv subst = function
 
 let quant_item_subst_kid sv subst (QI_aux (quant, l)) = QI_aux (quant_item_subst_kid_aux sv subst quant, l)
 
-let typquant_subst_kid_aux sv subst = function
-  | TypQ_tq quants -> TypQ_tq (List.map (quant_item_subst_kid sv subst) quants)
-  | TypQ_no_forall -> TypQ_no_forall
-
-let typquant_subst_kid sv subst (TypQ_aux (typq, l)) = TypQ_aux (typquant_subst_kid_aux sv subst typq, l)
+let typquant_subst_kid sv subst typq = List.map (quant_item_subst_kid sv subst) typq
 
 let subst_kids_nexp, subst_kids_nc, subst_kids_typ, subst_kids_typ_arg =
   let rec subst_kids_nexp substs (Nexp_aux (ne, l) as nexp) =

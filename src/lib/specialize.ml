@@ -421,13 +421,11 @@ let specialize_id_valspec spec instantiations id ast effect_info =
             kopts
         in
         let typq =
-          if List.length (typ_frees @ int_frees) = 0 && List.length kopts = 0 then mk_typquant []
+          if List.length (typ_frees @ int_frees) = 0 && List.length kopts = 0 then []
           else
-            mk_typquant
-              (List.map (mk_qi_id K_type) typ_frees
-              @ List.map (mk_qi_id K_int) int_frees
-              @ List.map mk_qi_kopt kopts @ List.map mk_qi_nc constraints
-              )
+            List.map (mk_qi_id K_type) typ_frees
+            @ List.map (mk_qi_id K_int) int_frees
+            @ List.map mk_qi_kopt kopts @ List.map mk_qi_nc constraints
         in
         let typschm = mk_typschm typq typ in
 

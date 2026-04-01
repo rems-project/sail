@@ -489,21 +489,16 @@ Arguments pexp A : clear implicits.
 
 (** * Top-level constructs *)
 
-Inductive typquant_aux : Set :=
-| TypQ_tq : list quant_item → typquant_aux
-| TypQ_no_forall : typquant_aux.
-
 Inductive mpexp_aux (a : Set) : Set :=
 | MPat_pat : mpat a → mpexp_aux a
 | MPat_when : mpat a → exp a → mpexp_aux a.
-
-Inductive typquant : Set :=
-| TypQ_aux : typquant_aux → loc → typquant.
 
 Inductive mpexp (a : Set) : Set :=
 | MPat_aux : mpexp_aux a → annot a → mpexp a.
 
 Definition pexp_funcl (a : Set) : Set := pexp a.
+
+Definition typquant : Set := list quant_item.
 
 Inductive typschm_aux : Set :=
 | TypSchm_ts : typquant → typ → typschm_aux.

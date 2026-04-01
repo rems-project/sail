@@ -199,7 +199,7 @@ let setup_sail_scripting istate =
     List.map
       (fun (cmd, (_, action)) ->
         let name = sail_command_name cmd in
-        let typschm = mk_typschm (mk_typquant []) (Interactive.reflect_typ action) in
+        let typschm = mk_typschm [] (Interactive.reflect_typ action) in
         mk_val_spec (VS_val_spec (typschm, mk_id name, Some { pure = false; bindings = [("_", name)] }))
       )
       cmds

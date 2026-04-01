@@ -276,9 +276,7 @@ let add_def_to_graph graph (DEF_aux (def, def_annot)) =
     | QI_constraint nc -> IdSet.iter (fun id -> graph := G.add_edge self (Type id) !graph) (constraint_ids nc)
   in
 
-  let scan_typquant self (TypQ_aux (aux, _)) =
-    match aux with TypQ_no_forall -> () | TypQ_tq quants -> List.iter (scan_quant_item self) quants
-  in
+  let scan_typquant self typq = List.iter (scan_quant_item self) typq in
 
   let add_type_def_to_graph (TD_aux (aux, (l, _))) =
     match aux with

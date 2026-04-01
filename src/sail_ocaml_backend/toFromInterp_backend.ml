@@ -151,9 +151,7 @@ let frominterp_typedef (TD_aux (td_aux, (l, _))) =
     | QI_id (KOpt_aux (KOpt_kind (K_aux (kind_aux, _), kid), _)) -> fromValueKid kid
     | QI_constraint _ -> empty
   in
-  let fromValueTypqs (TypQ_aux (typq_aux, _)) =
-    match typq_aux with TypQ_no_forall -> [empty] | TypQ_tq quants -> List.map fromValueTypq quants
-  in
+  let fromValueTypqs quants = List.map fromValueTypq quants in
   match td_aux with
   | TD_variant (id, typq, arms, _) -> begin
       match id with
@@ -230,8 +228,7 @@ let frominterp_typedef (TD_aux (td_aux, (l, _))) =
           match typ_arg with
           | A_aux (A_typ _, _) -> begin
               match typq with
-              | TypQ_aux (TypQ_no_forall, _) ->
-                  separate space [colon; string "value"; arrow; string (maybe_zencode (string_of_id id))]
+              | [] -> separate space [colon; string "value"; arrow; string (maybe_zencode (string_of_id id))]
               | _ -> empty
             end
           | _ -> empty
@@ -404,9 +401,7 @@ let tointerp_typedef (TD_aux (td_aux, (l, _))) =
     | QI_id (KOpt_aux (KOpt_kind (K_aux (kind_aux, _), kid), _)) -> toValueKid kid
     | QI_constraint _ -> empty
   in
-  let toValueTypqs (TypQ_aux (typq_aux, _)) =
-    match typq_aux with TypQ_no_forall -> [empty] | TypQ_tq quants -> List.map toValueTypq quants
-  in
+  let toValueTypqs quants = List.map toValueTypq quants in
   match td_aux with
   | TD_variant (id, typq, arms, _) -> begin
       match id with
@@ -472,8 +467,7 @@ let tointerp_typedef (TD_aux (td_aux, (l, _))) =
           match typ_arg with
           | A_aux (A_typ _, _) -> begin
               match typq with
-              | TypQ_aux (TypQ_no_forall, _) ->
-                  separate space [colon; string (maybe_zencode (string_of_id id)); arrow; string "value"]
+              | [] -> separate space [colon; string (maybe_zencode (string_of_id id)); arrow; string "value"]
               | _ -> empty
             end
           | _ -> empty

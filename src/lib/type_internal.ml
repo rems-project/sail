@@ -167,11 +167,7 @@ and unloc_typ_aux : typ_aux -> typ_aux = function
 
 and unloc_typ : typ -> typ = function Typ_aux (typ_aux, _) -> Typ_aux (unloc_typ_aux typ_aux, Parse_ast.Unknown)
 
-and unloc_typq = function TypQ_aux (typq_aux, _) -> TypQ_aux (unloc_typq_aux typq_aux, Parse_ast.Unknown)
-
-and unloc_typq_aux = function
-  | TypQ_no_forall -> TypQ_no_forall
-  | TypQ_tq quants -> TypQ_tq (List.map unloc_quant_item quants)
+and unloc_typq typq = List.map unloc_quant_item typq
 
 and unloc_quant_item = function QI_aux (qi_aux, _) -> QI_aux (unloc_qi_aux qi_aux, Parse_ast.Unknown)
 
