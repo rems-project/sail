@@ -34,40 +34,18 @@ module Coq_def_annot =
                      'a }
  end
 
-type 'a non_empty =
-| Non_empty of 'a * 'a list
-
 type 'a def_annot = 'a Coq_def_annot.record
 
 type 'a clause_annot = unit def_annot * 'a
 
 type 'a annot = Parse_ast.l * 'a
 
+type 'a non_empty =
+| Non_empty of 'a * 'a list
+
 type loop =
 | While
 | Until
-
-type hex_digit =
-| Hex_0
-| Hex_1
-| Hex_2
-| Hex_3
-| Hex_4
-| Hex_5
-| Hex_6
-| Hex_7
-| Hex_8
-| Hex_9
-| Hex_A
-| Hex_B
-| Hex_C
-| Hex_D
-| Hex_E
-| Hex_F
-
-type bin_digit =
-| Bin_0
-| Bin_1
 
 type kind_aux =
 | K_type
@@ -113,6 +91,28 @@ type value =
 | V_ctor of id * value list
 | V_record of (id * value) list
 
+type hex_digit =
+| Hex_0
+| Hex_1
+| Hex_2
+| Hex_3
+| Hex_4
+| Hex_5
+| Hex_6
+| Hex_7
+| Hex_8
+| Hex_9
+| Hex_A
+| Hex_B
+| Hex_C
+| Hex_D
+| Hex_E
+| Hex_F
+
+type bin_digit =
+| Bin_0
+| Bin_1
+
 type lit_aux =
 | L_unit
 | L_true
@@ -122,6 +122,9 @@ type lit_aux =
 | L_bin of bin_digit non_empty list
 | L_string of string
 | L_real of coq_Q
+
+type lit =
+| L_aux of lit_aux * Parse_ast.l
 
 type nexp_aux =
 | Nexp_id of id
@@ -175,12 +178,19 @@ type order_aux =
 | Ord_inc
 | Ord_dec
 
+type quant_item_aux =
+| QI_id of kinded_id
+| QI_constraint of n_constraint
+
+type quant_item =
+| QI_aux of quant_item_aux * Parse_ast.l
+
+type order =
+| Ord_aux of order_aux * Parse_ast.l
+
 type struct_name =
 | SN_id of id
 | SN_anon
-
-type lit =
-| L_aux of lit_aux * Parse_ast.l
 
 type field_pat_wildcard =
 | FP_wild of Parse_ast.l
@@ -192,13 +202,6 @@ type typ_pat_aux =
 | TP_app of id * typ_pat list
 and typ_pat =
 | TP_aux of typ_pat_aux * Parse_ast.l
-
-type quant_item_aux =
-| QI_id of kinded_id
-| QI_constraint of n_constraint
-
-type order =
-| Ord_aux of order_aux * Parse_ast.l
 
 type 'a pat_aux =
 | P_lit of lit
@@ -220,9 +223,6 @@ type 'a pat_aux =
 | P_struct of struct_name * (id * 'a pat) list * field_pat_wildcard
 and 'a pat =
 | P_aux of 'a pat_aux * 'a annot
-
-type quant_item =
-| QI_aux of quant_item_aux * Parse_ast.l
 
 type 'a mpat_aux =
 | MP_lit of lit
@@ -460,13 +460,6 @@ type 'a fundef =
 type 'a type_def =
 | TD_aux of type_def_aux * 'a annot
 
-type 'a impldef_aux =
-| Impl_impl of 'a funcl
-
-type 'a opt_default_aux =
-| Def_val_empty
-| Def_val_dec of 'a exp
-
 type ('a, 'b) def_aux =
 | DEF_type of 'a type_def
 | DEF_constraint of n_constraint
@@ -488,9 +481,3 @@ type ('a, 'b) def_aux =
 | DEF_pragma of string * pragma
 and ('a, 'b) def =
 | DEF_aux of ('a, 'b) def_aux * 'b def_annot
-
-type 'a impldef =
-| Impl_aux of 'a impldef_aux * l
-
-type 'a opt_default =
-| Def_val_aux of 'a opt_default_aux * 'a annot

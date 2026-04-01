@@ -52,8 +52,10 @@ From Stdlib Require Import QArith.
 
 From Sail Require Import Bit.
 
-(** We start by defining some external types that are not formalised
-in Rocq. *)
+(** * External types
+
+We start by defining some external types that are not formalised in
+Rocq. *)
 
 Parameter loc : Set.
 
@@ -109,70 +111,52 @@ Module extern.
     pure : bool;
     bindings : list (string * string);
   }.
+
   Definition with_pure pure (r : record) :=
     Build pure r.(bindings).
   Definition with_bindings bindings (r : record) :=
     Build r.(pure) bindings.
 End extern.
+
 Definition extern := extern.record.
 
 Module def_annot.
-  Record record {a : Set} : Set := Build {
+  Record record {A : Set} : Set := Build {
     doc_comment : option ext_doc_comment;
     attrs : list (loc * (string * option attribute_data));
     visibility : visibility;
     loc : loc;
-    env : a;
+    env : A;
   }.
+
   Arguments record : clear implicits.
-  Definition with_doc_comment {t_a} doc_comment (r : record t_a) :=
-    Build t_a doc_comment r.(attrs) r.(visibility) r.(loc) r.(env).
-  Definition with_attrs {t_a} attrs (r : record t_a) :=
-    Build t_a r.(doc_comment) attrs r.(visibility) r.(loc) r.(env).
-  Definition with_visibility {t_a} visibility (r : record t_a) :=
-    Build t_a r.(doc_comment) r.(attrs) visibility r.(loc) r.(env).
-  Definition with_loc {t_a} loc (r : record t_a) :=
-    Build t_a r.(doc_comment) r.(attrs) r.(visibility) loc r.(env).
-  Definition with_env {t_a} env (r : record t_a) :=
-    Build t_a r.(doc_comment) r.(attrs) r.(visibility) r.(loc) env.
+
+  Definition with_doc_comment {A} doc_comment (r : record A) :=
+    Build A doc_comment r.(attrs) r.(visibility) r.(loc) r.(env).
+  Definition with_attrs {A} attrs (r : record A) :=
+    Build A r.(doc_comment) attrs r.(visibility) r.(loc) r.(env).
+  Definition with_visibility {A} visibility (r : record A) :=
+    Build A r.(doc_comment) r.(attrs) visibility r.(loc) r.(env).
+  Definition with_loc {A} loc (r : record A) :=
+    Build A r.(doc_comment) r.(attrs) r.(visibility) loc r.(env).
+  Definition with_env {A} env (r : record A) :=
+    Build A r.(doc_comment) r.(attrs) r.(visibility) r.(loc) env.
 End def_annot.
-
-Inductive non_empty (a : Set) : Set :=
-| Non_empty : a → list a → non_empty a.
-
-Arguments Non_empty {_}.
 
 Definition def_annot := def_annot.record.
 
-Definition clause_annot (a : Set) : Set := def_annot unit * a.
+Definition clause_annot (A : Set) : Set := def_annot unit * A.
 
-Definition annot (a : Set) : Set := loc * a.
+Definition annot (A : Set) : Set := loc * A.
+
+Inductive non_empty (A : Set) : Set :=
+| Non_empty : A → list A → non_empty A.
+
+Arguments Non_empty {_}.
 
 Inductive loop : Set :=
 | While : loop
 | Until : loop.
-
-Inductive hex_digit : Set :=
-| Hex_0 : hex_digit
-| Hex_1 : hex_digit
-| Hex_2 : hex_digit
-| Hex_3 : hex_digit
-| Hex_4 : hex_digit
-| Hex_5 : hex_digit
-| Hex_6 : hex_digit
-| Hex_7 : hex_digit
-| Hex_8 : hex_digit
-| Hex_9 : hex_digit
-| Hex_A : hex_digit
-| Hex_B : hex_digit
-| Hex_C : hex_digit
-| Hex_D : hex_digit
-| Hex_E : hex_digit
-| Hex_F : hex_digit.
-
-Inductive bin_digit : Set :=
-| Bin_0
-| Bin_1.
 
 Inductive kind_aux : Set :=
 | K_type : kind_aux
@@ -218,6 +202,38 @@ Inductive value : Set :=
 | V_ctor : id → list value → value
 | V_record : list (id * value) → value.
 
+(** * Literals
+
+Note that the literal type preserves the presentation of bitvector
+literals from the source code including underscores separating groups
+of digits. Furthermore, we distinguish the binary digit type from the
+underlying [bit] type. This is because in bitvectors ([V_bitvector]),
+bits have significance - there is a least significant bit and a most
+significant bit, whereas a list of [bin_digit] is just a sequence of
+ones and zeros with no intrinsic meaning attached. *)
+
+Inductive hex_digit : Set :=
+| Hex_0 : hex_digit
+| Hex_1 : hex_digit
+| Hex_2 : hex_digit
+| Hex_3 : hex_digit
+| Hex_4 : hex_digit
+| Hex_5 : hex_digit
+| Hex_6 : hex_digit
+| Hex_7 : hex_digit
+| Hex_8 : hex_digit
+| Hex_9 : hex_digit
+| Hex_A : hex_digit
+| Hex_B : hex_digit
+| Hex_C : hex_digit
+| Hex_D : hex_digit
+| Hex_E : hex_digit
+| Hex_F : hex_digit.
+
+Inductive bin_digit : Set :=
+| Bin_0
+| Bin_1.
+
 Inductive lit_aux : Set :=
 | L_unit : lit_aux
 | L_true : lit_aux
@@ -227,6 +243,11 @@ Inductive lit_aux : Set :=
 | L_bin : list (non_empty bin_digit) → lit_aux
 | L_string : string → lit_aux
 | L_real : Q → lit_aux.
+
+Inductive lit : Set :=
+| L_aux : lit_aux → loc → lit.
+
+(** * Types and constraints *)
 
 Inductive nexp_aux : Set :=
 | Nexp_id : id → nexp_aux
@@ -287,16 +308,39 @@ Inductive order_aux : Set :=
 | Ord_inc : order_aux
 | Ord_dec : order_aux.
 
+Inductive quant_item_aux : Set :=
+| QI_id : kinded_id → quant_item_aux
+| QI_constraint : n_constraint → quant_item_aux.
+
+Inductive quant_item : Set :=
+| QI_aux : quant_item_aux → loc → quant_item.
+
+Inductive order : Set :=
+| Ord_aux : order_aux → loc → order.
+
+(** Struct constructs often allow an optional struct name, which can
+help disambiguate during type-checking. See [P_struct], [MP_struct] or
+[E_struct] for examples of this. *)
+
 Inductive struct_name : Set :=
 | SN_id : id → struct_name
 | SN_anon : struct_name.
 
-Inductive lit : Set :=
-| L_aux : lit_aux → loc → lit.
+(** * Patterns *)
+
+(** This type represents the optional wildcard in a struct pattern ([P_struct]).
+
+<<
+struct { field = <pat>, _ }
+>>
+
+Note that it is not permitted in mappings ([MP_struct]). *)
 
 Inductive field_pat_wildcard : Set :=
 | FP_wild : loc → field_pat_wildcard
 | FP_no_wild : field_pat_wildcard.
+
+(** Type patterns are subset of type syntax, used to bind new type variables. *)
 
 Inductive typ_pat_aux : Set :=
 | TP_wild : typ_pat_aux
@@ -306,202 +350,144 @@ Inductive typ_pat_aux : Set :=
 with typ_pat : Set :=
 | TP_aux : typ_pat_aux → loc → typ_pat.
 
-Inductive quant_item_aux : Set :=
-| QI_id : kinded_id → quant_item_aux
-| QI_constraint : n_constraint → quant_item_aux.
+Inductive pat_aux {A : Set} : Set :=
+| P_lit : lit → pat_aux
+| P_wild : pat_aux
+| P_or : pat → pat → pat_aux
+| P_not : pat → pat_aux
+| P_as : pat → id → pat_aux
+| P_typ : typ → pat → pat_aux
+| P_id : id → pat_aux
+| P_var : pat → typ_pat → pat_aux
+| P_app : id → list pat → pat_aux
+| P_vector : list pat → pat_aux
+| P_vector_concat : list pat → pat_aux
+| P_vector_subrange : id → Z → Z → pat_aux
+| P_tuple : list pat → pat_aux
+| P_list : list pat → pat_aux
+| P_cons : pat → pat → pat_aux
+| P_string_append : list pat → pat_aux
+| P_struct : struct_name → list (id * pat) → field_pat_wildcard → pat_aux
 
-Inductive order : Set :=
-| Ord_aux : order_aux → loc → order.
+with pat {A : Set} : Set :=
+| P_aux : pat_aux → annot A → pat.
 
-Inductive pat_aux (a : Set) : Set :=
-| P_lit : lit → pat_aux a
-| P_wild : pat_aux a
-| P_or : pat a → pat a → pat_aux a
-| P_not : pat a → pat_aux a
-| P_as : pat a → id → pat_aux a
-| P_typ : typ → pat a → pat_aux a
-| P_id : id → pat_aux a
-| P_var : pat a → typ_pat → pat_aux a
-| P_app : id → list (pat a) → pat_aux a
-| P_vector : list (pat a) → pat_aux a
-| P_vector_concat : list (pat a) → pat_aux a
-| P_vector_subrange : id → Z → Z → pat_aux a
-| P_tuple : list (pat a) → pat_aux a
-| P_list : list (pat a) → pat_aux a
-| P_cons : pat a → pat a → pat_aux a
-| P_string_append : list (pat a) → pat_aux a
-| P_struct : struct_name → list (id * pat a) → field_pat_wildcard → pat_aux a
+Arguments pat_aux A : clear implicits.
+Arguments pat A : clear implicits.
 
-with pat (a : Set) : Set :=
-| P_aux : pat_aux a → annot a → pat a.
+(** ** Mapping patterns
 
-Arguments P_aux {_}.
+Mapping patterns are the subset of the pattern type that is permitted
+to occur in bi-directional mapping clauses. *)
 
-Arguments P_lit {_}.
-Arguments P_wild {_}.
-Arguments P_or {_}.
-Arguments P_not {_}.
-Arguments P_as {_}.
-Arguments P_typ {_}.
-Arguments P_id {_}.
-Arguments P_var {_}.
-Arguments P_app {_}.
-Arguments P_vector {_}.
-Arguments P_vector_concat {_}.
-Arguments P_vector_subrange {_}.
-Arguments P_tuple {_}.
-Arguments P_list {_}.
-Arguments P_cons {_}.
-Arguments P_string_append {_}.
-Arguments P_struct {_}.
+Inductive mpat_aux {A : Set} : Set :=
+| MP_lit : lit → mpat_aux
+| MP_id : id → mpat_aux
+| MP_app : id → list mpat → mpat_aux
+| MP_vector : list mpat → mpat_aux
+| MP_vector_concat : list mpat → mpat_aux
+| MP_vector_subrange : id → Z → Z → mpat_aux
+| MP_tuple : list mpat → mpat_aux
+| MP_list : list mpat → mpat_aux
+| MP_cons : mpat → mpat → mpat_aux
+| MP_string_append : list mpat → mpat_aux
+| MP_typ : mpat → typ → mpat_aux
+| MP_as : mpat → id → mpat_aux
+| MP_struct : struct_name → list (id * mpat) → mpat_aux
 
-Inductive quant_item : Set :=
-| QI_aux : quant_item_aux → loc → quant_item.
+with mpat {A : Set} : Set :=
+| MP_aux : mpat_aux → annot A → mpat.
 
-Inductive mpat_aux (a : Set) : Set :=
-| MP_lit : lit → mpat_aux a
-| MP_id : id → mpat_aux a
-| MP_app : id → list (mpat a) → mpat_aux a
-| MP_vector : list (mpat a) → mpat_aux a
-| MP_vector_concat : list (mpat a) → mpat_aux a
-| MP_vector_subrange : id → Z → Z → mpat_aux a
-| MP_tuple : list (mpat a) → mpat_aux a
-| MP_list : list (mpat a) → mpat_aux a
-| MP_cons : mpat a → mpat a → mpat_aux a
-| MP_string_append : list (mpat a) → mpat_aux a
-| MP_typ : mpat a → typ → mpat_aux a
-| MP_as : mpat a → id → mpat_aux a
-| MP_struct : struct_name → list (id * mpat a) → mpat_aux a
+Arguments mpat_aux A : clear implicits.
+Arguments mpat A : clear implicits.
 
-with mpat (a : Set) : Set :=
-| MP_aux : mpat_aux a → annot a → mpat a.
+(** * Expressions and L-expressions *)
 
-Inductive in_place_loop_measure_aux (a : Set) : Set :=
-| Measure_none : in_place_loop_measure_aux a
-| Measure_some : exp a → in_place_loop_measure_aux a
+Inductive in_place_loop_measure_aux {A : Set} : Set :=
+| Measure_none : in_place_loop_measure_aux
+| Measure_some : exp → in_place_loop_measure_aux
 
-with in_place_loop_measure (a : Set) : Set :=
-| Measure_aux : in_place_loop_measure_aux a → loc → in_place_loop_measure a
+with in_place_loop_measure {A : Set} : Set :=
+| Measure_aux : in_place_loop_measure_aux → loc → in_place_loop_measure
 
-with exp_aux (a : Set) : Set :=
-| E_block : list (exp a) → exp_aux a
-| E_id : id → exp_aux a
-| E_lit : lit → exp_aux a
-| E_typ : typ → exp a → exp_aux a
-| E_app : id → list (exp a) → exp_aux a
-| E_tuple : list (exp a) → exp_aux a
-| E_if : exp a → exp a → exp a → exp_aux a
-| E_loop : loop → in_place_loop_measure a → exp a → exp a → exp_aux a
-| E_for : id → exp a → exp a → exp a → order → exp a → exp_aux a
-| E_vector : list (exp a) → exp_aux a
-| E_vector_append : exp a → exp a → exp_aux a
-| E_list : list (exp a) → exp_aux a
-| E_cons : exp a → exp a → exp_aux a
-| E_struct : struct_name → list (fexp a) → exp_aux a
-| E_struct_update : exp a → list (fexp a) → exp_aux a
-| E_field : exp a → id → exp_aux a
-| E_match : exp a → list (pexp a) → exp_aux a
-| E_let : pat a → exp a → exp a → exp_aux a
-| E_assign : lexp a → exp a → exp_aux a
-| E_sizeof : nexp → exp_aux a
-| E_return : exp a → exp_aux a
-| E_exit : exp a → exp_aux a
-| E_config : list string → exp_aux a
-| E_ref : id → exp_aux a
-| E_throw : exp a → exp_aux a
-| E_try : exp a → list (pexp a) → exp_aux a
-| E_assert : exp a → exp a → exp_aux a
-| E_var : lexp a → exp a → exp a → exp_aux a
-| E_undef : exp_aux a
-| E_internal_plet : pat a → exp a → exp a → exp_aux a
-| E_internal_return : exp a → exp_aux a
-| E_internal_value : value → exp_aux a
-| E_internal_assume : n_constraint → exp a → exp_aux a
-| E_constraint : n_constraint → exp_aux a
+with exp_aux {A : Set} : Set :=
+| E_block : list exp → exp_aux
+| E_id : id → exp_aux
+| E_lit : lit → exp_aux
+| E_typ : typ → exp → exp_aux
+| E_app : id → list exp → exp_aux
+| E_tuple : list exp → exp_aux
+| E_if : exp → exp → exp → exp_aux
+| E_loop : loop → in_place_loop_measure → exp → exp → exp_aux
+| E_for : id → exp → exp → exp → order → exp → exp_aux
+| E_vector : list exp → exp_aux
+| E_vector_append : exp → exp → exp_aux
+| E_list : list exp → exp_aux
+| E_cons : exp → exp → exp_aux
+| E_struct : struct_name → list fexp → exp_aux
+| E_struct_update : exp → list fexp → exp_aux
+| E_field : exp → id → exp_aux
+| E_match : exp → list pexp → exp_aux
+| E_let : pat A → exp → exp → exp_aux
+| E_assign : lexp → exp → exp_aux
+| E_sizeof : nexp → exp_aux
+| E_return : exp → exp_aux
+| E_exit : exp → exp_aux
+| E_config : list string → exp_aux
+| E_ref : id → exp_aux
+| E_throw : exp → exp_aux
+| E_try : exp → list pexp → exp_aux
+| E_assert : exp → exp → exp_aux
+| E_var : lexp → exp → exp → exp_aux
+| E_undef : exp_aux
+| E_internal_plet : pat A → exp → exp → exp_aux
+| E_internal_return : exp → exp_aux
+| E_internal_value : value → exp_aux
+| E_internal_assume : n_constraint → exp → exp_aux
+| E_constraint : n_constraint → exp_aux
 
-with exp (a : Set) : Set :=
-| E_aux : exp_aux a → annot a → exp a
+with exp {A : Set} : Set :=
+| E_aux : exp_aux → annot A → exp
 
-with lexp_aux (a : Set) : Set :=
-| LE_id : id → lexp_aux a
-| LE_deref : exp a → lexp_aux a
-| LE_app : id → list (exp a) → lexp_aux a
-| LE_typ : typ → id → lexp_aux a
-| LE_tuple : list (lexp a) → lexp_aux a
-| LE_vector_concat : list (lexp a) → lexp_aux a
-| LE_vector : lexp a → exp a → lexp_aux a
-| LE_vector_range : lexp a → exp a → exp a → lexp_aux a
-| LE_field : lexp a → id → lexp_aux a
+with lexp_aux {A : Set} : Set :=
+| LE_id : id → lexp_aux
+| LE_deref : exp → lexp_aux
+| LE_app : id → list exp → lexp_aux
+| LE_typ : typ → id → lexp_aux
+| LE_tuple : list lexp → lexp_aux
+| LE_vector_concat : list lexp → lexp_aux
+| LE_vector : lexp → exp → lexp_aux
+| LE_vector_range : lexp → exp → exp → lexp_aux
+| LE_field : lexp → id → lexp_aux
 
-with lexp (a : Set) : Set :=
-| LE_aux : lexp_aux a → annot a → lexp a
+with lexp {A : Set} : Set :=
+| LE_aux : lexp_aux → annot A → lexp
 
-with fexp_aux (a : Set) : Set :=
-| FE_fexp : id → exp a → fexp_aux a
+with fexp_aux {A : Set} : Set :=
+| FE_fexp : id → exp → fexp_aux
 
-with fexp (a : Set) : Set :=
-| FE_aux : fexp_aux a → annot a → fexp a
+with fexp {A : Set} : Set :=
+| FE_aux : fexp_aux → annot A → fexp
 
-with pexp_aux (a : Set) : Set :=
-| Pat_exp : pat a → exp a → pexp_aux a
-| Pat_when : pat a → exp a → exp a → pexp_aux a
+with pexp_aux {A : Set} : Set :=
+| Pat_exp : pat A → exp → pexp_aux
+| Pat_when : pat A → exp → exp → pexp_aux
 
-with pexp (a : Set) : Set :=
-| Pat_aux : pexp_aux a → annot a → pexp a.
+with pexp {A : Set} : Set :=
+| Pat_aux : pexp_aux → annot A → pexp.
 
-Arguments E_block {_}.
-Arguments E_id {_}.
-Arguments E_lit {_}.
-Arguments E_typ {_}.
-Arguments E_app {_}.
-Arguments E_tuple {_}.
-Arguments E_if {_}.
-Arguments E_loop {_}.
-Arguments E_for {_}.
-Arguments E_vector {_}.
-Arguments E_vector_append {_}.
-Arguments E_list {_}.
-Arguments E_cons {_}.
-Arguments E_struct {_}.
-Arguments E_struct_update {_}.
-Arguments E_field {_}.
-Arguments E_match {_}.
-Arguments E_let {_}.
-Arguments E_assign {_}.
-Arguments E_sizeof {_}.
-Arguments E_return {_}.
-Arguments E_exit {_}.
-Arguments E_config {_}.
-Arguments E_ref {_}.
-Arguments E_throw {_}.
-Arguments E_try {_}.
-Arguments E_assert {_}.
-Arguments E_var {_}.
-Arguments E_undef {_}.
-Arguments E_internal_plet {_}.
-Arguments E_internal_return {_}.
-Arguments E_internal_value {_}.
-Arguments E_internal_assume {_}.
-Arguments E_constraint {_}.
-Arguments E_aux {_}.
+Arguments in_place_loop_measure_aux A : clear implicits.
+Arguments in_place_loop_measure A : clear implicits.
+Arguments exp_aux A : clear implicits.
+Arguments exp A : clear implicits.
+Arguments lexp_aux A : clear implicits.
+Arguments lexp A : clear implicits.
+Arguments fexp_aux A : clear implicits.
+Arguments fexp A : clear implicits.
+Arguments pexp_aux A : clear implicits.
+Arguments pexp A : clear implicits.
 
-Arguments FE_aux {_}.
-Arguments FE_fexp {_}.
-
-Arguments Pat_aux {_}.
-Arguments Pat_exp {_}.
-Arguments Pat_when {_}.
-
-Arguments LE_aux {_}.
-Arguments LE_id {_}.
-Arguments LE_deref {_}.
-Arguments LE_app {_}.
-Arguments LE_typ {_}.
-Arguments LE_tuple {_}.
-Arguments LE_vector_concat {_}.
-Arguments LE_vector {_}.
-Arguments LE_vector_range {_}.
-Arguments LE_field {_}.
+(** * Top-level constructs *)
 
 Inductive typquant_aux : Set :=
 | TypQ_tq : list quant_item → typquant_aux
@@ -659,12 +645,7 @@ Inductive fundef (a : Set) : Set :=
 Inductive type_def (a : Set) : Set :=
 | TD_aux : type_def_aux → annot a → type_def a.
 
-Inductive impldef_aux (a : Set) : Set :=
-| Impl_impl : funcl a → impldef_aux a.
-
-Inductive opt_default_aux (a : Set) : Set :=
-| Def_val_empty : opt_default_aux a
-| Def_val_dec : exp a → opt_default_aux a.
+(** ** Definitions *)
 
 Inductive def_aux (a b : Set) : Set :=
 | DEF_type : type_def a → def_aux a b
@@ -688,9 +669,3 @@ Inductive def_aux (a b : Set) : Set :=
 
 with def (a b : Set) : Set :=
 | DEF_aux : def_aux a b → def_annot b → def a b.
-
-Inductive impldef (a : Set) : Set :=
-| Impl_aux : impldef_aux a → l → impldef a.
-
-Inductive opt_default (a : Set) : Set :=
-| Def_val_aux : opt_default_aux a → annot a → opt_default a.

@@ -265,13 +265,6 @@ and exp_aux =
 
 and exp = E_aux of exp_aux * l
 
-and opt_default_aux =
-  | (* Optional default value for indexed vectors, to define a default value for any unspecified positions in a sparse map *)
-    Def_val_empty
-  | Def_val_dec of exp
-
-and opt_default = Def_val_aux of opt_default_aux * l
-
 and pexp_aux =
   (* Pattern match *)
   | Pat_exp of pat * exp

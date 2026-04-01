@@ -112,21 +112,7 @@ type ('a, 'pat, 'pat_aux) pat_alg = {
 }
 
 (** the type of interpretations of expressions *)
-type ( 'a,
-       'exp,
-       'exp_aux,
-       'lexp,
-       'lexp_aux,
-       'fexp,
-       'fexp_aux,
-       'opt_default_aux,
-       'opt_default,
-       'pexp,
-       'pexp_aux,
-       'pat,
-       'pat_aux
-     )
-     exp_alg = {
+type ('a, 'exp, 'exp_aux, 'lexp, 'lexp_aux, 'fexp, 'fexp_aux, 'pexp, 'pexp_aux, 'pat, 'pat_aux) exp_alg = {
   e_block : 'exp list -> 'exp_aux;
   e_id : id -> 'exp_aux;
   e_ref : id -> 'exp_aux;
@@ -174,9 +160,6 @@ type ( 'a,
   le_aux : 'lexp_aux * 'a annot -> 'lexp;
   fe_fexp : id * 'exp -> 'fexp_aux;
   fe_aux : 'fexp_aux * 'a annot -> 'fexp;
-  def_val_empty : 'opt_default_aux;
-  def_val_dec : 'exp -> 'opt_default_aux;
-  def_val_aux : 'opt_default_aux * 'a annot -> 'opt_default;
   pat_exp : 'pat * 'exp -> 'pexp_aux;
   pat_when : 'pat * 'exp * 'exp -> 'pexp_aux;
   pat_aux : 'pexp_aux * 'a annot -> 'pexp;
@@ -190,78 +173,18 @@ val fold_mpat : ('a, 'mpat, 'mpat_aux) pat_alg -> 'a mpat -> 'mpat
 
 (* fold over expressions *)
 val fold_exp :
-  ( 'a,
-    'exp,
-    'exp_aux,
-    'lexp,
-    'lexp_aux,
-    'fexp,
-    'fexp_aux,
-    'opt_default_aux,
-    'opt_default,
-    'pexp,
-    'pexp_aux,
-    'pat,
-    'pat_aux
-  )
-  exp_alg ->
-  'a exp ->
-  'exp
+  ('a, 'exp, 'exp_aux, 'lexp, 'lexp_aux, 'fexp, 'fexp_aux, 'pexp, 'pexp_aux, 'pat, 'pat_aux) exp_alg -> 'a exp -> 'exp
 
 val fold_pexp :
-  ( 'a,
-    'exp,
-    'exp_aux,
-    'lexp,
-    'lexp_aux,
-    'fexp,
-    'fexp_aux,
-    'opt_default_aux,
-    'opt_default,
-    'pexp,
-    'pexp_aux,
-    'pat,
-    'pat_aux
-  )
-  exp_alg ->
-  'a pexp ->
-  'pexp
+  ('a, 'exp, 'exp_aux, 'lexp, 'lexp_aux, 'fexp, 'fexp_aux, 'pexp, 'pexp_aux, 'pat, 'pat_aux) exp_alg -> 'a pexp -> 'pexp
 
 val fold_funcl :
-  ( 'a,
-    'exp,
-    'exp_aux,
-    'lexp,
-    'lexp_aux,
-    'fexp,
-    'fexp_aux,
-    'opt_default_aux,
-    'opt_default,
-    'a pexp,
-    'pexp_aux,
-    'pat,
-    'pat_aux
-  )
-  exp_alg ->
+  ('a, 'exp, 'exp_aux, 'lexp, 'lexp_aux, 'fexp, 'fexp_aux, 'a pexp, 'pexp_aux, 'pat, 'pat_aux) exp_alg ->
   'a funcl ->
   'a funcl
 
 val fold_function :
-  ( 'a,
-    'exp,
-    'exp_aux,
-    'lexp,
-    'lexp_aux,
-    'fexp,
-    'fexp_aux,
-    'opt_default_aux,
-    'opt_default,
-    'a pexp,
-    'pexp_aux,
-    'pat,
-    'pat_aux
-  )
-  exp_alg ->
+  ('a, 'exp, 'exp_aux, 'lexp, 'lexp_aux, 'fexp, 'fexp_aux, 'a pexp, 'pexp_aux, 'pat, 'pat_aux) exp_alg ->
   'a fundef ->
   'a fundef
 
@@ -270,21 +193,7 @@ val id_pat_alg : ('a, 'a pat, 'a pat_aux) pat_alg
 val id_mpat_alg : ('a, 'a mpat option, 'a mpat_aux option) pat_alg
 
 val id_exp_alg :
-  ( 'a,
-    'a exp,
-    'a exp_aux,
-    'a lexp,
-    'a lexp_aux,
-    'a fexp,
-    'a fexp_aux,
-    'a opt_default_aux,
-    'a opt_default,
-    'a pexp,
-    'a pexp_aux,
-    'a pat,
-    'a pat_aux
-  )
-  exp_alg
+  ('a, 'a exp, 'a exp_aux, 'a lexp, 'a lexp_aux, 'a fexp, 'a fexp_aux, 'a pexp, 'a pexp_aux, 'a pat, 'a pat_aux) exp_alg
 
 val compute_pat_alg : 'b -> ('b -> 'b -> 'b) -> ('a, 'b * 'a pat, 'b * 'a pat_aux) pat_alg
 
@@ -298,8 +207,6 @@ val compute_exp_alg :
     'b * 'a lexp_aux,
     'b * 'a fexp,
     'b * 'a fexp_aux,
-    'b * 'a opt_default_aux,
-    'b * 'a opt_default,
     'b * 'a pexp,
     'b * 'a pexp_aux,
     'b * 'a pat,
@@ -309,7 +216,7 @@ val compute_exp_alg :
 
 val pure_pat_alg : 'b -> ('b -> 'b -> 'b) -> ('a, 'b, 'b) pat_alg
 
-val pure_exp_alg : 'b -> ('b -> 'b -> 'b) -> ('a, 'b, 'b, 'b, 'b, 'b, 'b, 'b, 'b, 'b, 'b, 'b, 'b) exp_alg
+val pure_exp_alg : 'b -> ('b -> 'b -> 'b) -> ('a, 'b, 'b, 'b, 'b, 'b, 'b, 'b, 'b, 'b, 'b) exp_alg
 
 val add_p_typ : Env.t -> typ -> 'a pat -> 'a pat
 

@@ -71,6 +71,4 @@ Separate Extraction
   ZAst.Residual
   attribute_data
   def
-  impldef
-  l
-  opt_default.
+  l.
