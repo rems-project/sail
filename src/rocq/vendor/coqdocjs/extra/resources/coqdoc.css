@@ -42,15 +42,15 @@ div + br {
 div:empty{ display: none;}
 
 #main h1 {
-	font-size: 2em;
+	font-size: 1.6em;
 }
 
 #main h2 {
-	font-size: 1.667rem;
+	font-size: 1.4em;
 }
 
 #main h3 {
-	font-size: 1.333em;
+	font-size: 1.2em;
 }
 
 #main h4, #main h5, #main h6 {
@@ -74,7 +74,12 @@ div:empty{ display: none;}
   display: none;
 }
 
-.doc + .code{
+.code {
+  margin-top:1em;
+  margin-bottom:1em;
+}
+
+.doc {
   margin-top:0.5em;
 }
 

@@ -63,6 +63,8 @@ From Sail Require Import PatternMatch.
 From Sail Require Import ValueType.
 From Sail Require TypeAnnot.
 
+Import TypeAnnot.Types.
+
 Definition is_value {A : Set} (exp : exp A) : bool :=
   match exp with
   | E_aux (E_internal_value _) _ => true

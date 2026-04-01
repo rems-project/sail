@@ -258,7 +258,7 @@ module Make =
      | P_typ (_, p0) -> pattern_match p0 v
      | P_id n ->
        (match Tannot.get_id_type (snd annot) n with
-        | Enum_member ->
+        | Types.Enum_member ->
           (match v with
            | V_member m -> simple_match_when (id_eqb n m)
            | _ -> Unmatched)
@@ -282,8 +282,8 @@ module Make =
             (fold_left (fun match_info p0 ->
               let P_aux (_, annot0) = p0 in
               (match Tannot.get_split (snd annot0) with
-               | No_split -> (Unmatched, [])
-               | Split s ->
+               | Types.No_split -> (Unmatched, [])
+               | Types.Split s ->
                  let (prev, bs0) = match_info in
                  (match bs0 with
                   | [] -> (Unmatched, [])
@@ -298,8 +298,8 @@ module Make =
             (fold_left (fun match_info p0 ->
               let P_aux (_, annot0) = p0 in
               (match Tannot.get_split (snd annot0) with
-               | No_split -> (Unmatched, [])
-               | Split s ->
+               | Types.No_split -> (Unmatched, [])
+               | Types.Split s ->
                  let (prev, vs0) = match_info in
                  (match vs0 with
                   | [] -> (Unmatched, [])

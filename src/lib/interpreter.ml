@@ -51,6 +51,7 @@ open Ast_util
 open Value
 
 open Extraction.ValueType
+open Extraction.TypeAnnot.Types
 
 module Big_int = Nat_big_num
 module Document = Pretty_print_sail.Document

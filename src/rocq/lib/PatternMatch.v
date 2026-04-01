@@ -58,6 +58,8 @@ From Sail Require Import ValueType.
 From Sail Require BitList.
 From Sail Require TypeAnnot.
 
+Import TypeAnnot.Types.
+
 (**
 A [binding] is something an identifier in a pattern can bind with
 during matching. The [Complete] case is for the regular case where an

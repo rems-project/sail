@@ -76,7 +76,8 @@ function isVernacStart(l, t){
 
 function isProofStart(n){
     return isVernacStart(["Proof"], n.textContent) && !isVernacStart(["Default", "Suggest"], n.previousSibling.previousSibling.textContent) ||
-        (isVernacStart(["Next"], n.textContent) && isVernacStart(["Obligation"], n.nextSibling.nextSibling.textContent));
+        (isVernacStart(["Next"], n.textContent) && isVernacStart(["Obligation"], n.nextSibling.nextSibling.textContent)) ||
+        (isVernacStart(["Final"], n.textContent) && isVernacStart(["Obligation"], n.nextSibling.nextSibling.textContent));
 }
 
 function isProofEnd(s){

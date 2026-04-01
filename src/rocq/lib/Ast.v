@@ -41,7 +41,12 @@
 (*  SPDX-License-Identifier: BSD-2-Clause                                   *)
 (* ************************************************************************ *)
 
-(** This file defines the Sail abstract syntax tree (AST) *)
+(** This file defines the Sail abstract syntax tree (AST).
+
+The general pattern is that for a type [exp] (for expressions) there
+will be a wrapper constructor [E_aux] which attaches meta-data like
+typing information and location information to the underlying actual
+type [exp_aux]. *)
 
 Require Extraction.
 
@@ -92,15 +97,6 @@ Parameter ext_attribute_data : Set.
 Extract Inlined Constant ext_attribute_data => "Parse_ast.Attribute_data.attribute_data".
 
 Definition attribute_data := ext_attribute_data.
-
-Inductive id_type : Set :=
-| Local_variable : id_type
-| Global_register : id_type
-| Enum_member : id_type.
-
-Inductive vector_concat_split : Set :=
-| No_split : vector_concat_split
-| Split : nat → vector_concat_split.
 
 Inductive visibility : Set :=
 | Public : visibility
@@ -158,31 +154,49 @@ Inductive loop : Set :=
 | While : loop
 | Until : loop.
 
+(** Sail has three kinds of types, denoted <<Type>>, <<Int>>, and
+<<Bool>>.
+
+<<Nat>> also exists in the syntax, but other than playing a role in
+kind-inference it is essentially just sugar for <<Int>> combined with
+a constraint that the type is zero or greater. *)
+
 Inductive kind_aux : Set :=
 | K_type : kind_aux
 | K_int : kind_aux
 | K_bool : kind_aux.
 
-Inductive kid_aux : Set :=
-| Var : string → kid_aux.
-
 Inductive kind : Set :=
 | K_aux : kind_aux → loc → kind.
+
+(** Type variables *)
+
+Inductive kid_aux : Set :=
+| Var : string → kid_aux.
 
 Inductive kid : Set :=
 | Kid_aux : kid_aux → loc → kid.
 
+(** A [kinded_id] is a type variable paired with an explicit [kind].
+In the syntax this would be denoted as <<'n : Int>> or <<'a : Type>>.
+
+Kind-inference happens during the desugaring performed by the OCaml
+Initial_check module, so the source syntax the kinds will often be
+implicit. *)
+
 Inductive kinded_id_aux : Set :=
 | KOpt_kind : kind → kid → kinded_id_aux.
+
+Inductive kinded_id : Set :=
+| KOpt_aux : kinded_id_aux → loc → kinded_id.
+
+(** Identifiers. *)
 
 Inductive id_aux : Set :=
 | And_bool : id_aux
 | Or_bool : id_aux
 | Id : string → id_aux
 | Operator : string → id_aux.
-
-Inductive kinded_id : Set :=
-| KOpt_aux : kinded_id_aux → loc → kinded_id.
 
 Inductive id : Set :=
 | Id_aux : id_aux → loc → id.

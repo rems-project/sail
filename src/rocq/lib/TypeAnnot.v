@@ -41,14 +41,59 @@
 (*  SPDX-License-Identifier: BSD-2-Clause                                   *)
 (* ************************************************************************ *)
 
+(** * Information from type annotations
+
+Sail annotates terms with custom type annotation data, which we
+don't have access to here. Instead whenever we need to access
+information from these annotations, we use a functor parameterised by
+the signature [S], which provides the methods we need.
+
+This file is not intended to be imported unqualified. Other modules
+can import the [Types] submodule to use those inductives unqualified
+however. *)
+
 From Stdlib Require Import Unicode.Utf8.
 
 From Sail Require Import Ast.
 
-(** Sail annotates terms with custom type annotation data, which we
-    don't have access to here. Instead use a functor parameterised by
-    the following signature, which can provide the methods we need. *)
+Module Types.
+  (** Type annotations are used to disambiguate identifiers in the Sail AST. *)
+  Inductive id_type : Set :=
+  | Local_variable : id_type
+  | Global_register : id_type
+  | Enum_member : id_type.
+
+  (** Type annotations determine how vector concatentation patterns
+  << x @ y >> in Sail are split apart. *)
+  Inductive vector_concat_split : Set :=
+  | No_split : vector_concat_split
+  | Split : nat → vector_concat_split.
+End Types.
+
+(** The signature contains the following functions:
+
+- [get_type]. Currently only used for [E_undefined]. It would be nice
+  to remove this.
+
+- [get_id_type]. See [id_type].
+
+- [get_split]. See [vector_concat_split].
+
+- [is_bitvector]. The bitvector syntax in Sail is overloaded between
+  bitvectors and generic vectors, so we use the typing information to
+  distinguish the two.
+
+- [fallthrough]. When evaluating try expressions, we need a
+  type-annotated expression which is essentially just
+  << exn => throw exn >> but we don't have the type-system in Rocq,
+  so we get such an expression from this module. This is a little ugly,
+  so it would be good to re-define the semantics in a way that avoids
+  needing this.
+*)
+
 Module Type S.
+  Import Types.
+
   Parameter t : Set.
 
   Parameter get_type : t → typ.

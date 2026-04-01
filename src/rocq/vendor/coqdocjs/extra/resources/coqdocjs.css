@@ -97,6 +97,9 @@
   content: "Hide Proofs";
 }
 
+.paragraph {
+  margin-bottom: 0.5em;
+}
 
 /* page layout */
 
@@ -131,7 +134,7 @@ html, body {
     padding-bottom: 2em;
     margin-left: auto;
     margin-right: auto;
-    max-width: 60em;
+    max-width: 80em;
     flex: 1 0 auto;
 }
 
@@ -232,6 +235,10 @@ a[name]:empty {
 div.code {
   width: auto;
   float: none;
+  background-color: #FFFFFA;
+  border-radius: 1em;
+  border: 2px solid #FFEBCC;
+  padding: 1em;
 }
 
 div.goal {
@@ -243,10 +250,7 @@ div.goal {
 
 div.doc {
   clear: both;
-  background-color: #FFFBF5;
-  border-radius: 1em;
-  border: 2px solid #FFEBCC;
-  padding: 1em;
+  max-width: 50em;
 }
 
 span.command:hover {

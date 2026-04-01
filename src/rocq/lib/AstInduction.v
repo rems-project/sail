@@ -79,7 +79,8 @@ Section pat_ind_g.
             (H_list : ∀ pats ann, Forall P pats → P (P_aux (P_list pats) ann))
             (H_cons : ∀ pat1 pat2 ann, P pat1 → P pat2 → P (P_aux (P_cons pat1 pat2) ann))
             (H_string_append : ∀ pats ann, Forall P pats → P (P_aux (P_string_append pats) ann))
-            (H_struct : ∀ sname fields wild ann, Forall (fun f => P (snd f)) fields → P (P_aux (P_struct sname fields wild) ann)).
+            (H_struct : ∀ sname fields wild ann,
+              Forall (λ f, P (snd f)) fields → P (P_aux (P_struct sname fields wild) ann)).
 
   Fixpoint pat_ind_g pat : P pat.
   Proof using All.
@@ -196,7 +197,7 @@ Fixpoint lexp_subexps {A : Set} (l : lexp A) : list (exp A) :=
   end.
 
 (** Once extracted by [lexp_subexps], this function puts
-subexpressions back into an l-expression, replacing the existing
+subexpressions back into an L-expression, replacing the existing
 subexpressions. *)
 
 Fixpoint update_lexp_subexps {A : Set} (xs : list (exp A)) (l : lexp A) : lexp A * list (exp A) :=
@@ -255,14 +256,16 @@ Fixpoint update_lexp_subexps {A : Set} (xs : list (exp A)) (l : lexp A) : lexp A
       end
   end.
 
-Lemma fst_let_fx : ∀ A B C (P : A * B) (f : A → C), fst (let '(x, y) := P in (f x, y)) = f (fst P).
+Lemma fst_let_fx : ∀ A B C (P : A * B) (f : A → C),
+  fst (let '(x, y) := P in (f x, y)) = f (fst P).
 Proof.
   intros.
   destruct P.
   reflexivity.
 Qed.
 
-Lemma snd_let_fx : ∀ A B C (P : A * B) (f : A → C), snd (let '(x, y) := P in (f x, y)) = snd P.
+Lemma snd_let_fx : ∀ A B C (P : A * B) (f : A → C),
+  snd (let '(x, y) := P in (f x, y)) = snd P.
 Proof.
   intros.
   destruct P.
@@ -380,7 +383,8 @@ Proof.
   cbn. reflexivity.
 Qed.
 
-Lemma lexp_subexps_identity_g : ∀ (A : Set) (l : lexp A) (es : list (exp A)), update_lexp_subexps (lexp_subexps l ++ es) l = (l, es).
+Lemma lexp_subexps_identity_g : ∀ (A : Set) (l : lexp A) (es : list (exp A)),
+  update_lexp_subexps (lexp_subexps l ++ es) l = (l, es).
 Proof.
   induction l using lexp_ind_g.
   all: try reflexivity.
@@ -420,6 +424,10 @@ Proof.
   - cbn. intros. rewrite IHl. reflexivity.
 Qed.
 
+(** The key property is extracting the subexpressions with
+[lexp_subexps] then putting them back with [update_lexp_subexps]
+returns the original L-expression. *)
+
 Lemma lexp_subexps_identity : ∀ (A : Set) (l : lexp A), update_lexp_subexps (lexp_subexps l) l = (l, []).
 Proof.
   intros A l.
@@ -442,13 +450,15 @@ Section exp_ind_g.
     (H_tuple : ∀ xs ann, Forall P xs → P (E_aux (E_tuple xs) ann))
     (H_if : ∀ i t e ann, P i → P t → P e → P (E_aux (E_if i t e) ann))
     (H_loop : ∀ lt measure cond body ann, P cond → P body → P (E_aux (E_loop lt measure cond body) ann))
-    (H_for : ∀ id from to amount ord body ann, P from → P to → P amount → P body → P (E_aux (E_for id from to amount ord body) ann))
+    (H_for : ∀ id from to amount ord body ann,
+      P from → P to → P amount → P body → P (E_aux (E_for id from to amount ord body) ann))
     (H_vector : ∀ xs ann, Forall P xs → P (E_aux (E_vector xs) ann))
     (H_vector_append : ∀ x y ann, P x → P y → P (E_aux (E_vector_append x y) ann))
     (H_list : ∀ xs ann, Forall P xs → P (E_aux (E_list xs) ann))
     (H_cons : ∀ x xs ann, P x → P xs → P (E_aux (E_cons x xs) ann))
-    (H_struct : ∀ name fields ann, Forall (fun f => P (fexp_exp f)) fields → P (E_aux (E_struct name fields) ann))
-    (H_struct_update : ∀ x fields ann, P x → Forall (fun f => P (fexp_exp f)) fields → P (E_aux (E_struct_update x fields) ann))
+    (H_struct : ∀ name fields ann, Forall (λ f, P (fexp_exp f)) fields → P (E_aux (E_struct name fields) ann))
+    (H_struct_update : ∀ x fields ann,
+      P x → Forall (λ f, P (fexp_exp f)) fields → P (E_aux (E_struct_update x fields) ann))
     (H_field : ∀ x f ann, P x → P (E_aux (E_field x f) ann))
     (H_match : ∀ x arms ann, P x → Forall (MatchArm P) arms → P (E_aux (E_match x arms) ann))
     (H_let : ∀ p x body ann, P x → P body → P (E_aux (E_let p x body) ann))
@@ -567,13 +577,15 @@ Section exp_and_lexp_ind_g.
     (H_tuple : ∀ xs ann, Forall P xs → P (E_aux (E_tuple xs) ann))
     (H_if : ∀ i t e ann, P i → P t → P e → P (E_aux (E_if i t e) ann))
     (H_loop : ∀ lt measure cond body ann, P cond → P body → P (E_aux (E_loop lt measure cond body) ann))
-    (H_for : ∀ id from to amount ord body ann, P from → P to → P amount → P body → P (E_aux (E_for id from to amount ord body) ann))
+    (H_for : ∀ id from to amount ord body ann,
+      P from → P to → P amount → P body → P (E_aux (E_for id from to amount ord body) ann))
     (H_vector : ∀ xs ann, Forall P xs → P (E_aux (E_vector xs) ann))
     (H_vector_append : ∀ x y ann, P x → P y → P (E_aux (E_vector_append x y) ann))
     (H_list : ∀ xs ann, Forall P xs → P (E_aux (E_list xs) ann))
     (H_cons : ∀ x xs ann, P x → P xs → P (E_aux (E_cons x xs) ann))
-    (H_struct : ∀ name fields ann, Forall (fun f => P (fexp_exp f)) fields → P (E_aux (E_struct name fields) ann))
-    (H_struct_update : ∀ x fields ann, P x → Forall (fun f => P (fexp_exp f)) fields → P (E_aux (E_struct_update x fields) ann))
+    (H_struct : ∀ name fields ann, Forall (λ f, P (fexp_exp f)) fields → P (E_aux (E_struct name fields) ann))
+    (H_struct_update : ∀ x fields ann,
+      P x → Forall (λ f, P (fexp_exp f)) fields → P (E_aux (E_struct_update x fields) ann))
     (H_field : ∀ x f ann, P x → P (E_aux (E_field x f) ann))
     (H_match : ∀ x arms ann, P x → Forall (MatchArm P) arms → P (E_aux (E_match x arms) ann))
     (H_let : ∀ p x body ann, P x → P body → P (E_aux (E_let p x body) ann))
