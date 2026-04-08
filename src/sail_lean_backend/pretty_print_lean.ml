@@ -36,6 +36,8 @@ let non_beq_types : IdSet.t ref = ref IdSet.empty
 
 let remove_empties (docs : document list) = List.filter (fun d -> d != empty) docs
 
+let has_generated_typ_kids typ = KidSet.exists is_kid_generated (tyvars_of_typ typ)
+
 let opens = ref IdSet.empty
 
 type context = {
@@ -560,7 +562,9 @@ and doc_vector_concat pats =
   brackets (separate_map comma doc_part pats)
 
 let doc_pat_typ_ascription ctx (P_aux (p, (l, annot)) as pat) =
-  match p with P_typ (ptyp, p) -> Some (doc_typ ctx ptyp) | _ -> None
+  match p with
+  | P_typ (ptyp, p) when not (has_generated_typ_kids ptyp) -> Some (doc_typ ctx ptyp)
+  | _ -> None
 
 (* Copied from the Coq PP *)
 let rebind_cast_pattern_vars pat typ exp =
@@ -946,7 +950,7 @@ and doc_exp (as_monadic : bool) ctx (E_aux (e, (l, annot)) as full_exp) =
         string "#v"
         ^^ wrap_with_pure as_monadic (brackets (nest 2 (separate_map comma_sp (d_of_arg ctx) (List.rev vals))))
   | E_typ (typ, e) ->
-      if has_effect e then doc_exp as_monadic ctx e
+      if has_effect e || has_generated_typ_kids typ then doc_exp as_monadic ctx e
       else wrap_with_pure as_monadic (parens (separate space [doc_exp false ctx e; colon; doc_typ ctx typ]))
   | E_tuple es -> wrap_with_pure as_monadic (parens (separate_map (comma ^^ space) (d_of_arg ctx) es))
   | E_let (lpat, lexp, e') | E_internal_plet (lpat, lexp, e') ->
