@@ -240,7 +240,7 @@ def execute (merge_var : ast) : SailM Unit := do
   | .LOAD (imm, rs1, rd) => (execute_LOAD imm rs1 rd)
   | _ =>
     (do
-      assert false "Pattern match failure at test/lean/riscv_duopod.sail:138.0-142.1"
+      assert false "Pattern match failure at riscv_duopod.sail:138.0-142.1"
       throw Error.Exit)
 
 def decode (merge_var : (BitVec 32)) : (Option ast) :=
