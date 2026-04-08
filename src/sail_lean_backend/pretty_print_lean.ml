@@ -36,8 +36,6 @@ let non_beq_types : IdSet.t ref = ref IdSet.empty
 
 let remove_empties (docs : document list) = List.filter (fun d -> d != empty) docs
 
-let has_generated_typ_kids typ = KidSet.exists is_kid_generated (tyvars_of_typ typ)
-
 let opens = ref IdSet.empty
 
 type context = {
@@ -562,9 +560,7 @@ and doc_vector_concat pats =
   brackets (separate_map comma doc_part pats)
 
 let doc_pat_typ_ascription ctx (P_aux (p, (l, annot)) as pat) =
-  match p with
-  | P_typ (ptyp, p) when not (has_generated_typ_kids ptyp) -> Some (doc_typ ctx ptyp)
-  | _ -> None
+  match p with P_typ (ptyp, p) -> Some (doc_typ ctx ptyp) | _ -> None
 
 (* Copied from the Coq PP *)
 let rebind_cast_pattern_vars pat typ exp =

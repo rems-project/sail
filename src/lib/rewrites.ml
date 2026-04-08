@@ -2976,7 +2976,7 @@ let rec rewrite_var_updates (E_aux (expaux, ((l, _) as annot)) as exp) =
         )
     | E_typ (typ, exp) -> begin
         match rewrite used_vars exp pat with
-        | Added_vars (exp', pat') -> Added_vars (E_aux (E_typ (typ, exp'), annot), pat')
+        | Added_vars (exp', pat') -> Added_vars (add_e_typ (env_of exp') (typ_of exp') exp', pat')
         | Same_vars exp' -> Same_vars (E_aux (E_typ (typ, exp'), annot))
       end
     | _ ->
