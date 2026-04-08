@@ -254,7 +254,8 @@ type lean_context = {
 
 let file_to_module (filename : string) =
   let base = Filename.basename filename in
-  Filename.chop_extension base
+  let name = Filename.chop_extension base in
+  Str.global_replace (Str.regexp_string ".") "" name
 
 let file_prelude version =
   let p =

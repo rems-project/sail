@@ -11,14 +11,14 @@ open ConcurrencyInterfaceV1
 
 abbrev bit := (BitVec 1)
 
-abbrev bits k_n := (BitVec k_n)
+abbrev bits (k_n : Int) := (BitVec k_n)
 
 /-- Type quantifiers: k_a : Type -/
 inductive option (k_a : Type) where
   | Some (_ : k_a)
   | None (_ : Unit)
   deriving Inhabited, BEq, Repr
-  open option
+open option
 
 abbrev xlen : Int := 64
 
@@ -30,13 +30,13 @@ abbrev regbits := (BitVec 5)
 
 inductive iop where | RISCV_ADDI | RISCV_SLTI | RISCV_SLTIU | RISCV_XORI | RISCV_ORI | RISCV_ANDI
   deriving BEq, Inhabited, Repr
-  open iop
+open iop
 
 inductive ast where
   | ITYPE (_ : ((BitVec 12) × regbits × regbits × iop))
   | LOAD (_ : ((BitVec 12) × regbits × regbits))
   deriving Inhabited, BEq, Repr
-  open ast
+open ast
 
 inductive Register : Type where
   | Xs
@@ -240,7 +240,7 @@ def execute (merge_var : ast) : SailM Unit := do
   | .LOAD (imm, rs1, rd) => (execute_LOAD imm rs1 rd)
   | _ =>
     (do
-      assert false "Pattern match failure at riscv_duopod.sail:138.0-142.1"
+      assert false "Pattern match failure at test/lean/riscv_duopod.sail:138.0-142.1"
       throw Error.Exit)
 
 def decode (merge_var : (BitVec 32)) : (Option ast) :=

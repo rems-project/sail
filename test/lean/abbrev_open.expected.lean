@@ -20,37 +20,23 @@ inductive option (k_a : Type) where
   deriving Inhabited, BEq, Repr
 open option
 
-inductive My_enum where | E1 | E2
+abbrev datasize := Int
+
+abbrev xlen (k_N : Int) := Nat
+
+inductive Color where | Red | Green | Blue
   deriving BEq, Inhabited, Repr
-open My_enum
+open Color
 
-structure My_struct where
-  field1 : Int
-  field2 : (BitVec 1)
-  deriving BEq, Inhabited, Repr
+inductive Shape where
+  | Circle (_ : Int)
+  | Square (_ : Int)
+  deriving Inhabited, BEq, Repr
+open Shape
 
-/-- Type quantifiers: k_n : Int, k_vasize : Int, k_pa : Type, k_ts : Type, k_arch_ak : Type, k_n > 0
-  ∧ k_vasize ≥ 0 -/
-structure My_mem_write_request
-  (k_n : Nat) (k_vasize : Nat) (k_pa : Type) (k_ts : Type) (k_arch_ak : Type) where
-  va : (Option (BitVec k_vasize))
-  pa : k_pa
-  translation : k_ts
-  size : Int
-  value : (Option (BitVec (8 * k_n)))
-  tag : (Option Bool)
-  deriving BEq, Inhabited, Repr
+abbrev Register := PEmpty
+abbrev RegisterType : Register -> Type := PEmpty.elim
 
-inductive Register : Type where
-  | r
-  deriving DecidableEq, Hashable, Repr
-open Register
-
-abbrev RegisterType : Register → Type
-  | .r => Int
-
-instance : Inhabited (RegisterRef RegisterType Int) where
-  default := .Reg r
 abbrev exception := Unit
 
 abbrev SailM := PreSailM RegisterType trivialChoiceSource exception
@@ -75,10 +61,10 @@ open ConcurrencyInterfaceV1
 namespace Out.Functions
 
 open option
-open Register
-open My_enum
+open Shape
+open Color
 
-/-- Type quantifiers: k_ex941_ : Bool, k_ex940_ : Bool -/
+/-- Type quantifiers: k_ex843_ : Bool, k_ex842_ : Bool -/
 def neq_bool (x : Bool) (y : Bool) : Bool :=
   (! (x == y))
 
@@ -171,57 +157,26 @@ def concat_str_bits (str : String) (x : (BitVec k_n)) : String :=
 def concat_str_dec (str : String) (x : Int) : String :=
   (HAppend.hAppend str (Int.repr x))
 
-def undefined_My_enum (_ : Unit) : SailM My_enum := do
-  (internal_pick [E1, E2])
+def undefined_Color (_ : Unit) : SailM Color := do
+  (internal_pick [Red, Green, Blue])
 
-/-- Type quantifiers: arg_ : Nat, 0 ≤ arg_ ∧ arg_ ≤ 1 -/
-def My_enum_of_num (arg_ : Nat) : My_enum :=
+/-- Type quantifiers: arg_ : Nat, 0 ≤ arg_ ∧ arg_ ≤ 2 -/
+def Color_of_num (arg_ : Nat) : Color :=
   match arg_ with
-  | 0 => E1
-  | _ => E2
+  | 0 => Red
+  | 1 => Green
+  | _ => Blue
 
-def num_of_My_enum (arg_ : My_enum) : Int :=
+def num_of_Color (arg_ : Color) : Int :=
   match arg_ with
-  | E1 => 0
-  | E2 => 1
+  | Red => 0
+  | Green => 1
+  | Blue => 2
 
-def undefined_My_struct (_ : Unit) : SailM My_struct := do
-  (pure { field1 := ← (undefined_int ())
-          field2 := ← (undefined_bitvector 1) })
+def initialize_registers (_ : Unit) : Unit :=
+  ()
 
-def struct_field2 (s : My_struct) : (BitVec 1) :=
-  s.field2
-
-def struct_update_field2 (s : My_struct) (b : (BitVec 1)) : My_struct :=
-  { s with field2 := b }
-
-/-- Type quantifiers: i : Int -/
-def struct_update_both_fields (s : My_struct) (i : Int) (b : (BitVec 1)) : My_struct :=
-  { s with field1 := i, field2 := b }
-
-/-- Type quantifiers: i : Int -/
-def mk_struct (i : Int) (b : (BitVec 1)) : My_struct :=
-  { field1 := i
-    field2 := b }
-
-def mk_struct_effectful (e : My_enum) (b : (BitVec 1)) : SailM My_struct := do
-  (pure { field1 := ← match e with
-            | E1 => readReg r
-            | E2 => (pure 2)
-          field2 := b })
-
-def undef_struct (x : (BitVec 1)) : SailM My_struct := do
-  (undefined_My_struct ())
-
-def match_struct (value : My_struct) : Int :=
-  match value with
-  | { field2 := 0, field1 := g__0 } => 0
-  | { field1 := field1, field2 := _ } => field1
-
-def initialize_registers (_ : Unit) : SailM Unit := do
-  writeReg r (← (undefined_int ()))
-
-def sail_model_init (x_0 : Unit) : SailM Unit := do
+def sail_model_init (x_0 : Unit) : Unit :=
   (initialize_registers ())
 
 end Out.Functions

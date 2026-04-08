@@ -11,19 +11,19 @@ open ConcurrencyInterfaceV1
 
 abbrev bit := (BitVec 1)
 
-abbrev bits k_n := (BitVec k_n)
+abbrev bits (k_n : Int) := (BitVec k_n)
 
 /-- Type quantifiers: k_a : Type -/
 inductive option (k_a : Type) where
   | Some (_ : k_a)
   | None (_ : Unit)
   deriving Inhabited, BEq, Repr
-  open option
+open option
 
 inductive virtaddr where
   | virtaddr (_ : (BitVec 32))
   deriving Inhabited, BEq, Repr
-  open virtaddr
+open virtaddr
 
 abbrev Register := PEmpty
 abbrev RegisterType : Register -> Type := PEmpty.elim
