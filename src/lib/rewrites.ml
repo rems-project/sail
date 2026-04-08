@@ -4166,13 +4166,35 @@ let move_termination_measures env ast =
   let called_output = ref IdSet.empty in
   let rec aux acc = function
     | [] -> List.rev acc
-    | (DEF_aux (DEF_fundef (FD_aux (FD_function (r, ty, fs), (l, f_ann))), def_annot) as d) :: t -> begin
+    | (DEF_aux (DEF_fundef fd, def_annot) as d) :: t -> begin
+        match aux_fd fd with
+        | None -> aux (d :: acc) t
+        | Some (new_fd, moved_val_specs) ->
+            let new_def = DEF_aux (DEF_fundef new_fd, def_annot) in
+            aux ((new_def :: moved_val_specs) @ acc) t
+      end
+    | (DEF_aux (DEF_internal_mutrec fds, def_annot) as d) :: t -> begin
+        match Util.map_changed_default (fun x -> (x, [])) aux_fd fds with
+        | None -> aux (d :: acc) t
+        | Some xs ->
+            let new_fds, moved_val_specss = List.split xs in
+            let new_def = DEF_aux (DEF_internal_mutrec new_fds, def_annot) in
+            aux ((new_def :: List.concat moved_val_specss) @ acc) t
+      end
+    | DEF_aux (DEF_val (VS_aux (VS_val_spec (_, id, _), _)), _) :: t when IdSet.mem id !called_output -> aux acc t
+    | (DEF_aux (DEF_val (VS_aux (VS_val_spec (_, id, _), _)), _) as d) :: t ->
+        called_output := IdSet.add id !called_output;
+        aux (d :: acc) t
+    | DEF_aux (DEF_measure _, _) :: t -> aux acc t
+    | h :: t -> aux (h :: acc) t
+  and aux_fd = function
+    | FD_aux (FD_function (r, ty, fs), (l, f_ann)) -> begin
         let id = match fs with [] -> assert false (* TODO *) | FCL_aux (FCL_funcl (id, _), _) :: _ -> id in
         match Bindings.find_opt id measures with
-        | None -> aux (d :: acc) t
+        | None -> None
         | Some (pat, exp, called_fns) ->
             let r = Rec_aux (Rec_measure (pat, exp), Generated l) in
-            let new_def = DEF_aux (DEF_fundef (FD_aux (FD_function (r, ty, fs), (l, f_ann))), def_annot) in
+            let new_fd = FD_aux (FD_function (r, ty, fs), (l, f_ann)) in
             let moved_val_specs =
               List.fold_left
                 (fun moved id ->
@@ -4184,14 +4206,8 @@ let move_termination_measures env ast =
                 )
                 [] called_fns
             in
-            aux ((new_def :: moved_val_specs) @ acc) t
+            Some (new_fd, moved_val_specs)
       end
-    | DEF_aux (DEF_val (VS_aux (VS_val_spec (_, id, _), _)), _) :: t when IdSet.mem id !called_output -> aux acc t
-    | (DEF_aux (DEF_val (VS_aux (VS_val_spec (_, id, _), _)), _) as d) :: t ->
-        called_output := IdSet.add id !called_output;
-        aux (d :: acc) t
-    | DEF_aux (DEF_measure _, _) :: t -> aux acc t
-    | h :: t -> aux (h :: acc) t
   in
   let ast = { ast with defs = aux [] ast.defs } in
   move_loop_measures ast
