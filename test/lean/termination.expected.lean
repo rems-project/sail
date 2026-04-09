@@ -173,7 +173,8 @@ def enabled (e : E) : Bool :=
   | A => (enabled B)
   | B => (enabled C)
   | C => true
-termination_by let e := e; ((measure e)).toNat
+termination_by (let e := e
+(measure e)).toNat
 
 def measure2 (x : E) : Int :=
   match x with
@@ -187,7 +188,8 @@ def enabled2 (b : Bool) (e : E) : Bool :=
   | A => (enabled2 b B)
   | B => (enabled2 b C)
   | C => b
-termination_by let (_, x) := (b, e); ((measure2 x)).toNat
+termination_by (let (_, x) := (b, e)
+(measure2 x)).toNat
 
 def initialize_registers (_ : Unit) : Unit :=
   ()

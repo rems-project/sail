@@ -21,8 +21,31 @@ function test2(x) = {
 termination_measure test1(x) = match x { A => 0, B => 1, C => 0 }
 termination_measure test2(x) = if x <= 0 then 2 else 0
 
+val test3 : (t, int) -> bool
+val test4 : int -> bool
+
+scattered function test3
+
+function clause test3(A,_) = false
+function clause test3(B,_) = test4(5)
+function clause test3(C,_) = true
+
+end test3
+
+function test4(x) = {
+  if x > 0 then true else if x == 0 then test3(A,x) else test3(B,x)
+}
+
+// termination_measure test3(x,_) = match x { A => 0, B => 1, C => 0 }
+termination_measure test3(_,_) = 1
+termination_measure test4(x) = if x <= 0 then 2 else 0
+
 function main() -> unit = {
   assert(test2(10));
   assert(not_bool(test2(0)));
   assert(test2(-10));
+
+  assert(test4(10));
+  assert(not_bool(test4(0)));
+  assert(test4(-10));
 }

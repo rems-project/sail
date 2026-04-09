@@ -128,3 +128,5 @@ val rewrite :
 val rewrites_interpreter : (string * rewriter_arg list) list
 
 val simple_typ : typ -> typ
+
+val pat_to_exp : Env.t -> tannot pat -> tannot exp
