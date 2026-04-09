@@ -4262,8 +4262,24 @@ let rewrite_explicit_measure effect_info env ast =
     let loc = Parse_ast.Generated (fst fcl_ann).loc in
     let P_aux (pat, pann), guard, body, ann = destruct_pexp pexp in
     let extra_pat = P_aux (P_id limit, (loc, empty_tannot)) in
-    let pat =
-      match pat with P_tuple pats -> P_tuple (pats @ [extra_pat]) | p -> P_tuple [P_aux (p, pann); extra_pat]
+    let _, fn_typ = Env.get_val_spec id (env_of_tannot (snd fcl_ann)) in
+    let pat, rebind =
+      match pat with
+      | P_tuple pats -> (P_tuple (pats @ [extra_pat]), fun e -> e)
+      | p -> (
+          (* If the arguments are matched by a single pattern, break it up to add the new one then rebind it later *)
+          match fn_typ with
+          | Typ_aux (Typ_fn ((_ :: _ :: _ as args), _), _) ->
+              let mk_arg_pat i _typ = P_aux (P_id (mk_id ("arg#" ^ string_of_int i)), (loc, empty_tannot)) in
+              let mk_arg_exp i _typ = E_aux (E_id (mk_id ("arg#" ^ string_of_int i)), (loc, empty_tannot)) in
+              let pats = List.mapi mk_arg_pat args in
+              let exps = List.mapi mk_arg_exp args in
+              let rebind body =
+                E_aux (E_let (P_aux (p, pann), E_aux (E_tuple exps, (loc, empty_tannot)), body), (loc, empty_tannot))
+              in
+              (P_tuple (pats @ [extra_pat]), rebind)
+          | _ -> (P_tuple [P_aux (p, pann); extra_pat], fun e -> e)
+        )
     in
     let assert_exp =
       E_aux
@@ -4304,7 +4320,7 @@ let rewrite_explicit_measure effect_info env ast =
         }
         body
     in
-    let body = E_aux (E_block [assert_exp; body], (loc, empty_tannot)) in
+    let body = rebind (E_aux (E_block [assert_exp; body], (loc, empty_tannot))) in
     let new_id = rec_id id in
     effect_info := Effects.copy_function_effect id !effect_info new_id;
     FCL_aux (FCL_funcl (new_id, construct_pexp (P_aux (pat, pann), guard, body, ann)), fcl_ann)

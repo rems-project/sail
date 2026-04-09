@@ -1186,16 +1186,22 @@ let doc_funcl_body fixup_binders ctx (FCL_aux (FCL_funcl (id, pexp), annot)) =
   let is_monadic = has_effect exp || not (Effects.function_is_pure id ctx.global.effect_info) in
   if untranslatable_mapping id exp then string "throw Error.Exit" else doc_exp is_monadic (context_with_env ctx env) exp
 
-let doc_termination ctx fnpat (Rec_aux (meas, _)) =
+let doc_termination fixup_binders ctx fnpat (Rec_aux (meas, _)) =
   match meas with
   | Rec_nonrec | Rec_rec -> empty
   | Rec_measure (pat, exp) ->
       (* TODO: actually use the pattern *)
-      let term = doc_exp false ctx exp in
-      let term_by =
-        string "termination_by let " ^^ doc_pat ctx false pat ^^ string " := " ^^ doc_pat ctx false fnpat ^^ string "; "
-        ^^ parens term ^^ string ".toNat"
+      let term =
+        doc_exp false ctx
+          (fixup_binders
+             (E_aux
+                ( E_let (pat, Rewrites.pat_to_exp (env_of_pat fnpat) fnpat, exp),
+                  (Unknown, mk_tannot ctx.env (typ_of exp))
+                )
+             )
+          )
       in
+      let term_by = string "termination_by " ^^ parens term ^^ string ".toNat" in
       hardline ^^ term_by
 
 let pat_of_funcl (FCL_aux (FCL_funcl (_, funcl), _)) =
@@ -1204,7 +1210,7 @@ let pat_of_funcl (FCL_aux (FCL_funcl (_, funcl), _)) =
 let doc_funcl ctx meas funcl =
   let comment, signature, ctx, fixup_binders = doc_funcl_init ctx.global funcl in
   let fnpat = pat_of_funcl funcl in
-  let termination = doc_termination ctx fnpat meas in
+  let termination = doc_termination fixup_binders ctx fnpat meas in
   comment ^^ nest 2 (signature ^^ hardline ^^ doc_funcl_body fixup_binders ctx funcl) ^^ termination
 
 let string_of_pexp p =
