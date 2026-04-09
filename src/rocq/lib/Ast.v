@@ -178,10 +178,12 @@ Inductive kid : Set :=
 | Kid_aux : kid_aux → loc → kid.
 
 (** A [kinded_id] is a type variable paired with an explicit [kind].
-In the syntax this would be denoted as <<'n : Int>> or <<'a : Type>>.
+In the syntax this would be denoted as:
+
+<<'n : Int>> or <<'a : Type>>.
 
 Kind-inference happens during the desugaring performed by the OCaml
-Initial_check module, so the source syntax the kinds will often be
+<<Initial_check>> module, so the source syntax the kinds will often be
 implicit. *)
 
 Inductive kinded_id_aux : Set :=

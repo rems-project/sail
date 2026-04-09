@@ -1884,6 +1884,28 @@ Module Dom (DZ : DOMAIN BinInt.Z) (Dbv : DOMAIN AbsBitvector.BitList) <: DOMAIN 
     | V_record m => from_option (λ x, x) ⊥ (m !! name)
     | _ => ⊥
     end.
+(*
+  Module Matching (Tannot : TypeAnnot.S).
+    Import PatternMatch.
 
+    Definition pattern_match_literal (l : Ast.lit) (v : value) : match_result value :=
+      let 'Ast.L_aux aux annot := l in
+      match (aux, v) with
+      | (Ast.L_unit,      V_unit        ) => simple_match value
+      | (Ast.L_true,      V_bool true   ) => simple_match value
+      | (Ast.L_false,     V_bool false  ) => simple_match value
+      | (Ast.L_num n,     V_int m       ) => simple_match value
+      | (Ast.L_hex s,     V_bitvector vs) => simple_match value
+      | (Ast.L_bin s,     V_bitvector vs) => simple_match value
+      | (Ast.L_string s1, V_string s2   ) => simple_match_when value (String.eqb s1 s2)
+      | (Ast.L_real r1,   V_real r2     ) => simple_match_when value (QArith_base.Qeq_bool r1 r2)
+      | _ => Unmatched
+      end.
+
+    Fixpoint pattern_match (p : Ast.pat Tannot.t) (v : value) {struct p} : match_result value :=
+      simple_match value.
+
+  End Matching.
+*)
   Definition complete (b : PatternMatch.binding t) : t := ⊥.
 End Dom.

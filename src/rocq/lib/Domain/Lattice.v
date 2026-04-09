@@ -41,6 +41,8 @@
 (*  SPDX-License-Identifier: BSD-2-Clause                                   *)
 (* ************************************************************************ *)
 
+From Stdlib Require Import ZArith.
+
 From stdpp Require Import base.
 
 Module Type CONCRETE.
@@ -155,3 +157,75 @@ Module DomainProperties (C : CONCRETE) (D : DOMAIN C).
       apply le_refl.
   Qed.
 End DomainProperties.
+
+Module Type SAIL_INT.
+  Parameter t : Set.
+
+  (** A [SAIL_INT] domain is always an abstraction of Rocq's integer [Z] type. *)
+  Parameter α : Z → t.
+
+  Parameter negate : t -> t.
+  Parameter negate_abst : ∀ {x}, α (-x) = negate (α x).
+  Parameter negate_negate : ∀ {x}, negate (negate x) = x.
+
+  Parameter add : t → t → t.
+  Parameter add_abst : ∀ {x y}, α (x + y) = add (α x) (α y).
+  Parameter add_comm : ∀ {x y}, add x y = add y x.
+  Parameter add_assoc : ∀ {x y z}, add x (add x y) = add (add x y) z.
+
+  Parameter sub : t → t → t.
+  Parameter sub_abst : ∀ {x y}, α (x - y) = sub (α x) (α y).
+
+  Parameter mult : t → t → t.
+  Parameter mult_abst : ∀ {x y}, α (x * y) = mult (α x) (α y).
+
+  Parameter max : t → t → t.
+  Parameter max_abst : ∀ {x y}, α (Z.max x y) = max (α x) (α y).
+
+  Parameter min : t → t → t.
+  Parameter min_abst : ∀ {x y}, α (Z.min x y) = min (α x) (α y).
+
+  Parameter abs : t → t.
+  Parameter abs_abst : ∀ {x}, α (Z.abs x) = abs (α x).
+
+  (** Truncating division (round towards zero) *)
+  Parameter tdiv : t → t → t.
+  Parameter tdiv_abst : ∀ {x y}, α (Z.quot x y) = tdiv (α x) (α y).
+
+  Parameter tmod : t → t → t.
+  Parameter tmod_abst : ∀ {x y}, α (Z.rem x y) = tmod (α x) (α y).
+
+  (** Flooring division (floor towards -∞) *)
+  Parameter fdiv : t → t → t.
+  Parameter fdiv_abst : ∀ {x y}, α (Z.div x y) = fdiv (α x) (α y).
+
+  Parameter fmod : t → t → t.
+  Parameter fmod_abst : ∀ {x y}, α (Z.modulo x y) = fmod (α x) (α y).
+
+  (** Euclidian division *)
+  Parameter ediv : t → t → t.
+  Parameter ediv_abst : ∀ {x y}, α (fst (Z.div_eucl x y)) = ediv (α x) (α y).
+
+  Parameter emod : t → t → t.
+  Parameter emod_abst : ∀ {x y}, α (snd (Z.div_eucl x y)) = emod (α x) (α y).
+End SAIL_INT.
+
+(*
+Module Type SAIL_BITS.
+  Parameter t : Set.
+
+  Parameter add : t → t → t.
+
+  Parameter sub : t → t → t.
+
+  Parameter not : t → t.
+
+  Parameter and : t → t → t.
+
+  Parameter or : t → t → t.
+
+  Parameter xor : t → t → t.
+
+  Parameter append : t → t → t.
+End SAIL_BITS.
+*)
