@@ -160,7 +160,7 @@ def e_test_of_num (arg_ : Nat) : e_test :=
 
 def num_of_e_test (arg_ : e_test) : Int :=
   match arg_ with
-  | VAL => 0
+  | .VAL => 0
 
 def undefined_s_test (_ : Unit) : SailM s_test := do
   (pure { f := ← (undefined_e_test ()) })

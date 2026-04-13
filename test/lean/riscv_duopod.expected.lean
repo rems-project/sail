@@ -216,12 +216,12 @@ def iop_of_num (arg_ : Nat) : iop :=
 
 def num_of_iop (arg_ : iop) : Int :=
   match arg_ with
-  | RISCV_ADDI => 0
-  | RISCV_SLTI => 1
-  | RISCV_SLTIU => 2
-  | RISCV_XORI => 3
-  | RISCV_ORI => 4
-  | RISCV_ANDI => 5
+  | .RISCV_ADDI => 0
+  | .RISCV_SLTI => 1
+  | .RISCV_SLTIU => 2
+  | .RISCV_XORI => 3
+  | .RISCV_ORI => 4
+  | .RISCV_ANDI => 5
 
 def execute_LOAD (imm : (BitVec 12)) (rs1 : (BitVec 5)) (rd : (BitVec 5)) : SailM Unit := do
   let addr ← (( do (pure ((← (rX rs1)) + (EXTS (m := 64) imm))) ) : SailM xlenbits )

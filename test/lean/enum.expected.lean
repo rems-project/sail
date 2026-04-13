@@ -158,9 +158,9 @@ def E_of_num (arg_ : Nat) : E :=
 
 def num_of_E (arg_ : E) : Int :=
   match arg_ with
-  | A => 0
-  | B => 1
-  | C => 2
+  | .A => 0
+  | .B => 1
+  | .C => 2
 
 def initialize_registers (_ : Unit) : Unit :=
   ()

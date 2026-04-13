@@ -159,17 +159,17 @@ def word_width_of_num (arg_ : Nat) : word_width :=
 
 def num_of_word_width (arg_ : word_width) : Int :=
   match arg_ with
-  | BYTE => 0
-  | HALF => 1
-  | WORD => 2
-  | DOUBLE => 3
+  | .BYTE => 0
+  | .HALF => 1
+  | .WORD => 2
+  | .DOUBLE => 3
 
 def size_bits_forwards (arg_ : word_width) : (BitVec 2) :=
   match arg_ with
-  | BYTE => 0b00#2
-  | HALF => 0b01#2
-  | WORD => 0b10#2
-  | DOUBLE => 0b11#2
+  | .BYTE => 0b00#2
+  | .HALF => 0b01#2
+  | .WORD => 0b10#2
+  | .DOUBLE => 0b11#2
 
 def size_bits_backwards (arg_ : (BitVec 2)) : word_width :=
   match arg_ with
@@ -180,10 +180,10 @@ def size_bits_backwards (arg_ : (BitVec 2)) : word_width :=
 
 def size_bits_forwards_matches (arg_ : word_width) : Bool :=
   match arg_ with
-  | BYTE => true
-  | HALF => true
-  | WORD => true
-  | DOUBLE => true
+  | .BYTE => true
+  | .HALF => true
+  | .WORD => true
+  | .DOUBLE => true
   | _ => false
 
 def size_bits_backwards_matches (arg_ : (BitVec 2)) : Bool :=
@@ -196,10 +196,10 @@ def size_bits_backwards_matches (arg_ : (BitVec 2)) : Bool :=
 
 def size_bits2_forwards (arg_ : word_width) : (BitVec 2) :=
   match arg_ with
-  | BYTE => 0b00#2
-  | HALF => 0b01#2
-  | WORD => 0b10#2
-  | DOUBLE => 0b11#2
+  | .BYTE => 0b00#2
+  | .HALF => 0b01#2
+  | .WORD => 0b10#2
+  | .DOUBLE => 0b11#2
 
 def size_bits2_backwards (arg_ : (BitVec 2)) : word_width :=
   match arg_ with
@@ -210,10 +210,10 @@ def size_bits2_backwards (arg_ : (BitVec 2)) : word_width :=
 
 def size_bits2_forwards_matches (arg_ : word_width) : Bool :=
   match arg_ with
-  | BYTE => true
-  | HALF => true
-  | WORD => true
-  | DOUBLE => true
+  | .BYTE => true
+  | .HALF => true
+  | .WORD => true
+  | .DOUBLE => true
   | _ => false
 
 def size_bits2_backwards_matches (arg_ : (BitVec 2)) : Bool :=
@@ -226,10 +226,10 @@ def size_bits2_backwards_matches (arg_ : (BitVec 2)) : Bool :=
 
 def size_bits3_forwards (arg_ : word_width) : (BitVec 2) :=
   match arg_ with
-  | BYTE => 0b00#2
-  | HALF => 0b01#2
-  | WORD => 0b10#2
-  | DOUBLE => 0b11#2
+  | .BYTE => 0b00#2
+  | .HALF => 0b01#2
+  | .WORD => 0b10#2
+  | .DOUBLE => 0b11#2
 
 def size_bits3_backwards (arg_ : (BitVec 2)) : word_width :=
   match arg_ with
@@ -240,10 +240,10 @@ def size_bits3_backwards (arg_ : (BitVec 2)) : word_width :=
 
 def size_bits3_forwards_matches (arg_ : word_width) : Bool :=
   match arg_ with
-  | BYTE => true
-  | HALF => true
-  | WORD => true
-  | DOUBLE => true
+  | .BYTE => true
+  | .HALF => true
+  | .WORD => true
+  | .DOUBLE => true
   | _ => false
 
 def size_bits3_backwards_matches (arg_ : (BitVec 2)) : Bool :=

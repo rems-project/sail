@@ -510,7 +510,9 @@ let rec doc_pat ?(need_parens = false) ?(in_vector = false) ctx in_match_bv (P_a
       | Typ_aux (Typ_app (Id_aux (Id id', _), [A_aux (A_nexp (Nexp_aux (Nexp_constant i, _)), _)]), _)
         when in_vector && (id' = "bits" || id' = "bitvector") ->
           (fixup_match_id id |> doc_id_ctor) ^^ string ":" ^^ doc_big_int i
-      | _ -> fixup_match_id id |> doc_id_ctor
+      | _ ->
+          let prefix = if Type_check.is_enum_member id ctx.env then string "." else empty in
+          prefix ^^ (fixup_match_id id |> doc_id_ctor)
     )
   | P_tuple pats -> separate (string ", ") (List.map (doc_pat ctx in_match_bv) pats) |> parens
   | P_list pats -> separate (string ", ") (List.map (doc_pat ctx in_match_bv) pats) |> brackets

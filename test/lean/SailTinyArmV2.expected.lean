@@ -613,10 +613,10 @@ def SecurityState_of_num (arg_ : Nat) : SecurityState :=
 
 def num_of_SecurityState (arg_ : SecurityState) : Int :=
   match arg_ with
-  | SS_NonSecure => 0
-  | SS_Root => 1
-  | SS_Realm => 2
-  | SS_Secure => 3
+  | .SS_NonSecure => 0
+  | .SS_Root => 1
+  | .SS_Realm => 2
+  | .SS_Secure => 3
 
 def undefined_PARTIDspaceType (_ : Unit) : SailM PARTIDspaceType := do
   (internal_pick [PIdSpace_Secure, PIdSpace_Root, PIdSpace_Realm, PIdSpace_NonSecure])
@@ -631,10 +631,10 @@ def PARTIDspaceType_of_num (arg_ : Nat) : PARTIDspaceType :=
 
 def num_of_PARTIDspaceType (arg_ : PARTIDspaceType) : Int :=
   match arg_ with
-  | PIdSpace_Secure => 0
-  | PIdSpace_Root => 1
-  | PIdSpace_Realm => 2
-  | PIdSpace_NonSecure => 3
+  | .PIdSpace_Secure => 0
+  | .PIdSpace_Root => 1
+  | .PIdSpace_Realm => 2
+  | .PIdSpace_NonSecure => 3
 
 def undefined_MPAMinfo (_ : Unit) : SailM MPAMinfo := do
   (pure { mpam_sp := ← (undefined_PARTIDspaceType ())
@@ -665,20 +665,20 @@ def AccessType_of_num (arg_ : Nat) : AccessType :=
 
 def num_of_AccessType (arg_ : AccessType) : Int :=
   match arg_ with
-  | AccessType_IFETCH => 0
-  | AccessType_GPR => 1
-  | AccessType_ASIMD => 2
-  | AccessType_SVE => 3
-  | AccessType_SME => 4
-  | AccessType_IC => 5
-  | AccessType_DC => 6
-  | AccessType_DCZero => 7
-  | AccessType_AT => 8
-  | AccessType_NV2 => 9
-  | AccessType_SPE => 10
-  | AccessType_GCS => 11
-  | AccessType_GPTW => 12
-  | AccessType_TTW => 13
+  | .AccessType_IFETCH => 0
+  | .AccessType_GPR => 1
+  | .AccessType_ASIMD => 2
+  | .AccessType_SVE => 3
+  | .AccessType_SME => 4
+  | .AccessType_IC => 5
+  | .AccessType_DC => 6
+  | .AccessType_DCZero => 7
+  | .AccessType_AT => 8
+  | .AccessType_NV2 => 9
+  | .AccessType_SPE => 10
+  | .AccessType_GCS => 11
+  | .AccessType_GPTW => 12
+  | .AccessType_TTW => 13
 
 def undefined_VARange (_ : Unit) : SailM VARange := do
   (internal_pick [VARange_LOWER, VARange_UPPER])
@@ -691,8 +691,8 @@ def VARange_of_num (arg_ : Nat) : VARange :=
 
 def num_of_VARange (arg_ : VARange) : Int :=
   match arg_ with
-  | VARange_LOWER => 0
-  | VARange_UPPER => 1
+  | .VARange_LOWER => 0
+  | .VARange_UPPER => 1
 
 def undefined_MemAtomicOp (_ : Unit) : SailM MemAtomicOp := do
   (internal_pick
@@ -715,17 +715,17 @@ def MemAtomicOp_of_num (arg_ : Nat) : MemAtomicOp :=
 
 def num_of_MemAtomicOp (arg_ : MemAtomicOp) : Int :=
   match arg_ with
-  | MemAtomicOp_GCSSS1 => 0
-  | MemAtomicOp_ADD => 1
-  | MemAtomicOp_BIC => 2
-  | MemAtomicOp_EOR => 3
-  | MemAtomicOp_ORR => 4
-  | MemAtomicOp_SMAX => 5
-  | MemAtomicOp_SMIN => 6
-  | MemAtomicOp_UMAX => 7
-  | MemAtomicOp_UMIN => 8
-  | MemAtomicOp_SWP => 9
-  | MemAtomicOp_CAS => 10
+  | .MemAtomicOp_GCSSS1 => 0
+  | .MemAtomicOp_ADD => 1
+  | .MemAtomicOp_BIC => 2
+  | .MemAtomicOp_EOR => 3
+  | .MemAtomicOp_ORR => 4
+  | .MemAtomicOp_SMAX => 5
+  | .MemAtomicOp_SMIN => 6
+  | .MemAtomicOp_UMAX => 7
+  | .MemAtomicOp_UMIN => 8
+  | .MemAtomicOp_SWP => 9
+  | .MemAtomicOp_CAS => 10
 
 def undefined_CacheOp (_ : Unit) : SailM CacheOp := do
   (internal_pick [CacheOp_Clean, CacheOp_Invalidate, CacheOp_CleanInvalidate])
@@ -739,9 +739,9 @@ def CacheOp_of_num (arg_ : Nat) : CacheOp :=
 
 def num_of_CacheOp (arg_ : CacheOp) : Int :=
   match arg_ with
-  | CacheOp_Clean => 0
-  | CacheOp_Invalidate => 1
-  | CacheOp_CleanInvalidate => 2
+  | .CacheOp_Clean => 0
+  | .CacheOp_Invalidate => 1
+  | .CacheOp_CleanInvalidate => 2
 
 def undefined_CacheOpScope (_ : Unit) : SailM CacheOpScope := do
   (internal_pick
@@ -762,15 +762,15 @@ def CacheOpScope_of_num (arg_ : Nat) : CacheOpScope :=
 
 def num_of_CacheOpScope (arg_ : CacheOpScope) : Int :=
   match arg_ with
-  | CacheOpScope_SetWay => 0
-  | CacheOpScope_PoU => 1
-  | CacheOpScope_PoC => 2
-  | CacheOpScope_PoE => 3
-  | CacheOpScope_PoP => 4
-  | CacheOpScope_PoDP => 5
-  | CacheOpScope_PoPA => 6
-  | CacheOpScope_ALLU => 7
-  | CacheOpScope_ALLUIS => 8
+  | .CacheOpScope_SetWay => 0
+  | .CacheOpScope_PoU => 1
+  | .CacheOpScope_PoC => 2
+  | .CacheOpScope_PoE => 3
+  | .CacheOpScope_PoP => 4
+  | .CacheOpScope_PoDP => 5
+  | .CacheOpScope_PoPA => 6
+  | .CacheOpScope_ALLU => 7
+  | .CacheOpScope_ALLUIS => 8
 
 def undefined_CacheType (_ : Unit) : SailM CacheType := do
   (internal_pick [CacheType_Data, CacheType_Tag, CacheType_Data_Tag, CacheType_Instruction])
@@ -785,10 +785,10 @@ def CacheType_of_num (arg_ : Nat) : CacheType :=
 
 def num_of_CacheType (arg_ : CacheType) : Int :=
   match arg_ with
-  | CacheType_Data => 0
-  | CacheType_Tag => 1
-  | CacheType_Data_Tag => 2
-  | CacheType_Instruction => 3
+  | .CacheType_Data => 0
+  | .CacheType_Tag => 1
+  | .CacheType_Data_Tag => 2
+  | .CacheType_Instruction => 3
 
 def undefined_CachePASpace (_ : Unit) : SailM CachePASpace := do
   (internal_pick
@@ -807,13 +807,13 @@ def CachePASpace_of_num (arg_ : Nat) : CachePASpace :=
 
 def num_of_CachePASpace (arg_ : CachePASpace) : Int :=
   match arg_ with
-  | CPAS_NonSecure => 0
-  | CPAS_Any => 1
-  | CPAS_RealmNonSecure => 2
-  | CPAS_Realm => 3
-  | CPAS_Root => 4
-  | CPAS_SecureNonSecure => 5
-  | CPAS_Secure => 6
+  | .CPAS_NonSecure => 0
+  | .CPAS_Any => 1
+  | .CPAS_RealmNonSecure => 2
+  | .CPAS_Realm => 3
+  | .CPAS_Root => 4
+  | .CPAS_SecureNonSecure => 5
+  | .CPAS_Secure => 6
 
 def undefined_AccessDescriptor (_ : Unit) : SailM AccessDescriptor := do
   (pure { acctype := ← (undefined_AccessType ())
@@ -861,8 +861,8 @@ def MemType_of_num (arg_ : Nat) : MemType :=
 
 def num_of_MemType (arg_ : MemType) : Int :=
   match arg_ with
-  | MemType_Normal => 0
-  | MemType_Device => 1
+  | .MemType_Normal => 0
+  | .MemType_Device => 1
 
 def undefined_DeviceType (_ : Unit) : SailM DeviceType := do
   (internal_pick [DeviceType_GRE, DeviceType_nGRE, DeviceType_nGnRE, DeviceType_nGnRnE])
@@ -877,10 +877,10 @@ def DeviceType_of_num (arg_ : Nat) : DeviceType :=
 
 def num_of_DeviceType (arg_ : DeviceType) : Int :=
   match arg_ with
-  | DeviceType_GRE => 0
-  | DeviceType_nGRE => 1
-  | DeviceType_nGnRE => 2
-  | DeviceType_nGnRnE => 3
+  | .DeviceType_GRE => 0
+  | .DeviceType_nGRE => 1
+  | .DeviceType_nGnRE => 2
+  | .DeviceType_nGnRnE => 3
 
 def undefined_MemAttrHints (_ : Unit) : SailM MemAttrHints := do
   (pure { attrs := ← (undefined_bitvector 2)
@@ -899,9 +899,9 @@ def Shareability_of_num (arg_ : Nat) : Shareability :=
 
 def num_of_Shareability (arg_ : Shareability) : Int :=
   match arg_ with
-  | Shareability_NSH => 0
-  | Shareability_ISH => 1
-  | Shareability_OSH => 2
+  | .Shareability_NSH => 0
+  | .Shareability_ISH => 1
+  | .Shareability_OSH => 2
 
 def undefined_MemTagType (_ : Unit) : SailM MemTagType := do
   (internal_pick [MemTag_Untagged, MemTag_AllocationTagged, MemTag_CanonicallyTagged])
@@ -915,9 +915,9 @@ def MemTagType_of_num (arg_ : Nat) : MemTagType :=
 
 def num_of_MemTagType (arg_ : MemTagType) : Int :=
   match arg_ with
-  | MemTag_Untagged => 0
-  | MemTag_AllocationTagged => 1
-  | MemTag_CanonicallyTagged => 2
+  | .MemTag_Untagged => 0
+  | .MemTag_AllocationTagged => 1
+  | .MemTag_CanonicallyTagged => 2
 
 def undefined_MemoryAttributes (_ : Unit) : SailM MemoryAttributes := do
   (pure { memtype := ← (undefined_MemType ())
@@ -942,10 +942,10 @@ def PASpace_of_num (arg_ : Nat) : PASpace :=
 
 def num_of_PASpace (arg_ : PASpace) : Int :=
   match arg_ with
-  | PAS_NonSecure => 0
-  | PAS_Secure => 1
-  | PAS_Root => 2
-  | PAS_Realm => 3
+  | .PAS_NonSecure => 0
+  | .PAS_Secure => 1
+  | .PAS_Root => 2
+  | .PAS_Realm => 3
 
 def undefined_FullAddress (_ : Unit) : SailM FullAddress := do
   (pure { paspace := ← (undefined_PASpace ())
@@ -965,11 +965,11 @@ def GPCF_of_num (arg_ : Nat) : GPCF :=
 
 def num_of_GPCF (arg_ : GPCF) : Int :=
   match arg_ with
-  | GPCF_None => 0
-  | GPCF_AddressSize => 1
-  | GPCF_Walk => 2
-  | GPCF_EABT => 3
-  | GPCF_Fail => 4
+  | .GPCF_None => 0
+  | .GPCF_AddressSize => 1
+  | .GPCF_Walk => 2
+  | .GPCF_EABT => 3
+  | .GPCF_Fail => 4
 
 def undefined_GPCFRecord (_ : Unit) : SailM GPCFRecord := do
   (pure { gpf := ← (undefined_GPCF ())
@@ -1009,30 +1009,30 @@ def Fault_of_num (arg_ : Nat) : Fault :=
 
 def num_of_Fault (arg_ : Fault) : Int :=
   match arg_ with
-  | Fault_None => 0
-  | Fault_AccessFlag => 1
-  | Fault_Alignment => 2
-  | Fault_Background => 3
-  | Fault_Domain => 4
-  | Fault_Permission => 5
-  | Fault_Translation => 6
-  | Fault_AddressSize => 7
-  | Fault_SyncExternal => 8
-  | Fault_SyncExternalOnWalk => 9
-  | Fault_SyncParity => 10
-  | Fault_SyncParityOnWalk => 11
-  | Fault_GPCFOnWalk => 12
-  | Fault_GPCFOnOutput => 13
-  | Fault_AsyncParity => 14
-  | Fault_AsyncExternal => 15
-  | Fault_TagCheck => 16
-  | Fault_Debug => 17
-  | Fault_TLBConflict => 18
-  | Fault_BranchTarget => 19
-  | Fault_HWUpdateAccessFlag => 20
-  | Fault_Lockdown => 21
-  | Fault_Exclusive => 22
-  | Fault_ICacheMaint => 23
+  | .Fault_None => 0
+  | .Fault_AccessFlag => 1
+  | .Fault_Alignment => 2
+  | .Fault_Background => 3
+  | .Fault_Domain => 4
+  | .Fault_Permission => 5
+  | .Fault_Translation => 6
+  | .Fault_AddressSize => 7
+  | .Fault_SyncExternal => 8
+  | .Fault_SyncExternalOnWalk => 9
+  | .Fault_SyncParity => 10
+  | .Fault_SyncParityOnWalk => 11
+  | .Fault_GPCFOnWalk => 12
+  | .Fault_GPCFOnOutput => 13
+  | .Fault_AsyncParity => 14
+  | .Fault_AsyncExternal => 15
+  | .Fault_TagCheck => 16
+  | .Fault_Debug => 17
+  | .Fault_TLBConflict => 18
+  | .Fault_BranchTarget => 19
+  | .Fault_HWUpdateAccessFlag => 20
+  | .Fault_Lockdown => 21
+  | .Fault_Exclusive => 22
+  | .Fault_ICacheMaint => 23
 
 def undefined_ErrorState (_ : Unit) : SailM ErrorState := do
   (internal_pick
@@ -1051,13 +1051,13 @@ def ErrorState_of_num (arg_ : Nat) : ErrorState :=
 
 def num_of_ErrorState (arg_ : ErrorState) : Int :=
   match arg_ with
-  | ErrorState_UC => 0
-  | ErrorState_UEU => 1
-  | ErrorState_UEO => 2
-  | ErrorState_UER => 3
-  | ErrorState_CE => 4
-  | ErrorState_Uncategorized => 5
-  | ErrorState_IMPDEF => 6
+  | .ErrorState_UC => 0
+  | .ErrorState_UEU => 1
+  | .ErrorState_UEO => 2
+  | .ErrorState_UER => 3
+  | .ErrorState_CE => 4
+  | .ErrorState_Uncategorized => 5
+  | .ErrorState_IMPDEF => 6
 
 def undefined_FaultRecord (_ : Unit) : SailM FaultRecord := do
   (pure { statuscode := ← (undefined_Fault ())
@@ -1095,10 +1095,10 @@ def MBReqDomain_of_num (arg_ : Nat) : MBReqDomain :=
 
 def num_of_MBReqDomain (arg_ : MBReqDomain) : Int :=
   match arg_ with
-  | MBReqDomain_Nonshareable => 0
-  | MBReqDomain_InnerShareable => 1
-  | MBReqDomain_OuterShareable => 2
-  | MBReqDomain_FullSystem => 3
+  | .MBReqDomain_Nonshareable => 0
+  | .MBReqDomain_InnerShareable => 1
+  | .MBReqDomain_OuterShareable => 2
+  | .MBReqDomain_FullSystem => 3
 
 def undefined_MBReqTypes (_ : Unit) : SailM MBReqTypes := do
   (internal_pick [MBReqTypes_Reads, MBReqTypes_Writes, MBReqTypes_All])
@@ -1112,9 +1112,9 @@ def MBReqTypes_of_num (arg_ : Nat) : MBReqTypes :=
 
 def num_of_MBReqTypes (arg_ : MBReqTypes) : Int :=
   match arg_ with
-  | MBReqTypes_Reads => 0
-  | MBReqTypes_Writes => 1
-  | MBReqTypes_All => 2
+  | .MBReqTypes_Reads => 0
+  | .MBReqTypes_Writes => 1
+  | .MBReqTypes_All => 2
 
 def undefined_CacheRecord (_ : Unit) : SailM CacheRecord := do
   (pure { acctype := ← (undefined_AccessType ())
@@ -1150,11 +1150,11 @@ def Regime_of_num (arg_ : Nat) : Regime :=
 
 def num_of_Regime (arg_ : Regime) : Int :=
   match arg_ with
-  | Regime_EL3 => 0
-  | Regime_EL30 => 1
-  | Regime_EL2 => 2
-  | Regime_EL20 => 3
-  | Regime_EL10 => 4
+  | .Regime_EL3 => 0
+  | .Regime_EL30 => 1
+  | .Regime_EL2 => 2
+  | .Regime_EL20 => 3
+  | .Regime_EL10 => 4
 
 def undefined_TGx (_ : Unit) : SailM TGx := do
   (internal_pick [TGx_4KB, TGx_16KB, TGx_64KB])
@@ -1168,9 +1168,9 @@ def TGx_of_num (arg_ : Nat) : TGx :=
 
 def num_of_TGx (arg_ : TGx) : Int :=
   match arg_ with
-  | TGx_4KB => 0
-  | TGx_16KB => 1
-  | TGx_64KB => 2
+  | .TGx_4KB => 0
+  | .TGx_16KB => 1
+  | .TGx_64KB => 2
 
 def undefined_TLBContext (_ : Unit) : SailM TLBContext := do
   (pure { ss := ← (undefined_SecurityState ())
@@ -1220,8 +1220,8 @@ def TLBILevel_of_num (arg_ : Nat) : TLBILevel :=
 
 def num_of_TLBILevel (arg_ : TLBILevel) : Int :=
   match arg_ with
-  | TLBILevel_Any => 0
-  | TLBILevel_Last => 1
+  | .TLBILevel_Any => 0
+  | .TLBILevel_Last => 1
 
 def undefined_TLBIOp (_ : Unit) : SailM TLBIOp := do
   (internal_pick
@@ -1257,30 +1257,30 @@ def TLBIOp_of_num (arg_ : Nat) : TLBIOp :=
 
 def num_of_TLBIOp (arg_ : TLBIOp) : Int :=
   match arg_ with
-  | TLBIOp_DALL => 0
-  | TLBIOp_DASID => 1
-  | TLBIOp_DVA => 2
-  | TLBIOp_IALL => 3
-  | TLBIOp_IASID => 4
-  | TLBIOp_IVA => 5
-  | TLBIOp_ALL => 6
-  | TLBIOp_ASID => 7
-  | TLBIOp_IPAS2 => 8
-  | TLBIPOp_IPAS2 => 9
-  | TLBIOp_VAA => 10
-  | TLBIOp_VA => 11
-  | TLBIPOp_VAA => 12
-  | TLBIPOp_VA => 13
-  | TLBIOp_VMALL => 14
-  | TLBIOp_VMALLS12 => 15
-  | TLBIOp_RIPAS2 => 16
-  | TLBIPOp_RIPAS2 => 17
-  | TLBIOp_RVAA => 18
-  | TLBIOp_RVA => 19
-  | TLBIPOp_RVAA => 20
-  | TLBIPOp_RVA => 21
-  | TLBIOp_RPA => 22
-  | TLBIOp_PAALL => 23
+  | .TLBIOp_DALL => 0
+  | .TLBIOp_DASID => 1
+  | .TLBIOp_DVA => 2
+  | .TLBIOp_IALL => 3
+  | .TLBIOp_IASID => 4
+  | .TLBIOp_IVA => 5
+  | .TLBIOp_ALL => 6
+  | .TLBIOp_ASID => 7
+  | .TLBIOp_IPAS2 => 8
+  | .TLBIPOp_IPAS2 => 9
+  | .TLBIOp_VAA => 10
+  | .TLBIOp_VA => 11
+  | .TLBIPOp_VAA => 12
+  | .TLBIPOp_VA => 13
+  | .TLBIOp_VMALL => 14
+  | .TLBIOp_VMALLS12 => 15
+  | .TLBIOp_RIPAS2 => 16
+  | .TLBIPOp_RIPAS2 => 17
+  | .TLBIOp_RVAA => 18
+  | .TLBIOp_RVA => 19
+  | .TLBIPOp_RVAA => 20
+  | .TLBIPOp_RVA => 21
+  | .TLBIOp_RPA => 22
+  | .TLBIOp_PAALL => 23
 
 def undefined_TLBIMemAttr (_ : Unit) : SailM TLBIMemAttr := do
   (internal_pick [TLBI_AllAttr, TLBI_ExcludeXS])
@@ -1293,8 +1293,8 @@ def TLBIMemAttr_of_num (arg_ : Nat) : TLBIMemAttr :=
 
 def num_of_TLBIMemAttr (arg_ : TLBIMemAttr) : Int :=
   match arg_ with
-  | TLBI_AllAttr => 0
-  | TLBI_ExcludeXS => 1
+  | .TLBI_AllAttr => 0
+  | .TLBI_ExcludeXS => 1
 
 def undefined_TLBIRecord (_ : Unit) : SailM TLBIRecord := do
   (pure { op := ← (undefined_TLBIOp ())
