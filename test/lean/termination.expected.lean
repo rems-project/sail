@@ -158,36 +158,36 @@ def E_of_num (arg_ : Nat) : E :=
 
 def num_of_E (arg_ : E) : Int :=
   match arg_ with
-  | A => 0
-  | B => 1
-  | C => 2
+  | .A => 0
+  | .B => 1
+  | .C => 2
 
 def measure (x : E) : Int :=
   match x with
-  | A => 10
-  | B => 5
-  | C => 1
+  | .A => 10
+  | .B => 5
+  | .C => 1
 
 def enabled (e : E) : Bool :=
   match e with
-  | A => (enabled B)
-  | B => (enabled C)
-  | C => true
+  | .A => (enabled B)
+  | .B => (enabled C)
+  | .C => true
 termination_by (let e := e
 (measure e)).toNat
 
 def measure2 (x : E) : Int :=
   match x with
-  | A => 10
-  | B => 5
-  | C => 1
+  | .A => 10
+  | .B => 5
+  | .C => 1
 
 /-- Type quantifiers: k_ex1014_ : Bool -/
 def enabled2 (b : Bool) (e : E) : Bool :=
   match e with
-  | A => (enabled2 b B)
-  | B => (enabled2 b C)
-  | C => b
+  | .A => (enabled2 b B)
+  | .B => (enabled2 b C)
+  | .C => b
 termination_by (let (_, x) := (b, e)
 (measure2 x)).toNat
 
