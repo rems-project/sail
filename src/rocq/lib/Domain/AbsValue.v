@@ -48,8 +48,9 @@ From Stdlib Require Import Program.
 
 From stdpp Require Import base.
 From stdpp Require Import gmap.
-From stdpp Require Import list.
 From stdpp Require Import mapset.
+From stdpp Require Import bitvector.definitions.
+From stdpp Require Import list.
 
 From Sail Require Import SailBase.
 From Sail Require Import IdUtil.
@@ -69,9 +70,9 @@ Module Value.
   Definition t := Ast.value.
 End Value.
 
-Module Dom (DZ : DOMAIN BinInt.Z) (Dbv : DOMAIN AbsBitvector.BitList) <: DOMAIN Value.
+Module Dom (DZ : DOMAIN BinInt.Z) (Dbv : DOMAIN AbsBitvector.Bits) <: DOMAIN Value.
   Module DZP := DomainProperties BinInt.Z DZ.
-  Module DbvP := DomainProperties AbsBitvector.BitList Dbv.
+  Module DbvP := DomainProperties AbsBitvector.Bits Dbv.
 
   Inductive value : Type :=
     | V_bitvector : Dbv.t → value
@@ -1862,7 +1863,7 @@ Module Dom (DZ : DOMAIN BinInt.Z) (Dbv : DOMAIN AbsBitvector.BitList) <: DOMAIN 
 
   Fixpoint α (x : Ast.value) : value :=
     match x with
-    | Ast.V_bitvector bv => V_bitvector (Dbv.α bv)
+    | Ast.V_bitvector bv => V_bitvector (Dbv.α (Bit.Bits.to_bvn bv))
     | Ast.V_vector xs => V_vector (List.map α xs)
     | Ast.V_list xs => V_list (List.map α xs)
     | Ast.V_int i => V_int (DZ.α i)

@@ -1,18 +1,19 @@
+open BinNat
 open Bit
-open Datatypes
 open List0
 open ListDef
 open OptionUtil
 open Specif
 open Base
 open Countable
+open Definitions
 open Fin_maps
 open Gmap
 open Numbers
 
-module BitList :
+module Bits :
  sig
-  type t = bit list
+  type t = bvn
  end
 
 module Dom :
@@ -53,5 +54,5 @@ module Dom :
 
   val leb : t -> t -> bool
 
-  val _UU03b1_ : bit list -> t
+  val _UU03b1_ : bvn -> t
  end

@@ -1,6 +1,7 @@
 open AbsBitvector
 open Ast
 open BinInt
+open Bit
 open Datatypes
 open IdUtil
 open Lattice
@@ -49,12 +50,12 @@ module Dom =
 
   val leb : t -> t -> bool
 
-  val _UU03b1_ : BitList.t -> t
+  val _UU03b1_ : AbsBitvector.Bits.t -> t
  end) ->
  struct
   module DZP = DomainProperties(Z)(DZ)
 
-  module DbvP = DomainProperties(BitList)(Dbv)
+  module DbvP = DomainProperties(AbsBitvector.Bits)(Dbv)
 
   type value =
   | V_bitvector of Dbv.t
@@ -512,7 +513,7 @@ module Dom =
   (** val _UU03b1_ : Ast.value -> value **)
 
   let rec _UU03b1_ = function
-  | Ast.V_bitvector bv -> V_bitvector (Dbv._UU03b1_ bv)
+  | Ast.V_bitvector bv -> V_bitvector (Dbv._UU03b1_ (Bits.to_bvn bv))
   | Ast.V_vector xs -> V_vector (map _UU03b1_ xs)
   | Ast.V_list xs -> V_list (map _UU03b1_ xs)
   | Ast.V_int i -> V_int (DZ._UU03b1_ i)

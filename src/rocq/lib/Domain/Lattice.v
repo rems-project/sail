@@ -44,6 +44,7 @@
 From Stdlib Require Import ZArith.
 
 From stdpp Require Import base.
+From stdpp Require Import bitvector.definitions.
 
 Module Type CONCRETE.
   Parameter t : Set.
@@ -171,7 +172,7 @@ Module Type SAIL_INT.
   Parameter add : t → t → t.
   Parameter add_abst : ∀ {x y}, α (x + y) = add (α x) (α y).
   Parameter add_comm : ∀ {x y}, add x y = add y x.
-  Parameter add_assoc : ∀ {x y z}, add x (add x y) = add (add x y) z.
+  Parameter add_assoc : ∀ {x y z}, add x (add y z) = add (add x y) z.
 
   Parameter sub : t → t → t.
   Parameter sub_abst : ∀ {x y}, α (x - y) = sub (α x) (α y).
@@ -210,22 +211,30 @@ Module Type SAIL_INT.
   Parameter emod_abst : ∀ {x y}, α (snd (Z.div_eucl x y)) = emod (α x) (α y).
 End SAIL_INT.
 
-(*
 Module Type SAIL_BITS.
   Parameter t : Set.
 
+  Parameter α : bvn -> t.
+
   Parameter add : t → t → t.
+  Parameter add_abst : ∀ {n} {x y : bv n}, α (bv_to_bvn (x + y)) = add (α (bv_to_bvn x)) (α (bv_to_bvn y)).
 
   Parameter sub : t → t → t.
+  Parameter sub_abst : ∀ {n} {x y : bv n}, α (bv_to_bvn (x - y)) = sub (α (bv_to_bvn x)) (α (bv_to_bvn y)).
 
   Parameter not : t → t.
+  Parameter not_abst : ∀ {n} {x : bv n}, α (bv_to_bvn (bv_not x)) = not (α (bv_to_bvn x)).
 
   Parameter and : t → t → t.
+  Parameter and_abst : ∀ {n} {x y : bv n}, α (bv_to_bvn (bv_and x y)) = and (α (bv_to_bvn x)) (α (bv_to_bvn y)).
 
   Parameter or : t → t → t.
+  Parameter or_abst : ∀ {n} {x y : bv n}, α (bv_to_bvn (bv_or x y)) = or (α (bv_to_bvn x)) (α (bv_to_bvn y)).
 
   Parameter xor : t → t → t.
+  Parameter xor_abst : ∀ {n} {x y : bv n}, α (bv_to_bvn (bv_xor x y)) = xor (α (bv_to_bvn x)) (α (bv_to_bvn y)).
 
   Parameter append : t → t → t.
+  Parameter append_abst : ∀ {n m} {x : bv n} {y : bv m},
+    α (bv_to_bvn (bv_concat (n + m) x y)) = append (α (bv_to_bvn x)) (α (bv_to_bvn y)).
 End SAIL_BITS.
-*)

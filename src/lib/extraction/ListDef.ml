@@ -5,6 +5,16 @@ let rec map f = function
 | [] -> []
 | a :: l0 -> (f a) :: (map f l0)
 
+(** val seq :
+    Big_int_Z.big_int -> Big_int_Z.big_int -> Big_int_Z.big_int list **)
+
+let rec seq start len =
+  (fun fO fS n -> if Big_int_Z.sign_big_int n <= 0 then fO ()
+  else fS (Big_int_Z.pred_big_int n))
+    (fun _ -> [])
+    (fun len0 -> start :: (seq (Big_int_Z.succ_big_int start) len0))
+    len
+
 (** val repeat : 'a1 -> Big_int_Z.big_int -> 'a1 list **)
 
 let rec repeat x n =

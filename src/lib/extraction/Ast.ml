@@ -43,11 +43,11 @@ type kind_aux =
 | K_int
 | K_bool
 
-type kid_aux =
-| Var of string
-
 type kind =
 | K_aux of kind_aux * Parse_ast.l
+
+type kid_aux =
+| Var of string
 
 type kid =
 | Kid_aux of kid_aux * Parse_ast.l
@@ -55,14 +55,14 @@ type kid =
 type kinded_id_aux =
 | KOpt_kind of kind * kid
 
+type kinded_id =
+| KOpt_aux of kinded_id_aux * Parse_ast.l
+
 type id_aux =
 | And_bool
 | Or_bool
 | Id of string
 | Operator of string
-
-type kinded_id =
-| KOpt_aux of kinded_id_aux * Parse_ast.l
 
 type id =
 | Id_aux of id_aux * Parse_ast.l

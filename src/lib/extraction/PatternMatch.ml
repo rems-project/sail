@@ -116,31 +116,31 @@ let merge_match_result l r =
      | Unmatched -> Unmatched)
   | Unmatched -> Unmatched
 
-(** val empty_bindings : value binding IdMap.t **)
+(** val empty_bindings : 'a1 binding IdMap.t **)
 
 let empty_bindings =
   IdMap.empty
 
-(** val simple_match : value match_result **)
+(** val simple_match : 'a1 match_result **)
 
 let simple_match =
   Matched empty_bindings
 
-(** val simple_match_when : bool -> value match_result **)
+(** val simple_match_when : bool -> 'a1 match_result **)
 
 let simple_match_when = function
 | true -> simple_match
 | false -> Unmatched
 
 (** val add_match :
-    id -> value binding -> value match_result -> value match_result **)
+    id -> 'a1 binding -> 'a1 match_result -> 'a1 match_result **)
 
 let add_match k v = function
 | Matched b -> Matched (IdMap.add k v b)
 | MaybeMatched b -> MaybeMatched (IdMap.add k v b)
 | Unmatched -> Unmatched
 
-(** val neg_match : value match_result -> value match_result **)
+(** val neg_match : 'a1 match_result -> 'a1 match_result **)
 
 let neg_match = function
 | Matched _ -> Unmatched

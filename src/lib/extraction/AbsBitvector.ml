@@ -1,18 +1,19 @@
+open BinNat
 open Bit
-open Datatypes
 open List0
 open ListDef
 open OptionUtil
 open Specif
 open Base
 open Countable
+open Definitions
 open Fin_maps
 open Gmap
 open Numbers
 
-module BitList =
+module Bits =
  struct
-  type t = bit list
+  type t = bvn
  end
 
 module Dom =
@@ -117,12 +118,16 @@ module Dom =
        | Bvs y0 ->
          leb_aux (let Coq_exist a = x0 in a) (let Coq_exist a = y0 in a))
 
-  (** val _UU03b1_ : bit list -> t **)
+  (** val _UU03b1_ : bvn -> t **)
 
-  let _UU03b1_ bv =
-    Bvs (Coq_exist
-      (singletonM
-        (map_singleton (gmap_partial_alter Nat.eq_dec nat_countable)
-          (gmap_empty Nat.eq_dec nat_countable))
-        (length bv) (map Three.from_bit bv)))
+  let _UU03b1_ x =
+    let len = x.bvn_n in
+    (match bvn_to_bv len x with
+     | Some x' ->
+       Bvs (Coq_exist
+         (singletonM
+           (map_singleton (gmap_partial_alter Nat.eq_dec nat_countable)
+             (gmap_empty Nat.eq_dec nat_countable))
+           (BinNat.N.to_nat len) (map Three.from_bool (bv_to_bits len x'))))
+     | None -> bot)
  end

@@ -41,7 +41,14 @@
 (*  SPDX-License-Identifier: BSD-2-Clause                                   *)
 (* ************************************************************************ *)
 
+From Stdlib Require Import BinNums.
+
 From stdpp Require Import base.
+From stdpp Require Import bitvector.definitions.
+From stdpp Require Import bitvector.tactics.
+From stdpp Require Import list.
+
+From Sail Require Import BvUtil.
 
 Inductive bit : Set :=
   | B0 : bit
@@ -54,6 +61,18 @@ Definition bit_eqb (lhs rhs : bit) : bool :=
   | _ => false
   end.
 
+Definition bit_to_bool (b : bit) : bool :=
+  match b with
+  | B0 => false
+  | B1 => true
+  end.
+
+Definition bool_to_bit (b : bool) : bit :=
+  match b with
+  | false => B0
+  | true => B1
+  end.
+
 Lemma bit_eqb_refl : ∀ b, bit_eqb b b = true.
 Proof.
   destruct b; reflexivity.
@@ -61,6 +80,15 @@ Qed.
 
 Lemma bit_eqb_comm : ∀ {x y}, bit_eqb x y = bit_eqb y x.
 Proof. intros x y; destruct x, y; reflexivity. Qed.
+
+Module Bits.
+  Definition t : Set := list bit.
+
+  Definition to_bv (x : list bit) : bv (N.of_nat (length x)) :=
+    bv_cast (f_equal N.of_nat (length_map bit_to_bool x)) (BoolList.to_bv (List.map bit_to_bool x)).
+
+  Definition to_bvn (x : list bit) : bvn := BoolList.to_bv (List.map bit_to_bool x).
+End Bits.
 
 Module Three.
   Inductive ubit : Set :=
@@ -75,6 +103,9 @@ Module Three.
   End Notations.
 
   Import Notations.
+
+  Definition from_bool (b : bool) : ubit :=
+    if b then 1 else 0.
 
   Definition from_bit (b : bit) : ubit :=
     match b with

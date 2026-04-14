@@ -3,6 +3,8 @@ open Datatypes
 open OptionUtil
 open Specif
 open ZArith_dec
+open Base
+open Option
 
 module Dom =
  struct
@@ -134,4 +136,202 @@ module Dom =
 
   let _UU03b1_ n =
     Ends (Coq_exist ((Some n), (Some n)))
+
+  (** val negate_endpoints :
+      (Big_int_Z.big_int option * Big_int_Z.big_int option) ->
+      Big_int_Z.big_int option * Big_int_Z.big_int option **)
+
+  let negate_endpoints x =
+    ((fmap (Obj.magic (fun _ _ -> option_fmap)) Z.opp (snd x)),
+      (fmap (Obj.magic (fun _ _ -> option_fmap)) Z.opp (fst x)))
+
+  (** val negate : interval -> interval **)
+
+  let negate = function
+  | Empty -> Empty
+  | Ends e -> Ends (Coq_exist (negate_endpoints (let Coq_exist a = e in a)))
+
+  (** val add_endpoints :
+      (Big_int_Z.big_int option * Big_int_Z.big_int option) ->
+      (Big_int_Z.big_int option * Big_int_Z.big_int option) ->
+      Big_int_Z.big_int option * Big_int_Z.big_int option **)
+
+  let add_endpoints x y =
+    let l = option_map2 Z.add (fst x) (fst y) in
+    let h = option_map2 Z.add (snd x) (snd y) in (l, h)
+
+  (** val add : interval -> interval -> interval **)
+
+  let add x y =
+    match x with
+    | Empty -> Empty
+    | Ends e1 ->
+      (match y with
+       | Empty -> Empty
+       | Ends e2 ->
+         Ends (Coq_exist
+           (add_endpoints (let Coq_exist a = e1 in a)
+             (let Coq_exist a = e2 in a))))
+
+  (** val sub : interval -> interval -> interval **)
+
+  let sub x y =
+    add x (negate y)
+
+  (** val four_corner_endpoints :
+      (Big_int_Z.big_int -> Big_int_Z.big_int -> Big_int_Z.big_int) ->
+      (Big_int_Z.big_int option * Big_int_Z.big_int option) ->
+      (Big_int_Z.big_int option * Big_int_Z.big_int option) ->
+      Big_int_Z.big_int option * Big_int_Z.big_int option **)
+
+  let four_corner_endpoints op x y =
+    let p = (((fst x), (snd x)), (fst y)) in
+    let o = snd y in
+    let (p0, o0) = p in
+    let (o1, o2) = p0 in
+    (match o1 with
+     | Some lx ->
+       (match o2 with
+        | Some hx ->
+          (match o0 with
+           | Some ly ->
+             (match o with
+              | Some hy ->
+                let v1 = op lx ly in
+                let v2 = op lx hy in
+                let v3 = op hx ly in
+                let v4 = op hx hy in
+                ((Some (Z.min v1 (Z.min v2 (Z.min v3 v4)))), (Some
+                (Z.max v1 (Z.max v2 (Z.max v3 v4)))))
+              | None -> (None, None))
+           | None -> (None, None))
+        | None -> (None, None))
+     | None -> (None, None))
+
+  (** val lift_binop :
+      (Big_int_Z.big_int -> Big_int_Z.big_int -> Big_int_Z.big_int) ->
+      interval -> interval -> interval **)
+
+  let lift_binop op x y =
+    match x with
+    | Empty -> Empty
+    | Ends e1 ->
+      (match y with
+       | Empty -> Empty
+       | Ends e2 ->
+         Ends (Coq_exist
+           (four_corner_endpoints op (let Coq_exist a = e1 in a)
+             (let Coq_exist a = e2 in a))))
+
+  (** val mult : interval -> interval -> interval **)
+
+  let mult x y =
+    lift_binop Z.mul x y
+
+  (** val max_endpoints :
+      (Big_int_Z.big_int option * Big_int_Z.big_int option) ->
+      (Big_int_Z.big_int option * Big_int_Z.big_int option) ->
+      Big_int_Z.big_int option * Big_int_Z.big_int option **)
+
+  let max_endpoints x y =
+    ((option_join Z.max (fst x) (fst y)), (option_map2 Z.max (snd x) (snd y)))
+
+  (** val max : interval -> interval -> interval **)
+
+  let max x y =
+    match x with
+    | Empty -> Empty
+    | Ends e1 ->
+      (match y with
+       | Empty -> Empty
+       | Ends e2 ->
+         Ends (Coq_exist
+           (max_endpoints (let Coq_exist a = e1 in a)
+             (let Coq_exist a = e2 in a))))
+
+  (** val min_endpoints :
+      (Big_int_Z.big_int option * Big_int_Z.big_int option) ->
+      (Big_int_Z.big_int option * Big_int_Z.big_int option) ->
+      Big_int_Z.big_int option * Big_int_Z.big_int option **)
+
+  let min_endpoints x y =
+    ((option_map2 Z.min (fst x) (fst y)), (option_join Z.min (snd x) (snd y)))
+
+  (** val min : interval -> interval -> interval **)
+
+  let min x y =
+    match x with
+    | Empty -> Empty
+    | Ends e1 ->
+      (match y with
+       | Empty -> Empty
+       | Ends e2 ->
+         Ends (Coq_exist
+           (min_endpoints (let Coq_exist a = e1 in a)
+             (let Coq_exist a = e2 in a))))
+
+  (** val abs_endpoint :
+      (Big_int_Z.big_int option * Big_int_Z.big_int option) ->
+      Big_int_Z.big_int option * Big_int_Z.big_int option **)
+
+  let abs_endpoint x =
+    let o = fst x in
+    let o0 = snd x in
+    (match o with
+     | Some l ->
+       (match o0 with
+        | Some h ->
+          if Z.leb Big_int_Z.zero_big_int l
+          then ((Some l), (Some h))
+          else if Z.ltb h Big_int_Z.zero_big_int
+               then ((Some (Z.opp h)), (Some (Z.opp l)))
+               else ((Some Big_int_Z.zero_big_int), (Some
+                      (Z.max (Z.opp l) h)))
+        | None ->
+          if Z.leb Big_int_Z.zero_big_int l
+          then ((Some l), None)
+          else ((Some Big_int_Z.zero_big_int), None))
+     | None ->
+       (match o0 with
+        | Some h ->
+          if Z.ltb h Big_int_Z.zero_big_int
+          then ((Some (Z.opp h)), None)
+          else ((Some Big_int_Z.zero_big_int), None)
+        | None -> ((Some Big_int_Z.zero_big_int), None)))
+
+  (** val abs : interval -> interval **)
+
+  let abs = function
+  | Empty -> Empty
+  | Ends e -> Ends (Coq_exist (abs_endpoint (let Coq_exist a = e in a)))
+
+  (** val tdiv : interval -> interval -> interval **)
+
+  let tdiv x y =
+    lift_binop Z.quot x y
+
+  (** val tmod : interval -> interval -> interval **)
+
+  let tmod x y =
+    lift_binop Z.rem x y
+
+  (** val fdiv : interval -> interval -> interval **)
+
+  let fdiv x y =
+    lift_binop Z.div x y
+
+  (** val fmod : interval -> interval -> interval **)
+
+  let fmod x y =
+    lift_binop Z.modulo x y
+
+  (** val ediv : interval -> interval -> interval **)
+
+  let ediv x y =
+    lift_binop (fun a b -> fst (Z.div_eucl a b)) x y
+
+  (** val emod : interval -> interval -> interval **)
+
+  let emod x y =
+    lift_binop (fun a b -> snd (Z.div_eucl a b)) x y
  end

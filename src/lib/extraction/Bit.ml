@@ -1,10 +1,27 @@
+open BinNat
+open BvUtil
+open Datatypes
+open ListDef
+open Definitions
 
-module Coq__1 = struct
- type bit =
- | B0
- | B1
-end
-include Coq__1
+type bit =
+| B0
+| B1
+
+(** val bit_to_bool : bit -> bool **)
+
+let bit_to_bool = function
+| B0 -> false
+| B1 -> true
+
+module Bits =
+ struct
+  (** val to_bvn : bit list -> bvn **)
+
+  let to_bvn x =
+    { bvn_n = (N.of_nat (length (map bit_to_bool x))); bvn_val =
+      (BoolList.to_bv (map bit_to_bool x)) }
+ end
 
 module Three =
  struct
@@ -13,11 +30,11 @@ module Three =
   | B1
   | BU
 
-  (** val from_bit : bit -> ubit **)
+  (** val from_bool : bool -> ubit **)
 
-  let from_bit = function
-  | Coq__1.B0 -> B0
-  | Coq__1.B1 -> B1
+  let from_bool = function
+  | true -> B1
+  | false -> B0
 
   (** val bit_join : ubit -> ubit -> ubit **)
 

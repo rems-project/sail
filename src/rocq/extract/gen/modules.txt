@@ -9,6 +9,7 @@ BinPos
 Bit
 BitList
 Bool
+BvUtil
 Datatypes
 DecidableClass
 Decimal
@@ -46,9 +47,12 @@ ZAst
 base
 countable
 decidable
+definitions
 fin_maps
 gmap
 list_basics
+list_monad
+list_numbers
 mapset
 numbers
 option

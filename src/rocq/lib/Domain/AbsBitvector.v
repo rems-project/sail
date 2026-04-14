@@ -45,17 +45,18 @@ From Stdlib Require Import Logic.ProofIrrelevance.
 
 From stdpp Require Import base.
 From stdpp Require Import gmap.
+From stdpp Require Import bitvector.definitions.
 
 From Sail Require Import Domain.Lattice.
 From Sail Require Import OptionUtil.
 From Sail Require Bit.
 From Sail Require Import Tactics.
 
-Module BitList.
-  Definition t := list Bit.bit.
-End BitList.
+Module Bits.
+  Definition t := bvn.
+End Bits.
 
-Module Dom <: DOMAIN BitList.
+Module Dom <: DOMAIN Bits.
   Import Bit.Three.
 
   Definition valid (m : gmap nat (list ubit)) : Prop :=
@@ -595,13 +596,6 @@ Module Dom <: DOMAIN BitList.
       rewrite lookup_singleton_ne; reflexivity + assumption.
   Qed.
 
-  Lemma abs_valid : ∀ bv, valid {[length bv := List.map from_bit bv]}.
-  Proof.
-    intros bv.
-    apply singleton_valid.
-    apply length_map.
-  Qed.
-
   Definition le (x y : t) : Prop := Is_true (leb x y).
 
   Infix "⊑" := le (right associativity, at level 70).
@@ -622,6 +616,19 @@ Module Dom <: DOMAIN BitList.
     apply leb_join_def.
   Qed.
 
-  Definition α (bv : list Bit.bit) : t :=
-    Bvs ({[length bv := List.map from_bit bv]} ↾ (abs_valid bv)).
+  Lemma abs_valid : ∀ {n} (x : bv n), valid {[N.to_nat n := List.map from_bool (bv_to_bits x)]}.
+  Proof.
+    intros n x.
+    apply singleton_valid.
+    rewrite length_map.
+    apply length_bv_to_bits.
+  Qed.
+
+  Definition α (x : bvn) : t :=
+    let len := bvn_n x in
+    match bvn_to_bv len x with
+    | Some x' =>
+        Bvs ({[N.to_nat len := List.map from_bool (bv_to_bits x')]} ↾ (abs_valid x'))
+    | None => ⊥
+    end.
 End Dom.
