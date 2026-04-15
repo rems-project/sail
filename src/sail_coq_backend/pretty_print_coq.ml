@@ -2383,9 +2383,6 @@ let doc_exp, doc_let =
   in
   (top_exp, let_exp)
 
-(* FIXME: A temporary definition of List.init until 4.06 is more standard *)
-let list_init n f = Array.to_list (Array.init n f)
-
 (* Calculate a transitive type name dependency map *)
 let type_dependencies defs =
   let rec ids_of_typ (Typ_aux (typ, l) as typ_full) =
@@ -2769,7 +2766,7 @@ let doc_typdef global generic_eq_types countable_types enum_number_defs (TD_aux 
       let numfields = List.length fs in
       let intros_pp s =
         string " intros ["
-        ^^ separate space (list_init numfields (fun n -> string (s ^ string_of_int n)))
+        ^^ separate space (List.init numfields (fun n -> string (s ^ string_of_int n)))
         ^^ string "]." ^^ hardline
       in
       let full_type_pps = type_id_pp :: List.filter_map (quant_item_id_name bare_ctxt) (quant_items typq) in
@@ -2834,7 +2831,7 @@ let doc_typdef global generic_eq_types countable_types enum_number_defs (TD_aux 
                      (((string "Instance Decidable_eq_" ^^ type_id_pp) :: typq_pps) @ eq_req_pps @ [colon; class_pp])
                   ^^ hardline ^^ intros_pp "x" ^^ intros_pp "y"
                   ^^ separate hardline
-                       (list_init numfields (fun n ->
+                       (List.init numfields (fun n ->
                             let ns = string_of_int n in
                             string ("cmp_record_field x" ^ ns ^ " y" ^ ns ^ ".")
                         )
@@ -4711,7 +4708,7 @@ end = struct
     in
     separate hardline
     @@ [string "Module GenericValueConversion."]
-    @ List.concat_map update_for_def defs
+    @ List.concat (List.map update_for_def defs)
     @ [string "End GenericValueConversion."]
 end
 
