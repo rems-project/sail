@@ -119,19 +119,20 @@ def test_lem(name):
     results.expect_failure("read_write_ram.sail", "uses memory primitives not provided by default in Lem")
     results.expect_failure("fail_exception.sail", "try-blocks around pure expressions not supported in Lem (and a little silly)")
     results.expect_failure("loop_exception.sail", "try-blocks around pure expressions not supported in Lem (and a little silly)")
+    results.expect_failure("loop_termination.sail", "try-blocks around pure expressions not supported in Lem (and a little silly)")
     results.expect_failure("real.sail", "print_real not available for Lem at present")
     results.expect_failure("real_prop.sail", "print_real not available for Lem at present")
     results.expect_failure("concurrency_interface.sail", "test doesn't meet Lem library's expectations for the concurrency interface")
     results.expect_failure("concurrency_interface_v2.sail", "test doesn't meet Lem library's expectations for the concurrency interface")
+    results.expect_failure("concurrency_interface_v2_var.sail", "test doesn't meet Lem library's expectations for the concurrency interface")
     results.expect_failure("concurrency_interface_write.sail", "test harness doesn't meet Lem library's expectations for the concurrency interface")
     results.expect_failure("pc_no_wildcard.sail", "register type unsupported by Lem backend")
-    results.expect_failure("cheri_capreg.sail", "test has strange 'pure' reg_deref")
     results.expect_failure("constructor247.sail", "don't attempt to support so many constructors in lem -> ocaml builds")
     results.expect_failure("either.sail", "Lem breaks because it has the same name as a library module")
     results.expect_failure("poly_outcome.sail", "test doesn't meet Lem library's expectations for the concurrency interface")
-    results.expect_failure("config_abstract_bool.sail", "type-level if not yet supported")
     results.expect_failure("outcome_impl_int.sail", "unsupported outcome")
     results.expect_failure("outcome_impl_bool.sail", "unsupported outcome")
+    results.expect_failure("remove_e_assign_try.sail", "try-blocks around pure expressions not supported in Lem (and a little silly)")
     for filenames in chunks(os.listdir('.'), parallel()):
         tests = {}
         for filename in filenames:

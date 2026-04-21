@@ -101,7 +101,8 @@ let rec fix_id remove_tick name =
   | "non_assoc" | "non_exec" | "special" | "target_rep" | "target_sorts" | "target_type" | "target_const" | "lemma"
   | "theorem" | "do" | "witness" | "assert" | "lsl" | "lsr" | "asr" | "type" | "fun" | "function" | "raise" | "try"
   | "match" | "with" | "check" | "field" | "LT" | "lt" | "lteq" | "GT" | "gt" | "gteq" | "EQ" | "eq" | "neq" | "integer"
-  | "union" | "inter" | "subset" | "zero_extend" | "sign_extend" | "zeros" | "B0" | "B1" | "Nothing" | "Just" | "not" ->
+  | "union" | "inter" | "subset" | "zero_extend" | "sign_extend" | "zeros" | "B0" | "B1" | "Nothing" | "Just" | "not"
+  | "sail_unwrap_value" ->
       name ^ "'"
   | _ ->
       if String.contains name '#' then fix_id remove_tick (String.concat "_" (Util.split_on_char '#' name))
@@ -1695,6 +1696,15 @@ let doc_regtype_fields (tname, (n1, n2, fields)) =
   in
   separate_map hardline doc_field fields
 
+let doc_def_let ctxt pat exp =
+  let pat_pp = doc_pat_lem ctxt true pat in
+  let body_pp =
+    if effectful (effect_of exp) then
+      string "sail_unwrap_value" ^/^ parens (doc_exp_lem { ctxt with monadic = true } false exp ^/^ string " : M _")
+    else doc_exp_lem ctxt false exp
+  in
+  group (prefix 2 1 (separate space [string "let"; pat_pp; equals]) body_pp) ^/^ hardline
+
 let doc_def_lem effect_info params_to_print type_env (DEF_aux (aux, _) as def) =
   match aux with
   | DEF_val v_spec -> doc_spec_lem effect_info params_to_print type_env v_spec
@@ -1708,7 +1718,7 @@ let doc_def_lem effect_info params_to_print type_env (DEF_aux (aux, _) as def) =
   | DEF_default df -> empty
   | DEF_fundef fdef -> group (doc_fundef_lem effect_info params_to_print type_env fdef) ^/^ hardline
   | DEF_internal_mutrec fundefs -> doc_mutrec_lem effect_info params_to_print type_env fundefs ^/^ hardline
-  | DEF_let (pat, exp) -> group (doc_let_lem { empty_ctxt with params_to_print } pat exp) ^/^ hardline
+  | DEF_let (pat, exp) -> doc_def_let { empty_ctxt with params_to_print } pat exp
   | DEF_scattered sdef -> unreachable (def_loc def) __POS__ "doc_def_lem: shoulnd't have DEF_scattered at this point"
   | DEF_mapdef (MD_aux (_, (l, _))) -> unreachable l __POS__ "Lem doesn't support mappings"
   | DEF_outcome _ | DEF_impl _ | DEF_instantiation _ ->
