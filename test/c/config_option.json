@@ -1,0 +1,6 @@
+{
+    "cfg_struct" : {
+        "field1" : 0,
+        "field2" : { "Some" : "A" }
+    }
+}
