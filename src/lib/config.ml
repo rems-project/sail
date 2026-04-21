@@ -624,21 +624,21 @@ let rec sail_exp_from_json ~at:l env typ =
           in
           Some (mk_exp ~loc:l (E_struct (SN_id id, fexps)))
         else if typ_is_variant env base_typ then
-          let* id, _ = destruct_typ_args base_typ in
+          let* id, args = destruct_typ_args base_typ in
           match obj with
-          | [(constructor, value)] -> (
-              let constructor = mk_id ~loc:l constructor in
-              match Env.union_constructor_info constructor env with
+          | [(ctor, value)] -> (
+              let ctor = mk_id ~loc:l ctor in
+              match List.find_opt (fun (id, _) -> Id.compare id ctor = 0) @@ instantiate_variant env id args with
               | None ->
                   raise
                     (Reporting.err_general l
                        (Printf.sprintf "Constructor %s in JSON configuration is not a valid constructor for union %s"
-                          (string_of_id constructor) (string_of_id id)
+                          (string_of_id ctor) (string_of_id id)
                        )
                     )
-              | Some (_, _, _, Tu_aux (Tu_ty_id (typ, _), _)) ->
+              | Some (_, typ) ->
                   let exp = sail_exp_from_json ~at:l env typ value in
-                  Some (mk_exp ~loc:l (E_app (constructor, [exp])))
+                  Some (mk_exp ~loc:l (E_app (ctor, [exp])))
             )
           | _ ->
               raise
