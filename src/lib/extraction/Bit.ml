@@ -36,6 +36,44 @@ module Three =
   | true -> B1
   | false -> B0
 
+  (** val bit_not : ubit -> ubit **)
+
+  let bit_not = function
+  | B0 -> B1
+  | B1 -> B0
+  | BU -> BU
+
+  (** val bit_or : ubit -> ubit -> ubit **)
+
+  let bit_or lhs rhs =
+    match lhs with
+    | B0 -> rhs
+    | B1 -> B1
+    | BU -> (match rhs with
+             | B0 -> BU
+             | x -> x)
+
+  (** val bit_and : ubit -> ubit -> ubit **)
+
+  let bit_and lhs rhs =
+    match lhs with
+    | B0 -> B0
+    | B1 -> rhs
+    | BU -> (match rhs with
+             | B0 -> B0
+             | _ -> BU)
+
+  (** val bit_xor : ubit -> ubit -> ubit **)
+
+  let bit_xor lhs rhs =
+    match lhs with
+    | B0 -> rhs
+    | B1 -> (match rhs with
+             | B0 -> B1
+             | B1 -> B0
+             | BU -> BU)
+    | BU -> BU
+
   (** val bit_join : ubit -> ubit -> ubit **)
 
   let bit_join x y =

@@ -118,7 +118,7 @@ module Dom =
        | Bvs y0 ->
          leb_aux (let Coq_exist a = x0 in a) (let Coq_exist a = y0 in a))
 
-  (** val _UU03b1_ : bvn -> t **)
+  (** val _UU03b1_ : bvn -> bvset **)
 
   let _UU03b1_ x =
     let len = x.bvn_n in
@@ -130,4 +130,58 @@ module Dom =
              (gmap_empty Nat.eq_dec nat_countable))
            (BinNat.N.to_nat len) (map Three.from_bool (bv_to_bits len x'))))
      | None -> bot)
+
+  (** val lift_bitwise_gmap :
+      (Three.ubit -> Three.ubit -> Three.ubit) -> (Big_int_Z.big_int,
+      Three.ubit list) gmap -> (Big_int_Z.big_int, Three.ubit list) gmap ->
+      (Big_int_Z.big_int, Three.ubit list) gmap **)
+
+  let lift_bitwise_gmap f x y =
+    intersection_with
+      (map_intersection_with
+        (Obj.magic (fun _ _ _ -> gmap_merge Nat.eq_dec nat_countable)))
+      (fun x0 y0 -> Some (zip_with f x0 y0)) x y
+
+  (** val lift_bitwise :
+      (Three.ubit -> Three.ubit -> Three.ubit) -> bvset -> bvset -> bvset **)
+
+  let lift_bitwise f x y =
+    match x with
+    | Top -> Top
+    | Bvs x0 ->
+      (match y with
+       | Top -> Top
+       | Bvs y0 ->
+         Bvs (Coq_exist
+           (lift_bitwise_gmap f (let Coq_exist a = x0 in a)
+             (let Coq_exist a = y0 in a))))
+
+  (** val coq_and : bvset -> bvset -> bvset **)
+
+  let coq_and x y =
+    lift_bitwise Three.bit_and x y
+
+  (** val coq_or : bvset -> bvset -> bvset **)
+
+  let coq_or x y =
+    lift_bitwise Three.bit_or x y
+
+  (** val xor : bvset -> bvset -> bvset **)
+
+  let xor x y =
+    lift_bitwise Three.bit_xor x y
+
+  (** val not_gmap :
+      (Big_int_Z.big_int, Three.ubit list) gmap -> (Big_int_Z.big_int,
+      Three.ubit list) gmap **)
+
+  let not_gmap x =
+    fmap (Obj.magic (fun _ _ -> gmap_fmap Nat.eq_dec nat_countable))
+      (map Three.bit_not) x
+
+  (** val not : bvset -> bvset **)
+
+  let not = function
+  | Top -> Top
+  | Bvs x0 -> Bvs (Coq_exist (not_gmap (let Coq_exist a = x0 in a)))
  end

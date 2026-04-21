@@ -54,5 +54,25 @@ module Dom :
 
   val leb : t -> t -> bool
 
-  val _UU03b1_ : bvn -> t
+  val _UU03b1_ : bvn -> bvset
+
+  val lift_bitwise_gmap :
+    (Three.ubit -> Three.ubit -> Three.ubit) -> (Big_int_Z.big_int,
+    Three.ubit list) gmap -> (Big_int_Z.big_int, Three.ubit list) gmap ->
+    (Big_int_Z.big_int, Three.ubit list) gmap
+
+  val lift_bitwise :
+    (Three.ubit -> Three.ubit -> Three.ubit) -> bvset -> bvset -> bvset
+
+  val coq_and : bvset -> bvset -> bvset
+
+  val coq_or : bvset -> bvset -> bvset
+
+  val xor : bvset -> bvset -> bvset
+
+  val not_gmap :
+    (Big_int_Z.big_int, Three.ubit list) gmap -> (Big_int_Z.big_int,
+    Three.ubit list) gmap
+
+  val not : bvset -> bvset
  end

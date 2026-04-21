@@ -49,6 +49,7 @@ From stdpp Require Import bitvector.tactics.
 From stdpp Require Import list.
 
 From Sail Require Import BvUtil.
+From Sail Require Import Tactics.
 
 Inductive bit : Set :=
   | B0 : bit
@@ -106,6 +107,13 @@ Module Three.
 
   Definition from_bool (b : bool) : ubit :=
     if b then 1 else 0.
+
+  Definition to_bool (u : bool) (b : ubit) : bool :=
+    match b with
+    | 0 => false
+    | 1 => true
+    | ? => u
+    end.
 
   Definition from_bit (b : bit) : ubit :=
     match b with
@@ -200,6 +208,77 @@ Module Three.
     | (?, ?) => (?, ?)
     end.
 
+  Definition bit_add_carry (lhs rhs carry : ubit) : ubit * ubit :=
+    match (lhs, rhs, carry) with
+    | (0, 0, 0) => (0, 0)
+    | (0, 0, 1) => (1, 0)
+    | (0, 0, ?) => (?, 0)
+    | (0, 1, 0) => (1, 0)
+    | (0, 1, 1) => (0, 1)
+    | (0, 1, ?) => (?, ?)
+    | (0, ?, 0) => (?, 0)
+    | (0, ?, 1) => (?, ?)
+    | (0, ?, ?) => (?, ?)
+    | (1, 0, 0) => (1, 0)
+    | (1, 0, 1) => (0, 1)
+    | (1, 0, ?) => (?, ?)
+    | (1, 1, 0) => (0, 1)
+    | (1, 1, 1) => (1, 1)
+    | (1, 1, ?) => (?, ?)
+    | (1, ?, 0) => (?, ?)
+    | (1, ?, 1) => (?, ?)
+    | (1, ?, ?) => (?, ?)
+    | (?, 0, 0) => (?, 0)
+    | (?, 0, 1) => (?, ?)
+    | (?, 0, ?) => (?, ?)
+    | (?, 1, 0) => (?, ?)
+    | (?, 1, 1) => (?, ?)
+    | (?, 1, ?) => (?, ?)
+    | (?, ?, 0) => (?, ?)
+    | (?, ?, 1) => (?, ?)
+    | (?, ?, ?) => (?, ?)
+    end.
+
+  Lemma bit_add_carry_0 : ∀ x y, bit_add_carry x y 0 = bit_add x y.
+  Proof. destruct x, y; reflexivity. Qed.
+
+  Lemma bit_add_carry_0_r : ∀ x c, bit_add_carry x 0 c = bit_add x c.
+  Proof. destruct x, c; reflexivity. Qed.
+
+  Lemma bit_add_carry_0_l : ∀ y c, bit_add_carry 0 y c = bit_add y c.
+  Proof. destruct y, c; reflexivity. Qed.
+
+  Fixpoint bitlist_add_carry_acc (xs ys : list ubit) (c : ubit) (zs : list ubit) : list ubit * ubit :=
+    match xs with
+    | [] => (zs, c)
+    | x :: xs =>
+        match ys with
+        | [] =>
+            let '(z, c) := bit_add x c in
+            bitlist_add_carry_acc xs ys c (z :: zs)
+        | y :: ys =>
+            let '(z, c) := bit_add_carry x y c in
+            bitlist_add_carry_acc xs ys c (z :: zs)
+        end
+    end.
+
+  Definition bitlist_add_carry (xs ys : list ubit) : list ubit * ubit :=
+    bitlist_add_carry_acc (rev xs) (rev ys) 0 [].
+
+  Lemma length_bitlist_add_carry_acc : ∀ xs ys c zs, length (fst (bitlist_add_carry_acc xs ys c zs)) = length xs + length zs.
+  Proof.
+    intros xs.
+    induction xs as [| x xs IH]; intros ys c zs.
+    - reflexivity.
+    - destruct ys as [| y ys]; cbn [bitlist_add_carry_acc]; destruct_match; rewrite IH; cbn; lia.
+  Qed.
+
+  Lemma length_bitlist_add_carry : ∀ xs ys, length (fst (bitlist_add_carry xs ys)) = length xs.
+  Proof. intros. unfold bitlist_add_carry. rewrite length_bitlist_add_carry_acc. simp_length. Qed.
+
+  Hint Rewrite length_bitlist_add_carry_acc : length_db.
+  Hint Rewrite length_bitlist_add_carry : length_db.
+
   Lemma bit_add_comm : ∀ (x y : ubit), bit_add x y = bit_add y x.
   Proof. intros x y; destruct x, y; reflexivity. Qed.
 
@@ -238,4 +317,88 @@ Module Three.
     | (_, ?) => true
     | _ => false
     end.
+
+  Definition bitwise_op_correct_1 (bit_op : ubit → ubit → ubit) (bool_op : bool → bool → bool) : Prop :=
+    ∀ x y, bit_op (from_bool x) (from_bool y) = from_bool (bool_op x y).
+
+  Definition bitwise_op_correct_2 (bv_op : ∀ n, bv n → bv n → bv n) (bit_op : ubit → ubit → ubit) : Prop :=
+    ∀ n x y,
+      map from_bool (bv_to_bits (bv_op n x y))
+      = zip_with bit_op (map from_bool (bv_to_bits x)) (map from_bool (bv_to_bits y)).
+
+  Definition bitwise_op_correct
+    (bv_op : ∀ n, bv n → bv n → bv n) (bit_op : ubit → ubit → ubit) (bool_op : bool → bool → bool) : Prop
+    := bitwise_op_correct_1 bit_op bool_op ∧ bitwise_op_correct_2 bv_op bit_op.
+
+  Lemma list_lookup_map : ∀ {f : bool → ubit} {xs : list bool} {i : nat}, map f xs !! i = option_map f (xs !! i).
+  Proof.
+    intros f xs i.
+    pose proof (list_lookup_fmap f xs i).
+    unfold fmap, option_fmap in H.
+    rewrite <- H.
+    reflexivity.
+  Qed.
+
+  Lemma option_map_from_bool_Some : ∀ {A B} {f: A → B} {x y}, option_map f x = Some y → ∃b, x = Some b ∧ y = f b.
+  Proof.
+    intros ??? x y H. destruct x as [x |]; [| discriminate].
+    exists x.
+    split.
+    - reflexivity.
+    - cbn in H. apply Some_inj in H. subst.
+      reflexivity.
+  Qed.
+
+  Lemma bit_and_from_bool : ∀ x y, bit_and (from_bool x) (from_bool y) = from_bool (andb x y).
+  Proof. destruct x, y; reflexivity. Qed.
+
+  Ltac prove_bitwise_op_correct :=
+    lazymatch goal with
+    | |- bitwise_op_correct _ _ _ =>
+        unfold bitwise_op_correct;
+        apply and_wlog_r; [
+          unfold bitwise_op_correct_1; intros;
+          repeat (lazymatch goal with [ b : bool |- _ ] => destruct b end);
+          reflexivity
+        | let H := fresh "H" in
+          intros H;
+          let n := fresh "n" in
+          unfold bitwise_op_correct_2; intros n ? ?;
+          apply (list_eq_same_length _ _ (N.to_nat n)); [ simp_length | simp_length |];
+          let L := fresh "L" in
+          let R := fresh "R" in
+          intros ? ? ? ? L R;
+          rewrite lookup_zip_with_Some in R;
+          destruct R as [? [? (? & ? & ?)]];
+          repeat (
+            lazymatch goal with
+            | [ H : map from_bool (bv_to_bits _) !! _ = Some _ |- _ ] =>
+                rewrite list_lookup_map in H;
+                apply option_map_from_bool_Some in H;
+                destruct H as [? [? ?]]
+            end
+          );
+          repeat (
+            lazymatch goal with
+            | [ H : bv_to_bits _ !! _ = Some _ |- _ ] =>
+                rewrite bv_to_bits_lookup_Some in H; destruct H as [_ ?]
+            end
+          );
+          subst;
+          unfold bitwise_op_correct_1 in H; rewrite H;
+          f_equal; bv_simplify; clear
+        ]
+    end.
+
+  Lemma and_correct : bitwise_op_correct (@bv_and) bit_and andb.
+  Proof. prove_bitwise_op_correct. rewrite Z.land_spec. reflexivity. Qed.
+
+  Lemma or_correct : bitwise_op_correct (@bv_or) bit_or orb.
+  Proof. prove_bitwise_op_correct. rewrite Z.lor_spec. reflexivity. Qed.
+
+  Lemma xor_correct : bitwise_op_correct (@bv_xor) bit_xor xorb.
+  Proof. prove_bitwise_op_correct. rewrite Z.lxor_spec. reflexivity. Qed.
+
+  Lemma bit_not_from_bool : ∀ {b}, bit_not (from_bool b) = from_bool (negb b).
+  Proof. intros b. destruct b; reflexivity. Qed.
 End Three.

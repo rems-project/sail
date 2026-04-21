@@ -218,10 +218,10 @@ Module Type SAIL_BITS.
 
   Parameter add : t → t → t.
   Parameter add_abst : ∀ {n} {x y : bv n}, α (bv_to_bvn (x + y)) = add (α (bv_to_bvn x)) (α (bv_to_bvn y)).
-
+(*
   Parameter sub : t → t → t.
   Parameter sub_abst : ∀ {n} {x y : bv n}, α (bv_to_bvn (x - y)) = sub (α (bv_to_bvn x)) (α (bv_to_bvn y)).
-
+*)
   Parameter not : t → t.
   Parameter not_abst : ∀ {n} {x : bv n}, α (bv_to_bvn (bv_not x)) = not (α (bv_to_bvn x)).
 
@@ -233,8 +233,9 @@ Module Type SAIL_BITS.
 
   Parameter xor : t → t → t.
   Parameter xor_abst : ∀ {n} {x y : bv n}, α (bv_to_bvn (bv_xor x y)) = xor (α (bv_to_bvn x)) (α (bv_to_bvn y)).
-
+(*
   Parameter append : t → t → t.
   Parameter append_abst : ∀ {n m} {x : bv n} {y : bv m},
     α (bv_to_bvn (bv_concat (n + m) x y)) = append (α (bv_to_bvn x)) (α (bv_to_bvn y)).
+*)
 End SAIL_BITS.

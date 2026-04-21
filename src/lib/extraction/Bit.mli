@@ -24,6 +24,14 @@ module Three :
 
   val from_bool : bool -> ubit
 
+  val bit_not : ubit -> ubit
+
+  val bit_or : ubit -> ubit -> ubit
+
+  val bit_and : ubit -> ubit -> ubit
+
+  val bit_xor : ubit -> ubit -> ubit
+
   val bit_join : ubit -> ubit -> ubit
 
   val bit_meet : ubit -> ubit -> ubit option

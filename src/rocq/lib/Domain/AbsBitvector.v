@@ -46,17 +46,20 @@ From Stdlib Require Import Logic.ProofIrrelevance.
 From stdpp Require Import base.
 From stdpp Require Import gmap.
 From stdpp Require Import bitvector.definitions.
+From stdpp Require Import bitvector.tactics.
 
+From Sail Require Import SailBase.
 From Sail Require Import Domain.Lattice.
 From Sail Require Import OptionUtil.
 From Sail Require Bit.
+From Sail Require Import BvUtil.
 From Sail Require Import Tactics.
 
 Module Bits.
   Definition t := bvn.
 End Bits.
 
-Module Dom <: DOMAIN Bits.
+Module Dom <: DOMAIN Bits <: SAIL_BITS.
   Import Bit.Three.
 
   Definition valid (m : gmap nat (list ubit)) : Prop :=
@@ -624,11 +627,226 @@ Module Dom <: DOMAIN Bits.
     apply length_bv_to_bits.
   Qed.
 
-  Definition α (x : bvn) : t :=
+  Definition α (x : bvn) : bvset :=
     let len := bvn_n x in
     match bvn_to_bv len x with
     | Some x' =>
         Bvs ({[N.to_nat len := List.map from_bool (bv_to_bits x')]} ↾ (abs_valid x'))
     | None => ⊥
     end.
+
+  Lemma abstract_bvs : ∀ {n} (x : bv n),
+     α x = Bvs ({[N.to_nat n := List.map from_bool (bv_to_bits x)]} ↾ abs_valid x).
+  Proof.
+    intros n x.
+    unfold α, bvn_to_bv.
+    case_decide.
+    - f_equal. apply subset_eq_compat. repeat f_equal.
+      rewrite (UIP_refl _ _ H). reflexivity.
+    - naive_solver.
+  Qed.
+
+  Definition lift_bitwise_gmap (f : ubit → ubit → ubit) (x y : gmap nat (list ubit)) : gmap nat (list ubit) :=
+    intersection_with (λ x y, Some (zip_with f x y)) x y.
+
+  Lemma lift_bitwise_gmap_valid : ∀ f {x y}, valid x → valid y → valid (lift_bitwise_gmap f x y).
+  Proof.
+    intros f x y Vx Vy n.
+    destruct (lift_bitwise_gmap f x y !! n) as [zs |] eqn : H; [| reflexivity].
+    unfold lift_bitwise_gmap in H. rewrite lookup_intersection_with_Some in H.
+    destruct H as [xs [ys (H1 & H2 & H3)]].
+    apply Some_inj in H3.
+    unfold valid in Vx, Vy.
+    specialize (Vx n). specialize (Vy n).
+    rewrite H1 in Vx. rewrite H2 in Vy.
+    rewrite <- H3, length_zip_with, Vx, Vy.
+    lia.
+  Qed.
+
+  Definition lift_bitwise (f : ubit → ubit → ubit) (x y : bvset) : bvset :=
+    match (x, y) with
+    | (Bvs x, Bvs y) => Bvs (lift_bitwise_gmap f (`x) (`y) ↾ lift_bitwise_gmap_valid f (proj2_sig x) (proj2_sig y))
+    | _ => ⊤
+    end.
+
+  Definition and (x y : bvset) : bvset := lift_bitwise bit_and x y.
+
+  Definition or (x y : bvset) : bvset := lift_bitwise bit_or x y.
+
+  Definition xor (x y : bvset) : bvset := lift_bitwise bit_xor x y.
+
+  Lemma lift_bitwise_abst : ∀ {bv_op : ∀ n, bv n → bv n → bv n} {bit_op : ubit → ubit → ubit} {bool_op : bool → bool → bool},
+    bitwise_op_correct bv_op bit_op bool_op →
+    ∀ {n} {x y : bv n}, α (bv_op n x y) = lift_bitwise bit_op (α x) (α y).
+  Proof.
+    intros ??? Correct n x y.
+    repeat rewrite abstract_bvs. unfold lift_bitwise. f_equal.
+    apply subset_eq_compat. cbn.
+    apply map_eq. intros i. rewrite lookup_intersection_with.
+    destruct (decide (i = N.to_nat n)) as [? | H]; [ subst |].
+    - repeat rewrite lookup_singleton_eq.
+      unfold intersection_with. cbn. f_equal.
+      apply Correct.
+    - repeat (rewrite lookup_singleton_ne; [| naive_solver]).
+      reflexivity.
+  Qed.
+
+  Lemma and_abst : ∀ {n} {x y : bv n}, α (bv_and x y) = lift_bitwise bit_and (α x) (α y).
+  Proof. intros. apply (lift_bitwise_abst and_correct). Qed.
+
+  Lemma or_abst : ∀ {n} {x y : bv n}, α (bv_or x y) = lift_bitwise bit_or (α x) (α y).
+  Proof. intros. apply (lift_bitwise_abst or_correct). Qed.
+
+  Lemma xor_abst : ∀ {n} {x y : bv n}, α (bv_xor x y) = lift_bitwise bit_xor (α x) (α y).
+  Proof. intros. apply (lift_bitwise_abst xor_correct). Qed.
+
+  Definition not_gmap (x : gmap nat (list ubit)) : gmap nat (list ubit) := map bit_not <$> x.
+
+  Lemma not_gmap_valid : ∀ {x}, valid x → valid (not_gmap x).
+  Proof.
+    intros x H i.
+    unfold valid, not_gmap in *.
+    specialize (H i).
+    rewrite lookup_fmap.
+    destruct (x !! i) as [x' |]; [| reflexivity].
+    cbn. rewrite length_map. apply H.
+  Qed.
+
+  Definition not (x : bvset) : bvset :=
+    match x with
+    | Bvs x => Bvs (not_gmap (`x) ↾ not_gmap_valid (proj2_sig x))
+    | _ => ⊤
+    end.
+
+  Lemma not_abst : ∀ {n} {x : bv n}, α (bv_not x) = not (α x).
+  Proof.
+    intros n x.
+    unfold not, not_gmap.
+    repeat rewrite abstract_bvs. f_equal.
+    apply subset_eq_compat. cbn.
+    rewrite map_fmap_singleton. f_equal.
+    apply (list_eq_same_length _ _ (N.to_nat n)).
+    - simp_length.
+    - simp_length.
+    - intros i b1 b2 i_lt_n L R.
+      rewrite list_lookup_map in L. apply option_map_from_bool_Some in L. destruct L as [b3 [L2 L3]].
+      rewrite map_map, list_lookup_map in R. apply option_map_from_bool_Some in R. destruct R as [b4 [R2 R3]].
+      rewrite bv_to_bits_lookup_Some in L2. destruct L2 as [_ L2].
+      rewrite bv_to_bits_lookup_Some in R2. destruct R2 as [_ R2].
+      subst. rewrite bit_not_from_bool. bv_simplify.
+      rewrite bv_wrap_spec_low, Z.lnot_spec; [ reflexivity | lia | lia ].
+  Qed.
+
+  Definition add_gmap (x y : gmap nat (list ubit)) : gmap nat (list ubit) :=
+    intersection_with (λ x y, Some (rev (fst (bitlist_add_carry_acc x y B0 [])))) x y.
+
+  Lemma add_gmap_valid : ∀ {x y}, valid x → valid y → valid (add_gmap x y).
+  Proof.
+    intros x y Vx Vy i.
+    unfold valid in *.
+    specialize (Vx i). specialize (Vy i).
+    destruct (add_gmap x y !! i) as [zs |] eqn : H; [| reflexivity].
+    unfold add_gmap in H. rewrite lookup_intersection_with_Some in H.
+    destruct H as [xs [ys (H1 & H2 & H3)]].
+    rewrite H1 in Vx.
+    rewrite H2 in Vy.
+    apply Some_inj in H3.
+    rewrite <- H3.
+    simp_length.
+  Qed.
+
+  Definition add (x y : bvset) : bvset :=
+    match (x, y) with
+    | (Bvs x, Bvs y) => Bvs (add_gmap (`x) (`y) ↾ add_gmap_valid (proj2_sig x) (proj2_sig y))
+    | _ => ⊤
+    end.
+
+  Lemma concrete_bitlist_bools : ∀ {xs ys zs n c c'},
+    length xs = length ys
+    → bitlist_add_carry_acc (map from_bool xs) (map from_bool ys) (from_bool c) (map from_bool zs) = (n, c')
+    → ∃ nb cb, n = map from_bool nb ∧ c' = from_bool cb ∧ BoolList.add_carry_acc xs ys c zs = (nb, cb).
+  Proof.
+    intros xs.
+    induction xs as [| x xs IH]; intros ys zs n c c' L H.
+    - cbn in *.
+      exists zs, c.
+      naive_solver.
+    - destruct ys as [| y ys]; [ cbn in L; discriminate |].
+      cbn [bitlist_add_carry_acc map] in *.
+      destruct (bit_add_carry (from_bool x) (from_bool y) (from_bool c)) as (z, c'') eqn : Add.
+      assert (A : ∃ a, c'' = from_bool a).
+      { exists (to_bool false c''). destruct x, y, z, c, c''; cbn in Add |- *; discriminate + reflexivity. }
+      destruct A as [a A].
+      assert (Z : ∃ ζ, z = from_bool ζ).
+      { exists (to_bool false z). destruct x, y, z, c, c''; cbn in Add |- *; discriminate + reflexivity. }
+      destruct Z as [ζ Z].
+      rewrite A, Z in H.
+      cbn [length] in L. apply eq_add_S in L.
+      specialize (IH ys (ζ :: zs) n a c' L H).
+      destruct IH as [nb [cb (IH1 & IH2 & IH3)]].
+      exists nb, cb.
+      cbn [BoolList.add_carry_acc].
+      split; [ apply IH1 |].
+      split; [ apply IH2 |].
+      assert (S : BoolList.bool_add_carry x y c = (ζ, a)).
+      { destruct x, y, z, c, c'', a, ζ; cbn in *; discriminate + reflexivity. }
+      rewrite S.
+      apply IH3.
+  Qed.
+
+  Lemma add_abst : ∀ {n} {x y : bv n}, α (x + y)%bv = add (α x) (α y).
+  Proof.
+    intros n x y.
+    repeat rewrite abstract_bvs. unfold add, add_gmap. f_equal.
+    apply subset_eq_compat.
+    apply map_eq. intros i.
+    rewrite lookup_intersection_with. cbn.
+    destruct (decide (i = N.to_nat n)) as [? | H]; [ subst |].
+    - repeat rewrite lookup_singleton_eq.
+      unfold intersection_with. cbn. f_equal.
+      apply (list_eq_same_length _ _ (N.to_nat n)).
+      + simp_length.
+      + simp_length.
+      + intros i xb yb i_lt_n L R.
+        rewrite list_lookup_map in L. apply option_map_from_bool_Some in L.
+        destruct L as [z (L & ?)].
+        rewrite bv_to_bits_lookup_Some in L.
+        destruct L as [_ L].
+        subst.
+        pose proof (BoolList.to_bv_ex x).
+        destruct H as [xs (xs_len & X)].
+        specialize (X xs_len).
+        pose proof (BoolList.to_bv_ex y).
+        destruct H as [ys (ys_len & Y)].
+        specialize (Y ys_len).
+        subst.
+        repeat rewrite bv_cast_bits in R.
+        cbn. bv_simplify. rewrite (bv_cast_unsigned ys_len).
+        rewrite bv_wrap_spec_low; [| lia].
+        repeat rewrite BoolList.to_bv_unsigned.
+        repeat rewrite BoolList.bv_round_trip_alt in R.
+        rewrite Nat2N.id in i_lt_n.
+        apply Nat2N.inj in ys_len.
+        symmetry in ys_len.
+        destruct (bitlist_add_carry_acc (map from_bool (rev xs)) (map from_bool (rev ys)) B0 []) as (zs, c) eqn : Add.
+        replace B0 with (from_bool false) in Add; [| reflexivity ].
+        replace [] with (map from_bool []) in Add; [| reflexivity ].
+        apply concrete_bitlist_bools in Add; [| rewrite length_rev, length_rev; apply ys_len ].
+        destruct Add as [zsb [cb (? & ? & Add)]].
+        subst.
+        cbn in R. rewrite <- map_rev, list_lookup_map in R. apply option_map_from_bool_Some in R.
+        destruct R as [ybb (R1 & R2)].
+        subst.
+        replace zsb with (rev (rev zsb)) in R1; [| apply rev_involutive ].
+        apply BoolList.to_Z_unsigned_testbit in R1.
+        subst. f_equal.
+        rewrite <- (Z.mod_pow2_bits_low _ (Z.of_nat (length xs)) _); [| lia ].
+        rewrite <- BoolList.add_carry_to_Z; [| exact ys_len ].
+        f_equal. f_equal.
+        unfold BoolList.add_carry.
+        rewrite Add, rev_involutive.
+        reflexivity.
+    - repeat (rewrite lookup_singleton_ne; [| naive_solver]).
+      reflexivity.
+  Qed.
 End Dom.
