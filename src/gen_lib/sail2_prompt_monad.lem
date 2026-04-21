@@ -380,6 +380,12 @@ let hasFailure t m = match runTrace t m with
   | _ -> false
 end
 
+val sail_unwrap_value : forall 'regval 'a 'e. monad 'regval 'a 'e -> 'a
+let sail_unwrap_value m = match m with
+  | Done v -> v
+  | _ -> failwith "Attempted to unwrap value from computation with side-effects"
+end
+
 (* Define a type synonym that also takes the register state as a type parameter,
    in order to make switching to the state monad without changing generated
    definitions easier, see also lib/hol/prompt_monad.lem. *)
