@@ -98,7 +98,7 @@ lemma of_bits_mword_return_of_bl[simp]:
   by (auto simp: of_bits_nondet_def of_bits_fail_def maybe_fail_def assms BC_mword_defs)
 
 lemma vec_of_bits_of_bl[simp]:
-  assumes "just_list (map bool_of_bitU bus) = Some bs"
+  assumes "(map (\<lambda>b. bit b 0) bus) = bs"
   shows "vec_of_bits_maybe bus = Some (of_bl bs)"
     (*and "vec_of_bits_fail bus = return (of_bl bs)"
     and "vec_of_bits_nondet RV bus = return (of_bl bs)"*)
@@ -113,9 +113,9 @@ lemmas access_vec_dec_test_bit[simp] = access_bv_dec_mword[folded access_vec_dec
 lemma access_vec_inc_test_bit[simp]:
   fixes w :: "('a::len) word"
   assumes "n \<ge> 0" and "nat n < LENGTH('a)"
-  shows "access_vec_inc w n = bitU_of_bool (bit w (LENGTH('a) - 1 - nat n))"
+  shows "access_vec_inc w n = Word.slice (LENGTH('a) - 1 - nat n) w"
   using assms
-  by (auto simp: access_vec_inc_def access_bv_inc_def access_list_def BC_mword_defs rev_nth test_bit_bl)
+  by (auto simp: access_vec_inc_def subrange_vec_inc_def subrange_vec_dec_def diff_diff_eq nat_minus_as_int)
 
 lemma bool_of_bitU_monadic_simps[simp]:
   "bool_of_bitU_fail B0 = return False"
@@ -128,17 +128,17 @@ lemma bool_of_bitU_monadic_simps[simp]:
   by auto
 
 lemma update_vec_dec_simps[simp]:
-  "update_vec_dec_maybe w i B0 = Some (set_bit w (nat i) False)"
-  "update_vec_dec_maybe w i B1 = Some (set_bit w (nat i) True)"
-  "update_vec_dec_maybe w i BU = None"
+  "update_vec_dec_maybe w i 0 = Some (set_bit w (nat i) False)"
+  "update_vec_dec_maybe w i 1 = Some (set_bit w (nat i) True)"
+  (*"update_vec_dec_maybe w i BU = None"*)
   (*"update_vec_dec_fail w i B0 = return (set_bit w (nat i) False)"
   "update_vec_dec_fail w i B1 = return (set_bit w (nat i) True)"
   "update_vec_dec_fail w i BU = Fail ''bool_of_bitU''"
   "update_vec_dec_nondet RV w i B0 = return (set_bit w (nat i) False)"
   "update_vec_dec_nondet RV w i B1 = return (set_bit w (nat i) True)"
   "update_vec_dec_nondet RV w i BU = choose_bool RV ''bool_of_bitU'' \<bind> (\<lambda>b. return (set_bit w (nat i) b))"*)
-  "update_vec_dec w i B0 = set_bit w (nat i) False"
-  "update_vec_dec w i B1 = set_bit w (nat i) True"
+  "update_vec_dec w i 0 = set_bit w (nat i) False"
+  "update_vec_dec w i 1 = set_bit w (nat i) True"
   unfolding update_vec_dec_maybe_def (*update_vec_dec_fail_def update_vec_dec_nondet_def*) update_vec_dec_def
   by (auto simp: update_mword_dec_def update_mword_bool_dec_def maybe_failwith_def)
 
