@@ -14,9 +14,9 @@ let sint_maybe v = Just (sint v)
 val vec_of_bits_maybe    : forall 'a. Size 'a => list (mword ty1) -> maybe (mword 'a)
 val vec_of_bits_failwith : forall 'a. Size 'a => list (mword ty1) -> mword 'a
 val vec_of_bits          : forall 'a. Size 'a => list (mword ty1) -> mword 'a
-let vec_of_bits_maybe bits = of_bits (List.map (fun b -> bitU_of_bool (getBit b 0)) bits)
-let vec_of_bits_failwith bits = of_bits_failwith (List.map (fun b -> bitU_of_bool (getBit b 0)) bits)
-let vec_of_bits bits = of_bits_failwith (List.map (fun b -> bitU_of_bool (getBit b 0)) bits)
+let vec_of_bits_maybe bits = Just (of_bools (List.map (fun b -> getBit b 0) bits))
+let vec_of_bits_failwith bits = of_bools (List.map (fun b -> getBit b 0) bits)
+let vec_of_bits bits = of_bools (List.map (fun b -> getBit b 0) bits)
 
 val update_vec_dec_maybe : forall 'a. Size 'a => mword 'a -> integer -> mword ty1 -> maybe (mword 'a)
 val update_vec_dec       : forall 'a. Size 'a => mword 'a -> integer -> mword ty1 -> mword 'a
