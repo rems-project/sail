@@ -129,6 +129,7 @@ let lem_rewrites =
        which has to be followed by type checking *)
     ("prover_regstate", [Flag_arg Monomorphise.opt_mwords]);
     ("top_sort_defs", []);
+    ("add_register_init_function", []);
     ("const_prop_mutrec", [String_arg "lem"]);
     ("exp_lift_assign", []);
     ("early_return", []);
