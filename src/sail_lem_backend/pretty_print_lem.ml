@@ -139,7 +139,7 @@ let doc_id_lem_ctor (Id_aux (i, _)) =
   | Id "nat" -> string "integer"
   | Id "Some" -> string "Just"
   | Id "None" -> string "Nothing"
-  | Id i -> string (fix_id false (String.capitalize_ascii i))
+  | Id i -> string (fix_id false i)
   | Operator x -> string (Util.zencode_string ("op " ^ x))
 
 let doc_var_lem kid = string (fix_id true (string_of_kid kid))
