@@ -54,19 +54,20 @@ repository. Assuming you have previously followed the above
 instructions (required to install dependencies):
 ```
 git clone https://github.com/rems-project/sail.git
-opam pin add sail
+cd sail
+opam pin add .
 ```
 will install from a local checkout of the Sail sources.
 
-You can update with new changes as they are committed by pulling and reinstalling:
+You can update with new changes as they are committed by pulling and reinstalling in the `sail` directory:
 ```
 git pull
-opam reinstall sail
+opam reinstall .
 ```
 
-To remove the pin and revert to the latest released opam package type:
+To remove the pin and revert to the latest released opam package type in the `sail` directory:
 ```
-opam pin remove sail
+opam pin remove .
 ```
 
 ### Building from source (without opam)
