@@ -1515,6 +1515,45 @@ Scattered definitions for functions and mappings appear at the
 end. A scattered function definition can be recursive, but mutually
 recursive scattered function definitions should be avoided.
 
+=== Termination measures
+:log2: sail_doc/log2.json
+
+Many theorem provers work best when all functions are completely well
+defined, and in particular that any use of loops or recursion
+terminates.  Termination measures help by giving an upper bound on the
+number of iterations of a loop, or the number of recursive calls,
+which can be calculated using the variables currently in scope and
+decreases each time.
+
+sail::log2_while[from=log2]
+
+Loops using `foreach` are naturally terminating and do not require a
+measure.
+
+Termination measures can also be given separately from the code.  This
+is useful for adding measures to a specification without altering it,
+or for compatibility with older versions of Sail.
+
+[source,sail]
+----
+termination_measure log2_while while (n)
+----
+
+Recursive functions can be given termination measures in a
+similar way.
+
+[source,sail]
+----
+include::sail:log2_recursive[from=log2]
+
+termination_measure log2_recursive(n) = n
+----
+
+The Lean output of Sail uses the termination measures along with a
+default proof tactic to prove termination.  Currently, the Rocq output
+uses the measures as a limit asserted within the function, rather than
+attempting to construct a proof.
+
 === Preludes and default environment
 
 By default Sail has almost no built-in types or functions, except for
