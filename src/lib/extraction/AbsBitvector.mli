@@ -1,7 +1,9 @@
 open BinNat
 open Bit
+open Datatypes
 open List0
 open ListDef
+open Nat0
 open OptionUtil
 open Specif
 open Base
@@ -75,4 +77,19 @@ module Dom :
     Three.ubit list) gmap
 
   val not : bvset -> bvset
+
+  val add_gmap :
+    (Big_int_Z.big_int, Three.ubit list) gmap -> (Big_int_Z.big_int,
+    Three.ubit list) gmap -> (Big_int_Z.big_int, Three.ubit list) gmap
+
+  val add : bvset -> bvset -> bvset
+
+  val append_insert :
+    Three.ubit list -> Three.ubit list option -> Three.ubit list option
+
+  val append_gmap :
+    (Big_int_Z.big_int, Three.ubit list) gmap -> (Big_int_Z.big_int,
+    Three.ubit list) gmap -> (Big_int_Z.big_int, Three.ubit list) gmap
+
+  val append : bvset -> bvset -> bvset
  end

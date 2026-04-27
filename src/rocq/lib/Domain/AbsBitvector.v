@@ -49,6 +49,7 @@ From stdpp Require Import bitvector.definitions.
 From stdpp Require Import bitvector.tactics.
 
 From Sail Require Import SailBase.
+From Sail Require Import Ast.
 From Sail Require Import Domain.Lattice.
 From Sail Require Import OptionUtil.
 From Sail Require Bit.
@@ -849,4 +850,81 @@ Module Dom <: DOMAIN Bits <: SAIL_BITS.
     - repeat (rewrite lookup_singleton_ne; [| naive_solver]).
       reflexivity.
   Qed.
+
+  Definition append_insert (bv : list ubit) (o : option (list ubit)) : option (list ubit) :=
+    match o with
+    | Some bv' => Some (zip_with bit_join bv bv')
+    | None => Some bv
+    end.
+
+  Definition append_gmap (x y : gmap nat (list ubit)) : gmap nat (list ubit) :=
+    map_fold (λ n xbv acc, map_fold (λ m ybv acc, partial_alter (append_insert (xbv ++ ybv)) (n + m) acc) acc y) ∅ x.
+
+  Lemma valid_insert_inv (m : gmap nat (list ubit)) n v :
+    m !! n = None → valid (<[n:=v]> m) → valid m.
+  Proof.
+    intros Hn Hv i.
+    unfold valid in Hv. specialize (Hv i).
+    destruct (decide (n = i)) as [-> | Hi].
+    - rewrite Hn. trivial.
+    - rewrite lookup_insert_ne in Hv; [exact Hv | exact Hi].
+  Qed.
+
+  Lemma partial_alter_preserves_valid (bv : list ubit) k (acc : gmap nat (list ubit)) :
+    length bv = k → valid acc → valid (partial_alter (append_insert bv) k acc).
+  Proof.
+    intros Hlen Hval i.
+    destruct (decide (k = i)) as [-> | Hi].
+    - rewrite lookup_partial_alter.
+      unfold valid in Hval. specialize (Hval i).
+      destruct (acc !! i) as [zs |].
+      + case_decide; [| congruence].
+        cbn -[length zip_with]. rewrite length_zip_with, Hlen, Hval, Nat.min_id. reflexivity.
+      + case_decide; [| congruence]. exact Hlen.
+    - rewrite lookup_partial_alter_ne; [| exact Hi]. apply Hval.
+  Qed.
+
+  Lemma inner_fold_valid (xbv : list ubit) n (y acc : gmap nat (list ubit)) :
+    length xbv = n → valid y → valid acc →
+    valid (map_fold (λ m ybv acc', partial_alter (append_insert (xbv ++ ybv)) (n + m) acc') acc y).
+  Proof.
+    intros Hxlen Vy Vacc.
+    enough (H : valid y → valid (map_fold (λ m ybv acc', partial_alter (append_insert (xbv ++ ybv)) (n + m) acc') acc y))
+      by exact (H Vy).
+    apply (map_fold_weak_ind (λ (acc' : gmap nat (list ubit)) my', valid my' → valid acc')).
+    - intros _. exact Vacc.
+    - intros m ybv my' acc' Hm IH Hv.
+      assert (Hybv : length ybv = m). {
+        pose proof (Hv m) as Hv'. rewrite lookup_insert_eq in Hv'. exact Hv'.
+      }
+      apply partial_alter_preserves_valid.
+      + rewrite length_app, Hxlen, Hybv. reflexivity.
+      + exact (IH (valid_insert_inv _ _ _ Hm Hv)).
+  Qed.
+
+  Lemma append_valid : ∀ {x y}, valid x → valid y → valid (append_gmap x y).
+  Proof.
+    intros x y Vx Vy.
+    unfold append_gmap.
+    enough (H : valid x → valid (map_fold (λ n xbv acc, map_fold (λ m ybv acc', partial_alter (append_insert (xbv ++ ybv)) (n + m) acc') acc y) ∅ x))
+      by exact (H Vx).
+    apply (map_fold_weak_ind (λ (acc : gmap nat (list ubit)) mx, valid mx → valid acc)).
+    - intros _. apply empty_is_valid.
+    - intros n xbv mx acc Hn IH Hv.
+      assert (Hxlen : length xbv = n). {
+        pose proof (Hv n) as Hv'. rewrite lookup_insert_eq in Hv'. exact Hv'.
+      }
+      apply inner_fold_valid; [exact Hxlen | exact Vy |].
+      exact (IH (valid_insert_inv _ _ _ Hn Hv)).
+  Qed.
+
+  Definition append (x y : bvset) : bvset :=
+    match (x, y) with
+    | (Bvs x, Bvs y) => Bvs (append_gmap (`x) (`y) ↾ append_valid (proj2_sig x) (proj2_sig y))
+    | _ => ⊤
+    end.
+
+  Lemma append_abst : ∀ {n m} {x : bv n} {y : bv m},
+    α (bv_to_bvn (bv_concat (n + m) x y)) = append (α (bv_to_bvn x)) (α (bv_to_bvn y)).
+  Admitted.
 End Dom.

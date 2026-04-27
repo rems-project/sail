@@ -32,6 +32,13 @@ module Three :
 
   val bit_xor : ubit -> ubit -> ubit
 
+  val bit_add : ubit -> ubit -> ubit * ubit
+
+  val bit_add_carry : ubit -> ubit -> ubit -> ubit * ubit
+
+  val bitlist_add_carry_acc :
+    ubit list -> ubit list -> ubit -> ubit list -> ubit list * ubit
+
   val bit_join : ubit -> ubit -> ubit
 
   val bit_meet : ubit -> ubit -> ubit option

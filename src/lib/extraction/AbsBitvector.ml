@@ -1,7 +1,9 @@
 open BinNat
 open Bit
+open Datatypes
 open List0
 open ListDef
+open Nat0
 open OptionUtil
 open Specif
 open Base
@@ -184,4 +186,60 @@ module Dom =
   let not = function
   | Top -> Top
   | Bvs x0 -> Bvs (Coq_exist (not_gmap (let Coq_exist a = x0 in a)))
+
+  (** val add_gmap :
+      (Big_int_Z.big_int, Three.ubit list) gmap -> (Big_int_Z.big_int,
+      Three.ubit list) gmap -> (Big_int_Z.big_int, Three.ubit list) gmap **)
+
+  let add_gmap x y =
+    intersection_with
+      (map_intersection_with
+        (Obj.magic (fun _ _ _ -> gmap_merge Nat.eq_dec nat_countable)))
+      (fun x0 y0 -> Some
+      (rev (fst (Three.bitlist_add_carry_acc x0 y0 Three.B0 [])))) x y
+
+  (** val add : bvset -> bvset -> bvset **)
+
+  let add x y =
+    match x with
+    | Top -> Top
+    | Bvs x0 ->
+      (match y with
+       | Top -> Top
+       | Bvs y0 ->
+         Bvs (Coq_exist
+           (add_gmap (let Coq_exist a = x0 in a) (let Coq_exist a = y0 in a))))
+
+  (** val append_insert :
+      Three.ubit list -> Three.ubit list option -> Three.ubit list option **)
+
+  let append_insert bv = function
+  | Some bv' -> Some (zip_with Three.bit_join bv bv')
+  | None -> Some bv
+
+  (** val append_gmap :
+      (Big_int_Z.big_int, Three.ubit list) gmap -> (Big_int_Z.big_int,
+      Three.ubit list) gmap -> (Big_int_Z.big_int, Three.ubit list) gmap **)
+
+  let append_gmap x y =
+    map_fold (fun _ -> gmap_fold Nat.eq_dec nat_countable) (fun n xbv acc ->
+      map_fold (fun _ -> gmap_fold Nat.eq_dec nat_countable)
+        (fun m ybv acc0 ->
+        partial_alter (gmap_partial_alter Nat.eq_dec nat_countable)
+          (append_insert (app xbv ybv)) (Nat0.add n m) acc0)
+        acc y)
+      (empty (gmap_empty Nat.eq_dec nat_countable)) x
+
+  (** val append : bvset -> bvset -> bvset **)
+
+  let append x y =
+    match x with
+    | Top -> Top
+    | Bvs x0 ->
+      (match y with
+       | Top -> Top
+       | Bvs y0 ->
+         Bvs (Coq_exist
+           (append_gmap (let Coq_exist a = x0 in a)
+             (let Coq_exist a = y0 in a))))
  end

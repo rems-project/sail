@@ -233,9 +233,8 @@ Module Type SAIL_BITS.
 
   Parameter xor : t → t → t.
   Parameter xor_abst : ∀ {n} {x y : bv n}, α (bv_to_bvn (bv_xor x y)) = xor (α (bv_to_bvn x)) (α (bv_to_bvn y)).
-(*
+
   Parameter append : t → t → t.
   Parameter append_abst : ∀ {n m} {x : bv n} {y : bv m},
     α (bv_to_bvn (bv_concat (n + m) x y)) = append (α (bv_to_bvn x)) (α (bv_to_bvn y)).
-*)
 End SAIL_BITS.
