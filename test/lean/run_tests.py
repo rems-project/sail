@@ -64,7 +64,7 @@ def get_support_lib(subdir) -> str:
         step(f"rm -rf {lib_path} || true")
         step(f"git clone https://github.com/rems-project/lean-sail.git {lib_path}")
         print("Building the support library")
-        step("lake build", cwd=lib_path)
+        step("lake build +Sail:c.o", cwd=lib_path)
         return f"../../support-lib"
 
 def test_lean(subdir: str, skip_list = None, runnable: bool = False):
