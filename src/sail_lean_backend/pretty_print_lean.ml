@@ -50,6 +50,7 @@ type context = {
   in_sail_monad : bool;  (** Indicates whether we are in an expression of `SailM _` *)
   in_except_monad : document option;
       (** Indicates whether we are in an expression of `ExceptM _ _` what the return type is. *)
+  emit_match_eq_for_termination : bool;
 }
 
 let context_init env global =
@@ -61,6 +62,7 @@ let context_init env global =
     loop_level = 0;
     in_sail_monad = false;
     in_except_monad = None;
+    emit_match_eq_for_termination = false;
   }
 let context_with_env ctx env = { ctx with env }
 
@@ -1015,7 +1017,9 @@ and doc_exp (as_monadic : bool) ctx (E_aux (e, (l, annot)) as full_exp) =
         || as_monadic
       in
       let cases = separate_map hardline (doc_match_clause is_match_bv as_monadic' ctx) brs in
-      string (match_or_match_bv is_match_bv brs) ^^ d_of_arg ctx discr ^^ string " with" ^^ hardline ^^ cases
+      if ctx.emit_match_eq_for_termination && not is_match_bv then
+        string "match h_match : " ^^ d_of_arg ctx discr ^^ string " with" ^^ hardline ^^ cases
+      else string (match_or_match_bv is_match_bv brs) ^^ d_of_arg ctx discr ^^ string " with" ^^ hardline ^^ cases
   | E_assign ((LE_aux (le_act, tannot) as le), e) ->
       wrap_with_left_arrow (not as_monadic)
         ( match le_act with
@@ -1213,7 +1217,12 @@ let doc_funcl ctx meas funcl =
   let comment, signature, ctx, fixup_binders = doc_funcl_init ctx.global funcl in
   let fnpat = pat_of_funcl funcl in
   let termination = doc_termination fixup_binders ctx fnpat meas in
-  comment ^^ nest 2 (signature ^^ hardline ^^ doc_funcl_body fixup_binders ctx funcl) ^^ termination
+  let body_ctx =
+    match meas with
+    | Rec_aux (Rec_measure _, _) -> { ctx with emit_match_eq_for_termination = true }
+    | _ -> ctx
+  in
+  comment ^^ nest 2 (signature ^^ hardline ^^ doc_funcl_body fixup_binders body_ctx funcl) ^^ termination
 
 let string_of_pexp p =
   let pat, guard, exp, _ = destruct_pexp p in
