@@ -1218,9 +1218,7 @@ let doc_funcl ctx meas funcl =
   let fnpat = pat_of_funcl funcl in
   let termination = doc_termination fixup_binders ctx fnpat meas in
   let body_ctx =
-    match meas with
-    | Rec_aux (Rec_measure _, _) -> { ctx with emit_match_eq_for_termination = true }
-    | _ -> ctx
+    match meas with Rec_aux (Rec_measure _, _) -> { ctx with emit_match_eq_for_termination = true } | _ -> ctx
   in
   comment ^^ nest 2 (signature ^^ hardline ^^ doc_funcl_body fixup_binders body_ctx funcl) ^^ termination
 
