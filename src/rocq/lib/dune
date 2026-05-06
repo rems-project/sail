@@ -12,6 +12,7 @@
   Domain.Interval
   Domain.AbsBitvector
   Domain.AbsValue
+  Domain.TransferBitvectorInterval
   IdUtil
   ListUtil
   OptionUtil

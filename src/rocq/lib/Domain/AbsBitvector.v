@@ -858,7 +858,7 @@ Module Dom <: DOMAIN Bits <: SAIL_BITS.
     end.
 
   Definition append_gmap (x y : gmap nat (list ubit)) : gmap nat (list ubit) :=
-    map_fold (λ n xbv acc, map_fold (λ m ybv acc, partial_alter (append_insert (xbv ++ ybv)) (n + m) acc) acc y) ∅ x.
+    map_fold (λ n xbv acc, map_fold (λ m ybv acc, partial_alter (append_insert (ybv ++ xbv)) (n + m) acc) acc y) ∅ x.
 
   Lemma valid_insert_inv (m : gmap nat (list ubit)) n v :
     m !! n = None → valid (<[n:=v]> m) → valid m.
@@ -886,10 +886,10 @@ Module Dom <: DOMAIN Bits <: SAIL_BITS.
 
   Lemma inner_fold_valid (xbv : list ubit) n (y acc : gmap nat (list ubit)) :
     length xbv = n → valid y → valid acc →
-    valid (map_fold (λ m ybv acc', partial_alter (append_insert (xbv ++ ybv)) (n + m) acc') acc y).
+    valid (map_fold (λ m ybv acc', partial_alter (append_insert (ybv ++ xbv)) (n + m) acc') acc y).
   Proof.
     intros Hxlen Vy Vacc.
-    enough (H : valid y → valid (map_fold (λ m ybv acc', partial_alter (append_insert (xbv ++ ybv)) (n + m) acc') acc y))
+    enough (H : valid y → valid (map_fold (λ m ybv acc', partial_alter (append_insert (ybv ++ xbv)) (n + m) acc') acc y))
       by exact (H Vy).
     apply (map_fold_weak_ind (λ (acc' : gmap nat (list ubit)) my', valid my' → valid acc')).
     - intros _. exact Vacc.
@@ -898,7 +898,7 @@ Module Dom <: DOMAIN Bits <: SAIL_BITS.
         pose proof (Hv m) as Hv'. rewrite lookup_insert_eq in Hv'. exact Hv'.
       }
       apply partial_alter_preserves_valid.
-      + rewrite length_app, Hxlen, Hybv. reflexivity.
+      + rewrite length_app, Hybv, Hxlen. lia.
       + exact (IH (valid_insert_inv _ _ _ Hm Hv)).
   Qed.
 
@@ -906,7 +906,7 @@ Module Dom <: DOMAIN Bits <: SAIL_BITS.
   Proof.
     intros x y Vx Vy.
     unfold append_gmap.
-    enough (H : valid x → valid (map_fold (λ n xbv acc, map_fold (λ m ybv acc', partial_alter (append_insert (xbv ++ ybv)) (n + m) acc') acc y) ∅ x))
+    enough (H : valid x → valid (map_fold (λ n xbv acc, map_fold (λ m ybv acc', partial_alter (append_insert (ybv ++ xbv)) (n + m) acc') acc y) ∅ x))
       by exact (H Vx).
     apply (map_fold_weak_ind (λ (acc : gmap nat (list ubit)) mx, valid mx → valid acc)).
     - intros _. apply empty_is_valid.
@@ -926,5 +926,198 @@ Module Dom <: DOMAIN Bits <: SAIL_BITS.
 
   Lemma append_abst : ∀ {n m} {x : bv n} {y : bv m},
     α (bv_to_bvn (bv_concat (n + m) x y)) = append (α (bv_to_bvn x)) (α (bv_to_bvn y)).
-  Admitted.
+  Proof.
+    intros n m x y.
+    repeat rewrite abstract_bvs.
+    unfold append. f_equal. apply subset_eq_compat. cbn.
+    unfold append_gmap.
+    rewrite map_fold_singleton, map_fold_singleton.
+    apply map_eq. intros i.
+    rewrite lookup_partial_alter, lookup_singleton, lookup_empty.
+    rewrite N2Nat.inj_add.
+    case_decide.
+    - cbn [append_insert]. rewrite bv_concat_app, map_app. reflexivity.
+    - rewrite lookup_empty. reflexivity.
+  Qed.
+
+  Lemma bv_opp_as_not_add_one : ∀ {n} (x : bv n), bv_opp x = bv_add (bv_not x) (Z_to_bv n 1).
+  Proof.
+    intros n x. apply bv_eq. bv_simplify.
+    pose proof (Z.opp_lnot (bv_unsigned x)).
+    f_equal. lia.
+  Qed.
+
+  Definition one_bits (n : nat) : list ubit :=
+    if n =? 0 then [] else B1 :: replicate (n - 1) B0.
+
+  Lemma one_bits_length : ∀ n, length (one_bits n) = n.
+  Proof.
+    intros n. unfold one_bits.
+    destruct (n =? 0) eqn : H.
+    - apply Nat.eqb_eq in H. subst. reflexivity.
+    - apply Nat.eqb_neq in H. cbn. rewrite length_replicate. lia.
+  Qed.
+
+  Lemma bv_testbit_1 : ∀ (n : N) (i : nat),
+    i < N.to_nat n → Z.testbit (bv_unsigned (Z_to_bv n 1)) (Z.of_nat i) = (i =? 0).
+  Proof.
+    intros n i Hi.
+    rewrite Z_to_bv_unsigned, bv_wrap_spec_low; [| lia].
+    destruct i; [reflexivity | cbn; reflexivity].
+  Qed.
+
+  Lemma one_bits_eq_bv1 : ∀ (n : N), one_bits (N.to_nat n) = map from_bool (bv_to_bits (Z_to_bv n 1)).
+  Proof.
+    intros n.
+    apply (list_eq_same_length _ _ (N.to_nat n)).
+    - rewrite length_map, length_bv_to_bits. reflexivity.
+    - apply one_bits_length.
+    - intros i b1 b2 Hi L R.
+      rewrite list_lookup_map in R.
+      apply option_map_from_bool_Some in R.
+      destruct R as [b (Rb & ->)].
+      rewrite bv_to_bits_lookup_Some in Rb.
+      destruct Rb as [_ Rb]. subst.
+      unfold one_bits in L.
+      replace (N.to_nat n =? 0) with false in L.
+      2: { symmetry; apply Nat.eqb_neq; lia. }
+      rewrite bv_testbit_1; [| exact Hi].
+      destruct i.
+      + cbn in L. injection L as <-. reflexivity.
+      + cbn in L. apply lookup_replicate_1 in L. destruct L as [-> _]. reflexivity.
+  Qed.
+
+  Definition negate_gmap (x : gmap nat (list ubit)) : gmap nat (list ubit) :=
+    add_gmap (not_gmap x) (fmap (λ bits, one_bits (length bits)) x).
+
+  Lemma negate_gmap_valid : ∀ {x}, valid x → valid (negate_gmap x).
+  Proof.
+    intros x Hv.
+    apply add_gmap_valid.
+    - exact (not_gmap_valid Hv).
+    - intros i. rewrite lookup_fmap.
+      unfold valid in Hv. specialize (Hv i).
+      destruct (x !! i) as [bits |]; [| reflexivity].
+      cbn. rewrite one_bits_length. exact Hv.
+  Qed.
+
+  Definition negate (x : bvset) : bvset :=
+    match x with
+    | Bvs x => Bvs (negate_gmap (`x) ↾ negate_gmap_valid (proj2_sig x))
+    | ⊤ => ⊤
+    end.
+
+  Lemma negate_abst : ∀ {n} {x : bv n}, α (bv_to_bvn (bv_opp x)) = negate (α (bv_to_bvn x)).
+  Proof.
+    intros n x.
+    pose proof (bv_opp_as_not_add_one x) as Hopp.
+    rewrite Hopp, add_abst, not_abst.
+    repeat rewrite abstract_bvs.
+    unfold negate, add, not. cbn. f_equal. apply subset_eq_compat. cbn.
+    unfold negate_gmap.
+    rewrite (map_fmap_singleton (λ bits, one_bits (length bits))).
+    rewrite length_map, length_bv_to_bits, one_bits_eq_bv1.
+    reflexivity.
+  Qed.
+
+  Definition sub (x y : bvset) : bvset := add x (negate y).
+
+  Lemma sub_abst : ∀ {n} {x y : bv n}, α (bv_to_bvn (bv_sub x y)) = sub (α (bv_to_bvn x)) (α (bv_to_bvn y)).
+  Proof.
+    intros n x y.
+    unfold sub.
+    rewrite bv_sub_add_opp, add_abst, negate_abst.
+    reflexivity.
+  Qed.
+
+  Definition slice_bits (bits : list ubit) (s m : nat) : list ubit :=
+    take m (drop s bits ++ replicate (m - length (drop s bits)) B0).
+
+  Lemma slice_bits_length : ∀ bits s m, length (slice_bits bits s m) = m.
+  Proof. intros. unfold slice_bits. simp_length. Qed.
+
+  Hint Rewrite slice_bits_length : length_db.
+
+  Definition slice_gmap (x : gmap nat (list ubit)) (s m : N) : gmap nat (list ubit) :=
+    map_fold (λ _ bits acc,
+      partial_alter (append_insert (slice_bits bits (N.to_nat s) (N.to_nat m))) (N.to_nat m) acc
+    ) ∅ x.
+
+  Lemma slice_gmap_valid : ∀ {x s m}, valid x → valid (slice_gmap x s m).
+  Proof.
+    intros x s m.
+    unfold slice_gmap.
+    apply (map_fold_weak_ind (λ acc mx, valid mx → valid acc)).
+    - intros _. apply empty_is_valid.
+    - intros n bits mx acc Hn IH Hmx.
+      apply partial_alter_preserves_valid.
+      + apply slice_bits_length.
+      + apply IH. exact (valid_insert_inv _ _ _ Hn Hmx).
+  Qed.
+
+  Definition slice (x : bvset) (s m : N) : bvset :=
+    match x with
+    | Bvs x => Bvs (slice_gmap (`x) s m ↾ slice_gmap_valid (proj2_sig x))
+    | ⊤ => Bvs ({[N.to_nat m := replicate (N.to_nat m) BU]} ↾ singleton_valid (length_replicate (N.to_nat m) BU))
+    end.
+
+  Lemma slice_bits_eq_bv_extract : ∀ {n} (x : bv n) (s m : N),
+    List.map from_bool (bv_to_bits (bv_extract s m x)) =
+    slice_bits (List.map from_bool (bv_to_bits x)) (N.to_nat s) (N.to_nat m).
+  Proof.
+    intros n x s m.
+    apply (list_eq_same_length _ _ (N.to_nat m)); try simp_length.
+    intros i b1 b2 Hi L R.
+    rewrite list_lookup_map in L.
+    apply option_map_from_bool_Some in L. destruct L as [bl [L1 L2]]. subst b1.
+    rewrite bv_to_bits_lookup_Some in L1. destruct L1 as [_ L1].
+    unfold slice_bits in R.
+    rewrite lookup_take_lt in R; [| exact Hi].
+    set (bits := List.map from_bool (bv_to_bits x)).
+    set (s_nat := N.to_nat s).
+    set (m_nat := N.to_nat m).
+    set (n_nat := N.to_nat n).
+    destruct (lt_dec i (n_nat - s_nat)) as [Hi2 | Hi2].
+    - assert (Hlen : i < length (drop s_nat bits)).
+      { unfold bits. rewrite length_drop, length_map, length_bv_to_bits.
+        unfold n_nat, s_nat. lia. }
+      rewrite lookup_app_l in R; [| exact Hlen].
+      rewrite lookup_drop, list_lookup_map in R.
+      apply option_map_from_bool_Some in R. destruct R as [br [R1 R2]]. subst b2.
+      rewrite bv_to_bits_lookup_Some in R1. destruct R1 as [_ R1].
+      rewrite L1, R1. f_equal.
+      rewrite bv_extract_unsigned.
+      rewrite bv_wrap_spec_low.
+      2: { split; [lia |]. rewrite <- N_nat_Z. apply inj_lt. unfold m_nat in Hi. exact Hi. }
+      rewrite Z.shiftr_spec; [| lia].
+      unfold s_nat. rewrite Nat2Z.inj_add, N_nat_Z. f_equal. lia.
+    - apply not_lt in Hi2.
+      assert (Hlen : length (drop s_nat bits) ≤ i).
+      { unfold bits. rewrite length_drop, length_map, length_bv_to_bits.
+        unfold n_nat, s_nat in Hi2. lia. }
+      rewrite lookup_app_r in R; [| exact Hlen].
+      rewrite lookup_replicate in R. destruct R as [-> _].
+      rewrite L1.
+      rewrite bv_extract_unsigned.
+      rewrite bv_wrap_spec_low.
+      2: { split; [lia |]. rewrite <- N_nat_Z. apply inj_lt. unfold m_nat in Hi. exact Hi. }
+      rewrite Z.shiftr_spec; [| lia].
+      rewrite bv_unsigned_spec_high; [reflexivity |].
+      rewrite <- (N_nat_Z n), <- (N_nat_Z s).
+      unfold n_nat, s_nat in *. lia.
+  Qed.
+
+  Lemma slice_abst : ∀ {n s m} {x : bv n}, α (bv_extract s m x) = slice (α x) s m.
+  Proof.
+    intros n s m x.
+    repeat rewrite abstract_bvs.
+    unfold slice. f_equal. apply subset_eq_compat. cbn.
+    unfold slice_gmap. rewrite map_fold_singleton.
+    apply map_eq. intros i.
+    rewrite lookup_partial_alter, lookup_singleton, lookup_empty.
+    case_decide as Hi.
+    - subst. cbn [append_insert]. f_equal.
+      apply slice_bits_eq_bv_extract.
+    - rewrite lookup_empty. reflexivity.
+  Qed.
 End Dom.

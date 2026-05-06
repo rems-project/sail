@@ -106,6 +106,12 @@ Module DomainProperties (C : CONCRETE) (D : DOMAIN C).
       exact S.
   Qed.
 
+  Lemma le_top : ∀ x, x ⊑ ⊤.
+  Proof. intros. rewrite le_meet_def, meet_id. reflexivity. Qed.
+
+  Lemma le_bot : ∀ x, ⊥ ⊑ x.
+  Proof. intros. rewrite le_join_def, join_comm, join_id. reflexivity. Qed.
+
   Lemma join_idem : ∀ x, x ⊔ x = x.
   Proof.
     intros x.
@@ -214,16 +220,21 @@ End SAIL_INT.
 Module Type SAIL_BITS.
   Parameter t : Set.
 
-  Parameter α : bvn -> t.
+  Parameter α : bvn → t.
+
+  Parameter le : t → t → Prop.
+
+  Parameter not : t → t.
+  Parameter not_abst : ∀ {n} {x : bv n}, α (bv_to_bvn (bv_not x)) = not (α (bv_to_bvn x)).
 
   Parameter add : t → t → t.
   Parameter add_abst : ∀ {n} {x y : bv n}, α (bv_to_bvn (x + y)) = add (α (bv_to_bvn x)) (α (bv_to_bvn y)).
-(*
+
+  Parameter negate : t → t.
+  Parameter negate_abst : ∀ {n} {x : bv n}, α (bv_to_bvn (- x)) = negate (α (bv_to_bvn x)).
+
   Parameter sub : t → t → t.
   Parameter sub_abst : ∀ {n} {x y : bv n}, α (bv_to_bvn (x - y)) = sub (α (bv_to_bvn x)) (α (bv_to_bvn y)).
-*)
-  Parameter not : t → t.
-  Parameter not_abst : ∀ {n} {x : bv n}, α (bv_to_bvn (bv_not x)) = not (α (bv_to_bvn x)).
 
   Parameter and : t → t → t.
   Parameter and_abst : ∀ {n} {x y : bv n}, α (bv_to_bvn (bv_and x y)) = and (α (bv_to_bvn x)) (α (bv_to_bvn y)).
@@ -237,4 +248,54 @@ Module Type SAIL_BITS.
   Parameter append : t → t → t.
   Parameter append_abst : ∀ {n m} {x : bv n} {y : bv m},
     α (bv_to_bvn (bv_concat (n + m) x y)) = append (α (bv_to_bvn x)) (α (bv_to_bvn y)).
+
+  (** <<slice bv s n>> extracts a bitvector of length <<n>> from <<bv>>, starting at index <<s>>. *)
+  Parameter slice : t → N → N → t.
+  Parameter slice_abst : ∀ {n s m} {x : bv n}, α (bv_extract s m x) = slice (α x) s m.
 End SAIL_BITS.
+
+Module Type SAIL_BITS_INT (Bits : SAIL_BITS) (Int : SAIL_INT).
+  Parameter unsigned : Bits.t → Int.t.
+  Parameter unsigned_abst : ∀ {n} {x : bv n},
+    Int.α (bv_unsigned x) = unsigned (Bits.α x).
+
+  Parameter signed : Bits.t → Int.t.
+  Parameter signed_abst : ∀ {n} {x : bv n},
+    Int.α (bv_signed x) = signed (Bits.α x).
+
+  (** Generate a bitvector containing all zeros.
+
+      If the interval is very wide, then this might produce a huge
+      number of bitvector widths. The first argument therefore
+      determines the maximum amount of bitvector widths that can be
+      generated, otherwise we generate [Bits.⊤] *)
+  Parameter zeros : nat → Int.t → Bits.t.
+  Parameter zeros_abst : ∀ {n : N} h,
+    Bits.le (Bits.α (bv_0 n)) (zeros h (Int.α (Z.of_N n))).
+
+  (** Generate a bitvector containing all ones.
+
+      See [zeros]. *)
+  Parameter ones : nat → Int.t → Bits.t.
+  Parameter ones_abst : ∀ {n} h,
+    Bits.le (Bits.α (bv_not (bv_0 n))) (ones h (Int.α (Z.of_N n))).
+
+  (** <<zero_extend h b n>> extends b to length n.
+
+      The heuristic logic is the same as for zeros. If the number of
+      possible bitvector widths would be greater than <<h>>, then
+      return [Bits.⊤]. *)
+  Parameter zero_extend : nat → Bits.t → Int.t → Bits.t.
+  Parameter zero_extend_abst : ∀ {n : N} {x : bv n} {z : N} h,
+    (n ≤ z)%N →
+    Bits.le (Bits.α (bv_zero_extend z x)) (zero_extend h (Bits.α x) (Int.α (Z.of_N z))).
+
+  Parameter sign_extend : nat → Bits.t → Int.t → Bits.t.
+  Parameter sign_extend_abst : ∀ {n : N} {x : bv n} {z : N} h,
+    (n ≤ z)%N →
+    Bits.le (Bits.α (bv_sign_extend z x)) (sign_extend h (Bits.α x) (Int.α (Z.of_N z))).
+
+  Parameter count_leading_zeros : Bits.t → Int.t.
+
+  Parameter count_trailing_zeros : Bits.t → Int.t.
+End SAIL_BITS_INT.

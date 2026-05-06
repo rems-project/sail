@@ -5,12 +5,14 @@ open List0
 open ListDef
 open Nat0
 open OptionUtil
+open PeanoNat
 open Specif
 open Base
 open Countable
 open Definitions
 open Fin_maps
 open Gmap
+open List_basics
 open Numbers
 
 module Bits :
@@ -92,4 +94,24 @@ module Dom :
     Three.ubit list) gmap -> (Big_int_Z.big_int, Three.ubit list) gmap
 
   val append : bvset -> bvset -> bvset
+
+  val one_bits : Big_int_Z.big_int -> Three.ubit list
+
+  val negate_gmap :
+    (Big_int_Z.big_int, Three.ubit list) gmap -> (Big_int_Z.big_int,
+    Three.ubit list) gmap
+
+  val negate : bvset -> bvset
+
+  val sub : bvset -> bvset -> bvset
+
+  val slice_bits :
+    Three.ubit list -> Big_int_Z.big_int -> Big_int_Z.big_int -> Three.ubit
+    list
+
+  val slice_gmap :
+    (Big_int_Z.big_int, Three.ubit list) gmap -> Big_int_Z.big_int ->
+    Big_int_Z.big_int -> (Big_int_Z.big_int, Three.ubit list) gmap
+
+  val slice : bvset -> Big_int_Z.big_int -> Big_int_Z.big_int -> bvset
  end

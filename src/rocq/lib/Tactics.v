@@ -142,5 +142,9 @@ Hint Rewrite length_map : length_db.
 Hint Rewrite length_rev : length_db.
 Hint Rewrite @length_bv_to_bits : length_db.
 Hint Rewrite @length_zip_with : length_db.
+Hint Rewrite @length_take : length_db.
+Hint Rewrite @length_drop : length_db.
+Hint Rewrite length_app : length_db.
+Hint Rewrite @length_replicate : length_db.
 
 Ltac simp_length := autorewrite with length_db; cbn; lia.

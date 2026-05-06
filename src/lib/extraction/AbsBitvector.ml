@@ -5,12 +5,14 @@ open List0
 open ListDef
 open Nat0
 open OptionUtil
+open PeanoNat
 open Specif
 open Base
 open Countable
 open Definitions
 open Fin_maps
 open Gmap
+open List_basics
 open Numbers
 
 module Bits =
@@ -226,7 +228,7 @@ module Dom =
       map_fold (fun _ -> gmap_fold Nat.eq_dec nat_countable)
         (fun m ybv acc0 ->
         partial_alter (gmap_partial_alter Nat.eq_dec nat_countable)
-          (append_insert (app xbv ybv)) (Nat0.add n m) acc0)
+          (append_insert (app ybv xbv)) (Nat0.add n m) acc0)
         acc y)
       (empty (gmap_empty Nat.eq_dec nat_countable)) x
 
@@ -242,4 +244,67 @@ module Dom =
          Bvs (Coq_exist
            (append_gmap (let Coq_exist a = x0 in a)
              (let Coq_exist a = y0 in a))))
+
+  (** val one_bits : Big_int_Z.big_int -> Three.ubit list **)
+
+  let one_bits n =
+    if PeanoNat.Nat.eqb n Big_int_Z.zero_big_int
+    then []
+    else Three.B1 :: (Coq_list.replicate
+                       (sub n (Big_int_Z.succ_big_int Big_int_Z.zero_big_int))
+                       Three.B0)
+
+  (** val negate_gmap :
+      (Big_int_Z.big_int, Three.ubit list) gmap -> (Big_int_Z.big_int,
+      Three.ubit list) gmap **)
+
+  let negate_gmap x =
+    add_gmap (not_gmap x)
+      (fmap (Obj.magic (fun _ _ -> gmap_fmap Nat.eq_dec nat_countable))
+        (fun bits -> one_bits (length bits)) x)
+
+  (** val negate : bvset -> bvset **)
+
+  let negate = function
+  | Top -> Top
+  | Bvs x0 -> Bvs (Coq_exist (negate_gmap (let Coq_exist a = x0 in a)))
+
+  (** val sub : bvset -> bvset -> bvset **)
+
+  let sub x y =
+    add x (negate y)
+
+  (** val slice_bits :
+      Three.ubit list -> Big_int_Z.big_int -> Big_int_Z.big_int -> Three.ubit
+      list **)
+
+  let slice_bits bits s m =
+    firstn m
+      (app (skipn s bits)
+        (Coq_list.replicate (Nat0.sub m (length (skipn s bits))) Three.B0))
+
+  (** val slice_gmap :
+      (Big_int_Z.big_int, Three.ubit list) gmap -> Big_int_Z.big_int ->
+      Big_int_Z.big_int -> (Big_int_Z.big_int, Three.ubit list) gmap **)
+
+  let slice_gmap x s m =
+    map_fold (fun _ -> gmap_fold Nat.eq_dec nat_countable) (fun _ bits acc ->
+      partial_alter (gmap_partial_alter Nat.eq_dec nat_countable)
+        (append_insert
+          (slice_bits bits (BinNat.N.to_nat s) (BinNat.N.to_nat m)))
+        (BinNat.N.to_nat m) acc)
+      (empty (gmap_empty Nat.eq_dec nat_countable)) x
+
+  (** val slice : bvset -> Big_int_Z.big_int -> Big_int_Z.big_int -> bvset **)
+
+  let slice x s m =
+    match x with
+    | Top ->
+      Bvs (Coq_exist
+        (singletonM
+          (map_singleton (gmap_partial_alter Nat.eq_dec nat_countable)
+            (gmap_empty Nat.eq_dec nat_countable))
+          (BinNat.N.to_nat m)
+          (Coq_list.replicate (BinNat.N.to_nat m) Three.BU)))
+    | Bvs x0 -> Bvs (Coq_exist (slice_gmap (let Coq_exist a = x0 in a) s m))
  end
