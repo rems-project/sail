@@ -17,17 +17,23 @@ INCLUDES = $(LEM_DIR)/hol-lib
 all: $(THYS)
 .PHONY: all
 
-EXTRA_CLEANS = $(LEM_CLEANS)
-
 ifdef POLY
 HOLHEAP = sail-heap
 EXTRA_CLEANS = $(LEM_CLEANS) $(HOLHEAP) $(HOLHEAP).o
 
 BASE_HEAP = $(LEM_DIR)/hol-lib/lemheap
 
+# The command to build heaps has changed after Trindemossen-2 release, so allow
+# both for now, and we can drop the first after the next HOL release.
 $(HOLHEAP): $(BASE_HEAP)
-	$(protect $(HOLDIR)/bin/buildheap) -o $(HOLHEAP) -b $(BASE_HEAP)
+	if type $(protect $(HOLDIR)/bin/buildheap) >/dev/null 2>/dev/null; then \
+	  $(protect $(HOLDIR)/bin/buildheap) -o $(HOLHEAP) -b $(BASE_HEAP); else \
+	  $(protect $(HOLDIR)/bin/hol) buildheap -o $(HOLHEAP) -b $(BASE_HEAP); fi
 
 all: $(HOLHEAP)
+
+else
+
+EXTRA_CLEANS = $(LEM_CLEANS)
 
 endif
