@@ -109,3 +109,14 @@ match l with
   body x vars >>$= fun vars ->
   foreachE xs vars body
 end
+
+(* We don't know the type of the register state for `sail_unwrap_value`, so use an arbitrary value
+   instead.  The expressions used should never touch the state, anyway. *)
+val sail_dummy_state : forall 'a. Sail2_state_monad.sequential_state 'a
+declare hol target_rep function sail_dummy_state = `ARB`
+
+val sail_unwrap_value : forall 'regval 'a 'e. monad 'regval 'a 'e -> 'a
+let sail_unwrap_value m = match m sail_dummy_state with
+  | singleton (Sail2_state_monad.Value v, _) -> v
+  | _ -> failwith "Attempted to unwrap value from computation with side-effects"
+end

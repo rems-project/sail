@@ -28,6 +28,7 @@ _coverage/
 
 # HOL4
 
+.hol
 .HOLMK
 .hollogs
 *Theory.dat
