@@ -3,7 +3,9 @@
 LEM_SCRIPTS = sail2_instr_kindsScript.sml sail2_valuesScript.sml sail2_operatorsScript.sml \
   sail2_operators_mwordsScript.sml sail2_operators_bitlistsScript.sml \
   sail2_state_monadScript.sml sail2_stateScript.sml sail2_promptScript.sml sail2_prompt_monadScript.sml \
-  sail2_undefinedScript.sml sail2_stringScript.sml
+  sail2_undefinedScript.sml sail2_stringScript.sml sail2_concurrency_interfaceScript.sml \
+  sail2_concurrency_interface_mwordsScript.sml sail2_concurrency_interface_bitlistsScript.sml \
+  sail2_undefined_concurrency_interfaceScript.sml sail2_monadic_combinatorsScript.sml
 
 LEM_CLEANS = $(LEM_SCRIPTS)
 

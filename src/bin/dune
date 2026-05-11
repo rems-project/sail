@@ -87,6 +87,18 @@
   (%{workspace_root}/lib/hol/sail2_prompt_monad.lem
    as
    lib/hol/sail2_prompt_monad.lem)
+  (%{workspace_root}/lib/hol/sail2_concurrency_interface.lem
+   as
+   lib/hol/sail2_concurrency_interface.lem)
+  (%{workspace_root}/lib/hol/sail2_concurrency_interface_bitlists.lem
+   as
+   lib/hol/sail2_concurrency_interface_bitlists.lem)
+  (%{workspace_root}/lib/hol/sail2_concurrency_interface_mwords.lem
+   as
+   lib/hol/sail2_concurrency_interface_mwords.lem)
+  (%{workspace_root}/lib/hol/sail2_undefined_concurrency_interface.lem
+   as
+   lib/hol/sail2_undefined_concurrency_interface.lem)
   (%{workspace_root}/lib/hol/sail2_stateAuxiliaryScript.sml
    as
    lib/hol/sail2_stateAuxiliaryScript.sml)
