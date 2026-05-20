@@ -16,14 +16,14 @@ jobs:
   build:
     strategy:
       matrix:
-        ocaml_version: [4.08.1, 5.2.1]
+        ocaml_version: [4.14.3, 5.2.1]
         os: [ubuntu-24.04, ubuntu-24.04-arm, macos-26, windows-2025]
         exclude:
         - os: macos-26
-          ocaml_version: 4.08.1
+          ocaml_version: 4.14.3
         # Windows is only supported by OCaml 5 or later.
         - os: windows-2025
-          ocaml_version: 4.08.1
+          ocaml_version: 4.14.3
 
     runs-on: ${{ matrix.os }}
 
