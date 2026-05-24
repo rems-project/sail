@@ -11,18 +11,18 @@ open ConcurrencyInterfaceV1
 
 abbrev bit := (BitVec 1)
 
-abbrev bits k_n := (BitVec k_n)
+abbrev bits (k_n : Int) := (BitVec k_n)
 
 /-- Type quantifiers: k_a : Type -/
 inductive option (k_a : Type) where
   | Some (_ : k_a)
   | None (_ : Unit)
   deriving Inhabited, BEq, Repr
-  open option
+open option
 
 inductive e_test where | VAL
   deriving BEq, Inhabited, Repr
-  open e_test
+open e_test
 
 structure s_test where
   f : e_test

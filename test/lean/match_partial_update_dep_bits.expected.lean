@@ -20,6 +20,12 @@ inductive option (k_a : Type) where
   deriving Inhabited, BEq, Repr
 open option
 
+inductive boxed_imm where
+  | Boxed32 (_ : (BitVec 32))
+  | Boxed64 (_ : (BitVec 64))
+  deriving Inhabited, BEq, Repr
+open boxed_imm
+
 abbrev Register := PEmpty
 abbrev RegisterType : Register -> Type := PEmpty.elim
 
@@ -47,8 +53,9 @@ open ConcurrencyInterfaceV1
 namespace Out.Functions
 
 open option
+open boxed_imm
 
-/-- Type quantifiers: k_ex940_ : Bool, k_ex939_ : Bool -/
+/-- Type quantifiers: k_ex939_ : Bool, k_ex938_ : Bool -/
 def neq_bool (x : Bool) (y : Bool) : Bool :=
   (! (x == y))
 
@@ -141,68 +148,23 @@ def concat_str_bits (str : String) (x : (BitVec k_n)) : String :=
 def concat_str_dec (str : String) (x : Int) : String :=
   (HAppend.hAppend str (Int.repr x))
 
-def bitvector_eq (x : (BitVec 16)) (y : (BitVec 16)) : Bool :=
-  (x == y)
-
-def bitvector_neq (x : (BitVec 16)) (y : (BitVec 16)) : Bool :=
-  (x != y)
-
-def bitvector_len (x : (BitVec 16)) : Nat :=
-  (Sail.BitVec.length x)
-
-def bitvector_sign_extend (x : (BitVec 16)) : (BitVec 32) :=
-  (Sail.BitVec.signExtend x 32)
-
-def bitvector_zero_extend (x : (BitVec 16)) : (BitVec 32) :=
-  (Sail.BitVec.zeroExtend x 32)
-
-def bitvector_truncate (x : (BitVec 32)) : (BitVec 16) :=
-  (Sail.BitVec.truncate x 16)
-
-def bitvector_truncateLSB (x : (BitVec 32)) : (BitVec 16) :=
-  (Sail.BitVec.truncateLsb x 16)
-
-def bitvector_append (x : (BitVec 16)) (y : (BitVec 16)) : (BitVec 32) :=
-  (x +++ y)
-
-def bitvector_add (x : (BitVec 16)) (y : (BitVec 16)) : (BitVec 16) :=
-  (x + y)
-
-def bitvector_sub (x : (BitVec 16)) (y : (BitVec 16)) : (BitVec 16) :=
-  (x - y)
-
-def bitvector_not (x : (BitVec 16)) : (BitVec 16) :=
-  (Complement.complement x)
-
-def bitvector_and (x : (BitVec 16)) (y : (BitVec 16)) : (BitVec 16) :=
-  (x &&& y)
-
-def bitvector_or (x : (BitVec 16)) (y : (BitVec 16)) : (BitVec 16) :=
-  (x ||| y)
-
-def bitvector_xor (x : (BitVec 16)) (y : (BitVec 16)) : (BitVec 16) :=
-  (x ^^^ y)
-
-def bitvector_unsigned (x : (BitVec 16)) : Nat :=
-  (BitVec.toNatInt x)
-
-def bitvector_signed (x : (BitVec 16)) : Int :=
-  (BitVec.toInt x)
-
-/-- Type quantifiers: i : Nat, 0 ≤ i ∧ i ≤ 15 -/
-def bitvector_access' (x : (BitVec 16)) (i : Nat) : (BitVec 1) :=
-  (BitVec.access x i)
-
-/-- Type quantifiers: i : Int -/
-def bitvector_plus_int (x : (BitVec 16)) (i : Int) : (BitVec 16) :=
-  (BitVec.addInt x i)
-
-def bitvector_literal (x : (BitVec 1)) (y : (BitVec 1)) : (BitVec 2) :=
-  (BitVec.join1 [x, y])
-
-/-- Type quantifiers: y : Int, x : Int -/
-def vector_literal (x : Int) (y : Int) : (Vector Int 2) :=
-  #v[y, x]
+/-- Type quantifiers: k_ex1040_ : Bool -/
+def partial_update_match (shift : (BitVec 2)) (imm12 : (BitVec 12)) (use64 : Bool) : boxed_imm :=
+  let datasize : Int :=
+    if (use64 : Bool)
+    then 64
+    else 32
+  let imm := (BitVec.zero datasize)
+  let imm :=
+    match shift with
+    | 0b00 => (Sail.BitVec.zeroExtend imm12 datasize)
+    | 0b01 => (Sail.BitVec.zeroExtend (imm12 +++ 0x000#12) datasize)
+    | _ =>
+      (let _ : Unit := (print "reserved")
+      imm)
+  if ((datasize == 64) : Bool)
+  then (Boxed64 imm)
+  else (Boxed32 imm)
 
 def initialize_registers (_ : Unit) : Unit :=
   ()

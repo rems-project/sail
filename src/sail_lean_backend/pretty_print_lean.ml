@@ -1256,9 +1256,9 @@ let doc_typdef ctx (TD_aux (td, tannot) as full_typdef) =
       let id = doc_id_ctor id in
       nest 2
         (flow (break 1) [string "inductive"; id; string "where"]
-        ^^ enums_doc ^^ hardline ^^ string "deriving" ^^ space ^^ separate comma_sp derivers ^^ hardline
-        ^^ string "open" ^^ space ^^ id
+        ^^ enums_doc ^^ hardline ^^ string "deriving" ^^ space ^^ separate comma_sp derivers
         )
+      ^^ hardline ^^ string "open" ^^ space ^^ id
   | TD_record (id, tq, fields, _) ->
       let fields = List.map (doc_typ_id ctx) fields in
       let fields_doc = separate hardline fields in
@@ -1279,13 +1279,15 @@ let doc_typdef ctx (TD_aux (td, tannot) as full_typdef) =
   | TD_abbrev (id, tq, A_aux (A_typ t, _)) when string_of_id id = "fp_bits" ->
       string (Printf.sprintf "-- Abbreviation %s skipped" (string_of_id id)) (* FIXME *)
   | TD_abbrev (id, tq, A_aux (A_typ t, _)) ->
-      let vars = doc_typ_quant_only_vars ctx tq in
+      let vars = doc_typ_quant_relevant ctx tq in
+      let vars = List.map parens vars in
       let vars = separate space vars in
       nest 2 (flow (break 1) (remove_empties [string "abbrev"; doc_id_ctor id; vars; coloneq; doc_typ ctx t]))
   | TD_abbrev (id, tq, A_aux (A_nexp ne, _)) ->
-      let vars = doc_typ_quant_only_vars ctx tq in
+      let vars = doc_typ_quant_relevant ctx tq in
+      let vars = List.map parens vars in
       let vars = separate space vars in
-      nest 2 (flow (break 1) [string "abbrev"; doc_id_ctor id; colon; string "Int"; coloneq; doc_nexp ctx ne])
+      nest 2 (flow (break 1) (remove_empties [string "abbrev"; doc_id_ctor id; vars; colon; string "Int"; coloneq; doc_nexp ctx ne]))
   | TD_abbrev (id, TypQ_aux (TypQ_no_forall, _), A_aux (A_bool nc, _)) ->
       (* We currently cannot handle explicit parameters because of the Int/Nat mismatch. *)
       nest 2 (flow (break 1) [string "abbrev"; doc_id_ctor id; colon; string "Bool"; coloneq; doc_nconstraint ctx nc])
@@ -1301,9 +1303,9 @@ let doc_typdef ctx (TD_aux (td, tannot) as full_typdef) =
       doc_typ_quant_in_comment ctx tq
       ^^ nest 2
            (nest 2 (flow space (remove_empties [string "inductive"; doc_id_ctor id; rectyp; string "where"]))
-           ^^ pp_tus ^^ hardline ^^ string "deriving" ^^ space ^^ separate comma_sp derivers ^^ hardline
-           ^^ string "open" ^^ space ^^ doc_id_ctor id
+           ^^ pp_tus ^^ hardline ^^ string "deriving" ^^ space ^^ separate comma_sp derivers
            )
+      ^^ hardline ^^ string "open" ^^ space ^^ doc_id_ctor id
   | _ -> failwith ("Type definition " ^ string_of_type_def_con full_typdef ^ " not translatable yet.")
 
 (* Copied from the Coq PP *)

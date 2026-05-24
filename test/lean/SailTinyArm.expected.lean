@@ -11,14 +11,14 @@ open ConcurrencyInterfaceV1
 
 abbrev bit := (BitVec 1)
 
-abbrev bits k_n := (BitVec k_n)
+abbrev bits (k_n : Int) := (BitVec k_n)
 
 /-- Type quantifiers: k_a : Type -/
 inductive option (k_a : Type) where
   | Some (_ : k_a)
   | None (_ : Unit)
   deriving Inhabited, BEq, Repr
-  open option
+open option
 
 abbrev MAIRType := (BitVec 64)
 
@@ -28,7 +28,7 @@ abbrev S2PIRType := (BitVec 64)
 
 inductive SecurityState where | SS_NonSecure | SS_Root | SS_Realm | SS_Secure
   deriving BEq, Inhabited, Repr
-  open SecurityState
+open SecurityState
 
 abbrev PARTIDtype := (BitVec 16)
 
@@ -36,7 +36,7 @@ abbrev PMGtype := (BitVec 8)
 
 inductive PARTIDspaceType where | PIdSpace_Secure | PIdSpace_Root | PIdSpace_Realm | PIdSpace_NonSecure
   deriving BEq, Inhabited, Repr
-  open PARTIDspaceType
+open PARTIDspaceType
 
 structure MPAMinfo where
   mpam_sp : PARTIDspaceType
@@ -46,31 +46,31 @@ structure MPAMinfo where
 
 inductive AccessType where | AccessType_IFETCH | AccessType_GPR | AccessType_ASIMD | AccessType_SVE | AccessType_SME | AccessType_IC | AccessType_DC | AccessType_DCZero | AccessType_AT | AccessType_NV2 | AccessType_SPE | AccessType_GCS | AccessType_GPTW | AccessType_TTW
   deriving BEq, Inhabited, Repr
-  open AccessType
+open AccessType
 
 inductive VARange where | VARange_LOWER | VARange_UPPER
   deriving BEq, Inhabited, Repr
-  open VARange
+open VARange
 
 inductive MemAtomicOp where | MemAtomicOp_GCSSS1 | MemAtomicOp_ADD | MemAtomicOp_BIC | MemAtomicOp_EOR | MemAtomicOp_ORR | MemAtomicOp_SMAX | MemAtomicOp_SMIN | MemAtomicOp_UMAX | MemAtomicOp_UMIN | MemAtomicOp_SWP | MemAtomicOp_CAS
   deriving BEq, Inhabited, Repr
-  open MemAtomicOp
+open MemAtomicOp
 
 inductive CacheOp where | CacheOp_Clean | CacheOp_Invalidate | CacheOp_CleanInvalidate
   deriving BEq, Inhabited, Repr
-  open CacheOp
+open CacheOp
 
 inductive CacheOpScope where | CacheOpScope_SetWay | CacheOpScope_PoU | CacheOpScope_PoC | CacheOpScope_PoE | CacheOpScope_PoP | CacheOpScope_PoDP | CacheOpScope_PoPA | CacheOpScope_ALLU | CacheOpScope_ALLUIS
   deriving BEq, Inhabited, Repr
-  open CacheOpScope
+open CacheOpScope
 
 inductive CacheType where | CacheType_Data | CacheType_Tag | CacheType_Data_Tag | CacheType_Instruction
   deriving BEq, Inhabited, Repr
-  open CacheType
+open CacheType
 
 inductive CachePASpace where | CPAS_NonSecure | CPAS_Any | CPAS_RealmNonSecure | CPAS_Realm | CPAS_Root | CPAS_SecureNonSecure | CPAS_Secure
   deriving BEq, Inhabited, Repr
-  open CachePASpace
+open CachePASpace
 
 structure AccessDescriptor where
   acctype : AccessType
@@ -110,11 +110,11 @@ structure AccessDescriptor where
 
 inductive MemType where | MemType_Normal | MemType_Device
   deriving BEq, Inhabited, Repr
-  open MemType
+open MemType
 
 inductive DeviceType where | DeviceType_GRE | DeviceType_nGRE | DeviceType_nGnRE | DeviceType_nGnRnE
   deriving BEq, Inhabited, Repr
-  open DeviceType
+open DeviceType
 
 structure MemAttrHints where
   attrs : (BitVec 2)
@@ -124,11 +124,11 @@ structure MemAttrHints where
 
 inductive Shareability where | Shareability_NSH | Shareability_ISH | Shareability_OSH
   deriving BEq, Inhabited, Repr
-  open Shareability
+open Shareability
 
 inductive MemTagType where | MemTag_Untagged | MemTag_AllocationTagged | MemTag_CanonicallyTagged
   deriving BEq, Inhabited, Repr
-  open MemTagType
+open MemTagType
 
 structure MemoryAttributes where
   memtype : MemType
@@ -143,7 +143,7 @@ structure MemoryAttributes where
 
 inductive PASpace where | PAS_NonSecure | PAS_Secure | PAS_Root | PAS_Realm
   deriving BEq, Inhabited, Repr
-  open PASpace
+open PASpace
 
 structure FullAddress where
   paspace : PASpace
@@ -152,7 +152,7 @@ structure FullAddress where
 
 inductive GPCF where | GPCF_None | GPCF_AddressSize | GPCF_Walk | GPCF_EABT | GPCF_Fail
   deriving BEq, Inhabited, Repr
-  open GPCF
+open GPCF
 
 structure GPCFRecord where
   gpf : GPCF
@@ -161,11 +161,11 @@ structure GPCFRecord where
 
 inductive Fault where | Fault_None | Fault_AccessFlag | Fault_Alignment | Fault_Background | Fault_Domain | Fault_Permission | Fault_Translation | Fault_AddressSize | Fault_SyncExternal | Fault_SyncExternalOnWalk | Fault_SyncParity | Fault_SyncParityOnWalk | Fault_GPCFOnWalk | Fault_GPCFOnOutput | Fault_AsyncParity | Fault_AsyncExternal | Fault_TagCheck | Fault_Debug | Fault_TLBConflict | Fault_BranchTarget | Fault_HWUpdateAccessFlag | Fault_Lockdown | Fault_Exclusive | Fault_ICacheMaint
   deriving BEq, Inhabited, Repr
-  open Fault
+open Fault
 
 inductive ErrorState where | ErrorState_UC | ErrorState_UEU | ErrorState_UEO | ErrorState_UER | ErrorState_CE | ErrorState_Uncategorized | ErrorState_IMPDEF
   deriving BEq, Inhabited, Repr
-  open ErrorState
+open ErrorState
 
 structure FaultRecord where
   statuscode : Fault
@@ -192,11 +192,11 @@ structure FaultRecord where
 
 inductive MBReqDomain where | MBReqDomain_Nonshareable | MBReqDomain_InnerShareable | MBReqDomain_OuterShareable | MBReqDomain_FullSystem
   deriving BEq, Inhabited, Repr
-  open MBReqDomain
+open MBReqDomain
 
 inductive MBReqTypes where | MBReqTypes_Reads | MBReqTypes_Writes | MBReqTypes_All
   deriving BEq, Inhabited, Repr
-  open MBReqTypes
+open MBReqTypes
 
 structure CacheRecord where
   acctype : AccessType
@@ -221,11 +221,11 @@ structure CacheRecord where
 
 inductive Regime where | Regime_EL3 | Regime_EL30 | Regime_EL2 | Regime_EL20 | Regime_EL10
   deriving BEq, Inhabited, Repr
-  open Regime
+open Regime
 
 inductive TGx where | TGx_4KB | TGx_16KB | TGx_64KB
   deriving BEq, Inhabited, Repr
-  open TGx
+open TGx
 
 structure S1TTWParams where
   ha : (BitVec 1)
@@ -318,15 +318,15 @@ structure TranslationInfo where
 
 inductive TLBILevel where | TLBILevel_Any | TLBILevel_Last
   deriving BEq, Inhabited, Repr
-  open TLBILevel
+open TLBILevel
 
 inductive TLBIOp where | TLBIOp_DALL | TLBIOp_DASID | TLBIOp_DVA | TLBIOp_IALL | TLBIOp_IASID | TLBIOp_IVA | TLBIOp_ALL | TLBIOp_ASID | TLBIOp_IPAS2 | TLBIPOp_IPAS2 | TLBIOp_VAA | TLBIOp_VA | TLBIPOp_VAA | TLBIPOp_VA | TLBIOp_VMALL | TLBIOp_VMALLS12 | TLBIOp_RIPAS2 | TLBIPOp_RIPAS2 | TLBIOp_RVAA | TLBIOp_RVA | TLBIPOp_RVAA | TLBIPOp_RVA | TLBIOp_RPA | TLBIOp_PAALL
   deriving BEq, Inhabited, Repr
-  open TLBIOp
+open TLBIOp
 
 inductive TLBIMemAttr where | TLBI_AllAttr | TLBI_ExcludeXS
   deriving BEq, Inhabited, Repr
-  open TLBIMemAttr
+open TLBIMemAttr
 
 structure TLBIRecord where
   op : TLBIOp
@@ -359,7 +359,7 @@ inductive arm_acc_type where
   | SAcc_GCS (_ : Unit)
   | SAcc_GPTW (_ : Unit)
   deriving Inhabited, BEq, Repr
-  open arm_acc_type
+open arm_acc_type
 
 structure TLBIInfo where
   rec' : TLBIRecord
@@ -380,7 +380,7 @@ inductive Barrier where
   | Barrier_PSSBB (_ : Unit)
   | Barrier_SB (_ : Unit)
   deriving Inhabited, BEq, Repr
-  open Barrier
+open Barrier
 
 abbrev boolean := (BitVec 1)
 
@@ -397,7 +397,7 @@ inductive ast where
   | DataMemoryBarrier (_ : Unit)
   | CompareAndBranch (_ : (reg_index × (BitVec 64)))
   deriving Inhabited, BEq, Repr
-  open ast
+open ast
 
 inductive Register : Type where
   | R0

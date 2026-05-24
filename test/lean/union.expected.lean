@@ -22,14 +22,14 @@ inductive shape where
   | Rectangle (_ : rectangle)
   | Circle (_ : circle)
   deriving Inhabited, BEq, Repr
-  open shape
+open shape
 
 /-- Type quantifiers: k_a : Type -/
 inductive my_option (k_a : Type) where
   | MySome (_ : k_a)
   | MyNone (_ : Unit)
   deriving Inhabited, BEq, Repr
-  open my_option
+open my_option
 
 abbrev Register := PEmpty
 abbrev RegisterType : Register -> Type := PEmpty.elim

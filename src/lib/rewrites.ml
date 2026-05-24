@@ -2947,7 +2947,7 @@ let rec rewrite_var_updates (E_aux (expaux, ((l, _) as annot)) as exp) =
             | Pat_aux ((Pat_exp (_, first) | Pat_when (_, _, first)), _) :: _ -> typ_of first
             | _ -> unit_typ
           in
-          let v = annot_exp expaux pl env typ in
+          let v = add_e_typ env typ (annot_exp expaux pl env typ) in
           Added_vars (v, tuple_pat (if overwrite then varpats else pat :: varpats))
         )
     | E_assign (lexp, vexp) ->

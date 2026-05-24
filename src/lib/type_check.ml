@@ -2704,6 +2704,51 @@ and check_block' f_p env exps ret_typ =
           (s_p, texp :: exps)
     )
 
+and infer_case env pat_typ pexp =
+  let pat, guard, case, (l, uannot) = destruct_pexp pexp in
+  ignore (check_pattern_duplicates env pat);
+  let env = bind_pattern_vector_subranges pat env in
+  match bind_pat env pat pat_typ with
+  | tpat, env, guards ->
+      if prove __POS__ env nc_false then None
+      else (
+        let hint_loc l =
+          match guard with
+          | None -> Parse_ast.Hint ("guard created for this pattern", pat_loc pat, l)
+          | Some exp -> Parse_ast.Hint ("combining pattern with guard", exp_loc exp, l)
+        in
+        let guard =
+          match (guard, guards) with None, h :: t -> Some (h, t) | Some x, l -> Some (x, l) | None, [] -> None
+        in
+        let guard =
+          match guard with
+          | Some (h, t) ->
+              Some
+                (List.fold_left
+                   (fun acc guard -> mk_infix_exp ~loc:(hint_loc (exp_loc guard)) acc (mk_operator "&") guard)
+                   h t
+                )
+          | None -> None
+        in
+        let checked_guard, env' =
+          match guard with
+          | None -> (None, env)
+          | Some guard ->
+              let checked_guard = check_exp env guard bool_typ in
+              (Some checked_guard, add_opt_constraint l "guard pattern" (assert_constraint env true checked_guard) env)
+        in
+        let inferred_case = irule infer_exp env' case in
+        Some (construct_pexp (tpat, checked_guard, inferred_case, (l, (None, uannot))))
+      )
+  | exception (Type_error _ as typ_exn) -> (
+      match pat with
+      | P_aux (P_lit lit, (l, _)) ->
+          let guard' = mk_infix_exp (mk_exp (E_id (mk_id "p#"))) (mk_operator "==") (mk_exp (E_lit lit)) in
+          let guard = match guard with None -> guard' | Some guard -> mk_infix_exp guard (mk_operator "&") guard' in
+          infer_case env pat_typ (Pat_aux (Pat_when (mk_pat ~loc:l (P_id (mk_id "p#")), guard, case), (l, uannot)))
+      | _ -> raise typ_exn
+    )
+
 and check_case env pat_typ pexp typ =
   let pat, guard, case, (l, uannot) = destruct_pexp pexp in
   ignore (check_pattern_duplicates env pat);
@@ -3926,6 +3971,36 @@ and infer_exp env (E_aux (exp_aux, (l, uannot)) as exp) =
                )
             )
     end
+  | E_match (exp, cases) ->
+      let inferred_exp = irule infer_exp env exp in
+      let inferred_typ = typ_of inferred_exp in
+      begin
+        match cases with
+        | first_pexp :: rest ->
+            begin
+              match infer_case env inferred_typ first_pexp with
+              | Some inferred_first ->
+                  let _, _, first_body, _ = destruct_pexp inferred_first in
+                  let result_typ = typ_of first_body in
+                  let checked_rest = List.filter_map (fun case -> check_case env inferred_typ case result_typ) rest in
+                  let all_cases = inferred_first :: checked_rest in
+                  let all_cases, attr_update =
+                    if Option.is_some (get_attribute "complete" uannot) || Option.is_some (get_attribute "incomplete" uannot)
+                    then (all_cases, fun attrs -> attrs)
+                    else (
+                      let completeness_typ, env = bind_existential (exp_loc exp) None inferred_typ env in
+                      let ctx = pattern_completeness_ctx env in
+                      match PC.is_complete_wildcarded l ctx all_cases completeness_typ with
+                      | Some wildcarded -> (wildcarded, add_attribute (gen_loc l) "complete" None)
+                      | None -> (all_cases, add_attribute (gen_loc l) "incomplete" None)
+                    )
+                  in
+                  let update_uannot f (E_aux (aux, (l, (tannot, uannot)))) = E_aux (aux, (l, (tannot, f uannot))) in
+                  annot_exp (E_match (inferred_exp, all_cases)) result_typ |> update_uannot attr_update
+              | None -> typ_error l "Cannot infer type of match expression: first case is unreachable"
+            end
+        | [] -> typ_error l "Cannot infer type of empty match expression"
+      end
   | E_vector_append (v1, E_aux (E_vector [], _)) -> infer_exp env v1
   | E_vector_append (v1, v2) -> infer_exp env (E_aux (E_app (mk_id "append", [v1; v2]), (l, uannot)))
   | E_vector [] -> typ_error l "Cannot infer type of empty vector"
