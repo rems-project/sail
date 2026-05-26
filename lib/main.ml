@@ -52,7 +52,7 @@ let opt_raw_files = ref ([] : (string * Nat_big_num.num)  list)
 let options = Arg.align [
     ( "-raw",
       Arg.String (fun s ->
-      let l = Util.split_on_char '@' s in
+      let l = String.split_on_char '@' s in
       let (file, addr) = match l with
         | [fname;addr] -> (fname, Nat_big_num.of_string addr)
         | _ -> raise (Arg.Bad (s ^ " not of form <filename>@<addr>")) in

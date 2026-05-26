@@ -105,8 +105,8 @@ let rec fix_id remove_tick name =
   | "sail_unwrap_value" ->
       name ^ "'"
   | _ ->
-      if String.contains name '#' then fix_id remove_tick (String.concat "_" (Util.split_on_char '#' name))
-      else if String.contains name '?' then fix_id remove_tick (String.concat "_pat_" (Util.split_on_char '?' name))
+      if String.contains name '#' then fix_id remove_tick (String.concat "_" (String.split_on_char '#' name))
+      else if String.contains name '?' then fix_id remove_tick (String.concat "_pat_" (String.split_on_char '?' name))
       else if name.[0] = '\'' then (
         let var = String.sub name 1 (String.length name - 1) in
         if remove_tick then var else var ^ "'"
@@ -1615,7 +1615,7 @@ let is_field_accessor regtypes fdef =
       (fun (tname, (_, _, fields)) -> tname = regtyp && List.exists (fun (_, fid) -> string_of_id fid = field) fields)
       regtypes
   in
-  match Util.split_on_char '_' (string_of_id (id_of_fundef fdef)) with
+  match String.split_on_char '_' (string_of_id (id_of_fundef fdef)) with
   | [access; regtyp; field] -> (access = "get" || access = "set") && is_field_of regtyp field
   | _ -> false
 

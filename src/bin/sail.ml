@@ -343,7 +343,7 @@ let rec options =
       ( "-mono_split",
         Arg.String
           (fun s ->
-            let l = Util.split_on_char ':' s in
+            let l = String.split_on_char ':' s in
             match l with
             | [fn; var] -> Rewrites.opt_mono_split := (Arg (Ast_util.mk_id fn), var) :: !Rewrites.opt_mono_split
             | [filename; line; var] ->
@@ -583,7 +583,8 @@ let run_sail (config : Yojson.Safe.t option) tgt =
   Target.run_pre_rewrites_hook tgt ast effect_info env;
   let ctx, ast, effect_info, env = Rewrites.rewrite ctx effect_info env (Target.rewrites tgt) ast in
 
-  Target.action tgt !opt_file_out { ctx; ast; effect_info; env; default_sail_dir = Locations.sail_dir; config };
+  Target.action tgt !opt_file_out
+    { ctx; ast; effect_info; env; options = !options; default_sail_dir = Locations.sail_dir; config };
 
   (ctx, ast, env, effect_info)
 

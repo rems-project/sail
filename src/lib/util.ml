@@ -196,11 +196,13 @@ let rec iter_last f = function
       f false x;
       iter_last f xs
 
-let rec split_on_char sep str =
-  try
-    let sep_pos = String.index str sep in
-    String.sub str 0 sep_pos :: split_on_char sep (String.sub str (sep_pos + 1) (String.length str - (sep_pos + 1)))
-  with Not_found -> [str]
+let split_on_first c s =
+  match String.index_opt s c with
+  | None -> (s, None)
+  | Some i ->
+      let before = String.sub s 0 i in
+      let after = String.sub s (i + 1) (String.length s - i - 1) in
+      (before, Some after)
 
 let map_changed_default d f l =
   let rec g = function

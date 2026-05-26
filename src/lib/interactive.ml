@@ -49,6 +49,8 @@ open Ast_defs
 open Ast_util
 open Printf
 
+module StringMap = Util.StringMap
+
 let opt_interactive = ref false
 
 module State = struct
@@ -57,16 +59,18 @@ module State = struct
     ast : Type_check.typed_ast;
     effect_info : Effects.side_effect_info;
     env : Type_check.Env.t;
+    options : (Arg.key * Arg.spec * Arg.doc) list;
     default_sail_dir : string;
     config : Yojson.Safe.t option;
   }
 
-  let initial_istate config default_sail_dir =
+  let initial_istate ~options ~config ~default_sail_dir =
     {
       ctx = Initial_check.initial_ctx;
       ast = empty_ast;
       effect_info = Effects.empty_side_effect_info;
       env = Type_check.initial_env;
+      options;
       default_sail_dir;
       config;
     }
@@ -81,13 +85,21 @@ let command str = str |> Util.green |> Util.clear
 type action =
   | ArgString of string * (string -> action)
   | ArgInt of string * (int -> action)
-  | Action of (State.istate -> State.istate)
-  | ActionUnit of (State.istate -> unit)
+  | Action of string option * (Lexing.position * string * State.istate -> State.istate option)
+
+let unit_action f =
+  Action
+    ( None,
+      fun _ ->
+        f ();
+        None
+    )
 
 module Arg = struct
   type (_, _) t =
     | String : string -> (string, action) t
     | Int : string -> (int, action) t
+    | Rest : string -> (Lexing.position * string * State.istate, State.istate option) t
     | Update : (State.istate, State.istate) t
     | Get : (State.istate, unit) t
 end
@@ -95,31 +107,40 @@ end
 let ( let@ ) : type a b. (a, b) Arg.t -> (a -> b) -> action = function
   | Arg.String s -> fun f -> ArgString (s, f)
   | Arg.Int s -> fun f -> ArgInt (s, f)
-  | Arg.Update -> fun f -> Action f
-  | Arg.Get -> fun f -> ActionUnit f
+  | Arg.Rest s -> fun f -> Action (Some s, f)
+  | Arg.Update -> fun f -> Action (None, fun (_, _, istate) -> Some (f istate))
+  | Arg.Get ->
+      fun f ->
+        Action
+          ( None,
+            fun (_, _, istate) ->
+              f istate;
+              None
+          )
 
-let commands = ref []
+type command = See of string | Command of { help : string; shortname : string option; action : action }
 
-let get_command cmd = List.assoc_opt cmd !commands
+let commands = ref StringMap.empty
 
-let all_commands () = !commands
+let rec get_command cmd =
+  match StringMap.find_opt cmd !commands with
+  | None -> None
+  | Some (Command { help; shortname = _; action }) -> Some (help, action)
+  | Some (See cmd') -> get_command (":" ^ cmd')
 
-let reflect_typ action =
-  let open Type_check in
-  let rec arg_typs = function
-    | ArgString (_, next) -> string_typ :: arg_typs (next "")
-    | ArgInt (_, next) -> int_typ :: arg_typs (next 0)
-    | Action _ -> []
-    | ActionUnit _ -> []
-  in
-  match action with Action _ -> function_typ [unit_typ] unit_typ | _ -> function_typ (arg_typs action) unit_typ
+let all_commands () =
+  List.filter_map
+    (fun (name, cmd) ->
+      match cmd with Command { help; shortname; action } -> Some (name, (help, shortname, action)) | See _ -> None
+    )
+    (StringMap.bindings !commands)
 
 let generate_help name help action =
   let rec args = function
     | ArgString (hint, next) -> arg hint :: args (next "")
     | ArgInt (hint, next) -> arg hint :: args (next 0)
-    | Action _ -> []
-    | ActionUnit _ -> []
+    | Action (Some hint, _) -> [arg hint]
+    | Action (None, _) -> []
   in
   let args = args action in
   let help =
@@ -143,23 +164,31 @@ let generate_help name help action =
         |> String.concat ""
         |> fun rest -> prefix ^ rest
   in
-  sprintf "%s %s - %s" Util.(name |> green |> clear) (String.concat ", " args) help
+  (Util.(name |> green |> clear), String.concat ", " args, help)
 
-let run_action istate cmd argument action =
-  let args = String.split_on_char ',' argument in
-  let rec call args action =
-    match (args, action) with
-    | x :: xs, ArgString (hint, next) -> call xs (next (String.trim x))
-    | x :: xs, ArgInt (hint, next) ->
-        let x = String.trim x in
-        if Str.string_match (Str.regexp "^[0-9]+$") x 0 then call xs (next (int_of_string x))
+let split_on_first c s =
+  match String.index_opt s c with
+  | None -> (s, None)
+  | Some i ->
+      let before = String.sub s 0 i in
+      let after = String.sub s (i + 1) (String.length s - i - 1) in
+      (before, Some after)
+
+let run_action istate cmd pos argument action =
+  let rec call argument action =
+    match (argument, action) with
+    | Some argument, ArgString (_, next) ->
+        let s, rest = split_on_first ',' argument in
+        call rest (next (String.trim s))
+    | Some argument, ArgInt (hint, next) ->
+        let s, rest = split_on_first ',' argument in
+        if Str.string_match (Str.regexp "^[0-9]+$") s 0 then call rest (next (int_of_string s))
         else failwith (sprintf "%s argument %s must be an non-negative integer" (command cmd) (arg hint))
-    | _, Action act -> act istate
-    | _, ActionUnit act ->
-        act istate;
-        istate
+    | _, Action (_, act) -> act (pos, Option.value ~default:"" argument, istate)
     | _, _ -> failwith (sprintf "Bad arguments for %s, see (%s %s)" (command cmd) (command ":help") (command cmd))
   in
-  call args action
+  match call (Some argument) action with None -> istate | Some istate -> istate
 
-let register_command ~name ~help action = commands := (":" ^ name, (help, action)) :: !commands
+let register_command ~name ?shortname ~help action =
+  commands := StringMap.add (":" ^ name) (Command { help; shortname; action }) !commands;
+  match shortname with None -> () | Some s -> commands := StringMap.add (":" ^ s) (See name) !commands

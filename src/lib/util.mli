@@ -280,7 +280,7 @@ val string_of_list : string -> ('a -> string) -> 'a list -> string
 
 val string_of_option : ('a -> string) -> 'a option -> string
 
-val split_on_char : char -> string -> string list
+val split_on_first : char -> string -> string * string option
 
 (** {2 Terminal color codes} *)
 

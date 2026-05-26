@@ -110,7 +110,7 @@ let c_options =
       "make sure the provided type identifier is preserved in the C/C++ output"
     );
     ( Flag.create ~prefix:["c"] "fold_unit",
-      Arg.String (fun str -> Constant_fold.opt_fold_to_unit := Util.split_on_char ',' str),
+      Arg.String (fun str -> Constant_fold.opt_fold_to_unit := String.split_on_char ',' str),
       "remove comma separated list of functions from C/C++ output, replacing them with unit"
     );
     ( Flag.create ~prefix:["c"] ~arg:"file" "coverage",

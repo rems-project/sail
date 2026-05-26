@@ -86,14 +86,18 @@ let add_symbol str = symbols := StringSet.add str !symbols
 
 let () =
   let open Interactive in
-  ArgString ("symbol", fun symbol -> ActionUnit (fun _ -> add_symbol symbol))
-  |> register_command ~name:"define_symbol" ~help:"Define preprocessor symbol";
+  (register_command ~name:"define_symbol" ~help:"Define preprocessor symbol"
+  @@ let@ symbol = Arg.String "symbol" in
+     unit_action (fun () -> add_symbol symbol)
+  );
 
-  ArgString ("symbol", fun symbol -> ActionUnit (fun _ -> symbols := StringSet.remove symbol !symbols))
-  |> register_command ~name:"undef_symbol" ~help:"Undefine preprocessor symbol";
+  (register_command ~name:"undef_symbol" ~help:"Undefine preprocessor symbol"
+  @@ let@ symbol = Arg.String "symbol" in
+     unit_action (fun () -> symbols := StringSet.remove symbol !symbols)
+  );
 
-  ActionUnit (fun _ -> List.iter print_endline (StringSet.elements !symbols))
-  |> register_command ~name:"symbols" ~help:"Print defined preprocessor symbols"
+  register_command ~name:"symbols" ~help:"Print defined preprocessor symbols"
+  @@ unit_action (fun () -> List.iter print_endline (StringSet.elements !symbols))
 
 let cond_pragma l defs =
   let depth = ref 0 in
@@ -142,7 +146,7 @@ let create_argv_array ~offset ~current l str =
       inline_argv := Argv_unknown;
       (Str.split (Str.regexp " +") str, reset)
   | Some (p, _) ->
-      let args = Util.split_on_char ' ' str in
+      let args = String.split_on_char ' ' str in
       let _, args =
         Util.fold_left_map
           (fun n arg -> if arg = "" then (n + 1, None) else (n + String.length arg + 1, Some (n, arg)))

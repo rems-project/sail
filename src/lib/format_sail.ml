@@ -212,7 +212,7 @@ module PPrintWrapper = struct
     let rec go n acc = if n = 0 then acc else go (n - 1) (doc ^^ acc) in
     go n empty
 
-  let lines s = List.map string (Util.split_on_char '\n' s)
+  let lines s = List.map string (String.split_on_char '\n' s)
 
   let count_indent line =
     let rec loop i = if i < String.length line && line.[i] = ' ' then loop (i + 1) else i in
@@ -259,7 +259,7 @@ module PPrintWrapper = struct
     lines
 
   let block_comment_lines col s =
-    let lines = Util.split_on_char '\n' s in
+    let lines = String.split_on_char '\n' s in
     (* Last line (before */) shouldn't be rtrimed *)
     let lines = List.mapi (fun i l -> if i + 1 = List.length lines then l else rtrim l) lines in
     let lines = patch_comment_lines_indent col lines in
@@ -279,7 +279,7 @@ module PPrintWrapper = struct
 
   (* TODO: maybe save line_number in ast *)
   let is_single_line_block_comment s =
-    let lines = Util.split_on_char '\n' s in
+    let lines = String.split_on_char '\n' s in
     List.length lines <= 1
 end
 

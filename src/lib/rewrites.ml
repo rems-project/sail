@@ -5024,11 +5024,10 @@ let rewrite ctx effect_info env rewriters ast =
 
 let () =
   let open Interactive in
-  ActionUnit
-    (fun _ ->
-      let print_rewriter (name, rw) =
-        print_endline (name ^ " " ^ Util.(String.concat " " (describe_rewriter rw) |> yellow |> clear))
-      in
-      List.sort (fun a b -> String.compare (fst a) (fst b)) all_rewriters |> List.iter print_rewriter
-    )
-  |> register_command ~name:"list_rewrites" ~help:"List all rewrites for use with the :rewrite command"
+  register_command ~name:"list_rewrites" ~help:"List all rewrites for use with the :rewrite command"
+  @@ unit_action (fun () ->
+         let print_rewriter (name, rw) =
+           print_endline (name ^ " " ^ Util.(String.concat " " (describe_rewriter rw) |> yellow |> clear))
+         in
+         List.sort (fun a b -> String.compare (fst a) (fst b)) all_rewriters |> List.iter print_rewriter
+     )

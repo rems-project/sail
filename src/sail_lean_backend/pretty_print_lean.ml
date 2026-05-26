@@ -101,7 +101,7 @@ let rec fix_id name =
       the_main_function_has_been_seen := true;
       "sail_main"
   | "?" -> "questionMark"
-  | _ -> if String.contains name '#' then fix_id (String.concat "_" (Util.split_on_char '#' name)) else name
+  | _ -> if String.contains name '#' then fix_id (String.concat "_" (String.split_on_char '#' name)) else name
 
 let doc_id_ctor (Id_aux (i, _)) =
   match i with

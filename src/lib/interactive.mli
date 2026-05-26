@@ -58,11 +58,13 @@ module State : sig
     ast : Type_check.typed_ast;
     effect_info : Effects.side_effect_info;
     env : Type_check.Env.t;
+    options : (Arg.key * Arg.spec * Arg.doc) list;
     default_sail_dir : string;
     config : Yojson.Safe.t option;
   }
 
-  val initial_istate : Yojson.Safe.t option -> string -> istate
+  val initial_istate :
+    options:(Arg.key * Arg.spec * Arg.doc) list -> config:Yojson.Safe.t option -> default_sail_dir:string -> istate
 end
 
 val arg : string -> string
@@ -71,28 +73,28 @@ val command : string -> string
 type action =
   | ArgString of string * (string -> action)
   | ArgInt of string * (int -> action)
-  | Action of (State.istate -> State.istate)
-  | ActionUnit of (State.istate -> unit)
+  | Action of string option * (Lexing.position * string * State.istate -> State.istate option)
+
+val unit_action : (unit -> unit) -> action
 
 module Arg : sig
   type (_, _) t =
     | String : string -> (string, action) t
     | Int : string -> (int, action) t
+    | Rest : string -> (Lexing.position * string * State.istate, State.istate option) t
     | Update : (State.istate, State.istate) t
     | Get : (State.istate, unit) t
 end
 
 val ( let@ ) : ('a, 'b) Arg.t -> ('a -> 'b) -> action
 
-val reflect_typ : action -> typ
-
 val get_command : string -> (string * action) option
 
-val all_commands : unit -> (string * (string * action)) list
+val all_commands : unit -> (string * (string * string option * action)) list
 
-val generate_help : string -> string -> action -> string
+val generate_help : string -> string -> action -> string * string * string
 
-val run_action : State.istate -> string -> string -> action -> State.istate
+val run_action : State.istate -> string -> Lexing.position -> string -> action -> State.istate
 
 (** This is the main function used to register new interactive commands. *)
-val register_command : name:string -> help:string -> action -> unit
+val register_command : name:string -> ?shortname:string -> help:string -> action -> unit
