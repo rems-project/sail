@@ -264,19 +264,12 @@ module Printer (Config : PRINT_CONFIG) = struct
     | [nc] -> parens_opt kdoc ^^ space ^^ string "constraint" ^^ space ^^ doc_nc nc
     | nc :: ncs -> parens_opt kdoc ^^ space ^^ string "constraint" ^^ space ^^ doc_nc (List.fold_left nc_and nc ncs)
 
-  let doc_binding (TypQ_aux (tq_aux, _), typ) =
-    match tq_aux with
-    | TypQ_no_forall -> doc_typ typ
-    | TypQ_tq [] -> doc_typ typ
-    | TypQ_tq qs -> string "forall" ^^ space ^^ doc_quants qs ^^ dot ^//^ doc_typ typ
+  let doc_binding (typq, typ) =
+    match typq with [] -> doc_typ typ | _ -> string "forall" ^^ space ^^ doc_quants typq ^^ dot ^//^ doc_typ typ
 
   let doc_typschm (TypSchm_aux (TypSchm_ts (typq, typ), _)) = doc_binding (typq, typ)
 
-  let doc_typquant ?(parenthesize = true) (TypQ_aux (tq_aux, _)) =
-    match tq_aux with
-    | TypQ_no_forall -> None
-    | TypQ_tq [] -> None
-    | TypQ_tq qs -> Some (doc_param_quants ~parenthesize qs)
+  let doc_typquant ?(parenthesize = true) = function [] -> None | qs -> Some (doc_param_quants ~parenthesize qs)
 
   let doc_lit (L_aux (l, _)) =
     utf8string
@@ -841,7 +834,7 @@ module Printer (Config : PRINT_CONFIG) = struct
             equals;
             surround 2 0 lbrace (separate_map (comma ^^ break 1) doc_enum_member members) rbrace;
           ]
-    | TD_record (id, TypQ_aux (TypQ_no_forall, _), fields, _) | TD_record (id, TypQ_aux (TypQ_tq [], _), fields, _) ->
+    | TD_record (id, [], fields, _) ->
         separate space
           [
             string "struct";
@@ -849,7 +842,7 @@ module Printer (Config : PRINT_CONFIG) = struct
             equals;
             surround 2 0 lbrace (separate_map (comma ^^ break 1) doc_field fields) rbrace;
           ]
-    | TD_record (id, TypQ_aux (TypQ_tq qs, _), fields, _) ->
+    | TD_record (id, qs, fields, _) ->
         separate space
           [
             string "struct";
@@ -859,11 +852,7 @@ module Printer (Config : PRINT_CONFIG) = struct
             surround 2 0 lbrace (separate_map (comma ^^ break 1) doc_field fields) rbrace;
           ]
     | TD_variant (id, quant, clauses, is_newtype) ->
-        let quant_doc =
-          match quant with
-          | TypQ_aux (TypQ_no_forall, _) | TypQ_aux (TypQ_tq [], _) -> empty
-          | TypQ_aux (TypQ_tq qs, _) -> space ^^ doc_param_quants qs
-        in
+        let quant_doc = match quant with [] -> empty | _ -> space ^^ doc_param_quants quant in
         let body =
           if is_newtype then (
             match clauses with
@@ -914,9 +903,8 @@ module Printer (Config : PRINT_CONFIG) = struct
     | SD_function (id, _) -> string "scattered" ^^ space ^^ string "function" ^^ space ^^ doc_id id
     | SD_funcl funcl -> string "function" ^^ space ^^ string "clause" ^^ space ^^ doc_funcl funcl
     | SD_end id -> string "end" ^^ space ^^ doc_id id
-    | SD_variant (id, TypQ_aux (TypQ_no_forall, _)) ->
-        string "scattered" ^^ space ^^ string "union" ^^ space ^^ doc_id id
-    | SD_variant (id, TypQ_aux (TypQ_tq quants, _)) ->
+    | SD_variant (id, []) -> string "scattered" ^^ space ^^ string "union" ^^ space ^^ doc_id id
+    | SD_variant (id, quants) ->
         string "scattered" ^^ space ^^ string "union" ^^ space ^^ doc_id id ^^ doc_param_quants quants
     | SD_mapcl (id, mapcl) -> separate space [string "mapping clause"; doc_id id; equals; doc_mapcl mapcl]
     | SD_mapping (id, Typ_annot_opt_aux (Typ_annot_opt_none, _)) ->
@@ -926,11 +914,7 @@ module Printer (Config : PRINT_CONFIG) = struct
     | SD_unioncl (id, tu) -> separate space [string "union clause"; doc_id id; equals; doc_union tu]
     | SD_internal_unioncl_record (id, record_id, typq, fields) ->
         let prefix = separate space [string "internal_union_record clause"; doc_id id; doc_id record_id] in
-        let params =
-          match typq with
-          | TypQ_aux (TypQ_no_forall, _) | TypQ_aux (TypQ_tq [], _) -> empty
-          | TypQ_aux (TypQ_tq qs, _) -> doc_param_quants qs
-        in
+        let params = match typq with [] -> empty | _ -> doc_param_quants typq in
         separate space
           [prefix ^^ params; equals; surround 2 0 lbrace (separate_map (comma ^^ break 1) doc_field fields) rbrace]
     | SD_enum id -> separate space [string "scattered enum"; doc_id id]

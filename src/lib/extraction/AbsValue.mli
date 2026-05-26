@@ -1,6 +1,7 @@
 open AbsBitvector
 open Ast
 open BinInt
+open Bit
 open Datatypes
 open IdUtil
 open Lattice
@@ -49,7 +50,7 @@ module Dom :
 
   val leb : t -> t -> bool
 
-  val _UU03b1_ : BitList.t -> t
+  val _UU03b1_ : AbsBitvector.Bits.t -> t
  end) ->
  sig
   module DZP :

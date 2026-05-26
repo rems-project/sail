@@ -41,7 +41,10 @@
 (*  SPDX-License-Identifier: BSD-2-Clause                                   *)
 (* ************************************************************************ *)
 
+From Stdlib Require Import ZArith.
+
 From stdpp Require Import base.
+From stdpp Require Import bitvector.definitions.
 
 Module Type CONCRETE.
   Parameter t : Set.
@@ -103,6 +106,12 @@ Module DomainProperties (C : CONCRETE) (D : DOMAIN C).
       exact S.
   Qed.
 
+  Lemma le_top : ∀ x, x ⊑ ⊤.
+  Proof. intros. rewrite le_meet_def, meet_id. reflexivity. Qed.
+
+  Lemma le_bot : ∀ x, ⊥ ⊑ x.
+  Proof. intros. rewrite le_join_def, join_comm, join_id. reflexivity. Qed.
+
   Lemma join_idem : ∀ x, x ⊔ x = x.
   Proof.
     intros x.
@@ -155,3 +164,138 @@ Module DomainProperties (C : CONCRETE) (D : DOMAIN C).
       apply le_refl.
   Qed.
 End DomainProperties.
+
+Module Type SAIL_INT.
+  Parameter t : Set.
+
+  (** A [SAIL_INT] domain is always an abstraction of Rocq's integer [Z] type. *)
+  Parameter α : Z → t.
+
+  Parameter negate : t -> t.
+  Parameter negate_abst : ∀ {x}, α (-x) = negate (α x).
+  Parameter negate_negate : ∀ {x}, negate (negate x) = x.
+
+  Parameter add : t → t → t.
+  Parameter add_abst : ∀ {x y}, α (x + y) = add (α x) (α y).
+  Parameter add_comm : ∀ {x y}, add x y = add y x.
+  Parameter add_assoc : ∀ {x y z}, add x (add y z) = add (add x y) z.
+
+  Parameter sub : t → t → t.
+  Parameter sub_abst : ∀ {x y}, α (x - y) = sub (α x) (α y).
+
+  Parameter mult : t → t → t.
+  Parameter mult_abst : ∀ {x y}, α (x * y) = mult (α x) (α y).
+
+  Parameter max : t → t → t.
+  Parameter max_abst : ∀ {x y}, α (Z.max x y) = max (α x) (α y).
+
+  Parameter min : t → t → t.
+  Parameter min_abst : ∀ {x y}, α (Z.min x y) = min (α x) (α y).
+
+  Parameter abs : t → t.
+  Parameter abs_abst : ∀ {x}, α (Z.abs x) = abs (α x).
+
+  (** Truncating division (round towards zero) *)
+  Parameter tdiv : t → t → t.
+  Parameter tdiv_abst : ∀ {x y}, α (Z.quot x y) = tdiv (α x) (α y).
+
+  Parameter tmod : t → t → t.
+  Parameter tmod_abst : ∀ {x y}, α (Z.rem x y) = tmod (α x) (α y).
+
+  (** Flooring division (floor towards -∞) *)
+  Parameter fdiv : t → t → t.
+  Parameter fdiv_abst : ∀ {x y}, α (Z.div x y) = fdiv (α x) (α y).
+
+  Parameter fmod : t → t → t.
+  Parameter fmod_abst : ∀ {x y}, α (Z.modulo x y) = fmod (α x) (α y).
+
+  (** Euclidian division *)
+  Parameter ediv : t → t → t.
+  Parameter ediv_abst : ∀ {x y}, α (fst (Z.div_eucl x y)) = ediv (α x) (α y).
+
+  Parameter emod : t → t → t.
+  Parameter emod_abst : ∀ {x y}, α (snd (Z.div_eucl x y)) = emod (α x) (α y).
+End SAIL_INT.
+
+Module Type SAIL_BITS.
+  Parameter t : Set.
+
+  Parameter α : bvn → t.
+
+  Parameter le : t → t → Prop.
+
+  Parameter not : t → t.
+  Parameter not_abst : ∀ {n} {x : bv n}, α (bv_to_bvn (bv_not x)) = not (α (bv_to_bvn x)).
+
+  Parameter add : t → t → t.
+  Parameter add_abst : ∀ {n} {x y : bv n}, α (bv_to_bvn (x + y)) = add (α (bv_to_bvn x)) (α (bv_to_bvn y)).
+
+  Parameter negate : t → t.
+  Parameter negate_abst : ∀ {n} {x : bv n}, α (bv_to_bvn (- x)) = negate (α (bv_to_bvn x)).
+
+  Parameter sub : t → t → t.
+  Parameter sub_abst : ∀ {n} {x y : bv n}, α (bv_to_bvn (x - y)) = sub (α (bv_to_bvn x)) (α (bv_to_bvn y)).
+
+  Parameter and : t → t → t.
+  Parameter and_abst : ∀ {n} {x y : bv n}, α (bv_to_bvn (bv_and x y)) = and (α (bv_to_bvn x)) (α (bv_to_bvn y)).
+
+  Parameter or : t → t → t.
+  Parameter or_abst : ∀ {n} {x y : bv n}, α (bv_to_bvn (bv_or x y)) = or (α (bv_to_bvn x)) (α (bv_to_bvn y)).
+
+  Parameter xor : t → t → t.
+  Parameter xor_abst : ∀ {n} {x y : bv n}, α (bv_to_bvn (bv_xor x y)) = xor (α (bv_to_bvn x)) (α (bv_to_bvn y)).
+
+  Parameter append : t → t → t.
+  Parameter append_abst : ∀ {n m} {x : bv n} {y : bv m},
+    α (bv_to_bvn (bv_concat (n + m) x y)) = append (α (bv_to_bvn x)) (α (bv_to_bvn y)).
+
+  (** <<slice bv s n>> extracts a bitvector of length <<n>> from <<bv>>, starting at index <<s>>. *)
+  Parameter slice : t → N → N → t.
+  Parameter slice_abst : ∀ {n s m} {x : bv n}, α (bv_extract s m x) = slice (α x) s m.
+End SAIL_BITS.
+
+Module Type SAIL_BITS_INT (Bits : SAIL_BITS) (Int : SAIL_INT).
+  Parameter unsigned : Bits.t → Int.t.
+  Parameter unsigned_abst : ∀ {n} {x : bv n},
+    Int.α (bv_unsigned x) = unsigned (Bits.α x).
+
+  Parameter signed : Bits.t → Int.t.
+  Parameter signed_abst : ∀ {n} {x : bv n},
+    Int.α (bv_signed x) = signed (Bits.α x).
+
+  (** Generate a bitvector containing all zeros.
+
+      If the interval is very wide, then this might produce a huge
+      number of bitvector widths. The first argument therefore
+      determines the maximum amount of bitvector widths that can be
+      generated, otherwise we generate [Bits.⊤] *)
+  Parameter zeros : nat → Int.t → Bits.t.
+  Parameter zeros_abst : ∀ {n : N} h,
+    Bits.le (Bits.α (bv_0 n)) (zeros h (Int.α (Z.of_N n))).
+
+  (** Generate a bitvector containing all ones.
+
+      See [zeros]. *)
+  Parameter ones : nat → Int.t → Bits.t.
+  Parameter ones_abst : ∀ {n} h,
+    Bits.le (Bits.α (bv_not (bv_0 n))) (ones h (Int.α (Z.of_N n))).
+
+  (** <<zero_extend h b n>> extends b to length n.
+
+      The heuristic logic is the same as for zeros. If the number of
+      possible bitvector widths would be greater than <<h>>, then
+      return [Bits.⊤]. *)
+  Parameter zero_extend : nat → Bits.t → Int.t → Bits.t.
+  Parameter zero_extend_abst : ∀ {n : N} {x : bv n} {z : N} h,
+    (n ≤ z)%N →
+    Bits.le (Bits.α (bv_zero_extend z x)) (zero_extend h (Bits.α x) (Int.α (Z.of_N z))).
+
+  Parameter sign_extend : nat → Bits.t → Int.t → Bits.t.
+  Parameter sign_extend_abst : ∀ {n : N} {x : bv n} {z : N} h,
+    (n ≤ z)%N →
+    Bits.le (Bits.α (bv_sign_extend z x)) (sign_extend h (Bits.α x) (Int.α (Z.of_N z))).
+
+  Parameter count_leading_zeros : Bits.t → Int.t.
+
+  Parameter count_trailing_zeros : Bits.t → Int.t.
+End SAIL_BITS_INT.

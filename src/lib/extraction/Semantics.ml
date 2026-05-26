@@ -38,7 +38,7 @@ type place =
 type destructure =
 | DL_app of id * value list
 | DL_tuple of destructure list
-| DL_vector_concat of (vector_concat_split * destructure) list
+| DL_vector_concat of (Types.vector_concat_split * destructure) list
 | DL_place of place
 
 module Monad =
@@ -430,8 +430,9 @@ module Make =
            fold_left (fun acc d0 ->
              let (s, d1) = d0 in
              (match s with
-              | No_split -> ((Monad.Runtime_type_error (fst annot0)), [])
-              | Split s0 ->
+              | Types.No_split ->
+                ((Monad.Runtime_type_error (fst annot0)), [])
+              | Types.Split s0 ->
                 let (prev, bs0) = acc in
                 (match bs0 with
                  | [] -> (prev, [])
@@ -448,8 +449,9 @@ module Make =
            fold_left (fun acc d0 ->
              let (s, d1) = d0 in
              (match s with
-              | No_split -> ((Monad.Runtime_type_error (fst annot0)), [])
-              | Split s0 ->
+              | Types.No_split ->
+                ((Monad.Runtime_type_error (fst annot0)), [])
+              | Types.Split s0 ->
                 let (prev, vs0) = acc in
                 (match vs0 with
                  | [] -> (prev, [])
@@ -471,9 +473,11 @@ module Make =
     (match aux with
      | LE_id var ->
        (match Tannot.get_id_type (snd annot0) var with
-        | Local_variable -> Monad.pure (DL_place (PL_id (var, Var_local)))
-        | Global_register -> Monad.pure (DL_place (PL_id (var, Var_register)))
-        | Enum_member -> Monad.Runtime_type_error (fst annot0))
+        | Types.Local_variable ->
+          Monad.pure (DL_place (PL_id (var, Var_local)))
+        | Types.Global_register ->
+          Monad.pure (DL_place (PL_id (var, Var_register)))
+        | Types.Enum_member -> Monad.Runtime_type_error (fst annot0))
      | LE_deref x ->
        let E_aux (e, _) = x in
        (match e with
@@ -487,9 +491,11 @@ module Make =
        Monad.pure (DL_app (name, evaluated0))
      | LE_typ (_, var) ->
        (match Tannot.get_id_type (snd annot0) var with
-        | Local_variable -> Monad.pure (DL_place (PL_id (var, Var_local)))
-        | Global_register -> Monad.pure (DL_place (PL_id (var, Var_register)))
-        | Enum_member -> Monad.Runtime_type_error (fst annot0))
+        | Types.Local_variable ->
+          Monad.pure (DL_place (PL_id (var, Var_local)))
+        | Types.Global_register ->
+          Monad.pure (DL_place (PL_id (var, Var_register)))
+        | Types.Enum_member -> Monad.Runtime_type_error (fst annot0))
      | LE_tuple ls ->
        Monad.bind (Monad.sequence (map lexp_to_destructure ls)) (fun ds ->
          Monad.pure (DL_tuple ds))
@@ -777,13 +783,13 @@ module Make =
        | E_id id0 ->
          let filtered_var = Tannot.get_id_type (snd annot0) id0 in
          (match filtered_var with
-          | Local_variable ->
+          | Types.Local_variable ->
             Monad.Read_var ((PL_id (id0, Var_local)), (fun v ->
               wrap (E_internal_value v)))
-          | Global_register ->
+          | Types.Global_register ->
             Monad.Read_var ((PL_id (id0, Var_register)), (fun v ->
               wrap (E_internal_value v)))
-          | Enum_member -> wrap (E_internal_value (V_member id0)))
+          | Types.Enum_member -> wrap (E_internal_value (V_member id0)))
        | E_lit lit -> wrap (E_internal_value (value_of_lit lit))
        | E_typ (_, x) -> step0 x
        | E_app (id0, args) ->

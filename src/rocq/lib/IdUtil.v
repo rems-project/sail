@@ -207,23 +207,6 @@ Module Aux <: Orders.OrderedType.
 
   Definition lt (id1 : t) (id2 : t) : Prop := Is_true (ltb id1 id2).
 
-  Definition to_gen_tree (id : t) : gen_tree (() + () + extstring + extstring) :=
-    match id with
-    | Operator s => GenLeaf (inr (Extstring s))
-    | Id s => GenLeaf (inl $ inr (Extstring s))
-    | Or_bool => GenLeaf (inl $ inl $ inr ())
-    | And_bool => GenLeaf (inl $ inl $ inl ())
-    end.
-
-  Definition from_gen_tree (tree : gen_tree (() + () + extstring + extstring)) : option t :=
-    match tree with
-    | GenLeaf (inr (Extstring s)) => Some (Operator s)
-    | GenLeaf (inl (inr (Extstring s))) => Some (Id s)
-    | GenLeaf (inl (inl (inr ()))) => Some Or_bool
-    | GenLeaf (inl (inl (inl ()))) => Some And_bool
-    | GenNode _ _ => None
-    end.
-
   Definition encode_id_aux (id : t) : positive :=
     match id with
     | And_bool   => xH

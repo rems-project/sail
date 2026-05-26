@@ -44,7 +44,7 @@ lib/hol/sail-heap
 *.vos
 *.glob
 .*.aux
-/lib/coq/.nia.cache
+.nia.cache
 /lib/coq/deps
 
 # Isabelle

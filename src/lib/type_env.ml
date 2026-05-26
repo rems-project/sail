@@ -357,7 +357,7 @@ let builtin_typs =
     incr k_counter;
     kid
   in
-  let kinds_typq kinds = mk_typquant (List.map (fun k -> mk_qi_id k (k_name ())) kinds) in
+  let kinds_typq kinds = List.map (fun k -> mk_qi_id k (k_name ())) kinds in
   List.fold_left
     (fun m (name, parameter_kinds, kind) -> Bindings.add (mk_id name) (kinds_typq parameter_kinds, kind) m)
     Bindings.empty
@@ -552,14 +552,14 @@ let infer_kind env id =
   if Bindings.mem id builtin_typs then Bindings.find id builtin_typs
   else if Bindings.mem id env.global.unions then (fst (get_item l env (Bindings.find id env.global.unions)), K_type)
   else if Bindings.mem id env.global.records then (fst (get_item l env (Bindings.find id env.global.records)), K_type)
-  else if Bindings.mem id env.global.enums then (mk_typquant [], K_type)
+  else if Bindings.mem id env.global.enums then ([], K_type)
   else if Bindings.mem id env.global.synonyms then (
     let typq, arg = get_item l env (Bindings.find id env.global.synonyms) in
     (typq, unaux_kind (typ_arg_kind arg))
   )
   else if Bindings.mem id env.global.abstract_typs then (
     let kind = get_item l env (Bindings.find id env.global.abstract_typs) in
-    (mk_typquant [], unaux_kind kind)
+    ([], unaux_kind kind)
   )
   else typ_error (id_loc id) ("Cannot infer kind of " ^ string_of_id id)
 
@@ -1143,9 +1143,7 @@ let add_typquant ?(from_outcome = false) l quant env =
     | QI_constraint constr -> add_constraint constr env
     | QI_id kopt -> add_typ_var ~from_outcome l kopt env
   in
-  match quant with
-  | TypQ_aux (TypQ_no_forall, _) -> env
-  | TypQ_aux (TypQ_tq quants, _) -> List.fold_left add_quant_item env quants
+  List.fold_left add_quant_item env quant
 
 let add_typ_synonym id typq arg env =
   if bound_typ_id env id then
@@ -1153,7 +1151,7 @@ let add_typ_synonym id typq arg env =
       ("Cannot define type synonym " ^ string_of_id id ^ ", as a type or synonym with that name already exists")
   else (
     let _, typq =
-      quant_fold_map_items
+      Util.fold_left_map
         (fun env quant_item ->
           match quant_item with
           | QI_aux (QI_constraint constr, l) ->
@@ -1528,9 +1526,7 @@ let add_record id typq fields env =
           mk_typ_arg (A_typ (mk_typ (Typ_var (kopt_kid kopt)))) :: record_typ_args qis
       | _ :: qis -> record_typ_args qis
     in
-    let record_typ =
-      match record_typ_args (quant_items typq) with [] -> mk_id_typ id | args -> mk_typ (Typ_app (id, args))
-    in
+    let record_typ = match record_typ_args typq with [] -> mk_id_typ id | args -> mk_typ (Typ_app (id, args)) in
     let fold_accessors accessors (typ, field) =
       let accessor_typ = mk_typ (Typ_fn ([record_typ], typ)) in
       typ_print

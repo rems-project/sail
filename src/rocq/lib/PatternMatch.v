@@ -58,6 +58,8 @@ From Sail Require Import ValueType.
 From Sail Require BitList.
 From Sail Require TypeAnnot.
 
+Import TypeAnnot.Types.
+
 (**
 A [binding] is something an identifier in a pattern can bind with
 during matching. The [Complete] case is for the regular case where an
@@ -493,29 +495,29 @@ Proof.
   all: cbn; try reflexivity; apply merge_bindings_assoc.
 Qed.
 
-Definition empty_bindings : IdMap.t (binding value) := @IdMap.empty (binding value).
+Definition empty_bindings (V : Set) : IdMap.t (binding V) := @IdMap.empty (binding V).
 
-Definition simple_match : match_result value := Matched empty_bindings.
+Definition simple_match (V : Set) : match_result V := Matched (empty_bindings V).
 
-Definition simple_match_when (b : bool) : match_result value :=
-  if b then simple_match else Unmatched.
+Definition simple_match_when (V : Set) (b : bool) : match_result V :=
+  if b then simple_match V else Unmatched.
 
-Definition add_match (k : id) (v : binding value) (r : match_result value) : match_result value :=
+Definition add_match {V} (k : id) (v : binding V) (r : match_result V) : match_result V :=
   match r with
   | Unmatched => Unmatched
   | MaybeMatched b => MaybeMatched (IdMap.add k v b)
   | Matched b => Matched (IdMap.add k v b)
   end.
 
-Definition fully_matched (r : match_result value) : Prop :=
+Definition fully_matched {V : Set} (r : match_result V) : Prop :=
   match r with
   | MaybeMatched _ => False
   | _ => True
   end.
 
-Definition neg_match (r : match_result value) : match_result value :=
+Definition neg_match {V : Set} (r : match_result V) : match_result V :=
   match r with
-  | Unmatched => simple_match
+  | Unmatched => simple_match V
   | MaybeMatched b => MaybeMatched b
   | Matched _ => Unmatched
   end.
@@ -547,14 +549,14 @@ Fixpoint binds_id {A} (n : Ast.id) (p : Ast.pat A) : bool :=
 Definition pattern_match_literal (l : Ast.lit) (v : value) : match_result value :=
   let 'L_aux aux annot := l in
   match (aux, v) with
-  | (L_unit,      V_unit        ) => simple_match
-  | (L_true,      V_bool true   ) => simple_match
-  | (L_false,     V_bool false  ) => simple_match
-  | (L_num n,     V_int m       ) => simple_match_when (Z.eqb n m)
-  | (L_hex s,     V_bitvector vs) => simple_match_when (BitList.same_bits (BitList.of_hex_lit s) vs)
-  | (L_bin s,     V_bitvector vs) => simple_match_when (BitList.same_bits (BitList.of_bin_lit s) vs)
-  | (L_string s1, V_string s2   ) => simple_match_when (String.eqb s1 s2)
-  | (L_real r1,   V_real r2     ) => simple_match_when (QArith_base.Qeq_bool r1 r2)
+  | (L_unit,      V_unit        ) => simple_match value
+  | (L_true,      V_bool true   ) => simple_match value
+  | (L_false,     V_bool false  ) => simple_match value
+  | (L_num n,     V_int m       ) => simple_match_when value (Z.eqb n m)
+  | (L_hex s,     V_bitvector vs) => simple_match_when value (BitList.same_bits (BitList.of_hex_lit s) vs)
+  | (L_bin s,     V_bitvector vs) => simple_match_when value (BitList.same_bits (BitList.of_bin_lit s) vs)
+  | (L_string s1, V_string s2   ) => simple_match_when value (String.eqb s1 s2)
+  | (L_real r1,   V_real r2     ) => simple_match_when value (QArith_base.Qeq_bool r1 r2)
   | _ => Unmatched
   end.
 
@@ -590,15 +592,15 @@ Module Make (Tannot : TypeAnnot.S).
   Fixpoint pattern_match (p : Ast.pat Tannot.t) (v : value) {struct p} : match_result value :=
     let 'P_aux aux annot := p in
     match aux with
-    | P_wild => simple_match
+    | P_wild => simple_match value
     | P_id n =>
         match Tannot.get_id_type (snd annot) n with
         | Enum_member =>
             match v with
-            | V_member m => simple_match_when (id_eqb n m)
+            | V_member m => simple_match_when value (id_eqb n m)
             | _          => Unmatched
             end
-        | _ => Matched (IdMap.add n (Complete v) empty_bindings)
+        | _ => Matched (IdMap.add n (Complete v) (empty_bindings value))
         end
     | P_typ _ p => pattern_match p v
     | P_lit l => pattern_match_literal l v
@@ -606,32 +608,32 @@ Module Make (Tannot : TypeAnnot.S).
     | P_app ctor ps =>
         match v with
         | V_ctor v_ctor vs =>
-            if id_eqb ctor v_ctor then fst (fold_match pattern_match ps (simple_match, vs)) else Unmatched
+            if id_eqb ctor v_ctor then fst (fold_match pattern_match ps (simple_match value, vs)) else Unmatched
         | _ => Unmatched
         end
     | P_tuple [] =>
         match v with
-        | V_unit => simple_match
+        | V_unit => simple_match value
         | _ => Unmatched
         end
     | P_tuple ps =>
         match v with
         | V_tuple vs =>
-            fst (fold_match pattern_match ps (simple_match, vs))
+            fst (fold_match pattern_match ps (simple_match value, vs))
         | _ => Unmatched
         end
     | P_list ps =>
         match v with
         | V_list vs =>
             if Nat.eqb (List.length ps) (List.length vs) then
-              fst (fold_match pattern_match ps (simple_match, vs))
+              fst (fold_match pattern_match ps (simple_match value, vs))
             else
               Unmatched
         | _ => Unmatched
         end
     | P_vector ps =>
         match BitList.to_gvector v with
-        | V_vector vs => fst (fold_match pattern_match ps (simple_match, vs))
+        | V_vector vs => fst (fold_match pattern_match ps (simple_match value, vs))
         | _ => Unmatched
         end
     | P_vector_concat ps =>
@@ -651,7 +653,7 @@ Module Make (Tannot : TypeAnnot.S).
                     | No_split => (Unmatched, [])
                     end)
                    ps
-                   (simple_match, bs))
+                   (simple_match value, bs))
         | V_vector vs =>
             fst (fold_left
                    (fun match_info p =>
@@ -667,7 +669,7 @@ Module Make (Tannot : TypeAnnot.S).
                     | No_split => (Unmatched, [])
                     end)
                    ps
-                   (simple_match, vs))
+                   (simple_match value, vs))
         | _ => Unmatched
         end
     | P_cons p ps =>
@@ -688,11 +690,11 @@ Module Make (Tannot : TypeAnnot.S).
                  prev ⋈ pattern_match p v
               )
               field_patterns
-              simple_match
+              (simple_match value)
         | _ => Unmatched
         end
-    | P_vector_subrange id n m => Matched (IdMap.add id (Partial (Non_empty (v, n, m) [])) empty_bindings)
+    | P_vector_subrange id n m => Matched (IdMap.add id (Partial (Non_empty (v, n, m) [])) (empty_bindings value))
     (* TODO *)
-    | P_string_append _ => simple_match
+    | P_string_append _ => simple_match value
     end.
 End Make.

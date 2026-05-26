@@ -136,7 +136,7 @@ let generate_val_spec env id args l annot =
         |> List.filter (fun nc -> KidSet.subset (tyvars_of_constraint nc) (tyvars_of_typ typ'))
       in
       let quant_items' = List.map mk_qi_kopt (KOptSet.elements kopts') @ List.map mk_qi_nc constraints' in
-      let typschm = mk_typschm (mk_typquant quant_items') typ' in
+      let typschm = mk_typschm quant_items' typ' in
       (mk_val_spec (VS_val_spec (typschm, generate_fun_id id args, None)), ksubsts)
   | _, Typ_aux (_, l) -> raise (Reporting.err_unreachable l __POS__ "Function val spec is not a function type")
 

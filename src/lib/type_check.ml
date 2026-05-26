@@ -1586,7 +1586,7 @@ let solve_quant env = function QI_aux (QI_id _, _) -> false | QI_aux (QI_constra
 
 let check_function_instantiation l id env bind1 bind2 =
   let direction check (typq1, typ1) (typq2, typ2) =
-    if quant_items typq1 <> [] && quant_items typq2 <> [] then (
+    if typq1 <> [] && typq2 <> [] then (
       let check_env = Env.add_typquant l typq1 env in
       let typq2, typ2 = Env.freshen_bind check_env (typq2, typ2) in
       let unifiers =
@@ -1594,7 +1594,7 @@ let check_function_instantiation l id env bind1 bind2 =
         with Unification_error (l, m) -> typ_error l ("Unification error: " ^ m)
       in
 
-      let quants = List.fold_left instantiate_quants (quant_items typq2) (KBindings.bindings unifiers) in
+      let quants = List.fold_left instantiate_quants typq2 (KBindings.bindings unifiers) in
       if not (List.for_all (solve_quant check_env) quants) then
         typ_raise l
           (Err_unresolved_quants (id, quants, Env.get_locals env, Env.get_typ_vars_info env, Env.get_constraints env));
@@ -2907,14 +2907,13 @@ and bind_pat env (P_aux (pat_aux, (l, uannot)) as pat) typ =
             )
     end
   | P_app (f, [pat]) when Env.is_union_constructor f env ->
-      let typq, ctor_typ = Env.get_union_id f env in
-      let quants = quant_items typq in
+      let quants, ctor_typ = Env.get_union_id f env in
       begin
-        match Env.expand_synonyms (Env.add_typquant l typq env) ctor_typ with
+        match Env.expand_synonyms (Env.add_typquant l quants env) ctor_typ with
         | Typ_aux (Typ_fn ([arg_typ], ret_typ), _) -> begin
             try
-              let goals = quant_kopts typq |> List.map kopt_kid |> KidSet.of_list in
-              typ_debug (lazy ("Unifying " ^ string_of_bind (typq, ctor_typ) ^ " for pattern " ^ string_of_typ typ));
+              let goals = quant_kopts quants |> List.map kopt_kid |> KidSet.of_list in
+              typ_debug (lazy ("Unifying " ^ string_of_bind (quants, ctor_typ) ^ " for pattern " ^ string_of_typ typ));
               let unifiers = unify l env goals ret_typ typ in
               let arg_typ' = subst_unifiers unifiers arg_typ in
               let quants' = List.fold_left instantiate_quants quants (KBindings.bindings unifiers) in
@@ -2933,12 +2932,11 @@ and bind_pat env (P_aux (pat_aux, (l, uannot)) as pat) typ =
         | _ -> typ_error l ("Mal-formed constructor " ^ string_of_id f ^ " with type " ^ string_of_typ ctor_typ)
       end
   | P_app (f, [pat]) when Env.is_mapping f env -> begin
-      let typq, mapping_typ = Env.get_val_spec f env in
-      let quants = quant_items typq in
+      let quants, mapping_typ = Env.get_val_spec f env in
       match Env.expand_synonyms env mapping_typ with
       | Typ_aux (Typ_bidir (typ1, typ2), _) -> begin
           try
-            typ_debug (lazy ("Unifying " ^ string_of_bind (typq, mapping_typ) ^ " for pattern " ^ string_of_typ typ));
+            typ_debug (lazy ("Unifying " ^ string_of_bind (quants, mapping_typ) ^ " for pattern " ^ string_of_typ typ));
 
             (* FIXME: There's no obvious goals here *)
             let unifiers = unify l env (tyvars_of_typ typ2) typ2 typ in
@@ -2955,7 +2953,7 @@ and bind_pat env (P_aux (pat_aux, (l, uannot)) as pat) typ =
           with Unification_error (l, _) -> (
             try
               typ_debug (lazy "Unifying mapping forwards failed, trying backwards.");
-              typ_debug (lazy ("Unifying " ^ string_of_bind (typq, mapping_typ) ^ " for pattern " ^ string_of_typ typ));
+              typ_debug (lazy ("Unifying " ^ string_of_bind (quants, mapping_typ) ^ " for pattern " ^ string_of_typ typ));
               let unifiers = unify l env (tyvars_of_typ typ1) typ1 typ in
               let arg_typ' = subst_unifiers unifiers typ2 in
               let quants' = List.fold_left instantiate_quants quants (KBindings.bindings unifiers) in
@@ -4081,7 +4079,7 @@ and infer_funapp' l env f (typq, f_typ) xs uannot expected_ret_typ =
 
   let quants, typ_args, typ_ret =
     match Env.expand_synonyms (Env.add_typquant l typq env) f_typ with
-    | Typ_aux (Typ_fn (typ_args, typ_ret), _) -> (ref (quant_items typq), typ_args, ref typ_ret)
+    | Typ_aux (Typ_fn (typ_args, typ_ret), _) -> (ref typq, typ_args, ref typ_ret)
     | _ -> typ_error l (string_of_typ f_typ ^ " is not a function type")
   in
 
@@ -4133,7 +4131,7 @@ and infer_funapp' l env f (typq, f_typ) xs uannot expected_ret_typ =
     | Some expect when is_exist (Env.expand_synonyms env expect) -> typ_args
     | Some expect when is_exist !typ_ret -> typ_args
     | Some expect -> (
-        let goals = quant_kopts (mk_typquant !quants) |> List.map kopt_kid |> KidSet.of_list in
+        let goals = quant_kopts !quants |> List.map kopt_kid |> KidSet.of_list in
         try
           let unifiers = unify l env (KidSet.diff goals (ambiguous_vars !typ_ret)) !typ_ret expect in
           record_unifiers unifiers;
@@ -4163,7 +4161,7 @@ and infer_funapp' l env f (typq, f_typ) xs uannot expected_ret_typ =
       with Type_error (l, err) -> Arg_error (l, 0, Err_function_arg (exp_loc arg, typ, err))
     )
     else (
-      let goals = quant_kopts (mk_typquant !quants) |> List.map kopt_kid |> KidSet.of_list in
+      let goals = quant_kopts !quants |> List.map kopt_kid |> KidSet.of_list in
       typ_debug (lazy ("Quantifiers " ^ Util.string_of_list ", " string_of_quant_item !quants));
       (* We want to track how many unification and type errors we see,
          as it provides a heuristic for how likely any error is in a
@@ -4359,18 +4357,17 @@ and bind_mpat allow_unknown other_env env (MP_aux (mpat_aux, (l, uannot)) as mpa
       | _ -> typ_error l "Cannot bind tuple mapping-pattern against non tuple type"
     end
   | MP_app (f, mpats) when Env.is_union_constructor f env -> begin
-      let typq, ctor_typ = Env.get_val_spec f env in
-      let quants = quant_items typq in
+      let quants, ctor_typ = Env.get_val_spec f env in
       let untuple (Typ_aux (typ_aux, _) as typ) = match typ_aux with Typ_tuple typs -> typs | _ -> [typ] in
       match Env.expand_synonyms env ctor_typ with
       | Typ_aux (Typ_fn ([arg_typ], ret_typ), _) -> begin
           try
             typ_debug
-              (lazy ("Unifying " ^ string_of_bind (typq, ctor_typ) ^ " for mapping-pattern " ^ string_of_typ typ));
+              (lazy ("Unifying " ^ string_of_bind (quants, ctor_typ) ^ " for mapping-pattern " ^ string_of_typ typ));
             let unifiers = unify l env (tyvars_of_typ ret_typ) ret_typ typ in
             let arg_typ' = subst_unifiers unifiers arg_typ in
             let quants' = List.fold_left instantiate_quants quants (KBindings.bindings unifiers) in
-            let env = Env.add_typquant l (mk_typquant quants') env in
+            let env = Env.add_typquant l quants' env in
             let _ret_typ' = subst_unifiers unifiers ret_typ in
             let tpats, env, guards =
               try List.fold_left2 bind_tuple_mpat ([], env, []) mpats (untuple arg_typ')
@@ -4384,13 +4381,12 @@ and bind_mpat allow_unknown other_env env (MP_aux (mpat_aux, (l, uannot)) as mpa
       | _ -> typ_error l ("Mal-formed constructor " ^ string_of_id f ^ " with type " ^ string_of_typ ctor_typ)
     end
   | MP_app (other, [mpat]) when Env.is_mapping other env -> begin
-      let typq, mapping_typ = Env.get_val_spec other env in
-      let quants = quant_items typq in
+      let quants, mapping_typ = Env.get_val_spec other env in
       match Env.expand_synonyms env mapping_typ with
       | Typ_aux (Typ_bidir (typ1, typ2), _) -> begin
           try
             typ_debug
-              (lazy ("Unifying " ^ string_of_bind (typq, mapping_typ) ^ " for mapping-pattern " ^ string_of_typ typ));
+              (lazy ("Unifying " ^ string_of_bind (quants, mapping_typ) ^ " for mapping-pattern " ^ string_of_typ typ));
             let unifiers = unify l env (tyvars_of_typ typ2) typ2 typ in
             let arg_typ' = subst_unifiers unifiers typ1 in
             let quants' = List.fold_left instantiate_quants quants (KBindings.bindings unifiers) in
@@ -4406,7 +4402,7 @@ and bind_mpat allow_unknown other_env env (MP_aux (mpat_aux, (l, uannot)) as mpa
             try
               typ_debug (lazy "Unifying mapping forwards failed, trying backwards.");
               typ_debug
-                (lazy ("Unifying " ^ string_of_bind (typq, mapping_typ) ^ " for mapping-pattern " ^ string_of_typ typ));
+                (lazy ("Unifying " ^ string_of_bind (quants, mapping_typ) ^ " for mapping-pattern " ^ string_of_typ typ));
               let unifiers = unify l env (tyvars_of_typ typ1) typ1 typ in
               let arg_typ' = subst_unifiers unifiers typ2 in
               let quants' = List.fold_left instantiate_quants quants (KBindings.bindings unifiers) in
@@ -4743,9 +4739,9 @@ let synthesize_val_spec env id typq typ def_annot =
 
 let check_tannot_opt ~def_type vs_l env typ = function
   | Typ_annot_opt_aux (Typ_annot_opt_none, _) -> ()
-  | Typ_annot_opt_aux (Typ_annot_opt_some (TypQ_aux (TypQ_tq _, _), _), l) ->
+  | Typ_annot_opt_aux (Typ_annot_opt_some (_ :: _, _), l) ->
       typ_error (Hint ("declared here", vs_l, l)) "Duplicate quantifier between inline annotation and 'val' declaration"
-  | Typ_annot_opt_aux (Typ_annot_opt_some (TypQ_aux (TypQ_no_forall, _), annot_typ), l) ->
+  | Typ_annot_opt_aux (Typ_annot_opt_some ([], annot_typ), l) ->
       if expanded_typ_identical env typ annot_typ then ()
       else
         typ_error
@@ -5027,7 +5023,7 @@ let extension_def_attribute env def_annot =
   | None -> None
 
 let check_type_union u_l non_rec_env env variant typq (Tu_aux (Tu_ty_id (arg_typ, v), def_annot)) =
-  let ret_typ = app_typ variant (List.fold_left fold_union_quant [] (quant_items typq)) in
+  let ret_typ = app_typ variant (List.fold_left fold_union_quant [] typq) in
   let typ = mk_typ (Typ_fn ([arg_typ], ret_typ)) in
   forbid_recursive_types u_l (fun () -> wf_binding def_annot.loc non_rec_env (typq, arg_typ));
   wf_binding def_annot.loc env (typq, typ);
@@ -5209,7 +5205,7 @@ let rec check_typedef : Env.t -> env def_annot -> uannot type_def -> typed_def l
               | BF_aux (BF_concat (r1, r2), l) ->
                   BF_aux (BF_concat (expand_range_synonyms r1, expand_range_synonyms r2), l)
             in
-            let record_tdef = TD_record (id, mk_typquant [], [((mk_id "bits", typ), mk_def_annot l ())], false) in
+            let record_tdef = TD_record (id, [], [((mk_id "bits", typ), mk_def_annot l ())], false) in
             let ranges =
               List.map (fun ((f, r), _) -> (f, expand_range_synonyms r)) ranges |> List.to_seq |> Bindings.of_seq
             in
@@ -5617,18 +5613,17 @@ let initial_env =
   |> Env.set_prover (Some (prove __POS__))
   |> Env.add_extern (mk_id "size_itself_int") { pure = true; bindings = [("_", "size_itself_int")] }
   |> Env.add_val_spec (mk_id "size_itself_int")
-       ( TypQ_aux (TypQ_tq [QI_aux (QI_id (mk_kopt K_int (mk_kid "n")), Parse_ast.Unknown)], Parse_ast.Unknown),
+       ( [QI_aux (QI_id (mk_kopt K_int (mk_kid "n")), Parse_ast.Unknown)],
          function_typ [app_typ (mk_id "itself") [mk_typ_arg (A_nexp (nvar (mk_kid "n")))]] (atom_typ (nvar (mk_kid "n")))
        )
   |> Env.add_extern (mk_id "make_the_value") { pure = true; bindings = [("_", "make_the_value")] }
   |> Env.add_val_spec (mk_id "make_the_value")
-       ( TypQ_aux (TypQ_tq [QI_aux (QI_id (mk_kopt K_int (mk_kid "n")), Parse_ast.Unknown)], Parse_ast.Unknown),
+       ( [QI_aux (QI_id (mk_kopt K_int (mk_kid "n")), Parse_ast.Unknown)],
          function_typ [atom_typ (nvar (mk_kid "n"))] (app_typ (mk_id "itself") [mk_typ_arg (A_nexp (nvar (mk_kid "n")))])
        )
   (* sail_assume is used by property.ml to add guards for SMT generation,
      but which don't affect flow-typing. *)
   |> Env.add_extern (mk_id "sail_assume") { pure = true; bindings = [("_", "sail_assume")] }
-  |> Env.add_val_spec (mk_id "sail_assume")
-       (TypQ_aux (TypQ_no_forall, Parse_ast.Unknown), function_typ [bool_typ] unit_typ)
+  |> Env.add_val_spec (mk_id "sail_assume") ([], function_typ [bool_typ] unit_typ)
 
 let initial_env_with_modules proj = Env.set_modules proj initial_env

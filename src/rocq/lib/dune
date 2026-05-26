@@ -7,10 +7,12 @@
   AstInduction
   Bit
   BitList
+  BvUtil
   Domain.Lattice
   Domain.Interval
   Domain.AbsBitvector
   Domain.AbsValue
+  Domain.TransferBitvectorInterval
   IdUtil
   ListUtil
   OptionUtil
@@ -22,4 +24,4 @@
   ValueType
   ZAst)
  (package rocq_sail)
- (theories Stdlib Ltac2 stdpp))
+ (theories Stdlib Ltac2 stdpp stdpp.bitvector))

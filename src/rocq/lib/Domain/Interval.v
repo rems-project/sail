@@ -51,7 +51,7 @@ From Sail Require Import Domain.Lattice.
 From Sail Require Import OptionUtil.
 From Sail Require Import Tactics.
 
-Module Dom <: DOMAIN BinInt.Z.
+Module Dom <: DOMAIN BinInt.Z <: SAIL_INT.
   Definition Low_high_order (i : option Z * option Z) : Prop :=
     match i with
     | (Some l, Some h) => (l <= h)%Z
@@ -387,4 +387,254 @@ Module Dom <: DOMAIN BinInt.Z.
     end.
 
   Definition α (n : Z) : interval := Ends (exist _ (Some n, Some n) (low_high_refl n)).
+
+  Definition negate_endpoints (x : option Z * option Z) :=
+    (Z.opp <$> snd x, Z.opp <$> fst x).
+
+  Lemma low_high_negate : ∀ [x], Low_high_order x → Low_high_order (negate_endpoints x).
+  Proof.
+    intros [[lx |] [hx |]] LH; cbn in *; lia.
+  Qed.
+
+  Definition negate (x : interval) :=
+    match x with
+    | Empty => Empty
+    | Ends e => Ends (exist _ (negate_endpoints (proj1_sig e)) (low_high_negate (proj2_sig e)))
+    end.
+
+  Lemma negate_abst : ∀ {x}, α (-x) = negate (α x).
+  Proof.
+    intros x.
+    unfold α, negate, negate_endpoints. f_equal.
+    apply subset_eq_compat. reflexivity.
+  Qed.
+
+  Lemma negate_negate : ∀ {x}, negate (negate x) = x.
+  Proof.
+    intros [| [[[l |] [h |]] LH]]; unfold negate, fmap, negate_endpoints; try reflexivity.
+    all: f_equal; apply subset_eq_compat; cbn; f_equal; f_equal; lia.
+  Qed.
+
+  Definition add_endpoints (x : option Z * option Z) (y : option Z * option Z) :=
+    let l := option_map2 Z.add (fst x) (fst y) in
+    let h := option_map2 Z.add (snd x) (snd y) in
+    (l, h).
+
+  Lemma low_high_add : ∀ [x y], Low_high_order x → Low_high_order y → Low_high_order (add_endpoints x y).
+  Proof.
+    intros [[lx |] [hx |]] [[ly |] [hy |]] LHx LHy; cbn in *; reflexivity + lia.
+  Qed.
+
+  Definition add (x : interval) (y : interval) :=
+    match (x, y) with
+    | (Empty, _) | (_, Empty) => Empty
+    | (Ends e1, Ends e2) =>
+        Ends (exist _ (add_endpoints (proj1_sig e1) (proj1_sig e2))
+                      (low_high_add (proj2_sig e1) (proj2_sig e2)))
+    end.
+
+  Lemma add_abst : ∀ {x y}, α (x + y) = add (α x) (α y).
+  Proof.
+    intros x y.
+    unfold α, add, add_endpoints. f_equal.
+    apply subset_eq_compat. reflexivity.
+  Qed.
+
+  Lemma add_comm : ∀ {x y}, add x y = add y x.
+  Proof.
+    intros [| [[lx hx] LHx]] [| [[ly hy] LHy]]; unfold add, add_endpoints; try reflexivity.
+    f_equal. apply subset_eq_compat.
+    destruct lx, hx, ly, hy; try reflexivity; cbn; f_equal; f_equal; lia.
+  Qed.
+
+  Lemma add_assoc : ∀ {x y z}, add x (add y z) = add (add x y) z.
+  Proof.
+    intros [| [[lx hx] LHx]] [| [[ly hy] LHy]] [| [[lz hz] LHz]]; unfold add, add_endpoints; try reflexivity.
+    f_equal. apply subset_eq_compat.
+    destruct lx, hx, ly, hy, lz, hz; try reflexivity; cbn; f_equal; f_equal; lia.
+  Qed.
+
+  Definition sub (x : interval) (y : interval) := add x (negate y).
+
+  Lemma sub_abst : ∀ {x y}, α (x - y) = sub (α x) (α y).
+  Proof.
+    intros x y.
+    unfold α, sub, add, add_endpoints, negate, negate_endpoints. f_equal.
+    apply subset_eq_compat. reflexivity.
+  Qed.
+
+  (** Build an interval from the four corner values of a binary operation *)
+  Definition four_corner_endpoints (op : Z → Z → Z) (x y : option Z * option Z) : option Z * option Z :=
+    match (fst x, snd x, fst y, snd y) with
+    | (Some lx, Some hx, Some ly, Some hy) =>
+        let v1 := op lx ly in
+        let v2 := op lx hy in
+        let v3 := op hx ly in
+        let v4 := op hx hy in
+        (Some (Z.min v1 (Z.min v2 (Z.min v3 v4))),
+         Some (Z.max v1 (Z.max v2 (Z.max v3 v4))))
+    | _ => (None, None)
+    end.
+
+  Lemma low_high_four_corner : ∀ op x y,
+    Low_high_order x → Low_high_order y → Low_high_order (four_corner_endpoints op x y).
+  Proof.
+    intros op [[lx|] [hx|]] [[ly|] [hy|]] LHx LHy; cbn; try exact I.
+    apply Z.le_trans with (op lx ly); [apply Z.le_min_l | apply Z.le_max_l].
+  Qed.
+
+  Definition lift_binop (op : Z → Z → Z) (x y : interval) : interval :=
+    match (x, y) with
+    | (Empty, _) | (_, Empty) => Empty
+    | (Ends e1, Ends e2) =>
+        Ends (exist _ (four_corner_endpoints op (proj1_sig e1) (proj1_sig e2))
+                      (low_high_four_corner op _ _ (proj2_sig e1) (proj2_sig e2)))
+    end.
+
+  Lemma lift_binop_abst : ∀ op x y,
+    α (op x y) = lift_binop op (α x) (α y).
+  Proof.
+    intros op x y.
+    unfold α, lift_binop, four_corner_endpoints. f_equal.
+    apply subset_eq_compat. cbn. f_equal; f_equal; lia.
+  Qed.
+
+  Lemma lift_binop_comm :
+    ∀ op, (∀ x y, op x y = op y x) → ∀ {x y}, lift_binop op x y = lift_binop op y x.
+  Proof.
+    intros op comm [| [[lx hx] LHx]] [| [[ly hy] LHy]]; cbn; try reflexivity.
+    f_equal; apply subset_eq_compat.
+    destruct lx as [x |], hx as [y |], ly as [z |], hy as [w |]; try reflexivity.
+    replace (op z x) with (op x z) by apply comm.
+    replace (op z y) with (op y z) by apply comm.
+    replace (op w x) with (op x w) by apply comm.
+    replace (op w y) with (op y w) by apply comm.
+    f_equal; f_equal; lia.
+  Qed.
+
+  Definition mult (x y : interval) := lift_binop Z.mul x y.
+
+  Lemma mult_abst : ∀ {x y}, α (x * y) = mult (α x) (α y).
+  Proof. intros x y. exact (lift_binop_abst Z.mul x y). Qed.
+
+  Definition max_endpoints (x y : option Z * option Z) : option Z * option Z :=
+    (option_join Z.max (fst x) (fst y),
+     option_map2 Z.max (snd x) (snd y)).
+
+  Lemma low_high_max_ep : ∀ x y, Low_high_order x → Low_high_order y → Low_high_order (max_endpoints x y).
+  Proof.
+    intros [[lx|] [hx|]] [[ly|] [hy|]] LHx LHy;
+    unfold Low_high_order, max_endpoints in *; cbn in *; try exact I.
+    all: lia.
+  Qed.
+
+  Definition max (x y : interval) :=
+    match (x, y) with
+    | (Empty, _) | (_, Empty) => Empty
+    | (Ends e1, Ends e2) =>
+        Ends (exist _ (max_endpoints (proj1_sig e1) (proj1_sig e2))
+                      (low_high_max_ep _ _ (proj2_sig e1) (proj2_sig e2)))
+    end.
+
+  Lemma max_abst : ∀ {x y}, α (Z.max x y) = max (α x) (α y).
+  Proof.
+    intros x y.
+    unfold α, max, max_endpoints, option_join, option_map2. f_equal.
+    apply subset_eq_compat. reflexivity.
+  Qed.
+
+  Definition min_endpoints (x y : option Z * option Z) : option Z * option Z :=
+    (option_map2 Z.min (fst x) (fst y),
+     option_join Z.min (snd x) (snd y)).
+
+  Lemma low_high_min_ep : ∀ x y, Low_high_order x → Low_high_order y → Low_high_order (min_endpoints x y).
+  Proof.
+    intros [[lx|] [hx|]] [[ly|] [hy|]] LHx LHy;
+    unfold Low_high_order, min_endpoints in *; cbn in *; try exact I.
+    all: lia.
+  Qed.
+
+  Definition min (x y : interval) :=
+    match (x, y) with
+    | (Empty, _) | (_, Empty) => Empty
+    | (Ends e1, Ends e2) =>
+        Ends (exist _ (min_endpoints (proj1_sig e1) (proj1_sig e2))
+                      (low_high_min_ep _ _ (proj2_sig e1) (proj2_sig e2)))
+    end.
+
+  Lemma min_abst : ∀ {x y}, α (Z.min x y) = min (α x) (α y).
+  Proof.
+    intros x y.
+    unfold α, min, min_endpoints, option_join, option_map2. f_equal.
+    apply subset_eq_compat. reflexivity.
+  Qed.
+
+  Definition abs_endpoint (x : option Z * option Z) : option Z * option Z :=
+    match (fst x, snd x) with
+    | (Some l, Some h) =>
+        if (0 <=? l)%Z then (Some l, Some h)
+        else if (h <? 0)%Z then (Some (-h)%Z, Some (-l)%Z)
+        else (Some 0%Z, Some (Z.max (-l) h)%Z)
+    | (None, Some h) =>
+        if (h <? 0)%Z then (Some (-h)%Z, None)
+        else (Some 0%Z, None)
+    | (Some l, None) =>
+        if (0 <=? l)%Z then (Some l, None)
+        else (Some 0%Z, None)
+    | (None, None) => (Some 0%Z, None)
+    end.
+
+  Lemma low_high_abs_ep : ∀ x, Low_high_order x → Low_high_order (abs_endpoint x).
+  Proof.
+    intros [[l|] [h|]] LH; unfold Low_high_order, abs_endpoint in *; cbn in *.
+    - destruct (0 <=? l)%Z eqn:C1; destruct (h <? 0)%Z eqn:C2;
+      unfold Low_high_order; cbn; lia.
+    - destruct (0 <=? l)%Z eqn:C; unfold Low_high_order; exact I.
+    - destruct (h <? 0)%Z eqn:C; unfold Low_high_order; exact I.
+    - unfold Low_high_order; exact I.
+  Qed.
+
+  Definition abs (x : interval) :=
+    match x with
+    | Empty => Empty
+    | Ends e => Ends (exist _ (abs_endpoint (proj1_sig e)) (low_high_abs_ep _ (proj2_sig e)))
+    end.
+
+  Lemma abs_abst : ∀ {x}, α (Z.abs x) = abs (α x).
+  Proof.
+    intros x.
+    unfold α, abs, abs_endpoint. f_equal.
+    apply subset_eq_compat. cbn.
+    destruct_match; f_equal; f_equal; lia.
+  Qed.
+
+  Definition tdiv (x y : interval) := lift_binop Z.quot x y.
+
+  Lemma tdiv_abst : ∀ {x y}, α (Z.quot x y) = tdiv (α x) (α y).
+  Proof. intros x y. exact (lift_binop_abst Z.quot x y). Qed.
+
+  Definition tmod (x y : interval) := lift_binop Z.rem x y.
+
+  Lemma tmod_abst : ∀ {x y}, α (Z.rem x y) = tmod (α x) (α y).
+  Proof. intros x y. exact (lift_binop_abst Z.rem x y). Qed.
+
+  Definition fdiv (x y : interval) := lift_binop Z.div x y.
+
+  Lemma fdiv_abst : ∀ {x y}, α (Z.div x y) = fdiv (α x) (α y).
+  Proof. intros x y. exact (lift_binop_abst Z.div x y). Qed.
+
+  Definition fmod (x y : interval) := lift_binop Z.modulo x y.
+
+  Lemma fmod_abst : ∀ {x y}, α (Z.modulo x y) = fmod (α x) (α y).
+  Proof. intros x y. exact (lift_binop_abst Z.modulo x y). Qed.
+
+  Definition ediv (x y : interval) := lift_binop (fun a b => fst (Z.div_eucl a b)) x y.
+
+  Lemma ediv_abst : ∀ {x y}, α (fst (Z.div_eucl x y)) = ediv (α x) (α y).
+  Proof. intros x y. exact (lift_binop_abst (fun a b => fst (Z.div_eucl a b)) x y). Qed.
+
+  Definition emod (x y : interval) := lift_binop (fun a b => snd (Z.div_eucl a b)) x y.
+
+  Lemma emod_abst : ∀ {x y}, α (snd (Z.div_eucl x y)) = emod (α x) (α y).
+  Proof. intros x y. exact (lift_binop_abst (fun a b => snd (Z.div_eucl a b)) x y). Qed.
 End Dom.

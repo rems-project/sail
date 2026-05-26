@@ -282,7 +282,7 @@ let rec size_nvars_nexp (Nexp_aux (ne, _)) =
 
 (* Given a type for a constructor, work out which refinements we ought to produce *)
 (* TODO collision avoidance *)
-let split_src_type all_errors env id ty (TypQ_aux (q, ql)) =
+let split_src_type all_errors env id ty q =
   let cannot l msg default =
     let open Reporting in
     match all_errors with
@@ -370,7 +370,7 @@ let split_src_type all_errors env id ty (TypQ_aux (q, ql)) =
   | [(l, _)] when List.for_all (function _, None -> true | _ -> false) l -> None
   | sample :: _ ->
       if List.length variants > !opt_size_set_limit then
-        cannot ql
+        cannot (id_loc id)
           (string_of_int (List.length variants)
           ^ "variants for constructor " ^ i ^ "bigger than limit " ^ string_of_int !opt_size_set_limit
           )
@@ -2560,7 +2560,7 @@ module Analysis = struct
         let _, assigns, r = analyse_sub env assigns e in
         (assigns, r)
 
-  let initial_env fn_id fn_l (TypQ_aux (tq, _)) pat body set_assertions globals =
+  let initial_env fn_id fn_l tq pat body set_assertions globals =
     (* The splitter always uses the outermost location *)
     let top_pat_loc = pat_loc pat in
 
@@ -2586,8 +2586,7 @@ module Analysis = struct
           Partial (pats, l)
       | None -> Total
     in
-    let qs = match tq with TypQ_no_forall -> [] | TypQ_tq qs -> qs in
-    let eqn_instantiations = Type_check.instantiate_simple_equations qs in
+    let eqn_instantiations = Type_check.instantiate_simple_equations tq in
     let eqn_kid_deps =
       KBindings.map (function A_aux (A_nexp nexp, _) -> Some (tyvars_of_nexp nexp) | _ -> None) eqn_instantiations
     in
@@ -2657,7 +2656,7 @@ module Analysis = struct
       | QI_aux (QI_id (KOpt_aux (KOpt_kind (K_aux (K_int, _), kid), _)), _) -> Some kid
       | _ -> None
     in
-    let top_kids = List.filter_map int_quant qs in
+    let top_kids = List.filter_map int_quant tq in
     let _, var_deps, kid_deps = split3 (List.mapi arg pats) in
     let var_deps = List.fold_left dep_bindings_merge Bindings.empty var_deps in
     let kid_deps = List.fold_left dep_kbindings_merge KBindings.empty kid_deps in
@@ -4303,11 +4302,7 @@ module BitvectorSizeCasts = struct
     let cast_specs, _ =
       let kid = mk_kid "n" in
       let bitsn = bitvector_typ (nvar kid) in
-      let ts =
-        mk_typschm
-          (mk_typquant [mk_qi_id K_int kid; mk_qi_nc (nc_gteq (nvar kid) (nint 0))])
-          (function_typ [bitsn] bitsn)
-      in
+      let ts = mk_typschm [mk_qi_id K_int kid; mk_qi_nc (nc_gteq (nvar kid) (nint 0))] (function_typ [bitsn] bitsn) in
       let mkfn name = mk_val_spec (VS_val_spec (ts, name, Some { pure = true; bindings = [("_", "zeroExtend")] })) in
       let defs = List.map mkfn (IdSet.elements !specs_required) in
       check_defs initial_env defs
@@ -4429,23 +4424,23 @@ module ToplevelNexpRewrites = struct
         else rewrite_typ_in_spec env nexp_map typ'
 
   let rewrite_toplevel_nexps ({ defs; _ } as ast) =
-    let rewrite_valspec (VS_aux (VS_val_spec (TypSchm_aux (TypSchm_ts (tqs, typ), ts_l), id, ext_opt), ann)) =
-      match tqs with
-      | TypQ_aux (TypQ_no_forall, _) -> None
-      | TypQ_aux (TypQ_tq qs, tq_l) -> (
+    let rewrite_valspec (VS_aux (VS_val_spec (TypSchm_aux (TypSchm_ts (qs, typ), ts_l), id, ext_opt), ann)) =
+      match qs with
+      | [] -> None
+      | _ -> (
           let env = env_of_annot ann in
-          let env = Env.add_typquant tq_l tqs env in
+          let env = Env.add_typquant ts_l qs env in
           let nexp_map, typ = rewrite_typ_in_spec env [] typ in
           match nexp_map with
           | [] -> None
           | _ ->
               let new_vars =
-                List.map (fun (kid, nexp) -> QI_aux (QI_id (mk_kopt K_int kid), Generated tq_l)) nexp_map
+                List.map (fun (kid, nexp) -> QI_aux (QI_id (mk_kopt K_int kid), Generated ts_l)) nexp_map
               in
               let new_constraints =
-                List.map (fun (kid, nexp) -> QI_aux (QI_constraint (nc_eq (nvar kid) nexp), Generated tq_l)) nexp_map
+                List.map (fun (kid, nexp) -> QI_aux (QI_constraint (nc_eq (nvar kid) nexp), Generated ts_l)) nexp_map
               in
-              let tqs = TypQ_aux (TypQ_tq (qs @ new_vars @ new_constraints), tq_l) in
+              let tqs = qs @ new_vars @ new_constraints in
               let vs = VS_aux (VS_val_spec (TypSchm_aux (TypSchm_ts (tqs, typ), ts_l), id, ext_opt), ann) in
               Some (id, nexp_map, vs)
         )
@@ -4553,11 +4548,9 @@ module ToplevelNexpRewrites = struct
   let rewrite_complete_record_params env ast =
     let lift_params (additions_map, tl) def =
       match def with
-      | DEF_aux
-          (DEF_type (TD_aux (TD_record (id, (TypQ_aux (TypQ_tq qs, tq_l) as tyqs), fields, semi), annot)), def_annot) as
-        def ->
+      | DEF_aux (DEF_type (TD_aux (TD_record (id, qs, fields, semi), annot)), def_annot) as def ->
           (* TODO: replace with a local environment *)
-          let env = Env.add_typquant tq_l tyqs env in
+          let env = Env.add_typquant def_annot.loc qs env in
           let nexp_map, fields' =
             List.fold_right
               (fun ((id, typ), def_annot) (nexp_map, t) ->
@@ -4571,13 +4564,15 @@ module ToplevelNexpRewrites = struct
             | [] -> (additions_map, def :: tl)
             | _ ->
                 let new_vars =
-                  List.map (fun (kid, nexp) -> QI_aux (QI_id (mk_kopt K_int kid), Generated tq_l)) nexp_map
+                  List.map (fun (kid, nexp) -> QI_aux (QI_id (mk_kopt K_int kid), Generated def_annot.loc)) nexp_map
                 in
                 let new_constraints =
-                  List.map (fun (kid, nexp) -> QI_aux (QI_constraint (nc_eq (nvar kid) nexp), Generated tq_l)) nexp_map
+                  List.map
+                    (fun (kid, nexp) -> QI_aux (QI_constraint (nc_eq (nvar kid) nexp), Generated def_annot.loc))
+                    nexp_map
                 in
-                let tyqs' = TypQ_aux (TypQ_tq (qs @ new_vars @ new_constraints), tq_l) in
-                let additions_map' = Bindings.add id (tyqs, nexp_map) additions_map in
+                let tyqs' = qs @ new_vars @ new_constraints in
+                let additions_map' = Bindings.add id (qs, nexp_map) additions_map in
                 ( additions_map',
                   DEF_aux (DEF_type (TD_aux (TD_record (id, tyqs', fields', semi), annot)), def_annot) :: tl
                 )

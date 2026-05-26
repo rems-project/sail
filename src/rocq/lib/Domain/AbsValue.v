@@ -48,8 +48,9 @@ From Stdlib Require Import Program.
 
 From stdpp Require Import base.
 From stdpp Require Import gmap.
-From stdpp Require Import list.
 From stdpp Require Import mapset.
+From stdpp Require Import bitvector.definitions.
+From stdpp Require Import list.
 
 From Sail Require Import SailBase.
 From Sail Require Import IdUtil.
@@ -69,9 +70,9 @@ Module Value.
   Definition t := Ast.value.
 End Value.
 
-Module Dom (DZ : DOMAIN BinInt.Z) (Dbv : DOMAIN AbsBitvector.BitList) <: DOMAIN Value.
+Module Dom (DZ : DOMAIN BinInt.Z) (Dbv : DOMAIN AbsBitvector.Bits) <: DOMAIN Value.
   Module DZP := DomainProperties BinInt.Z DZ.
-  Module DbvP := DomainProperties AbsBitvector.BitList Dbv.
+  Module DbvP := DomainProperties AbsBitvector.Bits Dbv.
 
   Inductive value : Type :=
     | V_bitvector : Dbv.t → value
@@ -1862,7 +1863,7 @@ Module Dom (DZ : DOMAIN BinInt.Z) (Dbv : DOMAIN AbsBitvector.BitList) <: DOMAIN 
 
   Fixpoint α (x : Ast.value) : value :=
     match x with
-    | Ast.V_bitvector bv => V_bitvector (Dbv.α bv)
+    | Ast.V_bitvector bv => V_bitvector (Dbv.α (Bit.Bits.to_bvn bv))
     | Ast.V_vector xs => V_vector (List.map α xs)
     | Ast.V_list xs => V_list (List.map α xs)
     | Ast.V_int i => V_int (DZ.α i)
@@ -1884,6 +1885,28 @@ Module Dom (DZ : DOMAIN BinInt.Z) (Dbv : DOMAIN AbsBitvector.BitList) <: DOMAIN 
     | V_record m => from_option (λ x, x) ⊥ (m !! name)
     | _ => ⊥
     end.
+(*
+  Module Matching (Tannot : TypeAnnot.S).
+    Import PatternMatch.
 
+    Definition pattern_match_literal (l : Ast.lit) (v : value) : match_result value :=
+      let 'Ast.L_aux aux annot := l in
+      match (aux, v) with
+      | (Ast.L_unit,      V_unit        ) => simple_match value
+      | (Ast.L_true,      V_bool true   ) => simple_match value
+      | (Ast.L_false,     V_bool false  ) => simple_match value
+      | (Ast.L_num n,     V_int m       ) => simple_match value
+      | (Ast.L_hex s,     V_bitvector vs) => simple_match value
+      | (Ast.L_bin s,     V_bitvector vs) => simple_match value
+      | (Ast.L_string s1, V_string s2   ) => simple_match_when value (String.eqb s1 s2)
+      | (Ast.L_real r1,   V_real r2     ) => simple_match_when value (QArith_base.Qeq_bool r1 r2)
+      | _ => Unmatched
+      end.
+
+    Fixpoint pattern_match (p : Ast.pat Tannot.t) (v : value) {struct p} : match_result value :=
+      simple_match value.
+
+  End Matching.
+*)
   Definition complete (b : PatternMatch.binding t) : t := ⊥.
 End Dom.

@@ -41,6 +41,10 @@
 (*  SPDX-License-Identifier: BSD-2-Clause                                   *)
 (* ************************************************************************ *)
 
+From stdpp Require Import base.
+From stdpp Require Import bitvector.definitions.
+From stdpp Require Import list.
+
 From Sail Require Import SailBase.
 
 Import Ltac2.Std.
@@ -131,3 +135,16 @@ Ltac2 rec destruct_match_goal () :=
   in Control.enter destruct_match'.
 
 Ltac destruct_match_goal := ltac2:(destruct_match_goal ()).
+
+Create HintDb length_db.
+
+Hint Rewrite length_map : length_db.
+Hint Rewrite length_rev : length_db.
+Hint Rewrite @length_bv_to_bits : length_db.
+Hint Rewrite @length_zip_with : length_db.
+Hint Rewrite @length_take : length_db.
+Hint Rewrite @length_drop : length_db.
+Hint Rewrite length_app : length_db.
+Hint Rewrite @length_replicate : length_db.
+
+Ltac simp_length := autorewrite with length_db; cbn; lia.

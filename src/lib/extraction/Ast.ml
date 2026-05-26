@@ -5,15 +5,6 @@ type l = Parse_ast.l
 
 type attribute_data = Parse_ast.Attribute_data.attribute_data
 
-type id_type =
-| Local_variable
-| Global_register
-| Enum_member
-
-type vector_concat_split =
-| No_split
-| Split of Big_int_Z.big_int
-
 type visibility =
 | Public
 | Private of Parse_ast.l
@@ -34,18 +25,62 @@ module Coq_def_annot =
                      'a }
  end
 
-type 'a non_empty =
-| Non_empty of 'a * 'a list
-
 type 'a def_annot = 'a Coq_def_annot.record
 
 type 'a clause_annot = unit def_annot * 'a
 
 type 'a annot = Parse_ast.l * 'a
 
+type 'a non_empty =
+| Non_empty of 'a * 'a list
+
 type loop =
 | While
 | Until
+
+type kind_aux =
+| K_type
+| K_int
+| K_bool
+
+type kind =
+| K_aux of kind_aux * Parse_ast.l
+
+type kid_aux =
+| Var of string
+
+type kid =
+| Kid_aux of kid_aux * Parse_ast.l
+
+type kinded_id_aux =
+| KOpt_kind of kind * kid
+
+type kinded_id =
+| KOpt_aux of kinded_id_aux * Parse_ast.l
+
+type id_aux =
+| And_bool
+| Or_bool
+| Id of string
+| Operator of string
+
+type id =
+| Id_aux of id_aux * Parse_ast.l
+
+type value =
+| V_bitvector of bit list
+| V_vector of value list
+| V_list of value list
+| V_int of Big_int_Z.big_int
+| V_real of coq_Q
+| V_bool of bool
+| V_tuple of value list
+| V_unit
+| V_string of string
+| V_ref of id
+| V_member of id
+| V_ctor of id * value list
+| V_record of (id * value) list
 
 type hex_digit =
 | Hex_0
@@ -69,50 +104,6 @@ type bin_digit =
 | Bin_0
 | Bin_1
 
-type kind_aux =
-| K_type
-| K_int
-| K_bool
-
-type kid_aux =
-| Var of string
-
-type kind =
-| K_aux of kind_aux * Parse_ast.l
-
-type kid =
-| Kid_aux of kid_aux * Parse_ast.l
-
-type kinded_id_aux =
-| KOpt_kind of kind * kid
-
-type id_aux =
-| And_bool
-| Or_bool
-| Id of string
-| Operator of string
-
-type kinded_id =
-| KOpt_aux of kinded_id_aux * Parse_ast.l
-
-type id =
-| Id_aux of id_aux * Parse_ast.l
-
-type value =
-| V_bitvector of bit list
-| V_vector of value list
-| V_list of value list
-| V_int of Big_int_Z.big_int
-| V_real of coq_Q
-| V_bool of bool
-| V_tuple of value list
-| V_unit
-| V_string of string
-| V_ref of id
-| V_member of id
-| V_ctor of id * value list
-| V_record of (id * value) list
-
 type lit_aux =
 | L_unit
 | L_true
@@ -122,6 +113,9 @@ type lit_aux =
 | L_bin of bin_digit non_empty list
 | L_string of string
 | L_real of coq_Q
+
+type lit =
+| L_aux of lit_aux * Parse_ast.l
 
 type nexp_aux =
 | Nexp_id of id
@@ -175,12 +169,19 @@ type order_aux =
 | Ord_inc
 | Ord_dec
 
+type quant_item_aux =
+| QI_id of kinded_id
+| QI_constraint of n_constraint
+
+type quant_item =
+| QI_aux of quant_item_aux * Parse_ast.l
+
+type order =
+| Ord_aux of order_aux * Parse_ast.l
+
 type struct_name =
 | SN_id of id
 | SN_anon
-
-type lit =
-| L_aux of lit_aux * Parse_ast.l
 
 type field_pat_wildcard =
 | FP_wild of Parse_ast.l
@@ -192,13 +193,6 @@ type typ_pat_aux =
 | TP_app of id * typ_pat list
 and typ_pat =
 | TP_aux of typ_pat_aux * Parse_ast.l
-
-type quant_item_aux =
-| QI_id of kinded_id
-| QI_constraint of n_constraint
-
-type order =
-| Ord_aux of order_aux * Parse_ast.l
 
 type 'a pat_aux =
 | P_lit of lit
@@ -220,9 +214,6 @@ type 'a pat_aux =
 | P_struct of struct_name * (id * 'a pat) list * field_pat_wildcard
 and 'a pat =
 | P_aux of 'a pat_aux * 'a annot
-
-type quant_item =
-| QI_aux of quant_item_aux * Parse_ast.l
 
 type 'a mpat_aux =
 | MP_lit of lit
@@ -305,21 +296,16 @@ and 'a pexp_aux =
 and 'a pexp =
 | Pat_aux of 'a pexp_aux * 'a annot
 
-type typquant_aux =
-| TypQ_tq of quant_item list
-| TypQ_no_forall
-
 type 'a mpexp_aux =
 | MPat_pat of 'a mpat
 | MPat_when of 'a mpat * 'a exp
-
-type typquant =
-| TypQ_aux of typquant_aux * Parse_ast.l
 
 type 'a mpexp =
 | MPat_aux of 'a mpexp_aux * 'a annot
 
 type 'a pexp_funcl = 'a pexp
+
+type typquant = quant_item list
 
 type typschm_aux =
 | TypSchm_ts of typquant * typ
@@ -460,13 +446,6 @@ type 'a fundef =
 type 'a type_def =
 | TD_aux of type_def_aux * 'a annot
 
-type 'a impldef_aux =
-| Impl_impl of 'a funcl
-
-type 'a opt_default_aux =
-| Def_val_empty
-| Def_val_dec of 'a exp
-
 type ('a, 'b) def_aux =
 | DEF_type of 'a type_def
 | DEF_constraint of n_constraint
@@ -488,9 +467,3 @@ type ('a, 'b) def_aux =
 | DEF_pragma of string * pragma
 and ('a, 'b) def =
 | DEF_aux of ('a, 'b) def_aux * 'b def_annot
-
-type 'a impldef =
-| Impl_aux of 'a impldef_aux * l
-
-type 'a opt_default =
-| Def_val_aux of 'a opt_default_aux * 'a annot

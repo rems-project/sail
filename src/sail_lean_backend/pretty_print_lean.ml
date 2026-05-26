@@ -341,9 +341,9 @@ let doc_quant_item_all ctx (QI_aux (qi, _)) =
   | QI_constraint c -> doc_nconstraint ctx c
 
 (* Used to annotate types with the original constraints *)
-let doc_typ_quant_all ctx tq = match tq with TypQ_tq qs -> List.map (doc_quant_item_all ctx) qs | TypQ_no_forall -> []
+let doc_typ_quant_all ctx qs = List.map (doc_quant_item_all ctx) qs
 
-let doc_typ_quant_in_comment ctx (TypQ_aux (tq, _)) =
+let doc_typ_quant_in_comment ctx tq =
   let typ_quants = doc_typ_quant_all ctx tq in
   if List.length typ_quants > 0 then
     string "/-- Type quantifiers: " ^^ nest 2 (flow comma_sp typ_quants) ^^ string " -/" ^^ hardline
@@ -355,18 +355,17 @@ let doc_quant_item_relevant ctx (QI_aux (qi, annot)) =
   | QI_constraint c -> None
 
 (* Used to translate type parameters of types, so we drop the constraints *)
-let doc_typ_quant_relevant ctx (TypQ_aux (tq, _) as tq_full) =
+let doc_typ_quant_relevant ctx tq =
   (* We go through the type variables with an environment that contains all the constraints,
      in order to detect when we can translate the Kind as Nat *)
-  let ctx = context_init (Type_check.Env.add_typquant Unknown tq_full ctx.env) ctx.global in
-  match tq with TypQ_tq qs -> List.filter_map (doc_quant_item_relevant ctx) qs | TypQ_no_forall -> []
+  let ctx = context_init (Type_check.Env.add_typquant Unknown tq ctx.env) ctx.global in
+  List.filter_map (doc_quant_item_relevant ctx) tq
 
 let doc_quant_item_only_vars ctx (QI_aux (qi, annot)) =
   match qi with QI_id (KOpt_aux (KOpt_kind (k, ki), _)) -> Some (doc_kid ctx ki) | QI_constraint c -> None
 
 (* Used to translate type parameters of type abbreviations *)
-let doc_typ_quant_only_vars ctx (TypQ_aux (tq, _) as tq_full) =
-  match tq with TypQ_tq qs -> List.filter_map (doc_quant_item_only_vars ctx) qs | TypQ_no_forall -> []
+let doc_typ_quant_only_vars ctx tq = List.filter_map (doc_quant_item_only_vars ctx) tq
 
 let lean_escape_string s = Str.global_replace (Str.regexp "\"") "\\\"" s
 
@@ -1095,7 +1094,7 @@ let rec add_path_renamings ~path ctx (P_aux (pat, pat_annot)) (Typ_aux (typ, typ
 
 let doc_funcl_init global (FCL_aux (FCL_funcl (id, pexp), annot)) =
   let env = env_of_tannot (snd annot) in
-  let (TypQ_aux (tq, l) as tq_all), typ = Env.get_val_spec_orig id env in
+  let tq, typ = Env.get_val_spec_orig id env in
   let arg_typs, ret_typ, _ =
     match typ with
     | Typ_aux (Typ_fn (arg_typs, ret_typ), _) -> (arg_typs, ret_typ, no_effect)
@@ -1109,7 +1108,8 @@ let doc_funcl_init global (FCL_aux (FCL_funcl (id, pexp), annot)) =
            match pat_is_plain_binder ~suffix:(Printf.sprintf "_%i" i) env pat with
            | Some (Some id, _) -> (pat, id, typ)
            | Some (None, _) ->
-               (pat, mk_id ~loc:l (Printf.sprintf "x_%i" i), typ) (* TODO fresh name or wildcard instead of x *)
+               (pat, mk_id ~loc:(pat_loc pat) (Printf.sprintf "x_%i" i), typ)
+               (* TODO fresh name or wildcard instead of x *)
            | _ ->
                ( pat,
                  Id_aux (Id "TODO_ARG_PATTERN", Unknown),
@@ -1129,7 +1129,7 @@ let doc_funcl_init global (FCL_aux (FCL_funcl (id, pexp), annot)) =
       )
       (ctx, [], fixup_binders) binders
   in
-  let typ_quant_comment = doc_typ_quant_in_comment ctx tq_all in
+  let typ_quant_comment = doc_typ_quant_in_comment ctx tq in
   (* Use auto-implicits for type quanitifiers for now and see if this works *)
   let doc_ret_typ_orig = doc_typ ctx ret_typ in
   let is_monadic = not (Effects.function_is_pure id ctx.global.effect_info) in
@@ -1286,7 +1286,7 @@ let doc_typdef ctx (TD_aux (td, tannot) as full_typdef) =
       let vars = doc_typ_quant_only_vars ctx tq in
       let vars = separate space vars in
       nest 2 (flow (break 1) [string "abbrev"; doc_id_ctor id; colon; string "Int"; coloneq; doc_nexp ctx ne])
-  | TD_abbrev (id, TypQ_aux (TypQ_no_forall, _), A_aux (A_bool nc, _)) ->
+  | TD_abbrev (id, [], A_aux (A_bool nc, _)) ->
       (* We currently cannot handle explicit parameters because of the Int/Nat mismatch. *)
       nest 2 (flow (break 1) [string "abbrev"; doc_id_ctor id; colon; string "Bool"; coloneq; doc_nconstraint ctx nc])
   | TD_abbrev _ -> empty

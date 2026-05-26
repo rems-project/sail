@@ -1080,7 +1080,7 @@ module ConvertType = struct
 
   let to_ast_typquant kenv ctx (P.TypQ_aux (aux, l)) =
     match aux with
-    | P.TypQ_no_forall -> (TypQ_aux (TypQ_no_forall, l), ctx)
+    | P.TypQ_no_forall -> ([], ctx)
     | P.TypQ_tq quants ->
         let quants, ctx =
           List.fold_left
@@ -1090,7 +1090,7 @@ module ConvertType = struct
             )
             ([], ctx) quants
         in
-        (TypQ_aux (TypQ_tq (List.rev quants), l), ctx)
+        (List.rev quants, ctx)
 
   let to_ast_tannot_opt kenv ctx (P.Typ_annot_opt_aux (tp, l)) : tannot_opt ctx_out =
     match tp with
@@ -1785,7 +1785,7 @@ let generate_enum_functions l ctx enum_id fns exps =
                  )
               );
           ];
-        mk_val_spec (VS_val_spec (mk_typschm (mk_typquant []) (function_typ [mk_id_typ enum_id] typ), name, None));
+        mk_val_spec (VS_val_spec (mk_typschm [] (function_typ [mk_id_typ enum_id] typ), name, None));
       ]
     )
     fns
@@ -2490,22 +2490,19 @@ let quant_item_arg = function
   | _ -> []
 
 let undefined_typschm id typq =
-  let qis = quant_items typq in
-  if qis = [] then mk_typschm typq (function_typ [unit_typ] (mk_typ (Typ_id id)))
-  else (
-    let arg_typs = List.concat (List.map quant_item_typ qis) in
-    let ret_typ = app_typ id (List.concat (List.map quant_item_arg qis)) in
-    mk_typschm typq (function_typ arg_typs ret_typ)
-  )
+  match typq with
+  | [] -> mk_typschm typq (function_typ [unit_typ] (mk_typ (Typ_id id)))
+  | _ ->
+      let arg_typs = List.concat (List.map quant_item_typ typq) in
+      let ret_typ = app_typ id (List.concat (List.map quant_item_arg typq)) in
+      mk_typschm typq (function_typ arg_typs ret_typ)
 
-let generate_undefined_record_context typq =
-  quant_items typq |> List.map (fun qi -> quant_item_param_typ qi) |> List.concat
+let generate_undefined_record_context typq = List.map (fun qi -> quant_item_param_typ qi) typq |> List.concat
 
 let generate_undefined_record id typq fields =
   let p_tup = function [pat] -> pat | pats -> mk_pat (P_tuple pats) in
   let pat =
-    p_tup (quant_items typq |> List.map quant_item_param |> List.concat |> List.map (fun id -> mk_pat (P_id id)))
-    |> locate_pat gen_loc
+    p_tup (List.map quant_item_param typq |> List.concat |> List.map (fun id -> mk_pat (P_id id))) |> locate_pat gen_loc
   in
   [
     mk_val_spec (VS_val_spec (undefined_typschm id typq, prepend_id "undefined_" id, None));
@@ -2611,9 +2608,7 @@ let generate_enum_number_conversions defs =
               | None, None -> (gen_loc def_annot.loc, append_id id "_of_num", prepend_id "num_of_" id)
             in
 
-            let enum_val_spec name quants typ =
-              mk_val_spec (VS_val_spec (mk_typschm (mk_typquant quants) typ, name, None))
-            in
+            let enum_val_spec name quants typ = mk_val_spec (VS_val_spec (mk_typschm quants typ, name, None)) in
             let range_constraint kid =
               nc_and (nc_lteq (nint 0) (nvar kid)) (nc_lteq (nvar kid) (nint (List.length elems - 1)))
             in

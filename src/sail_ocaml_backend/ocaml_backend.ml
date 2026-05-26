@@ -156,16 +156,13 @@ and ocaml_typ_arg ctx (A_aux (typ_arg_aux, _) as typ_arg) =
   | A_typ typ -> ocaml_typ ctx typ
   | _ -> failwith ("OCaml: unexpected type argument " ^ string_of_typ_arg typ_arg)
 
-let ocaml_typquant (TypQ_aux (_, l) as typq) =
+let ocaml_typquant typq =
   let ocaml_qi = function
     | QI_aux (QI_id kopt, _) -> zencode_kid (kopt_kid kopt)
-    | QI_aux (QI_constraint _, _) ->
+    | QI_aux (QI_constraint _, l) ->
         raise (Reporting.err_general l "Ocaml: type quantifiers should no longer contain constraints")
   in
-  match quant_items typq with
-  | [] -> empty
-  | [qi] -> ocaml_qi qi
-  | qis -> parens (separate_map (string ", ") ocaml_qi qis)
+  match typq with [] -> empty | [qi] -> ocaml_qi qi | qis -> parens (separate_map (string ", ") ocaml_qi qis)
 
 let string_lit str = dquotes (string (String.escaped str))
 
@@ -913,7 +910,7 @@ let ocaml_pp_generators ctx defs orig_types required =
           | TD_abbrev (_, tqs, A_aux (A_typ _, _)) -> tqs
           | TD_record (_, tqs, _, _) -> tqs
           | TD_variant (_, tqs, _, _) -> tqs
-          | TD_abstract _ | TD_enum _ -> TypQ_aux (TypQ_no_forall, Unknown)
+          | TD_abstract _ | TD_enum _ -> []
           | TD_abbrev (_, _, _) -> assert false
           | TD_bitfield _ -> assert false
         )
@@ -1013,7 +1010,7 @@ let ocaml_pp_generators ctx defs orig_types required =
             )
         | TD_enum (_, members, _) ->
             let ids = List.map fst members in
-            ( TypQ_aux (TypQ_no_forall, Parse_ast.Unknown),
+            ( [],
               string "rand_choice ["
               ^^ group (nest 2 (break 0 ^^ separate_map (string ";" ^^ break 1) (zencode_upper ctx) ids) ^^ break 0)
               ^^ string "]",

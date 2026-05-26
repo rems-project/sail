@@ -190,8 +190,6 @@ val mk_funcl : ?loc:l -> id -> uannot pat -> uannot exp -> uannot funcl
 val mk_fundef : ?loc:l -> uannot funcl list -> untyped_def
 val mk_val_spec : ?loc:l -> val_spec_aux -> untyped_def
 val mk_typschm : ?loc:l -> typquant -> typ -> typschm
-val mk_empty_typquant : loc:l -> typquant
-val mk_typquant : ?loc:l -> quant_item list -> typquant
 val mk_qi_id : ?loc:l -> kind_aux -> kid -> quant_item
 val mk_qi_nc : ?loc:l -> n_constraint -> quant_item
 val mk_qi_kopt : ?loc:l -> kinded_id -> quant_item
@@ -347,11 +345,8 @@ val arg_kopt : kinded_id -> typ_arg
 (** {1 Functions for working with type quantifiers} *)
 
 val quant_add : quant_item -> typquant -> typquant
-val quant_items : typquant -> quant_item list
 val quant_kopts : typquant -> kinded_id list
 val quant_split : typquant -> kinded_id list * n_constraint list
-val quant_map_items : (quant_item -> quant_item) -> typquant -> typquant
-val quant_fold_map_items : ('acc -> quant_item -> 'acc * quant_item) -> 'acc -> typquant -> 'acc * typquant
 
 val is_quant_kopt : quant_item -> bool
 val is_quant_constraint : quant_item -> bool

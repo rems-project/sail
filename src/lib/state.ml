@@ -126,7 +126,7 @@ let regstate_field typ = append_id (id_of_regtyp IdSet.empty typ) "_reg"
 
 let generate_regstate env registers =
   let regstate_def =
-    if registers = [] then TD_abbrev (mk_id "regstate", mk_typquant [], mk_typ_arg (A_typ unit_typ))
+    if registers = [] then TD_abbrev (mk_id "regstate", [], mk_typ_arg (A_typ unit_typ))
     else (
       let fields =
         if !opt_type_grouped_regstate then (
@@ -140,7 +140,7 @@ let generate_regstate env registers =
         )
         else List.map (fun (t, i, _) -> ((i, t), mk_def_annot (id_loc i) ())) registers
       in
-      TD_record (mk_id "regstate", mk_typquant [], fields, false)
+      TD_record (mk_id "regstate", [], fields, false)
     )
   in
   [
@@ -220,7 +220,7 @@ let generate_initial_regstate ctx env ast =
       let typ_subst_quant_item typ (QI_aux (qi, _)) arg =
         match qi with QI_id (KOpt_aux (KOpt_kind (_, kid), _)) -> typ_subst kid arg typ | _ -> typ
       in
-      let typ_subst_typquant tq args typ = List.fold_left2 typ_subst_quant_item typ (quant_items tq) args in
+      let typ_subst_typquant tq args typ = List.fold_left2 typ_subst_quant_item typ tq args in
       let add_typ_init_val (defs', vals) = function
         | TD_enum (id, (id1, _) :: _, _) ->
             (* Choose the first value of an enumeration type as default *)
@@ -244,7 +244,7 @@ let generate_initial_regstate ctx env ast =
               "struct { " ^ String.concat ", " (List.map init_field fields) ^ " }"
             in
             let def_name = "initial_" ^ string_of_id id in
-            if quant_items tq = [] && not (is_defined defs def_name) then
+            if tq = [] && not (is_defined defs def_name) then
               ( defs' @ ["let " ^ def_name ^ " : " ^ string_of_id id ^ " = " ^ init_val []],
                 Bindings.add id (fun _ -> def_name) vals
               )
@@ -918,7 +918,7 @@ let add_register_init_function ctx env ast =
   let id = mk_id "sail_model_init" in
   let funcl = mk_exp (E_block (init_exps @ [uninit])) |> mk_funcl id (mk_pat P_wild) in
   let fundef = mk_fundef [funcl] in
-  let val_spec = mk_val_spec (VS_val_spec (mk_typschm (mk_typquant []) (function_typ [unit_typ] unit_typ), id, None)) in
+  let val_spec = mk_val_spec (VS_val_spec (mk_typschm [] (function_typ [unit_typ] unit_typ), id, None)) in
   let new_defs, env = Type_error.check_defs env [val_spec; fundef] in
   let drop_init = function
     | DEF_aux (DEF_register (DEC_aux (DEC_reg (typ, id, Some exp), an)), def_annot) ->

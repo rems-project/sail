@@ -435,13 +435,12 @@ let classify_ex_type ctxt env ?binding ?(rawbools = false) (Typ_aux (t, l) as t0
 
 (* maybe TODO: this could be provided by the type checker, and shared with bind_pat *)
 let typ_of_constructor env f typ l =
-  let typq, ctor_typ = Env.get_union_id f env in
-  let quants = quant_items typq in
+  let quants, ctor_typ = Env.get_union_id f env in
   begin
-    match Env.expand_synonyms (Env.add_typquant l typq env) ctor_typ with
+    match Env.expand_synonyms (Env.add_typquant l quants env) ctor_typ with
     | Typ_aux (Typ_fn ([arg_typ], ret_typ), _) -> begin
         try
-          let goals = quant_kopts typq |> List.map kopt_kid |> KidSet.of_list in
+          let goals = quant_kopts quants |> List.map kopt_kid |> KidSet.of_list in
           let unifiers = unify l env goals ret_typ typ in
           let arg_typ' = subst_unifiers unifiers arg_typ in
           arg_typ'
@@ -893,27 +892,19 @@ let doc_quant_item_constr ?(prop_vars = false) ctx env delimit (QI_aux (qi, _)) 
 let quant_item_constr_name ctx (QI_aux (qi, _)) =
   match qi with QI_id _ -> None | QI_constraint _nc -> None (*Some underscore*)
 
-let doc_typquant_items ?(prop_vars = false) ctx env delimit (TypQ_aux (tq, _)) =
-  match tq with
-  | TypQ_tq qis ->
-      List.filter_map (doc_quant_item_id ~prop_vars ctx delimit) qis
-      @ List.filter_map (doc_quant_item_constr ~prop_vars ctx env delimit) qis
-  | TypQ_no_forall -> []
+let doc_typquant_items ?(prop_vars = false) ctx env delimit qis =
+  List.filter_map (doc_quant_item_id ~prop_vars ctx delimit) qis
+  @ List.filter_map (doc_quant_item_constr ~prop_vars ctx env delimit) qis
 
-let doc_typquant_items_separate ctx env delimit (TypQ_aux (tq, _)) =
-  match tq with
-  | TypQ_tq qis ->
-      (List.filter_map (doc_quant_item_id ctx delimit) qis, List.filter_map (doc_quant_item_constr ctx env delimit) qis)
-  | TypQ_no_forall -> ([], [])
+let doc_typquant_items_separate ctx env delimit qis =
+  (List.filter_map (doc_quant_item_id ctx delimit) qis, List.filter_map (doc_quant_item_constr ctx env delimit) qis)
 
-let typquant_names_separate ctx (TypQ_aux (tq, _)) =
-  match tq with
-  | TypQ_tq qis -> (List.filter_map (quant_item_id_name ctx) qis, List.filter_map (quant_item_constr_name ctx) qis)
-  | TypQ_no_forall -> ([], [])
+let typquant_names_separate ctx qis =
+  (List.filter_map (quant_item_id_name ctx) qis, List.filter_map (quant_item_constr_name ctx) qis)
 
-let doc_typquant ctx env (TypQ_aux (tq, _)) typ =
-  match tq with
-  | TypQ_tq (_ :: _ as qs) ->
+let doc_typquant ctx env qs typ =
+  match qs with
+  | _ :: _ ->
       string "forall "
       ^^ separate_opt space (doc_quant_item_id ctx braces) qs
       ^/^ separate_opt space (doc_quant_item_constr ctx env parens) qs
@@ -1811,7 +1802,7 @@ let doc_exp, doc_let =
                 autocast_req ctxt out_env ~existentials in_typ out_typ in_typ out_typ
               in
 
-              let simple_type_equations = Type_check.instantiate_simple_equations (quant_items tqs) in
+              let simple_type_equations = Type_check.instantiate_simple_equations tqs in
 
               let env_kids = Env.get_typ_vars env in
 
@@ -2745,14 +2736,14 @@ let doc_typdef global generic_eq_types countable_types enum_number_defs (TD_aux 
       let f_pp ((fid, typ), _) = concat [fname fid; space; colon; space; doc_typ bare_ctxt Env.empty typ; semi] in
       let rectyp =
         match typq with
-        | TypQ_aux (TypQ_tq qs, _) ->
+        | _ :: _ ->
             let quant_item = function
               | QI_aux (QI_id (KOpt_aux (KOpt_kind (_, kid), _)), l) -> [A_aux (A_nexp (Nexp_aux (Nexp_var kid, l)), l)]
               | _ -> []
             in
-            let targs = List.concat (List.map quant_item qs) in
+            let targs = List.concat (List.map quant_item typq) in
             mk_typ (Typ_app (id, targs))
-        | TypQ_aux (TypQ_no_forall, _) -> mk_id_typ id
+        | [] -> mk_id_typ id
       in
       let fs_doc = separate_map hardline f_pp fs in
       let type_id_pp = doc_id_type global None id in
@@ -2769,11 +2760,11 @@ let doc_typdef global generic_eq_types countable_types enum_number_defs (TD_aux 
         ^^ separate space (List.init numfields (fun n -> string (s ^ string_of_int n)))
         ^^ string "]." ^^ hardline
       in
-      let full_type_pps = type_id_pp :: List.filter_map (quant_item_id_name bare_ctxt) (quant_items typq) in
+      let full_type_pps = type_id_pp :: List.filter_map (quant_item_id_name bare_ctxt) typq in
       let full_type_pp = separate space full_type_pps in
       let eq_pp =
         if !opt_coq_all_eq_dec || IdSet.mem id generic_eq_types then (
-          let eq_req_pps = List.filter_map doc_dec_eq_req (quant_items typq) in
+          let eq_req_pps = List.filter_map doc_dec_eq_req typq in
           let class_pp, final_pp, countable_pp =
             match global.library_style with
             | BBV ->
@@ -2789,7 +2780,7 @@ let doc_typdef global generic_eq_types countable_types enum_number_defs (TD_aux 
                           Some (string "`{Countable " ^^ doc_var bare_ctxt kid ^^ string "}")
                       | _ -> None
                       )
-                    (quant_items typq)
+                    typq
                 in
                 let type_for_class = if List.length full_type_pps > 1 then parens full_type_pp else full_type_pp in
                 let tmp_vars = List.mapi (fun i _ -> string ("x" ^ string_of_int i)) fs in
@@ -2843,7 +2834,7 @@ let doc_typdef global generic_eq_types countable_types enum_number_defs (TD_aux 
         else empty
       in
       let inhabited_pp =
-        let req_pps = List.filter_map doc_inhabited_req (quant_items typq) in
+        let req_pps = List.filter_map doc_inhabited_req typq in
         let field_pp ((fid, _), _) = fname fid ^^ string " := inhabitant" in
         string "#[export]" ^^ hardline
         ^^ group
@@ -2882,11 +2873,11 @@ let doc_typdef global generic_eq_types countable_types enum_number_defs (TD_aux 
                 Some (string "`{Inhabited " ^^ doc_var bare_ctxt kid ^^ string "}")
             | _ -> None
           in
-          let typ_use_pps = id_pp :: List.filter_map (quant_item_id_name bare_ctxt) (quant_items typq) in
+          let typ_use_pps = id_pp :: List.filter_map (quant_item_id_name bare_ctxt) typq in
           let typ_use_pp = separate space typ_use_pps in
           let eq_pp =
             if !opt_coq_all_eq_dec || IdSet.mem id generic_eq_types then (
-              let eq_req_pps = List.filter_map doc_dec_eq_req (quant_items typq) in
+              let eq_req_pps = List.filter_map doc_dec_eq_req typq in
               match global.library_style with
               | BBV ->
                   string "#[export]" ^^ hardline
@@ -2915,7 +2906,7 @@ let doc_typdef global generic_eq_types countable_types enum_number_defs (TD_aux 
                             Some (string "`{Countable " ^^ doc_var bare_ctxt kid ^^ string "}")
                         | _ -> None
                         )
-                      (quant_items typq)
+                      typq
                   in
                   let type_for_class = if List.length typ_use_pps > 1 then parens typ_use_pp else typ_use_pp in
                   let encode_arm i (Tu_aux (Tu_ty_id (typ, id), _)) =
@@ -3036,7 +3027,7 @@ let doc_typdef global generic_eq_types countable_types enum_number_defs (TD_aux 
           let inhabited_pp =
             match ar with
             | Tu_aux (Tu_ty_id (typ, example_id), _) :: _ ->
-                let req_pps = List.filter_map doc_inhabited_req (quant_items typq) in
+                let req_pps = List.filter_map doc_inhabited_req typq in
                 string "#[export]" ^^ hardline
                 ^^ group
                      (prefix 2 1
@@ -3283,10 +3274,7 @@ let all_ids pexp =
     }
     pexp
 
-let tyvars_of_typquant (TypQ_aux (tq, _)) =
-  match tq with
-  | TypQ_no_forall -> KidSet.empty
-  | TypQ_tq qs -> List.fold_left KidSet.union KidSet.empty (List.map tyvars_of_quant_item qs)
+let tyvars_of_typquant qs = List.fold_left KidSet.union KidSet.empty (List.map tyvars_of_quant_item qs)
 
 let mk_kid_renames avoid_target_names ids_to_avoid kids =
   let map_id = function Id_aux (Id i, _) -> Some (fix_id avoid_target_names false i) | Id_aux (_, _) -> None in
@@ -3377,7 +3365,7 @@ let doc_funcl_init global proof_mode mutrec rec_opt ?rec_set (FCL_aux (FCL_funcl
 
   (* When printing a function application, we use an instantiation from the type checker.  That will
      use any simple equations in the constraints, so we substitute them here to match. *)
-  let simple_type_equations = Type_check.instantiate_simple_equations (quant_items tq) in
+  let simple_type_equations = Type_check.instantiate_simple_equations tq in
 
   let arg_typs, ret_typ, _ =
     match typ with
@@ -3726,7 +3714,7 @@ let doc_regtype_fields global (tname, (n1, n2, fields)) =
 
 (* Remove some type variables in a similar fashion to merge_kids_atoms *)
 let doc_axiom_typschm typ_env is_monadic l (tqs, typ) =
-  let simple_type_equations = Type_check.instantiate_simple_equations (quant_items tqs) in
+  let simple_type_equations = Type_check.instantiate_simple_equations tqs in
   let typ = Type_check.subst_unifiers simple_type_equations typ in
   let typ_env = Env.add_typquant l tqs typ_env in
   match typ with
@@ -3745,22 +3733,14 @@ let doc_axiom_typschm typ_env is_monadic l (tqs, typ) =
       let used = if is_number ret_ty then used else KidSet.union used (tyvars_of_typ ret_ty) in
       let kopts, constraints = quant_split tqs in
       let tqs =
-        match tqs with
-        | TypQ_aux (TypQ_tq qs, l) ->
-            TypQ_aux
-              ( TypQ_tq
-                  (List.filter
-                     (function
-                       | QI_aux (QI_id kopt, _) ->
-                           let kid = kopt_kid kopt in
-                           KidSet.mem kid used && not (KidSet.mem kid args)
-                       | _ -> true
-                       )
-                     qs
-                  ),
-                l
-              )
-        | _ -> tqs
+        List.filter
+          (function
+            | QI_aux (QI_id kopt, _) ->
+                let kid = kopt_kid kopt in
+                KidSet.mem kid used && not (KidSet.mem kid args)
+            | _ -> true
+            )
+          tqs
       in
       let typ_count = ref 0 in
       let fresh_var () =
@@ -4368,7 +4348,7 @@ end = struct
           )
           type_map;
         string "}.";
-        doc_field_updates ctxt (mk_typquant []) (mk_id "regstate")
+        doc_field_updates ctxt [] (mk_id "regstate")
           (List.map (fun (typ_id, typ) -> ((state_field_name typ_id, typ), mk_def_annot (id_loc typ_id) ())) type_map);
         empty;
         (* A record literal can cause problems with record type inference (e.g., if there are no registers) *)
@@ -4525,7 +4505,7 @@ end = struct
     let generic_fns_for_record typ_id quant fields =
       let type_id_pp = doc_id_type global None typ_id in
       let typq_pps = doc_typquant_items bare_ctxt Env.empty braces quant in
-      let full_type_pps = type_id_pp :: List.filter_map (quant_item_id_name bare_ctxt) (quant_items quant) in
+      let full_type_pps = type_id_pp :: List.filter_map (quant_item_id_name bare_ctxt) quant in
       let full_type_pp = separate space full_type_pps in
       let type_for_class = if List.length full_type_pps > 1 then parens full_type_pp else full_type_pp in
       let type_reqs class_str =
@@ -4535,7 +4515,7 @@ end = struct
                 Some (string "`{" ^^ string class_str ^^ space ^^ doc_var bare_ctxt kid ^^ string "}")
             | _ -> None
             )
-          (quant_items quant)
+          quant
       in
       (separate space
       @@ [string "  Definition update_" ^^ type_id_pp ^^ string "_field "]
@@ -4591,7 +4571,7 @@ end = struct
     let generic_fns_for_variant typ_id quant ar =
       let type_id_pp = doc_id_type global None typ_id in
       let typq_pps = doc_typquant_items bare_ctxt Env.empty braces quant in
-      let full_type_pps = type_id_pp :: List.filter_map (quant_item_id_name bare_ctxt) (quant_items quant) in
+      let full_type_pps = type_id_pp :: List.filter_map (quant_item_id_name bare_ctxt) quant in
       let full_type_pp = separate space full_type_pps in
       let type_for_class = if List.length full_type_pps > 1 then parens full_type_pp else full_type_pp in
       let type_reqs classes =
@@ -4605,7 +4585,7 @@ end = struct
                   )
             | _ -> None
             )
-          (quant_items quant)
+          quant
       in
       [
         separate space

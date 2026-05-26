@@ -1,10 +1,19 @@
+open BinNat
+open BvUtil
+open Datatypes
+open ListDef
+open Definitions
 
-module Coq__1 : sig
- type bit =
- | B0
- | B1
-end
-include module type of struct include Coq__1 end
+type bit =
+| B0
+| B1
+
+val bit_to_bool : bit -> bool
+
+module Bits :
+ sig
+  val to_bvn : bit list -> bvn
+ end
 
 module Three :
  sig
@@ -13,7 +22,22 @@ module Three :
   | B1
   | BU
 
-  val from_bit : bit -> ubit
+  val from_bool : bool -> ubit
+
+  val bit_not : ubit -> ubit
+
+  val bit_or : ubit -> ubit -> ubit
+
+  val bit_and : ubit -> ubit -> ubit
+
+  val bit_xor : ubit -> ubit -> ubit
+
+  val bit_add : ubit -> ubit -> ubit * ubit
+
+  val bit_add_carry : ubit -> ubit -> ubit -> ubit * ubit
+
+  val bitlist_add_carry_acc :
+    ubit list -> ubit list -> ubit -> ubit list -> ubit list * ubit
 
   val bit_join : ubit -> ubit -> ubit
 

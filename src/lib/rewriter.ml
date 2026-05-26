@@ -478,21 +478,7 @@ let id_mpat_alg : ('a, 'a mpat option, 'a mpat_aux option) pat_alg =
     p_aux = (fun (pat, annot) -> Option.map (fun pat -> MP_aux (pat, annot)) pat);
   }
 
-type ( 'a,
-       'exp,
-       'exp_aux,
-       'lexp,
-       'lexp_aux,
-       'fexp,
-       'fexp_aux,
-       'opt_default_aux,
-       'opt_default,
-       'pexp,
-       'pexp_aux,
-       'pat,
-       'pat_aux
-     )
-     exp_alg = {
+type ('a, 'exp, 'exp_aux, 'lexp, 'lexp_aux, 'fexp, 'fexp_aux, 'pexp, 'pexp_aux, 'pat, 'pat_aux) exp_alg = {
   e_block : 'exp list -> 'exp_aux;
   e_id : id -> 'exp_aux;
   e_ref : id -> 'exp_aux;
@@ -540,9 +526,6 @@ type ( 'a,
   le_aux : 'lexp_aux * 'a annot -> 'lexp;
   fe_fexp : id * 'exp -> 'fexp_aux;
   fe_aux : 'fexp_aux * 'a annot -> 'fexp;
-  def_val_empty : 'opt_default_aux;
-  def_val_dec : 'exp -> 'opt_default_aux;
-  def_val_aux : 'opt_default_aux * 'a annot -> 'opt_default;
   pat_exp : 'pat * 'exp -> 'pexp_aux;
   pat_when : 'pat * 'exp * 'exp -> 'pexp_aux;
   pat_aux : 'pexp_aux * 'a annot -> 'pexp;
@@ -675,9 +658,6 @@ let id_exp_alg =
     le_aux = (fun (lexp, annot) -> LE_aux (lexp, annot));
     fe_fexp = (fun (id, e) -> FE_fexp (id, e));
     fe_aux = (fun (fexp, annot) -> FE_aux (fexp, annot));
-    def_val_empty = Def_val_empty;
-    def_val_dec = (fun e -> Def_val_dec e);
-    def_val_aux = (fun (defval, aux) -> Def_val_aux (defval, aux));
     pat_exp = (fun (pat, e) -> Pat_exp (pat, e));
     pat_when = (fun (pat, e, e') -> Pat_when (pat, e, e'));
     pat_aux = (fun (pexp, a) -> Pat_aux (pexp, a));
@@ -806,9 +786,6 @@ let compute_exp_alg bot join =
     le_aux = (fun ((vl, lexp), annot) -> (vl, LE_aux (lexp, annot)));
     fe_fexp = (fun (id, (v, e)) -> (v, FE_fexp (id, e)));
     fe_aux = (fun ((vf, fexp), annot) -> (vf, FE_aux (fexp, annot)));
-    def_val_empty = (bot, Def_val_empty);
-    def_val_dec = (fun (v, e) -> (v, Def_val_dec e));
-    def_val_aux = (fun ((v, defval), aux) -> (v, Def_val_aux (defval, aux)));
     pat_exp = (fun ((vp, pat), (v, e)) -> (join vp v, Pat_exp (pat, e)));
     pat_when = (fun ((vp, pat), (v, e), (v', e')) -> (join_list [vp; v; v'], Pat_when (pat, e, e')));
     pat_aux = (fun ((v, pexp), a) -> (v, Pat_aux (pexp, a)));
@@ -892,9 +869,6 @@ let pure_exp_alg bot join =
     le_aux = (fun (vl, annot) -> vl);
     fe_fexp = (fun (id, v) -> v);
     fe_aux = (fun (vf, annot) -> vf);
-    def_val_empty = bot;
-    def_val_dec = (fun v -> v);
-    def_val_aux = (fun (v, aux) -> v);
     pat_exp = (fun (vp, v) -> join vp v);
     pat_when = (fun (vp, v, v') -> join_list [vp; v; v']);
     pat_aux = (fun (v, a) -> v);

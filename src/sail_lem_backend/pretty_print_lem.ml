@@ -1202,9 +1202,9 @@ let rec doc_range_lem (BF_aux(r,_)) = match r with
   | BF_concat(ir1,ir2) -> (doc_range ir1) ^^ comma ^^ (doc_range ir2)
  *)
 
-let doc_typquant_sorts idpp (TypQ_aux (typq, _)) =
-  match typq with
-  | TypQ_tq qs ->
+let doc_typquant_sorts idpp = function
+  | [] -> empty
+  | qs ->
       let q (QI_aux (qi, _)) =
         match qi with
         | QI_id (KOpt_aux (KOpt_kind (K_aux (K_int, _), kid), _)) -> Some (string "`len`")
@@ -1221,7 +1221,6 @@ let doc_typquant_sorts idpp (TypQ_aux (typq, _)) =
         string "declare isabelle target_sorts " ^^ idpp ^^ space ^^ separate space (equals :: qs_pp) ^^ hardline
       )
       else empty
-  | TypQ_no_forall -> empty
 
 let doc_sia_id (Id_aux (i, _)) =
   match i with
@@ -1235,15 +1234,14 @@ let typq_to_print params_to_print id typq =
   | None -> typq
   | Some is -> (
       match typq with
-      | TypQ_aux (TypQ_no_forall, _) -> typq
-      | TypQ_aux (TypQ_tq qs, l) ->
+      | [] -> typq
+      | qs ->
           List.fold_left
             (fun (t, i) h ->
               if is_quant_kopt h then if Util.IntSet.mem i is then (h :: t, i + 1) else (t, i + 1) else (t, i)
             )
             ([], 0) qs
           |> fst |> List.rev
-          |> fun qs -> TypQ_aux (TypQ_tq qs, l)
     )
 
 let doc_typdef_lem params_to_print env (TD_aux (td, (l, annot))) =

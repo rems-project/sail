@@ -51,6 +51,7 @@ open Ast_util
 open Value
 
 open Extraction.ValueType
+open Extraction.TypeAnnot.Types
 
 module Big_int = Nat_big_num
 module Document = Pretty_print_sail.Document
@@ -237,7 +238,7 @@ let fallthrough =
   let open Type_check in
   let open Type_error in
   try
-    let env = initial_env |> Env.add_scattered_variant (mk_id "exception") (mk_typquant []) in
+    let env = initial_env |> Env.add_scattered_variant (mk_id "exception") [] in
     check_case env exc_typ
       (mk_pexp (Pat_exp (mk_pat (P_id (mk_id "exn")), mk_exp (E_throw (mk_exp (E_id (mk_id "exn")))))))
       unit_typ

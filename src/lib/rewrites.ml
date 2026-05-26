@@ -1984,9 +1984,7 @@ let rewrite_split_fun_ctor_pats fun_name effect_info env ast =
         | (FCL_aux (FCL_funcl (_, pexp), _), ctor_typq, ctor_typ) :: _ ->
             let pat, _, exp, _ = destruct_pexp pexp in
             let ctor_quants args_typ =
-              List.filter
-                (fun qi -> KOptSet.subset (kopts_of_quant_item qi) (kopts_of_typ args_typ))
-                (quant_items ctor_typq)
+              List.filter (fun qi -> KOptSet.subset (kopts_of_quant_item qi) (kopts_of_typ args_typ)) ctor_typq
             in
             begin
               match ctor_typ with
@@ -2008,9 +2006,7 @@ let rewrite_split_fun_ctor_pats fun_name effect_info env ast =
         | Typ_aux (Typ_tuple args_typs, _) -> function_typ args_typs ret_typ
         | _ -> function_typ [args_typ] ret_typ
       in
-      let val_spec =
-        VS_aux (VS_val_spec (mk_typschm (mk_typquant quants) fun_typ, id, None), (Parse_ast.Unknown, empty_tannot))
-      in
+      let val_spec = VS_aux (VS_val_spec (mk_typschm quants fun_typ, id, None), (Parse_ast.Unknown, empty_tannot)) in
       let fundef = FD_aux (FD_function (r_o, t_o, funcls), fdannot) in
       let def_annot = mk_def_annot (gen_loc def_annot.loc) def_annot.env in
       (DEF_aux (DEF_val val_spec, def_annot) :: valdefs, DEF_aux (DEF_fundef fundef, def_annot) :: fundefs)
@@ -2030,7 +2026,7 @@ let rewrite_split_fun_ctor_pats fun_name effect_info env ast =
             tq
         | _ -> tq
       )
-      (mk_typquant []) ast.defs
+      [] ast.defs
   in
   let defs, new_effect_info =
     List.fold_right
@@ -2157,11 +2153,7 @@ and simple_typ_arg (A_aux (typ_arg_aux, l)) =
 (* This pass aims to remove all the Num quantifiers from the specification. *)
 let rewrite_simple_types env ast =
   let is_simple = function QI_aux (QI_id kopt, annot) when is_typ_kopt kopt -> true | _ -> false in
-  let simple_typquant (TypQ_aux (tq_aux, annot)) =
-    match tq_aux with
-    | TypQ_no_forall -> TypQ_aux (TypQ_no_forall, annot)
-    | TypQ_tq quants -> TypQ_aux (TypQ_tq (List.filter (fun q -> is_simple q) quants), annot)
-  in
+  let simple_typquant quants = List.filter (fun q -> is_simple q) quants in
   let simple_typschm (TypSchm_aux (TypSchm_ts (typq, typ), annot)) =
     TypSchm_aux (TypSchm_ts (simple_typquant typq, simple_typ typ), annot)
   in

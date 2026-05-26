@@ -39,16 +39,15 @@ type 'v match_result =
 val merge_match_result :
   value match_result -> value match_result -> value match_result
 
-val empty_bindings : value binding IdMap.t
+val empty_bindings : 'a1 binding IdMap.t
 
-val simple_match : value match_result
+val simple_match : 'a1 match_result
 
-val simple_match_when : bool -> value match_result
+val simple_match_when : bool -> 'a1 match_result
 
-val add_match :
-  id -> value binding -> value match_result -> value match_result
+val add_match : id -> 'a1 binding -> 'a1 match_result -> 'a1 match_result
 
-val neg_match : value match_result -> value match_result
+val neg_match : 'a1 match_result -> 'a1 match_result
 
 val or_match : value match_result -> value match_result -> value match_result
 

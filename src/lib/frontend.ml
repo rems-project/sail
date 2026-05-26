@@ -111,10 +111,7 @@ let instantiate_abstract_types tgt config insts ast =
     let prev_env_update = !env_update in
     env_update :=
       Type_check.Env.(
-        fun env ->
-          prev_env_update env |> remove_abstract_typ id
-          |> add_typ_synonym id (mk_empty_typquant ~loc:(gen_loc l)) arg
-          |> simplify_constraints
+        fun env -> prev_env_update env |> remove_abstract_typ id |> add_typ_synonym id [] arg |> simplify_constraints
       )
   in
   let instantiate = function
@@ -123,10 +120,7 @@ let instantiate_abstract_types tgt config insts ast =
         | Some arg_fun ->
             let arg = arg_fun (unaux_kind kind) in
             add_to_env_update l id arg;
-            DEF_aux
-              ( DEF_type (TD_aux (TD_abbrev (id, mk_empty_typquant ~loc:(gen_loc l), arg), (l, Type_check.empty_tannot))),
-                def_annot
-              )
+            DEF_aux (DEF_type (TD_aux (TD_abbrev (id, [], arg), (l, Type_check.empty_tannot))), def_annot)
         | None -> def
       )
     | DEF_aux (DEF_type (TD_aux (TD_abstract (id, kind, TDC_key key), (l, _))), def_annot) as def -> (
@@ -135,10 +129,7 @@ let instantiate_abstract_types tgt config insts ast =
         | Some json ->
             let arg = instantiate_from_json ~at:l json (unaux_kind kind) in
             add_to_env_update l id arg;
-            DEF_aux
-              ( DEF_type (TD_aux (TD_abbrev (id, mk_empty_typquant ~loc:(gen_loc l), arg), (l, Type_check.empty_tannot))),
-                def_annot
-              )
+            DEF_aux (DEF_type (TD_aux (TD_abbrev (id, [], arg), (l, Type_check.empty_tannot))), def_annot)
         | None -> def
       )
     | def -> def
