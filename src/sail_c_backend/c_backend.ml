@@ -187,6 +187,14 @@ let sail_convert_of ?(prefix = "") ?(suffix = "") ctyp1 ctyp2 fmt =
   let open Printf in
   ksprintf (fun s -> ksprintf string "%sCONVERT_OF(%s, %s)(%s)%s" prefix ctyp1 ctyp2 s suffix) fmt
 
+let sail_serialize ?(prefix = "") ?(suffix = "") ctyp fmt =
+  let open Printf in
+  ksprintf (fun s -> ksprintf string "%sSERIALIZE(%s)(%s)%s" prefix ctyp s suffix) fmt
+
+let sail_deserialize ?(prefix = "") ?(suffix = "") ctyp fmt =
+  let open Printf in
+  ksprintf (fun s -> ksprintf string "%sDESERIALIZE(%s)(%s)%s" prefix ctyp s suffix) fmt
+
 let c_function ~return decl body =
   string return ^^ space ^^ decl ^^ space ^^ nest 2 (lbrace ^^ hardline ^^ separate hardline body) ^^ hardline ^^ rbrace
 
@@ -1665,6 +1673,20 @@ module Codegen (Config : CODEGEN_CONFIG) = struct
           let name = sgen_id id in
           string (Printf.sprintf "static enum %s UNDEFINED(%s)(unit u) { return %s; }" name name (sgen_id first_id))
         in
+
+        let enum_serialize =
+          c_function ~return:"static void"
+            (sail_serialize enum_name "write_callback* write, void* user_data, enum %s op" enum_name)
+            [c_stmt "/* TODO: serialise the enum using write() */"]
+        in
+        let enum_deserialize =
+          c_function ~return:"static void"
+            (sail_deserialize enum_name "read_callback* read, void* user_data, enum %s op" enum_name)
+            [c_stmt "/* TODO: deserialise the enum using read() */"]
+        in
+
+        (* TODO: Save checksum of all global variables and their types. Simplest way to do this
+          is to collect them all and then pretty-print the Sail, then hash that. *)
         [
           TypeDeclaration
             (string (Printf.sprintf "// enum %s" (string_of_id id))
@@ -1674,9 +1696,12 @@ module Codegen (Config : CODEGEN_CONFIG) = struct
             );
           StaticFunctionDefinition enum_eq;
           StaticFunctionDefinition enum_undefined;
+          StaticFunctionDefinition enum_serialize;
+          StaticFunctionDefinition enum_deserialize;
         ]
     | CTD_enum (id, []) -> c_error ("Cannot compile empty enum " ^ string_of_id id)
     | CTD_abbrev (id, ctyp) ->
+        (* TODO: Do we need to serialize/deserialize these? *)
         [
           TypeDeclaration
             (ksprintf string "// type abbreviation %s" (string_of_id id)
@@ -1716,6 +1741,18 @@ module Codegen (Config : CODEGEN_CONFIG) = struct
             (sail_equal (sgen_id id) "struct %s op1, struct %s op2" (sgen_id id) (sgen_id id))
             [string "return" ^^ space ^^ separate_map (string " && ") field_eq ctors ^^ semi]
         in
+
+        let struct_serialize =
+          c_function ~return:"static void"
+            (sail_serialize struct_name "write_callback* write, void* user_data, struct %s op" struct_name)
+            [c_stmt "/* TODO: serialise the struct using write() */*/"]
+        in
+        let struct_deserialize =
+          c_function ~return:"static void"
+            (sail_deserialize struct_name "read_callback* read, void* user_data, struct %s op" struct_name)
+            [c_stmt "/* TODO: deserialise the enum using read() */"]
+        in
+
         (* Generate the struct and add the generated functions *)
         let struct_field (id, ctyp) = string (sgen_ctyp ctyp) ^^ space ^^ codegen_id id in
 
@@ -1736,8 +1773,13 @@ module Codegen (Config : CODEGEN_CONFIG) = struct
               ]
             else []
           )
-        @ [StaticFunctionDefinition struct_eq]
+        @ [
+            StaticFunctionDefinition struct_eq;
+            StaticFunctionDefinition struct_serialize;
+            StaticFunctionDefinition struct_deserialize;
+          ]
     | CTD_variant (id, _, tus) ->
+        let variant_name = sgen_id id in
         let codegen_tu (ctor_id, ctyp) =
           separate space [string "struct"; lbrace; string (sgen_ctyp ctyp); codegen_id ctor_id ^^ semi; rbrace]
         in
@@ -1757,9 +1799,9 @@ module Codegen (Config : CODEGEN_CONFIG) = struct
           if cases = [] then empty else c_switch ~default (ksprintf string "(%skind)" v) (List.rev cases)
         in
         let codegen_init =
-          let n = sgen_id id in
           let ctor_id, ctyp = List.hd tus in
-          c_function ~return:"static void" (sail_create n "struct %s *op" n)
+          c_function ~return:"static void"
+            (sail_create variant_name "struct %s *op" variant_name)
             ([string (Printf.sprintf "op->kind = Kind_%s;" (sgen_id ctor_id))]
             @
             if not (is_stack_ctyp ctx ctyp) then
@@ -1768,16 +1810,16 @@ module Codegen (Config : CODEGEN_CONFIG) = struct
             )
         in
         let codegen_reinit =
-          let n = sgen_id id in
-          c_function ~return:"static void" (sail_recreate n "struct %s *op" n) []
+          c_function ~return:"static void" (sail_recreate variant_name "struct %s *op" variant_name) []
         in
         let clear_field v ctor_id ctyp =
           if is_stack_ctyp ctx ctyp then None
           else Some (sail_kill ~suffix:";" (sgen_ctyp_name ctyp) "&%s->variants.%s" v (sgen_id ctor_id))
         in
         let codegen_clear =
-          let n = sgen_id id in
-          c_function ~return:"static void" (sail_kill n "struct %s *op" n) [each_ctor "op->" (clear_field "op") tus]
+          c_function ~return:"static void"
+            (sail_kill variant_name "struct %s *op" variant_name)
+            [each_ctor "op->" (clear_field "op") tus]
         in
         let codegen_ctor (ctor_id, ctyp) =
           let ctor_args = Printf.sprintf "%s op" (sgen_const_ctyp ctyp) in
@@ -1796,7 +1838,6 @@ module Codegen (Config : CODEGEN_CONFIG) = struct
             )
         in
         let codegen_setter =
-          let n = sgen_id id in
           let set_field ctor_id ctyp =
             Some
               ( if is_stack_ctyp ctx ctyp then
@@ -1808,7 +1849,7 @@ module Codegen (Config : CODEGEN_CONFIG) = struct
               )
           in
           c_function ~return:"static void"
-            (sail_copy n "struct %s *rop, struct %s op" n n)
+            (sail_copy variant_name "struct %s *rop, struct %s op" variant_name variant_name)
             [
               each_ctor "rop->" (clear_field "rop") tus ^^ semi;
               c_stmt "rop->kind = op.kind";
@@ -1837,9 +1878,22 @@ module Codegen (Config : CODEGEN_CONFIG) = struct
             (* This should be unreachable. *)
             ^^ c_return (string "false")
           in
-          let n = sgen_id id in
-          c_function ~return:"static bool" (sail_equal n "struct %s op1, struct %s op2" n n) [codegen_eq_tests tus]
+          c_function ~return:"static bool"
+            (sail_equal variant_name "struct %s op1, struct %s op2" variant_name variant_name)
+            [codegen_eq_tests tus]
         in
+
+        let codegen_serialize =
+          c_function ~return:"static void"
+            (sail_serialize variant_name "write_callback* write, void* user_data, struct %s op" variant_name)
+            [c_stmt "/* TODO: serialise the variant using write() */"]
+        in
+        let codegen_deserialize =
+          c_function ~return:"static void"
+            (sail_deserialize variant_name "read_callback* read, void* user_data, struct %s op" variant_name)
+            [c_stmt "/* TODO: deserialise the variant using read() */"]
+        in
+
         [
           TypeDeclaration
             (string (Printf.sprintf "// union %s" (string_of_id id))
@@ -1869,6 +1923,8 @@ module Codegen (Config : CODEGEN_CONFIG) = struct
           StaticFunctionDefinition codegen_clear;
           StaticFunctionDefinition codegen_setter;
           StaticFunctionDefinition codegen_eq;
+          StaticFunctionDefinition codegen_serialize;
+          StaticFunctionDefinition codegen_deserialize;
         ]
         @ List.map (fun tu -> StaticFunctionDefinition (codegen_ctor tu)) tus
         (* If this is the exception type, then we setup up some global variables to deal with exceptions. *)
@@ -2654,6 +2710,52 @@ module Codegen (Config : CODEGEN_CONFIG) = struct
         );
     ]
 
+  (* Generate save and restore functions that serialise/deserialise the
+     model state to a buffer. *)
+  let gen_snapshot_functions ctx cdefs =
+    (* TODO: Use sail_serialize/sail_deserialize here. *)
+    let codegen_serialise_def ctx (CDEF_aux (aux, _)) =
+      match aux with
+      | CDEF_register (id, ctyp, _) ->
+          Some (ksprintf string "SERIALIZE(%s)(write, user_data, %s);" (sgen_ctyp_name ctyp) (sgen_name id))
+      | _ -> None
+    in
+    let codegen_deserialise_def ctx (CDEF_aux (aux, _)) =
+      match aux with
+      | CDEF_register (id, ctyp, _) ->
+          Some (ksprintf string "DESERIALIZE(%s)(read, user_data, %s);" (sgen_ctyp_name ctyp) (sgen_name id))
+      | _ -> None
+    in
+
+    let serialize_declaration : document =
+      string "void model_serialize(write_callback* write, void* user_data)" ^^ semi ^^ hardline
+    in
+    let deserialize_declaration : document =
+      string "void model_deserialize(write_callback* read, void* user_data)" ^^ semi ^^ hardline
+    in
+
+    (* TODO: Add checksum of all registers and the types they use. This can be done
+    by finding the relevant code, pretty-printing it and then hashing that. *)
+    let serialize_definition : document =
+      string "void model_serialize(write_callback* write, void* user_data)"
+      ^^ lbrace
+      ^^ nest 2 (separate hardline (List.filter_map (codegen_serialise_def ctx) cdefs))
+      ^^ hardline ^^ rbrace ^^ hardline
+    in
+    let deserialize_definition : document =
+      string "void model_deserialize(read_callback* read, void* user_data)"
+      ^^ lbrace
+      ^^ nest 2 (separate hardline (List.filter_map (codegen_deserialise_def ctx) cdefs))
+      ^^ hardline ^^ rbrace ^^ hardline
+    in
+
+    [
+      FunctionDeclaration serialize_declaration;
+      FunctionDefinition serialize_definition;
+      FunctionDeclaration deserialize_declaration;
+      FunctionDefinition deserialize_definition;
+    ]
+
   let compile_ast env effect_info basename ast =
     try
       let cdefs, ctx = jib_of_ast env effect_info ast in
@@ -2671,7 +2773,9 @@ module Codegen (Config : CODEGEN_CONFIG) = struct
 
       let docs = List.map (codegen_def ctx) cdefs |> List.concat in
 
-      let docs = docs @ gen_model_init_fini ctx cdefs @ gen_unit_test_defs ctx cdefs in
+      let docs = docs @ gen_model_init_fini ctx cdefs in
+      let docs = docs @ gen_unit_test_defs ctx cdefs in
+      let docs = docs @ gen_snapshot_functions ctx cdefs in
       let docs = if Config.cpp then docs @ gen_constructor_destructor ctx cdefs else docs in
 
       let docs_by_type = docs |> merge_file_docs in
