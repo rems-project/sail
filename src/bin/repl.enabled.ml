@@ -60,7 +60,7 @@ type mode = Evaluation of frame | Normal
 
 type display_options = { clear : bool; registers : IdSet.t }
 
-type istate = {
+type repl_state = {
   ctx : Initial_check.ctx;
   ast : Type_check.typed_ast;
   effect_info : Effects.side_effect_info;
@@ -74,18 +74,18 @@ type istate = {
   config : Yojson.Safe.t option;
 }
 
-let shrink_istate istate : Interactive.State.istate =
+let shrink_repl_state rstate : Interactive.State.istate =
   {
-    ctx = istate.ctx;
-    ast = istate.ast;
-    effect_info = istate.effect_info;
-    env = istate.env;
-    options = istate.options;
-    default_sail_dir = istate.default_sail_dir;
-    config = istate.config;
+    ctx = rstate.ctx;
+    ast = rstate.ast;
+    effect_info = rstate.effect_info;
+    env = rstate.env;
+    options = rstate.options;
+    default_sail_dir = rstate.default_sail_dir;
+    config = rstate.config;
   }
 
-let initial_istate config options ctx env effect_info ast =
+let initial_repl_state config options ctx env effect_info ast =
   {
     ctx;
     ast;
@@ -100,9 +100,9 @@ let initial_istate config options ctx env effect_info ast =
     config;
   }
 
-let prompt istate =
-  if not (IdSet.is_empty istate.display_options.registers) then (
-    let _, gstate = istate.state in
+let prompt rstate =
+  if not (IdSet.is_empty rstate.display_options.registers) then (
+    let _, gstate = rstate.state in
     print_endline ("---- registers ----" |> Util.cyan |> Util.clear);
     List.iter
       (fun reg ->
@@ -111,22 +111,22 @@ let prompt istate =
             print_endline (string_of_id reg ^ " = " ^ (Value.string_of_value value |> Util.green |> Util.clear))
         | None -> print_endline ("No register " ^ string_of_id reg)
       )
-      (IdSet.elements istate.display_options.registers)
+      (IdSet.elements rstate.display_options.registers)
   );
   let l = Sail_file.repl_prompt_line () in
-  match istate.mode with Normal -> Printf.sprintf "REPL:%d> " l | Evaluation _ -> Printf.sprintf "REPL:%d eval> " l
+  match rstate.mode with Normal -> Printf.sprintf "REPL:%d> " l | Evaluation _ -> Printf.sprintf "REPL:%d eval> " l
 
-let mode_clear istate =
-  match istate.mode with
+let mode_clear rstate =
+  match rstate.mode with
   | Normal -> ()
-  | Evaluation _ -> if istate.display_options.clear then LNoise.clear_screen () else ()
+  | Evaluation _ -> if rstate.display_options.clear then LNoise.clear_screen () else ()
 
-let rec user_input istate callback =
-  match LNoise.linenoise (prompt istate) with
+let rec user_input rstate callback =
+  match LNoise.linenoise (prompt rstate) with
   | None -> ()
   | Some line ->
-      mode_clear istate;
-      user_input (callback istate line) callback
+      mode_clear rstate;
+      user_input (callback rstate line) callback
 
 let color_command cmd = Util.(cmd |> green |> clear)
 let color_arg arg = Util.(arg |> yellow |> clear)
@@ -155,8 +155,8 @@ let sail_logo =
 
 let sep = "-----------------------------------------------------" |> Util.blue |> Util.clear
 
-let print_program istate =
-  match istate.mode with
+let print_program rstate =
+  match rstate.mode with
   | Normal -> ()
   | Evaluation (Step (out, _, _, stack))
   | Evaluation (Effect_request (out, _, stack, _))
@@ -170,137 +170,214 @@ let print_program istate =
   | Evaluation (Done (_, v)) -> print_endline (Value.string_of_value v |> Util.green |> Util.clear)
   | Evaluation _ -> ()
 
-let rec run istate =
-  match istate.mode with
-  | Normal -> istate
+let rec run rstate =
+  match rstate.mode with
+  | Normal -> rstate
   | Evaluation frame -> begin
       match frame with
       | Done (state, v) ->
           print_endline ("Result = " ^ Value.string_of_value v);
-          { istate with mode = Normal; state }
+          { rstate with mode = Normal; state }
       | Fail (_, _, _, _, msg) ->
           print_endline ("Error: " ^ msg);
-          { istate with mode = Normal }
+          { rstate with mode = Normal }
       | Step _ ->
-          let istate =
-            try { istate with mode = Evaluation (eval_frame frame) }
+          let rstate =
+            try { rstate with mode = Evaluation (eval_frame frame) }
             with Failure str ->
               print_endline str;
-              { istate with mode = Normal }
+              { rstate with mode = Normal }
           in
-          run istate
+          run rstate
       | Break frame ->
           print_endline "Breakpoint";
-          { istate with mode = Evaluation frame }
+          { rstate with mode = Evaluation frame }
       | Effect_request (out, state, stack, eff) ->
-          let istate =
-            try { istate with mode = Evaluation (!Interpreter.effect_interp out state stack eff) }
+          let rstate =
+            try { rstate with mode = Evaluation (!Interpreter.effect_interp out state stack eff) }
             with Failure str ->
               print_endline str;
-              { istate with mode = Normal }
+              { rstate with mode = Normal }
           in
-          run istate
+          run rstate
     end
 
-let rec run_function istate depth =
-  let run_function' istate stack =
+let rec run_function rstate depth =
+  let run_function' rstate stack =
     match depth with
-    | None -> run_function istate (Some (List.length stack))
-    | Some n -> if List.compare_length_with stack n >= 0 then run_function istate depth else istate
+    | None -> run_function rstate (Some (List.length stack))
+    | Some n -> if List.compare_length_with stack n >= 0 then run_function rstate depth else rstate
   in
-  match istate.mode with
-  | Normal -> istate
+  match rstate.mode with
+  | Normal -> rstate
   | Evaluation frame -> begin
       match frame with
       | Done (state, v) ->
           print_endline ("Result = " ^ Value.string_of_value v);
-          { istate with mode = Normal; state }
+          { rstate with mode = Normal; state }
       | Fail (_, _, _, _, msg) ->
           print_endline ("Error: " ^ msg);
-          { istate with mode = Normal }
+          { rstate with mode = Normal }
       | Step (_, _, _, stack) ->
-          let istate =
-            try { istate with mode = Evaluation (eval_frame frame) }
+          let rstate =
+            try { rstate with mode = Evaluation (eval_frame frame) }
             with Failure str ->
               print_endline str;
-              { istate with mode = Normal }
+              { rstate with mode = Normal }
           in
-          run_function' istate stack
+          run_function' rstate stack
       | Break frame ->
           print_endline "Breakpoint";
-          { istate with mode = Evaluation frame }
+          { rstate with mode = Evaluation frame }
       | Effect_request (out, state, stack, eff) ->
-          let istate =
-            try { istate with mode = Evaluation (!Interpreter.effect_interp out state stack eff) }
+          let rstate =
+            try { rstate with mode = Evaluation (!Interpreter.effect_interp out state stack eff) }
             with Failure str ->
               print_endline str;
-              { istate with mode = Normal }
+              { rstate with mode = Normal }
           in
-          run_function' istate stack
+          run_function' rstate stack
     end
 
-let rec run_steps istate n =
-  match istate.mode with
-  | _ when n <= 0 -> istate
-  | Normal -> istate
+let rec run_steps rstate n =
+  match rstate.mode with
+  | _ when n <= 0 -> rstate
+  | Normal -> rstate
   | Evaluation frame -> begin
       match frame with
       | Done (state, v) ->
           print_endline ("Result = " ^ Value.string_of_value v);
-          { istate with mode = Normal; state }
+          { rstate with mode = Normal; state }
       | Fail (_, _, _, _, msg) ->
           print_endline ("Error: " ^ msg);
-          { istate with mode = Normal }
+          { rstate with mode = Normal }
       | Step (_, _, _, _) ->
-          let istate =
-            try { istate with mode = Evaluation (eval_frame frame) }
+          let rstate =
+            try { rstate with mode = Evaluation (eval_frame frame) }
             with Failure str ->
               print_endline str;
-              { istate with mode = Normal }
+              { rstate with mode = Normal }
           in
-          run_steps istate (n - 1)
+          run_steps rstate (n - 1)
       | Break frame ->
           print_endline "Breakpoint";
-          { istate with mode = Evaluation frame }
+          { rstate with mode = Evaluation frame }
       | Effect_request (out, state, stack, eff) ->
-          let istate =
-            try { istate with mode = Evaluation (!Interpreter.effect_interp out state stack eff) }
+          let rstate =
+            try { rstate with mode = Evaluation (!Interpreter.effect_interp out state stack eff) }
             with Failure str ->
               print_endline str;
-              { istate with mode = Normal }
+              { rstate with mode = Normal }
           in
-          run_steps istate (n - 1)
+          run_steps rstate (n - 1)
     end
 
-let help =
+type repl_action = string -> Lexing.position -> string -> repl_state -> repl_state
+
+type repl_command = { commands : string list; help : string; arg_help : string option; repl_action : repl_action }
+
+let repl_commands =
+  [
+    {
+      commands = [":n"; ":normal"];
+      help = "Exit evaluation mode back to normal mode.";
+      arg_help = None;
+      repl_action = (fun _ _ _ rstate -> { rstate with mode = Normal });
+    };
+    {
+      commands = [":clear"];
+      help = "Set whether to clear the screen or not in evaluation mode.";
+      arg_help = Some "(on|off)";
+      repl_action =
+        (fun _ _ arg rstate ->
+          if arg = "on" || arg = "true" then
+            { rstate with display_options = { rstate.display_options with clear = true } }
+          else if arg = "off" || arg = "false" then
+            { rstate with display_options = { rstate.display_options with clear = false } }
+          else (
+            print_endline "Invalid argument for :clear, expected either :clear on or :clear off";
+            rstate
+          )
+        );
+    };
+    {
+      commands = [":reset"];
+      help = "Reset the interpreter state.";
+      arg_help = None;
+      repl_action = (fun _ _ _ rstate -> { rstate with state = initial_state rstate.ast rstate.env !Value.primops });
+    };
+    {
+      commands = [":show_register"; ":show_registers"];
+      help = "Print the value of the given registers above the prompt.";
+      arg_help = Some "<register1> <register2> ...";
+      repl_action =
+        (fun _ _ arg rstate ->
+          let args = Str.split (Str.regexp " +") arg in
+          List.fold_left
+            (fun rstate arg ->
+              let display_options = rstate.display_options in
+              let display_options =
+                { display_options with registers = IdSet.add (mk_id arg) display_options.registers }
+              in
+              { rstate with display_options }
+            )
+            rstate args
+        );
+    };
+    {
+      commands = [":hide_register"; ":hide_registers"];
+      help =
+        Printf.sprintf "Do not print the value of the given registers above the prompt, undoing the action of %s"
+          (color_command ":show_register");
+      arg_help = Some "<register1> <register2> ...";
+      repl_action =
+        (fun _ _ arg rstate ->
+          let args = Str.split (Str.regexp " +") arg in
+          List.fold_left
+            (fun rstate arg ->
+              let display_options = rstate.display_options in
+              let reg = mk_id arg in
+              if IdSet.mem reg display_options.registers then (
+                let display_options =
+                  { display_options with registers = IdSet.remove (mk_id arg) display_options.registers }
+                in
+                { rstate with display_options }
+              )
+              else (
+                print_endline ("Register " ^ arg ^ " is not being displayed");
+                rstate
+              )
+            )
+            rstate args
+        );
+    };
+  ]
+
+let help cmd =
   let open Printf in
-  let open Util in
-  function
-  | ":commands" -> ":commands - List all available commands."
-  | ":help" ->
-      sprintf ":help %s - Get a description of <command>. Commands are prefixed with a colon, e.g. %s."
-        (color_arg "<command>") (color_command ":help :type")
-  | ":r" | ":run" -> "(:r | :run) - Completely evaluate the currently evaluating expression."
-  | ":reset" -> ":reset - Reset the interpreter state."
-  | ":s" | ":step" -> sprintf "(:s | :step) %s - Perform a number of evaluation steps." (color_arg "<number>")
+  match String.trim cmd with
+  | ":r" | ":run" -> sprintf "%s - Completely evaluate the currently evaluating expression." (color_command cmd)
+  | ":s" | ":step" -> sprintf "%s %s - Perform a number of evaluation steps." (color_command cmd) (color_arg "<number>")
   | ":f" | ":step_function" ->
-      sprintf "(:f | :step_function) - Perform evaluation steps until the currently evaulating function returns."
-  | ":n" | ":normal" -> "(:n | :normal) - Exit evaluation mode back to normal mode."
-  | ":clear" -> sprintf ":clear %s - Set whether to clear the screen or not in evaluation mode." (color_arg "(on|off)")
-  | ":hide_register" | ":hide_registers" ->
-      sprintf ":hide_register %s - Do not print the value of the registers above the prompt."
-        (color_arg "<register1> <register2> ...")
+      sprintf "%s - Perform evaluation steps until the currently evaulating function returns." (color_command cmd)
   | "" ->
       sprintf "Type %s for a list of commands, and %s %s for information about a specific command"
         (color_command ":commands") (color_command ":help") (color_arg "<command>")
-  | cmd -> (
-      match Interactive.get_command cmd with
-      | Some (help_message, action) ->
-          let cmd, args, desc = Interactive.generate_help cmd help_message action in
-          Printf.sprintf "%s %s - %s" cmd args desc
-      | None ->
-          sprintf "Either invalid command passed to help, or no documentation for %s. Try %s." (color_command cmd)
-            (color_command ":help :help")
+  | _ -> (
+      match List.find_opt (fun rcmd -> List.mem cmd rcmd.commands) repl_commands with
+      | Some rcmd ->
+          sprintf "%s %s- %s" (color_command cmd)
+            (match rcmd.arg_help with Some a -> color_arg a ^ " " | None -> "")
+            rcmd.help
+      | None -> (
+          match Interactive.get_command cmd with
+          | Some (help_message, action) ->
+              let cmd, args, desc = Interactive.generate_help cmd help_message action in
+              sprintf "%s %s - %s" cmd args desc
+          | None ->
+              sprintf "Either invalid command passed to help, or no documentation for %s. Try %s." (color_command cmd)
+                (color_command ":help :help")
+        )
     )
 
 type input = Command of string * string * Lexing.position | Expression of string * Lexing.position | Empty
@@ -464,7 +541,7 @@ let () =
   );
 
   (register_command ~name:"bind" ~shortname:"b" ~help:"Declare a variable of a specific type."
-  @@ let@ pos, arg, istate = Arg.Rest "" in
+  @@ let@ pos, arg, istate = Arg.Rest "id : type" in
      match String.split_on_char ':' arg with
      | [v; arg] ->
          let typ = Initial_check.typ_of_string ~inline:(advance_position ~after:1 ~trim:false v pos) arg in
@@ -473,6 +550,42 @@ let () =
          Some { istate with env }
      | _ -> failwith "Invalid arguments for :bind"
   );
+
+  (register_command ~name:"help"
+     ~help:
+       (Printf.sprintf "Get a description of %s. Commands are prefixed with a colon, e.g. %s." (color_arg "<command>")
+          (color_command ":help :type")
+       )
+  @@ let@ command_name = Arg.String "command" in
+     unit_action (fun () -> print_endline (help command_name))
+  );
+
+  register_command ~name:"commands" ~help:"List all available commands"
+  @@ unit_action (fun () ->
+         let format_command (cmd, (help, shortname, action)) =
+           let _, args, _ = Interactive.generate_help cmd help action in
+           match shortname with
+           | Some s -> Printf.sprintf "  %s | %s %s" (color_command (":" ^ s)) (color_command cmd) args
+           | _ -> Printf.sprintf "  %s %s" (color_command cmd) args
+         in
+         let more_commands = List.map format_command (Interactive.all_commands ()) in
+         print_endline "Commands:";
+         List.iter print_endline more_commands;
+         print_endline "";
+         print_endline "When evaluating an expression:";
+         List.iter
+           (fun (s, cmd) -> Printf.ksprintf print_endline "  %s | %s" (color_command s) (color_command cmd))
+           [(":r", ":run"); (":s", ":step"); (":f", ":step_function")];
+         print_endline "";
+         print_endline "REPL control:";
+         List.iter
+           (fun rcmd ->
+             Printf.ksprintf print_endline "  %s%s"
+               (Util.string_of_list " | " color_command rcmd.commands)
+               (match rcmd.arg_help with Some a -> " " ^ color_arg a | None -> "")
+           )
+           repl_commands
+     );
 
   register_command ~name:"rewrite"
     ~help:
@@ -505,7 +618,7 @@ let () =
      | [] -> failwith "Must provide the name of a rewrite, use :list_rewrites for a list of possible rewrites"
 
 (* This function is called on every line of input passed to the interpreter *)
-let handle_input' istate input =
+let handle_input' rstate input =
   LNoise.history_add input |> ignore;
 
   (* Process the input and check if it's a command, a raw expression,
@@ -534,179 +647,116 @@ let handle_input' istate input =
 
   let input = match input with Command (":edit", arg, _) -> editor_command arg | input -> input in
 
-  let handle_command istate cmd arg pos =
-    match cmd with
-    | ":n" | ":normal" -> { istate with mode = Normal }
-    | ":clear" ->
-        if arg = "on" || arg = "true" then
-          { istate with display_options = { istate.display_options with clear = true } }
-        else if arg = "off" || arg = "false" then
-          { istate with display_options = { istate.display_options with clear = false } }
-        else (
-          print_endline "Invalid argument for :clear, expected either :clear on or :clear off";
-          istate
-        )
-    | ":commands" ->
-        let format_command (cmd, (help, shortname, action)) =
-          let _, args, _ = Interactive.generate_help cmd help action in
-          match shortname with
-          | Some s -> Printf.sprintf "  %s | %s %s" (color_command (":" ^ s)) (color_command cmd) args
-          | _ -> Printf.sprintf "  %s %s" (color_command cmd) args
-        in
-        let more_commands = List.map format_command (Interactive.all_commands ()) in
-        print_endline "Commands:";
-        List.iter print_endline more_commands;
-        print_endline "";
-        print_endline "When evaluating an expression:";
-        List.iter
-          (fun (s, cmd) -> Printf.ksprintf print_endline "  %s | %s" (color_command s) (color_command cmd))
-          [(":r", ":run"); (":s", ":step"); (":f", ":step_function"); (":n", ":normal")];
-        print_endline "";
-        print_endline "REPL control:";
-        List.iter
-          (fun cmd -> Printf.ksprintf print_endline "  %s" (color_command cmd))
-          [":clear"; ":help"; ":commands"; ":reset"];
-        istate
-    | ":help" ->
-        print_endline (help arg);
-        istate
-    | ":show_register" | ":show_registers" ->
-        let args = Str.split (Str.regexp " +") arg in
-        List.fold_left
-          (fun istate arg ->
-            let display_options = istate.display_options in
-            let display_options =
-              { display_options with registers = IdSet.add (mk_id arg) display_options.registers }
-            in
-            { istate with display_options }
-          )
-          istate args
-    | ":hide_register" | ":hide_registers" ->
-        let args = Str.split (Str.regexp " +") arg in
-        List.fold_left
-          (fun istate arg ->
-            let display_options = istate.display_options in
-            let reg = mk_id arg in
-            if IdSet.mem reg display_options.registers then (
-              let display_options =
-                { display_options with registers = IdSet.remove (mk_id arg) display_options.registers }
-              in
-              { istate with display_options }
-            )
-            else (
-              print_endline ("Register " ^ arg ^ " is not being displayed");
-              istate
-            )
-          )
-          istate args
-    | ":reset" -> { istate with state = initial_state istate.ast istate.env !Value.primops }
-    | _ -> (
+  let handle_command rstate cmd arg pos =
+    match List.find_opt (fun rcmd -> List.mem cmd rcmd.commands) repl_commands with
+    | Some rcmd -> rcmd.repl_action cmd pos arg rstate
+    | None -> (
         match Interactive.get_command cmd with
         | Some (_, action) ->
-            let res = Interactive.run_action (shrink_istate istate) cmd pos arg action in
-            { istate with ast = res.ast; effect_info = res.effect_info; env = res.env }
+            let res = Interactive.run_action (shrink_repl_state rstate) cmd pos arg action in
+            { rstate with ast = res.ast; effect_info = res.effect_info; env = res.env }
         | None ->
             unrecognised_command cmd;
-            istate
+            rstate
       )
   in
 
-  match istate.mode with
+  match rstate.mode with
   | Normal -> begin
       match input with
-      | Command (cmd, arg, pos) -> handle_command istate cmd arg pos
+      | Command (cmd, arg, pos) -> handle_command rstate cmd arg pos
       | Expression (str, pos) ->
           (* An expression in normal mode is type checked, then puts
                us in evaluation mode. *)
-          let exp = Type_check.infer_exp istate.env (Initial_check.exp_of_string ~inline:pos str) in
-          let istate =
-            { istate with mode = Evaluation (eval_frame (Step (lazy "", istate.state, Monad.pure exp, []))) }
+          let exp = Type_check.infer_exp rstate.env (Initial_check.exp_of_string ~inline:pos str) in
+          let rstate =
+            { rstate with mode = Evaluation (eval_frame (Step (lazy "", rstate.state, Monad.pure exp, []))) }
           in
-          print_program istate;
-          istate
-      | Empty -> istate
+          print_program rstate;
+          rstate
+      | Empty -> rstate
     end
   | Evaluation frame -> begin
       match input with
       | Command (cmd, arg, pos) -> begin
           (* Evaluation mode commands *)
           match cmd with
-          | ":r" | ":run" -> run istate
+          | ":r" | ":run" -> run rstate
           | ":s" | ":step" ->
-              let istate = run_steps istate (int_of_string arg) in
-              print_program istate;
-              istate
+              let rstate = run_steps rstate (int_of_string arg) in
+              print_program rstate;
+              rstate
           | ":f" | ":step_function" ->
-              let istate = run_function istate None in
-              print_program istate;
-              istate
-          | _ -> handle_command istate cmd arg pos
+              let rstate = run_function rstate None in
+              print_program rstate;
+              rstate
+          | _ -> handle_command rstate cmd arg pos
         end
       | Expression _ ->
           print_endline "Already evaluating expression";
-          istate
+          rstate
       | Empty -> begin
           (* Empty input will evaluate one step, or switch back to
              normal mode when evaluation is completed. *)
           match frame with
           | Done (state, v) ->
               print_endline ("Result = " ^ Value.string_of_value v);
-              { istate with mode = Normal; state }
+              { rstate with mode = Normal; state }
           | Fail (_, _, _, _, msg) ->
               print_endline ("Error: " ^ msg);
-              { istate with mode = Normal }
+              { rstate with mode = Normal }
           | Step (_, state, _, _) -> begin
               try
-                let istate = { istate with mode = Evaluation (eval_frame frame); state } in
-                print_program istate;
-                istate
+                let rstate = { rstate with mode = Evaluation (eval_frame frame); state } in
+                print_program rstate;
+                rstate
               with Failure str ->
                 print_endline str;
-                { istate with mode = Normal }
+                { rstate with mode = Normal }
             end
           | Break frame ->
               print_endline "Breakpoint";
-              { istate with mode = Evaluation frame }
+              { rstate with mode = Evaluation frame }
           | Effect_request (out, state, stack, eff) -> begin
               try
-                let istate =
-                  { istate with mode = Evaluation (!Interpreter.effect_interp out state stack eff); state }
+                let rstate =
+                  { rstate with mode = Evaluation (!Interpreter.effect_interp out state stack eff); state }
                 in
-                print_program istate;
-                istate
+                print_program rstate;
+                rstate
               with Failure str ->
                 print_endline str;
-                { istate with mode = Normal }
+                { rstate with mode = Normal }
             end
         end
     end
 
-let handle_input istate input =
-  try handle_input' istate input with
+let handle_input rstate input =
+  try handle_input' rstate input with
   | Failure str ->
       print_endline ("Error: " ^ str);
-      istate
+      rstate
   | Type_error.Type_error (l, err) ->
       let msg, hint = Type_error.string_of_type_error err in
       Reporting.print_type_error ?hint l msg;
-      istate
+      rstate
   | Reporting.Fatal_error err ->
       Reporting.print_error ~interactive:true err;
-      istate
+      rstate
   | exn ->
       print_endline (Printexc.to_string exn);
-      istate
+      rstate
 
 let start_repl ?(banner = true) ?commands:(script = []) ?auto_rewrites:(rewrites = true) ~config ~options ctx env
     effect_info ast =
-  let istate =
+  let rstate =
     if rewrites then (
       let ctx, ast, effect_info, env =
         Rewrites.rewrite ctx effect_info env (Rewrites.instantiate_rewrites Rewrites.rewrites_interpreter) ast
       in
-      initial_istate config options ctx env effect_info ast
+      initial_repl_state config options ctx env effect_info ast
     )
-    else initial_istate config options ctx env effect_info ast
+    else initial_repl_state config options ctx env effect_info ast
   in
 
   LNoise.set_completion_callback (fun line_so_far ln_completions ->
@@ -733,7 +783,7 @@ let start_repl ?(banner = true) ?commands:(script = []) ?auto_rewrites:(rewrites
             |> List.map (fun completion -> line_so_far ^ completion)
             |> List.iter (LNoise.add_completion ln_completions)
         | _ ->
-            IdSet.elements !(istate.vs_ids) |> List.map string_of_id
+            IdSet.elements !(rstate.vs_ids) |> List.map string_of_id
             |> List.filter (fun id -> Str.string_match (Str.regexp_string last_id) id 0)
             |> List.map (fun completion -> line_so_far ^ completion)
             |> List.iter (LNoise.add_completion ln_completions)
@@ -777,10 +827,10 @@ let start_repl ?(banner = true) ?commands:(script = []) ?auto_rewrites:(rewrites
         )
   );
 
-  let istate = List.fold_left handle_input istate script in
+  let rstate = List.fold_left handle_input rstate script in
 
   LNoise.history_load ~filename:"sail_history" |> ignore;
   LNoise.history_set ~max_length:100 |> ignore;
 
   if banner then List.iter print_endline sail_logo;
-  user_input istate handle_input
+  user_input rstate handle_input
