@@ -165,7 +165,7 @@ let add_to_repl_contents ~command =
         add_line_to_repl_contents n line info;
         (n + 1, bol + String.length line)
       )
-      (n, bol) (Util.split_on_char '\n' command)
+      (n, bol) (String.split_on_char '\n' command)
   in
   info.contents.(0) <- Printf.sprintf "%07d,%07d" n' bol';
   (n + 1, bol)

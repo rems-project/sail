@@ -636,9 +636,7 @@ let specialize = specialize_passes (-1)
 
 let () =
   let open Interactive in
-  Action
-    (fun istate ->
-      let ast', env', effect_info' = specialize typ_specialization istate.env istate.ast istate.effect_info in
-      { istate with ast = ast'; env = env'; effect_info = effect_info' }
-    )
-  |> register_command ~name:"specialize" ~help:"Specialize type variables in the AST"
+  register_command ~name:"specialize" ~help:"Specialize type variables in the AST"
+  @@ let@ istate = Arg.Update in
+     let ast', env', effect_info' = specialize typ_specialization istate.env istate.ast istate.effect_info in
+     { istate with ast = ast'; env = env'; effect_info = effect_info' }

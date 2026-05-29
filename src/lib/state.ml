@@ -530,9 +530,11 @@ let register_refs_lem pp_tannot env registers =
 
 let generate_isa_lemmas env defs =
   let rec drop_while f = function x :: xs when f x -> drop_while f xs | xs -> xs in
-  let remove_leading_underscores str = String.concat "_" (drop_while (fun s -> s = "") (Util.split_on_char '_' str)) in
+  let remove_leading_underscores str =
+    String.concat "_" (drop_while (fun s -> s = "") (String.split_on_char '_' str))
+  in
   let remove_trailing_underscores str =
-    Util.split_on_char '_' str |> List.rev |> drop_while (fun s -> s = "") |> List.rev |> String.concat "_"
+    String.split_on_char '_' str |> List.rev |> drop_while (fun s -> s = "") |> List.rev |> String.concat "_"
   in
   let remove_underscores str = remove_leading_underscores (remove_trailing_underscores str) in
   let registers = find_registers defs in

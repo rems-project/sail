@@ -139,43 +139,29 @@ let extract_options () =
 
 let () =
   let open Interactive in
-  ActionUnit (fun _ -> List.iter (fun (name, _) -> print_endline name) (StringMap.bindings !targets))
-  |> register_command ~name:"list_targets" ~help:"list available Sail targets for use with :target";
+  (register_command ~name:"list_targets" ~help:"list available Sail targets for use with :target"
+  @@ let@ _ = Arg.Get in
+     List.iter (fun (name, _) -> print_endline name) (StringMap.bindings !targets)
+  );
 
-  ArgString
-    ( "target",
-      fun name ->
-        Action
-          (fun istate ->
-            match get ~name with
-            | Some tgt ->
-                let rws = rewrites tgt in
-                let ctx, ast, effect_info, env =
-                  Rewrites.rewrite istate.ctx istate.effect_info istate.env rws istate.ast
-                in
-                { istate with ctx; ast; env; effect_info }
-            | None ->
-                print_endline ("No target " ^ name);
-                istate
-          )
-    )
-  |> register_command ~name:"rewrites" ~help:"perform rewrites for a target. See :list_targets for a list of targets";
+  (register_command ~name:"rewrites" ~help:"perform rewrites for a target. See :list_targets for a list of targets"
+  @@ let@ name = Arg.String "target" in
+     let@ istate = Arg.Update in
+     match get ~name with
+     | Some tgt ->
+         let rws = rewrites tgt in
+         let ctx, ast, effect_info, env = Rewrites.rewrite istate.ctx istate.effect_info istate.env rws istate.ast in
+         { istate with ctx; ast; env; effect_info }
+     | None ->
+         print_endline ("No target " ^ name);
+         istate
+  );
 
-  ArgString
-    ( "target",
-      fun name ->
-        ArgString
-          ( "out",
-            fun out ->
-              ActionUnit
-                (fun istate ->
-                  match get ~name with
-                  | Some tgt -> action tgt (Some out) istate
-                  | None -> print_endline ("No target " ^ name)
-                )
-          )
-    )
-  |> register_command ~name:"target"
-       ~help:
-         "invoke Sail target. See :list_targets for a list of targets. out parameter is equivalent to command line -o \
-          option"
+  register_command ~name:"target"
+    ~help:
+      "invoke Sail target. See :list_targets for a list of targets. out parameter is equivalent to command line -o \
+       option"
+  @@ let@ name = Arg.String "target" in
+     let@ out = Arg.String "out" in
+     let@ istate = Arg.Get in
+     match get ~name with Some tgt -> action tgt (Some out) istate | None -> print_endline ("No target " ^ name)
