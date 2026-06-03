@@ -96,7 +96,7 @@ let rec fix_id name =
   match name with
   (* Lean keywords to avoid, to expand as needed *)
   | "_lean_wildcard" -> "_"
-  | "rec" | "def" | "at" | "alias" | "break" | "meta" -> name ^ "'"
+  | "rec" | "def" | "at" | "alias" | "break" | "meta" | "class" -> name ^ "'"
   | "main" ->
       the_main_function_has_been_seen := true;
       "sail_main"
