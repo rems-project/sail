@@ -206,7 +206,7 @@ let rec fix_id avoid remove_tick name =
   | "in" | "let" | "match" | "return" | "then" | "where" | "with" | "by" | "exists" | "exists2" | "using"
   (* other identifiers we shouldn't override *)
   | "assert" | "lsl" | "lsr" | "asr" | "type" | "function" | "raise" | "try" | "check" | "field" | "LT" | "GT" | "EQ"
-  | "Z" | "O" | "R" | "S" | "mod" | "M" | "tt" | "I" | "register_ref" | "vec" | "pair" ->
+  | "Z" | "O" | "R" | "S" | "mod" | "M" | "tt" | "I" | "register_ref" | "vec" | "pair" | "option" | "bool" | "string" ->
       name ^ "'"
   | _ ->
       if StringSet.mem name avoid then name ^ "'"
@@ -246,6 +246,7 @@ let doc_id_type global env (Id_aux (i, _) as id) =
   | Or_bool -> string "or_bool"
   | Id "int" -> string "Z"
   | Id "real" -> string "R"
+  | Id (("option" | "bool" | "string") as s) -> string s
   | Id i when List.mem i !opt_extern_types -> string i
   | Id i when is_shadowed () -> string global.types_mod ^^ dot ^^ string (fix_id global.avoid_target_names false i)
   | Id i -> string (fix_id global.avoid_target_names false i)
