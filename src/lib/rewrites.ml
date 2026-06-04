@@ -75,7 +75,7 @@ let fresh_id_pat pre (l, annot) =
 
 let get_loc_exp (E_aux (_, (l, _))) = l
 
-let gen_vs ~pure (id, spec) = Initial_check.extern_of_string ~pure (mk_id id) spec
+let gen_vs ~pure (id, spec) = Initial_check.extern_of_string ~pure Initial_check.initial_ctx (mk_id id) spec
 
 let simple_annot l typ = (gen_loc l, mk_tannot initial_env typ)
 

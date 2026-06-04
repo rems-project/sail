@@ -123,6 +123,15 @@ module Dom =
   | V_top -> f12
   | V_bot -> f13
 
+  (** val mk_ctor : id_aux -> value list -> value **)
+
+  let mk_ctor s args =
+    V_ctor
+      (singletonM
+        (map_singleton (gmap_partial_alter Aux.eq_eqdec Aux.id_aux_countable)
+          (gmap_empty Aux.eq_eqdec Aux.id_aux_countable))
+        s args)
+
   (** val is_unit : value -> bool **)
 
   let is_unit = function

@@ -322,7 +322,7 @@ let () =
                              failwith
                                (sprintf "Register %s does not have a field %s" (string_of_id reg) (string_of_id field))
                        in
-                       let exp = Initial_check.exp_of_string value in
+                       let exp = Initial_check.exp_of_string istate.ctx value in
                        let exp = check_exp istate.env exp typ in
                        Register_field (reg, field, typ, exp)
                    | _ ->
@@ -333,7 +333,7 @@ let () =
                    let reg = mk_id reg in
                    match Env.lookup_id reg istate.env with
                    | Register typ ->
-                       let exp = Initial_check.exp_of_string value in
+                       let exp = Initial_check.exp_of_string istate.ctx value in
                        let exp = check_exp istate.env exp typ in
                        Register (reg, typ, exp)
                    | _ -> failwith (sprintf "Register %s is not defined in the current environment" (string_of_id reg))
