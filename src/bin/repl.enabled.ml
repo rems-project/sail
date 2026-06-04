@@ -56,7 +56,7 @@ open Reporting.Position
 
 module Callgraph_commands = Callgraph_commands
 
-type mode = Evaluation of frame | Normal
+type mode = Normal | Evaluation of frame | PartialEvaluation of Partial_eval.partial_state
 
 type display_options = { clear : bool; registers : IdSet.t }
 
@@ -114,12 +114,15 @@ let prompt rstate =
       (IdSet.elements rstate.display_options.registers)
   );
   let l = Sail_file.repl_prompt_line () in
-  match rstate.mode with Normal -> Printf.sprintf "REPL:%d> " l | Evaluation _ -> Printf.sprintf "REPL:%d eval> " l
+  match rstate.mode with
+  | Normal -> Printf.sprintf "REPL:%d> " l
+  | Evaluation _ -> Printf.sprintf "REPL:%d eval> " l
+  | PartialEvaluation _ -> Printf.sprintf "REPL:%d partial> " l
 
 let mode_clear rstate =
   match rstate.mode with
   | Normal -> ()
-  | Evaluation _ -> if rstate.display_options.clear then LNoise.clear_screen () else ()
+  | Evaluation _ | PartialEvaluation _ -> if rstate.display_options.clear then LNoise.clear_screen () else ()
 
 let rec user_input rstate callback =
   match LNoise.linenoise (prompt rstate) with
@@ -169,10 +172,22 @@ let print_program rstate =
       print_endline (Lazy.force out)
   | Evaluation (Done (_, v)) -> print_endline (Value.string_of_value v |> Util.green |> Util.clear)
   | Evaluation _ -> ()
+  | PartialEvaluation pstate ->
+      let open PPrint in
+      let docs = Partial_eval.(Pretty.docs (partial_state_ctx pstate)) in
+      let num_docs = List.length docs in
+      List.iteri
+        (fun n doc ->
+          let prefix = string_of_int (num_docs - n) ^ ": " in
+          let doc = nest (String.length prefix) (string prefix ^^ doc) in
+          print_endline (Pretty_print_sail.Document.to_string doc)
+        )
+        docs;
+      print_endline (Partial_eval.string_of_focus pstate)
 
 let rec run rstate =
   match rstate.mode with
-  | Normal -> rstate
+  | Normal | PartialEvaluation _ -> rstate
   | Evaluation frame -> (
       match frame with
       | Done (state, v) ->
@@ -209,7 +224,7 @@ let rec run_function rstate depth =
     | Some n -> if List.compare_length_with stack n >= 0 then run_function rstate depth else rstate
   in
   match rstate.mode with
-  | Normal -> rstate
+  | Normal | PartialEvaluation _ -> rstate
   | Evaluation frame -> (
       match frame with
       | Done (state, v) ->
@@ -242,7 +257,7 @@ let rec run_function rstate depth =
 let rec run_steps rstate n =
   match rstate.mode with
   | _ when n <= 0 -> rstate
-  | Normal -> rstate
+  | Normal | PartialEvaluation _ -> rstate
   | Evaluation frame -> (
       match frame with
       | Done (state, v) ->
@@ -349,6 +364,16 @@ let repl_commands =
               )
             )
             rstate args
+        );
+    };
+    {
+      commands = [":partial"; ":p"];
+      help = Printf.sprintf "Begin partially evaluating an expression";
+      arg_help = Some "<expression>";
+      repl_action =
+        (fun _ pos arg rstate ->
+          let exp = Type_check.infer_exp rstate.env (Initial_check.exp_of_string ~inline:pos arg) in
+          { rstate with mode = PartialEvaluation (Partial_eval.from_exp exp) }
         );
     };
   ]
@@ -729,6 +754,17 @@ let handle_input' rstate input =
                 { rstate with mode = Normal }
             )
         )
+    )
+  | PartialEvaluation pstate -> (
+      match input with
+      | Command (cmd, arg, pos) -> handle_command rstate cmd arg pos
+      | Empty ->
+          let rstate = { rstate with mode = PartialEvaluation (Partial_eval.step pstate) } in
+          print_program rstate;
+          rstate
+      | _ ->
+          print_program rstate;
+          rstate
     )
 
 let handle_input rstate input =
