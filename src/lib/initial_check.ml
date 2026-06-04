@@ -2427,35 +2427,35 @@ let parse_from_string action ?inline str =
     let tok = Lexing.lexeme lexbuf in
     raise (Reporting.err_syntax pos (Printf.sprintf "Failed to parse '%s' at token '%s'" str tok))
 
-let exp_of_string =
+let exp_of_string ctx =
   parse_from_string (fun lexbuf ->
       let exp = Parser.exp_eof (Lexer.token (ref [])) lexbuf in
-      to_ast_exp initial_ctx exp
+      to_ast_exp ctx exp
   )
 
-let typschm_of_string =
+let typschm_of_string ctx =
   parse_from_string (fun lexbuf ->
       let typschm = Parser.typschm_eof (Lexer.token (ref [])) lexbuf in
-      let typschm, _ = to_ast_typschm initial_ctx typschm in
+      let typschm, _ = to_ast_typschm ctx typschm in
       typschm
   )
 
-let typ_of_string =
+let typ_of_string ctx =
   parse_from_string (fun lexbuf ->
       let typ = Parser.typ_eof (Lexer.token (ref [])) lexbuf in
-      to_ast_typ initial_ctx typ
+      to_ast_typ ctx typ
   )
 
-let constraint_of_string =
+let constraint_of_string ctx =
   parse_from_string (fun lexbuf ->
       let atyp = Parser.typ_eof (Lexer.token (ref [])) lexbuf in
-      to_ast_constraint initial_ctx atyp
+      to_ast_constraint ctx atyp
   )
 
-let extern_of_string ?(pure = false) id str =
-  VS_val_spec (typschm_of_string str, id, Some { pure; bindings = [("_", string_of_id id)] }) |> mk_val_spec
+let extern_of_string ?(pure = false) ctx id str =
+  VS_val_spec (typschm_of_string ctx str, id, Some { pure; bindings = [("_", string_of_id id)] }) |> mk_val_spec
 
-let val_spec_of_string id str = mk_val_spec (VS_val_spec (typschm_of_string str, id, None))
+let val_spec_of_string ctx id str = mk_val_spec (VS_val_spec (typschm_of_string ctx str, id, None))
 
 let quant_item_param_typ = function
   | QI_aux (QI_id kopt, _) when is_int_kopt kopt ->
@@ -2498,7 +2498,7 @@ let generate_undefined_record id typq fields =
   ]
 
 let generate_undefined_enum id ids =
-  let typschm = typschm_of_string ("unit -> " ^ string_of_id id) in
+  let typschm = typschm_of_string initial_ctx ("unit -> " ^ string_of_id id) in
   [
     mk_val_spec (VS_val_spec (typschm, prepend_id "undefined_" id, None));
     mk_fundef
@@ -2513,19 +2513,19 @@ let generate_undefined_enum id ids =
 
 let undefined_builtin_val_specs () =
   [
-    extern_of_string (mk_id "internal_pick") "forall ('a:Type). list('a) -> 'a";
-    extern_of_string (mk_id "undefined_bool") "unit -> bool";
-    extern_of_string (mk_id "undefined_bit") "unit -> bitvector(1)";
-    extern_of_string (mk_id "undefined_int") "unit -> int";
-    extern_of_string (mk_id "undefined_nat") "unit -> nat";
-    extern_of_string (mk_id "undefined_real") "unit -> real";
-    extern_of_string (mk_id "undefined_string") "unit -> string";
-    extern_of_string (mk_id "undefined_list") "forall ('a:Type). 'a -> list('a)";
-    extern_of_string (mk_id "undefined_range") "forall 'n 'm. (atom('n), atom('m)) -> range('n,'m)";
-    extern_of_string (mk_id "undefined_vector")
+    extern_of_string initial_ctx (mk_id "internal_pick") "forall ('a:Type). list('a) -> 'a";
+    extern_of_string initial_ctx (mk_id "undefined_bool") "unit -> bool";
+    extern_of_string initial_ctx (mk_id "undefined_bit") "unit -> bitvector(1)";
+    extern_of_string initial_ctx (mk_id "undefined_int") "unit -> int";
+    extern_of_string initial_ctx (mk_id "undefined_nat") "unit -> nat";
+    extern_of_string initial_ctx (mk_id "undefined_real") "unit -> real";
+    extern_of_string initial_ctx (mk_id "undefined_string") "unit -> string";
+    extern_of_string initial_ctx (mk_id "undefined_list") "forall ('a:Type). 'a -> list('a)";
+    extern_of_string initial_ctx (mk_id "undefined_range") "forall 'n 'm. (atom('n), atom('m)) -> range('n,'m)";
+    extern_of_string initial_ctx (mk_id "undefined_vector")
       "forall 'n ('a:Type) ('ord : Order). (atom('n), 'a) -> vector('n, 'ord,'a)";
-    extern_of_string (mk_id "undefined_bitvector") "forall 'n. atom('n) -> bitvector('n)";
-    extern_of_string (mk_id "undefined_unit") "unit -> unit";
+    extern_of_string initial_ctx (mk_id "undefined_bitvector") "forall 'n. atom('n) -> bitvector('n)";
+    extern_of_string initial_ctx (mk_id "undefined_unit") "unit -> unit";
   ]
 
 let make_global (DEF_aux (def, def_annot)) =
@@ -2548,13 +2548,13 @@ let generate_initialize_registers vs_ids regs =
     if IdSet.mem (mk_id "initialize_registers") vs_ids then []
     else if regs = [] then
       [
-        val_spec_of_string (mk_id "initialize_registers") "unit -> unit";
+        val_spec_of_string initial_ctx (mk_id "initialize_registers") "unit -> unit";
         mk_fundef
           [mk_funcl (mk_id "initialize_registers") (mk_pat (P_lit (mk_lit L_unit))) (mk_exp (E_lit (mk_lit L_unit)))];
       ]
     else
       [
-        val_spec_of_string (mk_id "initialize_registers") "unit -> unit";
+        val_spec_of_string initial_ctx (mk_id "initialize_registers") "unit -> unit";
         mk_fundef
           [
             mk_funcl (mk_id "initialize_registers")

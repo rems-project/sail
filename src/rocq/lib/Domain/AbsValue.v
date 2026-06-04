@@ -91,6 +91,9 @@ Module Dom (DZ : DOMAIN BinInt.Z) (Dbv : DOMAIN AbsBitvector.Bits) <: DOMAIN Val
     | V_top : value
     | V_bot : value.
 
+  Definition mk_ctor (s : Ast.id_aux) (args : list value) : value :=
+    V_ctor {[ s := args ]}.
+
   Definition is_unit (v : value) : bool :=
     match v with
     | V_unit => true

@@ -62,9 +62,6 @@ module State : sig
     default_sail_dir : string;
     config : Yojson.Safe.t option;
   }
-
-  val initial_istate :
-    options:(Arg.key * Arg.spec * Arg.doc) list -> config:Yojson.Safe.t option -> default_sail_dir:string -> istate
 end
 
 val arg : string -> string

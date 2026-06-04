@@ -63,17 +63,6 @@ module State = struct
     default_sail_dir : string;
     config : Yojson.Safe.t option;
   }
-
-  let initial_istate ~options ~config ~default_sail_dir =
-    {
-      ctx = Initial_check.initial_ctx;
-      ast = empty_ast;
-      effect_info = Effects.empty_side_effect_info;
-      env = Type_check.initial_env;
-      options;
-      default_sail_dir;
-      config;
-    }
 end
 
 open State

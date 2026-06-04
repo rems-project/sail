@@ -372,7 +372,7 @@ let repl_commands =
       arg_help = Some "<expression>";
       repl_action =
         (fun _ pos arg rstate ->
-          let exp = Type_check.infer_exp rstate.env (Initial_check.exp_of_string ~inline:pos arg) in
+          let exp = Type_check.infer_exp rstate.env (Initial_check.exp_of_string ~inline:pos rstate.ctx arg) in
           { rstate with mode = PartialEvaluation (Partial_eval.from_exp exp) }
         );
     };
@@ -454,7 +454,7 @@ let () =
 
   (register_command ~name:"infer" ~shortname:"i" ~help:"Infer the type of an expression."
   @@ let@ pos, arg, istate = Arg.Rest "expression" in
-     let exp = Initial_check.exp_of_string ~inline:pos arg in
+     let exp = Initial_check.exp_of_string ~inline:pos istate.ctx arg in
      let exp = Type_check.infer_exp istate.env exp in
      Document.to_channel stdout (doc_typ (Type_check.typ_of exp));
      print_newline ();
@@ -463,7 +463,7 @@ let () =
 
   (register_command ~name:"prove" ~help:"Try to prove a constraint."
   @@ let@ pos, arg, istate = Arg.Rest "constraint" in
-     let nc = Initial_check.constraint_of_string ~inline:pos arg in
+     let nc = Initial_check.constraint_of_string ~inline:pos istate.ctx arg in
      print_endline (string_of_bool (Type_check.prove __POS__ istate.env nc));
      None
   );
@@ -478,7 +478,7 @@ let () =
 
   (register_command ~name:"assume" ~help:"Add a constraint to the REPL environment."
   @@ let@ pos, arg, istate = Arg.Rest "function name" in
-     let nc = Initial_check.constraint_of_string ~inline:pos arg in
+     let nc = Initial_check.constraint_of_string ~inline:pos istate.ctx arg in
      Some { istate with env = Type_check.Env.add_constraint nc istate.env }
   );
 
@@ -554,7 +554,9 @@ let () =
   @@ let@ pos, arg, istate = Arg.Rest "variable = expression" in
      match String.split_on_char '=' arg with
      | [v; exp_str] ->
-         let exp = Initial_check.exp_of_string ~inline:(advance_position ~after:1 ~trim:false v pos) exp_str in
+         let exp =
+           Initial_check.exp_of_string ~inline:(advance_position ~after:1 ~trim:false v pos) istate.ctx exp_str
+         in
          let arg_l = string_location ~start:pos ~trim:true arg in
          let v_l = string_location ~start:pos ~trim:true v in
          let defs, env =
@@ -569,7 +571,7 @@ let () =
   @@ let@ pos, arg, istate = Arg.Rest "id : type" in
      match String.split_on_char ':' arg with
      | [v; arg] ->
-         let typ = Initial_check.typ_of_string ~inline:(advance_position ~after:1 ~trim:false v pos) arg in
+         let typ = Initial_check.typ_of_string ~inline:(advance_position ~after:1 ~trim:false v pos) istate.ctx arg in
          let v_l = string_location ~start:pos ~trim:true v in
          let _, env, _ = Type_check.bind_pat istate.env (mk_pat ~loc:v_l (P_id (mk_id ~loc:v_l (String.trim v)))) typ in
          Some { istate with env }
@@ -693,7 +695,7 @@ let handle_input' rstate input =
       | Expression (str, pos) ->
           (* An expression in normal mode is type checked, then puts
                us in evaluation mode. *)
-          let exp = Type_check.infer_exp rstate.env (Initial_check.exp_of_string ~inline:pos str) in
+          let exp = Type_check.infer_exp rstate.env (Initial_check.exp_of_string ~inline:pos rstate.ctx str) in
           let rstate =
             { rstate with mode = Evaluation (eval_frame (Step (lazy "", rstate.state, Monad.pure exp, []))) }
           in

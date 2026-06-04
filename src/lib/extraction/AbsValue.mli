@@ -93,6 +93,8 @@ module Dom :
     value list) gmap -> 'a1) -> ((id_aux, value) gmap -> 'a1) -> 'a1 -> 'a1
     -> value -> 'a1
 
+  val mk_ctor : id_aux -> value list -> value
+
   val is_unit : value -> bool
 
   val is_true : value -> bool

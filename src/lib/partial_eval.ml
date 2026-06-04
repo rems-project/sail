@@ -309,11 +309,15 @@ let string_of_focus p =
 
 let from_exp exp = { ctx = Z_top; state = Zinterp.R.empty; focus = Extraction.Datatypes.Coq_inl exp }
 
+let unaux_id = function Id_aux (id, _) -> id
+
 let step p =
   let rec go = function
     | Zinterp.Monad.Pure ((ctx, state), focus) -> { ctx; state; focus }
     | Zinterp.Monad.Call (id, args, cont) -> (
-        match Util.option_all (List.map (fun r -> r.Zinterp.R.this) args) with _ -> failwith "bad call"
+        match Util.option_all (List.map (fun r -> r.Zinterp.R.this) args) with
+        | Some args' -> go (cont { this = Some (Lattice.mk_ctor (unaux_id id) args'); exn = None; eff = false })
+        | None -> failwith "bad call"
       )
     | Zinterp.Monad.Get_undefined (_, cont) -> go (cont { this = Some Lattice.V_top; exn = None; eff = false })
     | _ -> failwith "unhandled"

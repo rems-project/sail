@@ -109,9 +109,9 @@ val hex_digit_of_char : char -> (hex_digit * digit_case option) option
 val parse_hex_lit : ?warn_inconsistent_case:Parse_ast.l -> string -> hex_digit non_empty list option
 val parse_bin_lit : string -> bin_digit non_empty list option
 
-val extern_of_string : ?pure:bool -> id -> string -> untyped_def
+val extern_of_string : ?pure:bool -> ctx -> id -> string -> untyped_def
 
-val val_spec_of_string : id -> string -> untyped_def
+val val_spec_of_string : ctx -> id -> string -> untyped_def
 
 val defs_of_string : string * int * int * int -> ctx -> string -> untyped_def list * ctx
 
@@ -125,11 +125,11 @@ val ast_of_def_string_with :
   string ->
   untyped_ast * ctx
 
-val exp_of_string : ?inline:Lexing.position -> string -> uannot exp
+val exp_of_string : ctx -> ?inline:Lexing.position -> string -> uannot exp
 
-val typ_of_string : ?inline:Lexing.position -> string -> typ
+val typ_of_string : ctx -> ?inline:Lexing.position -> string -> typ
 
-val constraint_of_string : ?inline:Lexing.position -> string -> n_constraint
+val constraint_of_string : ctx -> ?inline:Lexing.position -> string -> n_constraint
 
 val parse_from_string : (Lexing.lexbuf -> 'a) -> ?inline:Lexing.position -> string -> 'a
 
