@@ -137,6 +137,14 @@ val gset_union :
 val gset_intersection :
   ('a1, 'a1) coq_RelDecision -> 'a1 coq_Countable -> 'a1 gset coq_Intersection
 
+val gset_elem_of_dec :
+  ('a1, 'a1) coq_RelDecision -> 'a1 coq_Countable -> ('a1, 'a1 gset)
+  coq_RelDecision
+
 val gset_subseteq_dec :
   ('a1, 'a1) coq_RelDecision -> 'a1 coq_Countable -> ('a1 gset, 'a1 gset)
   coq_RelDecision
+
+val gset_dom :
+  ('a1, 'a1) coq_RelDecision -> 'a1 coq_Countable -> (('a1, 'a2) gmap, 'a1
+  gset) coq_Dom

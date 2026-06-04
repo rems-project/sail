@@ -2,8 +2,6 @@ open List0
 
 val is_none : 'a1 option -> bool
 
-val is_some : 'a1 option -> bool
-
 val option_bind : 'a1 option -> ('a1 -> 'a2 option) -> 'a2 option
 
 val option_map2 :

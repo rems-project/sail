@@ -16,6 +16,7 @@ open Qcanon
 open SailBase
 open ValueType
 open Base
+open Decidable
 open Fin_maps
 open Gmap
 open List_basics
@@ -106,7 +107,7 @@ module Dom :
 
   val vdepth : value -> Big_int_Z.big_int
 
-  val same_keys : (id_aux, 'a1) gmap -> (id_aux, 'a1) gmap -> bool
+  val key_inter : (id_aux, 'a1) gmap -> (id_aux, 'a1) gmap -> id_aux list
 
   val ctor_compat :
     (id_aux, value list) gmap -> (id_aux, value list) gmap -> bool

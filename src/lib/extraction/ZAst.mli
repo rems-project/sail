@@ -230,7 +230,7 @@ module Residual :
 
     val vdepth : value -> Big_int_Z.big_int
 
-    val same_keys : (id_aux, 'a1) gmap -> (id_aux, 'a1) gmap -> bool
+    val key_inter : (id_aux, 'a1) gmap -> (id_aux, 'a1) gmap -> id_aux list
 
     val ctor_compat :
       (id_aux, value list) gmap -> (id_aux, value list) gmap -> bool
@@ -428,7 +428,7 @@ module Make :
 
       val vdepth : value -> Big_int_Z.big_int
 
-      val same_keys : (id_aux, 'a1) gmap -> (id_aux, 'a1) gmap -> bool
+      val key_inter : (id_aux, 'a1) gmap -> (id_aux, 'a1) gmap -> id_aux list
 
       val ctor_compat :
         (id_aux, value list) gmap -> (id_aux, value list) gmap -> bool
@@ -584,7 +584,7 @@ module Make :
 
     val vdepth : value -> Big_int_Z.big_int
 
-    val same_keys : (id_aux, 'a1) gmap -> (id_aux, 'a1) gmap -> bool
+    val key_inter : (id_aux, 'a1) gmap -> (id_aux, 'a1) gmap -> id_aux list
 
     val ctor_compat :
       (id_aux, value list) gmap -> (id_aux, value list) gmap -> bool

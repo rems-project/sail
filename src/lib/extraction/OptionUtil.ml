@@ -6,12 +6,6 @@ let is_none = function
 | Some _ -> false
 | None -> true
 
-(** val is_some : 'a1 option -> bool **)
-
-let is_some = function
-| Some _ -> true
-| None -> false
-
 (** val option_bind : 'a1 option -> ('a1 -> 'a2 option) -> 'a2 option **)
 
 let option_bind o f =

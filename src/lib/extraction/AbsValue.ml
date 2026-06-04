@@ -16,6 +16,7 @@ open Qcanon
 open SailBase
 open ValueType
 open Base
+open Decidable
 open Fin_maps
 open Gmap
 open List_basics
@@ -177,33 +178,35 @@ module Dom =
       (Big_int_Z.succ_big_int Big_int_Z.zero_big_int)
   | _ -> Big_int_Z.zero_big_int
 
-  (** val same_keys : (id_aux, 'a1) gmap -> (id_aux, 'a1) gmap -> bool **)
+  (** val key_inter :
+      (id_aux, 'a1) gmap -> (id_aux, 'a1) gmap -> id_aux list **)
 
-  let same_keys m_UU2081_ m_UU2082_ =
-    (&&)
-      (forallb (fun pat ->
-        let (k, _) = pat in
-        is_some
-          (lookup (gmap_lookup Aux.eq_eqdec Aux.id_aux_countable) k m_UU2082_))
+  let key_inter m1 m2 =
+    map fst
+      (filter (fun _ -> Coq_list.list_filter)
+        (uncurry_dec (fun x _ ->
+          coq_Is_true_dec
+            (bool_decide
+              (decide_rel
+                (gset_elem_of_dec Aux.eq_eqdec Aux.id_aux_countable) x
+                (dom (gset_dom Aux.eq_eqdec Aux.id_aux_countable) m2)))))
         (map_to_list (fun _ -> gmap_fold Aux.eq_eqdec Aux.id_aux_countable)
-          m_UU2081_))
-      (forallb (fun pat ->
-        let (k, _) = pat in
-        is_some
-          (lookup (gmap_lookup Aux.eq_eqdec Aux.id_aux_countable) k m_UU2081_))
-        (map_to_list (fun _ -> gmap_fold Aux.eq_eqdec Aux.id_aux_countable)
-          m_UU2082_))
+          m1))
 
   (** val ctor_compat :
       (id_aux, value list) gmap -> (id_aux, value list) gmap -> bool **)
 
   let ctor_compat x y =
-    (&&) (same_keys x y)
-      (forallb (fun pat ->
-        let (k, vx) = pat in
-        from_option (fun vy -> Nat.eqb (length vx) (length vy)) false
-          (lookup (gmap_lookup Aux.eq_eqdec Aux.id_aux_countable) k y))
-        (map_to_list (fun _ -> gmap_fold Aux.eq_eqdec Aux.id_aux_countable) x))
+    forallb (fun k ->
+      let o = lookup (gmap_lookup Aux.eq_eqdec Aux.id_aux_countable) k x in
+      let o0 = lookup (gmap_lookup Aux.eq_eqdec Aux.id_aux_countable) k y in
+      (match o with
+       | Some vx ->
+         (match o0 with
+          | Some vy -> Nat.eqb (length vx) (length vy)
+          | None -> true)
+       | None -> true))
+      (key_inter x y)
 
   (** val same_or : 'a1 coq_EqDecb -> t -> ('a1 -> t) -> 'a1 -> 'a1 -> t **)
 
@@ -389,13 +392,20 @@ module Dom =
     | V_ctor m_UU2081_ ->
       (match v_UU2082_ with
        | V_ctor m_UU2082_ ->
-         if ctor_compat m_UU2081_ m_UU2082_
-         then V_ctor
-                (merge
-                  (Obj.magic (fun _ _ _ ->
-                    gmap_merge Aux.eq_eqdec Aux.id_aux_countable))
-                  (option_join (zip_with meet)) m_UU2081_ m_UU2082_)
-         else V_bot
+         V_ctor
+           (merge
+             (Obj.magic (fun _ _ _ ->
+               gmap_merge Aux.eq_eqdec Aux.id_aux_countable))
+             (fun o_UU2081_ o_UU2082_ ->
+             match o_UU2081_ with
+             | Some l_UU2081_ ->
+               (match o_UU2082_ with
+                | Some l_UU2082_ ->
+                  if Nat.eqb (length l_UU2081_) (length l_UU2082_)
+                  then Some (zip_with meet l_UU2081_ l_UU2082_)
+                  else None
+                | None -> None)
+             | None -> None) m_UU2081_ m_UU2082_)
        | V_top -> v_UU2081_
        | _ -> V_bot)
     | V_record m_UU2081_ ->
@@ -481,14 +491,14 @@ module Dom =
        | V_ctor ym ->
          if ctor_compat xm ym
          then map_fold (fun _ -> gmap_fold Aux.eq_eqdec Aux.id_aux_countable)
-                (fun k ys b ->
+                (fun k xs b ->
                 (&&) b
                   (match lookup
                            (gmap_lookup Aux.eq_eqdec Aux.id_aux_countable) k
-                           xm with
-                   | Some xs -> list_eqb leb xs ys
+                           ym with
+                   | Some ys -> list_eqb leb xs ys
                    | None -> false))
-                true ym
+                true xm
          else false
        | V_top -> true
        | _ -> false)
