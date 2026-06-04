@@ -27,6 +27,10 @@ type ('a, 'b) coq_Singleton = 'a -> 'b
 
 val singleton : ('a1, 'a2) coq_Singleton -> 'a1 -> 'a2
 
+type ('a, 'b) coq_Filter = __ -> ('a -> coq_Decision) -> 'b -> 'b
+
+val filter : ('a1, 'a2) coq_Filter -> ('a1 -> coq_Decision) -> 'a2 -> 'a2
+
 type 'm coq_MBind = __ -> __ -> (__ -> 'm) -> 'm -> 'm
 
 val mbind : 'a1 coq_MBind -> ('a2 -> 'a1) -> 'a1 -> 'a1
@@ -55,6 +59,10 @@ type ('k, 'a, 'm) coq_PartialAlter =
 val partial_alter :
   ('a1, 'a2, 'a3) coq_PartialAlter -> ('a2 option -> 'a2 option) -> 'a1 ->
   'a3 -> 'a3
+
+type ('m, 'd) coq_Dom = 'm -> 'd
+
+val dom : ('a1, 'a2) coq_Dom -> 'a1 -> 'a2
 
 type 'm coq_Merge =
   __ -> __ -> __ -> (__ option -> __ option -> __ option) -> 'm -> 'm -> 'm

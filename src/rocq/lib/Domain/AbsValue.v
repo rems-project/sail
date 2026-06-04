@@ -386,145 +386,102 @@ Module Dom (DZ : DOMAIN BinInt.Z) (Dbv : DOMAIN AbsBitvector.Bits) <: DOMAIN Val
           split; [ exact H1 | exact H2 ].
   Qed.
 
-  Definition same_keys {V} (m₁ m₂ : gmap Ast.id_aux V) : bool :=
-    forallb (fun '(k, _) => is_some (m₂ !! k)) (map_to_list m₁) &&
-    forallb (fun '(k, _) => is_some (m₁ !! k)) (map_to_list m₂).
+  Definition key_inter {V}
+    (m1 m2 : gmap Ast.id_aux V) : list Ast.id_aux :=
+    map fst (filter (fun '(k, _) => bool_decide (k ∈ dom m2)) (map_to_list m1)).
 
-  Definition same_keys_alt_def {V} (x y : gmap Ast.id_aux V) : Prop :=
-    ∀ k, is_some (x !! k) = is_some (y !! k).
-
-  Definition same_keys_false_alt_def {V} (x y : gmap Ast.id_aux V) : Prop :=
-    ∃ k, is_some (x !! k) ≠ is_some (y !! k).
-
-  Lemma same_keys_alt : ∀ {V} {x y : gmap Ast.id_aux V}, same_keys x y = true ↔ same_keys_alt_def x y.
+  Lemma key_inter_some : ∀ {V} {x y : gmap Ast.id_aux V} k {v1 v2}, x !! k = Some v1 → y !! k = Some v2 → k ∈ key_inter x y.
   Proof.
-    intros ? x y.
-    split; intros H; unfold same_keys_alt_def, same_keys in *.
-    - rewrite andb_true_iff in H.
-      intros k.
-      destruct H as [H1 H2].
-      destruct (x !! k) as [x' |] eqn : Hx; destruct (y !! k) as [y' |] eqn : Hy; try reflexivity.
-      + rewrite forallb_forall in H1.
-        rewrite <- elem_of_map_to_list, list_elem_of_In in Hx.
-        specialize (H1 (k, x') Hx).
-        cbn in H1. unfold is_some in H1. rewrite Hy in H1.
-        discriminate.
-      + rewrite forallb_forall in H2.
-        rewrite <- elem_of_map_to_list, list_elem_of_In in Hy.
-        specialize (H2 (k, y') Hy).
-        cbn in H2. unfold is_some in H2. rewrite Hx in H2.
-        discriminate.
-    - rewrite andb_true_iff.
-      split; rewrite forallb_forall; intros [k v] In;
-        rewrite <- list_elem_of_In, elem_of_map_to_list in In; cbn; specialize (H k).
-      + rewrite <- H, In. reflexivity.
-      + rewrite H, In. reflexivity.
+    intros V x y k v1 v2 Hx Hy.
+    unfold key_inter.
+    rewrite list_elem_of_fmap.
+    exists (k, v1). split; [ reflexivity | ].
+    rewrite list_elem_of_filter. split.
+    - apply bool_decide_pack. rewrite elem_of_dom. exists v2. exact Hy.
+    - rewrite elem_of_map_to_list. exact Hx.
   Qed.
 
-  Lemma same_keys_false_alt : ∀ {V} {x y : gmap Ast.id_aux V}, same_keys x y = false ↔ same_keys_false_alt_def x y.
+  Lemma key_inter_refl : ∀ {V} {x : gmap Ast.id_aux V} k, k ∈ key_inter x x → ∃v, x !! k = Some v.
   Proof.
-    intros ? x y.
-    destruct (same_keys x y) eqn : E; [ rewrite same_keys_alt in E | idtac ].
-    - split; intros H; [ discriminate | idtac ].
-      unfold same_keys_alt_def in E.
-      unfold same_keys_false_alt_def in H.
-      exfalso.
-      destruct H as [k H].
-      apply H, E.
-    - split; try reflexivity; intros _.
-      unfold same_keys_false_alt_def.
-      unfold same_keys in E.
-      rewrite andb_false_iff in E.
-      destruct E as [E | E]; rewrite forallb_false_iff in E; destruct E as [[k ?] [E1 E2]]; exists k.
-      + destruct (x !! k) as [x' |] eqn : Hx; destruct (x !! k) as [y' |] eqn : Hy; rewrite E2; cbn.
-        all: try (intros ?; discriminate).
-        rewrite elem_of_map_to_list in E1.
-        rewrite Hy in E1.
-        discriminate.
-      + destruct (x !! k) as [x' |] eqn : Hx; destruct (x !! k) as [y' |] eqn : Hy; rewrite E2; cbn.
-        all: try (intros ?; discriminate).
-        rewrite elem_of_map_to_list in E1.
-        rewrite E1.
-        cbn. intros ?. discriminate.
-  Qed.
-
-  Lemma same_keys_none : ∀ {V} {m₁ m₂ : gmap Ast.id_aux V} {k}, same_keys m₁ m₂ → m₁ !! k = None → m₂ !! k = None.
-  Proof.
-    intros V m₁ m₂ k Same H1.
-    unfold same_keys in Same.
-    rewrite Is_true_true, andb_true_iff in Same.
-    destruct Same as [_ K].
-    rewrite forallb_forall in K.
-    destruct (m₂ !! k) as [v₂ |] eqn : H2; [ exfalso | reflexivity ].
-    rewrite <- elem_of_map_to_list, list_elem_of_In in H2.
-    specialize (K (k, v₂) H2).
-    cbn in K.
-    unfold is_some in K.
-    rewrite H1 in K.
-    discriminate.
-  Qed.
-
-  Lemma same_keys_comm : ∀ {V} (m₁ m₂ : gmap Ast.id_aux V), same_keys m₁ m₂ = same_keys m₂ m₁.
-  Proof.
-    intros V x y.
-    unfold same_keys.
-    rewrite andb_comm.
-    reflexivity.
-  Qed.
-
-  Lemma same_keys_trans : ∀ {V} {x y z : gmap Ast.id_aux V},
-    same_keys x y = true → same_keys y z = true → same_keys x z = true.
-  Proof.
-    intros ? x y z same_xy same_yz.
-    repeat rewrite same_keys_alt in *.
-    unfold same_keys_alt_def in *.
-    intros k.
-    specialize (same_xy k). specialize (same_yz k).
-    apply (eq_trans same_xy same_yz).
+    intros V x k Hk.
+    unfold key_inter in Hk.
+    rewrite list_elem_of_fmap in Hk.
+    destruct Hk as [[k' v] [Hfst Hfin]].
+    cbn in Hfst. subst k'.
+    rewrite list_elem_of_filter in Hfin.
+    destruct Hfin as [_ Hxin].
+    rewrite elem_of_map_to_list in Hxin.
+    exists v. exact Hxin.
   Qed.
 
   Definition ctor_compat (x y : gmap Ast.id_aux (list value)) : bool :=
-    same_keys x y &&
-    forallb (fun '(k, vx) => from_option (fun vy => length vx =? length vy) false (y !! k)) (map_to_list x).
+    forallb (λ k, match (x !! k, y !! k) with
+                  | (Some vx, Some vy) => length vx =? length vy
+                  | _ => true
+                  end)
+            (key_inter x y).
 
   Lemma ctor_compat_same_length : ∀ {x y} k {xs ys},
     ctor_compat x y = true → x !! k = Some xs → y !! k = Some ys → length xs = length ys.
   Proof.
     intros x y k xs ys compat Hx Hy.
     unfold ctor_compat in compat.
-    rewrite andb_true_iff in compat.
-    destruct compat as [_ compat].
     rewrite forallb_forall in compat.
-    rewrite <- elem_of_map_to_list, list_elem_of_In in Hx.
-    specialize (compat (k, xs) Hx).
-    cbn in compat. rewrite Hy in compat.
-    cbn in compat.
-    rewrite Nat.eqb_eq in compat.
+    assert (L : In k (key_inter x y)).
+    { rewrite <- list_elem_of_In. apply (key_inter_some k Hx Hy). }
+    specialize (compat k L).
+    rewrite Hx, Hy, Nat.eqb_eq in compat.
     exact compat.
   Qed.
 
   Lemma ctor_compat_idemp : ∀ {x}, ctor_compat x x = true.
   Proof.
     intros x.
-    unfold ctor_compat. rewrite andb_true_iff.
-    split.
-    - rewrite same_keys_alt. unfold same_keys_alt_def.
-      intros. reflexivity.
-    - rewrite forallb_forall.
-      intros [k v] In.
-      rewrite <- list_elem_of_In, elem_of_map_to_list in In.
-      rewrite In.
-      cbn.
-      rewrite Nat.eqb_eq.
-      reflexivity.
+    unfold ctor_compat. rewrite forallb_forall.
+    intros k In.
+    rewrite <- list_elem_of_In in In.
+    apply (key_inter_refl k) in In.
+    destruct In as [v In].
+    rewrite In, Nat.eqb_eq.
+    reflexivity.
   Qed.
 
-  Lemma ctor_compat_same_keys : ∀ x y, ctor_compat x y = true → same_keys x y = true.
+  Lemma ctor_compat_comm : ∀ x y, ctor_compat x y = ctor_compat y x.
   Proof.
-    intros x y H.
-    unfold ctor_compat in H. rewrite andb_true_iff in H.
-    destruct H as [H _].
-    exact H.
+    intros x y.
+    destruct (ctor_compat x y) eqn:Hxy; destruct (ctor_compat y x) eqn:Hyx; try reflexivity; exfalso.
+    - unfold ctor_compat in Hyx.
+      rewrite forallb_false_iff in Hyx.
+      destruct Hyx as [k [Hk Hfalse]].
+      unfold key_inter in Hk.
+      rewrite list_elem_of_fmap in Hk.
+      destruct Hk as [[k' vy] [Hfst Hfin]].
+      cbn in Hfst. subst k'.
+      rewrite list_elem_of_filter in Hfin.
+      destruct Hfin as [Hdom Hyin].
+      apply bool_decide_unpack, elem_of_dom in Hdom.
+      destruct Hdom as [vx Hvx].
+      rewrite elem_of_map_to_list in Hyin.
+      rewrite Hyin, Hvx in Hfalse.
+      apply Nat.eqb_neq in Hfalse.
+      apply Hfalse. symmetry.
+      exact (ctor_compat_same_length k Hxy Hvx Hyin).
+    - unfold ctor_compat in Hxy.
+      rewrite forallb_false_iff in Hxy.
+      destruct Hxy as [k [Hk Hfalse]].
+      unfold key_inter in Hk.
+      rewrite list_elem_of_fmap in Hk.
+      destruct Hk as [[k' vx] [Hfst Hfin]].
+      cbn in Hfst. subst k'.
+      rewrite list_elem_of_filter in Hfin.
+      destruct Hfin as [Hdom Hxin].
+      apply bool_decide_unpack, elem_of_dom in Hdom.
+      destruct Hdom as [vy Hvy].
+      rewrite elem_of_map_to_list in Hxin.
+      rewrite Hxin, Hvy in Hfalse.
+      apply Nat.eqb_neq in Hfalse.
+      apply Hfalse. symmetry.
+      exact (ctor_compat_same_length k Hyx Hvy Hxin).
   Qed.
 
   Definition same_or {A} `{EqDecb A} (e : t) (v : A → t) (x y : A) : t :=
@@ -549,254 +506,6 @@ Module Dom (DZ : DOMAIN BinInt.Z) (Dbv : DOMAIN AbsBitvector.Bits) <: DOMAIN Val
     | (_, ⊥) => v₁
     | _ => ⊤
     end.
-
-  Lemma ctor_compat_comm_h : ∀ (x y : gmap Ast.id_aux (list value)),
-      same_keys x y
-    → forallb (λ '(k, v₁), from_option (λ v₂ : list value, length v₁ =? length v₂) false (y !! k))
-              (map_to_list x)
-      = true
-    → forallb (λ '(k, v₁), from_option (λ v₂ : list value, length v₁ =? length v₂) false (x !! k))
-              (map_to_list y)
-      = true.
-  Proof.
-    intros x y Keys H.
-    rewrite forallb_forall in *.
-    intros [k vy] In_y.
-    destruct (x !! k) as [vx |] eqn : Hx.
-    rewrite <- elem_of_map_to_list, list_elem_of_In in Hx.
-    specialize (H (k, vx) Hx).
-    destruct (y !! k) as [vy' |] eqn : Hy; cbn in H; rewrite Hy in H; cbn in *.
-    + rewrite <- list_elem_of_In, elem_of_map_to_list in In_y.
-      rewrite Nat.eqb_eq in *.
-      rewrite H.
-      f_equal.
-      apply Some_inj.
-      rewrite <- In_y, <- Hy.
-      reflexivity.
-    + discriminate.
-    + pose proof (same_keys_none Keys Hx) as Hy.
-      rewrite <- list_elem_of_In, elem_of_map_to_list, Hy in In_y.
-      discriminate.
-  Qed.
-
-  Lemma ctor_compat_comm : ∀ x y, ctor_compat x y = ctor_compat y x.
-  Proof.
-    intros x y.
-    unfold ctor_compat.
-    apply eq_true_iff_eq.
-    repeat rewrite andb_true_iff.
-    split.
-    all: (
-      intros [Keys H]; split;
-      [ rewrite same_keys_comm; assumption
-      | rewrite <- Is_true_true in Keys; apply (ctor_compat_comm_h _ _ Keys H) ]
-    ).
-  Qed.
-
-  Lemma ctor_compat_trans : ∀ {x y z},
-    ctor_compat x y = true → ctor_compat y z = true → ctor_compat x z = true.
-  Proof.
-    intros x y z compat_xy compat_yz.
-    unfold ctor_compat. rewrite andb_true_iff.
-    split.
-    - apply ctor_compat_same_keys in compat_xy, compat_yz.
-      apply (same_keys_trans compat_xy compat_yz).
-    - rewrite forallb_forall.
-      intros [k x'] In.
-      unfold ctor_compat in compat_xy.
-      rewrite andb_true_iff in compat_xy.
-      destruct compat_xy as [_ compat_xy].
-      rewrite forallb_forall in compat_xy.
-      specialize (compat_xy (k, x') In).
-      cbn in compat_xy.
-      destruct (y !! k) as [y' |] eqn : Hy; cbn in compat_xy; try discriminate.
-      unfold ctor_compat in compat_yz.
-      rewrite andb_true_iff in compat_yz.
-      destruct compat_yz as [_ compat_yz].
-      rewrite forallb_forall in compat_yz.
-      rewrite <- elem_of_map_to_list, list_elem_of_In in Hy.
-      specialize (compat_yz (k, y') Hy).
-      cbn in compat_yz.
-      destruct (z !! k) as [z' |] eqn : Hz; cbn in compat_xy; try discriminate.
-      cbn in compat_yz.
-      cbn.
-      rewrite Nat.eqb_eq in *.
-      apply (eq_trans compat_xy compat_yz).
-  Qed.
-
-  Lemma ctor_compat_false_trans : ∀ {x y z},
-    ctor_compat x y = false → ctor_compat y z = true → ctor_compat x z = false.
-  Proof.
-    intros x y z incompat_xy compat_yz.
-    unfold ctor_compat in *. rewrite andb_false_iff in *.
-    rewrite andb_true_iff in compat_yz.
-    destruct compat_yz as [same_yz compat_yz].
-    rewrite forallb_forall in compat_yz.
-    destruct incompat_xy as [not_same_xy | incompat_xy].
-    - left.
-      repeat rewrite same_keys_false_alt in *. unfold same_keys_false_alt_def in *.
-      destruct not_same_xy as [k not_same_xy].
-      exists k.
-      rewrite same_keys_alt in same_yz. unfold same_keys_alt_def in same_yz.
-      specialize (same_yz k).
-      clear compat_yz.
-      destruct (x !! k) eqn : Hx;
-      destruct (y !! k) eqn : Hy;
-      destruct (z !! k) eqn : Hz;
-      cbn in *; (intros ?; discriminate) + assumption.
-    - rewrite forallb_false_iff in incompat_xy.
-      destruct incompat_xy as [[k x'] [Hx incompat_xy]].
-      destruct (y !! k) as [y' |] eqn : Hy.
-      + right.
-        rewrite <- elem_of_map_to_list, list_elem_of_In in Hy.
-        specialize (compat_yz (k, y') Hy).
-        cbn in compat_yz.
-        rewrite forallb_false_iff.
-        exists (k, x').
-        split; [ exact Hx | idtac ].
-        destruct (z !! k) as [z' |] eqn : Hz; try reflexivity.
-        cbn in *.
-        rewrite Nat.eqb_neq in *.
-        rewrite Nat.eqb_eq in compat_yz.
-        intros ?. apply incompat_xy. rewrite compat_yz. assumption.
-      + left.
-        rewrite same_keys_false_alt. unfold same_keys_false_alt_def.
-        rewrite same_keys_alt in same_yz. unfold same_keys_alt_def in same_yz.
-        rewrite elem_of_map_to_list in Hx.
-        exists k. rewrite Hx. cbn.
-        specialize (same_yz k). rewrite Hy in same_yz. cbn in same_yz.
-        destruct (z !! k) as [z' |] eqn : Hz; cbn; try (reflexivity + intros ?; discriminate).
-  Qed.
-
-  Lemma ctor_compat_merge_right : ∀ {f : value → value → value} {x y z : gmap Ast.id_aux (list value)},
-    ctor_compat x y = true → ctor_compat y z = true →
-    ctor_compat x (merge (option_join (zip_with f)) y z) = true .
-  Proof.
-    intros f x y z compat_xy compat_yz.
-    unfold ctor_compat. rewrite andb_true_iff.
-    split.
-    - apply ctor_compat_same_keys in compat_xy, compat_yz.
-      repeat rewrite same_keys_alt in *. unfold same_keys_alt_def in *.
-      intros k.
-      specialize (compat_xy k). specialize (compat_yz k).
-      rewrite compat_xy, lookup_merge.
-      destruct (y !! k) as [y' |] eqn : Hy; destruct (z !! k) as [z' |] eqn : Hz; try reflexivity.
-      cbn in compat_yz. discriminate.
-    - rewrite forallb_forall. intros [k x'] In.
-      unfold ctor_compat in compat_xy.
-      rewrite andb_true_iff in compat_xy.
-      destruct compat_xy as [_ H].
-      rewrite forallb_forall in H.
-      specialize (H (k, x') In).
-      cbn in H.
-      destruct (y !! k) as [y' |] eqn : Hy; cbn in H; try discriminate.
-      rewrite <- elem_of_map_to_list, list_elem_of_In in Hy.
-      unfold ctor_compat in compat_yz.
-      rewrite andb_true_iff in compat_yz.
-      destruct compat_yz as [_ H'].
-      rewrite forallb_forall in H'.
-      specialize (H' (k, y') Hy).
-      cbn in H'.
-      destruct (z !! k) as [z' |] eqn : Hz; cbn in H'; try discriminate.
-      destruct (merge (option_join (zip_with f)) y z !! k) eqn : Hyz.
-      + cbn. rewrite Nat.eqb_eq in *.
-        rewrite lookup_merge in Hyz.
-        rewrite <- list_elem_of_In, elem_of_map_to_list in Hy.
-        rewrite Hy, Hz in Hyz.
-        cbn in Hyz.
-        inversion Hyz.
-        rewrite length_zip_with_l_eq.
-        * exact H.
-        * exact H'.
-      + cbn. rewrite Nat.eqb_eq in *.
-        rewrite lookup_merge in Hyz.
-        rewrite <- list_elem_of_In, elem_of_map_to_list in Hy.
-        rewrite Hy, Hz in Hyz.
-        cbn in Hyz.
-        discriminate.
-  Qed.
-
-  Lemma ctor_compat_merge_left : ∀ {f : value → value → value} {x y z : gmap Ast.id_aux (list value)},
-    ctor_compat x y = true → ctor_compat y z = true →
-    ctor_compat (merge (option_join (zip_with f)) x y) z = true.
-  Proof.
-    intros f x y z compat_xy compat_yz.
-    rewrite ctor_compat_comm.
-    apply ctor_compat_merge_right.
-    - rewrite ctor_compat_comm.
-      apply (ctor_compat_trans compat_xy compat_yz).
-    - apply compat_xy.
-  Qed.
-
-  Lemma ctor_compat_merge_left_false : ∀ {f : value → value → value} {x y z : gmap Ast.id_aux (list value)},
-    ctor_compat x y = true → ctor_compat y z = false →
-    ctor_compat (merge (option_join (zip_with f)) x y) z = false.
-  Proof.
-    intros f x y z compat_xy incompat_yz.
-    rewrite ctor_compat_comm.
-    unfold ctor_compat in *. rewrite andb_false_iff in *.
-    destruct incompat_yz as [not_same_yz | incompat_yz].
-    - left.
-      rewrite andb_true_iff in compat_xy. destruct compat_xy as [same_xy _].
-      rewrite same_keys_alt in same_xy.
-      repeat rewrite same_keys_false_alt in *.
-      unfold same_keys_alt_def in same_xy.
-      unfold same_keys_false_alt_def in *.
-      destruct not_same_yz as [k not_same_yz].
-      exists k.
-      rewrite lookup_merge.
-      specialize (same_xy k).
-      destruct (x !! k) as [x' |] eqn : Hx; destruct (y !! k) as [y' |] eqn : Hy; destruct (z !! k) as [z' |] eqn : Hz; cbn.
-      all: intros ?; try discriminate.
-      all: cbn in not_same_yz; apply not_same_yz; reflexivity.
-    - rewrite forallb_false_iff in incompat_yz.
-      destruct incompat_yz as [[k y'] [In_y incompat_yz]].
-      destruct (z !! k) as [z' |] eqn : Hz.
-      + right.
-        cbn in incompat_yz.
-        rewrite forallb_false_iff.
-        exists (k, z').
-        split; [ rewrite elem_of_map_to_list; exact Hz | idtac ].
-        rewrite lookup_merge.
-        rewrite elem_of_map_to_list in In_y.
-        rewrite In_y.
-        destruct (x !! k) as [x' |] eqn : Hx; cbn.
-        * rewrite andb_true_iff in compat_xy.
-          destruct compat_xy as [_ compat_xy].
-          rewrite forallb_forall in compat_xy.
-          rewrite <- elem_of_map_to_list, list_elem_of_In in Hx.
-          specialize (compat_xy (k, x') Hx).
-          cbn in compat_xy.
-          rewrite In_y in compat_xy.
-          cbn in compat_xy.
-          rewrite Nat.eqb_neq in *.
-          rewrite length_zip_with_r_eq.
-          ** symmetry. exact incompat_yz.
-          ** rewrite Nat.eqb_eq in compat_xy. symmetry. exact compat_xy.
-        * rewrite Nat.eqb_neq in *.
-          symmetry.
-          exact incompat_yz.
-      + left.
-        rewrite same_keys_false_alt.
-        unfold same_keys_false_alt_def.
-        exists k.
-        rewrite Hz.
-        rewrite lookup_merge.
-        rewrite elem_of_map_to_list in In_y.
-        rewrite In_y.
-        destruct (x !! k) as [x' |] eqn : Hx; cbn; intros ?; discriminate.
-  Qed.
-
-  Lemma ctor_compat_merge_right_false : ∀ {f : value → value → value} {x y z : gmap Ast.id_aux (list value)},
-    ctor_compat x y = false → ctor_compat y z = true →
-    ctor_compat x (merge (option_join (zip_with f)) y z) = false.
-  Proof.
-    intros f x y z incompat_xy compat_yz.
-    rewrite ctor_compat_comm.
-    apply (ctor_compat_merge_left_false compat_yz).
-    rewrite ctor_compat_comm.
-    apply (ctor_compat_false_trans incompat_xy compat_yz).
-  Qed.
 
   Lemma if_then_simp : ∀ {A} {P : bool} {x y e : A}, (P = true → x = y) → (if P then x else e) = (if P then y else e).
   Proof. intros ? P ??? H. destruct P; [ rewrite H; reflexivity | reflexivity ]. Qed.
@@ -928,6 +637,124 @@ Module Dom (DZ : DOMAIN BinInt.Z) (Dbv : DOMAIN AbsBitvector.Bits) <: DOMAIN Val
 
   Ltac simplify_same_or := ltac2:(Control.enter simplify_same_or).
 
+  Lemma ctor_compat_of_forall : ∀ {x y : gmap Ast.id_aux (list value)},
+    (∀ k vx vy, x !! k = Some vx → y !! k = Some vy → length vx = length vy) →
+    ctor_compat x y = true.
+  Proof.
+    intros x y H.
+    unfold ctor_compat. rewrite forallb_forall.
+    intros k Hk.
+    rewrite <- list_elem_of_In in Hk.
+    unfold key_inter in Hk.
+    rewrite list_elem_of_fmap in Hk.
+    destruct Hk as [[k' vx] [Hfst Hfin]].
+    cbn in Hfst. subst k'.
+    rewrite list_elem_of_filter in Hfin.
+    destruct Hfin as [Hdom_y Hxin].
+    apply bool_decide_unpack, elem_of_dom in Hdom_y.
+    destruct Hdom_y as [vy Hvy].
+    rewrite elem_of_map_to_list in Hxin.
+    rewrite Hxin, Hvy, Nat.eqb_eq.
+    exact (H k vx vy Hxin Hvy).
+  Qed.
+
+  Lemma ctor_compat_false_witness : ∀ {x y : gmap Ast.id_aux (list value)} {k vx vy},
+    x !! k = Some vx → y !! k = Some vy → length vx ≠ length vy →
+    ctor_compat x y = false.
+  Proof.
+    intros x y k vx vy Hx Hy Hlen.
+    unfold ctor_compat. rewrite forallb_false_iff.
+    exists k. split.
+    - exact (key_inter_some k Hx Hy).
+    - rewrite Hx, Hy, Nat.eqb_neq. exact Hlen.
+  Qed.
+
+  Lemma ctor_compat_merge_false_left : ∀ {x y z : gmap Ast.id_aux (list value)},
+    ctor_compat x y = true → ctor_compat y z = false →
+    ctor_compat (merge (option_join (zip_with join)) x y) z = false.
+  Proof.
+    intros x y z Hxy Hyz.
+    unfold ctor_compat in Hyz. rewrite forallb_false_iff in Hyz.
+    destruct Hyz as [k [Hk Hkfalse]].
+    unfold key_inter in Hk. rewrite list_elem_of_fmap in Hk.
+    destruct Hk as [[k' vy] [Hfst Hfin]].
+    cbn in Hfst. subst k'.
+    rewrite list_elem_of_filter in Hfin.
+    destruct Hfin as [Hdom_z Hyin].
+    apply bool_decide_unpack, elem_of_dom in Hdom_z.
+    destruct Hdom_z as [vz Hvz].
+    rewrite elem_of_map_to_list in Hyin.
+    rewrite Hyin, Hvz in Hkfalse. apply Nat.eqb_neq in Hkfalse.
+    destruct (x !! k) as [vx |] eqn:Hvx.
+    - apply (ctor_compat_false_witness (k := k) (vx := zip_with join vx vy) (vy := vz)).
+      + rewrite lookup_merge, Hvx, Hyin. reflexivity.
+      + exact Hvz.
+      + rewrite (length_zip_with_l_eq join vx vy (ctor_compat_same_length k Hxy Hvx Hyin)).
+        rewrite (ctor_compat_same_length k Hxy Hvx Hyin). exact Hkfalse.
+    - apply (ctor_compat_false_witness (k := k) (vx := vy) (vy := vz)).
+      + rewrite lookup_merge, Hvx, Hyin. reflexivity.
+      + exact Hvz.
+      + exact Hkfalse.
+  Qed.
+
+  Lemma ctor_compat_merge_false_right : ∀ {x y z : gmap Ast.id_aux (list value)},
+    ctor_compat x y = false → ctor_compat y z = true →
+    ctor_compat x (merge (option_join (zip_with join)) y z) = false.
+  Proof.
+    intros x y z Hxy Hyz.
+    unfold ctor_compat in Hxy. rewrite forallb_false_iff in Hxy.
+    destruct Hxy as [k [Hk Hkfalse]].
+    unfold key_inter in Hk. rewrite list_elem_of_fmap in Hk.
+    destruct Hk as [[k' vx] [Hfst Hfin]].
+    cbn in Hfst. subst k'.
+    rewrite list_elem_of_filter in Hfin.
+    destruct Hfin as [Hdom_y Hxin].
+    apply bool_decide_unpack, elem_of_dom in Hdom_y.
+    destruct Hdom_y as [vy Hvy].
+    rewrite elem_of_map_to_list in Hxin.
+    rewrite Hxin, Hvy in Hkfalse. apply Nat.eqb_neq in Hkfalse.
+    destruct (z !! k) as [vz |] eqn:Hvz.
+    - apply (ctor_compat_false_witness (k := k) (vx := vx) (vy := zip_with join vy vz)).
+      + exact Hxin.
+      + rewrite lookup_merge, Hvy, Hvz. reflexivity.
+      + rewrite (length_zip_with_l_eq join vy vz (ctor_compat_same_length k Hyz Hvy Hvz)).
+        exact Hkfalse.
+    - apply (ctor_compat_false_witness (k := k) (vx := vx) (vy := vy)).
+      + exact Hxin.
+      + rewrite lookup_merge, Hvy, Hvz. reflexivity.
+      + exact Hkfalse.
+  Qed.
+
+  Lemma ctor_compat_merge_eq : ∀ {x y z : gmap Ast.id_aux (list value)},
+    ctor_compat x y = true → ctor_compat y z = true →
+    ctor_compat x (merge (option_join (zip_with join)) y z) =
+    ctor_compat (merge (option_join (zip_with join)) x y) z.
+  Proof.
+    intros x y z Hxy Hyz.
+    apply Bool.eq_iff_eq_true. split; intro H; apply ctor_compat_of_forall.
+    - intros k vxy vz H_mxy Hvz.
+      rewrite lookup_merge in H_mxy.
+      destruct (y !! k) as [vy |] eqn:Hvy; destruct (x !! k) as [vx |] eqn:Hvx;
+      cbn in H_mxy; try discriminate; injection H_mxy as H_mxy; subst.
+      + rewrite (length_zip_with_l_eq join vx vy (ctor_compat_same_length k Hxy Hvx Hvy)).
+        rewrite (ctor_compat_same_length k Hxy Hvx Hvy).
+        exact (ctor_compat_same_length k Hyz Hvy Hvz).
+      + exact (ctor_compat_same_length k Hyz Hvy Hvz).
+      + assert (Hmyz : (merge (option_join (zip_with join)) y z) !! k = Some vz).
+        { rewrite lookup_merge, Hvy, Hvz. reflexivity. }
+        exact (ctor_compat_same_length k H Hvx Hmyz).
+    - intros k vx vyz Hvx H_myz.
+      rewrite lookup_merge in H_myz.
+      destruct (y !! k) as [vy |] eqn:Hvy; destruct (z !! k) as [vz |] eqn:Hvz;
+      cbn in H_myz; try discriminate; injection H_myz as H_myz; subst.
+      + rewrite (length_zip_with_l_eq join vy vz (ctor_compat_same_length k Hyz Hvy Hvz)).
+        exact (ctor_compat_same_length k Hxy Hvx Hvy).
+      + exact (ctor_compat_same_length k Hxy Hvx Hvy).
+      + assert (Hmxy : (merge (option_join (zip_with join)) x y) !! k = Some vx).
+        { rewrite lookup_merge, Hvx, Hvy. reflexivity. }
+        exact (ctor_compat_same_length k H Hmxy Hvz).
+  Qed.
+
   Lemma join_assoc : ∀ x y z, join x (join y z) = join (join x y) z.
   Proof.
     intros x y.
@@ -1036,26 +863,19 @@ Module Dom (DZ : DOMAIN BinInt.Z) (Dbv : DOMAIN AbsBitvector.Bits) <: DOMAIN Val
       apply map_union_assoc.
     - reintros y IH x z.
       cbn.
-      destruct (ctor_compat x y) eqn : compat_xy; destruct (ctor_compat y z) eqn : compat_yz.
-      + cbn.
-        assert (compat_left : ctor_compat x (merge (option_join (zip_with join)) y z) = true).
-        { apply (ctor_compat_merge_right compat_xy compat_yz). }
-        assert (compat_right : ctor_compat (merge (option_join (zip_with join)) x y) z = true).
-        { apply (ctor_compat_merge_left compat_xy compat_yz). }
-        rewrite compat_left, compat_right.
-        f_equal.
-        apply merge_assoc.
-        intros i.
-        destruct (x !! i) as [xs |]; destruct (y !! i) as [ys |] eqn : HY; destruct (z !! i) as [zs |]; try reflexivity.
-        cbn. f_equal.
-        apply zip_with_assoc.
-        intros x' y' z' elem_xs elem_ys elem_zs.
-        specialize (IH ys).
-        rewrite Forall_forall in IH.
-        apply (fun P => IH P y' elem_ys).
-        apply (elem_snd i), elem_of_map_to_list, HY.
-      + cbn. rewrite (ctor_compat_merge_left_false compat_xy compat_yz). reflexivity.
-      + cbn. rewrite (ctor_compat_merge_right_false compat_xy compat_yz). reflexivity.
+      destruct (ctor_compat x y) eqn:Hxy; destruct (ctor_compat y z) eqn:Hyz; cbn.
+      + rewrite (ctor_compat_merge_eq Hxy Hyz).
+        destruct (ctor_compat (merge (option_join (zip_with join)) x y) z).
+        * f_equal. apply merge_assoc. intros i.
+          destruct (x !! i) as [xs |]; destruct (y !! i) as [ys |] eqn:HY; destruct (z !! i) as [zs |]; cbn; try reflexivity.
+          f_equal. apply zip_with_assoc. intros x' y' z' _ Hy' _.
+          assert (Lys : ys ∈ map snd (map_to_list y)).
+          { apply (elem_snd i). rewrite elem_of_map_to_list. exact HY. }
+          specialize (IH ys Lys). rewrite Forall_forall in IH.
+          exact (IH y' Hy' x' z').
+        * reflexivity.
+      + rewrite (ctor_compat_merge_false_left Hxy Hyz). reflexivity.
+      + rewrite (ctor_compat_merge_false_right Hxy Hyz). reflexivity.
       + reflexivity.
     - reintros yfields IH xfields zfields.
       cbn. f_equal.
@@ -1122,7 +942,14 @@ Module Dom (DZ : DOMAIN BinInt.Z) (Dbv : DOMAIN AbsBitvector.Bits) <: DOMAIN Val
     | (V_string s₁, V_string s₂) => same_or ⊥ V_string s₁ s₂
     | (V_ref id₁, V_ref id₂) => same_or ⊥ V_ref id₁ id₂
     | (V_member ids₁, V_member ids₂) => V_member (ids₁ ∩ ids₂)
-    | (V_ctor m₁, V_ctor m₂) => if ctor_compat m₁ m₂ then V_ctor (merge (option_join (zip_with meet)) m₁ m₂) else ⊥
+    | (V_ctor m₁, V_ctor m₂) =>
+        V_ctor (merge (λ o₁ o₂, match o₁, o₂ with
+                                 | Some l₁, Some l₂ =>
+                                     if length l₁ =? length l₂
+                                     then Some (zip_with meet l₁ l₂)
+                                     else None
+                                 | _, _ => None
+                                 end) m₁ m₂)
     | (V_record m₁, V_record m₂) => V_record (merge (option_map2 meet) m₁ m₂)
     | (⊤, _) => v₂
     | (_, ⊤) => v₁
@@ -1141,12 +968,11 @@ Module Dom (DZ : DOMAIN BinInt.Z) (Dbv : DOMAIN AbsBitvector.Bits) <: DOMAIN Val
     - f_equal; apply DZP.meet_idem.
     - f_equal. set_solver.
     - reintros x IH.
-      rewrite ctor_compat_idemp.
-      f_equal.
+      cbn. f_equal.
       apply merge_idemp.
       intros i.
       destruct (x !! i) as [xs |] eqn : Hx; cbn; try reflexivity.
-      f_equal.
+      rewrite Nat.eqb_refl. f_equal.
       apply zip_with_idemp.
       rewrite <- elem_of_map_to_list in Hx. apply elem_snd in Hx.
       specialize (IH xs Hx).
@@ -1179,22 +1005,21 @@ Module Dom (DZ : DOMAIN BinInt.Z) (Dbv : DOMAIN AbsBitvector.Bits) <: DOMAIN Val
       cbn. f_equal.
       set_solver.
     - reintros x IH y.
-      cbn.
-      join_if_simp.
-      + apply ctor_compat_comm.
-      + intros Compat. f_equal.
-        apply merge_comm.
-        intros id.
-        destruct (x !! id) as [xs |] eqn : XH;
-        destruct (y !! id) as [ys |]; try reflexivity.
-        specialize (IH xs).
-        assert (L : xs ∈ map snd (map_to_list x)).
-        { apply (elem_snd id), elem_of_map_to_list, XH. }
-        specialize (IH L).
-        cbn. f_equal.
-        apply zip_with_comm. intros ?? In_xs ?.
-        rewrite Forall_forall in IH.
-        apply (IH _ In_xs).
+      cbn. f_equal.
+      apply merge_comm.
+      intros id.
+      destruct (x !! id) as [xs |] eqn : XH;
+      destruct (y !! id) as [ys |]; try reflexivity.
+      cbn. rewrite Nat.eqb_sym.
+      destruct (length ys =? length xs); try reflexivity.
+      f_equal.
+      apply zip_with_comm. intros ?? In_xs ?.
+      specialize (IH xs).
+      assert (L : xs ∈ map snd (map_to_list x)).
+      { apply (elem_snd id), elem_of_map_to_list, XH. }
+      specialize (IH L).
+      rewrite Forall_forall in IH.
+      apply (IH _ In_xs).
     - reintros xfields IH yfields.
       cbn. f_equal.
       apply merge_comm.
@@ -1311,28 +1136,29 @@ Module Dom (DZ : DOMAIN BinInt.Z) (Dbv : DOMAIN AbsBitvector.Bits) <: DOMAIN Val
       cbn. f_equal.
       set_solver.
     - reintros y IH x z.
-      cbn.
-      destruct (ctor_compat x y) eqn : compat_xy; destruct (ctor_compat y z) eqn : compat_yz.
-      + cbn.
-        assert (compat_left : ctor_compat x (merge (option_join (zip_with meet)) y z) = true).
-        { apply (ctor_compat_merge_right compat_xy compat_yz). }
-        assert (compat_right : ctor_compat (merge (option_join (zip_with meet)) x y) z = true).
-        { apply (ctor_compat_merge_left compat_xy compat_yz). }
-        rewrite compat_left, compat_right.
-        f_equal.
-        apply merge_assoc.
-        intros i.
-        destruct (x !! i) as [xs |]; destruct (y !! i) as [ys |] eqn : HY; destruct (z !! i) as [zs |]; try reflexivity.
-        cbn. f_equal.
-        apply zip_with_assoc.
-        intros x' y' z' elem_xs elem_ys elem_zs.
-        specialize (IH ys).
-        rewrite Forall_forall in IH.
-        apply (fun P => IH P y' elem_ys).
-        apply (elem_snd i), elem_of_map_to_list, HY.
-      + cbn. rewrite (ctor_compat_merge_left_false compat_xy compat_yz). reflexivity.
-      + cbn. rewrite (ctor_compat_merge_right_false compat_xy compat_yz). reflexivity.
-      + reflexivity.
+      cbn. f_equal.
+      apply merge_assoc. intros i.
+      destruct (x !! i) as [xs |]; destruct (y !! i) as [ys |] eqn:HY; destruct (z !! i) as [zs |]; cbn;
+        try reflexivity; try (destruct (length _ =? length _); reflexivity).
+      destruct (length xs =? length ys) eqn:Hxy; cbn.
+      + apply Nat.eqb_eq in Hxy.
+        rewrite (length_zip_with_l_eq meet xs ys Hxy).
+        destruct (length ys =? length zs) eqn:Hyz; cbn.
+        * apply Nat.eqb_eq in Hyz.
+          rewrite (length_zip_with_l_eq meet ys zs Hyz).
+          rewrite (proj2 (Nat.eqb_eq _ _) (eq_trans Hxy Hyz)).
+          rewrite (proj2 (Nat.eqb_eq _ _) Hxy). f_equal.
+          apply zip_with_assoc. intros x' y' z' _ Hy' _.
+          assert (Lys : ys ∈ map snd (map_to_list y)).
+          { apply (elem_snd i). rewrite elem_of_map_to_list. exact HY. }
+          specialize (IH ys Lys). rewrite Forall_forall in IH.
+          exact (IH y' Hy' x' z').
+        * rewrite Nat.eqb_neq in Hyz.
+          rewrite (proj2 (Nat.eqb_neq _ _) (fun H => Hyz (eq_trans (eq_sym Hxy) H))). reflexivity.
+      + destruct (length ys =? length zs) eqn:Hyz; cbn; try reflexivity.
+        apply Nat.eqb_eq in Hyz.
+        rewrite (length_zip_with_l_eq meet ys zs Hyz).
+        rewrite Hxy. reflexivity.
     - reintros yfields IH xfields zfields.
       cbn. f_equal.
       apply merge_assoc.
@@ -1425,47 +1251,42 @@ Module Dom (DZ : DOMAIN BinInt.Z) (Dbv : DOMAIN AbsBitvector.Bits) <: DOMAIN Val
       set_solver.
     - reintros x IH y.
       cbn.
-      destruct (ctor_compat x y) eqn : compat; try reflexivity.
-      rewrite (ctor_compat_merge_right ctor_compat_idemp compat).
-      f_equal.
+      assert (Hcompat : ctor_compat x (merge (λ o₁ o₂, match o₁, o₂ with
+        | Some l₁, Some l₂ => if length l₁ =? length l₂ then Some (zip_with meet l₁ l₂) else None
+        | _, _ => None end) x y) = true).
+      { apply ctor_compat_of_forall. intros k vx vm Hvx Hm.
+        rewrite lookup_merge, Hvx in Hm.
+        destruct (y !! k) as [vy |]; cbn in Hm; try discriminate.
+        destruct (length vx =? length vy) eqn:Hlxy; cbn in Hm; try discriminate.
+        injection Hm as Hm. subst.
+        apply Nat.eqb_eq in Hlxy.
+        exact (eq_sym (length_zip_with_l_eq meet vx vy Hlxy)). }
+      rewrite Hcompat. f_equal.
       apply merge_Some; try reflexivity.
-      intros i.
-      rewrite lookup_merge.
-      symmetry.
-      destruct (x !! i) as [xs |] eqn : Hx; destruct (y !! i) as [ys |] eqn : Hy; cbn.
-      + f_equal.
-        assert (L : length xs = length ys).
-        { unfold ctor_compat in compat.
-          rewrite andb_true_iff in compat.
-          destruct compat as [_ compat].
-          rewrite forallb_forall in compat.
-          rewrite <- elem_of_map_to_list, list_elem_of_In in Hx.
-          specialize (compat (i, xs) Hx).
-          cbn in compat.
-          rewrite Hy in compat.
-          cbn in compat.
-          rewrite Nat.eqb_eq in compat.
-          exact compat.
-        }
-        rewrite <- elem_of_map_to_list in Hx. apply elem_snd in Hx.
-        specialize (IH xs Hx).
-        clear Hy Hx compat i y x.
-        generalize dependent ys.
-        induction xs as [| x xs IHxs].
-        * intros; reflexivity.
-        * intros ys L.
-          destruct ys as [| y ys]; [ cbn in L; discriminate | idtac ].
-          cbn.
-          f_equal.
-          ** rewrite Forall_cons in IH. destruct IH as [IH _]. apply IH.
-          ** cbn in L. apply eq_add_S in L. rewrite Forall_cons in IH. destruct IH as [_ IH]. specialize (IHxs IH ys L). apply IHxs.
-      + f_equal. apply zip_with_idemp; intros; apply join_idemp.
-      + apply ctor_compat_same_keys in compat.
-        rewrite same_keys_alt in compat. unfold same_keys_alt_def in compat.
-        specialize (compat i).
-        rewrite Hx, Hy in compat.
-        discriminate.
-      + reflexivity.
+      intros i. rewrite lookup_merge.
+      destruct (x !! i) as [xs |] eqn:Hx; cbn; try reflexivity;
+        try (destruct (y !! i); reflexivity).
+      destruct (y !! i) as [ys |]; cbn; try reflexivity.
+      destruct (length xs =? length ys) eqn:Hxy; cbn; try reflexivity.
+      apply Nat.eqb_eq in Hxy.
+      f_equal.
+      assert (IH_xs : Forall (λ v, ∀ w, join v (meet v w) = v) xs).
+      { apply IH.
+        apply (elem_snd i).
+        rewrite elem_of_map_to_list. exact Hx. }
+      rewrite Forall_forall in IH_xs.
+      clear IH Hcompat i Hx x y.
+      revert ys Hxy.
+      induction xs as [| x' xs' IHxs'].
+      + intros. reflexivity.
+      + intros ys' Lxy'.
+        destruct ys' as [| y' ys'']; [cbn in Lxy'; discriminate|].
+        cbn in Lxy' |- *. apply eq_add_S in Lxy'.
+        f_equal.
+        * symmetry. apply IH_xs, list_elem_of_here.
+        * apply IHxs'.
+          { intros v Hv. exact (IH_xs v (list_elem_of_further _ _ _ Hv)). }
+          { exact Lxy'. }
     - reintros x IH y.
       cbn.
       f_equal.
@@ -1552,46 +1373,31 @@ Module Dom (DZ : DOMAIN BinInt.Z) (Dbv : DOMAIN AbsBitvector.Bits) <: DOMAIN Val
     - reintros x IH y.
       cbn.
       destruct (ctor_compat x y) eqn : compat; try reflexivity.
-      rewrite (ctor_compat_merge_right ctor_compat_idemp compat).
       f_equal.
       apply merge_Some; try reflexivity.
-      intros i.
-      rewrite lookup_merge.
-      symmetry.
-      destruct (x !! i) as [xs |] eqn : Hx; destruct (y !! i) as [ys |] eqn : Hy; cbn.
-      + f_equal.
-        assert (L : length xs = length ys).
-        { unfold ctor_compat in compat.
-          rewrite andb_true_iff in compat.
-          destruct compat as [_ compat].
-          rewrite forallb_forall in compat.
-          rewrite <- elem_of_map_to_list, list_elem_of_In in Hx.
-          specialize (compat (i, xs) Hx).
-          cbn in compat.
-          rewrite Hy in compat.
-          cbn in compat.
-          rewrite Nat.eqb_eq in compat.
-          exact compat.
-        }
-        rewrite <- elem_of_map_to_list in Hx. apply elem_snd in Hx.
-        specialize (IH xs Hx).
-        clear Hy Hx compat i y x.
-        generalize dependent ys.
-        induction xs as [| x xs IHxs].
-        * intros; reflexivity.
-        * intros ys L.
-          destruct ys as [| y ys]; [ cbn in L; discriminate | idtac ].
-          cbn.
-          f_equal.
-          ** rewrite Forall_cons in IH. destruct IH as [IH _]. apply IH.
-          ** cbn in L. apply eq_add_S in L. rewrite Forall_cons in IH. destruct IH as [_ IH]. specialize (IHxs IH ys L). apply IHxs.
-      + f_equal. apply zip_with_idemp; intros; apply meet_idemp.
-      + apply ctor_compat_same_keys in compat.
-        rewrite same_keys_alt in compat. unfold same_keys_alt_def in compat.
-        specialize (compat i).
-        rewrite Hx, Hy in compat.
-        discriminate.
-      + reflexivity.
+      intros i. rewrite lookup_merge.
+      destruct (x !! i) as [xs |] eqn:Hx; cbn; try reflexivity.
+      destruct (y !! i) as [ys |] eqn:Hy; cbn.
+      + assert (Hlxy : length xs = length ys) by exact (ctor_compat_same_length i compat Hx Hy).
+        rewrite (proj2 (Nat.eqb_eq _ _) (eq_sym (length_zip_with_l_eq join xs ys Hlxy))).
+        f_equal.
+        assert (IH_xs : Forall (λ v, ∀ w, meet v (join v w) = v) xs).
+        { apply IH. apply (elem_snd i). rewrite elem_of_map_to_list. exact Hx. }
+        rewrite Forall_forall in IH_xs.
+        clear IH compat i Hx Hy x y.
+        revert ys Hlxy IH_xs.
+        induction xs as [| x' xs' IHxs'].
+        { intros. reflexivity. }
+        intros ys' Hlxy' IH_xs'.
+        destruct ys' as [| y' ys'']; [cbn in Hlxy'; discriminate|].
+        cbn in Hlxy' |- *. apply eq_add_S in Hlxy'.
+        f_equal.
+        * symmetry. exact (IH_xs' x' (list_elem_of_here x' xs') y').
+        * apply IHxs'.
+          { exact Hlxy'. }
+          { intros v Hv. exact (IH_xs' v (list_elem_of_further _ _ _ Hv)). }
+      + rewrite Nat.eqb_refl. f_equal.
+        symmetry. apply zip_with_idemp. intros v _. apply meet_idemp.
     - reintros x IH y.
       cbn.
       f_equal.
@@ -1619,11 +1425,11 @@ Module Dom (DZ : DOMAIN BinInt.Z) (Dbv : DOMAIN AbsBitvector.Bits) <: DOMAIN Val
     | (V_member xs, V_member ys) => if decide (xs ⊆ ys) then true else false
     | (V_ctor xm, V_ctor ym) =>
         if ctor_compat xm ym
-        then map_fold (λ k ys b, b && (match xm !! k with
-                                       | Some xs => list_eqb leb xs ys
+        then map_fold (λ k xs b, b && (match ym !! k with
+                                       | Some ys => list_eqb leb xs ys
                                        | None => false
                                        end))
-                      true ym
+                      true xm
         else false
     | (V_record xm, V_record ym) =>
         map_fold (λ k x b, b && (match ym !! k with
@@ -1720,28 +1526,38 @@ Module Dom (DZ : DOMAIN BinInt.Z) (Dbv : DOMAIN AbsBitvector.Bits) <: DOMAIN Val
       rewrite map_fold_foldr in H.
       destruct (x !! i) as [xv |] eqn : Hx; destruct (y !! i) as [yv |] eqn : Hy; cbn; try reflexivity.
       + f_equal.
-        rewrite <- elem_of_map_to_list in Hx.
-        pose proof Hx as Hx'.
-        apply list_elem_of_split in Hx.
-        destruct Hx as [xs1 [xs2 Hx]].
-        rewrite Hx in H.
+        rewrite <- elem_of_map_to_list in Hy.
+        apply list_elem_of_split in Hy.
+        destruct Hy as [ys1 [ys2 Hy]].
+        rewrite Hy in H.
         rewrite (SetoidList.fold_right_commutes eq_equivalence eq_equivalence) in H.
-        * cbn in H. rewrite andb_true_iff in H. destruct H as [_ H]. rewrite Hy in H.
-          apply elem_snd in Hx'.
-          specialize (IH _ Hx').
+        * cbn in H. rewrite andb_true_iff in H. destruct H as [_ H]. rewrite Hx in H.
+          rewrite <- elem_of_map_to_list in Hx.
+          apply elem_snd in Hx.
+          specialize (IH _ Hx).
           apply (zip_with_le_join_1 IH H).
         * unfold Proper. intros; subst; reflexivity.
         * unfold SetoidList.transpose.
           intros [k1 v1] [k2 v2] b.
           cbn.
-          destruct (y !! k1); destruct (y !! k2); destruct b; cbn.
+          destruct (x !! k1); destruct (x !! k2); destruct b; cbn.
           all: repeat (rewrite andb_false_l + rewrite andb_false_r); try reflexivity.
           rewrite andb_comm. reflexivity.
       + exfalso.
-        apply ctor_compat_same_keys in compat.
-        rewrite <- Is_true_true, same_keys_comm in compat.
-        pose proof (same_keys_none compat Hx) as L.
-        rewrite Hy in L. discriminate.
+        rewrite <- elem_of_map_to_list in Hy.
+        apply list_elem_of_split in Hy.
+        destruct Hy as [ys1 [ys2 Hy]].
+        rewrite Hy in H.
+        rewrite (SetoidList.fold_right_commutes eq_equivalence eq_equivalence) in H.
+        * cbn in H. rewrite andb_true_iff in H. destruct H as [_ H]. rewrite Hx in H.
+          discriminate.
+        * unfold Proper. intros; subst; reflexivity.
+        * unfold SetoidList.transpose.
+          intros [k1 v1] [k2 v2] b.
+          cbn.
+          destruct (x !! k1); destruct (x !! k2); destruct b; cbn.
+          all: repeat (rewrite andb_false_l + rewrite andb_false_r); try reflexivity.
+          rewrite andb_comm. reflexivity.
     - reintros x IH y H.
       cbn in H |- *. f_equal.
       symmetry.
@@ -1827,20 +1643,13 @@ Module Dom (DZ : DOMAIN BinInt.Z) (Dbv : DOMAIN AbsBitvector.Bits) <: DOMAIN Val
       rewrite foldr_uncurry_to_forallb, forallb_forall.
       intros [k v] In. unfold uncurry.
       specialize (H k).
-      rewrite <- list_elem_of_In in In.
-      pose proof In as In'.
-      apply elem_snd in In.
-      rewrite elem_of_map_to_list in In'.
-      specialize (IH v In).
-      destruct (y !! k) as [ys |] eqn : Hy; destruct (x !! k) as [xs |] eqn : Hx; cbn in H; try discriminate.
-      + apply (zip_with_le_join_2 IH); inversion In'; subst.
-        * rewrite ctor_compat_comm in E.
-          apply (ctor_compat_same_length k E Hy Hx).
-        * injection H. intros. assumption.
-      + apply ctor_compat_same_keys in E.
-        rewrite <- Is_true_true in E.
-        pose proof (same_keys_none E Hx) as L.
-        rewrite L in Hy. discriminate.
+      rewrite <- list_elem_of_In, elem_of_map_to_list in In.
+      rewrite In in H.
+      destruct (y !! k) as [ys |] eqn : Hy; cbn in H; try discriminate.
+      apply Some_inj in H.
+      assert (Hys : ys ∈ map snd (map_to_list y)).
+      { apply (elem_snd k). rewrite elem_of_map_to_list. exact Hy. }
+      apply (zip_with_le_join_2 (IH ys Hys) (eq_sym (ctor_compat_same_length k E In Hy)) H).
     - reintros y IH x H.
       cbn in H |- *.
       injection H. clear H. intros H.

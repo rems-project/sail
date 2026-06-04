@@ -1,5 +1,7 @@
 open Base
+open Decidable
 open Fin_maps
+open Option
 
 type __ = Obj.t
 let __ = let rec f _ = Obj.repr f in Obj.repr f
@@ -35,6 +37,14 @@ let mapset_eq_dec eqDecision1 x1 x2 =
   let { mapset_car = m1 } = x1 in
   let { mapset_car = m2 } = x2 in decide (decide_rel eqDecision1 m1 m2)
 
+(** val mapset_elem_of_dec :
+    (__ -> ('a1, __, 'a2) coq_Lookup) -> ('a1, 'a2 mapset') coq_RelDecision **)
+
+let mapset_elem_of_dec h0 x x0 =
+  decide
+    (decide_rel (Obj.magic option_eq_dec unit_eq_dec)
+      (lookup (h0 __) x x0.mapset_car) (Some ()))
+
 (** val mapset_subseteq_dec :
     'a2 coq_FMap -> (__ -> ('a1, __, 'a2) coq_Lookup) -> (__ -> 'a2
     coq_Empty) -> (__ -> ('a1, __, 'a2) coq_PartialAlter) -> 'a2 coq_OMap ->
@@ -46,3 +56,8 @@ let mapset_subseteq_dec _ _ _ _ _ h4 _ _ eqDecision1 x1 x2 =
   decide
     (decide_rel (mapset_eq_dec eqDecision1) (union (mapset_union h4) x1 x2)
       x2)
+
+(** val mapset_dom : 'a1 coq_FMap -> ('a1, 'a1 mapset') coq_Dom **)
+
+let mapset_dom h m =
+  { mapset_car = (fmap h (fun _ -> ()) m) }
