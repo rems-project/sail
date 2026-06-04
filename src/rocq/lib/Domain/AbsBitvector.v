@@ -73,6 +73,12 @@ Module Dom <: DOMAIN Bits <: SAIL_BITS.
     | Top : bvset
     | Bvs : { m : gmap nat (list ubit) | valid m } → bvset.
 
+  Definition to_bv_list (x : bvset) : option (list (list ubit)) :=
+    match x with
+    | Top => None
+    | Bvs x => Some (List.map snd (map_to_list (`x)))
+    end.
+
   Definition t : Set := bvset.
 
   Definition top := Top.

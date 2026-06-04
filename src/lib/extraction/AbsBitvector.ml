@@ -42,6 +42,16 @@ module Dom =
   | Top -> f
   | Bvs s -> f0 s
 
+  (** val to_bv_list : bvset -> Three.ubit list list option **)
+
+  let to_bv_list = function
+  | Top -> None
+  | Bvs x0 ->
+    Some
+      (map snd
+        (map_to_list (fun _ -> gmap_fold Nat.eq_dec nat_countable)
+          (let Coq_exist a = x0 in a)))
+
   type t = bvset
 
   (** val top : bvset **)

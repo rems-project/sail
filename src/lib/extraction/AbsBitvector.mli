@@ -34,6 +34,8 @@ module Dom :
     'a1 -> ((Big_int_Z.big_int, Three.ubit list) gmap coq_sig -> 'a1) ->
     bvset -> 'a1
 
+  val to_bv_list : bvset -> Three.ubit list list option
+
   type t = bvset
 
   val top : bvset

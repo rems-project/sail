@@ -44,80 +44,25 @@
 (*  SPDX-License-Identifier: BSD-2-Clause                                   *)
 (****************************************************************************)
 
+(** This module provides an interface to the Rocq [Extraction.ZAst] module for partial evaluation of Sail expressions.
+*)
+
 open Ast
-open Ast_util
 
-(** The [PRINT_CONFIG] module type can be used to customise the behavior of the pretty-printer *)
-module type PRINT_CONFIG = sig
-  (** If true, then the printer will insert additional braces into the source (essentially creating additional E_block
-      nodes). This will give the code a more normal imperative look, especially after re-writing passes that are on the
-      path to the theorem prover targets that use a more functional style. *)
-  val insert_braces : bool
-
-  (** If true, the printer will attempt to reverse some transformations that are done to the source. It can do this
-      where passes insert attributes into the AST that it can use to revert various changes. It will do the following:
-
-      - Reintroduce [v[n]] for vector_access and [v[n..m]] for vector_subrange
-      - Undo overloading
-      - Turn [operator OP(x, y)] back into [x OP y]
-      - Reintroduce setters [setter(x, y)] into [setter(x) = y] *)
-  val resugar : bool
-
-  (** If true, all attributes [$[attr ...]] will be hidden in the output. Note that [resugar] will remove any attributes
-      it uses as hints for resugaring even when this is false. *)
-  val hide_attributes : bool
+module Zinterp : sig
+  type t
 end
 
-(** The [Printer] functor defines the printing function based on the supplied printing configuration *)
-module Printer (Config : PRINT_CONFIG) : sig
-  val doc_id : id -> PPrint.document
-
-  val doc_typ : typ -> PPrint.document
-
-  val doc_nc : n_constraint -> PPrint.document
-
-  val doc_binding : typquant * typ -> PPrint.document
-
-  val doc_typschm : typschm -> PPrint.document
-
-  val doc_pat : uannot pat -> PPrint.document
-
-  val doc_exp : uannot exp -> PPrint.document
-
-  val doc_block : uannot exp list -> PPrint.document
-
-  val doc_funcl : uannot funcl -> PPrint.document
-
-  val doc_mapcl : uannot mapcl -> PPrint.document
-
-  val doc_spec : uannot val_spec -> PPrint.document
-
-  val doc_type_def : uannot type_def -> PPrint.document
-
-  val doc_register : uannot dec_spec -> PPrint.document
-
-  val doc_def : untyped_def -> PPrint.document
-
-  val doc_ast : untyped_ast -> PPrint.document
+module Pretty : sig
+  val docs : Zinterp.t -> PPrint.document list
 end
 
-(** This function is intended to reformat machine-generated Sail into something a bit more readable, it is not intended
-    to be used as a general purpose code formatter. The output will be dumped as multiple files into the directory
-    argument. *)
-val reformat : into_directory:string -> untyped_ast -> unit
+type partial_state
 
-(** The default [PRINT_CONFIG] sets all the options to false, so it prints the AST 'as is' without modifications. *)
-module Default_print_config : PRINT_CONFIG
+val from_exp : Type_check.tannot exp -> partial_state
 
-(** For convenience, other modules can get the default behavior by just importing this module. *)
-include module type of Printer (Default_print_config)
+val partial_state_ctx : partial_state -> Zinterp.t
 
-(** This function is primarly used to dump the AST by debug options, such as [--ddump-tc-ast]. *)
-val output_ast : ?line_width:int -> out_channel -> untyped_ast -> unit
+val string_of_focus : partial_state -> string
 
-(** Some convenience functions for outputting PPrint documents *)
-module Document : sig
-  val to_channel : ?line_width:int -> out_channel -> PPrint.document -> unit
-
-  val to_string : ?line_width:int -> PPrint.document -> string
-end
+val step : partial_state -> partial_state
