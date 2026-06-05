@@ -22,6 +22,8 @@ let inline bind = Sail2_state_monad.bindS
 let inline (>>=) = Sail2_state_monad.(>>$=)
 let inline (>>) = Sail2_state_monad.(>>$)
 
+let inline Fail = Sail2_state_monad.failS
+
 val either_bind : forall 'e 'a 'b. either 'e 'a -> ('a -> either 'e 'b) -> either 'e 'b
 let either_bind m f =
   match m with

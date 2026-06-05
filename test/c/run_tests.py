@@ -112,9 +112,7 @@ def test_ocaml(name):
         results.collect(tests)
     return results.finish()
 
-def test_lem(name):
-    banner('Testing {}'.format(name))
-    results = Results(name)
+def add_lem_expected_failures(results):
     results.expect_failure("inc_tests.sail", "missing built-in functions for increasing vectors in Lem library")
     results.expect_failure("read_write_ram.sail", "uses memory primitives not provided by default in Lem")
     results.expect_failure("fail_exception.sail", "try-blocks around pure expressions not supported in Lem (and a little silly)")
@@ -122,10 +120,8 @@ def test_lem(name):
     results.expect_failure("loop_termination.sail", "try-blocks around pure expressions not supported in Lem (and a little silly)")
     results.expect_failure("real.sail", "print_real not available for Lem at present")
     results.expect_failure("real_prop.sail", "print_real not available for Lem at present")
-    results.expect_failure("concurrency_interface.sail", "test doesn't meet Lem library's expectations for the concurrency interface")
     results.expect_failure("concurrency_interface_v2.sail", "test doesn't meet Lem library's expectations for the concurrency interface")
     results.expect_failure("concurrency_interface_v2_var.sail", "test doesn't meet Lem library's expectations for the concurrency interface")
-    results.expect_failure("concurrency_interface_write.sail", "test harness doesn't meet Lem library's expectations for the concurrency interface")
     results.expect_failure("pc_no_wildcard.sail", "register type unsupported by Lem backend")
     results.expect_failure("constructor247.sail", "don't attempt to support so many constructors in lem -> ocaml builds")
     results.expect_failure("either.sail", "Lem breaks because it has the same name as a library module")
@@ -133,6 +129,13 @@ def test_lem(name):
     results.expect_failure("outcome_impl_int.sail", "unsupported outcome")
     results.expect_failure("outcome_impl_bool.sail", "unsupported outcome")
     results.expect_failure("remove_e_assign_try.sail", "try-blocks around pure expressions not supported in Lem (and a little silly)")
+
+def test_lem(name):
+    banner('Testing {}'.format(name))
+    results = Results(name)
+    add_lem_expected_failures(results)
+    results.expect_failure("concurrency_interface.sail", "test doesn't meet Lem library's expectations for the concurrency interface")
+    results.expect_failure("concurrency_interface_write.sail", "test harness doesn't meet Lem library's expectations for the concurrency interface")
     for filenames in chunks(os.listdir('.'), parallel()):
         tests = {}
         for filename in filenames:
@@ -154,6 +157,35 @@ def test_lem(name):
                     step('diff {}.lerr ../{}.err_expect'.format(basename, basename))
                 os.chdir('..')
                 step('rm -r _lbuild_{}'.format(basename))
+                print_ok(filename)
+                sys.exit()
+        results.collect(tests)
+    return results.finish()
+
+# NB: this is a little sketchy at the moment; in particular, failures might not terminate except by running out of memory
+def test_hol4(name):
+    banner('Testing {}'.format(name))
+    results = Results(name)
+    add_lem_expected_failures(results)
+    for filenames in chunks(os.listdir('.'), parallel()):
+        tests = {}
+        for filename in filenames:
+            basename = os.path.splitext(os.path.basename(filename))[0]
+            tests[filename] = os.fork()
+            if tests[filename] == 0:
+                step('\'{}\' -lem -lem_lib Undefined_override -o {} {}'.format(sail, basename, filename))
+                step('mkdir -p _holbuild_{}'.format(basename))
+                step('mv {}.lem {}_types.lem _holbuild_{}'.format(basename, basename, basename))
+                step('rm {}_lemmas.thy'.format(basename.capitalize()))
+                step('./mk_lem_hol.sh {} {}'.format(basename, sail_dir))
+                os.chdir('_holbuild_{}'.format(basename))
+                step('lem -lib {}/lib/hol -hol *.lem'.format(sail_dir))
+                step('LEM_DIR=$(opam var lem:share) Holmake'.format(sail_dir))
+                step('LEM_DIR=$(opam var lem:share) hol run main.sml'.format(sail_dir), expected_status = 1 if basename.startswith('fail') else 0)
+                #if os.path.exists('../{}.err_expect'.format(basename)):
+                #    step('diff {}.lerr ../{}.err_expect'.format(basename, basename))
+                os.chdir('..')
+                step('rm -r _holbuild_{}'.format(basename))
                 print_ok(filename)
                 sys.exit()
         results.collect(tests)
@@ -241,6 +273,9 @@ if 'ocaml' in targets:
 
 if 'lem' in targets:
     xml += test_lem('lem')
+
+if 'hol' in targets or 'hol4' in targets:
+    xml += test_hol4('hol4')
 
 if 'rocq' in targets or 'coq' in targets:
     xml += test_rocq('rocq')
