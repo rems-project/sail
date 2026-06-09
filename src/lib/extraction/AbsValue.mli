@@ -12,8 +12,10 @@ open Nat0
 open OptionUtil
 open PatternMatch
 open PeanoNat
+open QArith_base
 open Qcanon
 open SailBase
+open TypeAnnot
 open ValueType
 open Base
 open Decidable
@@ -127,6 +129,14 @@ module Dom :
   val of_lit : lit -> value
 
   val lookup_field : value -> id_aux -> value
+
+  module Matching :
+   functor (Tannot:S) ->
+   sig
+    val pattern_match_literal : lit -> value -> value match_result
+
+    val pattern_match : Tannot.t pat -> value -> value match_result
+   end
 
   val complete : t binding -> t
  end

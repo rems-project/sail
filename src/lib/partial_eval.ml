@@ -46,9 +46,12 @@
 
 open Ast
 open Ast_compare
+open Ast_defs
 open Ast_util
 
 open Extraction.ZAst
+
+module StringMap = Util.StringMap
 
 let fallthrough () =
   let open Type_check in
@@ -98,6 +101,21 @@ module B = Extraction.ZAst.ExpBuilder (Tannot)
 module Zinterp = Extraction.ZAst.Make (Tannot) (B)
 
 module Lattice = Zinterp.R.L
+
+type gstate = {
+  primops : (Lattice.value list -> Lattice.value) StringMap.t;
+  fundefs : Type_check.tannot fundef Bindings.t;
+  typecheck_env : Type_check.Env.t;
+}
+
+let initial_gstate ~typecheck_env ~ast =
+  let gstate = { primops = StringMap.empty; fundefs = Bindings.empty; typecheck_env } in
+  let add_function gstate = function
+    | DEF_aux (DEF_fundef fdef, _) -> { gstate with fundefs = Bindings.add (id_of_fundef fdef) fdef gstate.fundefs }
+    | _ -> gstate
+  in
+  let gstate = List.fold_left add_function gstate ast.defs in
+  gstate
 
 let zexp_aux_parent = function
   | Z_single (p, _)
@@ -150,7 +168,7 @@ module Pretty = struct
     go (List.rev bv);
     Buffer.contents buf
 
-  let string_of_value (v : Lattice.value) =
+  let rec string_of_value (v : Lattice.value) =
     match v with
     | V_bot -> "bot"
     | V_top -> "top"
@@ -176,6 +194,10 @@ module Pretty = struct
             | _ -> "{" ^ Util.string_of_list "," string_of_bitvector bvs ^ "}"
           )
       )
+    | V_unit -> "()"
+    | V_string str -> "\"" ^ String.escaped str ^ "\""
+    | V_bool b -> if b then "true" else "false"
+    | V_tuple values -> Util.string_of_list ", " string_of_value values
     | _ -> "?"
 
   let doc_residual ?(show_partial = false) (r : Zinterp.R.t) =
@@ -311,15 +333,63 @@ let from_exp exp = { ctx = Z_top; state = Zinterp.R.empty; focus = Extraction.Da
 
 let unaux_id = function Id_aux (id, _) -> id
 
-let step p =
-  let rec go = function
-    | Zinterp.Monad.Pure ((ctx, state), focus) -> { ctx; state; focus }
-    | Zinterp.Monad.Call (id, args, cont) -> (
-        match Util.option_all (List.map (fun r -> r.Zinterp.R.this) args) with
-        | Some args' -> go (cont { this = Some (Lattice.mk_ctor (unaux_id id) args'); exn = None; eff = false })
-        | None -> failwith "bad call"
-      )
-    | Zinterp.Monad.Get_undefined (_, cont) -> go (cont { this = Some Lattice.V_top; exn = None; eff = false })
-    | _ -> failwith "unhandled"
+let exp_of_value v = E_aux (E_internal_value v, (Parse_ast.Unknown, Type_check.empty_tannot))
+
+let arms_of_fundef (FD_aux (FD_function (_, _, funcls), annot)) =
+  let destruct_pexp = function
+    | Pat_aux (Pat_exp (pat, exp), _) -> ((pat, None), exp)
+    | Pat_aux (Pat_when (pat, guard, exp), _) -> ((pat, Some guard), exp)
   in
-  go (Zinterp.step p.ctx p.state p.focus)
+  let pexp_of_funcl (FCL_aux (FCL_funcl (_, pexp), _)) = destruct_pexp pexp in
+  (List.map pexp_of_funcl funcls, annot)
+
+let is_finished { ctx; state = _; focus } =
+  match (ctx, focus) with Z_top, Extraction.Datatypes.Coq_inr (v, _) -> Some v | _ -> None
+
+let mk_interpreter gstate =
+  let open Zinterp.Monad in
+  let stack = Stack.create () in
+
+  let step p =
+    let rec go = function
+      | Pure ((ctx, state), focus) -> (
+          match is_finished { ctx; state; focus } with
+          | Some v -> (
+              match Stack.pop_opt stack with Some cont -> go (cont v) | None -> { ctx; state; focus }
+            )
+          | None -> { ctx; state; focus }
+        )
+      | Early_return _ -> failwith "early return"
+      | Exit _ -> failwith "exit"
+      | Call (id, args, cont) -> (
+          match Util.option_all (List.map (fun r -> r.Zinterp.R.this) args) with
+          | Some args' ->
+              if Type_check.Env.is_outcome id gstate.typecheck_env then
+                go (cont { this = Some (Lattice.mk_ctor (unaux_id id) args'); exn = None; eff = false })
+              else if Type_check.Env.is_extern id gstate.typecheck_env "interpreter" then (
+                let extern = Type_check.Env.get_extern id gstate.typecheck_env "interpreter" in
+                match StringMap.find_opt extern gstate.primops with
+                | Some op -> go (cont { this = Some (op args'); exn = None; eff = false })
+                | None -> failwith "no primop"
+              )
+              else (
+                let arg = if List.length args != 1 then Lattice.V_tuple args' else List.hd args' in
+                let arms, annot = arms_of_fundef (Bindings.find id gstate.fundefs) in
+                Stack.push cont stack;
+                {
+                  ctx = Z_aux (Z_match_head (Z_top, Match, [], Some arms), annot);
+                  state = Zinterp.R.empty;
+                  focus =
+                    Extraction.Datatypes.Coq_inr
+                      ({ this = Some arg; exn = None; eff = false }, B.mk_id annot (mk_id "funarg#"));
+                }
+              )
+          | None -> failwith "bad call"
+        )
+      | Get_config (_, cont) -> failwith "get_config"
+      | Runtime_type_error l -> raise (Reporting.err_general l "Type error")
+      | Get_undefined (_, cont) -> go (cont { this = Some Lattice.V_top; exn = None; eff = false })
+    in
+    go (Zinterp.step p.ctx p.state p.focus)
+  in
+  step

@@ -464,6 +464,8 @@ End ExpBuilder.
 Module Residual (Tannot : TypeAnnot.S) (B : Builder Tannot).
   Module L := AbsValue.Dom Interval.Dom AbsBitvector.Dom.
 
+  Module Matching := L.Matching Tannot.
+
   Record value := {
       (* The actual value returned by some expression. [None] acts a
          bottom value for expressions that don't have a value like
@@ -654,7 +656,7 @@ Module Residual (Tannot : TypeAnnot.S) (B : Builder Tannot).
     in
     match h with
     | ⊥ => inl l
-    | Some v => inl l (* FIXME: inr (L.pattern_match pat v) *)
+    | Some v => inr (Matching.pattern_match pat v)
     end.
 
   Definition end_match (c : match_case) (_ : option state) (_ : list state) : state := empty.

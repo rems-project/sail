@@ -93,6 +93,23 @@ def test_interpreter(name):
         results.collect(tests)
     return results.finish()
 
+def test_partial(name):
+    banner('Testing {}'.format(name))
+    results = Results(name)
+    for filenames in chunks(os.listdir('.'), parallel()):
+        tests = {}
+        for filename in filenames:
+            basename = os.path.splitext(os.path.basename(filename))[0]
+            tests[filename] = os.fork()
+            if tests[filename] == 0:
+                step('timeout 10s \'{}\' -is partial.isail -iout {}.iresult {}'.format(sail, basename, filename))
+                step('diff {}.iresult {}.expect'.format(basename, basename))
+                step('rm {}.iresult'.format(basename))
+                print_ok(filename)
+                sys.exit()
+        results.collect(tests)
+    return results.finish()
+
 def test_ocaml(name):
     banner('Testing {}'.format(name))
     results = Results(name)
@@ -268,6 +285,9 @@ if 'interpreter' in targets:
         xml += test_interpreter('interpreter')
     else:
         print('Skipping interpreter tests because the interpreter is only supported on Unix-like platforms')
+
+if 'partial' in targets:
+    xml += test_partial('partial')
 
 if 'ocaml' in targets:
     xml += test_ocaml('OCaml')

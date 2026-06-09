@@ -56,7 +56,10 @@ open Reporting.Position
 
 module Callgraph_commands = Callgraph_commands
 
-type mode = Normal | Evaluation of frame | PartialEvaluation of Partial_eval.partial_state
+type mode =
+  | Normal
+  | Evaluation of frame
+  | PartialEvaluation of Partial_eval.partial_state * (Partial_eval.partial_state -> Partial_eval.partial_state)
 
 type display_options = { clear : bool; registers : IdSet.t }
 
@@ -172,7 +175,7 @@ let print_program rstate =
       print_endline (Lazy.force out)
   | Evaluation (Done (_, v)) -> print_endline (Value.string_of_value v |> Util.green |> Util.clear)
   | Evaluation _ -> ()
-  | PartialEvaluation pstate ->
+  | PartialEvaluation (pstate, _) ->
       let open PPrint in
       let docs = Partial_eval.(Pretty.docs (partial_state_ctx pstate)) in
       let num_docs = List.length docs in
@@ -187,7 +190,17 @@ let print_program rstate =
 
 let rec run rstate =
   match rstate.mode with
-  | Normal | PartialEvaluation _ -> rstate
+  | Normal -> rstate
+  | PartialEvaluation (pstate, step) -> (
+      match Partial_eval.is_finished pstate with
+      | Some v ->
+          ( match v.Partial_eval.Zinterp.R.this with
+          | Some v -> print_endline ("Result = " ^ Partial_eval.Pretty.string_of_value v)
+          | None -> ()
+          );
+          { rstate with mode = Normal }
+      | None -> run { rstate with mode = PartialEvaluation (step pstate, step) }
+    )
   | Evaluation frame -> (
       match frame with
       | Done (state, v) ->
@@ -373,7 +386,9 @@ let repl_commands =
       repl_action =
         (fun _ pos arg rstate ->
           let exp = Type_check.infer_exp rstate.env (Initial_check.exp_of_string ~inline:pos rstate.ctx arg) in
-          { rstate with mode = PartialEvaluation (Partial_eval.from_exp exp) }
+          let gstate = Partial_eval.initial_gstate ~typecheck_env:rstate.env ~ast:rstate.ast in
+          let step = Partial_eval.mk_interpreter gstate in
+          { rstate with mode = PartialEvaluation (Partial_eval.from_exp exp, step) }
         );
     };
   ]
@@ -757,11 +772,13 @@ let handle_input' rstate input =
             )
         )
     )
-  | PartialEvaluation pstate -> (
+  | PartialEvaluation (pstate, step) -> (
       match input with
-      | Command (cmd, arg, pos) -> handle_command rstate cmd arg pos
+      | Command (cmd, arg, pos) -> (
+          match cmd with ":r" | ":run" -> run rstate | _ -> handle_command rstate cmd arg pos
+        )
       | Empty ->
-          let rstate = { rstate with mode = PartialEvaluation (Partial_eval.step pstate) } in
+          let rstate = { rstate with mode = PartialEvaluation (step pstate, step) } in
           print_program rstate;
           rstate
       | _ ->

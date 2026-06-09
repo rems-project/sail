@@ -49,11 +49,25 @@
 
 open Ast
 
+type gstate
+
+val initial_gstate : typecheck_env:Type_check.Env.t -> ast:Type_check.typed_ast -> gstate
+
 module Zinterp : sig
   type t
+
+  module R : sig
+    module L : sig
+      type t
+    end
+
+    type value = { this : L.t option; exn : L.t option; eff : bool }
+  end
 end
 
 module Pretty : sig
+  val string_of_value : Zinterp.R.L.t -> string
+
   val docs : Zinterp.t -> PPrint.document list
 end
 
@@ -65,4 +79,6 @@ val partial_state_ctx : partial_state -> Zinterp.t
 
 val string_of_focus : partial_state -> string
 
-val step : partial_state -> partial_state
+val is_finished : partial_state -> Zinterp.R.value option
+
+val mk_interpreter : gstate -> partial_state -> partial_state
