@@ -1697,7 +1697,7 @@ Module Dom (DZ : DOMAIN BinInt.Z) (Dbv : DOMAIN AbsBitvector.Bits) <: DOMAIN Val
     | V_record m => from_option (λ x, x) ⊥ (m !! name)
     | _ => ⊥
     end.
-(*
+
   Module Matching (Tannot : TypeAnnot.S).
     Import PatternMatch.
 
@@ -1719,6 +1719,6 @@ Module Dom (DZ : DOMAIN BinInt.Z) (Dbv : DOMAIN AbsBitvector.Bits) <: DOMAIN Val
       simple_match value.
 
   End Matching.
-*)
+
   Definition complete (b : PatternMatch.binding t) : t := ⊥.
 End Dom.

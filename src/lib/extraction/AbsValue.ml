@@ -12,8 +12,10 @@ open Nat0
 open OptionUtil
 open PatternMatch
 open PeanoNat
+open QArith_base
 open Qcanon
 open SailBase
+open TypeAnnot
 open ValueType
 open Base
 open Decidable
@@ -554,8 +556,8 @@ module Dom =
         (Aux.unwrap id) (map _UU03b1_ xs))
   | Ast.V_record fields ->
     V_record
-      (Coq_list.foldl (fun m pat ->
-        let (k, v) = pat in
+      (Coq_list.foldl (fun m pat0 ->
+        let (k, v) = pat0 in
         insert
           (map_insert (gmap_partial_alter Aux.eq_eqdec Aux.id_aux_countable))
           (Aux.unwrap k) (_UU03b1_ v) m)
@@ -574,6 +576,46 @@ module Dom =
       from_option (fun x -> x) V_bot
         (lookup (gmap_lookup Aux.eq_eqdec Aux.id_aux_countable) name m)
     | _ -> V_bot
+
+  module Matching =
+   functor (Tannot:S) ->
+   struct
+    (** val pattern_match_literal : lit -> value -> value match_result **)
+
+    let pattern_match_literal l v =
+      let L_aux (aux, _) = l in
+      (match aux with
+       | L_unit -> (match v with
+                    | V_unit -> simple_match
+                    | _ -> Unmatched)
+       | L_true ->
+         (match v with
+          | V_bool b -> if b then simple_match else Unmatched
+          | _ -> Unmatched)
+       | L_false ->
+         (match v with
+          | V_bool b -> if b then Unmatched else simple_match
+          | _ -> Unmatched)
+       | L_num _ -> (match v with
+                     | V_int _ -> simple_match
+                     | _ -> Unmatched)
+       | L_string s1 ->
+         (match v with
+          | V_string s2 -> simple_match_when ((=) s1 s2)
+          | _ -> Unmatched)
+       | L_real r1 ->
+         (match v with
+          | V_real r2 -> simple_match_when (coq_Qeq_bool r1 r2.this)
+          | _ -> Unmatched)
+       | _ -> (match v with
+               | V_bitvector _ -> simple_match
+               | _ -> Unmatched))
+
+    (** val pattern_match : Tannot.t pat -> value -> value match_result **)
+
+    let rec pattern_match _ _ =
+      simple_match
+   end
 
   (** val complete : t binding -> t **)
 
