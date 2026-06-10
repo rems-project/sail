@@ -911,9 +911,10 @@ module Make =
     | Z_app (parent, f, evaluated, unevaluated) ->
       (match unevaluated with
        | [] ->
-         Monad.bind (Monad.Call (f, [], pure)) (fun r ->
+         Monad.bind (Monad.Call (f, (rev (map fst (focus :: evaluated))),
+           pure)) (fun r ->
            pure ((parent, _UU03c3_), (Coq_inr (r,
-             (B.mk_app annot0 f (map snd evaluated))))))
+             (B.mk_app annot0 f (rev (map snd (focus :: evaluated))))))))
        | u :: us ->
          pure (((Z_aux ((Z_app (parent, f, (focus :: evaluated), us)),
            annot0)), _UU03c3_), (Coq_inl u)))

@@ -108,8 +108,19 @@ type gstate = {
   typecheck_env : Type_check.Env.t;
 }
 
+let primop_print_endline args =
+  ( match args with
+  | [Lattice.V_string str] -> Value.output_endline str
+  | _ -> ()
+  );
+  Lattice.V_unit
+
+let initial_primops =
+  StringMap.empty
+  |> StringMap.add "print_endline" primop_print_endline
+
 let initial_gstate ~typecheck_env ~ast =
-  let gstate = { primops = StringMap.empty; fundefs = Bindings.empty; typecheck_env } in
+  let gstate = { primops = initial_primops; fundefs = Bindings.empty; typecheck_env } in
   let add_function gstate = function
     | DEF_aux (DEF_fundef fdef, _) -> { gstate with fundefs = Bindings.add (id_of_fundef fdef) fdef gstate.fundefs }
     | _ -> gstate
