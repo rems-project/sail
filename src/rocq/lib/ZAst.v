@@ -883,8 +883,8 @@ Module Make (Tannot : TypeAnnot.S) (B : Builder Tannot).
     | Z_app parent f evaluated unevaluated =>
         match unevaluated with
         | [] =>
-            r ← Monad.Call f [] (* FIXME (focus :: evaluated) *) pure;
-            pure (parent, σ, inr (r, B.mk_app annot f (List.map snd evaluated)))
+            r ← Monad.Call f (List.rev (List.map fst (focus :: evaluated))) pure;
+            pure (parent, σ, inr (r, B.mk_app annot f (List.rev (List.map snd (focus :: evaluated)))))
         | u :: us => pure (Z_aux (Z_app parent f (focus :: evaluated) us) annot, σ, inl u)
         end
 
