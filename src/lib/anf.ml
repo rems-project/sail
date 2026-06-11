@@ -123,10 +123,12 @@ let aexp_loc (AE_aux (_, { loc = l; _ })) = l
 
 (* Renaming variables in ANF expressions *)
 
-let rec apat_bindings (AP_aux (apat_aux, _)) =
+let rec apat_bindings (AP_aux (apat_aux, { env; _ })) =
   match apat_aux with
   | AP_tuple apats -> List.fold_left NameSet.union NameSet.empty (List.map apat_bindings apats)
-  | AP_id (id, _) -> NameSet.singleton id
+  | AP_id (id, _) -> (
+      match id with Name (id, _) when is_enum_member id env -> NameSet.empty | _ -> NameSet.singleton id
+    )
   | AP_global (id, _) -> NameSet.empty
   | AP_app (_, apat, _) -> apat_bindings apat
   | AP_cons (apat1, apat2) -> NameSet.union (apat_bindings apat1) (apat_bindings apat2)
