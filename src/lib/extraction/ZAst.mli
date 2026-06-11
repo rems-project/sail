@@ -2,6 +2,8 @@ open AbsBitvector
 open AbsValue
 open Ast
 open AstInduction
+open BinInt
+open Bit
 open Datatypes
 open IdUtil
 open Interval
@@ -14,6 +16,8 @@ open Qcanon
 open SailBase
 open TransferBitvectorInterval
 open TypeAnnot
+open Base
+open Fin_maps
 open Gmap
 
 type 'a zlexp_aux =
@@ -50,6 +54,7 @@ type list_case =
 | List
 | Tuple
 | Vector
+| Bitvector
 
 type match_case =
 | Match
@@ -85,6 +90,11 @@ type ('v, 'r, 's, 'a) zexp_aux =
    * 'a exp * 'a exp
 | Z_var_right of ('v, 'r, 's, 'a) zexp * 'a zlexp * 'r list * 'a exp
 | Z_var_body of ('v, 'r, 's, 'a) zexp * 'a zlexp * 'r list * 'r
+| Z_struct of ('v, 'r, 's, 'a) zexp * struct_name * (id * 'r) list * 
+   id * 'a fexp list
+| Z_struct_update_base of ('v, 'r, 's, 'a) zexp * struct_name * 'a fexp list
+| Z_struct_update of ('v, 'r, 's, 'a) zexp * struct_name * 'r
+   * (id * 'r) list * id * 'a fexp list
 and ('v, 'r, 's, 'a) zexp =
 | Z_aux of ('v, 'r, 's, 'a) zexp_aux * 'a annot
 | Z_top
@@ -134,6 +144,13 @@ module ExpBuilder :
     Tannot.t annot -> Tannot.t zlexp -> t list -> t -> Tannot.t exp
 
   val mk_undef : Tannot.t annot -> Tannot.t exp
+
+  val mk_fexp : Tannot.t annot -> (id * t) -> Tannot.t fexp
+
+  val mk_struct : Tannot.t annot -> struct_name -> (id * t) list -> t
+
+  val mk_struct_update :
+    Tannot.t annot -> struct_name -> t -> (id * t) list -> t
  end
 
 module Residual :
@@ -174,6 +191,11 @@ module Residual :
   val mk_assign : Tannot__3.t annot -> Tannot__3.t zlexp -> t list -> t -> t
 
   val mk_undef : Tannot__3.t annot -> t
+
+  val mk_struct : Tannot__3.t annot -> struct_name -> (id * t) list -> t
+
+  val mk_struct_update :
+    Tannot__3.t annot -> struct_name -> t -> (id * t) list -> t
  end) ->
  sig
   module L :
@@ -219,6 +241,8 @@ module Residual :
 
     val mk_ctor : id_aux -> value list -> value
 
+    val mk_member : id_aux -> value
+
     val is_unit : value -> bool
 
     val is_true : value -> bool
@@ -232,6 +256,10 @@ module Residual :
     val bot : t
 
     val value_length : value -> value
+
+    val mk_bitvector' : value list -> AbsBitvector.Dom.t option
+
+    val mk_bitvector : value list -> value
 
     val vdepth : value -> Big_int_Z.big_int
 
@@ -250,23 +278,49 @@ module Residual :
 
     val _UU03b1_ : Ast.value -> value
 
+    val alpha : Ast.value -> value
+
     val of_lit : lit -> value
 
     val lookup_field : value -> id_aux -> value
 
+    val int_concrete : Dom.t -> Big_int_Z.big_int option
+
+    val bv_slice : value -> Big_int_Z.big_int -> Big_int_Z.big_int -> value
+
+    val set_field : value -> id_aux -> value -> value
+
+    val vector_update : value list -> Big_int_Z.big_int -> value -> value list
+
+    val set_bv_range :
+      value -> Big_int_Z.big_int -> Big_int_Z.big_int -> value -> value
+
+    val get_vector_elem : value -> Big_int_Z.big_int -> value
+
+    val set_vector_elem : value -> Big_int_Z.big_int -> value -> value
+
     module Matching :
      functor (Tannot:S) ->
      sig
+      val match_bitvector_lit :
+        bit list -> AbsBitvector.Dom.t -> value match_result
+
       val pattern_match_literal : lit -> value -> value match_result
 
       val pattern_match : Tannot.t pat -> value -> value match_result
      end
+
+    val complete_partial :
+      ((t * Big_int_Z.big_int) * Big_int_Z.big_int) non_empty -> t
 
     val complete : t binding -> t
    end
 
   module Matching :
    sig
+    val match_bitvector_lit :
+      bit list -> AbsBitvector.Dom.t -> L.value match_result
+
     val pattern_match_literal : lit -> L.value -> L.value match_result
 
     val pattern_match : Tannot__3.t pat -> L.value -> L.value match_result
@@ -334,6 +388,11 @@ module Residual :
   val mk_assign :
     Tannot__3.t annot -> Tannot__3.t zlexp -> t list -> t -> value * B.t
 
+  val mk_struct : Tannot__3.t annot -> struct_name -> (id * t) list -> t
+
+  val mk_struct_update :
+    Tannot__3.t annot -> struct_name -> t -> (id * t) list -> t
+
   val empty : state
 
   val join : state -> state -> state
@@ -347,6 +406,36 @@ module Residual :
   val end_match : match_case -> state option -> state list -> state
 
   val lookup : Parse_ast.l -> state -> id -> (Parse_ast.l, L.t) sum
+
+  type update_step =
+  | US_field of id_aux
+  | US_index of Big_int_Z.big_int
+  | US_range of Big_int_Z.big_int * Big_int_Z.big_int
+
+  val update_step_rect :
+    (id_aux -> 'a1) -> (Big_int_Z.big_int -> 'a1) -> (Big_int_Z.big_int ->
+    Big_int_Z.big_int -> 'a1) -> update_step -> 'a1
+
+  val update_step_rec :
+    (id_aux -> 'a1) -> (Big_int_Z.big_int -> 'a1) -> (Big_int_Z.big_int ->
+    Big_int_Z.big_int -> 'a1) -> update_step -> 'a1
+
+  val apply_path : L.t -> update_step list -> L.t -> L.t
+
+  val subexp_concrete_z : t -> Big_int_Z.big_int option
+
+  val zlexp_path :
+    Tannot__3.t zlexp -> t list -> ((id * update_step list) * t list) option
+
+  val state_lookup : state -> id -> L.t
+
+  val assign_id : id -> L.t -> state -> state
+
+  val assign_via_path : Tannot__3.t zlexp -> t list -> L.t -> state -> state
+
+  val last_update_step : update_step list -> update_step option
+
+  val zlexp_subwidth : Tannot__3.t zlexp -> t list -> Big_int_Z.big_int option
 
   val assign : Tannot__3.t zlexp -> t list -> t -> state -> state
  end
@@ -389,6 +478,11 @@ module Make :
   val mk_assign : Tannot__5.t annot -> Tannot__5.t zlexp -> t list -> t -> t
 
   val mk_undef : Tannot__5.t annot -> t
+
+  val mk_struct : Tannot__5.t annot -> struct_name -> (id * t) list -> t
+
+  val mk_struct_update :
+    Tannot__5.t annot -> struct_name -> t -> (id * t) list -> t
  end) ->
  sig
   module R :
@@ -436,6 +530,8 @@ module Make :
 
       val mk_ctor : id_aux -> value list -> value
 
+      val mk_member : id_aux -> value
+
       val is_unit : value -> bool
 
       val is_true : value -> bool
@@ -449,6 +545,10 @@ module Make :
       val bot : t
 
       val value_length : value -> value
+
+      val mk_bitvector' : value list -> AbsBitvector.Dom.t option
+
+      val mk_bitvector : value list -> value
 
       val vdepth : value -> Big_int_Z.big_int
 
@@ -467,23 +567,50 @@ module Make :
 
       val _UU03b1_ : Ast.value -> value
 
+      val alpha : Ast.value -> value
+
       val of_lit : lit -> value
 
       val lookup_field : value -> id_aux -> value
 
+      val int_concrete : Dom.t -> Big_int_Z.big_int option
+
+      val bv_slice : value -> Big_int_Z.big_int -> Big_int_Z.big_int -> value
+
+      val set_field : value -> id_aux -> value -> value
+
+      val vector_update :
+        value list -> Big_int_Z.big_int -> value -> value list
+
+      val set_bv_range :
+        value -> Big_int_Z.big_int -> Big_int_Z.big_int -> value -> value
+
+      val get_vector_elem : value -> Big_int_Z.big_int -> value
+
+      val set_vector_elem : value -> Big_int_Z.big_int -> value -> value
+
       module Matching :
        functor (Tannot:S) ->
        sig
+        val match_bitvector_lit :
+          bit list -> AbsBitvector.Dom.t -> value match_result
+
         val pattern_match_literal : lit -> value -> value match_result
 
         val pattern_match : Tannot.t pat -> value -> value match_result
        end
+
+      val complete_partial :
+        ((t * Big_int_Z.big_int) * Big_int_Z.big_int) non_empty -> t
 
       val complete : t binding -> t
      end
 
     module Matching :
      sig
+      val match_bitvector_lit :
+        bit list -> AbsBitvector.Dom.t -> L.value match_result
+
       val pattern_match_literal : lit -> L.value -> L.value match_result
 
       val pattern_match : Tannot__5.t pat -> L.value -> L.value match_result
@@ -552,6 +679,11 @@ module Make :
     val mk_assign :
       Tannot__5.t annot -> Tannot__5.t zlexp -> t list -> t -> value * B.t
 
+    val mk_struct : Tannot__5.t annot -> struct_name -> (id * t) list -> t
+
+    val mk_struct_update :
+      Tannot__5.t annot -> struct_name -> t -> (id * t) list -> t
+
     val empty : state
 
     val join : state -> state -> state
@@ -565,6 +697,37 @@ module Make :
     val end_match : match_case -> state option -> state list -> state
 
     val lookup : Parse_ast.l -> state -> id -> (Parse_ast.l, L.t) sum
+
+    type update_step =
+    | US_field of id_aux
+    | US_index of Big_int_Z.big_int
+    | US_range of Big_int_Z.big_int * Big_int_Z.big_int
+
+    val update_step_rect :
+      (id_aux -> 'a1) -> (Big_int_Z.big_int -> 'a1) -> (Big_int_Z.big_int ->
+      Big_int_Z.big_int -> 'a1) -> update_step -> 'a1
+
+    val update_step_rec :
+      (id_aux -> 'a1) -> (Big_int_Z.big_int -> 'a1) -> (Big_int_Z.big_int ->
+      Big_int_Z.big_int -> 'a1) -> update_step -> 'a1
+
+    val apply_path : L.t -> update_step list -> L.t -> L.t
+
+    val subexp_concrete_z : t -> Big_int_Z.big_int option
+
+    val zlexp_path :
+      Tannot__5.t zlexp -> t list -> ((id * update_step list) * t list) option
+
+    val state_lookup : state -> id -> L.t
+
+    val assign_id : id -> L.t -> state -> state
+
+    val assign_via_path : Tannot__5.t zlexp -> t list -> L.t -> state -> state
+
+    val last_update_step : update_step list -> update_step option
+
+    val zlexp_subwidth :
+      Tannot__5.t zlexp -> t list -> Big_int_Z.big_int option
 
     val assign : Tannot__5.t zlexp -> t list -> t -> state -> state
    end
@@ -612,6 +775,8 @@ module Make :
 
     val mk_ctor : id_aux -> value list -> value
 
+    val mk_member : id_aux -> value
+
     val is_unit : value -> bool
 
     val is_true : value -> bool
@@ -625,6 +790,10 @@ module Make :
     val bot : t
 
     val value_length : value -> value
+
+    val mk_bitvector' : value list -> AbsBitvector.Dom.t option
+
+    val mk_bitvector : value list -> value
 
     val vdepth : value -> Big_int_Z.big_int
 
@@ -643,17 +812,40 @@ module Make :
 
     val _UU03b1_ : Ast.value -> value
 
+    val alpha : Ast.value -> value
+
     val of_lit : lit -> value
 
     val lookup_field : value -> id_aux -> value
 
+    val int_concrete : Dom.t -> Big_int_Z.big_int option
+
+    val bv_slice : value -> Big_int_Z.big_int -> Big_int_Z.big_int -> value
+
+    val set_field : value -> id_aux -> value -> value
+
+    val vector_update : value list -> Big_int_Z.big_int -> value -> value list
+
+    val set_bv_range :
+      value -> Big_int_Z.big_int -> Big_int_Z.big_int -> value -> value
+
+    val get_vector_elem : value -> Big_int_Z.big_int -> value
+
+    val set_vector_elem : value -> Big_int_Z.big_int -> value -> value
+
     module Matching :
      functor (Tannot:S) ->
      sig
+      val match_bitvector_lit :
+        bit list -> AbsBitvector.Dom.t -> value match_result
+
       val pattern_match_literal : lit -> value -> value match_result
 
       val pattern_match : Tannot.t pat -> value -> value match_result
      end
+
+    val complete_partial :
+      ((t * Big_int_Z.big_int) * Big_int_Z.big_int) non_empty -> t
 
     val complete : t binding -> t
    end

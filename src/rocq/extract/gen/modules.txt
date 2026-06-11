@@ -9,7 +9,9 @@ BinPos
 Bit
 BitList
 Bool
+Basics
 BvUtil
+Compare_dec
 Datatypes
 DecidableClass
 Decimal
@@ -39,6 +41,7 @@ SailBase
 Semantics
 Specif
 String0
+TransferBitvectorInterval
 TypeAnnot
 ValueType
 Wf
@@ -49,6 +52,7 @@ countable
 decidable
 definitions
 fin_maps
+fin_sets
 gmap
 list_basics
 list_monad

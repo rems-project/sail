@@ -6,6 +6,19 @@ let tl = function
 | [] -> []
 | _ :: l' -> l'
 
+(** val nth_error : 'a1 list -> Big_int_Z.big_int -> 'a1 option **)
+
+let rec nth_error l n =
+  (fun fO fS n -> if Big_int_Z.sign_big_int n <= 0 then fO ()
+  else fS (Big_int_Z.pred_big_int n))
+    (fun _ -> match l with
+              | [] -> None
+              | x :: _ -> Some x)
+    (fun n0 -> match l with
+               | [] -> None
+               | _ :: l' -> nth_error l' n0)
+    n
+
 (** val rev : 'a1 list -> 'a1 list **)
 
 let rec rev = function

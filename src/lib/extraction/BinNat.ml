@@ -12,6 +12,12 @@ module N =
       (fun p -> Pos.succ p)
       n
 
+  (** val sub :
+      Big_int_Z.big_int -> Big_int_Z.big_int -> Big_int_Z.big_int **)
+
+  let sub = (fun n m -> Big_int_Z.max_big_int Big_int_Z.zero_big_int
+  (Big_int_Z.sub_big_int n m))
+
   (** val compare : Big_int_Z.big_int -> Big_int_Z.big_int -> comparison **)
 
   let compare = (fun x y -> let s = Big_int_Z.compare_big_int x y in

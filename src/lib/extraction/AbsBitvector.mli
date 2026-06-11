@@ -55,7 +55,13 @@ module Dom :
 
   val leb : t -> t -> bool
 
+  val unknown_bit : bvset
+
+  val zwbv : bvset
+
   val _UU03b1_ : bvn -> bvset
+
+  val alpha : bvn -> bvset
 
   val lift_bitwise_gmap :
     (Three.ubit -> Three.ubit -> Three.ubit) -> (Big_int_Z.big_int,

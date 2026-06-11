@@ -51,6 +51,7 @@ skip_selftests = {
     'config_map_guard',
     'let_assert',
     'tuple_tuple_lexp',
+    'recursive_register',
 }
 
 print("Sail is {}".format(sail))

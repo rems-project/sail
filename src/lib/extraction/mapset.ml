@@ -1,6 +1,8 @@
+open Datatypes
 open Base
 open Decidable
 open Fin_maps
+open List_monad
 open Option
 
 type __ = Obj.t
@@ -29,6 +31,14 @@ let mapset_intersection h4 x1 x2 =
   let { mapset_car = m1 } = x1 in
   let { mapset_car = m2 } = x2 in
   { mapset_car = (intersection (map_intersection h4) m1 m2) }
+
+(** val mapset_elements :
+    (__ -> ('a1, __, 'a2) coq_MapFold) -> ('a1, 'a2 mapset') coq_Elements **)
+
+let mapset_elements h5 x =
+  let { mapset_car = m } = x in
+  fmap (Obj.magic (fun _ _ -> Coq_list.list_fmap)) fst
+    (Obj.magic map_to_list (h5 __) m)
 
 (** val mapset_eq_dec :
     ('a1, 'a1) coq_RelDecision -> ('a1 mapset', 'a1 mapset') coq_RelDecision **)

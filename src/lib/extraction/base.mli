@@ -81,3 +81,11 @@ type ('a, 'm) coq_IntersectionWith = ('a -> 'a -> 'a option) -> 'm -> 'm -> 'm
 val intersection_with :
   ('a1, 'a2) coq_IntersectionWith -> ('a1 -> 'a1 -> 'a1 option) -> 'a2 -> 'a2
   -> 'a2
+
+type ('a, 'c) coq_Elements = 'c -> 'a list
+
+val elements : ('a1, 'a2) coq_Elements -> 'a2 -> 'a1 list
+
+type 'c coq_Size = 'c -> Big_int_Z.big_int
+
+val size : 'a1 coq_Size -> 'a1 -> Big_int_Z.big_int

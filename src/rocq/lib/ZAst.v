@@ -42,6 +42,8 @@
 (* ************************************************************************ *)
 
 From Stdlib Require Import String.
+From Stdlib Require Import BinInt.
+From Stdlib Require Import BinNat.
 
 From stdpp Require Import base.
 
@@ -255,7 +257,8 @@ Inductive pair_case : Set :=
 Inductive list_case : Set :=
 | List : list_case
 | Tuple : list_case
-| Vector : list_case.
+| Vector : list_case
+| Bitvector : list_case.
 
 Inductive match_case : Set :=
 | Match : match_case
@@ -304,6 +307,9 @@ Inductive zexp_aux {V : Type} {R : Set} {S : Type} {A : Set} : Type :=
 | Z_var_left : zexp → zlexp A → list R → list (exp A) → exp A → exp A → zexp_aux
 | Z_var_right : zexp → zlexp A → list R → exp A → zexp_aux
 | Z_var_body : zexp → zlexp A → list R → R → zexp_aux
+| Z_struct : zexp → struct_name → list (id * R) → id → list (fexp A) → zexp_aux
+| Z_struct_update_base : zexp → struct_name → list (fexp A) → zexp_aux
+| Z_struct_update : zexp → struct_name → R → list (id * R) → id → list (fexp A) → zexp_aux
 
 with zexp {V : Type} {R : Set} {S : Type} {A : Set} : Type :=
 | Z_aux : zexp_aux → annot A → zexp
@@ -356,6 +362,8 @@ Module Type Builder (Tannot : TypeAnnot.S).
   Parameter mk_var     : annot Tannot.t → zlexp Tannot.t → list t → t → t → t.
   Parameter mk_assign  : annot Tannot.t → zlexp Tannot.t → list t → t → t.
   Parameter mk_undef   : annot Tannot.t → t.
+  Parameter mk_struct  : annot Tannot.t → struct_name → list (id * t) → t.
+  Parameter mk_struct_update : annot Tannot.t → struct_name → t → list (id * t) → t.
 End Builder.
 
 Module UnitBuilder (Tannot : TypeAnnot.S) <: Builder(Tannot).
@@ -377,6 +385,8 @@ Module UnitBuilder (Tannot : TypeAnnot.S) <: Builder(Tannot).
   Definition mk_var     (_ : annot Tannot.t) (_ : zlexp Tannot.t) (_ : list t) (_ : t) (_ : t) := tt.
   Definition mk_assign  (_ : annot Tannot.t) (_ : zlexp Tannot.t) (_ : list t) (_ : t) := tt.
   Definition mk_undef   (_ : annot Tannot.t) := tt.
+  Definition mk_struct  (_ : annot Tannot.t) (_ : struct_name) (_ : list (id * t)) := tt.
+  Definition mk_struct_update (_ : annot Tannot.t) (_ : struct_name) (_ : t) (_ : list (id * t)) := tt.
 End UnitBuilder.
 
 Module ExpBuilder (Tannot : TypeAnnot.S) <: Builder(Tannot).
@@ -399,6 +409,7 @@ Module ExpBuilder (Tannot : TypeAnnot.S) <: Builder(Tannot).
     | List => E_aux (E_list (List.rev xs)) ann
     | Tuple => E_aux (E_tuple (List.rev xs)) ann
     | Vector => E_aux (E_vector (List.rev xs)) ann
+    | Bitvector => E_aux (E_vector (List.rev xs)) ann
     end.
 
   Definition mk_literal (ann : annot Tannot.t) (l : lit) := E_aux (E_lit l) ann.
@@ -460,6 +471,15 @@ Module ExpBuilder (Tannot : TypeAnnot.S) <: Builder(Tannot).
     end.
 
   Definition mk_undef (ann : annot Tannot.t) := E_aux E_undef ann.
+
+  Definition mk_fexp (ann : annot Tannot.t) (kv : id * t) : fexp Tannot.t :=
+    let '(k, v) := kv in FE_aux (FE_fexp k v) ann.
+
+  Definition mk_struct (ann : annot Tannot.t) (sn : struct_name) (fs : list (id * t)) : t :=
+    E_aux (E_struct sn (List.map (mk_fexp ann) (List.rev fs))) ann.
+
+  Definition mk_struct_update (ann : annot Tannot.t) (sn : struct_name) (base : t) (fs : list (id * t)) : t :=
+    E_aux (E_struct_update base (List.map (mk_fexp ann) (List.rev fs))) ann.
 End ExpBuilder.
 
 Module Residual (Tannot : TypeAnnot.S) (B : Builder Tannot).
@@ -490,11 +510,16 @@ Module Residual (Tannot : TypeAnnot.S) (B : Builder Tannot).
   Definition is_unit (v : value) : bool :=
     option_is L.is_unit (this v) && is_none (exn v) && negb (eff v).
 
+  (* [is_true] / [is_false] don't gate on [eff]: the partial evaluator runs
+     side effects eagerly (writes update state in place, prints go straight
+     to stdout), so by the time we're inspecting the value all the effects
+     have already happened. If the value is concretely a [bool], we can pick
+     the matching branch even if the producing expression was effectful. *)
   Definition is_true (v : value) : bool :=
-    option_is L.is_true (this v) && is_none (exn v) && negb (eff v).
+    option_is L.is_true (this v) && is_none (exn v).
 
   Definition is_false (v : value) : bool :=
-    option_is L.is_false (this v) && is_none (exn v) && negb (eff v).
+    option_is L.is_false (this v) && is_none (exn v).
 
   Definition bounded_join (o₁ o₂ : option L.t) : option L.t := option_join L.join o₁ o₂.
 
@@ -537,6 +562,7 @@ Module Residual (Tannot : TypeAnnot.S) (B : Builder Tannot).
       | List => L.V_list
       | Tuple => L.V_tuple
       | Vector => L.V_vector
+      | Bitvector => L.mk_bitvector
       end
     in (
       {|
@@ -602,7 +628,17 @@ Module Residual (Tannot : TypeAnnot.S) (B : Builder Tannot).
     match c with
     | Assert => ({| this := Some L.V_unit; exn := exn (fst x) ⊔ exn (fst y); eff := true |}, b)
     | Vector_append => ({| this := ⊥; exn := ⊥; eff := false |}, b)
-    | Cons => ({| this := ⊥; exn := ⊥; eff := false |}, b)
+    | Cons =>
+        (* [hd :: tl] — when both [hd]'s value and [tl]'s value (which must
+           be a [V_list]) are known, produce the concrete [V_list]; otherwise
+           lose the value information rather than yielding a spurious one. *)
+        let this' :=
+          match this (fst x), this (fst y) with
+          | Some h, Some (L.V_list ts) => Some (L.V_list (h :: ts))
+          | _, _ => ⊥
+          end
+        in
+        ({| this := this'; exn := ⊥; eff := false |}, b)
     end.
 
   Definition mk_ref (ann : annot Tannot.t) (id : Ast.id) :=
@@ -639,6 +675,60 @@ Module Residual (Tannot : TypeAnnot.S) (B : Builder Tannot).
       B.mk_assign ann zl (List.map snd rs) (snd exp)
     ).
 
+  (** Build a [V_record] abstract value out of the (reverse) list of evaluated
+      (field, residual) pairs. We join the [exn] and [eff] flags across the
+      fields, and collapse [this] into a single [V_record] only when every
+      field has a known [this] value (otherwise we propagate [None]). *)
+  Definition mk_struct (ann : annot Tannot.t) (sn : struct_name) (rs : list (id * t)) : t :=
+    let this_v :=
+      List.fold_left
+        (fun acc kv =>
+          match acc with
+          | None => None
+          | Some m =>
+              let '(k, v) := kv in
+              match this (fst v) with
+              | None => None
+              | Some x => Some (insert (Aux.unwrap k) x m)
+              end
+          end)
+        rs (Some empty) in
+    ({|
+       this := option_map L.V_record this_v;
+       exn := List.fold_left bounded_join (List.map (fun kv => exn (fst (snd kv))) rs) ⊥;
+       eff := List.fold_left orb (List.map (fun kv => eff (fst (snd kv))) rs) false;
+     |},
+     B.mk_struct ann sn (List.map (fun kv => let '(k, v) := kv in (k, snd v)) rs)).
+
+  (** Build a [V_record] update from a base value and a list of field
+      (re)assignments. If every field has a known [this] and the base also
+      has a known [V_record], we [insert] each new (or replaced) field into
+      the base map. Otherwise we conservatively return [None]. *)
+  Definition mk_struct_update (ann : annot Tannot.t) (sn : struct_name) (base : t) (rs : list (id * t)) : t :=
+    let updated :=
+      match this (fst base) with
+      | Some (L.V_record base_m) =>
+          List.fold_left
+            (fun acc kv =>
+              match acc with
+              | None => None
+              | Some m =>
+                  let '(k, v) := kv in
+                  match this (fst v) with
+                  | None => None
+                  | Some x => Some (insert (Aux.unwrap k) x m)
+                  end
+              end)
+            rs (Some base_m)
+      | _ => None
+      end in
+    ({|
+       this := option_map L.V_record updated;
+       exn := List.fold_left bounded_join (List.map (fun kv => exn (fst (snd kv))) rs) (exn (fst base));
+       eff := List.fold_left orb (List.map (fun kv => eff (fst (snd kv))) rs) (eff (fst base));
+     |},
+     B.mk_struct_update ann sn (snd base) (List.map (fun kv => let '(k, v) := kv in (k, snd v)) rs)).
+
   Definition empty : state := {| locals := IdMap.empty L.t; registers := IdMap.empty L.t |}.
 
   Definition join (σ₁ σ₂ : state) : state := {|
@@ -656,11 +746,28 @@ Module Residual (Tannot : TypeAnnot.S) (B : Builder Tannot).
       end
     in
     match h with
-    | ⊥ => inl l
+    | ⊥ =>
+        match c with
+        (* For [try { e } catch { ... }], an absent exception value means
+           the body completed normally — no catch arm fires. Report
+           [Unmatched] so the match loop falls through cleanly to the
+           head's value via [mk_match]'s [is_none (exn _)] branch. *)
+        | Try => inr PatternMatch.Unmatched
+        | _ => inl l
+        end
     | Some v => inr (Matching.pattern_match pat v)
     end.
 
-  Definition end_match (c : match_case) (_ : option state) (_ : list state) : state := empty.
+  (** Joining states leaving a match. We at least need to preserve the
+      pre-match state so locals introduced before the match survive into
+      the residual evaluation. For the per-arm states we take the lattice
+      join across all arms (and the fall-through, if any). *)
+  Definition end_match (_ : match_case) (fallthrough : option state) (arms : list state) : state :=
+    let arms := match fallthrough with None => arms | Some σ => σ :: arms end in
+    match arms with
+    | [] => empty
+    | σ :: rest => List.fold_left join rest σ
+    end.
 
   Definition lookup (l : Ast.loc) (σ : state) (id : Ast.id) : Ast.loc + L.t :=
     match IdMap.find id (locals σ) with
@@ -672,7 +779,219 @@ Module Residual (Tannot : TypeAnnot.S) (B : Builder Tannot).
         end
     end.
 
-  Definition assign (zl : zlexp Tannot.t) (rs : list t) (exp : t) (σ : state) : state := empty.
+  (** Steps in a path of updates applied while assigning to a structured
+      l-value. [US_field] descends through a [V_record], [US_index] through a
+      [V_vector] at a concrete index, [US_range] replaces a bitvector subrange
+      [lo..hi] (inclusive). Each step's offsets / indices are concretised at
+      [zlexp_path] time, so [apply_path] operates on plain [Z]. *)
+  Inductive update_step :=
+  | US_field : Ast.id_aux → update_step
+  | US_index : Z → update_step
+  | US_range : Z → Z → update_step.
+
+  (** Apply a left-to-right sequence of updates to [base], replacing the
+      target with [v]. Each level reads the current sub-value, recurses, and
+      writes the updated sub-value back. *)
+  Fixpoint apply_path (base : L.t) (path : list update_step) (v : L.t) : L.t :=
+    match path with
+    | [] => v
+    | step :: rest =>
+        match step with
+        | US_field k =>
+            (* When the field isn't already present (uninitialised base, or
+               base is [V_top]), descend into [L.top] rather than [⊥] so a
+               freshly-written nested field still produces a recognisable
+               nested record. *)
+            let child :=
+              match base with
+              | L.V_record m => match m !! k with Some x => x | None => L.top end
+              | _ => L.top
+              end in
+            L.set_field base k (apply_path child rest v)
+        | US_index i => L.set_vector_elem base i (apply_path (L.get_vector_elem base i) rest v)
+        | US_range hi lo => L.set_bv_range base hi lo (apply_path L.top rest v)
+        end
+    end.
+
+  (** Helper: pull a concrete integer out of an evaluated sub-expression. *)
+  Definition subexp_concrete_z (r : t) : option Z :=
+    match this (fst r) with
+    | Some (L.V_int i) => L.int_concrete i
+    | _ => None
+    end.
+
+  (** Walk a [zlexp] structurally and try to collapse it into a [(root id,
+      path of update_steps, leftover sub-expressions)] triple. Returns
+      [None] for shapes that don't have a single root id (tuple,
+      vector_concat, app, deref) or that include an index / bound we can't
+      pin down to a concrete [Z]. *)
+  Fixpoint zlexp_path (zl : zlexp Tannot.t) (subexps : list t)
+                    : option (Ast.id * list update_step * list t) :=
+    let 'LZ_aux aux _ := zl in
+    match aux with
+    | LZ_id id => Some (id, [], subexps)
+    | LZ_typ _ id => Some (id, [], subexps)
+    | LZ_deref =>
+        (* [*p = e] — the first evaluated sub-expression is [p]. If it
+           resolved to a known [V_ref reg_id] we route the rest of the path
+           through that register, otherwise we give up. *)
+        match subexps with
+        | r :: rest =>
+            match this (fst r) with
+            | Some (L.V_ref reg_id) => Some (Ast.Id_aux reg_id Ast.ext_unknown_loc, [], rest)
+            | _ => None
+            end
+        | [] => None
+        end
+    | LZ_field inner field =>
+        match zlexp_path inner subexps with
+        | Some (id, path, rest) => Some (id, path ++ [US_field (Aux.unwrap field)], rest)
+        | None => None
+        end
+    | LZ_vector inner =>
+        match zlexp_path inner subexps with
+        | Some (id, path, n :: rest) =>
+            match subexp_concrete_z n with
+            | Some idx => Some (id, path ++ [US_index idx], rest)
+            | None => None
+            end
+        | _ => None
+        end
+    | LZ_vector_range inner =>
+        match zlexp_path inner subexps with
+        | Some (id, path, hi :: lo :: rest) =>
+            match subexp_concrete_z hi, subexp_concrete_z lo with
+            | Some h, Some l => Some (id, path ++ [US_range h l], rest)
+            | _, _ => None
+            end
+        | _ => None
+        end
+    | _ => None
+    end.
+
+  (** Lookup an identifier in [σ], falling through locals → registers → top. *)
+  Definition state_lookup (σ : state) (id : Ast.id) : L.t :=
+    match IdMap.find id (locals σ) with
+    | Some b => b
+    | None => match IdMap.find id (registers σ) with Some b => b | None => L.top end
+    end.
+
+  (** Write [new_v] to [id] in [σ], routing to [registers] if [id] is
+      registered, otherwise to [locals]. *)
+  Definition assign_id (id : Ast.id) (new_v : L.t) (σ : state) : state :=
+    if IdMap.mem id (registers σ) then
+      {| locals := locals σ; registers := IdMap.add id new_v (registers σ) |}
+    else
+      {| locals := IdMap.add id new_v (locals σ); registers := registers σ |}.
+
+  (** Handle a single-rooted l-expression: resolve to (id, path, leftover),
+      read the current root value, apply the path, write it back. *)
+  Definition assign_via_path (zl : zlexp Tannot.t) (rs : list t) (v : L.t) (σ : state) : state :=
+    match zlexp_path zl rs with
+    | Some (id, path, _) =>
+        match path with
+        | [] => assign_id id v σ
+        | _ => assign_id id (apply_path (state_lookup σ id) path v) σ
+        end
+    | None => σ
+    end.
+
+  (** Handle [var x = e; ...], [x = e], [x.f = e] (incl. nested), [*p = e]
+      (when [p] resolves to a known [V_ref]), [v[i] = e] / [v[hi..lo] = e]
+      with concrete bounds, and [(x, y, ...) = e] when the RHS is a known
+      [V_tuple]. For everything else we leave [σ] unchanged — the residual
+      still records the write, but downstream reads of the same name will
+      see the previous value. *)
+  (** Width of the bitvector slice that a single sub-lexp of a
+      [LZ_vector_concat] covers. We recover it from the [US_range] step a
+      [LZ_vector_range] inner-lexp leaves at the end of its path; sub-lexps
+      that aren't range-typed (plain id targets) currently don't have a
+      width available without consulting the type annotation, so we report
+      [None] and the surrounding assign falls back to a no-op. *)
+  Fixpoint last_update_step (path : list update_step) : option update_step :=
+    match path with
+    | [] => None
+    | [s] => Some s
+    | _ :: rest => last_update_step rest
+    end.
+
+  Definition zlexp_subwidth (zl : zlexp Tannot.t) (subexps : list t) : option Z :=
+    match zlexp_path zl subexps with
+    | Some (_, path, _) =>
+        match last_update_step path with
+        | Some (US_range hi lo) => Some (hi - lo + 1)%Z
+        | _ => None
+        end
+    | None => None
+    end.
+
+  Definition assign (zl : zlexp Tannot.t) (rs : list t) (exp : t) (σ : state) : state :=
+    let v := match this (fst exp) with Some v => v | None => L.top end in
+    let 'LZ_aux aux _ := zl in
+    match aux with
+    | LZ_tuple ls =>
+        match v with
+        | L.V_tuple vs =>
+            (* Walk [ls] and [vs] in lockstep, threading [σ] / leftover
+               [rs]. We only handle one level of nesting — sub-lexps that
+               are themselves tuples or vector-concats fall through to the
+               conservative [σ] (i.e. their state stays unchanged). *)
+            fst ((fix go ls vs rs σ {struct ls} : state * list t :=
+                    match ls, vs with
+                    | [], _ => (σ, rs)
+                    | _, [] => (σ, rs)
+                    | l :: ls', v :: vs' =>
+                        let σ' := assign_via_path l rs v σ in
+                        let rs' :=
+                          match zlexp_path l rs with
+                          | Some (_, _, leftover) => leftover
+                          | None => rs
+                          end in
+                        go ls' vs' rs' σ'
+                    end) ls vs rs σ)
+        | _ => σ
+        end
+    | LZ_vector_concat ls =>
+        (* [(a @ b @ c) = rhs] — split [rhs] by each sub-lexp's width and
+           recurse. For [Order dec], the leftmost sub-lexp gets the high
+           bits. We track a running offset from the high end ([cur_hi])
+           so each sub-lexp gets bits [cur_hi-width+1 .. cur_hi].
+
+           Only handled when every sub-lexp resolves to a concrete-width
+           range write (typical of bitfield setters). Anything else degrades
+           to a no-op. *)
+        match v with
+        | L.V_bitvector _ =>
+            match L.value_length v with
+            | L.V_int i =>
+            match L.int_concrete i with
+            | Some total =>
+                fst ((fix go ls rs cur_hi σ {struct ls} : state * list t :=
+                        match ls with
+                        | [] => (σ, rs)
+                        | l :: ls' =>
+                            match zlexp_subwidth l rs with
+                            | Some w =>
+                                let lo := (cur_hi + 1 - w)%Z in
+                                let sliced := L.bv_slice v (Z.to_N lo) (Z.to_N w) in
+                                let σ' := assign_via_path l rs sliced σ in
+                                let rs' :=
+                                  match zlexp_path l rs with
+                                  | Some (_, _, leftover) => leftover
+                                  | None => rs
+                                  end in
+                                go ls' rs' (cur_hi - w)%Z σ'
+                            | None => (σ, rs)
+                            end
+                        end) ls rs (total - 1)%Z σ)
+            | None => σ
+            end
+            | _ => σ
+            end
+        | _ => σ
+        end
+    | _ => assign_via_path zl rs v σ
+    end.
 End Residual.
 
 Module Make (Tannot : TypeAnnot.S) (B : Builder Tannot).
@@ -738,7 +1057,10 @@ Module Make (Tannot : TypeAnnot.S) (B : Builder Tannot).
       | Z_assign_right parent _ _
       | Z_var_left parent _ _ _ _ _
       | Z_var_right parent _ _ _
-      | Z_var_body parent _ _ _ => lookup parent id
+      | Z_var_body parent _ _ _
+      | Z_struct parent _ _ _ _
+      | Z_struct_update_base parent _ _
+      | Z_struct_update parent _ _ _ _ _ => lookup parent id
 
       | Z_match_arms_guard parent _ β _ _ _ _ _ _
       | Z_match_arms_body parent _ β _ _ _ _ _ =>
@@ -760,8 +1082,13 @@ Module Make (Tannot : TypeAnnot.S) (B : Builder Tannot).
         match lookup ctx i with
         | Some v => pure (ctx, σ, inr (R.from_semilattice v, B.mk_id annot i))
         | None =>
-            v ← Monad.lift_sum (R.lookup (fst annot) σ i);
-            pure (ctx, σ, inr (R.from_semilattice v, B.mk_id annot i))
+            match Tannot.get_id_type (snd annot) i with
+            | TypeAnnot.Types.Enum_member =>
+                pure (ctx, σ, inr (R.from_semilattice (L.mk_member (IdUtil.Aux.unwrap i)), B.mk_id annot i))
+            | _ =>
+                v ← Monad.lift_sum (R.lookup (fst annot) σ i);
+                pure (ctx, σ, inr (R.from_semilattice v, B.mk_id annot i))
+            end
         end
     | E_lit lit => pure (ctx, σ, inr (R.mk_literal annot lit))
     | E_if i t e => wrap (Z_if_cond ctx t e) i
@@ -785,7 +1112,11 @@ Module Make (Tannot : TypeAnnot.S) (B : Builder Tannot).
     | E_vector exps =>
         match exps with
         | [] => pure (ctx, σ, inr (R.mk_list annot Vector []))
-        | exp :: exps => wrap (Z_list ctx Vector [] exps) exp
+        | exp :: exps =>
+            if Tannot.is_bitvector (snd annot) then
+              wrap (Z_list ctx Bitvector [] exps) exp
+            else
+              wrap (Z_list ctx Vector [] exps) exp
         end
     | E_list exps =>
         match exps with
@@ -826,7 +1157,15 @@ Module Make (Tannot : TypeAnnot.S) (B : Builder Tannot).
         | x :: xs => wrap (Z_var_left ctx (lexp_to_z l) [] xs exp body) x
         end
 
-    | E_struct _ _ | E_struct_update _ _ | E_for _ _ _ _ _ _ | E_loop _ _ _ _ => Monad.Runtime_type_error (fst annot)
+    | E_struct sn fes =>
+        match fes with
+        | [] => pure (ctx, σ, inr (R.mk_struct annot sn []))
+        | FE_aux (FE_fexp f e) _ :: rest => wrap (Z_struct ctx sn [] f rest) e
+        end
+
+    | E_struct_update base fes => wrap (Z_struct_update_base ctx SN_anon fes) base
+
+    | E_for _ _ _ _ _ _ | E_loop _ _ _ _ => Monad.Runtime_type_error (fst annot)
 
     | E_sizeof _ | E_constraint _ | E_internal_value _ => Monad.Runtime_type_error (fst annot)
     end.
@@ -872,21 +1211,54 @@ Module Make (Tannot : TypeAnnot.S) (B : Builder Tannot).
         end
 
     | Z_block parent evaluated unevaluated =>
+        (* If [focus] has [this = ⊥] but [exn != ⊥], we've just evaluated a
+           [throw e] (or a call that definitely throws) — the rest of the
+           block is unreachable, so stop here and surface [focus] as the
+           block's value. The enclosing [try]/[Z_match_head Try _ _ _] will
+           pick up [exn] and dispatch on it. *)
         match unevaluated with
         | []      => pure (parent, σ, inr (R.mk_block annot (focus :: evaluated)))
         | u :: us =>
-            if R.is_unit (fst focus) then
+            if andb (is_none (R.this (fst focus))) (negb (is_none (R.exn (fst focus)))) then
+              pure (parent, σ, inr focus)
+            else if R.is_unit (fst focus) then
               pure (Z_aux (Z_block parent evaluated us) annot, σ, inl u)
             else
               pure (Z_aux (Z_block parent (focus :: evaluated) us) annot, σ, inl u)
         end
 
     | Z_app parent f evaluated unevaluated =>
-        match unevaluated with
-        | [] =>
+        match f, evaluated, unevaluated with
+        (* [and_bool(a, b)] and [or_bool(a, b)] are short-circuit operators
+           in Sail. Once [a] has been evaluated we hand control off to the
+           [Z_if_then] machinery, which both folds statically-known cases
+           (avoiding evaluating [b] when [a] determines the result) and, in
+           the dynamic case, produces an [if-then-else] residual instead of
+           an [and_bool]/[or_bool] call:
+             [a & b]  ≡  if a then b    else false
+             [a | b]  ≡  if a then true else b      *)
+        | Ast.Id_aux Ast.And_bool _, [], b :: nil =>
+            let false_lit : exp Tannot.t :=
+              E_aux (E_lit (L_aux L_false Ast.ext_unknown_loc)) annot in
+            if R.is_true (fst focus) then
+              pure (parent, σ, inl b)
+            else if R.is_false (fst focus) then
+              pure (parent, σ, inr focus)
+            else
+              pure (Z_aux (Z_if_then parent (σ, focus) false_lit) annot, σ, inl b)
+        | Ast.Id_aux Ast.Or_bool _, [], b :: nil =>
+            let true_lit : exp Tannot.t :=
+              E_aux (E_lit (L_aux L_true Ast.ext_unknown_loc)) annot in
+            if R.is_true (fst focus) then
+              pure (parent, σ, inr focus)
+            else if R.is_false (fst focus) then
+              pure (parent, σ, inl b)
+            else
+              pure (Z_aux (Z_if_then parent (σ, focus) b) annot, σ, inl true_lit)
+        | _, _, [] =>
             r ← Monad.Call f (List.rev (List.map fst (focus :: evaluated))) pure;
             pure (parent, σ, inr (r, B.mk_app annot f (List.rev (List.map snd (focus :: evaluated)))))
-        | u :: us => pure (Z_aux (Z_app parent f (focus :: evaluated) us) annot, σ, inl u)
+        | _, _, u :: us => pure (Z_aux (Z_app parent f (focus :: evaluated) us) annot, σ, inl u)
         end
 
     | Z_match_head parent γ evaluated unevaluated =>
@@ -907,7 +1279,12 @@ Module Make (Tannot : TypeAnnot.S) (B : Builder Tannot).
                 | None =>
                     pure (Z_aux (Z_match_arms_body parent γ β (σ, focus) evaluated pat None None) annot, σ, inl body)
                 | Some g =>
-                    pure (Z_aux (Z_match_arms_guard parent γ β (σ, focus) evaluated pat true body None) annot, σ, inl g)
+                    (* Even though the pattern is a guaranteed match, the
+                       guard can still fail at runtime, so we keep the
+                       remaining arms as fall-back. The [true] flag
+                       ([guaranteed_match]) tells the guard handler to drop
+                       them iff the guard evaluates to [true]. *)
+                    pure (Z_aux (Z_match_arms_guard parent γ β (σ, focus) evaluated pat true body (Some arms)) annot, σ, inl g)
                 end
             | PatternMatch.MaybeMatched β =>
                 let β := IdMap.map L.complete β in
@@ -920,7 +1297,12 @@ Module Make (Tannot : TypeAnnot.S) (B : Builder Tannot).
             end
         end
     | Z_match_arms_guard parent γ β (σ_h, h) evaluated pat guaranteed_match body unevaluated =>
-        if R.is_true (fst focus) then
+        if andb (is_none (R.this (fst focus))) (negb (is_none (R.exn (fst focus)))) then
+          (* The guard threw an exception. Its body never runs, and the
+             remaining arms aren't tried either — the exception escapes the
+             enclosing [try]/[match] to be handled (or not) further up. *)
+          pure (parent, σ, inr focus)
+        else if R.is_true (fst focus) then
           (* If the pattern before the guard was a guaranteed match, and the guard is always true, we can
              discard the rest of the unevaluated arms. *)
           let unevaluated' := if guaranteed_match then None else unevaluated in
@@ -934,7 +1316,7 @@ Module Make (Tannot : TypeAnnot.S) (B : Builder Tannot).
 
     | Z_assign_left parent l evaluated unevaluated exp =>
         match unevaluated with
-        | [] => pure (Z_aux (Z_assign_right parent l evaluated) annot, σ, inl exp)
+        | [] => pure (Z_aux (Z_assign_right parent l (List.rev (focus :: evaluated))) annot, σ, inl exp)
         | u :: us => pure (Z_aux (Z_assign_left parent l (focus :: evaluated) us exp) annot, σ, inl u)
         end
     | Z_assign_right parent l evaluated =>
@@ -942,13 +1324,36 @@ Module Make (Tannot : TypeAnnot.S) (B : Builder Tannot).
 
     | Z_var_left parent l evaluated unevaluated exp body =>
         match unevaluated with
-        | [] => pure (Z_aux (Z_var_right parent l evaluated body) annot, σ, inl exp)
+        | [] => pure (Z_aux (Z_var_right parent l (List.rev (focus :: evaluated)) body) annot, σ, inl exp)
         | u :: us => pure (Z_aux (Z_var_left parent l (focus :: evaluated) us exp body) annot, σ, inl u)
         end
     | Z_var_right parent l evaluated body =>
         pure (Z_aux (Z_var_body parent l evaluated focus) annot, R.assign l evaluated focus σ, inl body)
     | Z_var_body parent l evaluated v =>
         pure (parent, σ, inr (R.mk_var annot l evaluated v focus))
+
+    | Z_struct parent sn evaluated cur unevaluated =>
+        let evaluated' := (cur, focus) :: evaluated in
+        match unevaluated with
+        | [] => pure (parent, σ, inr (R.mk_struct annot sn evaluated'))
+        | FE_aux (FE_fexp f e) _ :: rest =>
+            pure (Z_aux (Z_struct parent sn evaluated' f rest) annot, σ, inl e)
+        end
+
+    | Z_struct_update_base parent sn fes =>
+        match fes with
+        | [] => pure (parent, σ, inr (R.mk_struct_update annot sn focus []))
+        | FE_aux (FE_fexp f e) _ :: rest =>
+            pure (Z_aux (Z_struct_update parent sn focus [] f rest) annot, σ, inl e)
+        end
+
+    | Z_struct_update parent sn base evaluated cur unevaluated =>
+        let evaluated' := (cur, focus) :: evaluated in
+        match unevaluated with
+        | [] => pure (parent, σ, inr (R.mk_struct_update annot sn base evaluated'))
+        | FE_aux (FE_fexp f e) _ :: rest =>
+            pure (Z_aux (Z_struct_update parent sn base evaluated' f rest) annot, σ, inl e)
+        end
     end.
 
   Definition step (ctx : t)

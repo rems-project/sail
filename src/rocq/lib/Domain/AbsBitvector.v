@@ -602,6 +602,10 @@ Module Dom <: SAIL_BITS.
       rewrite lookup_singleton_ne; reflexivity + assumption.
   Qed.
 
+  Definition unknown_bit : bvset := Bvs ({[1 := [BU]]} ↾ singleton_valid (length_cons [] BU)).
+
+  Definition zwbv : bvset := Bvs ({[0 := []]} ↾ singleton_valid (length_nil ubit)).
+
   Definition le (x y : t) : Prop := Is_true (leb x y).
 
   Infix "⊑" := le (right associativity, at level 70).
@@ -637,6 +641,10 @@ Module Dom <: SAIL_BITS.
         Bvs ({[N.to_nat len := List.map from_bool (bv_to_bits x')]} ↾ (abs_valid x'))
     | None => ⊥
     end.
+
+  (** ASCII alias for [α], so OCaml code consuming the extracted module can
+      use the readable name [alpha] instead of the mangled [_UU03b1_]. *)
+  Definition alpha := α.
 
   Lemma abstract_bvs : ∀ {n} (x : bv n),
      α x = Bvs ({[N.to_nat n := List.map from_bool (bv_to_bits x)]} ↾ abs_valid x).

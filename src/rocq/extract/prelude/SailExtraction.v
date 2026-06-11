@@ -58,6 +58,7 @@ From Sail Require Import IdUtil.
 From Sail Require Import PatternMatch.
 From Sail Require Import Semantics.
 From Sail Require Import ValueType.
+From Sail Require Import Domain.TransferBitvectorInterval.
 From Sail Require ZAst.
 
 Extraction Blacklist Nat List String.
@@ -66,6 +67,7 @@ Separate Extraction
   BitList.to_hex_digits
   Primops
   Semantics.Make
+  TransferBitvectorInterval.Ops
   ZAst.ExpBuilder
   ZAst.Make
   ZAst.Residual

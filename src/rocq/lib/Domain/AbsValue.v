@@ -59,6 +59,8 @@ From Sail Require Import OptionUtil.
 From Sail Require Import Tactics.
 From Sail Require Import Domain.Lattice.
 From Sail Require Domain.AbsBitvector.
+From Sail Require Import BitList.
+From Sail Require Import Bit.
 From Sail Require Domain.Interval.
 From Sail Require Ast.
 From Sail Require PatternMatch.
@@ -94,6 +96,8 @@ Module Dom (DZ : SAIL_INT) (Dbv : SAIL_BITS) (T : SAIL_BITS_INT Dbv DZ) <: DOMAI
   Definition mk_ctor (s : Ast.id_aux) (args : list value) : value :=
     V_ctor {[ s := args ]}.
 
+  Definition mk_member (s : Ast.id_aux) : value := V_member {[ s ]}.
+
   Definition is_unit (v : value) : bool :=
     match v with
     | V_unit => true
@@ -126,6 +130,24 @@ Module Dom (DZ : SAIL_INT) (Dbv : SAIL_BITS) (T : SAIL_BITS_INT Dbv DZ) <: DOMAI
     | V_list vs => V_int (DZ.α (Z.of_nat (length vs)))
     | V_vector vs => V_int (DZ.α (Z.of_nat (length vs)))
     | _ => V_bot
+    end.
+
+  (** Construct a bitvector from a list of bit values. *)
+  Definition mk_bitvector' (vs : list value) : option Dbv.t :=
+    fold_left
+      (fun acc v =>
+        match (acc, v) with
+        | (Some acc', V_bitvector bv) => Some (Dbv.append acc' (Dbv.meet bv Dbv.unknown_bit))
+        | _ => None
+        end
+      )
+      vs
+      (Some Dbv.zwbv).
+
+  Definition mk_bitvector (vs : list value) : value :=
+    match mk_bitvector' vs with
+    | Some bv => V_bitvector bv
+    | None => V_bot
     end.
 
   Fixpoint vdepth (v : value) : nat :=
@@ -1698,6 +1720,10 @@ Module Dom (DZ : SAIL_INT) (Dbv : SAIL_BITS) (T : SAIL_BITS_INT Dbv DZ) <: DOMAI
     | Ast.V_record fields => V_record (foldl (λ m '(k, v), <[Aux.unwrap k := α v]> m) ∅ fields)
     end.
 
+  (** ASCII alias for [α], so OCaml code consuming the extracted module can
+      use the readable name [alpha] instead of the mangled [_UU03b1_]. *)
+  Definition alpha := α.
+
   Definition of_lit (l : Ast.lit) : value := α (ValueType.value_of_lit l).
 
   Definition lookup_field (r : value) (name : Ast.id_aux) : value :=
@@ -1706,8 +1732,107 @@ Module Dom (DZ : SAIL_INT) (Dbv : SAIL_BITS) (T : SAIL_BITS_INT Dbv DZ) <: DOMAI
     | _ => ⊥
     end.
 
+  (** Re-exports of the integer / bitvector domains' concretisers so callers
+      that only see [L] (not [DZ] / [Dbv]) can pin down concrete singletons. *)
+  Definition int_concrete (i : DZ.t) : option Z := DZ.concrete i.
+
+  (** Extract bits [s..s+m-1] (0-based, LSB at index 0) of a [V_bitvector].
+      Wraps [Dbv.slice] so [Residual] can stay agnostic to [Dbv]. *)
+  Definition bv_slice (v : value) (s m : N) : value :=
+    match v with
+    | V_bitvector bv => V_bitvector (Dbv.slice bv s m)
+    | _ => V_top
+    end.
+
+  (** Update field [k] of a record value to [v]. An uninitialised [V_top]
+      register is treated as an empty record (matching [apply_field_path]'s
+      behaviour). Anything else degrades to [⊤] — we lose the value but
+      the residual still records the write. *)
+  Definition set_field (r : value) (k : Ast.id_aux) (v : value) : value :=
+    match r with
+    | V_record m => V_record (insert k v m)
+    | V_top => V_record (insert k v ∅)
+    | _ => V_top
+    end.
+
+  (** Replace the element at [i] of a [V_vector]. Out-of-bounds indices and
+      non-vector bases degrade to [⊤]. *)
+  Fixpoint vector_update (vs : list value) (i : nat) (v : value) : list value :=
+    match vs, i with
+    | [], _ => []
+    | x :: rest, O => v :: rest
+    | x :: rest, S n => x :: vector_update rest n v
+    end.
+
+  (** Set bits [lo..hi] (inclusive, [Order dec] convention) of a [V_bitvector]
+      to [new]. Splits the base into [high ‖ middle ‖ low] using [Dbv.slice],
+      then reassembles [high ‖ new ‖ low] via [Dbv.append]. Degrades to [⊤]
+      if the base has unknown width, the bounds are out of range, or the
+      base / [new] aren't both [V_bitvector]. *)
+  Definition set_bv_range (base : value) (hi lo : Z) (new : value) : value :=
+    match base, new with
+    | V_bitvector bv_base, V_bitvector bv_new =>
+        match DZ.concrete (T.bits_length bv_base) with
+        | Some n_z =>
+            if andb (Z.leb 0 lo) (andb (Z.leb lo hi) (Z.ltb hi n_z)) then
+              let n_N := Z.to_N n_z in
+              let lo_N := Z.to_N lo in
+              let hi_N := Z.to_N hi in
+              let high_start := (hi_N + 1)%N in
+              let high_width := (n_N - high_start)%N in
+              let high_part := Dbv.slice bv_base high_start high_width in
+              let low_part := Dbv.slice bv_base 0%N lo_N in
+              V_bitvector (Dbv.append high_part (Dbv.append bv_new low_part))
+            else V_top
+        | None => V_top
+        end
+    | _, _ => V_top
+    end.
+
+  (** Read / set element at (Sail-level) index [i] of a [V_vector]. We
+      follow the [dec] convention used by [access] / [update_list] in
+      [Sail_lib]: a vector of length [N] stores list position [N - 1 - i]
+      when the source writes [v[i]]. (Sail's default [Order dec] covers
+      nearly all real code; [inc]-ordered models would be off-by-mirror
+      — fix the storage convention once we plumb the order into the
+      annotation.) *)
+  Definition get_vector_elem (xs : value) (i : Z) : value :=
+    match xs with
+    | V_vector vs =>
+        let n := Z.of_nat (length vs) in
+        if andb (Z.leb 0 i) (Z.ltb i n) then
+          match nth_error vs (Z.to_nat (n - 1 - i)) with Some x => x | None => V_top end
+        else V_top
+    | _ => V_top
+    end.
+
+  Definition set_vector_elem (xs : value) (i : Z) (v : value) : value :=
+    match xs with
+    | V_vector vs =>
+        let n := Z.of_nat (length vs) in
+        if andb (Z.leb 0 i) (Z.ltb i n) then
+          V_vector (vector_update vs (Z.to_nat (n - 1 - i)) v)
+        else V_top
+    (* [bits(N)][i] = bit-valued RHS: forward to [set_bv_range] with
+       [hi = lo = i]. Sail's [bit] is a 1-element bitvector at runtime, so
+       [v] is itself a [V_bitvector]. *)
+    | V_bitvector _ => set_bv_range xs i i v
+    | _ => V_top
+    end.
+
   Module Matching (Tannot : TypeAnnot.S).
     Import PatternMatch.
+
+    (** Compare a concrete bitvector literal [lit_bs] against an abstract
+        [V_bitvector] value [bv]. Matched only when [bv] is exactly the
+        singleton {[lit_bs]}; MaybeMatched when [lit_bs] is one of the
+        values [bv] admits; otherwise Unmatched. *)
+    Definition match_bitvector_lit (lit_bs : list Bit.bit) (bv : Dbv.t) : match_result value :=
+      let lit_bv := Dbv.α (Bit.Bits.to_bvn lit_bs) in
+      if Dbv.leb lit_bv bv then
+        if Dbv.leb bv lit_bv then simple_match value
+        else MaybeMatched (empty_bindings value)
+      else Unmatched.
 
     Definition pattern_match_literal (l : Ast.lit) (v : value) : match_result value :=
       let 'Ast.L_aux aux annot := l in
@@ -1715,18 +1840,254 @@ Module Dom (DZ : SAIL_INT) (Dbv : SAIL_BITS) (T : SAIL_BITS_INT Dbv DZ) <: DOMAI
       | (Ast.L_unit,      V_unit        ) => simple_match value
       | (Ast.L_true,      V_bool true   ) => simple_match value
       | (Ast.L_false,     V_bool false  ) => simple_match value
-      | (Ast.L_num n,     V_int m       ) => simple_match value
-      | (Ast.L_hex s,     V_bitvector vs) => simple_match value
-      | (Ast.L_bin s,     V_bitvector vs) => simple_match value
+      | (Ast.L_num n,     V_int m       ) =>
+          (* If the interval contains [n] AND admits only [n], Match. If [n] is
+             one of several admitted values, MaybeMatched. Otherwise Unmatched.
+             We approximate "admits only [n]" by checking [leb (α n) m] both
+             ways. *)
+          if DZ.leb (DZ.α n) m then
+            if DZ.leb m (DZ.α n) then simple_match value
+            else MaybeMatched (empty_bindings value)
+          else Unmatched
+      | (Ast.L_hex s,     V_bitvector vs) => match_bitvector_lit (of_hex_lit s) vs
+      | (Ast.L_bin s,     V_bitvector vs) => match_bitvector_lit (of_bin_lit s) vs
       | (Ast.L_string s1, V_string s2   ) => simple_match_when value (String.eqb s1 s2)
       | (Ast.L_real r1,   V_real r2     ) => simple_match_when value (QArith_base.Qeq_bool r1 r2)
       | _ => Unmatched
       end.
 
+    (** Pattern match against the abstract value [v]. We handle the cases that
+        matter for let-bindings and the simple tuple/constructor matches used
+        across the test suite; anything we don't understand defaults to
+        [simple_match] (matched with no bindings), which is the same stub
+        behaviour we had before. *)
     Fixpoint pattern_match (p : Ast.pat Tannot.t) (v : value) {struct p} : match_result value :=
-      simple_match value.
+      let 'Ast.P_aux aux _ := p in
+      match aux with
+      | Ast.P_lit lit => pattern_match_literal lit v
+      | Ast.P_wild => simple_match value
+      | Ast.P_id id =>
+          (* In Sail, an identifier in a pattern can be a fresh variable
+             binding, an enum member, or a nullary union constructor. The
+             typechecker tells us which via [get_id_type]. *)
+          let 'Ast.P_aux _ annot := p in
+          match Tannot.get_id_type (snd annot) id with
+          | TypeAnnot.Types.Enum_member =>
+              match v with
+              | V_member ids =>
+                  if bool_decide (Aux.unwrap id ∈ ids) then
+                    if Nat.eqb (size ids) 1 then simple_match value
+                    else MaybeMatched (empty_bindings value)
+                  else Unmatched
+              | V_top => MaybeMatched (empty_bindings value)
+              | _ => Unmatched
+              end
+          | _ => add_match id (Complete v) (simple_match value)
+          end
+      | Ast.P_typ _ p' => pattern_match p' v
+      | Ast.P_var p' _ => pattern_match p' v
+      | Ast.P_as p' id =>
+          add_match id (Complete v) (pattern_match p' v)
+      | Ast.P_tuple ps =>
+          match v with
+          | V_unit =>
+              match ps with [] => simple_match value | _ => Unmatched end
+          | V_tuple vs =>
+              if Nat.eqb (List.length ps) (List.length vs) then
+                fst (List.fold_left
+                       (fun (acc : match_result value * list value) (p : Ast.pat Tannot.t) =>
+                          let '(r, vs) := acc in
+                          match vs with
+                          | [] => (Unmatched, [])
+                          | v :: rest => (r ⋈ pattern_match p v, rest)
+                          end)
+                       ps (simple_match value, vs))
+              else
+                Unmatched
+          | _ => simple_match value
+          end
+      | Ast.P_app ctor ps =>
+          match v with
+          | V_ctor m =>
+              match m !! Aux.unwrap ctor with
+              | None => Unmatched
+              | Some vs =>
+                  if Nat.eqb (List.length ps) (List.length vs) then
+                    let inner :=
+                      fst (List.fold_left
+                             (fun (acc : match_result value * list value) (p : Ast.pat Tannot.t) =>
+                                let '(r, vs) := acc in
+                                match vs with
+                                | [] => (Unmatched, [])
+                                | v :: rest => (r ⋈ pattern_match p v, rest)
+                                end)
+                             ps (simple_match value, vs))
+                    in
+                    (* If [v] could be other constructors too, demote a Matched
+                       result to MaybeMatched (the bindings are still right,
+                       but the residual evaluator should still consider the
+                       other arms). *)
+                    if Nat.eqb (size m) 1 then inner
+                    else match inner with
+                         | Matched b => MaybeMatched b
+                         | other => other
+                         end
+              else
+                Unmatched
+              end
+          | V_top => simple_match value
+          | _ => Unmatched
+          end
+      | Ast.P_struct _ field_pats _ =>
+          match v with
+          | V_record m =>
+              List.fold_left
+                (fun (acc : match_result value) (fp : Ast.id * Ast.pat Tannot.t) =>
+                  let '(field, fpat) := fp in
+                  match m !! Aux.unwrap field with
+                  | None => Unmatched
+                  | Some fv => acc ⋈ pattern_match fpat fv
+                  end)
+                field_pats (simple_match value)
+          | V_top => simple_match value
+          | _ => Unmatched
+          end
+      | Ast.P_vector_concat ps =>
+          match v with
+          | V_bitvector bv =>
+              (* Sail's view of a bitvector is MSB-first: in [P_vector_concat
+                 [p1; p2; p3]], [p1] matches the high bits and [p3] the low
+                 bits. We don't know the total length up-front so we trust
+                 the splits in each pattern's typing annotation and walk left
+                 to right, keeping an [offset] (in LSB-based bits from the
+                 low end) that decreases as we go. *)
+              let total :=
+                List.fold_left
+                  (fun (acc : nat) p =>
+                    let 'Ast.P_aux _ ann := p in
+                    match Tannot.get_split (snd ann) with
+                    | TypeAnnot.Types.Split n => Nat.add acc n
+                    | TypeAnnot.Types.No_split => acc
+                    end)
+                  ps 0%nat
+              in
+              fst (List.fold_left
+                     (fun (acc : match_result value * nat) (p : Ast.pat Tannot.t) =>
+                       let '(prev, off) := acc in
+                       let 'Ast.P_aux _ ann := p in
+                       match Tannot.get_split (snd ann) with
+                       | TypeAnnot.Types.Split s =>
+                           let off' := Nat.sub off s in
+                           let piece :=
+                             V_bitvector (Dbv.slice bv (N.of_nat off') (N.of_nat s))
+                           in
+                           (prev ⋈ pattern_match p piece, off')
+                       | TypeAnnot.Types.No_split => (Unmatched, off)
+                       end)
+                     ps (simple_match value, total))
+          | V_top => simple_match value
+          | _ => Unmatched
+          end
+      | Ast.P_list ps =>
+          (* [[||]] / [[|x|]] / [[|x, y|]] — the pattern is a concrete list
+             literal that matches a list of exactly the same length. *)
+          match v with
+          | V_list vs =>
+              if Nat.eqb (List.length ps) (List.length vs) then
+                fst (List.fold_left
+                       (fun (acc : match_result value * list value) (p : Ast.pat Tannot.t) =>
+                          let '(r, vs) := acc in
+                          match vs with
+                          | [] => (Unmatched, [])
+                          | v :: rest => (r ⋈ pattern_match p v, rest)
+                          end)
+                       ps (simple_match value, vs))
+              else
+                Unmatched
+          | V_top => simple_match value
+          | _ => Unmatched
+          end
+      | Ast.P_cons head_pat tail_pat =>
+          (* [h :: t] matches a non-empty list, binding [head_pat] to the head
+             and [tail_pat] to the tail. *)
+          match v with
+          | V_list (h :: t) =>
+              pattern_match head_pat h ⋈ pattern_match tail_pat (V_list t)
+          | V_list [] => Unmatched
+          | V_top => simple_match value
+          | _ => Unmatched
+          end
+      | Ast.P_vector_subrange id n m =>
+          (* [v[n..m]] records a partial binding for [v]: this match has
+             consumed the slice [v[n..m]], which the surrounding
+             [P_vector_concat] (or the standalone use) has already cut out
+             of the matched value. [complete_partial] later reassembles
+             all partial bindings for [v] into a single bitvector. *)
+          add_match id (Partial (Ast.Non_empty (v, n, m) [])) (simple_match value)
+      | Ast.P_vector ps =>
+          (* A single-element-per-bit vector pattern. For a [V_bitvector] of
+             length [n = List.length ps], the leftmost (MSB-first) pattern
+             matches the highest bit and the rightmost matches bit 0. *)
+          match v with
+          | V_bitvector bv =>
+              let n := List.length ps in
+              fst (List.fold_left
+                     (fun (acc : match_result value * nat) (p : Ast.pat Tannot.t) =>
+                       let '(prev, off) := acc in
+                       let off' := Nat.sub off 1 in
+                       let piece :=
+                         V_bitvector (Dbv.slice bv (N.of_nat off') (N.of_nat 1))
+                       in
+                       (prev ⋈ pattern_match p piece, off'))
+                     ps (simple_match value, n))
+          | V_vector vs =>
+              if Nat.eqb (List.length ps) (List.length vs) then
+                fst (List.fold_left
+                       (fun (acc : match_result value * list value) (p : Ast.pat Tannot.t) =>
+                         let '(prev, vs) := acc in
+                         match vs with
+                         | [] => (Unmatched, [])
+                         | v :: rest => (prev ⋈ pattern_match p v, rest)
+                         end)
+                       ps (simple_match value, vs))
+              else Unmatched
+          | V_top => simple_match value
+          | _ => Unmatched
+          end
+      | _ => simple_match value
+      end.
 
   End Matching.
 
-  Definition complete (b : PatternMatch.binding t) : t := ⊥.
+  (** Reassemble the slices recorded by a [Partial] binding (one entry
+      per [v[hi..lo]] sub-pattern) into a single [V_bitvector]. We assume
+      the slices' bit ranges together cover [0..max], which is the only
+      shape Sail's typechecker actually produces — for [v[3..0] @ v[7..4]]
+      we get [{(_, 3, 0); (_, 7, 4)}] and reassemble an 8-bit value. *)
+  Definition complete_partial (partial_values : Ast.non_empty (t * Z * Z)) : t :=
+    let 'Ast.Non_empty (v1, n1, m1) rest := partial_values in
+    let '(max, _) :=
+      List.fold_left
+        (fun (range : Z * Z) (pvalue : t * Z * Z) =>
+         let '(max, min) := range in
+         let '(_, n, m) := pvalue in
+         (Z.max max (Z.max n m), Z.min min (Z.min n m)))
+        rest (Z.max n1 m1, Z.min n1 m1)
+    in
+    let len := Z.succ max in
+    let zeros :=
+      V_bitvector (Dbv.α (Bit.Bits.to_bvn (List.repeat Bit.B0 (Z.to_nat len))))
+    in
+    List.fold_left
+      (fun bv pvalue =>
+       let '(slice, n, m) := pvalue in
+       set_bv_range bv (Z.max n m) (Z.min n m) slice)
+      ((v1, n1, m1) :: rest)
+      zeros.
+
+  Definition complete (b : PatternMatch.binding t) : t :=
+    match b with
+    | PatternMatch.Complete v => v
+    | PatternMatch.Partial vs => complete_partial vs
+    end.
 End Dom.

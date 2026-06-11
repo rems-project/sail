@@ -443,7 +443,7 @@ let string_of_hex = function
   | _ -> failwith "Cannot convert binary sequence to hex"
 
 let string_of_bits bits =
-  if List.length bits mod 4 == 0 then "0x" ^ String.concat "" (List.map string_of_hex (break 4 bits))
+  if List.length bits mod 4 = 0 then "0x" ^ String.concat "" (List.map string_of_hex (break 4 bits))
   else "0b" ^ String.concat "" (List.map string_of_bit bits)
 
 let decimal_string_of_bits bits =

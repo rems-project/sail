@@ -392,6 +392,21 @@ Module Dom <: SAIL_INT.
       use the readable name [alpha] instead of the mangled [_UU03b1_]. *)
   Definition alpha := α.
 
+  (** Recover a concrete integer from an interval whose endpoints coincide.
+      Anything else (open ends, [Empty], or [lo < hi]) returns [None]. *)
+  Definition concrete (i : interval) : option Z :=
+    match i with
+    | Ends ep =>
+        match proj1_sig ep with
+        | (Some lo, Some hi) => if Z.eqb lo hi then Some lo else None
+        | _ => None
+        end
+    | Empty => None
+    end.
+
+  Lemma concrete_abst : ∀ {x}, concrete (α x) = Some x.
+  Proof. intros. unfold concrete, α. cbn. rewrite Z.eqb_refl. reflexivity. Qed.
+
   Definition compare_endpoints (op : Z → Z → bool) (x y : option Z) : bool :=
     match (x, y) with
     | (Some a, Some b) => op a b
