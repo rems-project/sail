@@ -224,6 +224,13 @@ Module Type SAIL_INT.
 
   Parameter emod : t → t → t.
   Parameter emod_abst : ∀ {x y}, α (snd (Z.div_eucl x y)) = emod (α x) (α y).
+
+  (** Concretization: extract a singleton [Z] from an abstract value when the
+      domain knows it pins down exactly one integer. Used by the L-expression
+      handler to fold concrete vector indices / subrange bounds into actual
+      state updates. *)
+  Parameter concrete : t → option Z.
+  Parameter concrete_abst : ∀ {x}, concrete (α x) = Some x.
 End SAIL_INT.
 
 Module Bits.
@@ -232,6 +239,11 @@ End Bits.
 
 Module Type SAIL_BITS.
   Include DOMAIN Bits.
+
+  Parameter unknown_bit : t.
+
+  (** The zero-width bitvector. *)
+  Parameter zwbv : t.
 
   Parameter not : t → t.
   Parameter not_abst : ∀ {n} {x : bv n}, α (bv_to_bvn (bv_not x)) = not (α (bv_to_bvn x)).

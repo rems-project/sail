@@ -1,6 +1,8 @@
+open Datatypes
 open Base
 open Decidable
 open Fin_maps
+open List_monad
 open Option
 
 type __ = Obj.t
@@ -14,6 +16,9 @@ val mapset_singleton :
 val mapset_union : 'a1 coq_Merge -> 'a1 mapset' coq_Union
 
 val mapset_intersection : 'a1 coq_Merge -> 'a1 mapset' coq_Intersection
+
+val mapset_elements :
+  (__ -> ('a1, __, 'a2) coq_MapFold) -> ('a1, 'a2 mapset') coq_Elements
 
 val mapset_eq_dec :
   ('a1, 'a1) coq_RelDecision -> ('a1 mapset', 'a1 mapset') coq_RelDecision

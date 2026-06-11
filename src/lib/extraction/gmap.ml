@@ -598,6 +598,13 @@ let gset_union eqDecision0 h =
 let gset_intersection eqDecision0 h =
   mapset_intersection (Obj.magic (fun _ _ _ -> gmap_merge eqDecision0 h))
 
+(** val gset_elements :
+    ('a1, 'a1) coq_RelDecision -> 'a1 coq_Countable -> ('a1, 'a1 gset)
+    coq_Elements **)
+
+let gset_elements eqDecision0 h =
+  mapset_elements (Obj.magic (fun _ _ -> gmap_fold eqDecision0 h))
+
 (** val gset_elem_of_dec :
     ('a1, 'a1) coq_RelDecision -> 'a1 coq_Countable -> ('a1, 'a1 gset)
     coq_RelDecision **)

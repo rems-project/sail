@@ -142,6 +142,19 @@ module Dom =
   let alpha =
     _UU03b1_
 
+  (** val concrete : interval -> Big_int_Z.big_int option **)
+
+  let concrete = function
+  | Empty -> None
+  | Ends ep ->
+    let (o, o0) = let Coq_exist a = ep in a in
+    (match o with
+     | Some lo ->
+       (match o0 with
+        | Some hi -> if Z.eqb lo hi then Some lo else None
+        | None -> None)
+     | None -> None)
+
   (** val compare_endpoints :
       (Big_int_Z.big_int -> Big_int_Z.big_int -> bool) -> Big_int_Z.big_int
       option -> Big_int_Z.big_int option -> bool **)

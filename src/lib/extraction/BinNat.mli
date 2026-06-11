@@ -6,6 +6,8 @@ module N :
  sig
   val succ_pos : Big_int_Z.big_int -> Big_int_Z.big_int
 
+  val sub : Big_int_Z.big_int -> Big_int_Z.big_int -> Big_int_Z.big_int
+
   val compare : Big_int_Z.big_int -> Big_int_Z.big_int -> comparison
 
   val coq_lor : Big_int_Z.big_int -> Big_int_Z.big_int -> Big_int_Z.big_int

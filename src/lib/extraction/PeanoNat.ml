@@ -1,6 +1,16 @@
 
 module Nat =
  struct
+  (** val add :
+      Big_int_Z.big_int -> Big_int_Z.big_int -> Big_int_Z.big_int **)
+
+  let rec add n m =
+    (fun fO fS n -> if Big_int_Z.sign_big_int n <= 0 then fO ()
+  else fS (Big_int_Z.pred_big_int n))
+      (fun _ -> m)
+      (fun p -> Big_int_Z.succ_big_int (add p m))
+      n
+
   (** val sub :
       Big_int_Z.big_int -> Big_int_Z.big_int -> Big_int_Z.big_int **)
 

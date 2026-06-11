@@ -27,6 +27,11 @@ let map_insert h i x =
 let map_singleton h h0 i x =
   insert (map_insert h) i x (empty h0)
 
+(** val map_size : ('a1, 'a2, 'a3) coq_MapFold -> 'a3 coq_Size **)
+
+let map_size h =
+  map_fold h (fun _ _ x -> Big_int_Z.succ_big_int x) Big_int_Z.zero_big_int
+
 (** val map_to_list :
     ('a1, 'a2, 'a3) coq_MapFold -> 'a3 -> ('a1 * 'a2) list **)
 

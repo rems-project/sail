@@ -75,6 +75,8 @@ module type SAIL_INT =
   val ediv : t -> t -> t
 
   val emod : t -> t -> t
+
+  val concrete : t -> Big_int_Z.big_int option
  end
 
 module Bits =
@@ -97,6 +99,10 @@ module type SAIL_BITS =
   val leb : t -> t -> bool
 
   val _UU03b1_ : Bits.t -> t
+
+  val unknown_bit : t
+
+  val zwbv : t
 
   val not : t -> t
 

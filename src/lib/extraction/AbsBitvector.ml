@@ -127,6 +127,24 @@ module Dom =
        | Bvs y0 ->
          leb_aux (let Coq_exist a = x0 in a) (let Coq_exist a = y0 in a))
 
+  (** val unknown_bit : bvset **)
+
+  let unknown_bit =
+    Bvs (Coq_exist
+      (singletonM
+        (map_singleton (gmap_partial_alter Nat.eq_dec nat_countable)
+          (gmap_empty Nat.eq_dec nat_countable))
+        (Big_int_Z.succ_big_int Big_int_Z.zero_big_int) (Three.BU :: [])))
+
+  (** val zwbv : bvset **)
+
+  let zwbv =
+    Bvs (Coq_exist
+      (singletonM
+        (map_singleton (gmap_partial_alter Nat.eq_dec nat_countable)
+          (gmap_empty Nat.eq_dec nat_countable))
+        Big_int_Z.zero_big_int []))
+
   (** val _UU03b1_ : bvn -> bvset **)
 
   let _UU03b1_ x =
@@ -139,6 +157,11 @@ module Dom =
              (gmap_empty Nat.eq_dec nat_countable))
            (BinNat.N.to_nat len) (map Three.from_bool (bv_to_bits len x'))))
      | None -> bot)
+
+  (** val alpha : bvn -> bvset **)
+
+  let alpha =
+    _UU03b1_
 
   (** val lift_bitwise_gmap :
       (Three.ubit -> Three.ubit -> Three.ubit) -> (Big_int_Z.big_int,

@@ -51,6 +51,7 @@ open Ast_util
 
 open Extraction.ZAst
 
+module Big_int = Nat_big_num
 module StringMap = Util.StringMap
 
 let fallthrough () =
@@ -73,12 +74,18 @@ module Tannot = struct
     let typ = Type_check.typ_of_tannot tannot in
     typ
 
-  let get_id_type tannot id =
-    let env = Type_check.env_of_tannot tannot in
-    match Type_check.Env.lookup_id id env with
-    | Register _ -> Global_register
-    | Local _ | Unbound _ -> Local_variable
-    | Enum _ -> Enum_member
+  let get_id_type (tannot : t) id =
+    (* Synthesized expressions (from [desugar_for]/[desugar_loop]) carry an
+       empty type annotation; treat those as local variables, matching the
+       common case for a freshly-bound loop / let id. *)
+    if Type_check.is_empty_tannot tannot then Local_variable
+    else (
+      let env = Type_check.env_of_tannot tannot in
+      match Type_check.Env.lookup_id id env with
+      | Register _ -> Global_register
+      | Local _ | Unbound _ -> Local_variable
+      | Enum _ -> Enum_member
+    )
 
   let get_split tannot =
     let env = Type_check.env_of_tannot tannot in
@@ -102,32 +109,6 @@ module Zinterp = Extraction.ZAst.Make (Tannot) (B)
 
 module Lattice = Zinterp.R.L
 
-type gstate = {
-  primops : (Lattice.value list -> Lattice.value) StringMap.t;
-  fundefs : Type_check.tannot fundef Bindings.t;
-  typecheck_env : Type_check.Env.t;
-}
-
-let primop_print_endline args =
-  ( match args with
-  | [Lattice.V_string str] -> Value.output_endline str
-  | _ -> ()
-  );
-  Lattice.V_unit
-
-let initial_primops =
-  StringMap.empty
-  |> StringMap.add "print_endline" primop_print_endline
-
-let initial_gstate ~typecheck_env ~ast =
-  let gstate = { primops = initial_primops; fundefs = Bindings.empty; typecheck_env } in
-  let add_function gstate = function
-    | DEF_aux (DEF_fundef fdef, _) -> { gstate with fundefs = Bindings.add (id_of_fundef fdef) fdef gstate.fundefs }
-    | _ -> gstate
-  in
-  let gstate = List.fold_left add_function gstate ast.defs in
-  gstate
-
 let zexp_aux_parent = function
   | Z_single (p, _)
   | Z_return p
@@ -147,8 +128,16 @@ let zexp_aux_parent = function
   | Z_assign_right (p, _, _)
   | Z_var_left (p, _, _, _, _, _)
   | Z_var_right (p, _, _, _)
-  | Z_var_body (p, _, _, _) ->
+  | Z_var_body (p, _, _, _)
+  | Z_struct (p, _, _, _, _)
+  | Z_struct_update_base (p, _, _)
+  | Z_struct_update (p, _, _, _, _, _) ->
       p
+
+let concrete_bit = function
+  | Extraction.Bit.Three.B0 -> Some Bit.B0
+  | Extraction.Bit.Three.B1 -> Some Bit.B1
+  | Extraction.Bit.Three.BU -> None
 
 module Pretty = struct
   open PPrint
@@ -167,16 +156,25 @@ module Pretty = struct
     | Extraction.Bit.Three.B1 -> '1'
     | Extraction.Bit.Three.BU -> '?'
 
+  let rec is_concrete = function [] -> true | Extraction.Bit.Three.BU :: _ -> false | _ :: bv -> is_concrete bv
+
   let string_of_bitvector bv =
+    let len = List.length bv in
     let buf = Buffer.create (List.length bv) in
-    Buffer.add_string buf "0b";
-    let rec go = function
-      | [] -> ()
-      | b :: bs ->
-          Buffer.add_char buf (char_of_bit b);
-          go bs
-    in
-    go (List.rev bv);
+    if len mod 4 = 0 && is_concrete bv then (
+      let bv = Option.get (Util.option_all (List.map concrete_bit bv)) in
+      Buffer.add_string buf (Sail_lib.string_of_bits (List.rev bv))
+    )
+    else (
+      Buffer.add_string buf "0b";
+      let rec go = function
+        | [] -> ()
+        | b :: bs ->
+            Buffer.add_char buf (char_of_bit b);
+            go bs
+      in
+      go (List.rev bv)
+    );
     Buffer.contents buf
 
   let rec string_of_value (v : Lattice.value) =
@@ -234,7 +232,10 @@ module Pretty = struct
 
   let doc_list c docs =
     let l, r =
-      match c with List -> (string "[|", string "|]") | Tuple -> (char '(', char ')') | Vector -> (char '[', char ']')
+      match c with
+      | List -> (string "[|", string "|]")
+      | Tuple -> (char '(', char ')')
+      | Vector | Bitvector -> (char '[', char ']')
     in
     l ^^ separate (comma ^^ space) docs ^^ r
 
@@ -315,6 +316,7 @@ module Pretty = struct
                   ^^ match arms with None -> empty | Some _ -> break 1 ^^ string "..."
                   )
             | Z_assign_left _ | Z_assign_right _ | Z_var_left _ | Z_var_right _ | Z_var_body _ -> string "?"
+            | Z_struct _ | Z_struct_update_base _ | Z_struct_update _ -> string "?"
           in
           Stack.push child s;
           go (n + 1) (zexp_aux_parent aux)
@@ -322,6 +324,506 @@ module Pretty = struct
     go 0 zexp;
     List.of_seq @@ Stack.to_seq s
 end
+
+type gstate = {
+  primops : (Lattice.value list -> Lattice.value) StringMap.t;
+  fundefs : Type_check.tannot fundef Bindings.t;
+  letbinds : (Type_check.tannot pat * Type_check.tannot exp * Type_check.Env.t def_annot) list;
+  registers : (id * typ * Type_check.tannot exp option) list;
+  typecheck_env : Type_check.Env.t;
+}
+
+let concrete_real = function Lattice.V_real qc -> Some (Util.Rational.from_rocq qc.Extraction.Qcanon.this) | _ -> None
+
+let v_real (q : Q.t) = Lattice.V_real { Extraction.Qcanon.this = Util.Rational.to_rocq q }
+
+(* Wrap a concrete MSB-first [Bit.bit list] result as a [V_bitvector] abstract
+   value. [Bit.Bits.to_bvn] expects MSB-first input (its [bits_to_N] threads
+   each bit through [acc := 2*acc + b], so the first element is most-significant)
+   so we pass [bits] through unchanged. *)
+let v_bitvector_of_bits bits = Lattice.V_bitvector (Extraction.AbsBitvector.Dom.alpha (Extraction.Bit.Bits.to_bvn bits))
+
+(** Define a module for lifting primitives.
+
+    If [f] has type [int -> int -> string], then the following will lift it to a function over a list of values. [None]
+    is used to signal an arity error.
+
+    {[
+      lift f (Int @-> Int @-> Ret String) : value list -> value option
+    ]} *)
+module Lifting = struct
+  type _ ty =
+    | Unit : unit ty
+    | Int : Z.t ty
+    | AbsInt : Extraction.Interval.Dom.t ty
+    | BV : Bit.bit list ty
+    | AbsBV : Extraction.AbsBitvector.Dom.t ty
+    | Bool : bool ty
+    | Real : Q.t ty
+    | String : string ty
+
+  type _ lifting = Ret : 'a ty -> 'a lifting | Arg : 'a ty * 'b lifting -> ('a -> 'b) lifting
+
+  let ( @-> ) arg rest = Arg (arg, rest)
+
+  let encode : type a. a ty -> a -> Lattice.value =
+   fun ty x ->
+    match ty with
+    | Unit -> V_unit
+    | Int -> V_int (Extraction.Interval.Dom.alpha x)
+    | AbsInt -> V_int x
+    | BV -> v_bitvector_of_bits x
+    | AbsBV -> V_bitvector x
+    | Bool -> V_bool x
+    | Real -> v_real x
+    | String -> V_string x
+
+  let decode : type a. a ty -> Lattice.value -> a option =
+   fun ty v ->
+    match (ty, v) with
+    | Unit, V_unit -> Some ()
+    | AbsInt, V_int n -> Some n
+    | Int, V_int n -> Extraction.Interval.Dom.concrete n
+    | AbsBV, V_bitvector bv -> Some bv
+    | BV, V_bitvector bv -> (
+        match Extraction.AbsBitvector.Dom.to_bv_list bv with
+        | Some [bits] -> Option.map List.rev (Util.option_all (List.map concrete_bit bits))
+        | _ -> None
+      )
+    | Bool, V_bool b -> Some b
+    | String, V_string s -> Some s
+    | Real, V_real qc -> Some (Util.Rational.from_rocq qc.Extraction.Qcanon.this)
+    | _ -> None
+
+  let rec apply : type f. f -> f lifting -> Lattice.value list -> Lattice.value =
+   fun f lifting args ->
+    match (lifting, args) with
+    | Ret ty, [] -> encode ty f
+    | Arg (arg, rest), v :: vs -> (
+        match decode arg v with Some x -> apply (f x) rest vs | None -> V_top
+      )
+    | _ -> V_top
+
+  let lift : type a b. (a -> b) -> (a -> b) lifting -> Lattice.value list -> Lattice.value =
+   fun f lifting args -> apply f lifting args
+end
+
+let concrete_int = function Lattice.V_int i -> Extraction.Interval.Dom.concrete i | _ -> None
+
+let rec concrete_bits = function
+  | Lattice.V_bitvector dbv -> (
+      match Extraction.AbsBitvector.Dom.to_bv_list dbv with
+      | Some [bits] -> Option.map List.rev (Util.option_all (List.map concrete_bit bits))
+      | _ -> None
+    )
+  | _ -> None
+
+let primop_print_endline args =
+  (match args with [Lattice.V_string str] -> Value.output_endline str | _ -> ());
+  Lattice.V_unit
+
+let primop_print args =
+  (match args with [Lattice.V_string str] -> Value.output str | _ -> ());
+  Lattice.V_unit
+
+(* [prerr] / [prerr_endline] write to stderr — matching the regular
+   interpreter's [value.ml] bindings. The REPL's [-iout] captures stdout
+   only, so stderr output stays out of the test's diff. *)
+let primop_prerr args =
+  (match args with [Lattice.V_string str] -> Stdlib.prerr_string str | _ -> ());
+  Lattice.V_unit
+
+let primop_prerr_endline args =
+  (match args with [Lattice.V_string str] -> Stdlib.prerr_endline str | _ -> ());
+  Lattice.V_unit
+
+(* [print_string] / [prerr_string] take (msg, str) — see [value.ml].
+   Curiously, [value.ml]'s [value_prerr_string] sends its output to stdout,
+   not stderr; we mirror that. *)
+let primop_print_string args =
+  (match args with [Lattice.V_string a; Lattice.V_string b] -> Value.output_endline (a ^ b) | _ -> ());
+  Lattice.V_unit
+
+let v_int_concrete n = Lattice.V_int (Extraction.Interval.Dom.alpha n)
+
+(* Lift a Rocq-verified interval comparison ([interval -> interval -> bool option])
+   to the lattice. [None] means the relation cannot be decided from the intervals
+   alone, which lifts to [V_top]. *)
+let lift_int_cmp f = function
+  | [Lattice.V_int i; Lattice.V_int j] -> (
+      match f i j with Some b -> Lattice.V_bool b | None -> Lattice.V_top
+    )
+  | _ -> Lattice.V_top
+
+let primop_lt = lift_int_cmp Extraction.Interval.Dom.lt
+let primop_gt = lift_int_cmp Extraction.Interval.Dom.gt
+let primop_lteq = lift_int_cmp Extraction.Interval.Dom.lteq
+let primop_gteq = lift_int_cmp Extraction.Interval.Dom.gteq
+let primop_print_int = function
+  | [Lattice.V_string msg; n] ->
+      Value.output_endline (msg ^ Pretty.string_of_value n);
+      Lattice.V_unit
+  | _ -> Lattice.V_unit
+
+let primop_print_bits = function
+  | [Lattice.V_string msg; bits] ->
+      Value.output_endline (msg ^ Pretty.string_of_value bits);
+      Lattice.V_unit
+  | _ -> Lattice.V_unit
+
+(* Coerce a [Lattice.value] argument to an abstract bitvector [Dom.t]. Accepts
+   [V_bitvector] directly; falls back to flattening a [V_vector] of singleton
+   [V_bitvector]s by concretizing via [concrete_bits]. The fallback handles
+   bitvector literals like [[bitone, bitzero]] that the evaluator builds as
+   [V_vector] of single-bit [V_bitvector]s without consulting the type. *)
+let as_abs_bv = function
+  | Lattice.V_bitvector dbv -> Some dbv
+  | Lattice.V_vector _ as v -> (
+      match concrete_bits v with
+      | Some bs -> Some (Extraction.AbsBitvector.Dom.alpha (Extraction.Bit.Bits.to_bvn bs))
+      | None -> None
+    )
+  | _ -> None
+
+let v_bitvector dbv = Lattice.V_bitvector dbv
+
+(* [h] caps the number of distinct bitvector widths the result may carry; the
+   underlying Rocq op returns [B.⊤] if the input interval admits more widths
+   than this. Most Sail code uses concrete widths well under any reasonable
+   bound; we pick 256 as a generous default. *)
+let widths_cap = Z.of_int 256
+
+let primop_length = function [v] -> Lattice.value_length v | _ -> Lattice.V_top
+
+let primop_eq_bits = function
+  | [a; b] -> (
+      match (concrete_bits a, concrete_bits b) with
+      | Some xs, Some ys -> Lattice.V_bool (List.length xs = List.length ys && List.for_all2 ( = ) xs ys)
+      | _ -> Lattice.V_top
+    )
+  | _ -> Lattice.V_top
+
+let lattice_eq a b = Lattice.leb a b && Lattice.leb b a
+
+let primop_eq_anything = function [a; b] -> Lattice.V_bool (lattice_eq a b) | _ -> Lattice.V_top
+
+let initial_primops =
+  let open Lifting in
+  let open Extraction in
+  let curry f a b = f (a, b) in
+  let curry3 f a b c = f (a, b, c) in
+  let curry4 f a b c d = f (a, b, c, d) in
+  let curry5 f a b c d e = f (a, b, c, d, e) in
+  List.fold_left
+    (fun m (name, op) -> StringMap.add name op m)
+    StringMap.empty
+    [
+      ("print_endline", primop_print_endline);
+      ("prerr_endline", primop_prerr_endline);
+      ("print", primop_print);
+      ("prerr", primop_prerr);
+      ("print_string", primop_print_string);
+      ("prerr_string", primop_print_string);
+      ("print_int", primop_print_int);
+      ("prerr_int", primop_print_int);
+      ("print_bits", primop_print_bits);
+      ("prerr_bits", primop_print_bits);
+      ("dec_str", lift Sail_lib.dec_str (Int @-> Ret String));
+      ("hex_str", lift Sail_lib.hex_str (Int @-> Ret String));
+      ("hex_str_upper", lift Sail_lib.hex_str_upper (Int @-> Ret String));
+      ("negate", lift Interval.Dom.negate (AbsInt @-> Ret AbsInt));
+      ("string_take", lift (fun s n -> Sail_lib.string_take (s, n)) (String @-> Int @-> Ret String));
+      ("string_drop", lift (fun s n -> Sail_lib.string_drop (s, n)) (String @-> Int @-> Ret String));
+      ("string_length", lift Sail_lib.string_length (String @-> Ret Int));
+      ("string_append", lift ( ^ ) (String @-> String @-> Ret String));
+      ("add_int", lift Interval.Dom.add (AbsInt @-> AbsInt @-> Ret AbsInt));
+      ("sub_int", lift Interval.Dom.sub (AbsInt @-> AbsInt @-> Ret AbsInt));
+      ("mult_int", lift Interval.Dom.mult (AbsInt @-> AbsInt @-> Ret AbsInt));
+      ("mult", lift Interval.Dom.mult (AbsInt @-> AbsInt @-> Ret AbsInt));
+      ("abs_int", lift Z.abs (Int @-> Ret Int));
+      ("div_int", lift Z.div (Int @-> Int @-> Ret Int));
+      ("tdiv_int", lift Z.div (Int @-> Int @-> Ret Int));
+      ("quotient", lift Z.div (Int @-> Int @-> Ret Int));
+      ("modulus", lift Z.rem (Int @-> Int @-> Ret Int));
+      ("tmod_int", lift Z.rem (Int @-> Int @-> Ret Int));
+      ("eq_int", lift Z.equal (Int @-> Int @-> Ret Bool));
+      ("lt", primop_lt);
+      ("gt", primop_gt);
+      ("lteq", primop_lteq);
+      ("gteq", primop_gteq);
+      (* The synthesized for / loop desugarings (see [desugar_for])
+           call [gt_int] / [lt_int] / [add_int] / [sub_int] by their
+           Sail names rather than their extern aliases ("gt" / "lt" /
+           "add_int" / "sub_int"). Bind them here so the lookup also
+           works in tiny modules that don't [$include
+           <prelude.sail>]. *)
+      ("gt_int", primop_gt);
+      ("lt_int", primop_lt);
+      ("gteq_int", primop_gteq);
+      ("lteq_int", primop_lteq);
+      ("sail_zero_extend", lift (TransferBitvectorInterval.Ops.zero_extend widths_cap) (AbsBV @-> AbsInt @-> Ret AbsBV));
+      ("zero_extend", lift (TransferBitvectorInterval.Ops.zero_extend widths_cap) (AbsBV @-> AbsInt @-> Ret AbsBV));
+      ("sail_sign_extend", lift (TransferBitvectorInterval.Ops.sign_extend widths_cap) (AbsBV @-> AbsInt @-> Ret AbsBV));
+      ("sign_extend", lift (TransferBitvectorInterval.Ops.sign_extend widths_cap) (AbsBV @-> AbsInt @-> Ret AbsBV));
+      ("sail_zeros", lift (TransferBitvectorInterval.Ops.zeros widths_cap) (AbsInt @-> Ret AbsBV));
+      ("zeros", lift (TransferBitvectorInterval.Ops.zeros widths_cap) (AbsInt @-> Ret AbsBV));
+      ("sail_ones", lift (TransferBitvectorInterval.Ops.ones widths_cap) (AbsInt @-> Ret AbsBV));
+      ("ones", lift (TransferBitvectorInterval.Ops.ones widths_cap) (AbsInt @-> Ret AbsBV));
+      ("replicate_bits", lift (fun bs n -> Sail_lib.replicate_bits (bs, n)) (BV @-> Int @-> Ret BV));
+      ("length", primop_length);
+      ("eq_bits", primop_eq_bits);
+      ("eq_anything", primop_eq_anything);
+      ("not_vec", lift AbsBitvector.Dom.not (AbsBV @-> Ret AbsBV));
+      ("add_vec", lift AbsBitvector.Dom.add (AbsBV @-> AbsBV @-> Ret AbsBV));
+      ("sub_vec", lift AbsBitvector.Dom.sub (AbsBV @-> AbsBV @-> Ret AbsBV));
+      ("and_vec", lift AbsBitvector.Dom.coq_and (AbsBV @-> AbsBV @-> Ret AbsBV));
+      ("or_vec", lift AbsBitvector.Dom.coq_or (AbsBV @-> AbsBV @-> Ret AbsBV));
+      ("xor_vec", lift AbsBitvector.Dom.xor (AbsBV @-> AbsBV @-> Ret AbsBV));
+      ("shiftl", lift (fun bs n -> Sail_lib.shiftl (bs, n)) (BV @-> Int @-> Ret BV));
+      ("shiftr", lift (fun bs n -> Sail_lib.shiftr (bs, n)) (BV @-> Int @-> Ret BV));
+      ("append", lift AbsBitvector.Dom.append (AbsBV @-> AbsBV @-> Ret AbsBV));
+      ("vector_truncate", lift (fun bs n -> Sail_lib.vector_truncate (bs, n)) (BV @-> Int @-> Ret BV));
+      ("slice", lift AbsBitvector.Dom.slice (AbsBV @-> Int @-> Int @-> Ret AbsBV));
+      ("uint", lift TransferBitvectorInterval.Ops.unsigned (AbsBV @-> Ret AbsInt));
+      ("sint", lift TransferBitvectorInterval.Ops.signed (AbsBV @-> Ret AbsInt));
+      ("pow2", lift Sail_lib.pow2 (Int @-> Ret Int));
+      ("concat_str", lift ( ^ ) (String @-> String @-> Ret String));
+      ("string_of_bits", lift Sail_lib.string_of_bits (BV @-> Ret String));
+      ("eq_string", lift ( = ) (String @-> String @-> Ret Bool));
+      ("not", lift not (Bool @-> Ret Bool));
+      ("signed", lift TransferBitvectorInterval.Ops.signed (AbsBV @-> Ret AbsInt));
+      ("unsigned", lift TransferBitvectorInterval.Ops.unsigned (AbsBV @-> Ret AbsInt));
+      ("count_leading_zeros", lift TransferBitvectorInterval.Ops.count_leading_zeros (AbsBV @-> Ret AbsInt));
+      ("count_trailing_zeros", lift TransferBitvectorInterval.Ops.count_trailing_zeros (AbsBV @-> Ret AbsInt));
+      ( "access",
+        fun args ->
+          match args with
+          | [V_vector xs; n] -> (
+              match concrete_int n with
+              | Some n ->
+                  let i = List.length xs - Z.to_int n - 1 in
+                  if i >= 0 && i < List.length xs then List.nth xs i else V_top
+              | None -> V_top
+            )
+          | [bv; n] -> (
+              match (as_abs_bv bv, concrete_int n) with
+              | Some a, Some n -> v_bitvector (AbsBitvector.Dom.slice a n Z.one)
+              | _ -> V_top
+            )
+          | _ -> V_top
+      );
+      ( "access_inc",
+        fun args ->
+          match args with
+          | [V_vector xs; n] -> (
+              match concrete_int n with
+              | Some n ->
+                  let i = Z.to_int n in
+                  if i >= 0 && i < List.length xs then List.nth xs i else V_top
+              | None -> V_top
+            )
+          | [bv; n] -> (
+              match (concrete_bits bv, concrete_int n) with
+              | Some bs, Some n -> v_bitvector_of_bits (Sail_lib.access_inc (bs, n))
+              | _ -> V_top
+            )
+          | _ -> V_top
+      );
+      ( "access_list",
+        fun args ->
+          match args with
+          | [V_vector xs; n] -> (
+              match concrete_int n with
+              | Some n ->
+                  let i = List.length xs - Z.to_int n - 1 in
+                  if i >= 0 && i < List.length xs then List.nth xs i else V_top
+              | None -> V_top
+            )
+          | _ -> V_top
+      );
+      ( "access_list_inc",
+        fun args ->
+          match args with
+          | [V_vector xs; n] -> (
+              match concrete_int n with
+              | Some n ->
+                  let i = Z.to_int n in
+                  if i >= 0 && i < List.length xs then List.nth xs i else V_top
+              | None -> V_top
+            )
+          | _ -> V_top
+      );
+      ( "update",
+        fun args ->
+          match args with
+          | [V_vector xs; n; x] -> (
+              match concrete_int n with
+              | Some n ->
+                  let i = List.length xs - Z.to_int n - 1 in
+                  if i >= 0 && i < List.length xs then V_vector (List.mapi (fun j v -> if j = i then x else v) xs)
+                  else V_top
+              | None -> V_top
+            )
+          | [bv; n; bit] -> (
+              match (concrete_bits bv, concrete_int n, concrete_bits bit) with
+              | Some bs, Some n, Some [b] -> v_bitvector_of_bits (Sail_lib.update (bs, n, [b]))
+              | _ -> V_top
+            )
+          | _ -> V_top
+      );
+      ( "update_inc",
+        fun args ->
+          match args with
+          | [V_vector xs; n; x] -> (
+              match concrete_int n with
+              | Some n ->
+                  let i = Z.to_int n in
+                  if i >= 0 && i < List.length xs then V_vector (List.mapi (fun j v -> if j = i then x else v) xs)
+                  else V_top
+              | None -> V_top
+            )
+          | [bv; n; bit] -> (
+              match (concrete_bits bv, concrete_int n, concrete_bits bit) with
+              | Some bs, Some n, Some [b] -> v_bitvector_of_bits (Sail_lib.update_inc (bs, n, [b]))
+              | _ -> V_top
+            )
+          | _ -> V_top
+      );
+      ( "subrange",
+        fun args ->
+          match args with
+          | [bv; n; m] -> (
+              match (as_abs_bv bv, concrete_int n, concrete_int m) with
+              | Some a, Some n, Some m -> v_bitvector (AbsBitvector.Dom.slice a m (Z.add (Z.sub n m) Z.one))
+              | _ -> V_top
+            )
+          | _ -> V_top
+      );
+      ("subrange_inc", lift (curry3 Sail_lib.subrange_inc) (BV @-> Int @-> Int @-> Ret BV));
+      ("update_subrange", lift (curry4 Sail_lib.update_subrange) (BV @-> Int @-> Int @-> BV @-> Ret BV));
+      ("update_subrange_inc", lift (curry4 Sail_lib.update_subrange_inc) (BV @-> Int @-> Int @-> BV @-> Ret BV));
+      ( "eq_list",
+        fun args ->
+          match args with
+          | [V_bitvector _; V_bitvector _] -> primop_eq_bits args
+          | [(V_vector _ as a); (V_vector _ as b)] -> V_bool (lattice_eq a b)
+          | _ -> V_top
+      );
+      ( "vector_init",
+        fun args ->
+          match args with
+          | [n; elem] -> (
+              match concrete_int n with Some n -> V_vector (List.init (Z.to_int n) (fun _ -> elem)) | None -> V_top
+            )
+          | _ -> V_top
+      );
+      ("max_int", lift Interval.Dom.max (AbsInt @-> AbsInt @-> Ret AbsInt));
+      ("min_int", lift Interval.Dom.min (AbsInt @-> AbsInt @-> Ret AbsInt));
+      ("undefined_int", fun _ -> V_int Interval.Dom.top);
+      ("undefined_nat", fun _ -> V_int Interval.Dom.top);
+      ("undefined_range", fun _ -> V_int Interval.Dom.top);
+      ("undefined_unit", fun _ -> V_unit);
+      ("undefined_bool", fun _ -> V_top);
+      ("undefined_string", fun _ -> V_string "");
+      ( "undefined_bitvector",
+        fun args ->
+          match args with
+          | [n] -> (
+              match concrete_int n with
+              | Some n ->
+                  let zeros = List.init (Z.to_int n) (fun _ -> Bit.B0) in
+                  v_bitvector_of_bits zeros
+              | None -> V_top
+            )
+          | _ -> V_top
+      );
+      ( "undefined_vector",
+        fun args ->
+          match args with
+          | [n; elem] -> (
+              match concrete_int n with Some n -> V_vector (List.init (Z.to_int n) (fun _ -> elem)) | None -> V_top
+            )
+          | _ -> V_top
+      );
+      ("undefined_list", fun _ -> V_list []);
+      ("get_slice_int", lift (curry3 Sail_lib.get_slice_int) (Int @-> Int @-> Int @-> Ret BV));
+      ("add_vec_int", lift (curry Sail_lib.add_vec_int) (BV @-> Int @-> Ret BV));
+      ("sub_vec_int", lift (curry Sail_lib.sub_vec_int) (BV @-> Int @-> Ret BV));
+      ("valid_hex_bits", lift (curry Sail_lib.valid_hex_bits) (Int @-> String @-> Ret Bool));
+      ("parse_dec_bits", lift (curry Sail_lib.parse_dec_bits) (Int @-> String @-> Ret BV));
+      ("parse_hex_bits", lift (curry Sail_lib.parse_hex_bits) (Int @-> String @-> Ret BV));
+      ("slice_inc", lift (curry3 Sail_lib.slice_inc) (BV @-> Int @-> Int @-> Ret BV));
+      ("eq_bool", lift ( = ) (Bool @-> Bool @-> Ret Bool));
+      ("to_real", lift Sail_lib.to_real (Int @-> Ret Real));
+      ("random_real", fun _ -> V_top);
+      ("round_down", lift Sail_lib.round_down (Real @-> Ret Int));
+      ("round_up", lift Sail_lib.round_up (Real @-> Ret Int));
+      ("sqrt_real", lift Sail_lib.sqrt_real (Real @-> Ret Real));
+      ("abs_real", lift Sail_lib.abs_real (Real @-> Ret Real));
+      ("negate_real", lift Sail_lib.negate_real (Real @-> Ret Real));
+      ("neg_real", lift Sail_lib.neg_real (Real @-> Ret Real));
+      ("add_real", lift (curry Sail_lib.add_real) (Real @-> Real @-> Ret Real));
+      ("sub_real", lift (curry Sail_lib.sub_real) (Real @-> Real @-> Ret Real));
+      ("mult_real", lift (curry Sail_lib.mult_real) (Real @-> Real @-> Ret Real));
+      ("div_real", lift (curry Sail_lib.div_real) (Real @-> Real @-> Ret Real));
+      ("quotient_real", lift (curry Sail_lib.quotient_real) (Real @-> Real @-> Ret Real));
+      ("eq_real", lift (curry Sail_lib.eq_real) (Real @-> Real @-> Ret Bool));
+      ("lt_real", lift (curry Sail_lib.lt_real) (Real @-> Real @-> Ret Bool));
+      ("gt_real", lift (curry Sail_lib.gt_real) (Real @-> Real @-> Ret Bool));
+      ("lteq_real", lift (curry Sail_lib.lteq_real) (Real @-> Real @-> Ret Bool));
+      ("gteq_real", lift (curry Sail_lib.gteq_real) (Real @-> Real @-> Ret Bool));
+      ("arith_shiftr", lift (fun bs n -> Sail_lib.arith_shiftr (bs, n)) (BV @-> Int @-> Ret BV));
+      ( "set_slice",
+        fun args ->
+          match args with
+          | [_out_len; _slice_len; out; n; slice] -> (
+              match (concrete_bits out, concrete_int n, concrete_bits slice) with
+              | Some out_bs, Some n, Some slice_bs ->
+                  v_bitvector_of_bits
+                    (Sail_lib.set_slice
+                       (Z.of_int (List.length out_bs), Z.of_int (List.length slice_bs), out_bs, n, slice_bs)
+                    )
+              | _ -> V_top
+            )
+          | _ -> V_top
+      );
+      ( "print_real",
+        fun args ->
+          match args with
+          | [V_string msg; r] ->
+              let s = match concrete_real r with Some q -> Sail_lib.string_of_real q | None -> "?" in
+              Value.output_endline (msg ^ s);
+              V_unit
+          | _ -> V_unit
+      );
+      ("cycle_count", lift Sail_lib.cycle_count (Unit @-> Ret Unit));
+      ("get_cycle_count", fun _ -> v_int_concrete (Sail_lib.get_cycle_count ()));
+      ("read_ram", lift (curry4 Sail_lib.read_ram) (Int @-> Int @-> BV @-> BV @-> Ret BV));
+      ("write_ram", lift (curry5 Sail_lib.write_ram) (Int @-> Int @-> BV @-> BV @-> BV @-> Ret Bool));
+      ("emulator_read_mem", lift (curry3 Sail_lib.emulator_read_mem) (Int @-> BV @-> Int @-> Ret BV));
+      ("emulator_read_mem_ifetch", lift (curry3 Sail_lib.emulator_read_mem_ifetch) (Int @-> BV @-> Int @-> Ret BV));
+      ("emulator_read_mem_exclusive", lift (curry3 Sail_lib.emulator_read_mem_exclusive) (Int @-> BV @-> Int @-> Ret BV));
+      ("emulator_write_mem", lift (curry4 Sail_lib.emulator_write_mem) (Int @-> BV @-> Int @-> BV @-> Ret Bool));
+      ( "emulator_write_mem_exclusive",
+        lift (curry4 Sail_lib.emulator_write_mem_exclusive) (Int @-> BV @-> Int @-> BV @-> Ret Bool)
+      );
+      ("emulator_read_tag", lift (curry Sail_lib.emulator_read_tag) (Int @-> BV @-> Ret Bool));
+      ("emulator_write_tag", lift (curry3 Sail_lib.emulator_write_tag) (Int @-> BV @-> Bool @-> Ret Unit));
+      ("monomorphize", function [v] -> v | _ -> V_top);
+    ]
+
+let initial_gstate ~typecheck_env ~ast =
+  let gstate = { primops = initial_primops; fundefs = Bindings.empty; letbinds = []; registers = []; typecheck_env } in
+  let add_def gstate = function
+    | DEF_aux (DEF_fundef fdef, _) -> { gstate with fundefs = Bindings.add (id_of_fundef fdef) fdef gstate.fundefs }
+    | DEF_aux (DEF_let (pat, exp), annot) -> { gstate with letbinds = (pat, exp, annot) :: gstate.letbinds }
+    | DEF_aux (DEF_register (DEC_aux (DEC_reg (typ, id, init), _)), _) ->
+        { gstate with registers = (id, typ, init) :: gstate.registers }
+    | _ -> gstate
+  in
+  let gstate = List.fold_left add_def gstate ast.defs in
+  let gstate = { gstate with letbinds = List.rev gstate.letbinds; registers = List.rev gstate.registers } in
+  gstate
 
 type partial_state = {
   ctx : Zinterp.t;
@@ -357,50 +859,268 @@ let arms_of_fundef (FD_aux (FD_function (_, _, funcls), annot)) =
 let is_finished { ctx; state = _; focus } =
   match (ctx, focus) with Z_top, Extraction.Datatypes.Coq_inr (v, _) -> Some v | _ -> None
 
+(* Desugar [foreach (v from F to T by A in ord) body] into a single iteration
+   peel:
+
+     if cmp(F, T) then ()
+     else { let v = F in body; for v op(F,A) to A ord body }
+
+   where [cmp] is [gt_int] (resp. [lt_int]) and [op] is [add_int] (resp.
+   [sub_int]) for [Ord_inc] (resp. [Ord_dec]). Each step of the partial
+   evaluator processes one iteration; the recursive E_for in the [else] branch
+   is itself desugared on the next step. When the bounds are concrete, this
+   terminates after [|T - F| / A + 1] iterations; with non-concrete bounds the
+   abstract [if] cannot decide and evaluation gets stuck (returning the
+   residual), matching what we already do for any unfoldable conditional. *)
+let unknown_annot = (Parse_ast.Unknown, Type_check.empty_tannot)
+let mk_e e = E_aux (e, unknown_annot)
+let mk_p p = P_aux (p, unknown_annot)
+
+let desugar_for var from_e to_e amount_e ord body =
+  let cmp_id, op_id =
+    match ord with
+    | Ord_aux (Ord_inc, _) -> (mk_id "gt_int", mk_id "add_int")
+    | Ord_aux (Ord_dec, _) -> (mk_id "lt_int", mk_id "sub_int")
+  in
+  let cmp = mk_e (E_app (cmp_id, [from_e; to_e])) in
+  let next_from = mk_e (E_app (op_id, [from_e; amount_e])) in
+  let bind_body = mk_e (E_let (mk_p (P_id var), from_e, body)) in
+  let recurse = mk_e (E_for (var, next_from, to_e, amount_e, ord, body)) in
+  let else_branch = mk_e (E_block [bind_body; recurse]) in
+  let then_branch = mk_e (E_lit (mk_lit L_unit)) in
+  mk_e (E_if (cmp, then_branch, else_branch))
+
+(* Desugar [while cond do body] / [repeat body until cond] into
+
+     while cond do body => if cond then { body; while cond do body } else ()
+     repeat body until cond => { body; if cond then () else repeat body until cond }
+
+   Same iteration-by-iteration unfold story as [E_for]. *)
+let desugar_loop kind measure cond body =
+  match kind with
+  | While ->
+      let recurse = mk_e (E_loop (While, measure, cond, body)) in
+      let then_branch = mk_e (E_block [body; recurse]) in
+      let else_branch = mk_e (E_lit (mk_lit L_unit)) in
+      mk_e (E_if (cond, then_branch, else_branch))
+  | Until ->
+      let recurse = mk_e (E_loop (Until, measure, cond, body)) in
+      let then_branch = mk_e (E_lit (mk_lit L_unit)) in
+      let else_branch = recurse in
+      mk_e (E_block [body; mk_e (E_if (cond, then_branch, else_branch))])
+
+let preprocess_focus p =
+  match p.focus with
+  | Extraction.Datatypes.Coq_inl (E_aux (E_for (var, from_e, to_e, amount_e, ord, body), _)) ->
+      { p with focus = Extraction.Datatypes.Coq_inl (desugar_for var from_e to_e amount_e ord body) }
+  | Extraction.Datatypes.Coq_inl (E_aux (E_loop (kind, measure, cond, body), _)) ->
+      { p with focus = Extraction.Datatypes.Coq_inl (desugar_loop kind measure cond body) }
+  | _ -> p
+
 let mk_interpreter gstate =
   let open Zinterp.Monad in
   let stack = Stack.create () in
 
   let step p =
-    let rec go = function
+    let rec go state = function
       | Pure ((ctx, state), focus) -> (
           match is_finished { ctx; state; focus } with
           | Some v -> (
-              match Stack.pop_opt stack with Some cont -> go (cont v) | None -> { ctx; state; focus }
+              match Stack.pop_opt stack with
+              | Some cont -> (
+                  match cont v with
+                  | Pure ((ctx', _), focus') -> go state (Pure ((ctx', state), focus'))
+                  | other -> go state other
+                )
+              | None -> { ctx; state; focus }
             )
           | None -> { ctx; state; focus }
         )
-      | Early_return _ -> failwith "early return"
-      | Exit _ -> failwith "exit"
+      | Early_return (v, _) -> (
+          match Stack.pop_opt stack with
+          | Some cont -> go state (cont v)
+          | None ->
+              (* If we see [E_return e] at the very top of a REPL
+                 expression, treat it as [e]
+                 [e]. *)
+              {
+                ctx = Z_top;
+                state;
+                focus =
+                  Extraction.Datatypes.Coq_inr
+                    (v, E_aux (E_lit (mk_lit L_unit), (Parse_ast.Unknown, Type_check.empty_tannot)));
+              }
+        )
+      | Exit (v, _) ->
+          Stack.clear stack;
+          {
+            ctx = Z_top;
+            state;
+            focus =
+              Extraction.Datatypes.Coq_inr
+                ( v,
+                  E_aux
+                    ( E_exit (E_aux (E_lit (mk_lit L_unit), (Parse_ast.Unknown, Type_check.empty_tannot))),
+                      (Parse_ast.Unknown, Type_check.empty_tannot)
+                    )
+                );
+          }
       | Call (id, args, cont) -> (
           match Util.option_all (List.map (fun r -> r.Zinterp.R.this) args) with
           | Some args' ->
-              if Type_check.Env.is_outcome id gstate.typecheck_env then
-                go (cont { this = Some (Lattice.mk_ctor (unaux_id id) args'); exn = None; eff = false })
-              else if Type_check.Env.is_extern id gstate.typecheck_env "interpreter" then (
-                let extern = Type_check.Env.get_extern id gstate.typecheck_env "interpreter" in
-                match StringMap.find_opt extern gstate.primops with
-                | Some op -> go (cont { this = Some (op args'); exn = None; eff = false })
-                | None -> failwith "no primop"
-              )
-              else (
+              let has_fundef = Bindings.mem id gstate.fundefs in
+              let is_extern = Type_check.Env.is_extern id gstate.typecheck_env "interpreter" in
+              if has_fundef && (not is_extern) && Type_check.Env.is_outcome id gstate.typecheck_env then (
+                let fdef = Bindings.find id gstate.fundefs in
                 let arg = if List.length args != 1 then Lattice.V_tuple args' else List.hd args' in
-                let arms, annot = arms_of_fundef (Bindings.find id gstate.fundefs) in
+                let arms, annot = arms_of_fundef fdef in
                 Stack.push cont stack;
                 {
                   ctx = Z_aux (Z_match_head (Z_top, Match, [], Some arms), annot);
-                  state = Zinterp.R.empty;
+                  state;
                   focus =
                     Extraction.Datatypes.Coq_inr
                       ({ this = Some arg; exn = None; eff = false }, B.mk_id annot (mk_id "funarg#"));
                 }
               )
+              else if Type_check.Env.is_outcome id gstate.typecheck_env then
+                go state (cont { this = Some (Lattice.mk_ctor (unaux_id id) args'); exn = None; eff = false })
+              else if Type_check.Env.is_union_constructor id gstate.typecheck_env then
+                go state (cont { this = Some (Lattice.mk_ctor (unaux_id id) args'); exn = None; eff = false })
+              else if Type_check.Env.is_extern id gstate.typecheck_env "interpreter" then (
+                let extern = Type_check.Env.get_extern id gstate.typecheck_env "interpreter" in
+                if extern = "reg_deref" then (
+                  let v =
+                    match args' with
+                    | [Lattice.V_ref reg_id_aux] -> (
+                        let key = Id_aux (reg_id_aux, Parse_ast.Unknown) in
+                        match Extraction.IdUtil.IdMap.find key state.Zinterp.R.registers with
+                        | Some v -> v
+                        | None -> Lattice.V_top
+                      )
+                    | _ -> Lattice.V_top
+                  in
+                  go state (cont { this = Some v; exn = None; eff = false })
+                )
+                else (
+                  match StringMap.find_opt extern gstate.primops with
+                  | Some op -> go state (cont { this = Some (op args'); exn = None; eff = false })
+                  | None -> failwith ("no primop: " ^ extern)
+                )
+              )
+              else (
+                let arg = if List.length args != 1 then Lattice.V_tuple args' else List.hd args' in
+                let fdef = match Bindings.find_opt id gstate.fundefs with Some fdef -> Some fdef | None -> None in
+                match fdef with
+                | None -> (
+                    match StringMap.find_opt (string_of_id id) gstate.primops with
+                    | Some op -> go state (cont { this = Some (op args'); exn = None; eff = false })
+                    | None -> failwith ("unknown function: " ^ string_of_id id)
+                  )
+                | Some fdef ->
+                    let arms, annot = arms_of_fundef fdef in
+                    Stack.push cont stack;
+                    {
+                      ctx = Z_aux (Z_match_head (Z_top, Match, [], Some arms), annot);
+                      state;
+                      focus =
+                        Extraction.Datatypes.Coq_inr
+                          ({ this = Some arg; exn = None; eff = false }, B.mk_id annot (mk_id "funarg#"));
+                    }
+              )
           | None -> failwith "bad call"
         )
       | Get_config (_, cont) -> failwith "get_config"
       | Runtime_type_error l -> raise (Reporting.err_general l "Type error")
-      | Get_undefined (_, cont) -> go (cont { this = Some Lattice.V_top; exn = None; eff = false })
+      | Get_undefined (_, cont) -> go state (cont { this = Some Lattice.V_top; exn = None; eff = false })
     in
-    go (Zinterp.step p.ctx p.state p.focus)
+    let p = preprocess_focus p in
+    go p.state (Zinterp.step p.ctx p.state p.focus)
   in
   step
+
+(* Walk the partial evaluator forward on a single expression to a final value.
+   Used by [from_exp_with_globals] to pre-evaluate each top-level [let] RHS
+   into an abstract value we can store in the initial state's locals.
+
+   A non-terminating assignment RHS will hang here. This is just considered a
+   user-error in the written Sail. *)
+let evaluate_to_value ?(state = Zinterp.R.empty) step exp =
+  let rec loop ps = match is_finished ps with Some v -> (v, ps.state) | None -> loop (step ps) in
+  loop { ctx = Z_top; state; focus = Extraction.Datatypes.Coq_inl exp }
+
+module Matching = Lattice.Matching (Tannot)
+
+let bindings_of_match pat (v : Lattice.value) =
+  let mr = Matching.pattern_match pat v in
+  match mr with
+  | Extraction.PatternMatch.Matched b | Extraction.PatternMatch.MaybeMatched b ->
+      let collapsed = Extraction.IdUtil.IdMap.map Lattice.complete b in
+      Some collapsed
+  | Extraction.PatternMatch.Unmatched -> None
+
+(* Pre-evaluate every top-level [let] in the program into the initial state's
+   [locals]. RHSs that can't be reduced to a fully-known abstract value (e.g.
+   because they need a primop we haven't bound yet) are silently skipped — the
+   user will get a "Type error" when they later try to read the unbound name,
+   which mirrors the prior behaviour. *)
+let from_exp_with_globals gstate exp =
+  let step = mk_interpreter gstate in
+  let merge_locals s b =
+    Extraction.IdUtil.IdMap.fold
+      (fun id v s -> { s with Zinterp.R.locals = Extraction.IdUtil.IdMap.add id v s.Zinterp.R.locals })
+      b s
+  in
+  let state =
+    List.fold_left
+      (fun s (pat, lb_exp, _) ->
+        let rval, _ = evaluate_to_value ~state:s step lb_exp in
+        match rval.Zinterp.R.this with
+        | Some v -> (
+            match bindings_of_match pat v with Some b -> merge_locals s b | None -> s
+          )
+        | None -> s
+      )
+      Zinterp.R.empty gstate.letbinds
+  in
+  (* Top-level register declarations live separately in state.registers, so
+     subsequent E_assign writes route back to the right side of the state.
+     If a register has no initial value (or we can't evaluate it concretely),
+     we seed it with [V_top], or a more specific symbolic unknown if possible. *)
+  let rec default_for_typ typ =
+    match Type_check.destruct_vector gstate.typecheck_env typ with
+    | Some (Nexp_aux (Nexp_constant n, _), _) -> Lattice.V_vector (List.init (Z.to_int n) (fun _ -> Lattice.top))
+    | _ -> (
+        match Type_check.destruct_bitvector gstate.typecheck_env typ with
+        | Some (Nexp_aux (Nexp_constant n, _)) -> v_bitvector_of_bits (List.init (Z.to_int n) (fun _ -> Bit.B0))
+        | _ -> (
+            (* A register typed with a bitfield struct is really a record
+               with a single [bits] field carrying the underlying bitvector.
+               Seed [bits] to all-zeros (matching the [bits(N)] case) so
+               subsequent [r.bits[hi..lo] = e] writes can update concrete
+               state; partial-eval would otherwise see [r.bits] as [V_top]. *)
+            match typ with
+            | Typ_aux (Typ_id id, _) when Type_check.Env.is_bitfield id gstate.typecheck_env ->
+                let underlying, _ = Type_check.Env.get_bitfield id gstate.typecheck_env in
+                let bits_v = default_for_typ underlying in
+                Lattice.set_field Lattice.top (Id "bits") bits_v
+            | _ -> Lattice.top
+          )
+      )
+  in
+  let state =
+    List.fold_left
+      (fun s (id, typ, init_opt) ->
+        let v =
+          match init_opt with
+          | None -> default_for_typ typ
+          | Some init -> (
+              let rval, _ = evaluate_to_value ~state:s step init in
+              match rval.Zinterp.R.this with Some v -> v | None -> default_for_typ typ
+            )
+        in
+        { s with Zinterp.R.registers = Extraction.IdUtil.IdMap.add id v s.Zinterp.R.registers }
+      )
+      state gstate.registers
+  in
+  { ctx = Z_top; state; focus = Extraction.Datatypes.Coq_inl exp }

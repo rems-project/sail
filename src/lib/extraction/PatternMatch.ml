@@ -13,7 +13,7 @@ open QArith_base
 open TypeAnnot
 
 type 'v binding =
-| Complete of value
+| Complete of 'v
 | Partial of (('v * Big_int_Z.big_int) * Big_int_Z.big_int) non_empty
 
 (** val combine_binding :
@@ -100,7 +100,7 @@ type 'v match_result =
 | Unmatched
 
 (** val merge_match_result :
-    value match_result -> value match_result -> value match_result **)
+    'a1 match_result -> 'a1 match_result -> 'a1 match_result **)
 
 let merge_match_result l r =
   match l with

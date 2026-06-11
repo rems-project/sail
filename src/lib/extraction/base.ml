@@ -144,3 +144,17 @@ type ('a, 'm) coq_IntersectionWith = ('a -> 'a -> 'a option) -> 'm -> 'm -> 'm
 
 let intersection_with intersectionWith =
   intersectionWith
+
+type ('a, 'c) coq_Elements = 'c -> 'a list
+
+(** val elements : ('a1, 'a2) coq_Elements -> 'a2 -> 'a1 list **)
+
+let elements elements0 =
+  elements0
+
+type 'c coq_Size = 'c -> Big_int_Z.big_int
+
+(** val size : 'a1 coq_Size -> 'a1 -> Big_int_Z.big_int **)
+
+let size size0 =
+  size0

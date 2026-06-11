@@ -2,6 +2,8 @@ open AbsBitvector
 open AbsValue
 open Ast
 open AstInduction
+open BinInt
+open Bit
 open Datatypes
 open IdUtil
 open Interval
@@ -14,6 +16,8 @@ open Qcanon
 open SailBase
 open TransferBitvectorInterval
 open TypeAnnot
+open Base
+open Fin_maps
 open Gmap
 
 type 'a zlexp_aux =
@@ -119,6 +123,7 @@ type list_case =
 | List
 | Tuple
 | Vector
+| Bitvector
 
 type match_case =
 | Match
@@ -154,6 +159,11 @@ type ('v, 'r, 's, 'a) zexp_aux =
    * 'a exp * 'a exp
 | Z_var_right of ('v, 'r, 's, 'a) zexp * 'a zlexp * 'r list * 'a exp
 | Z_var_body of ('v, 'r, 's, 'a) zexp * 'a zlexp * 'r list * 'r
+| Z_struct of ('v, 'r, 's, 'a) zexp * struct_name * (id * 'r) list * 
+   id * 'a fexp list
+| Z_struct_update_base of ('v, 'r, 's, 'a) zexp * struct_name * 'a fexp list
+| Z_struct_update of ('v, 'r, 's, 'a) zexp * struct_name * 'r
+   * (id * 'r) list * id * 'a fexp list
 and ('v, 'r, 's, 'a) zexp =
 | Z_aux of ('v, 'r, 's, 'a) zexp_aux * 'a annot
 | Z_top
@@ -207,7 +217,7 @@ module ExpBuilder =
     match c with
     | List -> E_aux ((E_list (rev xs)), ann)
     | Tuple -> E_aux ((E_tuple (rev xs)), ann)
-    | Vector -> E_aux ((E_vector (rev xs)), ann)
+    | _ -> E_aux ((E_vector (rev xs)), ann)
 
   (** val mk_literal : Tannot.t annot -> lit -> Tannot.t exp **)
 
@@ -310,6 +320,22 @@ module ExpBuilder =
 
   let mk_undef ann =
     E_aux (E_undef, ann)
+
+  (** val mk_fexp : Tannot.t annot -> (id * t) -> Tannot.t fexp **)
+
+  let mk_fexp ann = function
+  | (k, v) -> FE_aux ((FE_fexp (k, v)), ann)
+
+  (** val mk_struct : Tannot.t annot -> struct_name -> (id * t) list -> t **)
+
+  let mk_struct ann sn fs =
+    E_aux ((E_struct (sn, (map (mk_fexp ann) (rev fs)))), ann)
+
+  (** val mk_struct_update :
+      Tannot.t annot -> struct_name -> t -> (id * t) list -> t **)
+
+  let mk_struct_update ann _ base fs =
+    E_aux ((E_struct_update (base, (map (mk_fexp ann) (rev fs)))), ann)
  end
 
 module Residual =
@@ -350,6 +376,11 @@ module Residual =
   val mk_assign : Tannot__3.t annot -> Tannot__3.t zlexp -> t list -> t -> t
 
   val mk_undef : Tannot__3.t annot -> t
+
+  val mk_struct : Tannot__3.t annot -> struct_name -> (id * t) list -> t
+
+  val mk_struct_update :
+    Tannot__3.t annot -> struct_name -> t -> (id * t) list -> t
  end) ->
  struct
   module L = AbsValue.Dom(Dom)(AbsBitvector.Dom)(Ops)
@@ -395,12 +426,12 @@ module Residual =
   (** val is_true : value -> bool **)
 
   let is_true v =
-    (&&) ((&&) (option_is L.is_true v.this) (is_none v.exn)) (negb v.eff)
+    (&&) (option_is L.is_true v.this) (is_none v.exn)
 
   (** val is_false : value -> bool **)
 
   let is_false v =
-    (&&) ((&&) (option_is L.is_false v.this) (is_none v.exn)) (negb v.eff)
+    (&&) (option_is L.is_false v.this) (is_none v.exn)
 
   (** val bounded_join : L.t option -> L.t option -> L.t option **)
 
@@ -439,11 +470,12 @@ module Residual =
       Tannot__3.t annot -> list_case -> t list -> value * B.t **)
 
   let mk_list ann c rs =
-    let ctor = fun x ->
+    let ctor =
       match c with
-      | List -> L.V_list x
-      | Tuple -> L.V_tuple x
-      | Vector -> L.V_vector x
+      | List -> (fun x -> L.V_list x)
+      | Tuple -> (fun x -> L.V_tuple x)
+      | Vector -> (fun x -> L.V_vector x)
+      | Bitvector -> L.mk_bitvector
     in
     ({ this =
     (option_map ctor (option_all (rev (map (fun r -> (fst r).this) rs))));
@@ -536,7 +568,22 @@ module Residual =
      | Assert ->
        ({ this = (Some L.V_unit); exn =
          (bounded_join (fst x).exn (fst y).exn); eff = true }, b)
-     | _ -> ({ this = None; exn = None; eff = false }, b))
+     | Vector_append -> ({ this = None; exn = None; eff = false }, b)
+     | Cons ->
+       let this' =
+         match (fst x).this with
+         | Some h ->
+           (match (fst y).this with
+            | Some t0 ->
+              (match t0 with
+               | L.V_bitvector _ -> None
+               | L.V_vector _ -> None
+               | L.V_list ts -> Some (L.V_list (h :: ts))
+               | _ -> None)
+            | None -> None)
+         | None -> None
+       in
+       ({ this = this'; exn = None; eff = false }, b))
 
   (** val mk_ref : Tannot__3.t annot -> id -> value * B.t **)
 
@@ -581,6 +628,76 @@ module Residual =
       (fold_left bounded_join (map (fun r -> (fst r).exn) rs) (fst exp0).exn);
       eff = true }, (B.mk_assign ann zl (map snd rs) (snd exp0)))
 
+  (** val mk_struct :
+      Tannot__3.t annot -> struct_name -> (id * t) list -> t **)
+
+  let mk_struct ann sn rs =
+    let this_v =
+      fold_left (fun acc kv ->
+        match acc with
+        | Some m ->
+          let (k, v) = kv in
+          (match (fst v).this with
+           | Some x ->
+             Some
+               (insert
+                 (map_insert
+                   (gmap_partial_alter Aux.eq_eqdec Aux.id_aux_countable))
+                 (Aux.unwrap k) x m)
+           | None -> None)
+        | None -> None) rs (Some
+        (empty (gmap_empty Aux.eq_eqdec Aux.id_aux_countable)))
+    in
+    ({ this = (option_map (fun x -> L.V_record x) this_v); exn =
+    (fold_left bounded_join (map (fun kv -> (fst (snd kv)).exn) rs) None);
+    eff = (fold_left (||) (map (fun kv -> (fst (snd kv)).eff) rs) false) },
+    (B.mk_struct ann sn (map (fun kv -> let (k, v) = kv in (k, (snd v))) rs)))
+
+  (** val mk_struct_update :
+      Tannot__3.t annot -> struct_name -> t -> (id * t) list -> t **)
+
+  let mk_struct_update ann sn base rs =
+    let updated =
+      match (fst base).this with
+      | Some t0 ->
+        (match t0 with
+         | L.V_bitvector _ -> None
+         | L.V_vector _ -> None
+         | L.V_list _ -> None
+         | L.V_int _ -> None
+         | L.V_real _ -> None
+         | L.V_bool _ -> None
+         | L.V_tuple _ -> None
+         | L.V_unit -> None
+         | L.V_string _ -> None
+         | L.V_ref _ -> None
+         | L.V_member _ -> None
+         | L.V_ctor _ -> None
+         | L.V_record base_m ->
+           fold_left (fun acc kv ->
+             match acc with
+             | Some m ->
+               let (k, v) = kv in
+               (match (fst v).this with
+                | Some x ->
+                  Some
+                    (insert
+                      (map_insert
+                        (gmap_partial_alter Aux.eq_eqdec Aux.id_aux_countable))
+                      (Aux.unwrap k) x m)
+                | None -> None)
+             | None -> None) rs (Some base_m)
+         | _ -> None)
+      | None -> None
+    in
+    ({ this = (option_map (fun x -> L.V_record x) updated); exn =
+    (fold_left bounded_join (map (fun kv -> (fst (snd kv)).exn) rs)
+      (fst base).exn);
+    eff =
+    (fold_left (||) (map (fun kv -> (fst (snd kv)).eff) rs) (fst base).eff) },
+    (B.mk_struct_update ann sn (snd base)
+      (map (fun kv -> let (k, v) = kv in (k, (snd v))) rs)))
+
   (** val empty : state **)
 
   let empty =
@@ -612,12 +729,21 @@ module Residual =
     in
     (match h with
      | Some v -> Coq_inr (Matching.pattern_match pat0 v)
-     | None -> Coq_inl l0)
+     | None -> (match c with
+                | Try -> Coq_inr Unmatched
+                | _ -> Coq_inl l0))
 
   (** val end_match : match_case -> state option -> state list -> state **)
 
-  let end_match _ _ _ =
-    empty
+  let end_match _ fallthrough arms =
+    let arms0 =
+      match fallthrough with
+      | Some _UU03c3_ -> _UU03c3_ :: arms
+      | None -> arms
+    in
+    (match arms0 with
+     | [] -> empty
+     | _UU03c3_ :: rest -> fold_left join rest _UU03c3_)
 
   (** val lookup : Parse_ast.l -> state -> id -> (Parse_ast.l, L.t) sum **)
 
@@ -629,10 +755,244 @@ module Residual =
        | Some v -> Coq_inr v
        | None -> Coq_inl l0)
 
+  type update_step =
+  | US_field of id_aux
+  | US_index of Big_int_Z.big_int
+  | US_range of Big_int_Z.big_int * Big_int_Z.big_int
+
+  (** val update_step_rect :
+      (id_aux -> 'a1) -> (Big_int_Z.big_int -> 'a1) -> (Big_int_Z.big_int ->
+      Big_int_Z.big_int -> 'a1) -> update_step -> 'a1 **)
+
+  let update_step_rect f f0 f1 = function
+  | US_field i -> f i
+  | US_index z -> f0 z
+  | US_range (z, z0) -> f1 z z0
+
+  (** val update_step_rec :
+      (id_aux -> 'a1) -> (Big_int_Z.big_int -> 'a1) -> (Big_int_Z.big_int ->
+      Big_int_Z.big_int -> 'a1) -> update_step -> 'a1 **)
+
+  let update_step_rec f f0 f1 = function
+  | US_field i -> f i
+  | US_index z -> f0 z
+  | US_range (z, z0) -> f1 z z0
+
+  (** val apply_path : L.t -> update_step list -> L.t -> L.t **)
+
+  let rec apply_path base path v =
+    match path with
+    | [] -> v
+    | step0 :: rest ->
+      (match step0 with
+       | US_field k ->
+         let child =
+           match base with
+           | L.V_record m ->
+             (match Base.lookup
+                      (gmap_lookup Aux.eq_eqdec Aux.id_aux_countable) k m with
+              | Some x -> x
+              | None -> L.top)
+           | _ -> L.top
+         in
+         L.set_field base k (apply_path child rest v)
+       | US_index i ->
+         L.set_vector_elem base i
+           (apply_path (L.get_vector_elem base i) rest v)
+       | US_range (hi, lo) ->
+         L.set_bv_range base hi lo (apply_path L.top rest v))
+
+  (** val subexp_concrete_z : t -> Big_int_Z.big_int option **)
+
+  let subexp_concrete_z r =
+    match (fst r).this with
+    | Some t0 -> (match t0 with
+                  | L.V_int i -> L.int_concrete i
+                  | _ -> None)
+    | None -> None
+
+  (** val zlexp_path :
+      Tannot__3.t zlexp -> t list -> ((id * update_step list) * t list) option **)
+
+  let rec zlexp_path zl subexps =
+    let LZ_aux (aux, _) = zl in
+    (match aux with
+     | LZ_id id0 -> Some ((id0, []), subexps)
+     | LZ_deref ->
+       (match subexps with
+        | [] -> None
+        | r :: rest ->
+          (match (fst r).this with
+           | Some t0 ->
+             (match t0 with
+              | L.V_ref reg_id ->
+                Some (((Id_aux (reg_id, Parse_ast.Unknown)), []), rest)
+              | _ -> None)
+           | None -> None))
+     | LZ_typ (_, id0) -> Some ((id0, []), subexps)
+     | LZ_vector inner ->
+       (match zlexp_path inner subexps with
+        | Some p ->
+          let (p0, l0) = p in
+          let (id0, path) = p0 in
+          (match l0 with
+           | [] -> None
+           | n :: rest ->
+             (match subexp_concrete_z n with
+              | Some idx ->
+                Some ((id0, (app path ((US_index idx) :: []))), rest)
+              | None -> None))
+        | None -> None)
+     | LZ_vector_range inner ->
+       (match zlexp_path inner subexps with
+        | Some p ->
+          let (p0, l0) = p in
+          let (id0, path) = p0 in
+          (match l0 with
+           | [] -> None
+           | hi :: l1 ->
+             (match l1 with
+              | [] -> None
+              | lo :: rest ->
+                (match subexp_concrete_z hi with
+                 | Some h ->
+                   (match subexp_concrete_z lo with
+                    | Some l2 ->
+                      Some ((id0, (app path ((US_range (h, l2)) :: []))),
+                        rest)
+                    | None -> None)
+                 | None -> None)))
+        | None -> None)
+     | LZ_field (inner, field) ->
+       (match zlexp_path inner subexps with
+        | Some p ->
+          let (p0, rest) = p in
+          let (id0, path) = p0 in
+          Some ((id0, (app path ((US_field (Aux.unwrap field)) :: []))), rest)
+        | None -> None)
+     | _ -> None)
+
+  (** val state_lookup : state -> id -> L.t **)
+
+  let state_lookup _UU03c3_ id0 =
+    match IdMap.find id0 _UU03c3_.locals with
+    | Some b -> b
+    | None ->
+      (match IdMap.find id0 _UU03c3_.registers with
+       | Some b -> b
+       | None -> L.top)
+
+  (** val assign_id : id -> L.t -> state -> state **)
+
+  let assign_id id0 new_v _UU03c3_ =
+    if IdMap.mem id0 _UU03c3_.registers
+    then { locals = _UU03c3_.locals; registers =
+           (IdMap.add id0 new_v _UU03c3_.registers) }
+    else { locals = (IdMap.add id0 new_v _UU03c3_.locals); registers =
+           _UU03c3_.registers }
+
+  (** val assign_via_path :
+      Tannot__3.t zlexp -> t list -> L.t -> state -> state **)
+
+  let assign_via_path zl rs v _UU03c3_ =
+    match zlexp_path zl rs with
+    | Some p ->
+      let (p0, _) = p in
+      let (id0, path) = p0 in
+      (match path with
+       | [] -> assign_id id0 v _UU03c3_
+       | _ :: _ ->
+         assign_id id0 (apply_path (state_lookup _UU03c3_ id0) path v)
+           _UU03c3_)
+    | None -> _UU03c3_
+
+  (** val last_update_step : update_step list -> update_step option **)
+
+  let rec last_update_step = function
+  | [] -> None
+  | s :: rest ->
+    (match rest with
+     | [] -> Some s
+     | _ :: _ -> last_update_step rest)
+
+  (** val zlexp_subwidth :
+      Tannot__3.t zlexp -> t list -> Big_int_Z.big_int option **)
+
+  let zlexp_subwidth zl subexps =
+    match zlexp_path zl subexps with
+    | Some p ->
+      let (p0, _) = p in
+      let (_, path) = p0 in
+      (match last_update_step path with
+       | Some u ->
+         (match u with
+          | US_range (hi, lo) ->
+            Some (Z.add (Z.sub hi lo) Big_int_Z.unit_big_int)
+          | _ -> None)
+       | None -> None)
+    | None -> None
+
   (** val assign : Tannot__3.t zlexp -> t list -> t -> state -> state **)
 
-  let assign _ _ _ _ =
-    empty
+  let assign zl rs exp0 _UU03c3_ =
+    let v = match (fst exp0).this with
+            | Some v -> v
+            | None -> L.top in
+    let LZ_aux (aux, _) = zl in
+    (match aux with
+     | LZ_tuple ls ->
+       (match v with
+        | L.V_tuple vs ->
+          fst
+            (let rec go ls0 vs0 rs0 _UU03c3_0 =
+               match ls0 with
+               | [] -> (_UU03c3_0, rs0)
+               | l0 :: ls' ->
+                 (match vs0 with
+                  | [] -> (_UU03c3_0, rs0)
+                  | v0 :: vs' ->
+                    let _UU03c3_' = assign_via_path l0 rs0 v0 _UU03c3_0 in
+                    let rs' =
+                      match zlexp_path l0 rs0 with
+                      | Some p -> let (_, leftover) = p in leftover
+                      | None -> rs0
+                    in
+                    go ls' vs' rs' _UU03c3_')
+             in go ls vs rs _UU03c3_)
+        | _ -> _UU03c3_)
+     | LZ_vector_concat ls ->
+       (match v with
+        | L.V_bitvector _ ->
+          (match L.value_length v with
+           | L.V_int i ->
+             (match L.int_concrete i with
+              | Some total ->
+                fst
+                  (let rec go ls0 rs0 cur_hi _UU03c3_0 =
+                     match ls0 with
+                     | [] -> (_UU03c3_0, rs0)
+                     | l0 :: ls' ->
+                       (match zlexp_subwidth l0 rs0 with
+                        | Some w ->
+                          let lo =
+                            Z.sub (Z.add cur_hi Big_int_Z.unit_big_int) w
+                          in
+                          let sliced = L.bv_slice v (Z.to_N lo) (Z.to_N w) in
+                          let _UU03c3_' =
+                            assign_via_path l0 rs0 sliced _UU03c3_0
+                          in
+                          let rs' =
+                            match zlexp_path l0 rs0 with
+                            | Some p -> let (_, leftover) = p in leftover
+                            | None -> rs0
+                          in
+                          go ls' rs' (Z.sub cur_hi w) _UU03c3_'
+                        | None -> (_UU03c3_0, rs0))
+                   in go ls rs (Z.sub total Big_int_Z.unit_big_int) _UU03c3_)
+              | None -> _UU03c3_)
+           | _ -> _UU03c3_)
+        | _ -> _UU03c3_)
+     | _ -> assign_via_path zl rs v _UU03c3_)
  end
 
 module Make =
@@ -673,6 +1033,11 @@ module Make =
   val mk_assign : Tannot__5.t annot -> Tannot__5.t zlexp -> t list -> t -> t
 
   val mk_undef : Tannot__5.t annot -> t
+
+  val mk_struct : Tannot__5.t annot -> struct_name -> (id * t) list -> t
+
+  val mk_struct_update :
+    Tannot__5.t annot -> struct_name -> t -> (id * t) list -> t
  end) ->
  struct
   module R = Residual(Tannot__5)(B)
@@ -790,7 +1155,10 @@ module Make =
        | Z_assign_right (parent, _, _) -> lookup parent id0
        | Z_var_left (parent, _, _, _, _, _) -> lookup parent id0
        | Z_var_right (parent, _, _, _) -> lookup parent id0
-       | Z_var_body (parent, _, _, _) -> lookup parent id0)
+       | Z_var_body (parent, _, _, _) -> lookup parent id0
+       | Z_struct (parent, _, _, _, _) -> lookup parent id0
+       | Z_struct_update_base (parent, _, _) -> lookup parent id0
+       | Z_struct_update (parent, _, _, _, _, _) -> lookup parent id0)
     | Z_top -> None
 
   (** val down :
@@ -813,10 +1181,16 @@ module Make =
           pure ((ctx, _UU03c3_), (Coq_inr ((R.from_semilattice v),
             (B.mk_id annot0 i))))
         | None ->
-          Monad.bind (Monad.lift_sum (R.lookup (fst annot0) _UU03c3_ i))
-            (fun v ->
-            pure ((ctx, _UU03c3_), (Coq_inr ((R.from_semilattice v),
-              (B.mk_id annot0 i))))))
+          (match Tannot__5.get_id_type (snd annot0) i with
+           | Types.Enum_member ->
+             pure ((ctx, _UU03c3_), (Coq_inr
+               ((R.from_semilattice (L.mk_member (Aux.unwrap i))),
+               (B.mk_id annot0 i))))
+           | _ ->
+             Monad.bind (Monad.lift_sum (R.lookup (fst annot0) _UU03c3_ i))
+               (fun v ->
+               pure ((ctx, _UU03c3_), (Coq_inr ((R.from_semilattice v),
+                 (B.mk_id annot0 i)))))))
      | E_lit lit0 ->
        pure ((ctx, _UU03c3_), (Coq_inr (R.mk_literal annot0 lit0)))
      | E_typ (t0, exp0) -> wrap (Z_single (ctx, (Typ t0))) exp0
@@ -834,13 +1208,24 @@ module Make =
      | E_vector exps ->
        (match exps with
         | [] -> pure ((ctx, _UU03c3_), (Coq_inr (R.mk_list annot0 Vector [])))
-        | exp0 :: exps0 -> wrap (Z_list (ctx, Vector, [], exps0)) exp0)
+        | exp0 :: exps0 ->
+          if Tannot__5.is_bitvector (snd annot0)
+          then wrap (Z_list (ctx, Bitvector, [], exps0)) exp0
+          else wrap (Z_list (ctx, Vector, [], exps0)) exp0)
      | E_vector_append (l0, r) -> wrap (Z_pair_1 (ctx, Vector_append, r)) l0
      | E_list exps ->
        (match exps with
         | [] -> pure ((ctx, _UU03c3_), (Coq_inr (R.mk_list annot0 List [])))
         | exp0 :: exps0 -> wrap (Z_list (ctx, List, [], exps0)) exp0)
      | E_cons (h, t0) -> wrap (Z_pair_1 (ctx, Cons, t0)) h
+     | E_struct (sn, fes) ->
+       (match fes with
+        | [] -> pure ((ctx, _UU03c3_), (Coq_inr (R.mk_struct annot0 sn [])))
+        | f0 :: rest ->
+          let FE_aux (f1, _) = f0 in
+          let FE_fexp (f, e) = f1 in wrap (Z_struct (ctx, sn, [], f, rest)) e)
+     | E_struct_update (base, fes) ->
+       wrap (Z_struct_update_base (ctx, SN_anon, fes)) base
      | E_field (exp0, fld) -> wrap (Z_single (ctx, (Field fld))) exp0
      | E_match (head, arms) ->
        wrap (Z_match_head (ctx, Match, [], (Some (map unwrap_arm arms)))) head
@@ -910,26 +1295,102 @@ module Make =
          pure (((Z_aux ((Z_list (parent, _UU03b3_, (focus :: evaluated),
            us)), annot0)), _UU03c3_), (Coq_inl u)))
     | Z_app (parent, f, evaluated, unevaluated) ->
-      (match unevaluated with
-       | [] ->
-         Monad.bind (Monad.Call (f, (rev (map fst (focus :: evaluated))),
-           pure)) (fun r ->
-           pure ((parent, _UU03c3_), (Coq_inr (r,
-             (B.mk_app annot0 f (rev (map snd (focus :: evaluated))))))))
-       | u :: us ->
-         pure (((Z_aux ((Z_app (parent, f, (focus :: evaluated), us)),
-           annot0)), _UU03c3_), (Coq_inl u)))
+      let Id_aux (i, _) = f in
+      (match i with
+       | And_bool ->
+         (match evaluated with
+          | [] ->
+            (match unevaluated with
+             | [] ->
+               Monad.bind (Monad.Call (f,
+                 (rev (map fst (focus :: evaluated))), pure)) (fun r ->
+                 pure ((parent, _UU03c3_), (Coq_inr (r,
+                   (B.mk_app annot0 f (rev (map snd (focus :: evaluated))))))))
+             | u :: us ->
+               (match us with
+                | [] ->
+                  let false_lit = E_aux ((E_lit (L_aux (L_false,
+                    Parse_ast.Unknown))), annot0)
+                  in
+                  if R.is_true (fst focus)
+                  then pure ((parent, _UU03c3_), (Coq_inl u))
+                  else if R.is_false (fst focus)
+                       then pure ((parent, _UU03c3_), (Coq_inr focus))
+                       else pure (((Z_aux ((Z_if_then (parent, (_UU03c3_,
+                              focus), false_lit)), annot0)), _UU03c3_),
+                              (Coq_inl u))
+                | _ :: _ ->
+                  pure (((Z_aux ((Z_app (parent, f, (focus :: evaluated),
+                    us)), annot0)), _UU03c3_), (Coq_inl u))))
+          | _ :: _ ->
+            (match unevaluated with
+             | [] ->
+               Monad.bind (Monad.Call (f,
+                 (rev (map fst (focus :: evaluated))), pure)) (fun r ->
+                 pure ((parent, _UU03c3_), (Coq_inr (r,
+                   (B.mk_app annot0 f (rev (map snd (focus :: evaluated))))))))
+             | u :: us ->
+               pure (((Z_aux ((Z_app (parent, f, (focus :: evaluated), us)),
+                 annot0)), _UU03c3_), (Coq_inl u))))
+       | Or_bool ->
+         (match evaluated with
+          | [] ->
+            (match unevaluated with
+             | [] ->
+               Monad.bind (Monad.Call (f,
+                 (rev (map fst (focus :: evaluated))), pure)) (fun r ->
+                 pure ((parent, _UU03c3_), (Coq_inr (r,
+                   (B.mk_app annot0 f (rev (map snd (focus :: evaluated))))))))
+             | u :: us ->
+               (match us with
+                | [] ->
+                  let true_lit = E_aux ((E_lit (L_aux (L_true,
+                    Parse_ast.Unknown))), annot0)
+                  in
+                  if R.is_true (fst focus)
+                  then pure ((parent, _UU03c3_), (Coq_inr focus))
+                  else if R.is_false (fst focus)
+                       then pure ((parent, _UU03c3_), (Coq_inl u))
+                       else pure (((Z_aux ((Z_if_then (parent, (_UU03c3_,
+                              focus), u)), annot0)), _UU03c3_), (Coq_inl
+                              true_lit))
+                | _ :: _ ->
+                  pure (((Z_aux ((Z_app (parent, f, (focus :: evaluated),
+                    us)), annot0)), _UU03c3_), (Coq_inl u))))
+          | _ :: _ ->
+            (match unevaluated with
+             | [] ->
+               Monad.bind (Monad.Call (f,
+                 (rev (map fst (focus :: evaluated))), pure)) (fun r ->
+                 pure ((parent, _UU03c3_), (Coq_inr (r,
+                   (B.mk_app annot0 f (rev (map snd (focus :: evaluated))))))))
+             | u :: us ->
+               pure (((Z_aux ((Z_app (parent, f, (focus :: evaluated), us)),
+                 annot0)), _UU03c3_), (Coq_inl u))))
+       | _ ->
+         (match unevaluated with
+          | [] ->
+            Monad.bind (Monad.Call (f, (rev (map fst (focus :: evaluated))),
+              pure)) (fun r ->
+              pure ((parent, _UU03c3_), (Coq_inr (r,
+                (B.mk_app annot0 f (rev (map snd (focus :: evaluated))))))))
+          | u :: us ->
+            pure (((Z_aux ((Z_app (parent, f, (focus :: evaluated), us)),
+              annot0)), _UU03c3_), (Coq_inl u))))
     | Z_block (parent, evaluated, unevaluated) ->
       (match unevaluated with
        | [] ->
          pure ((parent, _UU03c3_), (Coq_inr
            (R.mk_block annot0 (focus :: evaluated))))
        | u :: us ->
-         if R.is_unit (fst focus)
-         then pure (((Z_aux ((Z_block (parent, evaluated, us)), annot0)),
-                _UU03c3_), (Coq_inl u))
-         else pure (((Z_aux ((Z_block (parent, (focus :: evaluated), us)),
-                annot0)), _UU03c3_), (Coq_inl u)))
+         if (&&) (is_none (R.this (fst focus)))
+              (negb (is_none (R.exn (fst focus))))
+         then pure ((parent, _UU03c3_), (Coq_inr focus))
+         else if R.is_unit (fst focus)
+              then pure (((Z_aux ((Z_block (parent, evaluated, us)),
+                     annot0)), _UU03c3_), (Coq_inl u))
+              else pure (((Z_aux ((Z_block (parent, (focus :: evaluated),
+                     us)), annot0)), _UU03c3_), (Coq_inl u)))
     | Z_if_cond (parent, t0, e) ->
       if R.is_true (fst focus)
       then pure ((parent, _UU03c3_), (Coq_inl t0))
@@ -971,7 +1432,7 @@ module Make =
                  | Some g ->
                    pure (((Z_aux ((Z_match_arms_guard (parent, _UU03b3_,
                      _UU03b2_0, (_UU03c3_, focus), evaluated, pat0, true,
-                     body, None)), annot0)), _UU03c3_), (Coq_inl g))
+                     body, (Some arms))), annot0)), _UU03c3_), (Coq_inl g))
                  | None ->
                    pure (((Z_aux ((Z_match_arms_body (parent, _UU03b3_,
                      _UU03b2_0, (_UU03c3_, focus), evaluated, pat0, None,
@@ -1001,18 +1462,24 @@ module Make =
     | Z_match_arms_guard (parent, _UU03b3_, _UU03b2_, p, evaluated, pat0,
                           guaranteed_match, body, unevaluated) ->
       let (_UU03c3__h, h) = p in
-      if R.is_true (fst focus)
-      then let unevaluated' = if guaranteed_match then None else unevaluated
-           in
-           pure (((Z_aux ((Z_match_arms_body (parent, _UU03b3_, _UU03b2_,
-             (_UU03c3__h, h), evaluated, pat0, None, unevaluated')),
-             annot0)), _UU03c3_), (Coq_inl body))
-      else if R.is_false (fst focus)
-           then pure (((Z_aux ((Z_match_head (parent, _UU03b3_, evaluated,
-                  unevaluated)), annot0)), _UU03c3__h), (Coq_inr h))
-           else pure (((Z_aux ((Z_match_arms_body (parent, _UU03b3_,
-                  _UU03b2_, (_UU03c3__h, h), evaluated, pat0, (Some focus),
-                  unevaluated)), annot0)), _UU03c3_), (Coq_inl body))
+      if (&&) (is_none (R.this (fst focus)))
+           (negb (is_none (R.exn (fst focus))))
+      then pure ((parent, _UU03c3_), (Coq_inr focus))
+      else if R.is_true (fst focus)
+           then let unevaluated' =
+                  if guaranteed_match then None else unevaluated
+                in
+                pure (((Z_aux ((Z_match_arms_body (parent, _UU03b3_,
+                  _UU03b2_, (_UU03c3__h, h), evaluated, pat0, None,
+                  unevaluated')), annot0)), _UU03c3_), (Coq_inl body))
+           else if R.is_false (fst focus)
+                then pure (((Z_aux ((Z_match_head (parent, _UU03b3_,
+                       evaluated, unevaluated)), annot0)), _UU03c3__h),
+                       (Coq_inr h))
+                else pure (((Z_aux ((Z_match_arms_body (parent, _UU03b3_,
+                       _UU03b2_, (_UU03c3__h, h), evaluated, pat0, (Some
+                       focus), unevaluated)), annot0)), _UU03c3_), (Coq_inl
+                       body))
     | Z_match_arms_body (parent, _UU03b3_, _, p, evaluated, pat0, guard,
                          unevaluated) ->
       let (_UU03c3__h, h) = p in
@@ -1022,8 +1489,8 @@ module Make =
     | Z_assign_left (parent, l0, evaluated, unevaluated, exp0) ->
       (match unevaluated with
        | [] ->
-         pure (((Z_aux ((Z_assign_right (parent, l0, evaluated)), annot0)),
-           _UU03c3_), (Coq_inl exp0))
+         pure (((Z_aux ((Z_assign_right (parent, l0,
+           (rev (focus :: evaluated)))), annot0)), _UU03c3_), (Coq_inl exp0))
        | u :: us ->
          pure (((Z_aux ((Z_assign_left (parent, l0, (focus :: evaluated), us,
            exp0)), annot0)), _UU03c3_), (Coq_inl u)))
@@ -1033,8 +1500,8 @@ module Make =
     | Z_var_left (parent, l0, evaluated, unevaluated, exp0, body) ->
       (match unevaluated with
        | [] ->
-         pure (((Z_aux ((Z_var_right (parent, l0, evaluated, body)),
-           annot0)), _UU03c3_), (Coq_inl exp0))
+         pure (((Z_aux ((Z_var_right (parent, l0, (rev (focus :: evaluated)),
+           body)), annot0)), _UU03c3_), (Coq_inl exp0))
        | u :: us ->
          pure (((Z_aux ((Z_var_left (parent, l0, (focus :: evaluated), us,
            exp0, body)), annot0)), _UU03c3_), (Coq_inl u)))
@@ -1044,6 +1511,38 @@ module Make =
     | Z_var_body (parent, l0, evaluated, v) ->
       pure ((parent, _UU03c3_), (Coq_inr
         (R.mk_var annot0 l0 evaluated v focus)))
+    | Z_struct (parent, sn, evaluated, cur, unevaluated) ->
+      let evaluated' = (cur, focus) :: evaluated in
+      (match unevaluated with
+       | [] ->
+         pure ((parent, _UU03c3_), (Coq_inr
+           (R.mk_struct annot0 sn evaluated')))
+       | f0 :: rest ->
+         let FE_aux (f1, _) = f0 in
+         let FE_fexp (f, e) = f1 in
+         pure (((Z_aux ((Z_struct (parent, sn, evaluated', f, rest)),
+           annot0)), _UU03c3_), (Coq_inl e)))
+    | Z_struct_update_base (parent, sn, fes) ->
+      (match fes with
+       | [] ->
+         pure ((parent, _UU03c3_), (Coq_inr
+           (R.mk_struct_update annot0 sn focus [])))
+       | f0 :: rest ->
+         let FE_aux (f1, _) = f0 in
+         let FE_fexp (f, e) = f1 in
+         pure (((Z_aux ((Z_struct_update (parent, sn, focus, [], f, rest)),
+           annot0)), _UU03c3_), (Coq_inl e)))
+    | Z_struct_update (parent, sn, base, evaluated, cur, unevaluated) ->
+      let evaluated' = (cur, focus) :: evaluated in
+      (match unevaluated with
+       | [] ->
+         pure ((parent, _UU03c3_), (Coq_inr
+           (R.mk_struct_update annot0 sn base evaluated')))
+       | f0 :: rest ->
+         let FE_aux (f1, _) = f0 in
+         let FE_fexp (f, e) = f1 in
+         pure (((Z_aux ((Z_struct_update (parent, sn, base, evaluated', f,
+           rest)), annot0)), _UU03c3_), (Coq_inl e)))
 
   (** val step :
       t -> R.state -> (Tannot__5.t exp, R.t) sum ->

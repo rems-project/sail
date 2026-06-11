@@ -77,7 +77,7 @@ turned into a complete binding for the << ys >> variable. See the
 *)
 
 Inductive binding (V : Set) :=
-| Complete : value → binding V
+| Complete : V → binding V
 | Partial : non_empty (V * Z * Z) → binding V.
 
 Arguments Complete {_}.
@@ -476,7 +476,7 @@ Definition match_result_eq (l r : match_result value) : Prop :=
   | _ => False
   end.
 
-Definition merge_match_result (l r : match_result value) : match_result value :=
+Definition merge_match_result {V : Set} (l r : match_result V) : match_result V :=
   match (l, r) with
   | (Unmatched, _) => Unmatched
   | (_, Unmatched) => Unmatched

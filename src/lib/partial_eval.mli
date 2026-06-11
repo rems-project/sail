@@ -75,6 +75,10 @@ type partial_state
 
 val from_exp : Type_check.tannot exp -> partial_state
 
+(** Wrap the user expression in the program's top-level [let] bindings before starting partial evaluation, so global
+    identifiers are in scope. *)
+val from_exp_with_globals : gstate -> Type_check.tannot exp -> partial_state
+
 val partial_state_ctx : partial_state -> Zinterp.t
 
 val string_of_focus : partial_state -> string

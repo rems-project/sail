@@ -1,6 +1,8 @@
 open Ast
 open BinInt
+open BinNat
 open Bit
+open BitList
 open Datatypes
 open IdUtil
 open Lattice
@@ -19,6 +21,7 @@ open ValueType
 open Base
 open Decidable
 open Fin_maps
+open Fin_sets
 open Gmap
 open List_basics
 open Option
@@ -87,6 +90,8 @@ module Dom :
 
   val mk_ctor : id_aux -> value list -> value
 
+  val mk_member : id_aux -> value
+
   val is_unit : value -> bool
 
   val is_true : value -> bool
@@ -100,6 +105,10 @@ module Dom :
   val bot : t
 
   val value_length : value -> value
+
+  val mk_bitvector' : value list -> Dbv.t option
+
+  val mk_bitvector : value list -> value
 
   val vdepth : value -> Big_int_Z.big_int
 
@@ -118,17 +127,39 @@ module Dom :
 
   val _UU03b1_ : Ast.value -> value
 
+  val alpha : Ast.value -> value
+
   val of_lit : lit -> value
 
   val lookup_field : value -> id_aux -> value
 
+  val int_concrete : DZ.t -> Big_int_Z.big_int option
+
+  val bv_slice : value -> Big_int_Z.big_int -> Big_int_Z.big_int -> value
+
+  val set_field : value -> id_aux -> value -> value
+
+  val vector_update : value list -> Big_int_Z.big_int -> value -> value list
+
+  val set_bv_range :
+    value -> Big_int_Z.big_int -> Big_int_Z.big_int -> value -> value
+
+  val get_vector_elem : value -> Big_int_Z.big_int -> value
+
+  val set_vector_elem : value -> Big_int_Z.big_int -> value -> value
+
   module Matching :
    functor (Tannot:S) ->
    sig
+    val match_bitvector_lit : bit list -> Dbv.t -> value match_result
+
     val pattern_match_literal : lit -> value -> value match_result
 
     val pattern_match : Tannot.t pat -> value -> value match_result
    end
+
+  val complete_partial :
+    ((t * Big_int_Z.big_int) * Big_int_Z.big_int) non_empty -> t
 
   val complete : t binding -> t
  end
