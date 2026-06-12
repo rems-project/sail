@@ -22,6 +22,16 @@ type bv = { bv_unsigned : Big_int_Z.big_int }
 let coq_Z_to_bv n z =
   { bv_unsigned = (bv_wrap n z) }
 
+(** val bv_0 : Big_int_Z.big_int -> bv **)
+
+let bv_0 _ =
+  { bv_unsigned = Big_int_Z.zero_big_int }
+
+(** val bv_not : Big_int_Z.big_int -> bv -> bv **)
+
+let bv_not n x =
+  coq_Z_to_bv n (Z.lnot x.bv_unsigned)
+
 (** val bv_to_bits : Big_int_Z.big_int -> bv -> bool list **)
 
 let bv_to_bits n b =

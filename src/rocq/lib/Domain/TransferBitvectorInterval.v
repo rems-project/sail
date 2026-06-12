@@ -60,7 +60,7 @@ Import Bit.Three.
 Module B := AbsBitvector.Dom.
 Module I := Interval.Dom.
 
-Module BP := DomainProperties AbsBitvector.Bits B.
+Module BP := DomainProperties Lattice.Bits B.
 
 Module Ops <: SAIL_BITS_INT B I.
 
@@ -623,6 +623,27 @@ Module Ops <: SAIL_BITS_INT B I.
           destruct (rev (bv_to_bits x)); reflexivity. }
         rewrite Heq. apply BP.le_refl.
       + exfalso. apply Hd. rewrite (length_map from_bool), length_bv_to_bits. exact Hn_le.
+  Qed.
+
+  (** The keys of the underlying gmap are the possible widths of the abstract
+      bitvector, so [bits_length] is the join of [I.α (Z.of_nat w)] over every
+      width [w] present in the map. *)
+  Definition bits_length (b : B.t) : I.t :=
+    match b with
+    | B.Top   => nonneg_top
+    | B.Bvs m =>
+        map_fold (λ (w : nat) (_ : list ubit) acc,
+          I.join (I.α (Z.of_nat w)) acc) I.bot (`m)
+    end.
+
+  Lemma bits_length_abst : ∀ {n : N} {x : bv n},
+    bits_length (B.α (bv_to_bvn x)) = I.α (Z.of_N n).
+  Proof.
+    intros n x.
+    rewrite B.abstract_bvs.
+    unfold bits_length. cbn [proj1_sig].
+    rewrite map_fold_singleton, I.join_id.
+    rewrite N_nat_Z. reflexivity.
   Qed.
 
 End Ops.

@@ -12,6 +12,7 @@ open OptionUtil
 open PatternMatch
 open Qcanon
 open SailBase
+open TransferBitvectorInterval
 open TypeAnnot
 open Gmap
 
@@ -351,7 +352,7 @@ module Residual =
   val mk_undef : Tannot__3.t annot -> t
  end) ->
  struct
-  module L = AbsValue.Dom(Dom)(AbsBitvector.Dom)
+  module L = AbsValue.Dom(Dom)(AbsBitvector.Dom)(Ops)
 
   module Matching = L.Matching(Tannot__3)
 

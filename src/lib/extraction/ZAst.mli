@@ -12,6 +12,7 @@ open OptionUtil
 open PatternMatch
 open Qcanon
 open SailBase
+open TransferBitvectorInterval
 open TypeAnnot
 open Gmap
 
@@ -230,6 +231,8 @@ module Residual :
 
     val bot : t
 
+    val value_length : value -> value
+
     val vdepth : value -> Big_int_Z.big_int
 
     val key_inter : (id_aux, 'a1) gmap -> (id_aux, 'a1) gmap -> id_aux list
@@ -445,6 +448,8 @@ module Make :
 
       val bot : t
 
+      val value_length : value -> value
+
       val vdepth : value -> Big_int_Z.big_int
 
       val key_inter : (id_aux, 'a1) gmap -> (id_aux, 'a1) gmap -> id_aux list
@@ -618,6 +623,8 @@ module Make :
     val top : value
 
     val bot : t
+
+    val value_length : value -> value
 
     val vdepth : value -> Big_int_Z.big_int
 

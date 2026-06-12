@@ -166,10 +166,7 @@ Module DomainProperties (C : CONCRETE) (D : DOMAIN C).
 End DomainProperties.
 
 Module Type SAIL_INT.
-  Parameter t : Set.
-
-  (** A [SAIL_INT] domain is always an abstraction of Rocq's integer [Z] type. *)
-  Parameter α : Z → t.
+  Include DOMAIN BinInt.Z.
 
   Parameter lt : t → t → option bool.
   Parameter lt_abst : ∀ {x y}, Some (Z.ltb x y) = lt (α x) (α y).
@@ -229,12 +226,12 @@ Module Type SAIL_INT.
   Parameter emod_abst : ∀ {x y}, α (snd (Z.div_eucl x y)) = emod (α x) (α y).
 End SAIL_INT.
 
+Module Bits.
+  Definition t := bvn.
+End Bits.
+
 Module Type SAIL_BITS.
-  Parameter t : Set.
-
-  Parameter α : bvn → t.
-
-  Parameter le : t → t → Prop.
+  Include DOMAIN Bits.
 
   Parameter not : t → t.
   Parameter not_abst : ∀ {n} {x : bv n}, α (bv_to_bvn (bv_not x)) = not (α (bv_to_bvn x)).
@@ -310,4 +307,7 @@ Module Type SAIL_BITS_INT (Bits : SAIL_BITS) (Int : SAIL_INT).
   Parameter count_leading_zeros : Bits.t → Int.t.
 
   Parameter count_trailing_zeros : Bits.t → Int.t.
+
+  Parameter bits_length : Bits.t → Int.t.
+  Parameter bits_length_abst : ∀ {n : N} {x : bv n}, bits_length (Bits.α x) = Int.α (Z.of_N n).
 End SAIL_BITS_INT.

@@ -56,6 +56,7 @@ From Sail Require Import Domain.Lattice.
 From Sail Require Domain.AbsValue.
 From Sail Require Domain.AbsBitvector.
 From Sail Require Domain.Interval.
+From Sail Require Domain.TransferBitvectorInterval.
 From Sail Require PatternMatch.
 From Sail Require TypeAnnot.
 
@@ -462,7 +463,7 @@ Module ExpBuilder (Tannot : TypeAnnot.S) <: Builder(Tannot).
 End ExpBuilder.
 
 Module Residual (Tannot : TypeAnnot.S) (B : Builder Tannot).
-  Module L := AbsValue.Dom Interval.Dom AbsBitvector.Dom.
+  Module L := AbsValue.Dom Interval.Dom AbsBitvector.Dom TransferBitvectorInterval.Ops.
 
   Module Matching := L.Matching Tannot.
 

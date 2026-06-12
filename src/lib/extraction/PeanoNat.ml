@@ -20,6 +20,10 @@ module Nat =
 
   let rec eqb = Big_int_Z.eq_big_int
 
+  (** val leb : Big_int_Z.big_int -> Big_int_Z.big_int -> bool **)
+
+  let rec leb = Big_int_Z.le_big_int
+
   (** val eq_dec : Big_int_Z.big_int -> Big_int_Z.big_int -> bool **)
 
   let rec eq_dec = Big_int_Z.eq_big_int
