@@ -1,4 +1,3 @@
-open AbsBitvector
 open Ast
 open BinInt
 open Bit
@@ -25,35 +24,26 @@ open List_basics
 open Option
 
 module Dom :
- functor (DZ:sig
-  type t
+ functor (DZ:SAIL_INT) ->
+ functor (Dbv:SAIL_BITS) ->
+ functor (T:sig
+  val unsigned : Dbv.t -> DZ.t
 
-  val join : t -> t -> t
+  val signed : Dbv.t -> DZ.t
 
-  val meet : t -> t -> t
+  val zeros : Big_int_Z.big_int -> DZ.t -> Dbv.t
 
-  val top : t
+  val ones : Big_int_Z.big_int -> DZ.t -> Dbv.t
 
-  val bot : t
+  val zero_extend : Big_int_Z.big_int -> Dbv.t -> DZ.t -> Dbv.t
 
-  val leb : t -> t -> bool
+  val sign_extend : Big_int_Z.big_int -> Dbv.t -> DZ.t -> Dbv.t
 
-  val _UU03b1_ : Z.t -> t
- end) ->
- functor (Dbv:sig
-  type t
+  val count_leading_zeros : Dbv.t -> DZ.t
 
-  val join : t -> t -> t
+  val count_trailing_zeros : Dbv.t -> DZ.t
 
-  val meet : t -> t -> t
-
-  val top : t
-
-  val bot : t
-
-  val leb : t -> t -> bool
-
-  val _UU03b1_ : AbsBitvector.Bits.t -> t
+  val bits_length : Dbv.t -> DZ.t
  end) ->
  sig
   module DZP :
@@ -108,6 +98,8 @@ module Dom :
   val top : value
 
   val bot : t
+
+  val value_length : value -> value
 
   val vdepth : value -> Big_int_Z.big_int
 

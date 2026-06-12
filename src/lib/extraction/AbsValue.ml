@@ -1,4 +1,3 @@
-open AbsBitvector
 open Ast
 open BinInt
 open Bit
@@ -25,40 +24,31 @@ open List_basics
 open Option
 
 module Dom =
- functor (DZ:sig
-  type t
+ functor (DZ:SAIL_INT) ->
+ functor (Dbv:SAIL_BITS) ->
+ functor (T:sig
+  val unsigned : Dbv.t -> DZ.t
 
-  val join : t -> t -> t
+  val signed : Dbv.t -> DZ.t
 
-  val meet : t -> t -> t
+  val zeros : Big_int_Z.big_int -> DZ.t -> Dbv.t
 
-  val top : t
+  val ones : Big_int_Z.big_int -> DZ.t -> Dbv.t
 
-  val bot : t
+  val zero_extend : Big_int_Z.big_int -> Dbv.t -> DZ.t -> Dbv.t
 
-  val leb : t -> t -> bool
+  val sign_extend : Big_int_Z.big_int -> Dbv.t -> DZ.t -> Dbv.t
 
-  val _UU03b1_ : Z.t -> t
- end) ->
- functor (Dbv:sig
-  type t
+  val count_leading_zeros : Dbv.t -> DZ.t
 
-  val join : t -> t -> t
+  val count_trailing_zeros : Dbv.t -> DZ.t
 
-  val meet : t -> t -> t
-
-  val top : t
-
-  val bot : t
-
-  val leb : t -> t -> bool
-
-  val _UU03b1_ : AbsBitvector.Bits.t -> t
+  val bits_length : Dbv.t -> DZ.t
  end) ->
  struct
   module DZP = DomainProperties(Z)(DZ)
 
-  module DbvP = DomainProperties(AbsBitvector.Bits)(Dbv)
+  module DbvP = DomainProperties(Bits)(Dbv)
 
   type value =
   | V_bitvector of Dbv.t
@@ -163,6 +153,14 @@ module Dom =
 
   let bot =
     V_bot
+
+  (** val value_length : value -> value **)
+
+  let value_length = function
+  | V_bitvector bv -> V_int (T.bits_length bv)
+  | V_vector vs -> V_int (DZ._UU03b1_ (Z.of_nat (length vs)))
+  | V_list vs -> V_int (DZ._UU03b1_ (Z.of_nat (length vs)))
+  | _ -> V_bot
 
   (** val vdepth : value -> Big_int_Z.big_int **)
 
@@ -534,7 +532,7 @@ module Dom =
   (** val _UU03b1_ : Ast.value -> value **)
 
   let rec _UU03b1_ = function
-  | Ast.V_bitvector bv -> V_bitvector (Dbv._UU03b1_ (Bits.to_bvn bv))
+  | Ast.V_bitvector bv -> V_bitvector (Dbv._UU03b1_ (Bit.Bits.to_bvn bv))
   | Ast.V_vector xs -> V_vector (map _UU03b1_ xs)
   | Ast.V_list xs -> V_list (map _UU03b1_ xs)
   | Ast.V_int i -> V_int (DZ._UU03b1_ i)

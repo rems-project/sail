@@ -15,11 +15,6 @@ open Gmap
 open List_basics
 open Numbers
 
-module Bits =
- struct
-  type t = bvn
- end
-
 module Dom =
  struct
   type bvset =

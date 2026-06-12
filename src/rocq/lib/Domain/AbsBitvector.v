@@ -56,11 +56,7 @@ From Sail Require Bit.
 From Sail Require Import BvUtil.
 From Sail Require Import Tactics.
 
-Module Bits.
-  Definition t := bvn.
-End Bits.
-
-Module Dom <: DOMAIN Bits <: SAIL_BITS.
+Module Dom <: SAIL_BITS.
   Import Bit.Three.
 
   Definition valid (m : gmap nat (list ubit)) : Prop :=

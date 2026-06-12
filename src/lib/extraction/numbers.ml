@@ -1,5 +1,6 @@
 open BinNat
 open BinPos
+open Compare_dec
 open PeanoNat
 open Base
 
@@ -9,6 +10,11 @@ module Nat =
 
   let eq_dec =
     Nat.eq_dec
+
+  (** val le_dec : (Big_int_Z.big_int, Big_int_Z.big_int) coq_RelDecision **)
+
+  let le_dec =
+    le_dec
  end
 
 module Pos =

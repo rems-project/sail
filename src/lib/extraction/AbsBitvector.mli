@@ -15,11 +15,6 @@ open Gmap
 open List_basics
 open Numbers
 
-module Bits :
- sig
-  type t = bvn
- end
-
 module Dom :
  sig
   type bvset =

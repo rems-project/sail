@@ -51,7 +51,7 @@ From Sail Require Import Domain.Lattice.
 From Sail Require Import OptionUtil.
 From Sail Require Import Tactics.
 
-Module Dom <: DOMAIN BinInt.Z <: SAIL_INT.
+Module Dom <: SAIL_INT.
   Definition Low_high_order (i : option Z * option Z) : Prop :=
     match i with
     | (Some l, Some h) => (l <= h)%Z

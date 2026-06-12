@@ -70,9 +70,9 @@ Module Value.
   Definition t := Ast.value.
 End Value.
 
-Module Dom (DZ : DOMAIN BinInt.Z) (Dbv : DOMAIN AbsBitvector.Bits) <: DOMAIN Value.
+Module Dom (DZ : SAIL_INT) (Dbv : SAIL_BITS) (T : SAIL_BITS_INT Dbv DZ) <: DOMAIN Value.
   Module DZP := DomainProperties BinInt.Z DZ.
-  Module DbvP := DomainProperties AbsBitvector.Bits Dbv.
+  Module DbvP := DomainProperties Lattice.Bits Dbv.
 
   Inductive value : Type :=
     | V_bitvector : Dbv.t → value
@@ -119,6 +119,14 @@ Module Dom (DZ : DOMAIN BinInt.Z) (Dbv : DOMAIN AbsBitvector.Bits) <: DOMAIN Val
 
   Definition bot : t := V_bot.
   Notation "⊥" := V_bot.
+
+  Definition value_length (v : value) : value :=
+    match v with
+    | V_bitvector bv => V_int (T.bits_length bv)
+    | V_list vs => V_int (DZ.α (Z.of_nat (length vs)))
+    | V_vector vs => V_int (DZ.α (Z.of_nat (length vs)))
+    | _ => V_bot
+    end.
 
   Fixpoint vdepth (v : value) : nat :=
     match v with
