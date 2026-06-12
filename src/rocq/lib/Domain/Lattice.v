@@ -171,6 +171,18 @@ Module Type SAIL_INT.
   (** A [SAIL_INT] domain is always an abstraction of Rocq's integer [Z] type. *)
   Parameter α : Z → t.
 
+  Parameter lt : t → t → option bool.
+  Parameter lt_abst : ∀ {x y}, Some (Z.ltb x y) = lt (α x) (α y).
+
+  Parameter gt : t → t → option bool.
+  Parameter gt_abst : ∀ {x y}, Some (Z.gtb x y) = gt (α x) (α y).
+
+  Parameter lteq : t → t → option bool.
+  Parameter lteq_abst : ∀ {x y}, Some (Z.leb x y) = lteq (α x) (α y).
+
+  Parameter gteq : t → t → option bool.
+  Parameter gteq_abst : ∀ {x y}, Some (Z.geb x y) = gteq (α x) (α y).
+
   Parameter negate : t -> t.
   Parameter negate_abst : ∀ {x}, α (-x) = negate (α x).
   Parameter negate_negate : ∀ {x}, negate (negate x) = x.

@@ -45,6 +45,20 @@ module Dom :
 
   val _UU03b1_ : Big_int_Z.big_int -> interval
 
+  val alpha : Big_int_Z.big_int -> interval
+
+  val compare_endpoints :
+    (Big_int_Z.big_int -> Big_int_Z.big_int -> bool) -> Big_int_Z.big_int
+    option -> Big_int_Z.big_int option -> bool
+
+  val lt : interval -> interval -> bool option
+
+  val gt : interval -> interval -> bool option
+
+  val lteq : interval -> interval -> bool option
+
+  val gteq : interval -> interval -> bool option
+
   val negate_endpoints :
     (Big_int_Z.big_int option * Big_int_Z.big_int option) ->
     Big_int_Z.big_int option * Big_int_Z.big_int option
