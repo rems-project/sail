@@ -388,6 +388,102 @@ Module Dom <: DOMAIN BinInt.Z <: SAIL_INT.
 
   Definition α (n : Z) : interval := Ends (exist _ (Some n, Some n) (low_high_refl n)).
 
+  (** ASCII alias for [α], so OCaml code consuming the extracted module can
+      use the readable name [alpha] instead of the mangled [_UU03b1_]. *)
+  Definition alpha := α.
+
+  Definition compare_endpoints (op : Z → Z → bool) (x y : option Z) : bool :=
+    match (x, y) with
+    | (Some a, Some b) => op a b
+    | _ => false
+    end.
+
+  Definition lt (x y : interval) : option bool :=
+    match (x, y) with
+    | (Empty, _) | (_, Empty) => None
+    | (Ends ex, Ends ey) =>
+        if compare_endpoints Z.ltb (high ex) (low ey) then Some true
+        else if compare_endpoints Z.leb (high ey) (low ex) then Some false
+        else None
+    end.
+
+  Lemma lt_abst : ∀ {x y}, Some (Z.ltb x y) = lt (α x) (α y).
+  Proof.
+    intros x y.
+    unfold lt, α, compare_endpoints, low, high; cbn.
+    destruct (Z.ltb x y) eqn:H1; [reflexivity |].
+    destruct (Z.leb y x) eqn:H2; [reflexivity |].
+    exfalso.
+    apply Z.ltb_ge in H1.
+    apply Z.leb_gt in H2.
+    lia.
+  Qed.
+
+  Definition gt (x y : interval) : option bool :=
+    match (x, y) with
+    | (Empty, _) | (_, Empty) => None
+    | (Ends ex, Ends ey) =>
+        if compare_endpoints Z.ltb (high ey) (low ex) then Some true
+        else if compare_endpoints Z.leb (high ex) (low ey) then Some false
+        else None
+    end.
+
+  Lemma gt_abst : ∀ {x y}, Some (Z.gtb x y) = gt (α x) (α y).
+  Proof.
+    intros x y.
+    unfold gt, α, compare_endpoints, low, high; cbn.
+    rewrite Z.gtb_ltb.
+    destruct (Z.ltb y x) eqn:H1; [reflexivity |].
+    destruct (Z.leb x y) eqn:H2; [reflexivity |].
+    exfalso.
+    apply Z.ltb_ge in H1.
+    apply Z.leb_gt in H2.
+    lia.
+  Qed.
+
+  Definition lteq (x y : interval) : option bool :=
+    match (x, y) with
+    | (Empty, _) | (_, Empty) => None
+    | (Ends ex, Ends ey) =>
+        if compare_endpoints Z.leb (high ex) (low ey) then Some true
+        else if compare_endpoints Z.ltb (high ey) (low ex) then Some false
+        else None
+    end.
+
+  Lemma lteq_abst : ∀ {x y}, Some (Z.leb x y) = lteq (α x) (α y).
+  Proof.
+    intros x y.
+    unfold lteq, α, compare_endpoints, low, high; cbn.
+    destruct (Z.leb x y) eqn:H1; [reflexivity |].
+    destruct (Z.ltb y x) eqn:H2; [reflexivity |].
+    exfalso.
+    apply Z.leb_gt in H1.
+    apply Z.ltb_ge in H2.
+    lia.
+  Qed.
+
+  Definition gteq (x y : interval) : option bool :=
+    match (x, y) with
+    | (Empty, _) | (_, Empty) => None
+    | (Ends ex, Ends ey) =>
+        if compare_endpoints Z.leb (high ey) (low ex) then Some true
+        else if compare_endpoints Z.ltb (high ex) (low ey) then Some false
+        else None
+    end.
+
+  Lemma gteq_abst : ∀ {x y}, Some (Z.geb x y) = gteq (α x) (α y).
+  Proof.
+    intros x y.
+    unfold gteq, α, compare_endpoints, low, high; cbn.
+    rewrite Z.geb_leb.
+    destruct (Z.leb y x) eqn:H1; [reflexivity |].
+    destruct (Z.ltb x y) eqn:H2; [reflexivity |].
+    exfalso.
+    apply Z.leb_gt in H1.
+    apply Z.ltb_ge in H2.
+    lia.
+  Qed.
+
   Definition negate_endpoints (x : option Z * option Z) :=
     (Z.opp <$> snd x, Z.opp <$> fst x).
 

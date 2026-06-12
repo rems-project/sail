@@ -137,6 +137,82 @@ module Dom =
   let _UU03b1_ n =
     Ends (Coq_exist ((Some n), (Some n)))
 
+  (** val alpha : Big_int_Z.big_int -> interval **)
+
+  let alpha =
+    _UU03b1_
+
+  (** val compare_endpoints :
+      (Big_int_Z.big_int -> Big_int_Z.big_int -> bool) -> Big_int_Z.big_int
+      option -> Big_int_Z.big_int option -> bool **)
+
+  let compare_endpoints op x y =
+    match x with
+    | Some a -> (match y with
+                 | Some b -> op a b
+                 | None -> false)
+    | None -> false
+
+  (** val lt : interval -> interval -> bool option **)
+
+  let lt x y =
+    match x with
+    | Empty -> None
+    | Ends ex ->
+      (match y with
+       | Empty -> None
+       | Ends ey ->
+         if compare_endpoints Z.ltb (high ex) (low ey)
+         then Some true
+         else if compare_endpoints Z.leb (high ey) (low ex)
+              then Some false
+              else None)
+
+  (** val gt : interval -> interval -> bool option **)
+
+  let gt x y =
+    match x with
+    | Empty -> None
+    | Ends ex ->
+      (match y with
+       | Empty -> None
+       | Ends ey ->
+         if compare_endpoints Z.ltb (high ey) (low ex)
+         then Some true
+         else if compare_endpoints Z.leb (high ex) (low ey)
+              then Some false
+              else None)
+
+  (** val lteq : interval -> interval -> bool option **)
+
+  let lteq x y =
+    match x with
+    | Empty -> None
+    | Ends ex ->
+      (match y with
+       | Empty -> None
+       | Ends ey ->
+         if compare_endpoints Z.leb (high ex) (low ey)
+         then Some true
+         else if compare_endpoints Z.ltb (high ey) (low ex)
+              then Some false
+              else None)
+
+  (** val gteq : interval -> interval -> bool option **)
+
+  let gteq x y =
+    match x with
+    | Empty -> None
+    | Ends ex ->
+      (match y with
+       | Empty -> None
+       | Ends ey ->
+         if compare_endpoints Z.leb (high ey) (low ex)
+         then Some true
+         else if compare_endpoints Z.ltb (high ex) (low ey)
+              then Some false
+              else None)
+
   (** val negate_endpoints :
       (Big_int_Z.big_int option * Big_int_Z.big_int option) ->
       Big_int_Z.big_int option * Big_int_Z.big_int option **)
