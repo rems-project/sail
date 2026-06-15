@@ -212,6 +212,7 @@ def test_rocq(name):
     results.expect_failure("simple_while.sail", "Loop without termination measure")
     results.expect_failure("simple_while2.sail", "Loop without termination measure")
     results.expect_failure("simple_while3.sail", "Loop without termination measure")
+    results.expect_failure("tuple_tuple_lexp.sail", "Nested tuple L-expressions")
     for filenames in chunks(os.listdir('.'), parallel()):
         tests = {}
         for filename in filenames:
