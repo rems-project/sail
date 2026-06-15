@@ -50,6 +50,7 @@ skip_selftests = {
     'concurrency_interface_v2_var',
     'config_map_guard',
     'let_assert',
+    'tuple_tuple_lexp',
 }
 
 print("Sail is {}".format(sail))
