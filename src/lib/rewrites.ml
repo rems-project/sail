@@ -2263,29 +2263,38 @@ let rewrite_vector_concat_assignments env defs =
   rewrite_ast_base assign_defs defs
 
 let rewrite_tuple_assignments env defs =
-  let assign_tuple e_aux annot =
-    let env = env_of_annot annot in
-    match e_aux with
-    | E_assign (LE_aux (LE_tuple lexps, _), exp) ->
-        let _, ids =
-          List.fold_left (fun (n, ids) _ -> (n + 1, ids @ [mk_id ("tup__" ^ string_of_int n)])) (0, []) lexps
-        in
-        let block_assign i lexp =
-          mk_exp (E_assign (strip_lexp lexp, mk_exp (E_id (mk_id ("tup__" ^ string_of_int i)))))
-        in
-        let block = mk_exp (E_block (List.mapi block_assign lexps)) in
-        let pat = mk_pat (P_tuple (List.map (fun id -> mk_pat (P_id id)) ids)) in
-        let exp' = add_e_typ env (typ_of exp) exp in
-        let let_exp = mk_exp (E_let (pat, strip_exp exp', block)) in
-        begin
+  let rewrite_pass defs =
+    let rewritten = ref 0 in
+    let assign_tuple e_aux annot =
+      let env = env_of_annot annot in
+      match e_aux with
+      | E_assign (LE_aux (LE_tuple lexps, _), exp) -> (
+          incr rewritten;
+          let _, ids =
+            List.fold_left (fun (n, ids) _ -> (n + 1, ids @ [mk_id ("tup__" ^ string_of_int n)])) (0, []) lexps
+          in
+          let block_assign i lexp =
+            mk_exp (E_assign (strip_lexp lexp, mk_exp (E_id (mk_id ("tup__" ^ string_of_int i)))))
+          in
+          let block = mk_exp (E_block (List.mapi block_assign lexps)) in
+          let pat = mk_pat (P_tuple (List.map (fun id -> mk_pat (P_id id)) ids)) in
+          let exp' = add_e_typ env (typ_of exp) exp in
+          let let_exp = mk_exp (E_let (pat, strip_exp exp', block)) in
           try check_exp env let_exp unit_typ
           with Type_error.Type_error (l, err) -> raise (Type_error.to_reporting_exn l err)
-        end
-    | _ -> E_aux (e_aux, annot)
+        )
+      | _ -> E_aux (e_aux, annot)
+    in
+    let assign_exp = { id_exp_alg with e_aux = (fun (e_aux, annot) -> assign_tuple e_aux annot) } in
+    let assign_defs = { rewriters_base with rewrite_exp = (fun _ -> fold_exp assign_exp) } in
+    let defs = rewrite_ast_base assign_defs defs in
+    (!rewritten, defs)
   in
-  let assign_exp = { id_exp_alg with e_aux = (fun (e_aux, annot) -> assign_tuple e_aux annot) } in
-  let assign_defs = { rewriters_base with rewrite_exp = (fun _ -> fold_exp assign_exp) } in
-  rewrite_ast_base assign_defs defs
+  let rec go defs =
+    let n, defs = rewrite_pass defs in
+    if n > 0 then go defs else defs
+  in
+  go defs
 
 let rewrite_simple_assignments allow_fields env defs =
   let rec is_simple (LE_aux (aux, _)) =
