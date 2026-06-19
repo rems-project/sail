@@ -37,6 +37,7 @@ skip_tests = {
     'concurrency_interface_v2',
     'concurrency_interface_v2_var',
     'mini_builtins', # unsupported builtins
+    'test_mono_rewrites', # verilator bug (in CI, works with latest)
 }
 
 print("Sail is {}".format(sail))
