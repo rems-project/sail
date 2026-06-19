@@ -930,15 +930,15 @@ end
 
 let remove_stack_clears ctx = visit_cdefs (new Remove_stack_clears.visitor ctx)
 
-let concatMap f xs = List.concat (List.map f xs)
-
 let optimize ~have_rts ctx recursive_functions cdefs =
   let nothing cdefs = cdefs in
   cdefs
-  |> (if !optimize_alias then concatMap remove_alias else nothing)
+  |> (if !optimize_alias then List.concat_map remove_alias else nothing)
   |> (if !optimize_alias then combine_variables ctx else nothing)
   (* We need the runtime to initialize hoisted allocations *)
-  |> (if !optimize_hoist_allocations && have_rts then concatMap (hoist_allocations recursive_functions) else nothing)
+  |> ( if !optimize_hoist_allocations && have_rts then List.concat_map (hoist_allocations recursive_functions)
+       else nothing
+     )
   |> remove_stack_clears ctx
 
 (**************************************************************************)
