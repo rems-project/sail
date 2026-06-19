@@ -226,6 +226,7 @@ val _builtin_unsigned = pure {
   interpreter: "uint",
   c: "sail_unsigned",
   cpp: "sail_unsigned",
+  systemverilog: "sail_unsigned",
   coq: "uint",
   lean: "BitVec.toNat"
 } : forall 'n. bits('n) -> {'m, 0 <= 'm < 2 ^ 'n. int('m)}
@@ -237,9 +238,11 @@ val _builtin_unsigned = pure {
 val _builtin_mod_nat = pure {
   smt: "mod",
   ocaml: "modulus",
+  interpreter: "modulus",
   lem: "integerMod",
   c: "tmod_int",
   cpp: "tmod_int",
+  systemverilog: "tmod_int",
   coq: "Z.rem",
   lean: "Nat.mod"
 } : forall 'n 'm, 'n >= 0 & 'm >= 0. (int('n), int('m)) -> {'r, 0 <= 'r < 'm. int('r)}
@@ -260,7 +263,7 @@ val unsigned_subrange : forall 'n 'i 'j, 'n >= 0 & ('i - 'j) >= 0.
   (bits('n), int('i), int('j)) -> {'m, 0 <= 'm < 2 ^ ('i - 'j + 1). int('m)}
 
 function unsigned_subrange(xs,i,j) = {
-  let xs = sail_shiftright(xs & slice_mask(j,i-j+1), i) in
+  let xs = sail_shiftright(xs & slice_mask(j,i-j+1), j) in
   _builtin_mod_nat(_builtin_unsigned(xs), _builtin_pow2(i - j + 1))
 }
 
