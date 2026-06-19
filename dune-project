@@ -4,7 +4,7 @@
 (using dune_site 0.1)
 
 (name sail)
-(version 0.20.1)
+(version 0.20.2)
 
 (generate_opam_files true)
 
@@ -33,7 +33,7 @@
   (synopsis "Helper tool for compiling Sail")
   (name sail_maker)
   (depends
-    (ocaml (>= 4.08.1))))
+    (ocaml (>= 4.14.0))))
 
 (package
   (sites (share plugins))

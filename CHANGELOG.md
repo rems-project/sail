@@ -1,6 +1,24 @@
 Changelog
 =========
 
+Sail 0.20.2
+-----------
+
+This is another bugfix release for Sail 0.20. It includes fixes for
+the following issues and more:
+
+* https://github.com/rems-project/sail/issues/1683
+* https://github.com/rems-project/sail/issues/1664
+* https://github.com/rems-project/sail/issues/1654
+
+HOL4 support has been improved to support changes in Sail RISC-V.
+
+The minimum OCaml version has been increased to OCaml 4.14, although
+we highly recommend upgrading to at least OCaml 5.2. The minumum
+version might be increased to require OCaml 5 in some future major
+release.
+
+
 Sail 0.20.1
 -----------
 
