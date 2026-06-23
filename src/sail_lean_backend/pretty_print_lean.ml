@@ -1619,7 +1619,7 @@ let collect_import_files defs base =
   if res = [] then [base] else res
 
 let pp_ast_lean (env : Type_check.env) effect_info ({ defs; _ } as ast : Libsail.Type_check.typed_ast) out_name_camel
-    types_file imp_funcs_files funcs_file noncomputable =
+    types_file imp_funcs_files funcs_file =
   let regs = State.find_registers defs in
   let fun_args = populate_fun_args defs in
   let global = { effect_info; fun_args; kid_id_renames = KBindings.empty; kid_id_renames_rev = Bindings.empty } in
@@ -1645,7 +1645,7 @@ let pp_ast_lean (env : Type_check.env) effect_info ({ defs; _ } as ast : Libsail
   let main_function =
     if !the_main_function_has_been_seen then (
       let stub = main_function_stub effect_info has_registers in
-      [string ("open " ^ out_name_camel ^ ".Functions\n\n") ^^ stub]
+      [string ("open " ^ out_name_camel); string ("open " ^ out_name_camel ^ ".Functions\nopen Defs\n\n") ^^ stub]
     )
     else []
   in

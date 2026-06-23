@@ -7,7 +7,11 @@ set_option linter.unusedVariables false
 set_option match.ignoreUnusedAlts true
 
 open Sail
-open ConcurrencyInterfaceV1
+open Sail.ConcurrencyInterfaceV1
+
+namespace Out
+
+namespace Defs
 
 abbrev bit := (BitVec 1)
 
@@ -33,9 +37,14 @@ set_option linter.unusedVariables false
 set_option match.ignoreUnusedAlts true
 
 open Sail
+open Sail.ConcurrencyInterfaceV1
+
+namespace Out
+
 open ConcurrencyInterfaceV1
 
-namespace Out.Functions
+open Defs
+namespace Functions
 
 /-- Type quantifiers: n : Int -/
 def foo (n : Int) : SailM (Bool × (BitVec 1) × Int × Nat × (BitVec 3)) := do

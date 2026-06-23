@@ -7,7 +7,11 @@ set_option linter.unusedVariables false
 set_option match.ignoreUnusedAlts true
 
 open Sail
-open ConcurrencyInterfaceV1
+open Sail.ConcurrencyInterfaceV1
+
+namespace Out
+
+namespace Defs
 
 abbrev bit := (BitVec 1)
 
@@ -50,9 +54,14 @@ set_option linter.unusedVariables false
 set_option match.ignoreUnusedAlts true
 
 open Sail
+open Sail.ConcurrencyInterfaceV1
+
+namespace Out
+
 open ConcurrencyInterfaceV1
 
-namespace Out.Functions
+open Defs
+namespace Functions
 
 open option
 open e_test

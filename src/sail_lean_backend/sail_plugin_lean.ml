@@ -256,17 +256,21 @@ let file_to_module (filename : string) =
   let base = Filename.basename filename in
   Filename.chop_extension base
 
-let file_prelude version =
-  let p =
+let file_prelude version namespace =
+  let non_computable = if !opt_lean_noncomputable then "noncomputable section\n" else "" in
+  Printf.sprintf
     {|set_option maxHeartbeats 1_000_000_000
 set_option maxRecDepth 1_000_000
 set_option linter.unusedVariables false
 set_option match.ignoreUnusedAlts true
 
 open Sail
+open Sail.ConcurrencyInterfaceV%d
+
+%snamespace %s
+
 |}
-  in
-  Printf.sprintf "%sopen ConcurrencyInterfaceV%d\n\n" p version
+    version non_computable namespace
 
 let path_to_static_library sail_dir str = Filename.quote (sail_dir ^ "/src/sail_lean_backend/Sail/" ^ str ^ ".lean")
 
@@ -288,9 +292,10 @@ let print_function_file_prelude interface_v file out_name_camel (imp_refs : stri
           !opt_lean_import_files
     | ns -> List.iter (fun n -> output_string file ("import " ^ out_name_camel ^ "." ^ n ^ "\n")) ns
   in
-  output_string file ("\n" ^ file_prelude interface_v);
-  if !opt_lean_noncomputable then output_string file "noncomputable section\n\n";
-  output_string file ("namespace " ^ out_name_camel ^ ".Functions\n\n")
+  output_string file ("\n" ^ file_prelude interface_v out_name_camel);
+  Printf.fprintf file "open ConcurrencyInterfaceV%d\n\n" interface_v;
+  output_string file "open Defs\n";
+  output_string file "namespace Functions\n\n"
 
 let start_lean_output interface_v (out_name : string) (import_names : string list) (import_refs : string list list)
     (main_import_refs : string list) default_sail_dir =
@@ -332,7 +337,8 @@ let start_lean_output interface_v (out_name : string) (import_names : string lis
   let types_file = open_out (Filename.concat lean_src_dir "Defs.lean") in
   output_string types_file "import Sail\n";
   output_string types_file "open PreSail\n\n";
-  output_string types_file (file_prelude interface_v);
+  output_string types_file (file_prelude interface_v out_name_camel);
+  output_string types_file "namespace Defs\n\n";
   let funcs_file = open_out (Filename.concat project_dir (out_name_camel ^ ".lean")) in
   let lakefile = open_out (Filename.concat project_dir "lakefile.toml") in
   let lakemanifest = open_out (Filename.concat project_dir "lake-manifest.json") in
@@ -438,7 +444,6 @@ let output (out_name : string) env effect_info ({ defs; _ } as ast : Libsail.Typ
   let out_name_camel = Libsail.Util.to_upper_camel_case out_name in
   let executable =
     Pretty_print_lean.pp_ast_lean env effect_info ast out_name_camel ctx.types_file ctx.import_files ctx.funcs_file
-      noncomputable
   in
   create_lake_project ctx (executable && !opt_lean_executable)
 (* Uncomment for debug output of the Sail code after the rewrite passes *)
