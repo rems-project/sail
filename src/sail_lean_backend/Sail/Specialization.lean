@@ -1,7 +1,11 @@
 import Sail
 import THE_MODULE_NAME.Defs
 
-namespace Sail
+open Sail
+
+namespace THE_MODULE_NAME
+
+open Defs
 
 @[simp_sail]
 def sailTryCatch (e : SailM α) (h : exception → SailM α) : SailM α := PreSail.sailTryCatch e h
@@ -45,7 +49,7 @@ abbrev assert (p : Bool) (s : String) : SailM Unit := PreSail.assert p s
 
 namespace ConcurrencyInterfaceV1
 
-open PreSail.ConcurrencyInterfaceV1
+open Sail.ConcurrencyInterfaceV1
 
 abbrev sail_mem_write [Arch] (req : Mem_write_request n vasize (BitVec pa_size) ts arch) : SailM (Result (Option Bool) Arch.abort) :=
   PreSail.ConcurrencyInterfaceV1.sail_mem_write req
@@ -70,7 +74,7 @@ end ConcurrencyInterfaceV1
 
 namespace ConcurrencyInterfaceV2
 
-open PreSail.ConcurrencyInterfaceV2
+open Sail.ConcurrencyInterfaceV2
 
 abbrev sail_mem_read [Arch] (req : Mem_request n nt Arch.addr_size Arch.addr_space Arch.mem_acc) :
     SailM (Result ((Vector (BitVec 8) n) × (Vector Bool nt)) Arch.abort) :=
@@ -97,7 +101,6 @@ abbrev sail_translation_end [Arch] (te : Arch.trans_end) : SailM Unit := PreSail
 abbrev sail_take_exception [Arch] (f : Arch.exn) : SailM Unit := PreSail.ConcurrencyInterfaceV2.sail_take_exception f
 abbrev sail_return_exception (a : Unit) : SailM Unit := PreSail.ConcurrencyInterfaceV2.sail_return_exception a
 
-
 end ConcurrencyInterfaceV2
 
 abbrev cycle_count (a : Unit) : SailM Unit := PreSail.cycle_count a
@@ -123,5 +126,3 @@ def unwrapValue [Inhabited α] (x : SailM α) : α :=
   match x.run default with
   | .ok x _ => x
   | _ => default
-
-end Sail

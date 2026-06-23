@@ -7,7 +7,11 @@ set_option linter.unusedVariables false
 set_option match.ignoreUnusedAlts true
 
 open Sail
-open ConcurrencyInterfaceV1
+open Sail.ConcurrencyInterfaceV1
+
+namespace Out
+
+namespace Defs
 
 structure rectangle where
   width : Int
@@ -53,9 +57,14 @@ set_option linter.unusedVariables false
 set_option match.ignoreUnusedAlts true
 
 open Sail
+open Sail.ConcurrencyInterfaceV1
+
+namespace Out
+
 open ConcurrencyInterfaceV1
 
-namespace Out.Functions
+open Defs
+namespace Functions
 
 open shape
 open my_option

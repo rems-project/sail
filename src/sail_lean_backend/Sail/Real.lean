@@ -4,6 +4,10 @@ import Mathlib.Data.Real.Sqrt
 import Sail
 import THE_MODULE_NAME.Defs
 
+namespace THE_MODULE_NAME
+
+open Defs
+
 noncomputable section
 
 abbrev real := ℝ

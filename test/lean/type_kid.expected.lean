@@ -7,7 +7,11 @@ set_option linter.unusedVariables false
 set_option match.ignoreUnusedAlts true
 
 open Sail
-open ConcurrencyInterfaceV1
+open Sail.ConcurrencyInterfaceV1
+
+namespace Out
+
+namespace Defs
 
 abbrev Register := PEmpty
 abbrev RegisterType : Register -> Type := PEmpty.elim
@@ -31,9 +35,14 @@ set_option linter.unusedVariables false
 set_option match.ignoreUnusedAlts true
 
 open Sail
+open Sail.ConcurrencyInterfaceV1
+
+namespace Out
+
 open ConcurrencyInterfaceV1
 
-namespace Out.Functions
+open Defs
+namespace Functions
 
 /-- Type quantifiers: k_a : Type -/
 def foo (x : k_a) : (k_a × k_a) :=
