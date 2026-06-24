@@ -254,12 +254,12 @@ let option_binop f x y = match (x, y) with Some x, Some y -> Some (f x y) | _ ->
 
 let rec option_these = function Some x :: xs -> x :: option_these xs | None :: xs -> option_these xs | [] -> []
 
-let rec option_all = function
-  | [] -> Some []
+let rec option_all' acc = function
+  | [] -> Some (List.rev acc)
   | None :: _ -> None
-  | Some x :: xs -> (
-      match option_all xs with None -> None | Some xs -> Some (x :: xs)
-    )
+  | Some x :: xs -> option_all' (x :: acc) xs
+
+let option_all xs = option_all' [] xs
 
 let rec result_all = function
   | [] -> Ok []

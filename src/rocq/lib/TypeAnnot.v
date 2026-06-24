@@ -53,6 +53,7 @@ can import the [Types] submodule to use those inductives unqualified
 however. *)
 
 From Stdlib Require Import Unicode.Utf8.
+From Stdlib Require Import String.
 
 From Sail Require Import Ast.
 
@@ -83,6 +84,8 @@ End Types.
   bitvectors and generic vectors, so we use the typing information to
   distinguish the two.
 
+- [annotate]. Annotate a type annotation with a Sail attribute.
+
 - [fallthrough]. When evaluating try expressions, we need a
   type-annotated expression which is essentially just
   << exn => throw exn >> but we don't have the type-system in Rocq,
@@ -103,6 +106,8 @@ Module Type S.
   Parameter get_split : t → vector_concat_split.
 
   Parameter is_bitvector : t → bool.
+
+  Parameter annotate : loc → string → t → t.
 
   Parameter fallthrough : unit → Ast.pexp t.
 End S.

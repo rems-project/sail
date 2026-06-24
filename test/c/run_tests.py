@@ -93,8 +93,8 @@ def test_interpreter(name):
         results.collect(tests)
     return results.finish()
 
-def test_partial(name):
-    banner('Testing {}'.format(name))
+def test_partial(name, inline):
+    banner('Testing {} inlining: {}'.format(name, inline))
     results = Results(name)
     for filenames in chunks(os.listdir('.'), parallel()):
         tests = {}
@@ -102,7 +102,10 @@ def test_partial(name):
             basename = os.path.splitext(os.path.basename(filename))[0]
             tests[filename] = os.fork()
             if tests[filename] == 0:
-                step('timeout 10s \'{}\' -is partial.isail -iout {}.iresult {}'.format(sail, basename, filename))
+                if not inline:
+                    step('timeout 10s \'{}\' -is partial.isail -iout {}.iresult {}'.format(sail, basename, filename))
+                else:
+                    step('timeout 10s \'{}\' -is partial_inline.isail -iout {}.iresult {}'.format(sail, basename, filename))
                 step('diff {}.iresult {}.expect'.format(basename, basename))
                 step('rm {}.iresult'.format(basename))
                 print_ok(filename)
@@ -289,7 +292,10 @@ if 'interpreter' in targets:
         print('Skipping interpreter tests because the interpreter is only supported on Unix-like platforms')
 
 if 'partial' in targets:
-    xml += test_partial('partial')
+    xml += test_partial('partial', False)
+
+if 'partial_inline' in targets:
+    xml += test_partial('partial', True)
 
 if 'ocaml' in targets:
     xml += test_ocaml('OCaml')

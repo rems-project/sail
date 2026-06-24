@@ -126,7 +126,7 @@ val option_get_exn : exn -> 'a option -> 'a
 val option_these : 'a option list -> 'a list
 
 (** [option_all xs] extracts the elements of the list [xs] if all of them are wrapped in Some. If any are None then the
-    result is None is None. [option_all []] is [Some []] *)
+    result is None is None. [option_all []] is [Some []]. tail-recursive *)
 val option_all : 'a option list -> 'a list option
 
 val result_all : ('a, 'e) Result.t list -> ('a list, 'e) Result.t

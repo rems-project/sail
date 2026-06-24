@@ -100,6 +100,8 @@ module Tannot = struct
 
   let is_bitvector tannot = is_bitvector_typ (Type_check.typ_of_tannot tannot)
 
+  let annotate l attr tannot = Type_check.map_uannot (add_attribute l attr None) tannot
+
   let fallthrough () = fallthrough ()
 end
 
@@ -112,6 +114,7 @@ module Lattice = Zinterp.R.L
 let zexp_aux_parent = function
   | Z_single (p, _)
   | Z_return p
+  | Z_inline (p, _)
   | Z_exit p
   | Z_pair_1 (p, _, _)
   | Z_pair_2 (p, _, _)
@@ -283,6 +286,7 @@ module Pretty = struct
                        )
                   ^^ break 1 ^^ rbrace
                   )
+            | Z_inline (parent, _) -> string "internal_inlined" ^^ space ^^ hole n
             | Z_if_cond (_, t, e) -> doc_ite (hole n) (doc_exp t) (doc_exp e)
             | Z_if_then (_, (_, i), e) -> doc_ite (doc_residual i) (hole n) (doc_exp e)
             | Z_if_else (_, i, (_, t)) -> doc_ite (doc_residual i) (doc_residual t) (hole n)
@@ -547,6 +551,8 @@ let initial_primops =
       ("modulus", lift Z.rem (Int @-> Int @-> Ret Int));
       ("tmod_int", lift Z.rem (Int @-> Int @-> Ret Int));
       ("eq_int", lift Z.equal (Int @-> Int @-> Ret Bool));
+      ("quot_round_zero", lift Z.div (Int @-> Int @-> Ret Int));
+      ("rem_round_zero", lift Z.rem (Int @-> Int @-> Ret Int));
       ("lt", primop_lt);
       ("gt", primop_gt);
       ("lteq", primop_lteq);
@@ -917,7 +923,7 @@ let preprocess_focus p =
       { p with focus = Extraction.Datatypes.Coq_inl (desugar_loop kind measure cond body) }
   | _ -> p
 
-let mk_interpreter gstate =
+let mk_interpreter ~inlining gstate =
   let open Zinterp.Monad in
   let stack = Stack.create () in
 
@@ -928,7 +934,8 @@ let mk_interpreter gstate =
           | Some v -> (
               match Stack.pop_opt stack with
               | Some cont -> (
-                  match cont v with
+                  let state = Zinterp.R.pop_scope state in
+                  match cont (Return_value v) with
                   | Pure ((ctx', _), focus') -> go state (Pure ((ctx', state), focus'))
                   | other -> go state other
                 )
@@ -938,7 +945,12 @@ let mk_interpreter gstate =
         )
       | Early_return (v, _) -> (
           match Stack.pop_opt stack with
-          | Some cont -> go state (cont v)
+          | Some cont -> (
+              let state = Zinterp.R.pop_scope state in
+              match cont (Return_value v) with
+              | Pure ((ctx', _), focus') -> go state (Pure ((ctx', state), focus'))
+              | other -> go state other
+            )
           | None ->
               (* If we see [E_return e] at the very top of a REPL
                  expression, treat it as [e]
@@ -977,16 +989,18 @@ let mk_interpreter gstate =
                 Stack.push cont stack;
                 {
                   ctx = Z_aux (Z_match_head (Z_top, Match, [], Some arms), annot);
-                  state;
+                  state = Zinterp.R.push_scope state;
                   focus =
                     Extraction.Datatypes.Coq_inr
                       ({ this = Some arg; exn = None; eff = false }, B.mk_id annot (mk_id "funarg#"));
                 }
               )
               else if Type_check.Env.is_outcome id gstate.typecheck_env then
-                go state (cont { this = Some (Lattice.mk_ctor (unaux_id id) args'); exn = None; eff = false })
+                go state
+                  (cont (Return_value { this = Some (Lattice.mk_ctor (unaux_id id) args'); exn = None; eff = false }))
               else if Type_check.Env.is_union_constructor id gstate.typecheck_env then
-                go state (cont { this = Some (Lattice.mk_ctor (unaux_id id) args'); exn = None; eff = false })
+                go state
+                  (cont (Return_value { this = Some (Lattice.mk_ctor (unaux_id id) args'); exn = None; eff = false }))
               else if Type_check.Env.is_extern id gstate.typecheck_env "interpreter" then (
                 let extern = Type_check.Env.get_extern id gstate.typecheck_env "interpreter" in
                 if extern = "reg_deref" then (
@@ -1000,11 +1014,12 @@ let mk_interpreter gstate =
                       )
                     | _ -> Lattice.V_top
                   in
-                  go state (cont { this = Some v; exn = None; eff = false })
+                  go state (cont (Return_value { this = Some v; exn = None; eff = false }))
                 )
                 else (
+                  let is_pure = Type_check.Env.is_pure_extern id gstate.typecheck_env in
                   match StringMap.find_opt extern gstate.primops with
-                  | Some op -> go state (cont { this = Some (op args'); exn = None; eff = false })
+                  | Some op -> go state (cont (Return_value { this = Some (op args'); exn = None; eff = not is_pure }))
                   | None -> failwith ("no primop: " ^ extern)
                 )
               )
@@ -1014,19 +1029,22 @@ let mk_interpreter gstate =
                 match fdef with
                 | None -> (
                     match StringMap.find_opt (string_of_id id) gstate.primops with
-                    | Some op -> go state (cont { this = Some (op args'); exn = None; eff = false })
+                    | Some op -> go state (cont (Return_value { this = Some (op args'); exn = None; eff = false }))
                     | None -> failwith ("unknown function: " ^ string_of_id id)
                   )
                 | Some fdef ->
                     let arms, annot = arms_of_fundef fdef in
-                    Stack.push cont stack;
-                    {
-                      ctx = Z_aux (Z_match_head (Z_top, Match, [], Some arms), annot);
-                      state;
-                      focus =
-                        Extraction.Datatypes.Coq_inr
-                          ({ this = Some arg; exn = None; eff = false }, B.mk_id annot (mk_id "funarg#"));
-                    }
+                    if inlining then go state (cont (Return_inlined arms))
+                    else (
+                      Stack.push cont stack;
+                      {
+                        ctx = Z_aux (Z_match_head (Z_top, Match, [], Some arms), annot);
+                        state = Zinterp.R.push_scope state;
+                        focus =
+                          Extraction.Datatypes.Coq_inr
+                            ({ this = Some arg; exn = None; eff = false }, B.mk_id annot (mk_id "funarg#"));
+                      }
+                    )
               )
           | None -> failwith "bad call"
         )
@@ -1065,10 +1083,10 @@ let bindings_of_match pat (v : Lattice.value) =
    user will get a "Type error" when they later try to read the unbound name,
    which mirrors the prior behaviour. *)
 let from_exp_with_globals gstate exp =
-  let step = mk_interpreter gstate in
+  let step = mk_interpreter ~inlining:false gstate in
   let merge_locals s b =
     Extraction.IdUtil.IdMap.fold
-      (fun id v s -> { s with Zinterp.R.locals = Extraction.IdUtil.IdMap.add id v s.Zinterp.R.locals })
+      (fun id v s -> { s with Zinterp.R.locals = [Extraction.IdUtil.IdMap.add id v (List.hd s.Zinterp.R.locals)] })
       b s
   in
   let state =

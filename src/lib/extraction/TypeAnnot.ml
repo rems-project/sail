@@ -24,5 +24,7 @@ module type S =
 
   val is_bitvector : t -> bool
 
+  val annotate : Parse_ast.l -> string -> t -> t
+
   val fallthrough : unit -> t pexp
  end

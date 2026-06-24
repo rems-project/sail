@@ -134,6 +134,7 @@ type match_case =
 type ('v, 'r, 's, 'a) zexp_aux =
 | Z_single of ('v, 'r, 's, 'a) zexp * single_case
 | Z_return of ('v, 'r, 's, 'a) zexp
+| Z_inline of ('v, 'r, 's, 'a) zexp * 'r option
 | Z_exit of ('v, 'r, 's, 'a) zexp
 | Z_pair_1 of ('v, 'r, 's, 'a) zexp * pair_case * 'a exp
 | Z_pair_2 of ('v, 'r, 's, 'a) zexp * pair_case * 'r
@@ -288,6 +289,12 @@ module ExpBuilder =
   let mk_return ann x =
     E_aux ((E_return x), ann)
 
+  (** val mk_inline : Tannot.t annot -> t -> Tannot.t exp **)
+
+  let mk_inline ann x =
+    let (loc, tannot) = ann in
+    E_aux ((E_block (x :: [])), (loc, (Tannot.annotate loc "inline" tannot)))
+
   (** val mk_single : Tannot.t annot -> single_case -> t -> Tannot.t exp **)
 
   let mk_single ann c x =
@@ -369,6 +376,8 @@ module Residual =
 
   val mk_return : Tannot__3.t annot -> t -> t
 
+  val mk_inline : Tannot__3.t annot -> t -> t
+
   val mk_single : Tannot__3.t annot -> single_case -> t -> t
 
   val mk_var : Tannot__3.t annot -> Tannot__3.t zlexp -> t list -> t -> t -> t
@@ -404,9 +413,9 @@ module Residual =
   let eff v =
     v.eff
 
-  type state = { locals : L.t IdMap.t; registers : L.t IdMap.t }
+  type state = { locals : L.t IdMap.t list; registers : L.t IdMap.t }
 
-  (** val locals : state -> L.t IdMap.t **)
+  (** val locals : state -> L.t IdMap.t list **)
 
   let locals s =
     s.locals
@@ -597,6 +606,27 @@ module Residual =
     ({ this = None; exn = (fst r).exn; eff = true },
       (B.mk_return ann (snd r)))
 
+  (** val join_returns : t option -> t -> t **)
+
+  let join_returns acc ret =
+    match acc with
+    | Some a ->
+      ({ this = (bounded_join (fst a).this (fst ret).this); exn =
+        (bounded_join (fst a).exn (fst ret).exn); eff =
+        ((||) (fst a).eff (fst ret).eff) }, (snd ret))
+    | None -> ret
+
+  (** val mk_inline : Tannot__3.t annot -> t option -> t -> value * B.t **)
+
+  let mk_inline ann acc r =
+    let this' =
+      match acc with
+      | Some a -> bounded_join (fst a).this (fst r).this
+      | None -> (fst r).this
+    in
+    ({ this = this'; exn = (fst r).exn; eff = false },
+    (B.mk_inline ann (snd r)))
+
   (** val mk_single : Tannot__3.t annot -> single_case -> t -> value * B.t **)
 
   let mk_single ann c r =
@@ -701,13 +731,13 @@ module Residual =
   (** val empty : state **)
 
   let empty =
-    { locals = IdMap.empty; registers = IdMap.empty }
+    { locals = (IdMap.empty :: []); registers = IdMap.empty }
 
   (** val join : state -> state -> state **)
 
   let join _UU03c3__UU2081_ _UU03c3__UU2082_ =
     { locals =
-      (IdMap.map2 bounded_join _UU03c3__UU2081_.locals
+      (zip_with (IdMap.map2 bounded_join) _UU03c3__UU2081_.locals
         _UU03c3__UU2082_.locals);
       registers =
       (IdMap.map2 bounded_join _UU03c3__UU2081_.registers
@@ -745,10 +775,37 @@ module Residual =
      | [] -> empty
      | _UU03c3_ :: rest -> fold_left join rest _UU03c3_)
 
+  (** val push_scope : state -> state **)
+
+  let push_scope _UU03c3_ =
+    { locals = (IdMap.empty :: _UU03c3_.locals); registers =
+      _UU03c3_.registers }
+
+  (** val pop_scope : state -> state **)
+
+  let pop_scope _UU03c3_ =
+    match _UU03c3_.locals with
+    | [] -> _UU03c3_
+    | _ :: rest ->
+      (match rest with
+       | [] -> _UU03c3_
+       | _ :: _ -> { locals = rest; registers = _UU03c3_.registers })
+
+  (** val lookup_local :
+      Parse_ast.l -> L.t IdMap.t list -> id -> L.t option **)
+
+  let rec lookup_local l0 locals0 id0 =
+    match locals0 with
+    | [] -> None
+    | top0 :: stack ->
+      (match IdMap.find id0 top0 with
+       | Some v -> Some v
+       | None -> lookup_local l0 stack id0)
+
   (** val lookup : Parse_ast.l -> state -> id -> (Parse_ast.l, L.t) sum **)
 
   let lookup l0 _UU03c3_ id0 =
-    match IdMap.find id0 _UU03c3_.locals with
+    match lookup_local l0 _UU03c3_.locals id0 with
     | Some v -> Coq_inr v
     | None ->
       (match IdMap.find id0 _UU03c3_.registers with
@@ -875,21 +932,22 @@ module Residual =
   (** val state_lookup : state -> id -> L.t **)
 
   let state_lookup _UU03c3_ id0 =
-    match IdMap.find id0 _UU03c3_.locals with
-    | Some b -> b
-    | None ->
-      (match IdMap.find id0 _UU03c3_.registers with
-       | Some b -> b
-       | None -> L.top)
+    match lookup Parse_ast.Unknown _UU03c3_ id0 with
+    | Coq_inl _ -> L.top
+    | Coq_inr v -> v
 
   (** val assign_id : id -> L.t -> state -> state **)
 
   let assign_id id0 new_v _UU03c3_ =
-    if IdMap.mem id0 _UU03c3_.registers
-    then { locals = _UU03c3_.locals; registers =
-           (IdMap.add id0 new_v _UU03c3_.registers) }
-    else { locals = (IdMap.add id0 new_v _UU03c3_.locals); registers =
-           _UU03c3_.registers }
+    match _UU03c3_.locals with
+    | [] ->
+      { locals = []; registers = (IdMap.add id0 new_v _UU03c3_.registers) }
+    | top0 :: stack ->
+      if IdMap.mem id0 _UU03c3_.registers
+      then { locals = _UU03c3_.locals; registers =
+             (IdMap.add id0 new_v _UU03c3_.registers) }
+      else { locals = ((IdMap.add id0 new_v top0) :: stack); registers =
+             _UU03c3_.registers }
 
   (** val assign_via_path :
       Tannot__3.t zlexp -> t list -> L.t -> state -> state **)
@@ -932,34 +990,26 @@ module Residual =
        | None -> None)
     | None -> None
 
-  (** val assign : Tannot__3.t zlexp -> t list -> t -> state -> state **)
+  (** val assign_value :
+      Tannot__3.t zlexp -> t list -> L.t -> state -> state * t list **)
 
-  let assign zl rs exp0 _UU03c3_ =
-    let v = match (fst exp0).this with
-            | Some v -> v
-            | None -> L.top in
+  let rec assign_value zl rs v _UU03c3_ =
     let LZ_aux (aux, _) = zl in
     (match aux with
      | LZ_tuple ls ->
        (match v with
         | L.V_tuple vs ->
-          fst
-            (let rec go ls0 vs0 rs0 _UU03c3_0 =
-               match ls0 with
+          let rec go ls0 vs0 rs0 _UU03c3_0 =
+            match ls0 with
+            | [] -> (_UU03c3_0, rs0)
+            | l0 :: ls' ->
+              (match vs0 with
                | [] -> (_UU03c3_0, rs0)
-               | l0 :: ls' ->
-                 (match vs0 with
-                  | [] -> (_UU03c3_0, rs0)
-                  | v0 :: vs' ->
-                    let _UU03c3_' = assign_via_path l0 rs0 v0 _UU03c3_0 in
-                    let rs' =
-                      match zlexp_path l0 rs0 with
-                      | Some p -> let (_, leftover) = p in leftover
-                      | None -> rs0
-                    in
-                    go ls' vs' rs' _UU03c3_')
-             in go ls vs rs _UU03c3_)
-        | _ -> _UU03c3_)
+               | v0 :: vs' ->
+                 let (_UU03c3_', rs') = assign_value l0 rs0 v0 _UU03c3_0 in
+                 go ls' vs' rs' _UU03c3_')
+          in go ls vs rs _UU03c3_
+        | _ -> (_UU03c3_, rs))
      | LZ_vector_concat ls ->
        (match v with
         | L.V_bitvector _ ->
@@ -967,32 +1017,50 @@ module Residual =
            | L.V_int i ->
              (match L.int_concrete i with
               | Some total ->
-                fst
-                  (let rec go ls0 rs0 cur_hi _UU03c3_0 =
-                     match ls0 with
-                     | [] -> (_UU03c3_0, rs0)
-                     | l0 :: ls' ->
-                       (match zlexp_subwidth l0 rs0 with
-                        | Some w ->
-                          let lo =
-                            Z.sub (Z.add cur_hi Big_int_Z.unit_big_int) w
-                          in
-                          let sliced = L.bv_slice v (Z.to_N lo) (Z.to_N w) in
-                          let _UU03c3_' =
-                            assign_via_path l0 rs0 sliced _UU03c3_0
-                          in
-                          let rs' =
-                            match zlexp_path l0 rs0 with
-                            | Some p -> let (_, leftover) = p in leftover
-                            | None -> rs0
-                          in
-                          go ls' rs' (Z.sub cur_hi w) _UU03c3_'
-                        | None -> (_UU03c3_0, rs0))
-                   in go ls rs (Z.sub total Big_int_Z.unit_big_int) _UU03c3_)
-              | None -> _UU03c3_)
-           | _ -> _UU03c3_)
-        | _ -> _UU03c3_)
-     | _ -> assign_via_path zl rs v _UU03c3_)
+                let rec go ls0 rs0 cur_hi _UU03c3_0 =
+                  match ls0 with
+                  | [] -> (_UU03c3_0, rs0)
+                  | l0 :: ls' ->
+                    (match zlexp_subwidth l0 rs0 with
+                     | Some w ->
+                       let lo = Z.sub (Z.add cur_hi Big_int_Z.unit_big_int) w
+                       in
+                       let sliced = L.bv_slice v (Z.to_N lo) (Z.to_N w) in
+                       let _UU03c3_' = assign_via_path l0 rs0 sliced _UU03c3_0
+                       in
+                       let rs' =
+                         match zlexp_path l0 rs0 with
+                         | Some p -> let (_, leftover) = p in leftover
+                         | None -> rs0
+                       in
+                       go ls' rs' (Z.sub cur_hi w) _UU03c3_'
+                     | None -> (_UU03c3_0, rs0))
+                in go ls rs (Z.sub total Big_int_Z.unit_big_int) _UU03c3_
+              | None -> (_UU03c3_, rs))
+           | _ -> (_UU03c3_, rs))
+        | _ -> (_UU03c3_, rs))
+     | _ ->
+       (match zlexp_path zl rs with
+        | Some p ->
+          let (p0, leftover) = p in
+          let (id0, path) = p0 in
+          let _UU03c3_' =
+            match path with
+            | [] -> assign_id id0 v _UU03c3_
+            | _ :: _ ->
+              assign_id id0 (apply_path (state_lookup _UU03c3_ id0) path v)
+                _UU03c3_
+          in
+          (_UU03c3_', leftover)
+        | None -> (_UU03c3_, rs)))
+
+  (** val assign : Tannot__3.t zlexp -> t list -> t -> state -> state **)
+
+  let assign zl rs exp0 _UU03c3_ =
+    let v = match (fst exp0).this with
+            | Some v -> v
+            | None -> L.top in
+    fst (assign_value zl rs v _UU03c3_)
  end
 
 module Make =
@@ -1026,6 +1094,8 @@ module Make =
 
   val mk_return : Tannot__5.t annot -> t -> t
 
+  val mk_inline : Tannot__5.t annot -> t -> t
+
   val mk_single : Tannot__5.t annot -> single_case -> t -> t
 
   val mk_var : Tannot__5.t annot -> Tannot__5.t zlexp -> t list -> t -> t -> t
@@ -1046,11 +1116,32 @@ module Make =
 
   module Monad =
    struct
+    type function_return =
+    | Return_inlined of ((Tannot__5.t pat * Tannot__5.t exp
+                        option) * Tannot__5.t exp) list
+    | Return_value of R.value
+
+    (** val function_return_rect :
+        (((Tannot__5.t pat * Tannot__5.t exp option) * Tannot__5.t exp) list
+        -> 'a1) -> (R.value -> 'a1) -> function_return -> 'a1 **)
+
+    let function_return_rect f f0 = function
+    | Return_inlined l0 -> f l0
+    | Return_value v -> f0 v
+
+    (** val function_return_rec :
+        (((Tannot__5.t pat * Tannot__5.t exp option) * Tannot__5.t exp) list
+        -> 'a1) -> (R.value -> 'a1) -> function_return -> 'a1 **)
+
+    let function_return_rec f f0 = function
+    | Return_inlined l0 -> f l0
+    | Return_value v -> f0 v
+
     type 'a t =
     | Pure of 'a
     | Early_return of R.value * (unit -> 'a t)
     | Exit of R.value * (unit -> 'a t)
-    | Call of id * R.value list * (R.value -> 'a t)
+    | Call of id * R.value list * (function_return -> 'a t)
     | Get_config of string list * (R.value -> 'a t)
     | Runtime_type_error of Parse_ast.l
     | Get_undefined of typ * (R.value -> 'a t)
@@ -1058,10 +1149,10 @@ module Make =
     (** val t_rect :
         ('a1 -> 'a2) -> (R.value -> (unit -> 'a1 t) -> (unit -> 'a2) -> 'a2)
         -> (R.value -> (unit -> 'a1 t) -> (unit -> 'a2) -> 'a2) -> (id ->
-        R.value list -> (R.value -> 'a1 t) -> (R.value -> 'a2) -> 'a2) ->
-        (string list -> (R.value -> 'a1 t) -> (R.value -> 'a2) -> 'a2) ->
-        (Parse_ast.l -> 'a2) -> (typ -> (R.value -> 'a1 t) -> (R.value ->
-        'a2) -> 'a2) -> 'a1 t -> 'a2 **)
+        R.value list -> (function_return -> 'a1 t) -> (function_return ->
+        'a2) -> 'a2) -> (string list -> (R.value -> 'a1 t) -> (R.value ->
+        'a2) -> 'a2) -> (Parse_ast.l -> 'a2) -> (typ -> (R.value -> 'a1 t) ->
+        (R.value -> 'a2) -> 'a2) -> 'a1 t -> 'a2 **)
 
     let rec t_rect f f0 f1 f2 f3 f4 f5 = function
     | Pure y -> f y
@@ -1069,7 +1160,7 @@ module Make =
       f0 v t1 (fun u -> t_rect f f0 f1 f2 f3 f4 f5 (t1 u))
     | Exit (v, t1) -> f1 v t1 (fun u -> t_rect f f0 f1 f2 f3 f4 f5 (t1 u))
     | Call (i, l0, t1) ->
-      f2 i l0 t1 (fun v -> t_rect f f0 f1 f2 f3 f4 f5 (t1 v))
+      f2 i l0 t1 (fun f6 -> t_rect f f0 f1 f2 f3 f4 f5 (t1 f6))
     | Get_config (l0, t1) ->
       f3 l0 t1 (fun v -> t_rect f f0 f1 f2 f3 f4 f5 (t1 v))
     | Runtime_type_error l0 -> f4 l0
@@ -1079,10 +1170,10 @@ module Make =
     (** val t_rec :
         ('a1 -> 'a2) -> (R.value -> (unit -> 'a1 t) -> (unit -> 'a2) -> 'a2)
         -> (R.value -> (unit -> 'a1 t) -> (unit -> 'a2) -> 'a2) -> (id ->
-        R.value list -> (R.value -> 'a1 t) -> (R.value -> 'a2) -> 'a2) ->
-        (string list -> (R.value -> 'a1 t) -> (R.value -> 'a2) -> 'a2) ->
-        (Parse_ast.l -> 'a2) -> (typ -> (R.value -> 'a1 t) -> (R.value ->
-        'a2) -> 'a2) -> 'a1 t -> 'a2 **)
+        R.value list -> (function_return -> 'a1 t) -> (function_return ->
+        'a2) -> 'a2) -> (string list -> (R.value -> 'a1 t) -> (R.value ->
+        'a2) -> 'a2) -> (Parse_ast.l -> 'a2) -> (typ -> (R.value -> 'a1 t) ->
+        (R.value -> 'a2) -> 'a2) -> 'a1 t -> 'a2 **)
 
     let rec t_rec f f0 f1 f2 f3 f4 f5 = function
     | Pure y -> f y
@@ -1090,7 +1181,7 @@ module Make =
       f0 v t1 (fun u -> t_rec f f0 f1 f2 f3 f4 f5 (t1 u))
     | Exit (v, t1) -> f1 v t1 (fun u -> t_rec f f0 f1 f2 f3 f4 f5 (t1 u))
     | Call (i, l0, t1) ->
-      f2 i l0 t1 (fun v -> t_rec f f0 f1 f2 f3 f4 f5 (t1 v))
+      f2 i l0 t1 (fun f6 -> t_rec f f0 f1 f2 f3 f4 f5 (t1 f6))
     | Get_config (l0, t1) ->
       f3 l0 t1 (fun v -> t_rec f f0 f1 f2 f3 f4 f5 (t1 v))
     | Runtime_type_error l0 -> f4 l0
@@ -1133,6 +1224,7 @@ module Make =
       (match aux with
        | Z_single (parent, _) -> lookup parent id0
        | Z_return parent -> lookup parent id0
+       | Z_inline (_, _) -> None
        | Z_exit parent -> lookup parent id0
        | Z_pair_1 (parent, _, _) -> lookup parent id0
        | Z_pair_2 (parent, _, _) -> lookup parent id0
@@ -1197,8 +1289,16 @@ module Make =
      | E_app (f, xs) ->
        (match xs with
         | [] ->
-          Monad.bind (Monad.Call (f, [], pure)) (fun r ->
-            pure ((ctx, _UU03c3_), (Coq_inr (r, (B.mk_app annot0 f [])))))
+          Monad.bind (Monad.Call (f, [], pure)) (fun ret ->
+            match ret with
+            | Monad.Return_inlined arms ->
+              pure (((Z_aux ((Z_match_head ((Z_aux ((Z_inline (ctx, None)),
+                annot0)), Match, [], (Some arms))), annot0)),
+                (R.push_scope _UU03c3_)), (Coq_inr
+                ((R.from_semilattice L.V_unit),
+                (B.mk_literal annot0 (L_aux (L_unit, (fst annot0)))))))
+            | Monad.Return_value r ->
+              pure ((ctx, _UU03c3_), (Coq_inr (r, (B.mk_app annot0 f [])))))
         | x :: xs0 -> wrap (Z_app (ctx, f, [], xs0)) x)
      | E_tuple exps ->
        (match exps with
@@ -1266,6 +1366,82 @@ module Make =
        wrap (Z_single (ctx, (Internal_assume constr))) exp0
      | _ -> Monad.Runtime_type_error (fst annot0))
 
+  (** val join_inline_return : R.t -> t -> t option **)
+
+  let rec join_inline_return ret = function
+  | Z_aux (aux, annot0) ->
+    (match aux with
+     | Z_single (parent, c) ->
+       option_map (fun p -> Z_aux ((Z_single (p, c)), annot0))
+         (join_inline_return ret parent)
+     | Z_return parent ->
+       option_map (fun p -> Z_aux ((Z_return p), annot0))
+         (join_inline_return ret parent)
+     | Z_inline (parent, acc) ->
+       Some (Z_aux ((Z_inline (parent, (Some (R.join_returns acc ret)))),
+         annot0))
+     | Z_exit parent ->
+       option_map (fun p -> Z_aux ((Z_exit p), annot0))
+         (join_inline_return ret parent)
+     | Z_pair_1 (parent, c, e) ->
+       option_map (fun p -> Z_aux ((Z_pair_1 (p, c, e)), annot0))
+         (join_inline_return ret parent)
+     | Z_pair_2 (parent, c, r) ->
+       option_map (fun p -> Z_aux ((Z_pair_2 (p, c, r)), annot0))
+         (join_inline_return ret parent)
+     | Z_list (parent, c, rs, es) ->
+       option_map (fun p -> Z_aux ((Z_list (p, c, rs, es)), annot0))
+         (join_inline_return ret parent)
+     | Z_app (parent, f, rs, es) ->
+       option_map (fun p -> Z_aux ((Z_app (p, f, rs, es)), annot0))
+         (join_inline_return ret parent)
+     | Z_block (parent, rs, es) ->
+       option_map (fun p -> Z_aux ((Z_block (p, rs, es)), annot0))
+         (join_inline_return ret parent)
+     | Z_if_cond (parent, thn, els) ->
+       option_map (fun p -> Z_aux ((Z_if_cond (p, thn, els)), annot0))
+         (join_inline_return ret parent)
+     | Z_if_then (parent, sr, els) ->
+       option_map (fun p -> Z_aux ((Z_if_then (p, sr, els)), annot0))
+         (join_inline_return ret parent)
+     | Z_if_else (parent, thn, sr) ->
+       option_map (fun p -> Z_aux ((Z_if_else (p, thn, sr)), annot0))
+         (join_inline_return ret parent)
+     | Z_match_head (parent, mc, ev, un) ->
+       option_map (fun p -> Z_aux ((Z_match_head (p, mc, ev, un)), annot0))
+         (join_inline_return ret parent)
+     | Z_match_arms_guard (parent, mc, bnd, sr, ev, pt, gm, bd, un) ->
+       option_map (fun p -> Z_aux ((Z_match_arms_guard (p, mc, bnd, sr, ev,
+         pt, gm, bd, un)), annot0)) (join_inline_return ret parent)
+     | Z_match_arms_body (parent, mc, bnd, sr, ev, pt, gd, un) ->
+       option_map (fun p -> Z_aux ((Z_match_arms_body (p, mc, bnd, sr, ev,
+         pt, gd, un)), annot0)) (join_inline_return ret parent)
+     | Z_assign_left (parent, l0, rs, es, e) ->
+       option_map (fun p -> Z_aux ((Z_assign_left (p, l0, rs, es, e)),
+         annot0)) (join_inline_return ret parent)
+     | Z_assign_right (parent, l0, rs) ->
+       option_map (fun p -> Z_aux ((Z_assign_right (p, l0, rs)), annot0))
+         (join_inline_return ret parent)
+     | Z_var_left (parent, l0, rs, es, e1, e2) ->
+       option_map (fun p -> Z_aux ((Z_var_left (p, l0, rs, es, e1, e2)),
+         annot0)) (join_inline_return ret parent)
+     | Z_var_right (parent, l0, rs, e) ->
+       option_map (fun p -> Z_aux ((Z_var_right (p, l0, rs, e)), annot0))
+         (join_inline_return ret parent)
+     | Z_var_body (parent, l0, rs, r) ->
+       option_map (fun p -> Z_aux ((Z_var_body (p, l0, rs, r)), annot0))
+         (join_inline_return ret parent)
+     | Z_struct (parent, sn, rs, f, fes) ->
+       option_map (fun p -> Z_aux ((Z_struct (p, sn, rs, f, fes)), annot0))
+         (join_inline_return ret parent)
+     | Z_struct_update_base (parent, sn, fes) ->
+       option_map (fun p -> Z_aux ((Z_struct_update_base (p, sn, fes)),
+         annot0)) (join_inline_return ret parent)
+     | Z_struct_update (parent, sn, r, rs, f, fes) ->
+       option_map (fun p -> Z_aux ((Z_struct_update (p, sn, r, rs, f, fes)),
+         annot0)) (join_inline_return ret parent))
+  | Z_top -> None
+
   (** val next :
       (L.t IdMap.t, R.t, R.state, Tannot__5.t) zexp_aux -> Tannot__5.t annot
       -> R.state -> R.t -> ((t * R.state) * (Tannot__5.t exp, R.t) sum)
@@ -1276,8 +1452,15 @@ module Make =
     | Z_single (parent, _UU03b3_) ->
       pure ((parent, _UU03c3_), (Coq_inr (R.mk_single annot0 _UU03b3_ focus)))
     | Z_return parent ->
-      Monad.bind (Monad.Early_return ((fst focus), pure)) (fun _ ->
-        pure ((parent, _UU03c3_), (Coq_inr (R.mk_return annot0 focus))))
+      (match join_inline_return focus parent with
+       | Some parent' ->
+         pure ((parent', _UU03c3_), (Coq_inr (R.mk_return annot0 focus)))
+       | None ->
+         Monad.bind (Monad.Early_return ((fst focus), pure)) (fun _ ->
+           pure ((parent, _UU03c3_), (Coq_inr (R.mk_return annot0 focus)))))
+    | Z_inline (parent, acc) ->
+      pure ((parent, (R.pop_scope _UU03c3_)), (Coq_inr
+        (R.mk_inline annot0 acc focus)))
     | Z_exit parent ->
       Monad.bind (Monad.Exit ((fst focus), pure)) (fun _ ->
         pure ((parent, _UU03c3_), (Coq_inr (R.mk_exit annot0 focus))))
@@ -1303,9 +1486,22 @@ module Make =
             (match unevaluated with
              | [] ->
                Monad.bind (Monad.Call (f,
-                 (rev (map fst (focus :: evaluated))), pure)) (fun r ->
-                 pure ((parent, _UU03c3_), (Coq_inr (r,
-                   (B.mk_app annot0 f (rev (map snd (focus :: evaluated))))))))
+                 (rev (map fst (focus :: evaluated))), pure)) (fun ret ->
+                 match ret with
+                 | Monad.Return_inlined arms ->
+                   (match evaluated with
+                    | [] ->
+                      pure (((Z_aux ((Z_match_head ((Z_aux ((Z_inline
+                        (parent, None)), annot0)), Match, [], (Some arms))),
+                        annot0)), (R.push_scope _UU03c3_)), (Coq_inr focus))
+                    | _ :: _ ->
+                      pure (((Z_aux ((Z_match_head ((Z_aux ((Z_inline
+                        (parent, None)), annot0)), Match, [], (Some arms))),
+                        annot0)), (R.push_scope _UU03c3_)), (Coq_inr
+                        (R.mk_list annot0 Tuple (focus :: evaluated)))))
+                 | Monad.Return_value r ->
+                   pure ((parent, _UU03c3_), (Coq_inr (r,
+                     (B.mk_app annot0 f (rev (map snd (focus :: evaluated))))))))
              | u :: us ->
                (match us with
                 | [] ->
@@ -1326,9 +1522,22 @@ module Make =
             (match unevaluated with
              | [] ->
                Monad.bind (Monad.Call (f,
-                 (rev (map fst (focus :: evaluated))), pure)) (fun r ->
-                 pure ((parent, _UU03c3_), (Coq_inr (r,
-                   (B.mk_app annot0 f (rev (map snd (focus :: evaluated))))))))
+                 (rev (map fst (focus :: evaluated))), pure)) (fun ret ->
+                 match ret with
+                 | Monad.Return_inlined arms ->
+                   (match evaluated with
+                    | [] ->
+                      pure (((Z_aux ((Z_match_head ((Z_aux ((Z_inline
+                        (parent, None)), annot0)), Match, [], (Some arms))),
+                        annot0)), (R.push_scope _UU03c3_)), (Coq_inr focus))
+                    | _ :: _ ->
+                      pure (((Z_aux ((Z_match_head ((Z_aux ((Z_inline
+                        (parent, None)), annot0)), Match, [], (Some arms))),
+                        annot0)), (R.push_scope _UU03c3_)), (Coq_inr
+                        (R.mk_list annot0 Tuple (focus :: evaluated)))))
+                 | Monad.Return_value r ->
+                   pure ((parent, _UU03c3_), (Coq_inr (r,
+                     (B.mk_app annot0 f (rev (map snd (focus :: evaluated))))))))
              | u :: us ->
                pure (((Z_aux ((Z_app (parent, f, (focus :: evaluated), us)),
                  annot0)), _UU03c3_), (Coq_inl u))))
@@ -1338,9 +1547,22 @@ module Make =
             (match unevaluated with
              | [] ->
                Monad.bind (Monad.Call (f,
-                 (rev (map fst (focus :: evaluated))), pure)) (fun r ->
-                 pure ((parent, _UU03c3_), (Coq_inr (r,
-                   (B.mk_app annot0 f (rev (map snd (focus :: evaluated))))))))
+                 (rev (map fst (focus :: evaluated))), pure)) (fun ret ->
+                 match ret with
+                 | Monad.Return_inlined arms ->
+                   (match evaluated with
+                    | [] ->
+                      pure (((Z_aux ((Z_match_head ((Z_aux ((Z_inline
+                        (parent, None)), annot0)), Match, [], (Some arms))),
+                        annot0)), (R.push_scope _UU03c3_)), (Coq_inr focus))
+                    | _ :: _ ->
+                      pure (((Z_aux ((Z_match_head ((Z_aux ((Z_inline
+                        (parent, None)), annot0)), Match, [], (Some arms))),
+                        annot0)), (R.push_scope _UU03c3_)), (Coq_inr
+                        (R.mk_list annot0 Tuple (focus :: evaluated)))))
+                 | Monad.Return_value r ->
+                   pure ((parent, _UU03c3_), (Coq_inr (r,
+                     (B.mk_app annot0 f (rev (map snd (focus :: evaluated))))))))
              | u :: us ->
                (match us with
                 | [] ->
@@ -1361,9 +1583,22 @@ module Make =
             (match unevaluated with
              | [] ->
                Monad.bind (Monad.Call (f,
-                 (rev (map fst (focus :: evaluated))), pure)) (fun r ->
-                 pure ((parent, _UU03c3_), (Coq_inr (r,
-                   (B.mk_app annot0 f (rev (map snd (focus :: evaluated))))))))
+                 (rev (map fst (focus :: evaluated))), pure)) (fun ret ->
+                 match ret with
+                 | Monad.Return_inlined arms ->
+                   (match evaluated with
+                    | [] ->
+                      pure (((Z_aux ((Z_match_head ((Z_aux ((Z_inline
+                        (parent, None)), annot0)), Match, [], (Some arms))),
+                        annot0)), (R.push_scope _UU03c3_)), (Coq_inr focus))
+                    | _ :: _ ->
+                      pure (((Z_aux ((Z_match_head ((Z_aux ((Z_inline
+                        (parent, None)), annot0)), Match, [], (Some arms))),
+                        annot0)), (R.push_scope _UU03c3_)), (Coq_inr
+                        (R.mk_list annot0 Tuple (focus :: evaluated)))))
+                 | Monad.Return_value r ->
+                   pure ((parent, _UU03c3_), (Coq_inr (r,
+                     (B.mk_app annot0 f (rev (map snd (focus :: evaluated))))))))
              | u :: us ->
                pure (((Z_aux ((Z_app (parent, f, (focus :: evaluated), us)),
                  annot0)), _UU03c3_), (Coq_inl u))))
@@ -1371,9 +1606,22 @@ module Make =
          (match unevaluated with
           | [] ->
             Monad.bind (Monad.Call (f, (rev (map fst (focus :: evaluated))),
-              pure)) (fun r ->
-              pure ((parent, _UU03c3_), (Coq_inr (r,
-                (B.mk_app annot0 f (rev (map snd (focus :: evaluated))))))))
+              pure)) (fun ret ->
+              match ret with
+              | Monad.Return_inlined arms ->
+                (match evaluated with
+                 | [] ->
+                   pure (((Z_aux ((Z_match_head ((Z_aux ((Z_inline (parent,
+                     None)), annot0)), Match, [], (Some arms))), annot0)),
+                     (R.push_scope _UU03c3_)), (Coq_inr focus))
+                 | _ :: _ ->
+                   pure (((Z_aux ((Z_match_head ((Z_aux ((Z_inline (parent,
+                     None)), annot0)), Match, [], (Some arms))), annot0)),
+                     (R.push_scope _UU03c3_)), (Coq_inr
+                     (R.mk_list annot0 Tuple (focus :: evaluated)))))
+              | Monad.Return_value r ->
+                pure ((parent, _UU03c3_), (Coq_inr (r,
+                  (B.mk_app annot0 f (rev (map snd (focus :: evaluated))))))))
           | u :: us ->
             pure (((Z_aux ((Z_app (parent, f, (focus :: evaluated), us)),
               annot0)), _UU03c3_), (Coq_inl u))))
@@ -1383,8 +1631,7 @@ module Make =
          pure ((parent, _UU03c3_), (Coq_inr
            (R.mk_block annot0 (focus :: evaluated))))
        | u :: us ->
-         if (&&) (is_none (R.this (fst focus)))
-              (negb (is_none (R.exn (fst focus))))
+         if is_none (R.this (fst focus))
          then pure ((parent, _UU03c3_), (Coq_inr focus))
          else if R.is_unit (fst focus)
               then pure (((Z_aux ((Z_block (parent, evaluated, us)),
@@ -1393,9 +1640,11 @@ module Make =
                      us)), annot0)), _UU03c3_), (Coq_inl u)))
     | Z_if_cond (parent, t0, e) ->
       if R.is_true (fst focus)
-      then pure ((parent, _UU03c3_), (Coq_inl t0))
+      then pure (((Z_aux ((Z_block (parent, (focus :: []), [])), annot0)),
+             _UU03c3_), (Coq_inl t0))
       else if R.is_false (fst focus)
-           then pure ((parent, _UU03c3_), (Coq_inl e))
+           then pure (((Z_aux ((Z_block (parent, (focus :: []), [])),
+                  annot0)), _UU03c3_), (Coq_inl e))
            else pure (((Z_aux ((Z_if_then (parent, (_UU03c3_, focus), e)),
                   annot0)), _UU03c3_), (Coq_inl t0))
     | Z_if_then (parent, p, e) ->

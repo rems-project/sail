@@ -269,6 +269,10 @@ Inductive match_case : Set :=
 Inductive zexp_aux {V : Type} {R : Set} {S : Type} {A : Set} : Type :=
 | Z_single : zexp → single_case → zexp_aux
 | Z_return : zexp → zexp_aux
+(* The [option R] accumulates the join of every value the inlined function body
+   has [return]ed early, so that returns from speculative branches are joined
+   rather than escaping the whole computation. *)
+| Z_inline : zexp → option R → zexp_aux
 | Z_exit : zexp → zexp_aux
 | Z_pair_1 : zexp → pair_case → exp A → zexp_aux
 | Z_pair_2 : zexp → pair_case → R → zexp_aux
@@ -358,6 +362,7 @@ Module Type Builder (Tannot : TypeAnnot.S).
   Parameter mk_pair    : annot Tannot.t → pair_case → t → t → t.
   Parameter mk_ref     : annot Tannot.t → id → t.
   Parameter mk_return  : annot Tannot.t → t → t.
+  Parameter mk_inline  : annot Tannot.t → t → t.
   Parameter mk_single  : annot Tannot.t → single_case → t → t.
   Parameter mk_var     : annot Tannot.t → zlexp Tannot.t → list t → t → t → t.
   Parameter mk_assign  : annot Tannot.t → zlexp Tannot.t → list t → t → t.
@@ -381,6 +386,7 @@ Module UnitBuilder (Tannot : TypeAnnot.S) <: Builder(Tannot).
   Definition mk_pair    (_ : annot Tannot.t) (_ : pair_case) (_ : t) (_ : t) := tt.
   Definition mk_ref     (_ : annot Tannot.t) (_ : id) := tt.
   Definition mk_return  (_ : annot Tannot.t) (_ : t) := tt.
+  Definition mk_inline  (_ : annot Tannot.t) (_ : t) := tt.
   Definition mk_single  (_ : annot Tannot.t) (_ : single_case) (_ : t) := tt.
   Definition mk_var     (_ : annot Tannot.t) (_ : zlexp Tannot.t) (_ : list t) (_ : t) (_ : t) := tt.
   Definition mk_assign  (_ : annot Tannot.t) (_ : zlexp Tannot.t) (_ : list t) (_ : t) := tt.
@@ -449,6 +455,10 @@ Module ExpBuilder (Tannot : TypeAnnot.S) <: Builder(Tannot).
 
   Definition mk_return (ann : annot Tannot.t) (x : t) := E_aux (E_return x) ann.
 
+  Definition mk_inline (ann : annot Tannot.t) (x : t) :=
+    let '(loc, tannot) := ann in
+    E_aux (E_block [x]) (loc, Tannot.annotate loc "inline" tannot).
+
   Definition mk_single (ann : annot Tannot.t) (c : single_case) (x : t) :=
     match c with
     | Field fld => E_aux (E_field x fld) ann
@@ -501,7 +511,7 @@ Module Residual (Tannot : TypeAnnot.S) (B : Builder Tannot).
     }.
 
   Record state := {
-      locals    : IdMap.t L.t;
+      locals    : list (IdMap.t L.t);
       registers : IdMap.t L.t;
     }.
 
@@ -647,6 +657,26 @@ Module Residual (Tannot : TypeAnnot.S) (B : Builder Tannot).
   Definition mk_return (ann : annot Tannot.t) (r : t) :=
     ({| this := ⊥; exn := exn (fst r); eff := true |}, B.mk_return ann (snd r)).
 
+  (* Join a value returned early from an inlined body into the accumulator
+     carried on the enclosing [Z_inline] node. Only [this]/[exn]/[eff] matter;
+     the residual is provided by the fall-through value, so we keep [snd ret]. *)
+  Definition join_returns (acc : option t) (ret : t) : t :=
+    match acc with
+    | None => ret
+    | Some a =>
+        ({| this := this (fst a) ⊔ this (fst ret);
+            exn  := exn (fst a) ⊔ exn (fst ret);
+            eff  := eff (fst a) || eff (fst ret) |}, snd ret)
+    end.
+
+  (* [acc] is the join of every value the inlined body [return]ed early, and [r]
+     is the value it fell through with. The inlined expression's value is the
+     join of the two, so a body all of whose paths return early still yields the
+     joined return value rather than [⊥]. *)
+  Definition mk_inline (ann : annot Tannot.t) (acc : option t) (r : t) :=
+    let this' := match acc with None => this (fst r) | Some a => this (fst a) ⊔ this (fst r) end in
+    ({| this := this'; exn := exn (fst r); eff := false |}, B.mk_inline ann (snd r)).
+
   Definition mk_single (ann : annot Tannot.t) (c : single_case) (r : t) :=
     let b := B.mk_single ann c (snd r) in
     match c with
@@ -729,10 +759,10 @@ Module Residual (Tannot : TypeAnnot.S) (B : Builder Tannot).
      |},
      B.mk_struct_update ann sn (snd base) (List.map (fun kv => let '(k, v) := kv in (k, snd v)) rs)).
 
-  Definition empty : state := {| locals := IdMap.empty L.t; registers := IdMap.empty L.t |}.
+  Definition empty : state := {| locals := [IdMap.empty L.t]; registers := IdMap.empty L.t |}.
 
   Definition join (σ₁ σ₂ : state) : state := {|
-      locals := IdMap.map2 bounded_join (locals σ₁) (locals σ₂);
+      locals := zip_with (IdMap.map2 bounded_join) (locals σ₁) (locals σ₂);
       registers := IdMap.map2 bounded_join (registers σ₁) (registers σ₂)
     |}.
 
@@ -769,8 +799,34 @@ Module Residual (Tannot : TypeAnnot.S) (B : Builder Tannot).
     | σ :: rest => List.fold_left join rest σ
     end.
 
+  (** Push a fresh locals frame when entering a function body, so the
+      callee's mutable variables shadow (rather than clobber) any caller
+      variables with the same names. *)
+  Definition push_scope (σ : state) : state :=
+    {| locals := IdMap.empty L.t :: locals σ; registers := registers σ |}.
+
+  (** Pop the callee's locals frame when leaving a function body, discarding
+      its mutable variables. The bottom (global) frame is never popped, so an
+      unbalanced pop is a no-op rather than leaving future writes with no
+      frame to land in. *)
+  Definition pop_scope (σ : state) : state :=
+    match locals σ with
+    | _ :: ((_ :: _) as rest) => {| locals := rest; registers := registers σ |}
+    | _ => σ
+    end.
+
+  Fixpoint lookup_local (l : Ast.loc) (locals : list (IdMap.t L.t)) (id : Ast.id) {struct locals} : option L.t :=
+    match locals with
+    | [] => None
+    | (top :: stack) =>
+        match IdMap.find id top with
+        | Some v => Some v
+        | None => lookup_local l stack id
+        end
+    end.
+
   Definition lookup (l : Ast.loc) (σ : state) (id : Ast.id) : Ast.loc + L.t :=
-    match IdMap.find id (locals σ) with
+    match lookup_local l (locals σ) id with
     | Some v => inr v
     | ⊥ =>
         match IdMap.find id (registers σ) with
@@ -871,18 +927,21 @@ Module Residual (Tannot : TypeAnnot.S) (B : Builder Tannot).
 
   (** Lookup an identifier in [σ], falling through locals → registers → top. *)
   Definition state_lookup (σ : state) (id : Ast.id) : L.t :=
-    match IdMap.find id (locals σ) with
-    | Some b => b
-    | None => match IdMap.find id (registers σ) with Some b => b | None => L.top end
+    match lookup ext_unknown_loc σ id with
+    | inl _ => L.top
+    | inr v => v
     end.
 
-  (** Write [new_v] to [id] in [σ], routing to [registers] if [id] is
-      registered, otherwise to [locals]. *)
   Definition assign_id (id : Ast.id) (new_v : L.t) (σ : state) : state :=
-    if IdMap.mem id (registers σ) then
-      {| locals := locals σ; registers := IdMap.add id new_v (registers σ) |}
-    else
-      {| locals := IdMap.add id new_v (locals σ); registers := registers σ |}.
+    match locals σ with
+    | [] =>
+          {| locals := []; registers := IdMap.add id new_v (registers σ) |}
+    | top :: stack =>
+        if IdMap.mem id (registers σ) then
+          {| locals := locals σ; registers := IdMap.add id new_v (registers σ) |}
+        else
+          {| locals := IdMap.add id new_v top :: stack; registers := registers σ |}
+    end.
 
   (** Handle a single-rooted l-expression: resolve to (id, path, leftover),
       read the current root value, apply the path, write it back. *)
@@ -898,10 +957,10 @@ Module Residual (Tannot : TypeAnnot.S) (B : Builder Tannot).
 
   (** Handle [var x = e; ...], [x = e], [x.f = e] (incl. nested), [*p = e]
       (when [p] resolves to a known [V_ref]), [v[i] = e] / [v[hi..lo] = e]
-      with concrete bounds, and [(x, y, ...) = e] when the RHS is a known
-      [V_tuple]. For everything else we leave [σ] unchanged — the residual
-      still records the write, but downstream reads of the same name will
-      see the previous value. *)
+      with concrete bounds, and [(x, (y, z), ...) = e] (incl. nested tuples)
+      when the RHS is a known [V_tuple]. For everything else we leave [σ]
+      unchanged — the residual still records the write, but downstream reads
+      of the same name will see the previous value. *)
   (** Width of the bitvector slice that a single sub-lexp of a
       [LZ_vector_concat] covers. We recover it from the [US_range] step a
       [LZ_vector_range] inner-lexp leaves at the end of its path; sub-lexps
@@ -925,31 +984,29 @@ Module Residual (Tannot : TypeAnnot.S) (B : Builder Tannot).
     | None => None
     end.
 
-  Definition assign (zl : zlexp Tannot.t) (rs : list t) (exp : t) (σ : state) : state :=
-    let v := match this (fst exp) with Some v => v | None => L.top end in
+  (** Core of [assign], recursing structurally on the l-expression so nested
+      tuple targets like [(x, ((y, z), w)) = e] assign at every depth when the
+      corresponding right-hand side value is a known [V_tuple]. Returns the
+      updated state together with the sub-expressions left over once this
+      l-expression has consumed its share of [rs]. *)
+  Fixpoint assign_value (zl : zlexp Tannot.t) (rs : list t) (v : L.t) (σ : state) {struct zl} : state * list t :=
     let 'LZ_aux aux _ := zl in
     match aux with
     | LZ_tuple ls =>
         match v with
         | L.V_tuple vs =>
             (* Walk [ls] and [vs] in lockstep, threading [σ] / leftover
-               [rs]. We only handle one level of nesting — sub-lexps that
-               are themselves tuples or vector-concats fall through to the
-               conservative [σ] (i.e. their state stays unchanged). *)
-            fst ((fix go ls vs rs σ {struct ls} : state * list t :=
-                    match ls, vs with
-                    | [], _ => (σ, rs)
-                    | _, [] => (σ, rs)
-                    | l :: ls', v :: vs' =>
-                        let σ' := assign_via_path l rs v σ in
-                        let rs' :=
-                          match zlexp_path l rs with
-                          | Some (_, _, leftover) => leftover
-                          | None => rs
-                          end in
-                        go ls' vs' rs' σ'
-                    end) ls vs rs σ)
-        | _ => σ
+               [rs], recursing into each sub-lexp so nested tuples are
+               handled too. *)
+            (fix go ls vs rs σ {struct ls} : state * list t :=
+               match ls, vs with
+               | [], _ => (σ, rs)
+               | _, [] => (σ, rs)
+               | l :: ls', v :: vs' =>
+                   let '(σ', rs') := assign_value l rs v σ in
+                   go ls' vs' rs' σ'
+               end) ls vs rs σ
+        | _ => (σ, rs)
         end
     | LZ_vector_concat ls =>
         (* [(a @ b @ c) = rhs] — split [rhs] by each sub-lexp's width and
@@ -966,45 +1023,66 @@ Module Residual (Tannot : TypeAnnot.S) (B : Builder Tannot).
             | L.V_int i =>
             match L.int_concrete i with
             | Some total =>
-                fst ((fix go ls rs cur_hi σ {struct ls} : state * list t :=
-                        match ls with
-                        | [] => (σ, rs)
-                        | l :: ls' =>
-                            match zlexp_subwidth l rs with
-                            | Some w =>
-                                let lo := (cur_hi + 1 - w)%Z in
-                                let sliced := L.bv_slice v (Z.to_N lo) (Z.to_N w) in
-                                let σ' := assign_via_path l rs sliced σ in
-                                let rs' :=
-                                  match zlexp_path l rs with
-                                  | Some (_, _, leftover) => leftover
-                                  | None => rs
-                                  end in
-                                go ls' rs' (cur_hi - w)%Z σ'
-                            | None => (σ, rs)
-                            end
-                        end) ls rs (total - 1)%Z σ)
-            | None => σ
+                (fix go ls rs cur_hi σ {struct ls} : state * list t :=
+                   match ls with
+                   | [] => (σ, rs)
+                   | l :: ls' =>
+                       match zlexp_subwidth l rs with
+                       | Some w =>
+                           let lo := (cur_hi + 1 - w)%Z in
+                           let sliced := L.bv_slice v (Z.to_N lo) (Z.to_N w) in
+                           let σ' := assign_via_path l rs sliced σ in
+                           let rs' :=
+                             match zlexp_path l rs with
+                             | Some (_, _, leftover) => leftover
+                             | None => rs
+                             end in
+                           go ls' rs' (cur_hi - w)%Z σ'
+                       | None => (σ, rs)
+                       end
+                   end) ls rs (total - 1)%Z σ
+            | None => (σ, rs)
             end
-            | _ => σ
+            | _ => (σ, rs)
             end
-        | _ => σ
+        | _ => (σ, rs)
         end
-    | _ => assign_via_path zl rs v σ
+    | _ =>
+        (* Single-rooted l-expression: resolve to (id, path, leftover), apply
+           the path, and report the leftover sub-expressions so tuple targets
+           above us keep [rs] in sync. *)
+        match zlexp_path zl rs with
+        | Some (id, path, leftover) =>
+            let σ' :=
+              match path with
+              | [] => assign_id id v σ
+              | _ => assign_id id (apply_path (state_lookup σ id) path v) σ
+              end in
+            (σ', leftover)
+        | None => (σ, rs)
+        end
     end.
+
+  Definition assign (zl : zlexp Tannot.t) (rs : list t) (exp : t) (σ : state) : state :=
+    let v := match this (fst exp) with Some v => v | None => L.top end in
+    fst (assign_value zl rs v σ).
 End Residual.
 
 Module Make (Tannot : TypeAnnot.S) (B : Builder Tannot).
   Module R := Residual Tannot B.
   Module L := R.L.
 
+  (* TODO: Find a way to share the monad with Semantics.v *)
   Module Monad.
-    (* TODO: Find a way to share the monad with Semantics.v *)
+    Inductive function_return : Type :=
+    | Return_inlined : list (pat Tannot.t * option (exp Tannot.t) * exp Tannot.t) → function_return
+    | Return_value : R.value → function_return.
+
     Inductive t {A : Type} : Type :=
     | Pure : A → t
     | Early_return : R.value → (unit → t) → t
     | Exit : R.value → (unit → t) → t
-    | Call : id → list R.value → (R.value → t) → t
+    | Call : id → list R.value → (function_return → t) → t
     | Get_config : list string → (R.value → t) → t
     | Runtime_type_error : Ast.loc → t
     | Get_undefined : typ → (R.value → t) → t.
@@ -1062,6 +1140,9 @@ Module Make (Tannot : TypeAnnot.S) (B : Builder Tannot).
       | Z_struct_update_base parent _ _
       | Z_struct_update parent _ _ _ _ _ => lookup parent id
 
+      (* Stop at an inlined function boundary. *)
+      | Z_inline _ _ => None
+
       | Z_match_arms_guard parent _ β _ _ _ _ _ _
       | Z_match_arms_body parent _ β _ _ _ _ _ =>
           match IdMap.find id β with
@@ -1100,8 +1181,12 @@ Module Make (Tannot : TypeAnnot.S) (B : Builder Tannot).
         match xs with
         | x :: xs => wrap (Z_app ctx f [] xs) x
         | [] =>
-            r ← Monad.Call f [] pure;
-            pure (ctx, σ, inr (r, B.mk_app annot f []))
+            ret ← Monad.Call f [] pure;
+            match ret with
+            | Monad.Return_value r => pure (ctx, σ, inr (r, B.mk_app annot f []))
+            | Monad.Return_inlined arms =>
+                pure (Z_aux (Z_match_head (Z_aux (Z_inline ctx None) annot) Match [] (Some arms)) annot, R.push_scope σ, inr (R.from_semilattice L.V_unit, B.mk_literal annot (L_aux L_unit (fst annot))))
+            end
         end
     | E_typ t exp => wrap (Z_single ctx (Typ t)) exp
     | E_tuple exps =>
@@ -1170,6 +1255,67 @@ Module Make (Tannot : TypeAnnot.S) (B : Builder Tannot).
     | E_sizeof _ | E_constraint _ | E_internal_value _ => Monad.Runtime_type_error (fst annot)
     end.
 
+  (* When a [return] fires inside an inlined function body its value must be
+     joined into the accumulator carried by the nearest enclosing [Z_inline]
+     marker, rather than escaping the whole computation (as it would for a real
+     call handled via [Early_return]). This walks up the zipper, rebuilding the
+     intervening spine, and joins [ret] into that accumulator. It returns [None]
+     when there is no enclosing [Z_inline] — i.e. we are not inside an inlined
+     body — so the caller can fall back to the [Early_return] mechanism. *)
+  Fixpoint join_inline_return (ret : R.t) (ctx : t) : option t :=
+    match ctx with
+    | Z_top => None
+    | Z_aux aux annot =>
+      match aux with
+      | Z_inline parent acc =>
+          Some (Z_aux (Z_inline parent (Some (R.join_returns acc ret))) annot)
+      | Z_single parent c =>
+          option_map (fun p => Z_aux (Z_single p c) annot) (join_inline_return ret parent)
+      | Z_return parent =>
+          option_map (fun p => Z_aux (Z_return p) annot) (join_inline_return ret parent)
+      | Z_exit parent =>
+          option_map (fun p => Z_aux (Z_exit p) annot) (join_inline_return ret parent)
+      | Z_pair_1 parent c e =>
+          option_map (fun p => Z_aux (Z_pair_1 p c e) annot) (join_inline_return ret parent)
+      | Z_pair_2 parent c r =>
+          option_map (fun p => Z_aux (Z_pair_2 p c r) annot) (join_inline_return ret parent)
+      | Z_list parent c rs es =>
+          option_map (fun p => Z_aux (Z_list p c rs es) annot) (join_inline_return ret parent)
+      | Z_app parent f rs es =>
+          option_map (fun p => Z_aux (Z_app p f rs es) annot) (join_inline_return ret parent)
+      | Z_block parent rs es =>
+          option_map (fun p => Z_aux (Z_block p rs es) annot) (join_inline_return ret parent)
+      | Z_if_cond parent thn els =>
+          option_map (fun p => Z_aux (Z_if_cond p thn els) annot) (join_inline_return ret parent)
+      | Z_if_then parent sr els =>
+          option_map (fun p => Z_aux (Z_if_then p sr els) annot) (join_inline_return ret parent)
+      | Z_if_else parent thn sr =>
+          option_map (fun p => Z_aux (Z_if_else p thn sr) annot) (join_inline_return ret parent)
+      | Z_match_head parent mc ev un =>
+          option_map (fun p => Z_aux (Z_match_head p mc ev un) annot) (join_inline_return ret parent)
+      | Z_match_arms_guard parent mc bnd sr ev pt gm bd un =>
+          option_map (fun p => Z_aux (Z_match_arms_guard p mc bnd sr ev pt gm bd un) annot) (join_inline_return ret parent)
+      | Z_match_arms_body parent mc bnd sr ev pt gd un =>
+          option_map (fun p => Z_aux (Z_match_arms_body p mc bnd sr ev pt gd un) annot) (join_inline_return ret parent)
+      | Z_assign_left parent l rs es e =>
+          option_map (fun p => Z_aux (Z_assign_left p l rs es e) annot) (join_inline_return ret parent)
+      | Z_assign_right parent l rs =>
+          option_map (fun p => Z_aux (Z_assign_right p l rs) annot) (join_inline_return ret parent)
+      | Z_var_left parent l rs es e1 e2 =>
+          option_map (fun p => Z_aux (Z_var_left p l rs es e1 e2) annot) (join_inline_return ret parent)
+      | Z_var_right parent l rs e =>
+          option_map (fun p => Z_aux (Z_var_right p l rs e) annot) (join_inline_return ret parent)
+      | Z_var_body parent l rs r =>
+          option_map (fun p => Z_aux (Z_var_body p l rs r) annot) (join_inline_return ret parent)
+      | Z_struct parent sn rs f fes =>
+          option_map (fun p => Z_aux (Z_struct p sn rs f fes) annot) (join_inline_return ret parent)
+      | Z_struct_update_base parent sn fes =>
+          option_map (fun p => Z_aux (Z_struct_update_base p sn fes) annot) (join_inline_return ret parent)
+      | Z_struct_update parent sn r rs f fes =>
+          option_map (fun p => Z_aux (Z_struct_update p sn r rs f fes) annot) (join_inline_return ret parent)
+      end
+    end.
+
   Definition next (aux : zexp_aux (IdMap.t L.t) R.t R.state Tannot.t)
                   (annot : annot Tannot.t)
                   (σ : R.state)
@@ -1178,9 +1324,9 @@ Module Make (Tannot : TypeAnnot.S) (B : Builder Tannot).
     match aux with
     | Z_if_cond parent t e =>
         if R.is_true (fst focus) then
-          pure (parent, σ, inl t)
+          pure (Z_aux (Z_block parent [focus] []) annot, σ, inl t)
         else if R.is_false (fst focus) then
-          pure (parent, σ, inl e)
+          pure (Z_aux (Z_block parent [focus] []) annot, σ, inl e)
         else
           pure (Z_aux (Z_if_then parent (σ, focus) e) annot, σ, inl t)
     | Z_if_then parent (σ_i, i) e =>
@@ -1192,8 +1338,18 @@ Module Make (Tannot : TypeAnnot.S) (B : Builder Tannot).
         pure (parent, σ, inr (R.mk_single annot γ focus))
 
     | Z_return parent =>
-        _ ← Monad.Early_return (fst focus) pure;
-        pure (parent, σ, inr (R.mk_return annot focus))
+        (* If we are inside an inlined function body, join the returned value
+           into the enclosing [Z_inline] and continue evaluating (so returns in
+           other speculative branches are also accounted for). *)
+        match join_inline_return focus parent with
+        | Some parent' => pure (parent', σ, inr (R.mk_return annot focus))
+        | None =>
+            _ ← Monad.Early_return (fst focus) pure;
+            pure (parent, σ, inr (R.mk_return annot focus))
+        end
+
+    | Z_inline parent acc =>
+        pure (parent, R.pop_scope σ, inr (R.mk_inline annot acc focus))
 
     | Z_exit parent =>
         _ ← Monad.Exit (fst focus) pure;
@@ -1211,15 +1367,16 @@ Module Make (Tannot : TypeAnnot.S) (B : Builder Tannot).
         end
 
     | Z_block parent evaluated unevaluated =>
-        (* If [focus] has [this = ⊥] but [exn != ⊥], we've just evaluated a
-           [throw e] (or a call that definitely throws) — the rest of the
-           block is unreachable, so stop here and surface [focus] as the
-           block's value. The enclosing [try]/[Z_match_head Try _ _ _] will
-           pick up [exn] and dispatch on it. *)
+        (* If [focus] has [this = ⊥] we've just evaluated a statement that
+           diverges on every path — a [throw e], an early [return] (in an
+           inlined body), or an [exit] — so the rest of the block is
+           unreachable. Stop here and surface [focus] as the block's value; an
+           enclosing [try]/[Z_match_head Try _ _ _] will pick up any [exn], and
+           an enclosing [Z_inline] will already hold the returned value. *)
         match unevaluated with
         | []      => pure (parent, σ, inr (R.mk_block annot (focus :: evaluated)))
         | u :: us =>
-            if andb (is_none (R.this (fst focus))) (negb (is_none (R.exn (fst focus)))) then
+            if is_none (R.this (fst focus)) then
               pure (parent, σ, inr focus)
             else if R.is_unit (fst focus) then
               pure (Z_aux (Z_block parent evaluated us) annot, σ, inl u)
@@ -1256,8 +1413,18 @@ Module Make (Tannot : TypeAnnot.S) (B : Builder Tannot).
             else
               pure (Z_aux (Z_if_then parent (σ, focus) b) annot, σ, inl true_lit)
         | _, _, [] =>
-            r ← Monad.Call f (List.rev (List.map fst (focus :: evaluated))) pure;
-            pure (parent, σ, inr (r, B.mk_app annot f (List.rev (List.map snd (focus :: evaluated)))))
+            ret ← Monad.Call f (List.rev (List.map fst (focus :: evaluated))) pure;
+            match ret with
+            | Monad.Return_value r =>
+                pure (parent, σ, inr (r, B.mk_app annot f (List.rev (List.map snd (focus :: evaluated)))))
+            | Monad.Return_inlined arms =>
+                match evaluated with
+                | [] =>
+                    pure (Z_aux (Z_match_head (Z_aux (Z_inline parent None) annot) Match [] (Some arms)) annot, R.push_scope σ, inr focus)
+                | _ =>
+                    pure (Z_aux (Z_match_head (Z_aux (Z_inline parent None) annot) Match [] (Some arms)) annot, R.push_scope σ, inr (R.mk_list annot Tuple (focus :: evaluated)))
+                end
+            end
         | _, _, u :: us => pure (Z_aux (Z_app parent f (focus :: evaluated) us) annot, σ, inl u)
         end
 

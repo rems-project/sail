@@ -222,6 +222,7 @@ val add_filtered_overload : id -> id list -> t -> id * t
 val is_extern : id -> t -> string -> bool
 val add_extern : id -> extern -> t -> t
 val get_extern : id -> t -> string -> string
+val is_pure_extern : id -> t -> bool
 
 val add_enum : id -> id list -> t -> t
 val add_scattered_enum : id -> (l * string * Ast.attribute_data option) list -> t -> t

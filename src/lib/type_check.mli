@@ -183,6 +183,8 @@ module Env : sig
 
   val get_extern : id -> t -> string -> string
 
+  val is_pure_extern : id -> t -> bool
+
   (** Lookup id searchs for a specified id in the environment, and returns its type and what kind of identifier it is,
       using the lvar type. Returns Unbound if the identifier is unbound, and won't throw any exceptions. *)
   val lookup_id : id -> t -> typ lvar
