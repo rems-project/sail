@@ -85,4 +85,4 @@ val string_of_focus : partial_state -> string
 
 val is_finished : partial_state -> Zinterp.R.value option
 
-val mk_interpreter : gstate -> partial_state -> partial_state
+val mk_interpreter : inlining:bool -> gstate -> partial_state -> partial_state

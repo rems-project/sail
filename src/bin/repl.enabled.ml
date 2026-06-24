@@ -387,7 +387,19 @@ let repl_commands =
         (fun _ pos arg rstate ->
           let exp = Type_check.infer_exp rstate.env (Initial_check.exp_of_string ~inline:pos rstate.ctx arg) in
           let gstate = Partial_eval.initial_gstate ~typecheck_env:rstate.env ~ast:rstate.ast in
-          let step = Partial_eval.mk_interpreter gstate in
+          let step = Partial_eval.mk_interpreter ~inlining:false gstate in
+          { rstate with mode = PartialEvaluation (Partial_eval.from_exp_with_globals gstate exp, step) }
+        );
+    };
+    {
+      commands = [":partial_inline"];
+      help = Printf.sprintf "Begin partially evaluating an expression";
+      arg_help = Some "<expression>";
+      repl_action =
+        (fun _ pos arg rstate ->
+          let exp = Type_check.infer_exp rstate.env (Initial_check.exp_of_string ~inline:pos rstate.ctx arg) in
+          let gstate = Partial_eval.initial_gstate ~typecheck_env:rstate.env ~ast:rstate.ast in
+          let step = Partial_eval.mk_interpreter ~inlining:true gstate in
           { rstate with mode = PartialEvaluation (Partial_eval.from_exp_with_globals gstate exp, step) }
         );
     };

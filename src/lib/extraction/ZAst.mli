@@ -65,6 +65,7 @@ type match_case =
 type ('v, 'r, 's, 'a) zexp_aux =
 | Z_single of ('v, 'r, 's, 'a) zexp * single_case
 | Z_return of ('v, 'r, 's, 'a) zexp
+| Z_inline of ('v, 'r, 's, 'a) zexp * 'r option
 | Z_exit of ('v, 'r, 's, 'a) zexp
 | Z_pair_1 of ('v, 'r, 's, 'a) zexp * pair_case * 'a exp
 | Z_pair_2 of ('v, 'r, 's, 'a) zexp * pair_case * 'r
@@ -135,6 +136,8 @@ module ExpBuilder :
 
   val mk_return : Tannot.t annot -> t -> Tannot.t exp
 
+  val mk_inline : Tannot.t annot -> t -> Tannot.t exp
+
   val mk_single : Tannot.t annot -> single_case -> t -> Tannot.t exp
 
   val mk_var :
@@ -183,6 +186,8 @@ module Residual :
   val mk_ref : Tannot__3.t annot -> id -> t
 
   val mk_return : Tannot__3.t annot -> t -> t
+
+  val mk_inline : Tannot__3.t annot -> t -> t
 
   val mk_single : Tannot__3.t annot -> single_case -> t -> t
 
@@ -334,9 +339,9 @@ module Residual :
 
   val eff : value -> bool
 
-  type state = { locals : L.t IdMap.t; registers : L.t IdMap.t }
+  type state = { locals : L.t IdMap.t list; registers : L.t IdMap.t }
 
-  val locals : state -> L.t IdMap.t
+  val locals : state -> L.t IdMap.t list
 
   val registers : state -> L.t IdMap.t
 
@@ -380,6 +385,10 @@ module Residual :
 
   val mk_return : Tannot__3.t annot -> t -> value * B.t
 
+  val join_returns : t option -> t -> t
+
+  val mk_inline : Tannot__3.t annot -> t option -> t -> value * B.t
+
   val mk_single : Tannot__3.t annot -> single_case -> t -> value * B.t
 
   val mk_var :
@@ -404,6 +413,12 @@ module Residual :
     match_result) sum
 
   val end_match : match_case -> state option -> state list -> state
+
+  val push_scope : state -> state
+
+  val pop_scope : state -> state
+
+  val lookup_local : Parse_ast.l -> L.t IdMap.t list -> id -> L.t option
 
   val lookup : Parse_ast.l -> state -> id -> (Parse_ast.l, L.t) sum
 
@@ -436,6 +451,9 @@ module Residual :
   val last_update_step : update_step list -> update_step option
 
   val zlexp_subwidth : Tannot__3.t zlexp -> t list -> Big_int_Z.big_int option
+
+  val assign_value :
+    Tannot__3.t zlexp -> t list -> L.t -> state -> state * t list
 
   val assign : Tannot__3.t zlexp -> t list -> t -> state -> state
  end
@@ -470,6 +488,8 @@ module Make :
   val mk_ref : Tannot__5.t annot -> id -> t
 
   val mk_return : Tannot__5.t annot -> t -> t
+
+  val mk_inline : Tannot__5.t annot -> t -> t
 
   val mk_single : Tannot__5.t annot -> single_case -> t -> t
 
@@ -624,9 +644,9 @@ module Make :
 
     val eff : value -> bool
 
-    type state = { locals : L.t IdMap.t; registers : L.t IdMap.t }
+    type state = { locals : L.t IdMap.t list; registers : L.t IdMap.t }
 
-    val locals : state -> L.t IdMap.t
+    val locals : state -> L.t IdMap.t list
 
     val registers : state -> L.t IdMap.t
 
@@ -670,6 +690,10 @@ module Make :
 
     val mk_return : Tannot__5.t annot -> t -> value * B.t
 
+    val join_returns : t option -> t -> t
+
+    val mk_inline : Tannot__5.t annot -> t option -> t -> value * B.t
+
     val mk_single : Tannot__5.t annot -> single_case -> t -> value * B.t
 
     val mk_var :
@@ -695,6 +719,12 @@ module Make :
       match_result) sum
 
     val end_match : match_case -> state option -> state list -> state
+
+    val push_scope : state -> state
+
+    val pop_scope : state -> state
+
+    val lookup_local : Parse_ast.l -> L.t IdMap.t list -> id -> L.t option
 
     val lookup : Parse_ast.l -> state -> id -> (Parse_ast.l, L.t) sum
 
@@ -728,6 +758,9 @@ module Make :
 
     val zlexp_subwidth :
       Tannot__5.t zlexp -> t list -> Big_int_Z.big_int option
+
+    val assign_value :
+      Tannot__5.t zlexp -> t list -> L.t -> state -> state * t list
 
     val assign : Tannot__5.t zlexp -> t list -> t -> state -> state
    end
@@ -852,11 +885,24 @@ module Make :
 
   module Monad :
    sig
+    type function_return =
+    | Return_inlined of ((Tannot__5.t pat * Tannot__5.t exp
+                        option) * Tannot__5.t exp) list
+    | Return_value of R.value
+
+    val function_return_rect :
+      (((Tannot__5.t pat * Tannot__5.t exp option) * Tannot__5.t exp) list ->
+      'a1) -> (R.value -> 'a1) -> function_return -> 'a1
+
+    val function_return_rec :
+      (((Tannot__5.t pat * Tannot__5.t exp option) * Tannot__5.t exp) list ->
+      'a1) -> (R.value -> 'a1) -> function_return -> 'a1
+
     type 'a t =
     | Pure of 'a
     | Early_return of R.value * (unit -> 'a t)
     | Exit of R.value * (unit -> 'a t)
-    | Call of id * R.value list * (R.value -> 'a t)
+    | Call of id * R.value list * (function_return -> 'a t)
     | Get_config of string list * (R.value -> 'a t)
     | Runtime_type_error of Parse_ast.l
     | Get_undefined of typ * (R.value -> 'a t)
@@ -864,18 +910,18 @@ module Make :
     val t_rect :
       ('a1 -> 'a2) -> (R.value -> (unit -> 'a1 t) -> (unit -> 'a2) -> 'a2) ->
       (R.value -> (unit -> 'a1 t) -> (unit -> 'a2) -> 'a2) -> (id -> R.value
-      list -> (R.value -> 'a1 t) -> (R.value -> 'a2) -> 'a2) -> (string list
-      -> (R.value -> 'a1 t) -> (R.value -> 'a2) -> 'a2) -> (Parse_ast.l ->
-      'a2) -> (typ -> (R.value -> 'a1 t) -> (R.value -> 'a2) -> 'a2) -> 'a1 t
-      -> 'a2
+      list -> (function_return -> 'a1 t) -> (function_return -> 'a2) -> 'a2)
+      -> (string list -> (R.value -> 'a1 t) -> (R.value -> 'a2) -> 'a2) ->
+      (Parse_ast.l -> 'a2) -> (typ -> (R.value -> 'a1 t) -> (R.value -> 'a2)
+      -> 'a2) -> 'a1 t -> 'a2
 
     val t_rec :
       ('a1 -> 'a2) -> (R.value -> (unit -> 'a1 t) -> (unit -> 'a2) -> 'a2) ->
       (R.value -> (unit -> 'a1 t) -> (unit -> 'a2) -> 'a2) -> (id -> R.value
-      list -> (R.value -> 'a1 t) -> (R.value -> 'a2) -> 'a2) -> (string list
-      -> (R.value -> 'a1 t) -> (R.value -> 'a2) -> 'a2) -> (Parse_ast.l ->
-      'a2) -> (typ -> (R.value -> 'a1 t) -> (R.value -> 'a2) -> 'a2) -> 'a1 t
-      -> 'a2
+      list -> (function_return -> 'a1 t) -> (function_return -> 'a2) -> 'a2)
+      -> (string list -> (R.value -> 'a1 t) -> (R.value -> 'a2) -> 'a2) ->
+      (Parse_ast.l -> 'a2) -> (typ -> (R.value -> 'a1 t) -> (R.value -> 'a2)
+      -> 'a2) -> 'a1 t -> 'a2
 
     val bind : 'a1 t -> ('a1 -> 'a2 t) -> 'a2 t
 
@@ -891,6 +937,8 @@ module Make :
   val down :
     t -> R.state -> Tannot__5.t exp -> ((t * R.state) * (Tannot__5.t exp,
     R.t) sum) Monad.t
+
+  val join_inline_return : R.t -> t -> t option
 
   val next :
     (L.t IdMap.t, R.t, R.state, Tannot__5.t) zexp_aux -> Tannot__5.t annot ->

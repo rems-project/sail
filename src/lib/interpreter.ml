@@ -278,6 +278,8 @@ module Semantics = Extraction.Semantics.Make (struct
 
   let is_bitvector tannot = is_bitvector_typ (Type_check.typ_of_tannot tannot)
 
+  let annotate l attr tannot = Type_check.map_uannot (add_attribute l attr None) tannot
+
   let fallthrough () = fallthrough ()
 end)
 
