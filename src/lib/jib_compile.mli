@@ -191,9 +191,5 @@ end
 val callgraph : cdef list -> IdGraph.graph
 
 module Make (C : CONFIG) : sig
-  (** Compile a Sail definition into a Jib definition. The first two arguments are is the current definition number and
-      the total number of definitions, and can be used to drive a progress bar (see Util.progress). *)
-  val compile_def : int -> int -> ctx -> typed_def -> cdef list * ctx
-
   val compile_ast : ctx -> typed_ast -> cdef list * ctx
 end

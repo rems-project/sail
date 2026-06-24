@@ -234,7 +234,7 @@ let is_value = function E_aux (E_internal_value _, _) -> true | _ -> false
 let exp_of_value v = E_aux (E_internal_value v, (Parse_ast.Unknown, Type_check.empty_tannot))
 let value_of_exp = function E_aux (E_internal_value v, _) -> v | _ -> failwith "value_of_exp coerction failed"
 
-let fallthrough =
+let fallthrough () =
   let open Type_check in
   let open Type_error in
   try
@@ -278,7 +278,7 @@ module Semantics = Extraction.Semantics.Make (struct
 
   let is_bitvector tannot = is_bitvector_typ (Type_check.typ_of_tannot tannot)
 
-  let fallthrough = fallthrough
+  let fallthrough () = fallthrough ()
 end)
 
 module Monad = Extraction.Semantics.Monad

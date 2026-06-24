@@ -157,7 +157,7 @@ def EXTZ {m : _} (v : (BitVec k_n)) : (BitVec m) :=
 def foo (x : (BitVec 8)) : (BitVec 16) :=
   (EXTZ (m := 16) x)
 
-/-- Type quantifiers: k_ex1005_ : Bool, n : Nat, n ≥ 0 -/
+/-- Type quantifiers: k_ex951_ : Bool, n : Nat, n ≥ 0 -/
 def slice_mask2 {n : _} (i : (BitVec n)) (l : (BitVec n)) (b : Bool) : (BitVec n) :=
   if (b : Bool)
   then i

@@ -158,13 +158,13 @@ def concat_str_bits (str : String) (x : (BitVec k_n)) : String :=
 def concat_str_dec (str : String) (x : Int) : String :=
   (HAppend.hAppend str (Int.repr x))
 
-/-- Type quantifiers: k_ex937_ : Bool -/
+/-- Type quantifiers: k_ex883_ : Bool -/
 def test_exit (b : Bool) : SailM Unit := do
   if (b : Bool)
   then throw Error.Exit
   else (pure ())
 
-/-- Type quantifiers: k_ex939_ : Bool -/
+/-- Type quantifiers: k_ex884_ : Bool -/
 def test_assert (b : Bool) : SailM (BitVec 1) := do
   assert b "b is false"
   (pure 1#1)

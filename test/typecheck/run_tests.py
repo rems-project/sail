@@ -45,7 +45,7 @@ def test_pass():
                 for variantname in os.listdir(variantdir) if os.path.isdir(variantdir) else []:
                     if re.match('.+\.sail$', variantname):
                         variantbasename = os.path.splitext(os.path.basename(variantname))[0]
-                        step('\'{}\' --no-memo-z3 --strict-bitvector pass/{}/{} 2> pass/{}/{}.error'.format(sail, basename, variantname, basename, variantbasename), expected_status = 1)
+                        step('\'{}\' --no-memo-z3 --dsequential --no-memo-z3 --strict-bitvector pass/{}/{} 2> pass/{}/{}.error'.format(sail, basename, variantname, basename, variantbasename), expected_status = 1)
                         step('diff pass/{}/{}.error pass/{}/{}.expect'.format(basename, variantbasename, basename, variantbasename))
                         step('rm pass/{}/{}.error'.format(basename, variantbasename))
                         i = i + 1
@@ -64,7 +64,7 @@ def test_projects():
             tests[filename] = os.fork()
             if tests[filename] == 0:
                 if filename.startswith('fail'):
-                    step('\'{}\' --no-memo-z3 --strict-bitvector project/{} --all-modules 2> project/{}.error'.format(sail, filename, basename), expected_status = 1)
+                    step('\'{}\' --no-memo-z3 --dsequential --strict-bitvector project/{} --all-modules 2> project/{}.error'.format(sail, filename, basename), expected_status = 1)
                     step('diff project/{}.error project/{}.expect'.format(basename, basename))
                     step('rm project/{}.error'.format(basename))
                 else:
@@ -83,7 +83,7 @@ def test_fail():
             basename = os.path.splitext(os.path.basename(filename))[0]
             tests[filename] = os.fork()
             if tests[filename] == 0:
-                step('\'{}\' --no-memo-z3 --strict-bitvector fail/{} 2> fail/{}.error'.format(sail, filename, basename), expected_status = 1)
+                step('\'{}\' --no-memo-z3 --dsequential --strict-bitvector fail/{} 2> fail/{}.error'.format(sail, filename, basename), expected_status = 1)
                 step('diff fail/{}.error fail/{}.expect'.format(basename, basename))
                 step('rm fail/{}.error'.format(basename))
                 print_ok(filename)

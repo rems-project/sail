@@ -1111,7 +1111,7 @@ module Make =
               | Monad.Continue x'' -> wrap (E_try (x'', arms))
               | Monad.Caught exn ->
                 wrap (E_match ((E_aux ((E_internal_value exn), annot0)),
-                  (app arms (Tannot.fallthrough :: []))))))
+                  (app arms ((Tannot.fallthrough ()) :: []))))))
        | E_assert (x, msg) ->
          Monad.bind (get_bool x) (fun b ->
            match b with

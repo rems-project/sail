@@ -1993,7 +1993,7 @@ Module Make (Tannot : TypeAnnot.S).
         | _ =>
             x' ← catch (step x);
             match x' with
-            | Caught exn => wrap (E_match (E_aux (E_internal_value exn) annot) (arms ++ [Tannot.fallthrough]))
+            | Caught exn => wrap (E_match (E_aux (E_internal_value exn) annot) (arms ++ [Tannot.fallthrough ()]))
             | Continue x'' => wrap (E_try x'' arms)
             end
         end

@@ -1,4 +1,6 @@
-(* ************************************************************************ *)
+(****************************************************************************)
+(*     Sail                                                                 *)
+(*                                                                          *)
 (*  Sail and the Sail architecture models here, comprising all files and    *)
 (*  directories except the ASL-derived Sail code in the aarch64 directory,  *)
 (*  are subject to the BSD two-clause licence below.                        *)
@@ -26,12 +28,13 @@
 (*                                                                          *)
 (*  All rights reserved.                                                    *)
 (*                                                                          *)
-(*  This work was partially supported by EPSRC grant EP/K008528/1 REMS:     *)
-(*  Rigorous Engineering for Mainstream Systems, an ARM iCASE award, EPSRC  *)
-(*  IAA KTF funding, and donations from Arm. This project has received      *)
+(*  This work was partially supported by EPSRC grant EP/K008528/1 <a        *)
+(*  href="http://www.cl.cam.ac.uk/users/pes20/rems">REMS: Rigorous          *)
+(*  Engineering for Mainstream Systems</a>, an ARM iCASE award, EPSRC IAA   *)
+(*  KTF funding, and donations from Arm.  This project has received         *)
 (*  funding from the European Research Council (ERC) under the European     *)
-(*  Union's Horizon 2020 research and innovation programme (grant agreement *)
-(*  No 789108, ELVER).                                                      *)
+(*  Union’s Horizon 2020 research and innovation programme (grant           *)
+(*  agreement No 789108, ELVER).                                            *)
 (*                                                                          *)
 (*  This software was developed by SRI International and the University of  *)
 (*  Cambridge Computer Laboratory (Department of Computer Science and       *)
@@ -39,70 +42,38 @@
 (*  and FA8750-10-C-0237 ("CTSRD").                                         *)
 (*                                                                          *)
 (*  SPDX-License-Identifier: BSD-2-Clause                                   *)
-(* ************************************************************************ *)
+(****************************************************************************)
 
-(** * Information from type annotations
+let opt_sequential = ref false
 
-Sail annotates terms with custom type annotation data, which we
-don't have access to here. Instead whenever we need to access
-information from these annotations, we use a functor parameterised by
-the signature [S], which provides the methods we need.
+let read_all ch =
+  let buf = Buffer.create 4096 in
+  let chunk = Bytes.create 4096 in
+  ( try
+      while true do
+        let n = input ch chunk 0 4096 in
+        if n = 0 then raise End_of_file;
+        Buffer.add_subbytes buf chunk 0 n
+      done
+    with End_of_file -> ()
+  );
+  Buffer.contents buf
 
-This file is not intended to be imported unqualified. Other modules
-can import the [Types] submodule to use those inductives unqualified
-however. *)
+let run_process cmd env to_stdin =
+  let out_chan, in_chan, err_chan = Unix.open_process_full cmd env in
+  (match to_stdin with None -> () | Some str -> output_string in_chan str);
+  close_out in_chan;
+  let stdout_str = read_all out_chan in
+  let stderr_str = read_all err_chan in
+  let status = Unix.close_process_full (out_chan, in_chan, err_chan) in
+  (status, stdout_str, stderr_str)
 
-From Stdlib Require Import Unicode.Utf8.
+module ParUnix = struct
+  let open_process_full cmd env to_stdin = run_process cmd env to_stdin
+end
 
-From Sail Require Import Ast.
+let recommended_parallelism () = 1
 
-Module Types.
-  (** Type annotations are used to disambiguate identifiers in the Sail AST. *)
-  Inductive id_type : Set :=
-  | Local_variable : id_type
-  | Global_register : id_type
-  | Enum_member : id_type.
+let map ~parallelism:_ f xs = List.map f xs
 
-  (** Type annotations determine how vector concatentation patterns
-  << x @ y >> in Sail are split apart. *)
-  Inductive vector_concat_split : Set :=
-  | No_split : vector_concat_split
-  | Split : nat → vector_concat_split.
-End Types.
-
-(** The signature contains the following functions:
-
-- [get_type]. Currently only used for [E_undefined]. It would be nice
-  to remove this.
-
-- [get_id_type]. See [id_type].
-
-- [get_split]. See [vector_concat_split].
-
-- [is_bitvector]. The bitvector syntax in Sail is overloaded between
-  bitvectors and generic vectors, so we use the typing information to
-  distinguish the two.
-
-- [fallthrough]. When evaluating try expressions, we need a
-  type-annotated expression which is essentially just
-  << exn => throw exn >> but we don't have the type-system in Rocq,
-  so we get such an expression from this module. This is a little ugly,
-  so it would be good to re-define the semantics in a way that avoids
-  needing this.
-*)
-
-Module Type S.
-  Import Types.
-
-  Parameter t : Set.
-
-  Parameter get_type : t → typ.
-
-  Parameter get_id_type : t → id → id_type.
-
-  Parameter get_split : t → vector_concat_split.
-
-  Parameter is_bitvector : t → bool.
-
-  Parameter fallthrough : unit → Ast.pexp t.
-End S.
+let toplevel_handler f = f ()

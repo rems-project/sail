@@ -5554,17 +5554,15 @@ and check_defs : Env.t -> untyped_def list -> typed_def list * Env.t =
   let total = List.length defs in
   check_defs_progress check_def 1 total env defs
 
-let check : Env.t -> untyped_ast -> typed_ast * Env.t =
- fun env ast ->
-  let total = List.length ast.defs in
-  let defs, env = check_defs_progress check_def 1 total env ast.defs in
-  ({ ast with defs }, env)
-
-let check_lazy : Env.t -> untyped_ast -> typed_lazy_ast * Env.t =
- fun env ast ->
+let check_lazy env (ast : untyped_ast) : typed_lazy_ast * Env.t =
   let total = List.length ast.defs in
   let defs, env = check_defs_progress check_def_lazy 1 total env ast.defs in
-  ({ lazy_defs = defs; comments = ast.comments }, Env.open_all_modules env)
+  ({ lazy_defs = defs; comments = ast.comments }, env)
+
+let check env (ast : untyped_ast) : typed_ast * Env.t =
+  let lazy_ast, env = check_lazy env ast in
+  let defs = Parmap.map ~parallelism:(Parmap.recommended_parallelism ()) force_lazy_def lazy_ast.lazy_defs in
+  ({ defs; comments = lazy_ast.comments }, env)
 
 let rec check_with_envs : Env.t -> untyped_def list -> (typed_def list * Env.t) list =
  fun env defs ->
