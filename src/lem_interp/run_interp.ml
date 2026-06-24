@@ -340,36 +340,34 @@ let run
     flush_all ();
     let command = Pervasives.read_line () in
     let command' = if command = "" then mode_to_string mode else command in
-    begin
-      match command' with
-      | "s" | "step" -> Step
-      | "n" | "next" -> Next
-      | "r" | "run" -> Run
-      | "e" | "env" | "environment" ->
-          Reg.iter (fun k v -> debugf "%s\n" (Reg.to_string k v)) reg;
-          interact mode env stack
-      | "m" | "mem" | "memory" ->
-          Mem.iter (fun k v -> debugf "%s\n" (Mem.to_string k v)) mem;
-          interact mode env stack
-      | "bt" | "backtrace" | "stack" ->
-          List.iter (fun (e, (env, mem)) -> print_exp env e) (compact_stack stack);
-          interact mode env stack
-      | "c" | "cont" | "continuation" ->
-          (* print not-compacted continuation *)
-          let e, (lenv, lmem) = top_frame_exp_state stack in
-          print_exp lenv e;
-          interact mode env stack
-      | "show_casts" ->
-          Pretty_interp.ignore_casts := false;
-          interact mode env stack
-      | "hide_casts" ->
-          Pretty_interp.ignore_casts := true;
-          interact mode env stack
-      | "q" | "quit" | "exit" -> exit 0
-      | _ ->
-          debugf "%s\n" usage;
-          interact mode env stack
-    end
+    match command' with
+    | "s" | "step" -> Step
+    | "n" | "next" -> Next
+    | "r" | "run" -> Run
+    | "e" | "env" | "environment" ->
+        Reg.iter (fun k v -> debugf "%s\n" (Reg.to_string k v)) reg;
+        interact mode env stack
+    | "m" | "mem" | "memory" ->
+        Mem.iter (fun k v -> debugf "%s\n" (Mem.to_string k v)) mem;
+        interact mode env stack
+    | "bt" | "backtrace" | "stack" ->
+        List.iter (fun (e, (env, mem)) -> print_exp env e) (compact_stack stack);
+        interact mode env stack
+    | "c" | "cont" | "continuation" ->
+        (* print not-compacted continuation *)
+        let e, (lenv, lmem) = top_frame_exp_state stack in
+        print_exp lenv e;
+        interact mode env stack
+    | "show_casts" ->
+        Pretty_interp.ignore_casts := false;
+        interact mode env stack
+    | "hide_casts" ->
+        Pretty_interp.ignore_casts := true;
+        interact mode env stack
+    | "q" | "quit" | "exit" -> exit 0
+    | _ ->
+        debugf "%s\n" usage;
+        interact mode env stack
   in
   let rec loop mode env = function
     | Value v ->
@@ -380,67 +378,61 @@ let run
         let loc = get_loc (compact_exp top_exp) in
         let return, env' = perform_action env a in
         let step ?(force = false) () =
-          if mode = Step || force then begin
+          if mode = Step || force then (
             debugf "%s\n" (Pretty_interp.pp_exp top_env Printing_functions.red top_exp);
             interact mode env s
-          end
+          )
           else mode
         in
         let show act lhs arrow rhs = debugf "%s: %s: %s %s %s\n" (grey loc) (green act) lhs (blue arrow) rhs in
         let left = "<-" and right = "->" in
         let mode', env', s =
-          begin
-            match a with
-            | Read_reg (reg, sub) ->
-                show "read_reg" (reg_to_string reg ^ sub_to_string sub) right (string_of_value return);
-                (step (), env', s)
-            | Write_reg (reg, sub, value) ->
-                assert (return = unit_lit);
-                show "write_reg" (reg_to_string reg ^ sub_to_string sub) left (string_of_value value);
-                (step (), env', s)
-            | Read_mem (id, args, sub) ->
-                show "read_mem"
-                  (id_to_string id ^ string_of_value args ^ sub_to_string sub)
-                  right (string_of_value return);
-                (step (), env', s)
-            | Write_mem (id, args, sub, value) ->
-                assert (return = unit_lit);
-                show "write_mem"
-                  (id_to_string id ^ string_of_value args ^ sub_to_string sub)
-                  left (string_of_value value);
-                (step (), env', s)
-            (* distinguish single argument for pretty-printing *)
-            | Call_extern (f, (V_tuple _ as args)) ->
-                show "call_lib" (f ^ string_of_value args) right (string_of_value return);
-                (step (), env', s)
-            | Call_extern (f, arg) ->
-                show "call_lib" (sprintf "%s(%s)" f (string_of_value arg)) right (string_of_value return);
-                (step (), env', s)
-            | Interp.Step _ ->
-                assert (return = unit_lit);
-                show "breakpoint" "" "" "";
-                (step ~force:true (), env', s)
-            | Nondet exps ->
-                let stacks =
-                  List.sort
-                    (fun (_, i1) (_, i2) -> compare i1 i2)
-                    (List.combine (List.map (set_in_context s) exps) (List.map (fun _ -> Random.bits ()) exps))
-                in
-                show "nondeterministic evaluation begun" "" "" "";
-                let _, _, env' =
-                  List.fold_right
-                    (fun (stack, _) (_, _, env') ->
-                      loop mode env' (resume { eager_eval = mode = Run; track_values = false } stack None)
-                    )
-                    stacks (false, mode, env')
-                in
-                show "nondeterministic evaluation ended" "" "" "";
-                (step (), env', s)
-            | Exit e ->
-                show "exiting current evaluation" "" "" "";
-                (step (), env', set_in_context s e)
-            | Barrier (_, _) | Write_next_IA _ -> failwith "unexpected action"
-          end
+          match a with
+          | Read_reg (reg, sub) ->
+              show "read_reg" (reg_to_string reg ^ sub_to_string sub) right (string_of_value return);
+              (step (), env', s)
+          | Write_reg (reg, sub, value) ->
+              assert (return = unit_lit);
+              show "write_reg" (reg_to_string reg ^ sub_to_string sub) left (string_of_value value);
+              (step (), env', s)
+          | Read_mem (id, args, sub) ->
+              show "read_mem" (id_to_string id ^ string_of_value args ^ sub_to_string sub) right (string_of_value return);
+              (step (), env', s)
+          | Write_mem (id, args, sub, value) ->
+              assert (return = unit_lit);
+              show "write_mem" (id_to_string id ^ string_of_value args ^ sub_to_string sub) left (string_of_value value);
+              (step (), env', s)
+          (* distinguish single argument for pretty-printing *)
+          | Call_extern (f, (V_tuple _ as args)) ->
+              show "call_lib" (f ^ string_of_value args) right (string_of_value return);
+              (step (), env', s)
+          | Call_extern (f, arg) ->
+              show "call_lib" (sprintf "%s(%s)" f (string_of_value arg)) right (string_of_value return);
+              (step (), env', s)
+          | Interp.Step _ ->
+              assert (return = unit_lit);
+              show "breakpoint" "" "" "";
+              (step ~force:true (), env', s)
+          | Nondet exps ->
+              let stacks =
+                List.sort
+                  (fun (_, i1) (_, i2) -> compare i1 i2)
+                  (List.combine (List.map (set_in_context s) exps) (List.map (fun _ -> Random.bits ()) exps))
+              in
+              show "nondeterministic evaluation begun" "" "" "";
+              let _, _, env' =
+                List.fold_right
+                  (fun (stack, _) (_, _, env') ->
+                    loop mode env' (resume { eager_eval = mode = Run; track_values = false } stack None)
+                  )
+                  stacks (false, mode, env')
+              in
+              show "nondeterministic evaluation ended" "" "" "";
+              (step (), env', s)
+          | Exit e ->
+              show "exiting current evaluation" "" "" "";
+              (step (), env', set_in_context s e)
+          | Barrier (_, _) | Write_next_IA _ -> failwith "unexpected action"
         in
         loop mode' env' (resume { eager_eval = mode' = Run; track_values = false } s (Some return))
     | Error (l, e) ->

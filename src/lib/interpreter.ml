@@ -511,7 +511,7 @@ let initial_gstate primops defs env =
 
 let rec initialize_registers allow_registers undef_registers gstate =
   let process_def = function
-    | DEF_aux (DEF_register (DEC_aux (DEC_reg (typ, id, opt_exp), annot)), _) when allow_registers -> begin
+    | DEF_aux (DEF_register (DEC_aux (DEC_reg (typ, id, opt_exp), annot)), _) when allow_registers -> (
         match opt_exp with
         | None when undef_registers ->
             let env = Type_check.env_of_annot annot in
@@ -523,7 +523,7 @@ let rec initialize_registers allow_registers undef_registers gstate =
         | Some exp ->
             let evaluated = eval_exp (initial_lstate, gstate) exp in
             { gstate with registers = Bindings.add id evaluated gstate.registers }
-      end
+      )
     | DEF_aux (DEF_let (pat, exp), def_annot) -> (
         try
           let evaluated = eval_exp (initial_lstate, gstate) exp in

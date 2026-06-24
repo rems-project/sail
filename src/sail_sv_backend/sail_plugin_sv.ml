@@ -301,8 +301,7 @@ module Verilog_config (C : JIB_CONFIG) : Jib_compile.CONFIG = struct
     | Typ_id id when string_of_id id = "float_rounding_mode" -> CT_rounding_mode
     | Typ_app (id, _) when string_of_id id = "atom_bool" -> CT_bool
     | Typ_app (id, args) when string_of_id id = "itself" -> convert_typ ctx (Typ_aux (Typ_app (mk_id "atom", args), l))
-    | Typ_app (id, _) when string_of_id id = "range" || string_of_id id = "atom" || string_of_id id = "implicit" ->
-      begin
+    | Typ_app (id, _) when string_of_id id = "range" || string_of_id id = "atom" || string_of_id id = "implicit" -> (
         match destruct_range Env.empty typ with
         | None -> assert false (* Checked if range type in guard *)
         | Some (kids, constr, n, m) -> (
@@ -324,20 +323,20 @@ module Verilog_config (C : JIB_CONFIG) : Jib_compile.CONFIG = struct
                 then CT_fint 64
                 else CT_lint
           )
-      end
+      )
     | Typ_app (id, [A_aux (A_typ typ, _)]) when string_of_id id = "list" -> CT_list (ctyp_suprema (convert_typ ctx typ))
     (* When converting a sail bitvector type into C, we have three options in order of efficiency:
        - If the length is obviously static and smaller than 64, use the fixed bits type (aka uint64_t), fbits.
        - If the length is less than 64, then use a small bits type, sbits.
        - If the length may be larger than 64, use a large bits type lbits. *)
-    | Typ_app (id, [A_aux (A_nexp n, _)]) when string_of_id id = "bitvector" -> begin
+    | Typ_app (id, [A_aux (A_nexp n, _)]) when string_of_id id = "bitvector" -> (
         match solve_unique ctx.local_env n with Some n -> CT_fbits (Big_int.to_int n) | _ -> CT_lbits
-      end
-    | Typ_app (id, [A_aux (A_nexp n, _); A_aux (A_typ typ, _)]) when string_of_id id = "vector" -> begin
+      )
+    | Typ_app (id, [A_aux (A_nexp n, _); A_aux (A_typ typ, _)]) when string_of_id id = "vector" -> (
         match nexp_simp n with
         | Nexp_aux (Nexp_constant c, _) -> CT_fvector (Big_int.to_int c, convert_typ ctx typ)
         | _ -> CT_vector (convert_typ ctx typ)
-      end
+      )
     | Typ_app (id, [A_aux (A_typ typ, _)]) when string_of_id id = "register" -> CT_ref (convert_typ ctx typ)
     | Typ_id id when Bindings.mem id ctx.records -> CT_struct (id, [])
     | Typ_app (id, typ_args) when Bindings.mem id ctx.records ->
@@ -357,7 +356,7 @@ module Verilog_config (C : JIB_CONFIG) : Jib_compile.CONFIG = struct
         CT_variant (id, ctyp_args) |> transparent_newtype ctx
     | Typ_id id when Bindings.mem id ctx.enums -> CT_enum id
     | Typ_tuple typs -> CT_tup (List.map (convert_typ ctx) typs)
-    | Typ_exist _ -> begin
+    | Typ_exist _ -> (
         (* Use Type_check.destruct_exist when optimising with SMT, to
            ensure that we don't cause any type variable clashes in
            local_env, and that we can optimize the existential based
@@ -367,7 +366,7 @@ module Verilog_config (C : JIB_CONFIG) : Jib_compile.CONFIG = struct
             let env = add_existential l kids nc ctx.local_env in
             convert_typ { ctx with local_env = env } typ
         | None -> raise (Reporting.err_unreachable l __POS__ "Existential cannot be destructured!")
-      end
+      )
     | Typ_var kid -> CT_poly kid
     | _ -> Reporting.unreachable l __POS__ ("No C type for type " ^ string_of_typ typ)
 
@@ -401,7 +400,8 @@ let jib_of_ast make_call_precise env ast effect_info =
     let assert_to_exception = !opt_assert_to_exception
     let fun_to_wires =
       !opt_fun_to_wires |> List.to_seq |> Seq.map (fun (name, slots) -> (mk_id name, slots)) |> Bindings.of_seq
-  end)) in
+  end))
+  in
   let ctx = initial_ctx env effect_info in
   Jibc.compile_ast ctx ast
 
@@ -715,50 +715,44 @@ let verilog_target out_opt { ast; effect_info; env; default_sail_dir; _ } =
   output_string file_info.channel sv_output;
   Util.close_output_with_check file_info;
 
-  begin
-    match !opt_verilate with
-    | Verilator_compile | Verilator_run -> (
-        let file_info = Util.open_output_with_check ?directory:!opt_output_dir ("sim_" ^ out ^ ".cpp") in
-        List.iter
-          (fun line ->
-            output_string file_info.channel line;
-            output_char file_info.channel '\n'
-          )
-          (verilator_cpp_wrapper "sail_toplevel");
-        Util.close_output_with_check file_info;
+  match !opt_verilate with
+  | Verilator_compile | Verilator_run -> (
+      let file_info = Util.open_output_with_check ?directory:!opt_output_dir ("sim_" ^ out ^ ".cpp") in
+      List.iter
+        (fun line ->
+          output_string file_info.channel line;
+          output_char file_info.channel '\n'
+        )
+        (verilator_cpp_wrapper "sail_toplevel");
+      Util.close_output_with_check file_info;
 
-        let extra = match !opt_verilate_args with None -> "" | Some args -> " " ^ args in
-        let cflags = match !opt_verilate_cflags with None -> "" | Some args -> sprintf " -CFLAGS \"%s\"" args in
-        let ldflags = match !opt_verilate_ldflags with None -> "" | Some args -> sprintf " -LDFLAGS \"%s\"" args in
+      let extra = match !opt_verilate_args with None -> "" | Some args -> " " ^ args in
+      let cflags = match !opt_verilate_cflags with None -> "" | Some args -> sprintf " -CFLAGS \"%s\"" args in
+      let ldflags = match !opt_verilate_ldflags with None -> "" | Some args -> sprintf " -LDFLAGS \"%s\"" args in
 
-        (* Verilator sometimes just spuriously returns non-zero exit
+      (* Verilator sometimes just spuriously returns non-zero exit
            codes even when it suceeds, so we don't use system_checked
            here, and just hope for the best. *)
-        let verilator_command =
-          sprintf
-            "verilator --cc --exe --build -j %d --top-module sail_toplevel -I%s --Mdir %s_obj_dir sim_%s.cpp \
-             %s.sv%s%s%s"
-            !opt_verilate_jobs (Filename.quote sail_sv_libdir) out out out extra cflags ldflags
-        in
-        print_endline ("Verilator command: " ^ verilator_command);
-        let status = Unix.system verilator_command in
-        ( match status with
-        | WEXITED 0 -> ()
-        | WEXITED n ->
-            raise
-              (Reporting.err_general Parse_ast.Unknown
-                 (Printf.sprintf "Verilator exited with non-zero exit code (%d)" n)
-              )
-        | WSTOPPED n | WSIGNALED n ->
-            raise
-              (Reporting.err_general Parse_ast.Unknown (Printf.sprintf "Verilator stopped or killed by signal (%d)" n))
-        );
-        match !opt_verilate with
-        | Verilator_run -> Reporting.system_checked (sprintf "%s_obj_dir/V%s" out "sail_toplevel")
-        | _ -> ()
-      )
-    | _ -> ()
-  end
+      let verilator_command =
+        sprintf
+          "verilator --cc --exe --build -j %d --top-module sail_toplevel -I%s --Mdir %s_obj_dir sim_%s.cpp %s.sv%s%s%s"
+          !opt_verilate_jobs (Filename.quote sail_sv_libdir) out out out extra cflags ldflags
+      in
+      print_endline ("Verilator command: " ^ verilator_command);
+      let status = Unix.system verilator_command in
+      ( match status with
+      | WEXITED 0 -> ()
+      | WEXITED n ->
+          raise
+            (Reporting.err_general Parse_ast.Unknown (Printf.sprintf "Verilator exited with non-zero exit code (%d)" n))
+      | WSTOPPED n | WSIGNALED n ->
+          raise (Reporting.err_general Parse_ast.Unknown (Printf.sprintf "Verilator stopped or killed by signal (%d)" n))
+      );
+      match !opt_verilate with
+      | Verilator_run -> Reporting.system_checked (sprintf "%s_obj_dir/V%s" out "sail_toplevel")
+      | _ -> ()
+    )
+  | _ -> ()
 
 let _ =
   Target.register ~name:"systemverilog" ~flag:"sv" ~options:verilog_options ~rewrites:verilog_rewrites verilog_target

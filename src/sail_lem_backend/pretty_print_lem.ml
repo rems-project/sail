@@ -175,20 +175,17 @@ let doc_nexp_lem nexp =
   | Nexp_var v -> string (string_of_kid (nice_kid v))
   | _ ->
       let rec mangle_nexp (Nexp_aux (nexp, _)) =
-        begin
-          match nexp with
-          | Nexp_id id -> string_of_id id
-          | Nexp_var kid -> string_of_id (id_of_kid (nice_kid kid))
-          | Nexp_constant i -> lemnum Big_int.to_string i
-          | Nexp_times (n1, n2) -> mangle_nexp n1 ^ "_times_" ^ mangle_nexp n2
-          | Nexp_sum (n1, n2) -> mangle_nexp n1 ^ "_plus_" ^ mangle_nexp n2
-          | Nexp_minus (n1, n2) -> mangle_nexp n1 ^ "_minus_" ^ mangle_nexp n2
-          | Nexp_exp n -> "exp_" ^ mangle_nexp n
-          | Nexp_neg n -> "neg_" ^ mangle_nexp n
-          | _ ->
-              raise
-                (Reporting.err_unreachable l __POS__ ("cannot pretty-print nexp \"" ^ string_of_nexp full_nexp ^ "\""))
-        end
+        match nexp with
+        | Nexp_id id -> string_of_id id
+        | Nexp_var kid -> string_of_id (id_of_kid (nice_kid kid))
+        | Nexp_constant i -> lemnum Big_int.to_string i
+        | Nexp_times (n1, n2) -> mangle_nexp n1 ^ "_times_" ^ mangle_nexp n2
+        | Nexp_sum (n1, n2) -> mangle_nexp n1 ^ "_plus_" ^ mangle_nexp n2
+        | Nexp_minus (n1, n2) -> mangle_nexp n1 ^ "_minus_" ^ mangle_nexp n2
+        | Nexp_exp n -> "exp_" ^ mangle_nexp n
+        | Nexp_neg n -> "neg_" ^ mangle_nexp n
+        | _ ->
+            raise (Reporting.err_unreachable l __POS__ ("cannot pretty-print nexp \"" ^ string_of_nexp full_nexp ^ "\""))
       in
       string ("'" ^ mangle_nexp full_nexp)
 
@@ -228,7 +225,7 @@ let type_parameters_to_print env defs : Util.IntSet.t Bindings.t =
     in
     let rec check_typ is typ =
       match Env.expand_synonyms env typ with
-      | Typ_aux (Typ_app (id, args), _) -> begin
+      | Typ_aux (Typ_app (id, args), _) -> (
           match Bindings.find_opt id type_size_map with
           | None -> is
           | Some js ->
@@ -246,7 +243,7 @@ let type_parameters_to_print env defs : Util.IntSet.t Bindings.t =
               List.fold_left
                 (fun is (A_aux (arg, _)) -> match arg with A_typ typ -> check_typ is typ | _ -> is)
                 is' args
-        end
+        )
       | Typ_aux (Typ_tuple typs, _) -> List.fold_left check_typ is typs
       | Typ_aux (Typ_exist (_, _, typ), _) -> check_typ is typ
       | _ -> is
@@ -262,12 +259,12 @@ let type_parameters_to_print env defs : Util.IntSet.t Bindings.t =
     | DEF_type (TD_aux (TD_variant (id, typq, tus, _), _)) ->
         let env = Env.add_typquant Unknown typq env in
         make_type_size_map env id typq (List.map (fun (Tu_aux (Tu_ty_id (t, _), _)) -> t) tus) type_size_map
-    | DEF_type (TD_aux (TD_abbrev (id, typq, typ_arg), _)) -> begin
+    | DEF_type (TD_aux (TD_abbrev (id, typq, typ_arg), _)) -> (
         let env = Env.add_typquant Unknown typq env in
         match typ_arg with
         | A_aux (A_typ typ, _) -> make_type_size_map env id typq [typ] type_size_map
         | _ -> type_size_map
-      end
+      )
     | _ -> type_size_map
   in
 
@@ -304,14 +301,14 @@ let rec lem_nexps_of_typ params_to_print (Typ_aux (t, l)) =
   | Typ_app (Id_aux (Id "register", _), [A_aux (A_typ etyp, _)]) -> trec etyp
   | Typ_app (Id_aux (Id "range", _), _) | Typ_app (Id_aux (Id "implicit", _), _) | Typ_app (Id_aux (Id "atom", _), _) ->
       NexpSet.empty
-  | Typ_app (id, tas) -> begin
+  | Typ_app (id, tas) -> (
       match Bindings.find_opt id params_to_print with
       | Some is ->
           Util.IntSet.fold
             (fun i s -> NexpSet.union s (lem_nexps_of_typ_arg params_to_print (List.nth tas i)))
             is NexpSet.empty
       | None -> List.fold_left (fun s ta -> NexpSet.union s (lem_nexps_of_typ_arg params_to_print ta)) NexpSet.empty tas
-    end
+    )
   | Typ_exist (kids, _, t) -> trec t
   | Typ_bidir _ -> raise (Reporting.err_unreachable l __POS__ "Lem doesn't support bidir types")
   | Typ_internal_unknown -> raise (Reporting.err_unreachable l __POS__ "escaped Typ_internal_unknown")
@@ -398,7 +395,7 @@ let doc_typ_lem, doc_typ_lem_brackets, doc_atomic_typ_lem =
          * if we add a new Typ constructor *)
         let tpp = typ params_to_print true ty in
         if atyp_needed then parens tpp else tpp
-    | Typ_exist (kopts, _, ty) when List.for_all is_int_kopt kopts -> begin
+    | Typ_exist (kopts, _, ty) when List.for_all is_int_kopt kopts -> (
         let kids = List.map kopt_kid kopts in
         let tpp = typ params_to_print true ty in
         let visible_vars = lem_tyvars_of_typ params_to_print ty in
@@ -409,7 +406,7 @@ let doc_typ_lem, doc_typ_lem_brackets, doc_atomic_typ_lem =
               (Reporting.err_general l
                  ("Existential type variable(s) " ^ String.concat ", " (List.map string_of_kid bad) ^ " escape into Lem")
               )
-      end
+      )
     (* AA: I think the correct thing is likely to filter out
        non-integer kinded_id's, then use the above code. *)
     | Typ_exist (_, _, Typ_aux (Typ_app (id, [_]), _)) when string_of_id id = "atom_bool" -> string "bool"
@@ -447,33 +444,33 @@ let rec replace_typ_size ctxt env (Typ_aux (t, a) as typ) =
   let rewrap t = Typ_aux (t, a) in
   let recur = replace_typ_size ctxt env in
   match t with
-  | Typ_tuple typs -> begin
+  | Typ_tuple typs -> (
       match Util.option_all (List.map recur typs) with Some typs' -> Some (rewrap (Typ_tuple typs')) | None -> None
-    end
-  | Typ_app (id, args) when contains_t_pp_var ctxt typ -> begin
+    )
+  | Typ_app (id, args) when contains_t_pp_var ctxt typ -> (
       match Util.option_all (List.map (replace_typ_arg_size ctxt env) args) with
       | Some args' -> Some (rewrap (Typ_app (id, args')))
       | None -> None
-    end
+    )
   | Typ_app _ -> Some typ
   | Typ_id _ -> Some typ
-  | Typ_fn (argtyps, rtyp) -> begin
+  | Typ_fn (argtyps, rtyp) -> (
       match (Util.option_all (List.map recur argtyps), recur rtyp) with
       | Some argtyps', Some rtyp' -> Some (rewrap (Typ_fn (argtyps', rtyp')))
       | _ -> None
-    end
+    )
   | Typ_var kid ->
       let is_kid nexp = Nexp.compare nexp (nvar kid) = 0 in
       if NexpSet.exists is_kid ctxt.bound_nexps then Some typ else None
-  | Typ_exist (kids, nc, typ) -> begin
+  | Typ_exist (kids, nc, typ) -> (
       match recur typ with Some typ' -> Some (rewrap (Typ_exist (kids, nc, typ'))) | None -> None
-    end
+    )
   | Typ_internal_unknown | Typ_bidir (_, _) -> None
 
 and replace_typ_arg_size ctxt env (A_aux (ta, a) as targ) =
   let rewrap ta = A_aux (ta, a) in
   match ta with
-  | A_nexp nexp -> begin
+  | A_nexp nexp -> (
       match Type_check.solve_unique env nexp with
       | Some n -> Some (rewrap (A_nexp (nconstant n)))
       | None -> (
@@ -482,10 +479,10 @@ and replace_typ_arg_size ctxt env (A_aux (ta, a) as targ) =
           | nexp' -> Some (rewrap (A_nexp nexp'))
           | exception Not_found -> None
         )
-    end
-  | A_typ typ -> begin
+    )
+  | A_typ typ -> (
       match replace_typ_size ctxt env typ with Some typ' -> Some (rewrap (A_typ typ')) | None -> None
-    end
+    )
   | A_bool _ -> Some targ
 
 let make_printable_type ctxt env typ =
@@ -539,7 +536,7 @@ let rec typeclass_nexps params_to_print (Typ_aux (t, l)) =
     | Typ_id _ | Typ_var _ -> NexpSet.empty
     | Typ_fn (ts, t) -> List.fold_left NexpSet.union (typeclass_nexps t) (List.map typeclass_nexps ts)
     | Typ_tuple ts -> List.fold_left NexpSet.union NexpSet.empty (List.map typeclass_nexps ts)
-    | Typ_app (id, args) ->
+    | Typ_app (id, args) -> (
         let add_arg_subtyp_nexps nexps = function
           | A_aux (A_typ typ, _) -> NexpSet.union nexps (typeclass_nexps typ)
           | _ -> nexps
@@ -550,12 +547,11 @@ let rec typeclass_nexps params_to_print (Typ_aux (t, l)) =
               if is_nexp_constant nexp then nexps else NexpSet.add (orig_nexp nexp) nexps
           | _ -> nexps
         in
-        begin
-          let subtyp_nexps = List.fold_left add_arg_subtyp_nexps NexpSet.empty args in
-          match Bindings.find_opt id params_to_print with
-          | Some is -> Util.IntSet.fold (fun i set -> add_arg_nexps set (List.nth args i)) is subtyp_nexps
-          | None -> subtyp_nexps
-        end
+        let subtyp_nexps = List.fold_left add_arg_subtyp_nexps NexpSet.empty args in
+        match Bindings.find_opt id params_to_print with
+        | Some is -> Util.IntSet.fold (fun i set -> add_arg_nexps set (List.nth args i)) is subtyp_nexps
+        | None -> subtyp_nexps
+      )
     | Typ_exist (kids, _, t) -> NexpSet.empty (* todo *)
     | Typ_bidir _ -> unreachable l __POS__ "Lem doesn't support bidir types"
     | Typ_internal_unknown -> unreachable l __POS__ "escaped Typ_internal_unknown"
@@ -648,11 +644,11 @@ let rec typ_needs_printed params_to_print (Typ_aux (t, _)) =
   let typ_needs_printed = typ_needs_printed params_to_print in
   match t with
   | Typ_tuple ts -> List.exists typ_needs_printed ts
-  | Typ_app (id, targs) -> begin
+  | Typ_app (id, targs) -> (
       match Bindings.find_opt id params_to_print with
       | Some is when not (Util.IntSet.is_empty is) -> true
       | _ -> List.exists (typ_needs_printed_arg params_to_print) targs
-    end
+    )
   | Typ_fn (ts, t) -> List.exists typ_needs_printed ts || typ_needs_printed t
   | Typ_exist (kopts, _, t) ->
       let kids = List.map kopt_kid kopts in
@@ -792,7 +788,7 @@ let doc_exp_lem, doc_let_lem =
         )
     | E_loop _ -> raise (report l __POS__ "E_loop should have been rewritten before pretty-printing")
     | E_let (pat, bind, e) -> wrap_parens (let_exp ctxt pat bind ^^ space ^^ string "in" ^^ hardline ^^ expN e)
-    | E_app (f, args) -> begin
+    | E_app (f, args) -> (
         match f with
         | Id_aux (Id "None", _) as none -> doc_id_lem_ctor none
         | (Id_aux (And_bool, _) | Id_aux (Or_bool, _)) when effectful (effect_of full_exp) || has_early_return full_exp
@@ -801,7 +797,7 @@ let doc_exp_lem, doc_let_lem =
             let call = string (string_of_id f ^ suffix) in
             wrap_parens (hang 2 (flow (break 1) (call :: List.map expY args)))
         (* temporary hack to make the loop body a function of the temporary variables *)
-        | Id_aux (Id "foreach#", _) -> begin
+        | Id_aux (Id "foreach#", _) -> (
             match args with
             | [exp1; exp2; exp3; ord_exp; vartuple; body] ->
                 let loopvar, body =
@@ -864,56 +860,54 @@ let doc_exp_lem, doc_let_lem =
                   parens (string "pure_early_return_embed" ^/^ loop_pp)
                 else loop_pp
             | _ -> raise (Reporting.err_unreachable l __POS__ "Unexpected number of arguments for loop combinator")
-          end
+          )
         | Id_aux (Id (("while#" | "until#" | "while#t" | "until#t") as combinator), _) ->
             let combinator = String.sub combinator 0 (String.index combinator '#') in
-            begin
-              let cond, varstuple, body, measure =
-                match args with
-                | [cond; varstuple; body] -> (cond, varstuple, body, None)
-                | [cond; varstuple; body; measure] -> (cond, varstuple, body, Some measure)
-                | _ -> raise (Reporting.err_unreachable l __POS__ "Unexpected number of arguments for loop combinator")
-              in
-              let return (E_aux (e, a)) = E_aux (E_internal_return (E_aux (e, a)), a) in
-              let effectful_exp e = effectful (effect_of e) in
-              let csuffix = if effectful_exp full_exp then "M" else if has_early_return full_exp then "E" else "" in
-              let needs_monad e = effectful_exp e || has_early_return e in
-              let cond, body =
-                match (needs_monad cond, needs_monad body) with
-                | false, true -> (return cond, body)
-                | true, false -> (cond, return body)
-                | _, _ -> (cond, body)
-              in
-              let used_vars_body = find_e_ids body in
-              let lambda =
-                (* Work around indentation issues in Lem when translating
+            let cond, varstuple, body, measure =
+              match args with
+              | [cond; varstuple; body] -> (cond, varstuple, body, None)
+              | [cond; varstuple; body; measure] -> (cond, varstuple, body, Some measure)
+              | _ -> raise (Reporting.err_unreachable l __POS__ "Unexpected number of arguments for loop combinator")
+            in
+            let return (E_aux (e, a)) = E_aux (E_internal_return (E_aux (e, a)), a) in
+            let effectful_exp e = effectful (effect_of e) in
+            let csuffix = if effectful_exp full_exp then "M" else if has_early_return full_exp then "E" else "" in
+            let needs_monad e = effectful_exp e || has_early_return e in
+            let cond, body =
+              match (needs_monad cond, needs_monad body) with
+              | false, true -> (return cond, body)
+              | true, false -> (cond, return body)
+              | _, _ -> (cond, body)
+            in
+            let used_vars_body = find_e_ids body in
+            let lambda =
+              (* Work around indentation issues in Lem when translating
                     tuple or literal unit patterns to Isabelle *)
-                match fst (uncast_exp varstuple) with
-                | E_aux (E_tuple _, _) when not (IdSet.mem (mk_id "varstup") used_vars_body) ->
-                    separate space [string "fun varstup"; arrow]
-                    ^^ break 1
-                    ^^ separate space [string "let"; expY varstuple; string "= varstup in"]
-                | E_aux (E_lit (L_aux (L_unit, _)), _) when not (IdSet.mem (mk_id "unit_var") used_vars_body) ->
-                    separate space [string "fun unit_var"; arrow]
-                | _ -> separate space [string "fun"; expY varstuple; arrow]
-              in
-              let msuffix, measure_pp =
-                match measure with
-                | None -> ("", [])
-                | Some exp when effectful_exp full_exp -> ("T", [parens (prefix 2 1 (group lambda) (expN exp))])
-                | _ -> raise (Reporting.err_unreachable l __POS__ "Unexpected combinator for pure loop")
-              in
-              parens
-                ((prefix 2 1)
-                   (string (combinator ^ csuffix ^ msuffix))
-                   (separate (break 1)
-                      ((expY varstuple :: measure_pp)
-                      @ [parens (prefix 2 1 (group lambda) (expN cond)); parens (prefix 2 1 (group lambda) (expN body))]
-                      )
-                   )
-                )
-            end
-        | Id_aux (Id "early_return", _) -> begin
+              match fst (uncast_exp varstuple) with
+              | E_aux (E_tuple _, _) when not (IdSet.mem (mk_id "varstup") used_vars_body) ->
+                  separate space [string "fun varstup"; arrow]
+                  ^^ break 1
+                  ^^ separate space [string "let"; expY varstuple; string "= varstup in"]
+              | E_aux (E_lit (L_aux (L_unit, _)), _) when not (IdSet.mem (mk_id "unit_var") used_vars_body) ->
+                  separate space [string "fun unit_var"; arrow]
+              | _ -> separate space [string "fun"; expY varstuple; arrow]
+            in
+            let msuffix, measure_pp =
+              match measure with
+              | None -> ("", [])
+              | Some exp when effectful_exp full_exp -> ("T", [parens (prefix 2 1 (group lambda) (expN exp))])
+              | _ -> raise (Reporting.err_unreachable l __POS__ "Unexpected combinator for pure loop")
+            in
+            parens
+              ((prefix 2 1)
+                 (string (combinator ^ csuffix ^ msuffix))
+                 (separate (break 1)
+                    ((expY varstuple :: measure_pp)
+                    @ [parens (prefix 2 1 (group lambda) (expN cond)); parens (prefix 2 1 (group lambda) (expN body))]
+                    )
+                 )
+              )
+        | Id_aux (Id "early_return", _) -> (
             match args with
             | [exp] ->
                 let returner, monad, arg_order =
@@ -942,8 +936,8 @@ let doc_exp_lem, doc_let_lem =
                 in
                 if aexp_needed then parens tepp else tepp
             | _ -> raise (Reporting.err_unreachable l __POS__ "Unexpected number of arguments for early_return builtin")
-          end
-        | _ -> begin
+          )
+        | _ -> (
             match destruct_tannot annot with
             | Some (env, typ) when Env.is_union_constructor f env ->
                 (* If the union has type variables, we may need an annotation for Lem to typecheck it *)
@@ -983,8 +977,8 @@ let doc_exp_lem, doc_let_lem =
                   else (epp, aexp_needed)
                 in
                 liftR (if aexp_needed then parens (align taepp) else parens taepp)
-          end
-      end
+          )
+      )
     | E_field ((E_aux (_, (l, fannot)) as fexp), id) -> (
         match destruct_tannot fannot with
         | (Some (env, Typ_aux (Typ_id tid, _)) | Some (env, Typ_aux (Typ_app (tid, _), _))) when Env.is_record tid env

@@ -178,26 +178,24 @@ let rw_exp fixed target ok not_ok istate =
   let evaluate e_aux annot =
     let initial_monad = Interpreter.Monad.pure (E_aux (e_aux, annot)) in
     try
-      begin
-        let v = run (Interpreter.Step (lazy "", istate, initial_monad, [])) in
-        if not (is_too_large v) then (
-          let exp = exp_of_value v in
-          try
-            ok ();
-            Type_check.check_exp (env_of_annot annot) exp (typ_of_annot annot)
-          with Type_error.Type_error (l, err) ->
-            (* A type error here would be unexpected, so don't ignore it! *)
-            Reporting.warn "" l
-              ("Type error when folding constants in "
-              ^ string_of_exp (E_aux (e_aux, annot))
-              ^ "\n"
-              ^ fst (Type_error.string_of_type_error err)
-              );
-            not_ok ();
-            E_aux (e_aux, annot)
-        )
-        else E_aux (e_aux, annot)
-      end
+      let v = run (Interpreter.Step (lazy "", istate, initial_monad, [])) in
+      if not (is_too_large v) then (
+        let exp = exp_of_value v in
+        try
+          ok ();
+          Type_check.check_exp (env_of_annot annot) exp (typ_of_annot annot)
+        with Type_error.Type_error (l, err) ->
+          (* A type error here would be unexpected, so don't ignore it! *)
+          Reporting.warn "" l
+            ("Type error when folding constants in "
+            ^ string_of_exp (E_aux (e_aux, annot))
+            ^ "\n"
+            ^ fst (Type_error.string_of_type_error err)
+            );
+          not_ok ();
+          E_aux (e_aux, annot)
+      )
+      else E_aux (e_aux, annot)
     with
     (* Otherwise if anything goes wrong when trying to constant
        fold, just continue without optimising. *)
@@ -210,24 +208,24 @@ let rw_exp fixed target ok not_ok istate =
     | E_app (id, args) when fold_to_unit id ->
         ok ();
         E_aux (E_lit (L_aux (L_unit, fst annot)), annot)
-    | E_id id -> begin
+    | E_id id -> (
         match Bindings.find_opt id fixed.registers with
         | Some exp ->
             ok ();
             exp
         | None -> E_aux (e_aux, annot)
-      end
-    | E_field (E_aux (E_id id, _), field) -> begin
+      )
+    | E_field (E_aux (E_id id, _), field) -> (
         match Bindings.find_opt id fixed.fields with
-        | Some fields -> begin
+        | Some fields -> (
             match Bindings.find_opt field fields with
             | Some exp ->
                 ok ();
                 exp
             | None -> E_aux (e_aux, annot)
-          end
+          )
         | None -> E_aux (e_aux, annot)
-      end
+      )
     (* Short-circuit boolean operators with constants *)
     | E_app (id, [(E_aux (E_lit (L_aux (L_false, _)), _) as false_exp); _]) when is_and_bool id ->
         ok ();
@@ -309,42 +307,38 @@ let () =
        List.map
          (fun assignment ->
            match String.split_on_char '=' assignment with
-           | [reg; value] -> begin
+           | [reg; value] -> (
                match String.split_on_char '.' reg with
-               | [reg; field] ->
+               | [reg; field] -> (
                    let reg = mk_id reg in
                    let field = mk_id field in
-                   begin
-                     match Env.lookup_id reg istate.env with
-                     | Register (Typ_aux (Typ_id rec_id, _)) ->
-                         let _, fields = Env.get_record rec_id istate.env in
-                         let typ =
-                           match List.find_opt (fun (typ, id) -> Id.compare id field = 0) fields with
-                           | Some (typ, _) -> typ
-                           | None ->
-                               failwith
-                                 (sprintf "Register %s does not have a field %s" (string_of_id reg) (string_of_id field))
-                         in
-                         let exp = Initial_check.exp_of_string value in
-                         let exp = check_exp istate.env exp typ in
-                         Register_field (reg, field, typ, exp)
-                     | _ ->
-                         failwith
-                           (sprintf "Register %s is not defined as a record in the current environment"
-                              (string_of_id reg)
-                           )
-                   end
-               | _ ->
+                   match Env.lookup_id reg istate.env with
+                   | Register (Typ_aux (Typ_id rec_id, _)) ->
+                       let _, fields = Env.get_record rec_id istate.env in
+                       let typ =
+                         match List.find_opt (fun (typ, id) -> Id.compare id field = 0) fields with
+                         | Some (typ, _) -> typ
+                         | None ->
+                             failwith
+                               (sprintf "Register %s does not have a field %s" (string_of_id reg) (string_of_id field))
+                       in
+                       let exp = Initial_check.exp_of_string value in
+                       let exp = check_exp istate.env exp typ in
+                       Register_field (reg, field, typ, exp)
+                   | _ ->
+                       failwith
+                         (sprintf "Register %s is not defined as a record in the current environment" (string_of_id reg))
+                 )
+               | _ -> (
                    let reg = mk_id reg in
-                   begin
-                     match Env.lookup_id reg istate.env with
-                     | Register typ ->
-                         let exp = Initial_check.exp_of_string value in
-                         let exp = check_exp istate.env exp typ in
-                         Register (reg, typ, exp)
-                     | _ -> failwith (sprintf "Register %s is not defined in the current environment" (string_of_id reg))
-                   end
-             end
+                   match Env.lookup_id reg istate.env with
+                   | Register typ ->
+                       let exp = Initial_check.exp_of_string value in
+                       let exp = check_exp istate.env exp typ in
+                       Register (reg, typ, exp)
+                   | _ -> failwith (sprintf "Register %s is not defined in the current environment" (string_of_id reg))
+                 )
+             )
            | _ -> failwith (sprintf "Could not parse '%s' as an assignment <register>=<value>" assignment)
          )
          assignments

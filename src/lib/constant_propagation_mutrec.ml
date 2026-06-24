@@ -194,7 +194,7 @@ let rewrite_ast target effect_info env ({ defs; _ } as ast) =
               | [] -> [infer_exp env (mk_lit_exp L_unit)]
               | args' -> args'
             in
-            if not (IdSet.mem id' (ids_of_defs !valspecs)) then begin
+            if not (IdSet.mem id' (ids_of_defs !valspecs)) then (
               (* Generate copy of function with constant arguments propagated in *)
               let (FD_aux (FD_function (_, _, fcls), _)) =
                 List.find (fun fd -> Id.compare id (id_of_fundef fd) = 0) mutrecs
@@ -207,7 +207,7 @@ let rewrite_ast target effect_info env ({ defs; _ } as ast) =
               valspecs := valspec :: !valspecs;
               let fundef = mk_fundef (List.map const_prop_funcl fcls) in
               fundefs := fundef :: !fundefs
-            end
+            )
             else ();
             E_aux (E_app (id', args'), (l, annot))
           )

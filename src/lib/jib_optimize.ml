@@ -54,14 +54,14 @@ open Jib_util
 let optimize_unit instrs =
   let unit_cval cval = match cval_ctyp cval with CT_unit -> V_lit (VL_unit, CT_unit) | _ -> cval in
   let unit_instr = function
-    | I_aux (I_funcall (CR_one clexp, extern, id, args), annot) as instr -> begin
+    | I_aux (I_funcall (CR_one clexp, extern, id, args), annot) as instr -> (
         match clexp_ctyp clexp with
         | CT_unit -> I_aux (I_funcall (CR_one (CL_void CT_unit), extern, id, List.map unit_cval args), annot)
         | _ -> instr
-      end
-    | I_aux (I_copy (clexp, cval), annot) as instr -> begin
+      )
+    | I_aux (I_copy (clexp, cval), annot) as instr -> (
         match clexp_ctyp clexp with CT_unit -> I_aux (I_copy (CL_void CT_unit, unit_cval cval), annot) | _ -> instr
-      end
+      )
     | instr -> instr
   in
   let non_pointless_copy (I_aux (aux, _)) =
@@ -422,8 +422,7 @@ let inline cdefs should_inline instrs =
   in
 
   let inline_instr = function
-    | I_aux (I_funcall (CR_one clexp, Call, function_id, args), aux) as instr when should_inline (fst function_id) ->
-      begin
+    | I_aux (I_funcall (CR_one clexp, Call, function_id, args), aux) as instr when should_inline (fst function_id) -> (
         match find_function (fst function_id) cdefs with
         | Some (Return_plain, ids, body) ->
             incr inlines;
@@ -446,16 +445,16 @@ let inline cdefs should_inline instrs =
                expect it at this point. *)
             raise (Reporting.err_general (snd aux) "Unexpected return method in IR")
         | None -> instr
-      end
+      )
     | instr -> instr
   in
 
   let rec go instrs =
-    if !inlines <> 0 then begin
+    if !inlines <> 0 then (
       inlines := 0;
       let instrs = List.map (map_instr inline_instr) instrs in
       go instrs
-    end
+    )
     else instrs
   in
   go instrs
@@ -468,13 +467,13 @@ let remove_mutrec cdefs =
   let get_mutrec id = List.find_opt (fun component -> IdSet.mem id component) mutrecs in
   List.map
     (function
-      | CDEF_aux (CDEF_fundef (function_id, heap_return, args, body), annot) as cdef -> begin
+      | CDEF_aux (CDEF_fundef (function_id, heap_return, args, body), annot) as cdef -> (
           match get_mutrec function_id with
           | None -> cdef
           | Some component ->
               let body = inline cdefs (fun call -> Id.compare call function_id <> 0 && IdSet.mem call component) body in
               CDEF_aux (CDEF_fundef (function_id, heap_return, args, body), annot)
-        end
+        )
       | cdef -> cdef
       )
     cdefs
@@ -633,14 +632,14 @@ let remove_tuples cdefs ctx =
         instr
   and fix_instr (I_aux (instr, aux)) = I_aux (fix_instr_aux instr, aux) in
   let fix_conversions = function
-    | I_aux (I_copy (clexp, cval), (_, l)) as instr -> begin
+    | I_aux (I_copy (clexp, cval), (_, l)) as instr -> (
         match (clexp_ctyp clexp, cval_ctyp cval) with
         | CT_tup lhs_ctyps, CT_tup rhs_ctyps when List.length lhs_ctyps = List.length rhs_ctyps ->
             let elems = List.length lhs_ctyps in
             if List.for_all2 ctyp_equal lhs_ctyps rhs_ctyps then [instr]
             else List.mapi (fun n _ -> icopy l (CL_tuple (clexp, n)) (V_tuple_member (cval, elems, n))) lhs_ctyps
         | _ -> [instr]
-      end
+      )
     | instr -> [instr]
   in
   let fix_ctx ctx =

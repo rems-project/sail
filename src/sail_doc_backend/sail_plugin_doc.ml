@@ -106,14 +106,13 @@ let output_docinfo doc_dir docinfo =
 let doc_target out_file { ast; _ } =
   Reporting.opt_warnings := true;
   let doc_dir = match out_file with None -> "sail_doc" | Some s -> s in
-  begin
-    try
+  ( try
       if not (Sys.is_directory doc_dir) then (
         prerr_endline ("Failure: documentation output location exists and is not a directory: " ^ doc_dir);
         exit 1
       )
     with Sys_error _ -> Unix.mkdir doc_dir 0o755
-  end;
+  );
   if !opt_doc_format = "asciidoc" || !opt_doc_format = "adoc" then
     let module Config = struct
       let embedding_mode = embedding_option ()
@@ -177,20 +176,19 @@ let html_target files out_dir_opt { ast; _ } =
         Array.map
           (fun (node, s, e) ->
             match Callgraph.NodeMap.find_opt node link_targets with
-            | Some p ->
+            | Some p -> (
                 let filename = p.Lexing.pos_fname in
-                begin
-                  match List.find_opt (fun info -> info.filename = filename) !files with
-                  | Some info -> (
-                      match !opt_html_link_prefix with
-                      | None ->
-                          let relpath = Util.relativize_path file_info.filename info.prefix in
-                          Some (Printf.sprintf "%s.html#L%d" relpath p.Lexing.pos_lnum, s, e)
-                      | Some html_prefix ->
-                          Some (Printf.sprintf "%s%s.html#L%d" html_prefix info.prefix p.Lexing.pos_lnum, s, e)
-                    )
-                  | None -> None
-                end
+                match List.find_opt (fun info -> info.filename = filename) !files with
+                | Some info -> (
+                    match !opt_html_link_prefix with
+                    | None ->
+                        let relpath = Util.relativize_path file_info.filename info.prefix in
+                        Some (Printf.sprintf "%s.html#L%d" relpath p.Lexing.pos_lnum, s, e)
+                    | Some html_prefix ->
+                        Some (Printf.sprintf "%s%s.html#L%d" html_prefix info.prefix p.Lexing.pos_lnum, s, e)
+                  )
+                | None -> None
+              )
             | None -> None
           )
           file_links

@@ -193,33 +193,30 @@ let rec prerr_chunk indent = function
         args
   | Function fn ->
       Printf.eprintf "%sFunction:%s clause=%b\n" indent (string_of_id fn.id) fn.clause;
-      begin
-        match fn.typq_opt with
-        | Some typq ->
-            Printf.eprintf "%s  typq:\n" indent;
-            Queue.iter (prerr_chunk (indent ^ "    ")) typq
-        | None -> ()
-      end;
-      begin
-        match fn.return_typ_opt with
-        | Some return_typ ->
-            Printf.eprintf "%s  return_typ:\n" indent;
-            Queue.iter (prerr_chunk (indent ^ "    ")) return_typ
-        | None -> ()
-      end;
+      ( match fn.typq_opt with
+      | Some typq ->
+          Printf.eprintf "%s  typq:\n" indent;
+          Queue.iter (prerr_chunk (indent ^ "    ")) typq
+      | None -> ()
+      );
+      ( match fn.return_typ_opt with
+      | Some return_typ ->
+          Printf.eprintf "%s  return_typ:\n" indent;
+          Queue.iter (prerr_chunk (indent ^ "    ")) return_typ
+      | None -> ()
+      );
       List.iteri
         (fun i (funcl_header, funcl) ->
           Printf.eprintf "%s  header %d:\n" indent i;
           Queue.iter (prerr_chunk (indent ^ "    ")) funcl_header;
           Printf.eprintf "%s  pat %d:\n" indent i;
           Queue.iter (prerr_chunk (indent ^ "    ")) funcl.pat;
-          begin
-            match funcl.guard with
-            | Some guard ->
-                Printf.eprintf "%s  guard %d:\n" indent i;
-                Queue.iter (prerr_chunk (indent ^ "    ")) guard
-            | None -> ()
-          end;
+          ( match funcl.guard with
+          | Some guard ->
+              Printf.eprintf "%s  guard %d:\n" indent i;
+              Queue.iter (prerr_chunk (indent ^ "    ")) guard
+          | None -> ()
+          );
           Printf.eprintf "%s  body %d:\n" indent i;
           Queue.iter (prerr_chunk (indent ^ "    ")) funcl.body
         )
@@ -230,17 +227,16 @@ let rec prerr_chunk indent = function
       Queue.iter (prerr_chunk (indent ^ "    ")) vs.typ
   | Enum e ->
       Printf.eprintf "%sEnum:%s\n" indent (string_of_id e.id);
-      begin
-        match e.enum_functions with
-        | Some enum_functions ->
-            List.iter
-              (fun chunks ->
-                Printf.eprintf "%s  enum_function:\n" indent;
-                Queue.iter (prerr_chunk (indent ^ "    ")) chunks
-              )
-              enum_functions
-        | None -> ()
-      end;
+      ( match e.enum_functions with
+      | Some enum_functions ->
+          List.iter
+            (fun chunks ->
+              Printf.eprintf "%s  enum_function:\n" indent;
+              Queue.iter (prerr_chunk (indent ^ "    ")) chunks
+            )
+            enum_functions
+      | None -> ()
+      );
       List.iter
         (fun chunks ->
           Printf.eprintf "%s  member:\n" indent;
@@ -255,13 +251,12 @@ let rec prerr_chunk indent = function
         (fun i funcl ->
           Printf.eprintf "%s  pat %d:\n" indent i;
           Queue.iter (prerr_chunk (indent ^ "    ")) funcl.pat;
-          begin
-            match funcl.guard with
-            | Some guard ->
-                Printf.eprintf "%s  guard %d:\n" indent i;
-                Queue.iter (prerr_chunk (indent ^ "    ")) guard
-            | None -> ()
-          end;
+          ( match funcl.guard with
+          | Some guard ->
+              Printf.eprintf "%s  guard %d:\n" indent i;
+              Queue.iter (prerr_chunk (indent ^ "    ")) guard
+          | None -> ()
+          );
           Printf.eprintf "%s  body %d:\n" indent i;
           Queue.iter (prerr_chunk (indent ^ "    ")) funcl.body
         )
@@ -276,13 +271,12 @@ let rec prerr_chunk indent = function
         [("lhs", fn_typ.lhs); ("rhs", fn_typ.rhs)]
   | Foreach loop ->
       Printf.eprintf "%sForeach: downto=%b\n" indent loop.decreasing;
-      begin
-        match loop.step with
-        | Some step ->
-            Printf.eprintf "%s  step:\n" indent;
-            Queue.iter (prerr_chunk (indent ^ "    ")) step
-        | None -> ()
-      end;
+      ( match loop.step with
+      | Some step ->
+          Printf.eprintf "%s  step:\n" indent;
+          Queue.iter (prerr_chunk (indent ^ "    ")) step
+      | None -> ()
+      );
       List.iter
         (fun (name, arg) ->
           Printf.eprintf "%s  %s:\n" indent name;
@@ -291,13 +285,12 @@ let rec prerr_chunk indent = function
         [("var", loop.var); ("from", loop.from_index); ("to", loop.to_index); ("body", loop.body)]
   | While loop ->
       Printf.eprintf "%sWhile: repeat_until=%b\n" indent loop.repeat_until;
-      begin
-        match loop.termination_measure with
-        | Some measure ->
-            Printf.eprintf "%s  step:\n" indent;
-            Queue.iter (prerr_chunk (indent ^ "    ")) measure
-        | None -> ()
-      end;
+      ( match loop.termination_measure with
+      | Some measure ->
+          Printf.eprintf "%s  step:\n" indent;
+          Queue.iter (prerr_chunk (indent ^ "    ")) measure
+      | None -> ()
+      );
       List.iter
         (fun (name, arg) ->
           Printf.eprintf "%s  %s:\n" indent name;
@@ -426,7 +419,7 @@ let string_of_var (Kid_aux (Var v, _)) = v
 let rec pop_header_comments comments chunks l lnum =
   match Stack.top_opt comments with
   | None -> ()
-  | Some (Lexer.Comment (comment_type, comment_s, e, contents)) -> begin
+  | Some (Lexer.Comment (comment_type, comment_s, e, contents)) -> (
       match Reporting.simp_loc l with
       | Some (s, _) when e.pos_cnum < s.pos_cnum && comment_s.pos_lnum = lnum ->
           let _ = Stack.pop comments in
@@ -436,7 +429,7 @@ let rec pop_header_comments comments chunks l lnum =
           Queue.add (Spacer (true, 1)) chunks;
           pop_header_comments comments chunks l (lnum + 1)
       | _ -> ()
-    end
+    )
 
 let chunk_header_comments comments chunks = function
   | [] -> ()
@@ -455,7 +448,7 @@ let rec pop_comments ?(newline = false) ?last_comment_line ?(spacer = true) comm
   in
   match Stack.top_opt comments with
   | None -> Option.iter (fun (s, _) -> extra_lines s) (Reporting.simp_loc l)
-  | Some (Lexer.Comment (comment_type, comment_s, comment_e, contents)) -> begin
+  | Some (Lexer.Comment (comment_type, comment_s, comment_e, contents)) -> (
       match Reporting.simp_loc l with
       | Some (s, e) when comment_e.pos_cnum <= s.pos_cnum ->
           let _ = Stack.pop comments in
@@ -469,12 +462,12 @@ let rec pop_comments ?(newline = false) ?last_comment_line ?(spacer = true) comm
           if spacer && comment_e.pos_lnum < s.pos_lnum then Queue.add (Spacer (true, 1)) chunks;
           pop_comments ~last_comment_line:(comment_type, comment_e.pos_lnum) comments chunks l
       | _ -> Option.iter (fun (s, _) -> extra_lines s) (Reporting.simp_loc l)
-    end
+    )
 
 let rec pop_comments_until_loc_end comments chunks l =
   match Stack.top_opt comments with
   | None -> ()
-  | Some (Lexer.Comment (comment_type, comment_s, comment_e, contents)) -> begin
+  | Some (Lexer.Comment (comment_type, comment_s, comment_e, contents)) -> (
       match Reporting.simp_loc l with
       | Some (_, e) when comment_s.pos_cnum < e.pos_cnum ->
           let _ = Stack.pop comments in
@@ -485,7 +478,7 @@ let rec pop_comments_until_loc_end comments chunks l =
             chunks;
           pop_comments_until_loc_end comments chunks l
       | _ -> ()
-    end
+    )
 
 let rec discard_comments comments (pos : Lexing.position) =
   match Stack.top_opt comments with
@@ -499,7 +492,7 @@ let rec discard_comments comments (pos : Lexing.position) =
 let pop_trailing_comment ?space:(n = 0) comments chunks line_num =
   match line_num with
   | None -> false
-  | Some lnum -> begin
+  | Some lnum -> (
       match Stack.top_opt comments with
       | Some (Lexer.Comment (comment_type, s, _, contents)) when s.pos_lnum = lnum -> (
           let _ = Stack.pop comments in
@@ -507,7 +500,7 @@ let pop_trailing_comment ?space:(n = 0) comments chunks line_num =
           match comment_type with Comment_line -> true | _ -> false
         )
       | _ -> false
-    end
+    )
 
 let string_of_kind (K_aux (k, _)) =
   match k with K_type -> "Type" | K_int -> "Int" | K_nat -> "Nat" | K_order -> "Order" | K_bool -> "Bool"
@@ -564,12 +557,10 @@ let chunk_delimit ?delim ~within ~get_loc ~chunk comments xs =
       chunk comments chunks x;
 
       (* Add a delimiter, which is optional for the last element *)
-      begin
-        match delim with
-        | Some delim ->
-            if Option.is_some next then Queue.add (Delim delim) chunks else Queue.add (Opt_delim delim) chunks
-        | None -> ()
-      end;
+      ( match delim with
+      | Some delim -> if Option.is_some next then Queue.add (Delim delim) chunks else Queue.add (Opt_delim delim) chunks
+      | None -> ()
+      );
 
       (* If the next delimited expression is on a new line,
          pop any single trailing comment on the same line into
@@ -1007,34 +998,32 @@ let rec chunk_exp comments chunks (E_aux (aux, l)) =
 
             if need_spacer then Queue.add (Spacer (true, 1)) chunks;
 
-            begin
-              match block_exp with
-              | Block_exp exp -> chunk_exp comments chunks exp
-              | Block_let (pat, exp) ->
-                  pop_comments comments chunks s_l;
-                  let pat_chunks = Queue.create () in
-                  chunk_pat comments pat_chunks pat;
-                  let exp_chunks = rec_chunk_exp exp in
-                  Queue.add (Block_binder (Let_binder, pat_chunks, exp_chunks)) chunks
-              | Block_var (lexp, exp) ->
-                  pop_comments comments chunks s_l;
-                  let lexp_chunks = rec_chunk_exp lexp in
-                  let exp_chunks = rec_chunk_exp exp in
-                  Queue.add (Block_binder (Var_binder, lexp_chunks, exp_chunks)) chunks
-            end;
+            ( match block_exp with
+            | Block_exp exp -> chunk_exp comments chunks exp
+            | Block_let (pat, exp) ->
+                pop_comments comments chunks s_l;
+                let pat_chunks = Queue.create () in
+                chunk_pat comments pat_chunks pat;
+                let exp_chunks = rec_chunk_exp exp in
+                Queue.add (Block_binder (Let_binder, pat_chunks, exp_chunks)) chunks
+            | Block_var (lexp, exp) ->
+                pop_comments comments chunks s_l;
+                let lexp_chunks = rec_chunk_exp lexp in
+                let exp_chunks = rec_chunk_exp exp in
+                Queue.add (Block_binder (Var_binder, lexp_chunks, exp_chunks)) chunks
+            );
 
             let next_line_num = Option.bind next (fun bexp -> block_exp_locs bexp |> fst |> starting_line_num) in
             if
               have_linebreak (ending_line_num e_l) next_line_num
               || (Option.is_none next && have_linebreak (ending_line_num e_l) (ending_line_num l))
             then ignore (pop_trailing_comment comments chunks (ending_line_num e_l));
-            begin
-              match next with
-              | Some next ->
-                  let next_s_l, _ = block_exp_locs block_exp in
-                  pop_comments comments chunks next_s_l
-              | _ -> pop_comments_until_loc_end comments chunks l
-            end;
+            ( match next with
+            | Some next ->
+                let next_s_l, _ = block_exp_locs block_exp in
+                pop_comments comments chunks next_s_l
+            | _ -> pop_comments_until_loc_end comments chunks l
+            );
             (chunks, have_blank_linebreak (ending_line_num e_l) next_line_num)
           )
           false block_exps
@@ -1149,7 +1138,7 @@ let rec chunk_exp comments chunks (E_aux (aux, l)) =
           body = body_chunks;
         }
       |> add_chunk chunks
-  | E_loop (loop_type, measure, cond, body) ->
+  | E_loop (loop_type, measure, cond, body) -> (
       let measure_chunks_opt =
         match measure with
         | Measure_aux (Measure_none, _) -> None
@@ -1158,25 +1147,24 @@ let rec chunk_exp comments chunks (E_aux (aux, l)) =
             chunk_exp comments measure_chunks exp;
             Some measure_chunks
       in
-      begin
-        match loop_type with
-        | While ->
-            let cond_chunks = Queue.create () in
-            chunk_exp comments cond_chunks cond;
-            let body_chunks = Queue.create () in
-            chunk_exp comments body_chunks body;
-            While
-              { repeat_until = false; termination_measure = measure_chunks_opt; cond = cond_chunks; body = body_chunks }
-            |> add_chunk chunks
-        | Until ->
-            let cond_chunks = Queue.create () in
-            chunk_exp comments cond_chunks cond;
-            let body_chunks = Queue.create () in
-            chunk_exp comments body_chunks body;
-            While
-              { repeat_until = true; termination_measure = measure_chunks_opt; cond = cond_chunks; body = body_chunks }
-            |> add_chunk chunks
-      end
+      match loop_type with
+      | While ->
+          let cond_chunks = Queue.create () in
+          chunk_exp comments cond_chunks cond;
+          let body_chunks = Queue.create () in
+          chunk_exp comments body_chunks body;
+          While
+            { repeat_until = false; termination_measure = measure_chunks_opt; cond = cond_chunks; body = body_chunks }
+          |> add_chunk chunks
+      | Until ->
+          let cond_chunks = Queue.create () in
+          chunk_exp comments cond_chunks cond;
+          let body_chunks = Queue.create () in
+          chunk_exp comments body_chunks body;
+          While
+            { repeat_until = true; termination_measure = measure_chunks_opt; cond = cond_chunks; body = body_chunks }
+          |> add_chunk chunks
+    )
   | E_internal_assume (nc, exp) ->
       let nc_chunks = Queue.create () in
       chunk_atyp comments nc_chunks nc;

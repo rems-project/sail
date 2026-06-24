@@ -846,7 +846,7 @@ and doc_exp (as_monadic : bool) ctx (E_aux (e, (l, annot)) as full_exp) =
   | E_app (Id_aux (Id "while#t", _), args) -> doc_loop l as_monadic ctx `WhileFuel args
   | E_app (Id_aux (Id "until#", _), args) -> doc_loop l as_monadic ctx `Until args
   | E_app (Id_aux (Id "until#t", _), args) -> doc_loop l as_monadic ctx `UntilFuel args
-  | E_app (Id_aux (Id "foreach#", _), args) -> begin
+  | E_app (Id_aux (Id "foreach#", _), args) -> (
       match args with
       | [from_exp; to_exp; step_exp; ord_exp; vartuple; body] ->
           let loopvar, body =
@@ -890,7 +890,7 @@ and doc_exp (as_monadic : bool) ctx (E_aux (e, (l, annot)) as full_exp) =
           let full_loop = prefix 2 1 loop_head loop_body in
           separate hardline [vars_dec_pp; full_loop; wrap_with_pure as_monadic vars_pp]
       | _ -> raise (Reporting.err_unreachable l __POS__ "Unexpected number of arguments for loop combinator")
-    end
+    )
   | E_for (loopvar, from_exp, to_exp, step_exp, Ord_aux (order, _), body) ->
       let combinator = match order with Ord_inc -> "foreach_Z_up" | Ord_dec -> "foreach_Z_down" in
       let from_exp_pp, to_exp_pp, step_exp_pp =
@@ -1105,18 +1105,18 @@ let doc_funcl_init global (FCL_aux (FCL_funcl (id, pexp), annot)) =
   let binders : (tannot pat * id * typ) list =
     pats
     |> List.mapi (fun i (pat, typ) ->
-           match pat_is_plain_binder ~suffix:(Printf.sprintf "_%i" i) env pat with
-           | Some (Some id, _) -> (pat, id, typ)
-           | Some (None, _) ->
-               (pat, mk_id ~loc:(pat_loc pat) (Printf.sprintf "x_%i" i), typ)
-               (* TODO fresh name or wildcard instead of x *)
-           | _ ->
-               ( pat,
-                 Id_aux (Id "TODO_ARG_PATTERN", Unknown),
-                 Typ_aux (Typ_id (Id_aux (Id "TODO_ARG_PATTERN", Unknown)), Unknown)
-               )
-           (*failwith "Argument pattern not translatable yet."*)
-       )
+        match pat_is_plain_binder ~suffix:(Printf.sprintf "_%i" i) env pat with
+        | Some (Some id, _) -> (pat, id, typ)
+        | Some (None, _) ->
+            (pat, mk_id ~loc:(pat_loc pat) (Printf.sprintf "x_%i" i), typ)
+            (* TODO fresh name or wildcard instead of x *)
+        | _ ->
+            ( pat,
+              Id_aux (Id "TODO_ARG_PATTERN", Unknown),
+              Typ_aux (Typ_id (Id_aux (Id "TODO_ARG_PATTERN", Unknown)), Unknown)
+            )
+        (*failwith "Argument pattern not translatable yet."*)
+    )
   in
   let ctx = context_init env global in
   let ctx, binders, fixup_binders =

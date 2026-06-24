@@ -115,10 +115,10 @@ let update_field_exp range order inner_exp new_value =
         let vi' = if is_order_inc order then nsum vi w else nminus vi w in
         let rhs =
           if single then new_value
-          else begin
+          else (
             let vj = if is_order_inc order then nminus vi' (nint 1) else nsum vi' (nint 1) in
             mk_exp (vector_subrange new_value (mk_sizeof_exp vi) (mk_sizeof_exp vj))
-          end
+          )
         in
         let update = mk_exp (vector_update_subrange e (mk_sizeof_exp i) (mk_sizeof_exp j) rhs) in
         aux update vi' is

@@ -104,11 +104,11 @@ module Make_optimizer (S : Sequence) = struct
     let uses = NameHashtbl.create (Stack.length stack) in
 
     let rec uses_in_exp = function
-      | Var var -> begin
+      | Var var -> (
           match NameHashtbl.find_opt uses var with
           | Some n -> NameHashtbl.replace uses var (n + 1)
           | None -> NameHashtbl.add uses var 1
-        end
+        )
       | Unit | Member _ | Bitvec_lit _ | Bool_lit _ | String_lit _ | Real_lit _ | Empty_list -> ()
       | Fn (_, exps) -> List.iter uses_in_exp exps
       | Field (_, _, exp) -> uses_in_exp exp
@@ -132,17 +132,17 @@ module Make_optimizer (S : Sequence) = struct
     in
 
     let remove_unused () = function
-      | Declare_const (var, _) as def -> begin
+      | Declare_const (var, _) as def -> (
           match NameHashtbl.find_opt uses var with None -> () | Some _ -> Stack.push def stack'
-        end
+        )
       | Declare_fun _ as def -> Stack.push def stack'
-      | Define_const (var, _, exp) as def -> begin
+      | Define_const (var, _, exp) as def -> (
           match NameHashtbl.find_opt uses var with
           | None -> ()
           | Some _ ->
               uses_in_exp exp;
               Stack.push def stack'
-        end
+        )
       | Declare_datatypes _ as def -> Stack.push def stack'
       | Assert exp as def ->
           uses_in_exp exp;
@@ -157,18 +157,17 @@ module Make_optimizer (S : Sequence) = struct
     let constant_propagate = function
       | Declare_const _ as def -> S.add def seq
       | Declare_fun _ as def -> S.add def seq
-      | Define_const (var, typ, exp) ->
+      | Define_const (var, typ, exp) -> (
           let simpset = SimpSet.from_function (NameHashtbl.find_opt vars) in
           let exp = Smt_exp.simp simpset exp in
-          begin
-            match (NameHashtbl.find_opt uses var, exp) with
-            | _, (Bitvec_lit _ | Bool_lit _) -> NameHashtbl.add vars var exp
-            | _, Fn ("=", [Var _; Bitvec_lit _]) -> NameHashtbl.add vars var exp
-            | _, Fn ("concat", [Bitvec_lit _; Var _]) -> NameHashtbl.add vars var exp
-            | Some 1, _ -> NameHashtbl.add vars var exp
-            | Some _, exp -> S.add (Define_const (var, typ, exp)) seq
-            | None, _ -> assert false
-          end
+          match (NameHashtbl.find_opt uses var, exp) with
+          | _, (Bitvec_lit _ | Bool_lit _) -> NameHashtbl.add vars var exp
+          | _, Fn ("=", [Var _; Bitvec_lit _]) -> NameHashtbl.add vars var exp
+          | _, Fn ("concat", [Bitvec_lit _; Var _]) -> NameHashtbl.add vars var exp
+          | Some 1, _ -> NameHashtbl.add vars var exp
+          | Some _, exp -> S.add (Define_const (var, typ, exp)) seq
+          | None, _ -> assert false
+        )
       | Assert exp ->
           let simpset = SimpSet.from_function (NameHashtbl.find_opt vars) in
           S.add (Assert (Smt_exp.simp simpset exp)) seq
@@ -231,11 +230,11 @@ module Make (Config : CONFIG) = struct
           in
           assert (CTMap.cardinal rmap = 1);
           match CTMap.min_binding_opt rmap with
-          | Some (ctyp, regs) -> begin
+          | Some (ctyp, regs) -> (
               match Util.list_index (fun reg -> Name.compare reg id = 0) regs with
               | Some i -> Smt_gen.bvint (required_width (Big_int.of_int (List.length regs))) (Big_int.of_int i)
               | None -> assert false
-            end
+            )
           | _ -> assert false
       end)
       (struct
@@ -333,13 +332,13 @@ module Make (Config : CONFIG) = struct
     | CT_real ->
         let* _ = Smt_gen.real_used in
         return Real
-    | CT_ref ctyp -> begin
+    | CT_ref ctyp -> (
         match CTMap.find_opt ctyp Config.register_map with
         | Some regs -> return (Bitvec (required_width (Big_int.of_int (List.length regs))))
         | _ ->
             let* l = Smt_gen.current_location in
             Reporting.unreachable l __POS__ ("No registers with ctyp: " ^ string_of_ctyp ctyp)
-      end
+      )
     | CT_list _ | CT_float _ ->
         let* l = Smt_gen.current_location in
         raise (Reporting.err_todo l "Lists and floats not yet supported in SMT generation")
@@ -608,16 +607,14 @@ module Make (Config : CONFIG) = struct
         let write, ctyp = rmw_write clexp in
         let* modifier = rmw_modify smt clexp in
         singleton (define_const write ctyp modifier)
-    | I_decl (ctyp, id) -> begin
-        begin
-          match l with Unique (n, _) -> Stack.push (n, zencode_name id) state.arg_stack | _ -> ()
-        end;
+    | I_decl (ctyp, id) -> (
+        (match l with Unique (n, _) -> Stack.push (n, zencode_name id) state.arg_stack | _ -> ());
         let* ty = smt_ctyp ctyp in
         let wf_pred = wf_smt_ctyp ctyp in
         match wf_pred with
         | Some p -> return [Declare_const (id, ty); Assert (p (Var id))]
         | None -> return [Declare_const (id, ty)]
-      end
+      )
     | I_clear _ -> return []
     (* Should only appear as terminators for basic blocks. *)
     | I_jump _ | I_goto _ | I_end _ | I_exit _ | I_undefined _ ->
@@ -851,7 +848,7 @@ module Make (Config : CONFIG) = struct
 
   let smt_cdef props lets name_file ctx all_cdefs smt_includes (CDEF_aux (aux, def_annot)) =
     match aux with
-    | CDEF_val (function_id, _, arg_ctyps, ret_ctyp, _) when Bindings.mem function_id props -> begin
+    | CDEF_val (function_id, _, arg_ctyps, ret_ctyp, _) when Bindings.mem function_id props -> (
         match find_function [] function_id all_cdefs with
         | intervening_lets, Some (Return_plain, args, instrs, function_def_annot) ->
             let function_id_string = string_of_id function_id in
@@ -937,19 +934,19 @@ module Make (Config : CONFIG) = struct
         | _ ->
             let _, _, pragma_l, _ = Bindings.find function_id props in
             raise (Reporting.err_general pragma_l "No function body found")
-      end
+      )
     | _ -> None
 
   let rec smt_cdefs acc props lets name_file ctx all_cdefs smt_includes = function
     | CDEF_aux (CDEF_let (_, vars, setup), _) :: cdefs ->
         let vars = List.map (fun (id, ctyp) -> idecl (id_loc id) ctyp (name id)) vars in
         smt_cdefs acc props (lets @ vars @ setup) name_file ctx all_cdefs smt_includes cdefs
-    | cdef :: cdefs -> begin
+    | cdef :: cdefs -> (
         match smt_cdef props lets name_file ctx all_cdefs smt_includes cdef with
         | Some generation_info ->
             smt_cdefs (generation_info :: acc) props lets name_file ctx all_cdefs smt_includes cdefs
         | None -> smt_cdefs acc props lets name_file ctx all_cdefs smt_includes cdefs
-      end
+      )
     | [] -> acc
 
   (* For generating SMT when we have a reg_deref(r : register(t))
@@ -967,9 +964,9 @@ module Make (Config : CONFIG) = struct
 
       method! vinstr =
         function
-        | I_aux (I_funcall (CR_one (CL_addr (CL_id (id, ctyp))), Call, function_id, args), (_, l)) -> begin
+        | I_aux (I_funcall (CR_one (CL_addr (CL_id (id, ctyp))), Call, function_id, args), (_, l)) -> (
             match ctyp with
-            | CT_ref reg_ctyp -> begin
+            | CT_ref reg_ctyp -> (
                 match CTMap.find_opt reg_ctyp Config.register_map with
                 | Some regs ->
                     let end_label = label "end_reg_write_" in
@@ -987,52 +984,48 @@ module Make (Config : CONFIG) = struct
                     ChangeTo (iblock (List.concat (List.map try_reg regs) @ [ilabel end_label]))
                 | None ->
                     raise (Reporting.err_general l ("Could not find any registers with type " ^ string_of_ctyp reg_ctyp))
-              end
+              )
             | _ ->
                 raise
                   (Reporting.err_general l "Register reference assignment must take a register reference as an argument")
-          end
-        | I_aux (I_funcall (CR_one clexp, Call, function_id, [reg_ref]), (_, l)) as instr ->
+          )
+        | I_aux (I_funcall (CR_one clexp, Call, function_id, [reg_ref]), (_, l)) as instr -> (
             let open Type_check in
-            begin
-              match
-                if Env.is_extern (fst function_id) env "smt" then Some (Env.get_extern (fst function_id) env "smt")
-                else None
-              with
-              | Some "reg_deref" -> begin
-                  match cval_ctyp reg_ref with
-                  | CT_ref reg_ctyp -> begin
-                      (* Not find all the registers with this ctyp *)
-                      match CTMap.find_opt reg_ctyp Config.register_map with
-                      | Some regs ->
-                          let end_label = label "end_reg_deref_" in
-                          let try_reg r =
-                            let next_label = label "next_reg_deref_" in
-                            [
-                              ijump l
-                                (V_call (Neq, [V_lit (VL_ref (string_of_name ~zencode:false r), reg_ctyp); reg_ref]))
-                                next_label;
-                              icopy l clexp (V_id (r, reg_ctyp));
-                              igoto end_label;
-                              ilabel next_label;
-                            ]
-                          in
-                          ChangeTo (iblock (List.concat (List.map try_reg regs) @ [ilabel end_label]))
-                      | None ->
-                          raise
-                            (Reporting.err_general l
-                               ("Could not find any registers with type " ^ string_of_ctyp reg_ctyp)
-                            )
-                    end
-                  | _ ->
-                      raise
-                        (Reporting.err_general l "Register dereference must have a register reference as an argument")
-                end
-              | _ -> SkipChildren
-            end
-        | I_aux (I_copy (CL_addr (CL_id (id, ctyp)), cval), (_, l)) -> begin
+            match
+              if Env.is_extern (fst function_id) env "smt" then Some (Env.get_extern (fst function_id) env "smt")
+              else None
+            with
+            | Some "reg_deref" -> (
+                match cval_ctyp reg_ref with
+                | CT_ref reg_ctyp -> (
+                    (* Not find all the registers with this ctyp *)
+                    match CTMap.find_opt reg_ctyp Config.register_map with
+                    | Some regs ->
+                        let end_label = label "end_reg_deref_" in
+                        let try_reg r =
+                          let next_label = label "next_reg_deref_" in
+                          [
+                            ijump l
+                              (V_call (Neq, [V_lit (VL_ref (string_of_name ~zencode:false r), reg_ctyp); reg_ref]))
+                              next_label;
+                            icopy l clexp (V_id (r, reg_ctyp));
+                            igoto end_label;
+                            ilabel next_label;
+                          ]
+                        in
+                        ChangeTo (iblock (List.concat (List.map try_reg regs) @ [ilabel end_label]))
+                    | None ->
+                        raise
+                          (Reporting.err_general l ("Could not find any registers with type " ^ string_of_ctyp reg_ctyp))
+                  )
+                | _ ->
+                    raise (Reporting.err_general l "Register dereference must have a register reference as an argument")
+              )
+            | _ -> SkipChildren
+          )
+        | I_aux (I_copy (CL_addr (CL_id (id, ctyp)), cval), (_, l)) -> (
             match ctyp with
-            | CT_ref reg_ctyp -> begin
+            | CT_ref reg_ctyp -> (
                 match CTMap.find_opt reg_ctyp Config.register_map with
                 | Some regs ->
                     let end_label = label "end_reg_write_" in
@@ -1050,11 +1043,11 @@ module Make (Config : CONFIG) = struct
                     ChangeTo (iblock (List.concat (List.map try_reg regs) @ [ilabel end_label]))
                 | None ->
                     raise (Reporting.err_general l ("Could not find any registers with type " ^ string_of_ctyp reg_ctyp))
-              end
+              )
             | _ ->
                 raise
                   (Reporting.err_general l "Register reference assignment must take a register reference as an argument")
-          end
+          )
         | _ -> DoChildren
     end
 
@@ -1084,8 +1077,7 @@ end) : Jib_compile.CONFIG = struct
     | Typ_id id when string_of_id id = "real" -> CT_real
     | Typ_app (id, _) when string_of_id id = "atom_bool" -> CT_bool
     | Typ_app (id, args) when string_of_id id = "itself" -> convert_typ ctx (Typ_aux (Typ_app (mk_id "atom", args), l))
-    | Typ_app (id, _) when string_of_id id = "range" || string_of_id id = "atom" || string_of_id id = "implicit" ->
-      begin
+    | Typ_app (id, _) when string_of_id id = "range" || string_of_id id = "atom" || string_of_id id = "implicit" -> (
         match destruct_range ctx.local_env typ with
         | None -> assert false (* Checked if range type in guard *)
         | Some (kids, constr, n, m) -> (
@@ -1107,20 +1099,20 @@ end) : Jib_compile.CONFIG = struct
                 then CT_fint 64
                 else CT_lint
           )
-      end
+      )
     | Typ_app (id, [A_aux (A_typ typ, _)]) when string_of_id id = "list" -> CT_list (convert_typ ctx typ)
     (* Note that we have to use lbits for zero-length bitvectors because they are not allowed by SMTLIB *)
-    | Typ_app (id, [A_aux (A_nexp n, _)]) when string_of_id id = "bitvector" -> begin
+    | Typ_app (id, [A_aux (A_nexp n, _)]) when string_of_id id = "bitvector" -> (
         match nexp_simp n with
         | Nexp_aux (Nexp_constant n, _) when Big_int.equal n Big_int.zero -> CT_lbits
         | Nexp_aux (Nexp_constant n, _) -> CT_fbits (Big_int.to_int n)
         | _ -> CT_lbits
-      end
-    | Typ_app (id, [A_aux (A_nexp n, _); A_aux (A_typ typ, _)]) when string_of_id id = "vector" -> begin
+      )
+    | Typ_app (id, [A_aux (A_nexp n, _); A_aux (A_typ typ, _)]) when string_of_id id = "vector" -> (
         match nexp_simp n with
         | Nexp_aux (Nexp_constant c, _) -> CT_fvector (Big_int.to_int c, convert_typ ctx typ)
         | _ -> CT_vector (convert_typ ctx typ)
-      end
+      )
     | Typ_app (id, [A_aux (A_typ typ, _)]) when string_of_id id = "register" -> CT_ref (convert_typ ctx typ)
     | Typ_id id when Bindings.mem id ctx.records -> CT_struct (id, [])
     | Typ_app (id, typ_args) when Bindings.mem id ctx.records ->
@@ -1136,7 +1128,7 @@ end) : Jib_compile.CONFIG = struct
         CT_variant (id, ctyp_args)
     | Typ_id id when Bindings.mem id ctx.enums -> CT_enum id
     | Typ_tuple typs -> CT_tup (List.map (convert_typ ctx) typs)
-    | Typ_exist _ -> begin
+    | Typ_exist _ -> (
         (* Use Type_check.destruct_exist when optimising with SMT, to
            ensure that we don't cause any type variable clashes in
            local_env, and that we can optimize the existential based
@@ -1146,7 +1138,7 @@ end) : Jib_compile.CONFIG = struct
             let env = add_existential l kids nc ctx.local_env in
             convert_typ { ctx with local_env = env } typ
         | None -> raise (Reporting.err_unreachable l __POS__ "Existential cannot be destructured!")
-      end
+      )
     | Typ_var kid -> CT_poly kid
     | _ -> raise (Reporting.err_unreachable l __POS__ ("No SMT type for type " ^ string_of_typ typ))
 
@@ -1167,7 +1159,9 @@ end) : Jib_compile.CONFIG = struct
 
   let smt_literals ctx =
     let rec smt_literal annot = function
-      | AV_lit (lit, typ) as v -> begin match literal_to_cval lit with Some cval -> AV_cval (cval, typ) | None -> v end
+      | AV_lit (lit, typ) as v -> (
+          match literal_to_cval lit with Some cval -> AV_cval (cval, typ) | None -> v
+        )
       | AV_tuple avals -> AV_tuple (List.map (smt_literal annot) avals)
       | v -> v
     in
@@ -1177,7 +1171,7 @@ end) : Jib_compile.CONFIG = struct
      specialization), we can unroll the exact number of times required,
      and omit any comparisons. *)
   let unroll_static_foreach ctx = function
-    | AE_aux (AE_for (id, from_aexp, to_aexp, by_aexp, order, body), annot) as aexp -> begin
+    | AE_aux (AE_for (id, from_aexp, to_aexp, by_aexp, order, body), annot) as aexp -> (
         match
           ( convert_typ ctx (aexp_typ from_aexp),
             convert_typ ctx (aexp_typ to_aexp),
@@ -1185,7 +1179,7 @@ end) : Jib_compile.CONFIG = struct
             order
           )
         with
-        | CT_constant f, CT_constant t, CT_constant b, Ord_aux (Ord_inc, _) ->
+        | CT_constant f, CT_constant t, CT_constant b, Ord_aux (Ord_inc, _) -> (
             let new_annot = { annot with loc = gen_loc annot.loc; uannot = empty_uannot } in
             let i = ref f in
             let unrolled = ref [] in
@@ -1199,14 +1193,13 @@ end) : Jib_compile.CONFIG = struct
               unrolled := iteration :: !unrolled;
               i := Big_int.add !i b
             done;
-            begin
-              match !unrolled with
-              | last :: iterations ->
-                  AE_aux (AE_block (List.rev iterations, last, unit_typ), { annot with loc = gen_loc annot.loc })
-              | [] -> AE_aux (AE_val (AV_lit (L_aux (L_unit, gen_loc annot.loc), unit_typ)), new_annot)
-            end
+            match !unrolled with
+            | last :: iterations ->
+                AE_aux (AE_block (List.rev iterations, last, unit_typ), { annot with loc = gen_loc annot.loc })
+            | [] -> AE_aux (AE_val (AV_lit (L_aux (L_unit, gen_loc annot.loc), unit_typ)), new_annot)
+          )
         | _ -> aexp
-      end
+      )
     | aexp -> aexp
 
   (* Map over all the functions in an aexp. *)
@@ -1324,7 +1317,8 @@ let compile ~unroll_limit env effect_info ast =
   let cdefs, jib_ctx =
     let module Jibc = Jib_compile.Make (CompileConfig (struct
       let unroll_limit = unroll_limit
-    end)) in
+    end))
+    in
     let ctx = Jib_compile.initial_ctx ~for_target:"c" env effect_info in
     let t = Profile.start () in
     let cdefs, ctx = Jibc.compile_ast ctx ast in

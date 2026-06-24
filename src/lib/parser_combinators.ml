@@ -53,13 +53,19 @@ let ( >>= ) (m : 'a parser) (f : 'a -> 'b parser) (toks : Str.split_result list)
 
 let pmap f m toks = match m toks with Ok (r, toks) -> Ok (f r, toks) | Fail -> Fail
 
-let token f = function tok :: toks -> begin match f tok with Some x -> Ok (x, toks) | None -> Fail end | [] -> Fail
+let token f = function
+  | tok :: toks -> (
+      match f tok with Some x -> Ok (x, toks) | None -> Fail
+    )
+  | [] -> Fail
 
 let preturn x toks = Ok (x, toks)
 
 let rec plist m toks =
   match m toks with
-  | Ok (x, toks) -> begin match plist m toks with Ok (xs, toks) -> Ok (x :: xs, toks) | Fail -> Fail end
+  | Ok (x, toks) -> (
+      match plist m toks with Ok (xs, toks) -> Ok (x :: xs, toks) | Fail -> Fail
+    )
   | Fail -> Ok ([], toks)
 
 let pchoose m n toks = match m toks with Fail -> n toks | Ok (x, toks) -> Ok (x, toks)

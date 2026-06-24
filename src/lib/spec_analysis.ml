@@ -185,10 +185,10 @@ let nexp_subst_fns substs =
     match e with
     | E_block es -> re (E_block (List.map s_exp es))
     | E_id _ | E_ref _ | E_undef | E_lit _ | E_internal_value _ | E_config _ -> re e
-    | E_sizeof ne -> begin
+    | E_sizeof ne -> (
         let ne' = subst_kids_nexp substs ne in
         match ne' with Nexp_aux (Nexp_constant i, l) -> re (E_lit (L_aux (L_num i, l))) | _ -> re (E_sizeof ne')
-      end
+      )
     | E_constraint nc -> re (E_constraint (subst_kids_nc substs nc))
     | E_typ (t, e') -> re (E_typ (s_t t, s_exp e'))
     | E_app (id, es) -> re (E_app (id, List.map s_exp es))

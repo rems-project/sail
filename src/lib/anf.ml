@@ -510,19 +510,18 @@ let rec pp_aexp (AE_aux (aexp, annot)) =
   | AE_let (mut, id, id_typ, binding, body, typ) ->
       let keyword = match mut with Mutable -> string "var" | Immutable -> string "let" in
       group
-        begin
-          match binding with
-          | AE_aux (AE_let _, _) ->
-              (pp_annot typ (separate space [keyword; pp_annot id_typ (pp_name id); string "="])
-              ^^ hardline
-              ^^ nest 2 (pp_aexp binding)
-              )
-              ^^ hardline ^^ string "in" ^^ space ^^ pp_aexp body
-          | _ ->
-              pp_annot typ
-                (separate space [keyword; pp_annot id_typ (pp_name id); string "="; pp_aexp binding; string "in"])
-              ^^ hardline ^^ pp_aexp body
-        end
+        ( match binding with
+        | AE_aux (AE_let _, _) ->
+            (pp_annot typ (separate space [keyword; pp_annot id_typ (pp_name id); string "="])
+            ^^ hardline
+            ^^ nest 2 (pp_aexp binding)
+            )
+            ^^ hardline ^^ string "in" ^^ space ^^ pp_aexp body
+        | _ ->
+            pp_annot typ
+              (separate space [keyword; pp_annot id_typ (pp_name id); string "="; pp_aexp binding; string "in"])
+            ^^ hardline ^^ pp_aexp body
+        )
   | AE_if (cond, then_aexp, else_aexp, typ) ->
       pp_annot typ
         (separate space [string "if"; pp_aval cond; string "then"; pp_aexp then_aexp; string "else"; pp_aexp else_aexp])
@@ -835,11 +834,10 @@ let rec anf (E_aux (e_aux, (l, tannot)) as exp) =
       let aval1, wrap1 = to_aval aexp1 in
       let aval2, wrap2 = to_aval aexp2 in
       wrap1 (wrap2 (mk_aexp (AE_app (Extern (mk_id "sail_cons", None), [aval1; aval2], typ_of exp))))
-  | E_id id ->
+  | E_id id -> (
       let lvar = Env.lookup_id id (env_of exp) in
-      begin
-        match lvar with _ -> mk_aexp (AE_val (AV_id (name id, lvar)))
-      end
+      match lvar with _ -> mk_aexp (AE_val (AV_id (name id, lvar)))
+    )
   | E_ref id ->
       let lvar = Env.lookup_id id (env_of exp) in
       mk_aexp (AE_val (AV_ref (id, lvar)))

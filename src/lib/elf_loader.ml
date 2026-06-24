@@ -84,18 +84,16 @@ let read name =
   let info = Sail_interface.populate_and_obtain_global_symbol_init_info name in
   prerr_endline "Elf read:";
   let elf_file, elf_epi, symbol_map =
-    begin
-      match info with
-      | Error.Fail s -> failwith (Printf.sprintf "populate_and_obtain_global_symbol_init_info: %s" s)
-      | Error.Success
-          ( (elf_file : Elf_file.elf_file),
-            (elf_epi : Sail_interface.executable_process_image),
-            (symbol_map : Elf_file.global_symbol_init_info)
-          ) ->
-          (* XXX disabled because it crashes if entry_point overflows an ocaml int :-(
+    match info with
+    | Error.Fail s -> failwith (Printf.sprintf "populate_and_obtain_global_symbol_init_info: %s" s)
+    | Error.Success
+        ( (elf_file : Elf_file.elf_file),
+          (elf_epi : Sail_interface.executable_process_image),
+          (symbol_map : Elf_file.global_symbol_init_info)
+        ) ->
+        (* XXX disabled because it crashes if entry_point overflows an ocaml int :-(
              prerr_endline (Sail_interface.string_of_executable_process_image elf_epi);*)
-          (elf_file, elf_epi, symbol_map)
-    end
+        (elf_file, elf_epi, symbol_map)
   in
   prerr_endline "\nElf segments:";
 
@@ -104,14 +102,12 @@ let read name =
     Lem_list.mapMaybe (fun (seg, prov) -> if prov = Elf_file.FromELF then Some seg else None) segs
   in
   let segments, e_entry, _e_machine =
-    begin
-      match (elf_epi, elf_file) with
-      | Sail_interface.ELF_Class_32 (segments, e_entry, e_machine), Elf_file.ELF_File_32 _ ->
-          (ELF32 (prune_segments segments), e_entry, e_machine)
-      | Sail_interface.ELF_Class_64 (segments, e_entry, e_machine), Elf_file.ELF_File_64 _ ->
-          (ELF64 (prune_segments segments), e_entry, e_machine)
-      | _, _ -> failwith "cannot handle ELF file"
-    end
+    match (elf_epi, elf_file) with
+    | Sail_interface.ELF_Class_32 (segments, e_entry, e_machine), Elf_file.ELF_File_32 _ ->
+        (ELF32 (prune_segments segments), e_entry, e_machine)
+    | Sail_interface.ELF_Class_64 (segments, e_entry, e_machine), Elf_file.ELF_File_64 _ ->
+        (ELF64 (prune_segments segments), e_entry, e_machine)
+    | _, _ -> failwith "cannot handle ELF file"
   in
   (segments, e_entry, symbol_map)
 
@@ -194,10 +190,9 @@ let load_binary ?(writer = write_sail_lib) addr name =
     done;
     assert false
   with
-  | End_of_file -> begin
+  | End_of_file ->
       Bytes.iteri (fun i ch -> writer addr i (int_of_char ch)) (Buffer.to_bytes buf);
       close_in f
-    end
   | exc ->
       close_in f;
       raise exc

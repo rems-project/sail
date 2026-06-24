@@ -53,13 +53,12 @@ open Parser_combinators
 
 let find_properties { defs; _ } =
   let rec find_prop acc = function
-    | DEF_aux (DEF_pragma ((("property" | "counterexample") as prop_type), Pragma_line (command, l)), _) :: defs ->
-      begin
+    | DEF_aux (DEF_pragma ((("property" | "counterexample") as prop_type), Pragma_line (command, l)), _) :: defs -> (
         match Util.find_next (function DEF_aux (DEF_val _, _) -> true | _ -> false) defs with
         | _, Some (DEF_aux (DEF_val vs, _), defs) -> find_prop ((prop_type, command, l, vs) :: acc) defs
         | _, _ -> raise (Reporting.err_general l "Property is not attached to any function signature")
-      end
-    | DEF_aux (DEF_val vs, def_annot) :: defs -> begin
+      )
+    | DEF_aux (DEF_val vs, def_annot) :: defs -> (
         let attrs = get_attributes (uannot_of_def_annot def_annot) in
         match List.find_opt (fun (_, name, _) -> name = "property" || name = "counterexample") attrs with
         | Some (l, prop_type, Some (AD_aux (AD_string command, _))) ->
@@ -68,7 +67,7 @@ let find_properties { defs; _ } =
             raise (Reporting.err_general l "Expected string argument for property or counterexample")
         | Some (l, prop_type, None) -> find_prop ((prop_type, "", l, vs) :: acc) defs
         | None -> find_prop acc defs
-      end
+      )
     | def :: defs -> find_prop acc defs
     | [] -> acc
   in
@@ -104,13 +103,13 @@ let well_formed_function_arguments pragma_l pat =
         let pats, checks =
           List.combine pats arg_typs
           |> List.mapi (fun n (pat, arg_typ) ->
-                 let id = wf_var n in
-                 match well_formedness_check arg_typ with
-                 | Some check ->
-                     let pat = mk_pat (P_as (Type_check.strip_pat pat, id)) in
-                     (pat, Some (check (mk_exp (E_id id))))
-                 | None -> (Type_check.strip_pat pat, None)
-             )
+              let id = wf_var n in
+              match well_formedness_check arg_typ with
+              | Some check ->
+                  let pat = mk_pat (P_as (Type_check.strip_pat pat, id)) in
+                  (pat, Some (check (mk_exp (E_id id))))
+              | None -> (Type_check.strip_pat pat, None)
+          )
           |> List.split
         in
         (reconstruct_tuple_pat pats pats_annot, Util.option_these checks)
@@ -124,10 +123,10 @@ let add_property_guards props ast =
   let open Type_check in
   let open Type_error in
   let rec add_property_guards' acc = function
-    | (DEF_aux (DEF_fundef (FD_aux (FD_function (r_opt, t_opt, funcls), fd_aux) as fdef), def_annot) as def) :: defs ->
-      begin
+    | (DEF_aux (DEF_fundef (FD_aux (FD_function (r_opt, t_opt, funcls), fd_aux) as fdef), def_annot) as def) :: defs
+      -> (
         match Bindings.find_opt (id_of_fundef fdef) props with
-        | Some (_, _, pragma_l, VS_aux (VS_val_spec (TypSchm_aux (TypSchm_ts (quant, fn_typ), _), _, _), _)) -> begin
+        | Some (_, _, pragma_l, VS_aux (VS_val_spec (TypSchm_aux (TypSchm_ts (quant, fn_typ), _), _, _), _)) -> (
             match quant_split quant with
             | _, constraints ->
                 let add_checks_to_funcl (FCL_aux (FCL_funcl (id, pexp), (def_annot, fcl_tannot))) =
@@ -169,9 +168,9 @@ let add_property_guards props ast =
                 let fdef = FD_aux (FD_function (r_opt, t_opt, funcls), fd_aux) in
 
                 add_property_guards' (DEF_aux (DEF_fundef fdef, def_annot) :: acc) defs
-          end
+          )
         | None -> add_property_guards' (def :: acc) defs
-      end
+      )
     | def :: defs -> add_property_guards' (def :: acc) defs
     | [] -> List.rev acc
   in
@@ -289,11 +288,11 @@ let parse_pragma l input =
   let key = Str.regexp ":[a-z]+" in
   let tokens = Str.full_split key input in
   let rec process_toks pragma = function
-    | Str.Delim ":query" :: Str.Text query :: rest -> begin
+    | Str.Delim ":query" :: Str.Text query :: rest -> (
         match parse_query query with
         | Some q -> process_toks { pragma with query = q } rest
         | None -> raise (Reporting.err_general l ("Could not parse query " ^ String.trim query))
-      end
+      )
     | Str.Delim ":litmus" :: rest ->
         let args, rest = Util.take_drop (function Str.Text _ -> true | _ -> false) rest in
         process_toks { pragma with litmus = List.map (function Str.Text t -> t | _ -> assert false) args } rest

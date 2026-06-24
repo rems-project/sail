@@ -106,9 +106,7 @@ val ctx_has_val_spec : id -> ctx -> bool
 
     The target is the name that would appear in a valspec extern section, i.e.
 
-    {v
-    val foo = { systemverilog: "bar", c: "baz" } = ...
-    v}
+    {v val foo = { systemverilog: "bar", c: "baz" } = ... v}
 
     would mean "systemverilog" and "c" would be valid for_target parameters. If unspecified it will get the current
     target name from the Target module. If unspecified and there is no current target, it defaults to "c". *)

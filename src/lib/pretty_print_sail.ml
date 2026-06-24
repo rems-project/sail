@@ -71,19 +71,19 @@ module Printer (Config : PRINT_CONFIG) = struct
 
   let doc_def_annot def_annot =
     ( match def_annot.Coq_def_annot.doc_comment with
-    | Some { contents; comment_type } -> (
-        match comment_type with
-        | Comment_block -> string "/*!" ^^ string contents ^^ string "*/" ^^ hardline
-        | Comment_line ->
-            let ls = String.split_on_char '\n' contents in
-            string "///" ^^ separate_map (hardline ^^ string "///") string ls ^^ hardline
+      | Some { contents; comment_type } -> (
+          match comment_type with
+          | Comment_block -> string "/*!" ^^ string contents ^^ string "*/" ^^ hardline
+          | Comment_line ->
+              let ls = String.split_on_char '\n' contents in
+              string "///" ^^ separate_map (hardline ^^ string "///") string ls ^^ hardline
+        )
+      | _ -> empty
       )
-    | _ -> empty
-    )
     ^^ ( match def_annot.attrs with
-       | [] -> empty
-       | attrs -> separate_map hardline (fun (_, (attr, arg)) -> doc_attr attr arg) attrs ^^ hardline
-       )
+      | [] -> empty
+      | attrs -> separate_map hardline (fun (_, (attr, arg)) -> doc_attr attr arg) attrs ^^ hardline
+      )
     ^^ match def_annot.visibility with Private _ -> string "private" ^^ space | Public -> empty
 
   let doc_kopt_no_parens = function
@@ -178,12 +178,12 @@ module Printer (Config : PRINT_CONFIG) = struct
           ( NC_equal (A_aux (A_nexp (Nexp_aux (Nexp_var kid, _)), _), A_aux (A_nexp (Nexp_aux (Nexp_constant c, _)), _)),
             _
           )
-        :: ncs -> begin
+        :: ncs -> (
           match Util.option_all (List.map (collect_constants kid) ncs) with
           | None | Some [] -> parens' (separate_map (space ^^ bar ^^ space) nc1 disjs)
           | Some cs ->
               separate space [doc_kid kid; string "in"; braces (separate_map (comma ^^ space) doc_int (c :: cs))]
-        end
+        )
       | _ -> parens' (separate_map (space ^^ bar ^^ space) nc1 disjs)
     and nc1 nc =
       let conjs = constraint_conj nc in
@@ -540,7 +540,7 @@ module Printer (Config : PRINT_CONFIG) = struct
     | E_app (id, [exp]) when Id.compare (mk_id "pow2") id == 0 ->
         separate space [string "2"; string "^"; doc_atomic_exp exp]
     | E_internal_assume (nc, exp) -> doc_let_style_general "internal_assume" (parens (doc_nc nc)) None exp
-    | E_app (id, exps) -> begin
+    | E_app (id, exps) -> (
         let handle_setter id otherwise =
           if uannot_fmt.is_setter && List.length exps >= 2 then (
             let lexp = doc_id id ^^ parens (separate_map (comma ^^ space) doc_exp (Util.butlast exps)) in
@@ -562,7 +562,7 @@ module Printer (Config : PRINT_CONFIG) = struct
                 doc_infix 0 exp
             | _, _ -> handle_setter id (lazy (doc_atomic_exp exp))
           )
-      end
+      )
     | _ -> doc_atomic_exp exp
 
   and doc_part = function Part d -> d | Hole (0, exp) -> doc_exp exp | Hole (n, exp) -> doc_infix n exp
@@ -707,11 +707,11 @@ module Printer (Config : PRINT_CONFIG) = struct
     | _ -> doc_exp exp
 
   and doc_vector_update = function
-    | VU_single (idx, value) -> begin
+    | VU_single (idx, value) -> (
         match (unaux_exp idx, unaux_exp value) with
         | E_id id, E_id id' when Id.compare id id' == 0 -> doc_atomic_exp idx
         | _, _ -> separate space [doc_atomic_exp idx; equals; doc_exp value]
-      end
+      )
     | VU_range (high, low, value) ->
         separate space [doc_atomic_exp high; string ".."; doc_atomic_exp low; equals; doc_exp value]
 
@@ -817,7 +817,7 @@ module Printer (Config : PRINT_CONFIG) = struct
           | TDC_none -> empty
         in
         doc_op colon (concat [string "type"; space; doc_id id]) (doc_kind kind) ^^ doc_inst instantiation
-    | TD_abbrev (id, typq, typ_arg) -> begin
+    | TD_abbrev (id, typq, typ_arg) -> (
         match doc_typquant typq with
         | Some qdoc ->
             doc_op equals
@@ -825,7 +825,7 @@ module Printer (Config : PRINT_CONFIG) = struct
               (doc_typ_arg typ_arg)
         | None ->
             doc_op equals (concat [string "type"; space; doc_id id; doc_typ_arg_kind ":" typ_arg]) (doc_typ_arg typ_arg)
-      end
+      )
     | TD_enum (id, members, _) ->
         separate space
           [

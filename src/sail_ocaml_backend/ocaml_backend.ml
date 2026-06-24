@@ -195,24 +195,24 @@ let pat_record_id l pat =
 
 let rec ocaml_pat ctx (P_aux (pat_aux, (l, _)) as pat) =
   match pat_aux with
-  | P_id id -> begin
+  | P_id id -> (
       match Env.lookup_id id (env_of_pat pat) with
       | Local (_, _) | Unbound _ -> zencode ctx id
       | Enum _ -> zencode_upper ctx id
       | _ -> failwith ("Ocaml: Cannot pattern match on register: " ^ string_of_pat pat)
-    end
+    )
   | P_lit lit -> ocaml_lit lit
   | P_typ (_, pat) -> ocaml_pat ctx pat
   | P_tuple pats -> parens (separate_map (comma ^^ space) (ocaml_pat ctx) pats)
   | P_list pats -> brackets (separate_map (semi ^^ space) (ocaml_pat ctx) pats)
   | P_wild -> string "_"
   | P_as (pat, id) -> separate space [ocaml_pat ctx pat; string "as"; zencode ctx id]
-  | P_app (id, pats) -> begin
+  | P_app (id, pats) -> (
       match Env.union_constructor_info id (env_of_pat pat) with
       | Some (_, m, _, _) when m > ocaml_variant_max_constructors ->
           (string "`" ^^ zencode_upper ctx id) ^^ space ^^ parens (separate_map (comma ^^ space) (ocaml_pat ctx) pats)
       | _ -> zencode_upper ctx id ^^ space ^^ parens (separate_map (comma ^^ space) (ocaml_pat ctx) pats)
-    end
+    )
   | P_cons (hd_pat, tl_pat) -> ocaml_pat ctx hd_pat ^^ string " :: " ^^ ocaml_pat ctx tl_pat
   | P_struct (_, fpats, FP_no_wild) ->
       lbrace ^^ space
@@ -238,18 +238,17 @@ let record_id l exp =
 
 let rec ocaml_exp ctx (E_aux (exp_aux, (l, _)) as exp) =
   match exp_aux with
-  | E_app (f, xs) -> begin
+  | E_app (f, xs) -> (
       match Env.union_constructor_info f (env_of exp) with
-      | Some (_, m, _, _) ->
+      | Some (_, m, _, _) -> (
           let name =
             if m > ocaml_variant_max_constructors then string "`" ^^ zencode_upper ctx f else zencode_upper ctx f
           in
-          begin
-            match xs with
-            | [x] -> name ^^ space ^^ ocaml_atomic_exp ctx x
-            | xs -> name ^^ space ^^ parens (separate_map (comma ^^ space) (ocaml_atomic_exp ctx) xs)
-          end
-      | None -> begin
+          match xs with
+          | [x] -> name ^^ space ^^ ocaml_atomic_exp ctx x
+          | xs -> name ^^ space ^^ parens (separate_map (comma ^^ space) (ocaml_atomic_exp ctx) xs)
+        )
+      | None -> (
           match xs with
           | [x] -> zencode ctx f ^^ space ^^ ocaml_atomic_exp ctx x
           (* Make sure we get the correct short circuiting semantics for and and or *)
@@ -258,8 +257,8 @@ let rec ocaml_exp ctx (E_aux (exp_aux, (l, _)) as exp) =
           | [x; y] when string_of_id f = "or_bool" ->
               separate space [ocaml_atomic_exp ctx x; string "||"; ocaml_atomic_exp ctx y]
           | xs -> zencode ctx f ^^ space ^^ parens (separate_map (comma ^^ space) (ocaml_atomic_exp ctx) xs)
-        end
-    end
+        )
+    )
   | E_return exp -> separate space [string "r.return"; ocaml_atomic_exp ctx exp]
   | E_assert (exp, _) -> separate space [string "assert"; ocaml_atomic_exp ctx exp]
   | E_typ (_, exp) -> ocaml_exp ctx exp
@@ -387,7 +386,7 @@ and ocaml_atomic_exp ctx (E_aux (exp_aux, _) as exp) =
   match exp_aux with
   | E_lit lit -> ocaml_lit lit
   | E_ref id -> zencode ctx id
-  | E_id id -> begin
+  | E_id id -> (
       match Env.lookup_id id (env_of exp) with
       | Local (Immutable, _) | Unbound _ -> zencode ctx id
       | Enum _ -> zencode_upper ctx id
@@ -411,7 +410,7 @@ and ocaml_atomic_exp ctx (E_aux (exp_aux, _) as exp) =
           )
           else bang ^^ zencode ctx id
       | Local (Mutable, _) -> bang ^^ zencode ctx id
-    end
+    )
   | E_vector exps ->
       parens
         (string "List.concat" ^^ space ^^ enclose lbracket rbracket (separate_map (semi ^^ space) (ocaml_exp ctx) exps))
@@ -433,7 +432,7 @@ and ocaml_atomic_exp ctx (E_aux (exp_aux, _) as exp) =
 
 and ocaml_assignment ctx (LE_aux (lexp_aux, _) as lexp) exp =
   match lexp_aux with
-  | LE_typ (_, id) | LE_id id -> begin
+  | LE_typ (_, id) | LE_id id -> (
       match Env.lookup_id id (env_of exp) with
       | Register typ ->
           let var = gensym () in
@@ -458,7 +457,7 @@ and ocaml_assignment ctx (LE_aux (lexp_aux, _) as lexp) exp =
           in
           separate space [zencode ctx id; string ":="; traced_exp]
       | _ -> separate space [zencode ctx id; string ":="; parens (ocaml_exp ctx exp)]
-    end
+    )
   | LE_deref ref_exp -> separate space [ocaml_atomic_exp ctx ref_exp; string ":="; parens (ocaml_exp ctx exp)]
   | _ -> string ("LEXP<" ^ string_of_lexp lexp ^ ">")
 
@@ -1095,8 +1094,7 @@ let ocaml_ast ast generator_info =
 let ocaml_main spec sail_dir =
   let lines = ref [] in
   let chan = open_in (sail_dir ^ "/lib/main.ml") in
-  begin
-    try
+  ( try
       while true do
         let line = input_line chan in
         lines := line :: !lines
@@ -1104,7 +1102,7 @@ let ocaml_main spec sail_dir =
     with End_of_file ->
       close_in chan;
       lines := List.rev !lines
-  end;
+  );
   (("open " ^ String.capitalize_ascii spec ^ ";;\n\n") :: !lines)
   @ [
       "  zinitializze_registers ();";

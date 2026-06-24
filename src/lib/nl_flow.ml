@@ -81,7 +81,7 @@ let add_assert cond (E_aux (aux, (l, uannot)) as exp) =
 let modify_unsigned id value (E_aux (aux, annot) as exp) =
   match aux with
   | E_let (pat, (E_aux (E_app (f, [E_aux (E_id id', _)]), _) as bind), exp')
-    when (string_of_id f = "unsigned" || string_of_id f = "UInt") && Id.compare id id' = 0 -> begin
+    when (string_of_id f = "unsigned" || string_of_id f = "UInt") && Id.compare id id' = 0 -> (
       match pat_id pat with
       | None -> exp
       | Some uid ->
@@ -93,14 +93,14 @@ let modify_unsigned id value (E_aux (aux, annot) as exp) =
                 ),
               annot
             )
-    end
+    )
   | _ -> exp
 
 let is_equals = function Id_aux (Operator "==", _) -> true | _ -> false
 
 let analyze' exps =
   match exps with
-  | E_aux (E_if (cond, then_exp, _), _) :: _ when escapes then_exp -> begin
+  | E_aux (E_if (cond, then_exp, _), _) :: _ when escapes then_exp -> (
       match cond with
       | E_aux (E_app (op, [E_aux (E_id id, _); E_aux (E_lit lit, _)]), _)
       | E_aux (E_app (op, [E_aux (E_lit lit, _); E_aux (E_id id, _)]), _)
@@ -108,7 +108,7 @@ let analyze' exps =
           let value = bitvector_unsigned lit in
           List.map (modify_unsigned id value) exps
       | _ -> exps
-    end
+    )
   | _ -> exps
 
 let analyze exps = if !opt_nl_flow then analyze' exps else exps

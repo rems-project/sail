@@ -633,14 +633,13 @@ let run_sail_format (config : Yojson.Safe.t option) =
       let source = file_to_string f in
       if is_format_file f && not (is_skipped_file f) then (
         let formatted = Formatter.format_defs ~debug:!opt_format_debug f source comments parse_ast in
-        begin
-          match !opt_format_backup with
-          | Some suffix ->
-              let out_chan = open_out (f ^ "." ^ suffix) in
-              output_string out_chan source;
-              close_out out_chan
-          | None -> ()
-        end;
+        ( match !opt_format_backup with
+        | Some suffix ->
+            let out_chan = open_out (f ^ "." ^ suffix) in
+            output_string out_chan source;
+            close_out out_chan
+        | None -> ()
+        );
         match !opt_format_emit with
         | "file" ->
             let file_info = Util.open_output_with_check f in
@@ -696,21 +695,20 @@ let main () =
   options := Arg.align (fix_options !options);
 
   let plugin_extension = if is_bytecode then ".cma" else ".cmxs" in
-  begin
-    match Sys.getenv_opt "SAIL_NO_PLUGINS" with
-    | Some _ -> ()
-    | None -> (
-        match get_plugin_dir () with
-        | dir :: _ ->
-            List.iter
-              (fun plugin ->
-                let path = Filename.concat dir plugin in
-                if Filename.extension plugin = plugin_extension then load_plugin options path
-              )
-              (Array.to_list (Sys.readdir dir))
-        | [] -> ()
-      )
-  end;
+  ( match Sys.getenv_opt "SAIL_NO_PLUGINS" with
+  | Some _ -> ()
+  | None -> (
+      match get_plugin_dir () with
+      | dir :: _ ->
+          List.iter
+            (fun plugin ->
+              let path = Filename.concat dir plugin in
+              if Filename.extension plugin = plugin_extension then load_plugin options path
+            )
+            (Array.to_list (Sys.readdir dir))
+      | [] -> ()
+    )
+  );
 
   let argv = Sail_file.sail_argv () in
   ( try Arg.parse_argv_dynamic argv options (fun s -> opt_free_arguments := !opt_free_arguments @ [s]) usage_msg with
@@ -727,20 +725,19 @@ let main () =
 
   feature_check ();
 
-  begin
-    match !opt_require_version with
-    | Some required_version ->
-        let required_version_parsed =
-          match parse_version required_version with
-          | Some v -> v
-          | None -> raise (Reporting.err_general Unknown ("Couldn't parse required version '" ^ required_version ^ "'"))
-        in
-        if not (version_check ~required:required_version_parsed) then (
-          Printf.eprintf "Sail version %s is older than requested version %s" version_string required_version;
-          exit 1
-        )
-    | None -> ()
-  end;
+  ( match !opt_require_version with
+  | Some required_version ->
+      let required_version_parsed =
+        match parse_version required_version with
+        | Some v -> v
+        | None -> raise (Reporting.err_general Unknown ("Couldn't parse required version '" ^ required_version ^ "'"))
+      in
+      if not (version_check ~required:required_version_parsed) then (
+        Printf.eprintf "Sail version %s is older than requested version %s" version_string required_version;
+        exit 1
+      )
+  | None -> ()
+  );
 
   if !opt_print_version then (
     print_endline version_full;

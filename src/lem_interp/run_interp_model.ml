@@ -274,43 +274,41 @@ let run (istate : instruction_state) reg mem tagmem cap_size eager_eval track_de
     flush_all ();
     let command = Pervasives.read_line () in
     let command' = if command = "" then mode_to_string mode else command in
-    begin
-      match command' with
-      | "s" | "step" -> Step
-      | "n" | "next" -> Next
-      | "r" | "run" -> Run
-      | "rg" | "reg" | "registers" ->
-          Reg.iter (fun k v -> interactf "%s\n" (Reg.to_string k v)) reg;
-          interact mode env stack
-      | "m" | "mem" | "memory" ->
-          Mem.iter (fun k v -> interactf "%s\n" (Mem.to_string k v)) mem;
-          interact mode env stack
-      | "bt" | "backtrace" | "stack" ->
-          print_backtrace_compact (fun s -> interactf "%s" s) stack;
-          interact mode env stack
-      | "e" | "exh" | "exhaust" ->
-          interactf "interpreting exhaustively from current state\n";
-          let events = interp_exhaustive false None stack in
-          interactf "%s" (format_events events);
-          interact mode env stack
-      | "c" | "cont" | "continuation" ->
-          (* print not-compacted continuation *)
-          print_continuation (fun s -> interactf "%s" s) stack;
-          interact mode env stack
-      | "track" | "t" ->
-          track_dependencies := not !track_dependencies;
-          interact mode env stack
-      | "show_casts" ->
-          Pretty_interp.ignore_casts := false;
-          interact mode env stack
-      | "hide_casts" ->
-          Pretty_interp.ignore_casts := true;
-          interact mode env stack
-      | "q" | "quit" | "exit" -> exit 0
-      | _ ->
-          interactf "%s\n" usage;
-          interact mode env stack
-    end
+    match command' with
+    | "s" | "step" -> Step
+    | "n" | "next" -> Next
+    | "r" | "run" -> Run
+    | "rg" | "reg" | "registers" ->
+        Reg.iter (fun k v -> interactf "%s\n" (Reg.to_string k v)) reg;
+        interact mode env stack
+    | "m" | "mem" | "memory" ->
+        Mem.iter (fun k v -> interactf "%s\n" (Mem.to_string k v)) mem;
+        interact mode env stack
+    | "bt" | "backtrace" | "stack" ->
+        print_backtrace_compact (fun s -> interactf "%s" s) stack;
+        interact mode env stack
+    | "e" | "exh" | "exhaust" ->
+        interactf "interpreting exhaustively from current state\n";
+        let events = interp_exhaustive false None stack in
+        interactf "%s" (format_events events);
+        interact mode env stack
+    | "c" | "cont" | "continuation" ->
+        (* print not-compacted continuation *)
+        print_continuation (fun s -> interactf "%s" s) stack;
+        interact mode env stack
+    | "track" | "t" ->
+        track_dependencies := not !track_dependencies;
+        interact mode env stack
+    | "show_casts" ->
+        Pretty_interp.ignore_casts := false;
+        interact mode env stack
+    | "hide_casts" ->
+        Pretty_interp.ignore_casts := true;
+        interact mode env stack
+    | "q" | "quit" | "exit" -> exit 0
+    | _ ->
+        interactf "%s\n" usage;
+        interact mode env stack
   in
   let show act lhs arrow rhs = interactf "%s: %s %s %s\n" (green act) lhs (blue arrow) rhs in
   let left = "<-" and right = "->" in
@@ -337,10 +335,10 @@ let run (istate : instruction_state) reg mem tagmem cap_size eager_eval track_de
           let stack = match state with IState (stack, _) -> stack in
           let top_exp, (top_env, top_mem) = top_frame_exp_state stack in
           let loc = get_loc (compact_exp top_exp) in
-          if mode = Step || force then begin
+          if mode = Step || force then (
             interactf "%s\n" (Pretty_interp.pp_exp top_env top_mem Printing_functions.red true top_exp);
             interact mode env' state
-          end
+          )
           else mode
         in
         let mode', env', next =
@@ -466,7 +464,7 @@ let run (istate : instruction_state) reg mem tagmem cap_size eager_eval track_de
                   (List.combine possible_istates (List.map (fun _ -> Random.bits ()) possible_istates))
               in
               if possible_istates = [] then (step i_state, env', i_state)
-              else begin
+              else (
                 show "undefined triggered a non_det" "" "" "";
                 let _, _, _, env' =
                   List.fold_right
@@ -477,7 +475,7 @@ let run (istate : instruction_state) reg mem tagmem cap_size eager_eval track_de
                     (false, mode, !track_dependencies, env')
                 in
                 (step i_state, env', i_state)
-              end
+              )
           | Escape0 (Some e, _) ->
               show "exiting current evaluation" "" "" "";
               (step e, env', e)

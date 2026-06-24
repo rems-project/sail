@@ -278,9 +278,9 @@ module SimpSet = struct
 
   let find_opt v simpset =
     match to_simp_var v with
-    | Some (SimpVar.Var v) -> begin
+    | Some (SimpVar.Var v) -> (
         match SimpVarMap.find_opt (SimpVar.Var v) simpset.vars with Some exp -> Some exp | None -> simpset.var_fn v
-      end
+      )
     | Some v -> SimpVarMap.find_opt v simpset.vars
     | None -> None
 
@@ -464,25 +464,25 @@ module Simplifier = struct
 
   let rule_and_inequalities =
     mk_simple_rule __LOC__ @@ function
-    | Fn ("and", xs) ->
+    | Fn ("and", xs) -> (
         let open Util.Option_monad in
         let open Sail2_operators_bitlists in
         let inequalities, others =
           List.fold_left
             (fun (inequalities, others) x ->
               match inequalities with
-              | Some (var, size, lits) -> begin
+              | Some (var, size, lits) -> (
                   match x with
                   | Fn ("not", [Fn ("=", [Var var'; Bitvec_lit bv])])
                     when Name.compare var var' = 0 && List.length bv = size ->
                       (Some (var, size, bv :: lits), others)
                   | _ -> (inequalities, x :: others)
-                end
-              | None -> begin
+                )
+              | None -> (
                   match x with
                   | Fn ("not", [Fn ("=", [Var var; Bitvec_lit bv])]) -> (Some (var, List.length bv, [bv]), others)
                   | _ -> (None, x :: others)
-                end
+                )
             )
             (None, []) xs
         in
@@ -506,33 +506,32 @@ module Simplifier = struct
               )
           else None
         in
-        begin
-          match check_inequalities with
-          | Some equalities -> change (smt_conj (smt_disj equalities :: others))
-          | None -> NoChange
-        end
+        match check_inequalities with
+        | Some equalities -> change (smt_conj (smt_disj equalities :: others))
+        | None -> NoChange
+      )
     | _ -> NoChange
 
   let rule_or_equalities =
     mk_simple_rule __LOC__ @@ function
-    | Fn ("or", xs) ->
+    | Fn ("or", xs) -> (
         let open Util.Option_monad in
         let open Sail2_operators_bitlists in
         let equalities, others =
           List.fold_left
             (fun (equalities, others) x ->
               match equalities with
-              | Some (var, size, lits) -> begin
+              | Some (var, size, lits) -> (
                   match x with
                   | Fn ("=", [Var var'; Bitvec_lit bv]) when Name.compare var var' = 0 && List.length bv = size ->
                       (Some (var, size, bv :: lits), others)
                   | _ -> (equalities, x :: others)
-                end
-              | None -> begin
+                )
+              | None -> (
                   match x with
                   | Fn ("=", [Var var; Bitvec_lit bv]) -> (Some (var, List.length bv, [bv]), others)
                   | _ -> (None, x :: others)
-                end
+                )
             )
             (None, []) xs
         in
@@ -556,11 +555,10 @@ module Simplifier = struct
               )
           else None
         in
-        begin
-          match check_equalities with
-          | Some inequalities -> change (smt_disj (smt_conj inequalities :: others))
-          | None -> NoChange
-        end
+        match check_equalities with
+        | Some inequalities -> change (smt_disj (smt_conj inequalities :: others))
+        | None -> NoChange
+      )
     | _ -> NoChange
 
   let rule_or_ite =
@@ -613,7 +611,7 @@ module Simplifier = struct
 
   let rule_true_and =
     mk_simple_rule __LOC__ @@ function
-    | Fn ("and", xs) ->
+    | Fn ("and", xs) -> (
         let filtered = ref false in
         let xs =
           List.filter
@@ -625,13 +623,12 @@ module Simplifier = struct
               )
             xs
         in
-        begin
-          match xs with
-          | [] -> change (Bool_lit true)
-          | [x] -> change x
-          | _ when !filtered -> change (Fn ("and", xs))
-          | _ -> NoChange
-        end
+        match xs with
+        | [] -> change (Bool_lit true)
+        | [x] -> change x
+        | _ when !filtered -> change (Fn ("and", xs))
+        | _ -> NoChange
+      )
     | _ -> NoChange
 
   let rule_true_or =
@@ -641,7 +638,7 @@ module Simplifier = struct
 
   let rule_false_or =
     mk_simple_rule __LOC__ @@ function
-    | Fn ("or", xs) ->
+    | Fn ("or", xs) -> (
         let filtered = ref false in
         let xs =
           List.filter
@@ -653,13 +650,12 @@ module Simplifier = struct
               )
             xs
         in
-        begin
-          match xs with
-          | [] -> change (Bool_lit false)
-          | [x] -> change x
-          | _ when !filtered -> change (Fn ("or", xs))
-          | _ -> NoChange
-        end
+        match xs with
+        | [] -> change (Bool_lit false)
+        | [x] -> change x
+        | _ when !filtered -> change (Fn ("or", xs))
+        | _ -> NoChange
+      )
     | _ -> NoChange
 
   let rule_order_and =
@@ -705,7 +701,7 @@ module Simplifier = struct
   let rule_distribute_or_equality_in_and =
     let module Vars = SimpSet.SimpVarSet in
     mk_simple_rule __LOC__ @@ function
-    | Fn ("and", xs) -> begin
+    | Fn ("and", xs) ->
         let vars = ref Vars.empty in
         List.iter
           (fun x ->
@@ -735,7 +731,6 @@ module Simplifier = struct
                 (Fn ("or", List.map (fun eq -> Fn ("and", mk_eq eq :: List.map (apply_equality eq) others)) or_equality))
         )
         else NoChange
-      end
     | _ -> NoChange
 
   let add_to_or x = function Fn ("or", xs) -> Fn ("or", x :: xs) | y -> Fn ("or", [x; y])
@@ -819,17 +814,17 @@ module Simplifier = struct
         | "bvadd", [Bitvec_lit lhs; Bitvec_lit rhs] -> change (Bitvec_lit (add_vec lhs rhs))
         | "bvsub", [Bitvec_lit lhs; Bitvec_lit rhs] -> change (Bitvec_lit (sub_vec lhs rhs))
         | "bvshl", [lhs; Bitvec_lit rhs] when bv_is_zero rhs -> change lhs
-        | "bvshl", [Bitvec_lit lhs; Bitvec_lit rhs] -> begin
+        | "bvshl", [Bitvec_lit lhs; Bitvec_lit rhs] -> (
             match sint_maybe rhs with Some shift -> change (Bitvec_lit (shiftl lhs shift)) | None -> NoChange
-          end
+          )
         | "bvlshr", [lhs; Bitvec_lit rhs] when bv_is_zero rhs -> change lhs
-        | "bvlshr", [Bitvec_lit lhs; Bitvec_lit rhs] -> begin
+        | "bvlshr", [Bitvec_lit lhs; Bitvec_lit rhs] -> (
             match sint_maybe rhs with Some shift -> change (Bitvec_lit (shiftr lhs shift)) | None -> NoChange
-          end
+          )
         | "bvashr", [lhs; Bitvec_lit rhs] when bv_is_zero rhs -> change lhs
-        | "bvashr", [Bitvec_lit lhs; Bitvec_lit rhs] -> begin
+        | "bvashr", [Bitvec_lit lhs; Bitvec_lit rhs] -> (
             match sint_maybe rhs with Some shift -> change (Bitvec_lit (arith_shiftr lhs shift)) | None -> NoChange
-          end
+          )
         | "bvslt", [Bitvec_lit lhs; Bitvec_lit rhs] -> (
             match (sint_maybe lhs, sint_maybe rhs) with
             | Some lhs, Some rhs -> change (Bool_lit (Big_int.less lhs rhs))
@@ -882,7 +877,9 @@ module Simplifier = struct
 
   let rule_simp_eq =
     mk_simple_rule __LOC__ @@ function
-    | Fn ("=", [x; y]) -> begin match simp_eq x y with Some b -> change (Bool_lit b) | None -> NoChange end
+    | Fn ("=", [x; y]) -> (
+        match simp_eq x y with Some b -> change (Bool_lit b) | None -> NoChange
+      )
     | _ -> NoChange
 
   let rule_do_nothing = mk_simple_rule __LOC__ (fun _ -> NoChange)
@@ -1132,12 +1129,12 @@ module Counterexample (Config : COUNTEREXAMPLE_CONFIG) = struct
     let open Jib in
     let open Value in
     function
-    | CT_fbits width -> begin
+    | CT_fbits width -> (
         match parse_sexpr_int width sexpr with
         | Some value -> V_bitvector (Sail_lib.get_slice_int' (width, value, 0))
         | None -> raise (Reporting.err_general l ("Cannot parse sexpr as bitvector: " ^ string_of_sexpr sexpr))
-      end
-    | CT_struct _ as ctyp -> begin
+      )
+    | CT_struct _ as ctyp -> (
         let fields = Jib_compile.struct_field_bindings l ctx ctyp |> snd |> Bindings.bindings in
         match sexpr with
         | List (Atom name :: smt_fields) ->
@@ -1148,35 +1145,35 @@ module Counterexample (Config : COUNTEREXAMPLE_CONFIG) = struct
               |> Bindings.bindings
               )
         | _ -> raise (Reporting.err_general l ("Cannot parse sexpr as struct " ^ string_of_sexpr sexpr))
-      end
-    | CT_enum enum_id -> begin
+      )
+    | CT_enum enum_id -> (
         let members = Jib_compile.enum_members l ctx enum_id |> IdSet.elements in
         match sexpr with
-        | Atom name -> begin
+        | Atom name -> (
             match List.find_opt (fun member -> Util.zencode_string (string_of_id member) = name) members with
             | Some member -> V_member member
             | None ->
                 failwith
                   ("Could not find enum member for " ^ name ^ " in " ^ Util.string_of_list ", " string_of_id members)
-          end
+          )
         | _ -> failwith ("Cannot parse sexpr as enum " ^ string_of_sexpr sexpr)
-      end
-    | CT_bool -> begin
+      )
+    | CT_bool -> (
         match sexpr with
         | Atom "true" -> V_bool true
         | Atom "false" -> V_bool false
         | _ -> failwith ("Cannot parse sexpr as bool " ^ string_of_sexpr sexpr)
-      end
-    | CT_fint width -> begin
+      )
+    | CT_fint width -> (
         match parse_sexpr_int width sexpr with
         | Some value -> V_int value
         | None -> failwith ("Cannot parse sexpr as fixed-width integer: " ^ string_of_sexpr sexpr)
-      end
-    | CT_lint -> begin
+      )
+    | CT_lint -> (
         match parse_sexpr_int Config.max_unknown_integer_width sexpr with
         | Some value -> V_int value
         | None -> failwith ("Cannot parse sexpr as integer: " ^ string_of_sexpr sexpr)
-      end
+      )
     | ctyp -> failwith ("Unsupported type in sexpr: " ^ Jib_util.string_of_ctyp ctyp)
 
   let rec find_arg l ctx id ctyp arg_smt_names = function
@@ -1203,13 +1200,12 @@ module Counterexample (Config : COUNTEREXAMPLE_CONFIG) = struct
     print_endline ("Checking counterexample: " ^ file_name);
     let in_chan = ksprintf Unix.open_process_in "%s %s" (counterexample_command solver) file_name in
     let lines = ref [] in
-    begin
-      try
+    ( try
         while true do
           lines := input_line in_chan :: !lines
         done
       with End_of_file -> ()
-    end;
+    );
     let solver_output = List.rev !lines |> String.concat "\n" in
     let unsat =
       match parse_sexps solver_output with
@@ -1235,17 +1231,16 @@ module Counterexample (Config : COUNTEREXAMPLE_CONFIG) = struct
               )
           in
           let result = run (Step (lazy "", istate, Monad.pure call, [])) in
-          begin
-            match result with
-            | Result.Ok (V_bool false) | Result.Ok V_unit ->
-                ksprintf print_endline "Replaying counterexample: %s" Util.("ok" |> green |> clear)
-            | Result.Ok (V_bool true) ->
-                ksprintf print_endline "Failed to replay counterexample: %s\n  Function returned true"
-                  Util.("error" |> red |> clear)
-            | Result.Error msg ->
-                ksprintf print_endline "Failed to replay counterexample: %s\n  %s" Util.("error" |> red |> clear) msg
-            | _ -> ()
-          end;
+          ( match result with
+          | Result.Ok (V_bool false) | Result.Ok V_unit ->
+              ksprintf print_endline "Replaying counterexample: %s" Util.("ok" |> green |> clear)
+          | Result.Ok (V_bool true) ->
+              ksprintf print_endline "Failed to replay counterexample: %s\n  Function returned true"
+                Util.("error" |> red |> clear)
+          | Result.Error msg ->
+              ksprintf print_endline "Failed to replay counterexample: %s\n  %s" Util.("error" |> red |> clear) msg
+          | _ -> ()
+          );
           false
       | Some (Atom "unsat" :: _) ->
           print_endline "Solver could not find counterexample";

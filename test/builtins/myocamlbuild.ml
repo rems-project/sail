@@ -50,12 +50,10 @@ let lem_opts =
   ]
 ;;
 
-dispatch
-  begin
-    function
-    | After_rules ->
-        rule "lem -> ml" ~prod:"%.ml" ~dep:"%.lem" (fun env builder ->
-            Seq [Cmd (S ([P "lem"] @ lem_opts @ [A "-ocaml"; P (env "%.lem")]))]
-        )
-    | _ -> ()
-  end
+dispatch (function
+  | After_rules ->
+      rule "lem -> ml" ~prod:"%.ml" ~dep:"%.lem" (fun env builder ->
+          Seq [Cmd (S ([P "lem"] @ lem_opts @ [A "-ocaml"; P (env "%.lem")]))]
+      )
+  | _ -> ()
+  )
