@@ -163,9 +163,9 @@ let print_program rstate =
   | Evaluation (Fail (out, _, _, stack, _)) ->
       List.map stack_string stack |> List.rev
       |> List.iter (fun code ->
-             print_endline (Lazy.force code);
-             print_endline sep
-         );
+          print_endline (Lazy.force code);
+          print_endline sep
+      );
       print_endline (Lazy.force out)
   | Evaluation (Done (_, v)) -> print_endline (Value.string_of_value v |> Util.green |> Util.clear)
   | Evaluation _ -> ()
@@ -173,7 +173,7 @@ let print_program rstate =
 let rec run rstate =
   match rstate.mode with
   | Normal -> rstate
-  | Evaluation frame -> begin
+  | Evaluation frame -> (
       match frame with
       | Done (state, v) ->
           print_endline ("Result = " ^ Value.string_of_value v);
@@ -200,7 +200,7 @@ let rec run rstate =
               { rstate with mode = Normal }
           in
           run rstate
-    end
+    )
 
 let rec run_function rstate depth =
   let run_function' rstate stack =
@@ -210,7 +210,7 @@ let rec run_function rstate depth =
   in
   match rstate.mode with
   | Normal -> rstate
-  | Evaluation frame -> begin
+  | Evaluation frame -> (
       match frame with
       | Done (state, v) ->
           print_endline ("Result = " ^ Value.string_of_value v);
@@ -237,13 +237,13 @@ let rec run_function rstate depth =
               { rstate with mode = Normal }
           in
           run_function' rstate stack
-    end
+    )
 
 let rec run_steps rstate n =
   match rstate.mode with
   | _ when n <= 0 -> rstate
   | Normal -> rstate
-  | Evaluation frame -> begin
+  | Evaluation frame -> (
       match frame with
       | Done (state, v) ->
           print_endline ("Result = " ^ Value.string_of_value v);
@@ -270,7 +270,7 @@ let rec run_steps rstate n =
               { rstate with mode = Normal }
           in
           run_steps rstate (n - 1)
-    end
+    )
 
 type repl_action = string -> Lexing.position -> string -> repl_state -> repl_state
 
@@ -403,9 +403,9 @@ let () =
 
   register_command ~name:"quit" ~shortname:"q" ~help:"Exit the REPL."
   @@ unit_action (fun () ->
-         Value.output_close ();
-         exit 0
-     );
+      Value.output_close ();
+      exit 0
+  );
 
   (* We can't set up the elf commands in elf_loader.ml because it's used
      by Sail OCaml emulators at runtime, so set them up here. *)
@@ -562,30 +562,30 @@ let () =
 
   register_command ~name:"commands" ~help:"List all available commands"
   @@ unit_action (fun () ->
-         let format_command (cmd, (help, shortname, action)) =
-           let _, args, _ = Interactive.generate_help cmd help action in
-           match shortname with
-           | Some s -> Printf.sprintf "  %s | %s %s" (color_command (":" ^ s)) (color_command cmd) args
-           | _ -> Printf.sprintf "  %s %s" (color_command cmd) args
-         in
-         let more_commands = List.map format_command (Interactive.all_commands ()) in
-         print_endline "Commands:";
-         List.iter print_endline more_commands;
-         print_endline "";
-         print_endline "When evaluating an expression:";
-         List.iter
-           (fun (s, cmd) -> Printf.ksprintf print_endline "  %s | %s" (color_command s) (color_command cmd))
-           [(":r", ":run"); (":s", ":step"); (":f", ":step_function")];
-         print_endline "";
-         print_endline "REPL control:";
-         List.iter
-           (fun rcmd ->
-             Printf.ksprintf print_endline "  %s%s"
-               (Util.string_of_list " | " color_command rcmd.commands)
-               (match rcmd.arg_help with Some a -> " " ^ color_arg a | None -> "")
-           )
-           repl_commands
-     );
+      let format_command (cmd, (help, shortname, action)) =
+        let _, args, _ = Interactive.generate_help cmd help action in
+        match shortname with
+        | Some s -> Printf.sprintf "  %s | %s %s" (color_command (":" ^ s)) (color_command cmd) args
+        | _ -> Printf.sprintf "  %s %s" (color_command cmd) args
+      in
+      let more_commands = List.map format_command (Interactive.all_commands ()) in
+      print_endline "Commands:";
+      List.iter print_endline more_commands;
+      print_endline "";
+      print_endline "When evaluating an expression:";
+      List.iter
+        (fun (s, cmd) -> Printf.ksprintf print_endline "  %s | %s" (color_command s) (color_command cmd))
+        [(":r", ":run"); (":s", ":step"); (":f", ":step_function")];
+      print_endline "";
+      print_endline "REPL control:";
+      List.iter
+        (fun rcmd ->
+          Printf.ksprintf print_endline "  %s%s"
+            (Util.string_of_list " | " color_command rcmd.commands)
+            (match rcmd.arg_help with Some a -> " " ^ color_arg a | None -> "")
+        )
+        repl_commands
+  );
 
   register_command ~name:"rewrite"
     ~help:
@@ -662,7 +662,7 @@ let handle_input' rstate input =
   in
 
   match rstate.mode with
-  | Normal -> begin
+  | Normal -> (
       match input with
       | Command (cmd, arg, pos) -> handle_command rstate cmd arg pos
       | Expression (str, pos) ->
@@ -675,10 +675,10 @@ let handle_input' rstate input =
           print_program rstate;
           rstate
       | Empty -> rstate
-    end
-  | Evaluation frame -> begin
+    )
+  | Evaluation frame -> (
       match input with
-      | Command (cmd, arg, pos) -> begin
+      | Command (cmd, arg, pos) -> (
           (* Evaluation mode commands *)
           match cmd with
           | ":r" | ":run" -> run rstate
@@ -691,11 +691,11 @@ let handle_input' rstate input =
               print_program rstate;
               rstate
           | _ -> handle_command rstate cmd arg pos
-        end
+        )
       | Expression _ ->
           print_endline "Already evaluating expression";
           rstate
-      | Empty -> begin
+      | Empty -> (
           (* Empty input will evaluate one step, or switch back to
              normal mode when evaluation is completed. *)
           match frame with
@@ -705,7 +705,7 @@ let handle_input' rstate input =
           | Fail (_, _, _, _, msg) ->
               print_endline ("Error: " ^ msg);
               { rstate with mode = Normal }
-          | Step (_, state, _, _) -> begin
+          | Step (_, state, _, _) -> (
               try
                 let rstate = { rstate with mode = Evaluation (eval_frame frame); state } in
                 print_program rstate;
@@ -713,11 +713,11 @@ let handle_input' rstate input =
               with Failure str ->
                 print_endline str;
                 { rstate with mode = Normal }
-            end
+            )
           | Break frame ->
               print_endline "Breakpoint";
               { rstate with mode = Evaluation frame }
-          | Effect_request (out, state, stack, eff) -> begin
+          | Effect_request (out, state, stack, eff) -> (
               try
                 let rstate =
                   { rstate with mode = Evaluation (!Interpreter.effect_interp out state stack eff); state }
@@ -727,9 +727,9 @@ let handle_input' rstate input =
               with Failure str ->
                 print_endline str;
                 { rstate with mode = Normal }
-            end
-        end
-    end
+            )
+        )
+    )
 
 let handle_input rstate input =
   try handle_input' rstate input with
@@ -770,7 +770,7 @@ let start_repl ?(banner = true) ?commands:(script = []) ?auto_rewrites:(rewrites
       in
       let n = try String.index line_so_far ' ' with Not_found -> String.length line_so_far in
       let cmd = Str.string_before line_so_far n in
-      if last_id <> "" then begin
+      if last_id <> "" then (
         match cmd with
         | ":rewrite" ->
             List.map fst Rewrites.all_rewriters
@@ -787,7 +787,7 @@ let start_repl ?(banner = true) ?commands:(script = []) ?auto_rewrites:(rewrites
             |> List.filter (fun id -> Str.string_match (Str.regexp_string last_id) id 0)
             |> List.map (fun completion -> line_so_far ^ completion)
             |> List.iter (LNoise.add_completion ln_completions)
-      end
+      )
       else ()
   );
 
@@ -808,7 +808,7 @@ let start_repl ?(banner = true) ?commands:(script = []) ?auto_rewrites:(rewrites
           let args = Str.split (Str.regexp " +") str in
           match args with
           | [":rewrite"] -> hint "<rewrite>"
-          | ":rewrite" :: rw :: args -> begin
+          | ":rewrite" :: rw :: args -> (
               match List.assoc_opt rw Rewrites.all_rewriters with
               | Some rw -> (
                   let hints = Rewrites.describe_rewriter rw in
@@ -816,13 +816,13 @@ let start_repl ?(banner = true) ?commands:(script = []) ?auto_rewrites:(rewrites
                   match hints with [] -> None | _ -> hint (String.concat " " hints)
                 )
               | None -> None
-            end
+            )
           | [":option"] -> hint "<flag>"
-          | [":option"; flag] -> begin
+          | [":option"; flag] -> (
               match List.find_opt (fun (opt, _, _) -> flag = opt) options with
               | Some (_, _, help) -> hint (Str.global_replace (Str.regexp " +") " " help)
               | None -> None
-            end
+            )
           | _ -> None
         )
   );

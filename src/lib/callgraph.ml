@@ -160,25 +160,23 @@ let add_def_to_graph graph (DEF_aux (def, def_annot)) =
   let graph = ref graph in
 
   let scan_pat self p_aux annot =
-    begin
-      match p_aux with
-      | P_app (id, _) -> graph := G.add_edge self (Constructor id) !graph
-      | P_typ (typ, _) -> IdSet.iter (fun id -> graph := G.add_edge self (Type id) !graph) (typ_ids typ)
-      | _ -> ()
-    end;
+    ( match p_aux with
+    | P_app (id, _) -> graph := G.add_edge self (Constructor id) !graph
+    | P_typ (typ, _) -> IdSet.iter (fun id -> graph := G.add_edge self (Type id) !graph) (typ_ids typ)
+    | _ -> ()
+    );
     P_aux (p_aux, annot)
   in
   let scan_mpat self p_aux annot =
     let env = env_of_annot annot in
-    begin
-      match p_aux with
-      | Some (MP_app (id, _)) ->
-          graph :=
-            let node = if Env.is_union_constructor id env then Constructor id else Mapping id in
-            G.add_edge self node !graph
-      | Some (MP_typ (_, typ)) -> IdSet.iter (fun id -> graph := G.add_edge self (Type id) !graph) (typ_ids typ)
-      | _ -> ()
-    end;
+    ( match p_aux with
+    | Some (MP_app (id, _)) ->
+        graph :=
+          let node = if Env.is_union_constructor id env then Constructor id else Mapping id in
+          G.add_edge self node !graph
+    | Some (MP_typ (_, typ)) -> IdSet.iter (fun id -> graph := G.add_edge self (Type id) !graph) (typ_ids typ)
+    | _ -> ()
+    );
     Option.map (fun p_aux -> MP_aux (p_aux, annot)) p_aux
   in
   let rw_pat self = { id_pat_alg with p_aux = (fun (p_aux, annot) -> scan_pat self p_aux annot) } in
@@ -186,70 +184,67 @@ let add_def_to_graph graph (DEF_aux (def, def_annot)) =
 
   let scan_lexp self lexp_aux annot =
     let env = env_of_annot annot in
-    begin
-      match lexp_aux with
-      | LE_typ (typ, id) ->
-          IdSet.iter (fun id -> graph := G.add_edge self (Type id) !graph) (typ_ids typ);
-          begin
-            match Env.lookup_id id env with
-            | Register _ -> graph := G.add_edge self (Register id) !graph
-            | Enum _ -> graph := G.add_edge self (Constructor id) !graph
-            | _ -> if IdSet.mem id (Env.get_toplevel_lets env) then graph := G.add_edge self (Letbind id) !graph else ()
-          end
-      | LE_app (id, _) -> graph := G.add_edge self (Function id) !graph
-      | LE_id id -> begin
-          match Env.lookup_id id env with
-          | Register _ -> graph := G.add_edge self (Register id) !graph
-          | Enum _ -> graph := G.add_edge self (Constructor id) !graph
-          | _ -> if IdSet.mem id (Env.get_toplevel_lets env) then graph := G.add_edge self (Letbind id) !graph else ()
-        end
-      | _ -> ()
-    end;
+    ( match lexp_aux with
+    | LE_typ (typ, id) -> (
+        IdSet.iter (fun id -> graph := G.add_edge self (Type id) !graph) (typ_ids typ);
+        match Env.lookup_id id env with
+        | Register _ -> graph := G.add_edge self (Register id) !graph
+        | Enum _ -> graph := G.add_edge self (Constructor id) !graph
+        | _ -> if IdSet.mem id (Env.get_toplevel_lets env) then graph := G.add_edge self (Letbind id) !graph else ()
+      )
+    | LE_app (id, _) -> graph := G.add_edge self (Function id) !graph
+    | LE_id id -> (
+        match Env.lookup_id id env with
+        | Register _ -> graph := G.add_edge self (Register id) !graph
+        | Enum _ -> graph := G.add_edge self (Constructor id) !graph
+        | _ -> if IdSet.mem id (Env.get_toplevel_lets env) then graph := G.add_edge self (Letbind id) !graph else ()
+      )
+    | _ -> ()
+    );
     LE_aux (lexp_aux, annot)
   in
 
   let scan_exp self e_aux annot =
     let env = env_of_annot annot in
-    begin
-      match e_aux with
-      | E_id id -> begin
-          match Env.lookup_id id env with
-          | Register _ -> graph := G.add_edge self (Register id) !graph
-          | Enum _ -> graph := G.add_edge self (Constructor id) !graph
-          | _ -> if IdSet.mem id (Env.get_toplevel_lets env) then graph := G.add_edge self (Letbind id) !graph else ()
-        end
-      | E_app (id, _) ->
-          if Env.is_union_constructor id env then graph := G.add_edge self (Constructor id) !graph
-          else graph := G.add_edge self (Function id) !graph
-      | E_ref id -> graph := G.add_edge self (Register id) !graph
-      | E_typ (typ, _) -> IdSet.iter (fun id -> graph := G.add_edge self (Type id) !graph) (typ_ids typ)
-      | E_struct _ -> begin
-          match typ_of_annot annot with
-          | Typ_aux ((Typ_id id | Typ_app (id, _)), _) -> graph := G.add_edge self (Type id) !graph
-          | _ -> Reporting.unreachable (fst annot) __POS__ "Struct without struct type"
-        end
-      | E_undef -> begin
-          (* Make undefined literals depend on the undefined functions generated for the type (if any)
+    ( match e_aux with
+    | E_id id -> (
+        match Env.lookup_id id env with
+        | Register _ -> graph := G.add_edge self (Register id) !graph
+        | Enum _ -> graph := G.add_edge self (Constructor id) !graph
+        | _ -> if IdSet.mem id (Env.get_toplevel_lets env) then graph := G.add_edge self (Letbind id) !graph else ()
+      )
+    | E_app (id, _) ->
+        if Env.is_union_constructor id env then graph := G.add_edge self (Constructor id) !graph
+        else graph := G.add_edge self (Function id) !graph
+    | E_ref id -> graph := G.add_edge self (Register id) !graph
+    | E_typ (typ, _) -> IdSet.iter (fun id -> graph := G.add_edge self (Type id) !graph) (typ_ids typ)
+    | E_struct _ -> (
+        match typ_of_annot annot with
+        | Typ_aux ((Typ_id id | Typ_app (id, _)), _) -> graph := G.add_edge self (Type id) !graph
+        | _ -> Reporting.unreachable (fst annot) __POS__ "Struct without struct type"
+      )
+    | E_undef -> (
+        (* Make undefined literals depend on the undefined functions generated for the type (if any)
              to ensure that `rewrite_undefined` works *)
-          try
-            let typ = Env.expand_synonyms env (typ_of_annot annot) in
-            let funcalls_of_exp =
-              let e_app (id, args) =
-                let arg_funcalls = List.fold_left IdSet.union IdSet.empty args in
-                if Env.has_val_spec id env then IdSet.add id arg_funcalls else arg_funcalls
-              in
-              fold_exp { (pure_exp_alg IdSet.empty IdSet.union) with e_app }
+        try
+          let typ = Env.expand_synonyms env (typ_of_annot annot) in
+          let funcalls_of_exp =
+            let e_app (id, args) =
+              let arg_funcalls = List.fold_left IdSet.union IdSet.empty args in
+              if Env.has_val_spec id env then IdSet.add id arg_funcalls else arg_funcalls
             in
-            (* The `mwords` parameter of `undefined_of_type` shouldn't change the set of functions called,
+            fold_exp { (pure_exp_alg IdSet.empty IdSet.union) with e_app }
+          in
+          (* The `mwords` parameter of `undefined_of_type` shouldn't change the set of functions called,
                so just pass `true`. *)
-            funcalls_of_exp (undefined_of_typ true (fst annot) (fun _ -> empty_uannot) typ)
-            |> IdSet.iter (fun f -> graph := G.add_edge self (Function f) !graph)
-          with _ -> ()
-        end
-      | E_sizeof (Nexp_aux (Nexp_id id, _)) -> graph := G.add_edge self (Type id) !graph
-      | E_constraint (NC_aux (NC_id id, _)) -> graph := G.add_edge self (Type id) !graph
-      | _ -> ()
-    end;
+          funcalls_of_exp (undefined_of_typ true (fst annot) (fun _ -> empty_uannot) typ)
+          |> IdSet.iter (fun f -> graph := G.add_edge self (Function f) !graph)
+        with _ -> ()
+      )
+    | E_sizeof (Nexp_aux (Nexp_id id, _)) -> graph := G.add_edge self (Type id) !graph
+    | E_constraint (NC_aux (NC_id id, _)) -> graph := G.add_edge self (Type id) !graph
+    | _ -> ()
+    );
     E_aux (e_aux, annot)
   in
   let rw_exp self =
@@ -342,97 +337,95 @@ let add_def_to_graph graph (DEF_aux (def, def_annot)) =
     ignore (rewrite_fun (rewriters (Function id)) fdef)
   in
 
-  begin
-    match def with
-    | DEF_val (VS_aux (VS_val_spec (TypSchm_aux (TypSchm_ts (typq, (Typ_aux (Typ_bidir _, _) as typ)), _), id, _), _))
-      ->
-        graph := G.add_edges (Mapping id) [] !graph;
-        List.iter
-          (fun gen_id -> graph := G.add_edges (Function gen_id) [Mapping id] !graph)
-          [
-            id;
-            append_id id "_forwards";
-            append_id id "_forwards_matches";
-            append_id id "_backwards";
-            append_id id "_backwards_matches";
-          ];
-        scan_typquant (Mapping id) typq;
-        IdSet.iter (fun typ_id -> graph := G.add_edge (Mapping id) (Type typ_id) !graph) (typ_ids typ)
-    | DEF_val (VS_aux (VS_val_spec (TypSchm_aux (TypSchm_ts (typq, typ), _), id, _), _)) ->
-        graph := G.add_edges (Function id) [] !graph;
-        scan_typquant (Function id) typq;
-        IdSet.iter (fun typ_id -> graph := G.add_edge (Function id) (Type typ_id) !graph) (typ_ids typ)
-    | DEF_fundef fdef -> scan_fundef fdef
-    | DEF_mapdef mdef ->
-        let id = id_of_mapdef mdef in
-        graph := G.add_edges (Mapping id) [] !graph;
-        ignore (rewrite_mapdef (rewriters (Mapping id)) mdef)
-    | DEF_let (pat, exp) ->
-        let ids = pat_ids pat in
-        IdSet.iter (fun id -> graph := G.add_edges (Letbind id) [] !graph) ids;
-        IdSet.iter (fun id -> ignore (fold_pat (rw_pat (Letbind id)) pat)) ids;
-        IdSet.iter (fun id -> ignore (fold_exp (rw_exp (Letbind id)) exp)) ids
-    | DEF_type tdef -> add_type_def_to_graph tdef
-    | DEF_register (DEC_aux (DEC_reg (typ, id, opt_exp), annot)) ->
-        (* Determine dependencies of initial expressions (or `undefined` if missing, which will add
+  ( match def with
+  | DEF_val (VS_aux (VS_val_spec (TypSchm_aux (TypSchm_ts (typq, (Typ_aux (Typ_bidir _, _) as typ)), _), id, _), _)) ->
+      graph := G.add_edges (Mapping id) [] !graph;
+      List.iter
+        (fun gen_id -> graph := G.add_edges (Function gen_id) [Mapping id] !graph)
+        [
+          id;
+          append_id id "_forwards";
+          append_id id "_forwards_matches";
+          append_id id "_backwards";
+          append_id id "_backwards_matches";
+        ];
+      scan_typquant (Mapping id) typq;
+      IdSet.iter (fun typ_id -> graph := G.add_edge (Mapping id) (Type typ_id) !graph) (typ_ids typ)
+  | DEF_val (VS_aux (VS_val_spec (TypSchm_aux (TypSchm_ts (typq, typ), _), id, _), _)) ->
+      graph := G.add_edges (Function id) [] !graph;
+      scan_typquant (Function id) typq;
+      IdSet.iter (fun typ_id -> graph := G.add_edge (Function id) (Type typ_id) !graph) (typ_ids typ)
+  | DEF_fundef fdef -> scan_fundef fdef
+  | DEF_mapdef mdef ->
+      let id = id_of_mapdef mdef in
+      graph := G.add_edges (Mapping id) [] !graph;
+      ignore (rewrite_mapdef (rewriters (Mapping id)) mdef)
+  | DEF_let (pat, exp) ->
+      let ids = pat_ids pat in
+      IdSet.iter (fun id -> graph := G.add_edges (Letbind id) [] !graph) ids;
+      IdSet.iter (fun id -> ignore (fold_pat (rw_pat (Letbind id)) pat)) ids;
+      IdSet.iter (fun id -> ignore (fold_exp (rw_exp (Letbind id)) exp)) ids
+  | DEF_type tdef -> add_type_def_to_graph tdef
+  | DEF_register (DEC_aux (DEC_reg (typ, id, opt_exp), annot)) ->
+      (* Determine dependencies of initial expressions (or `undefined` if missing, which will add
            dependencies to `undefined_*` functions) *)
-        let exp = match opt_exp with Some exp -> exp | None -> E_aux (E_undef, annot) in
-        ignore (fold_exp (rw_exp (Register id)) exp);
-        IdSet.iter (fun typ_id -> graph := G.add_edge (Register id) (Type typ_id) !graph) (typ_ids typ)
-    | DEF_measure (id, pat, exp) ->
-        graph := G.add_edges (FunctionMeasure id) [Function id] !graph;
-        ignore (fold_pat (rw_pat (FunctionMeasure id)) pat);
-        ignore (fold_exp (rw_exp (FunctionMeasure id)) exp)
-    | DEF_loop_measures (id, measures) ->
-        (* We can't scan loop measures here because they aren't typed until they're moved into the loop expression *)
-        graph := G.add_edges (LoopMeasures id) [Function id] !graph
-    | DEF_outcome (OV_aux (OV_outcome (id, TypSchm_aux (TypSchm_ts (typq, typ), _), _), l), outcome_defs) ->
-        graph := G.add_edges (Outcome id) [] !graph;
-        scan_typquant (Outcome id) typq;
-        IdSet.iter (fun typ_id -> graph := G.add_edge (Outcome id) (Type typ_id) !graph) (typ_ids typ);
-        List.iter (scan_outcome_def l (Outcome id)) outcome_defs;
-        (* Remove dependencies on functions declared within the outcome;  these are parameters of the outcome,
+      let exp = match opt_exp with Some exp -> exp | None -> E_aux (E_undef, annot) in
+      ignore (fold_exp (rw_exp (Register id)) exp);
+      IdSet.iter (fun typ_id -> graph := G.add_edge (Register id) (Type typ_id) !graph) (typ_ids typ)
+  | DEF_measure (id, pat, exp) ->
+      graph := G.add_edges (FunctionMeasure id) [Function id] !graph;
+      ignore (fold_pat (rw_pat (FunctionMeasure id)) pat);
+      ignore (fold_exp (rw_exp (FunctionMeasure id)) exp)
+  | DEF_loop_measures (id, measures) ->
+      (* We can't scan loop measures here because they aren't typed until they're moved into the loop expression *)
+      graph := G.add_edges (LoopMeasures id) [Function id] !graph
+  | DEF_outcome (OV_aux (OV_outcome (id, TypSchm_aux (TypSchm_ts (typq, typ), _), _), l), outcome_defs) ->
+      graph := G.add_edges (Outcome id) [] !graph;
+      scan_typquant (Outcome id) typq;
+      IdSet.iter (fun typ_id -> graph := G.add_edge (Outcome id) (Type typ_id) !graph) (typ_ids typ);
+      List.iter (scan_outcome_def l (Outcome id)) outcome_defs;
+      (* Remove dependencies on functions declared within the outcome;  these are parameters of the outcome,
            and instantiations of these functions (possibly with a more constrained, architecture-specific type)
            and an `instantiation` declaration normally come later *)
-        IdSet.iter (fun f -> graph := G.delete_edge (Outcome id) (Function f) !graph) (val_spec_ids outcome_defs)
-    | DEF_instantiation (IN_aux (IN_id id, _), substs) ->
-        graph := G.add_edges (Function id) [Outcome id] !graph;
-        List.iter
-          (function
-            | IS_aux (IS_id (_, id_to), _) -> graph := G.add_edges (Function id) [Function id_to] !graph
-            | IS_aux (IS_typ (_, arg), _) ->
-                IdSet.iter (fun typ_id -> graph := G.add_edge (Function id) (Type typ_id) !graph) (typ_arg_ids arg)
-            )
-          substs
-    | DEF_scattered (SD_aux (sdef, _)) -> begin
-        match sdef with
-        | SD_funcl (FCL_aux (FCL_funcl (id, pexp), _)) -> ignore (rewrite_pexp (rewriters (Function id)) pexp)
-        | _ -> ()
-      end
-    | DEF_overload (id, ids) ->
-        List.iter
-          (fun id' ->
-            let n = if Env.is_union_constructor id' def_annot.env then Constructor id' else Function id' in
-            graph := G.add_edge (Overload id) n !graph
+      IdSet.iter (fun f -> graph := G.delete_edge (Outcome id) (Function f) !graph) (val_spec_ids outcome_defs)
+  | DEF_instantiation (IN_aux (IN_id id, _), substs) ->
+      graph := G.add_edges (Function id) [Outcome id] !graph;
+      List.iter
+        (function
+          | IS_aux (IS_id (_, id_to), _) -> graph := G.add_edges (Function id) [Function id_to] !graph
+          | IS_aux (IS_typ (_, arg), _) ->
+              IdSet.iter (fun typ_id -> graph := G.add_edge (Function id) (Type typ_id) !graph) (typ_arg_ids arg)
           )
-          ids
-    | DEF_internal_mutrec fundefs -> List.iter scan_fundef fundefs
-    | DEF_constraint nc ->
-        let ids = constraint_ids nc in
-        IdSet.iter
-          (fun id1 ->
-            IdSet.iter
-              (fun id2 ->
-                if not (Id.compare id1 id2 = 0) then (
-                  graph := G.add_edge (Type id1) (Type id2) !graph;
-                  graph := G.add_edge (Type id2) (Type id1) !graph
-                )
+        substs
+  | DEF_scattered (SD_aux (sdef, _)) -> (
+      match sdef with
+      | SD_funcl (FCL_aux (FCL_funcl (id, pexp), _)) -> ignore (rewrite_pexp (rewriters (Function id)) pexp)
+      | _ -> ()
+    )
+  | DEF_overload (id, ids) ->
+      List.iter
+        (fun id' ->
+          let n = if Env.is_union_constructor id' def_annot.env then Constructor id' else Function id' in
+          graph := G.add_edge (Overload id) n !graph
+        )
+        ids
+  | DEF_internal_mutrec fundefs -> List.iter scan_fundef fundefs
+  | DEF_constraint nc ->
+      let ids = constraint_ids nc in
+      IdSet.iter
+        (fun id1 ->
+          IdSet.iter
+            (fun id2 ->
+              if not (Id.compare id1 id2 = 0) then (
+                graph := G.add_edge (Type id1) (Type id2) !graph;
+                graph := G.add_edge (Type id2) (Type id1) !graph
               )
-              ids
-          )
-          ids
-    | _ -> ()
-  end;
+            )
+            ids
+        )
+        ids
+  | _ -> ()
+  );
   !graph
 
 let rec graph_of_defs defs =
@@ -481,7 +474,7 @@ let filter_ast_extra cuts g ast keep_std =
     let in_graph def = NS.exists (fun n -> NM.mem n g) (nodes_of_def def) in
     let is_cut def = NS.subset (nodes_of_def def) cuts in
     function
-    | DEF_aux (DEF_overload (id, overloads), def_annot) :: defs -> begin
+    | DEF_aux (DEF_overload (id, overloads), def_annot) :: defs -> (
         let keep_overload overload =
           (NM.mem (Function overload) g || NM.mem (Constructor overload) g || NM.mem (Overload overload) g)
           && not
@@ -491,7 +484,7 @@ let filter_ast_extra cuts g ast keep_std =
         match filtered with
         | [] -> filter_ast' g defs
         | _ -> DEF_aux (DEF_overload (id, filtered), def_annot) :: filter_ast' g defs
-      end
+      )
     | DEF_aux (DEF_val vs, def_annot) :: defs when NM.mem (Function (id_of_val_spec vs)) g ->
         DEF_aux (DEF_val vs, def_annot) :: filter_ast' g defs
     | DEF_aux (DEF_val _, _) :: defs -> filter_ast' g defs
@@ -512,13 +505,12 @@ let filter_ast_extra cuts g ast keep_std =
           def :: in_file defs
         )
         else def :: filter_ast' g defs
-    | DEF_aux (DEF_internal_mutrec fundefs, def_annot) :: defs ->
+    | DEF_aux (DEF_internal_mutrec fundefs, def_annot) :: defs -> (
         let fundefs' = List.filter (fun fd -> NM.mem (Function (id_of_fundef fd)) g) fundefs in
-        begin
-          match fundefs' with
-          | [] -> filter_ast' g defs
-          | _ -> DEF_aux (DEF_internal_mutrec fundefs', def_annot) :: filter_ast' g defs
-        end
+        match fundefs' with
+        | [] -> filter_ast' g defs
+        | _ -> DEF_aux (DEF_internal_mutrec fundefs', def_annot) :: filter_ast' g defs
+      )
     | DEF_aux (DEF_constraint nc, def_annot) :: defs ->
         let ids = constraint_ids nc in
         if IdSet.exists (fun id -> NM.mem (Type id) g) ids then
@@ -661,14 +653,11 @@ let slice_instantiation_types sail_dir ast =
   let roots =
     ast.defs
     |> List.filter_map (function
-         | DEF_aux (DEF_instantiation (_, substs), _) ->
-             Some
-               (List.filter_map
-                  (function IS_aux (IS_typ (_, arg), _) -> Some arg | IS_aux (IS_id _, _) -> None)
-                  substs
-               )
-         | _ -> None
-         )
+      | DEF_aux (DEF_instantiation (_, substs), _) ->
+          Some
+            (List.filter_map (function IS_aux (IS_typ (_, arg), _) -> Some arg | IS_aux (IS_id _, _) -> None) substs)
+      | _ -> None
+      )
     |> List.concat |> List.map typ_arg_ids |> List.fold_left IdSet.union IdSet.empty |> IdSet.elements
     |> List.map (fun id -> Type id)
     |> NodeSet.of_list
@@ -684,19 +673,19 @@ let partition_instantiation_definitions include_types defs =
   let roots =
     defs
     |> List.filter_map (function
-         | DEF_aux (DEF_instantiation (_, substs), _) ->
-             Some
-               (List.map
-                  (function
-                    | IS_aux (IS_typ (_, arg), _) ->
-                        if include_types then typ_arg_ids arg |> IdSet.elements |> List.map (fun id -> Type id) else []
-                    | IS_aux (IS_id (_, id_to), _) -> [Function id_to]
-                    )
-                  substs
-               |> List.concat
-               )
-         | _ -> None
-         )
+      | DEF_aux (DEF_instantiation (_, substs), _) ->
+          Some
+            (List.map
+               (function
+                 | IS_aux (IS_typ (_, arg), _) ->
+                     if include_types then typ_arg_ids arg |> IdSet.elements |> List.map (fun id -> Type id) else []
+                 | IS_aux (IS_id (_, id_to), _) -> [Function id_to]
+                 )
+               substs
+            |> List.concat
+            )
+      | _ -> None
+      )
     |> List.concat |> NS.of_list
   in
   let g = G.prune roots NS.empty g in

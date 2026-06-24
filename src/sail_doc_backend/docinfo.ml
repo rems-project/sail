@@ -160,30 +160,28 @@ let hyperlinks_from_def files def =
 
   let scan_lexp lexp_aux annot =
     let env = Type_check.env_of_annot annot in
-    begin
-      match lexp_aux with
-      | LE_typ (_, id) | LE_id id -> begin
-          match Type_check.Env.lookup_id id env with
-          | Register _ -> link (fun hloc -> Register (id, hloc)) (id_loc id)
-          | _ -> ()
-        end
-      | _ -> ()
-    end;
+    ( match lexp_aux with
+    | LE_typ (_, id) | LE_id id -> (
+        match Type_check.Env.lookup_id id env with
+        | Register _ -> link (fun hloc -> Register (id, hloc)) (id_loc id)
+        | _ -> ()
+      )
+    | _ -> ()
+    );
     LE_aux (lexp_aux, annot)
   in
 
   let scan_exp e_aux annot =
     let env = Type_check.env_of_annot annot in
-    begin
-      match e_aux with
-      | E_id id -> begin
-          match Type_check.Env.lookup_id id env with
-          | Register _ -> link (fun hloc -> Register (id, hloc)) (id_loc id)
-          | _ -> ()
-        end
-      | E_app (f, _) -> link (fun hloc -> Function (f, hloc)) (id_loc f)
-      | _ -> ()
-    end;
+    ( match e_aux with
+    | E_id id -> (
+        match Type_check.Env.lookup_id id env with
+        | Register _ -> link (fun hloc -> Register (id, hloc)) (id_loc id)
+        | _ -> ()
+      )
+    | E_app (f, _) -> link (fun hloc -> Function (f, hloc)) (id_loc f)
+    | _ -> ()
+    );
     E_aux (e_aux, annot)
   in
 
@@ -675,20 +673,18 @@ module Generator (Converter : Markdown.CONVERTER) (Config : CONFIG) = struct
       (* Function definiton may be scattered, so we can't skip it *)
       | DEF_fundef fdef ->
           let id = id_of_fundef fdef in
-          ( begin
-              match docinfo_for_fundef ~ast def_annot files fdef with
-              | None -> docinfo
-              | Some doc -> { docinfo with functions = Bindings.add id { doc; links; module_path } docinfo.functions }
-            end,
+          ( ( match docinfo_for_fundef ~ast def_annot files fdef with
+            | None -> docinfo
+            | Some doc -> { docinfo with functions = Bindings.add id { doc; links; module_path } docinfo.functions }
+            ),
             skips
           )
       | DEF_mapdef mdef ->
           let id = id_of_mapdef mdef in
-          ( begin
-              match docinfo_for_mapdef files mdef with
-              | None -> docinfo
-              | Some doc -> { docinfo with mappings = Bindings.add id { doc; links; module_path } docinfo.mappings }
-            end,
+          ( ( match docinfo_for_mapdef files mdef with
+            | None -> docinfo
+            | Some doc -> { docinfo with mappings = Bindings.add id { doc; links; module_path } docinfo.mappings }
+            ),
             skips
           )
       | _ when skipping skips -> (docinfo, skips)
@@ -772,26 +768,25 @@ module Generator (Converter : Markdown.CONVERTER) (Config : CONFIG) = struct
       List.iter
         (fun (DEF_aux (aux, def_annot)) ->
           match aux with
-          | DEF_pragma ("span", Pragma_line (arg, _)) when Option.is_none !current_span -> begin
+          | DEF_pragma ("span", Pragma_line (arg, _)) when Option.is_none !current_span -> (
               match String.split_on_char ' ' arg with
               | ["start"; name] -> current_span := Some (name, def_annot.loc)
               | _ -> raise (Reporting.err_general def_annot.loc "Invalid span directive")
-            end
-          | DEF_pragma ("span", Pragma_line (arg, _)) when arg = "end" -> begin
+            )
+          | DEF_pragma ("span", Pragma_line (arg, _)) when arg = "end" -> (
               match !current_span with
-              | Some (name, start_l) ->
+              | Some (name, start_l) -> (
                   current_span := None;
                   let end_l = def_annot.loc in
-                  begin
-                    match (Reporting.simp_loc start_l, Reporting.simp_loc end_l) with
-                    | Some (_, p1), Some (p2, _) when p1.pos_fname = p2.pos_fname ->
-                        (* Adjust the span for p2 to end at the very start of the directive *)
-                        let p2 = { p2 with pos_cnum = p2.pos_bol } in
-                        spans := Bindings.add (mk_id name) (doc_lexing_pos p1 p2) !spans
-                    | _, _ -> raise (Reporting.err_general def_annot.loc "Invalid locations found when ending span")
-                  end
+                  match (Reporting.simp_loc start_l, Reporting.simp_loc end_l) with
+                  | Some (_, p1), Some (p2, _) when p1.pos_fname = p2.pos_fname ->
+                      (* Adjust the span for p2 to end at the very start of the directive *)
+                      let p2 = { p2 with pos_cnum = p2.pos_bol } in
+                      spans := Bindings.add (mk_id name) (doc_lexing_pos p1 p2) !spans
+                  | _, _ -> raise (Reporting.err_general def_annot.loc "Invalid locations found when ending span")
+                )
               | None -> raise (Reporting.err_general def_annot.loc "No start span for this end span")
-            end
+            )
           | DEF_pragma ("span", _) ->
               raise (Reporting.err_general def_annot.loc "Previous span must be ended before this one can begin")
           | _ -> ()

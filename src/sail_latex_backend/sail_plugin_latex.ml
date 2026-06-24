@@ -78,14 +78,13 @@ let latex_options =
 let latex_target out_file { ast; effect_info; env; _ } =
   Reporting.opt_warnings := true;
   let latex_dir = match out_file with None -> "sail_latex" | Some s -> s in
-  begin
-    try
-      if not (Sys.is_directory latex_dir) then begin
+  ( try
+      if not (Sys.is_directory latex_dir) then (
         prerr_endline ("Failure: latex output location exists and is not a directory: " ^ latex_dir);
         exit 1
-      end
+      )
     with Sys_error _ -> Unix.mkdir latex_dir 0o755
-  end;
+  );
   Latex.opt_directory := latex_dir;
   let chan = open_out (Filename.concat latex_dir "commands.tex") in
   output_string chan (Pretty_print_sail.Document.to_string (Latex.defs (Type_check.strip_ast ast)));

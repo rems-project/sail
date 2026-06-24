@@ -100,13 +100,12 @@ class footprint_visitor ctx registers (footprint : direct_footprint) : jib_visit
     method! vcval =
       function
       | V_id (id, local_ctyp) ->
-          begin
-            match NameMap.find_opt id registers with
-            | Some (ctyp, _) ->
-                assert (ctyp_equal local_ctyp ctyp);
-                footprint.reads <- NameSet.add id footprint.reads
-            | None -> ()
-          end;
+          ( match NameMap.find_opt id registers with
+          | Some (ctyp, _) ->
+              assert (ctyp_equal local_ctyp ctyp);
+              footprint.reads <- NameSet.add id footprint.reads
+          | None -> ()
+          );
           SkipChildren
       | _ -> DoChildren
 
@@ -136,11 +135,11 @@ class footprint_visitor ctx registers (footprint : direct_footprint) : jib_visit
               );
             if name = "reg_deref" then (
               match args with
-              | [cval] -> begin
+              | [cval] -> (
                   match cval_ctyp cval with
                   | CT_ref reg_ctyp -> footprint.references <- CTSet.add reg_ctyp footprint.references
                   | _ -> ()
-                end
+                )
               | _ -> ()
             )
           );
@@ -156,13 +155,12 @@ class footprint_visitor ctx registers (footprint : direct_footprint) : jib_visit
           footprint.throws <- true;
           SkipChildren
       | CL_id (id, local_ctyp) ->
-          begin
-            match NameMap.find_opt id registers with
-            | Some (ctyp, _) ->
-                assert (ctyp_equal local_ctyp ctyp);
-                footprint.writes <- NameSet.add id footprint.writes
-            | None -> ()
-          end;
+          ( match NameMap.find_opt id registers with
+          | Some (ctyp, _) ->
+              assert (ctyp_equal local_ctyp ctyp);
+              footprint.writes <- NameSet.add id footprint.writes
+          | None -> ()
+          );
           SkipChildren
       | _ -> DoChildren
   end

@@ -300,7 +300,7 @@ let shadows v env = match KBindings.find_opt v env.shadow_vars with Some n -> n 
 
 let add_typ_var_shadow ?(from_outcome = false) l (KOpt_aux (KOpt_kind (K_aux (k, _), v), _)) env =
   let origin = if from_outcome then Outcome else Normal in
-  if KBindings.mem v env.typ_vars then begin
+  if KBindings.mem v env.typ_vars then (
     let n = match KBindings.find_opt v env.shadow_vars with Some n -> n | None -> 0 in
     let s_l, s_k, s_origin = KBindings.find v env.typ_vars in
     let s_v = Kid_aux (Var (string_of_kid v ^ "#" ^ string_of_int n), l) in
@@ -319,11 +319,11 @@ let add_typ_var_shadow ?(from_outcome = false) l (KOpt_aux (KOpt_kind (K_aux (k,
       },
       Some s_v
     )
-  end
-  else begin
+  )
+  else (
     typ_print (lazy (adding ^ "type variable " ^ string_of_kid v ^ " : " ^ string_of_kind_aux k)) [@coverage off];
     ({ env with typ_vars = KBindings.add v (l, k, origin) env.typ_vars }, None)
-  end
+  )
 
 let add_typ_var ?(from_outcome = false) l kopt env = fst (add_typ_var_shadow ~from_outcome l kopt env)
 
@@ -618,15 +618,14 @@ module Well_formedness = struct
         match in_scope_typ_id env id with
         | Ok true ->
             let typq, k = infer_kind env id in
-            begin
-              match k with
-              | K_type -> ()
-              | _ ->
-                  typ_error l
-                    (string_of_id id ^ " has kind " ^ string_of_kind_aux k
-                   ^ " but was used in a place where a type was expected"
-                    )
-            end;
+            ( match k with
+            | K_type -> ()
+            | _ ->
+                typ_error l
+                  (string_of_id id ^ " has kind " ^ string_of_kind_aux k
+                 ^ " but was used in a place where a type was expected"
+                  )
+            );
             if not (Util.list_empty (quant_kopts typq)) then
               typ_error l
                 ("Type constructor " ^ string_of_id id ^ " expected arguments " ^ string_of_typquant typq
@@ -636,7 +635,7 @@ module Well_formedness = struct
         | Ok false -> typ_error l ("Undefined type " ^ string_of_id id)
         | Error msg -> typ_raise l msg
       )
-    | Typ_var kid -> begin
+    | Typ_var kid -> (
         match KBindings.find kid env.typ_vars with
         | _, K_type, _ -> ()
         | _, k, _ ->
@@ -646,7 +645,7 @@ module Well_formedness = struct
               )
         | exception Not_found ->
             typ_error l ("Unbound type variable " ^ string_of_kid kid ^ " in type " ^ string_of_typ typ)
-      end
+      )
     | Typ_fn (arg_typs, ret_typ) ->
         List.iter (wf_typ exs env) arg_typs;
         wf_typ exs env ret_typ
@@ -657,20 +656,17 @@ module Well_formedness = struct
         wf_typ exs env typ2
     | Typ_tuple typs -> List.iter (wf_typ exs env) typs
     | Typ_app (id, [A_aux (A_nexp nexp, _)]) when string_of_id id = "bitvector" && !Initial_check.opt_strict_bitvector
-      ->
+      -> (
         wf_nexp exs env nexp;
-        begin
-          match env.prove with
-          | Some prove ->
-              let with_existential =
-                match exs.constr with
-                | Some ex_constraint -> fun c -> nc_or (nc_not ex_constraint) c
-                | None -> fun c -> c
-              in
-              if not (prove env (with_existential (nc_gteq nexp (nint 0)))) then
-                typ_error l "Bitvector index must be greater than or equal to zero"
-          | None -> Reporting.unreachable l __POS__ "No prover in environment when checking well-formedness"
-        end
+        match env.prove with
+        | Some prove ->
+            let with_existential =
+              match exs.constr with Some ex_constraint -> fun c -> nc_or (nc_not ex_constraint) c | None -> fun c -> c
+            in
+            if not (prove env (with_existential (nc_gteq nexp (nint 0)))) then
+              typ_error l "Bitvector index must be greater than or equal to zero"
+        | None -> Reporting.unreachable l __POS__ "No prover in environment when checking well-formedness"
+      )
     | Typ_app (id, [(A_aux (A_nexp _, _) as arg)]) when string_of_id id = "implicit" -> wf_typ_arg exs env arg
     | Typ_app (id, args) -> (
         match in_scope_typ_id env id with
@@ -717,15 +713,14 @@ module Well_formedness = struct
             )
     | Nexp_id id when bound_typ_id env id ->
         let typq, k = infer_kind env id in
-        begin
-          match k with
-          | K_int -> ()
-          | _ ->
-              typ_error l
-                (string_of_id id ^ " has kind " ^ string_of_kind_aux k
-               ^ " but was used in a place where a type-level number was expected"
-                )
-        end;
+        ( match k with
+        | K_int -> ()
+        | _ ->
+            typ_error l
+              (string_of_id id ^ " has kind " ^ string_of_kind_aux k
+             ^ " but was used in a place where a type-level number was expected"
+              )
+        );
         if not (Util.list_empty (quant_kopts typq)) then
           typ_error l
             ("Numeric type constructor " ^ string_of_id id ^ " expected arguments " ^ string_of_typquant typq
@@ -746,7 +741,7 @@ module Well_formedness = struct
         | None -> typ_error l msg
       )
     | Nexp_var kid when KidSet.mem kid exs.vars -> ()
-    | Nexp_var kid -> begin
+    | Nexp_var kid -> (
         match get_typ_var kid env with
         | K_int -> ()
         | kind ->
@@ -754,7 +749,7 @@ module Well_formedness = struct
               ("Constraint is badly formed, " ^ string_of_kid kid ^ " has kind " ^ string_of_kind_aux kind
              ^ " but should have kind Int"
               )
-      end
+      )
     | Nexp_constant _ -> ()
     | Nexp_app (id, nexps) -> (
         match in_scope_typ_id env id with
@@ -838,11 +833,11 @@ module Well_formedness = struct
         wf_constraint exs env nc2
     | NC_app (_, args) -> List.iter (wf_typ_arg exs env) args
     | NC_var kid when KidSet.mem kid exs.vars -> ()
-    | NC_var kid -> begin
+    | NC_var kid -> (
         match get_typ_var kid env with
         | K_bool -> ()
         | kind -> typ_error l (string_of_kid kid ^ " has kind " ^ string_of_kind_aux kind ^ " but should have kind Bool")
-      end
+      )
     | NC_true | NC_false -> ()
 end
 
@@ -1036,31 +1031,29 @@ and add_constraint ?(global = false) ?reason constr env =
   else if KidSet.cardinal power_vars = 1 && !opt_smt_linearize then (
     let v = KidSet.choose power_vars in
     let constrs = List.fold_left nc_and nc_true (get_constraints env) in
-    begin
-      match Constraint.solve_all_smt l (get_abstract_typs env) constrs v with
-      | Some solutions ->
-          typ_print
-            ( lazy
-              (Util.("Linearizing " |> red |> clear)
-              ^ string_of_n_constraint constr ^ " for " ^ string_of_kid v ^ " in "
-              ^ Util.string_of_list ", " Big_int.to_string solutions
-              )
-              ) [@coverage off];
-          let linearized =
-            List.fold_left
-              (fun c s ->
-                nc_or c (nc_and (nc_eq (nvar v) (nconstant s)) (constraint_subst v (arg_nexp (nconstant s)) constr))
-              )
-              nc_false solutions
-          in
-          typ_print (lazy (adding ^ "constraint " ^ string_of_n_constraint linearized)) [@coverage off];
-          { env with constraints = (reason, linearized) :: env.constraints }
-      | None ->
-          typ_error l
-            ("Type variable " ^ string_of_kid v ^ " must have a finite number of solutions to add "
-           ^ string_of_n_constraint constr
+    match Constraint.solve_all_smt l (get_abstract_typs env) constrs v with
+    | Some solutions ->
+        typ_print
+          ( lazy
+            (Util.("Linearizing " |> red |> clear)
+            ^ string_of_n_constraint constr ^ " for " ^ string_of_kid v ^ " in "
+            ^ Util.string_of_list ", " Big_int.to_string solutions
             )
-    end
+            ) [@coverage off];
+        let linearized =
+          List.fold_left
+            (fun c s ->
+              nc_or c (nc_and (nc_eq (nvar v) (nconstant s)) (constraint_subst v (arg_nexp (nconstant s)) constr))
+            )
+            nc_false solutions
+        in
+        typ_print (lazy (adding ^ "constraint " ^ string_of_n_constraint linearized)) [@coverage off];
+        { env with constraints = (reason, linearized) :: env.constraints }
+    | None ->
+        typ_error l
+          ("Type variable " ^ string_of_kid v ^ " must have a finite number of solutions to add "
+         ^ string_of_n_constraint constr
+          )
   )
   else (
     match nc_aux with
@@ -1240,45 +1233,43 @@ let rec valid_implicits env start = function
 
 let rec update_val_spec ?in_module id (typq, typ) env =
   let typq_env = add_typquant (id_loc id) typq env in
-  begin
-    match expand_synonyms typq_env typ with
-    | Typ_aux (Typ_fn (arg_typs, ret_typ), l) ->
-        valid_implicits env true arg_typs;
+  match expand_synonyms typq_env typ with
+  | Typ_aux (Typ_fn (arg_typs, ret_typ), l) ->
+      valid_implicits env true arg_typs;
 
-        (* We perform some canonicalisation for function types where existentials appear on the left, so
+      (* We perform some canonicalisation for function types where existentials appear on the left, so
            ({'n, 'n >= 2, int('n)}, foo) -> bar
            would become
            forall 'n, 'n >= 2. (int('n), foo) -> bar
            this enforces the invariant that all things on the left of functions are 'base types' (i.e. without existentials)
         *)
-        let base_args = List.map (fun typ -> destruct_exist (expand_synonyms typq_env typ)) arg_typs in
-        let existential_arg typq = function
-          | None -> typq
-          | Some (exs, nc, _) ->
-              List.fold_left (fun typq kopt -> quant_add (mk_qi_kopt kopt) typq) (quant_add (mk_qi_nc nc) typq) exs
-        in
-        let typq = List.fold_left existential_arg typq base_args in
-        let arg_typs = List.map2 (fun typ -> function Some (_, _, typ) -> typ | None -> typ) arg_typs base_args in
-        let typ = Typ_aux (Typ_fn (arg_typs, ret_typ), l) in
-        typ_print (lazy (adding ^ "val " ^ string_of_id id ^ " : " ^ string_of_bind (typq, typ))) [@coverage off];
-        update_global
-          (fun global ->
-            {
-              global with
-              val_specs = Bindings.add id (mk_item_in_opt in_module env ~loc:(id_loc id) (typq, typ)) global.val_specs;
-            }
-          )
-          env
-    | Typ_aux (Typ_bidir (typ1, typ2), _) ->
-        let env = add_mapping id (typq, typ1, typ2) env in
-        typ_print (lazy (adding ^ "mapping " ^ string_of_id id ^ " : " ^ string_of_bind (typq, typ))) [@coverage off];
-        update_global
-          (fun global ->
-            { global with val_specs = Bindings.add id (mk_item env ~loc:(id_loc id) (typq, typ)) global.val_specs }
-          )
-          env
-    | _ -> typ_error (id_loc id) "val definition must have a mapping or function type"
-  end
+      let base_args = List.map (fun typ -> destruct_exist (expand_synonyms typq_env typ)) arg_typs in
+      let existential_arg typq = function
+        | None -> typq
+        | Some (exs, nc, _) ->
+            List.fold_left (fun typq kopt -> quant_add (mk_qi_kopt kopt) typq) (quant_add (mk_qi_nc nc) typq) exs
+      in
+      let typq = List.fold_left existential_arg typq base_args in
+      let arg_typs = List.map2 (fun typ -> function Some (_, _, typ) -> typ | None -> typ) arg_typs base_args in
+      let typ = Typ_aux (Typ_fn (arg_typs, ret_typ), l) in
+      typ_print (lazy (adding ^ "val " ^ string_of_id id ^ " : " ^ string_of_bind (typq, typ))) [@coverage off];
+      update_global
+        (fun global ->
+          {
+            global with
+            val_specs = Bindings.add id (mk_item_in_opt in_module env ~loc:(id_loc id) (typq, typ)) global.val_specs;
+          }
+        )
+        env
+  | Typ_aux (Typ_bidir (typ1, typ2), _) ->
+      let env = add_mapping id (typq, typ1, typ2) env in
+      typ_print (lazy (adding ^ "mapping " ^ string_of_id id ^ " : " ^ string_of_bind (typq, typ))) [@coverage off];
+      update_global
+        (fun global ->
+          { global with val_specs = Bindings.add id (mk_item env ~loc:(id_loc id) (typq, typ)) global.val_specs }
+        )
+        env
+  | _ -> typ_error (id_loc id) "val definition must have a mapping or function type"
 
 and add_val_spec ?in_module ?(already_bound = false) ?(ignore_duplicate = false) id (bind_typq, bind_typ) env =
   let duplicate = Bindings.mem id env.global.val_specs in
@@ -1342,8 +1333,8 @@ and add_mapping id (typq, typ1, typ2) env =
   let backwards_matches_typ = Typ_aux (Typ_fn ([typ2], bool_typ), Parse_ast.Unknown) in
   env
   |> update_global (fun global ->
-         { global with mappings = Bindings.add id (mk_item env ~loc:(id_loc id) (typq, typ1, typ2)) global.mappings }
-     )
+      { global with mappings = Bindings.add id (mk_item env ~loc:(id_loc id) (typq, typ1, typ2)) global.mappings }
+  )
   |> add_val_spec ~ignore_duplicate:true forwards_id (typq, forwards_typ)
   |> add_val_spec ~ignore_duplicate:true backwards_id (typq, backwards_typ)
   |> add_val_spec ~ignore_duplicate:true forwards_matches_id (typq, forwards_matches_typ)

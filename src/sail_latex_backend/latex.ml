@@ -258,22 +258,22 @@ let latex_of_markdown str =
     | Text str -> text_code str
     | Emph elems -> sprintf "\\emph{%s}" (format elems)
     | Bold elems -> sprintf "\\textbf{%s}" (format elems)
-    | Ref (r, "THIS", alt, _) -> begin
+    | Ref (r, "THIS", alt, _) -> (
         match state.this with
         | Some id -> sprintf "\\hyperref[%s]{%s}" (refcode_id id) (replace_this alt)
         | None -> failwith "Cannot create link to THIS"
-      end
+      )
     | Ref (r, name, alt, _) ->
         (* special case for [id] (format as code) *)
         let format_fn = if name = alt then inline_code else replace_this in
         (* Do not attempt to escape link destinations wrapped in <> *)
         if Str.string_match (Str.regexp "<.+>") name 0 then
           sprintf "\\hyperref[%s]{%s}" (String.sub name 1 (String.length name - 2)) (format_fn alt)
-        else begin
+        else (
           match r#get_ref name with
           | None -> sprintf "\\hyperref[%s]{%s}" (refcode_string name) (format_fn alt)
           | Some (link, _) -> sprintf "\\hyperref[%s]{%s}" (refcode_string link) (format_fn alt)
-        end
+        )
     | Url (href, text, "") -> sprintf "\\href{%s}{%s}" href (format text)
     | Url (href, text, reference) -> sprintf "%s\\footnote{%s~\\url{%s}}" (format text) reference href
     | Code (_, code) -> sprintf "\\lstinline`%s`" code
@@ -350,7 +350,7 @@ let rec read_lines in_chan = function
 
 let latex_loc ?(docstring = empty) no_loc l =
   match Reporting.simp_loc l with
-  | Some (p1, p2) -> begin
+  | Some (p1, p2) -> (
       let open Lexing in
       try
         let in_chan = open_in p1.pos_fname in
@@ -364,7 +364,7 @@ let latex_loc ?(docstring = empty) no_loc l =
           close_in_noerr in_chan;
           docstring ^^ no_loc
       with _ -> docstring ^^ no_loc
-    end
+    )
   | None -> docstring ^^ no_loc
 
 let doc_spec_simple (VS_aux (VS_val_spec (ts, id, ext), _)) =
@@ -383,14 +383,14 @@ let latex_command ~docstring cat id no_loc l =
     Reporting.warn "" l ("Multiple instances of " ^ string_of_id id ^ " only generating latex for the first");
     empty
   )
-  else begin
+  else (
     state.commands <- StringSet.add command state.commands;
 
     ksprintf string "\\newcommand{%s}{\\saildoclabelled{%s}{\\saildoc%s{" command (refcode_cat_id cat id)
       (category_name_simple cat)
     ^^ docstring ^^ string "}{"
     ^^ ksprintf string "\\lstinputlisting[language=sail]{%s}}}}" (Filename.concat !opt_directory code_file)
-  end
+  )
 
 let latex_docstring (def_annot : 'a Ast.def_annot) =
   match def_annot.doc_comment with Some { contents; _ } -> string (latex_of_markdown contents) | None -> empty
@@ -494,15 +494,14 @@ let defs { defs; _ } =
     | DEF_fundef (FD_aux (FD_function (_, _, [FCL_aux (FCL_funcl (id, _), _)]), annot)) ->
         fundefs := Bindings.add id id !fundefs;
         Some (latex_command ~docstring Function id (Pretty_print_sail.doc_def def) (fst annot))
-    | DEF_let (pat, _) ->
+    | DEF_let (pat, _) -> (
         let ids = pat_ids pat in
-        begin
-          match IdSet.min_elt_opt ids with
-          | None -> None
-          | Some base_id ->
-              letdefs := IdSet.fold (fun id -> Bindings.add id base_id) ids !letdefs;
-              Some (latex_command ~docstring Let base_id (Pretty_print_sail.doc_def def) def_annot.loc)
-        end
+        match IdSet.min_elt_opt ids with
+        | None -> None
+        | Some base_id ->
+            letdefs := IdSet.fold (fun id -> Bindings.add id base_id) ids !letdefs;
+            Some (latex_command ~docstring Let base_id (Pretty_print_sail.doc_def def) def_annot.loc)
+      )
     | DEF_type (TD_aux (_, annot) as tdef) ->
         let id = id_of_type_def tdef in
         typedefs := Bindings.add id id !typedefs;

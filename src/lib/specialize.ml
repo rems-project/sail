@@ -225,7 +225,7 @@ let instantiations_of spec id ast =
   (* We need to to check patterns in case id is a union constructor
      that is never called like a function. *)
   let inspect_pat = function
-    | P_aux (P_app (id', _), annot) as pat when Id.compare id id' = 0 -> begin
+    | P_aux (P_app (id', _), annot) as pat when Id.compare id id' = 0 -> (
         match Type_check.typ_of_annot annot with
         | Typ_aux (Typ_app (variant_id, _), _) as typ ->
             let open Type_check in
@@ -239,7 +239,7 @@ let instantiations_of spec id ast =
             pat
         | Typ_aux (Typ_id variant_id, _) -> pat
         | _ -> failwith ("Union constructor " ^ string_of_pat pat ^ " has non-union type")
-      end
+      )
     | pat -> pat
   in
 
@@ -432,10 +432,10 @@ let specialize_id_valspec spec instantiations id ast effect_info =
         let spec_id = id_of_instantiation id instantiation in
 
         if IdSet.mem spec_id !spec_ids then []
-        else begin
+        else (
           spec_ids := IdSet.add spec_id !spec_ids;
           [DEF_aux (DEF_val (VS_aux (VS_val_spec (typschm, spec_id, externs), annot)), def_annot)]
-        end
+        )
       in
 
       let specializations = List.map specialize_instance instantiations |> List.concat in
@@ -478,10 +478,10 @@ let specialize_id_fundef instantiations id ast =
       let specialize_fundef instantiation =
         let spec_id = id_of_instantiation id instantiation in
         if IdSet.mem spec_id !spec_ids then []
-        else begin
+        else (
           spec_ids := IdSet.add spec_id !spec_ids;
           [DEF_aux (DEF_fundef (specialize_annotations instantiation (rename_fundef spec_id fundef)), def_annot)]
-        end
+        )
       in
       let fundefs = List.map specialize_fundef instantiations |> List.concat in
       { ast with defs = pre_defs @ (DEF_aux (DEF_fundef fundef, def_annot) :: fundefs) @ post_defs }
@@ -549,11 +549,11 @@ let remove_unused_valspecs env ast =
     match defs with
     | def :: defs when is_fundef id def -> remove_unused defs id
     | def :: defs when is_valspec id def -> remove_unused defs id
-    | DEF_aux (DEF_overload (overload_id, overloads), def_annot) :: defs -> begin
+    | DEF_aux (DEF_overload (overload_id, overloads), def_annot) :: defs -> (
         match List.filter (fun id' -> Id.compare id id' <> 0) overloads with
         | [] -> remove_unused defs id
         | overloads -> DEF_aux (DEF_overload (overload_id, overloads), def_annot) :: remove_unused defs id
-      end
+      )
     | def :: defs -> def :: remove_unused defs id
     | [] -> []
   in
@@ -597,16 +597,15 @@ let specialize_ids spec ids ast effect_info =
       (IdSet.elements ids)
   in
   let ast = reorder_typedefs ast in
-  begin
-    match !opt_ddump_spec_ast with
-    | Some (f, i) ->
-        let filename = f ^ "_spec_" ^ string_of_int i ^ ".sail" in
-        let out_chan = open_out filename in
-        Pretty_print_sail.output_ast out_chan (Type_check.strip_ast ast);
-        close_out out_chan;
-        opt_ddump_spec_ast := Some (f, i + 1)
-    | None -> ()
-  end;
+  ( match !opt_ddump_spec_ast with
+  | Some (f, i) ->
+      let filename = f ^ "_spec_" ^ string_of_int i ^ ".sail" in
+      let out_chan = open_out filename in
+      Pretty_print_sail.output_ast out_chan (Type_check.strip_ast ast);
+      close_out out_chan;
+      opt_ddump_spec_ast := Some (f, i + 1)
+  | None -> ()
+  );
   let ast, _ = Type_error.check Type_check.initial_env (Type_check.strip_ast ast) in
   let _, ast =
     List.fold_left

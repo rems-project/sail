@@ -264,10 +264,10 @@ let output libs files =
 let check_flags () =
   if !Pretty_print_coq.opt_generic_values && not !Pretty_print_coq.opt_coq_record_update then
     raise (Reporting.err_general Parse_ast.Unknown "--rocq-generic-value requires --rocq-record-update");
-  if !State.opt_type_grouped_regstate then begin
+  if !State.opt_type_grouped_regstate then (
     Reporting.simple_warn "-grouped-regstate option not supported in the Rocq back-end, ignoring";
     State.opt_type_grouped_regstate := false
-  end
+  )
 
 let coq_target out_file { ctx; ast; effect_info; env; _ } =
   let out_file = match out_file with Some f -> f | None -> "out" in

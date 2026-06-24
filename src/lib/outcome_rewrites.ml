@@ -171,16 +171,16 @@ let instantiate target ast =
         in
         let outcome_defs, _ =
           ( match instantiated_def with
-          | None ->
-              [
-                DEF_aux
-                  ( DEF_pragma ("abstract", Pragma_line (string_of_id id, gen_loc (id_loc id))),
-                    mk_def_annot (gen_loc (id_loc id)) ()
-                  );
-                valspec true;
-              ]
-          | Some def -> [valspec false; strip_def def]
-          )
+            | None ->
+                [
+                  DEF_aux
+                    ( DEF_pragma ("abstract", Pragma_line (string_of_id id, gen_loc (id_loc id))),
+                      mk_def_annot (gen_loc (id_loc id)) ()
+                    );
+                  valspec true;
+                ]
+            | Some def -> [valspec false; strip_def def]
+            )
           |> Type_error.check_defs env
         in
         (outcomes, if keep_original_defs then def :: outcome_defs else outcome_defs)

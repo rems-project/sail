@@ -89,10 +89,8 @@ let rec load_memory_segment' (bytes, addr) mem =
   | byte :: bytes' ->
       let data_byte = Char.code byte in
       let addr' = Nat_big_num.succ addr in
-      begin
-        add_mem data_byte addr mem;
-        load_memory_segment' (bytes', addr') mem
-      end
+      add_mem data_byte addr mem;
+      load_memory_segment' (bytes', addr') mem
 
 let rec load_memory_segment (segment : Elf_interpreted_segment.elf64_interpreted_segment) mem =
   let (Byte_sequence.Sequence bytes) = segment.Elf_interpreted_segment.elf64_segment_body in
@@ -100,16 +98,12 @@ let rec load_memory_segment (segment : Elf_interpreted_segment.elf64_interpreted
   load_memory_segment' (bytes, addr) mem
 
 let rec load_memory_segments segments =
-  begin
-    match segments with
-    | [] -> ()
-    | segment :: segments' ->
-        let x, w, r = segment.Elf_interpreted_segment.elf64_segment_flags in
-        begin
-          load_memory_segment segment prog_mem;
-          load_memory_segments segments'
-        end
-  end
+  match segments with
+  | [] -> ()
+  | segment :: segments' ->
+      let x, w, r = segment.Elf_interpreted_segment.elf64_segment_flags in
+      load_memory_segment segment prog_mem;
+      load_memory_segments segments'
 
 let rec read_mem mem address length =
   if length = 0 then []
@@ -641,41 +635,38 @@ let initial_system_state_of_elf_file name =
   | Error.Success
       (_, (elf_epi : Sail_interface.executable_process_image), (symbol_map : Elf_file.global_symbol_init_info)) ->
       let segments, e_entry, e_machine =
-        begin
-          match elf_epi with
-          | ELF_Class_32 _ -> failwith "cannot handle ELF_Class_32"
-          | ELF_Class_64 (segments, e_entry, e_machine) ->
-              (* remove all the auto generated segments (they contain only 0s) *)
-              let segments =
-                Lem_list.mapMaybe (fun (seg, prov) -> if prov = Elf_file.FromELF then Some seg else None) segments
-              in
-              (segments, e_entry, e_machine)
-        end
+        match elf_epi with
+        | ELF_Class_32 _ -> failwith "cannot handle ELF_Class_32"
+        | ELF_Class_64 (segments, e_entry, e_machine) ->
+            (* remove all the auto generated segments (they contain only 0s) *)
+            let segments =
+              Lem_list.mapMaybe (fun (seg, prov) -> if prov = Elf_file.FromELF then Some seg else None) segments
+            in
+            (segments, e_entry, e_machine)
       in
-
       (* construct program memory and start address *)
-      begin
-        prog_mem := Mem.empty;
-        data_mem := Mem.empty;
-        tag_mem := Mem.empty;
-        load_memory_segments segments;
-        (*
+
+      prog_mem := Mem.empty;
+      data_mem := Mem.empty;
+      tag_mem := Mem.empty;
+      load_memory_segments segments;
+      (*
       debugf "prog_mem\n";
       Mem.iter (fun k v -> debugf "%s\n" (Mem.to_string k v)) !prog_mem;
       debugf "data_mem\n";
       Mem.iter (fun k v -> debugf "%s\n" (Mem.to_string k v)) !data_mem;
       *)
-        let ( isa_defs,
-              isa_memory_access,
-              isa_externs,
-              isa_model,
-              model_reg_d,
-              startaddr,
-              initial_stack_data,
-              initial_register_abi_data,
-              register_data_all ) =
-          match Nat_big_num.to_int e_machine with
-          (* | 21  (* EM_PPC64 *) ->
+      let ( isa_defs,
+            isa_memory_access,
+            isa_externs,
+            isa_model,
+            model_reg_d,
+            startaddr,
+            initial_stack_data,
+            initial_register_abi_data,
+            register_data_all ) =
+        match Nat_big_num.to_int e_machine with
+        (* | 21  (* EM_PPC64 *) ->
                   let startaddr =
                     let e_entry = Uint64.of_int64 (Nat_big_num.to_int64 e_entry) in
                     match Abi_power64.abi_power64_compute_program_entry_point segments e_entry with
@@ -719,186 +710,176 @@ let initial_system_state_of_elf_file name =
                    initial_stack_data,
                    initial_register_abi_data,
                    aarch64_register_data_all) *)
-          | 8 (* EM_MIPS *) ->
-              let startaddr =
-                let e_entry = Uint64_wrapper.of_bigint e_entry in
-                match Abi_mips64.abi_mips64_compute_program_entry_point segments e_entry with
-                | Error.Fail s -> failwith "Failed computing entry point"
-                | Error.Success s -> s
-              in
-              let initial_stack_data, initial_register_abi_data =
-                initial_stack_and_reg_data_of_MIPS_elf_file e_entry !data_mem
-              in
+        | 8 (* EM_MIPS *) ->
+            let startaddr =
+              let e_entry = Uint64_wrapper.of_bigint e_entry in
+              match Abi_mips64.abi_mips64_compute_program_entry_point segments e_entry with
+              | Error.Fail s -> failwith "Failed computing entry point"
+              | Error.Success s -> s
+            in
+            let initial_stack_data, initial_register_abi_data =
+              initial_stack_and_reg_data_of_MIPS_elf_file e_entry !data_mem
+            in
 
-              ( Mips.defs,
-                ( Mips_extras.mips_read_memory_functions,
-                  Mips_extras.mips_memory_writes,
-                  Mips_extras.mips_memory_eas,
-                  Mips_extras.mips_memory_vals,
-                  Mips_extras.mips_barrier_functions
-                ),
-                [],
-                MIPS,
-                D_decreasing,
-                startaddr,
-                initial_stack_data,
-                initial_register_abi_data,
-                mips_register_data_all
+            ( Mips.defs,
+              ( Mips_extras.mips_read_memory_functions,
+                Mips_extras.mips_memory_writes,
+                Mips_extras.mips_memory_eas,
+                Mips_extras.mips_memory_vals,
+                Mips_extras.mips_barrier_functions
+              ),
+              [],
+              MIPS,
+              D_decreasing,
+              startaddr,
+              initial_stack_data,
+              initial_register_abi_data,
+              mips_register_data_all
+            )
+        | _ ->
+            failwith
+              (Printf.sprintf
+                 "Sail sequential interpreter can't handle the e_machine value %s, only EM_PPC64, EM_AARCH64 and \
+                  EM_MIPS are supported."
+                 (Nat_big_num.to_string e_machine)
               )
-          | _ ->
-              failwith
-                (Printf.sprintf
-                   "Sail sequential interpreter can't handle the e_machine value %s, only EM_PPC64, EM_AARCH64 and \
-                    EM_MIPS are supported."
-                   (Nat_big_num.to_string e_machine)
-                )
-        in
+      in
 
-        (* pull the object symbols from the symbol table *)
-        let symbol_table : (string * Nat_big_num.num * int * word8 list (*their bytes*)) list =
-          let rec convert_symbol_table symbol_map =
-            begin
-              match symbol_map with
-              | [] -> []
-              | ( (name : string),
-                  ( (typ : Nat_big_num.num),
-                    (size : Nat_big_num.num (*number of bytes*)),
-                    (address : Nat_big_num.num),
-                    (mb : Byte_sequence.byte_sequence option (*present iff type=stt_object*)),
-                    (binding : Nat_big_num.num)
-                  )
-                ) (*              (mb: Byte_sequence_wrapper.t option (*present iff type=stt_object*)) )) *)
-                :: symbol_map' ->
-                  if
-                    Nat_big_num.equal typ Elf_symbol_table.stt_object
-                    && not (Nat_big_num.equal size (Nat_big_num.of_int 0))
-                  then (
-                    (* an object symbol - map *)
-                    (*Printf.printf "*** size %d ***\n" (Nat_big_num.to_int size);*)
-                    let bytes =
-                      match mb with
-                      | None -> raise (Failure "this cannot happen")
-                      | Some (Sequence bytes) -> List.map (fun (c : char) -> Char.code c) bytes
-                    in
-                    (name, address, List.length bytes, bytes) :: convert_symbol_table symbol_map'
-                  )
-                  else (* not an object symbol or of zero size - ignore *)
-                    convert_symbol_table symbol_map'
-            end
-          in
-          List.map (fun (n, a, bs) -> (n, a, List.length bs, bs)) initial_stack_data @ convert_symbol_table symbol_map
+      (* pull the object symbols from the symbol table *)
+      let symbol_table : (string * Nat_big_num.num * int * word8 list (*their bytes*)) list =
+        let rec convert_symbol_table symbol_map =
+          match symbol_map with
+          | [] -> []
+          | ( (name : string),
+              ( (typ : Nat_big_num.num),
+                (size : Nat_big_num.num (*number of bytes*)),
+                (address : Nat_big_num.num),
+                (mb : Byte_sequence.byte_sequence option (*present iff type=stt_object*)),
+                (binding : Nat_big_num.num)
+              )
+            ) (*              (mb: Byte_sequence_wrapper.t option (*present iff type=stt_object*)) )) *)
+            :: symbol_map' ->
+              if Nat_big_num.equal typ Elf_symbol_table.stt_object && not (Nat_big_num.equal size (Nat_big_num.of_int 0))
+              then (
+                (* an object symbol - map *)
+                (*Printf.printf "*** size %d ***\n" (Nat_big_num.to_int size);*)
+                let bytes =
+                  match mb with
+                  | None -> raise (Failure "this cannot happen")
+                  | Some (Sequence bytes) -> List.map (fun (c : char) -> Char.code c) bytes
+                in
+                (name, address, List.length bytes, bytes) :: convert_symbol_table symbol_map'
+              )
+              else (* not an object symbol or of zero size - ignore *)
+                convert_symbol_table symbol_map'
         in
+        List.map (fun (n, a, bs) -> (n, a, List.length bs, bs)) initial_stack_data @ convert_symbol_table symbol_map
+      in
 
-        (* invert the symbol table to use for pp *)
-        let symbol_table_pp : ((Sail_impl_base.address * int) * string) list =
-          (* map symbol to (bindings, footprint),
+      (* invert the symbol table to use for pp *)
+      let symbol_table_pp : ((Sail_impl_base.address * int) * string) list =
+        (* map symbol to (bindings, footprint),
              if a symbol appears more then onece keep the one with higher
              precedence (stb_global > stb_weak > stb_local) *)
-          let map =
-            List.fold_left
-              (fun map (name, (typ, size, address, mb, binding)) ->
-                if
-                  String.length name <> 0
-                  && (if String.length name = 1 then Char.code (String.get name 0) <> 0 else true)
-                  && not (Nat_big_num.equal address (Nat_big_num.of_int 0))
-                then (
-                  try
-                    let binding', _ = StringMap.find name map in
-                    if
-                      Nat_big_num.equal binding' Elf_symbol_table.stb_local
-                      || Nat_big_num.equal binding Elf_symbol_table.stb_global
-                    then
-                      StringMap.add name
-                        (binding, (Sail_impl_base.address_of_integer address, Nat_big_num.to_int size))
-                        map
-                    else map
-                  with Not_found ->
+        let map =
+          List.fold_left
+            (fun map (name, (typ, size, address, mb, binding)) ->
+              if
+                String.length name <> 0
+                && (if String.length name = 1 then Char.code (String.get name 0) <> 0 else true)
+                && not (Nat_big_num.equal address (Nat_big_num.of_int 0))
+              then (
+                try
+                  let binding', _ = StringMap.find name map in
+                  if
+                    Nat_big_num.equal binding' Elf_symbol_table.stb_local
+                    || Nat_big_num.equal binding Elf_symbol_table.stb_global
+                  then
                     StringMap.add name
                       (binding, (Sail_impl_base.address_of_integer address, Nat_big_num.to_int size))
                       map
-                )
-                else map
+                  else map
+                with Not_found ->
+                  StringMap.add name (binding, (Sail_impl_base.address_of_integer address, Nat_big_num.to_int size)) map
               )
-              StringMap.empty symbol_map
-          in
-
-          List.map (fun (name, (binding, fp)) -> (fp, name)) (StringMap.bindings map)
-        in
-
-        (* Now we examine the rest of the data memory,
-           removing the footprint of the symbols and chunking it into aligned chunks *)
-        let rec remove_symbols_from_data_memory data_mem symbols =
-          match symbols with
-          | [] -> data_mem
-          | (name, address, size, bs) :: symbols' ->
-              let data_mem' =
-                Mem.filter
-                  (fun a v ->
-                    not
-                      (Nat_big_num.greater_equal a address
-                      && Nat_big_num.less a (Nat_big_num.add (Nat_big_num.of_int (List.length bs)) address)
-                      )
-                  )
-                  data_mem
-              in
-              remove_symbols_from_data_memory data_mem' symbols'
-        in
-
-        let trimmed_data_memory : (Nat_big_num.num * memory_byte) list =
-          Mem.bindings (remove_symbols_from_data_memory !data_mem symbol_table)
-        in
-
-        (* make sure that's ordered increasingly.... *)
-        let trimmed_data_memory = List.sort (fun (a, b) (a', b') -> Nat_big_num.compare a a') trimmed_data_memory in
-
-        let aligned a n =
-          (* a mod n = 0 *)
-          let n_big = Nat_big_num.of_int n in
-          Nat_big_num.equal (Nat_big_num.modulus a n_big) (Nat_big_num.of_int 0)
-        in
-
-        let isplus a' a n =
-          (* a' = a+n *)
-          Nat_big_num.equal a' (Nat_big_num.add (Nat_big_num.of_int n) a)
-        in
-
-        let rec chunk_data_memory dm =
-          match dm with
-          | (a0, b0) :: (a1, b1) :: (a2, b2) :: (a3, b3) :: (a4, b4) :: (a5, b5) :: (a6, b6) :: (a7, b7) :: dm'
-            when aligned a0 8 && isplus a1 a0 1 && isplus a2 a0 2 && isplus a3 a0 3 && isplus a4 a0 4 && isplus a5 a0 5
-                 && isplus a6 a0 6 && isplus a7 a0 7 ->
-              (a0, 8, [b0; b1; b2; b3; b4; b5; b6; b7]) :: chunk_data_memory dm'
-          | (a0, b0) :: (a1, b1) :: (a2, b2) :: (a3, b3) :: dm'
-            when aligned a0 4 && isplus a1 a0 1 && isplus a2 a0 2 && isplus a3 a0 3 ->
-              (a0, 4, [b0; b1; b2; b3]) :: chunk_data_memory dm'
-          | (a0, b0) :: (a1, b1) :: dm' when aligned a0 2 && isplus a1 a0 1 ->
-              (a0, 2, [b0; b1]) :: chunk_data_memory dm'
-          | (a0, b0) :: dm' -> (a0, 1, [b0]) :: chunk_data_memory dm'
-          | [] -> []
-        in
-
-        let initial_register_state rbn =
-          try List.assoc rbn initial_register_abi_data with Not_found -> (register_state_zero register_data_all) rbn
-        in
-
-        begin
-          initial_reg_file register_data_all initial_register_state;
-
-          (* construct initial system state *)
-          let initial_system_state =
-            ( isa_defs,
-              isa_memory_access,
-              isa_externs,
-              isa_model,
-              model_reg_d,
-              startaddr,
-              Sail_impl_base.address_of_integer startaddr
+              else map
             )
-          in
+            StringMap.empty symbol_map
+        in
 
-          (initial_system_state, symbol_table_pp)
-        end
-      end
+        List.map (fun (name, (binding, fp)) -> (fp, name)) (StringMap.bindings map)
+      in
+
+      (* Now we examine the rest of the data memory,
+           removing the footprint of the symbols and chunking it into aligned chunks *)
+      let rec remove_symbols_from_data_memory data_mem symbols =
+        match symbols with
+        | [] -> data_mem
+        | (name, address, size, bs) :: symbols' ->
+            let data_mem' =
+              Mem.filter
+                (fun a v ->
+                  not
+                    (Nat_big_num.greater_equal a address
+                    && Nat_big_num.less a (Nat_big_num.add (Nat_big_num.of_int (List.length bs)) address)
+                    )
+                )
+                data_mem
+            in
+            remove_symbols_from_data_memory data_mem' symbols'
+      in
+
+      let trimmed_data_memory : (Nat_big_num.num * memory_byte) list =
+        Mem.bindings (remove_symbols_from_data_memory !data_mem symbol_table)
+      in
+
+      (* make sure that's ordered increasingly.... *)
+      let trimmed_data_memory = List.sort (fun (a, b) (a', b') -> Nat_big_num.compare a a') trimmed_data_memory in
+
+      let aligned a n =
+        (* a mod n = 0 *)
+        let n_big = Nat_big_num.of_int n in
+        Nat_big_num.equal (Nat_big_num.modulus a n_big) (Nat_big_num.of_int 0)
+      in
+
+      let isplus a' a n =
+        (* a' = a+n *)
+        Nat_big_num.equal a' (Nat_big_num.add (Nat_big_num.of_int n) a)
+      in
+
+      let rec chunk_data_memory dm =
+        match dm with
+        | (a0, b0) :: (a1, b1) :: (a2, b2) :: (a3, b3) :: (a4, b4) :: (a5, b5) :: (a6, b6) :: (a7, b7) :: dm'
+          when aligned a0 8 && isplus a1 a0 1 && isplus a2 a0 2 && isplus a3 a0 3 && isplus a4 a0 4 && isplus a5 a0 5
+               && isplus a6 a0 6 && isplus a7 a0 7 ->
+            (a0, 8, [b0; b1; b2; b3; b4; b5; b6; b7]) :: chunk_data_memory dm'
+        | (a0, b0) :: (a1, b1) :: (a2, b2) :: (a3, b3) :: dm'
+          when aligned a0 4 && isplus a1 a0 1 && isplus a2 a0 2 && isplus a3 a0 3 ->
+            (a0, 4, [b0; b1; b2; b3]) :: chunk_data_memory dm'
+        | (a0, b0) :: (a1, b1) :: dm' when aligned a0 2 && isplus a1 a0 1 -> (a0, 2, [b0; b1]) :: chunk_data_memory dm'
+        | (a0, b0) :: dm' -> (a0, 1, [b0]) :: chunk_data_memory dm'
+        | [] -> []
+      in
+
+      let initial_register_state rbn =
+        try List.assoc rbn initial_register_abi_data with Not_found -> (register_state_zero register_data_all) rbn
+      in
+
+      initial_reg_file register_data_all initial_register_state;
+
+      (* construct initial system state *)
+      let initial_system_state =
+        ( isa_defs,
+          isa_memory_access,
+          isa_externs,
+          isa_model,
+          model_reg_d,
+          startaddr,
+          Sail_impl_base.address_of_integer startaddr
+        )
+      in
+
+      (initial_system_state, symbol_table_pp)
 
 let eager_eval = ref true
 let break_point = ref false
@@ -1022,12 +1003,10 @@ let set_next_instruction_address model =
           (* normal -- increment PC *)
           let n_addr = add_address_nat pc_val 4 in
           let n_pc = register_value_of_address n_addr D_decreasing in
-          begin
-            reg := Reg.add "nextPC" n_pc !reg;
-            reg :=
-              Reg.add "inBranchDelay" (register_value_of_integer 1 0 Sail_impl_base.D_decreasing Nat_big_num.zero) !reg
-          end
-      | Some pc_val, Some 1 -> begin
+          reg := Reg.add "nextPC" n_pc !reg;
+          reg :=
+            Reg.add "inBranchDelay" (register_value_of_integer 1 0 Sail_impl_base.D_decreasing Nat_big_num.zero) !reg
+      | Some pc_val, Some 1 ->
           (* delay slot -- branch to delayed PC and clear branchPending *)
           reg := Reg.add "nextPC" (Reg.find "delayedPC" !reg) !reg;
           reg :=
@@ -1036,7 +1015,6 @@ let set_next_instruction_address model =
             Reg.add "inBranchDelay"
               (register_value_of_integer 1 0 Sail_impl_base.D_decreasing (Nat_big_num.of_int 1))
               !reg
-        end
       | _, _ ->
           errorf "PC address contains unknown or undefined";
           exit 1
@@ -1161,10 +1139,8 @@ let fetch_instruction_opcode_and_update_ia model addr_trans =
       | Some cia_addr ->
           let cia_a = integer_of_address cia_addr in
           let opcode = get_opcode cia_a in
-          begin
-            reg := Reg.add "CIA" (Reg.find "NIA" !reg) !reg;
-            Opcode opcode
-          end
+          reg := Reg.add "CIA" (Reg.find "NIA" !reg) !reg;
+          Opcode opcode
       | None -> failwith "CIA address contains unknown or undefined"
     )
   | AArch64 -> (
@@ -1177,7 +1153,7 @@ let fetch_instruction_opcode_and_update_ia model addr_trans =
           Opcode opcode
       | None -> failwith "_PC address contains unknown or undefined"
     )
-  | MIPS -> begin
+  | MIPS -> (
       let nextPC = Reg.find "nextPC" !reg in
       let pc_addr = address_of_register_value nextPC in
       (*let unused = interactf "PC: %s\n" (Printing_functions.register_value_to_string nextPC) in*)
@@ -1207,14 +1183,12 @@ let fetch_instruction_opcode_and_update_ia model addr_trans =
             | _ -> failwith "No address and no events from translate address"
           in
           let opcode = get_opcode pc_a in
-          begin
-            reg := Reg.add "PC" (Reg.find "nextPC" !reg) !reg;
-            Opcode opcode
-          end
+          reg := Reg.add "PC" (Reg.find "nextPC" !reg) !reg;
+          Opcode opcode
       | None ->
           errorf "nextPC contains unknown or undefined";
           exit 1
-    end
+    )
   | _ -> assert false
 
 let get_pc_address = function MIPS -> Reg.find "PC" !reg | PPC -> Reg.find "CIA" !reg | AArch64 -> Reg.find "_PC" !reg
@@ -1224,11 +1198,11 @@ let option_int_of_reg str = option_int_of_option_integer (integer_of_register_va
 let rec fde_loop count context model mode track_dependencies addr_trans =
   if !max_cut_off && count = !max_instr then
     resultf "\nEnding evaluation due to reaching cut off point of %d instructions\n" count
-  else begin
-    if !break_point && count = !break_instr then begin
+  else (
+    if !break_point && count = !break_instr then (
       break_point := false;
       eager_eval := false
-    end;
+    );
     let pc_regval = get_pc_address model in
     interactf "\n**** instruction %d from address %s ****\n" count
       (Printing_functions.register_value_to_string pc_regval);
@@ -1281,7 +1255,7 @@ let rec fde_loop count context model mode track_dependencies addr_trans =
         in
         if stop_condition_met model instruction then
           resultf "\nSUCCESS program terminated after %d instructions\n" count
-        else begin
+        else (
           match
             Run_interp_model.run istate !reg !prog_mem !tag_mem (Nat_big_num.of_int 1) !eager_eval track_dependencies
               mode "execute"
@@ -1347,14 +1321,13 @@ let rec fde_loop count context model mode track_dependencies addr_trans =
                   !reg;
               reg := Reg.add "PC" (Reg.find "nextPC" !reg) !reg;
               fde_loop (count + 1) context model (Some mode) (ref track_dependencies) addr_trans
-        end
-    | None -> begin
+        )
+    | None ->
         reg := Reg.add "inBranchDelay" (Reg.find "branchPending" !reg) !reg;
         reg := Reg.add "branchPending" (register_value_of_integer 1 0 Sail_impl_base.D_decreasing Nat_big_num.zero) !reg;
         reg := Reg.add "PC" (Reg.find "nextPC" !reg) !reg;
         fde_loop (count + 1) context model mode track_dependencies addr_trans
-      end
-  end
+  )
 
 let rec load_raw_file' mem addr chan =
   let byte = input_byte chan in
@@ -1365,10 +1338,10 @@ let rec load_raw_file mem addr chan = try load_raw_file' mem addr chan with End_
 
 let run () =
   Arg.parse args (fun _ -> raise (Arg.Bad "anonymous parameter")) "";
-  if !file = "" then begin
+  if !file = "" then (
     Arg.usage args "";
     exit 1
-  end;
+  );
   if !break_point then eager_eval := true;
 
   let ( ( isa_defs,
@@ -1397,10 +1370,10 @@ let run () =
 ;;
 
 (* Turn off line-buffering of standard input to allow responsive console input *)
-if Unix.isatty Unix.stdin then begin
+if Unix.isatty Unix.stdin then (
   let tattrs = Unix.tcgetattr Unix.stdin in
   Unix.tcsetattr Unix.stdin Unix.TCSANOW { tattrs with c_icanon = false }
-end
+)
 ;;
 
 run ()

@@ -179,11 +179,10 @@ let to_smt l abstract vars constr =
   let abstract_decs =
     abstract |> Bindings.bindings
     |> List.filter_map (fun (id, kind) ->
-           match kind with
-           | K_aux (K_type, _) -> None
-           | _ ->
-               Some (sfun "declare-const" [Atom (Util.zencode_string (string_of_id id)); smt_type l (unaux_kind kind)])
-       )
+        match kind with
+        | K_aux (K_type, _) -> None
+        | _ -> Some (sfun "declare-const" [Atom (Util.zencode_string (string_of_id id)); smt_type l (unaux_kind kind)])
+    )
   in
 
   (* var_decs outputs the list of variables to be used by the SMT
@@ -203,7 +202,7 @@ let to_smt l abstract vars constr =
     | Nexp_times (nexp1, nexp2) -> sfun "*" [smt_nexp nexp1; smt_nexp nexp2]
     | Nexp_sum (nexp1, nexp2) -> sfun "+" [smt_nexp nexp1; smt_nexp nexp2]
     | Nexp_minus (nexp1, nexp2) -> sfun "-" [smt_nexp nexp1; smt_nexp nexp2]
-    | Nexp_exp nexp -> begin
+    | Nexp_exp nexp -> (
         match nexp_simp nexp with
         | Nexp_aux (Nexp_constant c, _) when Big_int.greater_equal c Big_int.zero ->
             Atom (Big_int.to_string (Big_int.pow_int_positive 2 (Big_int.to_int c)))
@@ -215,7 +214,7 @@ let to_smt l abstract vars constr =
             let exp = smt_nexp nexp in
             exponentials := exp :: !exponentials;
             sfun "to_int" [sfun "^" [Atom "2"; exp]]
-      end
+      )
     | Nexp_neg nexp -> sfun "-" [smt_nexp nexp]
     | Nexp_if (i, t, e) -> sfun "ite" [smt_constraint i; smt_nexp t; smt_nexp e]
   and smt_constraint (NC_aux (aux, _) : n_constraint) : sexpr =
@@ -250,8 +249,8 @@ let sailexp_concrete n =
       sfun "=>" [sfun ">=" [Atom "n"; Atom "0"]; sfun ">=" [sfun "sailexp" [Atom "n"]; Atom "1"]];
     ]
   :: List.init (n + 1) (fun i ->
-         sfun "=" [sfun "sailexp" [Atom (string_of_int i)]; Atom (Big_int.to_string (Big_int.pow_int_positive 2 i))]
-     )
+      sfun "=" [sfun "sailexp" [Atom (string_of_int i)]; Atom (Big_int.to_string (Big_int.pow_int_positive 2 i))]
+  )
 
 let smtlib_of_constraints ?(get_model = false) l abstract vars extra constr :
     string * (kid -> sexpr * bool) * sexpr list =
@@ -283,22 +282,21 @@ let load_digests_err path =
   let rec load () =
     let digest = Digest.input in_chan in
     let result = input_byte in_chan in
-    begin
-      match result with
-      | 0 -> known_problems := DigestMap.add digest Unknown !known_problems
-      | 1 -> known_problems := DigestMap.add digest Sat !known_problems
-      | 2 -> known_problems := DigestMap.add digest Unsat !known_problems
-      | 3 -> known_uniques := DigestMap.add digest None !known_uniques
-      | 4 ->
-          let solution = input_binary_int in_chan in
-          known_uniques := DigestMap.add digest (Some solution) !known_uniques
-      | _ ->
-          Reporting.warn "" Parse_ast.Unknown "SMT cache file 'sail_smt_cache' is invalid";
-          known_problems := DigestMap.empty;
-          known_uniques := DigestMap.empty;
-          (* Exit the loop as if we reached the end of the file *)
-          raise End_of_file
-    end;
+    ( match result with
+    | 0 -> known_problems := DigestMap.add digest Unknown !known_problems
+    | 1 -> known_problems := DigestMap.add digest Sat !known_problems
+    | 2 -> known_problems := DigestMap.add digest Unsat !known_problems
+    | 3 -> known_uniques := DigestMap.add digest None !known_uniques
+    | 4 ->
+        let solution = input_binary_int in_chan in
+        known_uniques := DigestMap.add digest (Some solution) !known_uniques
+    | _ ->
+        Reporting.warn "" Parse_ast.Unknown "SMT cache file 'sail_smt_cache' is invalid";
+        known_problems := DigestMap.empty;
+        known_uniques := DigestMap.empty;
+        (* Exit the loop as if we reached the end of the file *)
+        raise End_of_file
+    );
     load ()
   in
   try load () with End_of_file -> close_in in_chan
@@ -458,11 +456,11 @@ let rec call_smt' l abstract extra constraints =
 and call_smt_uninterpret_power ~bound l abstract constraints =
   match call_smt' l abstract (sailexp_concrete bound) constraints with
   | Unsat, _ -> Unsat
-  | Sat, exponentials -> begin
+  | Sat, exponentials -> (
       match call_smt' l abstract (sailexp_concrete bound @ List.map bound_exponential exponentials) constraints with
       | Sat, _ -> Sat
       | _ -> Unknown
-    end
+    )
   | _ -> Unknown
 
 let call_smt l abstract constraints =
@@ -592,23 +590,22 @@ let solve_unique_smt' l abstract constraints exp_defn exp_bound var =
     | Some None -> None
     | None -> (
         match call_smt_solve l smt_file smt_vars var with
-        | Some result ->
+        | Some result -> (
             let t = Profile.start_smt () in
             let smt_result' =
               fst (call_smt' l abstract exp_defn (nc_and constraints (nc_neq (nconstant result) (nvar var))))
             in
             Profile.finish_smt t;
-            begin
-              match smt_result' with
-              | Unsat ->
-                  if Big_int.less_equal Big_int.zero result && Big_int.less result (Big_int.pow_int_positive 2 30) then
-                    known_uniques := DigestMap.add digest (Some (Big_int.to_int result)) !known_uniques
-                  else ();
-                  Some result
-              | _ ->
-                  known_uniques := DigestMap.add digest None !known_uniques;
-                  None
-            end
+            match smt_result' with
+            | Unsat ->
+                if Big_int.less_equal Big_int.zero result && Big_int.less result (Big_int.pow_int_positive 2 30) then
+                  known_uniques := DigestMap.add digest (Some (Big_int.to_int result)) !known_uniques
+                else ();
+                Some result
+            | _ ->
+                known_uniques := DigestMap.add digest None !known_uniques;
+                None
+          )
         | None ->
             known_uniques := DigestMap.add digest None !known_uniques;
             None

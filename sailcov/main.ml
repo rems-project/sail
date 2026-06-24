@@ -154,29 +154,28 @@ let read_more_coverage filename spans =
   try
     let rec loop () =
       let line = input_line chan in
-      spans :=
-        begin
-          try
-            match Scanf.sscanf line "%c" (fun c -> c) with
-            | 'T' ->
-                Scanf.sscanf line "%c %d, %d, %S, %d, %d, %d, %d" (fun _type _bid _tid file l1 c1 l2 c2 ->
-                    add_span !spans file l1 c1 l2 c2
-                )
-            | 'B' ->
-                Scanf.sscanf line "%c %d, %S, %d, %d, %d, %d" (fun _type _bid file l1 c1 l2 c2 ->
-                    add_span !spans file l1 c1 l2 c2
-                )
-            | 'F' ->
-                Scanf.sscanf line "%c %d, %S, %S, %d, %d, %d, %d" (fun _type _fid _id file l1 c1 l2 c2 ->
-                    add_span !spans file l1 c1 l2 c2
-                )
-            | _ ->
-                Printf.eprintf "Unrecognised span format: %s" line;
-                !spans
-            (* The file produced by the executable does not contain the function ids, so we parse it slightly differently *)
-          with Scanf.Scan_failure _ ->
-            Scanf.sscanf line "%c %S, %d, %d, %d, %d" (fun _type file l1 c1 l2 c2 -> add_span !spans file l1 c1 l2 c2)
-        end;
+      (spans :=
+         try
+           match Scanf.sscanf line "%c" (fun c -> c) with
+           | 'T' ->
+               Scanf.sscanf line "%c %d, %d, %S, %d, %d, %d, %d" (fun _type _bid _tid file l1 c1 l2 c2 ->
+                   add_span !spans file l1 c1 l2 c2
+               )
+           | 'B' ->
+               Scanf.sscanf line "%c %d, %S, %d, %d, %d, %d" (fun _type _bid file l1 c1 l2 c2 ->
+                   add_span !spans file l1 c1 l2 c2
+               )
+           | 'F' ->
+               Scanf.sscanf line "%c %d, %S, %S, %d, %d, %d, %d" (fun _type _fid _id file l1 c1 l2 c2 ->
+                   add_span !spans file l1 c1 l2 c2
+               )
+           | _ ->
+               Printf.eprintf "Unrecognised span format: %s" line;
+               !spans
+           (* The file produced by the executable does not contain the function ids, so we parse it slightly differently *)
+         with Scanf.Scan_failure _ ->
+           Scanf.sscanf line "%c %S, %d, %d, %d, %d" (fun _type file l1 c1 l2 c2 -> add_span !spans file l1 c1 l2 c2)
+      );
       loop ()
     in
     loop ()
@@ -244,10 +243,9 @@ let file_info file all taken =
     match (all_count, taken_count) with
     | Some _, Some _ -> None
     | Some n, None -> Some n
-    | None, Some _ -> begin
+    | None, Some _ ->
         Printf.ksprintf warn "span not in all branches file: %s\n" (string_of_span file span);
         None
-      end
     | None, None -> None
   in
   let not_taken = SpanMap.merge diff all taken in
@@ -404,7 +402,7 @@ let main () =
       let taken, not_taken, desc = file_info file all taken in
       print_endline desc;
 
-      if !opt_histogram && not (SpanMap.is_empty taken) then begin
+      if !opt_histogram && not (SpanMap.is_empty taken) then (
         let histogram =
           SpanMap.fold
             (fun _ count m -> IntMap.update count (function None -> Some 1 | Some i -> Some (i + 1)) m)
@@ -412,7 +410,7 @@ let main () =
         in
         Printf.printf "Files | Number of spans\n";
         IntMap.iter (fun count spans -> Printf.printf "%5d | %7d\n" count spans) histogram
-      end;
+      );
 
       let source = read_source file in
       SpanMap.iter (mark_good_region file source) taken;
@@ -490,19 +488,19 @@ let main () =
           )
           else (
             let () = assert (span.l1 = line && span.c1 = char) in
-            if count = 0 && zero_width span then begin
+            if count = 0 && zero_width span then (
               output_string chan "<span title=\"";
               output_html_string chan (string_of_span file span);
               output_string chan (Printf.sprintf "\" style=\"background-color: %s\">" (bad_color ()));
               output_string chan "&#171;Invisible branch not taken here&#187";
               output_string chan "</span>";
               (stack, line, char)
-            end
-            else begin
+            )
+            else (
               let colour = if count = 0 then html_color !opt_bad_color 0 else html_color !opt_good_color count in
               output_string chan (Printf.sprintf "<span title=\"%d\" style=\"background-color: %s\">" count colour);
               (span :: stack, line, char)
-            end
+            )
           )
         in
         let rec finish (stack, line, char) =
@@ -595,42 +593,38 @@ let main () =
     )
     !opt_files;
 
-  begin
-    match !opt_index with
-    | Some name ->
-        let chan = open_out (name ^ ".html") in
+  match !opt_index with
+  | Some name ->
+      let chan = open_out (name ^ ".html") in
 
-        output_string chan "<!DOCTYPE html>\n";
-        output_string chan "<html lang=\"en\">\n";
-        Printf.ksprintf (output_string chan)
-          "<head>\n<meta charset=\"utf-8\">\n<title>Coverage Report</title>\n<style>%s</style>\n</head>\n" index_css;
-        output_string chan "<body>\n";
+      output_string chan "<!DOCTYPE html>\n";
+      output_string chan "<html lang=\"en\">\n";
+      Printf.ksprintf (output_string chan)
+        "<head>\n<meta charset=\"utf-8\">\n<title>Coverage Report</title>\n<style>%s</style>\n</head>\n" index_css;
+      output_string chan "<body>\n";
 
-        output_string chan "<table><tr><td class=\"left\"><div class=\"scroll\">";
-        List.iter
-          (fun file ->
-            let all, taken = get_file_spans file all taken in
-            let _, _, desc = file_info file all taken in
-            Printf.ksprintf (output_string chan) "<a href=\"%s\" target=\"source\">%s</a><br>\n" (html_file_for file)
-              desc
-          )
-          !opt_files;
-        output_string chan "</div></td>";
+      output_string chan "<table><tr><td class=\"left\"><div class=\"scroll\">";
+      List.iter
+        (fun file ->
+          let all, taken = get_file_spans file all taken in
+          let _, _, desc = file_info file all taken in
+          Printf.ksprintf (output_string chan) "<a href=\"%s\" target=\"source\">%s</a><br>\n" (html_file_for file) desc
+        )
+        !opt_files;
+      output_string chan "</div></td>";
 
-        output_string chan "<td class=\"right\">";
-        begin
-          match !opt_index_default with
-          | Some default_file ->
-              Printf.ksprintf (output_string chan) "<iframe src=\"%s\" name=\"source\"></iframe>"
-                (html_file_for default_file)
-          | None -> output_string chan "<iframe name=\"source\"></iframe>"
-        end;
-        output_string chan "</td></tr></table>\n";
-        output_string chan "</body>\n";
-        output_string chan "</html>";
-        close_out chan
-    | None -> ()
-  end
+      output_string chan "<td class=\"right\">";
+      ( match !opt_index_default with
+      | Some default_file ->
+          Printf.ksprintf (output_string chan) "<iframe src=\"%s\" name=\"source\"></iframe>"
+            (html_file_for default_file)
+      | None -> output_string chan "<iframe name=\"source\"></iframe>"
+      );
+      output_string chan "</td></tr></table>\n";
+      output_string chan "</body>\n";
+      output_string chan "</html>";
+      close_out chan
+  | None -> ()
 
 let usage_msg = "usage: sailcov -t <file> -a <file> <.sail files>\n"
 
@@ -651,9 +645,7 @@ let read_taken_lists () =
 let _ =
   Arg.parse options (fun s -> opt_files := !opt_files @ [s]) usage_msg;
   read_taken_lists ();
-  begin
-    opt_taken := match !opt_taken with [] -> ["sail_coverage"] | l -> l
-  end;
+  (opt_taken := match !opt_taken with [] -> ["sail_coverage"] | l -> l);
   try main ()
   with Sys_error msg ->
     prerr_endline msg;

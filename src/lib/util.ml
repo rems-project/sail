@@ -257,7 +257,9 @@ let rec option_these = function Some x :: xs -> x :: option_these xs | None :: x
 let rec option_all = function
   | [] -> Some []
   | None :: _ -> None
-  | Some x :: xs -> begin match option_all xs with None -> None | Some xs -> Some (x :: xs) end
+  | Some x :: xs -> (
+      match option_all xs with None -> None | Some xs -> Some (x :: xs)
+    )
 
 let rec result_all = function
   | [] -> Ok []
@@ -383,20 +385,19 @@ let input_byte_opt chan = try Some (input_byte chan) with End_of_file -> None
 
 let same_content_files file1 file2 : bool =
   Sys.file_exists file1 && Sys.file_exists file2
-  && begin
-       let s1 = open_in_bin file1 in
-       let s2 = open_in_bin file2 in
-       let rec comp s1 s2 =
-         match (input_byte_opt s1, input_byte_opt s2) with
-         | None, None -> true
-         | Some b1, Some b2 -> if b1 = b2 then comp s1 s2 else false
-         | _, _ -> false
-       in
-       let result = comp s1 s2 in
-       close_in s1;
-       close_in s2;
-       result
-     end
+  &&
+  let s1 = open_in_bin file1 in
+  let s2 = open_in_bin file2 in
+  let rec comp s1 s2 =
+    match (input_byte_opt s1, input_byte_opt s2) with
+    | None, None -> true
+    | Some b1, Some b2 -> if b1 = b2 then comp s1 s2 else false
+    | _, _ -> false
+  in
+  let result = comp s1 s2 in
+  close_in s1;
+  close_in s2;
+  result
 
 let read_whole_file filename =
   (* open_in_bin works correctly on Unix and Windows *)
@@ -475,7 +476,9 @@ let find_index_opt f xs =
   find_index_opt' f 0 xs
 
 let rec find_map f = function
-  | x :: xs -> begin match f x with Some y -> Some y | None -> find_map f xs end
+  | x :: xs -> (
+      match f x with Some y -> Some y | None -> find_map f xs
+    )
   | [] -> None
 
 let fold_left_concat_map f acc xs =
@@ -504,7 +507,9 @@ let fold_left_index_last f init xs =
 
 let map_if pred f xs =
   let rec go acc = function
-    | x :: xs -> begin match pred x with true -> go (f x :: acc) xs | false -> go (x :: acc) xs end
+    | x :: xs -> (
+        match pred x with true -> go (f x :: acc) xs | false -> go (x :: acc) xs
+      )
     | [] -> List.rev acc
   in
   go [] xs

@@ -84,10 +84,10 @@ let sail_call (type t) (f : _ -> t) =
   try f return with M.Return x -> x
 
 let trace str =
-  if !opt_trace then begin
+  if !opt_trace then (
     if !trace_depth < 0 then trace_depth := 0 else ();
     prerr_endline (String.make (!trace_depth * 2) ' ' ^ str)
-  end
+  )
   else ()
 
 let trace_write name str = trace ("Write: " ^ name ^ " " ^ str)
@@ -465,18 +465,15 @@ let putchar n =
   flush stdout
 
 let rec bits_of_int bit n =
-  if bit <> 0 then begin
-    if n / bit > 0 then B1 :: bits_of_int (bit / 2) (n - bit) else B0 :: bits_of_int (bit / 2) n
-  end
-  else []
+  if bit <> 0 then if n / bit > 0 then B1 :: bits_of_int (bit / 2) (n - bit) else B0 :: bits_of_int (bit / 2) n else []
 
 let rec bits_of_big_int pow n =
   if pow < 1 then []
-  else begin
+  else (
     let bit = Big_int.pow_int_positive 2 (pow - 1) in
     if Big_int.greater (Big_int.div n bit) Big_int.zero then B1 :: bits_of_big_int (pow - 1) (Big_int.sub n bit)
     else B0 :: bits_of_big_int (pow - 1) n
-  end
+  )
 
 let byte_of_int n = bits_of_int 128 n
 
@@ -527,10 +524,8 @@ let rec read_mem_bytes addr len =
 let write_ram' (data_size, addr, data) =
   let len = Big_int.to_int data_size in
   let bytes = Bytes.create len in
-  begin
-    List.iteri (fun i byte -> Bytes.set bytes (len - i - 1) (char_of_int (Big_int.to_int (uint byte)))) (break 8 data);
-    add_mem_bytes addr bytes 0 len
-  end
+  List.iteri (fun i byte -> Bytes.set bytes (len - i - 1) (char_of_int (Big_int.to_int (uint byte)))) (break 8 data);
+  add_mem_bytes addr bytes 0 len
 
 let write_ram (_addr_size, data_size, _hex_ram, addr, data) =
   write_ram' (data_size, uint addr, data);

@@ -356,7 +356,7 @@ and nexp_simp_aux = function
       nexp_simp_aux n1
   | Nexp_sum (Nexp_aux (Nexp_minus (Nexp_aux (n1, _), nexp2), _), nexp3) when nexp_identical nexp2 nexp3 ->
       nexp_simp_aux n1
-  | Nexp_sum (n1, n2) -> begin
+  | Nexp_sum (n1, n2) -> (
       let (Nexp_aux (n1_simp, _) as n1) = nexp_simp n1 in
       let (Nexp_aux (n2_simp, n2_loc) as n2) = nexp_simp n2 in
       match (n1_simp, n2_simp) with
@@ -371,8 +371,8 @@ and nexp_simp_aux = function
           else unaux_nexp root
       | _, Nexp_neg n2 -> Nexp_minus (n1, n2)
       | _, _ -> Nexp_sum (n1, n2)
-    end
-  | Nexp_times (n1, n2) -> begin
+    )
+  | Nexp_times (n1, n2) -> (
       let (Nexp_aux (n1_simp, _) as n1) = nexp_simp n1 in
       let (Nexp_aux (n2_simp, _) as n2) = nexp_simp n2 in
       match (n1_simp, n2_simp) with
@@ -380,8 +380,8 @@ and nexp_simp_aux = function
       | _, Nexp_constant c when Big_int.equal c (Big_int.of_int 1) -> n1_simp
       | Nexp_constant c1, Nexp_constant c2 -> Nexp_constant (Big_int.mul c1 c2)
       | _, _ -> Nexp_times (n1, n2)
-    end
-  | Nexp_minus (n1, n2) -> begin
+    )
+  | Nexp_minus (n1, n2) -> (
       let (Nexp_aux (n1_simp, _) as n1) = nexp_simp n1 in
       let (Nexp_aux (n2_simp, n2_loc) as n2) = nexp_simp n2 in
       match (n1_simp, n2_simp) with
@@ -394,38 +394,37 @@ and nexp_simp_aux = function
           else if Big_int.greater sum Big_int.zero then Nexp_sum (root, Nexp_aux (Nexp_constant sum, n2_loc))
           else unaux_nexp root
       | _, _ -> Nexp_minus (n1, n2)
-    end
-  | Nexp_neg n -> begin
+    )
+  | Nexp_neg n -> (
       let (Nexp_aux (n_simp, _) as n) = nexp_simp n in
       match n_simp with Nexp_constant c -> Nexp_constant (Big_int.negate c) | _ -> Nexp_neg n
-    end
-  | Nexp_app ((Id_aux (Id "div", _) as id), [n1; n2]) -> begin
+    )
+  | Nexp_app ((Id_aux (Id "div", _) as id), [n1; n2]) -> (
       let (Nexp_aux (n1_simp, _) as n1) = nexp_simp n1 in
       let (Nexp_aux (n2_simp, _) as n2) = nexp_simp n2 in
       match (n1_simp, n2_simp) with
       | Nexp_constant c1, Nexp_constant c2 -> Nexp_constant (Big_int.div c1 c2)
       | _, _ -> Nexp_app (id, [n1; n2])
-    end
-  | Nexp_app ((Id_aux (Id "mod", _) as id), [n1; n2]) -> begin
+    )
+  | Nexp_app ((Id_aux (Id "mod", _) as id), [n1; n2]) -> (
       let (Nexp_aux (n1_simp, _) as n1) = nexp_simp n1 in
       let (Nexp_aux (n2_simp, _) as n2) = nexp_simp n2 in
       match (n1_simp, n2_simp) with
       | Nexp_constant c1, Nexp_constant c2 -> Nexp_constant (Big_int.modulus c1 c2)
       | _, _ -> Nexp_app (id, [n1; n2])
-    end
-  | Nexp_app ((Id_aux (Id "abs", _) as id), [n]) -> begin
+    )
+  | Nexp_app ((Id_aux (Id "abs", _) as id), [n]) -> (
       let n = nexp_simp n in
       match n with Nexp_aux (Nexp_constant c, _) -> Nexp_constant (Big_int.abs c) | _ -> Nexp_app (id, [n])
-    end
-  | Nexp_exp nexp ->
+    )
+  | Nexp_exp nexp -> (
       let nexp = nexp_simp nexp in
-      begin
-        match nexp with
-        | Nexp_aux (Nexp_constant c, _)
-          when Big_int.greater_equal c Big_int.zero && Big_int.less_equal c (Big_int.of_int 7) ->
-            Nexp_constant (Big_int.pow_int_positive 2 (Big_int.to_int c))
-        | _ -> Nexp_exp nexp
-      end
+      match nexp with
+      | Nexp_aux (Nexp_constant c, _)
+        when Big_int.greater_equal c Big_int.zero && Big_int.less_equal c (Big_int.of_int 7) ->
+          Nexp_constant (Big_int.pow_int_positive 2 (Big_int.to_int c))
+      | _ -> Nexp_exp nexp
+    )
   | Nexp_if (i, t, e) -> (
       match constraint_simp i with
       | NC_aux (NC_true, _) -> unaux_nexp (nexp_simp t)
@@ -437,13 +436,12 @@ and nexp_simp_aux = function
 and constraint_simp (NC_aux (nc_aux, l)) =
   let nc_aux =
     match nc_aux with
-    | NC_set (nexp, ints) ->
+    | NC_set (nexp, ints) -> (
         let nexp = nexp_simp nexp in
-        begin
-          match nexp with
-          | Nexp_aux (Nexp_constant c, _) -> if List.exists (fun i -> Big_int.equal c i) ints then NC_true else NC_false
-          | _ -> NC_set (nexp, ints)
-        end
+        match nexp with
+        | Nexp_aux (Nexp_constant c, _) -> if List.exists (fun i -> Big_int.equal c i) ints then NC_true else NC_false
+        | _ -> NC_set (nexp, ints)
+      )
     | NC_equal (arg1, arg2) ->
         let arg1, arg2 = (typ_arg_simp arg1, typ_arg_simp arg2) in
         if TypArg.compare arg1 arg2 = 0 then NC_true
@@ -468,68 +466,61 @@ and constraint_simp (NC_aux (nc_aux, l)) =
           | A_aux (A_bool (NC_aux (NC_false, _)), _), A_aux (A_bool (NC_aux (NC_true, _)), _) -> NC_true
           | _, _ -> NC_not_equal (arg1, arg2)
         )
-    | NC_and (nc1, nc2) ->
+    | NC_and (nc1, nc2) -> (
         let nc1, nc2 = (constraint_simp nc1, constraint_simp nc2) in
-        begin
-          match (nc1, nc2) with
-          | NC_aux (NC_true, _), NC_aux (nc, _) -> nc
-          | NC_aux (nc, _), NC_aux (NC_true, _) -> nc
-          | NC_aux (NC_false, _), NC_aux (_, _) -> NC_false
-          | NC_aux (_, _), NC_aux (NC_false, _) -> NC_false
-          | _, _ -> NC_and (nc1, nc2)
-        end
-    | NC_or (nc1, nc2) ->
+        match (nc1, nc2) with
+        | NC_aux (NC_true, _), NC_aux (nc, _) -> nc
+        | NC_aux (nc, _), NC_aux (NC_true, _) -> nc
+        | NC_aux (NC_false, _), NC_aux (_, _) -> NC_false
+        | NC_aux (_, _), NC_aux (NC_false, _) -> NC_false
+        | _, _ -> NC_and (nc1, nc2)
+      )
+    | NC_or (nc1, nc2) -> (
         let nc1, nc2 = (constraint_simp nc1, constraint_simp nc2) in
-        begin
-          match (nc1, nc2) with
-          | NC_aux (NC_false, _), NC_aux (nc, _) -> nc
-          | NC_aux (nc, _), NC_aux (NC_false, _) -> nc
-          | NC_aux (NC_true, _), NC_aux (_, _) -> NC_true
-          | NC_aux (_, _), NC_aux (NC_true, _) -> NC_true
-          | _, _ -> NC_or (nc1, nc2)
-        end
-    | NC_ge (nexp1, nexp2) ->
+        match (nc1, nc2) with
+        | NC_aux (NC_false, _), NC_aux (nc, _) -> nc
+        | NC_aux (nc, _), NC_aux (NC_false, _) -> nc
+        | NC_aux (NC_true, _), NC_aux (_, _) -> NC_true
+        | NC_aux (_, _), NC_aux (NC_true, _) -> NC_true
+        | _, _ -> NC_or (nc1, nc2)
+      )
+    | NC_ge (nexp1, nexp2) -> (
         let nexp1, nexp2 = (nexp_simp nexp1, nexp_simp nexp2) in
-        begin
-          match (nexp1, nexp2) with
-          | Nexp_aux (Nexp_constant c1, _), Nexp_aux (Nexp_constant c2, _) ->
-              if Big_int.greater_equal c1 c2 then NC_true else NC_false
-          | _, _ -> NC_ge (nexp1, nexp2)
-        end
-    | NC_gt (nexp1, nexp2) ->
+        match (nexp1, nexp2) with
+        | Nexp_aux (Nexp_constant c1, _), Nexp_aux (Nexp_constant c2, _) ->
+            if Big_int.greater_equal c1 c2 then NC_true else NC_false
+        | _, _ -> NC_ge (nexp1, nexp2)
+      )
+    | NC_gt (nexp1, nexp2) -> (
         let nexp1, nexp2 = (nexp_simp nexp1, nexp_simp nexp2) in
-        begin
-          match (nexp1, nexp2) with
-          | Nexp_aux (Nexp_constant c1, _), Nexp_aux (Nexp_constant c2, _) ->
-              if Big_int.greater c1 c2 then NC_true else NC_false
-          | _, _ -> NC_gt (nexp1, nexp2)
-        end
-    | NC_le (nexp1, nexp2) ->
+        match (nexp1, nexp2) with
+        | Nexp_aux (Nexp_constant c1, _), Nexp_aux (Nexp_constant c2, _) ->
+            if Big_int.greater c1 c2 then NC_true else NC_false
+        | _, _ -> NC_gt (nexp1, nexp2)
+      )
+    | NC_le (nexp1, nexp2) -> (
         let nexp1, nexp2 = (nexp_simp nexp1, nexp_simp nexp2) in
-        begin
-          match (nexp1, nexp2) with
-          | Nexp_aux (Nexp_constant c1, _), Nexp_aux (Nexp_constant c2, _) ->
-              if Big_int.less_equal c1 c2 then NC_true else NC_false
-          | _, _ -> NC_le (nexp1, nexp2)
-        end
-    | NC_lt (nexp1, nexp2) ->
+        match (nexp1, nexp2) with
+        | Nexp_aux (Nexp_constant c1, _), Nexp_aux (Nexp_constant c2, _) ->
+            if Big_int.less_equal c1 c2 then NC_true else NC_false
+        | _, _ -> NC_le (nexp1, nexp2)
+      )
+    | NC_lt (nexp1, nexp2) -> (
         let nexp1, nexp2 = (nexp_simp nexp1, nexp_simp nexp2) in
-        begin
-          match (nexp1, nexp2) with
-          | Nexp_aux (Nexp_constant c1, _), Nexp_aux (Nexp_constant c2, _) ->
-              if Big_int.less c1 c2 then NC_true else NC_false
-          | _, _ -> NC_lt (nexp1, nexp2)
-        end
-    | NC_app (id, [A_aux (A_bool nc, arg_l)]) when Id.compare (mk_id "not") id = 0 ->
+        match (nexp1, nexp2) with
+        | Nexp_aux (Nexp_constant c1, _), Nexp_aux (Nexp_constant c2, _) ->
+            if Big_int.less c1 c2 then NC_true else NC_false
+        | _, _ -> NC_lt (nexp1, nexp2)
+      )
+    | NC_app (id, [A_aux (A_bool nc, arg_l)]) when Id.compare (mk_id "not") id = 0 -> (
         let nc = constraint_simp nc in
-        begin
-          match nc with
-          | NC_aux (NC_false, _) -> NC_true
-          | NC_aux (NC_true, _) -> NC_false
-          | NC_aux (NC_app (id, [A_aux (A_bool (NC_aux (nc_aux, _)), _)]), _) when Id.compare (mk_id "not") id = 0 ->
-              nc_aux
-          | _ -> NC_app (id, [A_aux (A_bool nc, arg_l)])
-        end
+        match nc with
+        | NC_aux (NC_false, _) -> NC_true
+        | NC_aux (NC_true, _) -> NC_false
+        | NC_aux (NC_app (id, [A_aux (A_bool (NC_aux (nc_aux, _)), _)]), _) when Id.compare (mk_id "not") id = 0 ->
+            nc_aux
+        | _ -> NC_app (id, [A_aux (A_bool nc, arg_l)])
+      )
     | _ -> nc_aux
   in
   NC_aux (nc_aux, l)
@@ -544,9 +535,9 @@ let rec get_nexp_constant (Nexp_aux (n, _)) =
   match nexp_simp_aux n with
   | Nexp_constant c -> Some c
   (* nexp_simp does not always expand large existentials *)
-  | Nexp_exp e -> begin
+  | Nexp_exp e -> (
       match get_nexp_constant e with Some c -> Some (Big_int.pow_int_positive 2 (Big_int.to_int c)) | None -> None
-    end
+    )
   | _ -> None
 
 let rec constraint_conj (NC_aux (nc_aux, _) as nc) =
@@ -1975,9 +1966,9 @@ let mk_subst_arg = function
 let rec nexp_subst sv subst (Nexp_aux (n, l)) =
   let wrap aux = Nexp_aux (aux, l) in
   match n with
-  | Nexp_var kid -> begin
+  | Nexp_var kid -> (
       match subst with A_aux (A_nexp n, _) when Kid.compare kid sv = 0 -> n | _ -> wrap (Nexp_var kid)
-    end
+    )
   | Nexp_id id -> wrap (Nexp_id id)
   | Nexp_constant c -> wrap (Nexp_constant c)
   | Nexp_times (nexp1, nexp2) -> wrap (Nexp_times (nexp_subst sv subst nexp1, nexp_subst sv subst nexp2))
@@ -2002,9 +1993,9 @@ and constraint_subst sv subst (NC_aux (nc, l)) =
   | NC_or (nc1, nc2) -> wrap (NC_or (constraint_subst sv subst nc1, constraint_subst sv subst nc2))
   | NC_and (nc1, nc2) -> wrap (NC_and (constraint_subst sv subst nc1, constraint_subst sv subst nc2))
   | NC_app (id, args) -> wrap (NC_app (id, List.map (typ_arg_subst sv subst) args))
-  | NC_var kid -> begin
+  | NC_var kid -> (
       match subst with A_aux (A_bool nc, _) when Kid.compare kid sv = 0 -> nc | _ -> wrap (NC_var kid)
-    end
+    )
   | NC_false -> wrap NC_false
   | NC_true -> wrap NC_true
 
@@ -2013,9 +2004,9 @@ and typ_subst sv subst (Typ_aux (typ, l)) =
   match typ with
   | Typ_internal_unknown -> wrap Typ_internal_unknown
   | Typ_id v -> wrap (Typ_id v)
-  | Typ_var kid -> begin
+  | Typ_var kid -> (
       match subst with A_aux (A_typ typ, _) when Kid.compare kid sv = 0 -> typ | _ -> wrap (Typ_var kid)
-    end
+    )
   | Typ_fn (arg_typs, ret_typ) -> wrap (Typ_fn (List.map (typ_subst sv subst) arg_typs, typ_subst sv subst ret_typ))
   | Typ_bidir (typ1, typ2) -> wrap (Typ_bidir (typ_subst sv subst typ1, typ_subst sv subst typ2))
   | Typ_tuple typs -> wrap (Typ_tuple (List.map (typ_subst sv subst) typs))
@@ -2120,12 +2111,11 @@ struct
 
   let rec option_mapm f = function
     | [] -> None
-    | x :: xs -> begin match f x with Some y -> Some y | None -> option_mapm f xs end
+    | x :: xs -> (
+        match f x with Some y -> Some y | None -> option_mapm f xs
+      )
 
-  let option_chain opt1 opt2 =
-    begin
-      match opt1 with None -> opt2 | _ -> opt1
-    end
+  let option_chain opt1 opt2 = match opt1 with None -> opt2 | _ -> opt1
 
   let rec find_annot_exp sl (E_aux (aux, (l, annot))) =
     if not (subloc sl l) then None
@@ -2198,12 +2188,12 @@ struct
     )
 
   let rec find_annot_defs sl = function
-    | DEF_aux (DEF_fundef fdef, _) :: defs -> begin
+    | DEF_aux (DEF_fundef fdef, _) :: defs -> (
         match find_annot_fundef sl fdef with None -> find_annot_defs sl defs | result -> result
-      end
-    | DEF_aux (DEF_scattered sdef, _) :: defs -> begin
+      )
+    | DEF_aux (DEF_scattered sdef, _) :: defs -> (
         match find_annot_scattered sl sdef with None -> find_annot_defs sl defs | result -> result
-      end
+      )
     | _ :: defs -> find_annot_defs sl defs
     | [] -> None
 

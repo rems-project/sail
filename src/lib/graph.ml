@@ -162,11 +162,11 @@ module Make (Ord : OrderedType) = struct
     let rec reachable' node =
       if NS.mem node !visited then ()
       else if NS.mem node cuts then visited := NS.add node !visited
-      else begin
+      else (
         visited := NS.add node !visited;
         let children = try NM.find node cg with Not_found -> NS.empty in
         NS.iter reachable' children
-      end
+      )
     in
 
     NS.iter reachable' roots;
@@ -212,14 +212,14 @@ module Make (Ord : OrderedType) = struct
            Not_a_DAG (node, lcg)
           )
       else if NS.mem node !marked then ()
-      else begin
+      else (
         let children = try NM.find node cg with Not_found -> NS.empty in
         temp_marked := NS.add node !temp_marked;
         NS.iter (fun child -> visit child) children;
         marked := NS.add node !marked;
         temp_marked := NS.remove node !temp_marked;
         list := node :: !list
-      end
+      )
     in
 
     let rec topsort' () =
@@ -242,11 +242,9 @@ module Make (Ord : OrderedType) = struct
     let stack = ref [] in
     let push v = stack := v :: !stack in
     let pop () =
-      begin
-        let v = List.hd !stack in
-        stack := List.tl !stack;
-        v
-      end
+      let v = List.hd !stack in
+      stack := List.tl !stack;
+      v
     in
     let is_on_stack v = List.exists (fun w -> Ord.compare v w = 0) !stack in
 
@@ -261,31 +259,28 @@ module Make (Ord : OrderedType) = struct
     in
 
     let rec visit_node v =
-      begin
-        set_index v;
-        index := !index + 1;
-        push v;
-        if NM.mem v cg then NS.iter (visit_edge v) (NM.find v cg) else ();
-        if get_root v = get_index v then begin
-          (* v is the root of a SCC *)
-          let component = ref [] in
-          let finished = ref false in
-          while not !finished do
-            let w = pop () in
-            component := w :: !component;
-            if Ord.compare v w = 0 then finished := true else ()
-          done;
-          components := !component :: !components
-        end
-      end
+      set_index v;
+      index := !index + 1;
+      push v;
+      if NM.mem v cg then NS.iter (visit_edge v) (NM.find v cg) else ();
+      if get_root v = get_index v then (
+        (* v is the root of a SCC *)
+        let component = ref [] in
+        let finished = ref false in
+        while not !finished do
+          let w = pop () in
+          component := w :: !component;
+          if Ord.compare v w = 0 then finished := true else ()
+        done;
+        components := !component :: !components
+      )
     and visit_edge v w =
-      if not (has_index w) then begin
+      if not (has_index w) then (
         visit_node w;
         if has_index w then set_root v (min (get_root v) (get_root w)) else ()
-      end
-      else begin
-        if is_on_stack w then set_root v (min (get_root v) (get_index w)) else ()
-      end
+      )
+      else if is_on_stack w then set_root v (min (get_root v) (get_index w))
+      else ()
     in
 
     let nodes = match original_order with Some nodes -> nodes | None -> List.map fst (NM.bindings cg) in

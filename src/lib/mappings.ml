@@ -181,16 +181,16 @@ and extract_mapping_pats_pair map_uannot is_mapping subst f pat1 pat2 =
    it to a list of match arms (pexps), stopping at the first arm where
    we find any mapping patterns. *)
 let rec split_arms map_uannot is_mapping subst prev_arms = function
-  | (Pat_aux (Pat_exp (pat, exp), annot) as arm) :: arms -> begin
+  | (Pat_aux (Pat_exp (pat, exp), annot) as arm) :: arms -> (
       match extract_mapping_pats map_uannot is_mapping subst pat with
       | _, [] -> split_arms map_uannot is_mapping subst (arm :: prev_arms) arms
       | pat, mappings -> (List.rev prev_arms, Some (Pat_aux (Pat_exp (pat, exp), annot), mappings, arms))
-    end
-  | (Pat_aux (Pat_when (pat, guard, exp), annot) as arm) :: arms -> begin
+    )
+  | (Pat_aux (Pat_when (pat, guard, exp), annot) as arm) :: arms -> (
       match extract_mapping_pats map_uannot is_mapping subst pat with
       | _, [] -> split_arms map_uannot is_mapping subst (arm :: prev_arms) arms
       | pat, mappings -> (List.rev prev_arms, Some (Pat_aux (Pat_when (pat, guard, exp), annot), mappings, arms))
-    end
+    )
   | [] -> (List.rev prev_arms, None)
 
 let name_gen prefix =
@@ -386,15 +386,14 @@ let rewrite_ast ast =
   let add_mapping_bitvector_types (aux, annot) =
     let env = env_of_annot annot in
     match aux with
-    | P_app (mapping, pats) when Env.is_mapping mapping env ->
+    | P_app (mapping, pats) when Env.is_mapping mapping env -> (
         let typ = typ_of_annot annot in
-        begin
-          match typ with
-          | Typ_aux (Typ_app (f, [A_aux (A_nexp (Nexp_aux (Nexp_constant n, _)), _)]), _)
-            when string_of_id f = "bitvector" ->
-              P_aux (P_typ (typ, P_aux (P_app (mapping, pats), annot)), annot)
-          | _ -> P_aux (P_app (mapping, pats), annot)
-        end
+        match typ with
+        | Typ_aux (Typ_app (f, [A_aux (A_nexp (Nexp_aux (Nexp_constant n, _)), _)]), _)
+          when string_of_id f = "bitvector" ->
+            P_aux (P_typ (typ, P_aux (P_app (mapping, pats), annot)), annot)
+        | _ -> P_aux (P_app (mapping, pats), annot)
+      )
     | _ -> P_aux (aux, annot)
   in
   let pat_alg = { id_pat_alg with p_aux = add_mapping_bitvector_types } in

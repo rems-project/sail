@@ -61,9 +61,7 @@ end
 
 (** Get an attribute from a regular (inline) AST annotation. Returns the attribute data, i.e. for
 
-    {v
-    $[sv_attribute <data>]
-    v}
+    {v $[sv_attribute <data>] v}
 
     will return [Some <data>].
 

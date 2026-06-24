@@ -140,42 +140,38 @@ let infer_def_direct_effects asserts_termination def =
 
   let scan_lexp lexp_aux annot =
     let env = env_of_annot annot in
-    begin
-      match lexp_aux with
-      | LE_typ (_, id) | LE_id id -> begin
-          match Env.lookup_id id env with Register _ -> effects := EffectSet.add Register !effects | _ -> ()
-        end
-      | LE_deref _ -> effects := EffectSet.add Register !effects
-      | _ -> ()
-    end;
+    ( match lexp_aux with
+    | LE_typ (_, id) | LE_id id -> (
+        match Env.lookup_id id env with Register _ -> effects := EffectSet.add Register !effects | _ -> ()
+      )
+    | LE_deref _ -> effects := EffectSet.add Register !effects
+    | _ -> ()
+    );
     LE_aux (lexp_aux, annot)
   in
 
   let scan_exp e_aux annot =
     let env = env_of_annot annot in
-    begin
-      match e_aux with
-      | E_id id -> begin
-          match Env.lookup_id id env with Register _ -> effects := EffectSet.add Register !effects | _ -> ()
-        end
-      | E_undef -> effects := EffectSet.add Undefined !effects
-      | E_throw _ -> effects := EffectSet.add Throw !effects
-      | E_exit _ | E_assert _ -> effects := EffectSet.add Exit !effects
-      | E_app (f, _) when Id.compare f (mk_id "__deref") = 0 -> effects := EffectSet.add Register !effects
-      | E_match (_, _) ->
-          if Option.is_some (snd annot |> untyped_annot |> get_attribute "incomplete") then
-            effects := EffectSet.add IncompleteMatch !effects
-      | E_loop (_, Measure_aux (Measure_some _, _), _, _) when asserts_termination ->
-          effects := EffectSet.add Exit !effects
-      | _ -> ()
-    end;
+    ( match e_aux with
+    | E_id id -> (
+        match Env.lookup_id id env with Register _ -> effects := EffectSet.add Register !effects | _ -> ()
+      )
+    | E_undef -> effects := EffectSet.add Undefined !effects
+    | E_throw _ -> effects := EffectSet.add Throw !effects
+    | E_exit _ | E_assert _ -> effects := EffectSet.add Exit !effects
+    | E_app (f, _) when Id.compare f (mk_id "__deref") = 0 -> effects := EffectSet.add Register !effects
+    | E_match (_, _) ->
+        if Option.is_some (snd annot |> untyped_annot |> get_attribute "incomplete") then
+          effects := EffectSet.add IncompleteMatch !effects
+    | E_loop (_, Measure_aux (Measure_some _, _), _, _) when asserts_termination ->
+        effects := EffectSet.add Exit !effects
+    | _ -> ()
+    );
     E_aux (e_aux, annot)
   in
 
   let scan_pat p_aux annot =
-    begin
-      match p_aux with P_string_append _ -> effects := EffectSet.add NonExec !effects | _ -> ()
-    end;
+    (match p_aux with P_string_append _ -> effects := EffectSet.add NonExec !effects | _ -> ());
     P_aux (p_aux, annot)
   in
 
@@ -193,21 +189,20 @@ let infer_def_direct_effects asserts_termination def =
   in
   ignore (rewrite_ast_defs { rewriters_base with rewrite_exp = rw_exp; rewrite_pat = (fun _ -> fold_pat pat_alg) } [def]);
 
-  begin
-    match def with
-    | DEF_aux (DEF_val (VS_aux (VS_val_spec (_, id, Some { pure = false; _ }), _)), _) ->
-        effects := EffectSet.add External !effects
-    | DEF_aux (DEF_fundef (FD_aux (FD_function (_, _, funcls), (l, _))), def_annot) -> begin
-        match funcls_info funcls with
-        | Some (id, typ, env) ->
-            if Option.is_some (get_def_attribute "incomplete" def_annot) then
-              effects := EffectSet.add IncompleteMatch !effects
-        | None -> Reporting.unreachable l __POS__ "Empty funcls in infer_def_direct_effects"
-      end
-    | DEF_aux (DEF_mapdef _, _) -> effects := EffectSet.add IncompleteMatch !effects
-    | DEF_aux (DEF_scattered _, _) -> effects := EffectSet.add Scattered !effects
-    | _ -> ()
-  end;
+  ( match def with
+  | DEF_aux (DEF_val (VS_aux (VS_val_spec (_, id, Some { pure = false; _ }), _)), _) ->
+      effects := EffectSet.add External !effects
+  | DEF_aux (DEF_fundef (FD_aux (FD_function (_, _, funcls), (l, _))), def_annot) -> (
+      match funcls_info funcls with
+      | Some (id, typ, env) ->
+          if Option.is_some (get_def_attribute "incomplete" def_annot) then
+            effects := EffectSet.add IncompleteMatch !effects
+      | None -> Reporting.unreachable l __POS__ "Empty funcls in infer_def_direct_effects"
+    )
+  | DEF_aux (DEF_mapdef _, _) -> effects := EffectSet.add IncompleteMatch !effects
+  | DEF_aux (DEF_scattered _, _) -> effects := EffectSet.add Scattered !effects
+  | _ -> ()
+  );
 
   !effects
 
@@ -216,9 +211,7 @@ let infer_mapdef_extra_direct_effects def =
   let backward_effects = ref EffectSet.empty in
 
   let scan_pat set p_aux annot =
-    begin
-      match p_aux with P_string_append _ -> set := EffectSet.add NonExec !set | _ -> ()
-    end;
+    (match p_aux with P_string_append _ -> set := EffectSet.add NonExec !set | _ -> ());
     P_aux (p_aux, annot)
   in
   let scan_mpat set mp_aux annot =
@@ -246,11 +239,10 @@ let infer_mapdef_extra_direct_effects def =
     | MCL_backwards backward -> scan_pexp backward_effects backward
   in
 
-  begin
-    match def with
-    | DEF_aux (DEF_mapdef (MD_aux (MD_mapping (_, _, mapcls), _)), _) -> List.iter scan_mapcl mapcls
-    | _ -> ()
-  end;
+  ( match def with
+  | DEF_aux (DEF_mapdef (MD_aux (MD_mapping (_, _, mapcls), _)), _) -> List.iter scan_mapcl mapcls
+  | _ -> ()
+  );
 
   (!forward_effects, !backward_effects)
 
@@ -317,22 +309,20 @@ let infer_side_effects asserts_termination ast =
     (fun i def ->
       Util.progress "Effects (direct) " (string_of_int (i + 1) ^ "/" ^ string_of_int total) (i + 1) total;
       (* Handle mapping separately to allow different effects for both directions *)
-      begin
-        match def with
-        | DEF_aux (DEF_mapdef mdef, _) ->
-            let effs = infer_def_direct_effects asserts_termination def in
-            let fw, bk = infer_mapdef_extra_direct_effects def in
-            let id = id_of_mapdef mdef in
-            direct_effects := add_effects id effs !direct_effects;
-            direct_effects := add_effects (append_id id "_forwards") fw !direct_effects;
-            direct_effects := add_effects (append_id id "_backwards") bk !direct_effects
-        | _ when can_have_direct_side_effect def ->
-            infer_fun_termination_assert def;
-            let effs = infer_def_direct_effects asserts_termination def in
-            let ids = ids_of_def def in
-            IdSet.iter (fun id -> direct_effects := add_effects id effs !direct_effects) ids
-        | _ -> ()
-      end
+      match def with
+      | DEF_aux (DEF_mapdef mdef, _) ->
+          let effs = infer_def_direct_effects asserts_termination def in
+          let fw, bk = infer_mapdef_extra_direct_effects def in
+          let id = id_of_mapdef mdef in
+          direct_effects := add_effects id effs !direct_effects;
+          direct_effects := add_effects (append_id id "_forwards") fw !direct_effects;
+          direct_effects := add_effects (append_id id "_backwards") bk !direct_effects
+      | _ when can_have_direct_side_effect def ->
+          infer_fun_termination_assert def;
+          let effs = infer_def_direct_effects asserts_termination def in
+          let ids = ids_of_def def in
+          IdSet.iter (fun id -> direct_effects := add_effects id effs !direct_effects) ids
+      | _ -> ()
     )
     ast.defs;
 
@@ -460,9 +450,9 @@ let rewrite_attach_effects effect_info =
     let env = env_of_tannot tannot in
     let eff =
       match lexp_aux with
-      | LE_typ (_, id) | LE_id id -> begin
+      | LE_typ (_, id) | LE_id id -> (
           match Env.lookup_id id env with Register _ -> monadic_effect | _ -> no_effect
-        end
+        )
       | LE_deref _ -> monadic_effect
       | _ -> no_effect
     in
@@ -474,13 +464,15 @@ let rewrite_attach_effects effect_info =
     let env = env_of_tannot tannot in
     let eff =
       match e_aux with
-      | E_app (f, _) -> begin
+      | E_app (f, _) -> (
           match Bindings.find_opt f effect_info.functions with
           | Some side_effects -> if pure side_effects then no_effect else monadic_effect
           | None -> no_effect
-        end
+        )
       | E_undef -> monadic_effect
-      | E_id id -> begin match Env.lookup_id id env with Register _ -> monadic_effect | _ -> no_effect end
+      | E_id id -> (
+          match Env.lookup_id id env with Register _ -> monadic_effect | _ -> no_effect
+        )
       | E_throw _ -> monadic_effect
       | E_exit _ | E_assert _ -> monadic_effect
       | _ -> no_effect

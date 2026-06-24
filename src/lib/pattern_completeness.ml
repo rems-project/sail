@@ -387,7 +387,7 @@ module Make (C : Config) = struct
         in
         GP_bitvector (pnum, List.length pats, fun x -> BVC_eq (BVC_bvand (BVC_lit mask, x), BVC_lit bits))
     | P_vector pats -> GP_vector (List.map (generalize ctx None) pats)
-    | P_vector_concat pats when is_bitvector_typ typ ->
+    | P_vector_concat pats when is_bitvector_typ typ -> (
         let lengths =
           List.fold_left
             (fun acc typ ->
@@ -401,31 +401,30 @@ module Make (C : Config) = struct
             (Some []) (List.map typ_of_pat pats)
         in
         let gpats = List.map (generalize ctx None) pats in
-        begin
-          match lengths with
-          | Some lengths ->
-              let total, slices =
-                List.fold_left (fun (total, acc) len -> (total + len, (total + len - 1, total) :: acc)) (0, []) lengths
-              in
-              let bvc x =
-                List.fold_left2
-                  (fun bvc (n, m) gpat ->
-                    match gpat with
-                    | GP_bitvector (_, _, bvc_subpat) -> bvc_and bvc (bvc_subpat (BVC_extract (n, m, x)))
-                    | GP_wild -> bvc
-                    | _ -> Reporting.unreachable l __POS__ "Invalid bitvector pattern" [@coverage off]
-                  )
-                  BVC_true slices gpats
-              in
-              GP_bitvector (pnum, total, bvc)
-          | None -> GP_wild
-        end
-    | P_tuple pats -> begin
+        match lengths with
+        | Some lengths ->
+            let total, slices =
+              List.fold_left (fun (total, acc) len -> (total + len, (total + len - 1, total) :: acc)) (0, []) lengths
+            in
+            let bvc x =
+              List.fold_left2
+                (fun bvc (n, m) gpat ->
+                  match gpat with
+                  | GP_bitvector (_, _, bvc_subpat) -> bvc_and bvc (bvc_subpat (BVC_extract (n, m, x)))
+                  | GP_wild -> bvc
+                  | _ -> Reporting.unreachable l __POS__ "Invalid bitvector pattern" [@coverage off]
+                )
+                BVC_true slices gpats
+            in
+            GP_bitvector (pnum, total, bvc)
+        | None -> GP_wild
+      )
+    | P_tuple pats -> (
         match head_exp_typ with
         | Some (Typ_aux (Typ_tuple typs, _)) when List.length pats = List.length typs ->
             GP_tuple (List.map2 (fun pat typ -> generalize ctx (Some typ) pat) pats typs)
         | _ -> GP_tuple (List.map (generalize ctx None) pats)
-      end
+      )
     | P_app (id, pats) ->
         let typ_id =
           match typ with Typ_aux (Typ_app (id, _), _) -> id | Typ_aux (Typ_id id, _) -> id | _ -> failwith "Bad type"
@@ -433,10 +432,10 @@ module Make (C : Config) = struct
         GP_app (typ_id, id, List.map (generalize ctx None) pats)
     | P_lit (L_aux (L_true, _)) -> GP_bool true
     | P_lit (L_aux (L_false, _)) -> GP_bool false
-    | P_lit (L_aux (L_num n, _)) -> begin
+    | P_lit (L_aux (L_num n, _)) -> (
         match head_exp_typ with
         | Some (Typ_aux (Typ_app (f, [A_aux (A_nexp (Nexp_aux (nexp, _)), _)]), _))
-          when string_of_id f = "atom" || string_of_id f = "implicit" -> begin
+          when string_of_id f = "atom" || string_of_id f = "implicit" -> (
             match nexp with
             | Nexp_var v -> GP_num (pnum, n, Some (GPN_var v))
             | Nexp_constant m ->
@@ -447,24 +446,24 @@ module Make (C : Config) = struct
                    Sail RISC-V. **)
                 GP_num (pnum, n, Some (GPN_constant m))
             | _ -> GP_num (pnum, n, None)
-          end
+          )
         | _ -> GP_num (pnum, n, None)
-      end
+      )
     | P_lit lit -> GP_lit lit
     | P_wild -> GP_wild
     | P_var (pat, _) -> generalize ctx head_exp_typ pat
     | P_as (pat, _) -> generalize ctx head_exp_typ pat
     | P_typ (_, pat) -> generalize ctx head_exp_typ pat
     | P_vector_subrange _ -> GP_wild
-    | P_id id -> begin
+    | P_id id -> (
         match List.find_opt (fun (enum, ctors) -> IdSet.mem id ctors) (Bindings.bindings ctx.enums) with
         | Some (enum, _) -> GP_enum (enum, id)
         | None -> GP_wild
-      end
+      )
     | P_cons (hd_pat, tl_pat) -> GP_cons (generalize ctx head_exp_typ hd_pat, generalize ctx head_exp_typ tl_pat)
     | P_list xs ->
         List.fold_right (fun pat tl_gpat -> GP_cons (generalize ctx head_exp_typ pat, tl_gpat)) xs GP_empty_list
-    | P_struct (_, fpats, FP_no_wild) -> begin
+    | P_struct (_, fpats, FP_no_wild) ->
         let get_field_typs struct_id =
           match Bindings.find_opt struct_id ctx.structs with
           | Some (typq, field_typs) -> (typq, field_typs)
@@ -508,15 +507,12 @@ module Make (C : Config) = struct
           ( struct_id,
             List.fold_left
               (fun gfpats (field, pat) ->
-                begin
-                  match Bindings.find_opt field field_typs with
-                  | Some typ -> Bindings.add field (generalize ctx (Some typ) pat) gfpats
-                  | None -> Bindings.add field (generalize ctx None pat) gfpats
-                end
+                match Bindings.find_opt field field_typs with
+                | Some typ -> Bindings.add field (generalize ctx (Some typ) pat) gfpats
+                | None -> Bindings.add field (generalize ctx None pat) gfpats
               )
               Bindings.empty fpats
           )
-      end
     | _ -> GP_unknown
 
   let rec find_smtlib_type = function
@@ -618,12 +614,12 @@ module Make (C : Config) = struct
             let abstract_decs =
               ctx.abstract |> Bindings.bindings
               |> List.filter_map (fun (id, kind) ->
-                     let name = Util.zencode_string (string_of_id id) in
-                     match kind with
-                     | K_aux (K_type, _) -> None
-                     | K_aux (K_int, _) -> Some (Printf.sprintf "(declare-const %s Int)" name)
-                     | K_aux (K_bool, _) -> Some (Printf.sprintf "(declare-const %s Bool)" name)
-                 )
+                  let name = Util.zencode_string (string_of_id id) in
+                  match kind with
+                  | K_aux (K_type, _) -> None
+                  | K_aux (K_int, _) -> Some (Printf.sprintf "(declare-const %s Int)" name)
+                  | K_aux (K_bool, _) -> Some (Printf.sprintf "(declare-const %s Bool)" name)
+              )
               |> String.concat "\n"
             in
             let smtlib =
@@ -854,51 +850,50 @@ module Make (C : Config) = struct
   let rec matrix_is_complete l ctx matrix =
     match find_complex_column matrix with
     | None -> simple_matrix_is_complete ctx matrix
-    | Some (i, col) -> begin
+    | Some (i, col) -> (
         match column_type col with
         | Tuple_column width ->
             matrix_is_complete l ctx (flatten_tuple_column width i matrix)
             |> completeness_map (retuple width i) (fun w -> w)
-        | Struct_column struct_id -> begin
+        | Struct_column struct_id -> (
             match Bindings.find_opt struct_id ctx.structs with
             | Some (_, field_typs) ->
                 let fields = List.map snd field_typs in
                 matrix_is_complete l ctx (flatten_struct_column fields i matrix)
                 |> completeness_map (restruct fields i) (fun w -> w)
             | None -> Reporting.unreachable l __POS__ ("Could not find struct type " ^ string_of_id struct_id)
-          end
-        | Lit_column ->
+          )
+        | Lit_column -> (
             let wild_matrix = split_matrix_wild i matrix in
-            begin
-              match unmatched_literal col with
-              | None -> begin
+            match unmatched_literal col with
+            | None -> (
+                match matrix_is_complete l ctx wild_matrix with
+                | Complete cinfo -> Complete cinfo
+                | Incomplete _ | Completeness_unknown -> Completeness_unknown
+              )
+            | Some lit ->
+                if row_matrix_empty wild_matrix then
+                  Incomplete (undefs_except 0 i (mk_lit_exp lit) (row_matrix_width l matrix))
+                else (
                   match matrix_is_complete l ctx wild_matrix with
+                  | Incomplete unmatcheds -> Incomplete (relit lit i unmatcheds)
                   | Complete cinfo -> Complete cinfo
-                  | Incomplete _ | Completeness_unknown -> Completeness_unknown
-                end
-              | Some lit ->
-                  if row_matrix_empty wild_matrix then
-                    Incomplete (undefs_except 0 i (mk_lit_exp lit) (row_matrix_width l matrix))
-                  else (
-                    match matrix_is_complete l ctx wild_matrix with
-                    | Incomplete unmatcheds -> Incomplete (relit lit i unmatcheds)
-                    | Complete cinfo -> Complete cinfo
-                    | Completeness_unknown -> Completeness_unknown
-                  )
-            end
+                  | Completeness_unknown -> Completeness_unknown
+                )
+          )
         | List_column ->
             let cons_matrix, empty_list_matrix = split_matrix_cons i matrix in
             let width = row_matrix_width l matrix in
             if row_matrix_empty empty_list_matrix then Incomplete (undefs_except 0 i (mk_exp (E_list [])) width)
             else if row_matrix_empty cons_matrix then
               Incomplete (undefs_except 0 i (mk_exp (E_cons (mk_exp E_undef, mk_exp E_undef))) width)
-            else begin
+            else (
               match matrix_is_complete l ctx cons_matrix with
               | Incomplete unmatcheds -> Incomplete (recons l i unmatcheds)
               | Complete cinfo ->
                   matrix_is_complete l ctx empty_list_matrix |> completeness_map (reempty_list i) (union_complete cinfo)
               | Completeness_unknown -> Completeness_unknown
-            end
+            )
         | App_column typ_id ->
             (* If split_app_column inserts a fake constructor for the
                case where the union is open (i.e. scattered) make sure
@@ -930,13 +925,13 @@ module Make (C : Config) = struct
             let width = row_matrix_width l matrix in
             if row_matrix_empty true_matrix then Incomplete (undefs_except 0 i (mk_lit_exp L_true) width)
             else if row_matrix_empty false_matrix then Incomplete (undefs_except 0 i (mk_lit_exp L_false) width)
-            else begin
+            else (
               match matrix_is_complete l ctx true_matrix with
               | Incomplete unmatcheds -> Incomplete (rebool true i unmatcheds)
               | Complete cinfo ->
                   matrix_is_complete l ctx false_matrix |> completeness_map (rebool false i) (union_complete cinfo)
               | Completeness_unknown -> Completeness_unknown
-            end
+            )
         | Enum_column typ_id ->
             let members = Bindings.find typ_id ctx.enums |> IdSet.elements |> List.map (fun id -> Some id) in
             let members = if ctx.is_open typ_id then members @ [None] else members in
@@ -968,7 +963,7 @@ module Make (C : Config) = struct
             | Complete cinfo -> Complete cinfo
             | Completeness_unknown -> Completeness_unknown
           )
-      end
+      )
 
   (* Just highlight the match keyword and not the whole match block. *)
   let shrink_loc keyword = function

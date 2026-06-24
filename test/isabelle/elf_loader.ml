@@ -48,33 +48,29 @@ let read name =
 
   prerr_endline "Elf read:";
   let elf_file, elf_epi, symbol_map =
-    begin
-      match info with
-      | Error.Fail s -> failwith (Printf.sprintf "populate_and_obtain_global_symbol_init_info: %s" s)
-      | Error.Success
-          ( (elf_file : Elf_file.elf_file),
-            (elf_epi : Sail_interface.executable_process_image),
-            (symbol_map : Elf_file.global_symbol_init_info)
-          ) ->
-          (* XXX disabled because it crashes if entry_point overflows an ocaml int :-(
+    match info with
+    | Error.Fail s -> failwith (Printf.sprintf "populate_and_obtain_global_symbol_init_info: %s" s)
+    | Error.Success
+        ( (elf_file : Elf_file.elf_file),
+          (elf_epi : Sail_interface.executable_process_image),
+          (symbol_map : Elf_file.global_symbol_init_info)
+        ) ->
+        (* XXX disabled because it crashes if entry_point overflows an ocaml int :-(
              prerr_endline (Sail_interface.string_of_executable_process_image elf_epi);*)
-          (elf_file, elf_epi, symbol_map)
-    end
+        (elf_file, elf_epi, symbol_map)
   in
 
   prerr_endline "\nElf segments:";
   let segments, e_entry, e_machine =
-    begin
-      match (elf_epi, elf_file) with
-      | Sail_interface.ELF_Class_32 _, _ -> failwith "cannot handle ELF_Class_32"
-      | _, Elf_file.ELF_File_32 _ -> failwith "cannot handle ELF_File_32"
-      | Sail_interface.ELF_Class_64 (segments, e_entry, e_machine), Elf_file.ELF_File_64 f1 ->
-          (* remove all the auto generated segments (they contain only 0s) *)
-          let segments =
-            Lem_list.mapMaybe (fun (seg, prov) -> if prov = Elf_file.FromELF then Some seg else None) segments
-          in
-          (segments, e_entry, e_machine)
-    end
+    match (elf_epi, elf_file) with
+    | Sail_interface.ELF_Class_32 _, _ -> failwith "cannot handle ELF_Class_32"
+    | _, Elf_file.ELF_File_32 _ -> failwith "cannot handle ELF_File_32"
+    | Sail_interface.ELF_Class_64 (segments, e_entry, e_machine), Elf_file.ELF_File_64 f1 ->
+        (* remove all the auto generated segments (they contain only 0s) *)
+        let segments =
+          Lem_list.mapMaybe (fun (seg, prov) -> if prov = Elf_file.FromELF then Some seg else None) segments
+        in
+        (segments, e_entry, e_machine)
   in
   (segments, e_entry, symbol_map)
 

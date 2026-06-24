@@ -69,10 +69,10 @@ let copy_file (input_path : string) (output_path : string) =
   try
     let rec copy_loop () =
       let bytes_read = input ic buffer 0 buffer_size in
-      if bytes_read > 0 then begin
+      if bytes_read > 0 then (
         output oc buffer 0 bytes_read;
         copy_loop ()
-      end
+      )
     in
     copy_loop ();
     close_in ic;
@@ -89,7 +89,7 @@ let copy_file (input_path : string) (output_path : string) =
 (* Recursively remove a file or directory tree. *)
 let rec remove_file_or_dir path =
   if Sys.file_exists path then
-    if Sys.is_directory path then begin
+    if Sys.is_directory path then (
       (* Remove all contents of the directory *)
       let entries = Sys.readdir path in
       Array.iter
@@ -100,7 +100,7 @@ let rec remove_file_or_dir path =
         entries;
       (* Remove the now-empty directory *)
       Unix.rmdir path
-    end
+    )
     else
       (* Remove regular file *)
       Sys.remove path

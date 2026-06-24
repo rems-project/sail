@@ -421,11 +421,10 @@ let const_props target env ast =
           let e1', _ = const_prop_exp substs assigns e1 in
           let e2', _ = const_prop_exp substs assigns e2 in
           re (E_loop (loop, m', e1', e2')) assigns
-      | E_vector es ->
+      | E_vector es -> (
           let es', assigns = non_det_exp_list es in
-          begin
-            match construct_lit_vector es' with None -> re (E_vector es') assigns | Some lit -> re (E_lit lit) assigns
-          end
+          match construct_lit_vector es' with None -> re (E_vector es') assigns | Some lit -> re (E_lit lit) assigns
+        )
       | E_vector_append (e1, e2) ->
           let e1', e2', assigns = non_det_exp_2 e1 e2 in
           re (E_vector_append (e1', e2')) assigns
@@ -439,32 +438,30 @@ let const_props target env ast =
           let assigned_in_fes = assigned_vars_in_fexps fes in
           let assigns = isubst_minus_set assigns assigned_in_fes in
           re (E_struct (struct_name, const_prop_fexps substs assigns fes)) assigns
-      | E_struct_update (e, fes) ->
+      | E_struct_update (e, fes) -> (
           let assigned_in = IdSet.union (assigned_vars_in_fexps fes) (assigned_vars e) in
           let assigns = isubst_minus_set assigns assigned_in in
           let e', _ = const_prop_exp substs assigns e in
           let fes' = const_prop_fexps substs assigns fes in
-          begin
-            match unaux_exp (fst (uncast_exp e')) with
-            | E_struct (struct_name, fes0) ->
-                let apply_fexp (FE_aux (FE_fexp (id, e), _)) (FE_aux (FE_fexp (id', e'), ann)) =
-                  if Id.compare id id' = 0 then FE_aux (FE_fexp (id', e), ann) else FE_aux (FE_fexp (id', e'), ann)
-                in
-                let update_fields fexp = List.map (apply_fexp fexp) in
-                let fes0' = List.fold_right update_fields fes' fes0 in
-                re (E_struct (struct_name, fes0')) assigns
-            | _ -> re (E_struct_update (e', fes')) assigns
-          end
-      | E_field (e, id) ->
+          match unaux_exp (fst (uncast_exp e')) with
+          | E_struct (struct_name, fes0) ->
+              let apply_fexp (FE_aux (FE_fexp (id, e), _)) (FE_aux (FE_fexp (id', e'), ann)) =
+                if Id.compare id id' = 0 then FE_aux (FE_fexp (id', e), ann) else FE_aux (FE_fexp (id', e'), ann)
+              in
+              let update_fields fexp = List.map (apply_fexp fexp) in
+              let fes0' = List.fold_right update_fields fes' fes0 in
+              re (E_struct (struct_name, fes0')) assigns
+          | _ -> re (E_struct_update (e', fes')) assigns
+        )
+      | E_field (e, id) -> (
           let e', assigns = const_prop_exp substs assigns e in
-          begin
-            let is_field (FE_aux (FE_fexp (id', _), _)) = Id.compare id id' = 0 in
-            match unaux_exp e' with
-            | E_struct (_, fes0) when List.exists is_field fes0 ->
-                let (FE_aux (FE_fexp (_, e), _)) = List.find is_field fes0 in
-                re (unaux_exp e) assigns
-            | _ -> re (E_field (e', id)) assigns
-          end
+          let is_field (FE_aux (FE_fexp (id', _), _)) = Id.compare id id' = 0 in
+          match unaux_exp e' with
+          | E_struct (_, fes0) when List.exists is_field fes0 ->
+              let (FE_aux (FE_fexp (_, e), _)) = List.find is_field fes0 in
+              re (unaux_exp e) assigns
+          | _ -> re (E_field (e', id)) assigns
+        )
       | E_match (e, cases) -> (
           let e', assigns = const_prop_exp substs assigns e in
           match can_match l e' cases substs assigns with
@@ -513,13 +510,13 @@ let const_props target env ast =
           let e', _ = const_prop_exp substs assigns e in
           let assigns =
             match idopt with
-            | Some id -> begin
+            | Some id -> (
                 match Env.lookup_id id env with
                 | Local (Mutable, _) | Unbound _ ->
                     if is_value e' && not (IdSet.mem id ref_vars) then Bindings.add id (keep_undef_typ e') assigns
                     else Bindings.remove id assigns
                 | _ -> assigns
-              end
+              )
             | None -> assigns
           in
           re (E_assign (le', e')) assigns
@@ -531,13 +528,13 @@ let const_props target env ast =
           let e', _ = const_prop_exp substs assigns e in
           let assigns =
             match idopt with
-            | Some id -> begin
+            | Some id -> (
                 match Env.lookup_id id env with
                 | Local (Mutable, _) | Unbound _ ->
                     if is_value e' && not (IdSet.mem id ref_vars) then Bindings.add id (keep_undef_typ e') assigns
                     else Bindings.remove id assigns
                 | _ -> assigns
-              end
+              )
             | None -> assigns
           in
           let e2', _ = const_prop_exp substs assigns e2 in
@@ -636,11 +633,11 @@ let const_props target env ast =
       let rec check_exp_pat (E_aux (e, (l, annot)) as exp) (P_aux (p, (l', p_annot)) as pat) =
         match (e, p) with
         | _, P_wild -> DoesMatch ([], [])
-        | _, P_typ (typ, p') -> begin
+        | _, P_typ (typ, p') -> (
             match (typ_has_existential typ, check_exp_pat exp p') with
             | false, DoesMatch ([(id, v)], ns) -> DoesMatch ([(id, E_aux (E_typ (typ, v), (l', p_annot)))], ns)
             | _, m -> m
-          end
+          )
         | _, P_id id' when pat_id_is_variable env id' ->
             let exp_typ = typ_of exp in
             let pat_typ = typ_of_pat pat in
@@ -661,14 +658,14 @@ let const_props target env ast =
             List.fold_left check (DoesMatch ([], [])) (List.combine es ps)
         | E_id id, _ -> (
             match Env.lookup_id id env with
-            | Enum _ -> begin
+            | Enum _ -> (
                 match p with
                 | P_id id' | P_app (id', []) -> if Id.compare id id' = 0 then DoesMatch ([], []) else DoesNotMatch
                 | _ ->
                     Reporting.print_err l' "Monomorphisation"
                       ("Unexpected kind of pattern for enumeration: " ^ string_of_pat pat);
                     GiveUp
-              end
+              )
             | _ -> GiveUp
           )
         | E_undef, P_var (P_aux (P_id id, p_id_annot), TP_aux (TP_var kid, _)) ->
@@ -680,7 +677,7 @@ let const_props target env ast =
             DoesMatch ([(id, E_aux (E_typ (typ, E_aux (e, (l, empty_tannot))), (l, empty_tannot)))], [(kid, nexp)])
         | E_lit (L_aux (lit_e, lit_l)), P_lit (L_aux (lit_p, _)) ->
             if lit_match (lit_e, lit_p) then DoesMatch ([], []) else DoesNotMatch
-        | E_lit (L_aux (lit_e, lit_l)), P_var (P_aux (P_id id, p_id_annot), TP_aux (TP_var kid, _)) -> begin
+        | E_lit (L_aux (lit_e, lit_l)), P_var (P_aux (P_id id, p_id_annot), TP_aux (TP_var kid, _)) -> (
             match lit_e with
             | L_num i -> DoesMatch ([(id, E_aux (e, (l, annot)))], [(kid, Nexp_aux (Nexp_constant i, Unknown))])
             (* For undefined we fix the type-level size (because there's no good
@@ -690,7 +687,7 @@ let const_props target env ast =
                 Reporting.print_err lit_l "Monomorphisation"
                   ("Unexpected kind of literal for var match: " ^ string_of_lit (L_aux (lit_e, lit_l)));
                 GiveUp
-          end
+          )
         | E_lit (L_aux ((L_bin _ | L_hex _), _) as lit), P_vector _ ->
             let mk_bitlit lit = E_aux (E_lit lit, (Generated l, mk_tannot env bit_typ)) in
             let lits' = List.map mk_bitlit (vector_string_to_bit_list lit) in
@@ -781,10 +778,10 @@ let const_props target env ast =
         | [] ->
             Reporting.print_err l "Monomorphisation" ("Failed to find a case for " ^ description);
             None
-        | Pat_aux (Pat_when (p, guard, exp), _) :: tl -> begin
+        | Pat_aux (Pat_when (p, guard, exp), _) :: tl -> (
             match check_pat p with
             | DoesNotMatch -> findpat_generic description assigns tl
-            | DoesMatch (vsubst, ksubst) -> begin
+            | DoesMatch (vsubst, ksubst) -> (
                 let guard = nexp_subst_exp (kbindings_from_list ksubst) guard in
                 let substs =
                   ( bindings_union substs (bindings_from_list vsubst),
@@ -798,9 +795,9 @@ let const_props target env ast =
                     Some (exp, vsubst, ksubst)
                 | E_lit (L_aux (L_false, _)) -> findpat_generic description assigns tl
                 | _ -> None
-              end
+              )
             | GiveUp -> None
-          end
+          )
         | Pat_aux (Pat_exp (p, exp), _) :: tl -> (
             match check_pat p with
             | DoesNotMatch -> findpat_generic description assigns tl

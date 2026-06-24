@@ -227,23 +227,22 @@ module Make (Config : CONFIG) = struct
         if two_state then ksprintf simple_type "bit [%d:0]" (width - 1)
         else ksprintf simple_type "logic [%d:0]" (width - 1)
     | CT_ref ctyp -> ksprintf simple_type "sail_reg_%s" (Util.zencode_string (string_of_ctyp ctyp))
-    | CT_fvector (len, ctyp) ->
+    | CT_fvector (len, ctyp) -> (
         let outer_index = sprintf "[%d]" len in
-        begin
-          match sv_ctyp ~two_state ctyp with
-          | ty, Some inner_index -> (ty, Some (inner_index ^ outer_index))
-          | ty, None -> (ty, Some outer_index)
-        end
-    | CT_list ctyp -> begin
+        match sv_ctyp ~two_state ctyp with
+        | ty, Some inner_index -> (ty, Some (inner_index ^ outer_index))
+        | ty, None -> (ty, Some outer_index)
+      )
+    | CT_list ctyp -> (
         match sv_ctyp ~two_state ctyp with
         | ty, Some inner_index -> (ty, Some (inner_index ^ "[$]"))
         | ty, None -> (ty, Some "[$]")
-      end
-    | CT_vector ctyp -> begin
+      )
+    | CT_vector ctyp -> (
         match sv_ctyp ~two_state ctyp with
         | ty, Some inner_index -> (ty, Some (inner_index ^ "[]"))
         | ty, None -> (ty, Some "[]")
-      end
+      )
     | CT_real -> simple_type "sail_real"
     | CT_rounding_mode -> simple_type "sail_rounding_mode"
     | CT_float width -> ksprintf simple_type "sail_float%d" width
@@ -655,11 +654,11 @@ module Make (Config : CONFIG) = struct
              )
           )
     | Empty_list -> string "{}"
-    | Hd (op, arg) -> begin
+    | Hd (op, arg) -> (
         match tails arg with
         | Some (index, v) -> pp_name v ^^ brackets (string (string_of_int index))
         | None -> string op ^^ parens (pp_smt arg)
-      end
+      )
     | Tl (op, arg) -> string op ^^ parens (pp_smt arg)
     | _ -> empty
 
@@ -673,7 +672,7 @@ module Make (Config : CONFIG) = struct
     | clexp -> string ("// CLEXP " ^ Jib_util.string_of_clexp clexp)
 
   let svir_update_fbits = function
-    | [bv; index; bit] -> begin
+    | [bv; index; bit] -> (
         match (cval_ctyp bv, cval_ctyp index) with
         | CT_fbits 1, _ -> Smt.smt_cval bit
         | CT_fbits sz, CT_constant c ->
@@ -689,7 +688,7 @@ module Make (Config : CONFIG) = struct
             in
             return smt
         | _, _ -> failwith "update_fbits 1"
-      end
+      )
     | _ -> failwith "update_fbits 2"
 
   let cval_for_ctyp = function
@@ -719,14 +718,13 @@ module Make (Config : CONFIG) = struct
     | CL_void ctyp -> ([], SVP_void ctyp)
     | CL_rmw (id_from, id, ctyp) ->
         let rec assignments lexp subpart ctyp = function
-          | parent :: parents -> begin
+          | parent :: parents ->
               let struct_id, fields = Jib_compile.struct_field_bindings l ctx ctyp in
               let fields = Bindings.bindings fields in
               let _, field_ctyp = List.find (fun (f, _) -> Id.compare f parent = 0) fields in
               let other_fields = List.filter (fun (f, _) -> Id.compare f parent <> 0) fields in
               assignments (SVP_field (lexp, parent)) (Field (struct_id, parent, subpart)) field_ctyp parents
               @ List.map (fun (f, _) -> SVS_assign (SVP_field (lexp, f), Field (struct_id, f, subpart))) other_fields
-            end
           | [] -> []
         in
         let updates = assignments (SVP_id id) (Var id_from) ctyp parents in
@@ -789,7 +787,7 @@ module Make (Config : CONFIG) = struct
   let extern_generate l ctx creturn id name args =
     let wrap aux = return (Some (SVS_aux (aux, l))) in
     match Smt.builtin ~allow_io:false name with
-    | Some generator ->
+    | Some generator -> (
         let clexp =
           match creturn with
           | CR_one clexp -> clexp
@@ -800,15 +798,14 @@ module Make (Config : CONFIG) = struct
                 )
         in
         let* value = Smt_gen.fmap (Smt_exp.simp SimpSet.empty) (generator args (clexp_ctyp clexp)) in
-        begin
-          (* We can optimize R = store(R, i x) into R[i] = x *)
-          match (clexp, value) with
-          | CL_id (v, _), Store (_, _, Var v', i, x) when Name.compare v v' = 0 ->
-              wrap (SVS_assign (SVP_index (SVP_id v, i), x))
-          | _, _ ->
-              let updates, lexp = svir_clexp l ctx clexp in
-              wrap (with_updates l updates (SVS_assign (lexp, value)))
-        end
+        (* We can optimize R = store(R, i x) into R[i] = x *)
+        match (clexp, value) with
+        | CL_id (v, _), Store (_, _, Var v', i, x) when Name.compare v v' = 0 ->
+            wrap (SVS_assign (SVP_index (SVP_id v, i), x))
+        | _, _ ->
+            let updates, lexp = svir_clexp l ctx clexp in
+            wrap (with_updates l updates (SVS_assign (lexp, value)))
+      )
     | None -> (
         match Primops.generate_module ~at:l name with
         | Some generator ->
@@ -899,9 +896,9 @@ module Make (Config : CONFIG) = struct
         else if Id.compare id (mk_id "internal_vector_init") = 0 then return None
         else if Id.compare id (mk_id "internal_vector_update") = 0 then (
           match args with
-          | [arr; i; x] -> begin
+          | [arr; i; x] -> (
               match cval_ctyp arr with
-              | CT_fvector (len, _) ->
+              | CT_fvector (len, _) -> (
                   let* arr = Smt.smt_cval arr in
                   let sz = required_width (Big_int.of_int (len - 1)) - 1 in
                   let* i =
@@ -911,36 +908,35 @@ module Make (Config : CONFIG) = struct
                   let* x = Smt.smt_cval x in
                   let j = mk_id "j" in
                   let updates, ret = svir_creturn l ctx creturn in
-                  begin
-                    match (ret, arr) with
-                    | SVP_id id1, Var id2 when Name.compare id1 id2 = 0 ->
-                        wrap (with_updates l updates (SVS_assign (SVP_index (ret, i), x)))
-                    | _ ->
-                        if sz = 0 then
-                          wrap (with_updates l updates (SVS_assign (SVP_index (ret, Bitvec_lit [Sail2_values.B0]), x)))
-                        else
-                          wrap
-                            (with_updates l updates
-                               (SVS_foreach
-                                  ( SVN_id j,
-                                    arr,
-                                    SVS_aux
-                                      ( SVS_assign
-                                          ( SVP_index (ret, var_id j),
-                                            Ite
-                                              ( Fn ("=", [Extract (sz - 1, 0, 32, var_id j); i]),
-                                                x,
-                                                Fn ("select", [arr; var_id j])
-                                              )
-                                          ),
-                                        l
-                                      )
-                                  )
-                               )
-                            )
-                  end
+                  match (ret, arr) with
+                  | SVP_id id1, Var id2 when Name.compare id1 id2 = 0 ->
+                      wrap (with_updates l updates (SVS_assign (SVP_index (ret, i), x)))
+                  | _ ->
+                      if sz = 0 then
+                        wrap (with_updates l updates (SVS_assign (SVP_index (ret, Bitvec_lit [Sail2_values.B0]), x)))
+                      else
+                        wrap
+                          (with_updates l updates
+                             (SVS_foreach
+                                ( SVN_id j,
+                                  arr,
+                                  SVS_aux
+                                    ( SVS_assign
+                                        ( SVP_index (ret, var_id j),
+                                          Ite
+                                            ( Fn ("=", [Extract (sz - 1, 0, 32, var_id j); i]),
+                                              x,
+                                              Fn ("select", [arr; var_id j])
+                                            )
+                                        ),
+                                      l
+                                    )
+                                )
+                             )
+                          )
+                )
               | _ -> Reporting.unreachable l __POS__ "Invalid vector type for internal vector update"
-            end
+            )
           | _ -> Reporting.unreachable l __POS__ "Invalid number of arguments to internal vector update"
         )
         else (
@@ -1019,11 +1015,11 @@ module Make (Config : CONFIG) = struct
         separate space [string "for"; parens (separate (semi ^^ space) [vars; pp_smt loop.for_cond; modifier])]
         ^^ nest 4 (hardline ^^ pp_statement ~terminator:empty stmt)
         ^^ terminator
-    | SVS_var (id, ctyp, init_opt) -> begin
+    | SVS_var (id, ctyp, init_opt) -> (
         match init_opt with
         | Some init -> ld ^^ separate space [wrap_type ctyp (pp_name id); equals; pp_smt init] ^^ terminator
         | None -> ld ^^ wrap_type ctyp (pp_name id) ^^ terminator
-      end
+      )
     | SVS_return smt -> string "return" ^^ space ^^ pp_smt smt ^^ terminator
     | SVS_assign (place, value) -> ld ^^ separate space [pp_place place; equals; pp_smt value] ^^ terminator
     | SVS_continuous_assign (place, value) ->
@@ -1135,7 +1131,7 @@ module Make (Config : CONFIG) = struct
 
       method! vinstr (I_aux (aux, iannot) as no_change) =
         match aux with
-        | I_copy (CL_addr (CL_id (id, CT_ref reg_ctyp)), cval) -> begin
+        | I_copy (CL_addr (CL_id (id, CT_ref reg_ctyp)), cval) ->
             let regs = Option.value ~default:NameSet.empty (CTMap.find_opt reg_ctyp spec_info.register_ctyp_map) in
 
             let encoded = "sail_reg_assign_" ^ Util.zencode_string (string_of_ctyp reg_ctyp) in
@@ -1148,8 +1144,7 @@ module Make (Config : CONFIG) = struct
                    iannot
                  )
               )
-          end
-        | I_funcall (CR_one clexp, ext, (f, []), args) -> begin
+        | I_funcall (CR_one clexp, ext, (f, []), args) -> (
             match Bindings.find_opt f spec_info.footprints with
             | Some footprint ->
                 let reads =
@@ -1225,7 +1220,7 @@ module Make (Config : CONFIG) = struct
                       )
                   else if name = "reg_deref" then (
                     match args with
-                    | [cval] -> begin
+                    | [cval] -> (
                         match cval_ctyp cval with
                         | CT_ref reg_ctyp ->
                             let regs =
@@ -1240,13 +1235,13 @@ module Make (Config : CONFIG) = struct
                                  (I_funcall (CR_one clexp, Extern reg_ctyp, (mk_id encoded, []), cval :: reads), iannot)
                               )
                         | _ -> Reporting.unreachable (snd iannot) __POS__ "Invalid type for reg_deref argument"
-                      end
+                      )
                     | _ -> Reporting.unreachable (snd iannot) __POS__ "Invalid arguments for reg_deref"
                   )
                   else SkipChildren
                 )
                 else SkipChildren
-          end
+          )
         | _ -> DoChildren
     end
 
@@ -1263,13 +1258,12 @@ module Make (Config : CONFIG) = struct
 
       method! vstatement (SVS_aux (aux, l) as no_change) =
         match aux with
-        | SVS_var (name, ctyp, exp_opt) ->
+        | SVS_var (name, ctyp, exp_opt) -> (
             decls := NameMap.add (fst (Jib_ssa.unssa_name name)) ctyp !decls;
-            begin
-              match exp_opt with
-              | Some exp -> ChangeTo (SVS_aux (SVS_assign (SVP_id name, exp), l))
-              | None -> ChangeTo (SVS_aux (SVS_skip, l))
-            end
+            match exp_opt with
+            | Some exp -> ChangeTo (SVS_aux (SVS_assign (SVP_id name, exp), l))
+            | None -> ChangeTo (SVS_aux (SVS_skip, l))
+          )
         | SVS_call (place, f, args) ->
             if sv_name_is_constructor spec_info f then SkipChildren
             else (
@@ -2057,18 +2051,15 @@ module Make (Config : CONFIG) = struct
   and pp_fundef f =
     let ret_ty, typedef =
       match f.return_type with
-      | Some ret_ctyp ->
+      | Some ret_ctyp -> (
           let ret_ty, index_ty = sv_ctyp ret_ctyp in
-          begin
-            match index_ty with
-            | Some index ->
-                let encoded = Util.zencode_string (string_of_ctyp ret_ctyp) in
-                let new_ty = string ("t_" ^ pp_sv_name_string f.function_name ^ "_" ^ encoded) in
-                ( new_ty,
-                  separate space [string "typedef"; string ret_ty; new_ty; string index] ^^ semi ^^ twice hardline
-                )
-            | None -> (string ret_ty, empty)
-          end
+          match index_ty with
+          | Some index ->
+              let encoded = Util.zencode_string (string_of_ctyp ret_ctyp) in
+              let new_ty = string ("t_" ^ pp_sv_name_string f.function_name ^ "_" ^ encoded) in
+              (new_ty, separate space [string "typedef"; string ret_ty; new_ty; string index] ^^ semi ^^ twice hardline)
+          | None -> (string ret_ty, empty)
+        )
       | None -> (string "void", empty)
     in
     let param_docs = List.map (fun (param, ctyp) -> wrap_type ctyp (pp_name param)) f.params in
@@ -2122,20 +2113,19 @@ module Make (Config : CONFIG) = struct
     | SVD_dpi_function { function_name; return_type; param_types } ->
         let ret_ty, typedef =
           match return_type with
-          | Some ret_ctyp ->
+          | Some ret_ctyp -> (
               (* Per the SystemVerilog LRM, a DPI function can only return
                  two-state types other than a single logic *)
               let ret_ty, index_ty = sv_ctyp ~two_state:true ret_ctyp in
-              begin
-                match index_ty with
-                | Some index ->
-                    let encoded = Util.zencode_string (string_of_ctyp ret_ctyp) in
-                    let new_ty = string ("t_" ^ pp_sv_name_string function_name ^ "_" ^ encoded) in
-                    ( new_ty,
-                      separate space [string "typedef"; string ret_ty; new_ty; string index] ^^ semi ^^ twice hardline
-                    )
-                | None -> (string ret_ty, empty)
-              end
+              match index_ty with
+              | Some index ->
+                  let encoded = Util.zencode_string (string_of_ctyp ret_ctyp) in
+                  let new_ty = string ("t_" ^ pp_sv_name_string function_name ^ "_" ^ encoded) in
+                  ( new_ty,
+                    separate space [string "typedef"; string ret_ty; new_ty; string index] ^^ semi ^^ twice hardline
+                  )
+              | None -> (string ret_ty, empty)
+            )
           | None -> (string "void", empty)
         in
         let params = List.mapi (fun n ctyp -> wrap_type ctyp (string ("param" ^ string_of_int n))) param_types in
@@ -2410,7 +2400,7 @@ module Make (Config : CONFIG) = struct
           @ [SVD_aux (SVD_module setup_module, def_annot.loc)],
           fn_ctyps
         )
-    | CDEF_register (id, ctyp, setup) -> begin
+    | CDEF_register (id, ctyp, setup) -> (
         match setup with
         | [] -> ([], fn_ctyps)
         | _ ->
@@ -2427,7 +2417,7 @@ module Make (Config : CONFIG) = struct
                 (setup @ [iend_name def_annot.loc id])
             in
             ([SVD_aux (SVD_module setup_module, def_annot.loc)], fn_ctyps)
-      end
+      )
     | _ -> ([], fn_ctyps)
 
   let sv_cdef spec_info ctx fn_ctyps setup_calls (CDEF_aux (aux, _)) =
@@ -2456,19 +2446,17 @@ module Make (Config : CONFIG) = struct
               |> remove_undefined |> filter_clear
             )
           in
-          begin
-            match Bindings.find_opt f fn_ctyps with
-            | Some (param_ctyps, ret_ctyp) ->
-                ( {
-                    empty_cdef_doc with
-                    inside_module =
-                      sv_fundef spec_info ctx (SVN_id f) params param_ctyps [ret_ctyp] body ^^ twice hardline;
-                  },
-                  fn_ctyps,
-                  setup_calls
-                )
-            | None -> Reporting.unreachable (id_loc f) __POS__ ("No function type found for " ^ string_of_id f)
-          end
+          match Bindings.find_opt f fn_ctyps with
+          | Some (param_ctyps, ret_ctyp) ->
+              ( {
+                  empty_cdef_doc with
+                  inside_module =
+                    sv_fundef spec_info ctx (SVN_id f) params param_ctyps [ret_ctyp] body ^^ twice hardline;
+                },
+                fn_ctyps,
+                setup_calls
+              )
+          | None -> Reporting.unreachable (id_loc f) __POS__ ("No function type found for " ^ string_of_id f)
         )
     | CDEF_let (n, bindings, setup) ->
         let bindings_doc =
@@ -2484,9 +2472,9 @@ module Make (Config : CONFIG) = struct
 
   let main_args main fn_ctyps =
     match main with
-    | Some (CDEF_aux (CDEF_fundef (f, _, params, body), _)) -> begin
+    | Some (CDEF_aux (CDEF_fundef (f, _, params, body), _)) -> (
         match Bindings.find_opt f fn_ctyps with
-        | Some (param_ctyps, ret_ctyp) -> begin
+        | Some (param_ctyps, ret_ctyp) -> (
             let main_args =
               List.map2
                 (fun param param_ctyp -> match param_ctyp with CT_unit -> string "SAIL_UNIT" | _ -> pp_name param)
@@ -2512,9 +2500,9 @@ module Make (Config : CONFIG) = struct
                   Some (string "main_result"),
                   (string "output" ^^ space ^^ wrap_type ret_ctyp (string "main_result")) :: module_main_in
                 )
-          end
+          )
         | None -> Reporting.unreachable (id_loc f) __POS__ ("No function type found for " ^ string_of_id f)
-      end
+      )
     | _ -> ([], None, [])
 
   let make_call_precise ctx id =

@@ -1,7 +1,7 @@
 profile = default
-version = 0.27.0
+version = 0.29.0
 margin = 120
-exp-grouping = preserve
+exp-grouping = parens
 parens-ite = true
 space-around-lists = false
 indicate-multiline-delimiters = closing-on-separate-line

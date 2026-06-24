@@ -80,17 +80,16 @@ let fixup_comments ~filename source =
   let needs_space = ref false in
   String.iteri
     (fun cnum c ->
-      begin
-        match Stack.top_opt comment_stack with
-        | Some (Lexer.Comment (_, start, _, _)) ->
-            if c = ' ' || c = '\n' then needs_space := false
-            else if cnum = start.pos_cnum then (
-              if !needs_space then Buffer.add_char fixed ' ';
-              ignore (Stack.pop comment_stack)
-            )
-            else needs_space := true
-        | None -> ()
-      end;
+      ( match Stack.top_opt comment_stack with
+      | Some (Lexer.Comment (_, start, _, _)) ->
+          if c = ' ' || c = '\n' then needs_space := false
+          else if cnum = start.pos_cnum then (
+            if !needs_space then Buffer.add_char fixed ' ';
+            ignore (Stack.pop comment_stack)
+          )
+          else needs_space := true
+      | None -> ()
+      );
       Buffer.add_char fixed c
     )
     source;
@@ -470,11 +469,10 @@ let get_option ~key:k ~keys:ks ~read ~default:d =
 let config_from_json (json : Yojson.Safe.t) =
   match json with
   | `Assoc keys ->
-      begin
-        match List.find_opt (fun (k, _) -> not (known_key k)) keys with
-        | Some (k, _) -> Reporting.simple_warn (Printf.sprintf "Unknown key %s in formatting config" k)
-        | None -> ()
-      end;
+      ( match List.find_opt (fun (k, _) -> not (known_key k)) keys with
+      | Some (k, _) -> Reporting.simple_warn (Printf.sprintf "Unknown key %s in formatting config" k)
+      | None -> ()
+      );
       {
         indent = get_option ~key:"indent" ~keys ~read:int_option ~default:default_config.indent;
         preserve_structure =
@@ -694,7 +692,7 @@ module Make (Config : CONFIG) = struct
         surround indent 1 (char '{')
           (doc_chunks opts exp ^^ space ^^ string "with" ^^ break 1 ^^ separate_map (break 1) (doc_chunks opts) fexps)
           (char '}')
-    | Comment (comment_type, n, col, contents, _) -> begin
+    | Comment (comment_type, n, col, contents, _) -> (
         match comment_type with
         | Comment_line -> blank n ^^ string "//" ^^ string contents ^^ require_hardline
         | Comment_block -> (
@@ -707,7 +705,7 @@ module Make (Config : CONFIG) = struct
             | [l] -> blank n ^^ string "/*" ^^ l ^^ string "*/" ^^ space
             | ls -> blank n ^^ group (align (string "/*" ^^ separate hardline ls ^^ string "*/")) ^^ require_hardline
           )
-      end
+      )
     | Doc_comment { contents; comment_type } -> (
         match comment_type with
         | Comment_block ->
@@ -758,10 +756,10 @@ module Make (Config : CONFIG) = struct
         string "enum" ^^ space ^^ doc_id e.id
         ^^ group
              (( match e.enum_functions with
-              | Some enum_functions ->
-                  space ^^ string "with" ^^ space ^^ align (separate_map softline (doc_chunks opts) enum_functions)
-              | None -> empty
-              )
+                | Some enum_functions ->
+                    space ^^ string "with" ^^ space ^^ align (separate_map softline (doc_chunks opts) enum_functions)
+                | None -> empty
+                )
              ^^ space ^^ char '=' ^^ space
              ^^ surround indent 1 (char '{') (separate_map softline (doc_chunks opts) e.members) (char '}')
              )
@@ -963,41 +961,38 @@ module Make (Config : CONFIG) = struct
     String.iter
       (fun c ->
         let rec pop_dedents () =
-          begin
-            match Queue.peek_opt lb_info.dedents with
-            | Some (l, c, amount) when l < !line || (l = !line && c = !column) ->
-                (* This happens when the formatter removes trailing
+          match Queue.peek_opt lb_info.dedents with
+          | Some (l, c, amount) when l < !line || (l = !line && c = !column) ->
+              (* This happens when the formatter removes trailing
                    whitespace premptively, so we never reach the dedent
                    column. *)
-                if l < !line && debug then Buffer.add_string buf Util.(">" ^ string_of_int c |> yellow |> clear);
-                if !after_hardline && l = !line then pending_spaces := !pending_spaces - amount;
-                if debug then Buffer.add_string buf Util.("D" ^ string_of_int amount |> green |> clear);
-                ignore (Queue.take lb_info.dedents);
-                pop_dedents ()
-            | _ -> ()
-          end
+              if l < !line && debug then Buffer.add_string buf Util.(">" ^ string_of_int c |> yellow |> clear);
+              if !after_hardline && l = !line then pending_spaces := !pending_spaces - amount;
+              if debug then Buffer.add_string buf Util.("D" ^ string_of_int amount |> green |> clear);
+              ignore (Queue.take lb_info.dedents);
+              pop_dedents ()
+          | _ -> ()
         in
         pop_dedents ();
 
         if c = '\n' then (
-          begin
-            match Queue.take_opt lb_info.hardlines with
-            | Some (l, c, hardline_type) -> begin
-                match hardline_type with
-                | Desired ->
-                    if debug then Buffer.add_string buf Util.("H" |> red |> clear);
-                    add_newline ();
-                    pending_spaces := 0;
-                    if !require_hardline then require_hardline := false;
-                    after_hardline := true
-                | Required ->
-                    if debug then Buffer.add_string buf Util.("R" |> red |> clear);
-                    require_hardline := true;
-                    after_hardline := true
-              end
-            | None ->
-                Reporting.unreachable Parse_ast.Unknown __POS__ (Printf.sprintf "Missing hardline %d %d" !line !column)
-          end;
+          ( match Queue.take_opt lb_info.hardlines with
+          | Some (l, c, hardline_type) -> (
+              match hardline_type with
+              | Desired ->
+                  if debug then Buffer.add_string buf Util.("H" |> red |> clear);
+                  add_newline ();
+                  pending_spaces := 0;
+                  if !require_hardline then require_hardline := false;
+                  after_hardline := true
+              | Required ->
+                  if debug then Buffer.add_string buf Util.("R" |> red |> clear);
+                  require_hardline := true;
+                  after_hardline := true
+            )
+          | None ->
+              Reporting.unreachable Parse_ast.Unknown __POS__ (Printf.sprintf "Missing hardline %d %d" !line !column)
+          );
           incr line;
           column := 0
         )

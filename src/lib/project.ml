@@ -135,16 +135,15 @@ let rec visit_exp vis outer_exp =
   let aux vis no_change =
     match no_change with
     | E_file _, _ | E_string _, _ | E_id _, _ | E_var _, _ | E_parent, _ | E_value _, _ -> no_change
-    | E_if (i, t, e), l ->
+    | E_if (i, t, e), l -> (
         let i' = visit_exp vis i in
-        begin
-          match i' with
-          | E_value (V_bool b), _ when vis#short_circuit_if -> if b then visit_exp vis t else visit_exp vis e
-          | _ ->
-              let t' = visit_exp vis t in
-              let e' = visit_exp vis e in
-              if i == i' && t == t' && e == e' then no_change else (E_if (i', t', e'), l)
-        end
+        match i' with
+        | E_value (V_bool b), _ when vis#short_circuit_if -> if b then visit_exp vis t else visit_exp vis e
+        | _ ->
+            let t' = visit_exp vis t in
+            let e' = visit_exp vis e in
+            if i == i' && t == t' && e == e' then no_change else (E_if (i', t', e'), l)
+      )
     | E_list xs, l ->
         let xs' = map_no_copy (visit_exp vis) xs in
         if xs == xs' then no_change else (E_list xs', l)
@@ -317,11 +316,11 @@ class eval_visitor (vars : value StringMap.t ref) =
         | (E_string s | E_id s), l -> (E_value (V_string s), l)
         | E_file (f, ext), l -> (E_value (V_string (f ^ "." ^ ext)), l)
         | E_parent, l -> (E_value (V_string Filename.parent_dir_name), l)
-        | E_var var, l -> begin
+        | E_var var, l -> (
             match StringMap.find_opt var !vars with
             | Some v -> (E_value v, l)
             | None -> raise (Reporting.err_typ (to_loc l) ("Could not find variable " ^ var))
-          end
+          )
         | E_op ((E_value lhs, _), op, (E_value rhs, _)), l -> (E_value (project_binop l op lhs rhs), l)
         | E_app (f, xs), l ->
             let xs =
@@ -494,15 +493,14 @@ class dependency_visitor (proj : project_structure) =
     method! vexp _ = SkipChildren
 
     method! vdependency _ dep =
-      begin
-        match dep with
-        | D_requires (e, es) ->
-            stack <- update_head (fun frame -> { frame with requires = frame.requires @ to_selectors (e :: es) }) stack
-        | D_before (e, es) ->
-            stack <- update_head (fun frame -> { frame with before = frame.before @ to_selectors (e :: es) }) stack
-        | D_after (e, es) ->
-            stack <- update_head (fun frame -> { frame with after = frame.after @ to_selectors (e :: es) }) stack
-      end;
+      ( match dep with
+      | D_requires (e, es) ->
+          stack <- update_head (fun frame -> { frame with requires = frame.requires @ to_selectors (e :: es) }) stack
+      | D_before (e, es) ->
+          stack <- update_head (fun frame -> { frame with before = frame.before @ to_selectors (e :: es) }) stack
+      | D_after (e, es) ->
+          stack <- update_head (fun frame -> { frame with after = frame.after @ to_selectors (e :: es) }) stack
+      );
       SkipChildren
 
     method! vmodule m =
@@ -628,11 +626,11 @@ let initialize_project_structure ~variables defs =
 
 let rec shorten_scc loop g =
   match loop with
-  | x :: xs -> begin
+  | x :: xs -> (
       match Util.find_next (fun y -> ModGraph.has_edge x y g) (List.rev xs) with
       | tail, Some (y, _) -> x :: shorten_scc (y :: List.rev tail) g
       | tail, None -> x :: shorten_scc (List.rev tail) g
-    end
+    )
   | [] -> []
 
 let get_module_id proj name = StringMap.find_opt name proj.ids

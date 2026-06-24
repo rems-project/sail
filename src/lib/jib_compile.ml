@@ -337,13 +337,12 @@ module Make (C : CONFIG) = struct
      writes the static branch info to C.branch_coverage. *)
   let coverage_branch_reached ctx l =
     match C.branch_coverage with
-    | Some out when ctx.coverage_override -> begin
+    | Some out when ctx.coverage_override ->
         let branch_id = !coverage_branch_count in
         incr coverage_branch_count;
         let args = coverage_loc_args l in
         Printf.fprintf out "%s\n" ("B " ^ string_of_int branch_id ^ ", " ^ args);
         (branch_id, [iraw (Printf.sprintf "sail_branch_reached(%d, %s);" branch_id args)])
-      end
     | _ -> (0, [])
 
   let append_into_block instrs instr = match instrs with [] -> instr | _ -> iblock (instrs @ [instr])
@@ -362,26 +361,24 @@ module Make (C : CONFIG) = struct
      conditional expression (the whole `match` etc.). *)
   let coverage_branch_target_taken ctx branch_id aexp =
     match C.branch_coverage with
-    | Some out when ctx.coverage_override -> begin
+    | Some out when ctx.coverage_override ->
         let branch_target_id = !coverage_branch_target_count in
         incr coverage_branch_target_count;
         let args = coverage_loc_args (find_aexp_loc aexp) in
         Printf.fprintf out "%s\n" ("T " ^ string_of_int branch_id ^ ", " ^ string_of_int branch_target_id ^ ", " ^ args);
         [iraw (Printf.sprintf "sail_branch_target_taken(%d, %d, %s);" branch_id branch_target_id args)]
-      end
     | _ -> []
 
   (* Generate code and static branch info for function entry coverage.
      `id` is the name of the function. *)
   let coverage_function_entry ctx id l =
     match C.branch_coverage with
-    | Some out when ctx.coverage_override -> begin
+    | Some out when ctx.coverage_override ->
         let function_id = !coverage_function_count in
         incr coverage_function_count;
         let args = coverage_loc_args l in
         Printf.fprintf out "%s\n" ("F " ^ string_of_int function_id ^ ", \"" ^ string_of_id id ^ "\", " ^ args);
         [iraw (Printf.sprintf "sail_function_entry(%d, \"%s\", %s);" function_id (string_of_id id) args)]
-      end
     | _ -> []
 
   let unit_cval = V_lit (VL_unit, CT_unit)
@@ -418,11 +415,11 @@ module Make (C : CONFIG) = struct
         )
         else ([], cval, [])
     | AV_id (Name (id, _), Enum typ) -> ([], V_member (id, ctyp_of_typ ctx typ), [])
-    | AV_id (id, typ) -> begin
+    | AV_id (id, typ) -> (
         match get_variable_ctyp id ctx with
         | Some (_, ctyp) -> ([], V_id (id, ctyp), [])
         | None -> ([], V_id (id, ctyp_of_typ ctx (lvar_typ typ)), [])
-      end
+      )
     | AV_abstract (id, typ) -> (
         match Bindings.find_opt id ctx.abstracts with
         | Some (ctyp, _) -> ([], V_id (Abstract id, ctyp), [])
@@ -444,10 +441,10 @@ module Make (C : CONFIG) = struct
     | AV_lit (L_aux (((L_hex _ | L_bin _) as l_aux), _), _) ->
         let bitlist =
           ( match l_aux with
-          | L_hex hex -> BitList.of_hex_lit hex
-          | L_bin bin -> BitList.of_bin_lit bin
-          | _ -> assert false
-          )
+            | L_hex hex -> BitList.of_hex_lit hex
+            | L_bin bin -> BitList.of_bin_lit bin
+            | _ -> assert false
+            )
           |> List.map (function B0 -> Sail2_values.B0 | B1 -> Sail2_values.B1)
         in
         let len = List.length bitlist in
@@ -518,24 +515,23 @@ module Make (C : CONFIG) = struct
           V_id (gs, ctyp),
           [iclear ctyp gs]
         )
-    | AV_vector ([], typ) ->
+    | AV_vector ([], typ) -> (
         let vector_ctyp = ctyp_of_typ ctx typ in
-        begin
-          match ctyp_of_typ ctx typ with
-          | CT_fbits 0 -> ([], V_lit (VL_bits [], vector_ctyp), [])
-          | _ ->
-              let gs = ngensym () in
-              ( [
-                  idecl l vector_ctyp gs;
-                  iextern l
-                    (CL_id (gs, vector_ctyp))
-                    (mk_id "internal_vector_init", [])
-                    [V_lit (VL_int Big_int.zero, CT_fint 64)];
-                ],
-                V_id (gs, vector_ctyp),
-                [iclear vector_ctyp gs]
-              )
-        end
+        match ctyp_of_typ ctx typ with
+        | CT_fbits 0 -> ([], V_lit (VL_bits [], vector_ctyp), [])
+        | _ ->
+            let gs = ngensym () in
+            ( [
+                idecl l vector_ctyp gs;
+                iextern l
+                  (CL_id (gs, vector_ctyp))
+                  (mk_id "internal_vector_init", [])
+                  [V_lit (VL_int Big_int.zero, CT_fint 64)];
+              ],
+              V_id (gs, vector_ctyp),
+              [iclear vector_ctyp gs]
+            )
+      )
     (* If we have a bitvector value, that isn't a literal then we need to set bits individually. *)
     | AV_vector (avals, Typ_aux (Typ_app (id, _), _)) when string_of_id id = "bitvector" && List.length avals <= 64 ->
         let len = List.length avals in
@@ -670,15 +666,12 @@ module Make (C : CONFIG) = struct
     let call_id = Option.value ~default:id override_id in
 
     ( List.rev !setup,
-      begin
-        fun clexp ->
-          let instantiation =
-            KBindings.union merge_unifiers (ctyp_unify l ret_ctyp (clexp_ctyp clexp)) !instantiation
-          in
-          let ctyp_args = List.map (fun v -> KBindings.find v instantiation) params in
-          ifuncall l clexp (call_id, ctyp_args) setup_args
-        (* iblock1 (optimize_call l ctx clexp (id, KBindings.bindings unifiers |> List.map snd) setup_args arg_ctyps ret_ctyp) *)
-      end,
+      (fun clexp ->
+        let instantiation = KBindings.union merge_unifiers (ctyp_unify l ret_ctyp (clexp_ctyp clexp)) !instantiation in
+        let ctyp_args = List.map (fun v -> KBindings.find v instantiation) params in
+        ifuncall l clexp (call_id, ctyp_args) setup_args
+      )
+      (* iblock1 (optimize_call l ctx clexp (id, KBindings.bindings unifiers |> List.map snd) setup_args arg_ctyps ret_ctyp) *),
       !cleanup
     )
 
@@ -703,8 +696,8 @@ module Make (C : CONFIG) = struct
     let rec if_chain = function [] -> [] | [(_, e)] -> e | (i, t) :: e -> [iif l i t (if_chain e)] in
     Bindings.bindings ctx.abstracts
     |> List.map (fun (id, ctyp) ->
-           (V_call (String_eq, [V_id (string_id, CT_string); V_lit (VL_string (string_of_id id), CT_string)]), f id ctyp)
-       )
+        (V_call (String_eq, [V_id (string_id, CT_string); V_lit (VL_string (string_of_id id), CT_string)]), f id ctyp)
+    )
     |> if_chain
 
   let static_load l ctyp f =
@@ -770,25 +763,25 @@ module Make (C : CONFIG) = struct
                  [V_id (json, CT_json)];
              ]
             @ select_abstract l ctx abstract_name (fun id (abstract_ctyp, _) ->
-                  match abstract_ctyp with
-                  | CT_fint 64 ->
-                      [
-                        iextern l
-                          (CL_id (value, ctyp))
-                          (mk_id "sail_config_unwrap_abstract_bits", [])
-                          [V_id (Abstract id, abstract_ctyp); V_id (json, CT_json)];
-                      ]
-                  | CT_lint | CT_fint _ ->
-                      let len = ngensym () in
-                      [
-                        iinit l (CT_fint 64) len (V_id (Abstract id, abstract_ctyp));
-                        iextern l
-                          (CL_id (value, ctyp))
-                          (mk_id "sail_config_unwrap_abstract_bits", [])
-                          [V_id (len, CT_fint 64); V_id (json, CT_json)];
-                      ]
-                  | _ -> []
-              )
+                match abstract_ctyp with
+                | CT_fint 64 ->
+                    [
+                      iextern l
+                        (CL_id (value, ctyp))
+                        (mk_id "sail_config_unwrap_abstract_bits", [])
+                        [V_id (Abstract id, abstract_ctyp); V_id (json, CT_json)];
+                    ]
+                | CT_lint | CT_fint _ ->
+                    let len = ngensym () in
+                    [
+                      iinit l (CT_fint 64) len (V_id (Abstract id, abstract_ctyp));
+                      iextern l
+                        (CL_id (value, ctyp))
+                        (mk_id "sail_config_unwrap_abstract_bits", [])
+                        [V_id (len, CT_fint 64); V_id (json, CT_json)];
+                    ]
+                | _ -> []
+            )
             @ [iclear CT_string abstract_name]
             )
             (setup @ [non_abstract_call (CL_id (value, ctyp))] @ cleanup);
@@ -1048,11 +1041,11 @@ module Make (C : CONFIG) = struct
     | AP_global (pid, typ) ->
         let global_ctyp = ctyp_of_typ ctx typ in
         ([], [icopy l (CL_id (name pid, global_ctyp)) cval], [], ctx)
-    | AP_id (Name (pid, _), _) when is_ct_enum ctyp -> begin
+    | AP_id (Name (pid, _), _) when is_ct_enum ctyp -> (
         match Env.lookup_id pid ctx.tc_env with
         | Unbound _ -> ([], [idecl l ctyp (name pid); icopy l (CL_id (name pid, ctyp)) cval], [], ctx)
         | _ -> ([on_failure l (V_call (Neq, [V_member (pid, ctyp); cval]))], [], [], ctx)
-      end
+      )
     | AP_id (pid, typ) ->
         let id_ctyp = ctyp_of_typ ctx typ in
         let ctx = { ctx with locals = NameMap.add pid (Immutable, id_ctyp) ctx.locals } in
@@ -1085,7 +1078,7 @@ module Make (C : CONFIG) = struct
         | _ -> Reporting.unreachable l __POS__ ("AP_tuple with ctyp " ^ string_of_ctyp ctyp)
       )
     | AP_app (Newtype_wrapper _, apat, _) -> compile_match ctx apat cval on_failure
-    | AP_app (Constructor ctor, apat, variant_typ) -> begin
+    | AP_app (Constructor ctor, apat, variant_typ) -> (
         match ctyp with
         | CT_variant (var_id, args) ->
             (* These should really be the same, something has gone wrong if they are not. *)
@@ -1116,9 +1109,9 @@ module Make (C : CONFIG) = struct
                     (string_of_id ctor) (string_of_typ variant_typ) (string_of_cval cval) (string_of_ctyp ctyp)
                  )
               )
-      end
+      )
     | AP_wild _ -> ([], [], [], ctx)
-    | AP_cons (hd_apat, tl_apat) -> begin
+    | AP_cons (hd_apat, tl_apat) -> (
         match ctyp with
         | CT_list ctyp ->
             let hd_pre, hd_setup, hd_cleanup, ctx = compile_match ctx hd_apat (V_call (List_hd, [cval])) on_failure in
@@ -1129,7 +1122,7 @@ module Make (C : CONFIG) = struct
               ctx
             )
         | _ -> raise (Reporting.err_general l "Tried to pattern match cons on non list type")
-      end
+      )
     | AP_nil _ -> ([on_failure l (V_call (Bnot, [V_call (List_is_empty, [cval])]))], [], [], ctx)
     | AP_vector_concat (vc_apats, typ) ->
         let vc_apats, total_width =
@@ -2307,7 +2300,7 @@ module Make (C : CONFIG) = struct
   (** Compile a Sail toplevel definition into an IR definition **)
   let rec compile_def n total ctx (DEF_aux (aux, _) as def) =
     match aux with
-    | DEF_fundef (FD_aux (FD_function (_, _, [FCL_aux (FCL_funcl (id, _), _)]), _)) when !opt_memo_cache ->
+    | DEF_fundef (FD_aux (FD_function (_, _, [FCL_aux (FCL_funcl (id, _), _)]), _)) when !opt_memo_cache -> (
         let digest = strip_def def |> Pretty_print_sail.doc_def |> Document.to_string |> Digest.string in
         let cachefile = Filename.concat "_sbuild" ("ccache" ^ Digest.to_hex digest) in
         let cached =
@@ -2323,18 +2316,17 @@ module Make (C : CONFIG) = struct
           )
           else None
         in
-        begin
-          match cached with
-          | Some (compiled, ctx) ->
-              Util.progress "Compiling " (string_of_id id) n total;
-              (compiled, ctx)
-          | None ->
-              let compiled, ctx = compile_def' n total ctx def in
-              let out_chan = open_out cachefile in
-              Marshal.to_channel out_chan compiled [Marshal.Closures];
-              close_out out_chan;
-              (compiled, { ctx with def_annot = None })
-        end
+        match cached with
+        | Some (compiled, ctx) ->
+            Util.progress "Compiling " (string_of_id id) n total;
+            (compiled, ctx)
+        | None ->
+            let compiled, ctx = compile_def' n total ctx def in
+            let out_chan = open_out cachefile in
+            Marshal.to_channel out_chan compiled [Marshal.Closures];
+            close_out out_chan;
+            (compiled, { ctx with def_annot = None })
+      )
     | _ ->
         let compiled, ctx = compile_def' n total ctx def in
         (compiled, { ctx with def_annot = None })

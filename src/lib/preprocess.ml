@@ -183,7 +183,7 @@ let preprocess dir target opts =
     | DEF_aux (DEF_pragma ("define", Pragma_line (symbol, _)), _) :: defs ->
         symbols := StringSet.add symbol !symbols;
         aux includes acc defs
-    | DEF_aux (DEF_pragma ("include_error", Pragma_line (message, _)), l) :: defs -> begin
+    | DEF_aux (DEF_pragma ("include_error", Pragma_line (message, _)), l) :: defs -> (
         match List.rev includes with
         | [] -> raise (Reporting.err_general (pragma_loc l) message)
         | (include_root, l) :: ls ->
@@ -196,7 +196,7 @@ let preprocess dir target opts =
             in
             format_message message (buffer_formatter b);
             raise (Reporting.err_general l (Buffer.contents b))
-      end
+      )
     | (DEF_aux (DEF_pragma ("option", Pragma_line (command, ltrim)), l) as opt_pragma) :: defs ->
         let l = pragma_loc l in
         let first_line err_msg =
@@ -205,18 +205,16 @@ let preprocess dir target opts =
         in
         let current = ref 0 in
         let args, reset = create_argv_array ~offset:(ltrim + 7) ~current l command in
-        begin
-          try
+        ( try
             let file_arg file =
               raise
                 (Reporting.err_general l ("Anonymous argument '" ^ file ^ "' cannot be passed via $option directive"))
             in
             Arg.parse_argv ~current (Array.of_list ("sail" :: args)) opts file_arg ""
           with
-          | Arg.Help msg -> raise (Reporting.err_general l "-help flag passed to $option directive")
-          | Arg.Bad msg ->
-              Reporting.warn "Invalid option" l ("Invalid flag passed to $option directive" ^ first_line msg)
-        end;
+        | Arg.Help msg -> raise (Reporting.err_general l "-help flag passed to $option directive")
+        | Arg.Bad msg -> Reporting.warn "Invalid option" l ("Invalid flag passed to $option directive" ^ first_line msg)
+        );
         reset ();
         aux includes (opt_pragma :: acc) defs
     | DEF_aux (DEF_pragma ("ifndef", Pragma_line (symbol, _)), l) :: defs ->
@@ -227,13 +225,12 @@ let preprocess dir target opts =
         let then_defs, else_defs, defs = cond_pragma l defs in
         if StringSet.mem symbol !symbols then aux includes acc (then_defs @ defs)
         else aux includes acc (else_defs @ defs)
-    | DEF_aux (DEF_pragma ("iftarget", Pragma_line (t, _)), l) :: defs ->
+    | DEF_aux (DEF_pragma ("iftarget", Pragma_line (t, _)), l) :: defs -> (
         let then_defs, else_defs, defs = cond_pragma l defs in
-        begin
-          match target with
-          | Some t' when target_set_contains t t' -> aux includes acc (then_defs @ defs)
-          | _ -> aux includes acc (else_defs @ defs)
-        end
+        match target with
+        | Some t' when target_set_contains t t' -> aux includes acc (then_defs @ defs)
+        | _ -> aux includes acc (else_defs @ defs)
+      )
     | DEF_aux (DEF_pragma ("include", Pragma_line (file, _)), l) :: defs ->
         let len = String.length file in
         if len = 0 then (
@@ -272,11 +269,10 @@ let preprocess dir target opts =
           aux includes acc defs
         )
     | DEF_aux (DEF_pragma ("suppress_warnings", _), l) :: defs ->
-        begin
-          match Reporting.simp_loc l with
-          | None -> () (* This shouldn't happen, but if it does just continue *)
-          | Some (p, _) -> Reporting.suppress_warnings_for_file p.pos_fname
-        end;
+        ( match Reporting.simp_loc l with
+        | None -> () (* This shouldn't happen, but if it does just continue *)
+        | Some (p, _) -> Reporting.suppress_warnings_for_file p.pos_fname
+        );
         aux includes acc defs
     (* Filter file_start and file_end out of the AST so when we
        round-trip files through the compiler we don't end up with
@@ -289,7 +285,7 @@ let preprocess dir target opts =
         aux includes (pragma_def :: acc) defs
     | DEF_aux (DEF_outcome (outcome_spec, inner_defs), l) :: defs ->
         aux includes (DEF_aux (DEF_outcome (outcome_spec, aux includes [] inner_defs), l) :: acc) defs
-    | (DEF_aux (DEF_default (DT_aux (DT_order (_, ATyp_aux (atyp, _)), _)), l) as def) :: defs -> begin
+    | (DEF_aux (DEF_default (DT_aux (DT_order (_, ATyp_aux (atyp, _)), _)), l) as def) :: defs -> (
         symbols := StringSet.add "_DEFAULT_ORDER_SET" !symbols;
         match atyp with
         | Parse_ast.ATyp_inc ->
@@ -299,7 +295,7 @@ let preprocess dir target opts =
             symbols := StringSet.add "_DEFAULT_DEC" !symbols;
             aux includes (def :: acc) defs
         | _ -> aux includes (def :: acc) defs
-      end
+      )
     | def :: defs -> aux includes (def :: acc) defs
   in
   aux [] []

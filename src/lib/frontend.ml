@@ -183,11 +183,10 @@ let filter_modules proj is_included ast =
     | None -> Reporting.unreachable l __POS__ "Failed to get module id"
   in
   let rec go skipping acc = function
-    | DEF_aux (DEF_pragma ("ended_module#", Pragma_line (name, l)), def_annot) :: defs ->
+    | DEF_aux (DEF_pragma ("ended_module#", Pragma_line (name, l)), def_annot) :: defs -> (
         let mod_id = get_module_id l name in
-        begin
-          match skipping with Some skip_id when mod_id = skip_id -> go None acc defs | _ -> go skipping acc defs
-        end
+        match skipping with Some skip_id when mod_id = skip_id -> go None acc defs | _ -> go skipping acc defs
+      )
     | _ :: defs when Option.is_some skipping -> go skipping acc defs
     | DEF_aux (DEF_pragma ("started_module#", Pragma_line (name, l)), def_annot) :: defs ->
         let mod_id = get_module_id l name in

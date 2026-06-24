@@ -115,7 +115,7 @@ module RemoveUnitPorts = struct
 
       method! vdef =
         function
-        | SVD_aux (SVD_instantiate { module_name; instance_name; input_connections; output_connections }, l) -> begin
+        | SVD_aux (SVD_instantiate { module_name; instance_name; input_connections; output_connections }, l) -> (
             match SVNameMap.find_opt module_name port_actions with
             | Some (input_port_action, output_port_action) ->
                 let input_connections =
@@ -127,7 +127,7 @@ module RemoveUnitPorts = struct
                 ChangeTo
                   (SVD_aux (SVD_instantiate { module_name; instance_name; input_connections; output_connections }, l))
             | None -> SkipChildren
-          end
+          )
         | _ -> DoChildren
     end
 
@@ -333,18 +333,18 @@ module RemoveUnusedVariables = struct
     | stack -> stack
 
   let rec get_num ?first_block name = function
-    | head :: tail -> begin
+    | head :: tail -> (
         match head with
-        | Block (bnum, vars) -> begin
+        | Block (bnum, vars) -> (
             let bnum = Option.value ~default:bnum first_block in
             match NameMap.find_opt name vars with
             | Some (vnum, ctyp) -> Some (bnum, vnum, ctyp)
             | None -> get_num ~first_block:bnum name tail
-          end
+          )
         | Foreach var -> if Name.compare name var = 0 then None else get_num ?first_block name tail
         | Ports ports -> if NameSet.mem name ports then None else get_num ?first_block name tail
         | Function params -> if NameSet.mem name params then None else get_num ?first_block name tail
-      end
+      )
     | [] -> None
 
   class remove_unused_visitor uses changes skip : svir_visitor =
@@ -365,24 +365,23 @@ module RemoveUnusedVariables = struct
 
       method! vsmt_exp =
         function
-        | Var name -> begin
+        | Var name -> (
             match self#get_vnum name with
-            | Some (_, vnum, ctyp) ->
+            | Some (_, vnum, ctyp) -> (
                 let usage = Option.value ~default:no_usage (Hashtbl.find_opt uses vnum) in
-                begin
-                  match usage.propagate_write_value with
-                  | Single_write exp ->
-                      incr changes;
-                      ChangeTo exp
-                  | _ -> SkipChildren
-                end
+                match usage.propagate_write_value with
+                | Single_write exp ->
+                    incr changes;
+                    ChangeTo exp
+                | _ -> SkipChildren
+              )
             | None -> SkipChildren
-          end
+          )
         | _ -> DoChildren
 
       method! vplace =
         function
-        | SVP_id name -> begin
+        | SVP_id name -> (
             match self#get_vnum name with
             | Some (_, vnum, ctyp) ->
                 let usage = Option.value ~default:no_usage (Hashtbl.find_opt uses vnum) in
@@ -390,7 +389,7 @@ module RemoveUnusedVariables = struct
                   ChangeTo (SVP_void ctyp)
                 else SkipChildren
             | None -> SkipChildren
-          end
+          )
         | _ -> DoChildren
 
       method! vdef =
@@ -407,7 +406,7 @@ module RemoveUnusedVariables = struct
               ChangeTo (SVD_aux (SVD_null, l))
             )
             else DoChildren
-        | SVD_aux (((SVD_module _ | SVD_fundef _) as aux), l) -> begin
+        | SVD_aux (((SVD_module _ | SVD_fundef _) as aux), l) -> (
             let frame =
               match aux with
               | SVD_fundef f ->
@@ -441,7 +440,7 @@ module RemoveUnusedVariables = struct
                     )
                 )
             | _ -> Reporting.unreachable l __POS__ "Un-numbered module or function"
-          end
+          )
         | SVD_aux (SVD_always_comb _, _) as comb -> ChangeDoChildrenPost (comb, simplify_empty_always_comb)
         | _ -> DoChildren
 
@@ -466,14 +465,14 @@ module RemoveUnusedVariables = struct
                   self#pop ();
                   simplify_empty_block block
               )
-        | SVS_aux (SVS_assign (SVP_id name, exp), l) as assign -> begin
+        | SVS_aux (SVS_assign (SVP_id name, exp), l) as assign -> (
             match can_propagate stack name exp with
             | Forbid ->
                 ChangeDoChildrenPost
                   ( assign,
                     function SVS_aux (SVS_assign (SVP_void _, _), l) -> SVS_aux (SVS_skip, l) | assign -> assign
                   )
-            | Literal | Variable -> begin
+            | Literal | Variable -> (
                 match self#get_vnum name with
                 | Some (_, vnum, _) ->
                     let usage = Option.value ~default:no_usage (Hashtbl.find_opt uses vnum) in
@@ -482,8 +481,8 @@ module RemoveUnusedVariables = struct
                     else if single_write_value usage then ChangeTo (SVS_aux (SVS_skip, l))
                     else DoChildren
                 | None -> DoChildren
-              end
-          end
+              )
+          )
         | SVS_aux (SVS_assign _, _) as assign ->
             ChangeDoChildrenPost
               (assign, function SVS_aux (SVS_assign (SVP_void _, _), l) -> SVS_aux (SVS_skip, l) | assign -> assign)
@@ -558,13 +557,10 @@ module RemoveUnusedVariables = struct
   let rec statement_uses stack uses (SVS_aux (aux, l)) =
     match aux with
     | SVS_comment _ | SVS_skip | SVS_split_comb -> ()
-    | SVS_var (name, ctyp, init_opt) ->
-        begin
-          match init_opt with Some init -> smt_uses stack uses init | None -> ()
-        end;
-        begin
-          match l with Unique (num, _) -> stack := add_var name num ctyp !stack | _ -> ()
-        end
+    | SVS_var (name, ctyp, init_opt) -> (
+        (match init_opt with Some init -> smt_uses stack uses init | None -> ());
+        match l with Unique (num, _) -> stack := add_var name num ctyp !stack | _ -> ()
+      )
     | SVS_block statements ->
         let bnum =
           match l with Unique (num, _) -> num | _ -> Reporting.unreachable l __POS__ "Un-numbered block found"
@@ -572,7 +568,7 @@ module RemoveUnusedVariables = struct
         push (Block (bnum, NameMap.empty)) stack;
         List.iter (statement_uses stack uses) statements;
         pop stack
-    | SVS_assign (SVP_id name, exp) -> begin
+    | SVS_assign (SVP_id name, exp) -> (
         match can_propagate !stack name exp with
         | Variable ->
             add_use ~write:true ~write_value:exp name stack uses;
@@ -581,30 +577,26 @@ module RemoveUnusedVariables = struct
         | Forbid ->
             add_use ~write:true name stack uses;
             smt_uses stack uses exp
-      end
+      )
     | SVS_assign (place, exp) | SVS_continuous_assign (place, exp) ->
         place_uses stack uses place;
         smt_uses stack uses exp
     | SVS_call (place, _, args) ->
         place_uses stack uses place;
         List.iter (smt_uses stack uses) args
-    | SVS_if (cond, then_stmt_opt, else_stmt_opt) ->
+    | SVS_if (cond, then_stmt_opt, else_stmt_opt) -> (
         smt_uses stack uses cond;
-        begin
-          match then_stmt_opt with Some then_stmt -> statement_uses stack uses then_stmt | None -> ()
-        end;
-        begin
-          match else_stmt_opt with Some else_stmt -> statement_uses stack uses else_stmt | None -> ()
-        end
+        (match then_stmt_opt with Some then_stmt -> statement_uses stack uses then_stmt | None -> ());
+        match else_stmt_opt with Some else_stmt -> statement_uses stack uses else_stmt | None -> ()
+      )
     | SVS_assert (name, cond, msg) ->
         smt_uses stack uses cond;
         smt_uses stack uses msg
-    | SVS_case { head_exp; cases; fallthrough } ->
+    | SVS_case { head_exp; cases; fallthrough } -> (
         smt_uses stack uses head_exp;
         List.iter (fun (_, stmt) -> statement_uses stack uses stmt) cases;
-        begin
-          match fallthrough with Some stmt -> statement_uses stack uses stmt | None -> ()
-        end
+        match fallthrough with Some stmt -> statement_uses stack uses stmt | None -> ()
+      )
     | SVS_foreach (_, exp, stmt) ->
         smt_uses stack uses exp;
         statement_uses stack uses stmt
@@ -632,7 +624,9 @@ module RemoveUnusedVariables = struct
         push (Ports portset) stack;
         defs_uses stack uses defs;
         pop stack
-    | SVD_var (name, ctyp) -> begin match l with Unique (num, _) -> stack := add_var name num ctyp !stack | _ -> () end
+    | SVD_var (name, ctyp) -> (
+        match l with Unique (num, _) -> stack := add_var name num ctyp !stack | _ -> ()
+      )
     | SVD_instantiate { input_connections; output_connections; _ } ->
         List.iter (smt_uses stack uses) input_connections;
         List.iter (place_uses ~output:true stack uses) output_connections
@@ -666,11 +660,11 @@ let remove_unused_variables = profile_rewrite RemoveUnusedVariables.rewrite ~mes
 
 module CaseInsertion = struct
   let rec can_be_case = function
-    | Ite (Fn ("=", [Var v; Bitvec_lit bv]), t, (Ite _ as e)) -> begin
+    | Ite (Fn ("=", [Var v; Bitvec_lit bv]), t, (Ite _ as e)) -> (
         match can_be_case e with
         | None -> None
         | Some (n, v', cases, e) -> if Name.compare v v' = 0 then Some (n + 1, v, (bv, t) :: cases, e) else None
-      end
+      )
     | Ite (Fn ("=", [Var v; Bitvec_lit bv]), t, e) -> Some (0, v, [(bv, t)], e)
     | exp -> None
 
@@ -680,7 +674,7 @@ module CaseInsertion = struct
 
       method! vstatement =
         function
-        | SVS_aux (SVS_assign (place, exp), l) -> begin
+        | SVS_aux (SVS_assign (place, exp), l) -> (
             match can_be_case exp with
             | Some (n, v, cases, default) when n > 2 ->
                 ChangeTo
@@ -696,7 +690,7 @@ module CaseInsertion = struct
                      )
                   )
             | _ -> DoChildren
-          end
+          )
         | _ -> DoChildren
     end
 

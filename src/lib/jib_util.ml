@@ -85,13 +85,13 @@ module Name = struct
     | Current_exception n, Current_exception m -> compare n m
     | Return n, Return m -> compare n m
     | Memory_writes n, Memory_writes m -> compare n m
-    | Channel (c1, n), Channel (c2, m) -> begin
+    | Channel (c1, n), Channel (c2, m) -> (
         match (c1, c2) with
         | Chan_stdout, Chan_stdout -> compare n m
         | Chan_stderr, Chan_stderr -> compare n m
         | Chan_stdout, Chan_stderr -> 1
         | Chan_stderr, Chan_stdout -> -1
-      end
+      )
     | Gen _, _ -> 1
     | _, Gen _ -> -1
     | Name _, _ -> 1
@@ -270,7 +270,7 @@ let rec string_of_cval = function
   | V_tuple_member (f, _, n) -> Printf.sprintf "%s.ztup%d" (string_of_cval f) n
   | V_ctor_kind (f, ctor) -> string_of_cval f ^ " is " ^ string_of_uid ctor
   | V_ctor_unwrap (f, ctor, _) -> string_of_cval f ^ " as " ^ string_of_uid ctor
-  | V_struct (fields, ctyp) -> begin
+  | V_struct (fields, ctyp) -> (
       match ctyp with
       | CT_struct (id, _) ->
           Printf.sprintf "struct %s {%s}"
@@ -280,7 +280,7 @@ let rec string_of_cval = function
                fields
             )
       | _ -> Reporting.unreachable Parse_ast.Unknown __POS__ "Struct without struct type found"
-    end
+    )
   | V_tuple members -> "(" ^ Util.string_of_list ", " string_of_cval members ^ ")"
 
 let rec string_of_clexp = function
@@ -674,7 +674,9 @@ let rec ctyp_ids = function
       IdSet.empty
 
 let rec subst_poly substs = function
-  | CT_poly kid -> begin match KBindings.find_opt kid substs with Some ctyp -> ctyp | None -> CT_poly kid end
+  | CT_poly kid -> (
+      match KBindings.find_opt kid substs with Some ctyp -> ctyp | None -> CT_poly kid
+    )
   | CT_tup ctyps -> CT_tup (List.map (subst_poly substs) ctyps)
   | CT_list ctyp -> CT_list (subst_poly substs ctyp)
   | CT_vector ctyp -> CT_vector (subst_poly substs ctyp)
@@ -937,13 +939,13 @@ let cdef_map_instr f = visit_cdef (new instr_visitor f)
 let rec map_funcall f instrs =
   match instrs with
   | [] -> []
-  | (I_aux (I_funcall _, _) as funcall_instr) :: tail -> begin
+  | (I_aux (I_funcall _, _) as funcall_instr) :: tail -> (
       match tail with
       | (I_aux (I_if (V_id (id, CT_bool), _, []), _) as exception_instr) :: tail'
         when Name.compare id have_exception == 0 ->
           f funcall_instr [exception_instr] @ map_funcall f tail'
       | _ -> f funcall_instr [] @ map_funcall f tail
-    end
+    )
   | I_aux (instr, aux) :: tail ->
       let instr =
         match instr with
@@ -1071,21 +1073,21 @@ let rec infer_call op vs =
   | Bnot, _ -> CT_bool
   | Band, _ -> CT_bool
   | Bor, _ -> CT_bool
-  | List_hd, [v] -> begin
+  | List_hd, [v] -> (
       match cval_ctyp v with
       | CT_list ctyp -> ctyp
       | _ -> Reporting.unreachable Parse_ast.Unknown __POS__ "Invalid call to hd"
-    end
-  | List_tl, [v] -> begin
+    )
+  | List_tl, [v] -> (
       match cval_ctyp v with
       | CT_list ctyp -> CT_list ctyp
       | _ -> Reporting.unreachable Parse_ast.Unknown __POS__ "Invalid call to tl"
-    end
-  | List_is_empty, [v] -> begin
+    )
+  | List_is_empty, [v] -> (
       match cval_ctyp v with
       | CT_list ctyp -> CT_list ctyp
       | _ -> Reporting.unreachable Parse_ast.Unknown __POS__ "Invalid call to is_empty"
-    end
+    )
   | (Eq | Neq), _ -> CT_bool
   | Bvnot, [v] -> cval_ctyp v
   | Bvaccess, _ -> CT_fbits 1
@@ -1093,35 +1095,35 @@ let rec infer_call op vs =
   | (Ilt | Igt | Ilteq | Igteq), _ -> CT_bool
   | (Iadd | Isub), _ -> CT_fint 64
   | (Unsigned n | Signed n), _ -> CT_fint n
-  | (Zero_extend n | Sign_extend n), [v] -> begin
+  | (Zero_extend n | Sign_extend n), [v] -> (
       match cval_ctyp v with
       | CT_fbits _ | CT_sbits _ -> CT_fbits n
       | _ -> Reporting.unreachable Parse_ast.Unknown __POS__ "Invalid type for zero/sign_extend argument"
-    end
-  | Slice n, [vec; _] -> begin
+    )
+  | Slice n, [vec; _] -> (
       match cval_ctyp vec with
       | CT_fbits _ | CT_sbits _ -> CT_fbits n
       | _ -> Reporting.unreachable Parse_ast.Unknown __POS__ "Invalid type for extract argument"
-    end
-  | Sslice n, [vec; _; _] -> begin
+    )
+  | Sslice n, [vec; _; _] -> (
       match cval_ctyp vec with
       | CT_fbits _ | CT_sbits _ -> CT_sbits n
       | _ -> Reporting.unreachable Parse_ast.Unknown __POS__ "Invalid type for extract argument"
-    end
+    )
   | Set_slice, [vec; _; _] -> cval_ctyp vec
-  | Replicate n, [vec] -> begin
+  | Replicate n, [vec] -> (
       match cval_ctyp vec with
       | CT_fbits m -> CT_fbits (n * m)
       | _ -> Reporting.unreachable Parse_ast.Unknown __POS__ "Invalid type for replicate argument"
-    end
-  | Concat, [v1; v2] -> begin
+    )
+  | Concat, [v1; v2] -> (
       match (cval_ctyp v1, cval_ctyp v2) with
       | CT_fbits n, CT_fbits m -> CT_fbits (n + m)
       | CT_fbits n, CT_sbits m -> CT_sbits m
       | CT_sbits n, CT_fbits m -> CT_sbits n
       | CT_sbits n, CT_sbits m -> CT_sbits (max n m)
       | _ -> Reporting.unreachable Parse_ast.Unknown __POS__ "Invalid type for concat argument"
-    end
+    )
   | Ite, [_; t; _] -> cval_ctyp t
   | String_eq, _ -> CT_bool
   | Index _, [v] -> (
@@ -1137,11 +1139,11 @@ and cval_ctyp = function
   | V_lit (_, ctyp) -> ctyp
   | V_ctor_kind _ -> CT_bool
   | V_ctor_unwrap (_, _, ctyp) -> ctyp
-  | V_tuple_member (cval, _, n) -> begin
+  | V_tuple_member (cval, _, n) -> (
       match cval_ctyp cval with
       | CT_tup ctyps -> List.nth ctyps n
       | ctyp -> Reporting.unreachable Parse_ast.Unknown __POS__ ("Invalid tuple type " ^ string_of_ctyp ctyp)
-    end
+    )
   | V_field (cval, field, ctyp) -> ctyp
   | V_struct (_, ctyp) -> ctyp
   | V_tuple cvals -> CT_tup (List.map cval_ctyp cvals)

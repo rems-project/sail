@@ -107,22 +107,21 @@ let add_cond cval graph =
 (** Add a vertex to a graph, returning the node index *)
 let add_vertex data graph =
   let n = graph.next in
-  if n >= Array.length graph.nodes then begin
+  if n >= Array.length graph.nodes then (
     let new_nodes = Array.make (Array.length graph.nodes * 2) None in
     Array.blit graph.nodes 0 new_nodes 0 (Array.length graph.nodes);
     graph.nodes <- new_nodes
-  end;
+  );
   graph.nodes.(n) <- Some (data, IntSet.empty, IntSet.empty);
   graph.next <- n + 1;
   n
 
 (** Add an edge between two existing vertices. Raises Invalid_argument if either of the vertices do not exist. *)
 let add_edge n m graph =
-  begin
-    match graph.nodes.(n) with
-    | Some (data, parents, children) -> graph.nodes.(n) <- Some (data, parents, IntSet.add m children)
-    | None -> raise (Invalid_argument "Parent node does not exist in graph")
-  end;
+  ( match graph.nodes.(n) with
+  | Some (data, parents, children) -> graph.nodes.(n) <- Some (data, parents, IntSet.add m children)
+  | None -> raise (Invalid_argument "Parent node does not exist in graph")
+  );
   match graph.nodes.(m) with
   | Some (data, parents, children) -> graph.nodes.(m) <- Some (data, IntSet.add n parents, children)
   | None -> raise (Invalid_argument "Child node does not exist in graph")
@@ -134,10 +133,10 @@ let reachable roots graph =
 
   let rec reachable' n =
     if IntSet.mem n !visited then ()
-    else begin
+    else (
       visited := IntSet.add n !visited;
       match graph.nodes.(n) with Some (_, _, successors) -> IntSet.iter reachable' successors | None -> ()
-    end
+    )
   in
   IntSet.iter reachable' roots;
   !visited
@@ -152,7 +151,7 @@ let topsort graph =
   let rec visit node =
     if IntSet.mem node !temp_marked then raise (Not_a_DAG node)
     else if IntSet.mem node !marked then ()
-    else begin
+    else (
       match get_vertex graph node with
       | None -> failwith "Node does not exist in topsort"
       | Some (_, _, succs) ->
@@ -161,16 +160,14 @@ let topsort graph =
           marked := IntSet.add node !marked;
           temp_marked := IntSet.remove node !temp_marked;
           list := node :: !list
-    end
+    )
   in
 
   let find_unmarked () =
     let unmarked = ref (-1) in
     let i = ref 0 in
     while !unmarked = -1 && !i < Array.length graph.nodes do
-      begin
-        match get_vertex graph !i with None -> () | Some _ -> if not (IntSet.mem !i !marked) then unmarked := !i
-      end;
+      (match get_vertex graph !i with None -> () | Some _ -> if not (IntSet.mem !i !marked) then unmarked := !i);
       incr i
     done;
     !unmarked
@@ -334,7 +331,7 @@ let immediate_dominators ?(post = false) graph root =
   let count = ref 0 in
 
   let rec dfs p n =
-    if dfnum.(n) = -1 then begin
+    if dfnum.(n) = -1 then (
       dfnum.(n) <- !count;
       vertex.(!count) <- n;
       parent.(n) <- p;
@@ -344,7 +341,7 @@ let immediate_dominators ?(post = false) graph root =
           let predecessors, successors = graph_order ~post predecessors successors in
           IntSet.iter (fun w -> dfs n w) successors
       | None -> assert false
-    end
+    )
   in
   dfs none root;
 
@@ -353,18 +350,17 @@ let immediate_dominators ?(post = false) graph root =
     let p = parent.(n) in
     let s = ref p in
 
-    begin
-      match graph.nodes.(n) with
-      | Some (_, predecessors, successors) ->
-          let predecessors, successors = graph_order ~post predecessors successors in
-          IntSet.iter
-            (fun v ->
-              let s' = if dfnum.(v) <= dfnum.(n) then v else semi.(ancestor_with_lowest_semi v) in
-              if dfnum.(s') < dfnum.(!s) then s := s'
-            )
-            predecessors
-      | None -> assert false
-    end;
+    ( match graph.nodes.(n) with
+    | Some (_, predecessors, successors) ->
+        let predecessors, successors = graph_order ~post predecessors successors in
+        IntSet.iter
+          (fun v ->
+            let s' = if dfnum.(v) <= dfnum.(n) then v else semi.(ancestor_with_lowest_semi v) in
+            if dfnum.(s') < dfnum.(!s) then s := s'
+          )
+          predecessors
+    | None -> assert false
+    );
     semi.(n) <- !s;
     bucket.(!s) <- IntSet.add n bucket.(!s);
     link p n;
@@ -404,13 +400,12 @@ let dominance_frontiers ?(post = false) graph root idom children =
   let rec compute_df n =
     let set = ref IntSet.empty in
 
-    begin
-      match graph.nodes.(n) with
-      | Some (content, predecessors, successors) ->
-          let predecessors, successors = graph_order ~post predecessors successors in
-          IntSet.iter (fun y -> if idom.(y) <> n then set := IntSet.add y !set) successors
-      | None -> ()
-    end;
+    ( match graph.nodes.(n) with
+    | Some (content, predecessors, successors) ->
+        let predecessors, successors = graph_order ~post predecessors successors in
+        IntSet.iter (fun y -> if idom.(y) <> n then set := IntSet.add y !set) successors
+    | None -> ()
+    );
     IntSet.iter
       (fun c ->
         compute_df c;
@@ -469,21 +464,20 @@ let place_phi_functions graph df =
         IntSet.iter
           (fun y ->
             let phi_A_a = match NameCTMap.find_opt a !phi_A with Some set -> set | None -> IntSet.empty in
-            if not (IntSet.mem y phi_A_a) then begin
-              begin
-                match graph.nodes.(y) with
-                | Some ((phis, cfnode), preds, succs) ->
-                    graph.nodes.(y) <-
-                      Some
-                        ( (Phi (fst a, snd a, Util.list_init (IntSet.cardinal preds) (fun _ -> fst a)) :: phis, cfnode),
-                          preds,
-                          succs
-                        )
-                | None -> assert false
-              end;
+            if not (IntSet.mem y phi_A_a) then (
+              ( match graph.nodes.(y) with
+              | Some ((phis, cfnode), preds, succs) ->
+                  graph.nodes.(y) <-
+                    Some
+                      ( (Phi (fst a, snd a, Util.list_init (IntSet.cardinal preds) (fun _ -> fst a)) :: phis, cfnode),
+                        preds,
+                        succs
+                      )
+              | None -> assert false
+              );
               phi_A := NameCTMap.add a (IntSet.add y phi_A_a) !phi_A;
               if not (NameCTSet.mem a (orig_A y)) then workset := IntSet.add y !workset
-            end
+            )
           )
           df.(n)
       done
@@ -620,13 +614,13 @@ let rename_variables globals graph root children =
   in
 
   let ssa_terminator = function
-    | T_jump (cond, label) -> begin
+    | T_jump (cond, label) -> (
         match IntMap.find_opt cond graph.conds with
         | Some cval ->
             graph.conds <- IntMap.add cond (fold_cval cval) graph.conds;
             T_jump (cond, label)
         | None -> assert false
-      end
+      )
     | T_end id ->
         let i = top_stack id in
         T_end (ssa_name i id)
@@ -667,27 +661,26 @@ let rename_variables globals graph root children =
 
   let rec rename n =
     let old_stacks = !stacks in
-    begin
-      match graph.nodes.(n) with
-      | Some ((ssa, cfnode), preds, succs) ->
-          let ssa = List.map ssa_ssanode ssa in
-          graph.nodes.(n) <- Some ((ssa, ssa_cfnode cfnode), preds, succs);
-          List.iter
-            (fun succ ->
-              match graph.nodes.(succ) with
-              | Some ((ssa, cfnode), preds, succs) ->
-                  (* Suppose n is the j-th predecessor of succ *)
-                  let rec find_j n succ = function
-                    | pred :: preds -> if pred = succ then n else find_j (n + 1) succ preds
-                    | [] -> assert false
-                  in
-                  let j = find_j 0 n (IntSet.elements preds) in
-                  graph.nodes.(succ) <- Some ((List.map (fix_phi j) ssa, cfnode), preds, succs)
-              | None -> assert false
-            )
-            (IntSet.elements succs)
-      | None -> assert false
-    end;
+    ( match graph.nodes.(n) with
+    | Some ((ssa, cfnode), preds, succs) ->
+        let ssa = List.map ssa_ssanode ssa in
+        graph.nodes.(n) <- Some ((ssa, ssa_cfnode cfnode), preds, succs);
+        List.iter
+          (fun succ ->
+            match graph.nodes.(succ) with
+            | Some ((ssa, cfnode), preds, succs) ->
+                (* Suppose n is the j-th predecessor of succ *)
+                let rec find_j n succ = function
+                  | pred :: preds -> if pred = succ then n else find_j (n + 1) succ preds
+                  | [] -> assert false
+                in
+                let j = find_j 0 n (IntSet.elements preds) in
+                graph.nodes.(succ) <- Some ((List.map (fix_phi j) ssa, cfnode), preds, succs)
+            | None -> assert false
+          )
+          (IntSet.elements succs)
+    | None -> assert false
+    );
     IntSet.iter (fun child -> rename child) children.(n);
     stacks := old_stacks
   in
@@ -714,12 +707,12 @@ let simp_conj = function
 
 let place_pi_functions ~start ~finish ~post_idom ~post_df graph =
   let get_guard = function
-    | CF_guard cond -> begin
+    | CF_guard cond -> (
         match IntMap.find_opt (abs cond) graph.conds with
         | Some guard when cond > 0 -> Some guard
         | Some guard -> Some (V_call (Bnot, [guard]))
         | None -> assert false
-      end
+      )
     | _ -> None
   in
   let get_pi ssanode = List.concat (List.map (function Pi guards -> guards | _ -> []) ssanode) in
@@ -843,24 +836,22 @@ let make_dominators_dot out_chan idom graph =
 
 let ssa ?globals ?debug_prefix instrs =
   let start, finish, cfg = control_flow_graph instrs in
-  begin
-    match debug_prefix with
-    | Some prefix ->
-        let out_chan = open_out (prefix ^ "_cfg.gv") in
-        make_dot out_chan cfg;
-        close_out out_chan
-    | None -> ()
-  end;
+  ( match debug_prefix with
+  | Some prefix ->
+      let out_chan = open_out (prefix ^ "_cfg.gv") in
+      make_dot out_chan cfg;
+      close_out out_chan
+  | None -> ()
+  );
   let idom = immediate_dominators cfg start in
   let post_idom = immediate_dominators ~post:true cfg finish in
-  begin
-    match debug_prefix with
-    | Some prefix ->
-        let out_chan = open_out (prefix ^ "_post_doms.gv") in
-        make_dominators_dot out_chan post_idom cfg;
-        close_out out_chan
-    | None -> ()
-  end;
+  ( match debug_prefix with
+  | Some prefix ->
+      let out_chan = open_out (prefix ^ "_post_doms.gv") in
+      make_dominators_dot out_chan post_idom cfg;
+      close_out out_chan
+  | None -> ()
+  );
   let children = dominator_children idom in
   let post_children = dominator_children post_idom in
   let df = dominance_frontiers cfg start idom children in
