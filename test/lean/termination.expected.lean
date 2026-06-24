@@ -191,7 +191,7 @@ def measure2 (x : E) : Int :=
   | .B => 5
   | .C => 1
 
-/-- Type quantifiers: k_ex1014_ : Bool -/
+/-- Type quantifiers: k_ex951_ : Bool -/
 def enabled2 (b : Bool) (e : E) : Bool :=
   match e with
   | .A => (enabled2 b B)

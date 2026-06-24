@@ -70,6 +70,26 @@
  (module libsail_sites)
  (sites libsail))
 
+; The parallel implementation of map uses effect handlers and matching
+; syntax, which is on,y available from OCaml 5.3.0 onwards. On older
+; compilers fall back to a sequential implementation.
+
+(rule
+ (target parmap.ml)
+ (enabled_if
+  (>= %{ocaml_version} 5.3.0))
+ (deps parmap.par.ml)
+ (action
+  (copy parmap.par.ml parmap.ml)))
+
+(rule
+ (target parmap.ml)
+ (enabled_if
+  (< %{ocaml_version} 5.3.0))
+ (deps parmap.seq.ml)
+ (action
+  (copy parmap.seq.ml parmap.ml)))
+
 (library
  (name libsail)
  (public_name libsail)

@@ -24,5 +24,5 @@ module type S =
 
   val is_bitvector : t -> bool
 
-  val fallthrough : t pexp
+  val fallthrough : unit -> t pexp
  end

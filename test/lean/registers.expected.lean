@@ -189,7 +189,7 @@ def undefined_My_struct (_ : Unit) : SailM My_struct := do
   (pure { field1 := ← (undefined_int ())
           field2 := ← (undefined_bitvector 1) })
 
-/-- Type quantifiers: k_ex1200_ : Bool -/
+/-- Type quantifiers: k_ex1137_ : Bool -/
 def test_reg_if_struct (x : My_struct) (b : Bool) : SailM My_struct := do
   let y ← do
     (pure { x with field1 := ← if (b : Bool)

@@ -102,6 +102,7 @@ def test_lean(subdir: str, skip_list = None, runnable: bool = False):
                     '--splice',
                     'rocq-print.splice',
                     '--strict-bitvector',
+                    '--dsequential', # Lean output includes type variables in comments, so we need this for consistent output
                 ] if runnable else [ ]
                 if not runnable:
                     extra_flags.append('--lean-matchbv')

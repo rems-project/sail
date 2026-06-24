@@ -432,6 +432,7 @@ let rec options =
       ("-dmono_continue", Arg.Set Rewrites.opt_dmono_continue, " (debug) continue despite monomorphisation errors");
       ("-dmono_limit", Arg.Set_int Monomorphise.opt_size_set_limit, " (debug) adjust maximum size of split allowed");
       ("-dpattern_warning_no_literals", Arg.Set Pattern_completeness.opt_debug_no_literals, "");
+      ("-dsequential", Arg.Set Parmap.opt_sequential, " (debug) Run without any internal parallelism");
       ( "-dbacktrace",
         Arg.Int (fun l -> Reporting.opt_backtrace_length := l),
         "<length> (debug) length of backtrace to show when reporting unreachable code"
@@ -797,7 +798,7 @@ let main () =
 
 let () =
   try
-    try main () with
+    try Parmap.toplevel_handler main with
     | Sys_error s -> raise (Reporting.err_general Parse_ast.Unknown s)
     | Failure s -> raise (Reporting.err_general Parse_ast.Unknown s)
   with Reporting.Fatal_error e ->

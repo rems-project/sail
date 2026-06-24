@@ -2166,6 +2166,8 @@ module Make (C : CONFIG) = struct
           );
       ]
 
+  type compiled_def = Compiled of cdef list | Parallel of (unit -> cdef list)
+
   let compile_funcl ctx def_annot id pat guard exp =
     let debug_attr = get_def_attribute "jib_debug" def_annot in
     let mapping_function_attr = get_def_attribute "mapping_function" def_annot in
@@ -2195,141 +2197,125 @@ module Make (C : CONFIG) = struct
     let arg_ctyps = List.map (ctyp_of_typ ctx) arg_typs in
     let ret_ctyp = ctyp_of_typ ctx ret_typ in
 
-    (* Compile the function arguments as patterns. *)
-    let arg_setup, compiled_args, arg_cleanup =
-      compile_arg_pats ctx (fun l b -> ijump l b fundef_label) pat arg_ctyps
-    in
-    let ctx =
-      (* We need the primop analyzer to be aware of the function argument types, so put them in ctx *)
-      List.fold_left2
-        (fun ctx (id, _) ctyp -> { ctx with locals = NameMap.add id (Immutable, ctyp) ctx.locals })
-        ctx compiled_args arg_ctyps
-    in
-
-    let known_ids = IdSet.fold (fun id -> NameSet.add (name id)) (pat_ids pat) (letbind_ids ctx) in
-    let guard_bindings = ref NameSet.empty in
-    let guard_instrs =
-      match guard with
-      | Some guard ->
-          let (AE_aux (_, { loc = l; _ }) as guard) = anf guard in
-          guard_bindings := aexp_bindings guard;
-          let guard_aexp = C.optimize_anf ctx (no_shadow known_ids guard) in
-          let guard_setup, guard_call, guard_cleanup = compile_aexp ctx guard_aexp in
-          let guard_label = label "guard_" in
-          let gs = ngensym () in
-          [
-            iblock
-              ([idecl l CT_bool gs]
-              @ guard_setup
-              @ [guard_call (CL_id (gs, CT_bool))]
-              @ guard_cleanup
-              @ [ijump (id_loc id) (V_id (gs, CT_bool)) guard_label; imatch_failure l; ilabel guard_label]
-              );
-          ]
-      | None -> []
-    in
-
-    (* Optimize and compile the expression to ANF. *)
-    let aexp = C.optimize_anf ctx (no_shadow (NameSet.union known_ids !guard_bindings) (anf exp)) in
-
-    if Option.is_some debug_attr then (
-      prerr_endline Util.("ANF for " ^ string_of_id id ^ ":" |> yellow |> bold |> clear);
-      prerr_endline (Document.to_string (pp_aexp aexp))
-    );
-
-    let compile_body ctx =
-      let setup, call, cleanup = compile_aexp ctx aexp in
-      let destructure, destructure_cleanup =
-        compiled_args |> List.map snd |> combine_destructure_cleanup |> fix_destructure (id_loc id) fundef_label
-      in
-
-      let instrs =
-        arg_setup @ destructure @ guard_instrs @ setup
-        @ [call (CL_id (return, ret_ctyp))]
-        @ cleanup @ destructure_cleanup @ arg_cleanup
-      in
-      let instrs = fix_early_return (exp_loc exp) (CL_id (return, ret_ctyp)) instrs in
-      let instrs = unique_names instrs in
-      let instrs = fix_exception ~return:(Some ret_ctyp) ctx instrs in
-      coverage_function_entry ctx id (exp_loc exp) @ instrs
-    in
-
-    let compiled_args = List.map fst compiled_args in
-    let instrs = compile_body ctx in
-
-    if Option.is_some debug_attr then (
-      let type_string = Util.string_of_list ", " string_of_ctyp arg_ctyps ^ " -> " ^ string_of_ctyp ret_ctyp in
-      prerr_endline Util.("IR for " ^ string_of_id id ^ ": " ^ type_string |> yellow |> bold |> clear);
-      List.iter (fun instr -> prerr_endline (string_of_instr instr)) instrs
-    );
-
-    if Option.is_some test_no_gmp then
-      List.iter
-        (fun instr ->
-          iter_instr
-            (function
-              | I_aux (I_decl (ctyp, _), (_, l)) | I_aux (I_init (ctyp, _, _), (_, l)) ->
-                  if ctyp_equal ctyp CT_lint || ctyp_equal ctyp CT_lbits then
-                    raise (Reporting.err_general l "Found GMP large integer or bitvector with test_no_gmp attribute")
-              | _ -> ()
-              )
-            instr
-        )
-        instrs;
-
-    (* If the function is a mapping, we generate an infallible version (that never causes a match_failure) *)
-    let mapping_infallible, return_ctx =
+    (* Now we have enough information to compute the return context for this compilation step. *)
+    let return_ctx =
       match mapping_function_attr with
-      | Some (attr_l, _) ->
-          let instrs =
-            compile_body
-              { ctx with def_annot = Some (add_def_attribute (gen_loc attr_l) "mapping_infallible" None def_annot) }
-          in
+      | Some _ ->
           let id = append_id id "_infallible" in
-          ( [
+          { orig_ctx with valspecs = Bindings.add id (None, arg_ctyps, ret_ctyp, empty_uannot) orig_ctx.valspecs }
+      | None -> orig_ctx
+    in
+
+    let do_funcl_compilation () =
+      (* Compile the function arguments as patterns. *)
+      let arg_setup, compiled_args, arg_cleanup =
+        compile_arg_pats ctx (fun l b -> ijump l b fundef_label) pat arg_ctyps
+      in
+      let ctx =
+        (* We need the primop analyzer to be aware of the function argument types, so put them in ctx *)
+        List.fold_left2
+          (fun ctx (id, _) ctyp -> { ctx with locals = NameMap.add id (Immutable, ctyp) ctx.locals })
+          ctx compiled_args arg_ctyps
+      in
+
+      let known_ids = IdSet.fold (fun id -> NameSet.add (name id)) (pat_ids pat) (letbind_ids ctx) in
+      let guard_bindings = ref NameSet.empty in
+      let guard_instrs =
+        match guard with
+        | Some guard ->
+            let (AE_aux (_, { loc = l; _ }) as guard) = anf guard in
+            guard_bindings := aexp_bindings guard;
+            let guard_aexp = C.optimize_anf ctx (no_shadow known_ids guard) in
+            let guard_setup, guard_call, guard_cleanup = compile_aexp ctx guard_aexp in
+            let guard_label = label "guard_" in
+            let gs = ngensym () in
+            [
+              iblock
+                ([idecl l CT_bool gs]
+                @ guard_setup
+                @ [guard_call (CL_id (gs, CT_bool))]
+                @ guard_cleanup
+                @ [ijump (id_loc id) (V_id (gs, CT_bool)) guard_label; imatch_failure l; ilabel guard_label]
+                );
+            ]
+        | None -> []
+      in
+
+      (* Optimize and compile the expression to ANF. *)
+      let aexp = C.optimize_anf ctx (no_shadow (NameSet.union known_ids !guard_bindings) (anf exp)) in
+
+      if Option.is_some debug_attr then (
+        prerr_endline Util.("ANF for " ^ string_of_id id ^ ":" |> yellow |> bold |> clear);
+        prerr_endline (Document.to_string (pp_aexp aexp))
+      );
+
+      let compile_body ctx =
+        let setup, call, cleanup = compile_aexp ctx aexp in
+        let destructure, destructure_cleanup =
+          compiled_args |> List.map snd |> combine_destructure_cleanup |> fix_destructure (id_loc id) fundef_label
+        in
+
+        let instrs =
+          arg_setup @ destructure @ guard_instrs @ setup
+          @ [call (CL_id (return, ret_ctyp))]
+          @ cleanup @ destructure_cleanup @ arg_cleanup
+        in
+        let instrs = fix_early_return (exp_loc exp) (CL_id (return, ret_ctyp)) instrs in
+        let instrs = unique_names instrs in
+        let instrs = fix_exception ~return:(Some ret_ctyp) ctx instrs in
+        coverage_function_entry ctx id (exp_loc exp) @ instrs
+      in
+
+      let compiled_args = List.map fst compiled_args in
+      let instrs = compile_body ctx in
+
+      if Option.is_some debug_attr then (
+        let type_string = Util.string_of_list ", " string_of_ctyp arg_ctyps ^ " -> " ^ string_of_ctyp ret_ctyp in
+        prerr_endline Util.("IR for " ^ string_of_id id ^ ": " ^ type_string |> yellow |> bold |> clear);
+        List.iter (fun instr -> prerr_endline (string_of_instr instr)) instrs
+      );
+
+      if Option.is_some test_no_gmp then
+        List.iter
+          (fun instr ->
+            iter_instr
+              (function
+                | I_aux (I_decl (ctyp, _), (_, l)) | I_aux (I_init (ctyp, _, _), (_, l)) ->
+                    if ctyp_equal ctyp CT_lint || ctyp_equal ctyp CT_lbits then
+                      raise (Reporting.err_general l "Found GMP large integer or bitvector with test_no_gmp attribute")
+                | _ -> ()
+                )
+              instr
+          )
+          instrs;
+
+      (* If the function is a mapping, we generate an infallible version (that never causes a match_failure) *)
+      let mapping_infallible =
+        match mapping_function_attr with
+        | Some (attr_l, _) ->
+            let instrs =
+              compile_body
+                { ctx with def_annot = Some (add_def_attribute (gen_loc attr_l) "mapping_infallible" None def_annot) }
+            in
+            let id = append_id id "_infallible" in
+            [
               CDEF_aux (CDEF_val (id, params, arg_ctyps, ret_ctyp, None), def_annot);
               CDEF_aux (CDEF_fundef (id, Return_plain, compiled_args, instrs), def_annot);
-            ],
-            { orig_ctx with valspecs = Bindings.add id (None, arg_ctyps, ret_ctyp, empty_uannot) orig_ctx.valspecs }
-          )
-      | None -> ([], orig_ctx)
+            ]
+        | None -> []
+      in
+      [CDEF_aux (CDEF_fundef (id, Return_plain, compiled_args, instrs), def_annot)] @ mapping_infallible
     in
 
-    ([CDEF_aux (CDEF_fundef (id, Return_plain, compiled_args, instrs), def_annot)] @ mapping_infallible, return_ctx)
+    (Parallel do_funcl_compilation, return_ctx)
 
   (** Compile a Sail toplevel definition into an IR definition **)
   let rec compile_def n total ctx (DEF_aux (aux, _) as def) =
-    match aux with
-    | DEF_fundef (FD_aux (FD_function (_, _, [FCL_aux (FCL_funcl (id, _), _)]), _)) when !opt_memo_cache -> (
-        let digest = strip_def def |> Pretty_print_sail.doc_def |> Document.to_string |> Digest.string in
-        let cachefile = Filename.concat "_sbuild" ("ccache" ^ Digest.to_hex digest) in
-        let cached =
-          if Sys.file_exists cachefile then (
-            let in_chan = open_in cachefile in
-            try
-              let compiled = Marshal.from_channel in_chan in
-              close_in in_chan;
-              Some (compiled, ctx)
-            with _ ->
-              close_in in_chan;
-              None
-          )
-          else None
-        in
-        match cached with
-        | Some (compiled, ctx) ->
-            Util.progress "Compiling " (string_of_id id) n total;
-            (compiled, ctx)
-        | None ->
-            let compiled, ctx = compile_def' n total ctx def in
-            let out_chan = open_out cachefile in
-            Marshal.to_channel out_chan compiled [Marshal.Closures];
-            close_out out_chan;
-            (compiled, { ctx with def_annot = None })
-      )
-    | _ ->
-        let compiled, ctx = compile_def' n total ctx def in
-        (compiled, { ctx with def_annot = None })
+    let compiled, ctx = compile_def' n total ctx def in
+    (compiled, { ctx with def_annot = None })
+
+  and compile_def_force n total ctx def =
+    match compile_def n total ctx def with Compiled cdefs, ctx -> (cdefs, ctx) | Parallel f, ctx -> (f (), ctx)
 
   and compile_def' n total ctx (DEF_aux (aux, def_annot) as def) =
     let def_env = def_annot.env in
@@ -2338,7 +2324,7 @@ module Make (C : CONFIG) = struct
     match aux with
     | DEF_register (DEC_aux (DEC_reg (typ, id, None), _)) ->
         let ctyp = ctyp_of_typ ctx typ in
-        ( [CDEF_aux (CDEF_register (name id, ctyp, []), def_annot)],
+        ( Compiled [CDEF_aux (CDEF_register (name id, ctyp, []), def_annot)],
           { ctx with registers = Bindings.add id ctyp ctx.registers }
         )
     | DEF_register (DEC_aux (DEC_reg (typ, id, Some exp), _)) ->
@@ -2347,7 +2333,7 @@ module Make (C : CONFIG) = struct
         let setup, call, cleanup = compile_aexp ctx aexp in
         let instrs = setup @ [call (CL_id (name id, ctyp))] @ cleanup in
         let instrs = unique_names instrs in
-        ( [CDEF_aux (CDEF_register (name id, ctyp, instrs), def_annot)],
+        ( Compiled [CDEF_aux (CDEF_register (name id, ctyp, instrs), def_annot)],
           { ctx with registers = Bindings.add id ctyp ctx.registers }
         )
     | DEF_val (VS_aux (VS_val_spec (_, id, ext), _)) ->
@@ -2362,7 +2348,7 @@ module Make (C : CONFIG) = struct
         in
         let ctx' = { ctx with local_env = Env.add_typquant (id_loc id) quant ctx.local_env } in
         let arg_ctyps, ret_ctyp = (List.map (ctyp_of_typ ctx') arg_typs, ctyp_of_typ ctx' ret_typ) in
-        ( [CDEF_aux (CDEF_val (id, params, arg_ctyps, ret_ctyp, extern), def_annot)],
+        ( Compiled [CDEF_aux (CDEF_val (id, params, arg_ctyps, ret_ctyp, extern), def_annot)],
           {
             ctx with
             valspecs = Bindings.add id (extern, arg_ctyps, ret_ctyp, uannot_of_def_annot def_annot) ctx.valspecs;
@@ -2371,7 +2357,7 @@ module Make (C : CONFIG) = struct
     | DEF_fundef (FD_aux (FD_function (_, _, [FCL_aux (FCL_funcl (id, pexp), _)]), _)) -> (
         Util.progress "Compiling " (string_of_id id) n total;
         match Bindings.find_opt id C.fun_to_wires with
-        | Some slots -> (compile_fun_to_wires ctx def_annot id slots, ctx)
+        | Some slots -> (Compiled (compile_fun_to_wires ctx def_annot id slots), ctx)
         | None -> (
             match pexp with
             | Pat_aux (Pat_exp (pat, exp), _) -> compile_funcl ctx def_annot id pat None exp
@@ -2384,7 +2370,7 @@ module Make (C : CONFIG) = struct
         raise (Reporting.err_general l "Encountered function with multiple clauses")
     | DEF_type type_def ->
         let tdef_opt, ctx = compile_type_def ctx type_def in
-        (List.map (fun tdef -> CDEF_aux (CDEF_type tdef, def_annot)) (Option.to_list tdef_opt), ctx)
+        (Compiled (List.map (fun tdef -> CDEF_aux (CDEF_type tdef, def_annot)) (Option.to_list tdef_opt)), ctx)
     | DEF_let (pat, exp) ->
         let debug_attr = get_def_attribute "jib_debug" def_annot in
         let ctyp = ctyp_of_typ ctx (typ_of_pat pat) in
@@ -2415,7 +2401,7 @@ module Make (C : CONFIG) = struct
             (Util.string_of_list ", " (fun (id, ctyp) -> string_of_id id ^ " : " ^ string_of_ctyp ctyp) bindings);
           List.iter (fun instr -> prerr_endline (string_of_instr instr)) instrs
         );
-        ( [CDEF_aux (CDEF_let (n, bindings, instrs), def_annot)],
+        ( Compiled [CDEF_aux (CDEF_let (n, bindings, instrs), def_annot)],
           {
             ctx with
             letbinds = n :: ctx.letbinds;
@@ -2424,30 +2410,34 @@ module Make (C : CONFIG) = struct
         )
     (* Only DEF_default that matters is default Order, but all order
        polymorphism is specialised by this point. *)
-    | DEF_default _ -> ([], ctx)
+    | DEF_default _ -> (Compiled [], ctx)
     (* Overloading resolved by type checker *)
-    | DEF_overload _ -> ([], ctx)
+    | DEF_overload _ -> (Compiled [], ctx)
     (* Only the parser and sail pretty printer care about this. *)
-    | DEF_fixity _ -> ([], ctx)
-    | DEF_pragma ("abstract", Pragma_line (id_str, _)) -> ([CDEF_aux (CDEF_pragma ("abstract", id_str), def_annot)], ctx)
+    | DEF_fixity _ -> (Compiled [], ctx)
+    | DEF_pragma ("abstract", Pragma_line (id_str, _)) ->
+        (Compiled [CDEF_aux (CDEF_pragma ("abstract", id_str), def_annot)], ctx)
     | DEF_pragma ("c_in_main", Pragma_line (source, _)) ->
-        ([CDEF_aux (CDEF_pragma ("c_in_main", source), def_annot)], ctx)
+        (Compiled [CDEF_aux (CDEF_pragma ("c_in_main", source), def_annot)], ctx)
     | DEF_pragma ("c_in_main_post", Pragma_line (source, _)) ->
-        ([CDEF_aux (CDEF_pragma ("c_in_main_post", source), def_annot)], ctx)
+        (Compiled [CDEF_aux (CDEF_pragma ("c_in_main_post", source), def_annot)], ctx)
     (* We just ignore any pragmas we don't want to deal with. *)
-    | DEF_pragma _ -> ([], ctx)
+    | DEF_pragma _ -> (Compiled [], ctx)
     (* Termination measures only needed for Coq, and other theorem prover output *)
-    | DEF_measure _ -> ([], ctx)
-    | DEF_loop_measures _ -> ([], ctx)
+    | DEF_measure _ -> (Compiled [], ctx)
+    | DEF_loop_measures _ -> (Compiled [], ctx)
     | DEF_internal_mutrec fundefs ->
         let defs = List.map (fun fdef -> mk_def (DEF_fundef fdef) def_env) fundefs in
-        List.fold_left
-          (fun (cdefs, ctx) def ->
-            let cdefs', ctx = compile_def n total ctx def in
-            (cdefs @ cdefs', ctx)
-          )
-          ([], ctx) defs
-    | DEF_constraint _ -> ([], ctx)
+        let cdefs, ctx =
+          List.fold_left
+            (fun (cdefs, ctx) def ->
+              let cdefs', ctx = compile_def_force n total ctx def in
+              (cdefs @ cdefs', ctx)
+            )
+            ([], ctx) defs
+        in
+        (Compiled cdefs, ctx)
+    | DEF_constraint _ -> (Compiled [], ctx)
     (* Scattereds, mapdefs, and event related definitions should be removed by this point *)
     | DEF_scattered _ | DEF_mapdef _ | DEF_outcome _ | DEF_impl _ | DEF_instantiation _ ->
         Reporting.unreachable (def_loc def) __POS__
@@ -3045,14 +3035,6 @@ module Make (C : CONFIG) = struct
     let g = G.prune roots NodeSet.empty g in
     let ast = Callgraph.filter_ast NodeSet.empty g ast in
 
-    if !opt_memo_cache then (
-      try
-        if Sys.is_directory "_sbuild" then ()
-        else raise (Reporting.err_general Parse_ast.Unknown "_sbuild exists, but is a file not a directory!")
-      with Sys_error _ -> Unix.mkdir "_sbuild" 0o775
-    )
-    else ();
-
     let total = List.length ast.defs in
     let _, chunks, ctx =
       List.fold_left
@@ -3062,6 +3044,11 @@ module Make (C : CONFIG) = struct
         )
         (1, [], ctx)
         (move_constraint_contexts ctx.tc_env [] ast.defs)
+    in
+    let chunks =
+      Parmap.map ~parallelism:(Parmap.recommended_parallelism ())
+        (function Compiled cdefs -> cdefs | Parallel f -> f ())
+        chunks
     in
     let cdefs = List.concat (List.rev chunks) in
 
