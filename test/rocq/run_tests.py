@@ -76,16 +76,18 @@ xml = '<testsuites>\n'
 xml += test('typecheck tests', '../typecheck/pass', 'stdpp')
 xml += test('Coq specific tests', 'pass', 'stdpp')
 
-try:
-    p = subprocess.run(["coqtop", "-require", "bbv.Word", "-batch"])
-    if p.returncode == 0:
-        xml += test('typecheck tests', '../typecheck/pass', 'bbv')
-        xml += test('Coq specific tests', 'pass', 'bbv')
-    else:
-        print("bbv not found, skipping bbv tests")
-except Exception as e:
-    print("Unable to check for bbv")
-    print(e)
+# BBV is not supported at present
+#
+#try:
+#    p = subprocess.run(["coqtop", "-require", "bbv.Word", "-batch"])
+#    if p.returncode == 0:
+#        xml += test('typecheck tests', '../typecheck/pass', 'bbv')
+#        xml += test('Coq specific tests', 'pass', 'bbv')
+#    else:
+#        print("bbv not found, skipping bbv tests")
+#except Exception as e:
+#    print("Unable to check for bbv")
+#    print(e)
 
 xml += '</testsuites>\n'
 
