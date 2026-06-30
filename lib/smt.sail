@@ -54,7 +54,7 @@ val ediv_int = pure {
   ocaml: "quotient",
   interpreter: "quotient",
   lem: "integerDiv",
-  coq: "ZEuclid.div",
+  coq: "e_div",
   lean: "Int.ediv",
   _: "ediv_int"
 } : forall 'n 'm. (int('n), int('m)) -> int(div('n, 'm))
@@ -63,7 +63,7 @@ val emod_int = pure {
   ocaml: "modulus",
   interpreter: "modulus",
   lem: "integerMod",
-  coq: "ZEuclid.modulo",
+  coq: "e_modulo",
   lean: "Int.emod",
   _: "emod_int"
 } : forall 'n 'm. (int('n), int('m)) -> int(mod('n, 'm))
