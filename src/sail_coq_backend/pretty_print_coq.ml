@@ -695,8 +695,8 @@ and doc_nexp ctx env ?(skip_vars = KidSet.empty) nexp =
     match n with
     | Nexp_if (i, t, e) ->
         parens (separate space [string "if"; doc_nc_exp ctx env i; string "then"; atomic t; string "else"; atomic e])
-    | Nexp_app (Id_aux (Id "div", _), [n1; n2]) -> separate space [string "ZEuclid.div"; atomic n1; atomic n2]
-    | Nexp_app (Id_aux (Id "mod", _), [n1; n2]) -> separate space [string "ZEuclid.modulo"; atomic n1; atomic n2]
+    | Nexp_app (Id_aux (Id "div", _), [n1; n2]) -> separate space [string "e_div"; atomic n1; atomic n2]
+    | Nexp_app (Id_aux (Id "mod", _), [n1; n2]) -> separate space [string "e_modulo"; atomic n1; atomic n2]
     | Nexp_app (Id_aux (Id "abs", _), [n1]) -> separate space [string "Z.abs"; atomic n1]
     | _ -> atomic nexp
   and atomic (Nexp_aux (n, l) as nexp) =
