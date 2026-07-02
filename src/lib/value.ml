@@ -53,13 +53,48 @@ open Ast_compare
 open Bit
 
 let print_chan = ref stdout
-let print_redirected = ref false
 
-let output_redirect chan =
-  print_chan := chan;
-  print_redirected := true
+let output_files : (string * out_channel) list ref = ref []
 
-let output_close () = if !print_redirected then close_out !print_chan else ()
+let output_redirect file =
+  let chan =
+    match List.assoc_opt file !output_files with
+    | Some chan -> chan
+    | None ->
+        let chan = open_out file in
+        output_files := !output_files @ [(file, chan)];
+        chan
+  in
+  print_chan := chan
+
+type output_selector = Output_index of int | Output_name of string | Output_stdout
+
+let output_select sel =
+  match sel with
+  | Output_stdout ->
+      print_chan := stdout;
+      true
+  | Output_name file -> (
+      match List.assoc_opt file !output_files with
+      | Some chan ->
+          print_chan := chan;
+          true
+      | None -> false
+    )
+  | Output_index n -> (
+      match List.nth_opt !output_files (n - 1) with
+      | Some (_, chan) ->
+          print_chan := chan;
+          true
+      | None -> false
+    )
+
+let output_names () = List.map fst !output_files
+
+let output_close () =
+  List.iter (fun (_, chan) -> close_out chan) !output_files;
+  output_files := [];
+  print_chan := stdout
 
 let output str =
   output_string !print_chan str;
