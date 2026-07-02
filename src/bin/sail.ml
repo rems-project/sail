@@ -236,8 +236,8 @@ let rec options =
         "<filename> start interactive interpreter and execute commands in script"
       );
       ( "-iout",
-        Arg.String (fun file -> Value.output_redirect (open_out file)),
-        "<filename> print interpreter output to file"
+        Arg.String Value.output_redirect,
+        "<filename> print interpreter output to file. Can be passed multiple times, see :output_select command."
       );
       ( "-interact_custom",
         Arg.Set Interactive.opt_interactive,

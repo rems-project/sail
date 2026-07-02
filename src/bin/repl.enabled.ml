@@ -526,9 +526,28 @@ let () =
 
   (register_command ~name:"output" ~help:"Redirect evaluating expression output to a file."
   @@ let@ filename = Arg.String "filename" in
+     unit_action (fun () -> Value.output_redirect filename)
+  );
+
+  (register_command ~name:"output_select"
+     ~help:
+       "Select a file previously opened with --iout or :output for evaluating expression output, or stdout to select \
+        standard output."
+  @@ let@ filename = Arg.String "filename" in
      unit_action (fun () ->
-         let chan = open_out filename in
-         Value.output_redirect chan
+         let redirected =
+           match int_of_string_opt filename with
+           | Some i -> Value.output_select (Value.Output_index i)
+           | None ->
+               if filename = "stdout" then Value.output_select Value.Output_stdout
+               else Value.output_select (Value.Output_name filename)
+         in
+         if not redirected then (
+           print_endline ("No open output file " ^ filename);
+           match Value.output_names () with
+           | [] -> print_endline "No output files have been opened. Use the --iout option or the :output command."
+           | names -> print_endline ("Open output files: " ^ String.concat ", " names)
+         )
      )
   );
 
