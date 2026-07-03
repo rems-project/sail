@@ -658,8 +658,7 @@ Module Residual (Tannot : TypeAnnot.S) (B : Builder Tannot).
     ({| this := ⊥; exn := exn (fst r); eff := true |}, B.mk_return ann (snd r)).
 
   (* Join a value returned early from an inlined body into the accumulator
-     carried on the enclosing [Z_inline] node. Only [this]/[exn]/[eff] matter;
-     the residual is provided by the fall-through value, so we keep [snd ret]. *)
+     carried on the enclosing [Z_inline] node. *)
   Definition join_returns (acc : option t) (ret : t) : t :=
     match acc with
     | None => ret

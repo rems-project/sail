@@ -65,8 +65,8 @@ module Ops =
   (** val bits_unsigned_interval : Three.ubit list -> I.t **)
 
   let bits_unsigned_interval bits =
-    I.join (I._UU03b1_ (unsigned_lo bits Big_int_Z.unit_big_int))
-      (I._UU03b1_ (unsigned_hi bits Big_int_Z.unit_big_int))
+    I.join (I.abst (unsigned_lo bits Big_int_Z.unit_big_int))
+      (I.abst (unsigned_hi bits Big_int_Z.unit_big_int))
 
   (** val unsigned : B.t -> I.t **)
 
@@ -81,7 +81,7 @@ module Ops =
 
   let bits_signed_interval bits =
     match rev bits with
-    | [] -> I._UU03b1_ Big_int_Z.zero_big_int
+    | [] -> I.abst Big_int_Z.zero_big_int
     | sign :: lower_rev ->
       let lower = rev lower_rev in
       let lo = unsigned_lo lower Big_int_Z.unit_big_int in
@@ -91,10 +91,9 @@ module Ops =
           (Z.of_nat (length lower))
       in
       (match sign with
-       | Three.B0 -> I.join (I._UU03b1_ lo) (I._UU03b1_ hi)
-       | Three.B1 ->
-         I.join (I._UU03b1_ (Z.sub lo half)) (I._UU03b1_ (Z.sub hi half))
-       | Three.BU -> I.join (I._UU03b1_ (Z.sub lo half)) (I._UU03b1_ hi))
+       | Three.B0 -> I.join (I.abst lo) (I.abst hi)
+       | Three.B1 -> I.join (I.abst (Z.sub lo half)) (I.abst (Z.sub hi half))
+       | Three.BU -> I.join (I.abst (Z.sub lo half)) (I.abst hi))
 
   (** val signed : B.t -> I.t **)
 
@@ -107,13 +106,13 @@ module Ops =
   (** val zeros_nat : Big_int_Z.big_int -> B.t **)
 
   let zeros_nat n =
-    B._UU03b1_ { bvn_n = (BinNat.N.of_nat n); bvn_val =
+    B.abst { bvn_n = (BinNat.N.of_nat n); bvn_val =
       (bv_0 (BinNat.N.of_nat n)) }
 
   (** val ones_nat : Big_int_Z.big_int -> B.t **)
 
   let ones_nat n =
-    B._UU03b1_ { bvn_n = (BinNat.N.of_nat n); bvn_val =
+    B.abst { bvn_n = (BinNat.N.of_nat n); bvn_val =
       (bv_not (BinNat.N.of_nat n) (bv_0 (BinNat.N.of_nat n))) }
 
   (** val nonneg_range :
@@ -199,7 +198,7 @@ module Ops =
     let rev_bits = rev bits in
     let lo = Z.of_nat (count_leading_B0 rev_bits) in
     let hi = Z.of_nat (count_until_B1 rev_bits) in
-    I.join (I._UU03b1_ lo) (I._UU03b1_ hi)
+    I.join (I.abst lo) (I.abst hi)
 
   (** val count_leading_zeros : B.t -> I.t **)
 
@@ -213,8 +212,7 @@ module Ops =
 
   let bits_ctz_interval bits =
     let lo = Z.of_nat (count_leading_B0 bits) in
-    let hi = Z.of_nat (count_until_B1 bits) in
-    I.join (I._UU03b1_ lo) (I._UU03b1_ hi)
+    let hi = Z.of_nat (count_until_B1 bits) in I.join (I.abst lo) (I.abst hi)
 
   (** val count_trailing_zeros : B.t -> I.t **)
 
@@ -312,5 +310,5 @@ module Ops =
   | B.Top -> nonneg_top
   | B.Bvs m ->
     map_fold (fun _ -> gmap_fold Nat.eq_dec nat_countable) (fun w _ acc ->
-      I.join (I._UU03b1_ (Z.of_nat w)) acc) I.bot (let Coq_exist a = m in a)
+      I.join (I.abst (Z.of_nat w)) acc) I.bot (let Coq_exist a = m in a)
  end

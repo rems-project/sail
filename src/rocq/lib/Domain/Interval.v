@@ -386,11 +386,9 @@ Module Dom <: SAIL_INT.
     | Some m => (n <= m)%Z
     end.
 
-  Definition α (n : Z) : interval := Ends (exist _ (Some n, Some n) (low_high_refl n)).
+  Definition abst (n : Z) : interval := Ends (exist _ (Some n, Some n) (low_high_refl n)).
 
-  (** ASCII alias for [α], so OCaml code consuming the extracted module can
-      use the readable name [alpha] instead of the mangled [_UU03b1_]. *)
-  Definition alpha := α.
+  Notation α := abst.
 
   (** Recover a concrete integer from an interval whose endpoints coincide.
       Anything else (open ends, [Empty], or [lo < hi]) returns [None]. *)

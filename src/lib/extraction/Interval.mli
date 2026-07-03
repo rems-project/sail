@@ -43,9 +43,7 @@ module Dom :
 
   val leb : interval -> interval -> bool
 
-  val _UU03b1_ : Big_int_Z.big_int -> interval
-
-  val alpha : Big_int_Z.big_int -> interval
+  val abst : Big_int_Z.big_int -> interval
 
   val concrete : interval -> Big_int_Z.big_int option
 

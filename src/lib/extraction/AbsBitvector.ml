@@ -145,9 +145,9 @@ module Dom =
           (gmap_empty Nat.eq_dec nat_countable))
         Big_int_Z.zero_big_int []))
 
-  (** val _UU03b1_ : bvn -> bvset **)
+  (** val abst : bvn -> bvset **)
 
-  let _UU03b1_ x =
+  let abst x =
     let len = x.bvn_n in
     (match bvn_to_bv len x with
      | Some x' ->
@@ -157,11 +157,6 @@ module Dom =
              (gmap_empty Nat.eq_dec nat_countable))
            (BinNat.N.to_nat len) (map Three.from_bool (bv_to_bits len x'))))
      | None -> bot)
-
-  (** val alpha : bvn -> bvset **)
-
-  let alpha =
-    _UU03b1_
 
   (** val lift_bitwise_gmap :
       (Three.ubit -> Three.ubit -> Three.ubit) -> (Big_int_Z.big_int,

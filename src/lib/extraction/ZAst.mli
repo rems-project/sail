@@ -281,9 +281,7 @@ module Residual :
 
     val leb : value -> value -> bool
 
-    val _UU03b1_ : Ast.value -> value
-
-    val alpha : Ast.value -> value
+    val abst : Ast.value -> value
 
     val of_lit : lit -> value
 
@@ -585,9 +583,7 @@ module Make :
 
       val leb : value -> value -> bool
 
-      val _UU03b1_ : Ast.value -> value
-
-      val alpha : Ast.value -> value
+      val abst : Ast.value -> value
 
       val of_lit : lit -> value
 
@@ -843,9 +839,7 @@ module Make :
 
     val leb : value -> value -> bool
 
-    val _UU03b1_ : Ast.value -> value
-
-    val alpha : Ast.value -> value
+    val abst : Ast.value -> value
 
     val of_lit : lit -> value
 
