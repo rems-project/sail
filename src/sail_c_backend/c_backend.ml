@@ -1663,12 +1663,22 @@ module Codegen (Config : CODEGEN_CONFIG) = struct
           let name = sgen_id id in
           string (Printf.sprintf "static enum %s UNDEFINED(%s)(unit u) { return %s; }" name name (sgen_id first_id))
         in
+        (* Conservatively use the smallest size of int to guard specifying storage size.  This assumes C++11,
+           but could also be done for C23.*)
+        let enum_type = if Config.cpp && List.length ids < 65536 then ": int" else "" in
         [
           TypeDeclaration
             (string (Printf.sprintf "// enum %s" (string_of_id id))
             ^^ hardline
             ^^ separate space
-                 [string "enum"; codegen_id id; lbrace; separate_map (comma ^^ space) codegen_id ids; rbrace ^^ semi]
+                 [
+                   string "enum";
+                   codegen_id id;
+                   string enum_type;
+                   lbrace;
+                   separate_map (comma ^^ space) codegen_id ids;
+                   rbrace ^^ semi;
+                 ]
             );
           StaticFunctionDefinition enum_eq;
           StaticFunctionDefinition enum_undefined;
