@@ -84,7 +84,8 @@ Module Type DOMAIN (C : CONCRETE).
   Parameter leb_le : ∀ x y, leb x y = true ↔ x ⊑ y.
   Parameter le_join_def : ∀ x y, x ⊑ y ↔ y = x ⊔ y.
 
-  Parameter α : C.t → t.
+  Parameter abst : C.t → t.
+  Notation α := abst.
 End DOMAIN.
 
 Module DomainProperties (C : CONCRETE) (D : DOMAIN C).

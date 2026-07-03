@@ -166,8 +166,8 @@ module Dom =
 
   let value_length = function
   | V_bitvector bv -> V_int (T.bits_length bv)
-  | V_vector vs -> V_int (DZ._UU03b1_ (Z.of_nat (length vs)))
-  | V_list vs -> V_int (DZ._UU03b1_ (Z.of_nat (length vs)))
+  | V_vector vs -> V_int (DZ.abst (Z.of_nat (length vs)))
+  | V_list vs -> V_int (DZ.abst (Z.of_nat (length vs)))
   | _ -> V_bot
 
   (** val mk_bitvector' : value list -> Dbv.t option **)
@@ -556,16 +556,16 @@ module Dom =
                 | _ -> false)
     | V_bot -> true
 
-  (** val _UU03b1_ : Ast.value -> value **)
+  (** val abst : Ast.value -> value **)
 
-  let rec _UU03b1_ = function
-  | Ast.V_bitvector bv -> V_bitvector (Dbv._UU03b1_ (Bit.Bits.to_bvn bv))
-  | Ast.V_vector xs -> V_vector (map _UU03b1_ xs)
-  | Ast.V_list xs -> V_list (map _UU03b1_ xs)
-  | Ast.V_int i -> V_int (DZ._UU03b1_ i)
+  let rec abst = function
+  | Ast.V_bitvector bv -> V_bitvector (Dbv.abst (Bit.Bits.to_bvn bv))
+  | Ast.V_vector xs -> V_vector (map abst xs)
+  | Ast.V_list xs -> V_list (map abst xs)
+  | Ast.V_int i -> V_int (DZ.abst i)
   | Ast.V_real q -> V_real (coq_Q2Qc q)
   | Ast.V_bool b -> V_bool b
-  | Ast.V_tuple xs -> V_tuple (map _UU03b1_ xs)
+  | Ast.V_tuple xs -> V_tuple (map abst xs)
   | Ast.V_unit -> V_unit
   | Ast.V_string str -> V_string str
   | Ast.V_ref id -> V_ref (Aux.unwrap id)
@@ -578,25 +578,20 @@ module Dom =
       (singletonM
         (map_singleton (gmap_partial_alter Aux.eq_eqdec Aux.id_aux_countable)
           (gmap_empty Aux.eq_eqdec Aux.id_aux_countable))
-        (Aux.unwrap id) (map _UU03b1_ xs))
+        (Aux.unwrap id) (map abst xs))
   | Ast.V_record fields ->
     V_record
       (Coq_list.foldl (fun m pat0 ->
         let (k, v) = pat0 in
         insert
           (map_insert (gmap_partial_alter Aux.eq_eqdec Aux.id_aux_countable))
-          (Aux.unwrap k) (_UU03b1_ v) m)
+          (Aux.unwrap k) (abst v) m)
         (empty (gmap_empty Aux.eq_eqdec Aux.id_aux_countable)) fields)
-
-  (** val alpha : Ast.value -> value **)
-
-  let alpha =
-    _UU03b1_
 
   (** val of_lit : lit -> value **)
 
   let of_lit l =
-    _UU03b1_ (value_of_lit l)
+    abst (value_of_lit l)
 
   (** val lookup_field : value -> id_aux -> value **)
 
@@ -710,7 +705,7 @@ module Dom =
     (** val match_bitvector_lit : bit list -> Dbv.t -> value match_result **)
 
     let match_bitvector_lit lit_bs bv =
-      let lit_bv = Dbv._UU03b1_ (Bit.Bits.to_bvn lit_bs) in
+      let lit_bv = Dbv.abst (Bit.Bits.to_bvn lit_bs) in
       if Dbv.leb lit_bv bv
       then if Dbv.leb bv lit_bv
            then simple_match
@@ -736,8 +731,8 @@ module Dom =
        | L_num n ->
          (match v with
           | V_int m ->
-            if DZ.leb (DZ._UU03b1_ n) m
-            then if DZ.leb m (DZ._UU03b1_ n)
+            if DZ.leb (DZ.abst n) m
+            then if DZ.leb m (DZ.abst n)
                  then simple_match
                  else MaybeMatched empty_bindings
             else Unmatched
@@ -954,7 +949,7 @@ module Dom =
     in
     let len = Z.succ max0 in
     let zeros0 = V_bitvector
-      (Dbv._UU03b1_ (Bit.Bits.to_bvn (repeat B0 (Z.to_nat len))))
+      (Dbv.abst (Bit.Bits.to_bvn (repeat B0 (Z.to_nat len))))
     in
     fold_left (fun bv pvalue ->
       let (y, m) = pvalue in

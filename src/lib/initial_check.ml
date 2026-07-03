@@ -1485,8 +1485,19 @@ let rec to_ast_exp ctx exp =
   | P.E_match (exp, pexps) -> wrap (E_match (to_ast_exp ctx exp, List.map (to_ast_case ctx) pexps))
   | P.E_try (exp, pexps) -> wrap (E_try (to_ast_exp ctx exp, List.map (to_ast_case ctx) pexps))
   | P.E_let (pat, bind, exp) -> wrap (E_let (to_ast_pat ctx pat, to_ast_exp ctx bind, to_ast_exp ctx exp))
-  | P.E_assign (lexp, exp) -> wrap (E_assign (to_ast_lexp ctx lexp, to_ast_exp ctx exp))
-  | P.E_var (lexp, exp1, exp2) -> wrap (E_var (to_ast_lexp ctx lexp, to_ast_exp ctx exp1, to_ast_exp ctx exp2))
+  | P.E_assign (lexp, exp) -> (
+      match to_ast_assign ctx lexp with
+      | Error (f, xs, lexp_l) ->
+          let exp = to_ast_exp ctx exp in
+          E_aux (E_app (f, xs @ [exp]), (l, add_attribute (gen_loc lexp_l) "setter" None empty_uannot))
+      | Ok lexp -> wrap (E_assign (lexp, to_ast_exp ctx exp))
+    )
+  | P.E_var (lexp, exp1, exp2) -> (
+      match to_ast_assign ctx lexp with
+      | Error (_, _, lexp_l) ->
+          raise (Reporting.err_general lexp_l "Setter function not allowed in 'var' variable declaration")
+      | Ok lexp -> wrap (E_var (lexp, to_ast_exp ctx exp1, to_ast_exp ctx exp2))
+    )
   | P.E_sizeof nexp -> wrap (E_sizeof (to_ast_nexp ctx nexp))
   | P.E_constraint nc -> wrap (E_constraint (to_ast_constraint ctx nc))
   | P.E_exit exp -> wrap (E_exit (to_ast_exp ctx exp))
@@ -1509,45 +1520,46 @@ and to_ast_measure ctx (P.Measure_aux (m, l)) : uannot in_place_loop_measure =
   let m = match m with P.Measure_none -> Measure_none | P.Measure_some exp -> Measure_some (to_ast_exp ctx exp) in
   Measure_aux (m, l)
 
+and to_ast_assign ctx exp =
+  let (P.E_aux (exp, l)) = parse_infix_exp ctx exp in
+  match exp with
+  | P.E_app (f, args) -> (
+      match List.map (to_ast_exp ctx) args with
+      | [E_aux (E_lit (L_aux (L_unit, _)), _)] -> Error (to_ast_id ctx f, [], l)
+      | [E_aux (E_tuple exps, _)] -> Error (to_ast_id ctx f, exps, l)
+      | args -> Error (to_ast_id ctx f, args, l)
+    )
+  | _ -> Ok (LE_aux (to_ast_lexp_aux ctx exp l, (l, empty_uannot)))
+
+and to_ast_lexp_aux ctx exp l =
+  match exp with
+  | P.E_id id -> LE_id (to_ast_id ctx id)
+  | P.E_deref exp -> LE_deref (to_ast_exp ctx exp)
+  | P.E_typ (typ, P.E_aux (P.E_id id, l')) -> LE_typ (to_ast_typ ctx typ, to_ast_id ctx id)
+  | P.E_tuple tups ->
+      let ltups = List.map (to_ast_lexp ctx) tups in
+      let is_ok_in_tup (LE_aux (le, (l, _))) =
+        match le with
+        | LE_id _ | LE_typ _ | LE_vector _ | LE_vector_concat _ | LE_field _ | LE_vector_range _ | LE_tuple _ -> ()
+        | LE_deref _ -> raise (Reporting.err_typ l "only identifiers, fields, and vectors may be set in a tuple")
+      in
+      List.iter is_ok_in_tup ltups;
+      LE_tuple ltups
+  | P.E_vector_append (exp1, exp2) -> LE_vector_concat (to_ast_lexp ctx exp1 :: to_ast_lexp_vector_concat ctx exp2)
+  | P.E_vector_access (vexp, exp) -> LE_vector (to_ast_lexp ctx vexp, to_ast_exp ctx exp)
+  | P.E_vector_subrange (vexp, exp1, exp2) ->
+      LE_vector_range (to_ast_lexp ctx vexp, to_ast_exp ctx exp1, to_ast_exp ctx exp2)
+  | P.E_field (fexp, id) -> LE_field (to_ast_lexp ctx fexp, to_ast_id ctx id)
+  | _ ->
+      raise
+        (Reporting.err_typ l
+           "Only identifiers, cast identifiers, vector accesses, vector slices, and fields can be on the lefthand side \
+            of an assignment"
+        )
+
 and to_ast_lexp ctx exp =
   let (P.E_aux (exp, l)) = parse_infix_exp ctx exp in
-  let lexp =
-    match exp with
-    | P.E_id id -> LE_id (to_ast_id ctx id)
-    | P.E_deref exp -> LE_deref (to_ast_exp ctx exp)
-    | P.E_typ (typ, P.E_aux (P.E_id id, l')) -> LE_typ (to_ast_typ ctx typ, to_ast_id ctx id)
-    | P.E_tuple tups ->
-        let ltups = List.map (to_ast_lexp ctx) tups in
-        let is_ok_in_tup (LE_aux (le, (l, _))) =
-          match le with
-          | LE_id _ | LE_typ _ | LE_vector _ | LE_vector_concat _ | LE_field _ | LE_vector_range _ | LE_tuple _ -> ()
-          | LE_app _ | LE_deref _ ->
-              raise (Reporting.err_typ l "only identifiers, fields, and vectors may be set in a tuple")
-        in
-        List.iter is_ok_in_tup ltups;
-        LE_tuple ltups
-    | P.E_app ((P.Id_aux (f, l') as f'), args) -> (
-        match f with
-        | P.Id id -> (
-            match List.map (to_ast_exp ctx) args with
-            | [E_aux (E_lit (L_aux (L_unit, _)), _)] -> LE_app (to_ast_id ctx f', [])
-            | [E_aux (E_tuple exps, _)] -> LE_app (to_ast_id ctx f', exps)
-            | args -> LE_app (to_ast_id ctx f', args)
-          )
-        | _ -> raise (Reporting.err_typ l' "memory call on lefthand side of assignment must begin with an id")
-      )
-    | P.E_vector_append (exp1, exp2) -> LE_vector_concat (to_ast_lexp ctx exp1 :: to_ast_lexp_vector_concat ctx exp2)
-    | P.E_vector_access (vexp, exp) -> LE_vector (to_ast_lexp ctx vexp, to_ast_exp ctx exp)
-    | P.E_vector_subrange (vexp, exp1, exp2) ->
-        LE_vector_range (to_ast_lexp ctx vexp, to_ast_exp ctx exp1, to_ast_exp ctx exp2)
-    | P.E_field (fexp, id) -> LE_field (to_ast_lexp ctx fexp, to_ast_id ctx id)
-    | _ ->
-        raise
-          (Reporting.err_typ l
-             "Only identifiers, cast identifiers, vector accesses, vector slices, and fields can be on the lefthand \
-              side of an assignment"
-          )
-  in
+  let lexp = to_ast_lexp_aux ctx exp l in
   LE_aux (lexp, (l, empty_uannot))
 
 and to_ast_lexp_vector_concat ctx (P.E_aux (exp_aux, l) as exp) =

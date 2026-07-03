@@ -21,7 +21,7 @@ module DomainProperties :
 
   val leb : t -> t -> bool
 
-  val _UU03b1_ : C.t -> t
+  val abst : C.t -> t
  end) ->
  sig
  end
@@ -40,7 +40,7 @@ module type SAIL_INT =
 
   val leb : t -> t -> bool
 
-  val _UU03b1_ : Z.t -> t
+  val abst : Z.t -> t
 
   val lt : t -> t -> bool option
 
@@ -98,7 +98,7 @@ module type SAIL_BITS =
 
   val leb : t -> t -> bool
 
-  val _UU03b1_ : Bits.t -> t
+  val abst : Bits.t -> t
 
   val unknown_bit : t
 

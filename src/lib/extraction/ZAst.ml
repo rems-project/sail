@@ -23,7 +23,6 @@ open Gmap
 type 'a zlexp_aux =
 | LZ_id of id
 | LZ_deref
-| LZ_app of id * Big_int_Z.big_int
 | LZ_typ of typ * id
 | LZ_tuple of 'a zlexp list
 | LZ_vector_concat of 'a zlexp list
@@ -40,7 +39,6 @@ let rec lexp_to_z = function
   (match aux with
    | LE_id id0 -> LZ_aux ((LZ_id id0), ann)
    | LE_deref _ -> LZ_aux (LZ_deref, ann)
-   | LE_app (id0, args) -> LZ_aux ((LZ_app (id0, (length args))), ann)
    | LE_typ (typ0, id0) -> LZ_aux ((LZ_typ (typ0, id0)), ann)
    | LE_tuple ls -> LZ_aux ((LZ_tuple (map lexp_to_z ls)), ann)
    | LE_vector_concat ls ->
@@ -61,9 +59,6 @@ let rec update_zlexp_subexps xs = function
      (match xs with
       | [] -> (None, xs)
       | y :: ys -> ((Some (LE_aux ((LE_deref y), annot0))), ys))
-   | LZ_app (id0, n) ->
-     let (ys, zs) = take_drop n xs in
-     ((Some (LE_aux ((LE_app (id0, ys)), annot0))), zs)
    | LZ_typ (typ0, id0) ->
      ((Some (LE_aux ((LE_typ (typ0, id0)), annot0))), xs)
    | LZ_tuple ls ->

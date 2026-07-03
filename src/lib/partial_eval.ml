@@ -345,7 +345,7 @@ let v_real (q : Q.t) = Lattice.V_real { Extraction.Qcanon.this = Util.Rational.t
    value. [Bit.Bits.to_bvn] expects MSB-first input (its [bits_to_N] threads
    each bit through [acc := 2*acc + b], so the first element is most-significant)
    so we pass [bits] through unchanged. *)
-let v_bitvector_of_bits bits = Lattice.V_bitvector (Extraction.AbsBitvector.Dom.alpha (Extraction.Bit.Bits.to_bvn bits))
+let v_bitvector_of_bits bits = Lattice.V_bitvector (Extraction.AbsBitvector.Dom.abst (Extraction.Bit.Bits.to_bvn bits))
 
 (** Define a module for lifting primitives.
 
@@ -374,7 +374,7 @@ module Lifting = struct
    fun ty x ->
     match ty with
     | Unit -> V_unit
-    | Int -> V_int (Extraction.Interval.Dom.alpha x)
+    | Int -> V_int (Extraction.Interval.Dom.abst x)
     | AbsInt -> V_int x
     | BV -> v_bitvector_of_bits x
     | AbsBV -> V_bitvector x
@@ -448,7 +448,7 @@ let primop_print_string args =
   (match args with [Lattice.V_string a; Lattice.V_string b] -> Value.output_endline (a ^ b) | _ -> ());
   Lattice.V_unit
 
-let v_int_concrete n = Lattice.V_int (Extraction.Interval.Dom.alpha n)
+let v_int_concrete n = Lattice.V_int (Extraction.Interval.Dom.abst n)
 
 (* Lift a Rocq-verified interval comparison ([interval -> interval -> bool option])
    to the lattice. [None] means the relation cannot be decided from the intervals
@@ -484,7 +484,7 @@ let as_abs_bv = function
   | Lattice.V_bitvector dbv -> Some dbv
   | Lattice.V_vector _ as v -> (
       match concrete_bits v with
-      | Some bs -> Some (Extraction.AbsBitvector.Dom.alpha (Extraction.Bit.Bits.to_bvn bs))
+      | Some bs -> Some (Extraction.AbsBitvector.Dom.abst (Extraction.Bit.Bits.to_bvn bs))
       | None -> None
     )
   | _ -> None

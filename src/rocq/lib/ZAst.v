@@ -66,8 +66,7 @@ From Sail Require TypeAnnot.
 We start by re-defining l-expressions such that they contain no
 embedded expressions. The type [zlexp A] is like [lexp A] but
 essentially contains an implicit 'hole' wherever an expression would
-have gone. See the [nat] argument for the [LZ_app] constructor, which
-is the number of holes for an illustrative example of this in action.
+have gone.
 
 The end goal is to be able to losslessly transform [lexp A] into
 [zlexp A * list (exp A)] and back again.
@@ -76,7 +75,6 @@ The end goal is to be able to losslessly transform [lexp A] into
 Inductive zlexp_aux {A : Set} : Set :=
 | LZ_id : id → zlexp_aux
 | LZ_deref : zlexp_aux
-| LZ_app : id → nat → zlexp_aux
 | LZ_typ : typ → id → zlexp_aux
 | LZ_tuple : list zlexp → zlexp_aux
 | LZ_vector_concat : list zlexp → zlexp_aux
@@ -96,7 +94,6 @@ Fixpoint lexp_to_z {A : Set} (l : lexp A) : zlexp A :=
   | LE_id id => LZ_aux (LZ_id id) ann
   | LE_typ typ id => LZ_aux (LZ_typ typ id) ann
   | LE_deref _ => LZ_aux LZ_deref ann
-  | LE_app id args => LZ_aux (LZ_app id (List.length args)) ann
   | LE_tuple ls => LZ_aux (LZ_tuple (map lexp_to_z ls)) ann
   | LE_vector_concat ls =>
       LZ_aux (LZ_vector_concat (map lexp_to_z ls)) ann
@@ -131,9 +128,6 @@ Fixpoint update_zlexp_subexps {A : Set} (xs : list (exp A)) (l : zlexp A) : opti
       | (Some ls, xs) => (Some (LE_aux (LE_vector_concat (List.rev ls)) annot), xs)
       | (None, xs) => (None, xs)
       end
-  | LZ_app id n =>
-      let '(ys, zs) := take_drop n xs in
-      (Some (LE_aux (LE_app id ys) annot), zs)
   | LZ_vector l =>
       match update_zlexp_subexps xs l with
       | (Some l, n :: xs) => (Some (LE_aux (LE_vector l n) annot), xs)
@@ -152,7 +146,6 @@ Proof with reflexivity.
   intros A l.
   induction l using lexp_ind_g.
   all: try reflexivity.
-  - cbn; intros; rewrite take_drop_app...
   - induction ls as [| l ls].
     + reflexivity.
     + rewrite Forall_cons_iff in H.
@@ -658,8 +651,7 @@ Module Residual (Tannot : TypeAnnot.S) (B : Builder Tannot).
     ({| this := ⊥; exn := exn (fst r); eff := true |}, B.mk_return ann (snd r)).
 
   (* Join a value returned early from an inlined body into the accumulator
-     carried on the enclosing [Z_inline] node. Only [this]/[exn]/[eff] matter;
-     the residual is provided by the fall-through value, so we keep [snd ret]. *)
+     carried on the enclosing [Z_inline] node. *)
   Definition join_returns (acc : option t) (ret : t) : t :=
     match acc with
     | None => ret

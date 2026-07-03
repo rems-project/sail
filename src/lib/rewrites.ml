@@ -102,14 +102,14 @@ let id_is_unbound id env = match Env.lookup_id id env with Unbound _ -> true | _
 
 let rec lexp_is_local (LE_aux (lexp, _)) env =
   match lexp with
-  | LE_app _ | LE_deref _ -> false
+  | LE_deref _ -> false
   | LE_id id | LE_typ (_, id) -> id_is_local_var id env
   | LE_tuple lexps | LE_vector_concat lexps -> List.for_all (fun lexp -> lexp_is_local lexp env) lexps
   | LE_vector (lexp, _) | LE_vector_range (lexp, _, _) | LE_field (lexp, _) -> lexp_is_local lexp env
 
 let rec lexp_is_local_intro (LE_aux (lexp, _)) env =
   match lexp with
-  | LE_app _ | LE_deref _ -> false
+  | LE_deref _ -> false
   | LE_id id | LE_typ (_, id) -> id_is_unbound id env
   | LE_tuple lexps | LE_vector_concat lexps -> List.for_all (fun lexp -> lexp_is_local_intro lexp env) lexps
   | LE_vector (lexp, _) | LE_vector_range (lexp, _, _) | LE_field (lexp, _) -> lexp_is_local_intro lexp env
@@ -2392,7 +2392,6 @@ let rewrite_ast_letbind_effects effect_info env =
     match lexp_aux with
     | LE_id _ -> k lexp
     | LE_deref exp -> n_exp_name exp (fun exp -> k (LE_aux (LE_deref exp, annot)))
-    | LE_app (id, es) -> n_exp_nameL es (fun es -> k (LE_aux (LE_app (id, es), annot)))
     | LE_tuple es -> n_lexpL es (fun es -> k (LE_aux (LE_tuple es, annot)))
     | LE_typ (typ, id) -> k (LE_aux (LE_typ (typ, id), annot))
     | LE_vector (lexp, e) -> n_lexp lexp (fun lexp -> n_exp_name e (fun e -> k (LE_aux (LE_vector (lexp, e), annot))))
@@ -3106,14 +3105,6 @@ let rec rewrite_var_updates (E_aux (expaux, ((l, _) as annot)) as exp) =
        "tail-position": check the definition n_exp_term and where it is used. *)
       exp
 
-let replace_memwrite_e_assign exp =
-  let e_aux (expaux, annot) =
-    match expaux with
-    | E_assign (LE_aux (LE_app (id, args), _), v) -> E_aux (E_app (id, args @ [v]), annot)
-    | _ -> E_aux (expaux, annot)
-  in
-  fold_exp { id_exp_alg with e_aux } exp
-
 let remove_reference_types exp =
   let rec rewrite_t (Typ_aux (t_aux, a)) = Typ_aux (rewrite_t_aux t_aux, a)
   and rewrite_t_aux t_aux =
@@ -3290,7 +3281,7 @@ let rewrite_ast_remove_e_assign env ast =
          )
       )
   in
-  let rewrite_exp _ e = replace_memwrite_e_assign (remove_reference_types (rewrite_var_updates e)) in
+  let rewrite_exp _ e = remove_reference_types (rewrite_var_updates e) in
   rewrite_ast_base
     { rewrite_exp; rewrite_pat; rewrite_mpat; rewrite_lexp; rewrite_fun; rewrite_def; rewrite_ast = rewrite_ast_base }
     { ast with defs = loop_specs @ ast.defs }

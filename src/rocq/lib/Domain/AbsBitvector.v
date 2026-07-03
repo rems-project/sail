@@ -634,7 +634,7 @@ Module Dom <: SAIL_BITS.
     apply length_bv_to_bits.
   Qed.
 
-  Definition α (x : bvn) : bvset :=
+  Definition abst (x : bvn) : bvset :=
     let len := bvn_n x in
     match bvn_to_bv len x with
     | Some x' =>
@@ -642,9 +642,7 @@ Module Dom <: SAIL_BITS.
     | None => ⊥
     end.
 
-  (** ASCII alias for [α], so OCaml code consuming the extracted module can
-      use the readable name [alpha] instead of the mangled [_UU03b1_]. *)
-  Definition alpha := α.
+  Notation α := abst.
 
   Lemma abstract_bvs : ∀ {n} (x : bv n),
      α x = Bvs ({[N.to_nat n := List.map from_bool (bv_to_bits x)]} ↾ abs_valid x).

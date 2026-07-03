@@ -132,15 +132,10 @@ module Dom =
          (&&) (low_leb (low e_UU2081_) (low e_UU2080_))
            (high_leb (high e_UU2080_) (high e_UU2081_)))
 
-  (** val _UU03b1_ : Big_int_Z.big_int -> interval **)
+  (** val abst : Big_int_Z.big_int -> interval **)
 
-  let _UU03b1_ n =
+  let abst n =
     Ends (Coq_exist ((Some n), (Some n)))
-
-  (** val alpha : Big_int_Z.big_int -> interval **)
-
-  let alpha =
-    _UU03b1_
 
   (** val concrete : interval -> Big_int_Z.big_int option **)
 

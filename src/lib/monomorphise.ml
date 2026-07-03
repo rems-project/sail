@@ -131,7 +131,6 @@ let ids_in_exp exp =
       (pure_exp_alg IdSet.empty IdSet.union) with
       e_id = IdSet.singleton;
       le_id = IdSet.singleton;
-      le_app = (fun (id, s) -> List.fold_left IdSet.union (IdSet.singleton id) s);
       le_typ = (fun (_, id) -> IdSet.singleton id);
     }
     exp
@@ -1181,7 +1180,6 @@ let split_defs target all_errors (splits : split_req list) env ast =
         let re e = LE_aux (e, annot) in
         match e with
         | LE_id _ | LE_typ _ -> le
-        | LE_app (id, es) -> re (LE_app (id, List.map map_exp es))
         | LE_tuple les -> re (LE_tuple (List.map map_lexp les))
         | LE_vector (le, e) -> re (LE_vector (map_lexp le, map_exp e))
         | LE_vector_range (le, e1, e2) -> re (LE_vector_range (map_lexp le, map_exp e1, map_exp e2))
@@ -2528,9 +2526,6 @@ module Analysis = struct
     match lexp with
     | LE_id id | LE_typ (_, id) ->
         if IdSet.mem id env.referenced_vars then (assigns, empty) else (Bindings.add id deps assigns, empty)
-    | LE_app (id, es) ->
-        let _, assigns, r = analyse_sub env assigns (E_aux (E_tuple es, (Unknown, empty_tannot))) in
-        (assigns, r)
     | LE_tuple lexps | LE_vector_concat lexps ->
         List.fold_left
           (fun (assigns, r) lexp ->

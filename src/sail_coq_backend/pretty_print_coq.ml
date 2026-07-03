@@ -3244,7 +3244,6 @@ let all_ids pexp =
           IdSet.add id (IdSet.union ids1 (IdSet.union ids2 (IdSet.union ids3 ids4)))
         );
       le_id = IdSet.singleton;
-      le_app = (fun (id, ids) -> List.fold_left IdSet.union (IdSet.singleton id) ids);
       le_typ = (fun (_, id) -> IdSet.singleton id);
       pat_alg =
         {

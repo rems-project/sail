@@ -1703,26 +1703,24 @@ Module Dom (DZ : SAIL_INT) (Dbv : SAIL_BITS) (T : SAIL_BITS_INT Dbv DZ) <: DOMAI
   Lemma le_join_def : ∀ x y, le x y ↔ y = join x y.
   Proof. intros. split; [ apply le_join_def_1 | apply le_join_def_2 ]. Qed.
 
-  Fixpoint α (x : Ast.value) : value :=
+  Fixpoint abst (x : Ast.value) : value :=
     match x with
     | Ast.V_bitvector bv => V_bitvector (Dbv.α (Bit.Bits.to_bvn bv))
-    | Ast.V_vector xs => V_vector (List.map α xs)
-    | Ast.V_list xs => V_list (List.map α xs)
+    | Ast.V_vector xs => V_vector (List.map abst xs)
+    | Ast.V_list xs => V_list (List.map abst xs)
     | Ast.V_int i => V_int (DZ.α i)
     | Ast.V_real q => V_real (Q2Qc q)
     | Ast.V_bool b => V_bool b
-    | Ast.V_tuple xs => V_tuple (List.map α xs)
+    | Ast.V_tuple xs => V_tuple (List.map abst xs)
     | Ast.V_unit => V_unit
     | Ast.V_string str => V_string str
     | Ast.V_ref id => V_ref (Aux.unwrap id)
     | Ast.V_member id => V_member {[ Aux.unwrap id ]}
-    | Ast.V_ctor id xs => V_ctor {[ Aux.unwrap id := List.map α xs ]}
-    | Ast.V_record fields => V_record (foldl (λ m '(k, v), <[Aux.unwrap k := α v]> m) ∅ fields)
+    | Ast.V_ctor id xs => V_ctor {[ Aux.unwrap id := List.map abst xs ]}
+    | Ast.V_record fields => V_record (foldl (λ m '(k, v), <[Aux.unwrap k := abst v]> m) ∅ fields)
     end.
 
-  (** ASCII alias for [α], so OCaml code consuming the extracted module can
-      use the readable name [alpha] instead of the mangled [_UU03b1_]. *)
-  Definition alpha := α.
+  Notation α := abst.
 
   Definition of_lit (l : Ast.lit) : value := α (ValueType.value_of_lit l).
 

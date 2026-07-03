@@ -468,7 +468,6 @@ with exp {A : Set} : Set :=
 with lexp_aux {A : Set} : Set :=
 | LE_id : id → lexp_aux
 | LE_deref : exp → lexp_aux
-| LE_app : id → list exp → lexp_aux
 | LE_typ : typ → id → lexp_aux
 | LE_tuple : list lexp → lexp_aux
 | LE_vector_concat : list lexp → lexp_aux

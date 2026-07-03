@@ -150,7 +150,6 @@ type ('a, 'exp, 'exp_aux, 'lexp, 'lexp_aux, 'fexp, 'fexp_aux, 'pexp, 'pexp_aux, 
   e_aux : 'exp_aux * 'a annot -> 'exp;
   le_id : id -> 'lexp_aux;
   le_deref : 'exp -> 'lexp_aux;
-  le_app : id * 'exp list -> 'lexp_aux;
   le_typ : Ast.typ * id -> 'lexp_aux;
   le_tuple : 'lexp list -> 'lexp_aux;
   le_vector : 'lexp * 'exp -> 'lexp_aux;

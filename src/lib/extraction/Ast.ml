@@ -277,7 +277,6 @@ and 'a exp =
 and 'a lexp_aux =
 | LE_id of id
 | LE_deref of 'a exp
-| LE_app of id * 'a exp list
 | LE_typ of typ * id
 | LE_tuple of 'a lexp list
 | LE_vector_concat of 'a lexp list

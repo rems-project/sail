@@ -87,7 +87,6 @@ Inductive place : Set :=
 | PL_field : place → id → place.
 
 Inductive destructure : Set :=
-| DL_app : id → list value → destructure
 | DL_tuple : list destructure → destructure
 | DL_vector_concat : list (vector_concat_split * destructure) → destructure
 | DL_place : place → destructure.
@@ -677,7 +676,6 @@ Module Make (Tannot : TypeAnnot.S).
     - cbn; reflexivity.
     - cbn; try assumption...
     - cbn; reflexivity.
-    - cbn; reflexivity.
     - cbn.
       induction lxs.
       + reflexivity.
@@ -772,8 +770,6 @@ Module Make (Tannot : TypeAnnot.S).
             assignment
         | _ => Runtime_type_error (fst annot)
         end
-    | _ =>
-        Runtime_type_error (fst annot)
     end.
 
   Fixpoint lexp_to_destructure (l : lexp Tannot.t) {struct l} : t destructure :=
@@ -796,9 +792,6 @@ Module Make (Tannot : TypeAnnot.S).
         | _ =>
             Runtime_type_error (fst annot)
         end
-    | LE_app name args =>
-        let evaluated := all_evaluated args in
-        pure (DL_app name evaluated)
     | LE_tuple ls =>
         ds ← sequence (map lexp_to_destructure ls);
         pure (DL_tuple ds)
