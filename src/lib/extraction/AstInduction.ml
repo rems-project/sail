@@ -2,7 +2,6 @@ open Ast
 open Datatypes
 open List0
 open ListDef
-open ListUtil
 
 (** val lexp_subexps : 'a1 lexp -> 'a1 exp list **)
 
@@ -10,7 +9,6 @@ let rec lexp_subexps = function
 | LE_aux (aux, _) ->
   (match aux with
    | LE_deref x -> x :: []
-   | LE_app (_, xs) -> xs
    | LE_tuple ls -> concat (map lexp_subexps ls)
    | LE_vector_concat ls -> concat (map lexp_subexps ls)
    | LE_vector (l0, x) -> app (lexp_subexps l0) (x :: [])
@@ -28,9 +26,6 @@ let rec update_lexp_subexps xs l = match l with
      (match xs with
       | [] -> (l, xs)
       | y :: ys -> ((LE_aux ((LE_deref y), annot)), ys))
-   | LE_app (id, args) ->
-     let (ys, zs) = take_drop (length args) xs in
-     ((LE_aux ((LE_app (id, ys)), annot)), zs)
    | LE_tuple ls ->
      let (ls0, xs0) =
        fold_left (fun acc l0 ->

@@ -31,7 +31,6 @@ type place =
 | PL_field of place * id
 
 type destructure =
-| DL_app of id * value list
 | DL_tuple of destructure list
 | DL_vector_concat of (Types.vector_concat_split * destructure) list
 | DL_place of place

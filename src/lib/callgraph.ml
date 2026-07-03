@@ -192,7 +192,6 @@ let add_def_to_graph graph (DEF_aux (def, def_annot)) =
         | Enum _ -> graph := G.add_edge self (Constructor id) !graph
         | _ -> if IdSet.mem id (Env.get_toplevel_lets env) then graph := G.add_edge self (Letbind id) !graph else ()
       )
-    | LE_app (id, _) -> graph := G.add_edge self (Function id) !graph
     | LE_id id -> (
         match Env.lookup_id id env with
         | Register _ -> graph := G.add_edge self (Register id) !graph

@@ -36,7 +36,6 @@ type place =
 | PL_field of place * id
 
 type destructure =
-| DL_app of id * value list
 | DL_tuple of destructure list
 | DL_vector_concat of (Types.vector_concat_split * destructure) list
 | DL_place of place
@@ -404,7 +403,6 @@ module Make =
 
   let rec destructuring_assignment annot0 d v =
     match d with
-    | DL_app (_, _) -> Monad.Runtime_type_error (fst annot0)
     | DL_tuple ds ->
       (match v with
        | V_tuple vs ->
@@ -486,9 +484,6 @@ module Make =
            | V_ref r -> Monad.pure (DL_place (PL_register r))
            | _ -> Monad.Runtime_type_error (fst annot0))
         | _ -> Monad.Runtime_type_error (fst annot0))
-     | LE_app (name, args) ->
-       let evaluated0 = all_evaluated args in
-       Monad.pure (DL_app (name, evaluated0))
      | LE_typ (_, var) ->
        (match Tannot.get_id_type (snd annot0) var with
         | Types.Local_variable ->

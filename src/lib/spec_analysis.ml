@@ -75,7 +75,6 @@ let rec assigned_vars_in_lexp (LE_aux (le, _)) =
   | LE_id id | LE_typ (_, id) -> IdSet.singleton id
   | LE_tuple lexps | LE_vector_concat lexps ->
       List.fold_left (fun vs le -> IdSet.union vs (assigned_vars_in_lexp le)) IdSet.empty lexps
-  | LE_app (_, es) -> List.fold_left (fun vs e -> IdSet.union vs (assigned_vars e)) IdSet.empty es
   | LE_vector (le, e) -> IdSet.union (assigned_vars_in_lexp le) (assigned_vars e)
   | LE_vector_range (le, e1, e2) ->
       IdSet.union (assigned_vars_in_lexp le) (IdSet.union (assigned_vars e1) (assigned_vars e2))
@@ -227,7 +226,6 @@ let nexp_subst_fns substs =
     match e with
     | LE_id _ -> re e
     | LE_typ (typ, id) -> re (LE_typ (s_t typ, id))
-    | LE_app (id, es) -> re (LE_app (id, List.map s_exp es))
     | LE_tuple les -> re (LE_tuple (List.map s_lexp les))
     | LE_vector (le, e) -> re (LE_vector (s_lexp le, s_exp e))
     | LE_vector_range (le, e1, e2) -> re (LE_vector_range (s_lexp le, s_exp e1, s_exp e2))

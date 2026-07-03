@@ -132,7 +132,6 @@ Section lexp_ind_g.
             (P : lexp A → Prop)
             (H_id : ∀ id ann, P (LE_aux (LE_id id) ann))
             (H_deref : ∀ x ann, P (LE_aux (LE_deref x) ann))
-            (H_app : ∀ f xs ann, P (LE_aux (LE_app f xs) ann))
             (H_typ : ∀ id typ ann, P (LE_aux (LE_typ typ id) ann))
             (H_tuple : ∀ ls ann, Forall P ls → P (LE_aux (LE_tuple ls) ann))
             (H_vector_concat : ∀ ls ann, Forall P ls → P (LE_aux (LE_vector_concat ls) ann))
@@ -146,7 +145,6 @@ Section lexp_ind_g.
     destruct aux.
     - apply H_id.
     - apply H_deref.
-    - apply H_app.
     - apply H_typ.
     - apply H_tuple.
       induction l.
@@ -187,7 +185,6 @@ Fixpoint lexp_subexps {A : Set} (l : lexp A) : list (exp A) :=
   match aux with
   | LE_id _ | LE_typ _ _ => []
   | LE_deref x => [x]
-  | LE_app _ xs => xs
   | LE_tuple ls
   | LE_vector_concat ls =>
       concat (map lexp_subexps ls)
@@ -213,9 +210,6 @@ Fixpoint update_lexp_subexps {A : Set} (xs : list (exp A)) (l : lexp A) : lexp A
   | LE_field l f =>
       let '(l', ys) := update_lexp_subexps xs l in
       (LE_aux (LE_field l' f) annot, ys)
-  | LE_app id args =>
-      let '(ys, zs) := take_drop (length args) xs in
-      (LE_aux (LE_app id ys) annot, zs)
   | LE_tuple ls =>
       let '(ls, xs) :=
         fold_left
@@ -388,7 +382,6 @@ Lemma lexp_subexps_identity_g : ∀ (A : Set) (l : lexp A) (es : list (exp A)),
 Proof.
   induction l using lexp_ind_g.
   all: try reflexivity.
-  - cbn. intros. rewrite take_drop_app. reflexivity.
   - induction ls.
     + reflexivity.
     + rewrite Forall_cons_iff in H.
@@ -607,7 +600,6 @@ Section exp_and_lexp_ind_g.
     (H_constraint : ∀ c ann, P (E_aux (E_constraint c) ann))
     (HL_id : ∀ id ann, Q (LE_aux (LE_id id) ann))
     (HL_deref : ∀ x ann, P x → Q (LE_aux (LE_deref x) ann))
-    (HL_app : ∀ f xs ann, Forall P xs → Q (LE_aux (LE_app f xs) ann))
     (HL_typ : ∀ typ id ann, Q (LE_aux (LE_typ typ id) ann))
     (HL_tuple : ∀ lxs ann, Forall Q lxs → Q (LE_aux (LE_tuple lxs) ann))
     (HL_vector_concat : ∀ lxs ann, Forall Q lxs → Q (LE_aux (LE_vector_concat lxs) ann))
@@ -703,11 +695,6 @@ Section exp_and_lexp_ind_g.
       destruct aux.
       - apply HL_id.
       - apply HL_deref. trivial.
-      - apply HL_app.
-        induction l.
-        + trivial.
-        + rewrite Forall_cons_iff.
-          easy.
       - apply HL_typ.
       - apply HL_tuple.
         induction l.
@@ -787,7 +774,6 @@ with lexp_depth {A : Set} (l : lexp A) {struct l} : nat :=
   let 'LE_aux aux _ := l in
   match aux with
   | LE_deref x => depth x + 1
-  | LE_app _ xs => fold_right max 0 (map depth xs) + 1
   | LE_tuple ls
   | LE_vector_concat ls => fold_right max 0 (map lexp_depth ls) + 1
   | LE_vector l n => lexp_depth l + depth n + 1
@@ -814,7 +800,6 @@ Proof.
    - reflexivity.
    - cbn. lia.
    - cbn. lia.
-   - reflexivity.
    - induction ls.
      + cbn. lia.
      + cbn.

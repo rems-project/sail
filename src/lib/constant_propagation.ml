@@ -578,7 +578,6 @@ let const_props target env ast =
       let re e = (LE_aux (e, annot), None) in
       match e with
       | LE_id id (* shouldn't end up substituting here *) | LE_typ (_, id) -> (le, Some id)
-      | LE_app (id, es) -> re (LE_app (id, List.map (fun e -> fst (const_prop_exp substs assigns e)) es)) (* or here *)
       | LE_tuple les -> re (LE_tuple (List.map (fun le -> fst (const_prop_lexp substs assigns le)) les))
       | LE_vector (le, e) ->
           re (LE_vector (fst (const_prop_lexp substs assigns le), fst (const_prop_exp substs assigns e)))

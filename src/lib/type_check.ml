@@ -2036,7 +2036,7 @@ let rec lexp_assignment_type env (LE_aux (aux, (l, _))) =
       | Local (Immutable, _) | Enum _ ->
           typ_error l ("Cannot modify immutable let-bound constant or enumeration constructor " ^ string_of_id v)
     )
-  | LE_deref _ | LE_app _ -> Update
+  | LE_deref _ -> Update
   | LE_field (lexp, _) -> (
       match lexp_assignment_type env lexp with
       | Update -> Update
@@ -3376,12 +3376,6 @@ and bind_assignment assign_l env (LE_aux (lexp_aux, (lexp_l, uannot)) as lexp) e
   in
   let has_typ v env = match Env.lookup_id v env with Local (Mutable, _) | Register _ -> true | _ -> false in
   match lexp_aux with
-  | LE_app (f, xs) ->
-      ( check_exp env
-          (E_aux (E_app (f, xs @ [exp]), (assign_l, add_attribute (gen_loc lexp_l) "setter" None uannot)))
-          unit_typ,
-        env
-      )
   | LE_typ (typ_annot, _) ->
       Env.wf_typ ~at:lexp_l env typ_annot;
       let checked_exp = crule check_exp env exp typ_annot in

@@ -258,7 +258,6 @@ let rewrite_lexp rewriters (LE_aux (lexp, (l, annot))) =
   | LE_id _ | LE_typ _ -> rewrap lexp
   | LE_deref exp -> rewrap (LE_deref (rewriters.rewrite_exp rewriters exp))
   | LE_tuple tupls -> rewrap (LE_tuple (List.map (rewriters.rewrite_lexp rewriters) tupls))
-  | LE_app (id, exps) -> rewrap (LE_app (id, List.map (rewriters.rewrite_exp rewriters) exps))
   | LE_vector (lexp, exp) ->
       rewrap (LE_vector (rewriters.rewrite_lexp rewriters lexp, rewriters.rewrite_exp rewriters exp))
   | LE_vector_range (lexp, exp1, exp2) ->
@@ -516,7 +515,6 @@ type ('a, 'exp, 'exp_aux, 'lexp, 'lexp_aux, 'fexp, 'fexp_aux, 'pexp, 'pexp_aux, 
   e_aux : 'exp_aux * 'a annot -> 'exp;
   le_id : id -> 'lexp_aux;
   le_deref : 'exp -> 'lexp_aux;
-  le_app : id * 'exp list -> 'lexp_aux;
   le_typ : Ast.typ * id -> 'lexp_aux;
   le_tuple : 'lexp list -> 'lexp_aux;
   le_vector : 'lexp * 'exp -> 'lexp_aux;
@@ -580,7 +578,6 @@ and fold_exp alg (E_aux (exp_aux, annot)) = alg.e_aux (fold_exp_aux alg exp_aux,
 and fold_lexp_aux alg = function
   | LE_id id -> alg.le_id id
   | LE_deref exp -> alg.le_deref (fold_exp alg exp)
-  | LE_app (id, es) -> alg.le_app (id, List.map (fold_exp alg) es)
   | LE_tuple les -> alg.le_tuple (List.map (fold_lexp alg) les)
   | LE_typ (typ, id) -> alg.le_typ (typ, id)
   | LE_vector (lexp, e) -> alg.le_vector (fold_lexp alg lexp, fold_exp alg e)
@@ -648,7 +645,6 @@ let id_exp_alg =
     e_aux = (fun (e, annot) -> E_aux (e, annot));
     le_id = (fun id -> LE_id id);
     le_deref = (fun e -> LE_deref e);
-    le_app = (fun (id, es) -> LE_app (id, es));
     le_typ = (fun (typ, id) -> LE_typ (typ, id));
     le_tuple = (fun tups -> LE_tuple tups);
     le_vector = (fun (lexp, e2) -> LE_vector (lexp, e2));
@@ -768,7 +764,6 @@ let compute_exp_alg bot join =
     e_aux = (fun ((v, e), annot) -> (v, E_aux (e, annot)));
     le_id = (fun id -> (bot, LE_id id));
     le_deref = (fun (v, e) -> (v, LE_deref e));
-    le_app = (fun (id, es) -> split_join (fun es -> LE_app (id, es)) es);
     le_typ = (fun (typ, id) -> (bot, LE_typ (typ, id)));
     le_tuple =
       (fun ls ->
@@ -859,7 +854,6 @@ let pure_exp_alg bot join =
     e_aux = (fun (v, annot) -> v);
     le_id = (fun id -> bot);
     le_deref = (fun v -> v);
-    le_app = (fun (id, es) -> join_list es);
     le_typ = (fun (typ, id) -> bot);
     le_tuple = join_list;
     le_vector = (fun (vl, v2) -> join vl v2);
@@ -899,16 +893,6 @@ let rec default_fold_lexp f x (LE_aux (le, ann) as lexp) =
   | LE_deref e ->
       let x, e = f x e in
       (x, re (LE_deref e))
-  | LE_app (id, es) ->
-      let x, es =
-        List.fold_left
-          (fun (x, es) e ->
-            let x, e' = f x e in
-            (x, e' :: es)
-          )
-          (x, []) es
-      in
-      (x, re (LE_app (id, List.rev es)))
   | LE_tuple les ->
       let x, les =
         List.fold_left
