@@ -226,7 +226,7 @@ let rec get_struct_field name = function
   let (name', v) = p in
   if id_eqb name name' then v else get_struct_field name rest_fields
 
-module Make =
+module Typed =
  functor (Tannot:S) ->
  struct
   (** val fold_match :

@@ -13,7 +13,7 @@ from sailtest import *
 
 sail_dir = get_sail_dir()
 sail = get_sail()
-targets = get_targets(['c', 'cpp', 'interpreter', 'ocaml'])
+targets = get_targets(['c', 'cpp', 'interpreter', 'ocaml', 'partial'])
 
 print("Sail is {}".format(sail))
 print("Sail dir is {}".format(sail_dir))

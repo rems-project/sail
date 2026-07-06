@@ -46,6 +46,10 @@ From Stdlib Require Import ZArith.
 From stdpp Require Import base.
 From stdpp Require Import bitvector.definitions.
 
+From Sail Require Assignment.
+From Sail Require PatternMatch.
+From Sail Require TypeAnnot.
+
 Module Type CONCRETE.
   Parameter t : Set.
 End CONCRETE.
@@ -324,3 +328,56 @@ Module Type SAIL_BITS_INT (Bits : SAIL_BITS) (Int : SAIL_INT).
   Parameter bits_length : Bits.t → Int.t.
   Parameter bits_length_abst : ∀ {n : N} {x : bv n}, bits_length (Bits.α x) = Int.α (Z.of_N n).
 End SAIL_BITS_INT.
+
+Module AstValue.
+  Definition t := Ast.value.
+End AstValue.
+
+Module Type SAIL_VALUE.
+  Include DOMAIN AstValue.
+
+  Parameter is_unit : t → bool.
+  Parameter is_true : t → bool.
+  Parameter is_false : t → bool.
+
+  Parameter of_lit : Ast.lit → t.
+
+  Parameter mk_unit : unit → t.
+  Parameter mk_list : list t → t.
+  Parameter mk_tuple : list t → t.
+  Parameter mk_vector : list t → t.
+  Parameter mk_bitvector : list t → t.
+  Parameter mk_ref : Ast.id_aux → t.
+  Parameter mk_member : Ast.id_aux → t.
+  Parameter mk_ctor : Ast.id_aux → list t → t.
+
+  Parameter cons : t → t → t.
+
+  (** Record operations. [mk_record] builds a record value from a list of
+      (field, value) pairs (later duplicates win). [update_record] replaces
+      fields of a known record value, or returns [None] when the base isn't
+      a known record. [lookup_field] is the expression-level field read,
+      degrading to [⊥]. *)
+  Parameter mk_record : list (Ast.id_aux * t) → t.
+  Parameter update_record : t → list (Ast.id_aux * t) → option t.
+  Parameter lookup_field : t → Ast.id_aux → t.
+
+  Module Matching (Tannot : TypeAnnot.S).
+    Parameter pattern_match : Ast.pat Tannot.t → t → PatternMatch.match_result t.
+  End Matching.
+
+  (** Take a destructuring assignment and a value, and return a list
+      of place and value pairs representing all the places that need
+      to be updated. *)
+  Parameter destructure_assignment : Assignment.destructure t → t → list (Assignment.place t * t).
+
+  (** <<update_place p x v>> updates the value [v], by replacing the subvalue at [p] with [x].*)
+  Parameter update_place : Assignment.place t → t → t → t.
+
+  (** The root identifier a place ultimately writes to: the variable for
+      [PL_id], or the register for a [PL_register] whose value pins down
+      a single concrete register (otherwise [None]). *)
+  Parameter place_root : Assignment.place t → option Ast.id.
+
+  Parameter complete : PatternMatch.binding t → t.
+End SAIL_VALUE.

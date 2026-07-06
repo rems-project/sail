@@ -56,6 +56,7 @@ From stdpp Require Import base.
 
 From Sail Require Import Ast.
 From Sail Require Import AstInduction.
+From Sail Require Import Assignment.
 From Sail Require Import Bit.
 From Sail Require Import IdUtil.
 From Sail Require Import ListUtil.
@@ -427,7 +428,7 @@ Qed.
 
 Module Make (Tannot : TypeAnnot.S).
 
-  Module PM := PatternMatch.Make(Tannot).
+  Module PM := PatternMatch.Typed(Tannot).
   Import PM.
 
   Fixpoint substitute {A} (n : Ast.id) (v : Ast.value) (x : exp A) : exp A :=

@@ -570,7 +570,7 @@ Fixpoint get_struct_field (name : id) (fields : list (id * value)) {struct field
   | [] => V_unit
   end.
 
-Module Make (Tannot : TypeAnnot.S).
+Module Typed (Tannot : TypeAnnot.S).
 
   Fixpoint fold_match
       (f : pat Tannot.t → value → match_result value)
@@ -697,4 +697,4 @@ Module Make (Tannot : TypeAnnot.S).
     (* TODO *)
     | P_string_append _ => simple_match value
     end.
-End Make.
+End Typed.

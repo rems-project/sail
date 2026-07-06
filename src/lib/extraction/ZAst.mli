@@ -1,41 +1,14 @@
-open AbsBitvector
-open AbsValue
+open Assignment
 open Ast
-open AstInduction
-open BinInt
-open Bit
 open Datatypes
 open IdUtil
-open Interval
+open Lattice
 open List0
 open ListDef
-open ListUtil
 open OptionUtil
 open PatternMatch
-open Qcanon
-open SailBase
-open TransferBitvectorInterval
 open TypeAnnot
 open Base
-open Fin_maps
-open Gmap
-
-type 'a zlexp_aux =
-| LZ_id of id
-| LZ_deref
-| LZ_typ of typ * id
-| LZ_tuple of 'a zlexp list
-| LZ_vector_concat of 'a zlexp list
-| LZ_vector of 'a zlexp
-| LZ_vector_range of 'a zlexp
-| LZ_field of 'a zlexp * id
-and 'a zlexp =
-| LZ_aux of 'a zlexp_aux * 'a annot
-
-val lexp_to_z : 'a1 lexp -> 'a1 zlexp
-
-val update_zlexp_subexps :
-  'a1 exp list -> 'a1 zlexp -> 'a1 lexp option * 'a1 exp list
 
 type single_case =
 | Field of id
@@ -156,176 +129,62 @@ module ExpBuilder :
  end
 
 module Residual :
- functor (Tannot__3:S) ->
+ functor (Tannot:S) ->
  functor (B:sig
   type t
 
-  val mk_app : Tannot__3.t annot -> id -> t list -> t
+  val mk_app : Tannot.t annot -> id -> t list -> t
 
-  val mk_config : Tannot__3.t annot -> string list -> t
+  val mk_config : Tannot.t annot -> string list -> t
 
-  val mk_id : Tannot__3.t annot -> id -> t
+  val mk_id : Tannot.t annot -> id -> t
 
-  val mk_block : Tannot__3.t annot -> t list -> t
+  val mk_block : Tannot.t annot -> t list -> t
 
-  val mk_exit : Tannot__3.t annot -> t -> t
+  val mk_exit : Tannot.t annot -> t -> t
 
-  val mk_ite : Tannot__3.t annot -> t -> t -> t -> t
+  val mk_ite : Tannot.t annot -> t -> t -> t -> t
 
-  val mk_list : Tannot__3.t annot -> list_case -> t list -> t
+  val mk_list : Tannot.t annot -> list_case -> t list -> t
 
-  val mk_literal : Tannot__3.t annot -> lit -> t
+  val mk_literal : Tannot.t annot -> lit -> t
 
   val mk_match :
-    Tannot__3.t annot -> match_case -> t -> ((Tannot__3.t pat * t
-    option) * t) list -> t
+    Tannot.t annot -> match_case -> t -> ((Tannot.t pat * t option) * t) list
+    -> t
 
-  val mk_pair : Tannot__3.t annot -> pair_case -> t -> t -> t
+  val mk_pair : Tannot.t annot -> pair_case -> t -> t -> t
 
-  val mk_ref : Tannot__3.t annot -> id -> t
+  val mk_ref : Tannot.t annot -> id -> t
 
-  val mk_return : Tannot__3.t annot -> t -> t
+  val mk_return : Tannot.t annot -> t -> t
 
-  val mk_inline : Tannot__3.t annot -> t -> t
+  val mk_inline : Tannot.t annot -> t -> t
 
-  val mk_single : Tannot__3.t annot -> single_case -> t -> t
+  val mk_single : Tannot.t annot -> single_case -> t -> t
 
-  val mk_var : Tannot__3.t annot -> Tannot__3.t zlexp -> t list -> t -> t -> t
+  val mk_var : Tannot.t annot -> Tannot.t zlexp -> t list -> t -> t -> t
 
-  val mk_assign : Tannot__3.t annot -> Tannot__3.t zlexp -> t list -> t -> t
+  val mk_assign : Tannot.t annot -> Tannot.t zlexp -> t list -> t -> t
 
-  val mk_undef : Tannot__3.t annot -> t
+  val mk_undef : Tannot.t annot -> t
 
-  val mk_struct : Tannot__3.t annot -> struct_name -> (id * t) list -> t
+  val mk_struct : Tannot.t annot -> struct_name -> (id * t) list -> t
 
   val mk_struct_update :
-    Tannot__3.t annot -> struct_name -> t -> (id * t) list -> t
+    Tannot.t annot -> struct_name -> t -> (id * t) list -> t
  end) ->
+ functor (L:SAIL_VALUE) ->
  sig
-  module L :
-   sig
-    module DZP :
-     sig
-     end
-
-    module DbvP :
-     sig
-     end
-
-    type value =
-    | V_bitvector of AbsBitvector.Dom.t
-    | V_vector of value list
-    | V_list of value list
-    | V_int of Dom.t
-    | V_real of coq_Qc
-    | V_bool of bool
-    | V_tuple of value list
-    | V_unit
-    | V_string of string
-    | V_ref of id_aux
-    | V_member of id_aux gset
-    | V_ctor of (id_aux, value list) gmap
-    | V_record of (id_aux, value) gmap
-    | V_top
-    | V_bot
-
-    val value_rect :
-      (AbsBitvector.Dom.t -> 'a1) -> (value list -> 'a1) -> (value list ->
-      'a1) -> (Dom.t -> 'a1) -> (coq_Qc -> 'a1) -> (bool -> 'a1) -> (value
-      list -> 'a1) -> 'a1 -> (string -> 'a1) -> (id_aux -> 'a1) -> (id_aux
-      gset -> 'a1) -> ((id_aux, value list) gmap -> 'a1) -> ((id_aux, value)
-      gmap -> 'a1) -> 'a1 -> 'a1 -> value -> 'a1
-
-    val value_rec :
-      (AbsBitvector.Dom.t -> 'a1) -> (value list -> 'a1) -> (value list ->
-      'a1) -> (Dom.t -> 'a1) -> (coq_Qc -> 'a1) -> (bool -> 'a1) -> (value
-      list -> 'a1) -> 'a1 -> (string -> 'a1) -> (id_aux -> 'a1) -> (id_aux
-      gset -> 'a1) -> ((id_aux, value list) gmap -> 'a1) -> ((id_aux, value)
-      gmap -> 'a1) -> 'a1 -> 'a1 -> value -> 'a1
-
-    val mk_ctor : id_aux -> value list -> value
-
-    val mk_member : id_aux -> value
-
-    val is_unit : value -> bool
-
-    val is_true : value -> bool
-
-    val is_false : value -> bool
-
-    type t = value
-
-    val top : value
-
-    val bot : t
-
-    val value_length : value -> value
-
-    val mk_bitvector' : value list -> AbsBitvector.Dom.t option
-
-    val mk_bitvector : value list -> value
-
-    val vdepth : value -> Big_int_Z.big_int
-
-    val key_inter : (id_aux, 'a1) gmap -> (id_aux, 'a1) gmap -> id_aux list
-
-    val ctor_compat :
-      (id_aux, value list) gmap -> (id_aux, value list) gmap -> bool
-
-    val same_or : 'a1 coq_EqDecb -> t -> ('a1 -> t) -> 'a1 -> 'a1 -> t
-
-    val join : value -> value -> value
-
-    val meet : value -> value -> value
-
-    val leb : value -> value -> bool
-
-    val abst : Ast.value -> value
-
-    val of_lit : lit -> value
-
-    val lookup_field : value -> id_aux -> value
-
-    val int_concrete : Dom.t -> Big_int_Z.big_int option
-
-    val bv_slice : value -> Big_int_Z.big_int -> Big_int_Z.big_int -> value
-
-    val set_field : value -> id_aux -> value -> value
-
-    val vector_update : value list -> Big_int_Z.big_int -> value -> value list
-
-    val set_bv_range :
-      value -> Big_int_Z.big_int -> Big_int_Z.big_int -> value -> value
-
-    val get_vector_elem : value -> Big_int_Z.big_int -> value
-
-    val set_vector_elem : value -> Big_int_Z.big_int -> value -> value
-
-    module Matching :
-     functor (Tannot:S) ->
-     sig
-      val match_bitvector_lit :
-        bit list -> AbsBitvector.Dom.t -> value match_result
-
-      val pattern_match_literal : lit -> value -> value match_result
-
-      val pattern_match : Tannot.t pat -> value -> value match_result
-     end
-
-    val complete_partial :
-      ((t * Big_int_Z.big_int) * Big_int_Z.big_int) non_empty -> t
-
-    val complete : t binding -> t
-   end
-
   module Matching :
    sig
-    val match_bitvector_lit :
-      bit list -> AbsBitvector.Dom.t -> L.value match_result
+    val pattern_match : Tannot.t pat -> L.t -> L.t match_result
+   end
 
-    val pattern_match_literal : lit -> L.value -> L.value match_result
-
-    val pattern_match : Tannot__3.t pat -> L.value -> L.value match_result
+  module Destructure :
+   sig
+    val zlexp_to_destructure :
+      'a1 list -> Tannot.t zlexp -> 'a1 destructure option * 'a1 list
    end
 
   type value = { this : L.t option; exn : L.t option; eff : bool }
@@ -336,9 +195,15 @@ module Residual :
 
   val eff : value -> bool
 
-  type state = { locals : L.t IdMap.t list; registers : L.t IdMap.t }
+  type state = { local_lets : L.t IdMap.t list;
+                 local_vars : L.t IdMap.t list; toplevel_lets : L.t IdMap.t;
+                 registers : L.t IdMap.t }
 
-  val locals : state -> L.t IdMap.t list
+  val local_lets : state -> L.t IdMap.t list
+
+  val local_vars : state -> L.t IdMap.t list
+
+  val toplevel_lets : state -> L.t IdMap.t
 
   val registers : state -> L.t IdMap.t
 
@@ -352,52 +217,54 @@ module Residual :
 
   val bounded_join : L.t option -> L.t option -> L.t option
 
-  val mk_block : Tannot__3.t annot -> t list -> value * B.t
+  val mk_block : Tannot.t annot -> t list -> value * B.t
 
-  val mk_exit : Tannot__3.t annot -> t -> value * B.t
+  val mk_exit : Tannot.t annot -> t -> value * B.t
 
-  val mk_ite : Tannot__3.t annot -> t -> t -> t -> value * B.t
+  val mk_ite : Tannot.t annot -> t -> t -> t -> value * B.t
 
-  val mk_list : Tannot__3.t annot -> list_case -> t list -> value * B.t
+  val mk_list : Tannot.t annot -> list_case -> t list -> value * B.t
 
-  val mk_literal : Tannot__3.t annot -> lit -> value * B.t
+  val mk_literal : Tannot.t annot -> lit -> value * B.t
 
   val build_arm :
-    (((state * Tannot__3.t pat) * t option) * t) -> (Tannot__3.t pat * B.t
+    (((state * Tannot.t pat) * t option) * t) -> (Tannot.t pat * B.t
     option) * B.t
 
-  val exn_arm : (((state * Tannot__3.t pat) * t option) * t) -> L.t option
+  val exn_arm : (((state * Tannot.t pat) * t option) * t) -> L.t option
 
-  val this_arm : (((state * Tannot__3.t pat) * t option) * t) -> L.t option
+  val this_arm : (((state * Tannot.t pat) * t option) * t) -> L.t option
 
-  val eff_arm : (((state * Tannot__3.t pat) * t option) * t) -> bool
+  val eff_arm : (((state * Tannot.t pat) * t option) * t) -> bool
 
   val mk_match :
-    Tannot__3.t annot -> match_case -> bool -> t -> (((state * Tannot__3.t
-    pat) * t option) * t) list -> t
+    Tannot.t annot -> match_case -> bool -> t -> (((state * Tannot.t pat) * t
+    option) * t) list -> t
 
-  val mk_pair : Tannot__3.t annot -> pair_case -> t -> t -> value * B.t
+  val mk_pair : Tannot.t annot -> pair_case -> t -> t -> value * B.t
 
-  val mk_ref : Tannot__3.t annot -> id -> value * B.t
+  val mk_ref : Tannot.t annot -> id -> value * B.t
 
-  val mk_return : Tannot__3.t annot -> t -> value * B.t
+  val mk_return : Tannot.t annot -> t -> value * B.t
 
   val join_returns : t option -> t -> t
 
-  val mk_inline : Tannot__3.t annot -> t option -> t -> value * B.t
+  val mk_inline : Tannot.t annot -> t option -> t -> value * B.t
 
-  val mk_single : Tannot__3.t annot -> single_case -> t -> value * B.t
+  val mk_single : Tannot.t annot -> single_case -> t -> value * B.t
 
   val mk_var :
-    Tannot__3.t annot -> Tannot__3.t zlexp -> t list -> t -> t -> value * B.t
+    Tannot.t annot -> Tannot.t zlexp -> t list -> t -> t -> value * B.t
 
   val mk_assign :
-    Tannot__3.t annot -> Tannot__3.t zlexp -> t list -> t -> value * B.t
+    Tannot.t annot -> Tannot.t zlexp -> t list -> t -> value * B.t
 
-  val mk_struct : Tannot__3.t annot -> struct_name -> (id * t) list -> t
+  val known_fields : (id * t) list -> (id_aux * L.t) list option
+
+  val mk_struct : Tannot.t annot -> struct_name -> (id * t) list -> t
 
   val mk_struct_update :
-    Tannot__3.t annot -> struct_name -> t -> (id * t) list -> t
+    Tannot.t annot -> struct_name -> t -> (id * t) list -> t
 
   val empty : state
 
@@ -406,8 +273,8 @@ module Residual :
   val from_semilattice : L.t -> value
 
   val pattern_match :
-    l -> match_case -> Tannot__3.t pat -> t -> (Parse_ast.l, L.t
-    match_result) sum
+    l -> match_case -> Tannot.t pat -> t -> (Parse_ast.l, L.t match_result)
+    sum
 
   val end_match : match_case -> state option -> state list -> state
 
@@ -415,220 +282,86 @@ module Residual :
 
   val pop_scope : state -> state
 
-  val lookup_local : Parse_ast.l -> L.t IdMap.t list -> id -> L.t option
+  val lookup_local_let : state -> id -> L.t option
+
+  val lookup_local_var : state -> id -> L.t option
 
   val lookup : Parse_ast.l -> state -> id -> (Parse_ast.l, L.t) sum
 
-  type update_step =
-  | US_field of id_aux
-  | US_index of Big_int_Z.big_int
-  | US_range of Big_int_Z.big_int * Big_int_Z.big_int
+  val bind_arm : L.t IdMap.t -> state -> L.t option IdMap.t * state
 
-  val update_step_rect :
-    (id_aux -> 'a1) -> (Big_int_Z.big_int -> 'a1) -> (Big_int_Z.big_int ->
-    Big_int_Z.big_int -> 'a1) -> update_step -> 'a1
-
-  val update_step_rec :
-    (id_aux -> 'a1) -> (Big_int_Z.big_int -> 'a1) -> (Big_int_Z.big_int ->
-    Big_int_Z.big_int -> 'a1) -> update_step -> 'a1
-
-  val apply_path : L.t -> update_step list -> L.t -> L.t
-
-  val subexp_concrete_z : t -> Big_int_Z.big_int option
-
-  val zlexp_path :
-    Tannot__3.t zlexp -> t list -> ((id * update_step list) * t list) option
+  val restore_arm : L.t option IdMap.t -> state -> state
 
   val state_lookup : state -> id -> L.t
 
   val assign_id : id -> L.t -> state -> state
 
-  val assign_via_path : Tannot__3.t zlexp -> t list -> L.t -> state -> state
+  val subexp_values : t list -> L.t list
 
-  val last_update_step : update_step list -> update_step option
+  val assign_place : state -> (L.t place * L.t) -> state
 
-  val zlexp_subwidth : Tannot__3.t zlexp -> t list -> Big_int_Z.big_int option
-
-  val assign_value :
-    Tannot__3.t zlexp -> t list -> L.t -> state -> state * t list
-
-  val assign : Tannot__3.t zlexp -> t list -> t -> state -> state
+  val assign : Tannot.t zlexp -> t list -> t -> state -> state
  end
 
 module Make :
- functor (Tannot__5:S) ->
+ functor (Tannot:S) ->
  functor (B:sig
   type t
 
-  val mk_app : Tannot__5.t annot -> id -> t list -> t
+  val mk_app : Tannot.t annot -> id -> t list -> t
 
-  val mk_config : Tannot__5.t annot -> string list -> t
+  val mk_config : Tannot.t annot -> string list -> t
 
-  val mk_id : Tannot__5.t annot -> id -> t
+  val mk_id : Tannot.t annot -> id -> t
 
-  val mk_block : Tannot__5.t annot -> t list -> t
+  val mk_block : Tannot.t annot -> t list -> t
 
-  val mk_exit : Tannot__5.t annot -> t -> t
+  val mk_exit : Tannot.t annot -> t -> t
 
-  val mk_ite : Tannot__5.t annot -> t -> t -> t -> t
+  val mk_ite : Tannot.t annot -> t -> t -> t -> t
 
-  val mk_list : Tannot__5.t annot -> list_case -> t list -> t
+  val mk_list : Tannot.t annot -> list_case -> t list -> t
 
-  val mk_literal : Tannot__5.t annot -> lit -> t
+  val mk_literal : Tannot.t annot -> lit -> t
 
   val mk_match :
-    Tannot__5.t annot -> match_case -> t -> ((Tannot__5.t pat * t
-    option) * t) list -> t
+    Tannot.t annot -> match_case -> t -> ((Tannot.t pat * t option) * t) list
+    -> t
 
-  val mk_pair : Tannot__5.t annot -> pair_case -> t -> t -> t
+  val mk_pair : Tannot.t annot -> pair_case -> t -> t -> t
 
-  val mk_ref : Tannot__5.t annot -> id -> t
+  val mk_ref : Tannot.t annot -> id -> t
 
-  val mk_return : Tannot__5.t annot -> t -> t
+  val mk_return : Tannot.t annot -> t -> t
 
-  val mk_inline : Tannot__5.t annot -> t -> t
+  val mk_inline : Tannot.t annot -> t -> t
 
-  val mk_single : Tannot__5.t annot -> single_case -> t -> t
+  val mk_single : Tannot.t annot -> single_case -> t -> t
 
-  val mk_var : Tannot__5.t annot -> Tannot__5.t zlexp -> t list -> t -> t -> t
+  val mk_var : Tannot.t annot -> Tannot.t zlexp -> t list -> t -> t -> t
 
-  val mk_assign : Tannot__5.t annot -> Tannot__5.t zlexp -> t list -> t -> t
+  val mk_assign : Tannot.t annot -> Tannot.t zlexp -> t list -> t -> t
 
-  val mk_undef : Tannot__5.t annot -> t
+  val mk_undef : Tannot.t annot -> t
 
-  val mk_struct : Tannot__5.t annot -> struct_name -> (id * t) list -> t
+  val mk_struct : Tannot.t annot -> struct_name -> (id * t) list -> t
 
   val mk_struct_update :
-    Tannot__5.t annot -> struct_name -> t -> (id * t) list -> t
+    Tannot.t annot -> struct_name -> t -> (id * t) list -> t
  end) ->
+ functor (L:SAIL_VALUE) ->
  sig
   module R :
    sig
-    module L :
-     sig
-      module DZP :
-       sig
-       end
-
-      module DbvP :
-       sig
-       end
-
-      type value =
-      | V_bitvector of AbsBitvector.Dom.t
-      | V_vector of value list
-      | V_list of value list
-      | V_int of Dom.t
-      | V_real of coq_Qc
-      | V_bool of bool
-      | V_tuple of value list
-      | V_unit
-      | V_string of string
-      | V_ref of id_aux
-      | V_member of id_aux gset
-      | V_ctor of (id_aux, value list) gmap
-      | V_record of (id_aux, value) gmap
-      | V_top
-      | V_bot
-
-      val value_rect :
-        (AbsBitvector.Dom.t -> 'a1) -> (value list -> 'a1) -> (value list ->
-        'a1) -> (Dom.t -> 'a1) -> (coq_Qc -> 'a1) -> (bool -> 'a1) -> (value
-        list -> 'a1) -> 'a1 -> (string -> 'a1) -> (id_aux -> 'a1) -> (id_aux
-        gset -> 'a1) -> ((id_aux, value list) gmap -> 'a1) -> ((id_aux,
-        value) gmap -> 'a1) -> 'a1 -> 'a1 -> value -> 'a1
-
-      val value_rec :
-        (AbsBitvector.Dom.t -> 'a1) -> (value list -> 'a1) -> (value list ->
-        'a1) -> (Dom.t -> 'a1) -> (coq_Qc -> 'a1) -> (bool -> 'a1) -> (value
-        list -> 'a1) -> 'a1 -> (string -> 'a1) -> (id_aux -> 'a1) -> (id_aux
-        gset -> 'a1) -> ((id_aux, value list) gmap -> 'a1) -> ((id_aux,
-        value) gmap -> 'a1) -> 'a1 -> 'a1 -> value -> 'a1
-
-      val mk_ctor : id_aux -> value list -> value
-
-      val mk_member : id_aux -> value
-
-      val is_unit : value -> bool
-
-      val is_true : value -> bool
-
-      val is_false : value -> bool
-
-      type t = value
-
-      val top : value
-
-      val bot : t
-
-      val value_length : value -> value
-
-      val mk_bitvector' : value list -> AbsBitvector.Dom.t option
-
-      val mk_bitvector : value list -> value
-
-      val vdepth : value -> Big_int_Z.big_int
-
-      val key_inter : (id_aux, 'a1) gmap -> (id_aux, 'a1) gmap -> id_aux list
-
-      val ctor_compat :
-        (id_aux, value list) gmap -> (id_aux, value list) gmap -> bool
-
-      val same_or : 'a1 coq_EqDecb -> t -> ('a1 -> t) -> 'a1 -> 'a1 -> t
-
-      val join : value -> value -> value
-
-      val meet : value -> value -> value
-
-      val leb : value -> value -> bool
-
-      val abst : Ast.value -> value
-
-      val of_lit : lit -> value
-
-      val lookup_field : value -> id_aux -> value
-
-      val int_concrete : Dom.t -> Big_int_Z.big_int option
-
-      val bv_slice : value -> Big_int_Z.big_int -> Big_int_Z.big_int -> value
-
-      val set_field : value -> id_aux -> value -> value
-
-      val vector_update :
-        value list -> Big_int_Z.big_int -> value -> value list
-
-      val set_bv_range :
-        value -> Big_int_Z.big_int -> Big_int_Z.big_int -> value -> value
-
-      val get_vector_elem : value -> Big_int_Z.big_int -> value
-
-      val set_vector_elem : value -> Big_int_Z.big_int -> value -> value
-
-      module Matching :
-       functor (Tannot:S) ->
-       sig
-        val match_bitvector_lit :
-          bit list -> AbsBitvector.Dom.t -> value match_result
-
-        val pattern_match_literal : lit -> value -> value match_result
-
-        val pattern_match : Tannot.t pat -> value -> value match_result
-       end
-
-      val complete_partial :
-        ((t * Big_int_Z.big_int) * Big_int_Z.big_int) non_empty -> t
-
-      val complete : t binding -> t
-     end
-
     module Matching :
      sig
-      val match_bitvector_lit :
-        bit list -> AbsBitvector.Dom.t -> L.value match_result
+      val pattern_match : Tannot.t pat -> L.t -> L.t match_result
+     end
 
-      val pattern_match_literal : lit -> L.value -> L.value match_result
-
-      val pattern_match : Tannot__5.t pat -> L.value -> L.value match_result
+    module Destructure :
+     sig
+      val zlexp_to_destructure :
+        'a1 list -> Tannot.t zlexp -> 'a1 destructure option * 'a1 list
      end
 
     type value = { this : L.t option; exn : L.t option; eff : bool }
@@ -639,9 +372,15 @@ module Make :
 
     val eff : value -> bool
 
-    type state = { locals : L.t IdMap.t list; registers : L.t IdMap.t }
+    type state = { local_lets : L.t IdMap.t list;
+                   local_vars : L.t IdMap.t list;
+                   toplevel_lets : L.t IdMap.t; registers : L.t IdMap.t }
 
-    val locals : state -> L.t IdMap.t list
+    val local_lets : state -> L.t IdMap.t list
+
+    val local_vars : state -> L.t IdMap.t list
+
+    val toplevel_lets : state -> L.t IdMap.t
 
     val registers : state -> L.t IdMap.t
 
@@ -655,53 +394,54 @@ module Make :
 
     val bounded_join : L.t option -> L.t option -> L.t option
 
-    val mk_block : Tannot__5.t annot -> t list -> value * B.t
+    val mk_block : Tannot.t annot -> t list -> value * B.t
 
-    val mk_exit : Tannot__5.t annot -> t -> value * B.t
+    val mk_exit : Tannot.t annot -> t -> value * B.t
 
-    val mk_ite : Tannot__5.t annot -> t -> t -> t -> value * B.t
+    val mk_ite : Tannot.t annot -> t -> t -> t -> value * B.t
 
-    val mk_list : Tannot__5.t annot -> list_case -> t list -> value * B.t
+    val mk_list : Tannot.t annot -> list_case -> t list -> value * B.t
 
-    val mk_literal : Tannot__5.t annot -> lit -> value * B.t
+    val mk_literal : Tannot.t annot -> lit -> value * B.t
 
     val build_arm :
-      (((state * Tannot__5.t pat) * t option) * t) -> (Tannot__5.t pat * B.t
+      (((state * Tannot.t pat) * t option) * t) -> (Tannot.t pat * B.t
       option) * B.t
 
-    val exn_arm : (((state * Tannot__5.t pat) * t option) * t) -> L.t option
+    val exn_arm : (((state * Tannot.t pat) * t option) * t) -> L.t option
 
-    val this_arm : (((state * Tannot__5.t pat) * t option) * t) -> L.t option
+    val this_arm : (((state * Tannot.t pat) * t option) * t) -> L.t option
 
-    val eff_arm : (((state * Tannot__5.t pat) * t option) * t) -> bool
+    val eff_arm : (((state * Tannot.t pat) * t option) * t) -> bool
 
     val mk_match :
-      Tannot__5.t annot -> match_case -> bool -> t -> (((state * Tannot__5.t
+      Tannot.t annot -> match_case -> bool -> t -> (((state * Tannot.t
       pat) * t option) * t) list -> t
 
-    val mk_pair : Tannot__5.t annot -> pair_case -> t -> t -> value * B.t
+    val mk_pair : Tannot.t annot -> pair_case -> t -> t -> value * B.t
 
-    val mk_ref : Tannot__5.t annot -> id -> value * B.t
+    val mk_ref : Tannot.t annot -> id -> value * B.t
 
-    val mk_return : Tannot__5.t annot -> t -> value * B.t
+    val mk_return : Tannot.t annot -> t -> value * B.t
 
     val join_returns : t option -> t -> t
 
-    val mk_inline : Tannot__5.t annot -> t option -> t -> value * B.t
+    val mk_inline : Tannot.t annot -> t option -> t -> value * B.t
 
-    val mk_single : Tannot__5.t annot -> single_case -> t -> value * B.t
+    val mk_single : Tannot.t annot -> single_case -> t -> value * B.t
 
     val mk_var :
-      Tannot__5.t annot -> Tannot__5.t zlexp -> t list -> t -> t ->
-      value * B.t
+      Tannot.t annot -> Tannot.t zlexp -> t list -> t -> t -> value * B.t
 
     val mk_assign :
-      Tannot__5.t annot -> Tannot__5.t zlexp -> t list -> t -> value * B.t
+      Tannot.t annot -> Tannot.t zlexp -> t list -> t -> value * B.t
 
-    val mk_struct : Tannot__5.t annot -> struct_name -> (id * t) list -> t
+    val known_fields : (id * t) list -> (id_aux * L.t) list option
+
+    val mk_struct : Tannot.t annot -> struct_name -> (id * t) list -> t
 
     val mk_struct_update :
-      Tannot__5.t annot -> struct_name -> t -> (id * t) list -> t
+      Tannot.t annot -> struct_name -> t -> (id * t) list -> t
 
     val empty : state
 
@@ -710,8 +450,8 @@ module Make :
     val from_semilattice : L.t -> value
 
     val pattern_match :
-      l -> match_case -> Tannot__5.t pat -> t -> (Parse_ast.l, L.t
-      match_result) sum
+      l -> match_case -> Tannot.t pat -> t -> (Parse_ast.l, L.t match_result)
+      sum
 
     val end_match : match_case -> state option -> state list -> state
 
@@ -719,177 +459,41 @@ module Make :
 
     val pop_scope : state -> state
 
-    val lookup_local : Parse_ast.l -> L.t IdMap.t list -> id -> L.t option
+    val lookup_local_let : state -> id -> L.t option
+
+    val lookup_local_var : state -> id -> L.t option
 
     val lookup : Parse_ast.l -> state -> id -> (Parse_ast.l, L.t) sum
 
-    type update_step =
-    | US_field of id_aux
-    | US_index of Big_int_Z.big_int
-    | US_range of Big_int_Z.big_int * Big_int_Z.big_int
+    val bind_arm : L.t IdMap.t -> state -> L.t option IdMap.t * state
 
-    val update_step_rect :
-      (id_aux -> 'a1) -> (Big_int_Z.big_int -> 'a1) -> (Big_int_Z.big_int ->
-      Big_int_Z.big_int -> 'a1) -> update_step -> 'a1
-
-    val update_step_rec :
-      (id_aux -> 'a1) -> (Big_int_Z.big_int -> 'a1) -> (Big_int_Z.big_int ->
-      Big_int_Z.big_int -> 'a1) -> update_step -> 'a1
-
-    val apply_path : L.t -> update_step list -> L.t -> L.t
-
-    val subexp_concrete_z : t -> Big_int_Z.big_int option
-
-    val zlexp_path :
-      Tannot__5.t zlexp -> t list -> ((id * update_step list) * t list) option
+    val restore_arm : L.t option IdMap.t -> state -> state
 
     val state_lookup : state -> id -> L.t
 
     val assign_id : id -> L.t -> state -> state
 
-    val assign_via_path : Tannot__5.t zlexp -> t list -> L.t -> state -> state
+    val subexp_values : t list -> L.t list
 
-    val last_update_step : update_step list -> update_step option
+    val assign_place : state -> (L.t place * L.t) -> state
 
-    val zlexp_subwidth :
-      Tannot__5.t zlexp -> t list -> Big_int_Z.big_int option
-
-    val assign_value :
-      Tannot__5.t zlexp -> t list -> L.t -> state -> state * t list
-
-    val assign : Tannot__5.t zlexp -> t list -> t -> state -> state
-   end
-
-  module L :
-   sig
-    module DZP :
-     sig
-     end
-
-    module DbvP :
-     sig
-     end
-
-    type value = R.L.value =
-    | V_bitvector of AbsBitvector.Dom.t
-    | V_vector of value list
-    | V_list of value list
-    | V_int of Dom.t
-    | V_real of coq_Qc
-    | V_bool of bool
-    | V_tuple of value list
-    | V_unit
-    | V_string of string
-    | V_ref of id_aux
-    | V_member of id_aux gset
-    | V_ctor of (id_aux, value list) gmap
-    | V_record of (id_aux, value) gmap
-    | V_top
-    | V_bot
-
-    val value_rect :
-      (AbsBitvector.Dom.t -> 'a1) -> (value list -> 'a1) -> (value list ->
-      'a1) -> (Dom.t -> 'a1) -> (coq_Qc -> 'a1) -> (bool -> 'a1) -> (value
-      list -> 'a1) -> 'a1 -> (string -> 'a1) -> (id_aux -> 'a1) -> (id_aux
-      gset -> 'a1) -> ((id_aux, value list) gmap -> 'a1) -> ((id_aux, value)
-      gmap -> 'a1) -> 'a1 -> 'a1 -> value -> 'a1
-
-    val value_rec :
-      (AbsBitvector.Dom.t -> 'a1) -> (value list -> 'a1) -> (value list ->
-      'a1) -> (Dom.t -> 'a1) -> (coq_Qc -> 'a1) -> (bool -> 'a1) -> (value
-      list -> 'a1) -> 'a1 -> (string -> 'a1) -> (id_aux -> 'a1) -> (id_aux
-      gset -> 'a1) -> ((id_aux, value list) gmap -> 'a1) -> ((id_aux, value)
-      gmap -> 'a1) -> 'a1 -> 'a1 -> value -> 'a1
-
-    val mk_ctor : id_aux -> value list -> value
-
-    val mk_member : id_aux -> value
-
-    val is_unit : value -> bool
-
-    val is_true : value -> bool
-
-    val is_false : value -> bool
-
-    type t = value
-
-    val top : value
-
-    val bot : t
-
-    val value_length : value -> value
-
-    val mk_bitvector' : value list -> AbsBitvector.Dom.t option
-
-    val mk_bitvector : value list -> value
-
-    val vdepth : value -> Big_int_Z.big_int
-
-    val key_inter : (id_aux, 'a1) gmap -> (id_aux, 'a1) gmap -> id_aux list
-
-    val ctor_compat :
-      (id_aux, value list) gmap -> (id_aux, value list) gmap -> bool
-
-    val same_or : 'a1 coq_EqDecb -> t -> ('a1 -> t) -> 'a1 -> 'a1 -> t
-
-    val join : value -> value -> value
-
-    val meet : value -> value -> value
-
-    val leb : value -> value -> bool
-
-    val abst : Ast.value -> value
-
-    val of_lit : lit -> value
-
-    val lookup_field : value -> id_aux -> value
-
-    val int_concrete : Dom.t -> Big_int_Z.big_int option
-
-    val bv_slice : value -> Big_int_Z.big_int -> Big_int_Z.big_int -> value
-
-    val set_field : value -> id_aux -> value -> value
-
-    val vector_update : value list -> Big_int_Z.big_int -> value -> value list
-
-    val set_bv_range :
-      value -> Big_int_Z.big_int -> Big_int_Z.big_int -> value -> value
-
-    val get_vector_elem : value -> Big_int_Z.big_int -> value
-
-    val set_vector_elem : value -> Big_int_Z.big_int -> value -> value
-
-    module Matching :
-     functor (Tannot:S) ->
-     sig
-      val match_bitvector_lit :
-        bit list -> AbsBitvector.Dom.t -> value match_result
-
-      val pattern_match_literal : lit -> value -> value match_result
-
-      val pattern_match : Tannot.t pat -> value -> value match_result
-     end
-
-    val complete_partial :
-      ((t * Big_int_Z.big_int) * Big_int_Z.big_int) non_empty -> t
-
-    val complete : t binding -> t
+    val assign : Tannot.t zlexp -> t list -> t -> state -> state
    end
 
   module Monad :
    sig
     type function_return =
-    | Return_inlined of ((Tannot__5.t pat * Tannot__5.t exp
-                        option) * Tannot__5.t exp) list
+    | Return_inlined of ((Tannot.t pat * Tannot.t exp option) * Tannot.t exp)
+                        list
     | Return_value of R.value
 
     val function_return_rect :
-      (((Tannot__5.t pat * Tannot__5.t exp option) * Tannot__5.t exp) list ->
-      'a1) -> (R.value -> 'a1) -> function_return -> 'a1
+      (((Tannot.t pat * Tannot.t exp option) * Tannot.t exp) list -> 'a1) ->
+      (R.value -> 'a1) -> function_return -> 'a1
 
     val function_return_rec :
-      (((Tannot__5.t pat * Tannot__5.t exp option) * Tannot__5.t exp) list ->
-      'a1) -> (R.value -> 'a1) -> function_return -> 'a1
+      (((Tannot.t pat * Tannot.t exp option) * Tannot.t exp) list -> 'a1) ->
+      (R.value -> 'a1) -> function_return -> 'a1
 
     type 'a t =
     | Pure of 'a
@@ -923,21 +527,19 @@ module Make :
 
   val pure : 'a1 -> 'a1 Monad.t
 
-  type t = (L.t IdMap.t, R.t, R.state, Tannot__5.t) zexp
-
-  val lookup : t -> id -> L.t option
+  type t = (L.t option IdMap.t, R.t, R.state, Tannot.t) zexp
 
   val down :
-    t -> R.state -> Tannot__5.t exp -> ((t * R.state) * (Tannot__5.t exp,
-    R.t) sum) Monad.t
+    t -> R.state -> Tannot.t exp -> ((t * R.state) * (Tannot.t exp, R.t) sum)
+    Monad.t
 
   val join_inline_return : R.t -> t -> t option
 
   val next :
-    (L.t IdMap.t, R.t, R.state, Tannot__5.t) zexp_aux -> Tannot__5.t annot ->
-    R.state -> R.t -> ((t * R.state) * (Tannot__5.t exp, R.t) sum) Monad.t
+    (L.t option IdMap.t, R.t, R.state, Tannot.t) zexp_aux -> Tannot.t annot
+    -> R.state -> R.t -> ((t * R.state) * (Tannot.t exp, R.t) sum) Monad.t
 
   val step :
-    t -> R.state -> (Tannot__5.t exp, R.t) sum ->
-    ((t * R.state) * (Tannot__5.t exp, R.t) sum) Monad.t
+    t -> R.state -> (Tannot.t exp, R.t) sum -> ((t * R.state) * (Tannot.t
+    exp, R.t) sum) Monad.t
  end

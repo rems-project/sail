@@ -56,10 +56,12 @@ open Reporting.Position
 
 module Callgraph_commands = Callgraph_commands
 
+module Partial = Partial_eval.Make (Partial_eval.AbsValue)
+
 type mode =
   | Normal
   | Evaluation of frame
-  | PartialEvaluation of Partial_eval.partial_state * (Partial_eval.partial_state -> Partial_eval.partial_state)
+  | PartialEvaluation of Partial.partial_state * (Partial.partial_state -> Partial.partial_state)
 
 type display_options = { clear : bool; registers : IdSet.t }
 
@@ -177,7 +179,7 @@ let print_program rstate =
   | Evaluation _ -> ()
   | PartialEvaluation (pstate, _) ->
       let open PPrint in
-      let docs = Partial_eval.(Pretty.docs (partial_state_ctx pstate)) in
+      let docs = Partial.(Pretty.docs (partial_state_ctx pstate)) in
       let num_docs = List.length docs in
       List.iteri
         (fun n doc ->
@@ -186,16 +188,16 @@ let print_program rstate =
           print_endline (Pretty_print_sail.Document.to_string doc)
         )
         docs;
-      print_endline (Partial_eval.string_of_focus pstate)
+      print_endline (Partial.string_of_focus pstate)
 
 let rec run rstate =
   match rstate.mode with
   | Normal -> rstate
   | PartialEvaluation (pstate, step) -> (
-      match Partial_eval.is_finished pstate with
+      match Partial.is_finished pstate with
       | Some v ->
-          ( match v.Partial_eval.Zinterp.R.this with
-          | Some v -> print_endline ("Result = " ^ Partial_eval.Pretty.string_of_value v)
+          ( match v.Partial.Zinterp.R.this with
+          | Some v -> print_endline ("Result = " ^ Partial_eval.AbsValue.string_of_value v)
           | None -> ()
           );
           { rstate with mode = Normal }
@@ -386,9 +388,9 @@ let repl_commands =
       repl_action =
         (fun _ pos arg rstate ->
           let exp = Type_check.infer_exp rstate.env (Initial_check.exp_of_string ~inline:pos rstate.ctx arg) in
-          let gstate = Partial_eval.initial_gstate ~typecheck_env:rstate.env ~ast:rstate.ast in
-          let step = Partial_eval.mk_interpreter ~inlining:false gstate in
-          { rstate with mode = PartialEvaluation (Partial_eval.from_exp_with_globals gstate exp, step) }
+          let gstate = Partial.initial_gstate ~typecheck_env:rstate.env ~ast:rstate.ast in
+          let step = Partial.mk_interpreter ~inlining:false gstate in
+          { rstate with mode = PartialEvaluation (Partial.from_exp_with_globals gstate exp, step) }
         );
     };
     {
@@ -398,9 +400,9 @@ let repl_commands =
       repl_action =
         (fun _ pos arg rstate ->
           let exp = Type_check.infer_exp rstate.env (Initial_check.exp_of_string ~inline:pos rstate.ctx arg) in
-          let gstate = Partial_eval.initial_gstate ~typecheck_env:rstate.env ~ast:rstate.ast in
-          let step = Partial_eval.mk_interpreter ~inlining:true gstate in
-          { rstate with mode = PartialEvaluation (Partial_eval.from_exp_with_globals gstate exp, step) }
+          let gstate = Partial.initial_gstate ~typecheck_env:rstate.env ~ast:rstate.ast in
+          let step = Partial.mk_interpreter ~inlining:true gstate in
+          { rstate with mode = PartialEvaluation (Partial.from_exp_with_globals gstate exp, step) }
         );
     };
   ]

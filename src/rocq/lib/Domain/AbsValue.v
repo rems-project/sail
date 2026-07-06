@@ -53,6 +53,7 @@ From stdpp Require Import bitvector.definitions.
 From stdpp Require Import list.
 
 From Sail Require Import SailBase.
+From Sail Require Import Assignment.
 From Sail Require Import IdUtil.
 From Sail Require Import ListUtil.
 From Sail Require Import OptionUtil.
@@ -68,11 +69,7 @@ From Sail Require ValueType.
 
 Import Ltac2.Std.
 
-Module Value.
-  Definition t := Ast.value.
-End Value.
-
-Module Dom (DZ : SAIL_INT) (Dbv : SAIL_BITS) (T : SAIL_BITS_INT Dbv DZ) <: DOMAIN Value.
+Module Dom (DZ : SAIL_INT) (Dbv : SAIL_BITS) (T : SAIL_BITS_INT Dbv DZ) <: SAIL_VALUE.
   Module DZP := DomainProperties BinInt.Z DZ.
   Module DbvP := DomainProperties Lattice.Bits Dbv.
 
@@ -114,6 +111,22 @@ Module Dom (DZ : SAIL_INT) (Dbv : SAIL_BITS) (T : SAIL_BITS_INT Dbv DZ) <: DOMAI
     match v with
     | V_bool false => true
     | _ => false
+    end.
+
+  Definition mk_unit (_ : unit) : value := V_unit.
+
+  Definition mk_tuple : list value → value := V_tuple.
+
+  Definition mk_list : list value → value := V_list.
+
+  Definition mk_vector : list value → value := V_vector.
+
+  Definition mk_ref (id : Ast.id_aux) := V_ref id.
+
+  Definition cons (h : value) (t : value) : value :=
+    match t with
+    | V_list ts => V_list (h :: ts)
+    | _ => V_bot
     end.
 
   Definition t := value.
@@ -1730,9 +1743,53 @@ Module Dom (DZ : SAIL_INT) (Dbv : SAIL_BITS) (T : SAIL_BITS_INT Dbv DZ) <: DOMAI
     | _ => ⊥
     end.
 
-  (** Re-exports of the integer / bitvector domains' concretisers so callers
-      that only see [L] (not [DZ] / [Dbv]) can pin down concrete singletons. *)
-  Definition int_concrete (i : DZ.t) : option Z := DZ.concrete i.
+  (** Like [lookup_field], but degrading to [⊤] rather than [⊥]: used when
+      descending an assignment path, where an absent field just means
+      uninitialised storage (mirroring [get_vector_elem]). *)
+  Definition get_field (r : value) (name : Ast.id_aux) : value :=
+    match r with
+    | V_record m => from_option (λ x, x) ⊤ (m !! name)
+    | _ => ⊤
+    end.
+
+  (** Build a record value from a list of (field, value) pairs. Later
+      duplicate fields win, matching [abst]'s [V_record] case. *)
+  Definition mk_record (fs : list (Ast.id_aux * value)) : value :=
+    V_record (foldl (λ m '(k, v), <[k := v]> m) ∅ fs).
+
+  (** Replace fields of a known record value; [None] when the base isn't a
+      known record. *)
+  Definition update_record (r : value) (fs : list (Ast.id_aux * value)) : option value :=
+    match r with
+    | V_record m => Some (V_record (foldl (λ m '(k, v), <[k := v]> m) m fs))
+    | _ => None
+    end.
+
+  (** Concretisers so callers that only see [L] (not [DZ] / [Dbv]) can pin
+      down concrete singletons. *)
+  Definition concrete_int (v : value) : option Z :=
+    match v with
+    | V_int i => DZ.concrete i
+    | _ => None
+    end.
+
+  Definition concrete_ref (v : value) : option Ast.id_aux :=
+    match v with
+    | V_ref id => Some id
+    | _ => None
+    end.
+
+  Definition concrete_bv_length (v : value) : option Z :=
+    match v with
+    | V_bitvector bv => DZ.concrete (T.bits_length bv)
+    | _ => None
+    end.
+
+  Definition tuple_elems (v : value) : option (list value) :=
+    match v with
+    | V_tuple vs => Some vs
+    | _ => None
+    end.
 
   (** Extract bits [s..s+m-1] (0-based, LSB at index 0) of a [V_bitvector].
       Wraps [Dbv.slice] so [Residual] can stay agnostic to [Dbv]. *)
@@ -2054,8 +2111,93 @@ Module Dom (DZ : SAIL_INT) (Dbv : SAIL_BITS) (T : SAIL_BITS_INT Dbv DZ) <: DOMAI
           end
       | _ => simple_match value
       end.
-
   End Matching.
+
+  (** Read the sub-value at place [p] within the root variable's value
+      [v], used to rebuild the intermediate levels of a nested update.
+      Reads degrade to [V_top]: an absent field or unknown element just
+      means uninitialised storage, so a freshly-written nested field
+      still produces a recognisable nested value. *)
+  Fixpoint read_place (p : place value) (v : value) : value :=
+    match p with
+    | PL_id _ _ => v
+    | PL_register _ => v
+    | PL_field p' fld => get_field (read_place p' v) (Aux.unwrap fld)
+    | PL_vector p' n =>
+        match concrete_int n with
+        | Some i => get_vector_elem (read_place p' v) i
+        | None => V_top
+        end
+    | PL_vector_range _ _ _ => V_top
+    end.
+
+  (** <<update_place p x v>> updates the value [v], by replacing the
+      subvalue at [p] with [x]. A vector index or range bound we can't
+      pin down to a concrete integer leaves [v] unchanged — the caller's
+      residual still records the write. *)
+  Fixpoint update_place (p : place value) (x : value) (v : value) : value :=
+    match p with
+    | PL_id _ _ => x
+    | PL_register _ => x
+    | PL_field p' fld =>
+        update_place p' (set_field (read_place p' v) (Aux.unwrap fld) x) v
+    | PL_vector p' n =>
+        match concrete_int n with
+        | Some i => update_place p' (set_vector_elem (read_place p' v) i x) v
+        | None => v
+        end
+    | PL_vector_range p' hi lo =>
+        match concrete_int hi, concrete_int lo with
+        | Some h, Some l => update_place p' (set_bv_range (read_place p' v) h l x) v
+        | _, _ => v
+        end
+    end.
+
+  (** Split the assigned value [v] across the places of a destructuring
+      assignment. Tuple targets walk a known [V_tuple] in lockstep;
+      bitvector concatenation targets slice a known-width [V_bitvector]
+      by each sub-target's width (the leftmost sub-target gets the high
+      bits, following [Order dec]). Whenever we can't split — unknown
+      value shape, unknown width — we return no updates for the
+      remaining places, leaving those variables' state unchanged. *)
+  Fixpoint destructure_assignment (d : destructure value) (v : value) : list (place value * value) :=
+    match d with
+    | DL_place p => [(p, v)]
+    | DL_tuple ds =>
+        match v with
+        | V_tuple vs =>
+            (fix go (ds : list (destructure value)) (vs : list value) : list (place value * value) :=
+               match ds, vs with
+               | d :: ds', v :: vs' => destructure_assignment d v ++ go ds' vs'
+               | _, _ => []
+               end) ds vs
+        | _ => []
+        end
+    | DL_vector_concat sds =>
+        match concrete_bv_length v with
+        | Some total =>
+            (fix go (sds : list (TypeAnnot.Types.vector_concat_split * destructure value)) (cur_hi : Z) : list (place value * value) :=
+               match sds with
+               | [] => []
+               | (TypeAnnot.Types.Split w, d) :: rest =>
+                   let wz := Z.of_nat w in
+                   let lo := (cur_hi + 1 - wz)%Z in
+                   destructure_assignment d (bv_slice v (Z.to_N lo) (N.of_nat w)) ++ go rest (cur_hi - wz)%Z
+               | (TypeAnnot.Types.No_split, _) :: _ => []
+               end) sds (total - 1)%Z
+        | None => []
+        end
+    end.
+
+  Fixpoint place_root (p : place value) : option Ast.id :=
+    match p with
+    | PL_id id _ => Some id
+    | PL_register r =>
+        option_map (fun reg_id => Ast.Id_aux reg_id Ast.ext_unknown_loc) (concrete_ref r)
+    | PL_vector p' _ => place_root p'
+    | PL_vector_range p' _ _ => place_root p'
+    | PL_field p' _ => place_root p'
+    end.
 
   (** Reassemble the slices recorded by a [Partial] binding (one entry
       per [v[hi..lo]] sub-pattern) into a single [V_bitvector]. We assume

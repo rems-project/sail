@@ -3,6 +3,7 @@
 (rocq.theory
  (name Sail)
  (modules
+  Assignment
   Ast
   AstInduction
   Bit
