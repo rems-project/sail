@@ -1,5 +1,5 @@
+open Assignment
 open Ast
-open AstInduction
 open Bit
 open Datatypes
 open IdUtil
@@ -268,7 +268,7 @@ let left_to_right3 x y z =
 module Make =
  functor (Tannot:S) ->
  struct
-  module PM = Make(Tannot)
+  module PM = Typed(Tannot)
 
   (** val substitute : id -> value -> 'a1 exp -> 'a1 exp **)
 

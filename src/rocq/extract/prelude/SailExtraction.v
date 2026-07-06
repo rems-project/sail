@@ -71,6 +71,8 @@ Separate Extraction
   ZAst.ExpBuilder
   ZAst.Make
   ZAst.Residual
+  Domain.Lattice
+  Domain.AbsValue.Dom
   attribute_data
   def
   l.

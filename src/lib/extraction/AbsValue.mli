@@ -1,3 +1,4 @@
+open Assignment
 open Ast
 open BinInt
 open BinNat
@@ -98,6 +99,18 @@ module Dom :
 
   val is_false : value -> bool
 
+  val mk_unit : unit -> value
+
+  val mk_tuple : value list -> value
+
+  val mk_list : value list -> value
+
+  val mk_vector : value list -> value
+
+  val mk_ref : id_aux -> value
+
+  val cons : value -> value -> value
+
   type t = value
 
   val top : value
@@ -131,7 +144,19 @@ module Dom :
 
   val lookup_field : value -> id_aux -> value
 
-  val int_concrete : DZ.t -> Big_int_Z.big_int option
+  val get_field : value -> id_aux -> value
+
+  val mk_record : (id_aux * value) list -> value
+
+  val update_record : value -> (id_aux * value) list -> value option
+
+  val concrete_int : value -> Big_int_Z.big_int option
+
+  val concrete_ref : value -> id_aux option
+
+  val concrete_bv_length : value -> Big_int_Z.big_int option
+
+  val tuple_elems : value -> value list option
 
   val bv_slice : value -> Big_int_Z.big_int -> Big_int_Z.big_int -> value
 
@@ -155,6 +180,15 @@ module Dom :
 
     val pattern_match : Tannot.t pat -> value -> value match_result
    end
+
+  val read_place : value place -> value -> value
+
+  val update_place : value place -> value -> value -> value
+
+  val destructure_assignment :
+    value destructure -> value -> (value place * value) list
+
+  val place_root : value place -> id option
 
   val complete_partial :
     ((t * Big_int_Z.big_int) * Big_int_Z.big_int) non_empty -> t

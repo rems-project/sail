@@ -49,3 +49,13 @@ let rec fold_right f a0 = function
 let rec forallb f = function
 | [] -> true
 | a :: l0 -> (&&) (f a) (forallb f l0)
+
+(** val combine : 'a1 list -> 'a2 list -> ('a1 * 'a2) list **)
+
+let rec combine l l' =
+  match l with
+  | [] -> []
+  | x :: tl0 ->
+    (match l' with
+     | [] -> []
+     | y :: tl' -> (x, y) :: (combine tl0 tl'))

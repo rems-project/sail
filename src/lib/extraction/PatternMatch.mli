@@ -57,7 +57,7 @@ val pattern_match_literal : lit -> value -> value match_result
 
 val get_struct_field : id -> (id * value) list -> value
 
-module Make :
+module Typed :
  functor (Tannot:S) ->
  sig
   val fold_match :

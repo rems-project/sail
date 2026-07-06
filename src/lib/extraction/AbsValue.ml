@@ -1,3 +1,4 @@
+open Assignment
 open Ast
 open BinInt
 open BinNat
@@ -149,6 +150,37 @@ module Dom =
   let is_false = function
   | V_bool b -> if b then false else true
   | _ -> false
+
+  (** val mk_unit : unit -> value **)
+
+  let mk_unit _ =
+    V_unit
+
+  (** val mk_tuple : value list -> value **)
+
+  let mk_tuple x =
+    V_tuple x
+
+  (** val mk_list : value list -> value **)
+
+  let mk_list x =
+    V_list x
+
+  (** val mk_vector : value list -> value **)
+
+  let mk_vector x =
+    V_vector x
+
+  (** val mk_ref : id_aux -> value **)
+
+  let mk_ref id0 =
+    V_ref id0
+
+  (** val cons : value -> value -> value **)
+
+  let cons h = function
+  | V_list ts -> V_list (h :: ts)
+  | _ -> V_bot
 
   type t = value
 
@@ -568,17 +600,17 @@ module Dom =
   | Ast.V_tuple xs -> V_tuple (map abst xs)
   | Ast.V_unit -> V_unit
   | Ast.V_string str -> V_string str
-  | Ast.V_ref id -> V_ref (Aux.unwrap id)
-  | Ast.V_member id ->
+  | Ast.V_ref id0 -> V_ref (Aux.unwrap id0)
+  | Ast.V_member id0 ->
     V_member
       (singleton (gset_singleton Aux.eq_eqdec Aux.id_aux_countable)
-        (Aux.unwrap id))
-  | Ast.V_ctor (id, xs) ->
+        (Aux.unwrap id0))
+  | Ast.V_ctor (id0, xs) ->
     V_ctor
       (singletonM
         (map_singleton (gmap_partial_alter Aux.eq_eqdec Aux.id_aux_countable)
           (gmap_empty Aux.eq_eqdec Aux.id_aux_countable))
-        (Aux.unwrap id) (map abst xs))
+        (Aux.unwrap id0) (map abst xs))
   | Ast.V_record fields ->
     V_record
       (Coq_list.foldl (fun m pat0 ->
@@ -602,10 +634,64 @@ module Dom =
         (lookup (gmap_lookup Aux.eq_eqdec Aux.id_aux_countable) name m)
     | _ -> V_bot
 
-  (** val int_concrete : DZ.t -> Big_int_Z.big_int option **)
+  (** val get_field : value -> id_aux -> value **)
 
-  let int_concrete =
-    DZ.concrete
+  let get_field r name =
+    match r with
+    | V_record m ->
+      from_option (fun x -> x) V_top
+        (lookup (gmap_lookup Aux.eq_eqdec Aux.id_aux_countable) name m)
+    | _ -> V_top
+
+  (** val mk_record : (id_aux * value) list -> value **)
+
+  let mk_record fs =
+    V_record
+      (Coq_list.foldl (fun m pat0 ->
+        let (k, v) = pat0 in
+        insert
+          (map_insert (gmap_partial_alter Aux.eq_eqdec Aux.id_aux_countable))
+          k v m)
+        (empty (gmap_empty Aux.eq_eqdec Aux.id_aux_countable)) fs)
+
+  (** val update_record : value -> (id_aux * value) list -> value option **)
+
+  let update_record r fs =
+    match r with
+    | V_record m ->
+      Some (V_record
+        (Coq_list.foldl (fun m0 pat0 ->
+          let (k, v) = pat0 in
+          insert
+            (map_insert
+              (gmap_partial_alter Aux.eq_eqdec Aux.id_aux_countable))
+            k v m0)
+          m fs))
+    | _ -> None
+
+  (** val concrete_int : value -> Big_int_Z.big_int option **)
+
+  let concrete_int = function
+  | V_int i -> DZ.concrete i
+  | _ -> None
+
+  (** val concrete_ref : value -> id_aux option **)
+
+  let concrete_ref = function
+  | V_ref id0 -> Some id0
+  | _ -> None
+
+  (** val concrete_bv_length : value -> Big_int_Z.big_int option **)
+
+  let concrete_bv_length = function
+  | V_bitvector bv -> DZ.concrete (T.bits_length bv)
+  | _ -> None
+
+  (** val tuple_elems : value -> value list option **)
+
+  let tuple_elems = function
+  | V_tuple vs -> Some vs
+  | _ -> None
 
   (** val bv_slice :
       value -> Big_int_Z.big_int -> Big_int_Z.big_int -> value **)
@@ -760,18 +846,18 @@ module Dom =
       let P_aux (aux, _) = p in
       (match aux with
        | P_lit lit0 -> pattern_match_literal lit0 v
-       | P_as (p', id) -> add_match id (Complete v) (pattern_match p' v)
+       | P_as (p', id0) -> add_match id0 (Complete v) (pattern_match p' v)
        | P_typ (_, p') -> pattern_match p' v
-       | P_id id ->
+       | P_id id0 ->
          let P_aux (_, annot) = p in
-         (match Tannot.get_id_type (snd annot) id with
+         (match Tannot.get_id_type (snd annot) id0 with
           | Types.Enum_member ->
             (match v with
              | V_member ids ->
                if bool_decide
                     (decide_rel
                       (gset_elem_of_dec Aux.eq_eqdec Aux.id_aux_countable)
-                      (Aux.unwrap id) ids)
+                      (Aux.unwrap id0) ids)
                then if Nat.eqb
                          (size
                            (set_size
@@ -783,7 +869,7 @@ module Dom =
                else Unmatched
              | V_top -> MaybeMatched empty_bindings
              | _ -> Unmatched)
-          | _ -> add_match id (Complete v) simple_match)
+          | _ -> add_match id0 (Complete v) simple_match)
        | P_var (p', _) -> pattern_match p' v
        | P_app (ctor, ps) ->
          (match v with
@@ -873,8 +959,8 @@ module Dom =
                 ps (simple_match, total))
           | V_top -> simple_match
           | _ -> Unmatched)
-       | P_vector_subrange (id, n, m) ->
-         add_match id (Partial (Non_empty (((v, n), m), []))) simple_match
+       | P_vector_subrange (id0, n, m) ->
+         add_match id0 (Partial (Non_empty (((v, n), m), []))) simple_match
        | P_tuple ps ->
          (match v with
           | V_tuple vs ->
@@ -931,6 +1017,86 @@ module Dom =
           | _ -> Unmatched)
        | _ -> simple_match)
    end
+
+  (** val read_place : value place -> value -> value **)
+
+  let rec read_place p v =
+    match p with
+    | PL_vector (p', n) ->
+      (match concrete_int n with
+       | Some i -> get_vector_elem (read_place p' v) i
+       | None -> V_top)
+    | PL_vector_range (_, _, _) -> V_top
+    | PL_field (p', fld) -> get_field (read_place p' v) (Aux.unwrap fld)
+    | _ -> v
+
+  (** val update_place : value place -> value -> value -> value **)
+
+  let rec update_place p x v =
+    match p with
+    | PL_vector (p', n) ->
+      (match concrete_int n with
+       | Some i -> update_place p' (set_vector_elem (read_place p' v) i x) v
+       | None -> v)
+    | PL_vector_range (p', hi, lo) ->
+      (match concrete_int hi with
+       | Some h ->
+         (match concrete_int lo with
+          | Some l -> update_place p' (set_bv_range (read_place p' v) h l x) v
+          | None -> v)
+       | None -> v)
+    | PL_field (p', fld) ->
+      update_place p' (set_field (read_place p' v) (Aux.unwrap fld) x) v
+    | _ -> x
+
+  (** val destructure_assignment :
+      value destructure -> value -> (value place * value) list **)
+
+  let rec destructure_assignment d v =
+    match d with
+    | DL_tuple ds ->
+      (match v with
+       | V_tuple vs ->
+         let rec go ds0 vs0 =
+           match ds0 with
+           | [] -> []
+           | d0 :: ds' ->
+             (match vs0 with
+              | [] -> []
+              | v0 :: vs' -> app (destructure_assignment d0 v0) (go ds' vs'))
+         in go ds vs
+       | _ -> [])
+    | DL_vector_concat sds ->
+      (match concrete_bv_length v with
+       | Some total ->
+         let rec go sds0 cur_hi =
+           match sds0 with
+           | [] -> []
+           | p :: rest ->
+             let (v0, d0) = p in
+             (match v0 with
+              | Types.No_split -> []
+              | Types.Split w ->
+                let wz = Z.of_nat w in
+                let lo = Z.sub (Z.add cur_hi Big_int_Z.unit_big_int) wz in
+                app
+                  (destructure_assignment d0
+                    (bv_slice v (Z.to_N lo) (N.of_nat w)))
+                  (go rest (Z.sub cur_hi wz)))
+         in go sds (Z.sub total Big_int_Z.unit_big_int)
+       | None -> [])
+    | DL_place p -> (p, v) :: []
+
+  (** val place_root : value place -> id option **)
+
+  let rec place_root = function
+  | PL_id (id0, _) -> Some id0
+  | PL_register r ->
+    option_map (fun reg_id -> Id_aux (reg_id, Parse_ast.Unknown))
+      (concrete_ref r)
+  | PL_vector (p', _) -> place_root p'
+  | PL_vector_range (p', _, _) -> place_root p'
+  | PL_field (p', _) -> place_root p'
 
   (** val complete_partial :
       ((t * Big_int_Z.big_int) * Big_int_Z.big_int) non_empty -> t **)

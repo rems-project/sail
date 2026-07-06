@@ -1,0 +1,3 @@
+:partial_inline main()
+:run
+:quit

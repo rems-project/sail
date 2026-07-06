@@ -78,6 +78,8 @@ Definition extstring_decode (p : positive) := Extstring <$> decode p.
 Extract Constant extstring_encode => "Extr_util.String_encoding.encode".
 Extract Constant extstring_decode => "Extr_util.String_encoding.decode".
 
+Extract Constant String.ltb => "(fun x y -> String.compare x y < 0)".
+
 Lemma extstring_decode_encode : ∀ str, extstring_decode (extstring_encode str) = Some str.
 Proof.
   intros str. destruct str.

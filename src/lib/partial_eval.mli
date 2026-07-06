@@ -49,40 +49,50 @@
 
 open Ast
 
-type gstate
+module type SAIL_VALUE = sig
+  include Extraction.Lattice.SAIL_VALUE
 
-val initial_gstate : typecheck_env:Type_check.Env.t -> ast:Type_check.typed_ast -> gstate
+  val string_of_value : t -> string
 
-module Zinterp : sig
-  type t
+  val bitvector_of_bits : Bit.bit list -> t
 
-  module R : sig
-    module L : sig
-      type t
+  val concrete_ref : t -> id_aux option
+
+  val initial_primops : (t list -> t) Util.StringMap.t
+end
+
+module AbsValue : SAIL_VALUE
+
+module Make (L : SAIL_VALUE) : sig
+  type gstate
+
+  val initial_gstate : typecheck_env:Type_check.Env.t -> ast:Type_check.typed_ast -> gstate
+
+  module Zinterp : sig
+    type t
+
+    module R : sig
+      type value = { this : L.t option; exn : L.t option; eff : bool }
     end
-
-    type value = { this : L.t option; exn : L.t option; eff : bool }
   end
+
+  module Pretty : sig
+    val docs : Zinterp.t -> PPrint.document list
+  end
+
+  type partial_state
+
+  val from_exp : Type_check.tannot exp -> partial_state
+
+  (** Wrap the user expression in the program's top-level [let] bindings before starting partial evaluation, so global
+      identifiers are in scope. *)
+  val from_exp_with_globals : gstate -> Type_check.tannot exp -> partial_state
+
+  val partial_state_ctx : partial_state -> Zinterp.t
+
+  val string_of_focus : partial_state -> string
+
+  val is_finished : partial_state -> Zinterp.R.value option
+
+  val mk_interpreter : inlining:bool -> gstate -> partial_state -> partial_state
 end
-
-module Pretty : sig
-  val string_of_value : Zinterp.R.L.t -> string
-
-  val docs : Zinterp.t -> PPrint.document list
-end
-
-type partial_state
-
-val from_exp : Type_check.tannot exp -> partial_state
-
-(** Wrap the user expression in the program's top-level [let] bindings before starting partial evaluation, so global
-    identifiers are in scope. *)
-val from_exp_with_globals : gstate -> Type_check.tannot exp -> partial_state
-
-val partial_state_ctx : partial_state -> Zinterp.t
-
-val string_of_focus : partial_state -> string
-
-val is_finished : partial_state -> Zinterp.R.value option
-
-val mk_interpreter : inlining:bool -> gstate -> partial_state -> partial_state

@@ -1,5 +1,5 @@
+open Assignment
 open Ast
-open AstInduction
 open Bit
 open Datatypes
 open IdUtil
