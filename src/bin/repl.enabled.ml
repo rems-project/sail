@@ -302,7 +302,7 @@ let rec run_steps rstate n =
           run_steps rstate (n - 1)
     )
 
-type repl_action = string -> Lexing.position -> string -> repl_state -> repl_state
+type repl_action = string -> Sail_file.position -> string -> repl_state -> repl_state
 
 type repl_command = { commands : string list; help : string; arg_help : string option; repl_action : repl_action }
 
@@ -434,17 +434,19 @@ let help cmd =
         )
     )
 
-type input = Command of string * string * Lexing.position | Expression of string * Lexing.position | Empty
+type input = Command of string * string * Sail_file.position | Expression of string * Sail_file.position | Empty
 
 let editor = ref "vim"
 
 let editor_command cmd =
-  let open Lexing in
+  let open Sail_file.Position in
   let temp_file = Filename.temp_file "repl" ".sail" in
   Reporting.system_checked (!editor ^ " " ^ temp_file);
   let contents = Util.read_whole_file temp_file in
   let start_line, start_bol = Sail_file.add_to_repl_contents ~command:contents in
-  let pos = { pos_fname = "REPL"; pos_lnum = start_line; pos_bol = start_bol; pos_cnum = start_bol } in
+  let pos =
+    { pos_fname = Sail_file.interactive_repl; pos_lnum = start_line; pos_bol = start_bol; pos_cnum = start_bol }
+  in
   if cmd = "" then Expression (contents, pos) else Command (cmd, contents, pos)
 
 let () =
@@ -699,13 +701,15 @@ let handle_input' rstate input =
   (* Process the input and check if it's a command, a raw expression,
      or empty. *)
   let input =
-    let open Lexing in
+    let open Sail_file.Position in
     if input <> "" && input.[0] = ':' then (
       let start_line, start_bol = Sail_file.add_to_repl_contents ~command:input in
       let n = try String.index input ' ' with Not_found -> String.length input in
       let cmd = Str.string_before input n in
       let arg = Str.string_after input n in
-      let pos = { pos_fname = "REPL"; pos_lnum = start_line; pos_bol = start_bol; pos_cnum = start_bol + n } in
+      let pos =
+        { pos_fname = Sail_file.interactive_repl; pos_lnum = start_line; pos_bol = start_bol; pos_cnum = start_bol + n }
+      in
       Command (cmd, String.trim arg, trim_position arg pos)
     )
     else if String.length input >= 2 && input.[0] = '/' && input.[1] = '/' then
@@ -713,7 +717,10 @@ let handle_input' rstate input =
       Empty
     else if input <> "" then (
       let start_line, start_bol = Sail_file.add_to_repl_contents ~command:input in
-      Expression (input, { pos_fname = "REPL"; pos_lnum = start_line; pos_bol = start_bol; pos_cnum = start_bol })
+      Expression
+        ( input,
+          { pos_fname = Sail_file.interactive_repl; pos_lnum = start_line; pos_bol = start_bol; pos_cnum = start_bol }
+        )
     )
     else Empty
   in

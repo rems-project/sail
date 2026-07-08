@@ -61,7 +61,7 @@ val name : target -> string
 
 val run_pre_parse_hook : target -> unit -> unit
 
-val run_pre_initial_check_hook : target -> string list -> unit
+val run_pre_initial_check_hook : target -> Sail_file.path list -> unit
 
 val run_pre_rewrites_hook : target -> typed_ast -> Effects.side_effect_info -> Env.t -> unit
 
@@ -110,7 +110,7 @@ val register :
   ?description:string ->
   ?options:(Flag.t * Arg.spec * string) list ->
   ?pre_parse_hook:(unit -> unit) ->
-  ?pre_initial_check_hook:(string list -> unit) ->
+  ?pre_initial_check_hook:(Sail_file.path list -> unit) ->
   ?pre_rewrites_hook:(typed_ast -> Effects.side_effect_info -> Env.t -> unit) ->
   ?skip_initial_rewrite:bool ->
   ?rewrites:(string * Rewrites.rewriter_arg list) list ->

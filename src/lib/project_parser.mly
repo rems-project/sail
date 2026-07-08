@@ -44,17 +44,21 @@
 /*  SPDX-License-Identifier: BSD-2-Clause                                   */
 /****************************************************************************/
 
-%{
+%parameter <F : sig val handle : Sail_file.handle end>
 
-[@@@coverage exclude_file]
+%{
 
 open Project
 
-let span x s e = (x, (s, e))
+let loc l =
+  let open Sail_file.Position in
+  { pos_fname = F.handle; pos_lnum = l.Lexing.pos_lnum; pos_bol = l.Lexing.pos_bol; pos_cnum = l.Lexing.pos_cnum }
+
+let span x s e = (x, (loc s, loc e))
 
 %}
 
-%token After Before Directory If Then Else Requires Files Variable Test True False
+%token After Before Directory If Implicit Then Else Requires Files Variable Test True False Virtual
 %token Comma DotDot Eq Gt Lt EqEq GtEq LtEq ExclEq Slash Semi
 %token Lparen Rparen Lsquare Rsquare Lcurly Rcurly
 %token Eof
@@ -125,8 +129,10 @@ atomic_exp:
     { span (E_value (bool_value true)) $startpos $endpos }
   | False
     { span (E_value (bool_value false)) $startpos $endpos }
+  | Virtual; fid = FileId
+    { span (E_file (true, fst fid, snd fid)) $startpos $endpos }
   | fid = FileId
-    { span (E_file (fst fid, snd fid)) $startpos $endpos }
+    { span (E_file (false, fst fid, snd fid)) $startpos $endpos }
   | id = Id
     { span (E_id id) $startpos $endpos }
   | id = Id; Lparen; args = exp_non_empty; Rparen
@@ -168,7 +174,7 @@ mdl:
   | name = IdLcurly; defs = separated_list(Semi?, mdl_def); Rcurly
     { { name = span (fst name) $startpos(name) (snd name);
         defs;
-        span = ($startpos, $endpos)
+        span = (loc $startpos, loc $endpos)
       } : mdl }
 
 def:
@@ -176,6 +182,8 @@ def:
     { span (Def_test ids) $startpos $endpos }
   | Variable; id = Id; Eq; e = exp
     { span (Def_var (span id $startpos(id) $endpos(id), e)) $startpos $endpos }
+  | Implicit; e = exp
+    { span (Def_implicit e) $startpos $endpos }
   | m = mdl
     { span (Def_module m) $startpos $endpos }
 

@@ -25,7 +25,6 @@
 (*    Stephen Kell                                                          *)
 (*    Mark Wassell                                                          *)
 (*    Alastair Reid (Arm Ltd)                                               *)
-(*    Louis-Emile Ploix                                                     *)
 (*                                                                          *)
 (*  All rights reserved.                                                    *)
 (*                                                                          *)
@@ -45,63 +44,125 @@
 (*  SPDX-License-Identifier: BSD-2-Clause                                   *)
 (****************************************************************************)
 
-{
-
-open Libsail
-
-open Sv_type_parser
-open Sail_file.Position
-
-module M = Map.Make (String)
-
-let kw_table =
-  List.fold_left
-    (fun r (x, y) -> M.add x y r)
-    M.empty
-    [
-      ("bit",       (fun _ -> Bit));
-      ("int",       (fun _ -> Int));
-      ("logic",     (fun _ -> Logic));
-      ("string",    (fun _ -> String));
-      ("sail_bits", (fun _ -> SailBits));
-      ("sail_int",  (fun _ -> SailInt));
-      ("sail_list", (fun _ -> SailList));
-    ]
-
-}
-
-let wsc = [' ''\t']
-let ws = wsc+
-let letter = ['a'-'z''A'-'Z']
-let digit = ['0'-'9']
-let alphanum = letter|digit
-let startident = letter|'_'
-let ident = alphanum|'_'
-
-rule token handle = parse
-  | ws                     { token handle lexbuf}
-  | "\n"
-  | "\r\n"                 { Lexing.new_line lexbuf; token handle lexbuf }
-  | "["                    { Lsquare }
-  | "]"                    { Rsquare }
-  | "_"                    { Underscore }
-  | ":"                    { Colon }
-  | digit+ as n            { match int_of_string_opt n with
-                             | Some n -> Nat n
-                             | None ->
-                                 raise (Reporting.err_lex (from_lexing handle (Lexing.lexeme_start_p lexbuf))
-                                         (Printf.sprintf "Numeric literal too large: %s" n)) }
-  | '#' (digit+ as n)      { match int_of_string_opt n with
-                             | Some n -> HashNat n
-                             | None ->
-                                 raise (Reporting.err_lex (from_lexing handle (Lexing.lexeme_start_p lexbuf))
-                                         (Printf.sprintf "Numeric literal too large: %s" n)) }
-  | startident ident* as i { let p = from_lexing handle (Lexing.lexeme_start_p lexbuf) in
-                             match M.find_opt i kw_table with
-                             | Some kw -> kw p
-                             | None ->
-                                 raise (Reporting.err_lex p ("Unknown keyword: " ^ i)) }
-  | eof                    { Eof }
-  | _  as c                { raise (Reporting.err_lex
-                                     (from_lexing handle (Lexing.lexeme_start_p lexbuf))
-                                     (Printf.sprintf "Unexpected character: %s" (Char.escaped c))) }
+type token =
+  | And
+  | As
+  | Assert
+  | At
+  | Attribute of string
+  | BOOL
+  | Backwards
+  | Bar
+  | Bidir
+  | Bin of string
+  | Bitfield
+  | Bitone
+  | Bitzero
+  | By
+  | Caret
+  | Cast
+  | Catch
+  | Clause
+  | Colon of string
+  | ColonColon
+  | Comma
+  | Config
+  | Configuration
+  | Constant
+  | Constraint
+  | Dec
+  | Default
+  | Do
+  | DocBlock of string
+  | DocLine of string
+  | Dot
+  | DotDot
+  | Downto
+  | Effect
+  | Else
+  | End
+  | Enum
+  | Eof
+  | Eq of string
+  | EqGt of string
+  | Exit
+  | False
+  | Fixity of Parse_ast.fixity_token
+  | Forall
+  | Foreach
+  | Forwards
+  | From
+  | Function_
+  | Hex of string
+  | INT
+  | Id of string
+  | If_
+  | Impl
+  | Impure
+  | In
+  | Inc
+  | Instantiation
+  | InternalAssume
+  | InternalPLet
+  | InternalReturn
+  | Lcurly
+  | LcurlyBar
+  | Let_
+  | Lparen
+  | Lsquare
+  | LsquareBar
+  | Mapping
+  | Match
+  | Minus
+  | MinusGt
+  | Monadic
+  | MultilineString of string list
+  | Mutual
+  | NAT
+  | Newtype
+  | Num of Nat_big_num.num
+  | ORDER
+  | Op
+  | OpId of string
+  | Outcome
+  | Overload
+  | Pragma of (string * string)
+  | Private
+  | Pure
+  | Rcurly
+  | RcurlyBar
+  | Real of string
+  | Ref
+  | Register
+  | Repeat
+  | Return
+  | Rparen
+  | Rsquare
+  | RsquareBar
+  | Scattered
+  | Semi
+  | Sizeof
+  | Star
+  | String of string
+  | Struct
+  | StructuredPragma of string
+  | TYPE
+  | TerminationMeasure
+  | Then
+  | Throw
+  | To
+  | True
+  | Try
+  | TwoCaret
+  | TyVar of string
+  | Typedef
+  | Undefined
+  | Under
+  | Union
+  | Unit of string
+  | Until
+  | Val
+  | Var
+  | When
+  | While
+  | With

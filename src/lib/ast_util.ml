@@ -2195,8 +2195,9 @@ struct
 end
 
 let string_of_lx lx =
-  let open Lexing in
-  Printf.sprintf "%s,%d,%d,%d" lx.pos_fname lx.pos_lnum lx.pos_bol lx.pos_cnum
+  let open Sail_file.Position in
+  let fname = Sail_file.Path.to_string (Sail_file.to_path lx.pos_fname) in
+  Printf.sprintf "%s,%d,%d,%d" fname lx.pos_lnum lx.pos_bol lx.pos_cnum
 
 let rec simple_string_of_loc = function
   | Parse_ast.Unknown -> "Unknown"

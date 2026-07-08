@@ -52,11 +52,14 @@ open Parse_ast.Attribute_data
 
 module StringSet = Util.StringSet
 
-let sv_type_of_string = Initial_check.parse_from_string (Sv_type_parser.sv_type Sv_type_lexer.token)
+let sv_type_of_string ?inline str =
+  let handle, lexbuf = Initial_check.lexbuf_from_string ?inline str in
+  try Sv_type_parser.sv_type (Sv_type_lexer.token handle) lexbuf
+  with Sv_type_parser.Error -> Initial_check.string_syntax_error handle str lexbuf
 
 let parse_sv_type = function
   | AD_aux (AD_string s, l) ->
-      let open Lexing in
+      let open Sail_file.Position in
       let p =
         match Reporting.simp_loc l with Some (p, _) -> Some { p with pos_cnum = p.pos_cnum + 1 } | None -> None
       in

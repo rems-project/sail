@@ -44,6 +44,10 @@ open ConcurrencyInterfaceV1
 open Defs
 namespace Functions
 
+/-- Type quantifiers: x : Int -/
+def __id (x : Int) : Int :=
+  x
+
 def let0 := (20, 300000000000000000000000)
 
 def y :=

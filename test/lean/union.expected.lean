@@ -69,6 +69,10 @@ namespace Functions
 open shape
 open my_option
 
+/-- Type quantifiers: x : Int -/
+def __id (x : Int) : Int :=
+  x
+
 def undefined_rectangle (_ : Unit) : SailM rectangle := do
   (pure { width := ← (undefined_int ())
           height := ← (undefined_int ()) })

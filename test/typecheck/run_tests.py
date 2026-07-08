@@ -38,7 +38,7 @@ def test_pass():
             tests[filename] = os.fork()
             if tests[filename] == 0:
                 step('\'{}\' --no-memo-z3 --just-check --strict-bitvector --ddump-tc-ast pass/{} 1> rtpass/{}'.format(sail, filename, filename))
-                step('\'{}\' --no-memo-z3 --just-check --strict-bitvector --ddump-tc-ast --dallow-internal rtpass/{} 1> rtpass2/{}'.format(sail, filename, filename))
+                step('\'{}\' --no-core --no-memo-z3 --just-check --strict-bitvector --ddump-tc-ast --dallow-internal rtpass/{} 1> rtpass2/{}'.format(sail, filename, filename))
                 step('diff rtpass/{} rtpass2/{}'.format(filename, filename))
                 i = 0
                 variantdir = os.path.join('pass', basename);

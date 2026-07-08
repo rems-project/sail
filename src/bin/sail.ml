@@ -64,6 +64,7 @@ let opt_interactive_script : string option ref = ref None
 let opt_splice : string list ref = ref []
 let opt_print_version = ref false
 let opt_require_version : string option ref = ref None
+let opt_no_core = ref false
 let opt_memo_z3 = ref true
 let opt_memo_z3_path = ref "sail_smt_cache"
 let opt_have_feature = ref None
@@ -174,12 +175,9 @@ let parse_instantiation inst =
       let abstract_type = mk_id (String.trim abstract_type) in
       let parse_value kind =
         let open Initial_check in
-        parse_from_string ?inline
-          (fun lexbuf ->
-            let atyp = Parser.typ_eof (Lexer.token (ref [])) lexbuf in
-            to_ast_typ_arg kind initial_ctx atyp
-          )
-          value
+        parse_from_string ?inline value (fun (module Parse : PARSER) handle lexbuf ->
+            to_ast_typ_arg kind initial_ctx (Parse.typ_eof (Lexer.token handle (ref [])) lexbuf)
+        )
       in
       opt_instantiations := Bindings.add abstract_type parse_value !opt_instantiations
   | _ -> raise (Reporting.err_general Parse_ast.Unknown "Failed to parse command-line instantiate flag")
@@ -309,6 +307,7 @@ let rec options =
       );
       ("-plugin", Arg.String (fun plugin -> load_plugin options plugin), "<file> load a Sail plugin");
       ("-just_check", Arg.Set opt_just_check, " terminate immediately after typechecking");
+      ("-no_core", Arg.Set opt_no_core, " do not use any core definitions");
       ( "-memo_z3",
         Arg.Set opt_memo_z3,
         " memoize calls to z3, improving performance when typechecking repeatedly (default)"
@@ -474,21 +473,6 @@ let rec options =
 let register_default_target () =
   Target.register ~name:"default" ~supports_abstract_types:true ~supports_runtime_config:true Target.empty_action
 
-let file_to_string filename =
-  let chan = open_in filename in
-  let buf = Buffer.create 4096 in
-  try
-    let rec loop () =
-      let line = input_line chan in
-      Buffer.add_string buf line;
-      Buffer.add_char buf '\n';
-      loop ()
-    in
-    loop ()
-  with End_of_file ->
-    close_in chan;
-    Buffer.contents buf
-
 let parse_json_config_file file =
   if Sys.file_exists file then (
     let json =
@@ -516,22 +500,11 @@ let run_sail (config : Yojson.Safe.t option) tgt =
     | [], [] ->
         (* If there are no provided project files, we concatenate all
            the free file arguments into one big blob like before *)
-        Frontend.load_files ~target:tgt Locations.sail_dir !options Type_check.initial_env frees
+        Frontend.load_files ~no_core:!opt_no_core ~target:tgt Locations.sail_dir !options Type_check.initial_env frees
     (* Allows project files from either free arguments via suffix, or
        from -project, but not both as the ordering between them would
        be unclear. *)
     | project_files, [] | [], project_files ->
-        let t = Profile.start () in
-        let defs =
-          List.map
-            (fun project_file ->
-              let root_directory = Filename.dirname project_file in
-              let contents = file_to_string project_file in
-              Project.mk_root root_directory :: Initial_check.parse_project ~filename:project_file ~contents ()
-            )
-            project_files
-          |> List.concat
-        in
         let variables = ref Util.StringMap.empty in
         List.iter
           (fun assignment ->
@@ -539,22 +512,9 @@ let run_sail (config : Yojson.Safe.t option) tgt =
               raise (Reporting.err_general Parse_ast.Unknown ("Could not parse assignment " ^ assignment))
           )
           !opt_variable_assignments;
-        let proj = Project.initialize_project_structure ~variables defs in
-        let mod_ids =
-          if !opt_all_modules then Project.all_modules proj
-          else
-            List.map
-              (fun mod_name ->
-                match Project.get_module_id proj mod_name with
-                | Some id -> id
-                | None -> raise (Reporting.err_general Parse_ast.Unknown ("Unknown module " ^ mod_name))
-              )
-              frees
-        in
-        Profile.finish "parsing project" t;
-        if !opt_just_parse_project then exit 0;
-        let env = Type_check.initial_env_with_modules proj in
-        Frontend.load_modules ~target:tgt Locations.sail_dir !options env proj mod_ids
+        let modules = if !opt_all_modules then None else Some frees in
+        Frontend.load_project ~no_core:!opt_no_core ~target:tgt ?modules ~options:!options ~variables
+          ~just_parse:!opt_just_parse_project Locations.sail_dir project_files
     | _, _ ->
         raise
           (Reporting.err_general Parse_ast.Unknown
@@ -566,7 +526,11 @@ let run_sail (config : Yojson.Safe.t option) tgt =
   let ast, instantiation = Frontend.instantiate_abstract_types (Some tgt) config_json !opt_instantiations ast in
   let schema, ast = Config.rewrite_ast tgt env instantiation config_json ast in
   let ast, env = if Target.skip_initial_rewrite tgt then (ast, env) else Frontend.initial_rewrite effect_info env ast in
-  let ast, env = match !opt_splice with [] -> (ast, env) | files -> Splice.splice_files ctx ast (List.rev files) in
+  let ast, env =
+    match !opt_splice with
+    | [] -> (ast, env)
+    | files -> Splice.splice_files ctx ast (List.rev_map Sail_file.Path.actual files)
+  in
   let effect_info = Effects.infer_side_effects (Target.asserts_termination tgt) ast in
 
   ( match !opt_output_schema_file with
@@ -590,8 +554,12 @@ let run_sail (config : Yojson.Safe.t option) tgt =
   (ctx, ast, env, effect_info)
 
 let run_sail_format (config : Yojson.Safe.t option) =
-  let is_format_file f = match !opt_format_only with [] -> true | files -> List.exists (fun f' -> f = f') files in
-  let is_skipped_file f = match !opt_format_skip with [] -> false | files -> List.exists (fun f' -> f = f') files in
+  let is_format_file f =
+    match !opt_format_only with [] -> true | files -> List.exists (fun f' -> Sail_file.Path.to_string f = f') files
+  in
+  let is_skipped_file f =
+    match !opt_format_skip with [] -> false | files -> List.exists (fun f' -> Sail_file.Path.to_string f = f') files
+  in
   let module Config = struct
     let config =
       match config with
@@ -611,8 +579,7 @@ let run_sail_format (config : Yojson.Safe.t option) =
     List.map
       (fun project_file ->
         let root_directory = Filename.dirname project_file in
-        let contents = file_to_string project_file in
-        let defs = Project.mk_root root_directory :: Initial_check.parse_project ~filename:project_file ~contents () in
+        let defs = Project.mk_root root_directory :: Initial_check.parse_project (Sail_file.Path.actual project_file) in
 
         let variables = ref Util.StringMap.empty in
         List.iter
@@ -628,22 +595,26 @@ let run_sail_format (config : Yojson.Safe.t option) =
     |> List.concat |> List.map fst
   in
 
-  let parsed_files = List.map (fun f -> (f, Initial_check.parse_file f)) (files @ referenced_files) in
+  let parsed_files =
+    List.map (fun f -> (f, Initial_check.parse_file f)) (List.map Sail_file.Path.actual files @ referenced_files)
+  in
   List.iter
     (fun (f, (comments, parse_ast)) ->
-      let source = file_to_string f in
+      let source = Sail_file.contents (Sail_file.open_file f) in
       if is_format_file f && not (is_skipped_file f) then (
-        let formatted = Formatter.format_defs ~debug:!opt_format_debug f source comments parse_ast in
+        let formatted =
+          Formatter.format_defs ~debug:!opt_format_debug (Sail_file.Path.to_string f) source comments parse_ast
+        in
         ( match !opt_format_backup with
         | Some suffix ->
-            let out_chan = open_out (f ^ "." ^ suffix) in
+            let out_chan = open_out (Sail_file.Path.to_string f ^ "." ^ suffix) in
             output_string out_chan source;
             close_out out_chan
         | None -> ()
         );
         match !opt_format_emit with
         | "file" ->
-            let file_info = Util.open_output_with_check f in
+            let file_info = Util.open_output_with_check (Sail_file.Path.to_string f) in
             output_string file_info.channel formatted;
             Util.close_output_with_check file_info
         | "stdout" ->

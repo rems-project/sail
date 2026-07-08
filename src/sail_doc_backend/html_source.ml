@@ -65,14 +65,14 @@ module Highlight = struct
     | TyVar -> "sail-ty-var"
 end
 
-let highlights ~filename ~contents =
-  let lexbuf = Initial_check.get_lexbuf_from_string ~filename ~contents in
+let highlights path =
+  let handle, lexbuf = Initial_check.get_lexbuf path in
   let comments = ref [] in
   let highlights = Queue.create () in
   let mark h = Queue.add (h, lexbuf.lex_start_p.pos_cnum, lexbuf.lex_curr_p.pos_cnum) highlights in
   let rec go () =
-    let open Parser in
-    match Lexer.token comments lexbuf with
+    let open Token in
+    match Lexer.token handle comments lexbuf with
     | Eof -> ()
     | Id _ ->
         mark Highlight.Id;

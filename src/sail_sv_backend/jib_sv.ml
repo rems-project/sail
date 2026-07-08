@@ -700,7 +700,8 @@ module Make (Config : CONFIG) = struct
   let sv_line_directive l =
     match Reporting.simp_loc l with
     | Some (p1, _) when Config.line_directives ->
-        ksprintf string "`line %d \"%s\" 0" p1.pos_lnum p1.pos_fname ^^ hardline
+        let fname = Sail_file.Path.to_string (Sail_file.to_path p1.pos_fname) in
+        ksprintf string "`line %d \"%s\" 0" p1.pos_lnum fname ^^ hardline
     | _ -> empty
 
   let sv_assign clexp value =

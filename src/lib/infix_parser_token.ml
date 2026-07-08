@@ -25,7 +25,6 @@
 (*    Stephen Kell                                                          *)
 (*    Mark Wassell                                                          *)
 (*    Alastair Reid (Arm Ltd)                                               *)
-(*    Louis-Emile Ploix                                                     *)
 (*                                                                          *)
 (*  All rights reserved.                                                    *)
 (*                                                                          *)
@@ -45,63 +44,48 @@
 (*  SPDX-License-Identifier: BSD-2-Clause                                   *)
 (****************************************************************************)
 
-{
-
-open Libsail
-
-open Sv_type_parser
-open Sail_file.Position
-
-module M = Map.Make (String)
-
-let kw_table =
-  List.fold_left
-    (fun r (x, y) -> M.add x y r)
-    M.empty
-    [
-      ("bit",       (fun _ -> Bit));
-      ("int",       (fun _ -> Int));
-      ("logic",     (fun _ -> Logic));
-      ("string",    (fun _ -> String));
-      ("sail_bits", (fun _ -> SailBits));
-      ("sail_int",  (fun _ -> SailInt));
-      ("sail_list", (fun _ -> SailList));
-    ]
-
-}
-
-let wsc = [' ''\t']
-let ws = wsc+
-let letter = ['a'-'z''A'-'Z']
-let digit = ['0'-'9']
-let alphanum = letter|digit
-let startident = letter|'_'
-let ident = alphanum|'_'
-
-rule token handle = parse
-  | ws                     { token handle lexbuf}
-  | "\n"
-  | "\r\n"                 { Lexing.new_line lexbuf; token handle lexbuf }
-  | "["                    { Lsquare }
-  | "]"                    { Rsquare }
-  | "_"                    { Underscore }
-  | ":"                    { Colon }
-  | digit+ as n            { match int_of_string_opt n with
-                             | Some n -> Nat n
-                             | None ->
-                                 raise (Reporting.err_lex (from_lexing handle (Lexing.lexeme_start_p lexbuf))
-                                         (Printf.sprintf "Numeric literal too large: %s" n)) }
-  | '#' (digit+ as n)      { match int_of_string_opt n with
-                             | Some n -> HashNat n
-                             | None ->
-                                 raise (Reporting.err_lex (from_lexing handle (Lexing.lexeme_start_p lexbuf))
-                                         (Printf.sprintf "Numeric literal too large: %s" n)) }
-  | startident ident* as i { let p = from_lexing handle (Lexing.lexeme_start_p lexbuf) in
-                             match M.find_opt i kw_table with
-                             | Some kw -> kw p
-                             | None ->
-                                 raise (Reporting.err_lex p ("Unknown keyword: " ^ i)) }
-  | eof                    { Eof }
-  | _  as c                { raise (Reporting.err_lex
-                                     (from_lexing handle (Lexing.lexeme_start_p lexbuf))
-                                     (Printf.sprintf "Unexpected character: %s" (Char.escaped c))) }
+type token =
+  | At
+  | ColonColon
+  | Eof
+  | Exp of Parse_ast.exp
+  | Gt
+  | GtEq
+  | In
+  | Lt
+  | LtEq
+  | Minus
+  | Op0 of Parse_ast.id
+  | Op0l of Parse_ast.id
+  | Op0r of Parse_ast.id
+  | Op1 of Parse_ast.id
+  | Op1l of Parse_ast.id
+  | Op1r of Parse_ast.id
+  | Op2 of Parse_ast.id
+  | Op2l of Parse_ast.id
+  | Op2r of Parse_ast.id
+  | Op3 of Parse_ast.id
+  | Op3l of Parse_ast.id
+  | Op3r of Parse_ast.id
+  | Op4 of Parse_ast.id
+  | Op4l of Parse_ast.id
+  | Op4r of Parse_ast.id
+  | Op5 of Parse_ast.id
+  | Op5l of Parse_ast.id
+  | Op5r of Parse_ast.id
+  | Op6 of Parse_ast.id
+  | Op6l of Parse_ast.id
+  | Op6r of Parse_ast.id
+  | Op7 of Parse_ast.id
+  | Op7l of Parse_ast.id
+  | Op7r of Parse_ast.id
+  | Op8 of Parse_ast.id
+  | Op8l of Parse_ast.id
+  | Op8r of Parse_ast.id
+  | Op9 of Parse_ast.id
+  | Op9l of Parse_ast.id
+  | Op9r of Parse_ast.id
+  | Plus
+  | Star
+  | TwoCaret
+  | Typ of Parse_ast.atyp

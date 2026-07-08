@@ -54,7 +54,7 @@ type target = {
   name : string;
   options : (Flag.t * Arg.spec * string) list;
   pre_parse_hook : unit -> unit;
-  pre_initial_check_hook : string list -> unit;
+  pre_initial_check_hook : Sail_file.path list -> unit;
   pre_rewrites_hook : typed_ast -> Effects.side_effect_info -> Env.t -> unit;
   skip_initial_rewrite : bool;
   rewrites : (string * Rewrites.rewriter_arg list) list;

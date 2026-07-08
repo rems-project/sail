@@ -44,6 +44,10 @@ open ConcurrencyInterfaceV1
 open Defs
 namespace Functions
 
+/-- Type quantifiers: x : Int -/
+def __id (x : Int) : Int :=
+  x
+
 /-- Type quantifiers: k_a : Type -/
 def foo (x : k_a) : (k_a × k_a) :=
   (x, x)

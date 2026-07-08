@@ -70,7 +70,7 @@ val command : string -> string
 type action =
   | ArgString of string * (string -> action)
   | ArgInt of string * (int -> action)
-  | Action of string option * (Lexing.position * string * State.istate -> State.istate option)
+  | Action of string option * (Sail_file.position * string * State.istate -> State.istate option)
 
 val unit_action : (unit -> unit) -> action
 
@@ -78,7 +78,7 @@ module Arg : sig
   type (_, _) t =
     | String : string -> (string, action) t
     | Int : string -> (int, action) t
-    | Rest : string -> (Lexing.position * string * State.istate, State.istate option) t
+    | Rest : string -> (Sail_file.position * string * State.istate, State.istate option) t
     | Update : (State.istate, State.istate) t
     | Get : (State.istate, unit) t
 end
@@ -91,7 +91,7 @@ val all_commands : unit -> (string * (string * string option * action)) list
 
 val generate_help : string -> string -> action -> string * string * string
 
-val run_action : State.istate -> string -> Lexing.position -> string -> action -> State.istate
+val run_action : State.istate -> string -> Sail_file.position -> string -> action -> State.istate
 
 (** This is the main function used to register new interactive commands. *)
 val register_command : name:string -> ?shortname:string -> help:string -> action -> unit

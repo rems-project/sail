@@ -177,15 +177,14 @@ let html_target files out_dir_opt { ast; _ } =
           (fun (node, s, e) ->
             match Callgraph.NodeMap.find_opt node link_targets with
             | Some p -> (
-                let filename = p.Lexing.pos_fname in
+                let filename = Sail_file.Path.to_string (Sail_file.to_path p.pos_fname) in
                 match List.find_opt (fun info -> info.filename = filename) !files with
                 | Some info -> (
                     match !opt_html_link_prefix with
                     | None ->
                         let relpath = Util.relativize_path file_info.filename info.prefix in
-                        Some (Printf.sprintf "%s.html#L%d" relpath p.Lexing.pos_lnum, s, e)
-                    | Some html_prefix ->
-                        Some (Printf.sprintf "%s%s.html#L%d" html_prefix info.prefix p.Lexing.pos_lnum, s, e)
+                        Some (Printf.sprintf "%s.html#L%d" relpath p.pos_lnum, s, e)
+                    | Some html_prefix -> Some (Printf.sprintf "%s%s.html#L%d" html_prefix info.prefix p.pos_lnum, s, e)
                   )
                 | None -> None
               )
@@ -206,16 +205,20 @@ let html_target files out_dir_opt { ast; _ } =
 let _ =
   let files : Html_source.file_info list ref = ref [] in
   Target.register ~name:"html" ~options:html_options ~supports_abstract_types:true ~supports_runtime_config:true
-    ~pre_initial_check_hook:(fun filenames ->
+    ~pre_initial_check_hook:(fun paths ->
       List.iter
-        (fun filename ->
-          match Filename.chop_suffix_opt ~suffix:".sail" filename with
-          | Some prefix when Filename.is_relative filename ->
-              let contents = Util.read_whole_file filename in
-              let highlights = Html_source.highlights ~filename ~contents in
-              files := { filename; prefix; contents; highlights } :: !files
-          | _ -> ()
+        (fun path ->
+          if not (Sail_file.Path.is_virtual path) then (
+            let filename = Sail_file.Path.to_string path in
+            match Filename.chop_suffix_opt ~suffix:".sail" filename with
+            | Some prefix when Filename.is_relative filename ->
+                let highlights = Html_source.highlights path in
+                let contents = Sail_file.contents (Sail_file.open_file path) in
+                files := { filename; prefix; contents; highlights } :: !files
+            | _ -> ()
+          )
+          else ()
         )
-        filenames
+        paths
     )
     (html_target files)

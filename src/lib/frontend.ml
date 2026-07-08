@@ -55,7 +55,7 @@ let opt_ddump_initial_ast = ref false
 let opt_ddump_side_effect = ref false
 let opt_ddump_tc_ast = ref false
 let opt_list_files = ref None
-let opt_reformat : string option ref = ref None
+let opt_just_parse_project = ref false
 
 let finalize_ast asserts_termination ctx env ast =
   Lint.warn_unmodified_variables ast;
@@ -160,13 +160,13 @@ type parse_continuation = {
 
 type parsed_file =
   | Generated of Parse_ast.def list
-  | File of { filename : string; cont : Initial_check.ctx -> parse_continuation }
+  | File of { path : Sail_file.path; cont : Initial_check.ctx -> parse_continuation }
 
 type parsed_module = { id : Project.mod_id; included : bool; files : parsed_file list }
 
 type processed_file =
   | ProcessedGenerated of untyped_def list
-  | ProcessedFile of { filename : string; cont : Type_check.Env.t -> Type_check.typed_ast * Type_check.Env.t }
+  | ProcessedFile of { path : Sail_file.path; cont : Type_check.Env.t -> Type_check.typed_ast * Type_check.Env.t }
 
 let wrap_module proj parsed_module =
   let module P = Parse_ast in
@@ -201,7 +201,7 @@ module type FILE_HANDLER = sig
 
   type processed
 
-  val parse : Parse_ast.l option -> string -> parsed
+  val parse : Parse_ast.l option -> Sail_file.path -> parsed
 
   val defines_functions : processed -> IdSet.t
 
@@ -219,7 +219,7 @@ module type FILE_HANDLER = sig
 end
 
 module SailHandler : FILE_HANDLER = struct
-  type parsed = string * Lexer.comment list * Parse_ast.def list
+  type parsed = Sail_file.path * Lexer.comment list * Parse_ast.def list
 
   type processed = untyped_ast
 
@@ -244,7 +244,7 @@ let handlers : (string, (module FILE_HANDLER)) Hashtbl.t = Hashtbl.create 8
 
 let register_file_handler ~extension handler = Hashtbl.replace handlers extension handler
 
-let get_handler ~filename = function
+let get_handler ~path = function
   | ".sail" -> (module SailHandler : FILE_HANDLER)
   | extension -> (
       match Hashtbl.find_opt handlers extension with
@@ -252,14 +252,14 @@ let get_handler ~filename = function
       | None ->
           raise
             (Reporting.err_general Parse_ast.Unknown
-               (Printf.sprintf "No handler for file '%s' with extension '%s'" filename extension)
+               (Printf.sprintf "No handler for file '%s' with extension '%s'" (Sail_file.Path.to_string path) extension)
             )
     )
 
-let parse_file ?loc ~target_name ~default_sail_dir ~options filename =
-  let extension = Filename.extension filename in
-  let module Handler = (val get_handler ~filename extension : FILE_HANDLER) in
-  let parsed = Handler.parse loc filename in
+let parse_file ?loc ~target_name ~default_sail_dir ~options path =
+  let extension = Filename.extension (Sail_file.Path.to_string path) in
+  let module Handler = (val get_handler ~path extension : FILE_HANDLER) in
+  let parsed = Handler.parse loc path in
   let cont ctx =
     let processed, ctx = Handler.process ~target_name ~default_sail_dir ~options ctx parsed in
     {
@@ -269,14 +269,14 @@ let parse_file ?loc ~target_name ~default_sail_dir ~options filename =
       ctx;
     }
   in
-  File { filename; cont }
+  File { path; cont }
 
 let process_files ~target_name ~default_sail_dir ~options ctx vs_ids regs files =
   Util.fold_left_map
     (fun (ctx, vs_ids, regs) -> function
-      | File { filename; cont } ->
+      | File { path; cont } ->
           let cont = cont ctx in
-          ((cont.ctx, IdSet.union vs_ids cont.vs_ids, regs @ cont.regs), ProcessedFile { filename; cont = cont.check })
+          ((cont.ctx, IdSet.union vs_ids cont.vs_ids, regs @ cont.regs), ProcessedFile { path; cont = cont.check })
       | Generated defs ->
           let defs = Preprocess.preprocess default_sail_dir target_name options defs in
           let ast, ctx = Initial_check.process_ast ctx (Parse_ast.Defs [(None, defs)]) in
@@ -313,7 +313,7 @@ let load_modules ?target default_sail_dir options env proj root_mod_ids =
           included = is_included mod_id;
           files =
             List.map
-              (fun (filename, l) -> parse_file ~loc:(Project.to_loc l) ~target_name ~default_sail_dir ~options filename)
+              (fun (path, l) -> parse_file ~loc:(Project.to_loc l) ~target_name ~default_sail_dir ~options path)
               files;
         }
       )
@@ -329,7 +329,14 @@ let load_modules ?target default_sail_dir options env proj root_mod_ids =
       print_endline
         (Util.string_of_list sep
            (fun s -> s)
-           (List.filter_map (function File { filename; _ } -> Some filename | Generated _ -> None) included_files)
+           (List.filter_map
+              (function
+                | File { path; _ } ->
+                    if Sail_file.Path.is_virtual path then None else Some (Sail_file.Path.to_string path)
+                | Generated _ -> None
+                )
+              included_files
+           )
         );
       exit 0
   | None -> ()
@@ -338,7 +345,7 @@ let load_modules ?target default_sail_dir options env proj root_mod_ids =
   let all_files =
     List.map (fun m -> m.files) parsed_modules
     |> List.concat
-    |> List.filter_map (function File { filename; _ } -> Some filename | Generated _ -> None)
+    |> List.filter_map (function File { path; _ } -> Some path | Generated _ -> None)
   in
   Option.iter (fun t -> Target.run_pre_initial_check_hook t all_files) target;
 
@@ -369,16 +376,19 @@ let load_modules ?target default_sail_dir options env proj root_mod_ids =
   let ast = filter_modules proj is_included ast in
   finalize_ast asserts_termination ctx env ast
 
-let load_files ?target default_sail_dir options env files =
+let load_files ?(no_core = false) ?target default_sail_dir options env files =
   let target_name = Option.map Target.name target in
   let asserts_termination = Option.fold ~none:false ~some:Target.asserts_termination target in
+
+  let files = List.map Sail_file.Path.actual files in
+  let files = if no_core then files else Corelib_sail.path :: files in
 
   let parsed_files = List.map (fun filename -> parse_file ~target_name ~default_sail_dir ~options filename) files in
 
   Option.iter
     (fun t ->
       Target.run_pre_initial_check_hook t
-        (List.filter_map (function File { filename; _ } -> Some filename | Generated _ -> None) parsed_files)
+        (List.filter_map (function File { path; _ } -> Some path | Generated _ -> None) parsed_files)
     )
     target;
 
@@ -397,33 +407,20 @@ let load_files ?target default_sail_dir options env files =
 
   finalize_ast asserts_termination ctx env (concat_ast checked)
 
-let file_to_string filename =
-  let chan = open_in filename in
-  let buf = Buffer.create 4096 in
-  try
-    let rec loop () =
-      let line = input_line chan in
-      Buffer.add_string buf line;
-      Buffer.add_char buf '\n';
-      loop ()
-    in
-    loop ()
-  with End_of_file ->
-    close_in chan;
-    Buffer.contents buf
-
-let load_project ?target ?modules ?(options = []) ?(variables = []) default_sail_dir project_files =
+let load_project ?(no_core = false) ?target ?modules ?(options = []) ?(variables = ref StringMap.empty)
+    ?(just_parse = false) default_sail_dir project_files =
+  let t = Profile.start () in
+  let project_files = List.map Sail_file.Path.actual project_files in
+  let project_files = if no_core then project_files else Corelib_project.path :: project_files in
   let defs =
     List.map
       (fun project_file ->
-        let root_directory = Filename.dirname project_file in
-        let contents = file_to_string project_file in
-        Project.mk_root root_directory :: Initial_check.parse_project ~filename:project_file ~contents ()
+        let root_directory = Filename.dirname (Sail_file.Path.to_string project_file) in
+        Project.mk_root root_directory :: Initial_check.parse_project project_file
       )
       project_files
     |> List.concat
   in
-  let variables = ref (StringMap.of_seq @@ List.to_seq @@ variables) in
   let proj = Project.initialize_project_structure ~variables defs in
   let mod_ids =
     match modules with
@@ -438,6 +435,8 @@ let load_project ?target ?modules ?(options = []) ?(variables = []) default_sail
           modules
   in
   let env = Type_check.initial_env_with_modules proj in
+  Profile.finish "parsing project" t;
+  if just_parse then exit 0;
   load_modules ?target default_sail_dir options env proj mod_ids
 
 let rewrite_ast_initial effect_info env =

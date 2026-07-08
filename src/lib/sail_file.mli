@@ -44,10 +44,70 @@
 (*  SPDX-License-Identifier: BSD-2-Clause                                   *)
 (****************************************************************************)
 
+(** This module contains all the logic for working with source files. *)
+
+(** {1 File paths} *)
+
+(** As per the OCaml stdlib [Filename] module, paths are represented by strings.
+
+    The one difference is we split files between 'actual' file, i.e. those that actually exist on the file system and
+    have real paths, from 'virtual' files which do not actually exist.
+
+    Any file that is embedded into the sail binary using the [sail_maker embed] is virtual, as is the ARGV string and
+    the REPL contents. There is also a dummy empty file, which is used by the [Initial_check] helper functions that
+    parse expressions directly from strings. *)
+module Path : sig
+  type t
+
+  val actual : string -> t
+
+  val is_virtual : t -> bool
+
+  val map_actual : (string -> string) -> t -> t
+
+  val to_string : t -> string
+end
+
+type path = Path.t
+
+(** {1 Handles} *)
+
+(** Handles are references to opened files that we have read. See [open_file]. *)
 type handle = private int
 
-(** This is a special handle that contains inputs to the sail -i REPL *)
+val handle_compare : handle -> handle -> int
+
+module HandleSet : sig
+  include Set.S with type elt = handle
+end
+
+(** Open a file and return a [handle] to it's contents. Note that the file is not actually held open -- we read the
+    contents, then close the handle storing the file information and contents in memory. As such there is no close_file.
+    Repeatedly calling this file on the same string will return the same handle. *)
+val open_file : path -> handle
+
+val add_virtual_file : contents:string -> string -> path * handle
+
+val get_virtual_file : string -> handle option
+
+(** The path that was passed to [open_file], or in the case of [add_virtual_file] was created at the same time as the
+    handle. *)
+val to_path : handle -> path
+
+(** The contents of a Sail file as a string, without any pending edits (see the LSP section of this file). *)
+val contents : handle -> string
+
+(** {2 Special handles} *)
+
+(** This is special handle that resolves to a internal file that is always empty. *)
+val dummy : handle
+
+(** This is a special handle that contains inputs to the sail -i REPL. *)
 val interactive_repl : handle
+
+val repl_prompt_line : unit -> int
+
+val add_to_repl_contents : command:string -> int * int
 
 (** This is a special handle that treats the Sail argv array as a file for error reporting, with one member of the argv
     array per line. *)
@@ -58,36 +118,50 @@ val argv : handle
     both are present. *)
 val sail_argv : unit -> string Array.t
 
-val repl_prompt_line : unit -> int
+(** {1 File positions}
 
-val add_to_repl_contents : command:string -> int * int
+    This module mirrors the OCaml builtin Lexing position type almost exactly, providing a drop-in replacement. The key
+    difference is pos_fname is actually a handle, rather than just a filename.
 
+    Note that then Menhir parsers and OCamllex generated lexers do still use [Lexing.position], they just never use the
+    pos_fname field for that type.
+
+    Positions do not necessarily correspond to sensible locations in any file, users should not naively assume that the
+    positions are actually in-bounds for the provided handle contents. *)
+module Position : sig
+  type position = { pos_fname : handle; pos_lnum : int; pos_bol : int; pos_cnum : int }
+
+  (** Convert a OCamllex [Lexing] position to a Sail one, discarding the string pos_fname. *)
+  val from_lexing : handle -> Lexing.position -> position
+
+  (** Convert a Sail position back into an OCamllex [Lexing] position. The [pos_fname] field is set to the empty string.
+      Used to feed positions back into the lexbuf and Menhir's incremental API, where [from_lexing] will re-attach the
+      correct handle. *)
+  val to_lexing : position -> Lexing.position
+
+  (** A dummy (invalid) position in the the [dummy] file. *)
+  val dummy_pos : position
+end
+
+type position = Position.position
+
+(** Returns the byte-offset for a line number. *)
 val bol_of_lnum : int -> handle -> int option
-
-(** For the LSP, we might have Sail and the editor use slightly different paths for the same file so we can set this to
-    Sys.realpath, and we will then treat files with the same canonical name as the same file.
-
-    We can't just use realpath directly because it would mean increasing our minimum OCaml version to 4.13. *)
-val set_canonicalize_function : (string -> string) -> unit
-
-(** Open a file and return a 'handle' to it's contents. Note that the file is not actually held open -- we read the
-    contents, then close the handle storing the file information and contents in memory. As such there is no close_file.
-    Repeatedly calling this file on the same string (as determined by [set_canonicalize_function]) will return the same
-    handle. *)
-val open_file : string -> handle
 
 (** Replace the contents of a file. Note that this only changes the in-memory contents of the file, and does not flush
     the changes to disk. *)
 val write_file : contents:string -> handle -> unit
 
-(** The the LSP takes control of a file by sending us a DidOpenTextDocument message, with the contents of the file as
-    seen by the editor. *)
+(** {1 Language-server-protocol (LSP) file lifecycle} *)
+
+(** The LSP takes control of a file by sending us a DidOpenTextDocument message, with the contents of the file as seen
+    by the editor. *)
 val editor_take_file : contents:string -> string -> handle
 
 (** The LSP can stop editing a file using the DidCloseTextDocument message, in which case we need to manage the file. *)
 val editor_drop_file : handle -> unit
 
-(** The LSP protocol uses line + character offsets as positions *)
+(** The LSP protocol uses line + character offsets as positions. *)
 type editor_position = { line : int; character : int }
 
 type editor_range = editor_position * editor_position
@@ -110,8 +184,7 @@ val editor_position : Lexing.position -> editor_position option
     is within a pending edit that has not yet been processed by Sail. *)
 val lexing_position : handle -> editor_position -> Lexing.position option
 
-(** The contents of a Sail file as a string, without any pending edits. *)
-val contents : handle -> string
+(** {1 Channel interface} *)
 
 (** This module aims to provide a drop-in replacement for the stdlib in_channel functionality used by Sail, essentially
     providing an iterator style interface to the file contents. *)

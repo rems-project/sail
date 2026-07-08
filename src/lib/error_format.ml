@@ -69,7 +69,14 @@ let error_tabwidth = 4
 
 let opt_debug_no_filenames = ref false
 
-let format_filename fname = if !opt_debug_no_filenames then "" else Util.(fname |> cyan |> clear)
+let format_filename handle =
+  let open Sail_file in
+  if !opt_debug_no_filenames then ""
+  else (
+    let path = to_path handle in
+    let extra s = if Path.is_virtual path then s ^ "(" ^ Util.("virtual" |> magenta |> clear) ^ ")" else s in
+    extra Util.(Sail_file.Path.to_string path |> cyan |> clear)
+  )
 
 let unprintable_notation ?(color = fun x -> x) c =
   let n = Char.code c in
@@ -167,29 +174,27 @@ let format_code_single_fallback prefix fname lnum cnum_from cnum_to contents ppf
   format_endline (Printf.sprintf "%s%s:%d.%d-%d:" prefix (format_filename fname) lnum cnum_from cnum_to) ppf;
   contents { ppf with indent = ppf.indent ^ blank_prefix ^ " " }
 
-let format_code_single prefix hint fname lnum cnum_from cnum_to contents ppf =
+let format_code_single prefix hint handle lnum cnum_from cnum_to contents ppf =
   try
-    let handle = Sail_file.open_file fname in
     let in_chan = Sail_file.In_channel.from_file handle in
-    format_code_single' prefix hint fname in_chan lnum cnum_from cnum_to contents ppf
-  with _ -> format_code_single_fallback prefix fname lnum cnum_from cnum_to contents ppf
+    format_code_single' prefix hint handle in_chan lnum cnum_from cnum_to contents ppf
+  with _ -> format_code_single_fallback prefix handle lnum cnum_from cnum_to contents ppf
 
-let format_code_double_fallback prefix fname lnum_from cnum_from lnum_to cnum_to contents ppf =
+let format_code_double_fallback prefix handle lnum_from cnum_from lnum_to cnum_to contents ppf =
   let blank_prefix = String.make (String.length (string_of_int lnum_to)) ' ' ^ Util.(clear (ppf.loc_color " |")) in
   format_endline
-    (Printf.sprintf "%s%s:%d.%d-%d.%d:" prefix (format_filename fname) lnum_from cnum_from lnum_to cnum_to)
+    (Printf.sprintf "%s%s:%d.%d-%d.%d:" prefix (format_filename handle) lnum_from cnum_from lnum_to cnum_to)
     ppf;
   contents { ppf with indent = ppf.indent ^ blank_prefix ^ " " }
 
-let format_code_double prefix fname lnum_from cnum_from lnum_to cnum_to contents ppf =
+let format_code_double prefix handle lnum_from cnum_from lnum_to cnum_to contents ppf =
   try
-    let handle = Sail_file.open_file fname in
     let in_chan = Sail_file.In_channel.from_file handle in
-    format_code_double' prefix fname in_chan lnum_from cnum_from lnum_to cnum_to contents ppf
-  with _ -> format_code_double_fallback prefix fname lnum_from cnum_from lnum_to cnum_to contents ppf
+    format_code_double' prefix handle in_chan lnum_from cnum_from lnum_to cnum_to contents ppf
+  with _ -> format_code_double_fallback prefix handle lnum_from cnum_from lnum_to cnum_to contents ppf
 
 let format_pos prefix hint p1 p2 contents ppf =
-  let open Lexing in
+  let open Sail_file.Position in
   if p1.pos_lnum == p2.pos_lnum then
     format_code_single prefix hint p1.pos_fname p1.pos_lnum (p1.pos_cnum - p1.pos_bol) (p2.pos_cnum - p2.pos_bol)
       contents ppf

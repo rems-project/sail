@@ -72,9 +72,9 @@ let discard_extra_trailing_newlines s =
 (* This function inserts a space before each comment if there is not
    already one, so "2/* comment */" will become "2 /* comment */"
    and similarly for line comments. *)
-let fixup_comments ~filename source =
+let fixup_comments source =
   (* Using the full parser is bit inefficient, it would be better to just tokenize *)
-  let comments, _ = Initial_check.parse_file_from_string ~filename ~contents:source in
+  let comments, _ = Initial_check.parse_file_from_string source in
   let comment_stack = Stack.of_seq (List.to_seq comments) in
   let fixed = Buffer.create (String.length source) in
   let needs_space = ref false in
@@ -1085,15 +1085,15 @@ module Make (Config : CONFIG) = struct
       prerr_endline debug_src
     );
     let formatted, lb_info = to_string (doc ^^ hardline) in
-    fixup lb_info formatted |> fixup_comments ~filename |> discard_extra_trailing_newlines
+    fixup lb_info formatted |> fixup_comments |> discard_extra_trailing_newlines
 
   let format_defs ?(debug = false) filename source comments starting_defs =
     let open Initial_check in
     let open Parse_ast_diff in
     let f1 = format_defs_once ~debug filename source comments starting_defs in
-    let comments, defs = parse_file_from_string ~filename ~contents:f1 in
+    let comments, defs = parse_file_from_string f1 in
     let f2 = format_defs_once ~debug filename f1 comments defs in
-    let comments, defs = parse_file_from_string ~filename ~contents:f2 in
+    let comments, defs = parse_file_from_string f2 in
     let f3 = format_defs_once ~debug filename f2 comments defs in
     if f2 <> f3 then (
       prerr_endline f2;

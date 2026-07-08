@@ -46,6 +46,10 @@ open ConcurrencyInterfaceV1
 open Defs
 namespace Functions
 
+/-- Type quantifiers: x : Int -/
+def __id (x : Int) : Int :=
+  x
+
 /-- Type quantifiers: n : Int -/
 def foo (n : Int) : SailM (Bool × (BitVec 1) × Int × Nat × (BitVec 3)) := do
   (pure ((← (undefined_bool ())), (← (undefined_bit ())), (← (undefined_int ())), (← (undefined_nat

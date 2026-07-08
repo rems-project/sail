@@ -437,7 +437,7 @@ let chunk_header_comments comments chunks = function
 
 (* Pop comments preceeding location into the chunkstream *)
 let rec pop_comments ?(newline = false) ?last_comment_line ?(spacer = true) comments chunks l =
-  let extra_lines (p : Lexing.position) =
+  let extra_lines (p : Sail_file.position) =
     match last_comment_line with
     | Some (comment_type, last) when spacer && last < p.pos_lnum ->
         let spacing = p.pos_lnum - last - match comment_type with Comment_line -> 1 | Comment_block -> 2 in
@@ -480,7 +480,7 @@ let rec pop_comments_until_loc_end comments chunks l =
       | _ -> ()
     )
 
-let rec discard_comments comments (pos : Lexing.position) =
+let rec discard_comments comments (pos : Sail_file.position) =
   match Stack.top_opt comments with
   | None -> ()
   | Some (Lexer.Comment (_, _, e, _)) ->
@@ -1491,7 +1491,7 @@ let chunk_scattered comments chunks (SD_aux (aux, l)) =
 
 let def_spacer (_, e) (s, _) = match (e, s) with Some l_e, Some l_s -> if l_s > l_e + 1 then 1 else 0 | _, _ -> 1
 
-let read_source (p1 : Lexing.position) (p2 : Lexing.position) source =
+let read_source (p1 : Sail_file.position) (p2 : Sail_file.position) source =
   String.sub source p1.pos_cnum (p2.pos_cnum - p1.pos_cnum)
 
 let can_handle_td (TD_aux (aux, _)) = match aux with TD_enum _ -> true | _ -> false

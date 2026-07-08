@@ -62,7 +62,7 @@ module ModSet : sig
   include Set.S with type elt = mod_id
 end
 
-type l = Lexing.position * Lexing.position
+type l = Sail_file.position * Sail_file.position
 
 type 'a spanned = 'a * l
 
@@ -78,7 +78,7 @@ val parse_assignment : variables:value Util.StringMap.t ref -> string -> bool
 
 type exp =
   | E_app of string * exp spanned list
-  | E_file of string * string
+  | E_file of bool * string * string
   | E_id of string
   | E_if of exp spanned * exp spanned * exp spanned
   | E_list of exp spanned list
@@ -99,7 +99,12 @@ type mdl_def = M_dep of dependency | M_directory of exp spanned | M_module of md
 
 and mdl = { name : string spanned; defs : mdl_def spanned list; span : l }
 
-type def = Def_root of string | Def_var of string spanned * exp spanned | Def_module of mdl | Def_test of string list
+type def =
+  | Def_root of string
+  | Def_var of string spanned * exp spanned
+  | Def_module of mdl
+  | Def_implicit of exp spanned
+  | Def_test of string list
 
 val mk_root : string -> def spanned
 
@@ -123,11 +128,11 @@ val valid_module_id : project_structure -> mod_id -> bool
 
 val module_order : project_structure -> mod_id list
 
-val module_files : project_structure -> mod_id -> string spanned list
+val module_files : project_structure -> mod_id -> Sail_file.path spanned list
 
 val module_requires : project_structure -> mod_id -> mod_id list
 
-val all_files : project_structure -> string spanned list
+val all_files : project_structure -> Sail_file.path spanned list
 
 val all_modules : project_structure -> mod_id list
 

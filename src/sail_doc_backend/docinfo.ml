@@ -72,6 +72,8 @@ let docinfo_version = 1
 
 let same_file f1 f2 = Filename.basename f1 = Filename.basename f2 && Filename.dirname f1 = Filename.dirname f2
 
+let loc_filename (p : Sail_file.position) = Sail_file.Path.to_string (Sail_file.to_path p.pos_fname)
+
 let process_file f filename = f (Util.read_whole_file filename)
 
 let hash_file filename = process_file Digest.string filename |> Digest.to_hex
@@ -114,13 +116,16 @@ type hyper_location = string * int * int
 
 let included_loc files l =
   match Reporting.loc_file l with
-  | Some file -> Util.list_empty files || List.exists (same_file file) files
+  | Some file ->
+      let file = Sail_file.Path.to_string (Sail_file.to_path file) in
+      Util.list_empty files || List.exists (same_file file) files
   | None -> Util.list_empty files
 
 let hyper_loc l =
   match Reporting.simp_loc l with
-  | Some (p1, p2) when p1.pos_fname = p2.pos_fname && Filename.is_relative p1.pos_fname ->
-      Some (p1.pos_fname, p1.pos_cnum, p2.pos_cnum)
+  | Some (p1, p2) when p1.pos_fname = p2.pos_fname ->
+      let file = Sail_file.Path.to_string (Sail_file.to_path p1.pos_fname) in
+      if Filename.is_relative file then Some (file, p1.pos_cnum, p2.pos_cnum) else None
   | _ -> None
 
 type hyperlink = Function of id * hyper_location | Register of id * hyper_location
@@ -419,12 +424,13 @@ module Generator (Converter : Markdown.CONVERTER) (Config : CONFIG) = struct
 
   let embedding_format () = match Config.embedding_mode with Some Plain | None -> Plain | Some Base64 -> Base64
 
-  let doc_lexing_pos (p1 : Lexing.position) (p2 : Lexing.position) =
+  let doc_lexing_pos (p1 : Sail_file.position) (p2 : Sail_file.position) =
+    let fname = Sail_file.Path.to_string (Sail_file.to_path p1.pos_fname) in
     match Config.embedding_mode with
     | Some _ when Config.embed_with_location ->
         RawWithLocation
           ( Reporting.loc_range_to_src p1 p2 |> encode,
-            p1.pos_fname,
+            fname,
             p1.pos_lnum,
             p1.pos_bol,
             p1.pos_cnum,
@@ -433,14 +439,15 @@ module Generator (Converter : Markdown.CONVERTER) (Config : CONFIG) = struct
             p2.pos_cnum
           )
     | Some _ -> Raw (Reporting.loc_range_to_src p1 p2 |> encode)
-    | None -> Location (p1.pos_fname, p1.pos_lnum, p1.pos_bol, p1.pos_cnum, p2.pos_lnum, p2.pos_bol, p2.pos_cnum)
+    | None -> Location (fname, p1.pos_lnum, p1.pos_bol, p1.pos_cnum, p2.pos_lnum, p2.pos_bol, p2.pos_cnum)
 
   let doc_loc l g f x =
+    let raw () = Raw (g x |> f |> Document.to_string |> encode) in
     match Reporting.simp_loc l with
-    | Some (p1, p2)
-      when p1.pos_fname = p2.pos_fname && Filename.is_relative p1.pos_fname && Sys.file_exists p1.pos_fname ->
-        doc_lexing_pos p1 p2
-    | _ -> Raw (g x |> f |> Document.to_string |> encode)
+    | Some (p1, p2) when p1.pos_fname = p2.pos_fname ->
+        let fname = Sail_file.Path.to_string (Sail_file.to_path p1.pos_fname) in
+        if Filename.is_relative fname && Sys.file_exists fname then doc_lexing_pos p1 p2 else raw ()
+    | _ -> raw ()
 
   let get_doc_comment def_annot =
     Option.map
@@ -546,7 +553,7 @@ module Generator (Converter : Markdown.CONVERTER) (Config : CONFIG) = struct
           let last_loc = exp_loc (Util.last (exp :: exps)) in
           match (Reporting.simp_loc first_loc, Reporting.simp_loc last_loc, Reporting.simp_loc block_loc) with
           | Some (p1, _), Some (_, p2), Some (block_p1, block_p2)
-            when p1.pos_fname = p2.pos_fname && Filename.is_relative p1.pos_fname ->
+            when p1.pos_fname = p2.pos_fname && Filename.is_relative (loc_filename p1) ->
               if block_p1.pos_lnum < p1.pos_lnum then
                 (* Make sure the first line is indented correctly, when it's on a different line to the start of the block. *)
                 doc_lexing_pos { p1 with pos_cnum = p1.pos_bol } p2
@@ -803,8 +810,8 @@ module Generator (Converter : Markdown.CONVERTER) (Config : CONFIG) = struct
         match Reporting.simp_loc doc_annot.loc with
         | None -> hashes
         | Some (p1, _) ->
-            if StringMap.mem p1.pos_fname hashes then hashes
-            else StringMap.add p1.pos_fname (hash_file p1.pos_fname) hashes
+            let file = loc_filename p1 in
+            if StringMap.mem file hashes then hashes else StringMap.add file (hash_file file) hashes
       )
       else hashes
     in

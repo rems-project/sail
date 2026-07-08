@@ -53,7 +53,7 @@ type l =
   | Unique of int * l
   | Generated of l
   | Hint of string * l * l
-  | Range of Lexing.position * Lexing.position
+  | Range of Sail_file.position * Sail_file.position
 
 type comment_type = Comment_block | Comment_line
 
@@ -140,7 +140,7 @@ type atyp_aux =
   | ATyp_minus of atyp * atyp (* subtraction *)
   | ATyp_exp of atyp (* exponential *)
   | ATyp_neg of atyp (* Internal (but not M as I want a datatype constructor) negative nexp *)
-  | ATyp_infix of (atyp infix_token * Lexing.position * Lexing.position) list
+  | ATyp_infix of (atyp infix_token * Sail_file.position * Sail_file.position) list
   | ATyp_inc (* increasing *)
   | ATyp_dec (* decreasing *)
   | ATyp_set of id list (* effect set *)
@@ -229,7 +229,7 @@ and exp_aux =
   | E_typ of atyp * exp (* cast *)
   | E_app of id * exp list (* function application *)
   | E_app_infix of exp * id * exp (* infix function application *)
-  | E_infix of (exp infix_token * Lexing.position * Lexing.position) list
+  | E_infix of (exp infix_token * Sail_file.position * Sail_file.position) list
   | E_tuple of exp list (* tuple *)
   | E_if of exp * exp * exp * if_loc (* conditional *)
   | E_loop of loop * measure * exp * exp
@@ -456,4 +456,4 @@ and def = DEF_aux of def_aux * l
 
 type defs =
   (* Definition sequence *)
-  | Defs of (string option * def list) list
+  | Defs of (Sail_file.path option * def list) list

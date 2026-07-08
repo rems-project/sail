@@ -62,7 +62,7 @@ type mod_id = ModId.t
 
 let global_scope = -1
 
-type l = Lexing.position * Lexing.position
+type l = Sail_file.position * Sail_file.position
 
 let to_loc l = Parse_ast.Range (fst l, snd l)
 
@@ -74,7 +74,12 @@ type 'a spanned = 'a * l
 
 type selector = S_tree | S_only
 
-type value = V_string of string | V_bool of bool | V_selector of selector * string | V_list of value list
+type value =
+  | V_virtual of string
+  | V_string of string
+  | V_bool of bool
+  | V_selector of selector * string
+  | V_list of value list
 
 let string_value s = V_string s
 let bool_value b = V_bool b
@@ -95,7 +100,7 @@ let parse_assignment ~variables s =
 
 type exp =
   | E_app of string * exp spanned list
-  | E_file of string * string
+  | E_file of bool * string * string
   | E_id of string
   | E_if of exp spanned * exp spanned * exp spanned
   | E_list of exp spanned list
@@ -116,9 +121,14 @@ type mdl_def = M_dep of dependency | M_directory of exp spanned | M_module of md
 
 and mdl = { name : string spanned; defs : mdl_def spanned list; span : l }
 
-type def = Def_root of string | Def_var of string spanned * exp spanned | Def_module of mdl | Def_test of string list
+type def =
+  | Def_root of string
+  | Def_var of string spanned * exp spanned
+  | Def_module of mdl
+  | Def_implicit of exp spanned
+  | Def_test of string list
 
-let mk_root root = (Def_root root, (Lexing.dummy_pos, Lexing.dummy_pos))
+let mk_root root = (Def_root root, (Sail_file.Position.dummy_pos, Sail_file.Position.dummy_pos))
 
 class type project_visitor = object
   method vexp : exp spanned -> exp spanned visit_action
@@ -211,18 +221,26 @@ let visit_def vis outer_def =
     | Def_root root, _ ->
         vis#on_root_change root;
         no_change
+    | Def_implicit exp, l ->
+        let exp' = visit_exp vis exp in
+        if exp == exp' then no_change else (Def_implicit exp', l)
   in
   do_visit vis (vis#vdef outer_def) aux outer_def
 
 let visit_defs vis defs = map_no_copy (visit_def vis) defs
 
-let rec value_to_strings l = function
-  | V_string s -> [(s, l)]
-  | V_list vs -> List.concat (List.map (value_to_strings l) vs)
+let rec value_to_paths l = function
+  | V_string s -> [(Sail_file.Path.actual s, l)]
+  | V_virtual s -> (
+      match Sail_file.get_virtual_file s with
+      | Some h -> [(Sail_file.to_path h, l)]
+      | None -> raise (Reporting.err_general (to_loc l) (Printf.sprintf "Virtual file %s does not exist in project" s))
+    )
+  | V_list vs -> List.concat (List.map (value_to_paths l) vs)
   | _ -> raise (Reporting.err_typ (to_loc l) "Expected strings")
 
-let rec to_strings = function
-  | (E_value v, l) :: xs -> value_to_strings l v @ to_strings xs
+let rec to_paths = function
+  | (E_value v, l) :: xs -> value_to_paths l v @ to_paths xs
   | (_, l) :: _ -> raise (Reporting.err_typ (to_loc l) "String has not been evaluated")
   | [] -> []
 
@@ -255,18 +273,21 @@ let project_binop l op lhs rhs =
   | "==" -> (
       match (lhs, rhs) with
       | V_string s1, V_string s2 -> V_bool (s1 = s2)
+      | V_virtual s1, V_virtual s2 -> V_bool (s1 = s2)
       | V_bool b1, V_bool b2 -> V_bool (b1 = b2)
       | _, _ -> invalid_arguments ()
     )
   | "!=" -> (
       match (lhs, rhs) with
       | V_string s1, V_string s2 -> V_bool (s1 <> s2)
+      | V_virtual s1, V_virtual s2 -> V_bool (s1 <> s2)
       | V_bool b1, V_bool b2 -> V_bool (b1 <> b2)
       | _, _ -> invalid_arguments ()
     )
   | "/" -> (
       match (lhs, rhs) with
       | V_string lhs, V_string rhs -> V_string (lhs ^ Filename.dir_sep ^ rhs)
+      | V_string lhs, V_virtual rhs -> V_virtual (lhs ^ Filename.dir_sep ^ rhs)
       | _, _ -> invalid_arguments ()
     )
   | _ -> raise (Reporting.err_typ (to_loc l) ("Unknown binary operator '" ^ op ^ "'"))
@@ -314,7 +335,8 @@ class eval_visitor (vars : value StringMap.t ref) =
       let aux no_change =
         match no_change with
         | (E_string s | E_id s), l -> (E_value (V_string s), l)
-        | E_file (f, ext), l -> (E_value (V_string (f ^ "." ^ ext)), l)
+        | E_file (virt, f, ext), l ->
+            if virt then (E_value (V_virtual (f ^ "." ^ ext)), l) else (E_value (V_string (f ^ "." ^ ext)), l)
         | E_parent, l -> (E_value (V_string Filename.parent_dir_name), l)
         | E_var var, l -> (
             match StringMap.find_opt var !vars with
@@ -360,7 +382,7 @@ type project_structure = {
   ids : int StringMap.t;
   mutable parents : int ModMap.t;
   mutable children : ModGraph.graph;
-  mutable files : string spanned list ModMap.t;
+  mutable files : Sail_file.path spanned list ModMap.t;
   mutable requires : ModGraph.graph;
   mutable deps : ModGraph.graph;
 }
@@ -409,12 +431,14 @@ let link_parent id parents proj =
   | [] -> ()
 
 let rec collect_files = function
-  | (M_files (f, fs), _) :: mdefs -> to_strings (f :: fs) @ collect_files mdefs
+  | (M_files (f, fs), _) :: mdefs -> to_paths (f :: fs) @ collect_files mdefs
   | _ :: mdefs -> collect_files mdefs
   | [] -> []
 
-let add_root root_opt (file, l) =
-  match root_opt with None | Some "." -> (file, l) | Some root -> (root ^ Filename.dir_sep ^ file, l)
+let add_root root_opt (path, l) =
+  match root_opt with
+  | None | Some "." -> (path, l)
+  | Some root -> (Sail_file.Path.map_actual (fun file -> root ^ Filename.dir_sep ^ file) path, l)
 
 class structure_visitor (proj : project_structure) =
   object
@@ -502,6 +526,13 @@ class dependency_visitor (proj : project_structure) =
           stack <- update_head (fun frame -> { frame with after = frame.after @ to_selectors (e :: es) }) stack
       );
       SkipChildren
+
+    method! vdef def =
+      match def with
+      | Def_implicit e, _ ->
+          stack <- { empty_frame with requires = to_selectors [e] } :: stack;
+          SkipChildren
+      | _ -> DoChildren
 
     method! vmodule m =
       let name = fst m.name in

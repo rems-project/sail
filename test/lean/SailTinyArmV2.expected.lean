@@ -512,6 +512,10 @@ open CacheOp
 open Barrier
 open AccessType
 
+/-- Type quantifiers: x : Int -/
+def __id (x : Int) : Int :=
+  x
+
 /-- Type quantifiers: k_ex10021_ : Bool, k_ex10020_ : Bool -/
 def neq_bool (x : Bool) (y : Bool) : Bool :=
   (! (x == y))
@@ -519,10 +523,6 @@ def neq_bool (x : Bool) (y : Bool) : Bool :=
 /-- Type quantifiers: k_n : Nat, y : Nat, k_n ≥ 0 ∧ y ≥ 0 -/
 def eq_bits_int (x : (BitVec k_n)) (y : Nat) : Bool :=
   ((BitVec.toNatInt x) == y)
-
-/-- Type quantifiers: x : Int -/
-def __id (x : Int) : Int :=
-  x
 
 /-- Type quantifiers: n : Int, m : Int -/
 def _shl_int_general (m : Int) (n : Int) : Int :=
