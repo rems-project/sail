@@ -48,6 +48,8 @@
 
 open Project
 open Project_parser
+open Project_token
+open Sail_file.Position
 
 module M = Map.Make(String)
 
@@ -57,6 +59,7 @@ let kw_table =
     M.empty
     [
       ("__test",    (fun _ -> Test));
+      ("__virtual", (fun _ -> Virtual));
       ("after",     (fun _ -> After));
       ("before",    (fun _ -> Before));
       ("directory", (fun _ -> Directory));
@@ -64,6 +67,7 @@ let kw_table =
       ("false",     (fun _ -> False));
       ("files",     (fun _ -> Files));
       ("if",        (fun _ -> If));
+      ("implicit",  (fun _ -> Implicit));
       ("requires",  (fun _ -> Requires));
       ("then",      (fun _ -> Then));
       ("true",      (fun _ -> True));
@@ -99,10 +103,10 @@ let operatorn = oper_char oper_char_no_slash_star (oper_char* ('_' ident)?) | op
 let operator = operator1 | operator2 | operatorn
 let escape_sequence = ('\\' ['\\''\"''\'''n''t''b''r']) | ('\\' digit digit digit) | ('\\' 'x' hexdigit hexdigit)
 
-rule token = parse
-  | ws                                { token lexbuf }
+rule token handle = parse
+  | ws                                { token handle lexbuf }
   | "\n"
-  | "\r\n"                            { Lexing.new_line lexbuf; token lexbuf }
+  | "\r\n"                            { Lexing.new_line lexbuf; token handle lexbuf }
   | ","                               { Comma }
   | "("                               { Lparen }
   | ")"                               { Rparen }
@@ -125,46 +129,47 @@ rule token = parse
                                         IdLcurly (i, { p with pos_cnum = p.pos_cnum + String.length i}) }
   | (ident* as f) "." (ident+ as ext) { FileId (f, ext) }
   | startident ident* as i            { match M.find_opt i kw_table with
-                                        | Some kw -> kw (Lexing.lexeme_start_p lexbuf)
+                                        | Some kw -> kw (from_lexing handle (Lexing.lexeme_start_p lexbuf))
                                         | None -> Id i }
   | '"'                               { let startpos = Lexing.lexeme_start_p lexbuf in
-                                        let contents = string startpos (Buffer.create 10) lexbuf in
+                                        let contents = string handle startpos (Buffer.create 10) lexbuf in
                                         lexbuf.lex_start_p <- startpos;
-                                        String(contents) }
+                                        String contents }
   | eof                               { Eof }
   | _  as c                           { raise (Reporting.err_lex
-                                          (Lexing.lexeme_start_p lexbuf)
+                                          (from_lexing handle (Lexing.lexeme_start_p lexbuf))
                                           (Printf.sprintf "Unexpected character: %s" (Char.escaped c))) }
   | "//"
-    { line_comment (Lexing.lexeme_start_p lexbuf) (Buffer.create 10) lexbuf; token lexbuf }
+    { line_comment handle (Lexing.lexeme_start_p lexbuf) (Buffer.create 10) lexbuf; token handle lexbuf }
   | "/*"
-    { comment (Lexing.lexeme_start_p lexbuf) (Buffer.create 10) 0 lexbuf; token lexbuf }
+    { comment handle (Lexing.lexeme_start_p lexbuf) (Buffer.create 10) 0 lexbuf; token handle lexbuf }
   | "*/"
-    { raise (Reporting.err_lex (Lexing.lexeme_start_p lexbuf) "Unbalanced comment") }
+    { raise (Reporting.err_lex (from_lexing handle (Lexing.lexeme_start_p lexbuf)) "Unbalanced comment") }
 
-and line_comment pos b = parse
+and line_comment handle pos b = parse
   | "\n"                              { Lexing.new_line lexbuf }
-  | _ as c                            { Buffer.add_string b (String.make 1 c); line_comment pos b lexbuf }
-  | eof                               { raise (Reporting.err_lex pos "File ended before newline in comment") }
+  | _ as c                            { Buffer.add_string b (String.make 1 c); line_comment handle pos b lexbuf }
+  | eof                               { raise (Reporting.err_lex (from_lexing handle pos) "File ended before newline in comment") }
 
-and comment pos b depth = parse
-  | "/*"                              { comment pos b (depth + 1) lexbuf }
+and comment handle pos b depth = parse
+  | "/*"                              { comment handle pos b (depth + 1) lexbuf }
   | "*/"                              { if depth > 0 then (
-                                          comment pos b (depth-1) lexbuf
+                                          comment handle pos b (depth - 1) lexbuf
                                         ) }
   | "\n"                              { Buffer.add_string b "\n";
                                         Lexing.new_line lexbuf;
-                                        comment pos b depth lexbuf }
-  | _ as c                            { Buffer.add_string b (String.make 1 c); comment pos b depth lexbuf }
-  | eof                               { raise (Reporting.err_lex pos "Unbalanced comment") }
+                                        comment handle pos b depth lexbuf }
+  | _ as c                            { Buffer.add_string b (String.make 1 c); comment handle pos b depth lexbuf }
+  | eof                               { raise (Reporting.err_lex (from_lexing handle pos) "Unbalanced comment") }
 
-and string pos b = parse
+and string handle pos b = parse
   | ([^'"''\n''\\']*'\n' as i)          { Lexing.new_line lexbuf;
                                           Buffer.add_string b i;
-                                          string pos b lexbuf }
-  | ([^'"''\n''\\']* as i)              { Buffer.add_string b i; string pos b lexbuf }
-  | escape_sequence as i                { Buffer.add_string b i; string pos b lexbuf }
-  | '\\' '\n' ws                        { Lexing.new_line lexbuf; string pos b lexbuf }
-  | '\\'                                { raise (Reporting.err_lex (Lexing.lexeme_start_p lexbuf) "String literal contains illegal backslash escape sequence") }
+                                          string handle pos b lexbuf }
+  | ([^'"''\n''\\']* as i)              { Buffer.add_string b i; string handle pos b lexbuf }
+  | escape_sequence as i                { Buffer.add_string b i; string handle pos b lexbuf }
+  | '\\' '\n' ws                        { Lexing.new_line lexbuf; string handle pos b lexbuf }
+  | '\\'                                { raise (Reporting.err_lex (from_lexing handle (Lexing.lexeme_start_p lexbuf))
+                                                                   "String literal contains illegal backslash escape sequence") }
   | '"'                                 { Scanf.unescaped (Buffer.contents b) }
-  | eof                                 { raise (Reporting.err_lex pos "String literal not terminated") }
+  | eof                                 { raise (Reporting.err_lex (from_lexing handle pos) "String literal not terminated") }

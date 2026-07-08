@@ -812,7 +812,9 @@ let split_defs target all_errors (splits : split_req list) env ast =
         | Unique (_, l) -> aux l
         | Generated l -> false (* Could do match_l l, but only want to split user-written patterns *)
         | Hint (_, _, l) -> aux l
-        | Range (p, q) -> p.Lexing.pos_fname = filename && p.Lexing.pos_lnum <= line && line <= q.Lexing.pos_lnum
+        | Range (p, q) ->
+            Sail_file.Path.to_string (Sail_file.to_path p.pos_fname) = filename
+            && p.pos_lnum <= line && line <= q.pos_lnum
       in
       aux
     in

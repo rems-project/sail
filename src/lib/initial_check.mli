@@ -115,34 +115,58 @@ val val_spec_of_string : ctx -> id -> string -> untyped_def
 
 val defs_of_string : string * int * int * int -> ctx -> string -> untyped_def list * ctx
 
-val ast_of_def_string : ?inline:Lexing.position -> string * int * int * int -> ctx -> string -> untyped_ast * ctx
+val ast_of_def_string : ?inline:Sail_file.position -> string * int * int * int -> ctx -> string -> untyped_ast * ctx
 
 val ast_of_def_string_with :
-  ?inline:Lexing.position ->
+  ?inline:Sail_file.position ->
   string * int * int * int ->
   ctx ->
   (Parse_ast.def list -> Parse_ast.def list) ->
   string ->
   untyped_ast * ctx
 
-val exp_of_string : ctx -> ?inline:Lexing.position -> string -> uannot exp
+val exp_of_string : ctx -> ?inline:Sail_file.position -> string -> uannot exp
 
-val typ_of_string : ctx -> ?inline:Lexing.position -> string -> typ
+val typ_of_string : ctx -> ?inline:Sail_file.position -> string -> typ
 
-val constraint_of_string : ctx -> ?inline:Lexing.position -> string -> n_constraint
+val constraint_of_string : ctx -> ?inline:Sail_file.position -> string -> n_constraint
 
-val parse_from_string : (Lexing.lexbuf -> 'a) -> ?inline:Lexing.position -> string -> 'a
+(** The entry points of the Sail parser (which is a functor over the file handle), so a parser instantiated for a
+    specific file can be passed to a [parse_from_string] action. *)
+module type PARSER = sig
+  exception Error
+
+  val typschm_eof : (Lexing.lexbuf -> Token.token) -> Lexing.lexbuf -> Parse_ast.typschm
+  val typ_eof : (Lexing.lexbuf -> Token.token) -> Lexing.lexbuf -> Parse_ast.atyp
+  val exp_eof : (Lexing.lexbuf -> Token.token) -> Lexing.lexbuf -> Parse_ast.exp
+  val def_eof : (Lexing.lexbuf -> Token.token) -> Lexing.lexbuf -> Parse_ast.def
+  val file : (Lexing.lexbuf -> Token.token) -> Lexing.lexbuf -> Parse_ast.def list
+end
+
+(** [parse_from_string ?inline str action] parses [str] by instantiating the parser for the appropriate file handle and
+    passing it (with that handle and the lexbuf) to [action]. *)
+val parse_from_string :
+  ?inline:Sail_file.position -> string -> ((module PARSER) -> Sail_file.handle -> Lexing.lexbuf -> 'a) -> 'a
+
+(** [lexbuf_from_string ?inline str] returns a lexbuf for parsing [str] along with the [Sail_file.handle] identifying
+    it. Intended for parsers other than the main Sail parser (which should use [parse_from_string]). *)
+val lexbuf_from_string : ?inline:Sail_file.position -> string -> Sail_file.handle * Lexing.lexbuf
+
+(** Raise a syntax error at the current lexeme of [lexbuf], attributing it to the file [handle]. Intended to report
+    failures from a parser run over the result of [lexbuf_from_string]. *)
+val string_syntax_error : Sail_file.handle -> string -> Lexing.lexbuf -> 'a
 
 (** {2 Parsing files} *)
+
+val get_lexbuf : Sail_file.path -> Sail_file.handle * Lexing.lexbuf
 
 (** Parse a file into a sequence of comments and a parse AST
 
     @param ?loc If we get an error reading the file, report the error at this location *)
-val parse_file : ?loc:Parse_ast.l -> string -> Lexer.comment list * Parse_ast.def list
+val parse_file : ?loc:Parse_ast.l -> Sail_file.path -> Lexer.comment list * Parse_ast.def list
 
-val get_lexbuf_from_string : filename:string -> contents:string -> Lexing.lexbuf
+val parse_file_from_string : ?inline:Sail_file.position -> string -> Lexer.comment list * Parse_ast.def list
 
-val parse_file_from_string : filename:string -> contents:string -> Lexer.comment list * Parse_ast.def list
+val parse_project : ?loc:Parse_ast.l -> Sail_file.path -> Project.def Project.spanned list
 
-val parse_project :
-  ?inline:Lexing.position -> ?filename:string -> contents:string -> unit -> Project.def Project.spanned list
+val parse_project_from_string : ?inline:Sail_file.position -> string -> Project.def Project.spanned list

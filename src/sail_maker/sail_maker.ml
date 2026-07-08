@@ -150,6 +150,39 @@ let tarball (prefix : string) (z3 : string) (gmp : string) =
   if gmp <> "" then copy_file gmp (Filename.concat bindir (Filename.basename gmp));
   ()
 
+let parse_embed_args (args : string list) =
+  let usage_msg = "sail_maker embed --file=PATH" in
+  let file = ref None in
+  let tag = ref "" in
+  let virt = ref None in
+
+  let speclist =
+    [
+      ("--file", Arg.String (fun f -> file := Some f), "<path> Path to file to embed");
+      ("--tag", Arg.Set_string tag, "<tag> Tag for generated file");
+      ("--virtual-file", Arg.String (fun v -> virt := Some v), "<name> Name of virtual Sail file");
+    ]
+  in
+
+  let anon_fun _ = () in
+  let args = Array.of_list ("sail_maker" :: args) in
+
+  Arg.parse_argv args speclist anon_fun usage_msg;
+
+  if Option.is_none !file then raise (Arg.Bad ("--file argument is required\n\n" ^ usage_msg));
+
+  (!tag, Option.get !file, !virt)
+
+let embed tag file virt_opt =
+  let in_chan = open_in_bin file in
+  let n = in_channel_length in_chan in
+  let contents = really_input_string in_chan n in
+  close_in in_chan;
+  printf "let contents = {%s|%s|%s}\n" tag contents tag;
+  match virt_opt with
+  | None -> ()
+  | Some virt -> printf "\nlet path, handle = Sail_file.add_virtual_file ~contents \"%s\"\n" virt
+
 let usage =
   "sail_maker gen_manifest\n\n\
   \  Write manifest.ml to stdout containing Git commit and branch information.\n\n\n\n\
@@ -157,15 +190,23 @@ let usage =
   \  Used for fixing up the `dune install` output in preparation for making release tarballs.\n\n"
 
 let main () =
-  (* OCaml's pattern matching support is not very good for arrays so convert
-  to a list. OCaml loves lists more than ones and zeros. *)
   match Array.to_list Sys.argv with
   | [_; "gen_manifest"] -> gen_manifest ()
   | _ :: "tarball" :: args ->
       let prefix, z3_path, gmp_path = parse_tarball_args args in
       tarball prefix z3_path gmp_path
+  | _ :: "embed" :: args ->
+      let tag, file, virt = parse_embed_args args in
+      embed tag file virt
   | _ ->
       prerr_endline usage;
       exit 1
 
-let () = main ()
+let () =
+  try main () with
+  | Arg.Bad msg ->
+      prerr_endline msg;
+      exit 1
+  | Arg.Help msg ->
+      prerr_endline msg;
+      exit 0

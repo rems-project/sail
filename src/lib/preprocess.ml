@@ -134,7 +134,7 @@ let wrap_include l file = function
       @ defs
       @ [DEF_aux (DEF_pragma ("include_end", Pragma_line (file, 1)), l)]
 
-type argv_offsets = Argv_actual | Argv_unknown | Argv_inline of int ref * Lexing.position * int list
+type argv_offsets = Argv_actual | Argv_unknown | Argv_inline of int ref * Sail_file.position * int list
 
 let inline_argv = ref Argv_actual
 
@@ -158,13 +158,13 @@ let create_argv_array ~offset ~current l str =
 
 let get_argv_position ~plus =
   let open Util.Option_monad in
-  let open Lexing in
+  let open Sail_file.Position in
   match !inline_argv with
   | Argv_unknown -> None
   | Argv_actual ->
       let argv_lnum = !Arg.current + plus + 1 in
       let* bol = Sail_file.bol_of_lnum argv_lnum Sail_file.argv in
-      Some { pos_fname = "ARGV"; pos_lnum = argv_lnum; pos_bol = bol; pos_cnum = bol }
+      Some { pos_fname = Sail_file.argv; pos_lnum = argv_lnum; pos_bol = bol; pos_cnum = bol }
   | Argv_inline (current, p, offsets) ->
       let n = !current in
       let* char_offset = List.nth_opt offsets n in
@@ -240,7 +240,7 @@ let preprocess dir target opts =
         else if file.[0] = '"' && file.[len - 1] = '"' then (
           let relative =
             match l with
-            | Parse_ast.Range (pos, _) -> Filename.dirname Lexing.(pos.pos_fname)
+            | Parse_ast.Range (pos, _) -> Filename.dirname Sail_file.(pos.pos_fname |> to_path |> Path.to_string)
             | _ ->
                 Reporting.unreachable (pragma_loc l) __POS__
                   "Couldn't figure out relative path for $include. This really shouldn't ever happen."
@@ -248,7 +248,7 @@ let preprocess dir target opts =
           let file = String.sub file 1 (len - 2) in
           let include_file = Filename.concat relative file in
           let include_defs =
-            Initial_check.parse_file ~loc:l (Filename.concat relative file)
+            Initial_check.parse_file ~loc:l (Sail_file.Path.actual (Filename.concat relative file))
             |> snd
             |> aux ((file, pragma_loc l) :: includes) []
           in
@@ -257,9 +257,11 @@ let preprocess dir target opts =
         else if file.[0] = '<' && file.[len - 1] = '>' then (
           let lib_file = String.sub file 1 (len - 2) in
           let sail_dir = Reporting.get_sail_dir dir in
-          let file = Filename.concat sail_dir ("lib/" ^ lib_file) in
+          let file = Filename.concat sail_dir (Filename.concat "lib" lib_file) in
           let include_defs =
-            Initial_check.parse_file ~loc:l file |> snd |> aux ((lib_file, pragma_loc l) :: includes) []
+            Initial_check.parse_file ~loc:l (Sail_file.Path.actual file)
+            |> snd
+            |> aux ((lib_file, pragma_loc l) :: includes) []
           in
           aux includes (List.rev (wrap_include l file include_defs) @ acc) defs
         )

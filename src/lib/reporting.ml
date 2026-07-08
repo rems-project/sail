@@ -94,7 +94,7 @@ let opt_warnings = ref true
 let opt_all_warnings = ref false
 let opt_backtrace_length = ref 10
 
-type pos_or_loc = Loc of Parse_ast.l | Pos of Lexing.position
+type pos_or_loc = Loc of Parse_ast.l | Pos of Sail_file.position
 
 let fix_endline str = if str.[String.length str - 1] = '\n' then String.sub str 0 (String.length str - 1) else str
 
@@ -150,9 +150,8 @@ let rec is_unknown_loc = function
   | Parse_ast.Range _ -> false
   | Parse_ast.Generated l | Parse_ast.Unique (_, l) | Parse_ast.Hint (_, _, l) -> is_unknown_loc l
 
-let loc_range_to_src (p1 : Lexing.position) (p2 : Lexing.position) =
-  let handle = Sail_file.open_file p1.pos_fname in
-  String.sub (Sail_file.contents handle) p1.pos_cnum (p2.pos_cnum - p1.pos_cnum)
+let loc_range_to_src (p1 : Sail_file.position) (p2 : Sail_file.position) =
+  String.sub (Sail_file.contents p1.pos_fname) p1.pos_cnum (p2.pos_cnum - p1.pos_cnum)
 
 let rec map_loc_range f = function
   | Parse_ast.Unknown -> Parse_ast.Unknown
@@ -181,8 +180,8 @@ let short_loc_to_string l =
   match simp_loc l with
   | None -> "unknown location"
   | Some (p1, p2) ->
-      Printf.sprintf "%s:%d.%d-%d.%d" p1.pos_fname p1.pos_lnum (p1.pos_cnum - p1.pos_bol) p2.pos_lnum
-        (p2.pos_cnum - p2.pos_bol)
+      let fname = Sail_file.Path.to_string (Sail_file.to_path p1.pos_fname) in
+      Printf.sprintf "%s:%d.%d-%d.%d" fname p1.pos_lnum (p1.pos_cnum - p1.pos_bol) p2.pos_lnum (p2.pos_cnum - p2.pos_bol)
 
 let print_err l m1 m2 = print_err_internal None (Loc l) m1 m2
 
@@ -190,9 +189,9 @@ type error =
   | Err_general of Parse_ast.l * string
   | Err_unreachable of Parse_ast.l * (string * int * int * int) * Printexc.raw_backtrace * string
   | Err_todo of Parse_ast.l * string
-  | Err_syntax of Lexing.position * string
+  | Err_syntax of Sail_file.position * string
   | Err_syntax_loc of Parse_ast.l * string
-  | Err_lex of Lexing.position * string
+  | Err_lex of Sail_file.position * string
   | Err_type of Parse_ast.l * string option * string
 
 let issues = "\nPlease report this as an issue on GitHub at https://github.com/rems-project/sail/issues"
@@ -258,19 +257,19 @@ let print_type_error ?hint l msg = print_err_internal hint (Loc l) Util.("Type e
 module StringSet = Set.Make (String)
 
 let pos_compare p1 p2 =
-  let open Lexing in
-  match String.compare p1.pos_fname p2.pos_fname with
+  let open Sail_file.Position in
+  match Sail_file.handle_compare p1.pos_fname p2.pos_fname with
   | 0 -> (
-      match compare p1.pos_lnum p2.pos_lnum with
+      match Int.compare p1.pos_lnum p2.pos_lnum with
       | 0 -> (
-          match compare p1.pos_bol p2.pos_bol with 0 -> compare p1.pos_cnum p2.pos_cnum | n -> n
+          match Int.compare p1.pos_bol p2.pos_bol with 0 -> Int.compare p1.pos_cnum p2.pos_cnum | n -> n
         )
       | n -> n
     )
   | n -> n
 
 module Range = struct
-  type t = Lexing.position * Lexing.position
+  type t = Sail_file.position * Sail_file.position
   let compare (p1, p2) (p3, p4) =
     let c = pos_compare p1 p3 in
     if c = 0 then pos_compare p2 p4 else c
@@ -278,9 +277,11 @@ end
 
 module RangeMap = Map.Make (Range)
 
-let ignored_files = ref StringSet.empty
+let ignored_files = ref Sail_file.HandleSet.empty
 
-let suppress_warnings_for_file f = ignored_files := StringSet.add f !ignored_files
+let suppress_warnings_for_file f = ignored_files := Sail_file.HandleSet.add f !ignored_files
+
+let ignore_file p = Sail_file.(HandleSet.mem p.Position.pos_fname !ignored_files)
 
 let seen_warnings = ref RangeMap.empty
 let once_from_warnings = ref StringSet.empty
@@ -313,7 +314,7 @@ let warn ?once_from ?(force_show = false) short_str l explanation =
   in
   if (!opt_warnings && not already_shown) || force_show then (
     match simp_loc l with
-    | Some (p1, p2) when not (StringSet.mem p1.pos_fname !ignored_files) ->
+    | Some (p1, p2) when not (ignore_file p1) ->
         let shorts = RangeMap.find_opt (p1, p2) !seen_warnings |> Option.value ~default:[] in
         if not (List.exists (fun s -> s = short_str) shorts) then (
           prerr_endline
@@ -344,7 +345,7 @@ let format_warn ?once_from short_str l explanation =
   in
   if !opt_warnings && not already_shown then (
     match simp_loc l with
-    | Some (p1, p2) when not (StringSet.mem p1.pos_fname !ignored_files) ->
+    | Some (p1, p2) when not (ignore_file p1) ->
         let shorts = RangeMap.find_opt (p1, p2) !seen_warnings |> Option.value ~default:[] in
         if not (List.exists (fun s -> s = short_str) shorts) then (
           let open Error_format in
@@ -379,7 +380,7 @@ let system_checked ?loc:(l = Parse_ast.Unknown) cmd =
   | WSIGNALED n -> raise (err_general l (Printf.sprintf "Command %s killed by signal %d" cmd n))
 
 module Position = struct
-  open Lexing
+  open Sail_file.Position
 
   let trim_position str p =
     let len = String.length str in

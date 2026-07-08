@@ -74,7 +74,7 @@ let command str = str |> Util.green |> Util.clear
 type action =
   | ArgString of string * (string -> action)
   | ArgInt of string * (int -> action)
-  | Action of string option * (Lexing.position * string * State.istate -> State.istate option)
+  | Action of string option * (Sail_file.position * string * State.istate -> State.istate option)
 
 let unit_action f =
   Action
@@ -88,7 +88,7 @@ module Arg = struct
   type (_, _) t =
     | String : string -> (string, action) t
     | Int : string -> (int, action) t
-    | Rest : string -> (Lexing.position * string * State.istate, State.istate option) t
+    | Rest : string -> (Sail_file.position * string * State.istate, State.istate option) t
     | Update : (State.istate, State.istate) t
     | Get : (State.istate, unit) t
 end

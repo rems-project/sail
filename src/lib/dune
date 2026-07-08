@@ -24,6 +24,36 @@
    true
    %{jib_ott})))
 
+(rule
+ (target corelib_sail.ml)
+ (deps
+  (:corelib_sail ../../lib/core/corelib.sail))
+ (action
+  (with-stdout-to
+   corelib_sail.ml
+   (run
+    sail_maker
+    embed
+    --file
+    %{corelib_sail}
+    --virtual-file
+    "corelib.sail"))))
+
+(rule
+ (target corelib_project.ml)
+ (deps
+  (:corelib_project ../../lib/core/corelib.sail_project))
+ (action
+  (with-stdout-to
+   corelib_project.ml
+   (run
+    sail_maker
+    embed
+    --file
+    %{corelib_project}
+    --virtual-file
+    "corelib.sail_project"))))
+
 (include_subdirs qualified)
 
 (copy_files ../gen_lib/*.lem)
@@ -58,11 +88,16 @@
    %{deps})))
 
 (menhir
- (modules parser project_parser))
+ (modules parser)
+ (flags --external-tokens Token))
 
 (menhir
  (modules infix_parser)
- (flags --table))
+ (flags --table --external-tokens Infix_parser_token))
+
+(menhir
+ (modules project_parser)
+ (flags --external-tokens Project_token))
 
 (ocamllex lexer project_lexer)
 
@@ -96,4 +131,5 @@
  (libraries lem linksem pprint dune-site yojson menhirLib)
  (modes byte native)
  (instrumentation
-  (backend bisect_ppx)))
+  (backend bisect_ppx --exclusions src/lib/bisect.exclude)
+  (deps bisect.exclude)))

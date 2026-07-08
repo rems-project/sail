@@ -48,13 +48,7 @@ open Libsail
 
 open Interactive.State
 
-let output_sail_options =
-  [
-    ( Flag.create ~prefix:["output_sail"] ~arg:"directory" "dir",
-      Arg.String (fun dir -> Frontend.opt_reformat := Some dir),
-      "set a directory to output pretty-printed Sail"
-    );
-  ]
+let output_sail_options = []
 
 let sail_target out_file { ast; _ } =
   let close, output_chan = match out_file with Some f -> (true, open_out (f ^ ".sail")) | None -> (false, stdout) in

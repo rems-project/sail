@@ -44,23 +44,24 @@
 /*  SPDX-License-Identifier: BSD-2-Clause                                   */
 /****************************************************************************/
 
-%{
+%parameter <F : sig val handle : Sail_file.handle end>
 
-[@@@coverage exclude_file]
+%{
 
 module Big_int = Nat_big_num
 open Parse_ast
 open Parse_ast.Attribute_data
+open Sail_file.Position
 
-let loc n m = Range (n, m)
+let loc n m = Range (from_lexing F.handle n, from_lexing F.handle m)
 
 let first_pat_range other = function
   | P_aux (_, Range (pos, _)) -> pos
-  | _ -> other
+  | _ -> from_lexing F.handle other
 
 let first_mpat_range other = function
   | MP_aux (_, Range (pos, _)) -> pos
-  | _ -> other
+  | _ -> from_lexing F.handle other
 
 let default_opt x = function
   | None -> x
@@ -140,6 +141,10 @@ let mk_tannot typq typ n m = Typ_annot_opt_aux (Typ_annot_opt_some (typq, typ), 
 
 let mk_typq kopts nc n m = TypQ_aux (TypQ_tq (List.map qi_id_of_kopt kopts @ nc), loc n m)
 
+let mk_it_prefix op s e = (IT_prefix op, from_lexing F.handle s, from_lexing F.handle e)
+let mk_it_op op s e = (IT_op op, from_lexing F.handle s, from_lexing F.handle e)
+let mk_it_primary x s e = (IT_primary x, from_lexing F.handle s, from_lexing F.handle e)
+
 type vector_update =
   VU_single of exp * exp
 | VU_range of exp * exp * exp
@@ -170,7 +175,7 @@ let pragma_left_spaces pragma p s =
          found in the directive argument. It would be very weird for a
          tab to show up here, so just bail. *)
       let p = { p with Lexing.pos_cnum = p.Lexing.pos_cnum + String.length pragma + 1 + !n } in
-      raise (Reporting.err_lex p "Tab character (\\t) found between directive and argument. Please use spaces.")
+      raise (Reporting.err_lex (from_lexing F.handle p) "Tab character (\\t) found between directive and argument. Please use spaces.")
     );
     incr n
   done;
@@ -335,21 +340,21 @@ typ_eof:
   |
     { [] }
   | TwoCaret
-    { [(IT_prefix "pow2", $startpos, $endpos)] }
+    { [mk_it_prefix "pow2" $startpos $endpos] }
   | Minus
-    { [(IT_prefix "negate", $startpos, $endpos)] }
+    { [mk_it_prefix "negate" $startpos $endpos] }
   | Star
-    { [(IT_prefix "__deref", $startpos, $endpos)] }
+    { [mk_it_prefix "__deref" $startpos $endpos] }
 
 postfix_typ:
   | t = atomic_typ
-    { [(IT_primary t, $startpos, $endpos)] }
+    { [mk_it_primary t $startpos $endpos] }
 
 /* When we parse a type from a pattern, we can't parse a ^ immediately because that's used for string append patterns */
 typ_no_caret:
   | prefix = prefix_typ_op;
     x = postfix_typ;
-    xs = list(op = op_no_caret; prefix = prefix_typ_op; y = postfix_typ { (IT_op op, $startpos(op), $endpos(op)) :: prefix @ y })
+    xs = list(op = op_no_caret; prefix = prefix_typ_op; y = postfix_typ { mk_it_op op $startpos(op) $endpos(op) :: prefix @ y })
     { simp_infix_typ (mk_typ (ATyp_infix (prefix @ x @ List.concat xs))
                              (match prefix with [] -> $startpos(x) | _ -> $startpos)
                              $endpos) }
@@ -363,7 +368,7 @@ typ:
 infix_typ:
   | prefix = prefix_typ_op;
     x = postfix_typ;
-    xs = list(op = op; prefix = prefix_typ_op; y = postfix_typ { (IT_op op, $startpos(op), $endpos(op)) :: prefix @ y })
+    xs = list(op = op; prefix = prefix_typ_op; y = postfix_typ { mk_it_op op $startpos(op) $endpos(op) :: prefix @ y })
     { simp_infix_typ (mk_typ (ATyp_infix (prefix @ x @ List.concat xs))
                              (match prefix with [] -> $startpos(x) | _ -> $startpos)
                              $endpos) }
@@ -504,7 +509,8 @@ pat1:
          | "::" ->
             let rec cons_list = function
               | [(_, _, x)] -> x
-              | ((_, _, x) :: xs) -> mk_pat (P_cons (x, cons_list xs)) (first_pat_range $startpos x) $endpos
+              | ((_, _, x) :: xs) ->
+                  P_aux (P_cons (x, cons_list xs), Range (first_pat_range $startpos x, from_lexing F.handle $endpos))
               | _ -> assert false in
             mk_pat (P_cons (p, cons_list ps)) $startpos $endpos
          | "^" ->
@@ -706,17 +712,17 @@ operators in expressions, with both left, right and non-associative operators */
   |
     { [] }
   | TwoCaret
-    { [(IT_prefix "pow2", $startpos, $endpos)] }
+    { [mk_it_prefix "pow2" $startpos $endpos] }
   | Minus
-    { [(IT_prefix "negate", $startpos, $endpos)] }
+    { [mk_it_prefix "negate" $startpos $endpos] }
   | Star
-    { [(IT_prefix "__deref", $startpos, $endpos)] }
+    { [mk_it_prefix "__deref" $startpos $endpos] }
 
 exp0:
   | prefix = prefix_op;
     x = atomic_exp;
-    xs = list(op = exp_op; prefix = prefix_op; y = atomic_exp { (IT_op op, $startpos(op), $endpos(op)) :: prefix @ [(IT_primary y, $startpos(y), $endpos(y))] })
-    { simp_infix (mk_exp (E_infix (prefix @ ((IT_primary x, $startpos(x), $endpos(x)) :: List.concat xs)))
+    xs = list(op = exp_op; prefix = prefix_op; y = atomic_exp { mk_it_op op $startpos(op) $endpos(op) :: prefix @ [mk_it_primary y $startpos(y) $endpos(y)] })
+    { simp_infix (mk_exp (E_infix (prefix @ (mk_it_primary x $startpos(x) $endpos(x) :: List.concat xs)))
                          (match prefix with [] -> $startpos(x) | _ -> $startpos)
                          $endpos) }
 
@@ -1163,7 +1169,8 @@ mpat:
          | "::" ->
             let rec cons_list = function
               | [(_, _, x)] -> x
-              | ((_, _, x) :: xs) -> mk_mpat (MP_cons (x, cons_list xs)) (first_mpat_range $startpos x) $endpos
+              | ((_, _, x) :: xs) ->
+                  MP_aux (MP_cons (x, cons_list xs), Range (first_mpat_range $startpos x, from_lexing F.handle $endpos))
               | _ -> assert false in
             mk_mpat (MP_cons (p, cons_list ps)) $startpos $endpos
          | "^" ->

@@ -5486,7 +5486,7 @@ and check_def : Env.t -> untyped_def -> typed_def list * Env.t =
       )
   | DEF_pragma ("project#", Pragma_line (arg, l)) ->
       let start_p = match Reporting.simp_loc l with Some (p, _) -> Some p | None -> None in
-      let proj_defs = Initial_check.parse_project ?inline:start_p ~contents:arg () in
+      let proj_defs = Initial_check.parse_project_from_string ?inline:start_p arg in
       let proj = Project.initialize_project_structure ~variables:(ref Util.StringMap.empty) proj_defs in
       typ_print (lazy "set modules");
       ([], Env.set_modules proj env)

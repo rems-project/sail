@@ -56,8 +56,6 @@ val opt_ddump_tc_ast : bool ref
 (** If [Some sep], then list the files included in the given sail_project file using [sep] as a separator. *)
 val opt_list_files : string option ref
 
-val opt_reformat : string option ref
-
 (** env_update: This function takes a pre abstract instantiation type environment, and makes any abstract types concrete
     if they were instantiated.
 
@@ -84,7 +82,7 @@ module type FILE_HANDLER = sig
   *)
   type processed
 
-  val parse : Parse_ast.l option -> string -> parsed
+  val parse : Parse_ast.l option -> Sail_file.path -> parsed
 
   (** If the file will define any functions, we must inform Sail. *)
   val defines_functions : processed -> IdSet.t
@@ -130,6 +128,7 @@ val load_modules :
   Initial_check.ctx * Type_check.typed_ast * Type_check.Env.t * Effects.side_effect_info
 
 val load_files :
+  ?no_core:bool ->
   ?target:Target.target ->
   string ->
   (Arg.key * Arg.spec * Arg.doc) list ->
@@ -141,10 +140,12 @@ val load_files :
 
     Must also be provided with a default location to use as SAIL_DIR if the environment variable is unset. *)
 val load_project :
+  ?no_core:bool ->
   ?target:Target.target ->
   ?modules:string list ->
   ?options:(Arg.key * Arg.spec * Arg.doc) list ->
-  ?variables:(string * Project.value) list ->
+  ?variables:Project.value Util.StringMap.t ref ->
+  ?just_parse:bool ->
   string ->
   string list ->
   Initial_check.ctx * Type_check.typed_ast * Type_check.Env.t * Effects.side_effect_info

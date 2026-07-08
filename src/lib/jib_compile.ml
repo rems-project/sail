@@ -329,7 +329,8 @@ module Make (C : CONFIG) = struct
        to measure coverage of them. *)
     | None -> "\"\", 0, 0, 0, 0"
     | Some (p1, p2) ->
-        Printf.sprintf "\"%s\", %d, %d, %d, %d" (String.escaped p1.pos_fname) p1.pos_lnum (p1.pos_cnum - p1.pos_bol)
+        let fname = Sail_file.Path.to_string (Sail_file.to_path p1.pos_fname) in
+        Printf.sprintf "\"%s\", %d, %d, %d, %d" (String.escaped fname) p1.pos_lnum (p1.pos_cnum - p1.pos_bol)
           p2.pos_lnum (p2.pos_cnum - p2.pos_bol)
 
   (* A branch is a `match` (including `mapping`), `if` or short-circuiting and/or.

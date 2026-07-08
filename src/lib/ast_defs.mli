@@ -50,9 +50,9 @@ type ('a, 'b) lazy_def = Strict_def of ('a, 'b) def | Lazy_fundef of id * ('a, '
 
 val force_lazy_def : ('a, 'b) lazy_def -> ('a, 'b) def
 
-type ('a, 'b) ast = { defs : ('a, 'b) def list; comments : (string * Lexer.comment list) list }
+type ('a, 'b) ast = { defs : ('a, 'b) def list; comments : (Sail_file.path * Lexer.comment list) list }
 
-type ('a, 'b) lazy_ast = { lazy_defs : ('a, 'b) lazy_def list; comments : (string * Lexer.comment list) list }
+type ('a, 'b) lazy_ast = { lazy_defs : ('a, 'b) lazy_def list; comments : (Sail_file.path * Lexer.comment list) list }
 
 val force_lazy_ast : ('a, 'b) lazy_ast -> ('a, 'b) ast
 

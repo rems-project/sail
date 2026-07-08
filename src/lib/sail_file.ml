@@ -44,24 +44,56 @@
 (*  SPDX-License-Identifier: BSD-2-Clause                                   *)
 (****************************************************************************)
 
+module Path = struct
+  type t = Actual of string | Virtual of string
+
+  let canonicalize = function Virtual p -> Virtual p | Actual p -> Actual (Unix.realpath p)
+
+  let actual p = Actual p
+
+  let is_virtual = function Virtual _ -> true | Actual _ -> false
+
+  let map_actual f = function Virtual p -> Virtual p | Actual p -> Actual (f p)
+
+  let to_string = function Virtual p -> p | Actual p -> p
+end
+
+type path = Path.t
+
 type handle = int
 
-let handles = ref 2
+let handle_compare h1 h2 = Int.compare h1 h2
 
-let interactive_repl = 0
+module HandleSet = Set.Make (struct
+  type t = handle
+  let compare = handle_compare
+end)
 
-let argv = 1
+let handles = ref 3
+
+let dummy = 0
+
+let interactive_repl = 1
+
+let argv = 2
 
 let new_handle () =
   let handle = !handles in
   incr handles;
   handle
 
-let canonicalizer = ref (fun path -> path)
+module Position = struct
+  type position = { pos_fname : handle; pos_lnum : int; pos_bol : int; pos_cnum : int }
 
-let canonicalize path = !canonicalizer path
+  let from_lexing handle p =
+    { pos_fname = handle; pos_lnum = p.Lexing.pos_lnum; pos_bol = p.Lexing.pos_bol; pos_cnum = p.Lexing.pos_cnum }
 
-let set_canonicalize_function f = canonicalizer := f
+  let to_lexing p = { Lexing.pos_fname = ""; pos_lnum = p.pos_lnum; pos_bol = p.pos_bol; pos_cnum = p.pos_cnum }
+
+  let dummy_pos = { pos_fname = dummy; pos_lnum = -1; pos_bol = -1; pos_cnum = -1 }
+end
+
+type position = Position.position
 
 type owner = Compiler | Editor
 
@@ -92,15 +124,22 @@ type info = {
      the file, otherwise the editor owns the file. *)
   owner : owner;
   (* The path as provided by the user *)
-  given_path : string;
-  canonical_path : string;
+  given_path : path;
+  canonical_path : path;
   mutable contents : string Array.t;
   mutable next_edit : int;
   mutable edits : (text_edit * text_edit_size) option Array.t;
 }
 
-let new_info ~owner ~given_path ~canonical_path ~contents =
-  { owner; given_path; canonical_path; contents; next_edit = 0; edits = Array.make 64 None }
+let new_info ~owner ~given_path ?canonical_path ~contents () =
+  {
+    owner;
+    given_path;
+    canonical_path = Option.value ~default:(Path.canonicalize given_path) canonical_path;
+    contents;
+    next_edit = 0;
+    edits = Array.make 64 None;
+  }
 
 let sail_argv () =
   let actual_argv = Sys.argv in
@@ -121,16 +160,32 @@ let files : (int, info) Hashtbl.t =
   let tbl = Hashtbl.create 64 in
   let repl_contents = Array.make 1 "0000001,0000016" in
   let argv_contents = sail_argv () in
+  Hashtbl.add tbl dummy (new_info ~owner:Compiler ~given_path:(Path.Virtual "EMPTY") ~contents:(Array.make 0 "") ());
   Hashtbl.add tbl interactive_repl
-    (new_info ~owner:Compiler ~given_path:"REPL" ~canonical_path:"REPL" ~contents:repl_contents);
-  Hashtbl.add tbl argv (new_info ~owner:Compiler ~given_path:"ARGV" ~canonical_path:"ARGV" ~contents:argv_contents);
+    (new_info ~owner:Compiler ~given_path:(Path.Virtual "REPL") ~contents:repl_contents ());
+  Hashtbl.add tbl argv (new_info ~owner:Compiler ~given_path:(Path.Virtual "ARGV") ~contents:argv_contents ());
   tbl
 
-let opened : (string, int) Hashtbl.t =
+let opened : (path, int) Hashtbl.t =
   let tbl = Hashtbl.create 64 in
-  Hashtbl.add tbl "REPL" interactive_repl;
-  Hashtbl.add tbl "ARGV" argv;
+  Hashtbl.add tbl (Path.Virtual "EMPTY") dummy;
+  Hashtbl.add tbl (Path.Virtual "REPL") interactive_repl;
+  Hashtbl.add tbl (Path.Virtual "ARGV") argv;
   tbl
+
+let to_path handle =
+  let path = (Hashtbl.find files handle).given_path in
+  path
+
+let add_virtual_file ~contents name =
+  let handle = new_handle () in
+  let path = Path.Virtual name in
+  let contents = Array.of_list (String.split_on_char '\n' contents) in
+  Hashtbl.add files handle (new_info ~owner:Compiler ~given_path:path ~contents ());
+  Hashtbl.add opened path handle;
+  (path, handle)
+
+let get_virtual_file name = Hashtbl.find_opt opened (Path.Virtual name)
 
 let bol_of_lnum line file =
   let info = Hashtbl.find files file in
@@ -235,7 +290,7 @@ let revert_position edit size p =
 
 let editor_position p =
   let open Lexing in
-  let path = canonicalize p.pos_fname in
+  let path = Path.canonicalize (Path.Actual p.pos_fname) in
   match Hashtbl.find_opt opened path with
   | Some handle ->
       fold_edits_first_to_last
@@ -246,21 +301,20 @@ let editor_position p =
 
 let lexing_position handle p =
   let open Lexing in
-  let open Util.Option_monad in
-  let* p =
+  match
     fold_edits_last_to_first
-      (fun edit size pos_opt ->
-        let* p = pos_opt in
-        revert_position edit size p
-      )
+      (fun edit size pos_opt -> Option.bind pos_opt (fun p -> revert_position edit size p))
       handle (Some p)
-  in
-  let info = Hashtbl.find files handle in
-  let bol = ref 0 in
-  for i = 0 to p.line - 1 do
-    bol := !bol + String.length info.contents.(i) + 1
-  done;
-  Some { pos_fname = info.given_path; pos_lnum = p.line; pos_bol = !bol; pos_cnum = !bol + p.character }
+  with
+  | None -> None
+  | Some p ->
+      let info = Hashtbl.find files handle in
+      let bol = ref 0 in
+      for i = 0 to p.line - 1 do
+        bol := !bol + String.length info.contents.(i) + 1
+      done;
+      Some
+        { pos_fname = Path.to_string info.given_path; pos_lnum = p.line; pos_bol = !bol; pos_cnum = !bol + p.character }
 
 let file_to_line_array filename =
   let chan = open_in filename in
@@ -293,17 +347,21 @@ let file_to_line_array filename =
     Array.init (Queue.length lines) (fun _ -> Queue.take lines)
 
 let open_file given_path =
-  let path = canonicalize given_path in
+  let path = Path.canonicalize given_path in
   match Hashtbl.find_opt opened path with
   | Some handle -> handle
-  | None ->
-      if not (Sys.file_exists path) then raise (Sys_error (path ^ ": No such file or directory"));
-      let contents = file_to_line_array path in
-      let handle = new_handle () in
-      let info = new_info ~owner:Compiler ~given_path ~canonical_path:path ~contents in
-      Hashtbl.add files handle info;
-      Hashtbl.add opened path handle;
-      handle
+  | None -> (
+      match path with
+      | Actual path ->
+          if not (Sys.file_exists path) then raise (Sys_error (path ^ ": No such file or directory"));
+          let contents = file_to_line_array path in
+          let handle = new_handle () in
+          let info = new_info ~owner:Compiler ~given_path ~canonical_path:(Path.Actual path) ~contents () in
+          Hashtbl.add files handle info;
+          Hashtbl.add opened (Path.Actual path) handle;
+          handle
+      | Virtual path -> assert false
+    )
 
 let write_file ~contents handle =
   let info = Hashtbl.find files handle in
@@ -313,6 +371,7 @@ let write_file ~contents handle =
   info.next_edit <- 0
 
 let editor_take_file ~contents path =
+  let path = Path.Actual path in
   let contents = Array.of_list (String.split_on_char '\n' contents) in
   match Hashtbl.find_opt opened path with
   | Some handle ->
@@ -320,7 +379,7 @@ let editor_take_file ~contents path =
       Hashtbl.replace files handle { info with owner = Editor; contents };
       handle
   | None -> (
-      let canonical_path = canonicalize path in
+      let canonical_path = Path.canonicalize path in
       let existing = ref None in
       Hashtbl.iter
         (fun handle info -> if info.canonical_path = canonical_path then existing := Some (handle, info))
@@ -332,7 +391,7 @@ let editor_take_file ~contents path =
           handle
       | None ->
           let handle = new_handle () in
-          let info = new_info ~owner:Editor ~given_path:path ~canonical_path ~contents in
+          let info = new_info ~owner:Editor ~given_path:path ~canonical_path ~contents () in
           Hashtbl.add files handle info;
           Hashtbl.add opened path handle;
           handle

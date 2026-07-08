@@ -50,7 +50,7 @@ val add_symbol : string -> unit
 
 val create_argv_array : offset:int -> current:int ref -> Ast.l -> string -> string list * (unit -> unit)
 
-val get_argv_position : plus:int -> Lexing.position option
+val get_argv_position : plus:int -> Sail_file.position option
 
 val preprocess :
   string -> string option -> (Arg.key * Arg.spec * Arg.doc) list -> Parse_ast.def list -> Parse_ast.def list

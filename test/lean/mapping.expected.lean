@@ -62,13 +62,13 @@ namespace Functions
 open word_width
 open option
 
-/-- Type quantifiers: k_ex1029_ : Bool, k_ex1028_ : Bool -/
-def neq_bool (x : Bool) (y : Bool) : Bool :=
-  (! (x == y))
-
 /-- Type quantifiers: x : Int -/
 def __id (x : Int) : Int :=
   x
+
+/-- Type quantifiers: k_ex1029_ : Bool, k_ex1028_ : Bool -/
+def neq_bool (x : Bool) (y : Bool) : Bool :=
+  (! (x == y))
 
 /-- Type quantifiers: n : Int, m : Int -/
 def _shl_int_general (m : Int) (n : Int) : Int :=

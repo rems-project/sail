@@ -81,7 +81,7 @@ type ctx = {
   outcome_variables : kind_aux KBindings.t;
   scattereds : (P.typquant * ctx) Bindings.t;
   fixities : (prec * int) StringMap.t;
-  internal_files : StringSet.t;
+  internal_files : Sail_file.HandleSet.t;
   target_sets : string list StringMap.t;
 }
 
@@ -100,7 +100,7 @@ let rec equal_ctx ctx1 ctx2 =
        (fun (typq1, ctx1) (typq2, ctx2) -> typq1 = typq2 && equal_ctx ctx1 ctx2)
        ctx1.scattereds ctx2.scattereds
   && StringMap.equal ( = ) ctx1.fixities ctx2.fixities
-  && StringSet.equal ctx1.internal_files ctx2.internal_files
+  && Sail_file.HandleSet.equal ctx1.internal_files ctx2.internal_files
   && StringMap.equal ( = ) ctx1.target_sets ctx2.target_sets
 
 let merge_ctx l ctx1 ctx2 =
@@ -143,7 +143,7 @@ let merge_ctx l ctx1 ctx2 =
       StringMap.merge
         (compatible ( = ) (fun op -> "Operator " ^ op ^ " declared with multiple fixities"))
         ctx1.fixities ctx2.fixities;
-    internal_files = StringSet.union ctx1.internal_files ctx2.internal_files;
+    internal_files = Sail_file.HandleSet.union ctx1.internal_files ctx2.internal_files;
     target_sets =
       StringMap.merge
         (compatible ( = ) (fun s -> "Mismatching target set " ^ s ^ " found"))
@@ -225,14 +225,14 @@ let to_ast_id ctx (P.Id_aux (id, l)) =
   in
   if string_contains (string_of_parse_id_aux id) '#' then (
     match Reporting.loc_file l with
-    | Some file when !opt_allow_internal || StringSet.mem file ctx.internal_files -> to_ast_id' id
+    | Some file when !opt_allow_internal || Sail_file.HandleSet.mem file ctx.internal_files -> to_ast_id' id
     | None -> to_ast_id' id
     | _ -> raise (Reporting.err_general l "Identifier contains hash character (internal only construct)")
   )
   else to_ast_id' id
 
 let to_infix_parser_op =
-  let open Infix_parser in
+  let open Infix_parser_token in
   function
   | Infix, 0, x -> Op0 x
   | InfixL, 0, x -> Op0l x
@@ -266,70 +266,77 @@ let to_infix_parser_op =
   | InfixR, 9, x -> Op9r x
   | _ -> Reporting.unreachable P.Unknown __POS__ "Invalid fixity"
 
-let parse_infix :
-    'a 'b.
-    P.l ->
+(* The infix parser is a functor over the file handle, but the token supplier it consumes is independent of that
+   instantiation: it produces external [Infix_parser_token.token] values with [Lexing] positions. We convert the stored
+   [Sail_file] positions back to [Lexing] positions here; the parser's semantic actions will re-attach the handle via
+   [from_lexing]. *)
+let infix_token_supplier : type a.
     ctx ->
-    ('a P.infix_token * Lexing.position * Lexing.position) list ->
-    ('a -> Infix_parser.token) ->
-    'b Infix_parser.MenhirInterpreter.checkpoint ->
-    'b =
- fun l ctx infix_tokens mk_primary checkpoint ->
-  let open Infix_parser in
+    (a -> Infix_parser_token.token) ->
+    (a P.infix_token * Sail_file.position * Sail_file.position) list ->
+    unit ->
+    Infix_parser_token.token * Lexing.position * Lexing.position =
+ fun ctx mk_primary infix_tokens ->
+  let open Infix_parser_token in
+  let mk s e tok = (tok, Sail_file.Position.to_lexing s, Sail_file.Position.to_lexing e) in
   let tokens =
     ref
       (List.map
-         (function
-           | P.IT_primary x, s, e -> (mk_primary x, s, e)
-           | P.IT_prefix id, s, e -> (
+         (fun (it, s, e) ->
+           match it with
+           | P.IT_primary x -> mk s e (mk_primary x)
+           | P.IT_prefix id -> (
                match id with
-               | "pow2" -> (TwoCaret, s, e)
-               | "negate" -> (Minus, s, e)
-               | "__deref" -> (Star, s, e)
+               | "pow2" -> mk s e TwoCaret
+               | "negate" -> mk s e Minus
+               | "__deref" -> mk s e Star
                | _ -> raise (Reporting.err_general (P.Range (s, e)) "Unknown prefix operator")
              )
-           | P.IT_op op, s, e -> (
+           | P.IT_op op -> (
                match op with
-               | "+" -> (Plus, s, e)
-               | "-" -> (Minus, s, e)
-               | "*" -> (Star, s, e)
-               | "<" -> (Lt, s, e)
-               | ">" -> (Gt, s, e)
-               | "<=" -> (LtEq, s, e)
-               | ">=" -> (GtEq, s, e)
-               | "::" -> (ColonColon, s, e)
-               | "@" -> (At, s, e)
-               | "in" -> (In, s, e)
+               | "+" -> mk s e Plus
+               | "-" -> mk s e Minus
+               | "*" -> mk s e Star
+               | "<" -> mk s e Lt
+               | ">" -> mk s e Gt
+               | "<=" -> mk s e LtEq
+               | ">=" -> mk s e GtEq
+               | "::" -> mk s e ColonColon
+               | "@" -> mk s e At
+               | "in" -> mk s e In
                | _ -> (
                    match StringMap.find_opt op ctx.fixities with
                    | Some (prec, level) ->
                        let id = P.Id_aux (P.Operator op, P.Range (s, e)) in
-                       (to_infix_parser_op (prec, level, id), s, e)
+                       mk s e (to_infix_parser_op (prec, level, id))
                    | None -> raise (Reporting.err_general (P.Range (s, e)) ("Undeclared fixity for operator " ^ op))
                  )
              )
-           )
+         )
          infix_tokens
       )
   in
-  let supplier () : token * Lexing.position * Lexing.position =
+  fun () ->
     match !tokens with
     | [((_, _, e) as token)] ->
-        tokens := [(Infix_parser.Eof, e, e)];
+        tokens := [(Eof, e, e)];
         token
     | token :: rest ->
         tokens := rest;
         token
     | [] -> assert false
-  in
-  try MenhirInterpreter.loop supplier checkpoint
-  with Infix_parser.Error -> raise (Reporting.err_syntax_loc l "Failed to parse infix expression")
 
 let parse_infix_exp ctx = function
   | P.E_aux (P.E_infix infix_tokens, l) -> (
       match infix_tokens with
-      | (_, s, _) :: _ ->
-          parse_infix l ctx infix_tokens (fun exp -> Infix_parser.Exp exp) (Infix_parser.Incremental.exp_eof s)
+      | (_, s, _) :: _ -> (
+          let module I = Infix_parser.Make (struct
+            let handle = s.Sail_file.Position.pos_fname
+          end) in
+          let supplier = infix_token_supplier ctx (fun exp -> Infix_parser_token.Exp exp) infix_tokens in
+          try I.MenhirInterpreter.loop supplier (I.Incremental.exp_eof (Sail_file.Position.to_lexing s))
+          with I.Error -> raise (Reporting.err_syntax_loc l "Failed to parse infix expression")
+        )
       | [] -> Reporting.unreachable l __POS__ "Found empty infix expression"
     )
   | exp -> exp
@@ -337,8 +344,14 @@ let parse_infix_exp ctx = function
 let parse_infix_atyp ctx = function
   | P.ATyp_aux (P.ATyp_infix infix_tokens, l) -> (
       match infix_tokens with
-      | (_, s, _) :: _ ->
-          parse_infix l ctx infix_tokens (fun typ -> Infix_parser.Typ typ) (Infix_parser.Incremental.typ_eof s)
+      | (_, s, _) :: _ -> (
+          let module I = Infix_parser.Make (struct
+            let handle = s.Sail_file.Position.pos_fname
+          end) in
+          let supplier = infix_token_supplier ctx (fun typ -> Infix_parser_token.Typ typ) infix_tokens in
+          try I.MenhirInterpreter.loop supplier (I.Incremental.typ_eof (Sail_file.Position.to_lexing s))
+          with I.Error -> raise (Reporting.err_syntax_loc l "Failed to parse infix type")
+        )
       | [] -> Reporting.unreachable l __POS__ "Found empty infix type"
     )
   | atyp -> atyp
@@ -1409,7 +1422,11 @@ let rec to_ast_exp ctx exp =
       let id_str = string_of_parse_id id in
       if id_str = "__LOC__" then wrap (E_lit (L_aux (L_string (Reporting.short_loc_to_string l), l)))
       else if id_str = "__FILE__" then (
-        let file = match Reporting.simp_loc l with Some (p, _) -> p.pos_fname | None -> "unknown file" in
+        let file =
+          match Reporting.simp_loc l with
+          | Some (p, _) -> Sail_file.Path.to_string (Sail_file.to_path p.pos_fname)
+          | None -> "unknown file"
+        in
         wrap (E_lit (L_aux (L_string file, l)))
       )
       else if id_str = "__LINE__" then (
@@ -1798,7 +1815,7 @@ let to_ast_reserved_type_id ctx id =
   let id = to_ast_id ctx id in
   if IdSet.mem id reserved_type_ids then (
     match Reporting.loc_file (id_loc id) with
-    | Some file when !opt_allow_internal || StringSet.mem file ctx.internal_files -> id
+    | Some file when !opt_allow_internal || Sail_file.HandleSet.mem file ctx.internal_files -> id
     | None -> id
     | Some file -> raise (Reporting.err_general (id_loc id) (sprintf "The type name %s is reserved" (string_of_id id)))
   )
@@ -2299,7 +2316,7 @@ let rec to_ast_def doc attrs vis ctx (P.DEF_aux (def, l)) : untyped_def list ctx
           match Reporting.loc_file l with
           | Some file ->
               ( [DEF_aux (DEF_pragma ("sail_internal", Pragma_line (arg, l)), annot)],
-                { ctx with internal_files = StringSet.add file ctx.internal_files }
+                { ctx with internal_files = Sail_file.HandleSet.add file ctx.internal_files }
               )
           | None -> ([DEF_aux (DEF_pragma ("sail_internal", Pragma_line (arg, l)), annot)], ctx)
         )
@@ -2346,13 +2363,14 @@ let to_ast ctx (P.Defs files) =
     in
     (List.rev defs, ctx)
   in
-  let wrap_file file defs =
-    match file with
-    | None -> defs
-    | Some file ->
+  let wrap_file path_opt defs =
+    match path_opt with
+    | Some path when not (Sail_file.Path.is_virtual path) ->
+        let file = Sail_file.Path.to_string path in
         [mk_def (DEF_pragma ("file_start", Pragma_line (file, P.Unknown))) ()]
         @ defs
         @ [mk_def (DEF_pragma ("file_end", Pragma_line (file, P.Unknown))) ()]
+    | _ -> defs
   in
   let defs, ctx =
     List.fold_left
@@ -2416,52 +2434,65 @@ let initial_ctx =
           ("/", InfixL, 7);
           ("%", InfixL, 7);
         ];
-    internal_files = StringSet.empty;
+    internal_files = Sail_file.HandleSet.empty;
     target_sets = StringMap.empty;
   }
 
-let inline_lexbuf lexbuf inline =
-  (* Note that OCaml >= 4.11 has a much less hacky way of doing this *)
-  let open Lexing in
-  match inline with
+let inline_lexbuf lexbuf = function
   | Some p ->
-      lexbuf.lex_curr_p <- p;
-      lexbuf.lex_abs_pos <- p.pos_cnum
+      let p = Sail_file.Position.to_lexing p in
+      Lexing.set_position lexbuf p
   | None -> ()
 
-let parse_from_string action ?inline str =
-  let lexbuf = Lexing.from_string str in
-  try
-    inline_lexbuf lexbuf inline;
-    action lexbuf
-  with Parser.Error ->
-    let pos = Lexing.lexeme_start_p lexbuf in
-    let tok = Lexing.lexeme lexbuf in
-    raise (Reporting.err_syntax pos (Printf.sprintf "Failed to parse '%s' at token '%s'" str tok))
+let inline_handle inline = match inline with Some p -> p.Sail_file.Position.pos_fname | None -> Sail_file.dummy
 
-let exp_of_string ctx =
-  parse_from_string (fun lexbuf ->
-      let exp = Parser.exp_eof (Lexer.token (ref [])) lexbuf in
-      to_ast_exp ctx exp
+let string_syntax_error handle str lexbuf =
+  let pos = Sail_file.Position.from_lexing handle (Lexing.lexeme_start_p lexbuf) in
+  let tok = Lexing.lexeme lexbuf in
+  raise (Reporting.err_syntax pos (Printf.sprintf "Failed to parse '%s' at token '%s'" str tok))
+
+let lexbuf_from_string ?inline str =
+  let lexbuf = Lexing.from_string str in
+  inline_lexbuf lexbuf inline;
+  let handle = inline_handle inline in
+  (handle, lexbuf)
+
+module type PARSER = sig
+  exception Error
+
+  val typschm_eof : (Lexing.lexbuf -> Token.token) -> Lexing.lexbuf -> Parse_ast.typschm
+  val typ_eof : (Lexing.lexbuf -> Token.token) -> Lexing.lexbuf -> Parse_ast.atyp
+  val exp_eof : (Lexing.lexbuf -> Token.token) -> Lexing.lexbuf -> Parse_ast.exp
+  val def_eof : (Lexing.lexbuf -> Token.token) -> Lexing.lexbuf -> Parse_ast.def
+  val file : (Lexing.lexbuf -> Token.token) -> Lexing.lexbuf -> Parse_ast.def list
+end
+
+let parse_from_string ?inline str action =
+  let handle, lexbuf = lexbuf_from_string ?inline str in
+  let module Parse = Parser.Make (struct
+    let handle = handle
+  end) in
+  try action (module Parse : PARSER) handle lexbuf with Parse.Error -> string_syntax_error handle str lexbuf
+
+let exp_of_string ctx ?inline str =
+  parse_from_string ?inline str (fun (module Parse : PARSER) handle lexbuf ->
+      to_ast_exp ctx (Parse.exp_eof (Lexer.token handle (ref [])) lexbuf)
   )
 
-let typschm_of_string ctx =
-  parse_from_string (fun lexbuf ->
-      let typschm = Parser.typschm_eof (Lexer.token (ref [])) lexbuf in
-      let typschm, _ = to_ast_typschm ctx typschm in
+let typschm_of_string ctx str =
+  parse_from_string str (fun (module Parse : PARSER) handle lexbuf ->
+      let typschm, _ = to_ast_typschm ctx (Parse.typschm_eof (Lexer.token handle (ref [])) lexbuf) in
       typschm
   )
 
-let typ_of_string ctx =
-  parse_from_string (fun lexbuf ->
-      let typ = Parser.typ_eof (Lexer.token (ref [])) lexbuf in
-      to_ast_typ ctx typ
+let typ_of_string ctx ?inline str =
+  parse_from_string ?inline str (fun (module Parse : PARSER) handle lexbuf ->
+      to_ast_typ ctx (Parse.typ_eof (Lexer.token handle (ref [])) lexbuf)
   )
 
-let constraint_of_string ctx =
-  parse_from_string (fun lexbuf ->
-      let atyp = Parser.typ_eof (Lexer.token (ref [])) lexbuf in
-      to_ast_constraint ctx atyp
+let constraint_of_string ctx ?inline str =
+  parse_from_string ?inline str (fun (module Parse : PARSER) handle lexbuf ->
+      to_ast_constraint ctx (Parse.typ_eof (Lexer.token handle (ref [])) lexbuf)
   )
 
 let extern_of_string ?(pure = false) ctx id str =
@@ -2693,12 +2724,16 @@ let ast_of_def_string_with ?inline ocaml_pos ctx f str =
   let lexbuf = Lexing.from_string str in
   lexbuf.lex_curr_p <- { pos_fname = ""; pos_lnum = 1; pos_bol = 0; pos_cnum = 0 };
   inline_lexbuf lexbuf inline;
+  let handle = inline_handle inline in
   let internal = !opt_allow_internal in
   opt_allow_internal := true;
+  let module Parse = Parser.Make (struct
+    let handle = handle
+  end) in
   let def =
-    try Parser.def_eof (Lexer.token (ref [])) lexbuf
-    with Parser.Error ->
-      let pos = Lexing.lexeme_start_p lexbuf in
+    try Parse.def_eof (Lexer.token handle (ref [])) lexbuf
+    with Parse.Error ->
+      let pos = Sail_file.Position.from_lexing handle (Lexing.lexeme_start_p lexbuf) in
       let tok = Lexing.lexeme lexbuf in
       raise (Reporting.err_syntax pos ("current token: " ^ tok))
   in
@@ -2712,49 +2747,62 @@ let defs_of_string ocaml_pos ctx str =
   let ast, ctx = ast_of_def_string ocaml_pos ctx str in
   (ast.defs, ctx)
 
-let get_lexbuf_from_string ~filename:f ~contents:s =
-  let lexbuf = Lexing.from_string s in
-  lexbuf.Lexing.lex_curr_p <- { Lexing.pos_fname = f; Lexing.pos_lnum = 1; Lexing.pos_bol = 0; Lexing.pos_cnum = 0 };
-  lexbuf
-
 let get_lexbuf f =
   let handle = Sail_file.open_file f in
-  get_lexbuf_from_string ~filename:f ~contents:(Sail_file.contents handle)
+  let lexbuf = Lexing.from_string (Sail_file.contents handle) in
+  Lexing.set_position lexbuf { Lexing.pos_fname = ""; Lexing.pos_lnum = 1; Lexing.pos_bol = 0; Lexing.pos_cnum = 0 };
+  (handle, lexbuf)
 
-let parse_file ?loc:(l = Parse_ast.Unknown) (f : string) : Lexer.comment list * Parse_ast.def list =
+let parse_file ?loc:(l = Parse_ast.Unknown) (f : Sail_file.path) : Lexer.comment list * Parse_ast.def list =
   try
-    let lexbuf = get_lexbuf f in
+    let handle, lexbuf = get_lexbuf f in
+    let module Parse = Parser.Make (struct
+      let handle = handle
+    end) in
     try
       let comments = ref [] in
-      let defs = Parser.file (Lexer.token comments) lexbuf in
+      let defs = Parse.file (Lexer.token handle comments) lexbuf in
       (!comments, defs)
-    with Parser.Error ->
-      let pos = Lexing.lexeme_start_p lexbuf in
+    with Parse.Error ->
+      let pos = Sail_file.Position.from_lexing handle (Lexing.lexeme_start_p lexbuf) in
       let tok = Lexing.lexeme lexbuf in
       raise (Reporting.err_syntax pos ("current token: " ^ tok))
   with Sys_error err -> raise (Reporting.err_general l err)
 
-let parse_file_from_string ~filename:f ~contents:s =
-  let lexbuf = get_lexbuf_from_string ~filename:f ~contents:s in
+let parse_file_from_string ?inline s =
+  let handle, lexbuf = lexbuf_from_string ?inline s in
+  let module Parse = Parser.Make (struct
+    let handle = handle
+  end) in
   try
     let comments = ref [] in
-    let defs = Parser.file (Lexer.token comments) lexbuf in
+    let defs = Parse.file (Lexer.token handle comments) lexbuf in
     (!comments, defs)
-  with Parser.Error ->
-    let pos = Lexing.lexeme_start_p lexbuf in
+  with Parse.Error ->
+    let pos = Sail_file.Position.from_lexing handle (Lexing.lexeme_start_p lexbuf) in
     let tok = Lexing.lexeme lexbuf in
     raise (Reporting.err_syntax pos ("current token: " ^ tok))
 
-let parse_project ?inline ?filename:f ~contents:s () =
-  let open Project in
-  let open Lexing in
-  let lexbuf = from_string s in
-  if Option.is_none inline then
-    lexbuf.lex_curr_p <- { pos_fname = Option.get f; pos_lnum = 1; pos_bol = 0; pos_cnum = 0 };
-  inline_lexbuf lexbuf inline;
+let parse_project ?loc:(l = Parse_ast.Unknown) (f : Sail_file.path) =
+  try
+    let handle, lexbuf = get_lexbuf f in
+    let module Parse = Project_parser.Make (struct
+      let handle = handle
+    end) in
+    try Parse.file (Project_lexer.token handle) lexbuf
+    with Parse.Error ->
+      let pos = Sail_file.Position.from_lexing handle (Lexing.lexeme_start_p lexbuf) in
+      let tok = Lexing.lexeme lexbuf in
+      raise (Reporting.err_syntax pos ("current token: " ^ tok))
+  with Sys_error err -> raise (Reporting.err_general l err)
 
-  try Project_parser.file Project_lexer.token lexbuf
-  with Project_parser.Error ->
-    let pos = lexeme_start_p lexbuf in
-    let tok = lexeme lexbuf in
+let parse_project_from_string ?inline s =
+  let handle, lexbuf = lexbuf_from_string ?inline s in
+  let module Parse = Project_parser.Make (struct
+    let handle = handle
+  end) in
+  try Parse.file (Project_lexer.token handle) lexbuf
+  with Parse.Error ->
+    let pos = Sail_file.Position.from_lexing handle (Lexing.lexeme_start_p lexbuf) in
+    let tok = Lexing.lexeme lexbuf in
     raise (Reporting.err_syntax pos ("current token: " ^ tok))

@@ -54,9 +54,9 @@ module Highlight : sig
   val to_class : t -> string
 end
 
-val highlights : filename:string -> contents:string -> (Highlight.t * int * int) array
+val highlights : Sail_file.path -> (Highlight.t * int * int) array
 
-val hyperlink_targets : ('a, 'b) ast -> Lexing.position Callgraph.NodeMap.t
+val hyperlink_targets : ('a, 'b) ast -> Sail_file.position Callgraph.NodeMap.t
 
 val hyperlinks_for_file : filename:string -> Type_check.typed_ast -> (Callgraph.node * int * int) array
 

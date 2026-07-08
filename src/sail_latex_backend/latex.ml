@@ -353,7 +353,7 @@ let latex_loc ?(docstring = empty) no_loc l =
   | Some (p1, p2) -> (
       let open Lexing in
       try
-        let in_chan = open_in p1.pos_fname in
+        let in_chan = open_in (Sail_file.Path.to_string (Sail_file.to_path p1.pos_fname)) in
         try
           skip_lines in_chan (p1.pos_lnum - 3);
           let code = read_lines in_chan (p2.pos_lnum - p1.pos_lnum + 3) in
