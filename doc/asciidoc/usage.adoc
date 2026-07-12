@@ -250,6 +250,21 @@ indicated by starting with the letter `d`.
   non-zero exit code.
 
 <<<
+=== Naming convention checks
+
+Sail can check the identifiers in a specification against a set of
+naming conventions. This can be enabled with the `-naming_check`
+flag. By default, violations will be reported as warnings. To treat
+them as errors, the `-naming_check_strict` flag can be used, which
+implies `-naming_check`.
+
+The default conventions are:
+* Types, records, and enums should be in PascalCase.
+* Functions and variables should be in snake_case.
+* Constants should be in SCREAMING_SNAKE_CASE.
+* Variants should be in Train_Case.
+
+<<<
 === Debug options
 
 These options are mostly used for debugging the Sail compiler itself.

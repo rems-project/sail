@@ -41,4 +41,10 @@ printf "==========================================\n"
 
 ./float/run_tests.py || returncode=1
 
+printf "\n==========================================\n"
+printf "Naming convention tests\n"
+printf "==========================================\n"
+
+./naming/run_tests.py || returncode=1
+
 exit $returncode

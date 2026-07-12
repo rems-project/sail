@@ -1,0 +1,4 @@
+Sail 0.20.0
+usage: sail <options> <file1.sail> ... <fileN.sail>
+
+Use 'sail --help' for a list of available arguments.

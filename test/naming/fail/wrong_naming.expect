@@ -1,0 +1,77 @@
+[93mError[0m:
+[96mfail/wrong_naming.sail[0m:2.0-18:
+2[96m |[0mtype my_type = int
+ [91m |[0m[91m^----------------^[0m
+ [91m |[0m Type 'my_type' should use PascalCase (e.g., MemoryAccess)
+[93mError[0m:
+Function 'My_Function' should use snake_case (e.g., execute_load)
+[93mError[0m:
+[96mfail/wrong_naming.sail[0m:5.9-40:
+5[96m |[0mfunction My_Function(x : int) -> int = x
+ [91m |[0m         [91m^-----------------------------^[0m
+ [91m |[0m Function 'My_Function' should use snake_case (e.g., execute_load)
+[93mError[0m:
+[96mfail/wrong_naming.sail[0m:14.4-17:
+14[96m |[0mlet my_const = 12
+  [91m |[0m    [91m^-----------^[0m
+  [91m |[0m Constant 'my_const' should use SCREAMING_SNAKE_CASE (e.g., MAX_XLEN)
+[93mError[0m:
+[96mfail/wrong_naming.sail[0m:17.0-19.1:
+17[96m |[0munion My_Union = {
+  [91m |[0m[91m^-----------------[0m
+19[96m |[0m}
+  [91m |[0m[91m^[0m
+  [91m |[0m Type 'My_Union' should use PascalCase (e.g., MemoryAccess)
+[93mError[0m:
+[96mfail/wrong_naming.sail[0m:18.2-21:
+18[96m |[0m  my_constructor: int
+  [91m |[0m  [91m^-----------------^[0m
+  [91m |[0m Type 'my_constructor' should use PascalCase (e.g., MemoryAccess)
+[93mError[0m:
+[96mfail/wrong_naming.sail[0m:22.0-28:
+22[96m |[0menum My_Enum = { my_member }
+  [91m |[0m[91m^--------------------------^[0m
+  [91m |[0m Type 'My_Enum' should use PascalCase (e.g., MemoryAccess)
+[93mError[0m:
+[96mfail/wrong_naming.sail[0m:22.17-26:
+22[96m |[0menum My_Enum = { my_member }
+  [91m |[0m                 [91m^-------^[0m
+  [91m |[0m Type 'my_member' should use PascalCase (e.g., MemoryAccess)
+[93mError[0m:
+Function 'undefined_My_Enum' should use snake_case (e.g., execute_load)
+[93mError[0m:
+Function 'undefined_My_Enum' should use snake_case (e.g., execute_load)
+[93mError[0m:
+Function 'My_Enum_of_num' should use snake_case (e.g., execute_load)
+[93mError[0m:
+Function 'My_Enum_of_num' should use snake_case (e.g., execute_load)
+[93mError[0m:
+Variable 'arg#' should use snake_case (e.g., execute_load)
+[93mError[0m:
+Function 'num_of_My_Enum' should use snake_case (e.g., execute_load)
+[93mError[0m:
+Function 'num_of_My_Enum' should use snake_case (e.g., execute_load)
+[93mError[0m:
+Variable 'arg#' should use snake_case (e.g., execute_load)
+[93mError[0m:
+Code generated nearby:
+[96mfail/wrong_naming.sail[0m:25.0-32:
+25[96m |[0mscattered enum my_scattered_enum
+  [91m |[0m[91m^------------------------------^[0m
+  [91m |[0m Type 'my_scattered_enum' should use PascalCase (e.g., MemoryAccess)
+[93mError[0m:
+[96mfail/wrong_naming.sail[0m:27.0-41:
+27[96m |[0menum clause my_scattered_enum = My_Member
+  [91m |[0m[91m^---------------------------------------^[0m
+  [91m |[0m Type 'My_Member' should use PascalCase (e.g., MemoryAccess)
+[93mError[0m:
+Code generated nearby:
+[96mfail/wrong_naming.sail[0m:30.0-36:
+30[96m |[0mscattered union my_scattered_variant
+  [91m |[0m[91m^----------------------------------^[0m
+  [91m |[0m Type 'my_scattered_variant' should use PascalCase (e.g., MemoryAccess)
+[93mError[0m:
+[96mfail/wrong_naming.sail[0m:32.0-64:
+32[96m |[0munion clause my_scattered_variant = My_Variant_Constructor : int
+  [91m |[0m[91m^--------------------------------------------------------------^[0m
+  [91m |[0m Type 'My_Variant_Constructor' should use PascalCase (e.g., MemoryAccess)
