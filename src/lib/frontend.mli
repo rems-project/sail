@@ -113,11 +113,15 @@ module type FILE_HANDLER = sig
     processed * Preprocess.symbol_set * Initial_check.ctx
 
   val check : Type_check.Env.t -> processed -> Type_check.typed_ast * Type_check.Env.t
+
+  val check_lazy : Type_check.Env.t -> processed -> Type_check.typed_lazy_ast * Type_check.Env.t
 end
 
 (** Register a file handler module. The extension should be the extension for the file type we want to handle, e.g.
     ".json". *)
 val register_file_handler : extension:string -> (module FILE_HANDLER) -> unit
+
+val get_handler : path:Sail_file.path -> string -> (module FILE_HANDLER)
 
 val load_files :
   ?no_core:bool ->

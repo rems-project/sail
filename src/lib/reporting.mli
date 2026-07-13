@@ -107,7 +107,7 @@ val start_loc : Parse_ast.l -> Parse_ast.l
 
     Note that all these errors are intended to be fatal, so should not be caught other than by the top-level function.
 *)
-type error = private
+type error =
   | Err_general of Parse_ast.l * string  (** General errors, used for multi purpose. If you are unsure, use this one. *)
   | Err_unreachable of Parse_ast.l * (string * int * int * int) * Printexc.raw_backtrace * string
       (** Unreachable errors should never be thrown. They represent an internal Sail error. *)

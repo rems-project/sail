@@ -161,7 +161,9 @@ val editor_take_file : contents:string -> string -> handle
 (** The LSP can stop editing a file using the DidCloseTextDocument message, in which case we need to manage the file. *)
 val editor_drop_file : handle -> unit
 
-(** The LSP protocol uses line + character offsets as positions. *)
+(** The LSP protocol uses line + character offsets as positions. Both are zero-based, and [character] is counted in
+    UTF-16 code units (as the LSP protocol specifies), not bytes. The conversion to the byte offsets Sail's lexer uses
+    happens lazily, when edits are applied and in [editor_position] and [lexing_position]. *)
 type editor_position = { line : int; character : int }
 
 type editor_range = editor_position * editor_position
@@ -183,6 +185,14 @@ val editor_position : Lexing.position -> editor_position option
 (** Take a cursor position in the editor, and map it to a position in the Sail AST. Returns None if the cursor position
     is within a pending edit that has not yet been processed by Sail. *)
 val lexing_position : handle -> editor_position -> Lexing.position option
+
+(** Bake the queued edits (see [edit_file]) into the file's contents, bringing them in sync with the editor, and clear
+    the queue. This is where the UTF-16 code-unit offsets carried by edits are resolved to byte offsets. *)
+val apply_edits : handle -> unit
+
+(** The length of a UTF-8 string in UTF-16 code units. LSP character offsets and lengths are counted in UTF-16 code
+    units, so this converts a byte length (or, applied to a substring, a byte offset) into the LSP's units. *)
+val utf16_length : string -> int
 
 (** {1 Channel interface} *)
 

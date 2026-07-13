@@ -1,1 +1,1 @@
-(dirs :standard \ rocq)
+(dirs :standard \ rocq sail_lsp)

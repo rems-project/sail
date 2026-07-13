@@ -44,22 +44,19 @@
 (*  SPDX-License-Identifier: BSD-2-Clause                                   *)
 (****************************************************************************)
 
-type symbol_set
+let speclist = [("--stdio", Arg.Unit (fun () -> ()), " Use stdin/stdout for IO (default).")]
 
-val add_default_symbol : string -> unit
+let anon_fun _ = ()
 
-val get_default_symbols : unit -> symbol_set
+let main () =
+  Arg.parse_argv Sys.argv speclist anon_fun "sail_lsp [--stdio]";
+  Server.run ()
 
-val have_symbol : string -> symbol_set -> bool
-
-val create_argv_array : offset:int -> current:int ref -> Ast.l -> string -> string list * (unit -> unit)
-
-val get_argv_position : plus:int -> Sail_file.position option
-
-val preprocess :
-  default_sail_dir:string ->
-  target_name:string option ->
-  options:(Arg.key * Arg.spec * Arg.doc) list ->
-  symbols:symbol_set ->
-  Parse_ast.def list ->
-  Parse_ast.def list * symbol_set
+let () =
+  try Libsail.Parmap.toplevel_handler main with
+  | Arg.Bad msg ->
+      prerr_endline msg;
+      exit 1
+  | Arg.Help msg ->
+      print_endline msg;
+      exit 0

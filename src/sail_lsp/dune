@@ -1,0 +1,5 @@
+(executable
+ (name sail_lsp)
+ (modes native byte)
+ (public_name sail_lsp)
+ (libraries libsail lsp))

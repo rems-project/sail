@@ -44,22 +44,8 @@
 (*  SPDX-License-Identifier: BSD-2-Clause                                   *)
 (****************************************************************************)
 
-type symbol_set
+open Printf
 
-val add_default_symbol : string -> unit
+let log fmt args = eprintf "[sail_lsp] %s\n%!" (sprintf fmt args)
 
-val get_default_symbols : unit -> symbol_set
-
-val have_symbol : string -> symbol_set -> bool
-
-val create_argv_array : offset:int -> current:int ref -> Ast.l -> string -> string list * (unit -> unit)
-
-val get_argv_position : plus:int -> Sail_file.position option
-
-val preprocess :
-  default_sail_dir:string ->
-  target_name:string option ->
-  options:(Arg.key * Arg.spec * Arg.doc) list ->
-  symbols:symbol_set ->
-  Parse_ast.def list ->
-  Parse_ast.def list * symbol_set
+let log_error fmt args = eprintf "[sail_lsp] Error: %s\n%!" (sprintf fmt args)

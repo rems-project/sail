@@ -17,6 +17,12 @@ libsail_coverage:
 extraction:
 	$(MAKE) -C src/rocq extraction
 
+lsp:
+	$(MAKE) -C src/sail_lsp
+
+lsp_install:
+	$(MAKE) -C src/sail_lsp install
+
 # Build binary tarball. The lib directory is very large and not needed
 # for running the compiler. Z3_EXE can be used to bundle a z3 binary.
 # GMP_DLL can be used to bundle a libgmp DLL (this is only used on Windows currently).

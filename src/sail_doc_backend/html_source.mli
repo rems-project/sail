@@ -48,18 +48,17 @@ open Libsail
 
 open Ast_defs
 
-module Highlight : sig
-  type t = Id | Keyword | Kind | Comment | String | Pragma | Internal | Operator | Literal | TyVar
-
-  val to_class : t -> string
-end
-
-val highlights : Sail_file.path -> (Highlight.t * int * int) array
+val highlights : Sail_file.path -> (Token.Highlight.t * int * int) array
 
 val hyperlink_targets : ('a, 'b) ast -> Sail_file.position Callgraph.NodeMap.t
 
 val hyperlinks_for_file : filename:string -> Type_check.typed_ast -> (Callgraph.node * int * int) array
 
-type file_info = { filename : string; prefix : string; contents : string; highlights : (Highlight.t * int * int) array }
+type file_info = {
+  filename : string;
+  prefix : string;
+  contents : string;
+  highlights : (Token.Highlight.t * int * int) array;
+}
 
 val output_html : ?css:string -> file_info:file_info -> hyperlinks:(string * int * int) array -> out_channel -> unit
