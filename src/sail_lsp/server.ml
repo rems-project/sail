@@ -44,22 +44,87 @@
 (*  SPDX-License-Identifier: BSD-2-Clause                                   *)
 (****************************************************************************)
 
-type symbol_set
+open Log
 
-val add_default_symbol : string -> unit
+module Io = struct
+  type 'a t = 'a
 
-val get_default_symbols : unit -> symbol_set
+  let return x = x
+  let raise = raise
 
-val have_symbol : string -> symbol_set -> bool
+  module O = struct
+    let ( let+ ) x f = f x
+    let ( let* ) x f = f x
+  end
+end
 
-val create_argv_array : offset:int -> current:int ref -> Ast.l -> string -> string list * (unit -> unit)
+module Chan = struct
+  type input = in_channel
+  type output = out_channel
 
-val get_argv_position : plus:int -> Sail_file.position option
+  let read_line ic = try Some (input_line ic) with End_of_file -> None
 
-val preprocess :
-  default_sail_dir:string ->
-  target_name:string option ->
-  options:(Arg.key * Arg.spec * Arg.doc) list ->
-  symbols:symbol_set ->
-  Parse_ast.def list ->
-  Parse_ast.def list * symbol_set
+  let read_exactly ic n =
+    let buf = Bytes.create n in
+    try
+      really_input ic buf 0 n;
+      Some (Bytes.to_string buf)
+    with End_of_file -> None
+
+  let write oc parts =
+    List.iter (output_string oc) parts;
+    flush oc
+end
+
+module LspIo = Lsp.Io.Make (Io) (Chan)
+
+let send oc packet = LspIo.write oc packet
+
+let handle_request oc (req : Jsonrpc.Request.t) =
+  let open Jsonrpc in
+  let resp =
+    match Lsp.Client_request.of_jsonrpc req with
+    | Error msg -> Response.error req.id (Response.Error.make ~code:Response.Error.Code.InvalidRequest ~message:msg ())
+    | Ok (Lsp.Client_request.E r) -> (
+        let result =
+          match r with
+          | Lsp.Client_request.Initialize params ->
+              Ok (Lsp.Client_request.yojson_of_result r (Handler.on_initialize params))
+          | Lsp.Client_request.Shutdown ->
+              Handler.on_shutdown ();
+              Ok (Lsp.Client_request.yojson_of_result r ())
+          | Lsp.Client_request.SemanticTokensFull params ->
+              Ok (Lsp.Client_request.yojson_of_result r (Handler.on_semantic_tokens_full params))
+          | _ ->
+              Error (Response.Error.make ~code:Response.Error.Code.MethodNotFound ~message:"method not implemented" ())
+        in
+        match result with Ok json -> Response.ok req.id json | Error err -> Response.error req.id err
+      )
+  in
+  send oc (Packet.Response resp)
+
+let rec run () =
+  match LspIo.read stdin with
+  | None -> ()
+  | Some packet ->
+      ( match packet with
+      | Jsonrpc.Packet.Request req -> (
+          try handle_request stdout req with exn -> log_error "request handler raised: %s" (Printexc.to_string exn)
+        )
+      | Jsonrpc.Packet.Notification n -> (
+          match Lsp.Client_notification.of_jsonrpc n with
+          | Ok notif -> (
+              try
+                List.iter
+                  (fun server_notif ->
+                    let jsonrpc_notif = Lsp.Server_notification.to_jsonrpc server_notif in
+                    send stdout (Jsonrpc.Packet.Notification jsonrpc_notif)
+                  )
+                  (Handler.on_notification notif)
+              with exn -> log_error "notification handler raised: %s" (Printexc.to_string exn)
+            )
+          | Error msg -> log_error "failed to decode notification: %s" msg
+        )
+      | _ -> ()
+      );
+      run ()

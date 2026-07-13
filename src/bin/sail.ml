@@ -635,7 +635,7 @@ let run_sail_format (config : Yojson.Safe.t option) =
 let feature_check () =
   match !opt_have_feature with
   | None -> ()
-  | Some symbol -> if Preprocess.have_default_symbol symbol then exit 0 else exit 2
+  | Some symbol -> if Preprocess.have_symbol symbol (Preprocess.get_default_symbols ()) then exit 0 else exit 2
 
 let get_plugin_dir () =
   match Sys.getenv_opt "SAIL_PLUGIN_DIR" with

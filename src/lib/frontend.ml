@@ -218,6 +218,8 @@ module type FILE_HANDLER = sig
     processed * Preprocess.symbol_set * Initial_check.ctx
 
   val check : Type_check.Env.t -> processed -> Type_check.typed_ast * Type_check.Env.t
+
+  val check_lazy : Type_check.Env.t -> processed -> Type_check.typed_lazy_ast * Type_check.Env.t
 end
 
 module SailHandler : FILE_HANDLER = struct
@@ -240,6 +242,8 @@ module SailHandler : FILE_HANDLER = struct
     ({ ast with comments = [(filename, comments)] }, symbols, ctx)
 
   let check env ast = Type_error.check env ast
+
+  let check_lazy env ast = Type_check.check_lazy env ast
 end
 
 let handlers : (string, (module FILE_HANDLER)) Hashtbl.t = Hashtbl.create 8

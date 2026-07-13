@@ -82,8 +82,6 @@ let get_default_symbols () = !default_symbols
 
 let add_default_symbol str = default_symbols := StringSet.add str !default_symbols
 
-let have_default_symbol str = StringSet.mem str !default_symbols
-
 let have_symbol str set = StringSet.mem str set
 
 let cond_pragma l defs =

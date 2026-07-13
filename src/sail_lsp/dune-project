@@ -1,0 +1,8 @@
+(lang dune 3.21)
+
+(package
+ (name sail_lsp)
+ (synopsis "Sail LSP server")
+ (depends
+  (lsp (>= 1.25.0))
+  (jsonrpc (>= 1.25.0))))

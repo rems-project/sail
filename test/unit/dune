@@ -1,0 +1,5 @@
+(test
+ (name test_libsail)
+ (libraries libsail alcotest)
+ (enabled_if
+  (= %{env:SAIL_UNIT_TESTS=false} true)))

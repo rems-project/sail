@@ -110,12 +110,54 @@ let count_newlines s =
   String.iter (fun c -> if c = '\n' then incr n) s;
   !n
 
+(* LSP positions count characters in UTF-16 code units, whereas Sail's lexer
+   works in bytes. A UTF-8 code point in the basic multilingual plane is a
+   single UTF-16 code unit; one outside it (a four-byte UTF-8 sequence) is
+   encoded as a surrogate pair and so counts as two. These helpers convert
+   between byte and UTF-16 offsets within a single (UTF-8 encoded) line. *)
+
+(* The number of UTF-8 bytes and UTF-16 code units of the character whose
+   leading byte is [c]. *)
+let utf8_char_size c = if c < 0x80 then (1, 1) else if c < 0xe0 then (2, 1) else if c < 0xf0 then (3, 1) else (4, 2)
+
+(* Byte offset into [line] of its [utf16]th UTF-16 code unit. An offset past the
+   end of the line clamps to its byte length. *)
+let utf16_offset_to_byte line utf16 =
+  let len = String.length line in
+  let byte = ref 0 in
+  let units = ref 0 in
+  while !units < utf16 && !byte < len do
+    let nbytes, nunits = utf8_char_size (Char.code line.[!byte]) in
+    byte := !byte + nbytes;
+    units := !units + nunits
+  done;
+  min !byte len
+
+(* UTF-16 code-unit offset into [line] corresponding to the byte offset [byte].
+   An offset past the end of the line clamps to its UTF-16 length. *)
+let byte_offset_to_utf16 line byte =
+  let target = min byte (String.length line) in
+  let b = ref 0 in
+  let units = ref 0 in
+  while !b < target do
+    let nbytes, nunits = utf8_char_size (Char.code line.[!b]) in
+    b := !b + nbytes;
+    units := !units + nunits
+  done;
+  !units
+
+(* The length of [s] in UTF-16 code units. *)
+let utf16_length s = byte_offset_to_utf16 s (String.length s)
+
+(* Text edits are stored in editor (UTF-16 code-unit) coordinates, so measure
+   the inserted text in the same units to keep the position arithmetic in
+   [update_position]/[revert_position] consistent. *)
 let measure_edit edit =
   let newlines = count_newlines edit.text in
-  if newlines = 0 then Single_line (String.length edit.text)
+  if newlines = 0 then Single_line (utf16_length edit.text)
   else (
-    let pre = String.index_from edit.text 0 '\n' in
-    let post = String.rindex_from edit.text (String.length edit.text - 1) '\n' in
+    let pre = byte_offset_to_utf16 edit.text (String.index_from edit.text 0 '\n') in
+    let post = byte_offset_to_utf16 edit.text (String.rindex_from edit.text (String.length edit.text - 1) '\n') in
     Multiple_lines { pre; newlines; post }
   )
 
@@ -293,10 +335,21 @@ let editor_position p =
   let path = Path.canonicalize (Path.Actual p.pos_fname) in
   match Hashtbl.find_opt opened path with
   | Some handle ->
+      let info = Hashtbl.find files handle in
+      (* Lexing/AST lines are 1-based; editor lines are 0-based. *)
+      let line = p.pos_lnum - 1 in
+      let byte_character = p.pos_cnum - p.pos_bol in
+      (* The Lexing position is a byte offset into the base contents; editor
+         positions are UTF-16 code units, so convert against the base line
+         before replaying the pending edits (which are in editor coordinates). *)
+      let character =
+        if line >= 0 && line < Array.length info.contents then byte_offset_to_utf16 info.contents.(line) byte_character
+        else byte_character
+      in
       fold_edits_first_to_last
         (fun edit size pos_opt -> match pos_opt with None -> None | Some p -> update_position edit size p)
         handle
-        (Some { line = p.pos_lnum; character = p.pos_cnum - p.pos_bol })
+        (Some { line; character })
   | None -> None
 
 let lexing_position handle p =
@@ -313,8 +366,60 @@ let lexing_position handle p =
       for i = 0 to p.line - 1 do
         bol := !bol + String.length info.contents.(i) + 1
       done;
+      (* [p.character] is a UTF-16 code-unit offset into the base contents;
+         convert it to a byte offset for the Sail lexing position. *)
+      let character =
+        if p.line >= 0 && p.line < Array.length info.contents then
+          utf16_offset_to_byte info.contents.(p.line) p.character
+        else p.character
+      in
+      (* Editor lines are 0-based; Lexing/AST lines are 1-based. *)
       Some
-        { pos_fname = Path.to_string info.given_path; pos_lnum = p.line; pos_bol = !bol; pos_cnum = !bol + p.character }
+        {
+          pos_fname = Path.to_string info.given_path;
+          pos_lnum = p.line + 1;
+          pos_bol = !bol;
+          pos_cnum = !bol + character;
+        }
+
+(* Apply a single text edit to a line array, returning the updated array. The
+   edit's character offsets are UTF-16 code units, so convert them to byte
+   offsets into the (UTF-8) lines they index before slicing. The half-open
+   range [s, e) is replaced by [edit.text], which may itself span several
+   lines. Line numbers are clamped to be in-bounds so that malformed client
+   input cannot raise; [utf16_offset_to_byte] already clamps the columns. *)
+let apply_edit contents edit =
+  let contents = if Array.length contents = 0 then [| "" |] else contents in
+  let n = Array.length contents in
+  let s, e = edit.range in
+  let clamp lo hi x = if x < lo then lo else if x > hi then hi else x in
+  let sl = clamp 0 (n - 1) s.line in
+  let el = clamp 0 (n - 1) e.line in
+  let sc = utf16_offset_to_byte contents.(sl) s.character in
+  let ec = utf16_offset_to_byte contents.(el) e.character in
+  let before = String.sub contents.(sl) 0 sc in
+  let after = String.sub contents.(el) ec (String.length contents.(el) - ec) in
+  let replacement = Array.of_list (String.split_on_char '\n' (before ^ edit.text ^ after)) in
+  Array.concat [Array.sub contents 0 sl; replacement; Array.sub contents (el + 1) (n - (el + 1))]
+
+(* The current editor view of a file: its base contents with every queued edit
+   applied, in order. Does not mutate the stored contents or the edit queue. *)
+let current_contents info =
+  let contents = ref info.contents in
+  for i = 0 to info.next_edit - 1 do
+    let edit, _ = Option.get info.edits.(i) in
+    contents := apply_edit !contents edit
+  done;
+  !contents
+
+(* Bake the queued edits into the file's contents, bringing them in sync with
+   the editor, and clear the queue. After this the base contents equals the
+   editor view, so no pending position translation remains. *)
+let apply_edits handle =
+  let info = Hashtbl.find files handle in
+  info.contents <- current_contents info;
+  Array.fill info.edits 0 info.next_edit None;
+  info.next_edit <- 0
 
 let file_to_line_array filename =
   let chan = open_in filename in

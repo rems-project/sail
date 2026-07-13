@@ -44,22 +44,10 @@
 (*  SPDX-License-Identifier: BSD-2-Clause                                   *)
 (****************************************************************************)
 
-type symbol_set
+val on_initialize : Lsp.Types.InitializeParams.t -> Lsp.Types.InitializeResult.t
 
-val add_default_symbol : string -> unit
+val on_shutdown : unit -> unit
 
-val get_default_symbols : unit -> symbol_set
+val on_semantic_tokens_full : Lsp.Types.SemanticTokensParams.t -> Lsp.Types.SemanticTokens.t option
 
-val have_symbol : string -> symbol_set -> bool
-
-val create_argv_array : offset:int -> current:int ref -> Ast.l -> string -> string list * (unit -> unit)
-
-val get_argv_position : plus:int -> Sail_file.position option
-
-val preprocess :
-  default_sail_dir:string ->
-  target_name:string option ->
-  options:(Arg.key * Arg.spec * Arg.doc) list ->
-  symbols:symbol_set ->
-  Parse_ast.def list ->
-  Parse_ast.def list * symbol_set
+val on_notification : Lsp.Client_notification.t -> Lsp.Server_notification.t list

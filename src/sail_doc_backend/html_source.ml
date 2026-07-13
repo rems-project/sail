@@ -49,21 +49,7 @@ open Libsail
 open Ast
 open Ast_defs
 
-module Highlight = struct
-  type t = Id | Keyword | Kind | Comment | String | Pragma | Internal | Operator | Literal | TyVar
-
-  let to_class = function
-    | Id -> "sail-id"
-    | Keyword -> "sail-keyword"
-    | Kind -> "sail-kind"
-    | Comment -> "sail-comment"
-    | String -> "sail-string"
-    | Pragma -> "sail-pragma"
-    | Internal -> "sail-internal"
-    | Operator -> "sail-operator"
-    | Literal -> "sail-literal"
-    | TyVar -> "sail-ty-var"
-end
+module Highlight = Token.Highlight
 
 let highlights path =
   let handle, lexbuf = Initial_check.get_lexbuf path in
@@ -72,49 +58,17 @@ let highlights path =
   let mark h = Queue.add (h, lexbuf.lex_start_p.pos_cnum, lexbuf.lex_curr_p.pos_cnum) highlights in
   let rec go () =
     let open Token in
-    match Lexer.token handle comments lexbuf with
-    | Eof -> ()
-    | Id _ ->
-        mark Highlight.Id;
-        go ()
-    | INT | NAT | BOOL | TYPE | ORDER ->
-        mark Highlight.Kind;
-        go ()
-    | String _ | MultilineString _ ->
-        mark Highlight.String;
-        go ()
-    | DocLine _ | DocBlock _ ->
-        mark Highlight.Comment;
-        go ()
-    | And | As | Assert | By | Match | Clause | Dec | Op | Default | Effect | End | Enum | Else | Exit | Cast | Forall
-    | Foreach | Function_ | Mapping | Overload | Throw | Try | Catch | If_ | In | Inc | Var | Ref | Pure | Impure
-    | Monadic | Register | Return | Scattered | Sizeof | Constraint | Constant | Struct | Then | Typedef | Union
-    | Newtype | With | Val | Outcome | Instantiation | Impl | Private | Repeat | Until | While | Do | Mutual | Config
-    | Configuration | TerminationMeasure | Forwards | Backwards | Let_ | Bitfield | When | To | Downto | From ->
-        mark Highlight.Keyword;
-        go ()
-    | StructuredPragma _ | Pragma _ | Attribute _ | Fixity _ ->
-        mark Highlight.Pragma;
-        go ()
-    | InternalPLet | InternalReturn | InternalAssume ->
-        mark Highlight.Internal;
-        go ()
-    | OpId _ | Star | ColonColon | Bar | Caret | Minus ->
-        mark Highlight.Operator;
-        go ()
-    | Hex _ | Bin _ | Undefined | True | False | Bitzero | Bitone | Num _ | Real _ ->
-        mark Highlight.Literal;
-        go ()
-    | TyVar _ ->
-        mark Highlight.TyVar;
-        go ()
-    | Under | Colon _ | Lcurly | Rcurly | LcurlyBar | RcurlyBar | Lsquare | Rsquare | LsquareBar | RsquareBar | Lparen
-    | Rparen | Dot | DotDot | EqGt _ | At | Unit _ | Bidir | Semi | Comma | Eq _ | TwoCaret | MinusGt ->
+    let tok = Lexer.token handle comments lexbuf in
+    match Highlight.classify tok with
+    | None -> ()
+    | Some (H_punctuation | H_bracket) -> go ()
+    | Some h ->
+        mark h;
         go ()
   in
   go ();
   List.iter
-    (function Lexer.Comment (_, s, e, _) -> Queue.add (Highlight.Comment, s.pos_cnum, e.pos_cnum) highlights)
+    (function Lexer.Comment (_, s, e, _) -> Queue.add (Highlight.H_comment, s.pos_cnum, e.pos_cnum) highlights)
     !comments;
   let highlights = Array.init (Queue.length highlights) (fun _ -> Queue.take highlights) in
   Array.stable_sort (fun (_, s1, _) (_, s2, _) -> Int.compare s1 s2) highlights;
