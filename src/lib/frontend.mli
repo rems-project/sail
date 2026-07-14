@@ -107,9 +107,10 @@ module type FILE_HANDLER = sig
     default_sail_dir:string ->
     target_name:string option ->
     options:(Arg.key * Arg.spec * Arg.doc) list ->
+    symbols:Preprocess.symbol_set ->
     Initial_check.ctx ->
     parsed ->
-    processed * Initial_check.ctx
+    processed * Preprocess.symbol_set * Initial_check.ctx
 
   val check : Type_check.Env.t -> processed -> Type_check.typed_ast * Type_check.Env.t
 end
@@ -118,23 +119,14 @@ end
     ".json". *)
 val register_file_handler : extension:string -> (module FILE_HANDLER) -> unit
 
-val load_modules :
-  ?target:Target.target ->
-  string ->
-  (Arg.key * Arg.spec * Arg.doc) list ->
-  Type_check.Env.t ->
-  Project.project_structure ->
-  Project.mod_id list ->
-  Initial_check.ctx * Type_check.typed_ast * Type_check.Env.t * Effects.side_effect_info
-
 val load_files :
   ?no_core:bool ->
   ?target:Target.target ->
-  string ->
+  default_sail_dir:string ->
   (Arg.key * Arg.spec * Arg.doc) list ->
   Type_check.Env.t ->
   string list ->
-  Initial_check.ctx * Type_check.typed_ast * Type_check.Env.t * Effects.side_effect_info
+  Preprocess.symbol_set * Initial_check.ctx * Type_check.typed_ast * Type_check.Env.t * Effects.side_effect_info
 
 (** Load a list of sail_project files.
 
@@ -146,16 +138,17 @@ val load_project :
   ?options:(Arg.key * Arg.spec * Arg.doc) list ->
   ?variables:Project.value Util.StringMap.t ref ->
   ?just_parse:bool ->
-  string ->
+  default_sail_dir:string ->
   string list ->
-  Initial_check.ctx * Type_check.typed_ast * Type_check.Env.t * Effects.side_effect_info
+  Preprocess.symbol_set * Initial_check.ctx * Type_check.typed_ast * Type_check.Env.t * Effects.side_effect_info
 
 val finalize_ast :
   bool ->
+  Preprocess.symbol_set ->
   Initial_check.ctx ->
   Type_check.Env.t ->
   Type_check.typed_ast ->
-  Initial_check.ctx * Type_check.typed_ast * Type_check.Env.t * Effects.side_effect_info
+  Preprocess.symbol_set * Initial_check.ctx * Type_check.typed_ast * Type_check.Env.t * Effects.side_effect_info
 
 val initial_rewrite :
   Effects.side_effect_info -> Type_check.Env.t -> Type_check.typed_ast -> Type_check.typed_ast * Type_check.Env.t

@@ -59,8 +59,8 @@ let opt_fast_undefined = ref false
 let opt_allow_internal = ref false
 let opt_strict_bitvector = ref false
 
-module StringSet = Set.Make (String)
-module StringMap = Map.Make (String)
+module StringSet = Util.StringSet
+module StringMap = Util.StringMap
 
 (* These are types that are defined in Sail, but we rely on them
    having specific definitions, so we only allow them to be defined in

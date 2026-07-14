@@ -218,7 +218,7 @@ let rec options =
         Arg.Tuple
           [
             Arg.Set Interactive.opt_interactive;
-            Arg.Unit (fun () -> Preprocess.add_symbol "INTERACTIVE");
+            Arg.Unit (fun () -> Preprocess.add_default_symbol "INTERACTIVE");
             Arg.Set opt_auto_interpreter_rewrites;
           ],
         " start interactive interpreter"
@@ -227,7 +227,7 @@ let rec options =
         Arg.Tuple
           [
             Arg.Set Interactive.opt_interactive;
-            Arg.Unit (fun () -> Preprocess.add_symbol "INTERACTIVE");
+            Arg.Unit (fun () -> Preprocess.add_default_symbol "INTERACTIVE");
             Arg.Set opt_auto_interpreter_rewrites;
             Arg.String (fun s -> opt_interactive_script := Some s);
           ],
@@ -286,23 +286,29 @@ let rec options =
         " (experimental) produce a Sail file containing all of the types that are used in instantiations"
       );
       ( "-D",
-        Arg.String (fun symbol -> Preprocess.add_symbol symbol),
+        Arg.String (fun symbol -> Preprocess.add_default_symbol symbol),
         "<symbol> define a symbol for the preprocessor, as $define does in the source code"
       );
       ("-no_warn", Arg.Clear Reporting.opt_warnings, " do not print warnings");
       ("-all_warnings", Arg.Set Reporting.opt_all_warnings, " print all warning messages");
       ( "-strict_var",
-        Arg.Tuple [Arg.Unit (fun () -> Preprocess.add_symbol "STRICT_VAR"); Arg.Set Type_check.opt_strict_var],
+        Arg.Tuple [Arg.Unit (fun () -> Preprocess.add_default_symbol "STRICT_VAR"); Arg.Set Type_check.opt_strict_var],
         " require var expressions for variable declarations"
       );
       ( "-strict_bitvector",
         Arg.Tuple
-          [Arg.Unit (fun () -> Preprocess.add_symbol "STRICT_BITVECTOR"); Arg.Set Initial_check.opt_strict_bitvector],
+          [
+            Arg.Unit (fun () -> Preprocess.add_default_symbol "STRICT_BITVECTOR");
+            Arg.Set Initial_check.opt_strict_bitvector;
+          ],
         " require bitvectors to be indexed by naturals"
       );
       ( "-strict_exponentials",
         Arg.Tuple
-          [Arg.Unit (fun () -> Preprocess.add_symbol "STRICT_EXPONENTIALS"); Arg.Set Type_env.opt_strict_exponentials],
+          [
+            Arg.Unit (fun () -> Preprocess.add_default_symbol "STRICT_EXPONENTIALS");
+            Arg.Set Type_env.opt_strict_exponentials;
+          ],
         " type level exponentials must have a non-negative argument"
       );
       ("-plugin", Arg.String (fun plugin -> load_plugin options plugin), "<file> load a Sail plugin");
@@ -495,12 +501,13 @@ let run_sail (config : Yojson.Safe.t option) tgt =
     List.partition (fun free -> Filename.check_suffix free ".sail_project") !opt_free_arguments
   in
 
-  let ctx, ast, env, effect_info =
+  let symbols, ctx, ast, env, effect_info =
     match (project_files, !opt_project_files) with
     | [], [] ->
         (* If there are no provided project files, we concatenate all
            the free file arguments into one big blob like before *)
-        Frontend.load_files ~no_core:!opt_no_core ~target:tgt Locations.sail_dir !options Type_check.initial_env frees
+        Frontend.load_files ~no_core:!opt_no_core ~target:tgt ~default_sail_dir:Locations.sail_dir !options
+          Type_check.initial_env frees
     (* Allows project files from either free arguments via suffix, or
        from -project, but not both as the ordering between them would
        be unclear. *)
@@ -514,7 +521,7 @@ let run_sail (config : Yojson.Safe.t option) tgt =
           !opt_variable_assignments;
         let modules = if !opt_all_modules then None else Some frees in
         Frontend.load_project ~no_core:!opt_no_core ~target:tgt ?modules ~options:!options ~variables
-          ~just_parse:!opt_just_parse_project Locations.sail_dir project_files
+          ~just_parse:!opt_just_parse_project ~default_sail_dir:Locations.sail_dir project_files
     | _, _ ->
         raise
           (Reporting.err_general Parse_ast.Unknown
@@ -549,9 +556,9 @@ let run_sail (config : Yojson.Safe.t option) tgt =
   let ctx, ast, effect_info, env = Rewrites.rewrite ctx effect_info env (Target.rewrites tgt) ast in
 
   Target.action tgt !opt_file_out
-    { ctx; ast; effect_info; env; options = !options; default_sail_dir = Locations.sail_dir; config };
+    { symbols; ctx; ast; effect_info; env; options = !options; default_sail_dir = Locations.sail_dir; config };
 
-  (ctx, ast, env, effect_info)
+  (symbols, ctx, ast, env, effect_info)
 
 let run_sail_format (config : Yojson.Safe.t option) =
   let is_format_file f =
@@ -626,7 +633,9 @@ let run_sail_format (config : Yojson.Safe.t option) =
     parsed_files
 
 let feature_check () =
-  match !opt_have_feature with None -> () | Some symbol -> if Preprocess.have_symbol symbol then exit 0 else exit 2
+  match !opt_have_feature with
+  | None -> ()
+  | Some symbol -> if Preprocess.have_default_symbol symbol then exit 0 else exit 2
 
 let get_plugin_dir () =
   match Sys.getenv_opt "SAIL_PLUGIN_DIR" with
@@ -730,7 +739,7 @@ let main () =
 
   if !opt_memo_z3 then Constraint.load_digests !opt_memo_z3_path;
 
-  let ctx, ast, env, effect_info =
+  let symbols, ctx, ast, env, effect_info =
     match Target.get_the_target () with
     | Some target when not !opt_just_check -> run_sail config target
     | _ -> run_sail config default_target
@@ -763,8 +772,8 @@ let main () =
           with End_of_file -> List.rev !lines
         )
     in
-    Repl.start_repl ~commands:script ~auto_rewrites:!opt_auto_interpreter_rewrites ~config ~options:!options ctx env
-      effect_info ast
+    Repl.start_repl ~commands:script ~auto_rewrites:!opt_auto_interpreter_rewrites ~config ~options:!options ~symbols
+      ctx env effect_info ast
   )
 
 let () =

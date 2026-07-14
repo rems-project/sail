@@ -55,6 +55,7 @@ let opt_interactive = ref false
 
 module State = struct
   type istate = {
+    symbols : Preprocess.symbol_set;
     ctx : Initial_check.ctx;
     ast : Type_check.typed_ast;
     effect_info : Effects.side_effect_info;

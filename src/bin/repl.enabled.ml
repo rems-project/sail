@@ -66,6 +66,7 @@ type mode =
 type display_options = { clear : bool; registers : IdSet.t }
 
 type repl_state = {
+  symbols : Preprocess.symbol_set;
   ctx : Initial_check.ctx;
   ast : Type_check.typed_ast;
   effect_info : Effects.side_effect_info;
@@ -81,6 +82,7 @@ type repl_state = {
 
 let shrink_repl_state rstate : Interactive.State.istate =
   {
+    symbols = rstate.symbols;
     ctx = rstate.ctx;
     ast = rstate.ast;
     effect_info = rstate.effect_info;
@@ -90,8 +92,9 @@ let shrink_repl_state rstate : Interactive.State.istate =
     config = rstate.config;
   }
 
-let initial_repl_state config options ctx env effect_info ast =
+let initial_repl_state config options symbols ctx env effect_info ast =
   {
+    symbols;
     ctx;
     ast;
     effect_info;
@@ -559,7 +562,12 @@ let () =
      ignore (Sail_file.add_to_repl_contents ~command:"");
      let ast, ctx =
        Initial_check.ast_of_def_string_with ~inline:pos __POS__ istate.ctx
-         (Preprocess.preprocess istate.default_sail_dir None istate.options)
+         (fun defs ->
+           fst
+             (Preprocess.preprocess ~default_sail_dir:istate.default_sail_dir ~target_name:None ~options:istate.options
+                ~symbols:(Preprocess.get_default_symbols ()) defs
+             )
+         )
          (arg ^ "\n")
      in
      let ast, env = Type_check.check istate.env ast in
@@ -842,16 +850,16 @@ let handle_input rstate input =
       print_endline (Printexc.to_string exn);
       rstate
 
-let start_repl ?(banner = true) ?commands:(script = []) ?auto_rewrites:(rewrites = true) ~config ~options ctx env
-    effect_info ast =
+let start_repl ?(banner = true) ?commands:(script = []) ?auto_rewrites:(rewrites = true) ~config ~options ~symbols ctx
+    env effect_info ast =
   let rstate =
     if rewrites then (
       let ctx, ast, effect_info, env =
         Rewrites.rewrite ctx effect_info env (Rewrites.instantiate_rewrites Rewrites.rewrites_interpreter) ast
       in
-      initial_repl_state config options ctx env effect_info ast
+      initial_repl_state config options symbols ctx env effect_info ast
     )
-    else initial_repl_state config options ctx env effect_info ast
+    else initial_repl_state config options symbols ctx env effect_info ast
   in
 
   LNoise.set_completion_callback (fun line_so_far ln_completions ->
