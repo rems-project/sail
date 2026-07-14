@@ -2554,28 +2554,8 @@ let generate_undefined_enum id ids =
       ];
   ]
 
-let undefined_builtin_val_specs () =
-  [
-    extern_of_string initial_ctx (mk_id "internal_pick") "forall ('a:Type). list('a) -> 'a";
-    extern_of_string initial_ctx (mk_id "undefined_bool") "unit -> bool";
-    extern_of_string initial_ctx (mk_id "undefined_bit") "unit -> bitvector(1)";
-    extern_of_string initial_ctx (mk_id "undefined_int") "unit -> int";
-    extern_of_string initial_ctx (mk_id "undefined_nat") "unit -> nat";
-    extern_of_string initial_ctx (mk_id "undefined_real") "unit -> real";
-    extern_of_string initial_ctx (mk_id "undefined_string") "unit -> string";
-    extern_of_string initial_ctx (mk_id "undefined_list") "forall ('a:Type). 'a -> list('a)";
-    extern_of_string initial_ctx (mk_id "undefined_range") "forall 'n 'm. (atom('n), atom('m)) -> range('n,'m)";
-    extern_of_string initial_ctx (mk_id "undefined_vector")
-      "forall 'n ('a:Type) ('ord : Order). (atom('n), 'a) -> vector('n, 'ord,'a)";
-    extern_of_string initial_ctx (mk_id "undefined_bitvector") "forall 'n. atom('n) -> bitvector('n)";
-    extern_of_string initial_ctx (mk_id "undefined_unit") "unit -> unit";
-  ]
-
 let make_global (DEF_aux (def, def_annot)) =
   DEF_aux (def, add_def_attribute (gen_loc def_annot.loc) "global" None def_annot)
-
-let generate_undefineds vs_ids =
-  List.filter (fun def -> IdSet.is_empty (IdSet.inter vs_ids (ids_of_def def))) (undefined_builtin_val_specs ())
 
 let rec get_uninitialized_registers = function
   | DEF_aux (DEF_register (DEC_aux (DEC_reg (typ, id, None), _)), _) :: defs -> (
@@ -2714,11 +2694,6 @@ let generate_enum_number_conversions defs =
 let process_ast ctx ast =
   let ast, ctx = to_ast ctx ast in
   ({ ast with defs = generate_enum_number_conversions ast.defs }, ctx)
-
-let generate ast =
-  let vs_ids = val_spec_ids ast.defs in
-  let regs = get_uninitialized_registers ast.defs in
-  { ast with defs = generate_undefineds vs_ids @ ast.defs @ generate_initialize_registers vs_ids regs }
 
 let ast_of_def_string_with ?inline ocaml_pos ctx f str =
   let lexbuf = Lexing.from_string str in

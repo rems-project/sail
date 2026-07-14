@@ -363,9 +363,7 @@ let load_modules ?target default_sail_dir options env proj root_mod_ids =
       mods
   in
   let processed =
-    [ProcessedGenerated (Initial_check.generate_undefineds vs_ids)]
-    @ List.concat processed
-    @ [ProcessedGenerated (Initial_check.generate_initialize_registers vs_ids regs)]
+    List.concat processed @ [ProcessedGenerated (Initial_check.generate_initialize_registers vs_ids regs)]
   in
 
   let t = Profile.start () in
@@ -395,11 +393,7 @@ let load_files ?(no_core = false) ?target default_sail_dir options env files =
   let (ctx, vs_ids, regs), processed =
     process_files ~target_name ~default_sail_dir ~options Initial_check.initial_ctx IdSet.empty [] parsed_files
   in
-  let processed =
-    [ProcessedGenerated (Initial_check.generate_undefineds vs_ids)]
-    @ processed
-    @ [ProcessedGenerated (Initial_check.generate_initialize_registers vs_ids regs)]
-  in
+  let processed = processed @ [ProcessedGenerated (Initial_check.generate_initialize_registers vs_ids regs)] in
 
   let t = Profile.start () in
   let env, checked = check_files env processed in
