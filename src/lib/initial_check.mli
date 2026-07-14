@@ -85,17 +85,9 @@ val generate_undefined_record : id -> typquant -> ((id * typ) * unit def_annot) 
 
 val generate_undefined_enum : id -> id list -> untyped_def list
 
-(** Val specs of undefined functions for builtin types that get added to the AST by generate_undefinds (minus those
-    functions that already exist in the AST). *)
-val undefined_builtin_val_specs : unit -> untyped_def list
-
-val generate_undefineds : IdSet.t -> untyped_def list
-
 val generate_initialize_registers : IdSet.t -> (id * typ) list -> untyped_def list
 
 val generate_enum_number_conversions : untyped_def list -> untyped_def list
-
-val generate : untyped_ast -> untyped_ast
 
 val process_ast : ctx -> Parse_ast.defs -> untyped_ast * ctx
 

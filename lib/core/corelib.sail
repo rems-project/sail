@@ -61,3 +61,39 @@ val gteq_int = pure { coq: "Z.geb", lean: "_lean_ge", _: "gteq" } : forall 'n 'm
 val lt_int = pure { coq: "Z.ltb", lean: "_lean_lt", _: "lt" } : forall 'n 'm. (int('n), int('m)) -> bool('n < 'm)
 
 val gt_int = pure { coq: "Z.gtb", lean: "_lean_gt", _: "gt" } : forall 'n 'm. (int('n), int('m)) -> bool('n > 'm)
+
+$[never_fold]
+val internal_pick = impure "internal_pick" : forall ('a:Type). list('a) -> 'a
+
+$[never_fold]
+val undefined_bool = impure "undefined_bool" : unit -> bool
+
+$[never_fold]
+val undefined_bit = impure "undefined_bit" : unit -> bitvector(1)
+
+$[never_fold]
+val undefined_int = impure "undefined_int" : unit -> int
+
+$[never_fold]
+val undefined_nat = impure "undefined_nat" : unit -> nat
+
+$[never_fold]
+val undefined_real = impure "undefined_real" : unit -> real
+
+$[never_fold]
+val undefined_string = impure "undefined_string" : unit -> string
+
+$[never_fold]
+val undefined_list = impure "undefined_list" : forall 'a. 'a -> list('a)
+
+$[never_fold]
+val undefined_range = impure "undefined_range" : forall 'n 'm. (int('n), int('m)) -> range('n, 'm)
+
+$[never_fold]
+val undefined_vector = impure "undefined_vector" : forall 'n 'a. (int('n), 'a) -> vector('n, 'a)
+
+$[never_fold]
+val undefined_bitvector = impure "undefined_bitvector" : forall 'n. int('n) -> bitvector('n)
+
+$[never_fold]
+val undefined_unit = impure "undefined_unit" : unit -> unit

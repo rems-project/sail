@@ -47,6 +47,7 @@
 open Ast
 open Ast_compare
 open Ast_util
+open Ast_defs
 open Spec_analysis
 open Type_check
 
@@ -261,6 +262,18 @@ and typ_arg_has_existential (A_aux (a, _)) =
 module StringSet = Set.Make (String)
 module StringMap = Map.Make (String)
 
+let never_fold_ids ast =
+  List.fold_left
+    (fun ids def ->
+      match def with
+      | DEF_aux (DEF_val vs, def_annot) -> (
+          let id = id_of_val_spec vs in
+          match get_def_attribute "never_fold" def_annot with Some _ -> IdSet.add id ids | None -> ids
+        )
+      | _ -> ids
+    )
+    IdSet.empty ast.defs
+
 (* This is set up so that a partially applied version can be used multiple
    times, reducing start up time. *)
 
@@ -269,11 +282,10 @@ let const_props target env ast =
   let interpreter_istate =
     (* Do not interpret undefined_X functions *)
     let open Interpreter in
-    let undefined_builtin_ids = ids_of_defs (Initial_check.undefined_builtin_val_specs ()) in
     let remove_primop id = StringMap.remove (string_of_id id) in
-    let remove_undefined_primops = IdSet.fold remove_primop undefined_builtin_ids in
+    let remove_never_fold = IdSet.fold remove_primop (never_fold_ids ast) in
     let lstate, gstate = Constant_fold.initial_state ast env in
-    (lstate, { gstate with primops = remove_undefined_primops gstate.primops })
+    (lstate, { gstate with primops = remove_never_fold gstate.primops })
   in
   let const_fold exp =
     try
