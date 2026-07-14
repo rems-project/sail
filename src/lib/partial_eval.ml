@@ -347,8 +347,8 @@ module AbsValue : SAIL_VALUE = struct
         ("abs_int", lift Z.abs (Int @-> Ret Int));
         ("div_int", lift Z.div (Int @-> Int @-> Ret Int));
         ("tdiv_int", lift Z.div (Int @-> Int @-> Ret Int));
-        ("quotient", lift Z.div (Int @-> Int @-> Ret Int));
-        ("modulus", lift Z.rem (Int @-> Int @-> Ret Int));
+        ("quotient", lift Z.ediv (Int @-> Int @-> Ret Int));
+        ("modulus", lift Z.erem (Int @-> Int @-> Ret Int));
         ("tmod_int", lift Z.rem (Int @-> Int @-> Ret Int));
         ("eq_int", lift Z.equal (Int @-> Int @-> Ret Bool));
         ("quot_round_zero", lift Z.div (Int @-> Int @-> Ret Int));
