@@ -57,7 +57,7 @@ let opt_ddump_tc_ast = ref false
 let opt_list_files = ref None
 let opt_just_parse_project = ref false
 
-let finalize_ast asserts_termination ctx env ast =
+let finalize_ast asserts_termination symbols ctx env ast =
   Lint.warn_unmodified_variables ast;
   Lint.warn_unused_variables ast;
   let ast = Scattered.descatter env ast in
@@ -65,7 +65,7 @@ let finalize_ast asserts_termination ctx env ast =
   if !opt_ddump_side_effect then Effects.dump_effects side_effects;
   Effects.check_side_effects side_effects ast;
   if !opt_ddump_tc_ast then Pretty_print_sail.output_ast stdout (Type_check.strip_ast ast);
-  (ctx, ast, Type_check.Env.open_all_modules env, side_effects)
+  (symbols, ctx, ast, Type_check.Env.open_all_modules env, side_effects)
 
 type abstract_instantiation = {
   env_update : Type_check.env -> Type_check.env;
@@ -155,12 +155,13 @@ type parse_continuation = {
   check : Type_check.Env.t -> Type_check.typed_ast * Type_check.Env.t;
   vs_ids : IdSet.t;
   regs : (Ast.id * Ast.typ) list;
+  symbols : Preprocess.symbol_set;
   ctx : Initial_check.ctx;
 }
 
 type parsed_file =
   | Generated of Parse_ast.def list
-  | File of { path : Sail_file.path; cont : Initial_check.ctx -> parse_continuation }
+  | File of { path : Sail_file.path; cont : Preprocess.symbol_set -> Initial_check.ctx -> parse_continuation }
 
 type parsed_module = { id : Project.mod_id; included : bool; files : parsed_file list }
 
@@ -211,9 +212,10 @@ module type FILE_HANDLER = sig
     default_sail_dir:string ->
     target_name:string option ->
     options:(Arg.key * Arg.spec * Arg.doc) list ->
+    symbols:Preprocess.symbol_set ->
     Initial_check.ctx ->
     parsed ->
-    processed * Initial_check.ctx
+    processed * Preprocess.symbol_set * Initial_check.ctx
 
   val check : Type_check.Env.t -> processed -> Type_check.typed_ast * Type_check.Env.t
 end
@@ -231,11 +233,11 @@ module SailHandler : FILE_HANDLER = struct
 
   let uninitialized_registers ast = Initial_check.get_uninitialized_registers ast.defs
 
-  let process ~default_sail_dir ~target_name ~options ctx (filename, comments, defs) =
-    let defs = Preprocess.preprocess default_sail_dir target_name options defs in
+  let process ~default_sail_dir ~target_name ~options ~symbols ctx (filename, comments, defs) =
+    let defs, symbols = Preprocess.preprocess ~default_sail_dir ~target_name ~options ~symbols defs in
     let ast, ctx = Initial_check.process_ast ctx (Parse_ast.Defs [(Some filename, defs)]) in
     if !opt_ddump_initial_ast then Pretty_print_sail.output_ast stdout ast;
-    ({ ast with comments = [(filename, comments)] }, ctx)
+    ({ ast with comments = [(filename, comments)] }, symbols, ctx)
 
   let check env ast = Type_error.check env ast
 end
@@ -260,29 +262,32 @@ let parse_file ?loc ~target_name ~default_sail_dir ~options path =
   let extension = Filename.extension (Sail_file.Path.to_string path) in
   let module Handler = (val get_handler ~path extension : FILE_HANDLER) in
   let parsed = Handler.parse loc path in
-  let cont ctx =
-    let processed, ctx = Handler.process ~target_name ~default_sail_dir ~options ctx parsed in
+  let cont symbols ctx =
+    let processed, symbols, ctx = Handler.process ~target_name ~default_sail_dir ~options ~symbols ctx parsed in
     {
       check = (fun env -> Handler.check env processed);
       vs_ids = Handler.defines_functions processed;
       regs = Handler.uninitialized_registers processed;
+      symbols;
       ctx;
     }
   in
   File { path; cont }
 
-let process_files ~target_name ~default_sail_dir ~options ctx vs_ids regs files =
+let process_files ~target_name ~default_sail_dir ~options ~symbols ctx vs_ids regs files =
   Util.fold_left_map
-    (fun (ctx, vs_ids, regs) -> function
+    (fun (symbols, ctx, vs_ids, regs) -> function
       | File { path; cont } ->
-          let cont = cont ctx in
-          ((cont.ctx, IdSet.union vs_ids cont.vs_ids, regs @ cont.regs), ProcessedFile { path; cont = cont.check })
+          let cont = cont symbols ctx in
+          ( (cont.symbols, cont.ctx, IdSet.union vs_ids cont.vs_ids, regs @ cont.regs),
+            ProcessedFile { path; cont = cont.check }
+          )
       | Generated defs ->
-          let defs = Preprocess.preprocess default_sail_dir target_name options defs in
+          let defs, symbols = Preprocess.preprocess ~default_sail_dir ~target_name ~options ~symbols defs in
           let ast, ctx = Initial_check.process_ast ctx (Parse_ast.Defs [(None, defs)]) in
-          ((ctx, vs_ids, regs), ProcessedGenerated ast.defs)
+          ((symbols, ctx, vs_ids, regs), ProcessedGenerated ast.defs)
       )
-    (ctx, vs_ids, regs) files
+    (symbols, ctx, vs_ids, regs) files
 
 let check_files env files =
   Util.fold_left_map
@@ -349,17 +354,17 @@ let load_modules ?target default_sail_dir options env proj root_mod_ids =
   in
   Option.iter (fun t -> Target.run_pre_initial_check_hook t all_files) target;
 
-  let (ctx, vs_ids, regs), processed =
+  let (symbols, ctx, vs_ids, regs), processed =
     let mods = List.map (wrap_module proj) parsed_modules in
     Util.fold_left_map
-      (fun (ctx, vs_ids, regs) parsed_module ->
-        let (ctx, vs_ids, regs), processed =
-          process_files ~target_name ~default_sail_dir ~options ctx vs_ids regs parsed_module.files
+      (fun (symbols, ctx, vs_ids, regs) parsed_module ->
+        let (symbols, ctx, vs_ids, regs), processed =
+          process_files ~target_name ~default_sail_dir ~options ~symbols ctx vs_ids regs parsed_module.files
         in
         (* If the module isn't being included we don't want to generate things for it's registers *)
-        ((ctx, vs_ids, if is_included parsed_module.id then regs else []), processed)
+        ((symbols, ctx, vs_ids, if is_included parsed_module.id then regs else []), processed)
       )
-      (Initial_check.initial_ctx, IdSet.empty, [])
+      (Preprocess.get_default_symbols (), Initial_check.initial_ctx, IdSet.empty, [])
       mods
   in
   let processed =
@@ -372,9 +377,9 @@ let load_modules ?target default_sail_dir options env proj root_mod_ids =
 
   let ast = concat_ast checked in
   let ast = filter_modules proj is_included ast in
-  finalize_ast asserts_termination ctx env ast
+  finalize_ast asserts_termination symbols ctx env ast
 
-let load_files ?(no_core = false) ?target default_sail_dir options env files =
+let load_files ?(no_core = false) ?target ~default_sail_dir options env files =
   let target_name = Option.map Target.name target in
   let asserts_termination = Option.fold ~none:false ~some:Target.asserts_termination target in
 
@@ -390,8 +395,10 @@ let load_files ?(no_core = false) ?target default_sail_dir options env files =
     )
     target;
 
-  let (ctx, vs_ids, regs), processed =
-    process_files ~target_name ~default_sail_dir ~options Initial_check.initial_ctx IdSet.empty [] parsed_files
+  let symbols = Preprocess.get_default_symbols () in
+
+  let (symbols, ctx, vs_ids, regs), processed =
+    process_files ~target_name ~default_sail_dir ~options ~symbols Initial_check.initial_ctx IdSet.empty [] parsed_files
   in
   let processed = processed @ [ProcessedGenerated (Initial_check.generate_initialize_registers vs_ids regs)] in
 
@@ -399,10 +406,10 @@ let load_files ?(no_core = false) ?target default_sail_dir options env files =
   let env, checked = check_files env processed in
   Profile.finish "type checking" t;
 
-  finalize_ast asserts_termination ctx env (concat_ast checked)
+  finalize_ast asserts_termination symbols ctx env (concat_ast checked)
 
 let load_project ?(no_core = false) ?target ?modules ?(options = []) ?(variables = ref StringMap.empty)
-    ?(just_parse = false) default_sail_dir project_files =
+    ?(just_parse = false) ~default_sail_dir project_files =
   let t = Profile.start () in
   let project_files = List.map Sail_file.Path.actual project_files in
   let project_files = if no_core then project_files else Corelib_project.path :: project_files in

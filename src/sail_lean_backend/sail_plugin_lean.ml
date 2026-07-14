@@ -412,9 +412,9 @@ let rec dedup_files (files : string list) (acc : string list) =
       | n -> dedup_files fs (acc @ [f ^ Int.to_string (n - 1)])
     )
 
-let output (out_name : string) env effect_info ({ defs; _ } as ast : Libsail.Type_check.typed_ast) default_sail_dir
-    single_file noncomputable =
-  let interface_v = if Preprocess.have_symbol "CONCURRENCY_INTERFACE_V2" then 2 else 1 in
+let output (out_name : string) symbols env effect_info ({ defs; _ } as ast : Libsail.Type_check.typed_ast)
+    default_sail_dir single_file noncomputable =
+  let interface_v = if Preprocess.have_symbol "CONCURRENCY_INTERFACE_V2" symbols then 2 else 1 in
   let cg = Callgraph.graph_of_ast ast in
   let files, import_sets, main_import_set =
     if single_file then ([], [], [])
@@ -443,14 +443,15 @@ let output (out_name : string) env effect_info ({ defs; _ } as ast : Libsail.Typ
   let ctx = start_lean_output interface_v out_name files import_sets main_import_set default_sail_dir in
   let out_name_camel = Libsail.Util.to_upper_camel_case out_name in
   let executable =
-    Pretty_print_lean.pp_ast_lean env effect_info ast out_name_camel ctx.types_file ctx.import_files ctx.funcs_file
+    Pretty_print_lean.pp_ast_lean symbols env effect_info ast out_name_camel ctx.types_file ctx.import_files
+      ctx.funcs_file
   in
   create_lake_project ctx (executable && !opt_lean_executable)
 (* Uncomment for debug output of the Sail code after the rewrite passes *)
 (* Pretty_print_sail.output_ast stdout (Type_check.strip_ast ast) *)
 
-let lean_target out_name { default_sail_dir; ctx; ast; effect_info; env; _ } =
+let lean_target out_name { default_sail_dir; symbols; ctx; ast; effect_info; env; _ } =
   let out_name = match out_name with Some f -> f | None -> "out" in
-  output out_name env effect_info ast default_sail_dir !opt_single_file !opt_lean_noncomputable
+  output out_name symbols env effect_info ast default_sail_dir !opt_single_file !opt_lean_noncomputable
 
 let _ = Target.register ~name:"lean" ~options:lean_options ~rewrites:lean_rewrites ~asserts_termination:true lean_target

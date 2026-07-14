@@ -51,9 +51,12 @@ open Type_check
 val opt_interactive : bool ref
 
 (** Each interactive command is passed this struct, containing the abstract syntax tree, effect info and the
-    type-checking environment. Also contains the default Sail directory *)
+    type-checking environment. Also contains the default Sail directory and configuration.
+
+    This type is provided to each sail backend target. See the [Target] module for details. *)
 module State : sig
   type istate = {
+    symbols : Preprocess.symbol_set;
     ctx : Initial_check.ctx;
     ast : Type_check.typed_ast;
     effect_info : Effects.side_effect_info;

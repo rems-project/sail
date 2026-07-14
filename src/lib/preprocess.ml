@@ -46,12 +46,10 @@
 
 open Parse_ast
 
-(* Simple preprocessor features for conditional file loading *)
-module StringSet = Set.Make (String)
+module StringSet = Util.StringSet
 
 (* Adjust a pragma location so it doesn't end after the newline. *)
 let pragma_loc l =
-  let open Lexing in
   Reporting.map_loc_range
     (fun p1 p2 ->
       if p1.pos_lnum + 1 = p2.pos_lnum then (
@@ -62,42 +60,31 @@ let pragma_loc l =
     )
     l
 
+type symbol_set = StringSet.t
+
 let default_symbols =
-  List.fold_left
-    (fun set str -> StringSet.add str set)
-    StringSet.empty
-    [
-      "FEATURE_IMPLICITS";
-      "FEATURE_CONSTANT_TYPES";
-      "FEATURE_BITVECTOR_TYPE";
-      "FEATURE_UNION_BARRIER";
-      "FEATURE_STRICT_VAR";
-      "FEATURE_STRICT_BITVECTOR";
-      "FEATURE_STRICT_EXPONENTIALS";
-    ]
+  ref
+    (List.fold_left
+       (fun set str -> StringSet.add str set)
+       StringSet.empty
+       [
+         "FEATURE_IMPLICITS";
+         "FEATURE_CONSTANT_TYPES";
+         "FEATURE_BITVECTOR_TYPE";
+         "FEATURE_UNION_BARRIER";
+         "FEATURE_STRICT_VAR";
+         "FEATURE_STRICT_BITVECTOR";
+         "FEATURE_STRICT_EXPONENTIALS";
+       ]
+    )
 
-let symbols = ref default_symbols
+let get_default_symbols () = !default_symbols
 
-let have_symbol symbol = StringSet.mem symbol !symbols
+let add_default_symbol str = default_symbols := StringSet.add str !default_symbols
 
-let clear_symbols () = symbols := default_symbols
+let have_default_symbol str = StringSet.mem str !default_symbols
 
-let add_symbol str = symbols := StringSet.add str !symbols
-
-let () =
-  let open Interactive in
-  (register_command ~name:"define_symbol" ~help:"Define preprocessor symbol"
-  @@ let@ symbol = Arg.String "symbol" in
-     unit_action (fun () -> add_symbol symbol)
-  );
-
-  (register_command ~name:"undef_symbol" ~help:"Undefine preprocessor symbol"
-  @@ let@ symbol = Arg.String "symbol" in
-     unit_action (fun () -> symbols := StringSet.remove symbol !symbols)
-  );
-
-  register_command ~name:"symbols" ~help:"Print defined preprocessor symbols"
-  @@ unit_action (fun () -> List.iter print_endline (StringSet.elements !symbols))
+let have_symbol str set = StringSet.mem str set
 
 let cond_pragma l defs =
   let depth = ref 0 in
@@ -176,8 +163,9 @@ let get_argv_position ~plus =
 let target_set_contains (target_set : string) (target : string) : bool =
   String.split_on_char ' ' target_set |> List.mem target
 
-let preprocess dir target opts =
+let preprocess ~default_sail_dir ~target_name ~options ~symbols defs =
   let module P = Parse_ast in
+  let symbols = ref symbols in
   let rec aux includes acc = function
     | [] -> List.rev acc
     | DEF_aux (DEF_pragma ("define", Pragma_line (symbol, _)), _) :: defs ->
@@ -210,7 +198,7 @@ let preprocess dir target opts =
               raise
                 (Reporting.err_general l ("Anonymous argument '" ^ file ^ "' cannot be passed via $option directive"))
             in
-            Arg.parse_argv ~current (Array.of_list ("sail" :: args)) opts file_arg ""
+            Arg.parse_argv ~current (Array.of_list ("sail" :: args)) options file_arg ""
           with
         | Arg.Help msg -> raise (Reporting.err_general l "-help flag passed to $option directive")
         | Arg.Bad msg -> Reporting.warn "Invalid option" l ("Invalid flag passed to $option directive" ^ first_line msg)
@@ -227,7 +215,7 @@ let preprocess dir target opts =
         else aux includes acc (else_defs @ defs)
     | DEF_aux (DEF_pragma ("iftarget", Pragma_line (t, _)), l) :: defs -> (
         let then_defs, else_defs, defs = cond_pragma l defs in
-        match target with
+        match target_name with
         | Some t' when target_set_contains t t' -> aux includes acc (then_defs @ defs)
         | _ -> aux includes acc (else_defs @ defs)
       )
@@ -256,7 +244,7 @@ let preprocess dir target opts =
         )
         else if file.[0] = '<' && file.[len - 1] = '>' then (
           let lib_file = String.sub file 1 (len - 2) in
-          let sail_dir = Reporting.get_sail_dir dir in
+          let sail_dir = Reporting.get_sail_dir default_sail_dir in
           let file = Filename.concat sail_dir (Filename.concat "lib" lib_file) in
           let include_defs =
             Initial_check.parse_file ~loc:l (Sail_file.Path.actual file)
@@ -300,4 +288,5 @@ let preprocess dir target opts =
       )
     | def :: defs -> aux includes (def :: acc) defs
   in
-  aux [] []
+  let defs = aux [] [] defs in
+  (defs, !symbols)

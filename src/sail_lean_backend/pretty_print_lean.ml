@@ -1548,8 +1548,8 @@ let doc_instantiations_v2 ctx ast =
   mem_acc_is_atomic_rmw : mem_acc -> Bool
 *)
 
-let doc_instantiations ctx env ast =
-  if Preprocess.have_symbol "CONCURRENCY_INTERFACE_V2" then doc_instantiations_v2 ctx ast
+let doc_instantiations symbols ctx env ast =
+  if Preprocess.have_symbol "CONCURRENCY_INTERFACE_V2" symbols then doc_instantiations_v2 ctx ast
   else doc_instantiations_v1 ctx env
 
 let main_function_stub effect_info has_registers =
@@ -1618,8 +1618,8 @@ let collect_import_files defs base =
   let res = collect_import_files_aux defs [base] None [] in
   if res = [] then [base] else res
 
-let pp_ast_lean (env : Type_check.env) effect_info ({ defs; _ } as ast : Libsail.Type_check.typed_ast) out_name_camel
-    types_file imp_funcs_files funcs_file =
+let pp_ast_lean symbols (env : Type_check.env) effect_info ({ defs; _ } as ast : Libsail.Type_check.typed_ast)
+    out_name_camel types_file imp_funcs_files funcs_file =
   let regs = State.find_registers defs in
   let fun_args = populate_fun_args defs in
   let global = { effect_info; fun_args; kid_id_renames = KBindings.empty; kid_id_renames_rev = Bindings.empty } in
@@ -1630,7 +1630,7 @@ let pp_ast_lean (env : Type_check.env) effect_info ({ defs; _ } as ast : Libsail
   let instantiation_deps =
     match instantiation_deps with [x] -> x | _ -> failwith "expected a single block of instantiation defs"
   in
-  let instantiations = doc_instantiations ctx env defs in
+  let instantiations = doc_instantiations symbols ctx env defs in
   let has_registers = List.length regs > 0 in
   let register_refs =
     if has_registers then doc_reg_info env global regs

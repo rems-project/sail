@@ -4717,8 +4717,8 @@ let calculate_type_rewrite env =
   IdSet.fold (fun id m -> Bindings.add id (append_id id "_typ") m) clashes Bindings.empty
 
 let pp_ast_coq library_style (types_file, types_modules) (interface_file, interface_modules) (defs_file, defs_modules)
-    type_defs_module opt_coq_isla ctx effect_info type_env ({ defs; _ } as ast) concurrency_monad_params top_line
-    suppress_MR_M =
+    type_defs_module opt_coq_isla symbols ctx effect_info type_env ({ defs; _ } as ast) concurrency_monad_params
+    top_line suppress_MR_M =
   try
     let is_typ_def = function DEF_aux (DEF_type _, _) -> true | _ -> false in
     let exc_typ = find_exc_typ defs in
@@ -4736,7 +4736,7 @@ let pp_ast_coq library_style (types_file, types_modules) (interface_file, interf
       | BBV -> IdSet.empty
     in
     let interface_defs =
-      if Preprocess.have_symbol "CONCURRENCY_INTERFACE_V2" then
+      if Preprocess.have_symbol "CONCURRENCY_INTERFACE_V2" symbols then
         let open Monad_params in
         let type_substs, id_substs = find_instantiations ast.defs in
         let pp_typish name default =
@@ -5045,8 +5045,8 @@ let pp_ast_coq library_style (types_file, types_modules) (interface_file, interf
                (fun lib -> separate space [string "Require Import"; string lib] ^^ dot)
                defs_modules;
              hardline;
-             ( if Preprocess.have_symbol "CONCURRENCY_INTERFACE_V2" || Option.is_some concurrency_monad_params then
-                 string "Import Defs." ^^ hardline
+             ( if Preprocess.have_symbol "CONCURRENCY_INTERFACE_V2" symbols || Option.is_some concurrency_monad_params
+               then string "Import Defs." ^^ hardline
                else empty
              );
              ( if !opt_coq_record_update then
