@@ -357,16 +357,6 @@ module AbsValue : SAIL_VALUE = struct
         ("gt", primop_gt);
         ("lteq", primop_lteq);
         ("gteq", primop_gteq);
-        (* The synthesized for / loop desugarings (see [desugar_for])
-           call [gt_int] / [lt_int] / [add_int] / [sub_int] by their
-           Sail names rather than their extern aliases ("gt" / "lt" /
-           "add_int" / "sub_int"). Bind them here so the lookup also
-           works in tiny modules that don't [$include
-           <prelude.sail>]. *)
-        ("gt_int", primop_gt);
-        ("lt_int", primop_lt);
-        ("gteq_int", primop_gteq);
-        ("lteq_int", primop_lteq);
         ( "sail_zero_extend",
           lift (TransferBitvectorInterval.Ops.zero_extend widths_cap) (AbsBV @-> AbsInt @-> Ret AbsBV)
         );
