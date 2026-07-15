@@ -106,7 +106,7 @@
  (sites libsail))
 
 ; The parallel implementation of map uses effect handlers and matching
-; syntax, which is on,y available from OCaml 5.3.0 onwards. On older
+; syntax, which is only available from OCaml 5.3.0 onwards. On older
 ; compilers fall back to a sequential implementation.
 
 (rule
