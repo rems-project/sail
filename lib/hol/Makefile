@@ -53,7 +53,7 @@ $(LEMLINKPOST): $(addprefix ../../src/gen_lib/,$(LEMLINKPOST))
 $(SCRIPTS): $(LEMSRC)
 	set -e; \
 	for f in $(LEMSRC); do \
-	  lem -hol -outdir . -auxiliary_level none -lib ../../src/lem_interp -lib . $$f; \
+	  lem -hol -outdir . -auxiliary_level none -lib . $$f; \
 	done
 
 $(THYS) sail-heap: $(SCRIPTS)
