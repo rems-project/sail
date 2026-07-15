@@ -397,6 +397,8 @@ module AbsValue : SAIL_VALUE = struct
         ("uint", lift TransferBitvectorInterval.Ops.unsigned (AbsBV @-> Ret AbsInt));
         ("sint", lift TransferBitvectorInterval.Ops.signed (AbsBV @-> Ret AbsInt));
         ("pow2", lift Sail_lib.pow2 (Int @-> Ret Int));
+        ("shl_int", lift (fun i n -> Sail_lib.shl_int (i, n)) (Int @-> Int @-> Ret Int));
+        ("shr_int", lift (fun i n -> Sail_lib.shr_int (i, n)) (Int @-> Int @-> Ret Int));
         ("concat_str", lift ( ^ ) (String @-> String @-> Ret String));
         ("string_of_bits", lift Sail_lib.string_of_bits (BV @-> Ret String));
         ("eq_string", lift ( = ) (String @-> String @-> Ret Bool));
