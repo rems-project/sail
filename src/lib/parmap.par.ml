@@ -150,6 +150,6 @@ let toplevel_handler f =
   let rec run action =
     match action () with
     | effect Open_process_full (cmd, env, to_stdin), cont -> run (fun () -> continue cont (run_process cmd env to_stdin))
-    | () -> ()
+    | x -> x
   in
   run f

@@ -71,4 +71,4 @@ val recommended_parallelism : unit -> int
 
 val map : parallelism:int -> ('a -> 'b) -> 'a list -> 'b list
 
-val toplevel_handler : (unit -> unit) -> unit
+val toplevel_handler : (unit -> 'a) -> 'a

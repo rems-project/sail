@@ -95,6 +95,8 @@ let handle_request oc (req : Jsonrpc.Request.t) =
               Ok (Lsp.Client_request.yojson_of_result r ())
           | Lsp.Client_request.SemanticTokensFull params ->
               Ok (Lsp.Client_request.yojson_of_result r (Handler.on_semantic_tokens_full params))
+          | Lsp.Client_request.TextDocumentHover params ->
+              Ok (Lsp.Client_request.yojson_of_result r (Handler.on_hover params))
           | _ ->
               Error (Response.Error.make ~code:Response.Error.Code.MethodNotFound ~message:"method not implemented" ())
         in
@@ -103,7 +105,7 @@ let handle_request oc (req : Jsonrpc.Request.t) =
   in
   send oc (Packet.Response resp)
 
-let rec run () =
+let rec run ~default_sail_dir () =
   match LspIo.read stdin with
   | None -> ()
   | Some packet ->
@@ -120,11 +122,11 @@ let rec run () =
                     let jsonrpc_notif = Lsp.Server_notification.to_jsonrpc server_notif in
                     send stdout (Jsonrpc.Packet.Notification jsonrpc_notif)
                   )
-                  (Handler.on_notification notif)
+                  (Handler.on_notification ~default_sail_dir notif)
               with exn -> log_error "notification handler raised: %s" (Printexc.to_string exn)
             )
           | Error msg -> log_error "failed to decode notification: %s" msg
         )
       | _ -> ()
       );
-      run ()
+      run ~default_sail_dir ()

@@ -5,4 +5,4 @@
    single run covers the whole library. To test a new file, add a
    [test_<file>.ml] module and append its [suites] below. *)
 
-let () = Alcotest.run "libsail" (List.concat [Test_sail_file.suites])
+let () = Alcotest.run "libsail" (List.concat [Test_ast_util.suites; Test_sail_file.suites])

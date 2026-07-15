@@ -383,12 +383,9 @@ let load_modules ?target default_sail_dir options env proj root_mod_ids =
   let ast = filter_modules proj is_included ast in
   finalize_ast asserts_termination symbols ctx env ast
 
-let load_files ?(no_core = false) ?target ~default_sail_dir options env files =
-  let target_name = Option.map Target.name target in
+let load_paths ?target ~default_sail_dir options env files =
   let asserts_termination = Option.fold ~none:false ~some:Target.asserts_termination target in
-
-  let files = List.map Sail_file.Path.actual files in
-  let files = if no_core then files else Corelib_sail.path :: files in
+  let target_name = Option.map Target.name target in
 
   let parsed_files = List.map (fun filename -> parse_file ~target_name ~default_sail_dir ~options filename) files in
 
@@ -411,6 +408,11 @@ let load_files ?(no_core = false) ?target ~default_sail_dir options env files =
   Profile.finish "type checking" t;
 
   finalize_ast asserts_termination symbols ctx env (concat_ast checked)
+
+let load_files ?(no_core = false) ?target ~default_sail_dir options env files =
+  let files = List.map Sail_file.Path.actual files in
+  let files = if no_core then files else Corelib_sail.path :: files in
+  load_paths ?target ~default_sail_dir options env files
 
 let load_project ?(no_core = false) ?target ?modules ?(options = []) ?(variables = ref StringMap.empty)
     ?(just_parse = false) ~default_sail_dir project_files =

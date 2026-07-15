@@ -50,4 +50,6 @@ val on_shutdown : unit -> unit
 
 val on_semantic_tokens_full : Lsp.Types.SemanticTokensParams.t -> Lsp.Types.SemanticTokens.t option
 
-val on_notification : Lsp.Client_notification.t -> Lsp.Server_notification.t list
+val on_hover : Lsp.Types.HoverParams.t -> Lsp.Types.Hover.t option
+
+val on_notification : default_sail_dir:string -> Lsp.Client_notification.t -> Lsp.Server_notification.t list

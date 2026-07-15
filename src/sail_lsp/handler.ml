@@ -76,13 +76,21 @@ let find_sail_project file =
 
 let state : Server_state.state option ref = ref None
 
-(* Convert a Sail source position to its zero-based, UTF-16 editor coordinates.
-   [Sail_file.editor_position] resolves the file from the position's path, so we
-   re-attach the handle's path to the (path-less) [Lexing] position first. *)
-let editor_position_of (p : Sail_file.position) =
-  let { Sail_file.Position.pos_fname = handle; _ } = p in
-  Sail_file.editor_position
-    { (Sail_file.Position.to_lexing p) with Lexing.pos_fname = Sail_file.Path.to_string (Sail_file.to_path handle) }
+module HoverScanner = Ast_util.Scanner (struct
+  type t = Sail_file.position
+
+  let subloc p l =
+    let open Sail_file.Position in
+    match Reporting.simp_loc l with
+    | None -> false
+    | Some (p1, p2) ->
+        let same_file = Sail_file.handle_compare p1.pos_fname p2.pos_fname = 0 in
+        same_file
+        &&
+        let in_line_range = p1.pos_lnum <= p.pos_lnum && p.pos_lnum <= p2.pos_lnum in
+        let in_char_range = p1.pos_cnum <= p.pos_cnum && p.pos_cnum <= p2.pos_cnum in
+        in_line_range && in_char_range
+end)
 
 (* Turn a [Reporting.error] into an LSP diagnostic. Every error carries a message
    and a location; when the location can't be resolved to an editor range (e.g. an
@@ -99,7 +107,9 @@ let error_diagnostic (err : Reporting.error) =
   let range =
     match
       Option.bind (Reporting.simp_loc loc) (fun (p1, p2) ->
-          match (editor_position_of p1, editor_position_of p2) with Some s, Some e -> Some (s, e) | _ -> None
+          match (Sail_file.editor_position p1, Sail_file.editor_position p2) with
+          | Some s, Some e -> Some (s, e)
+          | _ -> None
       )
     with
     | Some (s, e) ->
@@ -140,7 +150,7 @@ let on_initialize _params =
   in
   let semantic_tokens = Lsp.Types.SemanticTokensOptions.create ~legend:Highlight.legend ~full:(`Bool true) () in
   let capabilities =
-    Lsp.Types.ServerCapabilities.create ~textDocumentSync:(`TextDocumentSyncOptions sync)
+    Lsp.Types.ServerCapabilities.create ~hoverProvider:(`Bool true) ~textDocumentSync:(`TextDocumentSyncOptions sync)
       ~semanticTokensProvider:(`SemanticTokensOptions semantic_tokens) ()
   in
   Lsp.Types.InitializeResult.create ~capabilities ~serverInfo:server_info ()
@@ -156,13 +166,24 @@ let on_semantic_tokens_full (params : Lsp.Types.SemanticTokensParams.t) =
       None
   | Some handle -> Some (Highlight.compute handle)
 
-let refresh_project file =
+let on_hover ({ position = { line; character }; textDocument = { uri } } : Lsp.Types.HoverParams.t) =
+  let open Lsp.Types in
+  let open Util.Option_monad in
+  let file = DocumentUri.to_path uri in
+  let* handle = Hashtbl.find_opt file_to_handle file in
+  let* p = Sail_file.lexing_position handle { line; character } in
+  let* ast = Option.map Server_state.force_last_ast !state in
+  let* l, tannot = HoverScanner.find_annot_ast p ast in
+  let* _, typ = Type_check.destruct_tannot tannot in
+  log "%s" (Reporting.loc_to_string l);
+  Some (Hover.create ~contents:(`MarkedString { value = Ast_util.string_of_typ typ; language = None }) ())
+
+let refresh_project ~default_sail_dir file =
   match find_sail_project file with
-  | Some project_file ->
-      state := Some (Server_state.load_project ~default_sail_dir:"/Users/alasdair/sail" [project_file])
+  | Some project_file -> state := Some (Server_state.load_project ~default_sail_dir [project_file])
   | None -> state := None
 
-let on_notification notif =
+let on_notification ~default_sail_dir notif =
   let open Lsp.Types in
   match notif with
   | Lsp.Client_notification.Exit -> exit 0
@@ -173,9 +194,11 @@ let on_notification notif =
       let handle = Sail_file.editor_take_file ~contents:text file in
       register_handle file handle;
       ( match !state with
-      | None -> refresh_project file
+      | None -> refresh_project ~default_sail_dir file
       | Some s -> (
-          match Server_state.invalidate s handle with Some s' -> state := Some s' | None -> refresh_project file
+          match Server_state.invalidate s handle with
+          | Some s' -> state := Some s'
+          | None -> refresh_project ~default_sail_dir file
         )
       );
       [diagnostics_for_handle file handle]
