@@ -47,7 +47,7 @@ def test():
                 step('mkdir -p _build_{}'.format(filename))
                 step('\'{}\' --lem --lem-mwords --lem-lib Test_extra --lem-output-dir _build_{} -o out {}'.format(sail, filename, arguments))
                 os.chdir('_build_{}'.format(filename))
-                step('lem -ocaml -lib {}/src/lem_interp {} -outdir . ../test_extra.lem out_types.lem out.lem'.format(sail_dir, libpaths))
+                step('lem -ocaml {} -outdir . ../test_extra.lem out_types.lem out.lem'.format(libpaths))
                 step('if grep -q initial_regstate out.lem; then cp ../test_with_state.ml test.ml; else cp ../test.ml test.ml; fi')
                 step('ocamlfind ocamlc -linkpkg -package zarith -package lem {} test_extra.ml out_types.ml out.ml test.ml'.format(libml))
                 os.chdir('..')
