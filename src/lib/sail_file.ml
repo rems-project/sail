@@ -331,17 +331,17 @@ let revert_position edit size p =
   else None
 
 let editor_position p =
-  let open Lexing in
-  let path = Path.canonicalize (Path.Actual p.pos_fname) in
-  match Hashtbl.find_opt opened path with
-  | Some handle ->
-      let info = Hashtbl.find files handle in
+  let open Position in
+  let handle = p.pos_fname in
+  match Hashtbl.find_opt files handle with
+  | None -> None
+  | Some info ->
       (* Lexing/AST lines are 1-based; editor lines are 0-based. *)
       let line = p.pos_lnum - 1 in
       let byte_character = p.pos_cnum - p.pos_bol in
       (* The Lexing position is a byte offset into the base contents; editor
-         positions are UTF-16 code units, so convert against the base line
-         before replaying the pending edits (which are in editor coordinates). *)
+     positions are UTF-16 code units, so convert against the base line
+     before replaying the pending edits (which are in editor coordinates). *)
       let character =
         if line >= 0 && line < Array.length info.contents then byte_offset_to_utf16 info.contents.(line) byte_character
         else byte_character
@@ -350,10 +350,9 @@ let editor_position p =
         (fun edit size pos_opt -> match pos_opt with None -> None | Some p -> update_position edit size p)
         handle
         (Some { line; character })
-  | None -> None
 
 let lexing_position handle p =
-  let open Lexing in
+  let open Position in
   match
     fold_edits_last_to_first
       (fun edit size pos_opt -> Option.bind pos_opt (fun p -> revert_position edit size p))
@@ -374,13 +373,7 @@ let lexing_position handle p =
         else p.character
       in
       (* Editor lines are 0-based; Lexing/AST lines are 1-based. *)
-      Some
-        {
-          pos_fname = Path.to_string info.given_path;
-          pos_lnum = p.line + 1;
-          pos_bol = !bol;
-          pos_cnum = !bol + character;
-        }
+      Some { pos_fname = handle; pos_lnum = p.line + 1; pos_bol = !bol; pos_cnum = !bol + character }
 
 (* Apply a single text edit to a line array, returning the updated array. The
    edit's character offsets are UTF-16 code units, so convert them to byte

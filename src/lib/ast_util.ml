@@ -2113,6 +2113,15 @@ struct
   let option_chain opt1 opt2 = match opt1 with None -> opt2 | _ -> opt1
 
   let rec find_annot_exp sl (E_aux (aux, (l, annot))) =
+    let l =
+      (* E_let and E_var can appear as [let _ = _;] when in blocks, in which case the location
+         does not cover the body. Extend it here if possible so it does. *)
+      match aux with
+      | E_let (_, _, body) | E_var (_, _, body) -> (
+          match Reporting.end_pos (exp_loc body) with Some p -> Reporting.extend_loc p l | None -> l
+        )
+      | _ -> l
+    in
     if not (subloc sl l) then None
     else (
       let result =

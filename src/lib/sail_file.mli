@@ -180,11 +180,11 @@ val edit_file : handle -> text_edit -> unit
 
 (** Take a Sail AST position, and return the where it will visibly appear in the user's editor. Returns None if the
     position no longer exists in the editor buffer, for example, the user may have deleted the position. *)
-val editor_position : Lexing.position -> editor_position option
+val editor_position : position -> editor_position option
 
 (** Take a cursor position in the editor, and map it to a position in the Sail AST. Returns None if the cursor position
     is within a pending edit that has not yet been processed by Sail. *)
-val lexing_position : handle -> editor_position -> Lexing.position option
+val lexing_position : handle -> editor_position -> position option
 
 (** Bake the queued edits (see [edit_file]) into the file's contents, bringing them in sync with the editor, and clear
     the queue. This is where the UTF-16 code-unit offsets carried by edits are resolved to byte offsets. *)

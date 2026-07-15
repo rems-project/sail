@@ -123,6 +123,14 @@ val register_file_handler : extension:string -> (module FILE_HANDLER) -> unit
 
 val get_handler : path:Sail_file.path -> string -> (module FILE_HANDLER)
 
+val load_paths :
+  ?target:Target.target ->
+  default_sail_dir:string ->
+  (Arg.key * Arg.spec * Arg.doc) list ->
+  Type_check.Env.t ->
+  Sail_file.path list ->
+  Preprocess.symbol_set * Initial_check.ctx * Type_check.typed_ast * Type_check.Env.t * Effects.side_effect_info
+
 val load_files :
   ?no_core:bool ->
   ?target:Target.target ->

@@ -8,19 +8,7 @@
    The [suites] value at the bottom is collected by the [test_libsail] runner. *)
 
 open Libsail
-
-let counter = ref 0
-
-(* A fresh file handle initialised with [contents]. Each handle gets a unique
-   virtual name so tests do not interfere with one another. *)
-let handle_of contents =
-  incr counter;
-  let _, handle = Sail_file.add_virtual_file ~contents (Printf.sprintf "sail_file_test_%d.sail" !counter) in
-  handle
-
-let pos line character = { Sail_file.line; character }
-
-let edit start_ end_ text = { Sail_file.range = (start_, end_); text }
+open Helpers
 
 (* -- Sail_file.contents round-trips the initial file ---------------------- *)
 
@@ -50,7 +38,7 @@ let contents_tests =
 (* Byte offset within its line of the editor position [(line, utf16)]. *)
 let byte_offset handle line utf16 =
   match Sail_file.lexing_position handle (pos line utf16) with
-  | Some p -> p.Lexing.pos_cnum - p.Lexing.pos_bol
+  | Some p -> p.pos_cnum - p.pos_bol
   | None -> Alcotest.failf "lexing_position returned None for (%d, %d)" line utf16
 
 let lexing_position_tests =
