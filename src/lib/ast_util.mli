@@ -546,13 +546,25 @@ val unknown_to : l -> l -> l
 (** Try to find the annotation closest to the provided location (which can be in any format, as long as we can tell if
     it is smaller than any other location). Note that this function makes no guarantees about finding the closest
     annotation or even finding an annotation at all. This is used by the LSP to provide type-at-cursor functionality and
-    we don't mind if it's a bit fuzzy in that context. *)
+    we don't mind if it's a bit fuzzy in that context.
+
+    There is also the [category] type, which allows returning some information about the expression we land on as the
+    result of the search. *)
 module Scanner (Loc : sig
   type t
 
+  type category
+
   val subloc : t -> Parse_ast.l -> bool
+
+  val categorize_exp : 'a exp_aux -> category option
+
+  val categorize_lexp : 'a lexp_aux -> category option
+
+  val categorize_pat : 'a pat_aux -> category option
 end) : sig
-  val find_annot_ast : Loc.t -> ('a, 'b) ast -> (Parse_ast.l * 'a) option
+  (** Returns the closest node's location, annotation, and category (if applicable). *)
+  val find_annot_ast : Loc.t -> ('a, 'b) ast -> (Parse_ast.l * 'a * Loc.category option) option
 end
 
 (** {1 Substitutions}

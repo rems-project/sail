@@ -76,8 +76,14 @@ let find_sail_project file =
 
 let state : Server_state.state option ref = ref None
 
-module HoverScanner = Ast_util.Scanner (struct
+type scan_id = Scan_id of Ast.id | Scan_app of Ast.id
+
+module CursorScanner = Ast_util.Scanner (struct
+  open Ast
+
   type t = Sail_file.position
+
+  type category = scan_id
 
   let subloc p l =
     let open Sail_file.Position in
@@ -90,6 +96,15 @@ module HoverScanner = Ast_util.Scanner (struct
         let in_line_range = p1.pos_lnum <= p.pos_lnum && p.pos_lnum <= p2.pos_lnum in
         let in_char_range = p1.pos_cnum <= p.pos_cnum && p.pos_cnum <= p2.pos_cnum in
         in_line_range && in_char_range
+
+  let categorize_exp = function
+    | E_id id | E_ref id -> Some (Scan_id id)
+    | E_app (id, _) -> Some (Scan_app id)
+    | _ -> None
+
+  let categorize_lexp = function LE_id id -> Some (Scan_id id) | _ -> None
+
+  let categorize_pat = function P_id id -> Some (Scan_id id) | _ -> None
 end)
 
 (* Turn a [Reporting.error] into an LSP diagnostic. Every error carries a message
@@ -151,7 +166,8 @@ let on_initialize _params =
   let semantic_tokens = Lsp.Types.SemanticTokensOptions.create ~legend:Highlight.legend ~full:(`Bool true) () in
   let capabilities =
     Lsp.Types.ServerCapabilities.create ~hoverProvider:(`Bool true) ~textDocumentSync:(`TextDocumentSyncOptions sync)
-      ~semanticTokensProvider:(`SemanticTokensOptions semantic_tokens) ()
+      ~semanticTokensProvider:(`SemanticTokensOptions semantic_tokens) ~foldingRangeProvider:(`Bool true)
+      ~definitionProvider:(`Bool true) ()
   in
   Lsp.Types.InitializeResult.create ~capabilities ~serverInfo:server_info ()
 
@@ -166,6 +182,15 @@ let on_semantic_tokens_full (params : Lsp.Types.SemanticTokensParams.t) =
       None
   | Some handle -> Some (Highlight.compute handle)
 
+let on_folding_range (params : Lsp.Types.FoldingRangeParams.t) =
+  let file = Lsp.Types.DocumentUri.to_path params.textDocument.uri in
+  log "foldingRange: %s" file;
+  match Hashtbl.find_opt file_to_handle file with
+  | None ->
+      log "foldingRange: no handle for %s" file;
+      None
+  | Some handle -> Some (Folding.compute handle)
+
 let on_hover ({ position = { line; character }; textDocument = { uri } } : Lsp.Types.HoverParams.t) =
   let open Lsp.Types in
   let open Util.Option_monad in
@@ -173,10 +198,41 @@ let on_hover ({ position = { line; character }; textDocument = { uri } } : Lsp.T
   let* handle = Hashtbl.find_opt file_to_handle file in
   let* p = Sail_file.lexing_position handle { line; character } in
   let* ast = Option.map Server_state.force_last_ast !state in
-  let* l, tannot = HoverScanner.find_annot_ast p ast in
+  let* l, tannot, _ = CursorScanner.find_annot_ast p ast in
   let* _, typ = Type_check.destruct_tannot tannot in
   log "%s" (Reporting.loc_to_string l);
   Some (Hover.create ~contents:(`MarkedString { value = Ast_util.string_of_typ typ; language = None }) ())
+
+(* Turn a Sail source location into an LSP location (file plus range), or [None]
+   when it can't be resolved to an editor range (e.g. a generated location). *)
+let lsp_location_of_loc loc =
+  let open Util.Option_monad in
+  let* p1, p2 = Reporting.simp_loc loc in
+  let* s = Sail_file.editor_position p1 in
+  let* e = Sail_file.editor_position p2 in
+  let file = Sail_file.Path.to_string (Sail_file.to_path p1.Sail_file.Position.pos_fname) in
+  let range =
+    Lsp.Types.Range.create
+      ~start:(Lsp.Types.Position.create ~line:s.Sail_file.line ~character:s.Sail_file.character)
+      ~end_:(Lsp.Types.Position.create ~line:e.Sail_file.line ~character:e.Sail_file.character)
+  in
+  Some (Lsp.Types.Location.create ~uri:(Lsp.Types.DocumentUri.of_path file) ~range)
+
+(* Go-to-definition: from a value or function name under the cursor, jump to the point where it is defined. *)
+let on_definition ({ position = { line; character }; textDocument = { uri } } : Lsp.Types.DefinitionParams.t) =
+  let open Util.Option_monad in
+  let file = Lsp.Types.DocumentUri.to_path uri in
+  log "declaration: %s" file;
+  let* handle = Hashtbl.find_opt file_to_handle file in
+  let* p = Sail_file.lexing_position handle { line; character } in
+  let* ast = Option.map Server_state.force_last_ast !state in
+  let* _, tannot, id_cat = CursorScanner.find_annot_ast p ast in
+  match id_cat with
+  | Some (Scan_app id) | Some (Scan_id id) ->
+      let* _, l = Type_check.Env.get_global_binding_loc (Type_check.env_of_tannot tannot) id in
+      let* loc = lsp_location_of_loc l in
+      Some (`Location [loc])
+  | _ -> None
 
 let refresh_project ~default_sail_dir file =
   match find_sail_project file with

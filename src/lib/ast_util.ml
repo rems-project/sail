@@ -2099,10 +2099,20 @@ let subst_kids_nexp, subst_kids_nc, subst_kids_typ, subst_kids_typ_arg =
 module Scanner (Loc : sig
   type t
 
+  type category
+
   val subloc : t -> Parse_ast.l -> bool
+
+  val categorize_exp : 'a exp_aux -> category option
+
+  val categorize_lexp : 'a lexp_aux -> category option
+
+  val categorize_pat : 'a pat_aux -> category option
 end) =
 struct
   let subloc = Loc.subloc
+
+  type scan_id = App of id | Id of id | Other
 
   let rec option_mapm f = function
     | [] -> None
@@ -2136,9 +2146,11 @@ struct
         | E_match (exp, cases) | E_try (exp, cases) ->
             option_chain (find_annot_exp sl exp) (option_mapm (find_annot_pexp sl) cases)
         | E_return exp | E_typ (_, exp) -> find_annot_exp sl exp
+        | E_for (_, exp_from, exp_to, exp_by, _, body) ->
+            option_mapm (find_annot_exp sl) [exp_from; exp_to; exp_by; body]
         | _ -> None
       in
-      match result with None -> Some (l, annot) | _ -> result
+      match result with None -> Some (l, annot, Loc.categorize_exp aux) | _ -> result
     )
 
   and find_annot_lexp sl (LE_aux (aux, (l, annot))) =
@@ -2152,7 +2164,7 @@ struct
         | LE_tuple lexps -> option_mapm (find_annot_lexp sl) lexps
         | _ -> None
       in
-      match result with None -> Some (l, annot) | _ -> result
+      match result with None -> Some (l, annot, Loc.categorize_lexp aux) | _ -> result
     )
 
   and find_annot_pat sl (P_aux (aux, (l, annot))) =
@@ -2163,7 +2175,7 @@ struct
         | P_vector_concat pats | P_tuple pats | P_app (_, pats) -> option_mapm (find_annot_pat sl) pats
         | _ -> None
       in
-      match result with None -> Some (l, annot) | _ -> result
+      match result with None -> Some (l, annot, Loc.categorize_pat aux) | _ -> result
     )
 
   and find_annot_pexp sl (Pat_aux (aux, (l, _))) =
@@ -2177,17 +2189,17 @@ struct
   let find_annot_funcl sl (FCL_aux (FCL_funcl (_, pexp), (def_annot, annot))) =
     let l = def_annot.loc in
     if not (subloc sl l) then None
-    else (match find_annot_pexp sl pexp with None -> Some (l, annot) | result -> result)
+    else (match find_annot_pexp sl pexp with None -> Some (l, annot, None) | result -> result)
 
   let find_annot_fundef sl (FD_aux (FD_function (_, _, funcls), (l, annot))) =
     if not (subloc sl l) then None
-    else (match option_mapm (find_annot_funcl sl) funcls with None -> Some (l, annot) | result -> result)
+    else (match option_mapm (find_annot_funcl sl) funcls with None -> Some (l, annot, None) | result -> result)
 
   let find_annot_scattered sl (SD_aux (aux, (l, annot))) =
     if not (subloc sl l) then None
     else (
       let result = match aux with SD_funcl fcl -> find_annot_funcl sl fcl | _ -> None in
-      match result with None -> Some (l, annot) | _ -> result
+      match result with None -> Some (l, annot, None) | _ -> result
     )
 
   let rec find_annot_defs sl = function

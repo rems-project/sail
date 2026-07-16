@@ -95,8 +95,12 @@ let handle_request oc (req : Jsonrpc.Request.t) =
               Ok (Lsp.Client_request.yojson_of_result r ())
           | Lsp.Client_request.SemanticTokensFull params ->
               Ok (Lsp.Client_request.yojson_of_result r (Handler.on_semantic_tokens_full params))
+          | Lsp.Client_request.TextDocumentFoldingRange params ->
+              Ok (Lsp.Client_request.yojson_of_result r (Handler.on_folding_range params))
           | Lsp.Client_request.TextDocumentHover params ->
               Ok (Lsp.Client_request.yojson_of_result r (Handler.on_hover params))
+          | Lsp.Client_request.TextDocumentDefinition params ->
+              Ok (Lsp.Client_request.yojson_of_result r (Handler.on_definition params))
           | _ ->
               Error (Response.Error.make ~code:Response.Error.Code.MethodNotFound ~message:"method not implemented" ())
         in

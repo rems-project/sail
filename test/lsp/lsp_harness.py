@@ -224,6 +224,15 @@ class LspClient:
     def semantic_tokens_full(self, uri):
         return self.request("textDocument/semanticTokens/full", {"textDocument": {"uri": uri}})
 
+    def folding_range(self, uri):
+        return self.request("textDocument/foldingRange", {"textDocument": {"uri": uri}})
+
+    def definition(self, uri, line, character):
+        return self.request(
+            "textDocument/definition",
+            {"textDocument": {"uri": uri}, "position": {"line": line, "character": character}},
+        )
+
     def shutdown(self):
         return self.request("shutdown")
 

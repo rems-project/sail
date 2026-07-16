@@ -5,7 +5,8 @@ sail_lsp
 
 This is a minimal (and highly WIP) LSP server for Sail.
 
-Currently supports syntax highlighting and reporting type-error
+Currently supports syntax highlighting, code folding, hover
+type-at-cursor, go-to-definition, and reporting type-error
 diagnostics as you type.
 
 No editor modes are currently provided, but it is particularly easy to
