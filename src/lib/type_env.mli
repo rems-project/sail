@@ -103,6 +103,8 @@ val get_default_order : t -> order
 val get_default_order_opt : t -> order option
 val set_default_order : order -> t -> t
 
+val get_global_binding_loc : t -> id -> (string * l) option
+
 (** Add a function type (val spec) to the global typing environment.
 
     If already_bound = true, we can add a val_spec for something that is already bound as a global identifier in the

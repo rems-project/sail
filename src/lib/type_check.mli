@@ -84,6 +84,8 @@ module Env : sig
   val get_current_module : t -> Project.mod_id
   val get_modules : t -> Project.project_structure option
 
+  val get_global_binding_loc : t -> id -> (string * l) option
+
   (** Note: Most get_ functions assume the identifiers exist, and throw type errors if they don't. *)
 
   (** Get the quantifier and type for a function identifier, freshening type variables. *)

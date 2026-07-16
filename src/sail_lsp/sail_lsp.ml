@@ -44,12 +44,7 @@
 (*  SPDX-License-Identifier: BSD-2-Clause                                   *)
 (****************************************************************************)
 
-let default_sail_dir =
-  match Manifest.dir with
-  | Some opam_dir -> opam_dir
-  | None ->
-      let open Filename in
-      concat (concat (concat (dirname Sys.executable_name) parent_dir_name) "share") "sail"
+open Libsail
 
 let speclist = [("--stdio", Arg.Unit (fun () -> ()), " Use stdin/stdout for IO (default).")]
 
@@ -57,7 +52,14 @@ let anon_fun _ = ()
 
 let main () =
   Arg.parse_argv Sys.argv speclist anon_fun "sail_lsp [--stdio]";
-  Server.run ~default_sail_dir ()
+
+  Util.opt_colors := false;
+
+  match Server_config.get_config () with
+  | Ok config -> Server.run ~default_sail_dir:config.default_sail_dir ()
+  | Error msg ->
+      prerr_endline msg;
+      exit 1
 
 let () =
   try Libsail.Parmap.toplevel_handler main with

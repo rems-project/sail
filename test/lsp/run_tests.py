@@ -156,8 +156,11 @@ def test_open_close_reopen():
         client.initialized()
         uri = ws.uri("m.sail")
         client.did_open(uri, HELLO)
+        # didOpen publishes diagnostics for the opened document; consume them.
+        check(diagnostics_uri(client.wait_notification("textDocument/publishDiagnostics")) == uri,
+              "diagnostics for wrong uri")
         client.did_close(uri)
-        # didOpen/didClose produce no notifications of their own.
+        # didClose produces no notification of its own.
         client.expect_no_notification()
         client.did_open(uri, HELLO)
         client.did_change(uri, incremental_change(0, 0, 0, 0, "// again\n"))
@@ -266,6 +269,96 @@ def test_semantic_tokens_multiline():
         client.exit()
 
 
+def test_folding_range_capability():
+    """The server advertises a folding-range provider."""
+    with LspClient() as client:
+        result = client.initialize()
+        provider = result["capabilities"].get("foldingRangeProvider")
+        check(provider is True, "foldingRangeProvider not advertised: {}".format(provider))
+        client.shutdown()
+        client.exit()
+
+
+def test_folding_range():
+    """foldingRange folds bracket pairs and multi-line block comments."""
+    code = (
+        "/* a block\n"        # 0  comment start
+        "   comment */\n"     # 1  comment end
+        "function main() = {\n"  # 2  '{' opens here
+        "  let x = [1,\n"     # 3  '[' opens here
+        "           2];\n"    # 4  ']' closes here
+        "  ()\n"              # 5
+        "}\n"                 # 6  '}' closes here
+        "// tail\n"           # 7  line comment: not foldable
+    )
+    with Workspace({"m.sail": code}) as ws, LspClient() as client:
+        client.initialize(ws.root_uri())
+        client.initialized()
+        uri = ws.uri("m.sail")
+        client.did_open(uri, code)
+        ranges = client.folding_range(uri)
+        got = {(r["startLine"], r["endLine"], r.get("kind")) for r in ranges}
+        expected = {
+            (0, 1, "comment"),  # /* ... */
+            (2, 6, "region"),   # { ... }
+            (3, 4, "region"),   # [ ... ]
+        }
+        check(expected <= got, "expected folding ranges {} in {}".format(expected, got))
+        # A single-line construct (the line comment) produces no fold.
+        check(all(r["endLine"] > r["startLine"] for r in ranges), "single-line fold reported: {}".format(ranges))
+        client.shutdown()
+        client.exit()
+
+
+def test_definition_capability():
+    """The server advertises a definition provider."""
+    with LspClient() as client:
+        result = client.initialize()
+        provider = result["capabilities"].get("definitionProvider")
+        check(provider is True, "definitionProvider not advertised: {}".format(provider))
+        client.shutdown()
+        client.exit()
+
+
+def test_definition():
+    """go-to-definition on a call jumps to the callee's val definition."""
+    code = (
+        "default Order dec\n"                # 0
+        "val foo : int -> int\n"             # 1  definition: 'foo' at chars 4-7
+        "function foo(x) = x\n"              # 2
+        "function main() -> int = foo(3)\n"  # 3  call: 'foo' at chars 25-27
+    )
+    with Workspace({"proj.sail_project": PROJECT, "m.sail": code}) as ws, LspClient() as client:
+        client.initialize(ws.root_uri())
+        client.initialized()
+        uri = ws.uri("m.sail")
+        client.did_open(uri, code)
+        # Wait for the file to be type-checked so the AST is available.
+        client.wait_notification("textDocument/publishDiagnostics")
+        locations = client.definition(uri, 3, 26)
+        check(locations, "no definition returned for call site")
+        loc = locations[0]
+        check(loc["uri"] == uri, "definition in wrong file: {}".format(loc["uri"]))
+        start = loc["range"]["start"]
+        check(start["line"] == 1, "expected definition on line 1 (the val), got {}".format(start))
+        client.shutdown()
+        client.exit()
+
+
+def test_definition_absent():
+    """Requesting a definition where there is no identifier yields null."""
+    code = "default Order dec\n"
+    with Workspace({"proj.sail_project": PROJECT, "m.sail": code}) as ws, LspClient() as client:
+        client.initialize(ws.root_uri())
+        client.initialized()
+        uri = ws.uri("m.sail")
+        client.did_open(uri, code)
+        client.wait_notification("textDocument/publishDiagnostics")
+        check(client.definition(uri, 0, 0) is None, "expected null definition on a keyword")
+        client.shutdown()
+        client.exit()
+
+
 def test_error_diagnostic():
     """A file with an error yields a diagnostic with a valid, correctly located range."""
     # The syntax error is on line 1 (zero-based); LSP positions are zero-based.
@@ -321,6 +414,11 @@ TESTS = [
     test_semantic_tokens_full,
     test_semantic_tokens_unicode,
     test_semantic_tokens_multiline,
+    test_folding_range_capability,
+    test_folding_range,
+    test_definition_capability,
+    test_definition,
+    test_definition_absent,
     test_error_diagnostic,
     test_valid_file_has_no_diagnostics,
 ]

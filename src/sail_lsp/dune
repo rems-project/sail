@@ -1,14 +1,3 @@
-(rule
- (deps (universe))
- (target manifest.ml)
- (mode fallback)
- (action
-  (with-outputs-to
-   %{target}
-   (chdir
-    %{workspace_root}
-    (run sail_maker gen_manifest)))))
-
 (executable
  (name sail_lsp)
  (modes native byte)
