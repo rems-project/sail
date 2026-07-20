@@ -1013,7 +1013,7 @@ module Make (Lattice : SAIL_VALUE) = struct
                 let is_extern = Type_check.Env.is_extern id gstate.typecheck_env "interpreter" in
                 if has_fundef && (not is_extern) && Type_check.Env.is_outcome id gstate.typecheck_env then (
                   let fdef = Bindings.find id gstate.fundefs in
-                  let arg = if List.length args != 1 then Lattice.mk_tuple args' else List.hd args' in
+                  let arg = if Util.is_singleton_list args' then List.hd args' else Lattice.mk_tuple args' in
                   let arms, annot = arms_of_fundef fdef in
                   Stack.push cont stack;
                   {
@@ -1057,7 +1057,7 @@ module Make (Lattice : SAIL_VALUE) = struct
                   )
                 )
                 else (
-                  let arg = if List.length args != 1 then Lattice.mk_tuple args' else List.hd args' in
+                  let arg = if Util.is_singleton_list args then List.hd args' else Lattice.mk_tuple args' in
                   let fdef = match Bindings.find_opt id gstate.fundefs with Some fdef -> Some fdef | None -> None in
                   match fdef with
                   | None -> (

@@ -49,10 +49,7 @@ open Jib
 open Jib_util
 
 module IntSet = Util.IntSet
-module IntMap = Map.Make (struct
-  type t = int
-  let compare = compare
-end)
+module IntMap = Util.IntMap
 
 let ssa_name i = function
   | Gen (v1, v2, _) -> Gen (v1, v2, i)

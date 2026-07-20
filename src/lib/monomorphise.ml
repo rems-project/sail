@@ -1711,7 +1711,7 @@ module Analysis = struct
     type t = id * int
     let compare (id, i) (id', i') =
       let x = Id.compare id id' in
-      if x <> 0 then x else compare i i'
+      if x <> 0 then x else Int.compare i i'
   end)
 
   (* Type variables that we should look at in callers *)
@@ -1725,10 +1725,7 @@ module Analysis = struct
     type t = Parse_ast.l
     let compare = compare
   end)
-  module StringSet = Set.Make (struct
-    type t = string
-    let compare = compare
-  end)
+  module StringSet = Util.StringSet
 
   (* When we've obviously got a tuple, keep the elements separate *)
   type dependencies =

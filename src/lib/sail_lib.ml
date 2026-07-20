@@ -74,7 +74,7 @@ let cycle_count () = incr cycle_count_var
 
 let cycle_limit_reached () =
   incr cycle_count_var;
-  !opt_cycle_limit != 0 && !cycle_count_var >= !opt_cycle_limit
+  (not (Int.equal !opt_cycle_limit 0)) && !cycle_count_var >= !opt_cycle_limit
 
 let sail_call (type t) (f : _ -> t) =
   let module M = struct
@@ -136,7 +136,7 @@ let xor_vec (xs, ys) =
   assert (List.length xs = List.length ys);
   List.map2 (fun x y -> xor_bit (x, y)) xs ys
 
-let xor_bool (b1, b2) = (b1 || b2) && b1 != b2
+let xor_bool (b1, b2) = (b1 || b2) && b1 <> b2
 
 let undefined_bit () = if !random then if Random.bool () then B0 else B1 else B0
 

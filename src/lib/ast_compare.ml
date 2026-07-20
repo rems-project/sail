@@ -99,14 +99,16 @@ let rec nexp_compare (Nexp_aux (nexp1, _)) (Nexp_aux (nexp2, _)) =
   | Nexp_app (op1, args1), Nexp_app (op2, args2) ->
       let lex1 = Id.compare op1 op2 in
       let lex2 = List.length args1 - List.length args2 in
-      let lex3 = if lex2 = 0 then List.fold_left2 (fun l n1 n2 -> lex_ord (l, compare n1 n2)) 0 args1 args2 else 0 in
+      let lex3 =
+        if lex2 = 0 then List.fold_left2 (fun l n1 n2 -> lex_ord (l, nexp_compare n1 n2)) 0 args1 args2 else 0
+      in
       lex_ord (lex1, lex_ord (lex2, lex3))
   | Nexp_times (n1a, n1b), Nexp_times (n2a, n2b)
   | Nexp_sum (n1a, n1b), Nexp_sum (n2a, n2b)
   | Nexp_minus (n1a, n1b), Nexp_minus (n2a, n2b) ->
-      lex_ord (compare n1a n2a, compare n1b n2b)
-  | Nexp_exp n1, Nexp_exp n2 -> compare n1 n2
-  | Nexp_neg n1, Nexp_neg n2 -> compare n1 n2
+      lex_ord (nexp_compare n1a n2a, nexp_compare n1b n2b)
+  | Nexp_exp n1, Nexp_exp n2 -> nexp_compare n1 n2
+  | Nexp_neg n1, Nexp_neg n2 -> nexp_compare n1 n2
   | Nexp_if (i1, t1, e1), Nexp_if (i2, t2, e2) ->
       let lex1 = nc_compare i1 i2 in
       let lex2 = nexp_compare t1 t2 in
