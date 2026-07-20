@@ -7,7 +7,7 @@ set_option linter.unusedVariables false
 set_option match.ignoreUnusedAlts true
 
 open Sail
-open Sail.ConcurrencyInterfaceV2
+open Sail.ArchSem
 
 namespace Out
 
@@ -403,13 +403,6 @@ abbrev RegisterType : Register → Type
   | .R30 => (BitVec 64)
   | ._PC => (BitVec 64)
 
-instance : Inhabited (RegisterRef RegisterType (BitVec 64)) where
-  default := .Reg _PC
-abbrev exception := Unit
-
-abbrev SailM := PreSailM RegisterType trivialChoiceSource exception
-abbrev SailME := PreSailME RegisterType trivialChoiceSource exception
-
 def mem_acc_is_explicit (acc : AccessDescriptor) : Bool :=
   (BEq.beq acc.acctype AccessType_GPR)
 
@@ -443,6 +436,8 @@ instance : Arch where
   addr_space := addr_space
   CHERI := false
   cap_size_log := 0
+  register := Register
+  register_type := RegisterType
   mem_acc := AccessDescriptor
   mem_acc_is_explicit := mem_acc_is_explicit
   mem_acc_is_ifetch := mem_acc_is_ifetch
@@ -461,11 +456,21 @@ instance : Arch where
   tlbi := Unit
   exn := Unit
   sys_reg_id := Unit
+
+abbrev exception := Unit
+
+abbrev SailM := PreSailM exception
+abbrev SailME := PreSailME exception
+
+
+
+instance : Inhabited (RegisterRef (BitVec 64)) where
+  default := .Reg _PC
 XXXXXXXXX
 
 import Sail
 import Out.Defs
-import Out.Specialization
+import Out.SpecializationArchSem
 import Out.FakeReal
 
 set_option maxHeartbeats 1_000_000_000
@@ -474,11 +479,11 @@ set_option linter.unusedVariables false
 set_option match.ignoreUnusedAlts true
 
 open Sail
-open Sail.ConcurrencyInterfaceV2
+open Sail.ArchSem
 
 namespace Out
 
-open ConcurrencyInterfaceV2
+open ArchSem
 
 open Defs
 namespace Functions
