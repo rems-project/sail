@@ -11,8 +11,6 @@ open Sail.ConcurrencyInterfaceV1
 
 namespace Out
 
-namespace Defs
-
 structure rectangle where
   width : Int
   height : Int
@@ -67,7 +65,6 @@ namespace Out
 
 open ConcurrencyInterfaceV1
 
-open Defs
 namespace Functions
 
 open shape

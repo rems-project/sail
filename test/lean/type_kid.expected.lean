@@ -11,8 +11,6 @@ open Sail.ConcurrencyInterfaceV1
 
 namespace Out
 
-namespace Defs
-
 abbrev Register := PEmpty
 abbrev RegisterType : Register -> Type := PEmpty.elim
 
@@ -45,7 +43,6 @@ namespace Out
 
 open ConcurrencyInterfaceV1
 
-open Defs
 namespace Functions
 
 /-- Type quantifiers: x : Int -/

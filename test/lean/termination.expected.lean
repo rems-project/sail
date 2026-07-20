@@ -11,8 +11,6 @@ open Sail.ConcurrencyInterfaceV1
 
 namespace Out
 
-namespace Defs
-
 abbrev bit := (BitVec 1)
 
 abbrev bits k_n := (BitVec k_n)
@@ -60,7 +58,6 @@ namespace Out
 
 open ConcurrencyInterfaceV1
 
-open Defs
 namespace Functions
 
 open option

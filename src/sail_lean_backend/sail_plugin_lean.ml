@@ -296,7 +296,6 @@ let print_function_file_prelude interface_v file out_name_camel (imp_refs : stri
   in
   output_string file ("\n" ^ file_prelude interface_v out_name_camel);
   Printf.fprintf file "open %s\n\n" (interface_module interface_v);
-  output_string file "open Defs\n";
   output_string file "namespace Functions\n\n"
 
 let start_lean_output interface_v (out_name : string) (import_names : string list) (import_refs : string list list)
@@ -341,7 +340,6 @@ let start_lean_output interface_v (out_name : string) (import_names : string lis
   output_string types_file "import Sail\n";
   output_string types_file "open PreSail\n\n";
   output_string types_file (file_prelude interface_v out_name_camel);
-  output_string types_file "namespace Defs\n\n";
   let funcs_file = open_out (Filename.concat project_dir (out_name_camel ^ ".lean")) in
   let lakefile = open_out (Filename.concat project_dir "lakefile.toml") in
   let lakemanifest = open_out (Filename.concat project_dir "lake-manifest.json") in

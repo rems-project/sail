@@ -3,8 +3,6 @@ import THE_MODULE_NAME.Defs
 
 namespace THE_MODULE_NAME
 
-open Defs
-
 abbrev real := Float
 
 -- val "neg_real" : real -> real
