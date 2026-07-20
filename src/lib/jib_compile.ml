@@ -481,7 +481,7 @@ module Make (C : CONFIG) = struct
     | AV_tuple avals ->
         let elements = List.map (compile_aval l ctx) avals in
         let cvals = List.map (fun (_, cval, _) -> cval) elements in
-        let setup = List.concat (List.map (fun (setup, _, _) -> setup) elements) in
+        let setup = List.concat_map (fun (setup, _, _) -> setup) elements in
         let cleanup = List.concat (List.rev (List.map (fun (_, _, cleanup) -> cleanup) elements)) in
         let tup_ctyp = CT_tup (List.map cval_ctyp cvals) in
         let gs = ngensym () in
@@ -500,9 +500,9 @@ module Make (C : CONFIG) = struct
           (field_setup, (id, cval), field_cleanup)
         in
         let field_triples = List.map compile_fields (Bindings.bindings fields) in
-        let setup = List.concat (List.map (fun (s, _, _) -> s) field_triples) in
+        let setup = List.concat_map (fun (s, _, _) -> s) field_triples in
         let fields = List.map (fun (_, f, _) -> f) field_triples in
-        let cleanup = List.concat (List.map (fun (_, _, c) -> c) field_triples) in
+        let cleanup = List.concat_map (fun (_, _, c) -> c) field_triples in
         (setup, V_struct (fields, ctyp), cleanup)
     | AV_record (fields, typ) ->
         let ctyp = ctyp_of_typ ctx typ in
@@ -512,7 +512,7 @@ module Make (C : CONFIG) = struct
           let field_setup, cval, field_cleanup = compile_aval l ctx aval in
           field_setup @ [icopy l (CL_field (CL_id (gs, ctyp), id, field_ctyp id)) cval] @ field_cleanup
         in
-        ( [idecl l ctyp gs] @ List.concat (List.map compile_fields (Bindings.bindings fields)),
+        ( [idecl l ctyp gs] @ List.concat_map compile_fields (Bindings.bindings fields),
           V_id (gs, ctyp),
           [iclear ctyp gs]
         )
@@ -624,7 +624,7 @@ module Make (C : CONFIG) = struct
           @ [iextern l (CL_id (gs, CT_list ctyp)) (mk_id "sail_cons", [ctyp]) [cval; V_id (gs, CT_list ctyp)]]
           @ cleanup
         in
-        ( [idecl l (CT_list ctyp) gs] @ List.concat (List.map mk_cons (List.rev avals)),
+        ( [idecl l (CT_list ctyp) gs] @ List.concat_map mk_cons (List.rev avals),
           V_id (gs, CT_list ctyp),
           [iclear (CT_list ctyp) gs]
         )
@@ -881,7 +881,7 @@ module Make (C : CONFIG) = struct
           let fields = instantiate_polymorphic_type ~at:l struct_id args ctx.records |> Bindings.bindings in
           let struct_name = ngensym () in
           let fields_from_json =
-            List.map
+            List.concat_map
               (fun (field_id, field_ctyp) ->
                 let field_json = ngensym () in
                 let setup, call, cleanup = extract field_json field_ctyp in
@@ -898,7 +898,6 @@ module Make (C : CONFIG) = struct
                 @ [iclear CT_json field_json]
               )
               fields
-            |> List.concat
           in
           ( [idecl l struct_ctyp struct_name] @ fields_from_json,
             (fun clexp -> icopy l clexp (V_id (struct_name, struct_ctyp))),
@@ -1430,7 +1429,7 @@ module Make (C : CONFIG) = struct
                 ]
               else []
             )
-          @ List.concat (List.map compile_case cases)
+          @ List.concat_map compile_case cases
           @ [
               (* fallthrough *)
               icopy l (CL_id (have_exception, CT_bool)) (V_lit (VL_bool true, CT_bool));
@@ -1493,7 +1492,7 @@ module Make (C : CONFIG) = struct
           @ setup
           @ [icopy l (CL_id (gs, ctyp)) cval]
           @ cleanup
-          @ List.concat (List.map compile_fields (Bindings.bindings fields)),
+          @ List.concat_map compile_fields (Bindings.bindings fields),
           (fun clexp -> icopy l clexp (V_id (gs, ctyp))),
           [iclear ctyp gs]
         )
@@ -1567,7 +1566,7 @@ module Make (C : CONFIG) = struct
           let field_setup, cval, field_cleanup = compile_aval l ctx aval in
           field_setup @ [icopy l (CL_field (CL_id (id, ctyp), field_id, field_ctyp field_id)) cval] @ field_cleanup
         in
-        (List.concat (List.map compile_fields (Bindings.bindings fields)), (fun clexp -> icopy l clexp unit_cval), [])
+        (List.concat_map compile_fields (Bindings.bindings fields), (fun clexp -> icopy l clexp unit_cval), [])
     | AE_assign (alexp, aexp) ->
         let setup, call, cleanup = compile_aexp ctx aexp in
         (setup @ [call (compile_alexp ctx alexp)], (fun clexp -> icopy l clexp unit_cval), cleanup)
@@ -1865,7 +1864,7 @@ module Make (C : CONFIG) = struct
     in
     let is_clear ids = function I_aux (I_clear (_, id), _) -> NameSet.add id ids | _ -> ids in
     let cleaned = List.fold_left is_clear NameSet.empty instrs in
-    instrs |> List.map generate_cleanup' |> List.concat
+    List.concat_map generate_cleanup' instrs
     |> List.filter (fun (id, _) -> not (NameSet.mem id cleaned))
     |> List.map snd
 
@@ -1979,7 +1978,7 @@ module Make (C : CONFIG) = struct
           [iclear (CT_tup ctyps) arg_id] @ cleanup
         )
 
-  let combine_destructure_cleanup xs = (List.concat (List.map fst xs), List.concat (List.rev (List.map snd xs)))
+  let combine_destructure_cleanup xs = (List.concat_map fst xs, List.concat (List.rev (List.map snd xs)))
 
   let fix_destructure l fail_label = function
     | [], cleanup -> ([], cleanup)
@@ -2698,14 +2697,13 @@ module Make (C : CONFIG) = struct
             ctx monomorphized_variants
         in
         let mangled_ctors =
-          List.map
+          List.concat_map
             (fun (_, monomorphized_ctors) ->
               List.map2
                 (fun (ctor_id, _) (monomorphized_id, _) -> mangled_pragma ctor_id monomorphized_id)
                 ctors monomorphized_ctors
             )
             monomorphized_variants
-          |> List.concat
         in
 
         let prior = Util.map_if (contains_variant var_id) (cdef_map_ctyp (fix_variants ctx var_id)) prior in
@@ -2715,13 +2713,11 @@ module Make (C : CONFIG) = struct
         let ctx = { ctx with variants = Bindings.remove var_id ctx.variants } in
 
         specialize_variants ctx
-          (List.concat
-             (List.map
-                (fun (id, ctors) ->
-                  [CDEF_aux (CDEF_type (CTD_variant (id, [], ctors)), def_annot); mangled_pragma var_id id]
-                )
-                monomorphized_variants
+          (List.concat_map
+             (fun (id, ctors) ->
+               [CDEF_aux (CDEF_type (CTD_variant (id, [], ctors)), def_annot); mangled_pragma var_id id]
              )
+             monomorphized_variants
           @ mangled_ctors @ prior
           )
           cdefs
@@ -2741,14 +2737,13 @@ module Make (C : CONFIG) = struct
             (CTListSet.elements !instantiations)
         in
         let mangled_fields =
-          List.map
+          List.concat_map
             (fun (_, monomorphized_fields) ->
               List.map2
                 (fun (field_id, _) (monomorphized_id, _) -> mangled_pragma field_id monomorphized_id)
                 fields monomorphized_fields
             )
             monomorphized_structs
-          |> List.concat
         in
 
         let prior = Util.map_if (contains_struct struct_id) (cdef_map_ctyp (fix_variants ctx struct_id)) prior in
@@ -2765,13 +2760,11 @@ module Make (C : CONFIG) = struct
         let ctx = { ctx with records = Bindings.remove struct_id ctx.records } in
 
         specialize_variants ctx
-          (List.concat
-             (List.map
-                (fun (id, fields) ->
-                  [CDEF_aux (CDEF_type (CTD_struct (id, [], fields)), def_annot); mangled_pragma struct_id id]
-                )
-                monomorphized_structs
+          (List.concat_map
+             (fun (id, fields) ->
+               [CDEF_aux (CDEF_type (CTD_struct (id, [], fields)), def_annot); mangled_pragma struct_id id]
              )
+             monomorphized_structs
           @ mangled_fields @ prior
           )
           cdefs
@@ -2855,7 +2848,7 @@ module Make (C : CONFIG) = struct
                     )
                     else ([], clexp, [])
                   in
-                  let casts = List.map (fun (x, _, _) -> x) casted_args |> List.concat in
+                  let casts = List.concat_map (fun (x, _, _) -> x) casted_args in
                   let args = List.map (fun (_, y, _) -> y) casted_args in
                   let cleanup = List.rev_map (fun (_, _, z) -> z) casted_args |> List.concat in
                   [
@@ -2969,7 +2962,7 @@ module Make (C : CONFIG) = struct
     end
 
   let lift_statics cdefs =
-    List.map
+    List.concat_map
       (fun cdef ->
         let statics = ref [] in
         let cdef = visit_cdef (new static_visitor statics) cdef in
@@ -2984,7 +2977,6 @@ module Make (C : CONFIG) = struct
         @ [cdef]
       )
       cdefs
-    |> List.concat
 
   let is_def_constraint = function DEF_aux (DEF_constraint _, _) -> true | _ -> false
 

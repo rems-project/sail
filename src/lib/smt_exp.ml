@@ -587,7 +587,7 @@ module Simplifier = struct
     | Fn ("and", xs) ->
         let nested_and = List.exists (function Fn ("and", _) -> true | _ -> false) xs in
         if nested_and then (
-          let xs = List.map (function Fn ("and", xs) -> xs | x -> [x]) xs |> List.concat in
+          let xs = List.concat_map (function Fn ("and", xs) -> xs | x -> [x]) xs in
           change (Fn ("and", xs))
         )
         else NoChange
@@ -598,7 +598,7 @@ module Simplifier = struct
     | Fn ("or", xs) ->
         let nested_or = List.exists (function Fn ("or", _) -> true | _ -> false) xs in
         if nested_or then (
-          let xs = List.map (function Fn ("or", xs) -> xs | x -> [x]) xs |> List.concat in
+          let xs = List.concat_map (function Fn ("or", xs) -> xs | x -> [x]) xs in
           change (Fn ("or", xs))
         )
         else NoChange

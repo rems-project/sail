@@ -110,10 +110,10 @@ let rec typ_constraints (Typ_aux (typ_aux, _)) =
   | Typ_internal_unknown -> []
   | Typ_id _ -> []
   | Typ_var _ -> []
-  | Typ_tuple typs -> List.concat (List.map typ_constraints typs)
-  | Typ_app (_, args) -> List.concat (List.map typ_arg_constraints args)
+  | Typ_tuple typs -> List.concat_map typ_constraints typs
+  | Typ_app (_, args) -> List.concat_map typ_arg_constraints args
   | Typ_exist (_, _, typ) -> typ_constraints typ
-  | Typ_fn (arg_typs, ret_typ) -> List.concat (List.map typ_constraints arg_typs) @ typ_constraints ret_typ
+  | Typ_fn (arg_typs, ret_typ) -> List.concat_map typ_constraints arg_typs @ typ_constraints ret_typ
   | Typ_bidir (typ1, typ2) -> typ_constraints typ1 @ typ_constraints typ2
 
 and typ_arg_constraints (A_aux (typ_arg_aux, _)) =
@@ -407,7 +407,7 @@ let prove_smt ~abstract ~assumptions:ncs (NC_aux (_, l) as nc) =
   | Constraint.Unknown -> (
       (* Work around versions of z3 that are confused by 2^n in
          constraints, even when such constraints are irrelevant *)
-      let ncs' = List.concat (List.map constraint_conj ncs) in
+      let ncs' = List.concat_map constraint_conj ncs in
       let ncs' = List.filter (fun nc -> KidSet.is_empty (constraint_power_variables nc)) ncs' in
       match Constraint.call_smt l abstract (List.fold_left nc_and (nc_not nc) ncs') with
       | Constraint.Unsat ->
@@ -1404,7 +1404,7 @@ let instantiate_simple_equations =
     | QI_aux (QI_id kinded_kid, _) :: quants -> (
         let kid = kopt_kid kinded_kid in
         let insts_tl = inst_from_eq quants in
-        match List.concat (List.map (find_eqs_quant kid) quants) with
+        match List.concat_map (find_eqs_quant kid) quants with
         | [] -> insts_tl
         | h :: _ -> KBindings.add kid h (KBindings.map (typ_arg_subst kid h) insts_tl)
       )
@@ -1877,7 +1877,7 @@ let rec filter_overload_tree env =
   | OT_overloads (f, overloads, args, annot) ->
       let args = List.map (filter_overload_tree env) args in
       let overload_info =
-        List.map
+        List.concat_map
           (fun overload ->
             let unwrap_overload_type = function
               | Typ_aux (Typ_fn (arg_typs, ret_typ), _) ->
@@ -1892,7 +1892,6 @@ let rec filter_overload_tree env =
             unwrap_overload_type (snd (Env.get_val_spec overload env))
           )
           overloads
-        |> List.concat
       in
       let plausible_overloads =
         List.filter_map
@@ -5428,7 +5427,7 @@ and check_def : Env.t -> untyped_def -> typed_def list * Env.t =
   | DEF_mapdef mdef -> check_mapdef env def_annot mdef
   | DEF_impl funcl -> check_impldef env def_annot funcl
   | DEF_internal_mutrec fdefs ->
-      let defs = List.concat (List.map (fun fdef -> fst (check_fundef env def_annot fdef)) fdefs) in
+      let defs = List.concat_map (fun fdef -> fst (check_fundef env def_annot fdef)) fdefs in
       let split_fundef (defs, fdefs) def =
         match def with DEF_aux (DEF_fundef fdef, _) -> (defs, fdefs @ [fdef]) | _ -> (defs @ [def], fdefs)
       in

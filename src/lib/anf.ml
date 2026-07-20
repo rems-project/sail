@@ -685,12 +685,12 @@ let rec apat_globals (AP_aux (aux, { env; _ })) =
   match aux with
   | AP_nil _ | AP_wild _ | AP_id _ -> []
   | AP_global (id, typ) -> [(id, env, typ)]
-  | AP_tuple apats -> List.concat (List.map apat_globals apats)
+  | AP_tuple apats -> List.concat_map apat_globals apats
   | AP_app (_, apat, _) -> apat_globals apat
   | AP_cons (hd_apat, tl_apat) -> apat_globals hd_apat @ apat_globals tl_apat
   | AP_as (apat, _, _) -> apat_globals apat
-  | AP_struct (afpats, _) -> List.concat (List.map (fun (_, apat) -> apat_globals apat) afpats)
-  | AP_vector_concat (vc_apats, _) -> List.concat (List.map (fun (_, apat) -> apat_globals apat) vc_apats)
+  | AP_struct (afpats, _) -> List.concat_map (fun (_, apat) -> apat_globals apat) afpats
+  | AP_vector_concat (vc_apats, _) -> List.concat_map (fun (_, apat) -> apat_globals apat) vc_apats
 
 let rec anf (E_aux (e_aux, (l, tannot)) as exp) =
   let mk_aexp aexp = AE_aux (aexp, { loc = l; env = env_of_tannot tannot; uannot = untyped_annot tannot }) in

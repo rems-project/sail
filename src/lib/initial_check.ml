@@ -889,7 +889,7 @@ module ConvertType = struct
               List.init (List.length vs) (fun _ -> k)
           | _ -> []
         in
-        List.concat (List.map qi_kinds qis)
+        List.concat_map qi_kinds qis
 
   let rec to_ast_typ kenv ctx atyp =
     let (P.ATyp_aux (aux, l)) = parse_infix_atyp ctx atyp in
@@ -1706,7 +1706,7 @@ let anon_rec_constructor_typ record_id = function
             List.map (fun v -> P.ATyp_aux (P.ATyp_var v, Generated l)) vs
         | P.QI_aux (P.QI_constraint _, _) -> []
       in
-      match List.concat (List.map quant_arg quants) with
+      match List.concat_map quant_arg quants with
       | [] -> P.ATyp_aux (P.ATyp_id record_id, Generated l)
       | args -> P.ATyp_aux (P.ATyp_app (record_id, args), Generated l)
     )
@@ -2520,16 +2520,16 @@ let undefined_typschm id typq =
   match typq with
   | [] -> mk_typschm typq (function_typ [unit_typ] (mk_typ (Typ_id id)))
   | _ ->
-      let arg_typs = List.concat (List.map quant_item_typ typq) in
-      let ret_typ = app_typ id (List.concat (List.map quant_item_arg typq)) in
+      let arg_typs = List.concat_map quant_item_typ typq in
+      let ret_typ = app_typ id (List.concat_map quant_item_arg typq) in
       mk_typschm typq (function_typ arg_typs ret_typ)
 
-let generate_undefined_record_context typq = List.map (fun qi -> quant_item_param_typ qi) typq |> List.concat
+let generate_undefined_record_context typq = List.concat_map (fun qi -> quant_item_param_typ qi) typq
 
 let generate_undefined_record id typq fields =
   let p_tup = function [pat] -> pat | pats -> mk_pat (P_tuple pats) in
   let pat =
-    p_tup (List.map quant_item_param typq |> List.concat |> List.map (fun id -> mk_pat (P_id id))) |> locate_pat gen_loc
+    p_tup (List.concat_map quant_item_param typq |> List.map (fun id -> mk_pat (P_id id))) |> locate_pat gen_loc
   in
   [
     mk_val_spec (VS_val_spec (undefined_typschm id typq, prepend_id "undefined_" id, None));

@@ -241,7 +241,7 @@ module Printer (Config : PRINT_CONFIG) = struct
     in
     let qi_nc (QI_aux (qi_aux, _)) = match qi_aux with QI_constraint nc -> [nc] | _ -> [] in
     let kdoc = doc_kopts (get_kopts quants) in
-    let ncs = List.concat (List.map qi_nc quants) in
+    let ncs = List.concat_map qi_nc quants in
     match ncs with
     | [] -> kdoc
     | [nc] -> kdoc ^^ comma ^^ space ^^ doc_nc nc
@@ -257,8 +257,8 @@ module Printer (Config : PRINT_CONFIG) = struct
       | QI_constraint _ -> []
     in
     let qi_nc (QI_aux (qi_aux, _)) = match qi_aux with QI_constraint nc -> [nc] | _ -> [] in
-    let kdoc = separate (comma ^^ space) (List.concat (List.map doc_qi_kopt quants)) in
-    let ncs = List.concat (List.map qi_nc quants) in
+    let kdoc = separate (comma ^^ space) (List.concat_map doc_qi_kopt quants) in
+    let ncs = List.concat_map qi_nc quants in
     match ncs with
     | [] -> parens_opt kdoc
     | [nc] -> parens_opt kdoc ^^ space ^^ string "constraint" ^^ space ^^ doc_nc nc

@@ -79,7 +79,7 @@ let analyze_unresolved_quant locals ncs = function
               [(v, nexp)]
           | _ -> []
         in
-        let substs = List.concat (List.map (fun v -> List.concat (List.map (fun nc -> is_subst v nc) ncs)) gen_kids) in
+        let substs = List.concat_map (fun v -> List.concat_map (fun nc -> is_subst v nc) ncs) gen_kids in
         let nc = List.fold_left (fun nc (v, nexp) -> constraint_subst v (arg_nexp nexp) nc) nc substs in
         if not (KidSet.exists is_kid_generated (tyvars_of_constraint nc)) then Suggest_add_constraint nc
         else (
@@ -92,8 +92,7 @@ let analyze_unresolved_quant locals ncs = function
             | id, (mut, typ) -> []
           in
           let substs =
-            List.concat
-              (List.map (fun v -> List.concat (List.map (fun nc -> is_linked v nc) (Bindings.bindings locals))) gen_kids)
+            List.concat_map (fun v -> List.concat_map (fun nc -> is_linked v nc) (Bindings.bindings locals)) gen_kids
           in
           let nc = List.fold_left (fun nc (v, nexp, _) -> constraint_subst v (arg_nexp nexp) nc) nc substs in
           if not (KidSet.exists is_kid_generated (tyvars_of_constraint nc)) then Suggest_none else Suggest_none
@@ -391,7 +390,7 @@ let message_of_type_error type_error =
           match derived_from with
           | _ :: _ ->
               let mk_msg l = [Line ""; Location ("constraint from ", Some "This type argument", l, Seq [])] in
-              Seq (msg :: List.concat (List.map mk_msg derived_from))
+              Seq (msg :: List.concat_map mk_msg derived_from)
           | [] -> msg
         in
         match simplified with

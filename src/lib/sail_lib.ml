@@ -405,7 +405,7 @@ let list_of_string s =
   let rec aux i acc = if i < 0 then acc else aux (i - 1) (s.[i] :: acc) in
   aux (String.length s - 1) []
 
-let bits_of_string str = List.concat (List.map hex_char (list_of_string str))
+let bits_of_string str = List.concat_map hex_char (list_of_string str)
 
 let concat_str (str1, str2) = str1 ^ str2
 
@@ -454,7 +454,7 @@ let decimal_string_of_bits bits =
   Big_int.to_string sum
 
 let hex_slice (str, n, m) =
-  let bits = List.concat (List.map hex_char (list_of_string (String.sub str 2 (String.length str - 2)))) in
+  let bits = List.concat_map hex_char (list_of_string (String.sub str 2 (String.length str - 2))) in
   let padding = replicate_bits ([B0], n) in
   let bits = padding @ bits in
   let slice = List.rev (take (Big_int.to_int n) (drop (Big_int.to_int m) (List.rev bits))) in

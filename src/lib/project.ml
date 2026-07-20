@@ -236,7 +236,7 @@ let rec value_to_paths l = function
       | Some h -> [(Sail_file.to_path h, l)]
       | None -> raise (Reporting.err_general (to_loc l) (Printf.sprintf "Virtual file %s does not exist in project" s))
     )
-  | V_list vs -> List.concat (List.map (value_to_paths l) vs)
+  | V_list vs -> List.concat_map (value_to_paths l) vs
   | _ -> raise (Reporting.err_typ (to_loc l) "Expected strings")
 
 let rec to_paths = function
@@ -247,7 +247,7 @@ let rec to_paths = function
 let rec value_to_selectors l = function
   | V_selector (sel, s) -> [((sel, s), l)]
   | V_string s -> [((S_tree, s), l)]
-  | V_list vs -> List.concat (List.map (value_to_selectors l) vs)
+  | V_list vs -> List.concat_map (value_to_selectors l) vs
   | _ -> raise (Reporting.err_typ (to_loc l) "Expected module selector")
 
 let rec to_selectors = function
@@ -698,6 +698,6 @@ let module_files proj id = ModMap.find id proj.files
 
 let module_requires (proj : project_structure) id = ModMap.find id proj.requires |> ModSet.elements
 
-let all_files proj = List.map (fun id -> ModMap.find id proj.files) (module_order proj) |> List.concat
+let all_files proj = List.concat_map (fun id -> ModMap.find id proj.files) (module_order proj)
 
 let all_modules proj = List.map snd (StringMap.bindings proj.ids)
