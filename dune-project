@@ -50,6 +50,7 @@ been used for several papers, available from
 http://www.cl.cam.ac.uk/~pes20/sail/.
 ")
   (depends
+    (sail_maker (and (= :version) :build))
     (dune-site (>= 3.0.2))
     (bisect_ppx (and :dev (>= "2.5.0")))
     (menhir (and (>= 20240715) :build))

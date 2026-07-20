@@ -31,6 +31,7 @@ homepage: "https://github.com/rems-project/sail"
 bug-reports: "https://github.com/rems-project/sail/issues"
 depends: [
   "dune" {>= "3.21"}
+  "sail_maker" {= version & build}
   "dune-site" {>= "3.0.2"}
   "bisect_ppx" {dev & >= "2.5.0"}
   "menhir" {>= "20240715" & build}
