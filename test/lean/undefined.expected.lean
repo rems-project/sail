@@ -11,8 +11,6 @@ open Sail.ConcurrencyInterfaceV1
 
 namespace Out
 
-namespace Defs
-
 abbrev bit := (BitVec 1)
 
 abbrev Register := PEmpty
@@ -47,7 +45,6 @@ namespace Out
 
 open ConcurrencyInterfaceV1
 
-open Defs
 namespace Functions
 
 /-- Type quantifiers: x : Int -/

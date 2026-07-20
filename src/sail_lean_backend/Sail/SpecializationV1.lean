@@ -5,8 +5,6 @@ open Sail ConcurrencyInterfaceV1
 
 namespace THE_MODULE_NAME
 
-open Defs
-
 @[simp_sail]
 def sailTryCatch (e : SailM α) (h : exception → SailM α) : SailM α := PreSail.sailTryCatch e h
 
