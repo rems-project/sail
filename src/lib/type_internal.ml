@@ -187,10 +187,10 @@ let rec typ_nexps (Typ_aux (typ_aux, _)) =
   | Typ_internal_unknown -> []
   | Typ_id _ -> []
   | Typ_var _ -> []
-  | Typ_tuple typs -> List.concat (List.map typ_nexps typs)
-  | Typ_app (_, args) -> List.concat (List.map typ_arg_nexps args)
+  | Typ_tuple typs -> List.concat_map typ_nexps typs
+  | Typ_app (_, args) -> List.concat_map typ_arg_nexps args
   | Typ_exist (_, _, typ) -> typ_nexps typ
-  | Typ_fn (arg_typs, ret_typ) -> List.concat (List.map typ_nexps arg_typs) @ typ_nexps ret_typ
+  | Typ_fn (arg_typs, ret_typ) -> List.concat_map typ_nexps arg_typs @ typ_nexps ret_typ
   | Typ_bidir (typ1, typ2) -> typ_nexps typ1 @ typ_nexps typ2
 
 and typ_arg_nexps (A_aux (typ_arg_aux, _)) =
@@ -203,7 +203,7 @@ and constraint_nexps (NC_aux (nc_aux, _)) =
   | NC_id _ | NC_true | NC_false | NC_var _ -> []
   | NC_set (n, _) -> [n]
   | NC_or (nc1, nc2) | NC_and (nc1, nc2) -> constraint_nexps nc1 @ constraint_nexps nc2
-  | NC_app (_, args) -> List.concat (List.map typ_arg_nexps args)
+  | NC_app (_, args) -> List.concat_map typ_arg_nexps args
 
 (* Return a KidSet containing all the type variables appearing in
    nexp, where nexp occurs underneath a Nexp_exp, i.e. 2^nexp *)

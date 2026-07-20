@@ -438,7 +438,7 @@ let specialize_id_valspec spec instantiations id ast effect_info =
         )
       in
 
-      let specializations = List.map specialize_instance instantiations |> List.concat in
+      let specializations = List.concat_map specialize_instance instantiations in
 
       let effect_info =
         IdSet.fold (fun id' effect_info -> Effects.copy_function_effect id effect_info id') !spec_ids effect_info
@@ -483,7 +483,7 @@ let specialize_id_fundef instantiations id ast =
           [DEF_aux (DEF_fundef (specialize_annotations instantiation (rename_fundef spec_id fundef)), def_annot)]
         )
       in
-      let fundefs = List.map specialize_fundef instantiations |> List.concat in
+      let fundefs = List.concat_map specialize_fundef instantiations in
       { ast with defs = pre_defs @ (DEF_aux (DEF_fundef fundef, def_annot) :: fundefs) @ post_defs }
   | Some _ -> assert false (* unreachable *)
 
@@ -494,7 +494,7 @@ let specialize_id_overloads instantiations id ast =
     match defs with
     | DEF_aux (DEF_overload (overload_id, overloads), def_annot) :: defs ->
         let overloads =
-          List.concat (List.map (fun id' -> if Id.compare id' id = 0 then IdSet.elements ids else [id']) overloads)
+          List.concat_map (fun id' -> if Id.compare id' id = 0 then IdSet.elements ids else [id']) overloads
         in
         DEF_aux (DEF_overload (overload_id, overloads), def_annot) :: rewrite_overloads defs
     | def :: defs -> def :: rewrite_overloads defs

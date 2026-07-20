@@ -339,9 +339,9 @@ let regval_instance_lem =
     ]
   in
   separate_map hardline string
-    (List.concat (List.map conv_def regval_class_typs_lem)
+    (List.concat_map conv_def regval_class_typs_lem
     @ [""; "instance (Register_Value register_value)"]
-    @ List.concat (List.map conv_inst regval_class_typs_lem)
+    @ List.concat_map conv_inst regval_class_typs_lem
     @ ["end"]
     )
 
@@ -383,7 +383,7 @@ let add_regval_conv ctx env id typ defs =
   in
   let to_function = Printf.sprintf "function %s v# = %s" to_name (string_of_exp to_exp) in
   let to_defs = if is_defined defs to_name then [] else [to_val; to_function] in
-  let cdefs = List.concat (List.map (fun s -> fst (defs_of_string __POS__ ctx s)) (from_defs @ to_defs)) in
+  let cdefs = List.concat_map (fun s -> fst (defs_of_string __POS__ ctx s)) (from_defs @ to_defs) in
   defs @ cdefs
 
 let rec regval_convs wrap_fun (Typ_aux (t, _) as typ) =

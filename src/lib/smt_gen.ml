@@ -170,7 +170,7 @@ let bvpint ?(loc = Parse_ast.Unknown) sz x =
     let x = Big_int.to_int x in
     match Printf.sprintf "%X" x |> Util.string_to_list |> List.map nibble_of_char |> Util.option_all with
     | Some nibbles ->
-        let bin = List.map (fun (a, b, c, d) -> [a; b; c; d]) nibbles |> List.concat in
+        let bin = List.concat_map (fun (a, b, c, d) -> [a; b; c; d]) nibbles in
         let _, bin = Util.take_drop (function B0 -> true | _ -> false) bin in
         let padding_amount = sz - List.length bin in
         if padding_amount >= 0 then (

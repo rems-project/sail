@@ -544,7 +544,7 @@ let parse_json_string_to_bits ~at:l ~len str =
       Some (List.map bin_digit_to_bit bin_digits |> fix_length ~at:l ~len)
     else if str_len > 2 && String.sub str 0 2 = "0x" then
       let* hex_digits = Util.drop 2 chars |> List.filter_map valid_hex_char |> Util.option_all in
-      Some (List.map BitList.of_hex_digit hex_digits |> List.concat |> fix_length ~at:l ~len)
+      Some (List.concat_map BitList.of_hex_digit hex_digits |> fix_length ~at:l ~len)
     else
       let* dec_chars = List.filter_map valid_dec_char chars |> Util.option_all in
       let n = List.to_seq dec_chars |> String.of_seq |> Big_int.of_string in
@@ -572,7 +572,7 @@ let parse_json_string_to_abstract_bits ~at:l ~len str =
     Some (List.map bin_digit_to_bit bin_digits |> mask)
   else if str_len > 2 && String.sub str 0 2 = "0x" then
     let* hex_digits = Util.drop 2 chars |> List.filter_map valid_hex_char |> Util.option_all in
-    Some (List.map BitList.of_hex_digit hex_digits |> List.concat |> mask)
+    Some (List.concat_map BitList.of_hex_digit hex_digits |> mask)
   else
     let* dec_chars = List.filter_map valid_dec_char chars |> Util.option_all in
     let n = List.to_seq dec_chars |> String.of_seq |> Big_int.of_string in

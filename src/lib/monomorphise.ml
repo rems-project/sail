@@ -156,14 +156,14 @@ let rec cross' = function
   | [] -> [[]]
   | h :: t ->
       let t' = cross' t in
-      List.concat (List.map (fun x -> List.map (fun l -> x :: l) t') h)
+      List.concat_map (fun x -> List.map (fun l -> x :: l) t') h
 
 let rec cross'' = function
   | [] -> [[]]
   | (k, None) :: t -> List.map (fun l -> (k, None) :: l) (cross'' t)
   | (k, Some h) :: t ->
       let t' = cross'' t in
-      List.concat (List.map (fun x -> List.map (fun l -> (k, Some x) :: l) t') h)
+      List.concat_map (fun x -> List.map (fun l -> (k, Some x) :: l) t') h
 
 let kidset_bigunion = function [] -> KidSet.empty | h :: t -> List.fold_left KidSet.union h t
 
@@ -274,7 +274,7 @@ let rec size_nvars_nexp (Nexp_aux (ne, _)) =
   | Nexp_id _ | Nexp_constant _ -> []
   | Nexp_times (n1, n2) | Nexp_sum (n1, n2) | Nexp_minus (n1, n2) -> size_nvars_nexp n1 @ size_nvars_nexp n2
   | Nexp_exp n | Nexp_neg n -> size_nvars_nexp n
-  | Nexp_app (_, args) -> List.concat (List.map size_nvars_nexp args)
+  | Nexp_app (_, args) -> List.concat_map size_nvars_nexp args
   | Nexp_if (_, t, e) -> size_nvars_nexp t @ size_nvars_nexp e
 
 (* Given a type for a constructor, work out which refinements we ought to produce *)
@@ -342,7 +342,7 @@ let split_src_type all_errors env id ty q =
           in
           if uninhabited then None else Some (inst @ inst0, ty)
         in
-        let tys = List.concat (List.map (fun instty -> List.filter_map (ty_and_inst instty) insts) tys) in
+        let tys = List.concat_map (fun instty -> List.filter_map (ty_and_inst instty) insts) tys in
         let free = List.fold_left (fun vars k -> KidSet.remove (kopt_kid k) vars) vars kopts in
         (free, tys)
     | Typ_internal_unknown -> Reporting.unreachable l __POS__ "escaped Typ_internal_unknown"
@@ -860,7 +860,7 @@ let split_defs target all_errors (splits : split_req list) env ast =
                 Some (h :: t, hsubs @ tsubs, hpchoices @ tpchoices, KBindings.union (fun k a _ -> Some a) hksubs tksubs)
               else None
             in
-            Some (List.concat (List.map (fun h -> List.filter_map (merge h) t') h'))
+            Some (List.concat_map (fun h -> List.filter_map (merge h) t') h')
       in
       let rec spl (P_aux (p, (l, annot))) =
         let relist f ctx ps =
@@ -1070,7 +1070,7 @@ let split_defs target all_errors (splits : split_req list) env ast =
         | E_struct (struct_name, fes) -> re (E_struct (struct_name, List.map map_fexp fes))
         | E_struct_update (e, fes) -> re (E_struct_update (map_exp e, List.map map_fexp fes))
         | E_field (e, id) -> re (E_field (map_exp e, id))
-        | E_match (e, cases) -> re (E_match (map_exp e, List.concat (List.map map_pexp cases)))
+        | E_match (e, cases) -> re (E_match (map_exp e, List.concat_map map_pexp cases))
         | E_let (lpat, lbind, e) ->
             let binding_exp_annot = match lbind with E_aux (_, (_, a)) -> a in
             let lb_l = letbind_loc lpat lbind in
@@ -1111,7 +1111,7 @@ let split_defs target all_errors (splits : split_req list) env ast =
         | E_assign (le, e) -> re (E_assign (map_lexp le, map_exp e))
         | E_exit e -> re (E_exit (map_exp e))
         | E_throw e -> re (E_throw e)
-        | E_try (e, cases) -> re (E_try (map_exp e, List.concat (List.map map_pexp cases)))
+        | E_try (e, cases) -> re (E_try (map_exp e, List.concat_map map_pexp cases))
         | E_return e -> re (E_return (map_exp e))
         | E_assert (e1, e2) -> re (E_assert (map_exp e1, map_exp e2))
         | E_var (le, e1, e2) -> re (E_var (map_lexp le, map_exp e1, map_exp e2))
@@ -1225,7 +1225,7 @@ let split_defs target all_errors (splits : split_req list) env ast =
     in
 
     let map_fundef (FD_aux (FD_function (r, t, fcls), annot)) =
-      FD_aux (FD_function (r, t, List.concat (List.map map_funcl fcls)), annot)
+      FD_aux (FD_function (r, t, List.concat_map map_funcl fcls), annot)
     in
     let map_scattered_def sd =
       match sd with
@@ -4350,7 +4350,7 @@ module ToplevelNexpRewrites = struct
     match t with
     | Typ_fn (args, res) ->
         let args' = List.map (rewrite_typ_in_spec env nexp_map) args in
-        let nexp_map = List.concat (List.map fst args') in
+        let nexp_map = List.concat_map fst args' in
         let nexp_map, res = rewrite_typ_in_spec env nexp_map res in
         (nexp_map, Typ_aux (Typ_fn (List.map snd args', res), ann))
     | Typ_tuple typs ->

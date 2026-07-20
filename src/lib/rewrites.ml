@@ -2132,7 +2132,7 @@ and simple_typ_aux l = function
   | Typ_app (id, [_]) when Id.compare id (mk_id "atom") = 0 -> Typ_id (mk_id "int")
   | Typ_app (id, [_; _]) when Id.compare id (mk_id "range") = 0 -> Typ_id (mk_id "int")
   | Typ_app (id, [_]) when Id.compare id (mk_id "atom_bool") = 0 -> Typ_id (mk_id "bool")
-  | Typ_app (id, args) -> Typ_app (id, List.concat (List.map simple_typ_arg args))
+  | Typ_app (id, args) -> Typ_app (id, List.concat_map simple_typ_arg args)
   | Typ_fn (arg_typs, ret_typ) -> Typ_fn (List.map simple_typ arg_typs, simple_typ ret_typ)
   | Typ_tuple typs -> Typ_tuple (List.map simple_typ typs)
   | Typ_exist (_, _, Typ_aux (typ, l)) -> simple_typ_aux l typ
@@ -3246,8 +3246,8 @@ let rewrite_ast_remove_superfluous_returns env =
             let same_id (P_aux (p, _)) (E_aux (e, _)) =
               match (p, e) with P_id id, E_id id' -> Id.compare id id' == 0 | _, _ -> false
             in
-            let ps = List.map fst (List.map untyp_pat ps) in
-            let es = List.map fst (List.map uncast_exp es) in
+            let ps = List.map (fun p -> fst (untyp_pat p)) ps in
+            let es = List.map (fun e -> fst (uncast_exp e)) es in
             if List.for_all2 same_id ps es then add_opt_cast ptyp etyp a exp1 else E_aux (exp, annot)
         | _ -> E_aux (exp, annot)
       )
@@ -3557,7 +3557,7 @@ let rewrite_ast_realize_mappings effect_info env ast =
           DEF_aux
             ( DEF_overload
                 ( id,
-                  List.map
+                  List.concat_map
                     (fun overload ->
                       if Env.is_mapping overload env then (
                         let forwards_id = mk_id (string_of_id overload ^ "_forwards") in
@@ -3567,7 +3567,6 @@ let rewrite_ast_realize_mappings effect_info env ast =
                       else [overload]
                     )
                     overloads
-                  |> List.concat
                 ),
               def_annot
             );
@@ -4724,7 +4723,7 @@ let rewrite_toplevel_let_patterns env ast =
         )
     | d -> [d]
   in
-  let defs = List.map rewrite_def ast.defs |> List.concat in
+  let defs = List.concat_map rewrite_def ast.defs in
   { ast with defs }
 
 (* Remove definitions when they're shadowed by an external declaration.  Avoids problems with (e.g.)

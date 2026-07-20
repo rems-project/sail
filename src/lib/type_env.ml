@@ -489,8 +489,9 @@ let get_overloads id env =
 
 let get_overloads_recursive id env =
   let overloads = get_overloads id env in
-  List.map (fun overload -> if is_overload overload env then get_overloads overload env else [overload]) overloads
-  |> List.concat
+  List.concat_map
+    (fun overload -> if is_overload overload env then get_overloads overload env else [overload])
+    overloads
 
 let add_overloads l id ids env =
   typ_print

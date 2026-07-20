@@ -645,12 +645,12 @@ let quant_add qi typq =
 
 let quant_kopts typq =
   let qi_kopt = function QI_aux (QI_id kopt, _) -> [kopt] | QI_aux _ -> [] in
-  List.map qi_kopt typq |> List.concat
+  List.concat_map qi_kopt typq
 
 let quant_split typq =
   let qi_kopt = function QI_aux (QI_id kopt, _) -> [kopt] | _ -> [] in
   let qi_nc = function QI_aux (QI_constraint nc, _) -> [nc] | _ -> [] in
-  (List.concat (List.map qi_kopt typq), List.concat (List.map qi_nc typq))
+  (List.concat_map qi_kopt typq, List.concat_map qi_nc typq)
 
 let is_quant_kopt = function QI_aux (QI_id _, _) -> true | _ -> false
 
@@ -1574,7 +1574,7 @@ let rec undefined_of_typ mwords l annot (Typ_aux (typ_aux, _) as typ) =
       wrap (E_app (mk_id "undefined_bitvector", undefined_of_typ_args mwords l annot size)) typ
   | Typ_app (atom, [A_aux (A_nexp i, _)]) when string_of_id atom = "atom" -> wrap (E_sizeof i) typ
   | Typ_app (id, args) ->
-      wrap (E_app (prepend_id "undefined_" id, List.concat (List.map (undefined_of_typ_args mwords l annot) args))) typ
+      wrap (E_app (prepend_id "undefined_" id, List.concat_map (undefined_of_typ_args mwords l annot) args)) typ
   | Typ_tuple typs -> wrap (E_tuple (List.map (undefined_of_typ mwords l annot) typs)) typ
   | Typ_var kid ->
       (* Undefined monomorphism restriction in the type checker should

@@ -712,7 +712,7 @@ let place_pi_functions ~start ~finish ~post_idom ~post_df graph =
       )
     | _ -> None
   in
-  let get_pi ssanode = List.concat (List.map (function Pi guards -> guards | _ -> []) ssanode) in
+  let get_pi ssanode = List.concat_map (function Pi guards -> guards | _ -> []) ssanode in
 
   let mk_disj xs = match simp_disj xs with [] -> V_lit (VL_bool false, CT_bool) | [x] -> x | xs -> V_call (Bor, xs) in
   let mk_conj xs = match simp_conj xs with [] -> V_lit (VL_bool true, CT_bool) | [x] -> x | xs -> V_call (Band, xs) in

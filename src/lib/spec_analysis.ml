@@ -112,9 +112,9 @@ let bindings_from_pat p =
     | P_id id -> if pat_id_is_variable env id then [id] else []
     | P_var (p, kid) -> aux_pat p
     | P_vector ps | P_vector_concat ps | P_string_append ps | P_app (_, ps) | P_tuple ps | P_list ps ->
-        List.concat (List.map aux_pat ps)
+        List.concat_map aux_pat ps
     | P_cons (p1, p2) -> aux_pat p1 @ aux_pat p2
-    | P_struct (_, fps, _) -> List.map snd fps |> List.map aux_pat |> List.concat
+    | P_struct (_, fps, _) -> List.concat_map (fun fp -> aux_pat (snd fp)) fps
   in
   aux_pat p
 

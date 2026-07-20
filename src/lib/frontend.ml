@@ -332,8 +332,7 @@ let load_modules ?target default_sail_dir options env proj root_mod_ids =
   ( match !opt_list_files with
   | Some sep ->
       let included_files =
-        List.map (fun parsed_module -> if parsed_module.included then parsed_module.files else []) parsed_modules
-        |> List.concat
+        List.concat_map (fun parsed_module -> if parsed_module.included then parsed_module.files else []) parsed_modules
       in
       print_endline
         (Util.string_of_list sep
@@ -352,8 +351,7 @@ let load_modules ?target default_sail_dir options env proj root_mod_ids =
   );
 
   let all_files =
-    List.map (fun m -> m.files) parsed_modules
-    |> List.concat
+    List.concat_map (fun m -> m.files) parsed_modules
     |> List.filter_map (function File { path; _ } -> Some path | Generated _ -> None)
   in
   Option.iter (fun t -> Target.run_pre_initial_check_hook t all_files) target;
@@ -420,13 +418,12 @@ let load_project ?(no_core = false) ?target ?modules ?(options = []) ?(variables
   let project_files = List.map Sail_file.Path.actual project_files in
   let project_files = if no_core then project_files else Corelib_project.path :: project_files in
   let defs =
-    List.map
+    List.concat_map
       (fun project_file ->
         let root_directory = Filename.dirname (Sail_file.Path.to_string project_file) in
         Project.mk_root root_directory :: Initial_check.parse_project project_file
       )
       project_files
-    |> List.concat
   in
   let proj = Project.initialize_project_structure ~variables defs in
   let mod_ids =

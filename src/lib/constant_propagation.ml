@@ -778,12 +778,12 @@ let const_props target env ast =
             | NC_equal (A_aux (A_nexp (Nexp_aux (Nexp_var kid1, _)), _), A_aux (A_nexp (Nexp_aux (Nexp_var kid2, _)), _))
               when Kid.compare kid kid1 = 0 ->
                 [(kid2, nexp)]
-            | NC_and _ -> List.concat (List.map synonyms_of_nc (constraint_conj nc))
+            | NC_and _ -> List.concat_map synonyms_of_nc (constraint_conj nc)
             | _ -> []
           in
-          List.concat (List.map synonyms_of_nc (Env.get_constraints env'))
+          List.concat_map synonyms_of_nc (Env.get_constraints env')
         in
-        ksubst @ List.concat (List.map get_synonyms ksubst)
+        ksubst @ List.concat_map get_synonyms ksubst
       in
       let rec findpat_generic description assigns = function
         | [] ->

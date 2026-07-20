@@ -538,14 +538,13 @@ let top_sort_defs ast =
     {
       ast with
       defs =
-        List.map
+        List.concat_map
           (function
             | DEF_aux (DEF_internal_mutrec fds, def_annot) ->
                 List.map (fun fd -> DEF_aux (DEF_fundef fd, def_annot)) fds
             | d -> [d]
             )
-          ast.defs
-        |> List.concat;
+          ast.defs;
     }
   in
   (* Build callgraph, and collect definitions per node, so that we can efficiently reorder later *)
@@ -580,7 +579,7 @@ let top_sort_defs ast =
     | DEF_aux (DEF_internal_mutrec fundefs, _) -> List.map id_of_fundef fundefs
     | _ -> []
   in
-  let defined_funs = List.map fun_id_of_def ast.defs |> List.concat |> IdSet.of_list in
+  let defined_funs = List.concat_map fun_id_of_def ast.defs |> IdSet.of_list in
   let is_defined_val_spec = function
     | DEF_aux (DEF_val vs, _) when IdSet.mem (id_of_val_spec vs) defined_funs -> true
     | _ -> false
@@ -610,7 +609,7 @@ let top_sort_defs ast =
             | DEF_aux (DEF_internal_mutrec fundefs, _) -> fundefs
             | _ -> []
           in
-          let fundefs = List.map get_fundefs cdefs |> List.concat in
+          let fundefs = List.concat_map get_fundefs cdefs in
           let other_defs = List.filter (fun d -> get_fundefs d = []) cdefs in
           if List.length fundefs > 1 then (
             let env = Util.last cdefs |> function DEF_aux (_, da) -> da.env in
@@ -674,14 +673,13 @@ let partition_instantiation_definitions include_types defs =
     |> List.filter_map (function
       | DEF_aux (DEF_instantiation (_, substs), _) ->
           Some
-            (List.map
+            (List.concat_map
                (function
                  | IS_aux (IS_typ (_, arg), _) ->
                      if include_types then typ_arg_ids arg |> IdSet.elements |> List.map (fun id -> Type id) else []
                  | IS_aux (IS_id (_, id_to), _) -> [Function id_to]
                  )
                substs
-            |> List.concat
             )
       | _ -> None
       )

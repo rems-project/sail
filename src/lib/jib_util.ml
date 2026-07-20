@@ -917,10 +917,9 @@ let rec concatmap_instr f (I_aux (instr, aux)) =
     | I_return _ | I_comment _ | I_label _ | I_goto _ | I_raw _ | I_exit _ | I_undefined _ | I_end _ ->
         instr
     | I_if (cval, instrs1, instrs2) ->
-        I_if
-          (cval, List.concat (List.map (concatmap_instr f) instrs1), List.concat (List.map (concatmap_instr f) instrs2))
-    | I_block instrs -> I_block (List.concat (List.map (concatmap_instr f) instrs))
-    | I_try_block instrs -> I_try_block (List.concat (List.map (concatmap_instr f) instrs))
+        I_if (cval, List.concat_map (concatmap_instr f) instrs1, List.concat_map (concatmap_instr f) instrs2)
+    | I_block instrs -> I_block (List.concat_map (concatmap_instr f) instrs)
+    | I_try_block instrs -> I_try_block (List.concat_map (concatmap_instr f) instrs)
   in
   f (I_aux (instr, aux))
 
@@ -976,16 +975,16 @@ let cdef_map_funcall f (CDEF_aux (aux, def_annot)) = CDEF_aux (cdef_aux_map_func
 
 let ctype_def_concatmap_instr f = function
   | CTD_abstract (id, ctyp, CTDI_instrs instrs) ->
-      CTD_abstract (id, ctyp, CTDI_instrs (List.concat (List.map (concatmap_instr f) instrs)))
+      CTD_abstract (id, ctyp, CTDI_instrs (List.concat_map (concatmap_instr f) instrs))
   | ctd -> ctd
 
 let cdef_aux_concatmap_instr f = function
-  | CDEF_register (id, ctyp, instrs) -> CDEF_register (id, ctyp, List.concat (List.map (concatmap_instr f) instrs))
-  | CDEF_let (n, bindings, instrs) -> CDEF_let (n, bindings, List.concat (List.map (concatmap_instr f) instrs))
+  | CDEF_register (id, ctyp, instrs) -> CDEF_register (id, ctyp, List.concat_map (concatmap_instr f) instrs)
+  | CDEF_let (n, bindings, instrs) -> CDEF_let (n, bindings, List.concat_map (concatmap_instr f) instrs)
   | CDEF_fundef (id, heap_return, args, instrs) ->
-      CDEF_fundef (id, heap_return, args, List.concat (List.map (concatmap_instr f) instrs))
-  | CDEF_startup (id, instrs) -> CDEF_startup (id, List.concat (List.map (concatmap_instr f) instrs))
-  | CDEF_finish (id, instrs) -> CDEF_finish (id, List.concat (List.map (concatmap_instr f) instrs))
+      CDEF_fundef (id, heap_return, args, List.concat_map (concatmap_instr f) instrs)
+  | CDEF_startup (id, instrs) -> CDEF_startup (id, List.concat_map (concatmap_instr f) instrs)
+  | CDEF_finish (id, instrs) -> CDEF_finish (id, List.concat_map (concatmap_instr f) instrs)
   | CDEF_val (id, tyvars, ctyps, ctyp, extern) -> CDEF_val (id, tyvars, ctyps, ctyp, extern)
   | CDEF_type tdef -> CDEF_type (ctype_def_concatmap_instr f tdef)
   | CDEF_pragma (name, str) -> CDEF_pragma (name, str)
