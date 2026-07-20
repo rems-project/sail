@@ -1445,7 +1445,15 @@ let type_enum ctx registers =
       empty;
     ]
 
-let inhabit_enum ctx typ_map =
+let inhabit_enum_v2 ctx typ_map =
+  separate_map hardline
+    (fun (_, (id, typ)) ->
+      string "instance : Inhabited (RegisterRef "
+      ^^ doc_typ ctx typ ^^ string ") where" ^^ hardline ^^ string "  default := .Reg " ^^ doc_id_ctor id
+    )
+    typ_map
+
+let inhabit_enum_v1 ctx typ_map =
   separate_map hardline
     (fun (_, (id, typ)) ->
       string "instance : Inhabited (RegisterRef RegisterType "
@@ -1455,11 +1463,9 @@ let inhabit_enum ctx typ_map =
 
 let doc_reg_info env global registers =
   let ctx = context_init env global in
-  let type_map = List.fold_left add_reg_typ Bindings.empty registers in
-  let type_map = Bindings.bindings type_map in
-  separate hardline [register_enums registers; type_enum ctx registers; inhabit_enum ctx type_map; empty]
+  separate hardline [register_enums registers; type_enum ctx registers; empty]
 
-let doc_monad_abbrev defs (has_registers : bool) =
+let doc_monad_abbrev ~version defs =
   let find_exc_typ defs =
     let is_exc_typ_def = function
       | DEF_aux (DEF_type td, _) -> string_of_id (id_of_type_def td) = "exception"
@@ -1468,89 +1474,96 @@ let doc_monad_abbrev defs (has_registers : bool) =
     if List.exists is_exc_typ_def defs then empty else string "abbrev exception := Unit\n"
   in
   let excdef = find_exc_typ defs in
-  let pp_register_type = string "PreSailM RegisterType trivialChoiceSource exception" in
-  let pp_register_type_e = string "PreSailME RegisterType trivialChoiceSource exception" in
+  let pp_register_type =
+    if version = 1 then string "PreSailM RegisterType trivialChoiceSource exception" else string "PreSailM exception"
+  in
+  let pp_register_type_e =
+    if version = 1 then string "PreSailME RegisterType trivialChoiceSource exception" else string "PreSailME exception"
+  in
   let monad = separate space [string "abbrev"; string "SailM"; coloneq; pp_register_type] in
   let monad_e =
     separate space [string "abbrev"; string "SailME"; coloneq; pp_register_type_e] ^^ hardline ^^ hardline
   in
   separate hardline (remove_empties [excdef; monad; monad_e])
 
-let doc_instantiations_v1 ctx env =
+let doc_instantiations_v1 ctx env defs registers =
   let params = Monad_params.find_monad_parameters env in
-  match params with
-  | None -> empty
-  | Some params ->
-      nest 2
-        (separate hardline
-           [
-             string "instance : Arch where";
-             string "va_size := 64";
-             string "pa := " ^^ doc_typ ctx params.pa_type;
-             string "abort := " ^^ doc_typ ctx params.abort_type;
-             string "translation := " ^^ doc_typ ctx params.translation_summary_type;
-             string "trans_start := " ^^ doc_typ ctx params.trans_start_type;
-             string "trans_end := " ^^ doc_typ ctx params.trans_end_type;
-             string "fault := " ^^ doc_typ ctx params.fault_type;
-             string "tlb_op := " ^^ doc_typ ctx params.tlbi_type;
-             string "cache_op := " ^^ doc_typ ctx params.cache_op_type;
-             string "barrier := " ^^ doc_typ ctx params.barrier_type;
-             string "arch_ak := " ^^ doc_typ ctx params.arch_ak_type;
-             string "sys_reg_id := " ^^ doc_typ ctx params.sys_reg_id_type ^^ hardline;
-           ]
-        )
-      ^^ hardline
+  let arch =
+    match params with
+    | None -> empty
+    | Some params ->
+        nest 2
+          (separate hardline
+             [
+               string "instance : Arch where";
+               string "va_size := 64";
+               string "pa := " ^^ doc_typ ctx params.pa_type;
+               string "abort := " ^^ doc_typ ctx params.abort_type;
+               string "translation := " ^^ doc_typ ctx params.translation_summary_type;
+               string "trans_start := " ^^ doc_typ ctx params.trans_start_type;
+               string "trans_end := " ^^ doc_typ ctx params.trans_end_type;
+               string "fault := " ^^ doc_typ ctx params.fault_type;
+               string "tlb_op := " ^^ doc_typ ctx params.tlbi_type;
+               string "cache_op := " ^^ doc_typ ctx params.cache_op_type;
+               string "barrier := " ^^ doc_typ ctx params.barrier_type;
+               string "arch_ak := " ^^ doc_typ ctx params.arch_ak_type;
+               string "sys_reg_id := " ^^ doc_typ ctx params.sys_reg_id_type ^^ hardline;
+             ]
+          )
+        ^^ hardline
+  in
+  let type_map = List.fold_left add_reg_typ Bindings.empty registers in
+  let type_map = Bindings.bindings type_map in
+  separate hardline [arch; empty; doc_monad_abbrev ~version:1 defs; empty; inhabit_enum_v1 ctx type_map]
 
-let doc_instantiations_v2 ctx ast =
-  let type_substs, id_substs = Monad_params.find_instantiations ast in
+let doc_instantiations_v2 ctx defs registers =
+  let has_regs = registers != [] in
+  let type_substs, id_substs = Monad_params.find_instantiations defs in
   let ts x d = KBindings.find_opt (mk_kid x) type_substs |> Option.fold ~none:(string d) ~some:(doc_typ_app ctx) in
   let is x = Bindings.find_opt (mk_id x) id_substs |> Option.fold ~none:(string "fun _ => false") ~some:doc_id_ctor in
   let pr ?(d = "Unit") x = string (x ^ " := ") ^^ ts x d in
   let fn x = string (x ^ " := ") ^^ is x in
-  string "@[reducible]" ^^ hardline
-  ^^ nest 2
-       (separate hardline
-          [
-            string "instance : Arch where";
-            pr "addr_size" ~d:"64";
-            pr "addr_space";
-            pr "CHERI" ~d:"false";
-            pr "cap_size_log" ~d:"0";
-            pr "mem_acc";
-            fn "mem_acc_is_explicit";
-            fn "mem_acc_is_ifetch";
-            fn "mem_acc_is_ttw";
-            fn "mem_acc_is_relaxed";
-            fn "mem_acc_is_rel_acq_rcpc";
-            fn "mem_acc_is_rel_acq_rcsc";
-            fn "mem_acc_is_standalone";
-            fn "mem_acc_is_exclusive";
-            fn "mem_acc_is_atomic_rmw";
-            pr "trans_start";
-            pr "trans_end";
-            pr "abort";
-            pr "barrier";
-            pr "cache_op";
-            pr "tlbi";
-            pr "exn";
-            pr "sys_reg_id";
-          ]
-       )
-(*
-  mem_acc_is_explicit : mem_acc -> Bool
-  mem_acc_is_ifetch : mem_acc -> Bool
-  mem_acc_is_ttw : mem_acc -> Bool
-  mem_acc_is_relaxed : mem_acc -> Bool
-  mem_acc_is_rel_acq_rcpc : mem_acc -> Bool
-  mem_acc_is_rel_acq_rcsc : mem_acc -> Bool
-  mem_acc_is_standalone : mem_acc -> Bool
-  mem_acc_is_exclusive : mem_acc -> Bool
-  mem_acc_is_atomic_rmw : mem_acc -> Bool
-*)
+  let arch =
+    string "@[reducible]" ^^ hardline
+    ^^ nest 2
+         (separate hardline
+            [
+              string "instance : Arch where";
+              pr "addr_size" ~d:"64";
+              pr "addr_space";
+              pr "CHERI" ~d:"false";
+              pr "cap_size_log" ~d:"0";
+              pr "register" ~d:"Register";
+              pr "register_type" ~d:"RegisterType";
+              pr "mem_acc";
+              fn "mem_acc_is_explicit";
+              fn "mem_acc_is_ifetch";
+              fn "mem_acc_is_ttw";
+              fn "mem_acc_is_relaxed";
+              fn "mem_acc_is_rel_acq_rcpc";
+              fn "mem_acc_is_rel_acq_rcsc";
+              fn "mem_acc_is_standalone";
+              fn "mem_acc_is_exclusive";
+              fn "mem_acc_is_atomic_rmw";
+              pr "trans_start";
+              pr "trans_end";
+              pr "abort";
+              pr "barrier";
+              pr "cache_op";
+              pr "tlbi";
+              pr "exn";
+              pr "sys_reg_id";
+            ]
+         )
+  in
+  let type_map = List.fold_left add_reg_typ Bindings.empty registers in
+  let type_map = Bindings.bindings type_map in
+  separate hardline [arch; empty; doc_monad_abbrev ~version:2 defs; empty; inhabit_enum_v2 ctx type_map]
+(* let doc_monad_abbrev env global registers defs (has_registers : bool) = *)
 
-let doc_instantiations symbols ctx env ast =
-  if Preprocess.have_symbol "CONCURRENCY_INTERFACE_V2" symbols then doc_instantiations_v2 ctx ast
-  else doc_instantiations_v1 ctx env
+let doc_instantiations symbols ctx env defs regs =
+  if Preprocess.have_symbol "CONCURRENCY_INTERFACE_V2" symbols then doc_instantiations_v2 ctx defs regs
+  else doc_instantiations_v1 ctx env defs regs
 
 let main_function_stub effect_info has_registers =
   let open Effects in
@@ -1630,13 +1643,12 @@ let pp_ast_lean symbols (env : Type_check.env) effect_info ({ defs; _ } as ast :
   let instantiation_deps =
     match instantiation_deps with [x] -> x | _ -> failwith "expected a single block of instantiation defs"
   in
-  let instantiations = doc_instantiations symbols ctx env defs in
+  let instantiations = doc_instantiations symbols ctx env defs regs in
   let has_registers = List.length regs > 0 in
   let register_refs =
     if has_registers then doc_reg_info env global regs
     else string "abbrev Register := PEmpty\nabbrev RegisterType : Register -> Type := PEmpty.elim\n\n"
   in
-  let monad = doc_monad_abbrev defs has_registers in
   let types, all_fundefss = doc_defs ctx defs in
   let imp_fundefss, main_fundefs =
     if imp_funcs_files = [] then ([], concat all_fundefss) else (Util.butlast all_fundefss, Util.last all_fundefss)
@@ -1650,7 +1662,7 @@ let pp_ast_lean symbols (env : Type_check.env) effect_info ({ defs; _ } as ast :
     else []
   in
   let opens = IdSet.fold (fun id doc -> string "open " ^^ doc_id_ctor id ^^ hardline ^^ doc) !opens empty in
-  print types_file (types ^^ register_refs ^^ monad ^^ instantiation_deps ^^ instantiations);
+  print types_file (types ^^ register_refs ^^ instantiation_deps ^^ instantiations);
   let _ =
     List.map2
       (fun file defs -> print file (separate hardline (remove_empties [opens; defs])))

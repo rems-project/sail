@@ -32,19 +32,22 @@ open Register
 abbrev RegisterType : Register → Type
   | .dummy => (BitVec 1)
 
-instance : Inhabited (RegisterRef RegisterType (BitVec 1)) where
-  default := .Reg dummy
+
+
 abbrev exception := Unit
 
 abbrev SailM := PreSailM RegisterType trivialChoiceSource exception
 abbrev SailME := PreSailME RegisterType trivialChoiceSource exception
 
 
+
+instance : Inhabited (RegisterRef RegisterType (BitVec 1)) where
+  default := .Reg dummy
 XXXXXXXXX
 
 import Sail
 import Out.Defs
-import Out.Specialization
+import Out.SpecializationV1
 import Out.FakeReal
 
 set_option maxHeartbeats 1_000_000_000

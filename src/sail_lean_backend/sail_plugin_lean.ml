@@ -97,7 +97,7 @@ let opt_disable_matchbv : bool ref = ref true
 let lean_version : string = "lean4:v4.29.0"
 let mathlib_version : string = "v4.29.0"
 let lib_default_git : string = "https://github.com/rems-project/lean-sail"
-let lib_default_rev : string = "v4"
+let lib_default_rev : string = "v5"
 
 let lean_options =
   [
@@ -256,6 +256,8 @@ let file_to_module (filename : string) =
   let base = Filename.basename filename in
   Filename.chop_extension base
 
+let interface_module interface_v = if interface_v = 1 then "ConcurrencyInterfaceV1" else "ArchSem"
+
 let file_prelude version namespace =
   let non_computable = if !opt_lean_noncomputable then "noncomputable section\n" else "" in
   Printf.sprintf
@@ -265,12 +267,12 @@ set_option linter.unusedVariables false
 set_option match.ignoreUnusedAlts true
 
 open Sail
-open Sail.ConcurrencyInterfaceV%d
+open Sail.%s
 
 %snamespace %s
 
 |}
-    version non_computable namespace
+    (interface_module version) non_computable namespace
 
 let path_to_static_library sail_dir str = Filename.quote (sail_dir ^ "/src/sail_lean_backend/Sail/" ^ str ^ ".lean")
 
@@ -293,7 +295,7 @@ let print_function_file_prelude interface_v file out_name_camel (imp_refs : stri
     | ns -> List.iter (fun n -> output_string file ("import " ^ out_name_camel ^ "." ^ n ^ "\n")) ns
   in
   output_string file ("\n" ^ file_prelude interface_v out_name_camel);
-  Printf.fprintf file "open ConcurrencyInterfaceV%d\n\n" interface_v;
+  Printf.fprintf file "open %s\n\n" (interface_module interface_v);
   output_string file "open Defs\n";
   output_string file "namespace Functions\n\n"
 
@@ -325,7 +327,8 @@ let start_lean_output interface_v (out_name : string) (import_names : string lis
     else "/src/sail_lean_backend/Sail/FakeReal.lean"
   in
   opt_lean_import_files := (sail_dir ^ real_numbers_file) :: !opt_lean_import_files;
-  opt_lean_import_files := (sail_dir ^ "/src/sail_lean_backend/Sail/Specialization.lean") :: !opt_lean_import_files;
+  let specialization_file = if interface_v = 1 then "SpecializationV1.lean" else "SpecializationArchSem.lean" in
+  opt_lean_import_files := (sail_dir ^ "/src/sail_lean_backend/Sail/" ^ specialization_file) :: !opt_lean_import_files;
   List.iter
     (fun filename ->
       let filepath = Filename.concat lean_src_dir (file_to_module filename) in
