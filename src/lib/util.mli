@@ -187,6 +187,8 @@ val compare_list : ('a -> 'b -> int) -> 'a list -> 'b list -> int
 
 val equal_list : ('a -> 'b -> bool) -> 'a list -> 'b list -> bool
 
+val is_singleton_list : 'a list -> bool
+
 val take : int -> 'a list -> 'a list
 val drop : int -> 'a list -> 'a list
 

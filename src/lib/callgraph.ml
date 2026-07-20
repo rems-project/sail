@@ -104,7 +104,7 @@ module Node = struct
   type t = node
   let compare n1 n2 =
     let lex_ord c1 c2 = if c1 = 0 then c2 else c1 in
-    lex_ord (compare (node_kind n1) (node_kind n2)) (Id.compare (node_id n1) (node_id n2))
+    lex_ord (Int.compare (node_kind n1) (node_kind n2)) (Id.compare (node_id n1) (node_id n2))
 end
 
 module NodeSet = Set.Make (Node)

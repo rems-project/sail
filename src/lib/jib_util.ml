@@ -81,14 +81,14 @@ module Name = struct
         let c1 = Id.compare x y in
         if c1 = 0 then Int.compare n m else c1
     | Abstract x, Abstract y -> Id.compare x y
-    | Have_exception n, Have_exception m -> compare n m
-    | Current_exception n, Current_exception m -> compare n m
-    | Return n, Return m -> compare n m
-    | Memory_writes n, Memory_writes m -> compare n m
+    | Have_exception n, Have_exception m -> Int.compare n m
+    | Current_exception n, Current_exception m -> Int.compare n m
+    | Return n, Return m -> Int.compare n m
+    | Memory_writes n, Memory_writes m -> Int.compare n m
     | Channel (c1, n), Channel (c2, m) -> (
         match (c1, c2) with
-        | Chan_stdout, Chan_stdout -> compare n m
-        | Chan_stderr, Chan_stderr -> compare n m
+        | Chan_stdout, Chan_stdout -> Int.compare n m
+        | Chan_stderr, Chan_stderr -> Int.compare n m
         | Chan_stdout, Chan_stderr -> 1
         | Chan_stderr, Chan_stdout -> -1
       )
@@ -504,16 +504,16 @@ let rec ctyp_compare ctyp1 ctyp2 =
   | CT_lint, CT_lint -> 0
   | CT_lint, _ -> 1
   | _, CT_lint -> -1
-  | CT_fint n, CT_fint m -> compare n m
+  | CT_fint n, CT_fint m -> Int.compare n m
   | CT_fint _, _ -> 1
   | _, CT_fint _ -> -1
   | CT_constant n, CT_constant m -> Big_int.compare n m
   | CT_constant _, _ -> 1
   | _, CT_constant _ -> -1
-  | CT_fbits n, CT_fbits m -> compare n m
+  | CT_fbits n, CT_fbits m -> Int.compare n m
   | CT_fbits _, _ -> 1
   | _, CT_fbits _ -> -1
-  | CT_sbits n, CT_sbits m -> compare n m
+  | CT_sbits n, CT_sbits m -> Int.compare n m
   | CT_sbits _, _ -> 1
   | _, CT_sbits _ -> -1
   | CT_lbits, CT_lbits -> 0
@@ -525,7 +525,7 @@ let rec ctyp_compare ctyp1 ctyp2 =
   | CT_real, CT_real -> 0
   | CT_real, _ -> 1
   | _, CT_real -> -1
-  | CT_float n, CT_float m -> compare n m
+  | CT_float n, CT_float m -> Int.compare n m
   | CT_float _, _ -> 1
   | _, CT_float _ -> -1
   | CT_poly kid1, CT_poly kid2 -> Kid.compare kid1 kid2
@@ -552,7 +552,7 @@ let rec ctyp_compare ctyp1 ctyp2 =
   | CT_vector ctyp1, CT_vector ctyp2 -> ctyp_compare ctyp1 ctyp2
   | CT_vector _, _ -> 1
   | _, CT_vector _ -> -1
-  | CT_fvector (n1, ctyp1), CT_fvector (n2, ctyp2) -> lex_ord (compare n1 n2) (ctyp_compare ctyp1 ctyp2)
+  | CT_fvector (n1, ctyp1), CT_fvector (n2, ctyp2) -> lex_ord (Int.compare n1 n2) (ctyp_compare ctyp1 ctyp2)
   | CT_fvector _, _ -> 1
   | _, CT_fvector _ -> -1
   | CT_tup ctyps1, CT_tup ctyps2 -> Util.lex_ord_list ctyp_compare ctyps1 ctyps2

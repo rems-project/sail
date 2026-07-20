@@ -59,7 +59,7 @@ open Callgraph
 
 let outcome_spec_of_def = function DEF_outcome (OV_aux (outcome, _), _) -> Some outcome | _ -> None
 
-let outcome_specs_of_ast ast = Util.map_filter outcome_spec_of_def ast.defs
+let outcome_specs_of_ast ast = List.filter_map outcome_spec_of_def ast.defs
 
 let id_of_outcome (OV_outcome (id, _, _)) = id
 

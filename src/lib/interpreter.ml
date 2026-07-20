@@ -393,7 +393,7 @@ let rec eval_frame' = function
             )
           )
           else (
-            let arg = if List.length args != 1 then tuple_value args else List.hd args in
+            let arg = if Util.is_singleton_list args then List.hd args else tuple_value args in
             try
               let body = exp_of_fundef (Bindings.find id gstate.fundefs) arg in
               Step (lazy (string_of_exp body), (initial_lstate, gstate), Monad.pure body, (out, lstate, cont) :: stack)
@@ -481,7 +481,7 @@ let default_effect_interp out state stack eff =
         else failwith ("Write of nonexistent register: " ^ string_of_id id)
       else failwith ("Register write disallowed by allow_registers setting: " ^ string_of_id id)
   | Outcome (id, vals, cont) -> (
-      let arg = if List.length vals != 1 then tuple_value vals else List.hd vals in
+      let arg = if Util.is_singleton_list vals then List.hd vals else tuple_value vals in
       match Bindings.find_opt id gstate.fundefs with
       | Some fundef ->
           let body = exp_of_fundef fundef arg in

@@ -183,6 +183,8 @@ let rec equal_list f l1 l2 =
   | [], _ -> false
   | x :: l1, y :: l2 -> f x y && equal_list f l1 l2
 
+let is_singleton_list = function [_] -> true | _ -> false
+
 let update_first f = function [] -> [] | x :: xs -> f x :: xs
 
 let rec update_last f = function [] -> [] | [x] -> [f x] | x :: xs -> x :: update_last f xs
@@ -352,8 +354,11 @@ module StringSet = Set.Make (String)
 module StringMap = Map.Make (String)
 
 module IntIntSet = Set.Make (struct
-  let compare = Stdlib.compare
   type t = int * int
+
+  let compare x y =
+    let c = Int.compare (fst x) (fst y) in
+    if c = 0 then Int.compare (snd x) (snd y) else c
 end)
 
 let copy_file src dst =

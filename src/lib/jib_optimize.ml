@@ -689,7 +689,7 @@ let remove_tuples cdefs ctx =
         let sorted_tuples =
           CTSet.elements tuples
           |> List.map (fun ctyp -> (tuple_depth ctyp, ctyp))
-          |> List.sort (fun (d1, _) (d2, _) -> compare d2 d1)
+          |> List.sort (fun (d1, _) (d2, _) -> Int.compare d2 d1)
           |> List.map snd
         in
         let ctx_updates, structs = List.map to_struct sorted_tuples |> List.split in
