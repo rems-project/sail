@@ -1,5 +1,17 @@
 (lang dune 3.21)
 
+(name sail_lsp)
+(version 0.20.2)
+
+(generate_opam_files true)
+
+(source
+  (github rems-project/sail))
+
+(maintainers "Sail Devs <cl-sail-dev@lists.cam.ac.uk>")
+
+(license BSD-2-Clause)
+
 (package
  (name sail_lsp)
  (synopsis "Sail LSP server")

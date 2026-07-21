@@ -26,6 +26,7 @@ elif [ "$1" = "other" ]; then
     test/format/run_tests.py || returncode=1
     test/oneoff/run_tests.py || returncode=1
     test/float/run_tests.py || returncode=1
+    test/lsp/run_tests.py || returncode=1
 elif [ "$1" = "rocq" ]; then
     test/rocq/run_tests.py || returncode=1
     test/c/run_tests.py --targets coq || returncode=1
