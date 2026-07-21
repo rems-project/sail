@@ -73,12 +73,20 @@ jobs:
         eval $(opam env)
         opam pin --yes --no-action add .
         opam install . --yes --deps-only
+        opam install src/sail_lsp --yes --deps-only
 
     - name: Build Sail with coverage
       run: |
         eval $(opam env)
         dune build --release --instrument-with bisect_ppx
         dune install
+
+    - name: Build sail_lsp
+      working-directory: src/sail_lsp
+      run: |
+        eval $(opam env)
+        dune build --release
+        dune install --root .
 
     - name: Build sailcov
       working-directory: sailcov
