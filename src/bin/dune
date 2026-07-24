@@ -293,3 +293,9 @@
   (%{workspace_root}/src/sail_lean_backend/Sail/SpecializationArchSem.lean
    as
    src/sail_lean_backend/Sail/SpecializationArchSem.lean)))
+
+(install
+ (files
+  (%{workspace_root}/editors/sail-mode.el as emacs/site-lisp/sail-mode.el))
+ (section share_root)
+ (package sail))
