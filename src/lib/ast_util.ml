@@ -2136,22 +2136,35 @@ struct
     else (
       let result =
         match aux with
-        | E_block exps | E_tuple exps -> option_mapm (find_annot_exp sl) exps
+        | E_block exps | E_tuple exps | E_vector exps | E_list exps -> option_mapm (find_annot_exp sl) exps
         | E_app (_, exps) -> option_mapm (find_annot_exp sl) exps
         | E_let (pat, exp, body) -> option_chain (find_annot_pat sl pat) (option_mapm (find_annot_exp sl) [exp; body])
+        | E_assert (exp1, exp2) | E_cons (exp1, exp2) | E_vector_append (exp1, exp2) ->
+            option_mapm (find_annot_exp sl) [exp1; exp2]
         | E_assign (lexp, exp) -> option_chain (find_annot_lexp sl lexp) (find_annot_exp sl exp)
         | E_var (lexp, exp1, exp2) ->
             option_chain (find_annot_lexp sl lexp) (option_mapm (find_annot_exp sl) [exp1; exp2])
         | E_if (cond_exp, then_exp, else_exp) -> option_mapm (find_annot_exp sl) [cond_exp; then_exp; else_exp]
         | E_match (exp, cases) | E_try (exp, cases) ->
             option_chain (find_annot_exp sl exp) (option_mapm (find_annot_pexp sl) cases)
-        | E_return exp | E_typ (_, exp) -> find_annot_exp sl exp
+        | E_return exp | E_typ (_, exp) | E_exit exp | E_throw exp | E_field (exp, _) -> find_annot_exp sl exp
         | E_for (_, exp_from, exp_to, exp_by, _, body) ->
             option_mapm (find_annot_exp sl) [exp_from; exp_to; exp_by; body]
+        | E_loop (_, measure, exp_cond, exp_body) ->
+            option_chain (find_annot_measure sl measure) (option_mapm (find_annot_exp sl) [exp_cond; exp_body])
+        | E_struct (_, fexps) -> option_mapm (find_annot_fexp sl) fexps
+        | E_struct_update (exp, fexps) -> option_chain (find_annot_exp sl exp) (option_mapm (find_annot_fexp sl) fexps)
         | _ -> None
       in
       match result with None -> Some (l, annot, Loc.categorize_exp aux) | _ -> result
     )
+
+  and find_annot_measure sl (Measure_aux (aux, l)) =
+    if not (subloc sl l) then None
+    else (match aux with Measure_none -> None | Measure_some exp -> find_annot_exp sl exp)
+
+  and find_annot_fexp sl (FE_aux (FE_fexp (_, exp), (l, annot))) =
+    if not (subloc sl l) then None else find_annot_exp sl exp
 
   and find_annot_lexp sl (LE_aux (aux, (l, annot))) =
     if not (subloc sl l) then None
