@@ -141,7 +141,8 @@ Editor support
 **Emacs Mode**
 [editors/sail-mode.el](editors/sail-mode.el) contains an Emacs mode
 for the most recent version of Sail which provides some basic syntax
-highlighting.
+highlighting.  If you use the opam package with user-setup, then it
+should be sufficient to add `(require 'sail-mode)` to your `.emacs`.
 
 **VSCode Mode**
 [editors/vscode](editors/vscode) contains a Visual Studio Code mode
