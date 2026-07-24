@@ -30,6 +30,18 @@ vim.filetype.add({
 })
 ```
 
+For emacs you can add the following to your `.emacs` file after
+loading sail-mode:
+
+```elisp
+(require 'lsp-mode)
+(add-to-list 'lsp-language-id-configuration '(sail-mode . "sail"))
+(lsp-register-client (make-lsp-client
+                      :new-connection (lsp-stdio-connection "sail_lsp")
+                      :activation-fn (lsp-activate-on "sail")
+                      :server-id 'saillsp))
+```
+
 ### Build
 
 Use `make lsp` or `make lsp_install` from the repository root.
