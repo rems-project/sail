@@ -116,33 +116,47 @@ jobs:
         path: ${{ github.event_path }}
 
   rocq:
-    runs-on: ubuntu-latest
-    env:
-      OPAMROOT: /home/rocq/.opam
-    container:
-      image: rocq/rocq-prover:9.0
-      # github requires root to access some resources from outside the container
-      # (e.g. https://github.com/actions/checkout/issues/47)
-      options: --user root
+    runs-on: ubuntu-24.04
 
     steps:
     - uses: actions/checkout@v4
 
     - name: System dependencies
       run: |
-        apt-get update
-        apt-get -o Acquire::Retries=3 install -y build-essential libgmp-dev z3 git curl
+        sudo apt-get update
+        sudo apt-get -o Acquire::Retries=3 install -y build-essential libgmp-dev z3 opam git curl
+
+    # Note that we include rocq and its stdlib in the cache to avoid costly rebuilds
+    - name: Restore cached opam
+      id: cache-opam-restore
+      uses: actions/cache/restore@v4
+      with:
+        path: ~/.opam
+        key: rocq-opam
+
+    - name: Setup opam
+      if: steps.cache-opam-restore.outputs.cache-hit != 'true'
+      run: |
+        opam init --yes --no-setup --shell=sh --compiler=5.2.1
+        opam repo add --yes rocq-released https://rocq-prover.org/opam/released
+        opam update --yes
+        opam install --yes rocq-core.9.2.0 rocq-stdlib.9.1.0
+
+    - name: Save cached opam
+      if: steps.cache-opam-restore.outputs.cache-hit != 'true'
+      id: cache-opam-save
+      uses: actions/cache/save@v4
+      with:
+        path: ~/.opam
+        key: ${{ steps.cache-opam-restore.outputs.cache-primary-key }}
 
     - name: Install Sail dependencies
       run: |
         eval $(opam env)
-        # checkout does this, but for some reason it has disappeared by this point...
-        git config --global --add safe.directory /__w/sail/sail
         opam update --yes
-        opam pin --yes remove dune
         opam pin --yes --no-action add rocq-sail-stdpp git+https://github.com/rems-project/coq-sail.git
         opam pin --yes --no-action -k path add .
-        opam install --yes "coq<9.1" rocq-sail-stdpp coq-record-update
+        opam install --yes rocq-sail-stdpp coq-record-update
         opam install . --yes --deps-only
 
     - name: Build Sail with coverage
