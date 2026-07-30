@@ -4439,7 +4439,7 @@ let remove_duplicate_valspecs env ast =
   { ast with defs = List.rev rev_defs }
 
 let rewrite_toplevel_consts target type_env ast =
-  let istate = Constant_fold.initial_state ast type_env in
+  let istate = Constant_fold.initial_state target ast type_env in
   let subst consts exp =
     let open Rewriter in
     let used_ids = fold_exp { (pure_exp_alg IdSet.empty IdSet.union) with e_id = IdSet.singleton } exp in

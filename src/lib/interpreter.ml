@@ -65,6 +65,7 @@ end)
 type gstate = {
   registers : value Bindings.t;
   allow_registers : bool; (* For some uses we want to forbid touching any registers. *)
+  fold_target : string option;
   primops : (value list -> value) StringMap.t;
   letbinds : value Bindings.t;
   fundefs : Type_check.tannot fundef Bindings.t;
@@ -251,6 +252,9 @@ let is_interpreter_extern id env = Type_check.Env.is_extern id env "interpreter"
 
 let get_interpreter_extern id env = Type_check.Env.get_extern id env "interpreter"
 
+let is_fold_target_extern id env gstate =
+  match gstate.fold_target with Some target -> Type_check.Env.is_extern id env target | None -> false
+
 module Semantics = Extraction.Semantics.Make (struct
   type t = Type_check.tannot
 
@@ -359,10 +363,19 @@ let rec eval_frame' = function
       | Assertion_failed s, _ -> Fail (out, state, m, stack, "Assertion failed: " ^ s)
       | Call (id, args, cont), _ ->
           let env = gstate.typecheck_env in
+          let interpreter_extern = is_interpreter_extern id env in
           if Type_check.Env.is_outcome id env then Effect_request (out, state, stack, Outcome (id, args, cont))
           else if Type_check.Env.is_union_constructor id env then
             Step (lazy "", state, cont (Extraction.Semantics.Return_ok (V_ctor (id, args))), stack)
-          else if is_interpreter_extern id env then (
+          else if is_fold_target_extern id env gstate && not interpreter_extern then
+            Fail
+              ( out,
+                state,
+                m,
+                stack,
+                "Tried interpreting external function for constant folding target: " ^ string_of_id id
+              )
+          else if interpreter_extern then (
             let extern = get_interpreter_extern id env in
             if extern = "reg_deref" then (
               let regname = coerce_ref (List.hd args) in
@@ -501,10 +514,11 @@ let rec run_frame frame =
 
 let eval_exp state exp = run_frame (Step (lazy "", state, Monad.pure exp, []))
 
-let initial_gstate primops defs env =
+let initial_gstate ?fold_target primops defs env =
   {
     registers = Bindings.empty;
     allow_registers = true;
+    fold_target;
     primops;
     letbinds = Bindings.empty;
     fundefs = Bindings.empty;
@@ -546,8 +560,8 @@ let rec initialize_registers allow_registers undef_registers gstate =
   in
   function def :: defs -> initialize_registers allow_registers undef_registers (process_def def) defs | [] -> gstate
 
-let initial_state ?(registers = true) ?(undef_registers = true) ast env primops =
-  let gstate = initial_gstate primops ast.defs env in
+let initial_state ?(registers = true) ?(undef_registers = true) ?fold_target ast env primops =
+  let gstate = initial_gstate ?fold_target primops ast.defs env in
   let add_function gstate = function
     | DEF_aux (DEF_fundef fdef, _) -> { gstate with fundefs = Bindings.add (id_of_fundef fdef) fdef gstate.fundefs }
     | _ -> gstate

@@ -284,7 +284,7 @@ let const_props target env ast =
     let open Interpreter in
     let remove_primop id = StringMap.remove (string_of_id id) in
     let remove_never_fold = IdSet.fold remove_primop (never_fold_ids ast) in
-    let lstate, gstate = Constant_fold.initial_state ast env in
+    let lstate, gstate = Constant_fold.initial_state target ast env in
     (lstate, { gstate with primops = remove_never_fold gstate.primops })
   in
   let const_fold exp =
