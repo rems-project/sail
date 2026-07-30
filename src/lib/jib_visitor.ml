@@ -240,15 +240,45 @@ let rec visit_instr vis outer_instr =
   do_visit vis (vis#vinstr outer_instr) aux outer_instr
 
 and visit_instrs vis outer_instrs =
-  let aux vis no_change =
-    match no_change with
+  let rec commit rev shared n =
+    if n = 0 then (rev, shared) else (match shared with x :: t -> commit (x :: rev) t (n - 1) | [] -> (rev, shared))
+  in
+  let rec unwind result = function
+    | [] -> result
+    | (rev_prefix, f) :: posts -> unwind (List.rev_append rev_prefix (f result)) posts
+  in
+  let rec go rev shared pending posts instrs =
+    match vis#vinstrs instrs with
+    | SkipChildren -> unwind (List.rev_append rev shared) posts
+    | ChangeTo instrs' ->
+        let rev, _ = commit rev shared pending in
+        unwind (List.rev_append rev instrs') posts
+    | DoChildren -> children rev shared pending posts instrs
+    | DoChildrenPost f ->
+        let rev, _ = commit rev shared pending in
+        children [] instrs 0
+          (( rev,
+             fun r ->
+               f ();
+               r
+           )
+          :: posts
+          )
+          instrs
+    | ChangeDoChildrenPost (instrs', f) ->
+        let rev, _ = commit rev shared pending in
+        children [] instrs' 0 ((rev, f) :: posts) instrs'
+  and children rev shared pending posts = function
+    | [] -> unwind (List.rev_append rev shared) posts
     | instr :: instrs ->
         let instr' = visit_instr vis instr in
-        let instrs' = visit_instrs vis instrs in
-        if instr == instr' && instrs == instrs' then no_change else instr' :: instrs'
-    | [] -> []
+        if instr' != instr then (
+          let rev, _ = commit rev shared pending in
+          go (instr' :: rev) instrs 0 posts instrs
+        )
+        else go rev shared (pending + 1) posts instrs
   in
-  do_visit vis (vis#vinstrs outer_instrs) aux outer_instrs
+  go [] outer_instrs 0 [] outer_instrs
 
 and visit_ctype_def vis no_change =
   match no_change with

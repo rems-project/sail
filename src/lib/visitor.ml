@@ -125,22 +125,26 @@ let do_visit (vis : 'v) (action : 'a visit_action) (children : 'v -> 'a -> 'a) (
 
 let change_do_children node' = ChangeDoChildrenPost (node', fun n -> n)
 
-(* map_no_copy is like map but avoid copying the list if the function does not
- * change the elements. *)
-let rec map_no_copy (f : 'a -> 'a) = function
-  | [] -> []
-  | i :: resti as li ->
-      let i' = f i in
-      let resti' = map_no_copy f resti in
-      if i' != i || resti' != resti then i' :: resti' else li
-
-let rec map_no_copy_list (f : 'a -> 'a list) = function
-  | [] -> []
-  | i :: resti as li -> (
-      let il' = f i in
-      let resti' = map_no_copy_list f resti in
-      match il' with [i'] when i' == i && resti' == resti -> li | _ -> il' @ resti'
-    )
+(* map_no_copy is like map but avoids copying the list if the function does not
+   change any element (compared with physical equality). It is tail recursive:
+   elements up to the last change are rebuilt while the unchanged suffix is
+   shared with the original list, so nothing is allocated when nothing changes.
+   f is applied left-to-right, once per element. *)
+let map_no_copy (f : 'a -> 'a) li =
+  let rec commit rev shared n =
+    if n = 0 then (rev, shared) else (match shared with x :: t -> commit (x :: rev) t (n - 1) | [] -> (rev, shared))
+  in
+  let rec go rev shared pending = function
+    | [] -> List.rev_append rev shared
+    | i :: resti ->
+        let i' = f i in
+        if i' != i then (
+          let rev, shared = commit rev shared pending in
+          go (i' :: rev) resti 0 resti
+        )
+        else go rev shared (pending + 1) resti
+  in
+  go [] li 0 li
 
 (* not part of original cil framework *)
 let map_no_copy_opt (f : 'a -> 'a) : 'a option -> 'a option = function
