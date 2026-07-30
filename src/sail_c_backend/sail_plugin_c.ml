@@ -242,11 +242,11 @@ let c_target (mode : c_backend_mode) out_file { ast; effect_info; env; default_s
   Reporting.opt_warnings := true;
 
   if !opt_generate_header then
-    Reporting.warn "Deprecated" Parse_ast.Unknown
+    Reporting.warn Version.v0_20_2 "Deprecated" Parse_ast.Unknown
       "--c-generate-header is deprecated and has no effect; headers are now always generated";
 
   if !opt_static then
-    Reporting.warn "Deprecated" Parse_ast.Unknown "--static is deprecated and no longer has any effect";
+    Reporting.warn Version.v0_20_2 "Deprecated" Parse_ast.Unknown "--static is deprecated and no longer has any effect";
 
   let out_file = Option.value out_file ~default:"out" in
   let basename = Filename.basename out_file in

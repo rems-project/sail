@@ -425,7 +425,7 @@ let known_key k =
 let int_option k = function
   | `Int n -> Some n
   | json ->
-      Reporting.simple_warn
+      Reporting.simple_warn Version.v0_20_2
         (Printf.sprintf "Argument for key %s must be an integer, got %s instead. Using default value." k
            (Yojson.Safe.to_string json)
         );
@@ -434,7 +434,7 @@ let int_option k = function
 let bool_option k = function
   | `Bool n -> Some n
   | json ->
-      Reporting.simple_warn
+      Reporting.simple_warn Version.v0_20_2
         (Printf.sprintf "Argument for key %s must be a boolean, got %s instead. Using default value." k
            (Yojson.Safe.to_string json)
         );
@@ -444,7 +444,7 @@ let float_option k = function
   | `Int n -> Some (float_of_int n)
   | `Float n -> Some n
   | json ->
-      Reporting.simple_warn
+      Reporting.simple_warn Version.v0_20_2
         (Printf.sprintf "Argument for key %s must be a number, got %s instead. Using default value." k
            (Yojson.Safe.to_string json)
         );
@@ -454,10 +454,11 @@ let enum_option f k = function
   | `String s ->
       let res = f s in
       if Option.is_none res then
-        Reporting.simple_warn (Printf.sprintf "Argument for key %s was not a recognized setting. Using default value." k);
+        Reporting.simple_warn Version.v0_20_2
+          (Printf.sprintf "Argument for key %s was not a recognized setting. Using default value." k);
       res
   | json ->
-      Reporting.simple_warn
+      Reporting.simple_warn Version.v0_20_2
         (Printf.sprintf "Argument for key %s must be a string, got %s instead. Using default value." k
            (Yojson.Safe.to_string json)
         );
@@ -470,7 +471,7 @@ let config_from_json (json : Yojson.Safe.t) =
   match json with
   | `Assoc keys ->
       ( match List.find_opt (fun (k, _) -> not (known_key k)) keys with
-      | Some (k, _) -> Reporting.simple_warn (Printf.sprintf "Unknown key %s in formatting config" k)
+      | Some (k, _) -> Reporting.simple_warn Version.v0_20_2 (Printf.sprintf "Unknown key %s in formatting config" k)
       | None -> ()
       );
       {

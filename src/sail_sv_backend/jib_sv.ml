@@ -1394,7 +1394,7 @@ module Make (Config : CONFIG) = struct
           Printf.sprintf "%s: control flow graph is not acyclic (node %d is in cycle)" (string_of_sv_name name) n
         in
         if Config.skip_cyclic then (
-          Reporting.warn "SystemVerilog generation" Parse_ast.Unknown msg;
+          Reporting.warn Version.v0_20_2 "SystemVerilog generation" Parse_ast.Unknown msg;
           []
         )
         else raise (Reporting.err_general Parse_ast.Unknown msg)

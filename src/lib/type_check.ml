@@ -2028,7 +2028,9 @@ let rec lexp_assignment_type env (LE_aux (aux, (l, _))) =
   | LE_typ (_, v) -> (
       match Env.lookup_id v env with
       | Register _ | Local (Mutable, _) ->
-          Reporting.warn ("Redundant type annotation on assignment to " ^ string_of_id v) l "Type is already known";
+          Reporting.warn Version.v0_20_2
+            ("Redundant type annotation on assignment to " ^ string_of_id v)
+            l "Type is already known";
           Update
       | Unbound _ -> Declaration
       | Local (Immutable, _) | Enum _ ->
@@ -2801,7 +2803,7 @@ and bind_pat env (P_aux (pat_aux, (l, uannot)) as pat) typ =
       (* If the identifier we're matching on is also a constructor of
          a union, that's probably a mistake, so warn about it. *)
       if Env.is_union_constructor v env then
-        Reporting.warn
+        Reporting.warn Version.v0_20_2
           (Printf.sprintf "Identifier %s found in pattern is also a union constructor at" (string_of_id v))
           l
           (Printf.sprintf "Suggestion: Maybe you meant to match against %s() instead?" (string_of_id v));
@@ -4259,7 +4261,7 @@ and bind_mpat allow_unknown other_env env (MP_aux (mpat_aux, (l, uannot)) as mpa
       (* If the identifier we're matching on is also a constructor of
          a union, that's probably a mistake, so warn about it. *)
       if Env.is_union_constructor v env then
-        Reporting.warn
+        Reporting.warn Version.v0_20_2
           (Printf.sprintf "Identifier %s found in mapping-pattern is also a union constructor at" (string_of_id v))
           l ""
       else ();
@@ -5453,7 +5455,8 @@ and check_def : Env.t -> untyped_def -> typed_def list * Env.t =
       Env.wf_typ ~at:l env typ;
       match typ with
       | Typ_aux (Typ_app (Id_aux (Id "option", _), [_]), _) ->
-          Reporting.warn "No default value" l "Registers of type option should explicitly be given a default value";
+          Reporting.warn Version.v0_20_2 "No default value" l
+            "Registers of type option should explicitly be given a default value";
           let none_ctor = locate (fun _ -> gen_loc l) (mk_exp (E_app (mk_id "None", [mk_lit_exp L_unit]))) in
           check_def env
             (DEF_aux (DEF_register (DEC_aux (DEC_reg (typ, id, Some none_ctor), (l, uannot))), strip_def_annot def_annot)

@@ -49,11 +49,6 @@ open Libsail
 open Interactive.State
 open Sail_options
 
-type version = { major : int; minor : int; patch : int }
-
-(* Current version of Sail. Must be updated manually. *)
-let version = { major = 0; minor = 20; patch = 2 }
-
 let opt_new_cli = ref false
 let opt_free_arguments : string list ref = ref []
 let opt_file_out : string option ref = ref None
@@ -82,6 +77,7 @@ let opt_format_skip : string list ref = ref []
 let opt_format_debug : bool ref = ref false
 let opt_slice_instantiation_types : bool ref = ref false
 let opt_output_schema_file : string option ref = ref None
+let opt_warn_error : bool ref = ref false
 
 let is_bytecode = Sys.backend_type = Bytecode
 
@@ -100,7 +96,8 @@ let rec fix_options = function
             let explanation =
               Printf.sprintf "Old style command line flag %s used, use %s instead" flag canonical_flag
             in
-            Arg.Tuple [Arg.Unit (fun () -> Reporting.warn "Old style flag" Parse_ast.Unknown explanation); spec]
+            Arg.Tuple
+              [Arg.Unit (fun () -> Reporting.warn Version.v0_20_2 "Old style flag" Parse_ast.Unknown explanation); spec]
           )
           else spec
         in
@@ -183,27 +180,12 @@ let parse_instantiation inst =
   | _ -> raise (Reporting.err_general Parse_ast.Unknown "Failed to parse command-line instantiate flag")
 
 (* Version as a string, e.g. "1.2.3". *)
-let version_string = Printf.sprintf "%d.%d.%d" version.major version.minor version.patch
+let version_string = Version.to_string Version.current
 
 (* Full version string including Git branch & commit. *)
 let version_full =
   let open Manifest in
   Printf.sprintf "Sail %s (%s @ %s)" version_string branch commit
-
-(* Convert a string like "1.2.3" to a list [1; 2; 3] *)
-let parse_version dotted_version =
-  let open Util.Option_monad in
-  let* version = String.split_on_char '.' dotted_version |> List.map int_of_string_opt |> Util.option_all in
-  match version with
-  | [major; minor; patch] -> Some { major; minor; patch }
-  | [major; minor] -> Some { major; minor; patch = 0 }
-  | [major] -> Some { major; minor = 0; patch = 0 }
-  | _ -> None
-
-let version_check ~required =
-  required.major < version.major
-  || (required.major = version.major && required.minor < version.minor)
-  || (required.major = version.major && required.minor = version.minor && required.patch <= version.patch)
 
 let usage_msg = "Sail " ^ version_string ^ "\nusage: sail <options> <file1.sail> ... <fileN.sail>\n"
 
@@ -291,6 +273,7 @@ let rec options =
       );
       ("-no_warn", Arg.Clear Reporting.opt_warnings, " do not print warnings");
       ("-all_warnings", Arg.Set Reporting.opt_all_warnings, " print all warning messages");
+      ("-warn_error", Arg.Set opt_warn_error, " promote warnings to errors, if below the required version");
       ( "-strict_var",
         Arg.Tuple [Arg.Unit (fun () -> Preprocess.add_default_symbol "STRICT_VAR"); Arg.Set Type_check.opt_strict_var],
         " require var expressions for variable declarations"
@@ -444,7 +427,7 @@ let rec options =
       );
       ("-just_parse_project", Arg.Set opt_just_parse_project, "");
       ( "-infer_effects",
-        Arg.Unit (fun () -> Reporting.simple_warn "-infer_effects option is deprecated"),
+        Arg.Unit (fun () -> Reporting.simple_warn Version.v0_20_2 "-infer_effects option is deprecated"),
         " (deprecated) ignored for compatibility with older versions; effects are always inferred now"
       );
       ( "-undefined_gen",
@@ -657,7 +640,7 @@ let get_implicit_config_file override_file =
   let check_exists file =
     if Sys.file_exists file then Some file
     else (
-      Reporting.warn "" Parse_ast.Unknown (Printf.sprintf "Configuration file %s does not exist" file);
+      Reporting.warn Version.v0_20_2 "" Parse_ast.Unknown (Printf.sprintf "Configuration file %s does not exist" file);
       None
     )
   in
@@ -709,14 +692,15 @@ let main () =
   ( match !opt_require_version with
   | Some required_version ->
       let required_version_parsed =
-        match parse_version required_version with
+        match Version.parse required_version with
         | Some v -> v
         | None -> raise (Reporting.err_general Unknown ("Couldn't parse required version '" ^ required_version ^ "'"))
       in
-      if not (version_check ~required:required_version_parsed) then (
+      if not (Version.check ~required:required_version_parsed ()) then (
         Printf.eprintf "Sail version %s is older than requested version %s" version_string required_version;
         exit 1
-      )
+      );
+      if !opt_warn_error then Reporting.opt_warn_error := Some required_version_parsed
   | None -> ()
   );
 

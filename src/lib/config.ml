@@ -528,7 +528,8 @@ let fix_length ~at:l ~len bitlist =
   match Primops.zero_extend (V_bitvector bitlist) (V_int (Big_int.of_int len)) with
   | Some (V_bitvector bitlist) -> bitlist
   | _ ->
-      Reporting.warn ~force_show:true "Configuration" l "Forced to truncate configuration bitvector literal";
+      Reporting.warn ~force_show:true Version.v0_20_2 "Configuration" l
+        "Forced to truncate configuration bitvector literal";
       let d = len - List.length bitlist in
       Util.drop (abs d) bitlist
 

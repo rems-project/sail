@@ -293,7 +293,7 @@ let load_digests_err path =
         let solution = input_binary_int in_chan in
         known_uniques := DigestMap.add digest (Some solution) !known_uniques
     | _ ->
-        Reporting.warn "" Parse_ast.Unknown "SMT cache file 'sail_smt_cache' is invalid";
+        Reporting.warn Version.v0_20_2 "" Parse_ast.Unknown "SMT cache file 'sail_smt_cache' is invalid";
         known_problems := DigestMap.empty;
         known_uniques := DigestMap.empty;
         (* Exit the loop as if we reached the end of the file *)

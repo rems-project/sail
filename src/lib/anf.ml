@@ -743,7 +743,7 @@ let rec anf (E_aux (e_aux, (l, tannot)) as exp) =
   | E_undef -> mk_aexp (AE_val (AV_undef (typ_of exp)))
   | E_lit lit -> mk_aexp (ae_lit lit (typ_of exp))
   | E_block [] ->
-      Reporting.warn "" l
+      Reporting.warn Version.v0_20_2 "" l
         "Translating empty block (possibly assigning to an uninitialized variable at the end of a block?)";
       mk_aexp (ae_lit (L_aux (L_unit, l)) (typ_of exp))
   | E_block exps ->

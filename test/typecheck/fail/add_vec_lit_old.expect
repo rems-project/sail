@@ -1,8 +1,8 @@
-[93mWarning[0m: Deprecated [96mfail/add_vec_lit_old.sail[0m:9.4-8:
+[93mWarning[0m: Deprecated
+[96mfail/add_vec_lit_old.sail[0m:9.4-8:
 9[96m |[0mval cast unsigned : forall 'n.
  [91m |[0m    [91m^--^[0m
- [91m |[0m 
-Cast annotations are deprecated. They will be removed in a future version of the language.
+ [91m |[0m Cast annotations are deprecated. They will be removed in a future version of the language.
 
 [93mType error[0m:
 [96mfail/add_vec_lit_old.sail[0m:14.23-32:

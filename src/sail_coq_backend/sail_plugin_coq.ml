@@ -265,7 +265,7 @@ let check_flags () =
   if !Pretty_print_coq.opt_generic_values && not !Pretty_print_coq.opt_coq_record_update then
     raise (Reporting.err_general Parse_ast.Unknown "--rocq-generic-value requires --rocq-record-update");
   if !State.opt_type_grouped_regstate then (
-    Reporting.simple_warn "-grouped-regstate option not supported in the Rocq back-end, ignoring";
+    Reporting.simple_warn Version.v0_20_2 "-grouped-regstate option not supported in the Rocq back-end, ignoring";
     State.opt_type_grouped_regstate := false
   )
 
