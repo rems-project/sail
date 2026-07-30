@@ -161,8 +161,8 @@ let generate_initial_regstate ctx env ast =
       in
       initial_state.Interpreter.registers
     with e ->
-      Reporting.warn ~force_show:true "Unable to evaluate initial state, using default values only" Parse_ast.Unknown
-        (Printexc.to_string e);
+      Reporting.warn ~force_show:true Version.v0_20_2 "Unable to evaluate initial state, using default values only"
+        Parse_ast.Unknown (Printexc.to_string e);
       Bindings.empty
   in
   let defs = ast.defs in

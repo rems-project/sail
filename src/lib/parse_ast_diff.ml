@@ -562,13 +562,15 @@ let rec diff_mapcl (MCL_aux (lhs, l)) (MCL_aux (rhs, _)) =
       | _ -> Some l
     )
   | MCL_forwards_deprecated _ ->
-      Reporting.warn "Deprecated" l "Cannot check AST equivalence here, as a deprecated construct was found.";
+      Reporting.warn Version.v0_20_2 "Deprecated" l
+        "Cannot check AST equivalence here, as a deprecated construct was found.";
       None
   | MCL_forwards pexp1 -> (
       match rhs with
       | MCL_forwards pexp2 -> diff_pexp pexp1 pexp2
       | MCL_forwards_deprecated _ ->
-          Reporting.warn "Deprecated" l "Cannot check AST equivalence here, as a deprecated construct was found.";
+          Reporting.warn Version.v0_20_2 "Deprecated" l
+            "Cannot check AST equivalence here, as a deprecated construct was found.";
           None
       | _ -> Some l
     )

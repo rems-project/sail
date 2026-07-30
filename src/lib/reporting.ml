@@ -93,6 +93,7 @@
 let opt_warnings = ref true
 let opt_all_warnings = ref false
 let opt_backtrace_length = ref 10
+let opt_warn_error = ref None
 
 type pos_or_loc = Loc of Parse_ast.l | Pos of Sail_file.position
 
@@ -193,6 +194,7 @@ type error =
   | Err_syntax_loc of Parse_ast.l * string
   | Err_lex of Sail_file.position * string
   | Err_type of Parse_ast.l * string option * string
+  | Err_warning of Parse_ast.l * string * string
 
 let issues = "\nPlease report this as an issue on GitHub at https://github.com/rems-project/sail/issues"
 
@@ -211,6 +213,7 @@ let dest_err ?(interactive = false) = function
   | Err_syntax_loc (l, m) -> (Util.("Syntax error" |> yellow |> clear), None, Loc l, m)
   | Err_lex (p, s) -> (Util.("Lexical error" |> yellow |> clear), None, Pos p, s)
   | Err_type (l, hint, m) -> (Util.("Type error" |> yellow |> clear), hint, Loc l, m)
+  | Err_warning (l, short, m) -> (Util.("Warning (--warn-error)" |> yellow |> clear) ^ ": " ^ short, None, Loc l, m)
 
 exception Fatal_error of error
 
@@ -224,6 +227,7 @@ let err_typ ?hint l m = Fatal_error (Err_type (l, hint, m))
 let err_syntax p m = Fatal_error (Err_syntax (p, m))
 let err_syntax_loc l m = Fatal_error (Err_syntax_loc (l, m))
 let err_lex p m = Fatal_error (Err_lex (p, m))
+let err_warning l short m = Fatal_error (Err_warning (l, short, m))
 
 let unreachable l pos msg = raise (err_unreachable l pos msg)
 
@@ -235,6 +239,7 @@ let forbid_errors ocaml_pos f x =
   | Fatal_error (Err_syntax_loc (l, m)) -> raise (err_unreachable l ocaml_pos m)
   | Fatal_error (Err_lex (p, m)) -> raise (err_unreachable (Range (p, p)) ocaml_pos m)
   | Fatal_error (Err_type (l, _, m)) -> raise (err_unreachable l ocaml_pos m)
+  | Fatal_error (Err_warning (l, short, m)) -> raise (err_unreachable l ocaml_pos (short ^ "\n" ^ m))
 
 let print_error ?(interactive = false) e =
   let m1, hint, pos_l, m2 = dest_err ~interactive e in
@@ -297,7 +302,28 @@ let suppressed_warning_info () =
     suppressed_warnings := 0
   )
 
-let warn ?once_from ?(force_show = false) short_str l explanation =
+let print_warning ~fatal short_str l explanation =
+  let open Error_format in
+  if fatal then (
+    let explanation =
+      let b = Buffer.create 256 in
+      format_message explanation (buffer_formatter b);
+      Buffer.contents b
+    in
+    raise (err_warning l short_str explanation)
+  )
+  else (
+    prerr_endline (Util.("Warning" |> yellow |> clear) ^ ": " ^ short_str);
+    format_message (Location ("", None, l, explanation)) err_formatter;
+    prerr_endline ""
+  )
+
+let format_warn ?once_from ?(force_show = false) version short_str l explanation =
+  let fatal =
+    match !opt_warn_error with
+    | Some below_version -> Version.check ~required:version ~against:below_version ()
+    | None -> false
+  in
   let already_shown =
     match once_from with
     | Some (file, lnum, cnum, enum) when not !opt_all_warnings ->
@@ -317,47 +343,16 @@ let warn ?once_from ?(force_show = false) short_str l explanation =
     | Some (p1, p2) when not (ignore_file p1) ->
         let shorts = RangeMap.find_opt (p1, p2) !seen_warnings |> Option.value ~default:[] in
         if not (List.exists (fun s -> s = short_str) shorts) then (
-          prerr_endline
-            (Util.("Warning" |> yellow |> clear)
-            ^ ": " ^ short_str
-            ^ (if short_str <> "" then " " else "")
-            ^ loc_to_string l ^ explanation ^ "\n"
-            );
+          print_warning ~fatal short_str l explanation;
           seen_warnings := RangeMap.add (p1, p2) (short_str :: shorts) !seen_warnings
         )
-    | _ -> prerr_endline (Util.("Warning" |> yellow |> clear) ^ ": " ^ short_str ^ "\n" ^ explanation ^ "\n")
+    | _ -> print_warning ~fatal short_str l explanation
   )
 
-let format_warn ?once_from short_str l explanation =
-  let already_shown =
-    match once_from with
-    | Some (file, lnum, cnum, enum) when not !opt_all_warnings ->
-        let key = Printf.sprintf "%d:%d:%d:%s" lnum cnum enum file in
-        if StringSet.mem key !once_from_warnings then (
-          incr suppressed_warnings;
-          true
-        )
-        else (
-          once_from_warnings := StringSet.add key !once_from_warnings;
-          false
-        )
-    | _ -> false
-  in
-  if !opt_warnings && not already_shown then (
-    match simp_loc l with
-    | Some (p1, p2) when not (ignore_file p1) ->
-        let shorts = RangeMap.find_opt (p1, p2) !seen_warnings |> Option.value ~default:[] in
-        if not (List.exists (fun s -> s = short_str) shorts) then (
-          let open Error_format in
-          prerr_endline (Util.("Warning" |> yellow |> clear) ^ ": " ^ short_str);
-          format_message (Location ("", None, l, explanation)) err_formatter;
-          prerr_endline "";
-          seen_warnings := RangeMap.add (p1, p2) (short_str :: shorts) !seen_warnings
-        )
-    | _ -> prerr_endline (Util.("Warning" |> yellow |> clear) ^ ": " ^ short_str ^ "\n")
-  )
+let warn ?once_from ?(force_show = false) version short_str l explanation =
+  format_warn ?once_from ~force_show version short_str l (Line explanation)
 
-let simple_warn str = warn str Parse_ast.Unknown ""
+let simple_warn version str = warn version str Parse_ast.Unknown ""
 
 let get_sail_dir default_sail_dir =
   match Sys.getenv_opt "SAIL_DIR" with

@@ -1073,7 +1073,8 @@ module ConvertType = struct
     | P.QI_id kopt ->
         let (kopts, constrs, ctx), attr = to_ast_kopts kenv ctx kopt in
         ( match attr with
-        | Some "constant" -> Reporting.warn "Deprecated" l "constant type variable attribute no longer used"
+        | Some "constant" ->
+            Reporting.warn Version.v0_20_2 "Deprecated" l "constant type variable attribute no longer used"
         | Some attr -> raise (Reporting.err_typ l (sprintf "Unknown attribute %s" attr))
         | None -> ()
         );
@@ -1217,7 +1218,7 @@ let parse_hex_lit ?warn_inconsistent_case str =
               match warn_inconsistent_case with
               | None -> ()
               | Some l ->
-                  Reporting.warn "Inconsistent hexadecimal casing" l
+                  Reporting.warn Version.v0_20_2 "Inconsistent hexadecimal casing" l
                     "This hexadecimal bitvector literal contains both lowercase and uppercase digits."
             )
       )
@@ -2622,7 +2623,7 @@ let generate_enum_number_conversions defs =
 
             let already_defined name =
               let original_id = IdSet.find name vs_ids in
-              Reporting.warn
+              Reporting.warn Version.v0_20_2
                 (Printf.sprintf "Cannot generate %s for enum" (string_of_id name))
                 (Hint ("Function with the same name defined here", id_loc original_id, def_annot.loc))
                 (Printf.sprintf

@@ -113,7 +113,7 @@ let warn_unmodified_variables (type a) (ast : (a, 'b) ast) : unit =
     let unmodified = IdSet.diff lexp exp in
     IdSet.iter
       (fun id ->
-        Reporting.warn "Unnecessary mutability" (id_loc id)
+        Reporting.warn Version.v0_20_2 "Unnecessary mutability" (id_loc id)
           "This variable is mutable, but it is never modified. It could be declared as immutable using 'let'."
       )
       unmodified;
@@ -142,7 +142,7 @@ let warn_unused_variables (ast : Type_check.typed_ast) : unit =
     IdSet.iter
       (fun id ->
         if not (ignore_variable id) then
-          Reporting.warn "Unused variable" (id_loc id) "This variable is defined but never used."
+          Reporting.warn Version.v0_20_2 "Unused variable" (id_loc id) "This variable is defined but never used."
       )
       unused;
     IdSet.diff used pat

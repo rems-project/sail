@@ -186,7 +186,7 @@ let rw_exp fixed target ok not_ok istate =
           Type_check.check_exp (env_of_annot annot) exp (typ_of_annot annot)
         with Type_error.Type_error (l, err) ->
           (* A type error here would be unexpected, so don't ignore it! *)
-          Reporting.warn "" l
+          Reporting.warn Version.v0_20_2 "" l
             ("Type error when folding constants in "
             ^ string_of_exp (E_aux (e_aux, annot))
             ^ "\n"

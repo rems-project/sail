@@ -275,7 +275,7 @@ module Make (C : Config) = struct
     let preserved = get_preserved_patterns cinfo in
     let wildcards = get_wildcard_patterns cinfo in
     let rec go wild (P_aux (aux, (l, (t, n))) as full_pat) =
-      if IntSet.mem n preserved then Reporting.warn "Required literal" l preserved_explanation;
+      if IntSet.mem n preserved then Reporting.warn Version.v0_20_2 "Required literal" l preserved_explanation;
       let wild = wild || List.exists (fun wildcard -> wildcard = n) wildcards in
       let t = ref t in
       let aux =
@@ -378,7 +378,7 @@ module Make (C : Config) = struct
                 | P_wild | P_id _ -> (mask ^ "0", bits ^ "0")
                 | P_typ (_, P_aux (pat, _)) -> go pat
                 | _ ->
-                    Reporting.warn "Unexpected pattern" l "";
+                    Reporting.warn Version.v0_20_2 "Unexpected pattern" l "";
                     (mask ^ "0", bits ^ "0")
               in
               go pat
@@ -1005,7 +1005,7 @@ module Make (C : Config) = struct
       (* The type-checker can prune some case armms early, if it determines the pattern would introduce a
          false/impossible flow typing constraint. If this happens we can get an empty list here. *)
       | have_guard, have_mapping, [] ->
-          Reporting.warn "Incomplete pattern match statement at" (shrink_loc keyword l)
+          Reporting.warn Version.v0_20_2 "Incomplete pattern match statement at" (shrink_loc keyword l)
             ("No expression of type "
             ^ Util.(string_of_typ head_exp_typ |> yellow |> clear)
             ^ " can be matched"
@@ -1023,7 +1023,7 @@ module Make (C : Config) = struct
           in
           match matrix_is_complete l ctx matrix with
           | Incomplete (unmatched :: _) ->
-              Reporting.warn "Incomplete pattern match statement at" (shrink_loc keyword l)
+              Reporting.warn Version.v0_20_2 "Incomplete pattern match statement at" (shrink_loc keyword l)
                 ("The following expression is unmatched"
                 ^ guard_info ~terminator:": " ~have_guard ~have_mapping
                 ^ Util.(string_of_exp unmatched |> yellow |> clear)
@@ -1036,7 +1036,7 @@ module Make (C : Config) = struct
               List.iter
                 (fun (idx, _) ->
                   if IntSet.mem idx.num cinfo.redundant then
-                    Reporting.warn "Redundant case" idx.loc "This match case is never used"
+                    Reporting.warn Version.v0_20_2 "Redundant case" idx.loc "This match case is never used"
                 )
                 (rows_to_list matrix);
               let result = update_cases l wildcarded_pats cases in
@@ -1044,9 +1044,10 @@ module Make (C : Config) = struct
           | Completeness_unknown -> None
         )
     with
-    (* For now, if any error occurs just report the pattern match is incomplete *)
-    | _ ->
-      None
+    (* For now, if any error occurs just report the pattern match is incomplete. The only exception is if we want
+       warnings to be fatal, so re-raise those. *)
+    | Reporting.Fatal_error (Err_warning _) as exn -> raise exn
+    | _ -> None
 
   let is_complete_funcls_wildcarded ?(keyword = "match") ?(remove_redundant = false) l ctx funcls head_exp_typ =
     let destruct_funcl (FCL_aux (FCL_funcl (id, pexp), annot)) = ((id, annot), pexp) in

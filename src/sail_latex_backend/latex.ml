@@ -380,7 +380,8 @@ let latex_command ~docstring cat id no_loc l =
   close_out chan;
   let command = sprintf "\\%s" (latex_cat_id cat id) in
   if StringSet.mem command state.commands then (
-    Reporting.warn "" l ("Multiple instances of " ^ string_of_id id ^ " only generating latex for the first");
+    Reporting.warn Version.v0_20_2 "" l
+      ("Multiple instances of " ^ string_of_id id ^ " only generating latex for the first");
     empty
   )
   else (
@@ -448,7 +449,7 @@ let process_pragma l command =
       let body = String.trim (latex_of_markdown (Str.string_after arg n)) in
       Some (ksprintf string "\\newcommand{\\%s}{%s}" name body)
   | _ ->
-      Reporting.warn "Bad latex pragma at" l "";
+      Reporting.warn Version.v0_20_2 "Bad latex pragma at" l "";
       None
 
 let defs { defs; _ } =

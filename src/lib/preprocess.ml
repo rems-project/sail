@@ -199,7 +199,9 @@ let preprocess ~default_sail_dir ~target_name ~options ~symbols defs =
             Arg.parse_argv ~current (Array.of_list ("sail" :: args)) options file_arg ""
           with
         | Arg.Help msg -> raise (Reporting.err_general l "-help flag passed to $option directive")
-        | Arg.Bad msg -> Reporting.warn "Invalid option" l ("Invalid flag passed to $option directive" ^ first_line msg)
+        | Arg.Bad msg ->
+            Reporting.warn Version.v0_20_2 "Invalid option" l
+              ("Invalid flag passed to $option directive" ^ first_line msg)
         );
         reset ();
         aux includes (opt_pragma :: acc) defs
@@ -220,7 +222,7 @@ let preprocess ~default_sail_dir ~target_name ~options ~symbols defs =
     | DEF_aux (DEF_pragma ("include", Pragma_line (file, _)), l) :: defs ->
         let len = String.length file in
         if len = 0 then (
-          Reporting.warn "" (pragma_loc l) "Skipping bad $include. No file argument.";
+          Reporting.warn Version.v0_20_2 "" (pragma_loc l) "Skipping bad $include. No file argument.";
           aux includes acc defs
         )
         else if file.[0] = '"' && file.[len - 1] = '"' then (
@@ -253,7 +255,7 @@ let preprocess ~default_sail_dir ~target_name ~options ~symbols defs =
         )
         else (
           let help = "Make sure the filename is surrounded by quotes or angle brackets" in
-          Reporting.warn "" (pragma_loc l) ("Skipping bad $include " ^ file ^ ". " ^ help);
+          Reporting.warn Version.v0_20_2 "" (pragma_loc l) ("Skipping bad $include " ^ file ^ ". " ^ help);
           aux includes acc defs
         )
     | DEF_aux (DEF_pragma ("suppress_warnings", _), l) :: defs ->
@@ -269,7 +271,7 @@ let preprocess ~default_sail_dir ~target_name ~options ~symbols defs =
         aux includes acc defs
     | (DEF_aux (DEF_pragma (p, _), l) as pragma_def) :: defs ->
         if not (StringSet.mem p (Pragma.all ()) || String.contains p '#') then
-          Reporting.warn "" (pragma_loc l) ("Unrecognised directive: " ^ p);
+          Reporting.warn Version.v0_20_2 "" (pragma_loc l) ("Unrecognised directive: " ^ p);
         aux includes (pragma_def :: acc) defs
     | DEF_aux (DEF_outcome (outcome_spec, inner_defs), l) :: defs ->
         aux includes (DEF_aux (DEF_outcome (outcome_spec, aux includes [] inner_defs), l) :: acc) defs

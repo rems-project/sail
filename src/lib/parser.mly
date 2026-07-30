@@ -182,24 +182,24 @@ let pragma_left_spaces pragma p s =
   !n
 
 let effect_deprecated l =
-  Reporting.warn ~once_from:__POS__ "Deprecated" l "Explicit effect annotations are deprecated. They are no longer used and can be removed."
+  Reporting.warn ~once_from:__POS__ Version.v0_20_2 "Deprecated" l "Explicit effect annotations are deprecated. They are no longer used and can be removed."
 
 let cast_deprecated l =
-  Reporting.warn ~once_from:__POS__ "Deprecated" l "Cast annotations are deprecated. They will be removed in a future version of the language."
+  Reporting.warn ~once_from:__POS__ Version.v0_20_2 "Deprecated" l "Cast annotations are deprecated. They will be removed in a future version of the language."
 
 let old_bitfield_deprecated ?(bitfield = "<bitfield>") l field =
   let replace = if field = "bits" then Printf.sprintf "%s.bits" bitfield else Printf.sprintf "%s[%s]" bitfield field in
-  Reporting.warn ~once_from:__POS__ "Deprecated" l
+  Reporting.warn ~once_from:__POS__ Version.v0_20_2 "Deprecated" l
     ("Old bitfield syntax, use '" ^ replace ^ "' instead")
 
 let warn_extern_effect l =
-  Reporting.warn ~once_from:__POS__ "Deprecated" l "All external bindings should be marked as either pure or impure"
+  Reporting.warn ~once_from:__POS__ Version.v0_20_2 "Deprecated" l "All external bindings should be marked as either pure or impure"
 
 let forwards_mapcl_deprecated l =
-  Reporting.warn ~once_from:__POS__ "Deprecated" l "Single direction mapping clause should be prefixed by a direction, either forwards or backwards"
+  Reporting.warn ~once_from:__POS__ Version.v0_20_2 "Deprecated" l "Single direction mapping clause should be prefixed by a direction, either forwards or backwards"
 
 let set_syntax_deprecated l =
-  Reporting.warn ~once_from:__POS__ "Deprecated" l "Old set syntax, {|1, 2, 3|} can now be written as {1, 2, 3}."
+  Reporting.warn ~once_from:__POS__ Version.v0_20_2 "Deprecated" l "Old set syntax, {|1, 2, 3|} can now be written as {1, 2, 3}."
 
 %}
 

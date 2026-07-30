@@ -1286,7 +1286,7 @@ and add_val_spec ?in_module ?(already_bound = false) ?(ignore_duplicate = false)
         | None -> Parse_ast.Unknown
       in
       let open Error_format in
-      Reporting.format_warn ~once_from:__POS__
+      Reporting.format_warn ~once_from:__POS__ Version.v0_20_2
         ("Duplicate function type definition for " ^ string_of_id id)
         (id_loc id)
         (Seq

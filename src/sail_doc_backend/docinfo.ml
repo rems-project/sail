@@ -74,9 +74,7 @@ let same_file f1 f2 = Filename.basename f1 = Filename.basename f2 && Filename.di
 
 let loc_filename (p : Sail_file.position) = Sail_file.Path.to_string (Sail_file.to_path p.pos_fname)
 
-let process_file f filename = f (Util.read_whole_file filename)
-
-let hash_file filename = process_file Digest.string filename |> Digest.to_hex
+let hash_file handle = Sail_file.contents handle |> Digest.string |> Digest.to_hex
 
 type embedding = Plain | Base64
 
@@ -810,8 +808,9 @@ module Generator (Converter : Markdown.CONVERTER) (Config : CONFIG) = struct
         match Reporting.simp_loc doc_annot.loc with
         | None -> hashes
         | Some (p1, _) ->
-            let file = loc_filename p1 in
-            if StringMap.mem file hashes then hashes else StringMap.add file (hash_file file) hashes
+            let hash = hash_file p1.pos_fname in
+            let file = Sail_file.Path.to_string (Sail_file.to_path p1.pos_fname) in
+            if StringMap.mem file hashes then hashes else StringMap.add file hash hashes
       )
       else hashes
     in
