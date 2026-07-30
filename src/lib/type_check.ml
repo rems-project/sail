@@ -742,11 +742,10 @@ let unify l env goals typ1 typ2 =
       )
   else unify_typ l env goals typ1 typ2
 
-let subst_unifiers unifiers typ =
-  List.fold_left (fun typ (v, arg) -> typ_subst v arg typ) typ (KBindings.bindings unifiers)
+let subst_unifiers unifiers typ = KBindings.fold (fun v arg typ -> typ_subst v arg typ) unifiers typ
 
 let subst_unifiers_typ_arg unifiers typ_arg =
-  List.fold_left (fun typ_arg (v, arg) -> typ_arg_subst v arg typ_arg) typ_arg (KBindings.bindings unifiers)
+  KBindings.fold (fun v arg typ_arg -> typ_arg_subst v arg typ_arg) unifiers typ_arg
 
 let instantiate_quant (v, arg) (QI_aux (aux, l) as qi) =
   match aux with
