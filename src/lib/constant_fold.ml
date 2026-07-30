@@ -168,7 +168,7 @@ let rec run frame =
     - Calls an unsafe primop.
     - Throws an exception that isn't caught. *)
 
-let initial_state ast env = Interpreter.initial_state ~registers:false ast env safe_primops
+let initial_state target ast env = Interpreter.initial_state ~registers:false ~fold_target:target ast env safe_primops
 
 type fixed = { registers : tannot exp Bindings.t; fields : tannot exp Bindings.t Bindings.t }
 
@@ -233,14 +233,7 @@ let rw_exp fixed target ok not_ok istate =
     | E_app (id, [(E_aux (E_lit (L_aux (L_true, _)), _) as true_exp); _]) when is_or_bool id ->
         ok ();
         true_exp
-    | E_app (id, args) when List.for_all is_constant args ->
-        let env = env_of_annot annot in
-        (* We want to fold all primitive operations, but avoid folding
-           non-primitives that are defined in target-specific way. *)
-        let is_primop =
-          Env.is_extern id env "interpreter" && StringMap.mem (Env.get_extern id env "interpreter") safe_primops
-        in
-        if (not (Env.is_extern id env target)) || is_primop then evaluate e_aux annot else E_aux (e_aux, annot)
+    | E_app (_, args) when List.for_all is_constant args -> evaluate e_aux annot
     | E_typ (typ, (E_aux (E_lit _, _) as lit)) ->
         ok ();
         lit
@@ -269,7 +262,7 @@ let rec rewrite_constant_function_calls' fixed target env ast =
   let rewrite_count = ref 0 in
   let ok () = incr rewrite_count in
   let not_ok () = decr rewrite_count in
-  let istate = initial_state ast env in
+  let istate = initial_state target ast env in
 
   let rw_defs = { rewriters_base with rewrite_exp = (fun _ -> rw_exp fixed target ok not_ok istate) } in
   let ast = rewrite_ast_base rw_defs ast in

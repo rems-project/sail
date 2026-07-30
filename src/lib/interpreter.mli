@@ -54,6 +54,7 @@ open Value
 type gstate = {
   registers : value Bindings.t;
   allow_registers : bool; (* For some uses we want to forbid touching any registers. *)
+  fold_target : string option;
   primops : (value list -> value) StringMap.t;
   letbinds : value Bindings.t;
   fundefs : tannot fundef Bindings.t;
@@ -116,4 +117,10 @@ val effect_interp :
   ref
 
 val initial_state :
-  ?registers:bool -> ?undef_registers:bool -> typed_ast -> env -> (value list -> value) StringMap.t -> state
+  ?registers:bool ->
+  ?undef_registers:bool ->
+  ?fold_target:string ->
+  typed_ast ->
+  env ->
+  (value list -> value) StringMap.t ->
+  state
