@@ -4203,8 +4203,8 @@ and infer_funapp' l env f (typq, f_typ) xs uannot expected_ret_typ =
     match KBindings.find_opt impl !all_unifiers with
     | Some (A_aux (A_nexp (Nexp_aux (Nexp_constant c, _)), _)) -> irule infer_exp env (mk_lit_exp (L_num c))
     | Some (A_aux (A_nexp n, _)) -> (
-        try irule infer_exp env (mk_exp ~loc:l (E_sizeof n))
-        with Type_error (l, err) ->
+        try irule infer_exp env (mk_exp (E_sizeof n))
+        with Type_error (_l, err) ->
           typ_raise l (Err_inner (Err_other "Unable to solve implicit function argument", Parse_ast.Unknown, "", err))
       )
     | _ ->
