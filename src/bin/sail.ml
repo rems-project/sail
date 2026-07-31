@@ -661,17 +661,17 @@ let main () =
   let plugin_extension = if is_bytecode then ".cma" else ".cmxs" in
   ( match Sys.getenv_opt "SAIL_NO_PLUGINS" with
   | Some _ -> ()
-  | None -> (
-      match get_plugin_dir () with
-      | dir :: _ ->
+  | None ->
+      List.iter
+        (fun dir ->
           List.iter
             (fun plugin ->
               let path = Filename.concat dir plugin in
               if Filename.extension plugin = plugin_extension then load_plugin options path
             )
             (Array.to_list (Sys.readdir dir))
-      | [] -> ()
-    )
+        )
+        (get_plugin_dir ())
   );
 
   let argv = Sail_file.sail_argv () in
