@@ -69,15 +69,11 @@ let opt_project_files : string list ref = ref []
 let opt_variable_assignments : string list ref = ref []
 let opt_model_config_file : string option ref = ref None
 let opt_sail_config_file : string option ref = ref None
-let opt_format = ref false
-let opt_format_backup : string option ref = ref None
-let opt_format_only : string list ref = ref []
-let opt_format_emit : string ref = ref "file"
-let opt_format_skip : string list ref = ref []
-let opt_format_debug : bool ref = ref false
 let opt_slice_instantiation_types : bool ref = ref false
 let opt_output_schema_file : string option ref = ref None
 let opt_warn_error : bool ref = ref false
+let opt_tool : (Yojson.Safe.t option -> string list -> string list -> int) option ref = ref None
+let opt_tool_help : string ref = ref ""
 
 let is_bytecode = Sys.backend_type = Bytecode
 
@@ -187,6 +183,16 @@ let version_full =
   let open Manifest in
   Printf.sprintf "Sail %s (%s @ %s)" version_string branch commit
 
+let set_tool options tool_name =
+  opt_tool_help := " --tool " ^ tool_name;
+  let action =
+    match tool_name with
+    | "strip_json" -> Tools.load (module Tools.Strip_json_comments) fix_options options
+    | "format" -> Tools.load (module Tools.Format) fix_options options
+    | _ -> raise (Arg.Bad "unknown tool")
+  in
+  opt_tool := Some action
+
 let usage_msg = "Sail " ^ version_string ^ "\nusage: sail <options> <file1.sail> ... <fileN.sail>\n"
 
 let help options = raise (Arg.Help (Arg.usage_string options usage_msg))
@@ -242,27 +248,14 @@ let rec options =
         Arg.String (fun sep -> Frontend.opt_list_files := Some sep),
         " list files used in all project files, with a provided separator"
       );
+      ("-tool", Arg.String (fun s -> set_tool options s), "<name> run a builtin utility");
       ("-config", Arg.String (fun file -> opt_model_config_file := Some file), "<file> model configuration file");
       ("-sail_config", Arg.String (fun file -> opt_sail_config_file := Some file), "<file> sail configuration file");
       ( "-output-schema",
         Arg.String (fun file -> opt_output_schema_file := Some file),
         "<file> output configuration schema"
       );
-      ("-fmt", Arg.Set opt_format, " format input source code");
-      ( "-fmt_backup",
-        Arg.String (fun suffix -> opt_format_backup := Some suffix),
-        "<suffix> create backups of formatted files as 'file.suffix'"
-      );
-      ("-fmt_only", Arg.String (fun file -> opt_format_only := file :: !opt_format_only), "<file> format only this file");
-      ( "-fmt_emit",
-        Arg.String (fun output -> opt_format_emit := output),
-        "[file(default)|stdout] update target file or just output to stdout"
-      );
-      ( "-fmt_skip",
-        Arg.String (fun file -> opt_format_skip := file :: !opt_format_skip),
-        "<file> skip formatting this file"
-      );
-      ("-fmt_debug", Arg.Bool (fun debug -> opt_format_debug := debug), "<bool> debug mode");
+      ("-fmt", Arg.Unit (fun () -> set_tool options "format"), " format input source code");
       ( "-slice_instantiation_types",
         Arg.Tuple [Arg.Set Type_check.opt_no_bitfield_expansion; Arg.Set opt_slice_instantiation_types],
         " (experimental) produce a Sail file containing all of the types that are used in instantiations"
@@ -543,78 +536,6 @@ let run_sail (config : Yojson.Safe.t option) tgt =
 
   (symbols, ctx, ast, env, effect_info)
 
-let run_sail_format (config : Yojson.Safe.t option) =
-  let is_format_file f =
-    match !opt_format_only with [] -> true | files -> List.exists (fun f' -> Sail_file.Path.to_string f = f') files
-  in
-  let is_skipped_file f =
-    match !opt_format_skip with [] -> false | files -> List.exists (fun f' -> Sail_file.Path.to_string f = f') files
-  in
-  let module Config = struct
-    let config =
-      match config with
-      | Some (`Assoc keys) ->
-          List.assoc_opt "fmt" keys |> Option.map Format_sail.config_from_json
-          |> Option.value ~default:Format_sail.default_config
-      | Some _ -> raise (Reporting.err_general Parse_ast.Unknown "Invalid configuration file (must be a json object)")
-      | None -> Format_sail.default_config
-  end in
-  let module Formatter = Format_sail.Make (Config) in
-  let project_files, files =
-    List.partition (fun free -> Filename.check_suffix free ".sail_project") !opt_free_arguments
-  in
-
-  (* Get all the files references by project files *)
-  let referenced_files =
-    List.map
-      (fun project_file ->
-        let root_directory = Filename.dirname project_file in
-        let defs = Project.mk_root root_directory :: Initial_check.parse_project (Sail_file.Path.actual project_file) in
-
-        let variables = ref Util.StringMap.empty in
-        List.iter
-          (fun assignment ->
-            if not (Project.parse_assignment ~variables assignment) then
-              raise (Reporting.err_general Parse_ast.Unknown ("Could not parse assignment " ^ assignment))
-          )
-          !opt_variable_assignments;
-        let proj = Project.initialize_project_structure ~variables defs in
-        Project.all_files proj
-      )
-      project_files
-    |> List.concat |> List.map fst
-  in
-
-  let parsed_files =
-    List.map (fun f -> (f, Initial_check.parse_file f)) (List.map Sail_file.Path.actual files @ referenced_files)
-  in
-  List.iter
-    (fun (f, (comments, parse_ast)) ->
-      let source = Sail_file.contents (Sail_file.open_file f) in
-      if is_format_file f && not (is_skipped_file f) then (
-        let formatted =
-          Formatter.format_defs ~debug:!opt_format_debug (Sail_file.Path.to_string f) source comments parse_ast
-        in
-        ( match !opt_format_backup with
-        | Some suffix ->
-            let out_chan = open_out (Sail_file.Path.to_string f ^ "." ^ suffix) in
-            output_string out_chan source;
-            close_out out_chan
-        | None -> ()
-        );
-        match !opt_format_emit with
-        | "file" ->
-            let file_info = Util.open_output_with_check (Sail_file.Path.to_string f) in
-            output_string file_info.channel formatted;
-            Util.close_output_with_check file_info
-        | "stdout" ->
-            output_string stdout formatted;
-            flush stdout
-        | _ -> raise (Failure "unknown format_emit option")
-      )
-    )
-    parsed_files
-
 let feature_check () =
   match !opt_have_feature with
   | None -> ()
@@ -678,7 +599,7 @@ let main () =
   ( try Arg.parse_argv_dynamic argv options (fun s -> opt_free_arguments := !opt_free_arguments @ [s]) usage_msg with
   | Arg.Bad _ ->
       prerr_endline usage_msg;
-      prerr_endline "Use 'sail --help' for a list of available arguments.";
+      Printf.eprintf "Use 'sail%s --help' for a list of available arguments.\n%!" !opt_tool_help;
       exit 1
   | Arg.Help msg ->
       prerr_endline msg;
@@ -714,10 +635,7 @@ let main () =
     exit 0
   );
 
-  if !opt_format then (
-    run_sail_format config;
-    exit 0
-  );
+  (match !opt_tool with None -> () | Some action -> exit (action config !opt_variable_assignments !opt_free_arguments));
 
   let default_target = register_default_target () in
 
