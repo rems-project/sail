@@ -356,6 +356,7 @@ end = struct
               ("properties", `Assoc properties);
               ("minProperties", `Int 1);
               ("maxProperties", `Int 1);
+              ("additionalProperties", `Bool false);
             ]
           in
           Some (`Assoc variant_schema)
