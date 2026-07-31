@@ -124,17 +124,27 @@ generated SystemVerilog, see `sail --help` for more details.
 
 
 <<<
-=== Automatic formatting (Experimental)
+=== Automatic formatting
 
-CAUTION: This feature is new and experimental, so be sure to inspect
-changes to source made by the tool and use at your own risk!
+NOTE: The tool does check that the resulting syntax tree is equivalent
+to the input syntax tree, and it also runs the formatting multiple
+times to ensure a formatting fixed point is reached, which should
+provide some guarantee that it is both stable and does not change the
+meaning of the code. However, it is still somewhat experimental so
+we suggest taking care to inspect changes made to the code.
 
 Sail supports automatic code formatting similar to tools like `go fmt`
 or `rustfmt`. This is built into Sail itself, and can be used via the
-`--fmt` flag. To format a file `my_file.sail`, we would use the command:
+`--fmt` or `--tool` flag. To format a file `my_file.sail`, we would
+use the command:
 [source,sh]
 ----
 sail --fmt my_file.sail
+----
+or
+[source,sh]
+----
+sail --tool format my_file.sail
 ----
 
 Note that Sail does not attempt to type-check files when formatting
@@ -147,27 +157,33 @@ so:
 sail --fmt file1.sail file2.sail file3.sail
 ----
 
-The one exception is if a file uses a custom infix operator, then the
-file that declares that operator must be passed before any file that
-uses it. So if `my_file.sail` uses an operator declared in
-`operator.sail` (otherwise it would not be able to parenthesize infix
-expressions correctly), we would be required to do:
+This will format all three files. If we want to avoid formatting
+`file2.sail`, we could either use `--fmt-skip`, like so:
 [source,sh]
 ----
-sail --fmt operator.sail my_file.sail
-----
-This will format both files. If we want to avoid formatting
-`operator.sail`, we could either use `--fmt-skip`, like so:
-[source,sh]
-----
-sail --fmt-skip operator.sail --fmt operator.sail my_file.sail
+sail --fmt file1.sail file2.sail file3.sail --fmt-skip file2.sail
 ----
 or the `--fmt-only` option, like so:
 [source,sh]
 ----
-sail --fmt-only my_file.sail --fmt operator.sail my_file.sail
+sail --fmt file1.sail file2.sail file3.sail --fmt-only file1.sail --fmt-only file3.sail
 ----
-Both of these options can be passed multiple times if required.
+Both of these options can be passed multiple times as required.
+
+They, and other formatting specific options (See `sail --fmt --help`)
+must be passed after the `--fmt`/`--tool` flag.
+
+An entire Sail project can be formatted by passing the `.sail_project` file:
+[source,sh]
+----
+sail --fmt file.sail_project
+----
+if we want to set any variables in the project, they must be passed
+prior to the `--fmt`/`--tool` flag, for example:
+[source,sh]
+----
+sail --variable "FOO=true" --fmt file.sail_project
+----
 
 Formatting configuration is done using a JSON configuration file:
 as:
@@ -175,7 +191,7 @@ as:
 ----
 include::../../test/format/default/config.json[]
 ----
-which is passed to sail with the `--config` flag.
+which is passed to sail with the `--sail-config` flag.
 
 The various keys supported under the `"fmt"` key are as follows:
 
