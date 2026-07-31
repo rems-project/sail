@@ -41,4 +41,10 @@ printf "==========================================\n"
 
 ./float/run_tests.py || returncode=1
 
+printf "\n==========================================\n"
+printf "Plugin tests\n"
+printf "==========================================\n"
+
+./plugins/run_tests.py || returncode=1
+
 exit $returncode
