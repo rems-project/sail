@@ -358,6 +358,7 @@ val assert_constraint : Env.t -> bool -> tannot exp -> n_constraint option
     type definitions will be considered as closed. *)
 val check_funcls_complete :
   ?global_env:Env.t ->
+  ?allow_redundant:bool ->
   Parse_ast.l ->
   Env.t ->
   tannot funcl list ->
