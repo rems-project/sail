@@ -999,10 +999,11 @@ module Make (C : Config) = struct
     )
     ^ terminator
 
-  let is_complete_wildcarded ?(keyword = "match") ?(remove_redundant = false) l ctx cases head_exp_typ =
+  let is_complete_wildcarded ?(keyword = "match") ?(remove_redundant = false) ?(allow_redundant = false) l ctx cases
+      head_exp_typ =
     try
       match cases_to_pats ctx 0 ~have_guard:false ~have_mapping:false cases with
-      (* The type-checker can prune some case armms early, if it determines the pattern would introduce a
+      (* The type-checker can prune some case arms early, if it determines the pattern would introduce a
          false/impossible flow typing constraint. If this happens we can get an empty list here. *)
       | have_guard, have_mapping, [] ->
           Reporting.warn Version.v0_20_2 "Incomplete pattern match statement at" (shrink_loc keyword l)
@@ -1033,12 +1034,13 @@ module Make (C : Config) = struct
               Reporting.unreachable l __POS__ "Got unmatched pattern matrix without witness" [@coverage off]
           | Complete cinfo ->
               let wildcarded_pats = List.map (fun (_, pat) -> insert_wildcards cinfo pat) pats in
-              List.iter
-                (fun (idx, _) ->
-                  if IntSet.mem idx.num cinfo.redundant then
-                    Reporting.warn Version.v0_20_2 "Redundant case" idx.loc "This match case is never used"
-                )
-                (rows_to_list matrix);
+              if not allow_redundant then
+                List.iter
+                  (fun (idx, _) ->
+                    if IntSet.mem idx.num cinfo.redundant then
+                      Reporting.warn Version.v0_20_2 "Redundant case" idx.loc "This match case is never used"
+                  )
+                  (rows_to_list matrix);
               let result = update_cases l wildcarded_pats cases in
               if remove_redundant then Some (filter_out cinfo.redundant result) else Some result
           | Completeness_unknown -> None
@@ -1049,10 +1051,13 @@ module Make (C : Config) = struct
     | Reporting.Fatal_error (Err_warning _) as exn -> raise exn
     | _ -> None
 
-  let is_complete_funcls_wildcarded ?(keyword = "match") ?(remove_redundant = false) l ctx funcls head_exp_typ =
+  let is_complete_funcls_wildcarded ?(remove_redundant = false) ?(allow_redundant = false) l ctx funcls head_exp_typ =
     let destruct_funcl (FCL_aux (FCL_funcl (id, pexp), annot)) = ((id, annot), pexp) in
     let cases = List.map destruct_funcl funcls in
-    match is_complete_wildcarded ~keyword l ctx (List.map snd cases) head_exp_typ with
+    match
+      is_complete_wildcarded ~keyword:"function" ~remove_redundant ~allow_redundant l ctx (List.map snd cases)
+        head_exp_typ
+    with
     | Some pexps -> Some (List.map2 (fun ((id, annot), _) pexp -> FCL_aux (FCL_funcl (id, pexp), annot)) cases pexps)
     | None -> None
 
