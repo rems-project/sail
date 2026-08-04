@@ -77,8 +77,14 @@ type handle = private int
 
 val handle_compare : handle -> handle -> int
 
+val handle_equal : handle -> handle -> bool
+
 module HandleSet : sig
   include Set.S with type elt = handle
+end
+
+module HandleMap : sig
+  include Map.S with type key = handle
 end
 
 (** Open a file and return a [handle] to it's contents. Note that the file is not actually held open -- we read the

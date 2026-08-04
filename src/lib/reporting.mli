@@ -44,7 +44,7 @@
 (*  SPDX-License-Identifier: BSD-2-Clause                                   *)
 (****************************************************************************)
 
-(** Sail error reporting
+(** Sail error reporting and warnings
 
     [Reporting] contains functions to report errors and warnings. It contains functions to print locations
     ([Parse_ast.l] and [Ast.l]) and lexing positions.
@@ -53,7 +53,9 @@
     internally and reported via [report_error]. There are several predefined types of errors which all cause different
     error messages. If none of these fit, [Err_general] can be used. *)
 
-(** If this is false, Sail will never generate any warnings *)
+(** {1 Options} *)
+
+(** If this is false, Sail will never generate any warnings (except when marked as [~force_show]) *)
 val opt_warnings : bool ref
 
 (** If this is true, we will print all warnings, even if generated with [~once_from]. *)
@@ -65,7 +67,7 @@ val opt_warn_error : Version.t option ref
 (** How many backtrace entries to show for unreachable code errors *)
 val opt_backtrace_length : int ref
 
-(** {2 Auxiliary Functions} *)
+(** {1 Auxiliary Functions} *)
 
 (** [loc_to_string] prints a location as a string, including source code *)
 val loc_to_string : Parse_ast.l -> string
@@ -104,12 +106,12 @@ val print_err : Parse_ast.l -> string -> string -> unit
 (** Reduce all spans in a location to just their starting characters *)
 val start_loc : Parse_ast.l -> Parse_ast.l
 
-(** {2 The error type} *)
+(** {1 The error type} *)
 
 (** Errors stop execution and print a message; they typically have a location and message.
 
-    Note that all these errors are intended to be fatal, so should not be caught other than by the top-level function.
-*)
+    Note that all these errors are intended to be fatal, so should not typically be caught other than by the top-level
+    function. *)
 type error =
   | Err_general of Parse_ast.l * string  (** General errors, used for multi purpose. If you are unsure, use this one. *)
   | Err_unreachable of Parse_ast.l * (string * int * int * int) * Printexc.raw_backtrace * string
@@ -151,10 +153,31 @@ val print_type_error : ?hint:string -> Parse_ast.l -> string -> unit
 (** This function transforms all errors raised by the provided function into internal [Err_unreachable] errors *)
 val forbid_errors : string * int * int * int -> ('a -> 'b) -> 'a -> 'b
 
-(** Print a warning message. The first string is printed before the location, the second after. *)
+(** {1 Warnings} *)
+
+(** Print a warning message. The first string argument is a short string identifying the type of warning (e.g.
+    "Deprecated") and is printed before the location, the second is a longer description printed after.
+
+    The combination of the short string and the location are used to uniquely identify any warning. Subsequent warnings
+    that share both will not be shown.
+
+    The version argument is used for promoting warnings to errors. Each warning, has a specified version where it was
+    introduced (see [Version]). Any warning with an introduced version less than or equal to the [opt_warn_error]
+    version will become an error. This means that new warnings can be introduced without breaking downstream CI builds
+    that want to treat warnings as errors.
+
+    @param once_from
+      This parameter is always set to the OCaml builtin [__POS__] binding. If used, this ensures that that instance of
+      [warn] only ever happens once, provided [opt_all_warnings] isn't set. This is useful when a warning, if triggered,
+      would likely trigger many more times (on different parts of the input source). As an example, this is often used
+      for deprecated constructs, as we want to notify that is deprecated via a warning, but not print hundreds or
+      warnings for every use.
+
+    @param force_show This parameter if true forces the warning to always be shown. *)
 val warn :
   ?once_from:string * int * int * int -> ?force_show:bool -> Version.t -> string -> Parse_ast.l -> string -> unit
 
+(** Print a formatted warning message. See [warn] for details of the arguments. *)
 val format_warn :
   ?once_from:string * int * int * int ->
   ?force_show:bool ->
@@ -164,15 +187,26 @@ val format_warn :
   Error_format.message ->
   unit
 
-(** Print information about suppressed warnings *)
+(** Print information about suppressed warnings. These are specifically warnings that would be shown if
+    [opt_all_warnings] was used.
+
+    Internally we can consider warnings that are not shown as falling into three categories:
+
+    - Suppressed by [once_from]
+    - Ignored by directives ([$suppress_warnings])
+    - Duplicate, already shown
+
+    This function prints information about the first only. *)
 val suppressed_warning_info : unit -> unit
 
 (** Print a simple one-line warning without a location. *)
 val simple_warn : Version.t -> string -> unit
 
-(** Will suppress all warnings for a given (Sail) file handle. Used by $suppress_warnings directive in process_file.ml
-*)
+(** Will suppress all warnings for a given (Sail) file handle. Used by the $suppress_warnings directive in
+    process_file.ml *)
 val suppress_warnings_for_file : Sail_file.handle -> unit
+
+val suppress_warnings_for_span : Sail_file.position -> Sail_file.position -> unit
 
 val get_sail_dir : string -> string
 

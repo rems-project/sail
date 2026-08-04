@@ -161,6 +161,12 @@ let get_argv_position ~plus =
 let target_set_contains (target_set : string) (target : string) : bool =
   String.split_on_char ' ' target_set |> List.mem target
 
+let rec find_warnings_off = function
+  | DEF_aux (DEF_pragma ("suppress_warnings", Pragma_line ("off", _)), l) :: _ ->
+      Option.map snd (Reporting.simp_loc (pragma_loc l))
+  | def :: defs -> find_warnings_off defs
+  | [] -> None
+
 let preprocess ~default_sail_dir ~target_name ~options ~symbols defs =
   let module P = Parse_ast in
   let symbols = ref symbols in
@@ -183,6 +189,9 @@ let preprocess ~default_sail_dir ~target_name ~options ~symbols defs =
             format_message message (buffer_formatter b);
             raise (Reporting.err_general l (Buffer.contents b))
       )
+    | DEF_aux (DEF_pragma ("warn", Pragma_line (msg, _)), l) :: defs ->
+        Reporting.warn Version.v0_20_2 "Directive" (pragma_loc l) msg;
+        aux includes acc defs
     | (DEF_aux (DEF_pragma ("option", Pragma_line (command, ltrim)), l) as opt_pragma) :: defs ->
         let l = pragma_loc l in
         let first_line err_msg =
@@ -258,10 +267,22 @@ let preprocess ~default_sail_dir ~target_name ~options ~symbols defs =
           Reporting.warn Version.v0_20_2 "" (pragma_loc l) ("Skipping bad $include " ^ file ^ ". " ^ help);
           aux includes acc defs
         )
-    | DEF_aux (DEF_pragma ("suppress_warnings", _), l) :: defs ->
+    | DEF_aux (DEF_pragma ("suppress_warnings", arg), l) :: defs ->
         ( match Reporting.simp_loc l with
         | None -> () (* This shouldn't happen, but if it does just continue *)
-        | Some (p, _) -> Reporting.suppress_warnings_for_file p.pos_fname
+        | Some (p, _) -> (
+            match arg with
+            | Pragma_line ("on", _) -> (
+                match find_warnings_off defs with
+                | None ->
+                    raise
+                      (Reporting.err_general (pragma_loc l) "Could not find matching '$suppress_warnings off' directive")
+                | Some p_end -> Reporting.suppress_warnings_for_span p p_end
+              )
+            | Pragma_line ("off", _) -> ()
+            | Pragma_line ("", _) -> Reporting.suppress_warnings_for_file p.pos_fname
+            | _ -> raise (Reporting.err_general (pragma_loc l) "Unknown argument for suppress_warnings directive")
+          )
         );
         aux includes acc defs
     (* Filter file_start and file_end out of the AST so when we
