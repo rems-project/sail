@@ -64,7 +64,14 @@ type handle = int
 
 let handle_compare h1 h2 = Int.compare h1 h2
 
+let handle_equal h1 h2 = Int.equal h1 h2
+
 module HandleSet = Set.Make (struct
+  type t = handle
+  let compare = handle_compare
+end)
+
+module HandleMap = Map.Make (struct
   type t = handle
   let compare = handle_compare
 end)

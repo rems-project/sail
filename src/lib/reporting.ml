@@ -282,11 +282,33 @@ end
 
 module RangeMap = Map.Make (Range)
 
-let ignored_files = ref Sail_file.HandleSet.empty
+let ignored_locations = ref Sail_file.HandleMap.empty
 
-let suppress_warnings_for_file f = ignored_files := Sail_file.HandleSet.add f !ignored_files
+let suppress_warnings_for_file f = ignored_locations := Sail_file.HandleMap.add f None !ignored_locations
 
-let ignore_file p = Sail_file.(HandleSet.mem p.Position.pos_fname !ignored_files)
+let suppress_warnings_for_span p_start p_end =
+  let open Sail_file.Position in
+  if Sail_file.handle_equal p_start.pos_fname p_end.pos_fname then (
+    match Sail_file.HandleMap.find_opt p_start.pos_fname !ignored_locations with
+    | None ->
+        ignored_locations :=
+          Sail_file.HandleMap.add p_start.pos_fname
+            (Some (Util.IntIntSet.singleton (p_start.pos_cnum, p_end.pos_cnum)))
+            !ignored_locations
+    | Some None -> () (* Already ignoring whole file. *)
+    | Some (Some spans) ->
+        ignored_locations :=
+          Sail_file.HandleMap.add p_start.pos_fname
+            (Some (Util.IntIntSet.add (p_start.pos_cnum, p_end.pos_cnum) spans))
+            !ignored_locations
+  )
+
+let ignore_position p =
+  let open Sail_file.Position in
+  match Sail_file.HandleMap.find_opt p.pos_fname !ignored_locations with
+  | None -> false
+  | Some None -> true
+  | Some (Some spans) -> Util.IntIntSet.exists (fun (s, e) -> s <= p.pos_cnum && p.pos_cnum <= e) spans
 
 let seen_warnings = ref RangeMap.empty
 let once_from_warnings = ref StringSet.empty
@@ -297,7 +319,7 @@ let suppressed_warning_info () =
     prerr_endline
       (Util.("Warning" |> yellow |> clear)
       ^ ": " ^ string_of_int !suppressed_warnings
-      ^ " warnings have been suppressed. Use --all-warnings to display them."
+      ^ " warnings have been automatically suppressed. Use --all-warnings to display them."
       );
     suppressed_warnings := 0
   )
@@ -340,11 +362,13 @@ let format_warn ?once_from ?(force_show = false) version short_str l explanation
   in
   if (!opt_warnings && not already_shown) || force_show then (
     match simp_loc l with
-    | Some (p1, p2) when not (ignore_file p1) ->
-        let shorts = RangeMap.find_opt (p1, p2) !seen_warnings |> Option.value ~default:[] in
-        if not (List.exists (fun s -> s = short_str) shorts) then (
-          print_warning ~fatal short_str l explanation;
-          seen_warnings := RangeMap.add (p1, p2) (short_str :: shorts) !seen_warnings
+    | Some (p1, p2) ->
+        if not (ignore_position p1) then (
+          let shorts = RangeMap.find_opt (p1, p2) !seen_warnings |> Option.value ~default:[] in
+          if not (List.exists (fun s -> s = short_str) shorts) then (
+            print_warning ~fatal short_str l explanation;
+            seen_warnings := RangeMap.add (p1, p2) (short_str :: shorts) !seen_warnings
+          )
         )
     | _ -> print_warning ~fatal short_str l explanation
   )
