@@ -34,6 +34,14 @@ dummy_cmxs = os.path.join(dummy_plugin_dir, 'sail_plugin_dir_test.cmxs')
 dummy_cma = os.path.join(dummy_plugin_dir, 'sail_plugin_dir_test.cma')
 marker = '--sail-plugin-dir-test-marker'
 
+# One of the flags added by a real built-in plugin (the smt backend), used to
+# check whether the built-in plugin directory was scanned or not
+builtin_flag = '--smt-auto'
+
+# `sail_dir` (e.g. <prefix>/share/sail) and the built-in plugin directory
+# (<prefix>/share/libsail/plugins) are siblings under the same install prefix
+default_plugin_dir = os.path.join(os.path.dirname(sail_dir), 'libsail', 'plugins')
+
 
 def ensure_dummy_plugin_built():
     if os.path.exists(dummy_cmxs):
@@ -66,15 +74,32 @@ def clean_env(**extra):
 
 
 def test_plugin_dir_include_extra_plugin():
-    # Three checks: the marker is absent by default, SAIL_PLUGIN_DIR adds it
-    # without losing any built-in plugin options, and SAIL_NO_PLUGINS still
-    # overrides SAIL_PLUGIN_DIR.
-    banner('Testing loading of external plugins from SAIL_PLUGIN_DIR in addition to native sail plugins')
+    # Checks: the marker is absent by default, SAIL_NO_PLUGINS drops the
+    # built-in plugins, SAIL_PLUGIN_DIR replaces the built-in plugin
+    # directory rather than adding to it, and SAIL_PLUGIN_DIR is treated as a
+    # colon-separated list of directories.
+    banner('Testing loading of external plugins from SAIL_PLUGIN_DIR instead of native sail plugins')
     results = Results('plugins')
+
+    def check(name, condition, detail):
+        if condition:
+            results.passes += 1
+            results.xml += '    <testcase name="{}"/>\n'.format(name)
+            print_ok(name)
+        else:
+            results._add_failure(name, detail)
+            print('{}Failed{}: {}: {}'.format(color.FAIL, color.END, name, detail))
 
     if not ensure_dummy_plugin_built():
         print_skip('sail_plugin_dir')
         results._add_status('sail_plugin_dir', 'skipped', 'could not build the dummy plugin: {}'.format(dummy_cmxs))
+        return results
+
+    if not os.path.isdir(default_plugin_dir):
+        print_skip('sail_plugin_dir')
+        results._add_status(
+            'sail_plugin_dir', 'skipped', 'could not find the built-in plugin directory: {}'.format(default_plugin_dir)
+        )
         return results
 
     with tempfile.TemporaryDirectory() as custom_dir:
@@ -83,40 +108,62 @@ def test_plugin_dir_include_extra_plugin():
             shutil.copy(dummy_cma, custom_dir)
 
         baseline = sail_help(clean_env())
+        with_no_plugins = sail_help(clean_env(SAIL_NO_PLUGINS='1'))
         with_plugin_dir = sail_help(clean_env(SAIL_PLUGIN_DIR=custom_dir))
-        with_no_plugins = sail_help(clean_env(SAIL_PLUGIN_DIR=custom_dir, SAIL_NO_PLUGINS='1'))
+        with_no_plugins_and_plugin_dir = sail_help(clean_env(SAIL_NO_PLUGINS='1', SAIL_PLUGIN_DIR=custom_dir))
+        with_colon_separated_dirs = sail_help(
+            clean_env(SAIL_PLUGIN_DIR='{}:{}'.format(custom_dir, default_plugin_dir))
+        )
 
     # The marker must not appear without SAIL_PLUGIN_DIR, otherwise its presence
     # below wouldn't actually show that SAIL_PLUGIN_DIR was scanned
-    if marker not in baseline:
-        results.passes += 1
-        results.xml += '    <testcase name="sail_plugin_dir_marker_absent_by_default"/>\n'
-        print_ok('sail_plugin_dir_marker_absent_by_default')
-    else:
-        msg = 'marker {} unexpectedly present without SAIL_PLUGIN_DIR'.format(marker)
-        results._add_failure('sail_plugin_dir_marker_absent_by_default', msg)
-        print('{}Failed{}: sail_plugin_dir_marker_absent_by_default: {}'.format(color.FAIL, color.END, msg))
+    check(
+        'sail_plugin_dir_marker_absent_by_default',
+        marker not in baseline,
+        'marker {} unexpectedly present without SAIL_PLUGIN_DIR'.format(marker),
+    )
 
-    # SAIL_PLUGIN_DIR should add the marker without losing any built-in options
-    lost = sorted(flag for flag in baseline - with_plugin_dir if flag.startswith('-'))
-    if not lost and marker in with_plugin_dir:
-        results.passes += 1
-        results.xml += '    <testcase name="sail_plugin_dir_adds_builtins"/>\n'
-        print_ok('sail_plugin_dir_adds_builtins')
-    else:
-        msg = 'lost built-in flags {}, marker present: {}'.format(lost, marker in with_plugin_dir)
-        results._add_failure('sail_plugin_dir_adds_builtins', msg)
-        print('{}Failed{}: sail_plugin_dir_adds_builtins: {}'.format(color.FAIL, color.END, msg))
+    # Sanity check for the tests below that rely on this flag: it is present
+    # by default...
+    check(
+        'sail_plugin_dir_builtin_present_by_default',
+        builtin_flag in baseline,
+        'built-in flag {} missing without SAIL_NO_PLUGINS'.format(builtin_flag),
+    )
 
-    # SAIL_NO_PLUGINS should still take precedence over SAIL_PLUGIN_DIR
-    if marker not in with_no_plugins:
-        results.passes += 1
-        results.xml += '    <testcase name="sail_no_plugins_overrides_plugin_dir"/>\n'
-        print_ok('sail_no_plugins_overrides_plugin_dir')
-    else:
-        msg = 'marker {} present despite SAIL_NO_PLUGINS'.format(marker)
-        results._add_failure('sail_no_plugins_overrides_plugin_dir', msg)
-        print('{}Failed{}: sail_no_plugins_overrides_plugin_dir: {}'.format(color.FAIL, color.END, msg))
+    # ...and dropped when SAIL_NO_PLUGINS is set
+    check(
+        'sail_no_plugins_drops_builtins',
+        builtin_flag not in with_no_plugins,
+        'built-in flag {} still present with SAIL_NO_PLUGINS'.format(builtin_flag),
+    )
+
+    # SAIL_NO_PLUGINS should take precedence over SAIL_PLUGIN_DIR, not just the built-in directory
+    check(
+        'sail_no_plugins_overrides_plugin_dir',
+        marker not in with_no_plugins_and_plugin_dir,
+        'marker {} present despite SAIL_NO_PLUGINS'.format(marker),
+    )
+
+    # SAIL_PLUGIN_DIR should load the marker plugin, and no longer load the
+    # built-in plugin directory (so the built-in flags disappear)
+    check(
+        'sail_plugin_dir_replaces_builtins',
+        marker in with_plugin_dir and builtin_flag not in with_plugin_dir,
+        'marker present: {}, built-in flag {} present: {}'.format(
+            marker in with_plugin_dir, builtin_flag, builtin_flag in with_plugin_dir
+        ),
+    )
+
+    # SAIL_PLUGIN_DIR should be treated as a colon-separated list of
+    # directories, all of which are scanned for plugins
+    check(
+        'sail_plugin_dir_colon_separated_list',
+        marker in with_colon_separated_dirs and builtin_flag in with_colon_separated_dirs,
+        'marker present: {}, built-in flag {} present: {}'.format(
+            marker in with_colon_separated_dirs, builtin_flag, builtin_flag in with_colon_separated_dirs
+        ),
+    )
 
     return results
 

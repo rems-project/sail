@@ -622,7 +622,7 @@ let feature_check () =
 
 let get_plugin_dir () =
   match Sys.getenv_opt "SAIL_PLUGIN_DIR" with
-  | Some path -> path :: Libsail_sites.Sites.plugins
+  | Some path -> String.split_on_char ':' path
   | None -> Libsail_sites.Sites.plugins
 
 let rec find_file_above ?prev_inode_opt dir file =
