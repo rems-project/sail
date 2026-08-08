@@ -37,7 +37,6 @@ skip_selftests = {
     'string_literal_type',
     'issue429',
     'pc_no_wildcard',
-    'type_if_bits',
     'nexp_simp_euclidian',
     'issue136',
     'anf_as_pattern',

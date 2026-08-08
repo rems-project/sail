@@ -1276,12 +1276,26 @@ let doc_typdef ctx (TD_aux (td, tannot) as full_typdef) =
       let vars = List.map parens vars in
       let vars = separate space vars in
       nest 2 (flow (break 1) (remove_empties [string "abbrev"; doc_id_ctor id; vars; coloneq; doc_typ ctx t]))
-  | TD_abbrev (id, tq, A_aux (A_typ t, _)) when string_of_id id = "fp_bits" ->
-      string (Printf.sprintf "-- Abbreviation %s skipped" (string_of_id id)) (* FIXME *)
   | TD_abbrev (id, tq, A_aux (A_typ t, _)) ->
-      let vars = doc_typ_quant_only_vars ctx tq in
-      let vars = separate space vars in
-      nest 2 (flow (break 1) (remove_empties [string "abbrev"; doc_id_ctor id; vars; coloneq; doc_typ ctx t]))
+      (* Since RHS is a type term, `abbrev` defines a type abbreviation.
+       In an abbrev there is usually no expected-type context, so `_` holes
+       from existentials are often not solvable. For existentials we therefore
+       print an explicit dependent pair (Sigma). *)
+      let rhs_doc =
+        match t with
+        | Typ_aux (Typ_exist (kopts, _nc, body), _l) ->
+            (* Copied from Coq backend. *)
+            let body_doc = doc_typ ctx body in
+            List.fold_right
+              (fun kopt acc ->
+                let kid = kopt_kid kopt in
+                string "Sigma" ^^ space ^^ parens (string "fun " ^^ doc_kid ctx kid ^^ space ^^ string "=> " ^^ acc)
+              )
+              kopts body_doc
+        | _ -> doc_typ ctx t
+      in
+      let vars = doc_typ_quant_only_vars ctx tq |> separate space in
+      nest 2 (flow (break 1) (remove_empties [string "abbrev"; doc_id_ctor id; vars; coloneq; rhs_doc]))
   | TD_abbrev (id, tq, A_aux (A_nexp ne, _)) ->
       let vars = doc_typ_quant_only_vars ctx tq in
       let vars = separate space vars in
