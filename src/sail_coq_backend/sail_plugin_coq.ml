@@ -110,10 +110,6 @@ let make_options prefix hide =
       Arg.Clear Pretty_print_coq.opt_coq_all_eq_dec,
       " generate decidable equality instances only when necessary"
     );
-    ( Flag.create ~prefix ~hide ~debug:true "warn_nonex",
-      Arg.Set Rewrites.opt_coq_warn_nonexhaustive,
-      "generate warnings for non-exhaustive pattern matches in the Rocq backend"
-    );
     ( Flag.create ~prefix ~hide ~arg:"function" ~debug:true "debug_on",
       Arg.String (fun f -> Pretty_print_coq.opt_debug_on := f :: !Pretty_print_coq.opt_debug_on),
       "produce debug messages for Rocq output on given function"
@@ -171,8 +167,7 @@ let coq_rewrites =
     (* We need to do the exhaustiveness check before merging, because it may
        introduce new wildcard clauses *)
     ("recheck_defs", []);
-    ("make_cases_exhaustive", []);
-    ("remove_redundant_pats", []);
+    ("pattern_exhaustivity_redundancy", []);
     (* merge funcls before adding the measure argument so that it doesn't
        disappear into an internal pattern match *)
     ("merge_function_clauses", []);
