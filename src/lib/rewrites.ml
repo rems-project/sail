@@ -3576,454 +3576,105 @@ let rewrite_ast_realize_mappings effect_info env ast =
   let ast = { ast with defs = List.map rewrite_def ast.defs |> List.flatten } in
   (ast, !effect_info, env)
 
-(* Rewrite to make all pattern matches in Coq output exhaustive and
-   remove redundant clauses.  Assumes that guards, vector patterns,
-   etc have been rewritten already, and the scattered functions have
-   been merged.  It also reruns effect inference if a pattern match
-   failure has to be added.
+(* Check patterns for exhaustivity and redundancy.  Used late in the rewrite process this can be
+   used to fulfill target language requirements, currently for Rocq and Lean.
 
-   Note: if this naive implementation turns out to be too slow or buggy, we
-   could look at implementing Maranget JFP 17(3), 2007.
-*)
+   This must be run before function clauses are merged because it may introduce a second clause
+   for the wildcard.
+ *)
 
-let opt_coq_warn_nonexhaustive = ref false
-
-module MakeExhaustive = struct
-  type rlit = RL_unit | RL_true | RL_false | RL_inf
-
-  let string_of_rlit = function RL_unit -> "()" | RL_true -> "true" | RL_false -> "false" | RL_inf -> "..."
-
-  let rlit_of_lit (L_aux (l, _)) =
-    match l with
-    | L_unit -> RL_unit
-    | L_true -> RL_true
-    | L_false -> RL_false
-    | L_num _ | L_hex _ | L_bin _ | L_string _ | L_real _ -> RL_inf
-
-  let inv_rlit_of_lit (L_aux (l, _)) =
-    match l with
-    | L_unit -> []
-    | L_true -> [RL_false]
-    | L_false -> [RL_true]
-    | L_num _ | L_hex _ | L_bin _ | L_string _ | L_real _ -> [RL_inf]
-
-  type residual_pattern =
-    | RP_any
-    | RP_lit of rlit
-    | RP_enum of id
-    | RP_app of id * residual_pattern list
-    | RP_tuple of residual_pattern list
-    | RP_nil
-    | RP_cons of residual_pattern * residual_pattern
-    | RP_struct of (id * residual_pattern) list
-
-  let rec string_of_rp = function
-    | RP_any -> "_"
-    | RP_lit rlit -> string_of_rlit rlit
-    | RP_enum id -> string_of_id id
-    | RP_app (f, args) -> string_of_id f ^ "(" ^ String.concat "," (List.map string_of_rp args) ^ ")"
-    | RP_tuple rps -> "(" ^ String.concat "," (List.map string_of_rp rps) ^ ")"
-    | RP_nil -> "[| |]"
-    | RP_cons (rp1, rp2) -> string_of_rp rp1 ^ "::" ^ string_of_rp rp2
-    | RP_struct frps ->
-        "struct { "
-        ^ Util.string_of_list ", " (fun (field, rp) -> string_of_id field ^ " = " ^ string_of_rp rp) frps
-        ^ " }"
-
-  type ctx = {
-    env : Env.t;
-    enum_to_rest : residual_pattern list Bindings.t;
-    constructor_to_rest : residual_pattern list Bindings.t;
-  }
-
-  let make_enum_mappings ids m =
-    let all_ids = List.map (fun e -> RP_enum e) (IdSet.elements ids) in
-    IdSet.fold (fun id m -> Bindings.add id all_ids m) ids m
-
-  let get_residual_enum ctx id =
-    let all_ids = Bindings.find id ctx.enum_to_rest in
-    List.filter (function RP_enum id' -> Id.compare id id' <> 0 | _ -> false) all_ids
-
-  let make_cstr_mappings env ids m =
-    let ids = IdSet.elements ids in
-    let constructors =
-      List.map
-        (fun id ->
-          let _, ty = Env.get_val_spec id env in
-          let args = match ty with Typ_aux (Typ_fn (tys, _), _) -> List.map (fun _ -> RP_any) tys | _ -> [RP_any] in
-          RP_app (id, args)
-        )
-        ids
-    in
-    let rec aux ids acc l =
-      match (ids, l) with
-      | [], [] -> m
-      | id :: ids, rp :: t ->
-          (* We don't need to keep the ordering inside acc *)
-          let m = aux ids (rp :: acc) t in
-          Bindings.add id (acc @ t) m
-      | _ -> assert false
-    in
-    aux ids [] constructors
-
-  let ctx_from_env env =
+let pattern_check effect_info top_env ast =
+  (* We may have to update the effect information if we introduce new wildcard cases with failures *)
+  let redo_effects = ref false in
+  let ctx env =
     {
-      env;
-      enum_to_rest = Bindings.fold (fun _ ids m -> make_enum_mappings ids m) (Env.get_enums env) Bindings.empty;
-      constructor_to_rest =
-        Bindings.fold
-          (fun _ ids m -> make_cstr_mappings env ids m)
-          (Bindings.map (fun (_, tus) -> IdSet.of_list (List.map type_union_id tus)) (Env.get_variants env))
-          Bindings.empty;
+      Pattern_completeness.abstract = Env.get_abstract_typs env;
+      Pattern_completeness.variants = Env.get_variants env;
+      Pattern_completeness.structs = Env.get_records env;
+      Pattern_completeness.enums = Env.get_enums env;
+      Pattern_completeness.is_open = (fun id -> Env.is_scattered_open id env);
+      Pattern_completeness.constraints = Env.get_constraints env;
+      Pattern_completeness.is_mapping = (fun id -> Env.is_mapping id env);
     }
-
-  let rec remove_clause_from_pattern ctx (P_aux (rm_pat, ann)) res_pat =
-    (* Remove the tuple rm_pats from the tuple of res_pats *)
-    let subpats rm_pats res_pats =
-      (* Pointwise removal *)
-      let res_pats' = List.map2 (remove_clause_from_pattern ctx) rm_pats res_pats in
-      let progress = List.exists snd res_pats' in
-      (* Form the list of residual tuples by combining one position from the
-         pointwise removal with the original residual of the other positions. *)
-      let rec aux acc fixed residual =
-        match (fixed, residual) with
-        | [], [] -> []
-        | fh :: ft, (rh, _) :: rt ->
-            (* ... so order matters here *)
-            let rt' = aux (acc @ [fh]) ft rt in
-            let newr = List.map (fun x -> acc @ (x :: ft)) rh in
-            newr @ rt'
-        | _, _ -> assert false (* impossible because we managed map2 above *)
-      in
-      (aux [] res_pats res_pats', progress)
-    in
-    let inconsistent () =
-      raise
-        (Reporting.err_unreachable (fst ann) __POS__
-           ("Inconsistency during exhaustiveness analysis with " ^ string_of_rp res_pat)
-        )
-    in
-    (*let _ = print_endline (!printprefix ^ "pat: " ^string_of_pat (P_aux (rm_pat,ann))) in
-      let _ = print_endline (!printprefix ^ "res_pat: " ^string_of_rp res_pat) in
-      let _ = printprefix := "  " ^ !printprefix in*)
-    let rp' =
-      match rm_pat with
-      | P_wild -> ([], true)
-      | P_id id when match Env.lookup_id id ctx.env with Unbound _ | Local _ -> true | _ -> false -> ([], true)
-      | P_lit lit -> (
-          match res_pat with
-          | RP_any -> (List.map (fun l -> RP_lit l) (inv_rlit_of_lit lit), true)
-          | RP_lit RL_inf -> ([res_pat], true (* TODO: check for duplicates *))
-          | RP_lit lit' -> if lit' = rlit_of_lit lit then ([], true) else ([res_pat], false)
-          | _ -> inconsistent ()
-        )
-      | P_as (p, _) | P_typ (_, p) | P_var (p, _) -> remove_clause_from_pattern ctx p res_pat
-      | P_id id -> (
-          match Env.lookup_id id ctx.env with
-          | Enum enum -> (
-              match res_pat with
-              | RP_any -> (get_residual_enum ctx id, true)
-              | RP_enum id' -> if Id.compare id id' == 0 then ([], true) else ([res_pat], false)
-              | _ -> inconsistent ()
-            )
-          | _ -> assert false
-        )
-      | P_tuple rm_pats ->
-          if Util.list_empty rm_pats then ([], true)
-          else (
-            let previous_res_pats =
-              match res_pat with
-              | RP_tuple res_pats -> res_pats
-              | RP_any -> List.map (fun _ -> RP_any) rm_pats
-              | _ -> inconsistent ()
-            in
-            let res_pats', progress = subpats rm_pats previous_res_pats in
-            (List.map (fun rps -> RP_tuple rps) res_pats', progress)
-          )
-      | P_app (id, args) -> (
-          match res_pat with
-          | RP_app (id', residual_args) ->
-              if Id.compare id id' == 0 then (
-                let res_pats', progress =
-                  (* Constructors that were specified without a return type might get
-                     an extra tuple in their type; expand that here if necessary.
-                     TODO: this should go away if we enforce proper arities. *)
-                  match (args, residual_args) with
-                  | [], [RP_any] | _ :: _ :: _, [RP_any] -> subpats args (List.map (fun _ -> RP_any) args)
-                  | _, _ -> subpats args residual_args
-                in
-                (List.map (fun rps -> RP_app (id, rps)) res_pats', progress)
-              )
-              else ([res_pat], false)
-          | RP_any ->
-              let res_args, progress = subpats args (List.map (fun _ -> RP_any) args) in
-              (List.map (fun l -> RP_app (id, l)) res_args @ Bindings.find id ctx.constructor_to_rest, progress)
-          | _ -> inconsistent ()
-        )
-      | P_struct (struct_name, field_pats, _) ->
-          let all_ids, res_pats =
-            match res_pat with
-            | RP_struct res_fields ->
-                let all_ids = List.map fst res_fields in
-                let res_pats = List.map snd res_fields in
-                (all_ids, res_pats)
-            | RP_any ->
-                let record_id =
-                  match Env.expand_synonyms ctx.env (typ_of_annot ann) with
-                  | Typ_aux (Typ_id id, _) | Typ_aux (Typ_app (id, _), _) -> id
-                  | _ -> Reporting.unreachable (fst ann) __POS__ "Record is not a record"
-                in
-                let _, fields = Env.get_record record_id ctx.env in
-                (List.map snd fields, List.map (fun _ -> RP_any) fields)
-            | _ -> inconsistent ()
-          in
-          let cur_pats =
-            List.map
-              (fun id ->
-                List.find_opt (fun (x, _) -> Id.compare id x == 0) field_pats
-                |> Option.map snd
-                |> Option.value ~default:(P_aux (P_wild, (Unknown, empty_tannot)))
-              )
-              all_ids
-          in
-          let res_pats', progress = subpats cur_pats res_pats in
-          (List.map (fun rps -> RP_struct (List.combine all_ids rps)) res_pats', progress)
-      | P_list ps -> (
-          match ps with
-          | p1 :: ptl -> remove_clause_from_pattern ctx (P_aux (P_cons (p1, P_aux (P_list ptl, ann)), ann)) res_pat
-          | [] -> (
-              match res_pat with
-              | RP_any -> ([RP_cons (RP_any, RP_any)], true)
-              | RP_cons _ -> ([res_pat], false)
-              | RP_nil -> ([], true)
-              | _ -> inconsistent ()
-            )
-        )
-      | P_cons (p1, p2) -> (
-          let rp', rps =
-            match res_pat with
-            | RP_cons (rp1, rp2) -> ([], Some [rp1; rp2])
-            | RP_any -> ([RP_nil], Some [RP_any; RP_any])
-            | RP_nil -> ([RP_nil], None)
-            | _ -> inconsistent ()
-          in
-          match rps with
-          | None -> (rp', false)
-          | Some rps ->
-              let res_pats, progress = subpats [p1; p2] rps in
-              (rp' @ List.map (function [rp1; rp2] -> RP_cons (rp1, rp2) | _ -> assert false) res_pats, progress)
-        )
-      | P_or _ -> raise (Reporting.err_unreachable (fst ann) __POS__ "Or pattern not supported")
-      | P_not _ -> raise (Reporting.err_unreachable (fst ann) __POS__ "Negated pattern not supported")
-      | P_vector _ | P_vector_concat _ | P_vector_subrange _ | P_string_append _ ->
-          raise
-            (Reporting.err_unreachable (fst ann) __POS__
-               "Found pattern that should have been rewritten away in earlier stage"
-            )
-      (*in let _ = printprefix := String.sub (!printprefix) 0 (String.length !printprefix - 2)
-        in let _ = print_endline (!printprefix ^ "res_pats': " ^ String.concat "; " (List.map string_of_rp rp'))*)
-    in
-
-    rp'
-
-  let process_pexp env =
-    let ctx = ctx_from_env env in
-    fun rps patexp ->
-      (*let _ = print_endline ("res_pats: " ^ String.concat "; " (List.map string_of_rp rps)) in
-        let _ = print_endline ("pat: " ^ string_of_pexp patexp) in*)
-      match patexp with
-      | Pat_aux (Pat_exp (p, _), _) ->
-          let rps, progress = List.split (List.map (remove_clause_from_pattern ctx p) rps) in
-          (List.concat rps, List.exists (fun b -> b) progress)
-      | Pat_aux (Pat_when _, (l, _)) ->
-          raise (Reporting.err_unreachable l __POS__ "Guarded pattern should have been rewritten away")
-
-  let check_cases warned_unknown process is_wild loc_of cases =
-    let rec aux rps acc = function
-      | [] -> (acc, rps)
-      | [p] when is_wild p && match rps with [] -> true | _ -> false ->
-          let l = loc_of p in
-          let warn =
-            match (l, !warned_unknown) with
-            | Parse_ast.Unknown, true -> false
-            | Parse_ast.Unknown, false ->
-                warned_unknown := true;
-                true
-            | _, _ -> true
-          in
-          let () = if warn then Reporting.print_err (loc_of p) "Match checking" "Redundant wildcard clause" in
-          (acc, [])
-      | h :: t ->
-          let rps', progress = process rps h in
-          if progress then aux rps' (h :: acc) t
-          else (
-            Reporting.print_err (loc_of h) "Match checking" "Redundant clause";
-            aux rps' acc t
-          )
-    in
-    let cases, rps = aux [RP_any] [] cases in
-    (List.rev cases, rps)
-
-  let not_enum env id = match Env.lookup_id id env with Enum _ -> false | _ -> true
-
-  let pexp_is_wild = function
-    | Pat_aux (Pat_exp (P_aux (P_wild, _), _), _) -> true
-    | Pat_aux (Pat_exp (P_aux (P_id id, ann), _), _) when not_enum (env_of_annot ann) id -> true
-    | _ -> false
-
-  let pexp_loc = function
-    | Pat_aux (Pat_exp (P_aux (_, (l, _)), _), _) -> l
-    | Pat_aux (Pat_when (P_aux (_, (l, _)), _, _), _) -> l
-
-  let funcl_is_wild = function FCL_aux (FCL_funcl (_, pexp), _) -> pexp_is_wild pexp
-
-  let funcl_loc (FCL_aux (_, (def_annot, _))) = def_annot.loc
-
-  let rewrite_case warned_unknown redo_effects (e, ann) =
-    match e with
-    | E_match (e1, cases) | E_try (e1, cases) -> (
-        let env = env_of_annot ann in
-        let cases, rps = check_cases warned_unknown (process_pexp env) pexp_is_wild pexp_loc cases in
-        let rebuild cases =
-          match e with E_match _ -> E_match (e1, cases) | E_try _ -> E_try (e1, cases) | _ -> assert false
-        in
-        match rps with
-        | [] -> E_aux (rebuild cases, ann)
-        | example :: _ ->
-            let _ =
-              if !opt_coq_warn_nonexhaustive then
-                Reporting.print_err (fst ann) "Non-exhaustive matching" ("Example: " ^ string_of_rp example)
-            in
-
-            let l = Parse_ast.Generated Parse_ast.Unknown in
-            let p = P_aux (P_wild, (l, mk_tannot env (typ_of e1))) in
-            let l_ann = mk_tannot env unit_typ in
-            let ann' = mk_tannot env (typ_of_annot ann) in
-            (* TODO: use an expression that specifically indicates a failed pattern match *)
-            let b = E_aux (E_exit (E_aux (E_lit (L_aux (L_unit, l)), (l, l_ann))), (l, ann')) in
-            redo_effects := true;
-            E_aux (rebuild (cases @ [Pat_aux (Pat_exp (p, b), (l, empty_tannot))]), ann)
-      )
-    | E_let (pat, e1, e2) -> (
-        let env = env_of_annot ann in
-        let ctx = ctx_from_env env in
-        let rps, _ = remove_clause_from_pattern ctx pat RP_any in
-        match rps with
-        | [] -> E_aux (e, ann)
-        | example :: _ ->
-            let _ =
-              if !opt_coq_warn_nonexhaustive then
-                Reporting.print_err (fst ann) "Non-exhaustive let" ("Example: " ^ string_of_rp example)
-            in
-            let l = Parse_ast.Generated Parse_ast.Unknown in
-            let p = P_aux (P_wild, (l, mk_tannot env (typ_of e1))) in
-            let l_ann = mk_tannot env unit_typ in
-            let ann' = mk_tannot env (typ_of_annot ann) in
-            (* TODO: use an expression that specifically indicates a failed pattern match *)
-            let b = E_aux (E_exit (E_aux (E_lit (L_aux (L_unit, l)), (l, l_ann))), (l, ann')) in
-            redo_effects := true;
-            E_aux (E_match (e1, [Pat_aux (Pat_exp (pat, e2), ann); Pat_aux (Pat_exp (p, b), (l, empty_tannot))]), ann)
-      )
-    | _ -> E_aux (e, ann)
-
-  let rewrite_fun warned_unknown rewriters (FD_aux (FD_function (r, t, fcls), f_ann)) =
-    let id, fcl_ann =
-      match fcls with
-      | FCL_aux (FCL_funcl (id, _), ann) :: _ -> (id, ann)
-      | [] -> raise (Reporting.err_unreachable (fst f_ann) __POS__ "Empty function")
-    in
-    let env = env_of_tannot (snd fcl_ann) in
-    let process_funcl rps (FCL_aux (FCL_funcl (_, pexp), _)) = process_pexp env rps pexp in
-    let fcls, rps = check_cases warned_unknown process_funcl funcl_is_wild funcl_loc fcls in
-    let fcls' =
-      List.map
-        (function FCL_aux (FCL_funcl (id, pexp), ann) -> FCL_aux (FCL_funcl (id, rewrite_pexp rewriters pexp), ann))
-        fcls
-    in
-    match rps with
-    | [] -> FD_aux (FD_function (r, t, fcls'), f_ann)
-    | example :: _ ->
-        let _ =
-          if !opt_coq_warn_nonexhaustive then
-            Reporting.print_err (fst f_ann) "Non-exhaustive matching" ("Example: " ^ string_of_rp example)
-        in
-
-        let l = Parse_ast.Generated Parse_ast.Unknown in
-        let arg_ty, ret_ty, env' = bind_funcl_arg_typ l env (typ_of_tannot (snd fcl_ann)) in
-        let p = P_aux (P_wild, (l, mk_tannot env' arg_ty)) in
-        let ret_ann = mk_tannot env ret_ty in
-        (* TODO: use an expression that specifically indicates a failed pattern match *)
-        let b = E_aux (E_exit (E_aux (E_lit (L_aux (L_unit, l)), (l, empty_tannot))), (l, ret_ann)) in
-        let default = FCL_aux (FCL_funcl (id, Pat_aux (Pat_exp (p, b), (l, empty_tannot))), fcl_ann) in
-
-        FD_aux (FD_function (r, t, fcls' @ [default]), f_ann)
-
-  let rewrite effect_info env ast =
-    (* Have we already warned about a redundunt wildcard at an unknown location? *)
-    let warned_unknown = ref false in
-    let redo_effects = ref false in
-    let alg = { id_exp_alg with e_aux = rewrite_case warned_unknown redo_effects } in
-    let ast' =
-      rewrite_ast_base
-        {
-          rewrite_exp = (fun _ -> fold_exp alg);
-          rewrite_pat;
-          rewrite_mpat;
-          rewrite_lexp;
-          rewrite_fun = rewrite_fun warned_unknown;
-          rewrite_def;
-          rewrite_ast = rewrite_ast_base_progress "Make patterns exhaustive";
-        }
-        ast
-    in
-    let effect_info' =
-      (* TODO: if we use this for anything other than Coq we'll need
-         to replace "true" with Target.asserts_termination target,
-         after plumbing target through to this rewrite. *)
-      if !redo_effects then Effects.infer_side_effects true ast' else effect_info
-    in
-    (ast', effect_info', env)
-end
-
-(* Remove redundant patterns because Rocq doesn't like them.  Assumes that all
-   patterns are exhaustive (e.g., by the above rewrite) so that the pattern
-   completeness checker will always work. *)
-let remove_redundant_pats _env ast =
-  let remove_redundant l env pexps typ =
-    let ctx =
-      {
-        Pattern_completeness.abstract = Env.get_abstract_typs env;
-        Pattern_completeness.variants = Env.get_variants env;
-        Pattern_completeness.structs = Env.get_records env;
-        Pattern_completeness.enums = Env.get_enums env;
-        Pattern_completeness.is_open = (fun id -> Env.is_scattered_open id env);
-        Pattern_completeness.constraints = Env.get_constraints env;
-        Pattern_completeness.is_mapping = (fun id -> Env.is_mapping id env);
-      }
-    in
-    match PC.is_complete_wildcarded ~remove_redundant:true l ctx pexps typ with
-    | Some r -> r
-    | None ->
-        Reporting.unreachable l __POS__
-          ("Redundant pattern removal failed due to incomplete patterns:\n"
-          ^ String.concat "\n" (List.map string_of_pexp pexps)
-          )
   in
-  let rw_exp rws (E_aux (e, (l, ann)) as exp) =
+  let catch_all l env typ result_typ =
+    let l = Parse_ast.Generated l in
+    let p = P_aux (P_wild, (l, mk_tannot env typ)) in
+    let l_ann = mk_tannot env unit_typ in
+    let ann' = mk_tannot env result_typ in
+    (* TODO: use an expression that specifically indicates a failed pattern match *)
+    let b = E_aux (E_exit (E_aux (E_lit (L_aux (L_unit, l)), (l, l_ann))), (l, ann')) in
+    redo_effects := true;
+    Pat_aux (Pat_exp (p, b), (l, empty_tannot))
+  in
+  let check_pexps l env pexps typ =
+    match PC.is_complete_wildcarded ~remove_redundant:true l (ctx env) pexps typ with
+    | Some r -> r
+    | None -> (
+        let _, _, example_body, _ = destruct_pexp (List.hd pexps) in
+        let result_typ = typ_of example_body in
+        let pexps = pexps @ [catch_all l env typ result_typ] in
+        match PC.is_complete_wildcarded ~remove_redundant:true l (ctx env) pexps typ with
+        | Some r -> r
+        | None ->
+            Reporting.unreachable l __POS__
+              ("Redundant pattern removal failed due to incomplete patterns:\n"
+              ^ String.concat "\n" (List.map string_of_pexp pexps)
+              )
+      )
+  in
+  let rec rw_exp rws (E_aux (e, (l, ann)) as exp) =
     match e with
     | E_match (e1, pexps) ->
-        let e1 = rewrite_exp rws e1 in
+        let e1 = rw_exp rws e1 in
         let pexps = List.map (rewrite_pexp rws) pexps in
-        let pexps = remove_redundant l (env_of_annot (l, ann)) pexps (typ_of e1) in
+        let pexps = check_pexps l (env_of_annot (l, ann)) pexps (typ_of e1) in
         E_aux (E_match (e1, pexps), (l, ann))
     | E_try (e1, pexps) ->
-        let e1 = rewrite_exp rws e1 in
+        let e1 = rw_exp rws e1 in
         let pexps = List.map (rewrite_pexp rws) pexps in
-        let pexps = remove_redundant l (env_of_annot (l, ann)) pexps exc_typ in
+        let pexps = check_pexps l (env_of_annot (l, ann)) pexps exc_typ in
         E_aux (E_try (e1, pexps), (l, ann))
-    | _ -> exp
+    | E_let (pat, e1, e2) -> (
+        let e1 = rw_exp rws e1 in
+        let e2 = rw_exp rws e2 in
+        let pexps =
+          check_pexps l (env_of_annot (l, ann)) [construct_pexp (pat, None, e2, (l, empty_tannot))] (typ_of e1)
+        in
+        match pexps with [_] -> E_aux (E_let (pat, e1, e2), (l, ann)) | _ -> E_aux (E_match (e1, pexps), (l, ann))
+      )
+    | _ -> rewrite_exp rws exp
   in
-  rewrite_ast_base { rewriters_base with rewrite_exp = rw_exp } ast
+  let rw_fun rws fd =
+    let (FD_aux (FD_function (rec_opt, tannot_opt, funcls), ((l, _) as fd_ann))) = rewrite_fun rws fd in
+    let id, env, typ, fcl_ann =
+      match funcls with
+      | [] -> Reporting.unreachable l __POS__ "Function has no clauses"
+      | FCL_aux (FCL_funcl (id, _), ((_, tannot) as fcl_ann)) :: _ ->
+          (id, env_of_tannot tannot, typ_of_tannot tannot, fcl_ann)
+    in
+    let typ_arg, result_typ, env = Type_check.bind_funcl_arg_typ l env typ in
+    match PC.is_complete_funcls_wildcarded ~remove_redundant:true l (ctx env) funcls typ_arg with
+    | Some funcls' -> FD_aux (FD_function (rec_opt, tannot_opt, funcls'), fd_ann)
+    | None -> (
+        let funcls = funcls @ [FCL_aux (FCL_funcl (id, catch_all l env typ result_typ), fcl_ann)] in
+        match PC.is_complete_funcls_wildcarded ~remove_redundant:true l (ctx env) funcls typ_arg with
+        | Some funcls' -> FD_aux (FD_function (rec_opt, tannot_opt, funcls'), fd_ann)
+        | None ->
+            Reporting.unreachable l __POS__
+              ("Redundant pattern removal failed due to incomplete patterns:\n"
+              ^ String.concat "\n" (List.map (function FCL_aux (FCL_funcl (_, pexp), _) -> string_of_pexp pexp) funcls)
+              )
+      )
+  in
+  let ast' = rewrite_ast_base { rewriters_base with rewrite_exp = rw_exp; rewrite_fun = rw_fun } ast in
+  let effect_info' =
+    (* TODO: if we use this for anything other than Rocq and Lean we'll need
+       to replace "true" with Target.asserts_termination target,
+       after plumbing target through to this rewrite. *)
+    if !redo_effects then Effects.infer_side_effects true ast' else effect_info
+  in
+  (ast', effect_info', top_env)
 
 (* Splitting a function (e.g., an execute function on an AST) can produce
    new functions that appear to be recursive but are not.  This checks to
@@ -4869,8 +4520,7 @@ let all_rewriters =
     ("add_bitvector_casts", basic_rewriter Monomorphise.add_bitvector_casts);
     ("remove_impossible_int_cases", basic_rewriter Constant_propagation.remove_impossible_int_cases);
     ("const_prop_mutrec", String_rewriter (fun target -> base_rewriter (Constant_propagation_mutrec.rewrite_ast target)));
-    ("make_cases_exhaustive", base_rewriter MakeExhaustive.rewrite);
-    ("remove_redundant_pats", basic_rewriter remove_redundant_pats);
+    ("pattern_exhaustivity_redundancy", base_rewriter pattern_check);
     ("undefined", Bool_rewriter (fun b -> basic_rewriter (rewrite_undefined_if_gen b)));
     ("remove_not_pats", basic_rewriter rewrite_ast_not_pats);
     ("pattern_literals", Literal_rewriter (fun f -> basic_rewriter (rewrite_ast_pat_lits false f)));

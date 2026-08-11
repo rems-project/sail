@@ -216,7 +216,7 @@ let lean_rewrites =
     (* We need to do the exhaustiveness check before merging, because it may
        introduce new wildcard clauses *)
     ("recheck_defs", []);
-    ("make_cases_exhaustive", [If_flag opt_disable_matchbv]);
+    ("pattern_exhaustivity_redundancy", [If_flag opt_disable_matchbv]);
     (* merge funcls before adding the measure argument so that it doesn't
        disappear into an internal pattern match *)
     ("merge_function_clauses", []);

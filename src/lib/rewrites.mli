@@ -62,9 +62,6 @@ val opt_unroll_loops : bool ref
 
 val opt_unroll_loops_max_iter : int ref
 
-(** Warn about matches where we add a default case for Coq because they're not exhaustive *)
-val opt_coq_warn_nonexhaustive : bool ref
-
 (** Output each rewrite step (as produced by the rewrite function) to a file for debugging *)
 val opt_ddump_rewrite_ast : (string * int) option ref
 
