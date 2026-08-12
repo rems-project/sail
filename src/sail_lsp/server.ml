@@ -80,7 +80,7 @@ module LspIo = Lsp.Io.Make (Io) (Chan)
 
 let send oc packet = LspIo.write oc packet
 
-let handle_request oc (req : Jsonrpc.Request.t) =
+let handle_request ~config oc (req : Jsonrpc.Request.t) =
   let open Jsonrpc in
   let resp =
     match Lsp.Client_request.of_jsonrpc req with
@@ -89,7 +89,7 @@ let handle_request oc (req : Jsonrpc.Request.t) =
         let result =
           match r with
           | Lsp.Client_request.Initialize params ->
-              Ok (Lsp.Client_request.yojson_of_result r (Handler.on_initialize params))
+              Ok (Lsp.Client_request.yojson_of_result r (Handler.on_initialize ~config params))
           | Lsp.Client_request.Shutdown ->
               Handler.on_shutdown ();
               Ok (Lsp.Client_request.yojson_of_result r ())
@@ -109,13 +109,14 @@ let handle_request oc (req : Jsonrpc.Request.t) =
   in
   send oc (Packet.Response resp)
 
-let rec run ~default_sail_dir () =
+let rec run ~config () =
   match LspIo.read stdin with
   | None -> ()
   | Some packet ->
       ( match packet with
       | Jsonrpc.Packet.Request req -> (
-          try handle_request stdout req with exn -> log_error "request handler raised: %s" (Printexc.to_string exn)
+          try handle_request ~config stdout req
+          with exn -> log_error "request handler raised: %s" (Printexc.to_string exn)
         )
       | Jsonrpc.Packet.Notification n -> (
           match Lsp.Client_notification.of_jsonrpc n with
@@ -126,11 +127,11 @@ let rec run ~default_sail_dir () =
                     let jsonrpc_notif = Lsp.Server_notification.to_jsonrpc server_notif in
                     send stdout (Jsonrpc.Packet.Notification jsonrpc_notif)
                   )
-                  (Handler.on_notification ~default_sail_dir notif)
+                  (Handler.on_notification ~config notif)
               with exn -> log_error "notification handler raised: %s" (Printexc.to_string exn)
             )
           | Error msg -> log_error "failed to decode notification: %s" msg
         )
       | _ -> ()
       );
-      run ~default_sail_dir ()
+      run ~config ()

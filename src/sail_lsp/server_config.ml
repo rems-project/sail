@@ -47,6 +47,18 @@
 open Libsail
 open Util.Result_monad
 
+type 'a flag_setting = Explicit of 'a | Implicit of 'a
+
+let unwrap_flag_setting = function Explicit v -> v | Implicit v -> v
+
+let with_flag flg get cfg =
+  match flg with
+  | Explicit v -> Ok v
+  | Implicit v -> (
+      let* res = get cfg in
+      match res with Some cfg_v -> Ok cfg_v | None -> Ok v
+    )
+
 let get_home_dir () =
   match Sys.getenv_opt "HOME" with
   | Some h -> Ok h
@@ -90,31 +102,43 @@ let read_process_stdout cmd =
 
 let get_sail_dir_from_sail () = Result.map String.trim (read_process_stdout "sail --dir")
 
-type t = { default_sail_dir : string }
+type t = { default_sail_dir : string; highlight : bool; folding : bool }
 
 module From_json = struct
   let assoc msg = function `Assoc obj -> Ok obj | _ -> Error (Printf.sprintf "Expected JSON object %s" msg)
 
   let string msg = function `String str -> Ok str | _ -> Error (Printf.sprintf "Expected JSON string %s" msg)
 
+  let boolean msg = function `Bool b -> Ok b | _ -> Error (Printf.sprintf "Expected JSON boolean %S" msg)
+
   let sail_dir json =
     let* obj = assoc "at root" json in
     match List.assoc_opt "sail_dir" obj with
     | Some json -> string "as sail_dir value" json
     | None -> get_sail_dir_from_sail ()
+
+  let optional_toggle name json =
+    let* obj = assoc "at root" json in
+    match List.assoc_opt name obj with
+    | Some json ->
+        let* v = boolean ("as " ^ name ^ " value") json in
+        Ok (Some v)
+    | None -> Ok None
 end
 
-let config_from_json json =
+let config_from_json ~highlight ~folding json =
   let* default_sail_dir = From_json.sail_dir json in
-  Ok { default_sail_dir }
+  let* highlight = with_flag highlight (From_json.optional_toggle "highlight") json in
+  let* folding = with_flag folding (From_json.optional_toggle "folding") json in
+  Ok { default_sail_dir; highlight; folding }
 
-let get_config () =
+let get_config ~highlight ~folding =
   let* cfg_dir = get_config_dir () in
   let cfg_file = Filename.concat cfg_dir "config.json" in
   if not (Sys.file_exists cfg_file) then
     let* sail_dir = get_sail_dir_from_sail () in
-    Ok { default_sail_dir = sail_dir }
+    Ok { default_sail_dir = sail_dir; highlight = unwrap_flag_setting highlight; folding = unwrap_flag_setting folding }
   else (
     let json = Yojson.Safe.from_file ~fname:"config.json" cfg_file in
-    config_from_json json
+    config_from_json ~highlight ~folding json
   )

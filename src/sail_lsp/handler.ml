@@ -118,6 +118,7 @@ let error_diagnostic (err : Reporting.error) =
     | Reporting.Err_unreachable (l, _, _, msg) -> (l, msg)
     | Reporting.Err_type (l, hint, msg) -> (l, match hint with Some h -> msg ^ "\n" ^ h | None -> msg)
     | Reporting.Err_syntax (p, msg) | Reporting.Err_lex (p, msg) -> (Parse_ast.Range (p, p), msg)
+    | Reporting.Err_warning (l, short, msg) -> (l, short ^ ":\n" ^ msg)
   in
   let range =
     match
@@ -157,16 +158,21 @@ let diagnostics_for_handle file handle =
   in
   Lsp.Server_notification.PublishDiagnostics params
 
-let on_initialize _params =
+let on_initialize ~(config : Server_config.t) _params =
   let server_info = Lsp.Types.InitializeResult.create_serverInfo ~name:"sail_lsp" () in
   let sync =
     Lsp.Types.TextDocumentSyncOptions.create ~openClose:true ~change:Lsp.Types.TextDocumentSyncKind.Incremental
       ~save:(`Bool true) ()
   in
-  let semantic_tokens = Lsp.Types.SemanticTokensOptions.create ~legend:Highlight.legend ~full:(`Bool true) () in
+  let semantic_tokens =
+    if config.highlight then
+      Some
+        (`SemanticTokensOptions (Lsp.Types.SemanticTokensOptions.create ~legend:Highlight.legend ~full:(`Bool true) ()))
+    else None
+  in
   let capabilities =
     Lsp.Types.ServerCapabilities.create ~hoverProvider:(`Bool true) ~textDocumentSync:(`TextDocumentSyncOptions sync)
-      ~semanticTokensProvider:(`SemanticTokensOptions semantic_tokens) ~foldingRangeProvider:(`Bool true)
+      ?semanticTokensProvider:semantic_tokens ~foldingRangeProvider:(`Bool config.folding)
       ~definitionProvider:(`Bool true) ()
   in
   Lsp.Types.InitializeResult.create ~capabilities ~serverInfo:server_info ()
@@ -234,12 +240,13 @@ let on_definition ({ position = { line; character }; textDocument = { uri } } : 
       Some (`Location [loc])
   | _ -> None
 
-let refresh_project ~default_sail_dir file =
+let refresh_project ~(config : Server_config.t) file =
   match find_sail_project file with
-  | Some project_file -> state := Some (Server_state.load_project ~default_sail_dir [project_file])
+  | Some project_file ->
+      state := Some (Server_state.load_project ~default_sail_dir:config.default_sail_dir [project_file])
   | None -> state := None
 
-let on_notification ~default_sail_dir notif =
+let on_notification ~config notif =
   let open Lsp.Types in
   match notif with
   | Lsp.Client_notification.Exit -> exit 0
@@ -250,11 +257,11 @@ let on_notification ~default_sail_dir notif =
       let handle = Sail_file.editor_take_file ~contents:text file in
       register_handle file handle;
       ( match !state with
-      | None -> refresh_project ~default_sail_dir file
+      | None -> refresh_project ~config file
       | Some s -> (
           match Server_state.invalidate s handle with
           | Some s' -> state := Some s'
-          | None -> refresh_project ~default_sail_dir file
+          | None -> refresh_project ~config file
         )
       );
       [diagnostics_for_handle file handle]

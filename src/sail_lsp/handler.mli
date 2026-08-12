@@ -44,7 +44,7 @@
 (*  SPDX-License-Identifier: BSD-2-Clause                                   *)
 (****************************************************************************)
 
-val on_initialize : Lsp.Types.InitializeParams.t -> Lsp.Types.InitializeResult.t
+val on_initialize : config:Server_config.t -> Lsp.Types.InitializeParams.t -> Lsp.Types.InitializeResult.t
 
 val on_shutdown : unit -> unit
 
@@ -56,4 +56,4 @@ val on_hover : Lsp.Types.HoverParams.t -> Lsp.Types.Hover.t option
 
 val on_definition : Lsp.Types.DefinitionParams.t -> Lsp.Types.Locations.t option
 
-val on_notification : default_sail_dir:string -> Lsp.Client_notification.t -> Lsp.Server_notification.t list
+val on_notification : config:Server_config.t -> Lsp.Client_notification.t -> Lsp.Server_notification.t list
