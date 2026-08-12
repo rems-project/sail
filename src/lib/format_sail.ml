@@ -1096,14 +1096,13 @@ module Make (Config : CONFIG) = struct
     let f2 = format_defs_once ~debug filename f1 comments defs in
     let comments, defs = parse_file_from_string f2 in
     let f3 = format_defs_once ~debug filename f2 comments defs in
-    if f2 <> f3 then (
-      prerr_endline f2;
-      prerr_endline f3;
-      raise (Reporting.err_general Parse_ast.Unknown filename)
-    );
+    if not (String.equal f2 f3) then
+      raise
+        (Reporting.err_general Parse_ast.Unknown
+           (Printf.sprintf "Did not reach a fixed point when formatting %s" filename)
+        );
     ( match diff_list ~at:Parse_ast.Unknown diff_def starting_defs defs with
     | Some difference ->
-        prerr_endline f3;
         raise
           (Reporting.err_general difference
              (Printf.sprintf "Found difference in syntax tree here after formatting %s" filename)

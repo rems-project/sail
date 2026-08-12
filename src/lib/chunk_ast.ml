@@ -1535,6 +1535,10 @@ let rec chunk_def skip source last_line_span comments chunks (DEF_aux (def, l)) 
       Queue.add (Spacer (false, 1)) chunks;
       let skip = has_skip_attr skip attrs in
       chunk_def skip source last_line_span comments chunks def
+  | DEF_private def ->
+      pop_comments comments chunks l;
+      chunk_keyword "private" chunks;
+      chunk_def skip source line_span comments chunks def
   | def ->
       if skip then raw_source ()
       else (
