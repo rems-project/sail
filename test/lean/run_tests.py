@@ -57,27 +57,24 @@ skip_selftests = {
 print("Sail is {}".format(sail))
 print("Sail dir is {}".format(sail_dir))
 
-def get_support_lib(subdir) -> str:
+def get_support_lib() -> str:
     if local_support_lib:
-        return local_support_lib
+        lib_path = os.path.abspath(local_support_lib)
     else:
-        lean_path = f"../{subdir}"
-        lib_path = f"../{subdir}/support-lib"
+        lib_path = os.path.abspath('support-lib')
         step(f"rm -rf {lib_path} || true")
         step(f"git clone https://github.com/rems-project/lean-sail.git {lib_path}")
-        print("Building the support library")
-        step("lake build +Sail:c.o", cwd=lib_path)
-        return f"../../support-lib"
 
-def test_lean(subdir: str, skip_list = None, runnable: bool = False):
+    print("Building the support library")
+    step("lake build +Sail:c.o", cwd=lib_path)
+    return lib_path
+
+def test_lean(subdir: str, support_lib: str, skip_list = None, runnable: bool = False):
     """
     Run all Sail files available in the `subdir`.
     If `runnable` is set to `True`, it will do `lake run`
     instead of `lake build`.
     """
-    banner("Cloning the support library")
-    support_lib = get_support_lib(subdir)
-    print("...done!")
     banner(f'Testing lean target (sub-directory: {subdir})')
     results = Results(subdir)
     for filenames in chunks(os.listdir(f'../{subdir}'), parallel()):
@@ -115,14 +112,13 @@ def test_lean(subdir: str, skip_list = None, runnable: bool = False):
                 if runnable and basename.startswith('fail'):
                     expected_status = 1
                 if runnable:
-                    step(f'lake exe run > expected 2> err_status',
+                    step(f'timeout 90s lake exe run > expected 2> err_status',
                         cwd=f'{basename}/out',
                         name=filename,
                         expected_status=expected_status,
                         stderr_file=f'{basename}/out/err_status')
                 else:
                     # NOTE: lake --dir does not behave the same as cd $dir && lake build...
-                    step('lake update', cwd=f'{basename}/out', name=filename)
                     step('lake build', cwd=f'{basename}/out', name=filename)
 
                 if not runnable:
@@ -151,10 +147,14 @@ def test_lean(subdir: str, skip_list = None, runnable: bool = False):
         results.collect(tests)
     return results.finish()
 
+banner("Preparing the support library")
+support_lib = get_support_lib()
+print("...done!")
+
 xml = '<testsuites>\n'
 
-xml += test_lean('lean')
-xml += test_lean('c', skip_list=skip_selftests, runnable=True)
+xml += test_lean('lean', support_lib)
+xml += test_lean('c', support_lib, skip_list=skip_selftests, runnable=True)
 
 xml += '</testsuites>\n'
 
