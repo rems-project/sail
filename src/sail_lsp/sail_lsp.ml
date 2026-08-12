@@ -46,7 +46,19 @@
 
 open Libsail
 
-let speclist = [("--stdio", Arg.Unit (fun () -> ()), " Use stdin/stdout for IO (default).")]
+let opt_highlight = ref (Server_config.Implicit false)
+let opt_folding = ref (Server_config.Implicit false)
+
+let toggle_option name desc opt =
+  [
+    ("--" ^ name, Arg.Unit (fun () -> opt := Server_config.Explicit true), " Enable " ^ desc ^ ".");
+    ("--no-" ^ name, Arg.Unit (fun () -> opt := Server_config.Explicit false), " Disable " ^ desc ^ ".");
+  ]
+
+let speclist =
+  [("--stdio", Arg.Unit (fun () -> ()), " Use stdin/stdout for IO (default).")]
+  @ toggle_option "highlight" "full semantic highlighting" opt_highlight
+  @ toggle_option "folding" "code folding" opt_folding
 
 let anon_fun _ = ()
 
@@ -55,8 +67,8 @@ let main () =
 
   Util.opt_colors := false;
 
-  match Server_config.get_config () with
-  | Ok config -> Server.run ~default_sail_dir:config.default_sail_dir ()
+  match Server_config.get_config ~highlight:!opt_highlight ~folding:!opt_folding with
+  | Ok config -> Server.run ~config ()
   | Error msg ->
       prerr_endline msg;
       exit 1

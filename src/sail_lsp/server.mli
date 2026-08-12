@@ -44,4 +44,4 @@
 (*  SPDX-License-Identifier: BSD-2-Clause                                   *)
 (****************************************************************************)
 
-val run : default_sail_dir:string -> unit -> unit
+val run : config:Server_config.t -> unit -> unit

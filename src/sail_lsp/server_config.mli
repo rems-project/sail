@@ -44,6 +44,8 @@
 (*  SPDX-License-Identifier: BSD-2-Clause                                   *)
 (****************************************************************************)
 
-type t = { default_sail_dir : string }
+type 'a flag_setting = Explicit of 'a | Implicit of 'a
 
-val get_config : unit -> (t, string) Result.t
+type t = { default_sail_dir : string; highlight : bool; folding : bool }
+
+val get_config : highlight:bool flag_setting -> folding:bool flag_setting -> (t, string) Result.t
