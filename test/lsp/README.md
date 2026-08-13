@@ -47,7 +47,9 @@ Sail test suites); the runner exits non-zero if any test fails.
   request/notification helpers, and the document lifecycle (didOpen,
   didChange, didSave, didClose). Documents must exist on disk because the
   server canonicalises paths with `realpath`; use the `Workspace` helper to
-  create throwaway files.
+  create throwaway files. Features that the server has off by default are
+  enabled by passing the flag to the server, as in
+  `LspClient(args=["--highlight"])`.
 - `run_tests.py` — the test cases and runner.
 
 ## Adding a test

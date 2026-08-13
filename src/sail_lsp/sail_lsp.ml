@@ -56,7 +56,10 @@ let toggle_option name desc opt =
   ]
 
 let speclist =
-  [("--stdio", Arg.Unit (fun () -> ()), " Use stdin/stdout for IO (default).")]
+  [
+    ("--stdio", Arg.Unit (fun () -> ()), " Use stdin/stdout for IO (default).");
+    ("--log-file", Arg.String (fun s -> Log.opt_file := Some (open_out s)), " Log to a file rather than stderr");
+  ]
   @ toggle_option "highlight" "full semantic highlighting" opt_highlight
   @ toggle_option "folding" "code folding" opt_folding
 

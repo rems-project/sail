@@ -86,7 +86,10 @@ class LspError(Exception):
 class LspClient:
     """Drives a sail_lsp subprocess over stdio."""
 
-    def __init__(self, server=None, timeout=15.0):
+    def __init__(self, server=None, timeout=15.0, args=None):
+        """Spawn the server. ``args`` are extra command line flags, appended
+        after ``--stdio``; features that are off by default (``--highlight``,
+        ``--folding``) have to be enabled that way."""
         self.server = server or find_server()
         self.timeout = timeout
         self._next_id = 0
@@ -94,7 +97,7 @@ class LspClient:
         self._notifications = queue.Queue()
         self._stderr_lines = []
         self._proc = subprocess.Popen(
-            [self.server, "--stdio"],
+            [self.server, "--stdio"] + list(args or []),
             stdin=subprocess.PIPE,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
@@ -149,7 +152,9 @@ class LspClient:
     def notify(self, method, params=None):
         self._send({"jsonrpc": "2.0", "method": method, "params": params or {}})
 
-    def request(self, method, params=None):
+    def request(self, method, params=None, expect_error=False):
+        """Send a request and return its result. With ``expect_error`` the
+        request must fail, and the JSON-RPC error object is returned instead."""
         self._next_id += 1
         request_id = self._next_id
         self._send({"jsonrpc": "2.0", "id": request_id, "method": method, "params": params or {}})
@@ -161,6 +166,10 @@ class LspClient:
             raise LspError("server exited while waiting for response to {!r}\n{}".format(method, self.stderr()))
         if response.get("id") != request_id:
             raise LspError("response id {} did not match request id {}".format(response.get("id"), request_id))
+        if expect_error:
+            if "error" not in response:
+                raise LspError("request {!r} unexpectedly succeeded: {}".format(method, response.get("result")))
+            return response["error"]
         if "error" in response:
             raise LspError("request {!r} returned error: {}".format(method, response["error"]))
         return response.get("result")
@@ -226,6 +235,27 @@ class LspClient:
 
     def folding_range(self, uri):
         return self.request("textDocument/foldingRange", {"textDocument": {"uri": uri}})
+
+    def formatting(self, uri, tab_size=4, insert_spaces=True, expect_error=False):
+        return self.request(
+            "textDocument/formatting",
+            {"textDocument": {"uri": uri}, "options": {"tabSize": tab_size, "insertSpaces": insert_spaces}},
+            expect_error=expect_error,
+        )
+
+    def range_formatting(self, uri, start_line, start_char, end_line, end_char, tab_size=4, expect_error=False):
+        return self.request(
+            "textDocument/rangeFormatting",
+            {
+                "textDocument": {"uri": uri},
+                "range": {
+                    "start": {"line": start_line, "character": start_char},
+                    "end": {"line": end_line, "character": end_char},
+                },
+                "options": {"tabSize": tab_size, "insertSpaces": True},
+            },
+            expect_error=expect_error,
+        )
 
     def definition(self, uri, line, character):
         return self.request(

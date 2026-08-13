@@ -205,7 +205,7 @@ def semantic_tokens_legend(init_result):
 
 def test_semantic_tokens_capability():
     """The server advertises a semanticTokens provider with a full legend."""
-    with LspClient() as client:
+    with LspClient(args=["--highlight"]) as client:
         provider = semantic_tokens_legend(client.initialize())
         check(provider.get("full") is True, "full semantic tokens not advertised: {}".format(provider))
         types = provider["legend"]["tokenTypes"]
@@ -218,7 +218,7 @@ def test_semantic_tokens_capability():
 def test_semantic_tokens_full():
     """semanticTokens/full lexes the buffer into typed, positioned tokens."""
     code = 'val x = 0xFF // hi\n"str"\n'
-    with Workspace({"m.sail": code}) as ws, LspClient() as client:
+    with Workspace({"m.sail": code}) as ws, LspClient(args=["--highlight"]) as client:
         types = semantic_tokens_legend(client.initialize(ws.root_uri()))["legend"]["tokenTypes"]
         client.initialized()
         uri = ws.uri("m.sail")
@@ -242,7 +242,7 @@ def test_semantic_tokens_unicode():
     """Token positions and lengths are reported in UTF-16 code units."""
     # The string literal "ππ" is 6 UTF-8 bytes but 4 UTF-16 code units.
     code = 'let x = "ππ"\n'
-    with Workspace({"m.sail": code}) as ws, LspClient() as client:
+    with Workspace({"m.sail": code}) as ws, LspClient(args=["--highlight"]) as client:
         types = semantic_tokens_legend(client.initialize(ws.root_uri()))["legend"]["tokenTypes"]
         client.initialized()
         uri = ws.uri("m.sail")
@@ -256,7 +256,7 @@ def test_semantic_tokens_unicode():
 def test_semantic_tokens_multiline():
     """A token spanning several lines is split into one token per line."""
     code = "/* a\n b */\nval x\n"
-    with Workspace({"m.sail": code}) as ws, LspClient() as client:
+    with Workspace({"m.sail": code}) as ws, LspClient(args=["--highlight"]) as client:
         types = semantic_tokens_legend(client.initialize(ws.root_uri()))["legend"]["tokenTypes"]
         client.initialized()
         uri = ws.uri("m.sail")
@@ -271,7 +271,7 @@ def test_semantic_tokens_multiline():
 
 def test_folding_range_capability():
     """The server advertises a folding-range provider."""
-    with LspClient() as client:
+    with LspClient(args=["--folding"]) as client:
         result = client.initialize()
         provider = result["capabilities"].get("foldingRangeProvider")
         check(provider is True, "foldingRangeProvider not advertised: {}".format(provider))
@@ -291,7 +291,7 @@ def test_folding_range():
         "}\n"                 # 6  '}' closes here
         "// tail\n"           # 7  line comment: not foldable
     )
-    with Workspace({"m.sail": code}) as ws, LspClient() as client:
+    with Workspace({"m.sail": code}) as ws, LspClient(args=["--folding"]) as client:
         client.initialize(ws.root_uri())
         client.initialized()
         uri = ws.uri("m.sail")
@@ -359,6 +359,223 @@ def test_definition_absent():
         client.exit()
 
 
+def test_formatting_capability():
+    """The server advertises a formatting provider."""
+    with LspClient() as client:
+        provider = client.initialize()["capabilities"].get("documentFormattingProvider")
+        check(provider is True, "documentFormattingProvider not advertised: {}".format(provider))
+        client.shutdown()
+        client.exit()
+
+
+def test_formatting():
+    """Formatting a badly laid out document returns one whole-document edit."""
+    code = "default   Order    dec\nval  main :  unit->unit\nfunction  main()  =  ()\n"
+    with Workspace({"m.sail": code}) as ws, LspClient() as client:
+        client.initialize(ws.root_uri())
+        client.initialized()
+        uri = ws.uri("m.sail")
+        client.did_open(uri, code)
+        edits = client.formatting(uri)
+        check(len(edits) == 1, "expected a single whole-document edit, got {}".format(edits))
+        edit = edits[0]
+        start, end = edit["range"]["start"], edit["range"]["end"]
+        check(start == {"line": 0, "character": 0}, "edit does not start at the top of the file: {}".format(start))
+        # The document has a trailing newline, so its last line is line 3 and empty.
+        check(end == {"line": 3, "character": 0}, "edit does not cover the whole file: {}".format(end))
+        formatted = edit["newText"]
+        check("val main : unit -> unit" in formatted, "run-together spacing not fixed: {!r}".format(formatted))
+
+        # Formatting is idempotent: the formatted text needs no further edits.
+        client.did_change(uri, full_change(formatted))
+        client.wait_notification("textDocument/publishDiagnostics")
+        check(client.formatting(uri) == [], "formatted document was not left alone")
+        client.shutdown()
+        client.exit()
+
+
+def test_formatting_unicode():
+    """The replaced range ends at the end of the buffer, in UTF-16 code units."""
+    # The last line holds two multi-byte characters: 12 UTF-16 code units, 14 bytes.
+    # It deliberately has no trailing newline, so the last line is not empty.
+    code = 'default   Order dec\nlet x = "ππ"'
+    with Workspace({"m.sail": code}) as ws, LspClient() as client:
+        client.initialize(ws.root_uri())
+        client.initialized()
+        uri = ws.uri("m.sail")
+        client.did_open(uri, code)
+        edits = client.formatting(uri)
+        check(len(edits) == 1, "expected a single whole-document edit, got {}".format(edits))
+        end = edits[0]["range"]["end"]
+        check(end == {"line": 1, "character": 12}, "end position is not in UTF-16 code units: {}".format(end))
+        client.shutdown()
+        client.exit()
+
+
+def test_formatting_syntax_error():
+    """A document that does not parse cannot be formatted, and says so."""
+    code = "default Order dec\nfoo bar baz\n"
+    with Workspace({"m.sail": code}) as ws, LspClient() as client:
+        client.initialize(ws.root_uri())
+        client.initialized()
+        uri = ws.uri("m.sail")
+        client.did_open(uri, code)
+        error = client.formatting(uri, expect_error=True)
+        check("m.sail" in error["message"], "error does not name the file: {}".format(error))
+        check("line 2" in error["message"], "error does not locate the problem: {}".format(error))
+        # The server must still be serving requests afterwards.
+        check(client.shutdown() is None, "server did not survive a formatting failure")
+        client.exit()
+
+
+def test_range_formatting_capability():
+    """The server advertises a range-formatting provider."""
+    with LspClient() as client:
+        provider = client.initialize()["capabilities"].get("documentRangeFormattingProvider")
+        check(provider is True, "documentRangeFormattingProvider not advertised: {}".format(provider))
+        client.shutdown()
+        client.exit()
+
+
+# Two badly spaced definitions, separated by a comment and blank lines that
+# belong to no definition. The first line is already formatted.
+RANGE_CODE = (
+    "default Order dec\n"    # 0
+    "\n"                     # 1
+    "// a comment\n"         # 2
+    "val  f : int -> int\n"  # 3
+    "\n"                     # 4
+    "val  g : int -> int\n"  # 5
+)
+
+
+def test_range_formatting():
+    """Formatting a range reformats the definitions it touches, and nothing else."""
+    with Workspace({"m.sail": RANGE_CODE}) as ws, LspClient() as client:
+        client.initialize(ws.root_uri())
+        client.initialized()
+        uri = ws.uri("m.sail")
+        client.did_open(uri, RANGE_CODE)
+
+        # An empty range - a bare cursor - selects the definition it sits in.
+        edits = client.range_formatting(uri, 5, 4, 5, 4)
+        check(len(edits) == 1, "expected one edit for the definition at the cursor, got {}".format(edits))
+        check(edits[0]["newText"] == "val g : int -> int", "definition not reformatted: {}".format(edits[0]))
+        check(
+            edits[0]["range"] == {"start": {"line": 5, "character": 0}, "end": {"line": 5, "character": 19}},
+            "edit does not cover exactly the definition: {}".format(edits[0]["range"]),
+        )
+
+        # A selection spanning both definitions yields one edit each. The already
+        # formatted first line is not among them: it needs no edit.
+        edits = client.range_formatting(uri, 3, 0, 5, 19)
+        check(
+            [e["newText"] for e in edits] == ["val f : int -> int", "val g : int -> int"],
+            "expected an edit per selected definition, got {}".format(edits),
+        )
+        check([e["range"]["start"]["line"] for e in edits] == [3, 5], "edits on the wrong lines: {}".format(edits))
+        client.shutdown()
+        client.exit()
+
+
+def test_range_formatting_outside_definition():
+    """A range touching no definition produces no edits."""
+    with Workspace({"m.sail": RANGE_CODE}) as ws, LspClient() as client:
+        client.initialize(ws.root_uri())
+        client.initialized()
+        uri = ws.uri("m.sail")
+        client.did_open(uri, RANGE_CODE)
+        for line, what in [(2, "a comment"), (4, "a blank line")]:
+            edits = client.range_formatting(uri, line, 0, line, 0)
+            check(edits == [], "expected no edits for {}, got {}".format(what, edits))
+        client.shutdown()
+        client.exit()
+
+
+def test_range_formatting_multiline():
+    """A definition spanning several lines is replaced whole, and its neighbour is untouched."""
+    code = (
+        "function  main()  = {\n"        # 0
+        "let  x  =  1;   // trailing\n"  # 1
+        "      ()\n"                     # 2
+        "}\n"                            # 3
+        "\n"                             # 4
+        "val  g : int -> int\n"          # 5
+    )
+    with Workspace({"m.sail": code}) as ws, LspClient() as client:
+        client.initialize(ws.root_uri())
+        client.initialized()
+        uri = ws.uri("m.sail")
+        client.did_open(uri, code)
+        edits = client.range_formatting(uri, 1, 2, 1, 2)
+        check(len(edits) == 1, "expected one edit for the enclosing definition, got {}".format(edits))
+        edit = edits[0]
+        check(
+            edit["range"] == {"start": {"line": 0, "character": 0}, "end": {"line": 3, "character": 1}},
+            "edit does not cover the whole definition: {}".format(edit["range"]),
+        )
+        check(
+            edit["newText"] == "function main() = {\n    let x = 1; // trailing\n    ()\n}",
+            "definition not reformatted as expected: {!r}".format(edit["newText"]),
+        )
+        client.shutdown()
+        client.exit()
+
+
+def test_range_formatting_attributes():
+    """A definition with an attribute or a doc comment is formatted along with it."""
+    # Attributes, doc comments and `private` wrap the definition they are
+    # attached to in another definition whose location spans only the wrapper,
+    # so the extent of such a definition has to be stitched back together.
+    code = (
+        "$[attr]\n"                      # 0
+        "val  f : int -> int\n"          # 1
+        "\n"                             # 2
+        "/*! documented */\n"            # 3
+        "$[complete]\n"                  # 4
+        "function  main()  = ()\n"       # 5
+        "\n"                             # 6
+        "private val  g : int -> int\n"  # 7
+    )
+    with Workspace({"m.sail": code}) as ws, LspClient() as client:
+        client.initialize(ws.root_uri())
+        client.initialized()
+        uri = ws.uri("m.sail")
+        client.did_open(uri, code)
+
+        # Whether the cursor is on the attribute or on the definition it is
+        # attached to, both are reformatted as one.
+        for line, character in [(0, 0), (1, 4)]:
+            edits = client.range_formatting(uri, line, character, line, character)
+            check(len(edits) == 1, "expected one edit at {}:{}, got {}".format(line, character, edits))
+            check(
+                edits[0]["newText"] == "$[attr]\nval f : int -> int",
+                "attribute and definition not reformatted together: {!r}".format(edits[0]["newText"]),
+            )
+            check(
+                edits[0]["range"] == {"start": {"line": 0, "character": 0}, "end": {"line": 1, "character": 19}},
+                "edit does not span the attribute and the definition: {}".format(edits[0]["range"]),
+            )
+
+        # A doc comment stacked on top of an attribute is covered too.
+        edits = client.range_formatting(uri, 5, 4, 5, 4)
+        check(len(edits) == 1, "expected one edit for the documented definition, got {}".format(edits))
+        check(
+            edits[0]["range"]["start"] == {"line": 3, "character": 0},
+            "edit does not start at the doc comment: {}".format(edits[0]["range"]),
+        )
+
+        # `private` is the third wrapper of this kind.
+        edits = client.range_formatting(uri, 7, 12, 7, 12)
+        check(len(edits) == 1, "expected one edit for the private definition, got {}".format(edits))
+        check(
+            edits[0]["newText"] == "private val g : int -> int",
+            "private definition not reformatted: {!r}".format(edits[0]["newText"]),
+        )
+        client.shutdown()
+        client.exit()
+
+
 def test_error_diagnostic():
     """A file with an error yields a diagnostic with a valid, correctly located range."""
     # The syntax error is on line 1 (zero-based); LSP positions are zero-based.
@@ -419,6 +636,15 @@ TESTS = [
     test_definition_capability,
     test_definition,
     test_definition_absent,
+    test_formatting_capability,
+    test_formatting,
+    test_formatting_unicode,
+    test_formatting_syntax_error,
+    test_range_formatting_capability,
+    test_range_formatting,
+    test_range_formatting_outside_definition,
+    test_range_formatting_multiline,
+    test_range_formatting_attributes,
     test_error_diagnostic,
     test_valid_file_has_no_diagnostics,
 ]

@@ -102,7 +102,7 @@ let read_process_stdout cmd =
 
 let get_sail_dir_from_sail () = Result.map String.trim (read_process_stdout "sail --dir")
 
-type t = { default_sail_dir : string; highlight : bool; folding : bool }
+type t = { default_sail_dir : string; highlight : bool; folding : bool; fmt : Format_sail.config }
 
 module From_json = struct
   let assoc msg = function `Assoc obj -> Ok obj | _ -> Error (Printf.sprintf "Expected JSON object %s" msg)
@@ -124,20 +124,39 @@ module From_json = struct
         let* v = boolean ("as " ^ name ^ " value") json in
         Ok (Some v)
     | None -> Ok None
+
+  (* The formatting options are shared with [sail -fmt], so they are read by the
+     same code, which reports a malformed section by raising rather than by
+     returning a result like the rest of this module. *)
+  let fmt json =
+    let* obj = assoc "at root" json in
+    match List.assoc_opt "fmt" obj with
+    | Some json -> (
+        try Ok (Format_sail.config_from_json json)
+        with Reporting.Fatal_error (Reporting.Err_general (_, msg)) -> Error msg
+      )
+    | None -> Ok Format_sail.default_config
 end
 
 let config_from_json ~highlight ~folding json =
   let* default_sail_dir = From_json.sail_dir json in
   let* highlight = with_flag highlight (From_json.optional_toggle "highlight") json in
   let* folding = with_flag folding (From_json.optional_toggle "folding") json in
-  Ok { default_sail_dir; highlight; folding }
+  let* fmt = From_json.fmt json in
+  Ok { default_sail_dir; highlight; folding; fmt }
 
 let get_config ~highlight ~folding =
   let* cfg_dir = get_config_dir () in
   let cfg_file = Filename.concat cfg_dir "config.json" in
   if not (Sys.file_exists cfg_file) then
     let* sail_dir = get_sail_dir_from_sail () in
-    Ok { default_sail_dir = sail_dir; highlight = unwrap_flag_setting highlight; folding = unwrap_flag_setting folding }
+    Ok
+      {
+        default_sail_dir = sail_dir;
+        highlight = unwrap_flag_setting highlight;
+        folding = unwrap_flag_setting folding;
+        fmt = Format_sail.default_config;
+      }
   else (
     let json = Yojson.Safe.from_file ~fname:"config.json" cfg_file in
     config_from_json ~highlight ~folding json

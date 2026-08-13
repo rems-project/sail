@@ -44,14 +44,22 @@
 (*  SPDX-License-Identifier: BSD-2-Clause                                   *)
 (****************************************************************************)
 
-open Printf
+open Libsail
 
-let opt_file = ref None
+(** Automatic formatting for the LSP (the [textDocument/formatting] and [textDocument/rangeFormatting] requests). *)
 
-let log fmt args =
-  let chan = Option.value ~default:stdout !opt_file in
-  fprintf chan "[sail_lsp] %s\n%!" (sprintf fmt args)
+(** Format an entire document using the same formatter as [sail -fmt], returning the edits that turn the buffer into its
+    formatted form: a single whole-document replacement, or no edits at all when the buffer is already formatted.
+    Formatting requires the buffer to parse, so a document with a syntax error - or one the formatter rejects - returns
+    the error explaining why it could not be formatted. *)
+val compute : config:Format_sail.config -> Sail_file.handle -> (Lsp.Types.TextEdit.t list, Reporting.error) Result.t
 
-let log_error fmt args =
-  let chan = Option.value ~default:stdout !opt_file in
-  fprintf chan "[sail_lsp] Error: %s\n%!" (sprintf fmt args)
+(** Format the definitions a range touches, one edit per definition, leaving the rest of the document alone. A range
+    that selects no definition - a cursor in a comment sitting between two of them, say - yields no edits. The whole
+    buffer still has to parse, as it does for [compute], because a definition is formatted by formatting the document it
+    belongs to and keeping the part of the result that corresponds to it. *)
+val compute_range :
+  config:Format_sail.config ->
+  range:Lsp.Types.Range.t ->
+  Sail_file.handle ->
+  (Lsp.Types.TextEdit.t list, Reporting.error) Result.t
