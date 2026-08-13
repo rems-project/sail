@@ -1,0 +1,4 @@
+default Order dec
+
+function pma_atomicity_support_gt(x : AtomicSupport, y : AtomicSupport) -> bool =
+  long_long_extra_num_of_AtomicSupport(x) > num_of_AtomicSupport(y)

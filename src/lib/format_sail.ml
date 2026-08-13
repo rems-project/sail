@@ -276,6 +276,17 @@ module PPrintWrapper = struct
       )
       lines
 
+  (* True if the document contains a hardline that will be printed even
+     when the document is flattened, i.e. any group containing it can
+     never be laid out on a single line. Note that we only need to look
+     at the flat branch of an ifflat. *)
+  let rec forces_hardline = function
+    | Hardline _ -> true
+    | Cat (doc1, doc2) -> forces_hardline doc1 || forces_hardline doc2
+    | Group doc | Nest (_, doc) | Align doc -> forces_hardline doc
+    | Ifflat (flat, _) -> forces_hardline flat
+    | Empty | Weak_space | Char _ | Lineup_char _ | String _ | Utf8string _ -> false
+
   (* TODO: maybe save line_number in ast *)
   let is_single_line_block_comment s =
     let lines = String.split_on_char '\n' s in
@@ -881,10 +892,19 @@ module Make (Config : CONFIG) = struct
     match pexp.guard with
     | None ->
         group (typq ^^ paren_args (doc_chunks ~ungroup_tuple:true opts pexp.pat) ^^ return_typ)
-        ^^ string "="
         ^^
-        if is_block pexp.body || hanging then space ^^ doc_chunks opts pexp.body
-        else nest indent (hardline ^^ doc_chunks opts pexp.body)
+        let body = doc_chunks opts pexp.body in
+        string "="
+        ^^
+        if is_block pexp.body then space ^^ body
+        else if hanging then
+          (* The body was on the same line as the header in the source, so
+             we try to keep it there. However, if the body is not something
+             that will lay itself out over multiple lines anyway (like a
+             block or a match), we allow it to be pushed onto the next line
+             rather than forcing it to break internally. *)
+          if forces_hardline body then space ^^ body else group (nest indent (break 1 ^^ body))
+        else nest indent (hardline ^^ body)
     | Some guard ->
         typq
         ^^ parens (separate space [doc_chunks opts pexp.pat; string "if"; doc_chunks opts guard])
