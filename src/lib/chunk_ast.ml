@@ -1517,7 +1517,8 @@ let rec chunk_def skip source last_line_span comments chunks (DEF_aux (def, l)) 
         discard_comments comments p2;
         let source = read_source p1 p2 source in
         Queue.add (Raw source) chunks;
-        Queue.add (Spacer (true, 1)) chunks
+        if not (pop_trailing_comment ~space:1 comments chunks (ending_line_num l)) then
+          Queue.add (Spacer (true, 1)) chunks
     | None ->
         Reporting.unreachable l __POS__
           ( if skip then "Could not find location of source code for $[fmt skip] attribute"
