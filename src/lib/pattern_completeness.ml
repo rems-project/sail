@@ -551,6 +551,13 @@ module Make (C : Config) = struct
     | _ :: rest -> unmatched_literal rest
     | [] -> None
 
+  let collect_literals c matrix =
+    rows_to_list matrix
+    |> List.filter_map (fun (_, row) ->
+        (columns_to_list row |> fun xs -> List.nth xs c) |> function GP_lit l -> Some l | _ -> None
+    )
+    |> LitSet.of_list
+
   let simple_matrix_is_complete ctx matrix =
     let vars =
       List.mapi
@@ -768,6 +775,14 @@ module Make (C : Config) = struct
       |> List.map (fun (l, row) -> (l, Columns (remove_index c (columns_to_list row))))
       )
 
+  let split_matrix_lit l c matrix =
+    let is_lit_row = function GP_lit l' -> Lit.compare l l' = 0 | GP_wild -> true | _ -> false in
+    Rows
+      (rows_to_list matrix
+      |> List.filter (fun (_, row) -> columns_to_list row |> (fun xs -> List.nth xs c) |> is_lit_row)
+      |> List.map (fun (l, row) -> (l, Columns (remove_index c (columns_to_list row))))
+      )
+
   let split_matrix_cons c matrix =
     let is_cons_row = function GP_wild | GP_cons _ -> true | _ -> false in
     let is_empty_list_row = function GP_wild | GP_empty_list -> true | _ -> false in
@@ -877,7 +892,19 @@ module Make (C : Config) = struct
                 else (
                   match matrix_is_complete l ctx wild_matrix with
                   | Incomplete unmatcheds -> Incomplete (relit lit i unmatcheds)
-                  | Complete cinfo -> Complete cinfo
+                  | Complete cinfo ->
+                      (* At this point we know that matrix is complete, but we still have to check for redundant rows *)
+                      let lits = collect_literals i matrix in
+                      LitSet.fold
+                        (fun lit unmatcheds ->
+                          match unmatcheds with
+                          | Incomplete _ | Completeness_unknown ->
+                              Reporting.unreachable l __POS__ "Completeness check failed after larger check succeeded"
+                          | Complete cinfo ->
+                              matrix_is_complete l ctx (split_matrix_lit lit i matrix)
+                              |> completeness_map (fun x -> x) (union_complete cinfo)
+                        )
+                        lits (Complete cinfo)
                   | Completeness_unknown -> Completeness_unknown
                 )
           )
