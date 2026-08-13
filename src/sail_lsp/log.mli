@@ -44,6 +44,8 @@
 (*  SPDX-License-Identifier: BSD-2-Clause                                   *)
 (****************************************************************************)
 
+val opt_file : out_channel option ref
+
 val log : ('a -> string, unit, string) format -> 'a -> unit
 
 val log_error : ('a -> string, unit, string) format -> 'a -> unit

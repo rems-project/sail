@@ -107,19 +107,21 @@ module CursorScanner = Ast_util.Scanner (struct
   let categorize_pat = function P_id id -> Some (Scan_id id) | _ -> None
 end)
 
+(* Split a [Reporting.error] into the location it points at and its message. *)
+let error_loc_and_message (err : Reporting.error) =
+  match err with
+  | Reporting.Err_general (l, msg) | Reporting.Err_todo (l, msg) | Reporting.Err_syntax_loc (l, msg) -> (l, msg)
+  | Reporting.Err_unreachable (l, _, _, msg) -> (l, msg)
+  | Reporting.Err_type (l, hint, msg) -> (l, match hint with Some h -> msg ^ "\n" ^ h | None -> msg)
+  | Reporting.Err_syntax (p, msg) | Reporting.Err_lex (p, msg) -> (Parse_ast.Range (p, p), msg)
+  | Reporting.Err_warning (l, short, msg) -> (l, short ^ ":\n" ^ msg)
+
 (* Turn a [Reporting.error] into an LSP diagnostic. Every error carries a message
    and a location; when the location can't be resolved to an editor range (e.g. an
    unknown or generated location) we fall back to the start of the file so the
    diagnostic is still valid and shown. *)
 let error_diagnostic (err : Reporting.error) =
-  let loc, message =
-    match err with
-    | Reporting.Err_general (l, msg) | Reporting.Err_todo (l, msg) | Reporting.Err_syntax_loc (l, msg) -> (l, msg)
-    | Reporting.Err_unreachable (l, _, _, msg) -> (l, msg)
-    | Reporting.Err_type (l, hint, msg) -> (l, match hint with Some h -> msg ^ "\n" ^ h | None -> msg)
-    | Reporting.Err_syntax (p, msg) | Reporting.Err_lex (p, msg) -> (Parse_ast.Range (p, p), msg)
-    | Reporting.Err_warning (l, short, msg) -> (l, short ^ ":\n" ^ msg)
-  in
+  let loc, message = error_loc_and_message err in
   let range =
     match
       Option.bind (Reporting.simp_loc loc) (fun (p1, p2) ->
@@ -173,7 +175,8 @@ let on_initialize ~(config : Server_config.t) _params =
   let capabilities =
     Lsp.Types.ServerCapabilities.create ~hoverProvider:(`Bool true) ~textDocumentSync:(`TextDocumentSyncOptions sync)
       ?semanticTokensProvider:semantic_tokens ~foldingRangeProvider:(`Bool config.folding)
-      ~definitionProvider:(`Bool true) ()
+      ~definitionProvider:(`Bool true) ~documentFormattingProvider:(`Bool true)
+      ~documentRangeFormattingProvider:(`Bool true) ()
   in
   Lsp.Types.InitializeResult.create ~capabilities ~serverInfo:server_info ()
 
@@ -196,6 +199,43 @@ let on_folding_range (params : Lsp.Types.FoldingRangeParams.t) =
       log "foldingRange: no handle for %s" file;
       None
   | Some handle -> Some (Folding.compute handle)
+
+(* The two formatting requests differ only in which edits they ask for; finding
+   the document and reporting a failure are the same for both. Unlike the other
+   requests, a failure here is worth telling the user about - they asked for
+   something to be reformatted and it was not - so we report why rather than
+   silently returning no edits. *)
+let formatting_edits ~request uri edits_of_handle =
+  let file = Lsp.Types.DocumentUri.to_path uri in
+  log "%s" (request ^ ": " ^ file);
+  match Hashtbl.find_opt file_to_handle file with
+  | None ->
+      log "%s" (request ^ ": no handle for " ^ file);
+      Error (Printf.sprintf "%s is not open" file)
+  | Some handle -> (
+      match edits_of_handle handle with
+      | Ok edits -> Ok edits
+      | Error err ->
+          let loc, message = error_loc_and_message err in
+          (* The formatter parses the buffer rather than the file on disk, so the
+             error's file is a scratch handle; only its line number is useful. *)
+          let where =
+            match Reporting.simp_loc loc with
+            | Some (p1, _) -> Printf.sprintf " on line %d" p1.Sail_file.Position.pos_lnum
+            | None -> ""
+          in
+          log_error "%s" (request ^ ": " ^ message);
+          Error (Printf.sprintf "Could not format %s%s: %s" (Filename.basename file) where message)
+    )
+
+let on_formatting ~(config : Server_config.t) (params : Lsp.Types.DocumentFormattingParams.t) =
+  formatting_edits ~request:"formatting" params.textDocument.uri (Formatting.compute ~config:config.fmt)
+
+(* Formatting a selection reformats the definitions it touches, so a cursor
+   anywhere in a definition reformats that definition. *)
+let on_range_formatting ~(config : Server_config.t) (params : Lsp.Types.DocumentRangeFormattingParams.t) =
+  formatting_edits ~request:"rangeFormatting" params.textDocument.uri
+    (Formatting.compute_range ~config:config.fmt ~range:params.range)
 
 let on_hover ({ position = { line; character }; textDocument = { uri } } : Lsp.Types.HoverParams.t) =
   let open Lsp.Types in

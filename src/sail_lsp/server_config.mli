@@ -44,8 +44,15 @@
 (*  SPDX-License-Identifier: BSD-2-Clause                                   *)
 (****************************************************************************)
 
+open Libsail
+
 type 'a flag_setting = Explicit of 'a | Implicit of 'a
 
-type t = { default_sail_dir : string; highlight : bool; folding : bool }
+type t = {
+  default_sail_dir : string;
+  highlight : bool;
+  folding : bool;
+  fmt : Format_sail.config;  (** The formatting options, read from the [fmt] section as for [sail -fmt]. *)
+}
 
 val get_config : highlight:bool flag_setting -> folding:bool flag_setting -> (t, string) Result.t

@@ -101,6 +101,16 @@ let handle_request ~config oc (req : Jsonrpc.Request.t) =
               Ok (Lsp.Client_request.yojson_of_result r (Handler.on_hover params))
           | Lsp.Client_request.TextDocumentDefinition params ->
               Ok (Lsp.Client_request.yojson_of_result r (Handler.on_definition params))
+          | Lsp.Client_request.TextDocumentFormatting params -> (
+              match Handler.on_formatting ~config params with
+              | Ok edits -> Ok (Lsp.Client_request.yojson_of_result r (Some edits))
+              | Error message -> Error (Response.Error.make ~code:Response.Error.Code.RequestFailed ~message ())
+            )
+          | Lsp.Client_request.TextDocumentRangeFormatting params -> (
+              match Handler.on_range_formatting ~config params with
+              | Ok edits -> Ok (Lsp.Client_request.yojson_of_result r (Some edits))
+              | Error message -> Error (Response.Error.make ~code:Response.Error.Code.RequestFailed ~message ())
+            )
           | _ ->
               Error (Response.Error.make ~code:Response.Error.Code.MethodNotFound ~message:"method not implemented" ())
         in

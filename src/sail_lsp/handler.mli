@@ -52,6 +52,15 @@ val on_semantic_tokens_full : Lsp.Types.SemanticTokensParams.t -> Lsp.Types.Sema
 
 val on_folding_range : Lsp.Types.FoldingRangeParams.t -> Lsp.Types.FoldingRange.t list option
 
+(** Format a whole document, returning either the edits that reformat it (none if it is already formatted) or a message
+    explaining why it could not be formatted, to be sent back as a request error. *)
+val on_formatting :
+  config:Server_config.t -> Lsp.Types.DocumentFormattingParams.t -> (Lsp.Types.TextEdit.t list, string) Result.t
+
+(** Format the definitions the given range touches, reporting a failure as [on_formatting] does. *)
+val on_range_formatting :
+  config:Server_config.t -> Lsp.Types.DocumentRangeFormattingParams.t -> (Lsp.Types.TextEdit.t list, string) Result.t
+
 val on_hover : Lsp.Types.HoverParams.t -> Lsp.Types.Hover.t option
 
 val on_definition : Lsp.Types.DefinitionParams.t -> Lsp.Types.Locations.t option
