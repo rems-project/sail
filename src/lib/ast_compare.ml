@@ -223,6 +223,35 @@ and typ_arg_compare (A_aux (ta1, _)) (A_aux (ta2, _)) =
   | A_typ _, _ -> -1
   | _, A_typ _ -> 1
 
+let bit_compare b1 b2 =
+  let open Bit in
+  match (b1, b2) with B0, B0 -> 0 | B0, B1 -> -1 | B1, B0 -> 1 | B1, B1 -> 0
+
+let lit_compare (L_aux (l1, _)) (L_aux (l2, _)) =
+  match (l1, l2) with
+  | L_unit, L_unit -> 0
+  | L_unit, _ -> -1
+  | _, L_unit -> 1
+  | L_true, L_true -> 0
+  | L_true, _ -> -1
+  | _, L_true -> 1
+  | L_false, L_false -> 0
+  | L_false, _ -> -1
+  | _, L_false -> 1
+  | L_num n1, L_num n2 -> Big_int_Z.compare_big_int n1 n2
+  | L_num _, _ -> -1
+  | _, L_num _ -> 1
+  | L_hex h1, L_hex h2 -> List.compare bit_compare (BitList.of_hex_lit h1) (BitList.of_hex_lit h2)
+  | L_hex _, _ -> -1
+  | _, L_hex _ -> 1
+  | L_bin b1, L_bin b2 -> List.compare bit_compare (BitList.of_bin_lit b1) (BitList.of_bin_lit b2)
+  | L_bin _, _ -> -1
+  | _, L_bin _ -> 1
+  | L_string s1, L_string s2 -> String.compare s1 s2
+  | L_string _, _ -> -1
+  | _, L_string _ -> 1
+  | L_real r1, L_real r2 -> Q.compare (Util.Rational.from_rocq r1) (Util.Rational.from_rocq r2)
+
 module Nexp = struct
   type t = nexp
   let compare = nexp_compare
@@ -243,6 +272,11 @@ module TypArg = struct
   let compare = typ_arg_compare
 end
 
+module Lit = struct
+  type t = lit
+  let compare = lit_compare
+end
+
 module Bindings = Map.Make (Id)
 module IdSet = Set.Make (Id)
 module KBindings = Map.Make (Kid)
@@ -253,3 +287,4 @@ module NexpSet = Set.Make (Nexp)
 module NexpMap = Map.Make (Nexp)
 module TypMap = Map.Make (Typ)
 module NCMap = Map.Make (NC)
+module LitSet = Set.Make (Lit)

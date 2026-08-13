@@ -84,6 +84,11 @@ module Typ : sig
   val compare : typ -> typ -> int
 end
 
+module Lit : sig
+  type t = lit
+  val compare : lit -> lit -> int
+end
+
 module TypArg : sig
   type t = typ_arg
   val compare : typ_arg -> typ_arg -> int
@@ -127,4 +132,8 @@ end
 
 module TypMap : sig
   include Map.S with type key = typ
+end
+
+module LitSet : sig
+  include Set.S with type elt = lit
 end
