@@ -872,7 +872,10 @@ module Make (Config : CONFIG) = struct
   and doc_pexp_chunks aligned opts pexp =
     let guarded_pat, body = doc_pexp_chunks_pair opts pexp in
     let arrow = if aligned then lineup_point '=' ^^ char '>' else string "=>" in
-    let doc = separate space [guarded_pat; arrow; body] in
+    let doc =
+      if can_hang pexp.body then separate space [guarded_pat; arrow; body]
+      else guarded_pat ^^ space ^^ arrow ^^ nest indent (space ^^ body)
+    in
     match pexp.attr with
     | Some attr ->
         let attr = doc_chunks opts attr in

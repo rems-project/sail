@@ -1,3 +1,10 @@
+// =======================================================================================
+// This test is derived from the sail-riscv model. See RISCV_LICENSE in the formatting
+// tests directory.
+//
+// SPDX-License-Identifier: BSD-2-Clause
+// =======================================================================================
+
 default Order dec
 
 function pma_atomicity_support_gt(x : AtomicSupport, y : AtomicSupport) -> bool =
