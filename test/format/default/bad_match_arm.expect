@@ -1,0 +1,29 @@
+// =======================================================================================
+// This test is derived from the sail-riscv model. See RISCV_LICENSE in the formatting
+// tests directory.
+//
+// SPDX-License-Identifier: BSD-2-Clause
+// =======================================================================================
+
+private function update_and_write_pte forall 'pte_width, 'pte_width in {4, 8}. (
+    pteAddr : physaddr,
+    pteWidth : int('pte_width),
+    pte : bits('pte_width * 8),
+    access : MemoryAccessType(mem_payload),
+) -> (
+    result(option(bits('pte_width * 8)), PTW_Error)
+) =
+    match update_PTE_Bits(pte, access) {
+        None() => Ok(None()),
+        Some(pte) => // The PTE has new A/D bits.  If neither Svadu or Svade is supported,
+            // the current default is to update the PTE.
+            if (currentlyEnabled(Ext_Svadu) & menvcfg[ADUE] == 0b1) |
+                (not(currentlyEnabled(Ext_Svadu)) & not(currentlyEnabled(Ext_Svade))) then {
+                match write_pte(pteAddr, pteWidth, pte) {
+                    Ok(_) => Ok(Some(pte)),
+                    Err(_) => Err(PTW_No_Access()),
+                }
+            } else {
+                Err(PTW_PTE_Needs_Update())
+            },
+    }
