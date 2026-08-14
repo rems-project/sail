@@ -139,6 +139,25 @@ and pexp_chunks = { funcl_space : bool; attr : chunks option; pat : chunks; guar
 
 let add_chunk q chunk = Queue.add chunk q
 
+(* A sequence of line comment chunks that all start at the same
+   column, with no code or blank lines in between, is 'block-like',
+   i.e. it should be formatted as a single unit with each '//'
+   aligned, rather than indenting each line independently. *)
+let coalesce_line_comments chunks =
+  let rec go acc = function
+    | Comment (Comment_line, n, col, contents, trailing) :: chunks ->
+        let rec take_aligned contents = function
+          | Spacer (true, 1) :: Comment (Comment_line, _, col', contents', _) :: chunks when col' = col ->
+              take_aligned (contents ^ "\n" ^ contents') chunks
+          | chunks -> (contents, chunks)
+        in
+        let contents, chunks = take_aligned contents chunks in
+        go (Comment (Comment_line, n, col, contents, trailing) :: acc) chunks
+    | chunk :: chunks -> go (chunk :: acc) chunks
+    | [] -> List.rev acc
+  in
+  go [] (List.of_seq (Queue.to_seq chunks))
+
 [@@@coverage off]
 let rec prerr_chunk indent = function
   | Comment (comment_type, n, col, contents, trailing) ->
