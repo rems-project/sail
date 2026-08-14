@@ -706,7 +706,14 @@ module Make (Config : CONFIG) = struct
           (char '}')
     | Comment (comment_type, n, col, contents, _) -> (
         match comment_type with
-        | Comment_line -> blank n ^^ string "//" ^^ string contents ^^ require_hardline
+        | Comment_line -> (
+            (* A comment chunk with newlines in its contents is a
+               block-like sequence of line comments, which we align so
+               each '//' lines up with the first *)
+            match String.split_on_char '\n' contents with
+            | [l] -> blank n ^^ string "//" ^^ string l ^^ require_hardline
+            | ls -> blank n ^^ align (separate_map hardline (fun l -> string "//" ^^ string l) ls) ^^ require_hardline
+          )
         | Comment_block -> (
             (* Allow a linebreak after a block comment with newlines. This prevents formatting like:
                /* comment line 1
@@ -950,7 +957,10 @@ module Make (Config : CONFIG) = struct
     (group doc, !requires_hardline)
 
   and doc_chunks ?(ungroup_tuple = false) opts chunks =
-    Queue.fold (fun doc chunk -> doc ^^ doc_chunk ~ungroup_tuple opts chunk) empty chunks
+    List.fold_left
+      (fun doc chunk -> doc ^^ doc_chunk ~ungroup_tuple opts chunk)
+      empty
+      (coalesce_line_comments chunks)
 
   let to_string doc =
     let b = Buffer.create 1024 in

@@ -125,4 +125,6 @@ and pexp_chunks = { funcl_space : bool; attr : chunks option; pat : chunks; guar
 
 val prerr_chunk : string -> chunk -> unit
 
+val coalesce_line_comments : chunks -> chunk list
+
 val chunk_defs : string -> Lexer.comment list -> Parse_ast.def list -> chunks
