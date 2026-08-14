@@ -510,15 +510,13 @@ let rec discard_comments comments (pos : Sail_file.position) =
 
 let pop_trailing_comment ?space:(n = 0) comments chunks line_num =
   match line_num with
-  | None -> false
+  | None -> ()
   | Some lnum -> (
       match Stack.top_opt comments with
-      | Some (Lexer.Comment (comment_type, s, _, contents)) when s.pos_lnum = lnum -> (
+      | Some (Lexer.Comment (comment_type, s, _, contents)) when s.pos_lnum = lnum ->
           let _ = Stack.pop comments in
-          Queue.add (Comment (comment_type, n, s.pos_cnum - s.pos_bol, contents, true)) chunks;
-          match comment_type with Comment_line -> true | _ -> false
-        )
-      | _ -> false
+          Queue.add (Comment (comment_type, n, s.pos_cnum - s.pos_bol, contents, true)) chunks
+      | _ -> ()
     )
 
 let string_of_kind (K_aux (k, _)) =
@@ -593,8 +591,7 @@ let chunk_delimit ?delim ~within ~get_loc ~chunk comments xs =
          the line comment will be attached to arg2, and the
          block comment to arg1 *)
       let next_line_num = Option.bind next (fun x2 -> starting_line_num (get_loc x2)) in
-      if have_linebreak (ending_line_num l) next_line_num then
-        ignore (pop_trailing_comment comments chunks (ending_line_num l));
+      if have_linebreak (ending_line_num l) next_line_num then pop_trailing_comment comments chunks (ending_line_num l);
 
       (* This handles trailing comments at the end of delimited constructs,
          using the span of the location the delimited sequence is within, and
@@ -610,7 +607,7 @@ let chunk_delimit ?delim ~within ~get_loc ~chunk comments xs =
 
          And needs to be handled specially. *)
       if Option.is_none next && have_linebreak (ending_line_num l) (ending_line_num within) then
-        ignore (pop_trailing_comment comments chunks (ending_line_num l));
+        pop_trailing_comment comments chunks (ending_line_num l);
 
       chunks
     )
@@ -1036,7 +1033,7 @@ let rec chunk_exp comments chunks (E_aux (aux, l)) =
             if
               have_linebreak (ending_line_num e_l) next_line_num
               || (Option.is_none next && have_linebreak (ending_line_num e_l) (ending_line_num l))
-            then ignore (pop_trailing_comment comments chunks (ending_line_num e_l));
+            then pop_trailing_comment comments chunks (ending_line_num e_l);
             ( match next with
             | Some next ->
                 let next_s_l, _ = block_exp_locs block_exp in
@@ -1176,10 +1173,10 @@ let rec chunk_exp comments chunks (E_aux (aux, l)) =
             { repeat_until = false; termination_measure = measure_chunks_opt; cond = cond_chunks; body = body_chunks }
           |> add_chunk chunks
       | Until ->
-          let cond_chunks = Queue.create () in
-          chunk_exp comments cond_chunks cond;
           let body_chunks = Queue.create () in
           chunk_exp comments body_chunks body;
+          let cond_chunks = Queue.create () in
+          chunk_exp comments cond_chunks cond;
           While
             { repeat_until = true; termination_measure = measure_chunks_opt; cond = cond_chunks; body = body_chunks }
           |> add_chunk chunks
@@ -1237,7 +1234,7 @@ and chunk_pexp ?attr_chunks ?delim comments chunks (Pat_aux (aux, l)) =
       let exp_chunks = Queue.create () in
       chunk_exp comments exp_chunks exp;
       (match delim with Some d when Option.is_none attr_chunks -> Queue.add (Delim d) exp_chunks | _ -> ());
-      ignore (pop_trailing_comment comments exp_chunks (ending_line_num l));
+      pop_trailing_comment comments exp_chunks (ending_line_num l);
       { funcl_space; attr = attr_chunks; pat = pat_chunks; guard = None; body = exp_chunks }
   | Pat_when (pat, guard, exp) ->
       let pat_chunks = Queue.create () in
@@ -1247,7 +1244,7 @@ and chunk_pexp ?attr_chunks ?delim comments chunks (Pat_aux (aux, l)) =
       let exp_chunks = Queue.create () in
       chunk_exp comments exp_chunks exp;
       (match delim with Some d when Option.is_none attr_chunks -> Queue.add (Delim d) exp_chunks | _ -> ());
-      ignore (pop_trailing_comment comments exp_chunks (ending_line_num l));
+      pop_trailing_comment comments exp_chunks (ending_line_num l);
       { funcl_space = true; attr = attr_chunks; pat = pat_chunks; guard = Some guard_chunks; body = exp_chunks }
 
 let chunk_funcl comments funcl =
@@ -1353,7 +1350,8 @@ let chunk_val_spec comments chunks (VS_aux (VS_val_spec (typschm, id, extern_opt
   let typ_chunks = Queue.create () in
   chunk_atyp comments typ_chunks typ;
   add_chunk chunks (Val { id; extern_opt; typq_opt = typq_chunks_opt; typ = typ_chunks });
-  if not (pop_trailing_comment ~space:1 comments chunks (ending_line_num l)) then Queue.push (Spacer (true, 1)) chunks
+  pop_trailing_comment ~space:1 comments chunks (ending_line_num l);
+  Queue.push (Spacer (true, 1)) chunks
 
 let chunk_register comments chunks (DEC_aux (DEC_reg ((ATyp_aux (_, typ_l) as typ), id, opt_exp), l)) =
   pop_comments comments chunks l;
@@ -1367,19 +1365,18 @@ let chunk_register comments chunks (DEC_aux (DEC_reg ((ATyp_aux (_, typ_l) as ty
 
   let typ_chunks = Queue.create () in
   chunk_atyp comments typ_chunks typ;
-  let skip_spacer =
-    match opt_exp with
-    | Some (E_aux (_, exp_l) as exp) ->
-        let exp_chunks = Queue.create () in
-        chunk_exp comments exp_chunks exp;
-        Queue.push (Assign (id_chunks, Some (":", typ_chunks), "=", exp_chunks)) def_chunks;
-        pop_trailing_comment ~space:1 comments exp_chunks (ending_line_num exp_l)
-    | None ->
-        Queue.push (Binary (id_chunks, ":", typ_chunks)) def_chunks;
-        pop_trailing_comment ~space:1 comments typ_chunks (ending_line_num typ_l)
-  in
+  ( match opt_exp with
+  | Some (E_aux (_, exp_l) as exp) ->
+      let exp_chunks = Queue.create () in
+      chunk_exp comments exp_chunks exp;
+      Queue.push (Assign (id_chunks, Some (":", typ_chunks), "=", exp_chunks)) def_chunks;
+      pop_trailing_comment ~space:1 comments exp_chunks (ending_line_num exp_l)
+  | None ->
+      Queue.push (Binary (id_chunks, ":", typ_chunks)) def_chunks;
+      pop_trailing_comment ~space:1 comments typ_chunks (ending_line_num typ_l)
+  );
   Queue.push (Chunks def_chunks) chunks;
-  if not skip_spacer then Queue.push (Spacer (true, 1)) chunks
+  Queue.push (Spacer (true, 1)) chunks
 
 let chunk_toplevel_let l comments chunks pat exp =
   pop_comments comments chunks l;
@@ -1402,8 +1399,8 @@ let chunk_toplevel_let l comments chunks pat exp =
       Queue.push (Block_binder (Let_binder, pat_chunks, exp_chunks)) def_chunks
   );
   Queue.push (Chunks def_chunks) chunks;
-  if not (pop_trailing_comment ~space:1 comments exp_chunks (ending_line_num l)) then
-    Queue.push (Spacer (true, 1)) chunks
+  pop_trailing_comment ~space:1 comments exp_chunks (ending_line_num l);
+  Queue.push (Spacer (true, 1)) chunks
 
 let chunk_keyword k chunks =
   Queue.push (Atom k) chunks;
@@ -1536,8 +1533,8 @@ let rec chunk_def skip source last_line_span comments chunks (DEF_aux (def, l)) 
         discard_comments comments p2;
         let source = read_source p1 p2 source in
         Queue.add (Raw source) chunks;
-        if not (pop_trailing_comment ~space:1 comments chunks (ending_line_num l)) then
-          Queue.add (Spacer (true, 1)) chunks
+        pop_trailing_comment ~space:1 comments chunks (ending_line_num l);
+        Queue.add (Spacer (true, 1)) chunks
     | None ->
         Reporting.unreachable l __POS__
           ( if skip then "Could not find location of source code for $[fmt skip] attribute"
