@@ -957,10 +957,7 @@ module Make (Config : CONFIG) = struct
     (group doc, !requires_hardline)
 
   and doc_chunks ?(ungroup_tuple = false) opts chunks =
-    List.fold_left
-      (fun doc chunk -> doc ^^ doc_chunk ~ungroup_tuple opts chunk)
-      empty
-      (coalesce_line_comments chunks)
+    List.fold_left (fun doc chunk -> doc ^^ doc_chunk ~ungroup_tuple opts chunk) empty (coalesce_line_comments chunks)
 
   let to_string doc =
     let b = Buffer.create 1024 in

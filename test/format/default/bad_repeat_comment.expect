@@ -1,0 +1,8 @@
+
+function f() -> unit = {
+    repeat {
+        // A comment inside the loop body.
+        g();
+        h()
+    } until done()
+}

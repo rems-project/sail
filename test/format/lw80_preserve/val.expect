@@ -2,6 +2,7 @@ default Order dec
 $include <prelude.sail>
 
 val foo = impure { _: "foo" } : unit -> unit // foo
+
 val bar = impure { c: "foo_c", cpp: "foo_c", _: "foo" } : (
     unit,
     unit,
