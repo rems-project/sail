@@ -67,8 +67,8 @@ vim.filetype.add({
 })
 ```
 
-For emacs you can add the following to your `.emacs` file after
-loading sail-mode:
+For emacs, if using `lsp-mode`, you can add the following to your
+`.emacs` file after loading `sail-mode`:
 
 ```elisp
 (require 'lsp-mode)
@@ -77,6 +77,16 @@ loading sail-mode:
                       :new-connection (lsp-stdio-connection "sail_lsp")
                       :activation-fn (lsp-activate-on "sail")
                       :server-id 'saillsp))
+```
+
+When using `eglot` in emacs, the corresponding snippet after loading
+`sail-mode` is:
+
+``` elisp
+(add-hook 'sail-mode-hook 'eglot-ensure)
+(with-eval-after-load 'eglot
+  (add-to-list 'eglot-server-programs
+	       '((sail-mode :language-id "Sail") . ("sail_lsp"))))
 ```
 
 ### Build
