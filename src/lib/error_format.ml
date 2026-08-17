@@ -225,7 +225,7 @@ type message =
   | Seq of message list
   | Severity of severity * message
 
-let bullet = Util.(clear (blue "*"))
+let bullet () = Util.(clear (blue "*"))
 
 let rec format_message msg ppf =
   match msg with
