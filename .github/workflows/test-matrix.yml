@@ -126,6 +126,11 @@ jobs:
   rocq:
     runs-on: ubuntu-24.04
 
+    env:
+      OCAML_VERSION: 5.2.1
+      ROCQ_VERSION: 9.2.0
+      ROCQ_STDLIB: 9.1.0
+
     steps:
     - uses: actions/checkout@v4
 
@@ -140,15 +145,16 @@ jobs:
       uses: actions/cache/restore@v4
       with:
         path: ~/.opam
-        key: rocq-opam
+        key: rocq-opam-ocaml-${{ env.OCAML_VERSION }}-rocq-${{ env.ROCQ_VERSION }}-stdlib-${{ env.ROCQ_STDLIB }}
 
     - name: Setup opam
       if: steps.cache-opam-restore.outputs.cache-hit != 'true'
       run: |
-        opam init --yes --no-setup --shell=sh --compiler=5.2.1
+        opam init --yes --no-setup --shell=sh --compiler=$OCAML_VERSION
         opam repo add --yes rocq-released https://rocq-prover.org/opam/released
         opam update --yes
-        opam install --yes rocq-core.9.2.0 rocq-stdlib.9.1.0
+        opam install --yes rocq-core.$ROCQ_VERSION rocq-stdlib.$ROCQ_STDLIB
+        opam clean --yes
 
     - name: Save cached opam
       if: steps.cache-opam-restore.outputs.cache-hit != 'true'
