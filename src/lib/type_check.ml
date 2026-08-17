@@ -5043,10 +5043,10 @@ let rec check_typedef : Env.t -> env def_annot -> uannot type_def -> typed_def l
           Env.wf_constraint ~at:a_l env nc
       );
       ([DEF_aux (DEF_type (TD_aux (tdef, (l, empty_tannot))), def_annot)], Env.add_typ_synonym id typq typ_arg env)
-  | TD_abstract (id, kind, _) -> (
+  | TD_abstract (id, kind, key) -> (
       match unaux_kind kind with
       | K_int | K_bool ->
-          ([DEF_aux (DEF_type (TD_aux (tdef, (l, empty_tannot))), def_annot)], Env.add_abstract_typ id kind env)
+          ([DEF_aux (DEF_type (TD_aux (tdef, (l, empty_tannot))), def_annot)], Env.add_abstract_typ id kind key env)
       | K_type -> raise (Reporting.err_general l "Abstract type must be either a boolean or integer type")
     )
   | TD_record (id, typq, fields, _) -> (

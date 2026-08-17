@@ -47,7 +47,8 @@ module Monad :
   | Call of id * value list * (return_value -> 'a t)
   | Read_var of place * (value -> 'a t)
   | Write_var of place * value * (unit -> 'a t)
-  | Get_undefined of typ * (value -> 'a t)
+  | Get_config of Parse_ast.l * string list * typ * (value -> 'a t)
+  | Get_undefined of Parse_ast.l * typ * (value -> 'a t)
 
   val bind : 'a1 t -> ('a1 -> 'a2 t) -> 'a2 t
 
@@ -59,7 +60,9 @@ module Monad :
 
   val sequence : 'a1 t list -> 'a1 list t
 
-  val get_undefined : typ -> value t
+  val get_config : Parse_ast.l -> string list -> typ -> value t
+
+  val get_undefined : Parse_ast.l -> typ -> value t
 
   val throw : value -> 'a1 t
 

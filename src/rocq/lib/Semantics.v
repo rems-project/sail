@@ -93,17 +93,18 @@ Inductive destructure : Set :=
 | DL_place : place → destructure.
 
 Module Monad.
-  Inductive t (a : Set) : Set :=
-  | Pure : a → t a
-  | Early_return : value → t a
-  | Exception : value → t a
-  | Runtime_type_error : Ast.loc → t a
-  | Match_failure : Ast.loc → t a
-  | Assertion_failed : string → t a
-  | Call : id → list value → (return_value → t a) → t a
-  | Read_var : place → (value → t a) → t a
-  | Write_var : place → value → (unit → t a) → t a
-  | Get_undefined : typ → (value → t a) → t a.
+  Inductive t (A : Set) : Set :=
+  | Pure : A → t A
+  | Early_return : value → t A
+  | Exception : value → t A
+  | Runtime_type_error : Ast.loc → t A
+  | Match_failure : Ast.loc → t A
+  | Assertion_failed : string → t A
+  | Call : id → list value → (return_value → t A) → t A
+  | Read_var : place → (value → t A) → t A
+  | Write_var : place → value → (unit → t A) → t A
+  | Get_config : Ast.loc → list string → typ → (value → t A) → t A
+  | Get_undefined : Ast.loc → typ → (value → t A) → t A.
 
   Arguments Pure {_}.
   Arguments Early_return {_}.
@@ -114,6 +115,7 @@ Module Monad.
   Arguments Call {_}.
   Arguments Read_var {_}.
   Arguments Write_var {_}.
+  Arguments Get_config {_}.
   Arguments Get_undefined {_}.
 
   Fixpoint bind {A B : Set} (m : t A) (f : A → t B) : t B :=
@@ -127,7 +129,8 @@ Module Monad.
     | Call id args cont => Call id args (fun v => bind (cont v) f)
     | Read_var r cont => Read_var r (fun v => bind (cont v) f)
     | Write_var r v cont => Write_var r v (fun u => bind (cont u) f)
-    | Get_undefined t cont => Get_undefined t (fun v => bind (cont v) f)
+    | Get_config l key t cont => Get_config l key t (fun v => bind (cont v) f)
+    | Get_undefined l t cont => Get_undefined l t (fun v => bind (cont v) f)
     end.
 
   Notation "x ← y ; z" := (bind y (fun x : _ => z))
@@ -144,7 +147,8 @@ Module Monad.
     | Call id args cont => Call id args (fun v => fmap f (cont v))
     | Read_var r cont => Read_var r (fun v => fmap f (cont v))
     | Write_var r v cont => Write_var r v (fun u => fmap f (cont u))
-    | Get_undefined t cont => Get_undefined t (fun v => fmap f (cont v))
+    | Get_config l key t cont => Get_config l key t (fun v => fmap f (cont v))
+    | Get_undefined l t cont => Get_undefined l t (fun v => fmap f (cont v))
     end.
 
   Definition pure {A : Set} (x : A) : t A := Pure x.
@@ -164,7 +168,9 @@ Module Monad.
   | [] => pure []
   end.
 
-  Definition get_undefined (typ : Ast.typ) : t value := Get_undefined typ pure.
+  Definition get_config (l : Ast.loc) (key : list string) (typ : Ast.typ) : t value := Get_config l key typ pure.
+
+  Definition get_undefined (l : Ast.loc) (typ : Ast.typ) : t value := Get_undefined l typ pure.
 
   Definition throw {A : Set} (v : value) : t A := Exception v.
 
@@ -186,7 +192,8 @@ Module Monad.
     | Call id args cont => Call id args (fun v => fmap Continue (cont v))
     | Read_var r cont => Read_var r (fun v => fmap Continue (cont v))
     | Write_var r v cont => Write_var r v (fun _ => fmap Continue (cont ()))
-    | Get_undefined t cont => Get_undefined t (fun v => fmap Continue (cont v))
+    | Get_config l key t cont => Get_config l key t (fun v => fmap Continue (cont v))
+    | Get_undefined l t cont => Get_undefined l t (fun v => fmap Continue (cont v))
     end.
 
   Lemma bind_left_id : ∀ (A B : Set) (f : A → t B) (x : A), bind (pure x) f = f x.
@@ -197,7 +204,7 @@ Module Monad.
   Lemma bind_right_id : ∀ (A : Set) (m : t A), bind m pure = m.
   Proof.
     intros A m.
-    induction m as [| | | | | | ? ? cont H | ? cont H | ? ? cont H | ? cont H]; try easy.
+    induction m as [| | | | | | ? ? cont H | ? cont H | ? ? cont H | ? ? ? cont H | ? ? cont H]; try easy.
     all: cbn.
     all: f_equal.
     all: apply functional_extensionality.
@@ -210,7 +217,7 @@ Module Monad.
       bind (bind x f) g = bind x (fun y => bind (f y) g).
   Proof.
     intros A B C f g x.
-    induction x as [| | | | | | ? ? cont H | ? cont H | ? ? cont H | ? cont H]; try easy.
+    induction x as [| | | | | | ? ? cont H | ? cont H | ? ? cont H | ? ? ? cont H | ? ? cont H]; try easy.
     all: cbn.
     all: f_equal.
     all: apply functional_extensionality.
@@ -2044,13 +2051,15 @@ Module Make (Tannot : TypeAnnot.S).
             end
         end
     | E_undef =>
-        u ← get_undefined (Tannot.get_type (snd annot));
+        u ← get_undefined (fst annot) (Tannot.get_type (snd annot));
         wrap (E_internal_value u)
+    | E_config key =>
+        v ← get_config (fst annot) key (Tannot.get_type (snd annot));
+        wrap (E_internal_value v)
     | E_vector_append _ _ => Runtime_type_error (fst annot)
     | E_sizeof _ => Runtime_type_error (fst annot)
     | E_constraint _ => Runtime_type_error (fst annot)
     | E_exit _ => Runtime_type_error (fst annot)
-    | E_config _ => Runtime_type_error (fst annot)
     | E_internal_plet _ _ _ => Runtime_type_error (fst annot)
     | E_internal_return _ => Runtime_type_error (fst annot)
     | E_internal_assume _ _ => Runtime_type_error (fst annot)
