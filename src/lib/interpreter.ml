@@ -70,6 +70,7 @@ type gstate = {
   letbinds : value Bindings.t;
   fundefs : Type_check.tannot fundef Bindings.t;
   typecheck_env : Type_check.Env.t;
+  config : Yojson.Safe.t option;
 }
 
 let is_increasing gstate =
@@ -459,10 +460,28 @@ let rec eval_frame' = function
                   Write_reg (name, accessors, value, fun () state' -> eval_frame' (Step (out, state', cont (), stack)))
                 )
         )
-      | Get_undefined (typ, cont), _ ->
-          let undef_exp = Ast_util.undefined_of_typ false Parse_ast.Unknown (fun _ -> empty_uannot) typ in
+      | Get_undefined (l, typ, cont), _ ->
+          let undef_exp = Ast_util.undefined_of_typ false l (fun _ -> empty_uannot) typ in
           let undef_exp = Type_check.check_exp gstate.typecheck_env undef_exp typ in
           Step (lazy "", state, Monad.pure undef_exp, stack)
+      | Get_config (l, key, typ, cont), _ -> (
+          match gstate.config with
+          | None -> Fail (out, state, m, stack, "No configuration JSON")
+          | Some config -> (
+              match Config_json.find_json ~at:l key config with
+              | Some json ->
+                  let value = Config_json.value_from_json ~at:l gstate.typecheck_env typ json in
+                  Step (lazy "", state, cont value, stack)
+              | None ->
+                  Fail
+                    ( out,
+                      state,
+                      m,
+                      stack,
+                      "No configuration JSON for key " ^ Util.string_of_list "." (fun part -> part) key
+                    )
+            )
+        )
     )
 
 let eval_frame frame =
@@ -514,7 +533,7 @@ let rec run_frame frame =
 
 let eval_exp state exp = run_frame (Step (lazy "", state, Monad.pure exp, []))
 
-let initial_gstate ?fold_target primops defs env =
+let initial_gstate ?fold_target ?config primops defs env =
   {
     registers = Bindings.empty;
     allow_registers = true;
@@ -523,6 +542,7 @@ let initial_gstate ?fold_target primops defs env =
     letbinds = Bindings.empty;
     fundefs = Bindings.empty;
     typecheck_env = env;
+    config;
   }
 
 let rec initialize_registers allow_registers undef_registers gstate =
@@ -560,8 +580,8 @@ let rec initialize_registers allow_registers undef_registers gstate =
   in
   function def :: defs -> initialize_registers allow_registers undef_registers (process_def def) defs | [] -> gstate
 
-let initial_state ?(registers = true) ?(undef_registers = true) ?fold_target ast env primops =
-  let gstate = initial_gstate ?fold_target primops ast.defs env in
+let initial_state ?(registers = true) ?(undef_registers = true) ?fold_target ?config ast env primops =
+  let gstate = initial_gstate ?fold_target ?config primops ast.defs env in
   let add_function gstate = function
     | DEF_aux (DEF_fundef fdef, _) -> { gstate with fundefs = Bindings.add (id_of_fundef fdef) fdef gstate.fundefs }
     | _ -> gstate

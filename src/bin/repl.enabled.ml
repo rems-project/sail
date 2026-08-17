@@ -77,7 +77,6 @@ type repl_state = {
   display_options : display_options;
   state : Interpreter.lstate * Interpreter.gstate;
   default_sail_dir : string;
-  config : Yojson.Safe.t option;
 }
 
 let shrink_repl_state rstate : Interactive.State.istate =
@@ -89,7 +88,21 @@ let shrink_repl_state rstate : Interactive.State.istate =
     env = rstate.env;
     options = rstate.options;
     default_sail_dir = rstate.default_sail_dir;
-    config = rstate.config;
+    config = (snd rstate.state).config;
+  }
+
+let update_repl_state (istate : Interactive.State.istate) (rstate : repl_state) =
+  let lstate, gstate = rstate.state in
+  {
+    rstate with
+    symbols = istate.symbols;
+    ctx = istate.ctx;
+    ast = istate.ast;
+    effect_info = istate.effect_info;
+    env = istate.env;
+    options = istate.options;
+    state = (lstate, { gstate with config = istate.config });
+    default_sail_dir = istate.default_sail_dir;
   }
 
 let initial_repl_state config options symbols ctx env effect_info ast =
@@ -103,9 +116,8 @@ let initial_repl_state config options symbols ctx env effect_info ast =
     options;
     mode = Normal;
     display_options = { clear = true; registers = IdSet.empty };
-    state = initial_state ast env !Value.primops;
+    state = initial_state ?config ast env !Value.primops;
     default_sail_dir = Locations.sail_dir;
-    config;
   }
 
 let prompt rstate =
@@ -486,6 +498,18 @@ let () =
      print_endline (Reporting.get_sail_dir istate.default_sail_dir)
   );
 
+  (register_command ~name:"config" ~help:"Set the current configuration."
+  @@ let@ filename = Arg.String "file" in
+     let@ istate = Arg.Update in
+     let json =
+       try Yojson.Safe.from_file ~fname:filename ~lnum:0 filename
+       with Yojson.Json_error message ->
+         raise
+           (Reporting.err_general Parse_ast.Unknown (Printf.sprintf "Failed to parse configuration file:\n%s" message))
+     in
+     { istate with config = Some json }
+  );
+
   (register_command ~name:"infer" ~shortname:"i" ~help:"Infer the type of an expression."
   @@ let@ pos, arg, istate = Arg.Rest "expression" in
      let exp = Initial_check.exp_of_string ~inline:pos istate.ctx arg in
@@ -744,7 +768,7 @@ let handle_input' rstate input =
         match Interactive.get_command cmd with
         | Some (_, action) ->
             let res = Interactive.run_action (shrink_repl_state rstate) cmd pos arg action in
-            { rstate with ast = res.ast; effect_info = res.effect_info; env = res.env }
+            update_repl_state res rstate
         | None ->
             unrecognised_command cmd;
             rstate

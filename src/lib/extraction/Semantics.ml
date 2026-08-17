@@ -52,7 +52,8 @@ module Monad =
   | Call of id * value list * (return_value -> 'a t)
   | Read_var of place * (value -> 'a t)
   | Write_var of place * value * (unit -> 'a t)
-  | Get_undefined of typ * (value -> 'a t)
+  | Get_config of Parse_ast.l * string list * typ * (value -> 'a t)
+  | Get_undefined of Parse_ast.l * typ * (value -> 'a t)
 
   (** val bind : 'a1 t -> ('a1 -> 'a2 t) -> 'a2 t **)
 
@@ -67,8 +68,10 @@ module Monad =
     | Call (id0, args, cont) -> Call (id0, args, (fun v -> bind (cont v) f))
     | Read_var (r, cont) -> Read_var (r, (fun v -> bind (cont v) f))
     | Write_var (r, v, cont) -> Write_var (r, v, (fun u -> bind (cont u) f))
-    | Get_undefined (t0, cont) ->
-      Get_undefined (t0, (fun v -> bind (cont v) f))
+    | Get_config (l, key, t0, cont) ->
+      Get_config (l, key, t0, (fun v -> bind (cont v) f))
+    | Get_undefined (l, t0, cont) ->
+      Get_undefined (l, t0, (fun v -> bind (cont v) f))
 
   (** val fmap : ('a1 -> 'a2) -> 'a1 t -> 'a2 t **)
 
@@ -82,7 +85,10 @@ module Monad =
   | Call (id0, args, cont) -> Call (id0, args, (fun v -> fmap f (cont v)))
   | Read_var (r, cont) -> Read_var (r, (fun v -> fmap f (cont v)))
   | Write_var (r, v, cont) -> Write_var (r, v, (fun u -> fmap f (cont u)))
-  | Get_undefined (t0, cont) -> Get_undefined (t0, (fun v -> fmap f (cont v)))
+  | Get_config (l, key, t0, cont) ->
+    Get_config (l, key, t0, (fun v -> fmap f (cont v)))
+  | Get_undefined (l, t0, cont) ->
+    Get_undefined (l, t0, (fun v -> fmap f (cont v)))
 
   (** val pure : 'a1 -> 'a1 t **)
 
@@ -101,10 +107,15 @@ module Monad =
   | [] -> pure []
   | m :: ms -> bind m (fun x -> bind (sequence ms) (fun xs -> pure (x :: xs)))
 
-  (** val get_undefined : typ -> value t **)
+  (** val get_config : Parse_ast.l -> string list -> typ -> value t **)
 
-  let get_undefined typ0 =
-    Get_undefined (typ0, pure)
+  let get_config l key typ0 =
+    Get_config (l, key, typ0, pure)
+
+  (** val get_undefined : Parse_ast.l -> typ -> value t **)
+
+  let get_undefined l typ0 =
+    Get_undefined (l, typ0, pure)
 
   (** val throw : value -> 'a1 t **)
 
@@ -130,8 +141,10 @@ module Monad =
     Read_var (r, (fun v -> fmap (fun x -> Continue x) (cont v)))
   | Write_var (r, v, cont) ->
     Write_var (r, v, (fun _ -> fmap (fun x -> Continue x) (cont ())))
-  | Get_undefined (t0, cont) ->
-    Get_undefined (t0, (fun v -> fmap (fun x -> Continue x) (cont v)))
+  | Get_config (l, key, t0, cont) ->
+    Get_config (l, key, t0, (fun v -> fmap (fun x -> Continue x) (cont v)))
+  | Get_undefined (l, t0, cont) ->
+    Get_undefined (l, t0, (fun v -> fmap (fun x -> Continue x) (cont v)))
  end
 
 type 'a evaluated =
@@ -1088,7 +1101,10 @@ module Make =
           | Evaluated v -> Monad.Early_return v
           | Unevaluated -> Monad.bind (step0 x) (fun x' -> wrap (E_return x')))
        | E_exit _ -> Monad.Runtime_type_error (fst annot0)
-       | E_config _ -> Monad.Runtime_type_error (fst annot0)
+       | E_config key ->
+         Monad.bind
+           (Monad.get_config (fst annot0) key (Tannot.get_type (snd annot0)))
+           (fun v -> wrap (E_internal_value v))
        | E_ref register_name -> wrap (E_internal_value (V_ref register_name))
        | E_throw x ->
          let filtered_var = get_value x in
@@ -1125,7 +1141,8 @@ module Make =
        | E_var (l, x, body) ->
          wrap (E_block ((E_aux ((E_assign (l, x)), annot0)) :: (body :: [])))
        | E_undef ->
-         Monad.bind (Monad.get_undefined (Tannot.get_type (snd annot0)))
+         Monad.bind
+           (Monad.get_undefined (fst annot0) (Tannot.get_type (snd annot0)))
            (fun u -> wrap (E_internal_value u))
        | E_internal_plet (_, _, _) -> Monad.Runtime_type_error (fst annot0)
        | E_internal_return _ -> Monad.Runtime_type_error (fst annot0)

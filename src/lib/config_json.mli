@@ -8,7 +8,7 @@
 (*  The ASL derived parts of the ARMv8.3 specification in                   *)
 (*  aarch64/no_vector and aarch64/full are copyright ARM Ltd.               *)
 (*                                                                          *)
-(*  Copyright (c) 2013-2021                                                 *)
+(*  Copyright (c) 2013-2026                                                 *)
 (*    Kathyrn Gray                                                          *)
 (*    Shaked Flur                                                           *)
 (*    Stephen Kell                                                          *)
@@ -44,85 +44,24 @@
 (*  SPDX-License-Identifier: BSD-2-Clause                                   *)
 (****************************************************************************)
 
+(** Interpreting JSON values from configuration files as Sail expressions. *)
+
 open Ast
-open Ast_compare
 open Ast_util
-open Ast_defs
 open Type_check
-open Value
 
-type gstate = {
-  registers : value Bindings.t;
-  allow_registers : bool; (* For some uses we want to forbid touching any registers. *)
-  fold_target : string option;
-  primops : (value list -> value) StringMap.t;
-  letbinds : value Bindings.t;
-  fundefs : tannot fundef Bindings.t;
-  typecheck_env : Env.t;
-  config : Yojson.Safe.t option;
-}
+val typ_is_record : env -> typ -> bool
 
-module VariableUpdate : sig
-  type accessor
-end
+val typ_is_variant : env -> typ -> bool
 
-type lstate = { locals : value Bindings.t }
+val destruct_typ_args : typ -> (id * typ_arg list) option
 
-type state = lstate * gstate
+(** [find_json ~at:l parts json] looks up the configuration key path [parts] in [json], returning [None] if no such key
+    exists. Raises a fatal error if the path tries to descend through a JSON value that is not an object. *)
+val find_json : at:Parse_ast.l -> string list -> Yojson.Safe.t -> Yojson.Safe.t option
 
-type return_value = Extraction.Semantics.return_value
+(** [exp_from_json ~at:l env typ json] interprets JSON a Sail expression of type [typ], raising a fatal error if it
+    cannot be interpreted as that type. *)
+val exp_from_json : at:Parse_ast.l -> env -> typ -> Yojson.Safe.t -> uannot exp
 
-module Monad : sig
-  type 'a t
-
-  val pure : 'a -> 'a t
-end
-
-type frame =
-  | Done of state * value
-  | Step of
-      string Lazy.t * state * tannot exp Monad.t * (string Lazy.t * lstate * (return_value -> tannot exp Monad.t)) list
-  | Break of frame
-  | Effect_request of
-      string Lazy.t * state * (string Lazy.t * lstate * (return_value -> tannot exp Monad.t)) list * effect_request
-  | Fail of
-      string Lazy.t
-      * state
-      * tannot exp Monad.t
-      * (string Lazy.t * lstate * (return_value -> tannot exp Monad.t)) list
-      * string
-
-and effect_request =
-  | Read_reg of id * VariableUpdate.accessor list * (value -> state -> frame)
-  | Write_reg of id * VariableUpdate.accessor list * value * (unit -> state -> frame)
-  | Outcome of id * value list * (return_value -> tannot exp Monad.t)
-
-val stack_string : string Lazy.t * lstate * (return_value -> tannot exp Monad.t) -> string Lazy.t
-
-val eval_frame : frame -> frame
-
-val default_effect_interp :
-  string Lazy.t ->
-  state ->
-  (string Lazy.t * lstate * (return_value -> tannot exp Monad.t)) list ->
-  effect_request ->
-  frame
-
-val effect_interp :
-  (string Lazy.t ->
-  state ->
-  (string Lazy.t * lstate * (return_value -> tannot exp Monad.t)) list ->
-  effect_request ->
-  frame
-  )
-  ref
-
-val initial_state :
-  ?registers:bool ->
-  ?undef_registers:bool ->
-  ?fold_target:string ->
-  ?config:Yojson.Safe.t ->
-  typed_ast ->
-  env ->
-  (value list -> value) StringMap.t ->
-  state
+val value_from_json : at:Parse_ast.l -> env -> typ -> Yojson.Safe.t -> value

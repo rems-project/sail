@@ -91,7 +91,7 @@ type global_env = {
   union_ids : (typquant * typ) env_item Bindings.t;
   newtypes : IdSet.t;
   scattered_union_envs : global_env Bindings.t;
-  abstract_typs : kind env_item Bindings.t;
+  abstract_typs : (kind * string list option) env_item Bindings.t;
   constraints : (constraint_reason * n_constraint) list;
   enums : (bool * IdSet.t) env_item Bindings.t;
   enum_ids : id env_item Bindings.t;
@@ -559,7 +559,7 @@ let infer_kind env id =
     (typq, unaux_kind (typ_arg_kind arg))
   )
   else if Bindings.mem id env.global.abstract_typs then (
-    let kind = get_item l env (Bindings.find id env.global.abstract_typs) in
+    let kind, _ = get_item l env (Bindings.find id env.global.abstract_typs) in
     ([], unaux_kind kind)
   )
   else typ_error (id_loc id) ("Cannot infer kind of " ^ string_of_id id)
@@ -877,7 +877,7 @@ let get_typ_synonym id env =
 
 let get_typ_synonyms env = filter_items env env.global.synonyms
 
-let add_abstract_typ id kind env =
+let add_abstract_typ id kind key env =
   if bound_typ_id env id then
     typ_error (id_loc id)
       ("Cannot introduce abstract type " ^ string_of_id id ^ " as a type or synonym with that name already exists")
@@ -885,7 +885,7 @@ let add_abstract_typ id kind env =
     typ_print (lazy (adding ^ "abstract type " ^ string_of_id id ^ " : " ^ string_of_kind kind)) [@coverage off];
     update_global
       (fun global ->
-        { global with abstract_typs = Bindings.add id (mk_item env ~loc:(id_loc id) kind) global.abstract_typs }
+        { global with abstract_typs = Bindings.add id (mk_item env ~loc:(id_loc id) (kind, key)) global.abstract_typs }
       )
       env
   )
@@ -893,7 +893,9 @@ let add_abstract_typ id kind env =
 let remove_abstract_typ id env =
   update_global (fun global -> { global with abstract_typs = Bindings.remove id global.abstract_typs }) env
 
-let get_abstract_typs env = Bindings.map (fun item -> item.item) env.global.abstract_typs
+let get_abstract_typs env = Bindings.map (fun item -> fst item.item) env.global.abstract_typs
+
+let get_abstract_typ_key id env = Option.bind (Bindings.find_opt id env.global.abstract_typs) (fun item -> snd item.item)
 
 let is_abstract_typ id env = Bindings.mem id env.global.abstract_typs
 
