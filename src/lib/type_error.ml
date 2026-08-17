@@ -380,7 +380,7 @@ let message_of_type_error type_error =
         ( Seq
             [
               Line ("Could not resolve quantifiers for " ^ string_of_id id);
-              Line (bullet ^ " " ^ Util.string_of_list ("\n" ^ bullet ^ " ") string_of_quant_item quants);
+              Line (bullet () ^ " " ^ Util.string_of_list ("\n" ^ bullet () ^ " ") string_of_quant_item quants);
             ],
           None
         )
