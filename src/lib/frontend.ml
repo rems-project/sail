@@ -115,7 +115,7 @@ let instantiate_abstract_types tgt config insts ast =
       )
   in
   let instantiate = function
-    | DEF_aux (DEF_type (TD_aux (TD_abstract (id, kind, TDC_none), (l, _))), def_annot) as def -> (
+    | DEF_aux (DEF_type (TD_aux (TD_abstract (id, kind, None), (l, _))), def_annot) as def -> (
         match Bindings.find_opt id insts with
         | Some arg_fun ->
             let arg = arg_fun (unaux_kind kind) in
@@ -123,7 +123,7 @@ let instantiate_abstract_types tgt config insts ast =
             DEF_aux (DEF_type (TD_aux (TD_abbrev (id, [], arg), (l, Type_check.empty_tannot))), def_annot)
         | None -> def
       )
-    | DEF_aux (DEF_type (TD_aux (TD_abstract (id, kind, TDC_key key), (l, _))), def_annot) as def -> (
+    | DEF_aux (DEF_type (TD_aux (TD_abstract (id, kind, Some key), (l, _))), def_annot) as def -> (
         config_ids := Bindings.add id (unaux_kind kind, key) !config_ids;
         match json_lookup key config with
         | Some json ->

@@ -354,10 +354,6 @@ type index_range_aux =
 and index_range =
 | BF_aux of index_range_aux * Parse_ast.l
 
-type opt_abstract_config =
-| TDC_key of string list
-| TDC_none
-
 type outcome_spec_aux =
 | OV_outcome of id * typschm * typquant
 
@@ -401,7 +397,7 @@ type type_def_aux =
 | TD_record of id * typquant * ((id * typ) * unit def_annot) list * bool
 | TD_variant of id * typquant * type_union list * bool
 | TD_enum of id * (id * unit def_annot) list * bool
-| TD_abstract of id * kind * opt_abstract_config
+| TD_abstract of id * kind * string list option
 | TD_bitfield of id * typ * ((id * index_range) * unit def_annot) list
 
 type outcome_spec =

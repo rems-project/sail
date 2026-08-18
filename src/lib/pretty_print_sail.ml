@@ -812,8 +812,8 @@ module Printer (Config : PRINT_CONFIG) = struct
     match td with
     | TD_abstract (id, kind, instantiation) ->
         let doc_inst = function
-          | TDC_key key -> space ^^ separate space [equals; string "config"; separate_map dot string key]
-          | TDC_none -> empty
+          | Some key -> space ^^ separate space [equals; string "config"; separate_map dot string key]
+          | None -> empty
         in
         doc_op colon (concat [string "type"; space; doc_id id]) (doc_kind kind) ^^ doc_inst instantiation
     | TD_abbrev (id, typq, typ_arg) -> (
