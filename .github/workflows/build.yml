@@ -40,7 +40,10 @@ jobs:
 
     - name: System dependencies (Windows)
       if: runner.os == 'Windows'
-      run: vcpkg install gmp
+      run: |
+        vcpkg update
+        vcpkg upgrade
+        vcpkg install gmp
 
     - name: Setup Z3
       id: z3
