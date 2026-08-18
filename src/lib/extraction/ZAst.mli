@@ -500,7 +500,7 @@ module Make :
     | Early_return of R.value * (unit -> 'a t)
     | Exit of R.value * (unit -> 'a t)
     | Call of id * R.value list * (function_return -> 'a t)
-    | Get_config of string list * (R.value -> 'a t)
+    | Get_config of Parse_ast.l * string list * typ * (R.value -> 'a t)
     | Runtime_type_error of Parse_ast.l
     | Get_undefined of typ * (R.value -> 'a t)
 
@@ -508,17 +508,17 @@ module Make :
       ('a1 -> 'a2) -> (R.value -> (unit -> 'a1 t) -> (unit -> 'a2) -> 'a2) ->
       (R.value -> (unit -> 'a1 t) -> (unit -> 'a2) -> 'a2) -> (id -> R.value
       list -> (function_return -> 'a1 t) -> (function_return -> 'a2) -> 'a2)
-      -> (string list -> (R.value -> 'a1 t) -> (R.value -> 'a2) -> 'a2) ->
-      (Parse_ast.l -> 'a2) -> (typ -> (R.value -> 'a1 t) -> (R.value -> 'a2)
-      -> 'a2) -> 'a1 t -> 'a2
+      -> (Parse_ast.l -> string list -> typ -> (R.value -> 'a1 t) -> (R.value
+      -> 'a2) -> 'a2) -> (Parse_ast.l -> 'a2) -> (typ -> (R.value -> 'a1 t)
+      -> (R.value -> 'a2) -> 'a2) -> 'a1 t -> 'a2
 
     val t_rec :
       ('a1 -> 'a2) -> (R.value -> (unit -> 'a1 t) -> (unit -> 'a2) -> 'a2) ->
       (R.value -> (unit -> 'a1 t) -> (unit -> 'a2) -> 'a2) -> (id -> R.value
       list -> (function_return -> 'a1 t) -> (function_return -> 'a2) -> 'a2)
-      -> (string list -> (R.value -> 'a1 t) -> (R.value -> 'a2) -> 'a2) ->
-      (Parse_ast.l -> 'a2) -> (typ -> (R.value -> 'a1 t) -> (R.value -> 'a2)
-      -> 'a2) -> 'a1 t -> 'a2
+      -> (Parse_ast.l -> string list -> typ -> (R.value -> 'a1 t) -> (R.value
+      -> 'a2) -> 'a2) -> (Parse_ast.l -> 'a2) -> (typ -> (R.value -> 'a1 t)
+      -> (R.value -> 'a2) -> 'a2) -> 'a1 t -> 'a2
 
     val bind : 'a1 t -> ('a1 -> 'a2 t) -> 'a2 t
 

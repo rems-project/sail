@@ -403,7 +403,8 @@ let repl_commands =
       repl_action =
         (fun _ pos arg rstate ->
           let exp = Type_check.infer_exp rstate.env (Initial_check.exp_of_string ~inline:pos rstate.ctx arg) in
-          let gstate = Partial.initial_gstate ~typecheck_env:rstate.env ~ast:rstate.ast in
+          let config = Option.value ~default:(`Assoc []) (snd rstate.state).config in
+          let gstate = Partial.initial_gstate ~typecheck_env:rstate.env ~config ~ast:rstate.ast in
           let step = Partial.mk_interpreter ~inlining:false gstate in
           { rstate with mode = PartialEvaluation (Partial.from_exp_with_globals gstate exp, step) }
         );
@@ -415,7 +416,8 @@ let repl_commands =
       repl_action =
         (fun _ pos arg rstate ->
           let exp = Type_check.infer_exp rstate.env (Initial_check.exp_of_string ~inline:pos rstate.ctx arg) in
-          let gstate = Partial.initial_gstate ~typecheck_env:rstate.env ~ast:rstate.ast in
+          let config = Option.value ~default:(`Assoc []) (snd rstate.state).config in
+          let gstate = Partial.initial_gstate ~typecheck_env:rstate.env ~config ~ast:rstate.ast in
           let step = Partial.mk_interpreter ~inlining:true gstate in
           { rstate with mode = PartialEvaluation (Partial.from_exp_with_globals gstate exp, step) }
         );
