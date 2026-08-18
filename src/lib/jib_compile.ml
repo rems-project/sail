@@ -1830,12 +1830,12 @@ module Make (C : CONFIG) = struct
       )
     | TD_abstract (id, K_aux (kind, _), inst) -> (
         let compile_inst ctyp = function
-          | TDC_key key ->
+          | Some key ->
               (* The abstract initialisers are ran very early, before the rest of the model,
                  so we can't rely on Jib static initialisers being set up. *)
               let setup, call, cleanup = compile_config' l { ctx with no_static = true } key ctyp in
               CTDI_instrs (setup @ [call (CL_id (Abstract id, ctyp))] @ cleanup)
-          | TDC_none -> CTDI_none
+          | None -> CTDI_none
         in
         let is_initialised = function CTDI_instrs _ -> Initialised | CTDI_none -> Uninitialised in
         match kind with

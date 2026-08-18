@@ -1956,7 +1956,6 @@ let rec to_ast_typedef ctx def_annot (P.TD_aux (aux, l) : P.type_def) : untyped_
       )
   | P.TD_abstract (id, kind, instantiation) -> (
       let id = to_ast_reserved_type_id ctx id in
-      let instantiation = match instantiation with Some key -> TDC_key key | None -> TDC_none in
       match to_ast_kind kind with
       | Some kind ->
           ( [DEF_aux (DEF_type (TD_aux (TD_abstract (id, kind, instantiation), (l, empty_uannot))), def_annot)],
