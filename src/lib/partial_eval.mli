@@ -66,7 +66,7 @@ module AbsValue : SAIL_VALUE
 module Make (L : SAIL_VALUE) : sig
   type gstate
 
-  val initial_gstate : typecheck_env:Type_check.Env.t -> ast:Type_check.typed_ast -> gstate
+  val initial_gstate : typecheck_env:Type_check.Env.t -> config:Yojson.Safe.t -> ast:Type_check.typed_ast -> gstate
 
   module Zinterp : sig
     type t

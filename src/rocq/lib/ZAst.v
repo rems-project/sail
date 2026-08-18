@@ -812,7 +812,7 @@ Module Make (Tannot : TypeAnnot.S) (B : BUILDER Tannot) (L : SAIL_VALUE).
     | Early_return : R.value → (unit → t) → t
     | Exit : R.value → (unit → t) → t
     | Call : id → list R.value → (function_return → t) → t
-    | Get_config : list string → (R.value → t) → t
+    | Get_config : Ast.loc → list string → typ → (R.value → t) → t
     | Runtime_type_error : Ast.loc → t
     | Get_undefined : typ → (R.value → t) → t.
 
@@ -824,7 +824,7 @@ Module Make (Tannot : TypeAnnot.S) (B : BUILDER Tannot) (L : SAIL_VALUE).
       | Early_return v cont => Early_return v (fun v => bind (cont tt) f)
       | Exit v cont => Exit v (fun v => bind (cont tt) f)
       | Call id args cont => Call id args (fun v => bind (cont v) f)
-      | Get_config key cont => Get_config key (fun v => bind (cont v) f)
+      | Get_config l key t cont => Get_config l key t (fun v => bind (cont v) f)
       | Runtime_type_error l => Runtime_type_error l
       | Get_undefined t cont => Get_undefined t (fun v => bind (cont v) f)
       end.
@@ -908,7 +908,7 @@ Module Make (Tannot : TypeAnnot.S) (B : BUILDER Tannot) (L : SAIL_VALUE).
     | E_ref id => pure (ctx, σ, inr (R.mk_ref annot id))
     | E_throw exp => wrap (Z_single ctx Throw) exp
     | E_config key =>
-        v ← Monad.Get_config key pure;
+        v ← Monad.Get_config (fst annot) key (Tannot.get_type (snd annot)) pure;
         pure (ctx, σ, inr (v, B.mk_config annot key))
     | E_block exps =>
         match exps with

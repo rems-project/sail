@@ -873,7 +873,7 @@ module Make =
     | Early_return of R.value * (unit -> 'a t)
     | Exit of R.value * (unit -> 'a t)
     | Call of id * R.value list * (function_return -> 'a t)
-    | Get_config of string list * (R.value -> 'a t)
+    | Get_config of Parse_ast.l * string list * typ * (R.value -> 'a t)
     | Runtime_type_error of Parse_ast.l
     | Get_undefined of typ * (R.value -> 'a t)
 
@@ -881,9 +881,9 @@ module Make =
         ('a1 -> 'a2) -> (R.value -> (unit -> 'a1 t) -> (unit -> 'a2) -> 'a2)
         -> (R.value -> (unit -> 'a1 t) -> (unit -> 'a2) -> 'a2) -> (id ->
         R.value list -> (function_return -> 'a1 t) -> (function_return ->
-        'a2) -> 'a2) -> (string list -> (R.value -> 'a1 t) -> (R.value ->
-        'a2) -> 'a2) -> (Parse_ast.l -> 'a2) -> (typ -> (R.value -> 'a1 t) ->
-        (R.value -> 'a2) -> 'a2) -> 'a1 t -> 'a2 **)
+        'a2) -> 'a2) -> (Parse_ast.l -> string list -> typ -> (R.value -> 'a1
+        t) -> (R.value -> 'a2) -> 'a2) -> (Parse_ast.l -> 'a2) -> (typ ->
+        (R.value -> 'a1 t) -> (R.value -> 'a2) -> 'a2) -> 'a1 t -> 'a2 **)
 
     let rec t_rect f f0 f1 f2 f3 f4 f5 = function
     | Pure y -> f y
@@ -892,8 +892,8 @@ module Make =
     | Exit (v, t1) -> f1 v t1 (fun u -> t_rect f f0 f1 f2 f3 f4 f5 (t1 u))
     | Call (i, l0, t1) ->
       f2 i l0 t1 (fun f6 -> t_rect f f0 f1 f2 f3 f4 f5 (t1 f6))
-    | Get_config (l0, t1) ->
-      f3 l0 t1 (fun v -> t_rect f f0 f1 f2 f3 f4 f5 (t1 v))
+    | Get_config (l0, l1, t1, t2) ->
+      f3 l0 l1 t1 t2 (fun v -> t_rect f f0 f1 f2 f3 f4 f5 (t2 v))
     | Runtime_type_error l0 -> f4 l0
     | Get_undefined (t1, t2) ->
       f5 t1 t2 (fun v -> t_rect f f0 f1 f2 f3 f4 f5 (t2 v))
@@ -902,9 +902,9 @@ module Make =
         ('a1 -> 'a2) -> (R.value -> (unit -> 'a1 t) -> (unit -> 'a2) -> 'a2)
         -> (R.value -> (unit -> 'a1 t) -> (unit -> 'a2) -> 'a2) -> (id ->
         R.value list -> (function_return -> 'a1 t) -> (function_return ->
-        'a2) -> 'a2) -> (string list -> (R.value -> 'a1 t) -> (R.value ->
-        'a2) -> 'a2) -> (Parse_ast.l -> 'a2) -> (typ -> (R.value -> 'a1 t) ->
-        (R.value -> 'a2) -> 'a2) -> 'a1 t -> 'a2 **)
+        'a2) -> 'a2) -> (Parse_ast.l -> string list -> typ -> (R.value -> 'a1
+        t) -> (R.value -> 'a2) -> 'a2) -> (Parse_ast.l -> 'a2) -> (typ ->
+        (R.value -> 'a1 t) -> (R.value -> 'a2) -> 'a2) -> 'a1 t -> 'a2 **)
 
     let rec t_rec f f0 f1 f2 f3 f4 f5 = function
     | Pure y -> f y
@@ -913,8 +913,8 @@ module Make =
     | Exit (v, t1) -> f1 v t1 (fun u -> t_rec f f0 f1 f2 f3 f4 f5 (t1 u))
     | Call (i, l0, t1) ->
       f2 i l0 t1 (fun f6 -> t_rec f f0 f1 f2 f3 f4 f5 (t1 f6))
-    | Get_config (l0, t1) ->
-      f3 l0 t1 (fun v -> t_rec f f0 f1 f2 f3 f4 f5 (t1 v))
+    | Get_config (l0, l1, t1, t2) ->
+      f3 l0 l1 t1 t2 (fun v -> t_rec f f0 f1 f2 f3 f4 f5 (t2 v))
     | Runtime_type_error l0 -> f4 l0
     | Get_undefined (t1, t2) ->
       f5 t1 t2 (fun v -> t_rec f f0 f1 f2 f3 f4 f5 (t2 v))
@@ -928,7 +928,8 @@ module Make =
         Early_return (v, (fun _ -> bind (cont ()) f))
       | Exit (v, cont) -> Exit (v, (fun _ -> bind (cont ()) f))
       | Call (id0, args, cont) -> Call (id0, args, (fun v -> bind (cont v) f))
-      | Get_config (key, cont) -> Get_config (key, (fun v -> bind (cont v) f))
+      | Get_config (l0, key, t0, cont) ->
+        Get_config (l0, key, t0, (fun v -> bind (cont v) f))
       | Runtime_type_error l0 -> Runtime_type_error l0
       | Get_undefined (t0, cont) ->
         Get_undefined (t0, (fun v -> bind (cont v) f))
@@ -1030,7 +1031,8 @@ module Make =
      | E_return exp0 -> wrap (Z_return ctx) exp0
      | E_exit exp0 -> wrap (Z_exit ctx) exp0
      | E_config key ->
-       Monad.bind (Monad.Get_config (key, pure)) (fun v ->
+       Monad.bind (Monad.Get_config ((fst annot0), key,
+         (Tannot.get_type (snd annot0)), pure)) (fun v ->
          pure ((ctx, _UU03c3_), (Coq_inr (v, (B.mk_config annot0 key)))))
      | E_ref id0 -> pure ((ctx, _UU03c3_), (Coq_inr (R.mk_ref annot0 id0)))
      | E_throw exp0 -> wrap (Z_single (ctx, Throw)) exp0

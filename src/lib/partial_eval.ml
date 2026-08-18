@@ -836,11 +836,19 @@ module Make (Lattice : SAIL_VALUE) = struct
     letbinds : (Type_check.tannot pat * Type_check.tannot exp * Type_check.Env.t def_annot) list;
     registers : (id * typ * Type_check.tannot exp option) list;
     typecheck_env : Type_check.Env.t;
+    config : Yojson.Safe.t;
   }
 
-  let initial_gstate ~typecheck_env ~ast =
+  let initial_gstate ~typecheck_env ~config ~ast =
     let gstate =
-      { primops = Lattice.initial_primops; fundefs = Bindings.empty; letbinds = []; registers = []; typecheck_env }
+      {
+        primops = Lattice.initial_primops;
+        fundefs = Bindings.empty;
+        letbinds = [];
+        registers = [];
+        typecheck_env;
+        config;
+      }
     in
     let add_def gstate = function
       | DEF_aux (DEF_fundef fdef, _) -> { gstate with fundefs = Bindings.add (id_of_fundef fdef) fdef gstate.fundefs }
@@ -1081,7 +1089,13 @@ module Make (Lattice : SAIL_VALUE) = struct
                 )
             | None -> failwith "bad call"
           )
-        | Get_config (_, cont) -> failwith "get_config"
+        | Get_config (l, key, typ, cont) -> (
+            match Config_json.find_json ~at:l key gstate.config with
+            | None -> go state (cont { this = Some Lattice.top; exn = None; eff = false })
+            | Some json ->
+                let value = Config_json.value_from_json ~at:l gstate.typecheck_env typ json in
+                go state (cont { this = Some (Lattice.abst value); exn = None; eff = false })
+          )
         | Runtime_type_error l -> raise (Reporting.err_general l "Type error")
         | Get_undefined (_, cont) -> go state (cont { this = Some Lattice.top; exn = None; eff = false })
       in
