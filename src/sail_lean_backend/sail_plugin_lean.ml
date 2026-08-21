@@ -416,6 +416,9 @@ let rec dedup_files (files : string list) (acc : string list) =
 let output (out_name : string) symbols env effect_info ({ defs; _ } as ast : Libsail.Type_check.typed_ast)
     default_sail_dir single_file noncomputable =
   let interface_v = if Preprocess.have_symbol "CONCURRENCY_INTERFACE_V2" symbols then 2 else 1 in
+  if !opt_lean_executable && interface_v = 2 then
+    Reporting.warn ~force_show:true Version.v0_20_2 "Lean executable" Parse_ast.Unknown
+      "`--lean-executable` is not supported for ArchSem models; provide a model-specific interpreter and `main` instead";
   let cg = Callgraph.graph_of_ast ast in
   let files, import_sets, main_import_set =
     if single_file then ([], [], [])

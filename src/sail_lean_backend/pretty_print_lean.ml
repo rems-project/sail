@@ -1665,6 +1665,7 @@ let compute_ctor_renames (env : Type_check.env) =
 
 let pp_ast_lean symbols (env : Type_check.env) effect_info ({ defs; _ } as ast : Libsail.Type_check.typed_ast)
     out_name_camel types_file imp_funcs_files funcs_file =
+  let is_concurrency_interface_v2 = Preprocess.have_symbol "CONCURRENCY_INTERFACE_V2" symbols in
   let regs = State.find_registers defs in
   let fun_args = populate_fun_args defs in
   let ctor_renames = compute_ctor_renames env in
@@ -1689,8 +1690,10 @@ let pp_ast_lean symbols (env : Type_check.env) effect_info ({ defs; _ } as ast :
     if imp_funcs_files = [] then ([], concat all_fundefss) else (Util.butlast all_fundefss, Util.last all_fundefss)
   in
   let main_fundefs = main_fundefs ^^ string ("end " ^ out_name_camel ^ ".Functions") ^^ hardline in
+  (* ArchSem effects require a model-specific interpreter, so its Sail main cannot use the V1 IO wrapper. *)
+  let generate_main = !the_main_function_has_been_seen && not is_concurrency_interface_v2 in
   let main_function =
-    if !the_main_function_has_been_seen then (
+    if generate_main then (
       let stub = main_function_stub effect_info has_registers in
       [string ("open " ^ out_name_camel); string ("open " ^ out_name_camel ^ ".Functions\n\n") ^^ stub]
     )
@@ -1704,4 +1707,4 @@ let pp_ast_lean symbols (env : Type_check.env) effect_info ({ defs; _ } as ast :
       imp_funcs_files imp_fundefss
   in
   print ~len:!opt_line_width funcs_file (separate hardline (remove_empties ([opens; main_fundefs] @ main_function)));
-  !the_main_function_has_been_seen
+  generate_main
