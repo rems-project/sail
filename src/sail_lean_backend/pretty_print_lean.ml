@@ -1593,7 +1593,7 @@ let main_function_stub effect_info has_registers =
     (separate hardline
        [
          string "def main (_ : List String) : IO UInt32 := do";
-         Printf.ksprintf string "main_of_sail_main ⟨default, (), default, default, default, default⟩ %s" main_call;
+         Printf.ksprintf string "main_of_sail_main default %s" main_call;
          empty;
        ]
     )
