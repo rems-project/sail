@@ -131,7 +131,7 @@ let parse_json_string_to_bits ~at:l ~len str =
     else
       let* dec_chars = List.filter_map valid_dec_char chars |> Util.option_all in
       let n = List.to_seq dec_chars |> String.of_seq |> Big_int.of_string in
-      Some (Sail_lib.get_slice_int (Big_int.of_int len, n, Big_int.zero))
+      Some (Sail_lib.get_slice_int (Big_int.of_int len) n Big_int.zero)
   in
   Some (mk_lit_exp ~loc:l (L_bin (bitlist_to_literal bitlist)))
 
@@ -260,7 +260,7 @@ module Parse (V : CONFIG_VALUE) = struct
       else
         let* dec_chars = List.filter_map valid_dec_char chars |> Util.option_all in
         let n = List.to_seq dec_chars |> String.of_seq |> Big_int.of_string in
-        Some (Sail_lib.get_slice_int (Big_int.of_int len, n, Big_int.zero))
+        Some (Sail_lib.get_slice_int (Big_int.of_int len) n Big_int.zero)
     in
     Some (V.bin l (bitlist_to_literal bitlist))
 

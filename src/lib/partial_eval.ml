@@ -314,10 +314,6 @@ module AbsValue : SAIL_VALUE = struct
   let initial_primops =
     let open Lifting in
     let open Extraction in
-    let curry f a b = f (a, b) in
-    let curry3 f a b c = f (a, b, c) in
-    let curry4 f a b c d = f (a, b, c, d) in
-    let curry5 f a b c d e = f (a, b, c, d, e) in
     List.fold_left
       (fun m (name, op) -> StringMap.add name op m)
       StringMap.empty
@@ -336,8 +332,8 @@ module AbsValue : SAIL_VALUE = struct
         ("hex_str", lift Sail_lib.hex_str (Int @-> Ret String));
         ("hex_str_upper", lift Sail_lib.hex_str_upper (Int @-> Ret String));
         ("negate", lift Interval.Dom.negate (AbsInt @-> Ret AbsInt));
-        ("string_take", lift (fun s n -> Sail_lib.string_take (s, n)) (String @-> Int @-> Ret String));
-        ("string_drop", lift (fun s n -> Sail_lib.string_drop (s, n)) (String @-> Int @-> Ret String));
+        ("string_take", lift Sail_lib.string_take (String @-> Int @-> Ret String));
+        ("string_drop", lift Sail_lib.string_drop (String @-> Int @-> Ret String));
         ("string_length", lift Sail_lib.string_length (String @-> Ret Int));
         ("string_append", lift ( ^ ) (String @-> String @-> Ret String));
         ("add_int", lift Interval.Dom.add (AbsInt @-> AbsInt @-> Ret AbsInt));
@@ -369,7 +365,7 @@ module AbsValue : SAIL_VALUE = struct
         ("zeros", lift (TransferBitvectorInterval.Ops.zeros widths_cap) (AbsInt @-> Ret AbsBV));
         ("sail_ones", lift (TransferBitvectorInterval.Ops.ones widths_cap) (AbsInt @-> Ret AbsBV));
         ("ones", lift (TransferBitvectorInterval.Ops.ones widths_cap) (AbsInt @-> Ret AbsBV));
-        ("replicate_bits", lift (fun bs n -> Sail_lib.replicate_bits (bs, n)) (BV @-> Int @-> Ret BV));
+        ("replicate_bits", lift Sail_lib.replicate_bits (BV @-> Int @-> Ret BV));
         ("length", primop_length);
         ("eq_bits", primop_eq_bits);
         ("eq_anything", primop_eq_anything);
@@ -379,16 +375,16 @@ module AbsValue : SAIL_VALUE = struct
         ("and_vec", lift AbsBitvector.Dom.coq_and (AbsBV @-> AbsBV @-> Ret AbsBV));
         ("or_vec", lift AbsBitvector.Dom.coq_or (AbsBV @-> AbsBV @-> Ret AbsBV));
         ("xor_vec", lift AbsBitvector.Dom.xor (AbsBV @-> AbsBV @-> Ret AbsBV));
-        ("shiftl", lift (fun bs n -> Sail_lib.shiftl (bs, n)) (BV @-> Int @-> Ret BV));
-        ("shiftr", lift (fun bs n -> Sail_lib.shiftr (bs, n)) (BV @-> Int @-> Ret BV));
+        ("shiftl", lift Sail_lib.shiftl (BV @-> Int @-> Ret BV));
+        ("shiftr", lift Sail_lib.shiftr (BV @-> Int @-> Ret BV));
         ("append", lift AbsBitvector.Dom.append (AbsBV @-> AbsBV @-> Ret AbsBV));
-        ("vector_truncate", lift (fun bs n -> Sail_lib.vector_truncate (bs, n)) (BV @-> Int @-> Ret BV));
+        ("vector_truncate", lift Sail_lib.vector_truncate (BV @-> Int @-> Ret BV));
         ("slice", lift AbsBitvector.Dom.slice (AbsBV @-> Int @-> Int @-> Ret AbsBV));
         ("uint", lift TransferBitvectorInterval.Ops.unsigned (AbsBV @-> Ret AbsInt));
         ("sint", lift TransferBitvectorInterval.Ops.signed (AbsBV @-> Ret AbsInt));
         ("pow2", lift Sail_lib.pow2 (Int @-> Ret Int));
-        ("shl_int", lift (fun i n -> Sail_lib.shl_int (i, n)) (Int @-> Int @-> Ret Int));
-        ("shr_int", lift (fun i n -> Sail_lib.shr_int (i, n)) (Int @-> Int @-> Ret Int));
+        ("shl_int", lift Sail_lib.shl_int (Int @-> Int @-> Ret Int));
+        ("shr_int", lift Sail_lib.shr_int (Int @-> Int @-> Ret Int));
         ("concat_str", lift ( ^ ) (String @-> String @-> Ret String));
         ("string_of_bits", lift Sail_lib.string_of_bits (BV @-> Ret String));
         ("eq_string", lift ( = ) (String @-> String @-> Ret Bool));
@@ -426,7 +422,7 @@ module AbsValue : SAIL_VALUE = struct
               )
             | [bv; n] -> (
                 match (concrete_bits bv, concrete_int n) with
-                | Some bs, Some n -> bitvector_of_bits (Sail_lib.access_inc (bs, n))
+                | Some bs, Some n -> bitvector_of_bits (Sail_lib.access_inc bs n)
                 | _ -> V_top
               )
             | _ -> V_top
@@ -468,7 +464,7 @@ module AbsValue : SAIL_VALUE = struct
               )
             | [bv; n; bit] -> (
                 match (concrete_bits bv, concrete_int n, concrete_bits bit) with
-                | Some bs, Some n, Some [b] -> bitvector_of_bits (Sail_lib.update (bs, n, [b]))
+                | Some bs, Some n, Some [b] -> bitvector_of_bits (Sail_lib.update bs n [b])
                 | _ -> V_top
               )
             | _ -> V_top
@@ -486,7 +482,7 @@ module AbsValue : SAIL_VALUE = struct
               )
             | [bv; n; bit] -> (
                 match (concrete_bits bv, concrete_int n, concrete_bits bit) with
-                | Some bs, Some n, Some [b] -> bitvector_of_bits (Sail_lib.update_inc (bs, n, [b]))
+                | Some bs, Some n, Some [b] -> bitvector_of_bits (Sail_lib.update_inc bs n [b])
                 | _ -> V_top
               )
             | _ -> V_top
@@ -501,9 +497,9 @@ module AbsValue : SAIL_VALUE = struct
               )
             | _ -> V_top
         );
-        ("subrange_inc", lift (curry3 Sail_lib.subrange_inc) (BV @-> Int @-> Int @-> Ret BV));
-        ("update_subrange", lift (curry4 Sail_lib.update_subrange) (BV @-> Int @-> Int @-> BV @-> Ret BV));
-        ("update_subrange_inc", lift (curry4 Sail_lib.update_subrange_inc) (BV @-> Int @-> Int @-> BV @-> Ret BV));
+        ("subrange_inc", lift Sail_lib.subrange_inc (BV @-> Int @-> Int @-> Ret BV));
+        ("update_subrange", lift Sail_lib.update_subrange (BV @-> Int @-> Int @-> BV @-> Ret BV));
+        ("update_subrange_inc", lift Sail_lib.update_subrange_inc (BV @-> Int @-> Int @-> BV @-> Ret BV));
         ( "eq_list",
           fun args ->
             match args with
@@ -548,13 +544,13 @@ module AbsValue : SAIL_VALUE = struct
             | _ -> V_top
         );
         ("undefined_list", fun _ -> V_list []);
-        ("get_slice_int", lift (curry3 Sail_lib.get_slice_int) (Int @-> Int @-> Int @-> Ret BV));
-        ("add_vec_int", lift (curry Sail_lib.add_vec_int) (BV @-> Int @-> Ret BV));
-        ("sub_vec_int", lift (curry Sail_lib.sub_vec_int) (BV @-> Int @-> Ret BV));
-        ("valid_hex_bits", lift (curry Sail_lib.valid_hex_bits) (Int @-> String @-> Ret Bool));
-        ("parse_dec_bits", lift (curry Sail_lib.parse_dec_bits) (Int @-> String @-> Ret BV));
-        ("parse_hex_bits", lift (curry Sail_lib.parse_hex_bits) (Int @-> String @-> Ret BV));
-        ("slice_inc", lift (curry3 Sail_lib.slice_inc) (BV @-> Int @-> Int @-> Ret BV));
+        ("get_slice_int", lift Sail_lib.get_slice_int (Int @-> Int @-> Int @-> Ret BV));
+        ("add_vec_int", lift Sail_lib.add_vec_int (BV @-> Int @-> Ret BV));
+        ("sub_vec_int", lift Sail_lib.sub_vec_int (BV @-> Int @-> Ret BV));
+        ("valid_hex_bits", lift Sail_lib.valid_hex_bits (Int @-> String @-> Ret Bool));
+        ("parse_dec_bits", lift Sail_lib.parse_dec_bits (Int @-> String @-> Ret BV));
+        ("parse_hex_bits", lift Sail_lib.parse_hex_bits (Int @-> String @-> Ret BV));
+        ("slice_inc", lift Sail_lib.slice_inc (BV @-> Int @-> Int @-> Ret BV));
         ("eq_bool", lift ( = ) (Bool @-> Bool @-> Ret Bool));
         ("to_real", lift Sail_lib.to_real (Int @-> Ret Real));
         ("random_real", fun _ -> V_top);
@@ -564,17 +560,17 @@ module AbsValue : SAIL_VALUE = struct
         ("abs_real", lift Sail_lib.abs_real (Real @-> Ret Real));
         ("negate_real", lift Sail_lib.negate_real (Real @-> Ret Real));
         ("neg_real", lift Sail_lib.neg_real (Real @-> Ret Real));
-        ("add_real", lift (curry Sail_lib.add_real) (Real @-> Real @-> Ret Real));
-        ("sub_real", lift (curry Sail_lib.sub_real) (Real @-> Real @-> Ret Real));
-        ("mult_real", lift (curry Sail_lib.mult_real) (Real @-> Real @-> Ret Real));
-        ("div_real", lift (curry Sail_lib.div_real) (Real @-> Real @-> Ret Real));
-        ("quotient_real", lift (curry Sail_lib.quotient_real) (Real @-> Real @-> Ret Real));
-        ("eq_real", lift (curry Sail_lib.eq_real) (Real @-> Real @-> Ret Bool));
-        ("lt_real", lift (curry Sail_lib.lt_real) (Real @-> Real @-> Ret Bool));
-        ("gt_real", lift (curry Sail_lib.gt_real) (Real @-> Real @-> Ret Bool));
-        ("lteq_real", lift (curry Sail_lib.lteq_real) (Real @-> Real @-> Ret Bool));
-        ("gteq_real", lift (curry Sail_lib.gteq_real) (Real @-> Real @-> Ret Bool));
-        ("arith_shiftr", lift (fun bs n -> Sail_lib.arith_shiftr (bs, n)) (BV @-> Int @-> Ret BV));
+        ("add_real", lift Sail_lib.add_real (Real @-> Real @-> Ret Real));
+        ("sub_real", lift Sail_lib.sub_real (Real @-> Real @-> Ret Real));
+        ("mult_real", lift Sail_lib.mult_real (Real @-> Real @-> Ret Real));
+        ("div_real", lift Sail_lib.div_real (Real @-> Real @-> Ret Real));
+        ("quotient_real", lift Sail_lib.quotient_real (Real @-> Real @-> Ret Real));
+        ("eq_real", lift Sail_lib.eq_real (Real @-> Real @-> Ret Bool));
+        ("lt_real", lift Sail_lib.lt_real (Real @-> Real @-> Ret Bool));
+        ("gt_real", lift Sail_lib.gt_real (Real @-> Real @-> Ret Bool));
+        ("lteq_real", lift Sail_lib.lteq_real (Real @-> Real @-> Ret Bool));
+        ("gteq_real", lift Sail_lib.gteq_real (Real @-> Real @-> Ret Bool));
+        ("arith_shiftr", lift Sail_lib.arith_shiftr (BV @-> Int @-> Ret BV));
         ( "set_slice",
           fun args ->
             match args with
@@ -583,7 +579,9 @@ module AbsValue : SAIL_VALUE = struct
                 | Some out_bs, Some n, Some slice_bs ->
                     bitvector_of_bits
                       (Sail_lib.set_slice
-                         (Z.of_int (List.length out_bs), Z.of_int (List.length slice_bs), out_bs, n, slice_bs)
+                         (Z.of_int (List.length out_bs))
+                         (Z.of_int (List.length slice_bs))
+                         out_bs n slice_bs
                       )
                 | _ -> V_top
               )
@@ -599,19 +597,17 @@ module AbsValue : SAIL_VALUE = struct
         );
         ("cycle_count", lift Sail_lib.cycle_count (Unit @-> Ret Unit));
         ("get_cycle_count", fun _ -> v_int_concrete (Sail_lib.get_cycle_count ()));
-        ("read_ram", lift (curry4 Sail_lib.read_ram) (Int @-> Int @-> BV @-> BV @-> Ret BV));
-        ("write_ram", lift (curry5 Sail_lib.write_ram) (Int @-> Int @-> BV @-> BV @-> BV @-> Ret Bool));
-        ("emulator_read_mem", lift (curry3 Sail_lib.emulator_read_mem) (Int @-> BV @-> Int @-> Ret BV));
-        ("emulator_read_mem_ifetch", lift (curry3 Sail_lib.emulator_read_mem_ifetch) (Int @-> BV @-> Int @-> Ret BV));
-        ( "emulator_read_mem_exclusive",
-          lift (curry3 Sail_lib.emulator_read_mem_exclusive) (Int @-> BV @-> Int @-> Ret BV)
-        );
-        ("emulator_write_mem", lift (curry4 Sail_lib.emulator_write_mem) (Int @-> BV @-> Int @-> BV @-> Ret Bool));
+        ("read_ram", lift Sail_lib.read_ram (Int @-> Int @-> BV @-> BV @-> Ret BV));
+        ("write_ram", lift Sail_lib.write_ram (Int @-> Int @-> BV @-> BV @-> BV @-> Ret Bool));
+        ("emulator_read_mem", lift Sail_lib.emulator_read_mem (Int @-> BV @-> Int @-> Ret BV));
+        ("emulator_read_mem_ifetch", lift Sail_lib.emulator_read_mem_ifetch (Int @-> BV @-> Int @-> Ret BV));
+        ("emulator_read_mem_exclusive", lift Sail_lib.emulator_read_mem_exclusive (Int @-> BV @-> Int @-> Ret BV));
+        ("emulator_write_mem", lift Sail_lib.emulator_write_mem (Int @-> BV @-> Int @-> BV @-> Ret Bool));
         ( "emulator_write_mem_exclusive",
-          lift (curry4 Sail_lib.emulator_write_mem_exclusive) (Int @-> BV @-> Int @-> BV @-> Ret Bool)
+          lift Sail_lib.emulator_write_mem_exclusive (Int @-> BV @-> Int @-> BV @-> Ret Bool)
         );
-        ("emulator_read_tag", lift (curry Sail_lib.emulator_read_tag) (Int @-> BV @-> Ret Bool));
-        ("emulator_write_tag", lift (curry3 Sail_lib.emulator_write_tag) (Int @-> BV @-> Bool @-> Ret Unit));
+        ("emulator_read_tag", lift Sail_lib.emulator_read_tag (Int @-> BV @-> Ret Bool));
+        ("emulator_write_tag", lift Sail_lib.emulator_write_tag (Int @-> BV @-> Bool @-> Ret Unit));
         ("monomorphize", function [v] -> v | _ -> V_top);
       ]
 end

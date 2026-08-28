@@ -12,7 +12,7 @@ val eq_string = {ocaml: "eq_string", interpreter: "eq_string", lem: "eq", c: "eq
 val eq_real = {ocaml: "eq_real", interpreter: "eq_real", lem: "eq", c: "eq_real", coq: "Reqb"} : (real, real) -> bool
 
 val eq_anything = {
-  ocaml: "(fun (x, y) -> x = y)",
+  ocaml: "(fun x y -> x = y)",
   interpreter: "eq_anything",
   lem: "eq",
   c: "eq_anything",
