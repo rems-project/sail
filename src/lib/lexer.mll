@@ -122,6 +122,7 @@ let kw_table =
      ("private",                 (fun _ -> Private));
      ("import",                  (fun p -> raise (Reporting.err_lex p "import is a reserved keyword")));
      ("module",                  (fun p -> raise (Reporting.err_lex p "module is a reserved keyword")));
+     ("where",                   (fun p -> raise (Reporting.err_lex p "where is a reserved keyword")));
      ("repeat",                  (fun _ -> Repeat));
      ("until",                   (fun _ -> Until));
      ("while",                   (fun _ -> While));
