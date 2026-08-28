@@ -6,7 +6,7 @@ register R3 : int
 val __deref = impure "reg_deref" : forall ('a : Type). register('a) -> 'a effect {rreg}
 
 val output = {
-    ocaml: "(fun (str, n) -> print_endline (str ^ Big_int.to_string n))",
+    ocaml: "(fun str n -> print_endline (str ^ Big_int.to_string n))",
     interpreter: "print_int"
   } : (string, int) -> unit
 

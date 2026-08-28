@@ -145,7 +145,7 @@ let rec ocaml_typ ctx (Typ_aux (typ_aux, l)) =
   | Typ_app (id, []) -> ocaml_typ_id ctx id
   | Typ_app (id, typs) -> parens (separate_map (string ", ") (ocaml_typ_arg ctx) typs) ^^ space ^^ ocaml_typ_id ctx id
   | Typ_tuple typs -> parens (separate_map (string " * ") (ocaml_typ ctx) typs)
-  | Typ_fn (typs, typ) -> separate space [ocaml_typ ctx (Typ_aux (Typ_tuple typs, l)); string "->"; ocaml_typ ctx typ]
+  | Typ_fn (typs, typ) -> separate (string " -> ") (List.map (ocaml_typ ctx) typs @ [ocaml_typ ctx typ])
   | Typ_bidir _ -> raise (Reporting.err_general l "Ocaml doesn't support bidir types")
   | Typ_var kid -> zencode_kid kid
   | Typ_exist _ -> assert false
@@ -250,13 +250,14 @@ let rec ocaml_exp ctx (E_aux (exp_aux, (l, _)) as exp) =
         )
       | None -> (
           match xs with
+          | [] -> zencode ctx f ^^ space ^^ string "()"
           | [x] -> zencode ctx f ^^ space ^^ ocaml_atomic_exp ctx x
           (* Make sure we get the correct short circuiting semantics for and and or *)
           | [x; y] when string_of_id f = "and_bool" ->
               separate space [ocaml_atomic_exp ctx x; string "&&"; ocaml_atomic_exp ctx y]
           | [x; y] when string_of_id f = "or_bool" ->
               separate space [ocaml_atomic_exp ctx x; string "||"; ocaml_atomic_exp ctx y]
-          | xs -> zencode ctx f ^^ space ^^ parens (separate_map (comma ^^ space) (ocaml_atomic_exp ctx) xs)
+          | xs -> zencode ctx f ^^ space ^^ separate_map space (ocaml_atomic_exp ctx) xs
         )
     )
   | E_return exp -> separate space [string "r.return"; ocaml_atomic_exp ctx exp]
@@ -573,15 +574,24 @@ let ocaml_funcls ctx =
     in
     (arg_sym, string_of_arg, ret_sym, string_of_ret)
   in
-  let sail_call id arg_sym pat_sym ret_sym =
+  let sail_call id arg_sym args ret_sym =
     if !opt_trace_ocaml then
       separate space
-        [string "sail_trace_call"; string_lit (string_of_id id); parens (arg_sym ^^ space ^^ pat_sym); ret_sym]
+        [string "sail_trace_call"; string_lit (string_of_id id); parens (arg_sym ^^ space ^^ args); ret_sym]
     else separate space [string "sail_call"]
   in
   let ocaml_funcl call string_of_arg string_of_ret =
     if !opt_trace_ocaml then call ^^ twice hardline ^^ string_of_arg ^^ twice hardline ^^ string_of_ret else call
   in
+  let rec arg_pats arg_typs (P_aux (pat_aux, _) as pat) =
+    match (pat_aux, arg_typs) with
+    | P_typ (_, pat), _ -> arg_pats arg_typs pat
+    | _, [_] -> Some [pat]
+    | P_tuple pats, _ when List.compare_lengths pats arg_typs = 0 -> Some pats
+    | _, _ -> None
+  in
+  let arg_tuple = function [arg] -> arg | args -> parens (separate (comma ^^ space) args) in
+  let unit_if_empty = function [] -> [string "()"] | params -> params in
   function
   | [] -> failwith "Ocaml: empty function"
   | [FCL_aux (FCL_funcl (id, pexp), _)] ->
@@ -598,7 +608,6 @@ let ocaml_funcls ctx =
            indicate Type-polymorphism. If we have it, we need to generate
            explicit type signatures with universal quantification. *)
         let kids = List.fold_left KidSet.union (tyvars_of_typ ret_typ) (List.map tyvars_of_typ arg_typs) in
-        let pat_sym = gensym () in
         let pat, guard, exp =
           match pexp with
           | Pat_aux (Pat_exp (pat, exp), _) -> (pat, None, exp)
@@ -617,48 +626,47 @@ let ocaml_funcls ctx =
                 ]
           | None -> ocaml_exp ctx exp
         in
-        let annot_pat =
-          let pat =
-            if KidSet.is_empty kids then
-              parens (ocaml_pat ctx pat ^^ space ^^ colon ^^ space ^^ ocaml_typ ctx (mk_typ (Typ_tuple arg_typs)))
-            else ocaml_pat ctx pat
-          in
-          if !opt_trace_ocaml then parens (separate space [pat; string "as"; pat_sym]) else pat
+        let annot_param param typ =
+          if KidSet.is_empty kids then parens (param ^^ space ^^ colon ^^ space ^^ ocaml_typ ctx typ) else param
         in
+        let syms = List.map (fun _ -> gensym ()) arg_typs in
+        let args = arg_tuple syms in
+        let params, destructure =
+          match arg_pats arg_typs pat with
+          | Some pats when not !opt_trace_ocaml ->
+              (List.map2 (fun pat typ -> annot_param (ocaml_pat ctx pat) typ) pats arg_typs, fun body -> body)
+          | _ ->
+              ( List.map2 annot_param syms arg_typs,
+                fun body -> separate space [string "let"; ocaml_pat ctx pat; equals; args; string "in"] ^/^ body
+              )
+        in
+        let params = unit_if_empty params in
         let call_header = function_header () in
         let arg_sym, string_of_arg, ret_sym, string_of_ret = trace_info (mk_typ (Typ_tuple arg_typs)) ret_typ in
+        let body = destructure (ocaml_guarded_exp ctx exp guard) in
         let call =
           if KidSet.is_empty kids then
             separate space
-              [
-                call_header;
-                zencode ctx id;
-                annot_pat;
-                colon;
-                ocaml_typ ctx ret_typ;
-                equals;
-                sail_call id arg_sym pat_sym ret_sym;
-                string "(fun r ->";
-              ]
-            ^//^ ocaml_guarded_exp ctx exp guard ^^ rparen
+              ([call_header; zencode ctx id]
+              @ params
+              @ [colon; ocaml_typ ctx ret_typ; equals; sail_call id arg_sym args ret_sym; string "(fun r ->"]
+              )
+            ^//^ body ^^ rparen
           else
             separate space
-              [
-                call_header;
-                zencode ctx id;
-                colon;
-                separate space (List.map zencode_kid (KidSet.elements kids)) ^^ dot;
-                ocaml_typ ctx (mk_typ (Typ_tuple arg_typs));
-                string "->";
-                ocaml_typ ctx ret_typ;
-                equals;
-                string "fun";
-                annot_pat;
-                string "->";
-                sail_call id arg_sym pat_sym ret_sym;
-                string "(fun r ->";
-              ]
-            ^//^ ocaml_guarded_exp ctx exp guard ^^ rparen
+              ([
+                 call_header;
+                 zencode ctx id;
+                 colon;
+                 separate space (List.map zencode_kid (KidSet.elements kids)) ^^ dot;
+                 ocaml_typ ctx (mk_typ (Typ_fn (arg_typs, ret_typ)));
+                 equals;
+                 string "fun";
+               ]
+              @ params
+              @ [string "->"; sail_call id arg_sym args ret_sym; string "(fun r ->"]
+              )
+            ^//^ body ^^ rparen
         in
         ocaml_funcl call string_of_arg string_of_ret
       )
@@ -675,20 +683,18 @@ let ocaml_funcls ctx =
         let kids = List.fold_left KidSet.union (tyvars_of_typ ret_typ) (List.map tyvars_of_typ arg_typs) in
         if not (KidSet.is_empty kids) then failwith "Cannot handle polymorphic multi-clause function in OCaml backend"
         else ();
-        let pat_sym = gensym () in
+        let syms = List.map (fun _ -> gensym ()) arg_typs in
+        let args = arg_tuple syms in
+        let params =
+          unit_if_empty
+            (List.map2 (fun sym typ -> parens (sym ^^ space ^^ colon ^^ space ^^ ocaml_typ ctx typ)) syms arg_typs)
+        in
         let call_header = function_header () in
         let arg_sym, string_of_arg, ret_sym, string_of_ret = trace_info (mk_typ (Typ_tuple arg_typs)) ret_typ in
         let call =
           separate space
-            [
-              call_header;
-              zencode ctx id;
-              parens (pat_sym ^^ space ^^ colon ^^ space ^^ ocaml_typ ctx (mk_typ (Typ_tuple arg_typs)));
-              equals;
-              sail_call id arg_sym pat_sym ret_sym;
-              string "(fun r ->";
-            ]
-          ^//^ (separate space [string "match"; pat_sym; string "with"] ^^ hardline ^^ ocaml_funcl_matches ctx funcls)
+            ([call_header; zencode ctx id] @ params @ [equals; sail_call id arg_sym args ret_sym; string "(fun r ->"])
+          ^//^ (separate space [string "match"; args; string "with"] ^^ hardline ^^ ocaml_funcl_matches ctx funcls)
           ^^ rparen
         in
         ocaml_funcl call string_of_arg string_of_ret

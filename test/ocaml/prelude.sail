@@ -14,7 +14,7 @@ val maybe_int_of_string = "maybe_int_of_string" : string -> option(int)
 val eq_real = "eq_real" : (real, real) -> bool
 
 val eq_anything = {
-    ocaml: "(fun (x, y) -> x = y)",
+    ocaml: "(fun x y -> x = y)",
     interpreter: "eq_anything"
   } : forall ('a : Type). ('a, 'a) -> bool
 

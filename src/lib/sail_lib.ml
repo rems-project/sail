@@ -110,45 +110,45 @@ let trace_call str =
   trace str;
   incr trace_depth
 
-let eq_anything (a, b) = a = b
+let eq_anything a b = a = b
 
-let eq_bit (a, b) = a = b
+let eq_bit a b = a = b
 
-let and_bit = function B1, B1 -> B1 | _, _ -> B0
+let and_bit x y = match (x, y) with B1, B1 -> B1 | _, _ -> B0
 
-let or_bit = function B0, B0 -> B0 | _, _ -> B1
+let or_bit x y = match (x, y) with B0, B0 -> B0 | _, _ -> B1
 
-let xor_bit = function B1, B0 -> B1 | B0, B1 -> B1 | _, _ -> B0
+let xor_bit x y = match (x, y) with B1, B0 -> B1 | B0, B1 -> B1 | _, _ -> B0
 
-let and_vec (xs, ys) =
+let and_vec xs ys =
   assert (List.length xs = List.length ys);
-  List.map2 (fun x y -> and_bit (x, y)) xs ys
+  List.map2 and_bit xs ys
 
-let and_bool (b1, b2) = b1 && b2
+let and_bool b1 b2 = b1 && b2
 
-let or_vec (xs, ys) =
+let or_vec xs ys =
   assert (List.length xs = List.length ys);
-  List.map2 (fun x y -> or_bit (x, y)) xs ys
+  List.map2 or_bit xs ys
 
-let or_bool (b1, b2) = b1 || b2
+let or_bool b1 b2 = b1 || b2
 
-let xor_vec (xs, ys) =
+let xor_vec xs ys =
   assert (List.length xs = List.length ys);
-  List.map2 (fun x y -> xor_bit (x, y)) xs ys
+  List.map2 xor_bit xs ys
 
-let xor_bool (b1, b2) = (b1 || b2) && b1 <> b2
+let xor_bool b1 b2 = (b1 || b2) && b1 <> b2
 
 let undefined_bit () = if !random then if Random.bool () then B0 else B1 else B0
 
 let undefined_bool () = if !random then Random.bool () else false
 
-let rec undefined_vector (len, item) =
-  if Big_int.equal len Big_int.zero then [] else item :: undefined_vector (Big_int.sub len (Big_int.of_int 1), item)
+let rec undefined_vector len item =
+  if Big_int.equal len Big_int.zero then [] else item :: undefined_vector (Big_int.sub len (Big_int.of_int 1)) item
 
 let undefined_list _ = []
 
 let undefined_bitvector len =
-  if Big_int.equal len Big_int.zero then [] else B0 :: undefined_vector (Big_int.sub len (Big_int.of_int 1), B0)
+  if Big_int.equal len Big_int.zero then [] else B0 :: undefined_vector (Big_int.sub len (Big_int.of_int 1)) B0
 
 let undefined_string () = ""
 
@@ -158,13 +158,13 @@ let undefined_int () = if !random then Big_int.of_int (Random.int 0xFFFF) else B
 
 let undefined_nat () = Big_int.zero
 
-let undefined_range (lo, _) = lo
+let undefined_range lo _ = lo
 
 let internal_pick list = if !random then List.nth list (Random.int (List.length list)) else List.nth list 0
 
-let eq_int (n, m) = Big_int.equal n m
+let eq_int n m = Big_int.equal n m
 
-let eq_bool ((x : bool), (y : bool)) : bool = x = y
+let eq_bool (x : bool) (y : bool) : bool = x = y
 
 let rec drop n xs = match (n, xs) with 0, xs -> xs | _, [] -> [] | n, _ :: xs -> drop (n - 1) xs
 
@@ -176,73 +176,70 @@ let count_leading_zeros xs =
 
 let count_trailing_zeros xs = count_leading_zeros (List.rev xs)
 
-let subrange (list, n, m) =
+let subrange list n m =
   let n = Big_int.to_int n in
   let m = Big_int.to_int m in
   List.rev (take (n - (m - 1)) (drop m (List.rev list)))
 
-let subrange_inc (list, n, m) =
+let subrange_inc list n m =
   let n = Big_int.to_int n in
   let m = Big_int.to_int m in
   take (m - (n - 1)) (drop n list)
 
-let slice (list, n, m) =
+let slice list n m =
   let n = Big_int.to_int n in
   let m = Big_int.to_int m in
   List.rev (take m (drop n (List.rev list)))
 
-let slice_inc (list, n, m) =
+let slice_inc list n m =
   let n = Big_int.to_int n in
   let m = Big_int.to_int m in
   take m (drop n list)
 
-let eq_list (xs, ys) = if List.compare_lengths xs ys = 0 then List.for_all2 (fun x y -> x = y) xs ys else false
+let eq_list xs ys = if List.compare_lengths xs ys = 0 then List.for_all2 (fun x y -> x = y) xs ys else false
 
-let access (xs, n) = [List.nth (List.rev xs) (Big_int.to_int n)]
+let access xs n = [List.nth (List.rev xs) (Big_int.to_int n)]
 
-let access_inc (xs, n) = [List.nth xs (Big_int.to_int n)]
+let access_inc xs n = [List.nth xs (Big_int.to_int n)]
 
-let access_list (xs, n) = List.nth (List.rev xs) (Big_int.to_int n)
+let access_list xs n = List.nth (List.rev xs) (Big_int.to_int n)
 
-let access_list_inc (xs, n) = List.nth xs (Big_int.to_int n)
+let access_list_inc xs n = List.nth xs (Big_int.to_int n)
 
-let append (xs, ys) = xs @ ys
+let append xs ys = xs @ ys
 
-let update (xs, n, x) =
+let update xs n x =
   let n = List.length xs - Big_int.to_int n - 1 in
   take n xs @ x @ drop (n + 1) xs
 
-let update_inc (xs, n, x) =
+let update_inc xs n x =
   let n = Big_int.to_int n in
   take n xs @ x @ drop (n + 1) xs
 
-let update_list (xs, n, x) =
+let update_list xs n x =
   let n = List.length xs - Big_int.to_int n - 1 in
   take n xs @ [x] @ drop (n + 1) xs
 
-let update_list_inc (xs, n, x) =
+let update_list_inc xs n x =
   let n = Big_int.to_int n in
   take n xs @ [x] @ drop (n + 1) xs
 
-let update_subrange (xs, n, _, ys) =
+let update_subrange xs n _ ys =
+  let rec aux xs o = function [] -> xs | y :: ys -> aux (update_list xs o y) (Big_int.sub o (Big_int.of_int 1)) ys in
+  aux xs n ys
+
+let update_subrange_inc xs n _ ys =
   let rec aux xs o = function
     | [] -> xs
-    | y :: ys -> aux (update_list (xs, o, y)) (Big_int.sub o (Big_int.of_int 1)) ys
+    | y :: ys -> aux (update_list_inc xs o y) (Big_int.add o (Big_int.of_int 1)) ys
   in
   aux xs n ys
 
-let update_subrange_inc (xs, n, _, ys) =
-  let rec aux xs o = function
-    | [] -> xs
-    | y :: ys -> aux (update_list_inc (xs, o, y)) (Big_int.add o (Big_int.of_int 1)) ys
-  in
-  aux xs n ys
+let vector_init n elem = List.init (Big_int.to_int n) (fun _ -> elem)
 
-let vector_init (n, elem) = List.init (Big_int.to_int n) (fun _ -> elem)
+let vector_truncate xs n = List.rev (take (Big_int.to_int n) (List.rev xs))
 
-let vector_truncate (xs, n) = List.rev (take (Big_int.to_int n) (List.rev xs))
-
-let vector_truncateLSB (xs, n) = take (Big_int.to_int n) xs
+let vector_truncateLSB xs n = take (Big_int.to_int n) xs
 
 let length xs = Big_int.of_int (List.length xs)
 
@@ -262,33 +259,33 @@ let sint = function
       let complement = Big_int.negate (Big_int.mul (Big_int.pow_int_positive 2 msb_pos) (big_int_of_bit msb)) in
       Big_int.add complement (uint xs)
 
-let add_int (x, y) = Big_int.add x y
-let sub_int (x, y) = Big_int.sub x y
-let sub_nat (x, y) =
+let add_int x y = Big_int.add x y
+let sub_int x y = Big_int.sub x y
+let sub_nat x y =
   let z = Big_int.sub x y in
   if Big_int.less z Big_int.zero then Big_int.zero else z
 
-let mult (x, y) = Big_int.mul x y
+let mult x y = Big_int.mul x y
 
 (* This is euclidian division from lem *)
-let quotient (x, y) = Big_int.div x y
+let quotient x y = Big_int.div x y
 
 (* This is the same as tdiv_int, kept for compatibility with old preludes *)
-let quot_round_zero (x, y) = Big_int.integerDiv_t x y
+let quot_round_zero x y = Big_int.integerDiv_t x y
 
 (* The corresponding remainder function for above just respects the sign of x *)
-let rem_round_zero (x, y) = Big_int.integerRem_t x y
+let rem_round_zero x y = Big_int.integerRem_t x y
 
 (* Lem provides euclidian modulo by default *)
-let modulus (x, y) = Big_int.modulus x y
+let modulus x y = Big_int.modulus x y
 
 let negate x = Big_int.negate x
 
-let tdiv_int (x, y) = Big_int.integerDiv_t x y
+let tdiv_int x y = Big_int.integerDiv_t x y
 
-let tmod_int (x, y) = Big_int.integerRem_t x y
+let tmod_int x y = Big_int.integerRem_t x y
 
-let add_bit_with_carry (x, y, carry) =
+let add_bit_with_carry x y carry =
   match (x, y, carry) with
   | B0, B0, B0 -> (B0, B0)
   | B0, B1, B0 -> (B1, B0)
@@ -299,7 +296,7 @@ let add_bit_with_carry (x, y, carry) =
   | B1, B0, B1 -> (B0, B1)
   | B1, B1, B1 -> (B1, B1)
 
-let sub_bit_with_carry (x, y, carry) =
+let sub_bit_with_carry x y carry =
   match (x, y, carry) with
   | B0, B0, B0 -> (B0, B0)
   | B0, B1, B0 -> (B0, B1)
@@ -314,22 +311,22 @@ let not_bit = function B0 -> B1 | B1 -> B0
 
 let not_vec xs = List.map not_bit xs
 
-let add_vec_carry (xs, ys) =
+let add_vec_carry xs ys =
   assert (List.length xs = List.length ys);
   let carry, result =
     List.fold_right2
       (fun x y (c, result) ->
-        let z, c = add_bit_with_carry (x, y, c) in
+        let z, c = add_bit_with_carry x y c in
         (c, z :: result)
       )
       xs ys (B0, [])
   in
   (carry, result)
 
-let add_vec (xs, ys) = snd (add_vec_carry (xs, ys))
+let add_vec xs ys = snd (add_vec_carry xs ys)
 
-let rec replicate_bits (bits, n) =
-  if Big_int.less_equal n Big_int.zero then [] else bits @ replicate_bits (bits, Big_int.sub n (Big_int.of_int 1))
+let rec replicate_bits bits n =
+  if Big_int.less_equal n Big_int.zero then [] else bits @ replicate_bits bits (Big_int.sub n (Big_int.of_int 1))
 
 let identity x = x
 
@@ -338,47 +335,47 @@ Returns list of n bits of integer m starting from offset o >= 0 (bits numbered f
 Uses twos-complement representation for m<0 and pads most significant bits in sign-extended way. 
 Most significant bit is head of returned list.
  *)
-let rec get_slice_int' (n, m, o) =
+let rec get_slice_int' n m o =
   if n <= 0 then []
   else (
     let bit = if Big_int.extract_num m (n + o - 1) 1 == Big_int.zero then B0 else B1 in
-    bit :: get_slice_int' (n - 1, m, o)
+    bit :: get_slice_int' (n - 1) m o
   )
 
 (* as above but taking Big_int for all arguments *)
-let get_slice_int (n, m, o) = get_slice_int' (Big_int.to_int n, m, Big_int.to_int o)
+let get_slice_int n m o = get_slice_int' (Big_int.to_int n) m (Big_int.to_int o)
 
 (* as above but omitting offset, len is ocaml int *)
-let to_bits' (len, n) = get_slice_int' (len, n, 0)
+let to_bits' len n = get_slice_int' len n 0
 
 (* as above but taking big_int for length *)
-let to_bits (len, n) = get_slice_int' (Big_int.to_int len, n, 0)
+let to_bits len n = get_slice_int' (Big_int.to_int len) n 0
 
 (* unsigned multiplication of two n bit lists producing a list of 2n bits *)
-let mult_vec (x, y) =
+let mult_vec x y =
   let xi = uint x in
   let yi = uint y in
   let len = List.length x in
   let prod = Big_int.mul xi yi in
-  to_bits' (2 * len, prod)
+  to_bits' (2 * len) prod
 
 (* signed multiplication of two n bit lists producing a list of 2n bits. *)
-let mults_vec (x, y) =
+let mults_vec x y =
   let xi = sint x in
   let yi = sint y in
   let len = List.length x in
   let prod = Big_int.mul xi yi in
-  to_bits' (2 * len, prod)
+  to_bits' (2 * len) prod
 
-let add_vec_int (v, n) =
-  let n_bits = to_bits' (List.length v, n) in
-  add_vec (v, n_bits)
+let add_vec_int v n =
+  let n_bits = to_bits' (List.length v) n in
+  add_vec v n_bits
 
-let sub_vec (xs, ys) = add_vec (xs, add_vec_int (not_vec ys, Big_int.of_int 1))
+let sub_vec xs ys = add_vec xs (add_vec_int (not_vec ys) (Big_int.of_int 1))
 
-let sub_vec_int (v, n) =
-  let n_bits = to_bits' (List.length v, n) in
-  sub_vec (v, n_bits)
+let sub_vec_int v n =
+  let n_bits = to_bits' (List.length v) n in
+  sub_vec v n_bits
 
 let bin_char = function '0' -> B0 | '1' -> B1 | _ -> failwith "Invalid binary character"
 
@@ -407,7 +404,7 @@ let list_of_string s =
 
 let bits_of_string str = List.concat_map hex_char (list_of_string str)
 
-let concat_str (str1, str2) = str1 ^ str2
+let concat_str str1 str2 = str1 ^ str2
 
 let rec break n = function [] -> [] | _ :: _ as xs -> [take n xs] @ break n (drop n xs)
 
@@ -453,9 +450,9 @@ let decimal_string_of_bits bits =
   let sum = List.fold_left Big_int.add Big_int.zero place_values in
   Big_int.to_string sum
 
-let hex_slice (str, n, m) =
+let hex_slice str n m =
   let bits = List.concat_map hex_char (list_of_string (String.sub str 2 (String.length str - 2))) in
-  let padding = replicate_bits ([B0], n) in
+  let padding = replicate_bits [B0] n in
   let bits = padding @ bits in
   let slice = List.rev (take (Big_int.to_int n) (drop (Big_int.to_int m) (List.rev bits))) in
   slice
@@ -521,28 +518,28 @@ let rec read_mem_bytes addr len =
   let bytes = Bytes.sub page page_off to_get in
   if to_get >= len then bytes else Bytes.cat bytes (read_mem_bytes page_top (len - to_get))
 
-let write_ram' (data_size, addr, data) =
+let write_ram' data_size addr data =
   let len = Big_int.to_int data_size in
   let bytes = Bytes.create len in
   List.iteri (fun i byte -> Bytes.set bytes (len - i - 1) (char_of_int (Big_int.to_int (uint byte)))) (break 8 data);
   add_mem_bytes addr bytes 0 len
 
-let write_ram (_addr_size, data_size, _hex_ram, addr, data) =
-  write_ram' (data_size, uint addr, data);
+let write_ram _addr_size data_size _hex_ram addr data =
+  write_ram' data_size (uint addr) data;
   true
 
 let wram addr byte =
   let bytes = Bytes.make 1 (char_of_int byte) in
   add_mem_bytes addr bytes 0 1
 
-let read_ram (_addr_size, data_size, _hex_ram, addr) =
+let read_ram _addr_size data_size _hex_ram addr =
   let addr = uint addr in
   let bytes = read_mem_bytes addr (Big_int.to_int data_size) in
   let vector = ref [] in
   Bytes.iter (fun byte -> vector := byte_of_int (int_of_char byte) @ !vector) bytes;
   !vector
 
-let fast_read_ram (data_size, addr) =
+let fast_read_ram data_size addr =
   let addr = uint addr in
   let bytes = read_mem_bytes addr (Big_int.to_int data_size) in
   let vector = ref [] in
@@ -551,7 +548,7 @@ let fast_read_ram (data_size, addr) =
 
 let tag_ram = (ref Mem.empty : bool Mem.t ref)
 
-let write_tag_bool (addr, tag) =
+let write_tag_bool addr tag =
   let addri = uint addr in
   tag_ram := Mem.add addri tag !tag_ram
 
@@ -564,33 +561,33 @@ let rec reverse_endianness bits = if List.length bits <= 8 then bits else revers
 (* FIXME: Casts can't be externed *)
 let zcast_unit_vec x = [x]
 
-let shl_int (n, m) = Big_int.shift_left n (Big_int.to_int m)
-let shr_int (n, m) = Big_int.shift_right n (Big_int.to_int m)
-let lor_int (n, m) = Big_int.bitwise_or n m
-let land_int (n, m) = Big_int.bitwise_and n m
-let lxor_int (n, m) = Big_int.bitwise_xor n m
+let shl_int n m = Big_int.shift_left n (Big_int.to_int m)
+let shr_int n m = Big_int.shift_right n (Big_int.to_int m)
+let lor_int n m = Big_int.bitwise_or n m
+let land_int n m = Big_int.bitwise_and n m
+let lxor_int n m = Big_int.bitwise_xor n m
 
-let debug (str1, n, str2, v) = prerr_endline (str1 ^ Big_int.to_string n ^ str2 ^ string_of_bits v)
+let debug str1 n str2 v = prerr_endline (str1 ^ Big_int.to_string n ^ str2 ^ string_of_bits v)
 
-let eq_string (str1, str2) = String.compare str1 str2 == 0
+let eq_string str1 str2 = String.compare str1 str2 == 0
 
-let string_startswith (str1, str2) =
+let string_startswith str1 str2 =
   String.length str1 >= String.length str2 && String.compare (String.sub str1 0 (String.length str2)) str2 == 0
 
-let string_drop (str, n) =
+let string_drop str n =
   if Big_int.less_equal (Big_int.of_int (String.length str)) n then ""
   else (
     let n = Big_int.to_int n in
     String.sub str n (String.length str - n)
   )
 
-let string_take (str, n) =
+let string_take str n =
   let n = Big_int.to_int n in
   if String.length str <= n then str else String.sub str 0 n
 
 let string_length str = Big_int.of_int (String.length str)
 
-let string_append (s1, s2) = s1 ^ s2
+let string_append s1 s2 = s1 ^ s2
 
 let int_of_string_opt s = try Some (Big_int.of_string s) with Invalid_argument _ -> None
 
@@ -606,43 +603,43 @@ let rec maybe_int_of_prefix = function
 
 let maybe_int_of_string str = match int_of_string_opt str with None -> ZNone () | Some n -> ZSome n
 
-let lt_int (x, y) = Big_int.less x y
+let lt_int x y = Big_int.less x y
 
-let set_slice (out_len, _slice_len, out, n, slice) =
-  let out = update_subrange (out, Big_int.add n (Big_int.of_int (List.length slice - 1)), n, slice) in
+let set_slice out_len _slice_len out n slice =
+  let out = update_subrange out (Big_int.add n (Big_int.of_int (List.length slice - 1))) n slice in
   assert (List.length out = Big_int.to_int out_len);
   out
 
 (* Set slice_len bits in the integer m, starting from index n *)
-let set_slice_int (slice_len, m, n, slice) =
+let set_slice_int slice_len m n slice =
   assert (Big_int.to_int slice_len == List.length slice);
   let shifted_slice = Big_int.shift_left (uint slice) (Big_int.to_int n) in
-  let mask = uint (replicate_bits ([B1], slice_len) @ replicate_bits ([B0], n)) in
+  let mask = uint (replicate_bits [B1] slice_len @ replicate_bits [B0] n) in
   Big_int.bitwise_or (Big_int.bitwise_xor (Big_int.bitwise_or mask m) mask) shifted_slice
 
-let eq_real (x, y) = Q.equal x y
-let lt_real (x, y) = Q.lt x y
-let gt_real (x, y) = Q.gt x y
-let lteq_real (x, y) = Q.leq x y
-let gteq_real (x, y) = Q.geq x y
+let eq_real x y = Q.equal x y
+let lt_real x y = Q.lt x y
+let gt_real x y = Q.gt x y
+let lteq_real x y = Q.leq x y
+let gteq_real x y = Q.geq x y
 let to_real x = Q.of_bigint x
 let negate_real x = Q.neg x
 let neg_real x = Q.neg x
 
 let string_of_real x = Q.to_string x
 
-let print_real (str, r) = print_endline (str ^ string_of_real r)
-let prerr_real (str, r) = prerr_endline (str ^ string_of_real r)
+let print_real str r = print_endline (str ^ string_of_real r)
+let prerr_real str r = prerr_endline (str ^ string_of_real r)
 
 let round_down x = Z.fdiv (Q.num x) (Q.den x)
 let round_up x = Z.cdiv (Q.num x) (Q.den x)
-let quotient_real (x, y) = Q.div x y
-let div_real (x, y) = Q.div x y
-let mult_real (x, y) = Q.mul x y
-let real_power (_, _) = failwith "real_power"
-let int_power (x, y) = Big_int.pow_int x (Big_int.to_int y)
-let add_real (x, y) = Q.add x y
-let sub_real (x, y) = Q.sub x y
+let quotient_real x y = Q.div x y
+let div_real x y = Q.div x y
+let mult_real x y = Q.mul x y
+let real_power _ _ = failwith "real_power"
+let int_power x y = Big_int.pow_int x (Big_int.to_int y)
+let add_real x y = Q.add x y
+let sub_real x y = Q.sub x y
 
 let abs_real x = Q.abs x
 
@@ -666,15 +663,15 @@ let sqrt_real x =
 
 let random_real () = Q.div (Q.of_int (Random.bits ())) (Q.of_int (Random.bits ()))
 
-let lt (x, y) = Big_int.less x y
-let gt (x, y) = Big_int.greater x y
-let lteq (x, y) = Big_int.less_equal x y
-let gteq (x, y) = Big_int.greater_equal x y
+let lt x y = Big_int.less x y
+let gt x y = Big_int.greater x y
+let lteq x y = Big_int.less_equal x y
+let gteq x y = Big_int.greater_equal x y
 
 let pow2 x = Big_int.pow_int (Big_int.of_int 2) (Big_int.to_int x)
 
-let max_int (x, y) = Big_int.max x y
-let min_int (x, y) = Big_int.min x y
+let max_int x y = Big_int.max x y
+let min_int x y = Big_int.min x y
 let abs_int x = Big_int.abs x
 
 let string_of_int x = Big_int.to_string x
@@ -689,17 +686,17 @@ let print str = Stdlib.print_string str
 
 let prerr str = Stdlib.prerr_string str
 
-let print_int (str, x) = print_endline (str ^ Big_int.to_string x)
+let print_int str x = print_endline (str ^ Big_int.to_string x)
 
-let prerr_int (str, x) = prerr_endline (str ^ Big_int.to_string x)
+let prerr_int str x = prerr_endline (str ^ Big_int.to_string x)
 
-let print_bits (str, xs) = print_endline (str ^ string_of_bits xs)
+let print_bits str xs = print_endline (str ^ string_of_bits xs)
 
-let prerr_bits (str, xs) = prerr_endline (str ^ string_of_bits xs)
+let prerr_bits str xs = prerr_endline (str ^ string_of_bits xs)
 
-let print_string (str, msg) = print_endline (str ^ msg)
+let print_string str msg = print_endline (str ^ msg)
 
-let prerr_string (str, msg) = prerr_endline (str ^ msg)
+let prerr_string str msg = prerr_endline (str ^ msg)
 
 let reg_deref r = !r
 
@@ -719,47 +716,47 @@ let rec string_of_list sep string_of = function
 
 let skip () = ()
 
-let memea (_, _) = ()
+let memea _ _ = ()
 
-let zero_extend (vec, n) =
+let zero_extend vec n =
   let m = Big_int.to_int n in
-  if m <= List.length vec then take m vec else replicate_bits ([B0], Big_int.of_int (m - List.length vec)) @ vec
+  if m <= List.length vec then take m vec else replicate_bits [B0] (Big_int.of_int (m - List.length vec)) @ vec
 
-let sign_extend (vec, n) =
+let sign_extend vec n =
   let m = Big_int.to_int n in
   match vec with
-  | B0 :: _ as vec -> replicate_bits ([B0], Big_int.of_int (m - List.length vec)) @ vec
-  | [] -> replicate_bits ([B0], Big_int.of_int (m - List.length vec)) @ vec
-  | B1 :: _ as vec -> replicate_bits ([B1], Big_int.of_int (m - List.length vec)) @ vec
+  | B0 :: _ as vec -> replicate_bits [B0] (Big_int.of_int (m - List.length vec)) @ vec
+  | [] -> replicate_bits [B0] (Big_int.of_int (m - List.length vec)) @ vec
+  | B1 :: _ as vec -> replicate_bits [B1] (Big_int.of_int (m - List.length vec)) @ vec
 
-let zeros n = replicate_bits ([B0], n)
-let ones n = replicate_bits ([B1], n)
+let zeros n = replicate_bits [B0] n
+let ones n = replicate_bits [B1] n
 
-let shift_bits_right_arith (x, y) =
+let shift_bits_right_arith x y =
   let ybi = uint y in
-  let msbs = replicate_bits (take 1 x, ybi) in
+  let msbs = replicate_bits (take 1 x) ybi in
   let rbits = msbs @ x in
   take (List.length x) rbits
 
-let shiftr (x, y) =
+let shiftr x y =
   let zeros = zeros y in
   let rbits = zeros @ x in
   take (List.length x) rbits
 
-let arith_shiftr (x, y) =
-  let msbs = replicate_bits (take 1 x, y) in
+let arith_shiftr x y =
+  let msbs = replicate_bits (take 1 x) y in
   let rbits = msbs @ x in
   take (List.length x) rbits
 
-let shift_bits_right (x, y) = shiftr (x, uint y)
+let shift_bits_right x y = shiftr x (uint y)
 
-let shiftl (x, y) =
+let shiftl x y =
   let yi = Big_int.to_int y in
   let zeros = zeros y in
   let rbits = x @ zeros in
   drop yi rbits
 
-let shift_bits_left (x, y) = shiftl (x, uint y)
+let shift_bits_left x y = shiftl x (uint y)
 
 let speculate_conditional_success () = true
 
@@ -1099,7 +1096,7 @@ let hex_char_width c =
   else if c = '4' || c = '5' || c = '6' || c = '7' then 3
   else 4
 
-let valid_hex_bits (n, s) =
+let valid_hex_bits n s =
   let len = String.length s in
   (* We must have at least the 0x prefix, then one character *)
   if len < 3 || String.sub s 0 2 <> "0x" then false
@@ -1121,16 +1118,16 @@ let valid_hex_bits (n, s) =
     !actual_len <= Big_int.to_int n && !is_valid
   )
 
-let parse_hex_bits (n, s) =
+let parse_hex_bits n s =
   let padding = zeros n in
-  if not (valid_hex_bits (n, s)) then padding
+  if not (valid_hex_bits n s) then padding
   else
     padding @ bits_of_string (String.sub s 2 (String.length s - 2))
     |> List.rev
     |> Util.take (Big_int.to_int n)
     |> List.rev
 
-let valid_dec_bits (n, s) =
+let valid_dec_bits n s =
   if String.length s > 0 && s.[0] = '-' then false
   else (
     let is_valid = ref true in
@@ -1143,23 +1140,23 @@ let valid_dec_bits (n, s) =
     )
   )
 
-let parse_dec_bits (n, s) =
+let parse_dec_bits n s =
   let padding = zeros n in
-  if not (valid_dec_bits (n, s)) then padding
+  if not (valid_dec_bits n s) then padding
   else (
     let dec_value = Big_int.of_string s in
     let bits = bits_of_big_int (Big_int.to_int n) dec_value in
     padding @ bits |> List.rev |> Util.take (Big_int.to_int n) |> List.rev
   )
 
-let trace_memory_write (_, _, _) = ()
-let trace_memory_read (_, _, _) = ()
+let trace_memory_write _ _ _ = ()
+let trace_memory_read _ _ _ = ()
 
 let sleep_request () = ()
 let wakeup_request () = ()
 let reset_registers () = ()
 
-let load_raw (paddr, file) =
+let load_raw paddr file =
   let i = ref 0 in
   let paddr = uint paddr in
   let in_chan = open_in file in
@@ -1187,20 +1184,20 @@ let rand_choice l =
   let n = List.length l in
   List.nth l (Random.int n)
 
-let emulator_read_mem (_addrsize, addr, len) = fast_read_ram (len, addr)
+let emulator_read_mem _addrsize addr len = fast_read_ram len addr
 
-let emulator_read_mem_ifetch (_addrsize, addr, len) = fast_read_ram (len, addr)
+let emulator_read_mem_ifetch _addrsize addr len = fast_read_ram len addr
 
-let emulator_read_mem_exclusive (_addrsize, addr, len) = fast_read_ram (len, addr)
+let emulator_read_mem_exclusive _addrsize addr len = fast_read_ram len addr
 
-let emulator_write_mem (_addrsize, addr, len, value) =
-  write_ram' (len, uint addr, value);
+let emulator_write_mem _addrsize addr len value =
+  write_ram' len (uint addr) value;
   true
 
-let emulator_write_mem_exclusive (_addrsize, addr, len, value) =
-  write_ram' (len, uint addr, value);
+let emulator_write_mem_exclusive _addrsize addr len value =
+  write_ram' len (uint addr) value;
   true
 
-let emulator_read_tag (_addrsize, addr) = read_tag_bool addr
+let emulator_read_tag _addrsize addr = read_tag_bool addr
 
-let emulator_write_tag (_addrsize, addr, tag) = write_tag_bool (addr, tag)
+let emulator_write_tag _addrsize addr tag = write_tag_bool addr tag

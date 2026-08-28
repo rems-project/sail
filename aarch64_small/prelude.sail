@@ -85,7 +85,7 @@ overload operator | = {or_bool, or_bits}
 
 overload ~ = {not_bool, not_vec}
 
-val eq_anything = {ocaml: "(fun (x, y) -> x = y)", lem: "eq", coq: "generic_eq", _:"eq_anything"} : forall ('a : Type). ('a, 'a) -> bool
+val eq_anything = {ocaml: "(fun x y -> x = y)", lem: "eq", coq: "generic_eq", _:"eq_anything"} : forall ('a : Type). ('a, 'a) -> bool
 overload operator == = {eq_anything}
 
 

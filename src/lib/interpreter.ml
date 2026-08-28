@@ -120,7 +120,7 @@ module VariableUpdate = struct
         | Vector_range (n, m) -> (
             match BitList.to_gvector v with
             | V_vector vs ->
-                let vs = Sail_lib.subrange (vs, n, m) in
+                let vs = Sail_lib.subrange vs n m in
                 access (V_vector vs) accessors
             | _ -> None
           )
