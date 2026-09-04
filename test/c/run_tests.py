@@ -140,8 +140,7 @@ def add_lem_expected_failures(results):
     results.expect_failure("loop_termination.sail", "try-blocks around pure expressions not supported in Lem (and a little silly)")
     results.expect_failure("real.sail", "print_real not available for Lem at present")
     results.expect_failure("real_prop.sail", "print_real not available for Lem at present")
-    results.expect_failure("concurrency_interface_v2.sail", "test doesn't meet Lem library's expectations for the concurrency interface")
-    results.expect_failure("concurrency_interface_v2_var.sail", "test doesn't meet Lem library's expectations for the concurrency interface")
+    results.expect_failure("cycle_count_v2.sail", "cycle count not implemented in Lem")
     results.expect_failure("pc_no_wildcard.sail", "register type unsupported by Lem backend")
     results.expect_failure("constructor247.sail", "don't attempt to support so many constructors in lem -> ocaml builds")
     results.expect_failure("either.sail", "Lem breaks because it has the same name as a library module")
@@ -150,7 +149,7 @@ def add_lem_expected_failures(results):
     results.expect_failure("outcome_impl_bool.sail", "unsupported outcome")
     results.expect_failure("remove_e_assign_try.sail", "try-blocks around pure expressions not supported in Lem (and a little silly)")
 
-def test_lem(name):
+def test_lem(name, mwords_opt):
     banner('Testing {}'.format(name))
     results = Results(name)
     add_lem_expected_failures(results)
@@ -162,7 +161,7 @@ def test_lem(name):
             basename = os.path.splitext(os.path.basename(filename))[0]
             tests[filename] = os.fork()
             if tests[filename] == 0:
-                step('\'{}\' -lem -lem_lib Undefined_override -o {} {}'.format(sail, basename, filename))
+                step('\'{}\' -lem {} -lem_lib Undefined_override -o {} {}'.format(sail, mwords_opt, basename, filename))
                 step('mkdir -p _lbuild_{}'.format(basename))
                 step('mv {}.lem {}_types.lem _lbuild_{}'.format(basename, basename, basename))
                 step('rm {}_lemmas.thy'.format(basename.capitalize()))
@@ -301,7 +300,11 @@ if 'ocaml' in targets:
     xml += test_ocaml('OCaml')
 
 if 'lem' in targets:
-    xml += test_lem('lem')
+    xml += test_lem('lem', '')
+
+# Note: lots of this will fail at the moment, because it doesn't try to monomorphise the bitvector lengths
+if 'lem-mwords' in targets:
+    xml += test_lem('lem', ' --lem-mwords')
 
 if 'hol' in targets or 'hol4' in targets:
     xml += test_hol4('hol4')

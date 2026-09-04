@@ -1759,7 +1759,8 @@ let group_defs_by_file top_filename defs =
   in
   group None [] [] defs
 
-let doc_ast_lem out_filename split_files base_imports extra_imports ctx effect_info type_env ({ defs; _ } as ast) =
+let doc_ast_lem out_filename split_files base_imports extra_imports symbols ctx effect_info type_env ({ defs; _ } as ast)
+    =
   let concurrency_monad_params = Monad_params.find_monad_parameters type_env in
   let state_ids = fst (State.generate_regstate_defs ctx type_env ast) |> val_spec_ids in
   let is_state_def = function
@@ -1803,12 +1804,18 @@ let doc_ast_lem out_filename split_files base_imports extra_imports ctx effect_i
   in
   let register_refs = State.register_refs_lem register_ref_tannot type_env (State.find_registers defs) in
   let extra_monad_params =
-    if Preprocess.have_symbol "CONCURRENCY_INTERFACE_V2" then begin
+    if Preprocess.have_symbol "CONCURRENCY_INTERFACE_V2" symbols then
       let open Monad_params in
       let type_substs, id_substs = find_instantiations defs in
+      (* To make supporting both bitlist and machine word representation of bitvectors easier we
+         the address size parameter to the monad with the full bitvector type so that we can use
+         the same definition for both. *)
       let pp_typish name default =
         match KBindings.find_opt (mk_kid name) type_substs with
-        | Some typ_arg -> doc_typ_arg_lem params_to_print typ_arg
+        | Some typ_arg ->
+            if String.compare name "addr_size" == 0 then
+              doc_typ_lem_brackets params_to_print type_env (mk_typ (Typ_app (mk_id "bitvector", [typ_arg])))
+            else doc_typ_arg_lem params_to_print typ_arg
         | None -> string default
       in
       let pp_typ_or_unit name = pp_typish name "unit" in
@@ -1826,8 +1833,7 @@ let doc_ast_lem out_filename split_files base_imports extra_imports ctx effect_i
              "addr_size";
              "addr_space";
            ]
-    end
-    else begin
+    else (
       match concurrency_monad_params with
       | None -> empty
       | Some params ->
@@ -1847,7 +1853,7 @@ let doc_ast_lem out_filename split_files base_imports extra_imports ctx effect_i
                  params.trans_end_type;
                  params.arch_ak_type;
                ]
-    end
+    )
   in
   let types_doc =
     concat

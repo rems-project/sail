@@ -1,0 +1,17 @@
+open import Machine_word
+open import Sail2_values
+open import Sail2_concurrency_interface_v2
+
+type Mem_request 'addr_size 'addr_space 'mem_acc = Mem_request_generic (mword 'addr_size) 'addr_space 'mem_acc
+
+val sail_mem_read : forall 'abort 'barrier 'cache_op 'exn 'pa 'tlb_op 'trans_start 'trans_end 'mem_acc 'addr 'addr_space 'regval 'e.
+  Mem_request_generic 'addr 'addr_space 'mem_acc ->
+  monad 'abort 'barrier 'cache_op 'exn 'tlb_op 'trans_start 'trans_end 'mem_acc 'addr 'addr_space 'regval (result (list (mword ty8) * list bool) 'abort) 'e
+let sail_mem_read req = Mem_read req return
+
+val sail_mem_write : forall 'abort 'barrier 'cache_op 'exn 'pa 'tlb_op 'trans_start 'trans_end 'mem_acc 'addr 'addr_space 'regval 'e.
+  Mem_request_generic 'addr 'addr_space 'mem_acc ->
+  list (mword ty8) ->
+  list bool ->
+  monad 'abort 'barrier 'cache_op 'exn 'tlb_op 'trans_start 'trans_end 'mem_acc 'addr 'addr_space 'regval (result unit 'abort) 'e
+let sail_mem_write req data tags = Mem_write req data tags return
