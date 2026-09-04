@@ -1,0 +1,42 @@
+open import Pervasives_extra
+open import Sail2_values
+open import Sail2_concurrency_interface_v2
+
+(* Override the normal definitions for these to provide something
+   executable and determinstic.
+
+   The Lem files are compiled individually here, so we need to include
+   the modules with the definitions that we're overriding to ensure a
+   consistent renaming by Lem. *)
+
+val internal_pick : forall 'abort 'barrier 'cache_op 'exn 'tlb_op 'trans_start 'trans_end 'mem_acc 'addr_size 'addr_space 'regval 'a 'e. list 'a -> monad 'abort 'barrier 'cache_op 'exn 'tlb_op 'trans_start 'trans_end 'mem_acc 'addr_size 'addr_space 'regval 'a 'e
+let internal_pick l =
+  match l with
+  | [] -> Fail "internal_pick on empty list"
+  | h :: _ -> return h
+  end
+
+val undefined_bitvector : forall 'abort 'barrier 'cache_op 'exn 'tlb_op 'trans_start 'trans_end 'mem_acc 'addr_size 'addr_space 'regval 'a 'e. Bitvector 'a => integer -> monad 'abort 'barrier 'cache_op 'exn 'tlb_op 'trans_start 'trans_end 'mem_acc 'addr_size 'addr_space 'regval 'a 'e
+let undefined_bitvector n = return (of_int n 0)
+
+let undefined_bits = undefined_bitvector
+val undefined_bit : forall 'abort 'barrier 'cache_op 'exn 'tlb_op 'trans_start 'trans_end 'mem_acc 'addr_size 'addr_space 'regval 'e. unit -> monad 'abort 'barrier 'cache_op 'exn 'tlb_op 'trans_start 'trans_end 'mem_acc 'addr_size 'addr_space 'regval bitU 'e
+let undefined_bit () = return BU
+val undefined_bool : forall 'abort 'barrier 'cache_op 'exn 'tlb_op 'trans_start 'trans_end 'mem_acc 'addr_size 'addr_space 'regval 'e. unit -> monad 'abort 'barrier 'cache_op 'exn 'tlb_op 'trans_start 'trans_end 'mem_acc 'addr_size 'addr_space 'regval bool 'e
+let undefined_bool () = return false
+val undefined_string : forall 'abort 'barrier 'cache_op 'exn 'tlb_op 'trans_start 'trans_end 'mem_acc 'addr_size 'addr_space 'regval 'e. unit -> monad 'abort 'barrier 'cache_op 'exn 'tlb_op 'trans_start 'trans_end 'mem_acc 'addr_size 'addr_space 'regval string 'e
+let undefined_string () = return "undefined_string"
+val undefined_int : forall 'abort 'barrier 'cache_op 'exn 'tlb_op 'trans_start 'trans_end 'mem_acc 'addr_size 'addr_space 'regval 'e. unit -> monad 'abort 'barrier 'cache_op 'exn 'tlb_op 'trans_start 'trans_end 'mem_acc 'addr_size 'addr_space 'regval integer 'e
+let undefined_int () = return (0 : integer)
+val undefined_nat : forall 'abort 'barrier 'cache_op 'exn 'tlb_op 'trans_start 'trans_end 'mem_acc 'addr_size 'addr_space 'regval 'e. unit -> monad 'abort 'barrier 'cache_op 'exn 'tlb_op 'trans_start 'trans_end 'mem_acc 'addr_size 'addr_space 'regval integer 'e
+let undefined_nat () = return (0 : integer)
+val undefined_real : forall 'abort 'barrier 'cache_op 'exn 'tlb_op 'trans_start 'trans_end 'mem_acc 'addr_size 'addr_space 'regval 'e. unit -> monad 'abort 'barrier 'cache_op 'exn 'tlb_op 'trans_start 'trans_end 'mem_acc 'addr_size 'addr_space 'regval real 'e
+let undefined_real () = return (0 : real)
+val undefined_range : forall 'abort 'barrier 'cache_op 'exn 'tlb_op 'trans_start 'trans_end 'mem_acc 'addr_size 'addr_space 'regval 'e. integer -> integer -> monad 'abort 'barrier 'cache_op 'exn 'tlb_op 'trans_start 'trans_end 'mem_acc 'addr_size 'addr_space 'regval integer 'e
+let undefined_range i j = return i
+val undefined_atom : forall 'abort 'barrier 'cache_op 'exn 'tlb_op 'trans_start 'trans_end 'mem_acc 'addr_size 'addr_space 'regval 'e. integer -> monad 'abort 'barrier 'cache_op 'exn 'tlb_op 'trans_start 'trans_end 'mem_acc 'addr_size 'addr_space 'regval integer 'e
+let undefined_atom i = return i
+
+val undefined_list : forall 'abort 'barrier 'cache_op 'exn 'tlb_op 'trans_start 'trans_end 'mem_acc 'addr_size 'addr_space 'regval 'a 'e. 'a -> monad 'abort 'barrier 'cache_op 'exn 'tlb_op 'trans_start 'trans_end 'mem_acc 'addr_size 'addr_space 'regval (list 'a) 'e
+let undefined_list a = return []
+

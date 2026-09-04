@@ -178,9 +178,11 @@ function main() = {
     sail_return_exception();
 
     /* Cycle count primitives */
+    /* Moved to it's own test because it's not supported in Lem and likely to be removed.
     sail_end_cycle();
     let c = sail_get_cycle_count();
     print_int("c = ", c);
+    */
 
     /* Instruction and branch announce events */
     sail_instr_announce(0xABCD_1234);

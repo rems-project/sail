@@ -123,9 +123,15 @@
   (%{workspace_root}/lib/isabelle/Sail2_concurrency_interface_lemmas.thy
    as
    lib/isabelle/Sail2_concurrency_interface_lemmas.thy)
+  (%{workspace_root}/lib/isabelle/Sail2_concurrency_interface_v2_lemmas.thy
+   as
+   lib/isabelle/Sail2_concurrency_interface_v2_lemmas.thy)
   (%{workspace_root}/lib/isabelle/Sail2_monadic_combinators_lemmas.thy
    as
    lib/isabelle/Sail2_monadic_combinators_lemmas.thy)
+  (%{workspace_root}/lib/isabelle/Sail2_monadic_combinators_v2_lemmas.thy
+   as
+   lib/isabelle/Sail2_monadic_combinators_v2_lemmas.thy)
   (%{workspace_root}/lib/isabelle/Sail2_operators_mwords_lemmas.thy
    as
    lib/isabelle/Sail2_operators_mwords_lemmas.thy)
@@ -236,12 +242,24 @@
   (%{workspace_root}/src/gen_lib/sail2_concurrency_interface_bitlists.lem
    as
    src/gen_lib/sail2_concurrency_interface_bitlists.lem)
+  (%{workspace_root}/src/gen_lib/sail2_concurrency_interface_v2.lem
+   as
+   src/gen_lib/sail2_concurrency_interface_v2.lem)
+  (%{workspace_root}/src/gen_lib/sail2_concurrency_interface_mwords_v2.lem
+   as
+   src/gen_lib/sail2_concurrency_interface_mwords_v2.lem)
+  (%{workspace_root}/src/gen_lib/sail2_concurrency_interface_bitlists_v2.lem
+   as
+   src/gen_lib/sail2_concurrency_interface_bitlists_v2.lem)
   (%{workspace_root}/src/gen_lib/sail2_instr_kinds.lem
    as
    src/gen_lib/sail2_instr_kinds.lem)
   (%{workspace_root}/src/gen_lib/sail2_monadic_combinators.lem
    as
    src/gen_lib/sail2_monadic_combinators.lem)
+  (%{workspace_root}/src/gen_lib/sail2_monadic_combinators_v2.lem
+   as
+   src/gen_lib/sail2_monadic_combinators_v2.lem)
   (%{workspace_root}/src/gen_lib/sail2_operators.lem
    as
    src/gen_lib/sail2_operators.lem)
@@ -275,6 +293,9 @@
   (%{workspace_root}/src/gen_lib/sail2_undefined_concurrency_interface.lem
    as
    src/gen_lib/sail2_undefined_concurrency_interface.lem)
+  (%{workspace_root}/src/gen_lib/sail2_undefined_concurrency_interface_v2.lem
+   as
+   src/gen_lib/sail2_undefined_concurrency_interface_v2.lem)
   (%{workspace_root}/src/gen_lib/sail2_values.lem
    as
    src/gen_lib/sail2_values.lem)

@@ -163,12 +163,19 @@ let write_doc directory filename doc =
   Pretty_print_common.print file_info.channel doc;
   Util.close_output_with_check file_info
 
-let lem_target out_file { ctx; ast; effect_info; env = type_env; _ } =
+let lem_target out_file { symbols; ctx; ast; effect_info; env = type_env; _ } =
   let out_filename = match out_file with Some f -> f | None -> "out" in
   let concurrency_monad_params = Monad_params.find_monad_parameters type_env in
   let monad_modules =
-    if Preprocess.have_symbol "CONCURRENCY_INTERFACE_V2" then
-      ["Sail2_concurrency_interface_v2"; "Sail2_monadic_combinators_v2"; "Sail2_undefined_concurrency_interface_v2"]
+    if Preprocess.have_symbol "CONCURRENCY_INTERFACE_V2" symbols then
+      [
+        "Sail2_concurrency_interface_v2";
+        "Sail2_monadic_combinators_v2";
+        "Sail2_undefined_concurrency_interface_v2";
+        ( if !Monomorphise.opt_mwords then "Sail2_concurrency_interface_mwords_v2"
+          else "Sail2_concurrency_interface_bitlists_v2"
+        );
+      ]
     else if Option.is_some concurrency_monad_params then
       [
         "Sail2_concurrency_interface";
@@ -190,7 +197,7 @@ let lem_target out_file { ctx; ast; effect_info; env = type_env; _ } =
         string "  imports";
         string ("    " ^ String.capitalize_ascii out_filename);
         string "    Sail.Sail2_values_lemmas";
-        ( if Preprocess.have_symbol "CONCURRENCY_INTERFACE_V2" then
+        ( if Preprocess.have_symbol "CONCURRENCY_INTERFACE_V2" symbols then
             string "    Sail.Sail2_concurrency_interface_v2_lemmas"
           else if Option.is_some concurrency_monad_params then string "    Sail.Sail2_concurrency_interface_lemmas"
           else string "    Sail.Sail2_state_lemmas"
@@ -205,8 +212,8 @@ let lem_target out_file { ctx; ast; effect_info; env = type_env; _ } =
     ^^ hardline
   in
   let lem_files =
-    Pretty_print_lem.doc_ast_lem out_filename !opt_lem_split_files base_imports !opt_libs_lem ctx effect_info type_env
-      ast
+    Pretty_print_lem.doc_ast_lem out_filename !opt_lem_split_files base_imports !opt_libs_lem symbols ctx effect_info
+      type_env ast
   in
   write_doc !opt_isa_output_dir (isa_thy_name ^ ".thy") isa_lemmas;
   List.iter (fun (filename, doc) -> write_doc !opt_lem_output_dir filename doc) lem_files
