@@ -99,6 +99,18 @@
   (%{workspace_root}/lib/hol/sail2_undefined_concurrency_interface.lem
    as
    lib/hol/sail2_undefined_concurrency_interface.lem)
+  (%{workspace_root}/lib/hol/sail2_concurrency_interface_v2.lem
+   as
+   lib/hol/sail2_concurrency_interface_v2.lem)
+  (%{workspace_root}/lib/hol/sail2_concurrency_interface_bitlists_v2.lem
+   as
+   lib/hol/sail2_concurrency_interface_bitlists_v2.lem)
+  (%{workspace_root}/lib/hol/sail2_concurrency_interface_mwords_v2.lem
+   as
+   lib/hol/sail2_concurrency_interface_mwords_v2.lem)
+  (%{workspace_root}/lib/hol/sail2_undefined_concurrency_interface_v2.lem
+   as
+   lib/hol/sail2_undefined_concurrency_interface_v2.lem)
   (%{workspace_root}/lib/hol/sail2_stateAuxiliaryScript.sml
    as
    lib/hol/sail2_stateAuxiliaryScript.sml)

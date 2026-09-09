@@ -1,0 +1,26 @@
+open import Pervasives_extra
+open import Sail2_values
+open import Sail2_concurrency_interface_v2
+
+type Mem_request 'addr_space 'mem_acc = Mem_request_generic (list bitU) 'addr_space 'mem_acc
+
+let addr_to_nat (bv : list bitU) = match unsigned bv with Just i -> natFromInteger i | Nothing -> 0 end
+
+val sail_mem_read : forall 'abort 'barrier 'cache_op 'exn 'tlb_op 'trans_start 'trans_end 'mem_acc 'addr 'addr_space 'regval 'bv 'e.
+  Mem_request 'addr_space 'mem_acc ->
+  monad 'abort 'barrier 'cache_op 'exn 'tlb_op 'trans_start 'trans_end 'mem_acc 'addr 'addr_space 'regval (result (list (list bitU) * list bool) 'abort) 'e
+let sail_mem_read req = MonadWrap (
+  Sail2_state_monad.bindS
+    (Sail2_state_monad.read_memt_bytesS Sail2_instr_kinds.Read_plain (addr_to_nat req.Mem_request_address) (nat_of_int req.Mem_request_size))
+    (fun (bytes, tag) -> Sail2_state_monad.returnS (Ok (bytes, match bool_of_bitU tag with Just t -> [t] | _ -> [] end))))
+
+val sail_mem_write : forall 'abort 'barrier 'cache_op 'exn 'tlb_op 'trans_start 'trans_end 'mem_acc 'addr 'addr_space 'regval 'e.
+  Mem_request 'addr_space 'mem_acc ->
+  list (list bitU) ->
+  list bool ->
+  monad 'abort 'barrier 'cache_op 'exn 'tlb_op 'trans_start 'trans_end 'mem_acc 'addr 'addr_space 'regval (result unit 'abort) 'e
+let sail_mem_write req data tags = MonadWrap (
+  let tag = match tags with t::_ -> bitU_of_bool t | [] -> B0 end in
+  Sail2_state_monad.bindS
+    (Sail2_state_monad.write_memt_bytesS Sail2_instr_kinds.Write_plain (addr_to_nat req.Mem_request_address) (nat_of_int req.Mem_request_size) data tag)
+    (fun _ -> Sail2_state_monad.returnS (Ok ())))

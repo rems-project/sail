@@ -1,0 +1,203 @@
+open import Pervasives_extra
+open import Sail2_values
+import Sail2_state_monad
+
+(* Fake interface of the concurrency interface by redirecting to the state monad, since
+   the former is not currently supported by HOL4 because of the datatype used for the
+   monad. *)
+
+
+(* Verbatim ---> *)
+type Mem_request_generic 'addr 'addr_space 'mem_acc =
+  <| Mem_request_access_kind : 'mem_acc;
+     Mem_request_address : 'addr;
+     Mem_request_address_space : 'addr_space;
+     Mem_request_size : integer;
+     Mem_request_num_tag : integer; |>
+(* <--- *)
+
+(* Create a type wrapping the state monad to avoid problems with ghost type parameters, then quietly drop it in the output. *)
+type monad 'abort 'barrier 'cache_op 'exn 'tlb_op 'trans_start 'trans_end 'mem_acc 'addr 'addr_space 'regval 'a 'e =
+  MonadWrap of Sail2_state_monad.monadS 'regval 'a 'e
+declare hol target_rep type monad 'abort 'barrier 'cache_op 'exn 'tlb_op 'trans_start 'trans_end 'mem_acc 'addr 'addr_space 'regval 'a 'e = `sail2_state_monad$monadS` 'regval 'a 'e
+declare hol target_rep function MonadWrap = ``
+
+let inline return x = MonadWrap (Sail2_state_monad.returnS x)
+val bind : forall 'abort 'barrier 'cache_op 'exn 'tlb_op 'trans_start 'trans_end 'mem_acc 'addr 'addr_space 'regval 'a 'b 'e.
+  monad 'abort 'barrier 'cache_op 'exn 'tlb_op 'trans_start 'trans_end 'mem_acc 'addr 'addr_space 'regval 'a 'e ->
+  ('a -> monad 'abort 'barrier 'cache_op 'exn 'tlb_op 'trans_start 'trans_end 'mem_acc 'addr 'addr_space 'regval 'b 'e) ->
+  monad 'abort 'barrier 'cache_op 'exn 'tlb_op 'trans_start 'trans_end 'mem_acc 'addr 'addr_space 'regval 'b 'e
+let bind (MonadWrap m) n = MonadWrap (Sail2_state_monad.bindS m (fun x -> match n x with MonadWrap y -> y end))
+let inline throw e = MonadWrap (Sail2_state_monad.throwS e)
+
+val try_catch : forall 'abort 'barrier 'cache_op 'exn 'tlb_op 'trans_start 'trans_end 'mem_acc 'addr 'addr_space 'regval 'a 'e1 'e2.
+  monad 'abort 'barrier 'cache_op 'exn 'tlb_op 'trans_start 'trans_end 'mem_acc 'addr 'addr_space 'regval 'a 'e1 ->
+  ('e1 -> monad 'abort 'barrier 'cache_op 'exn 'tlb_op 'trans_start 'trans_end 'mem_acc 'addr 'addr_space 'regval 'a 'e2) ->
+  monad 'abort 'barrier 'cache_op 'exn 'tlb_op 'trans_start 'trans_end 'mem_acc 'addr 'addr_space 'regval 'a 'e2
+let try_catch (MonadWrap m) h = MonadWrap (Sail2_state_monad.try_catchS m (fun e -> match h e with MonadWrap n -> n end))
+
+let inline Fail s = MonadWrap (Sail2_state_monad.failS s)
+
+type monadR 'abort 'barrier 'cache_op 'exn 'tlb_op 'trans_start 'trans_end 'mem_acc 'addr 'addr_space 'rv 'a 'r 'e = monad 'abort 'barrier 'cache_op 'exn 'tlb_op 'trans_start 'trans_end 'mem_acc 'addr 'addr_space 'rv 'a (either 'r 'e)
+declare hol target_rep type monadR 'abort 'barrier 'cache_op 'exn 'tlb_op 'trans_start 'trans_end 'mem_acc 'addr 'addr_space 'rv 'a 'r 'e = `sail2_state_monad$monadRS` 'rv 'a 'r 'e
+
+val early_return : forall 'abort 'barrier 'cache_op 'exn 'tlb_op 'trans_start 'trans_end 'mem_acc 'addr 'addr_space 'regval 'a 'r 'e.
+  'r ->
+  monadR 'abort 'barrier 'cache_op 'exn 'tlb_op 'trans_start 'trans_end 'mem_acc 'addr 'addr_space 'regval 'a 'r 'e
+let inline early_return r = throw (Left r)
+val catch_early_return : forall 'abort 'barrier 'cache_op 'exn 'tlb_op 'trans_start 'trans_end 'mem_acc 'addr 'addr_space 'rv 'a 'e.
+  monadR 'abort 'barrier 'cache_op 'exn 'tlb_op 'trans_start 'trans_end 'mem_acc 'addr 'addr_space 'rv 'a 'a 'e ->
+  monad 'abort 'barrier 'cache_op 'exn 'tlb_op 'trans_start 'trans_end 'mem_acc 'addr 'addr_space 'rv 'a 'e
+let inline catch_early_return m = try_catch m (function Left a -> return a | Right e -> throw e end)
+
+(* Verbatim ---> *)
+val pure_early_return : forall 'a. either 'a 'a -> 'a
+let pure_early_return = function
+  | Left a -> a
+  | Right a -> a
+end
+
+(*val pure_early_return_embed : forall 'rv 'a 'r 'e. either 'r 'a -> monadR 'rv 'a 'r 'e*)
+let pure_early_return_embed = function
+  | Left r -> throw (Left r)
+  | Right a -> return a
+end
+
+val either_bind : forall 'e 'a 'b. either 'e 'a -> ('a -> either 'e 'b) -> either 'e 'b
+let either_bind m f =
+  match m with
+  | Left e -> Left e
+  | Right x -> f x
+  end
+(* <--- *)
+
+val liftR : forall 'abort 'barrier 'cache_op 'exn 'tlb_op 'trans_start 'trans_end 'mem_acc 'addr 'addr_space 'regval 'a 'r 'e.
+  monad 'abort 'barrier 'cache_op 'exn 'tlb_op 'trans_start 'trans_end 'mem_acc 'addr 'addr_space 'regval 'a 'e ->
+  monadR 'abort 'barrier 'cache_op 'exn 'tlb_op 'trans_start 'trans_end 'mem_acc 'addr 'addr_space 'regval 'a 'r 'e
+let liftR (MonadWrap m) = MonadWrap (Sail2_state_monad.liftRS m)
+let try_catchR (MonadWrap m) h = MonadWrap (Sail2_state_monad.try_catchRS m (fun v -> match h v with MonadWrap n -> n end))
+
+let inline maybe_fail s e = MonadWrap (Sail2_state_monad.maybe_failS s e)
+let inline assert_exp exp msg = MonadWrap (Sail2_state_monad.assert_expS exp msg)
+let inline exit u = MonadWrap (Sail2_state_monad.exitS u)
+
+let inline read_reg reg = MonadWrap (Sail2_state_monad.read_regS reg)
+let inline reg_deref = read_reg
+let inline write_reg reg v = MonadWrap (Sail2_state_monad.write_regS reg v)
+
+val choose_regval : forall 'abort 'barrier 'cache_op 'exn 'tlb_op 'trans_start 'trans_end 'mem_acc 'addr 'addr_space 'rv 'e.
+  SetType 'rv => string -> monad 'abort 'barrier 'cache_op 'exn 'tlb_op 'trans_start 'trans_end 'mem_acc 'addr 'addr_space 'rv 'rv 'e
+let choose_regval _ = MonadWrap (Sail2_state_monad.chooseS universal)
+val choose_convert : forall 'abort 'barrier 'cache_op 'exn 'tlb_op 'trans_start 'trans_end 'mem_acc 'addr 'addr_space 'rv 'e 'a.
+  SetType 'rv => ('rv -> maybe 'a) -> string -> monad 'abort 'barrier 'cache_op 'exn 'tlb_op 'trans_start 'trans_end 'mem_acc 'addr 'addr_space 'rv 'a 'e
+let choose_convert of_rv descr = MonadWrap (Sail2_state_monad.bindS (Sail2_state_monad.chooseS universal) (fun rv -> Sail2_state_monad.maybe_failS descr (of_rv rv)))
+val choose_convert_default : forall 'abort 'barrier 'cache_op 'exn 'tlb_op 'trans_start 'trans_end 'mem_acc 'addr 'addr_space 'rv 'e 'a.
+  SetType 'rv => ('rv -> maybe 'a) -> 'a -> string -> monad 'abort 'barrier 'cache_op 'exn 'tlb_op 'trans_start 'trans_end 'mem_acc 'addr 'addr_space 'rv 'a 'e
+let choose_convert_default of_rv x _descr = MonadWrap (Sail2_state_monad.bindS (Sail2_state_monad.chooseS universal) (fun rv -> Sail2_state_monad.returnS (match of_rv rv with
+    | Just a -> a
+    | Nothing -> x
+    end)))
+
+val choose_bool : forall 'abort 'barrier 'cache_op 'exn 'tlb_op 'trans_start 'trans_end 'mem_acc 'addr 'addr_space 'rv 'e.
+  string -> monad 'abort 'barrier 'cache_op 'exn 'tlb_op 'trans_start 'trans_end 'mem_acc 'addr 'addr_space 'rv bool 'e
+let choose_bool _descr = MonadWrap (Sail2_state_monad.choose_boolS ())
+val choose_bit : forall 'abort 'barrier 'cache_op 'exn 'tlb_op 'trans_start 'trans_end 'mem_acc 'addr 'addr_space 'rv 'e.
+  string -> monad 'abort 'barrier 'cache_op 'exn 'tlb_op 'trans_start 'trans_end 'mem_acc 'addr 'addr_space 'rv bitU 'e
+let choose_bit _descr = MonadWrap (Sail2_state_monad.bindS (Sail2_state_monad.choose_boolS ()) (fun b -> Sail2_state_monad.returnS (bitU_of_bool b)))
+val choose_int : forall 'abort 'barrier 'cache_op 'exn 'tlb_op 'trans_start 'trans_end 'mem_acc 'addr 'addr_space 'rv 'e.
+  string -> monad 'abort 'barrier 'cache_op 'exn 'tlb_op 'trans_start 'trans_end 'mem_acc 'addr 'addr_space 'rv integer 'e
+let choose_int _descr = MonadWrap (Sail2_state_monad.chooseS universal)
+val choose_real : forall 'abort 'barrier 'cache_op 'exn 'tlb_op 'trans_start 'trans_end 'mem_acc 'addr 'addr_space 'rv 'e.
+  string -> monad 'abort 'barrier 'cache_op 'exn 'tlb_op 'trans_start 'trans_end 'mem_acc 'addr 'addr_space 'rv real 'e
+let choose_real _descr = MonadWrap (Sail2_state_monad.chooseS universal)
+val choose_string : forall 'abort 'barrier 'cache_op 'exn 'tlb_op 'trans_start 'trans_end 'mem_acc 'addr 'addr_space 'rv 'e.
+  string -> monad 'abort 'barrier 'cache_op 'exn 'tlb_op 'trans_start 'trans_end 'mem_acc 'addr 'addr_space 'rv string 'e
+let choose_string _descr = MonadWrap (Sail2_state_monad.chooseS universal)
+
+let inline headM l = MonadWrap (Sail2_state_monad.headS l)
+let inline tailM l = MonadWrap (Sail2_state_monad.tailS l)
+
+val sail_mem_address_announce : forall 'abort 'barrier 'cache_op 'exn 'tlb_op 'trans_start 'trans_end 'mem_acc 'addr 'addr_space 'regval 'e.
+  Mem_request_generic 'addr 'addr_space 'mem_acc ->
+  monad 'abort 'barrier 'cache_op 'exn 'tlb_op 'trans_start 'trans_end 'mem_acc 'addr 'addr_space 'regval unit 'e
+let sail_mem_address_announce _req = return ()
+
+val sail_translation_start : forall 'abort 'barrier 'cache_op 'exn 'tlb_op 'trans_start 'trans_end 'mem_acc 'addr 'addr_space 'regval 'e.
+  'trans_start -> monad 'abort 'barrier 'cache_op 'exn 'tlb_op 'trans_start 'trans_end 'mem_acc 'addr 'addr_space 'regval unit 'e
+let sail_translation_start _ts = return ()
+
+val sail_translation_end : forall 'abort 'barrier 'cache_op 'exn 'tlb_op 'trans_start 'trans_end 'mem_acc 'addr 'addr_space 'regval 'e.
+  'trans_end -> monad 'abort 'barrier 'cache_op 'exn 'tlb_op 'trans_start 'trans_end 'mem_acc 'addr 'addr_space 'regval unit 'e
+let sail_translation_end _te = return ()
+
+val instr_announce : forall 'instr 'abort 'barrier 'cache_op 'exn 'tlb_op 'trans_start 'trans_end 'mem_acc 'addr 'addr_space 'regval 'e.
+  'instr ->
+  monad 'abort 'barrier 'cache_op 'exn 'tlb_op 'trans_start 'trans_end 'mem_acc 'addr 'addr_space 'regval unit 'e
+let instr_announce _pa = return ()
+
+val branch_announce : forall 'branch_addr 'abort 'barrier 'cache_op 'exn 'tlb_op 'trans_start 'trans_end 'mem_acc 'addr 'addr_space 'regval 'e. Bitvector 'addr =>
+  integer -> 'branch_addr ->
+  monad 'abort 'barrier 'cache_op 'exn 'tlb_op 'trans_start 'trans_end 'mem_acc 'addr 'addr_space 'regval unit 'e
+let branch_announce _addr_size _addr = return ()
+
+val sail_barrier : forall 'abort 'barrier 'cache_op 'exn 'tlb_op 'trans_start 'trans_end 'mem_acc 'addr 'addr_space 'regval 'e.
+  'barrier ->
+  monad 'abort 'barrier 'cache_op 'exn 'tlb_op 'trans_start 'trans_end 'mem_acc 'addr 'addr_space 'regval unit 'e
+let sail_barrier _barrier = return ()
+
+val sail_cache_op : forall 'abort 'barrier 'cache_op 'exn 'tlb_op 'trans_start 'trans_end 'mem_acc 'addr 'addr_space 'regval 'e.
+  'cache_op ->
+  monad 'abort 'barrier 'cache_op 'exn 'tlb_op 'trans_start 'trans_end 'mem_acc 'addr 'addr_space 'regval unit 'e
+let sail_cache_op _cache_op = return ()
+
+val sail_tlbi : forall 'abort 'barrier 'cache_op 'exn 'tlb_op 'trans_start 'trans_end 'mem_acc 'addr 'addr_space 'regval 'e.
+  'tlb_op ->
+  monad 'abort 'barrier 'cache_op 'exn 'tlb_op 'trans_start 'trans_end 'mem_acc 'addr 'addr_space 'regval unit 'e
+let sail_tlbi _tlb_op = return ()
+
+val sail_take_exception : forall 'abort 'barrier 'cache_op 'exn 'tlb_op 'trans_start 'trans_end 'mem_acc 'addr 'addr_space 'regval 'e.
+  'exn ->
+  monad 'abort 'barrier 'cache_op 'exn 'tlb_op 'trans_start 'trans_end 'mem_acc 'addr 'addr_space 'regval unit 'e
+let sail_take_exception _fault = return ()
+
+val sail_return_exception : forall 'abort 'barrier 'cache_op 'exn 'tlb_op 'trans_start 'trans_end 'mem_acc 'addr 'addr_space 'regval 'e.
+  unit ->
+  monad 'abort 'barrier 'cache_op 'exn 'tlb_op 'trans_start 'trans_end 'mem_acc 'addr 'addr_space 'regval unit 'e
+let sail_return_exception _pa = return ()
+
+val sail_instr_announce : forall 'instr_addr 'abort 'barrier 'cache_op 'exn 'tlb_op 'trans_start 'trans_end 'mem_acc 'addr 'addr_space 'regval 'e.
+  'instr_addr ->
+  monad 'abort 'barrier 'cache_op 'exn 'tlb_op 'trans_start 'trans_end 'mem_acc 'addr 'addr_space 'regval unit 'e
+let sail_instr_announce _pa = return ()
+
+(* Verbatim ---> *)
+(* We treat the cycle count operations as dummy operations.  We don't currently use cycle_count as an end-of-instruction marker
+   in the Lem targets, and we're going to move get_cycle_count into the Arm model directly soon. *)
+val cycle_count : forall 'abort 'barrier 'cache_op 'exn 'tlb_op 'trans_start 'trans_end 'mem_acc 'addr 'addr_space 'regval 'e.
+  unit ->
+  monad 'abort 'barrier 'cache_op 'exn 'tlb_op 'trans_start 'trans_end 'mem_acc 'addr 'addr_space 'regval unit 'e
+let cycle_count () = return ()
+
+val get_cycle_count : forall 'abort 'barrier 'cache_op 'exn 'tlb_op 'trans_start 'trans_end 'mem_acc 'addr 'addr_space 'regval 'e.
+  unit ->
+  monad 'abort 'barrier 'cache_op 'exn 'tlb_op 'trans_start 'trans_end 'mem_acc 'addr 'addr_space 'regval integer 'e
+let get_cycle_count () = return 0
+(* <--- *)
+
+(* We don't know the type of the register state for `sail_unwrap_value`, so use an arbitrary value
+   instead.  The expressions used should never touch the state, anyway. *)
+val sail_dummy_state : forall 'a. Sail2_state_monad.sequential_state 'a
+declare hol target_rep function sail_dummy_state = `ARB`
+
+val sail_unwrap_value : forall 'abort 'barrier 'cache_op 'exn 'tlb_op 'trans_start 'trans_end 'mem_acc 'addr 'addr_space 'regval 'a 'e.
+  SetType 'regval => monad 'abort 'barrier 'cache_op 'exn 'tlb_op 'trans_start 'trans_end 'mem_acc 'addr 'addr_space 'regval 'a 'e -> 'a
+let sail_unwrap_value (MonadWrap m) =
+  match m sail_dummy_state with
+  | singleton (Sail2_state_monad.Value v, _) -> v
+  | _ -> failwith "Attempted to unwrap computation with side-effect"
+  end
+
+type base_monad 'abort 'barrier 'cache_op 'exn 'tlb_op 'trans_start 'trans_end 'mem_acc 'addr 'addr_space 'regval 'regstate 'a 'e = monad 'abort 'barrier 'cache_op 'exn 'tlb_op 'trans_start 'trans_end 'mem_acc 'addr 'addr_space 'regstate 'a 'e
+declare hol target_rep type base_monad 'abort 'barrier 'cache_op 'exn 'tlb_op 'trans_start 'trans_end 'mem_acc 'addr 'addr_space 'regval 'regstate 'a 'e = `sail2_state_monad$monadS` 'regstate 'a 'e
+type base_monadR 'abort 'barrier 'cache_op 'exn 'tlb_op 'trans_start 'trans_end 'mem_acc 'addr 'addr_space 'regval 'regstate 'a 'r 'e = monadR 'abort 'barrier 'cache_op 'exn 'tlb_op 'trans_start 'trans_end 'mem_acc 'addr 'addr_space 'regstate 'a 'r 'e
+declare hol target_rep type base_monadR 'abort 'barrier 'cache_op 'exn 'tlb_op 'trans_start 'trans_end 'mem_acc 'addr 'addr_space 'rv 'regstate 'a 'r 'e = `sail2_state_monad$monadRS` 'regstate 'a 'r 'e
