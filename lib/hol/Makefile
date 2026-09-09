@@ -9,7 +9,8 @@ LEMLINKPRE = \
   sail2_state_monad.lem \
   sail2_state.lem \
   sail2_string.lem \
-  sail2_monadic_combinators.lem
+  sail2_monadic_combinators.lem \
+  sail2_monadic_combinators_v2.lem
 
 LEMLINKPOST = \
   sail2_monadic_combinators.lem
@@ -23,6 +24,10 @@ LEMSRC =  \
   sail2_concurrency_interface_mwords.lem \
   sail2_concurrency_interface_bitlists.lem \
   sail2_undefined_concurrency_interface.lem \
+  sail2_concurrency_interface_v2.lem \
+  sail2_concurrency_interface_mwords_v2.lem \
+  sail2_concurrency_interface_bitlists_v2.lem \
+  sail2_undefined_concurrency_interface_v2.lem \
   $(LEMLINKPOST)
 
 SCRIPTS = sail2_instr_kindsScript.sml sail2_valuesScript.sml sail2_operatorsScript.sml \
@@ -31,7 +36,9 @@ SCRIPTS = sail2_instr_kindsScript.sml sail2_valuesScript.sml sail2_operatorsScri
   sail2_prompt_monadScript.sml sail2_promptScript.sml sail2_undefinedScript.sml \
   sail2_stringScript.sml sail2_concurrency_interfaceScript.sml \
   sail2_concurrency_interface_mwordsScript.sml sail2_concurrency_interface_bitlistsScript.sml \
-  sail2_undefined_concurrency_interfaceScript.sml sail2_monadic_combinatorsScript.sml
+  sail2_undefined_concurrency_interfaceScript.sml sail2_monadic_combinatorsScript.sml \
+  sail2_concurrency_interface_mwords_v2Script.sml sail2_concurrency_interface_bitlists_v2Script.sml \
+  sail2_undefined_concurrency_interface_v2Script.sml sail2_monadic_combinators_v2Script.sml
 
 THYS = $(patsubst %Script.sml,%Theory.uo,$(SCRIPTS))
 

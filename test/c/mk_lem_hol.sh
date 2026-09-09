@@ -36,7 +36,10 @@ cat > "_holbuild_${BASENAME}/Holmakefile" <<EOF
 INCLUDES = \$(LEM_DIR)/hol-lib ${SAIL_DIR}/lib/hol
 EOF
 
-if grep -q 'Sail2_concurrency_interface' "_holbuild_${BASENAME}/${BASENAME}.lem"; then
+if grep -q 'Sail2_concurrency_interface_v2' "_holbuild_${BASENAME}/${BASENAME}.lem"; then
+  cp lbuild/undefined_override.lem_v2 "_holbuild_${BASENAME}/undefined_override.lem" <<EOF
+EOF
+elif grep -q 'Sail2_concurrency_interface' "_holbuild_${BASENAME}/${BASENAME}.lem"; then
   cp lbuild/undefined_override.lem_v1 "_holbuild_${BASENAME}/undefined_override.lem" <<EOF
 EOF
 else
