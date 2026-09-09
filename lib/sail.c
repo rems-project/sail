@@ -203,38 +203,39 @@ bool EQUAL(sail_string)(const_sail_string str1, const_sail_string str2)
 
 void undefined_string(sail_string *str, const unit u) {}
 
+// Concatenate `str1` and `str2` and store in `stro`. Any of these arguments
+// may be aliases. They may all be the same string.
 void concat_str(sail_string *stro, const_sail_string str1, const_sail_string str2)
 {
-  sail_string in1;
-  sail_string in2;
   size_t in1_len = strlen(str1);
   size_t in2_len = strlen(str2);
-  bool in1_free = false;
-  bool in2_free = false;
 
-  if (*stro == str1) {
-    in1 = (sail_string)sail_malloc(in1_len + 1);
-    strcpy(in1, str1);
-    in1_free = true;
-  } else {
-    in1 = (sail_string)str1;
-  }
+  // Record if the inputs are the same strings as the output
+  // before we realloc stro and can no longer tell.
+  bool str1_is_output = str1 == *stro;
+  bool str2_is_output = str2 == *stro;
 
-  if (*stro == str2) {
-    in2 = (sail_string)sail_malloc(in2_len + 1);
-    strcpy(in2, str2);
-    in2_free = true;
-  } else {
-    in2 = (sail_string)str2;
-  }
-
+  // Resize the output so there's enough space for both strings.
+  // This might invalidate str1 or str2 (or both) because they
+  // might be aliases.
   *stro = (sail_string)realloc(*stro, in1_len + in2_len + 1);
-  (*stro)[0] = '\0';
-  strcat(*stro, in1);
-  strcat(*stro, in2);
 
-  if (in1_free) sail_free(in1);
-  if (in2_free) sail_free(in2);
+  // Write str2 to the end of stro (including null terminator).
+  if (str2_is_output) {
+    // Must memmove within stro because str2 has been invalidated
+    // and the source and destination may overlap.
+    memmove(*stro + in1_len, *stro, in2_len + 1);
+  } else {
+    // str2 is valid and a different string to stro so we can just copy.
+    memcpy(*stro + in1_len, str2, in2_len + 1);
+  }
+
+  // Copy str1 to the start of stro (not including null terminator).
+  // We can skip this for the special case of appending str2 to stro
+  // when it should already be there.
+  if (!str1_is_output) {
+    memcpy(*stro, str1, in1_len);
+  }
 }
 
 bool string_startswith(const_sail_string s, const_sail_string prefix)
@@ -440,7 +441,7 @@ void mult_int(sail_int *rop, const sail_int op1, const sail_int op2)
 
 void ediv_int(sail_int *rop, const sail_int op1, const sail_int op2)
 {
-  /* GMP doesn't have Euclidean division but we can emulate it using 
+  /* GMP doesn't have Euclidean division but we can emulate it using
      flooring and ceiling division. */
   if (mpz_sgn(op2) >= 0) {
     mpz_fdiv_q(*rop, op1, op2);
@@ -451,7 +452,7 @@ void ediv_int(sail_int *rop, const sail_int op1, const sail_int op2)
 
 void emod_int(sail_int *rop, const sail_int op1, const sail_int op2)
 {
-  /* The documentation isn't that explicit but I think this is 
+  /* The documentation isn't that explicit but I think this is
      Euclidean mod. */
   mpz_mod(*rop, op1, op2);
 }
@@ -1720,7 +1721,7 @@ void parse_dec_bits(lbits *res, const mpz_t n, const_sail_string dec)
 
     mpz_t value;
     mpz_init(value);
-    
+
     if (mpz_set_str(value, dec, 10) == 0) {
         res->len = mpz_get_ui(n);
         mpz_set(*(res->bits), value);
