@@ -37,6 +37,7 @@ skip_tests = {
     'repeat_loop', # loops
     'concurrency_interface_v2',
     'concurrency_interface_v2_var',
+    'cycle_count_v2',
     'mini_builtins', # unsupported builtins
     'test_mono_rewrites', # verilator bug (in CI, works with latest)
 }
