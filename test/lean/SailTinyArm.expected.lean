@@ -1938,7 +1938,7 @@ def wMem (addr : (BitVec 64)) (value : (BitVec 64)) : SailM Unit := do
   | .Ok _ => (pure ())
   | .Err _ => throw Error.Exit
 
-/-- Type quantifiers: x_0 : Nat, x_0 ∈ {32, 64} -/
+/-- Type quantifiers: x_0 : Nat, List.elem x_0 [32, 64] -/
 def sail_address_announce (x_0 : Nat) (x_1 : (BitVec x_0)) : Unit :=
   ()
 
@@ -2098,7 +2098,7 @@ def unwrap_or (r : (Result k_a k_b)) (y : k_a) : k_a :=
 def sail_instr_announce (x_0 : (BitVec k_n)) : Unit :=
   ()
 
-/-- Type quantifiers: x_0 : Nat, x_0 ∈ {32, 64} -/
+/-- Type quantifiers: x_0 : Nat, List.elem x_0 [32, 64] -/
 def sail_branch_announce (x_0 : Nat) (x_1 : (BitVec x_0)) : Unit :=
   ()
 

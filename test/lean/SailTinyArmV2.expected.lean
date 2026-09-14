@@ -316,7 +316,7 @@ inductive Barrier where
 
 abbrev reg_index := Nat
 
-abbrev addr_size : Int := 64
+abbrev addr_size  : Int := 64
 
 abbrev addr_space := Unit
 
@@ -1388,7 +1388,7 @@ def unwrap_or (r : (Result k_a k_b)) (y : k_a) : k_a :=
 def sail_instr_announce (x_0 : (BitVec k_n)) : Unit :=
   ()
 
-/-- Type quantifiers: x_0 : Nat, x_0 ∈ {32, 64} -/
+/-- Type quantifiers: x_0 : Nat, List.elem x_0 [32, 64] -/
 def sail_branch_announce (x_0 : Nat) (x_1 : (BitVec x_0)) : Unit :=
   ()
 
@@ -1430,7 +1430,7 @@ def __monomorphize_reads : Bool := false
 
 def __monomorphize_writes : Bool := false
 
-/-- Type quantifiers: x_0 : Nat, x_0 ∈ {32, 64} -/
+/-- Type quantifiers: x_0 : Nat, List.elem x_0 [32, 64] -/
 def sail_address_announce (x_0 : Nat) (x_1 : (BitVec x_0)) : Unit :=
   ()
 

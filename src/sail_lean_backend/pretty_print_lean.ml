@@ -262,7 +262,7 @@ and doc_nconstraint ctx (NC_aux (nc, _)) =
   | NC_or (n1, n2) -> flow (break 1) [doc_nconstraint ctx n1; string "∨"; doc_nconstraint ctx n2]
   | NC_equal (a1, a2) -> flow (break 1) [doc_typ_arg ctx `All a1; string "="; doc_typ_arg ctx `All a2]
   | NC_not_equal (a1, a2) -> flow (break 1) [doc_typ_arg ctx `All a1; string "≠"; doc_typ_arg ctx `All a2]
-  | NC_app (f, args) -> doc_id_ctor ctx f ^^ parens (separate_map comma_sp (doc_typ_arg ctx `All) args)
+  | NC_app (f, args) -> parens (flow (break 1) (doc_id_ctor ctx f :: List.map (doc_typ_arg ctx `All) args))
   | NC_false -> string "false"
   | NC_true -> string "true"
   | NC_ge (n1, n2) -> flow (break 1) [doc_nexp ctx n1; string "≥"; doc_nexp ctx n2]
@@ -273,9 +273,9 @@ and doc_nconstraint ctx (NC_aux (nc, _)) =
   | NC_set (n, vs) ->
       flow (break 1)
         [
+          string "List.elem";
           doc_nexp ctx n;
-          string "∈";
-          implicit_parens (separate_map comma_sp (fun x -> string (Nat_big_num.to_string x)) vs);
+          brackets (separate_map comma_sp (fun x -> string (Nat_big_num.to_string x)) vs);
         ]
   | NC_var ki -> doc_kid ctx ki
 
@@ -1297,14 +1297,18 @@ let doc_typdef ctx (TD_aux (td, tannot) as full_typdef) =
       let vars = separate space vars in
       nest 2 (flow (break 1) (remove_empties [string "abbrev"; doc_id_ctor ctx id; vars; coloneq; doc_typ ctx t]))
   | TD_abbrev (id, tq, A_aux (A_nexp ne, _)) ->
-      let vars = doc_typ_quant_only_vars ctx tq in
+      let vars = doc_typ_quant_relevant ctx tq in
+      let vars = List.map parens vars in
       let vars = separate space vars in
-      nest 2 (flow (break 1) [string "abbrev"; doc_id_ctor ctx id; colon; string "Int"; coloneq; doc_nexp ctx ne])
-  | TD_abbrev (id, [], A_aux (A_bool nc, _)) ->
-      (* We currently cannot handle explicit parameters because of the Int/Nat mismatch. *)
+      nest 2 (flow (break 1) [string "abbrev"; doc_id_ctor ctx id; vars; colon; string "Int"; coloneq; doc_nexp ctx ne])
+  | TD_abbrev (id, tq, A_aux (A_bool nc, _)) ->
+      let vars = doc_typ_quant_relevant ctx tq in
+      let vars = List.map parens vars in
+      let vars = separate space vars in
       nest 2
-        (flow (break 1) [string "abbrev"; doc_id_ctor ctx id; colon; string "Bool"; coloneq; doc_nconstraint ctx nc])
-  | TD_abbrev _ -> empty
+        (flow (break 1)
+           [string "abbrev"; doc_id_ctor ctx id; vars; colon; string "Bool"; coloneq; doc_nconstraint ctx nc]
+        )
   | TD_variant (id, tq, ar, _) ->
       let pp_tus = concat (List.map (fun tu -> hardline ^^ doc_type_union ctx tu) ar) in
       let rectyp = doc_typ_quant_relevant ctx tq in
