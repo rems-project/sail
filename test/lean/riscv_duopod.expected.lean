@@ -22,9 +22,9 @@ inductive option (k_a : Type) where
   deriving Inhabited, BEq, Repr
   open option
 
-abbrev xlen : Int := 64
+abbrev xlen  : Int := 64
 
-abbrev xlen_bytes : Int := 8
+abbrev xlen_bytes  : Int := 8
 
 abbrev xlenbits := (BitVec 64)
 

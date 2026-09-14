@@ -22,7 +22,7 @@ inductive option (k_a : Type) where
   deriving Inhabited, BEq, Repr
   open option
 
-abbrev xlen : Int := 32
+abbrev xlen  : Int := 32
 
 abbrev Register := PEmpty
 abbrev RegisterType : Register -> Type := PEmpty.elim
