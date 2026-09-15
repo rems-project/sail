@@ -25,6 +25,8 @@ type global_context = {
   kid_id_renames : id option KBindings.t;
       (** Associates a kind variable to the corresponding argument of the function, used for implicit arguments. *)
   kid_id_renames_rev : kid Bindings.t;  (** Inverse of the [kid_id_renames] mapping. *)
+  out_name_camel : string;
+  defined_functions : IdSet.t;
 }
 
 let the_main_function_has_been_seen = ref false
@@ -122,6 +124,14 @@ let doc_id_ctor ?(ren_ctor = false) ctx (Id_aux (i, _) as id) =
       | Id i -> string (fix_id i)
       | Operator x -> string (Util.zencode_string ("op " ^ x))
     )
+
+let doc_id_typ_ctor ctx env (Id_aux (i, _) as id) =
+  let is_shadowed () = IdSet.mem id ctx.global.defined_functions || not (is_unbound (Env.lookup_id id env)) in
+  match i with
+  | And_bool -> string "and_bool"
+  | Or_bool -> string "or_bool"
+  | Id i -> if is_shadowed () then string (ctx.global.out_name_camel ^ "." ^ fix_id i) else string (fix_id i)
+  | Operator x -> string (Util.zencode_string ("op " ^ x))
 
 let doc_kid ctx (Kid_aux (Var x, _) as ki) =
   match KBindings.find_opt ki ctx.kid_id_renames with
@@ -223,7 +233,8 @@ let is_true e = is_lit e L_true
 let is_false e = is_lit e L_false
 
 (* Adapted from Coq PP *)
-let rec doc_nexp ctx (Nexp_aux (n, l) as nexp) =
+(* These all take a local environment so that they can spot type names that are shadowed by let-bound variables. *)
+let rec doc_nexp ctx env (Nexp_aux (n, l) as nexp) =
   let rec plussub (Nexp_aux (n, l) as nexp) =
     match n with
     | Nexp_sum (n1, n2) -> separate space [plussub n1; plus; mul n2]
@@ -238,7 +249,8 @@ let rec doc_nexp ctx (Nexp_aux (n, l) as nexp) =
   and app (Nexp_aux (n, l) as nexp) =
     match n with
     | Nexp_if (i, t, e) ->
-        separate space [string "if ("; doc_nconstraint ctx i; string " : Bool) then"; atomic t; string "else"; atomic e]
+        separate space
+          [string "if ("; doc_nconstraint ctx env i; string " : Bool) then"; atomic t; string "else"; atomic e]
     | Nexp_app (Id_aux (Id "div", _), [n1; n2]) -> separate space [atomic n1; string "/"; atomic n2]
     | Nexp_app (Id_aux (Id "mod", _), [n1; n2]) -> separate space [atomic n1; string "%"; atomic n2]
     | Nexp_app (Id_aux (Id "abs", _), [n1]) -> separate dot [atomic n1; string "natAbs"]
@@ -256,44 +268,44 @@ let rec doc_nexp ctx (Nexp_aux (n, l) as nexp) =
   in
   atomic nexp
 
-and doc_nconstraint ctx (NC_aux (nc, _)) =
+and doc_nconstraint ctx env (NC_aux (nc, _)) =
   match nc with
-  | NC_and (n1, n2) -> flow (break 1) [doc_nconstraint ctx n1; string "∧"; doc_nconstraint ctx n2]
-  | NC_or (n1, n2) -> flow (break 1) [doc_nconstraint ctx n1; string "∨"; doc_nconstraint ctx n2]
-  | NC_equal (a1, a2) -> flow (break 1) [doc_typ_arg ctx `All a1; string "="; doc_typ_arg ctx `All a2]
-  | NC_not_equal (a1, a2) -> flow (break 1) [doc_typ_arg ctx `All a1; string "≠"; doc_typ_arg ctx `All a2]
-  | NC_app (f, args) -> parens (flow (break 1) (doc_id_ctor ctx f :: List.map (doc_typ_arg ctx `All) args))
+  | NC_and (n1, n2) -> flow (break 1) [doc_nconstraint ctx env n1; string "∧"; doc_nconstraint ctx env n2]
+  | NC_or (n1, n2) -> flow (break 1) [doc_nconstraint ctx env n1; string "∨"; doc_nconstraint ctx env n2]
+  | NC_equal (a1, a2) -> flow (break 1) [doc_typ_arg ctx env `All a1; string "="; doc_typ_arg ctx env `All a2]
+  | NC_not_equal (a1, a2) -> flow (break 1) [doc_typ_arg ctx env `All a1; string "≠"; doc_typ_arg ctx env `All a2]
+  | NC_app (f, args) -> parens (flow (break 1) (doc_id_ctor ctx f :: List.map (doc_typ_arg ctx env `All) args))
   | NC_false -> string "false"
   | NC_true -> string "true"
-  | NC_ge (n1, n2) -> flow (break 1) [doc_nexp ctx n1; string "≥"; doc_nexp ctx n2]
-  | NC_le (n1, n2) -> flow (break 1) [doc_nexp ctx n1; string "≤"; doc_nexp ctx n2]
-  | NC_gt (n1, n2) -> flow (break 1) [doc_nexp ctx n1; string ">"; doc_nexp ctx n2]
-  | NC_lt (n1, n2) -> flow (break 1) [doc_nexp ctx n1; string "<"; doc_nexp ctx n2]
+  | NC_ge (n1, n2) -> flow (break 1) [doc_nexp ctx env n1; string "≥"; doc_nexp ctx env n2]
+  | NC_le (n1, n2) -> flow (break 1) [doc_nexp ctx env n1; string "≤"; doc_nexp ctx env n2]
+  | NC_gt (n1, n2) -> flow (break 1) [doc_nexp ctx env n1; string ">"; doc_nexp ctx env n2]
+  | NC_lt (n1, n2) -> flow (break 1) [doc_nexp ctx env n1; string "<"; doc_nexp ctx env n2]
   | NC_id i -> doc_id_ctor ctx i
   | NC_set (n, vs) ->
       flow (break 1)
         [
           string "List.elem";
-          doc_nexp ctx n;
+          doc_nexp ctx env n;
           brackets (separate_map comma_sp (fun x -> string (Nat_big_num.to_string x)) vs);
         ]
   | NC_var ki -> doc_kid ctx ki
 
-and doc_typ_arg ctx rel (A_aux (t, _)) =
+and doc_typ_arg ctx env rel (A_aux (t, _)) =
   match t with
-  | A_typ t -> doc_typ ctx t
-  | A_nexp n -> doc_nexp ctx n
+  | A_typ t -> doc_typ ctx env t
+  | A_nexp n -> doc_nexp ctx env n
   | A_bool nc -> (
-      match rel with `Only_relevant -> empty | `All -> parens (doc_nconstraint ctx nc)
+      match rel with `Only_relevant -> empty | `All -> parens (doc_nconstraint ctx env nc)
     )
 
 and provably_nneg ctx x = Type_check.prove __POS__ ctx.env (nc_gteq x (nint 0))
 
-and doc_typ ctx (Typ_aux (t, _) as typ) =
+and doc_typ ctx env (Typ_aux (t, _) as typ) =
   match t with
   | Typ_app (Id_aux (Id "vector", _), [A_aux (A_nexp m, _); A_aux (A_typ elem_typ, _)]) ->
       (* TODO: remove duplication with exists, below *)
-      nest 2 (parens (flow space [string "Vector"; doc_typ ctx elem_typ; doc_nexp ctx m]))
+      nest 2 (parens (flow space [string "Vector"; doc_typ ctx env elem_typ; doc_nexp ctx env m]))
   | Typ_id (Id_aux (Id "unit", _)) -> string "Unit"
   | Typ_id (Id_aux (Id "int", _)) -> string "Int"
   | Typ_id (Id_aux (Id "string", _)) -> string "String"
@@ -302,24 +314,24 @@ and doc_typ ctx (Typ_aux (t, _) as typ) =
   | Typ_id (Id_aux (Id "nat", _)) -> string "Nat"
   | Typ_app (Id_aux (Id "bitvector", _), [A_aux (A_nexp m, _)]) | Typ_app (Id_aux (Id "bits", _), [A_aux (A_nexp m, _)])
     ->
-      parens (string "BitVec " ^^ doc_nexp ctx m)
+      parens (string "BitVec " ^^ doc_nexp ctx env m)
   | Typ_app (Id_aux (Id "atom", _), [A_aux (A_nexp x, _)]) -> if provably_nneg ctx x then string "Nat" else string "Int"
   | Typ_app (Id_aux (Id "register", _), t_app) ->
-      parens (string "RegisterRef " ^^ separate_map comma (doc_typ_app ctx) t_app)
+      parens (string "RegisterRef " ^^ separate_map comma (doc_typ_app ctx env) t_app)
   | Typ_app (Id_aux (Id "implicit", _), [A_aux (A_nexp (Nexp_aux (Nexp_var ki, _)), _)]) ->
       underscore (* TODO check if the type of implicit arguments can really be always inferred *)
-  | Typ_app (Id_aux (Id "option", _), [A_aux (A_typ typ, _)]) -> parens (string "Option " ^^ doc_typ ctx typ)
+  | Typ_app (Id_aux (Id "option", _), [A_aux (A_typ typ, _)]) -> parens (string "Option " ^^ doc_typ ctx env typ)
   | Typ_app (Id_aux (Id "list", _), args) ->
-      parens (string "List" ^^ space ^^ separate_map space (doc_typ_arg ctx `Only_relevant) args)
-  | Typ_tuple ts -> parens (separate_map (space ^^ string "×" ^^ space) (doc_typ ctx) ts)
-  | Typ_id id -> doc_id_ctor ctx id
+      parens (string "List" ^^ space ^^ separate_map space (doc_typ_arg ctx env `Only_relevant) args)
+  | Typ_tuple ts -> parens (separate_map (space ^^ string "×" ^^ space) (doc_typ ctx env) ts)
+  | Typ_id id -> doc_id_typ_ctor ctx env id
   | Typ_app (Id_aux (Id "range", _), [A_aux (A_nexp low, _); A_aux (A_nexp high, _)]) ->
       if provably_nneg ctx low then string "Nat" else string "Int"
   | Typ_app (Id_aux (Id "result", _), [A_aux (A_typ typ1, _); A_aux (A_typ typ2, _)]) ->
-      parens (separate space [string "Result"; doc_typ ctx typ1; doc_typ ctx typ2])
+      parens (separate space [string "Result"; doc_typ ctx env typ1; doc_typ ctx env typ2])
   | Typ_var kid -> doc_kid ctx kid
   | Typ_app (id, args) ->
-      parens (doc_id_ctor ctx id ^^ space ^^ separate_map space (doc_typ_arg ctx `Only_relevant) args)
+      parens (doc_id_typ_ctor ctx env id ^^ space ^^ separate_map space (doc_typ_arg ctx env `Only_relevant) args)
   | Typ_exist (kids, _, typ) ->
       let ctx =
         List.fold_left
@@ -328,11 +340,14 @@ and doc_typ ctx (Typ_aux (t, _) as typ) =
           )
           ctx kids
       in
-      doc_typ ctx typ
+      doc_typ ctx env typ
   | _ -> failwith ("Type " ^ string_of_typ_con typ ^ " " ^ string_of_typ typ ^ " not translatable yet.")
 
-and doc_typ_app ctx (A_aux (t, _) as typ) =
-  match t with A_typ t' -> doc_typ ctx t' | A_bool nc -> doc_nconstraint ctx nc | A_nexp m -> doc_nexp ctx m
+and doc_typ_app ctx env (A_aux (t, _) as typ) =
+  match t with
+  | A_typ t' -> doc_typ ctx env t'
+  | A_bool nc -> doc_nconstraint ctx env nc
+  | A_nexp m -> doc_nexp ctx env m
 
 let captured_typ_var ((i, Typ_aux (t, _)) as typ) =
   match t with
@@ -341,7 +356,7 @@ let captured_typ_var ((i, Typ_aux (t, _)) as typ) =
       Some (i, ki)
   | _ -> None
 
-let doc_typ_id ctx ((fid, typ), _) = flow (break 1) [doc_id_ctor ctx fid; colon; doc_typ ctx typ]
+let doc_typ_id ctx env ((fid, typ), _) = flow (break 1) [doc_id_ctor ctx fid; colon; doc_typ ctx env typ]
 
 let doc_kind ctx (kid : kid) (K_aux (k, _)) =
   match k with
@@ -349,16 +364,16 @@ let doc_kind ctx (kid : kid) (K_aux (k, _)) =
   | K_bool -> string "Bool"
   | K_type -> string "Type"
 
-let doc_quant_item_all ctx (QI_aux (qi, _)) =
+let doc_quant_item_all ctx env (QI_aux (qi, _)) =
   match qi with
   | QI_id (KOpt_aux (KOpt_kind (k, ki), _)) -> flow (break 1) [doc_kid ctx ki; colon; doc_kind ctx ki k]
-  | QI_constraint c -> doc_nconstraint ctx c
+  | QI_constraint c -> doc_nconstraint ctx env c
 
 (* Used to annotate types with the original constraints *)
-let doc_typ_quant_all ctx qs = List.map (doc_quant_item_all ctx) qs
+let doc_typ_quant_all ctx env qs = List.map (doc_quant_item_all ctx env) qs
 
-let doc_typ_quant_in_comment ctx tq =
-  let typ_quants = doc_typ_quant_all ctx tq in
+let doc_typ_quant_in_comment ctx env tq =
+  let typ_quants = doc_typ_quant_all ctx env tq in
   if List.length typ_quants > 0 then
     string "/-- Type quantifiers: " ^^ nest 2 (flow comma_sp typ_quants) ^^ string " -/" ^^ hardline
   else empty
@@ -516,7 +531,7 @@ let rec doc_pat ?(need_parens = false) ?(in_vector = false) ctx in_match_bv (P_a
   | P_typ (Typ_aux (Typ_app (Id_aux (Id id, _), [A_aux (A_nexp (Nexp_aux (Nexp_constant i, _)), _)]), _), p)
     when in_vector && (id = "bits" || id = "bitvector") ->
       doc_pat ctx in_match_bv p ^^ string ":" ^^ doc_big_int i
-  | P_typ (ptyp, p) when in_vector -> doc_pat ctx in_match_bv p ^^ string ":" ^^ doc_typ ctx ptyp
+  | P_typ (ptyp, p) when in_vector -> doc_pat ctx in_match_bv p ^^ string ":" ^^ doc_typ ctx env ptyp
   | P_typ (ptyp, p) -> doc_pat ctx in_match_bv p
   | P_id id -> (
       match typ_of_pat pat with
@@ -574,8 +589,8 @@ and doc_vector_concat ctx pats =
   in
   brackets (separate_map comma doc_part pats)
 
-let doc_pat_typ_ascription ctx (P_aux (p, (l, annot)) as pat) =
-  match p with P_typ (ptyp, p) -> Some (doc_typ ctx ptyp) | _ -> None
+let doc_pat_typ_ascription ctx env (P_aux (p, (l, annot)) as pat) =
+  match p with P_typ (ptyp, p) -> Some (doc_typ ctx env ptyp) | _ -> None
 
 (* Copied from the Coq PP *)
 let rebind_cast_pattern_vars pat typ exp =
@@ -962,13 +977,13 @@ and doc_exp (as_monadic : bool) ctx (E_aux (e, (l, annot)) as full_exp) =
         ^^ wrap_with_pure as_monadic (brackets (nest 2 (separate_map comma_sp (d_of_arg ctx) (List.rev vals))))
   | E_typ (typ, e) ->
       if has_effect e then doc_exp as_monadic ctx e
-      else wrap_with_pure as_monadic (parens (separate space [doc_exp false ctx e; colon; doc_typ ctx typ]))
+      else wrap_with_pure as_monadic (parens (separate space [doc_exp false ctx e; colon; doc_typ ctx env typ]))
   | E_tuple es -> wrap_with_pure as_monadic (parens (separate_map (comma ^^ space) (d_of_arg ctx) es))
   | E_let (lpat, lexp, e') | E_internal_plet (lpat, lexp, e') ->
       let has_loop = has_loop lexp in
       let is_arrow_do = match e with E_let _ when not has_loop -> false | _ -> true in
       let id_typ = doc_pat ctx false lpat in
-      let typ_ascription = doc_pat_typ_ascription ctx lpat in
+      let typ_ascription = doc_pat_typ_ascription ctx env lpat in
       let ctx = update_ctx_pat ctx lpat in
       let pp_let_line_f l = group (nest 2 (flow (break 1) l)) in
       let pp_let_line =
@@ -1069,7 +1084,7 @@ and doc_fexp with_arrow ctx (FE_aux (FE_fexp (field, e), _)) =
   let arrow = if with_arrow then leftarrow ^^ space else empty in
   doc_id_ctor ctx field ^^ string " := " ^^ arrow ^^ nest 2 (doc_exp with_arrow ctx e)
 
-let doc_binder ctx i t =
+let doc_binder ctx env i t =
   let parenthesizer =
     match t with
     | Typ_aux (Typ_app (Id_aux (Id "implicit", _), [A_aux (A_nexp (Nexp_aux (Nexp_var ki, _)), _)]), _) ->
@@ -1078,7 +1093,7 @@ let doc_binder ctx i t =
   in
   (* Overwrite the id if it's captured *)
   let ctx = match captured_typ_var (i, t) with Some (i, ki) -> add_single_kid_id_rename ctx i ki | _ -> ctx in
-  (ctx, separate space [doc_id_ctor ctx i; colon; doc_typ ctx t] |> parenthesizer)
+  (ctx, separate space [doc_id_ctor ctx i; colon; doc_typ ctx env t] |> parenthesizer)
 
 (** Find all patterns in the arguments of the sail function that Lean cannot handle in a [def], and add them as let
     bindings in the prelude of the translation of the function. This assumes that the pattern is irrefutable. *)
@@ -1136,16 +1151,16 @@ let doc_funcl_init global (FCL_aux (FCL_funcl (id, pexp), annot)) =
   let ctx, binders, fixup_binders =
     List.fold_left
       (fun (ctx, bs, fixup_binders) (pat, i, t) ->
-        let ctx, d = doc_binder ctx i t in
+        let ctx, d = doc_binder ctx env i t in
         let fixup_binders = add_function_pattern ctx fixup_binders pat i t in
         let ctx = add_path_renamings ~path:(string_of_id i) ctx pat t in
         (ctx, bs @ [d], fixup_binders)
       )
       (ctx, [], fixup_binders) binders
   in
-  let typ_quant_comment = doc_typ_quant_in_comment ctx tq in
+  let typ_quant_comment = doc_typ_quant_in_comment ctx env tq in
   (* Use auto-implicits for type quanitifiers for now and see if this works *)
-  let doc_ret_typ_orig = doc_typ ctx ret_typ in
+  let doc_ret_typ_orig = doc_typ ctx env ret_typ in
   let is_monadic = not (Effects.function_is_pure id ctx.global.effect_info) in
   let early_return = has_early_return exp in
   let has_loop = has_loop exp in
@@ -1246,7 +1261,7 @@ let doc_fundef ctx (FD_aux (FD_function (meas, typa, fcls), fannot) as full_fund
         )
 
 let doc_type_union ctx (Tu_aux (Tu_ty_id (ty, i), _)) =
-  nest 2 (flow space [pipe; doc_id_ctor ctx i; parens (flow space [underscore; colon; doc_typ ctx ty])])
+  nest 2 (flow space [pipe; doc_id_ctor ctx i; parens (flow space [underscore; colon; doc_typ ctx ctx.env ty])])
 
 let string_of_type_def_con (TD_aux (td, _)) =
   match td with
@@ -1274,13 +1289,13 @@ let doc_typdef ctx (TD_aux (td, tannot) as full_typdef) =
         ^^ string "open" ^^ space ^^ id
         )
   | TD_record (id, tq, fields, _) ->
-      let fields = List.map (doc_typ_id ctx) fields in
+      let fields = List.map (doc_typ_id ctx ctx.env) fields in
       let fields_doc = separate hardline fields in
       let rectyp = doc_typ_quant_relevant ctx tq in
       let rectyp = List.map (fun d -> parens d) rectyp |> separate space in
       let derivers = [string "Inhabited"; string "Repr"] in
       let derivers = if IdSet.mem id !non_beq_types then derivers else string "BEq" :: derivers in
-      doc_typ_quant_in_comment ctx tq
+      doc_typ_quant_in_comment ctx ctx.env tq
       ^^ nest 2
            (flow (break 1) (remove_empties [string "structure"; doc_id_ctor ctx id; rectyp; string "where"])
            ^^ hardline ^^ fields_doc ^^ hardline ^^ string "deriving" ^^ space ^^ separate comma_sp derivers
@@ -1289,25 +1304,30 @@ let doc_typdef ctx (TD_aux (td, tannot) as full_typdef) =
       let vars = doc_typ_quant_relevant ctx tq in
       let vars = List.map parens vars in
       let vars = separate space vars in
-      nest 2 (flow (break 1) (remove_empties [string "abbrev"; doc_id_ctor ctx id; vars; coloneq; doc_typ ctx t]))
+      nest 2
+        (flow (break 1) (remove_empties [string "abbrev"; doc_id_ctor ctx id; vars; coloneq; doc_typ ctx ctx.env t]))
   | TD_abbrev (id, tq, A_aux (A_typ t, _)) when string_of_id id = "fp_bits" ->
       string (Printf.sprintf "-- Abbreviation %s skipped" (string_of_id id)) (* FIXME *)
   | TD_abbrev (id, tq, A_aux (A_typ t, _)) ->
       let vars = doc_typ_quant_only_vars ctx tq in
       let vars = separate space vars in
-      nest 2 (flow (break 1) (remove_empties [string "abbrev"; doc_id_ctor ctx id; vars; coloneq; doc_typ ctx t]))
+      nest 2
+        (flow (break 1) (remove_empties [string "abbrev"; doc_id_ctor ctx id; vars; coloneq; doc_typ ctx ctx.env t]))
   | TD_abbrev (id, tq, A_aux (A_nexp ne, _)) ->
       let vars = doc_typ_quant_relevant ctx tq in
       let vars = List.map parens vars in
       let vars = separate space vars in
-      nest 2 (flow (break 1) [string "abbrev"; doc_id_ctor ctx id; vars; colon; string "Int"; coloneq; doc_nexp ctx ne])
+      nest 2
+        (flow (break 1)
+           [string "abbrev"; doc_id_ctor ctx id; vars; colon; string "Int"; coloneq; doc_nexp ctx ctx.env ne]
+        )
   | TD_abbrev (id, tq, A_aux (A_bool nc, _)) ->
       let vars = doc_typ_quant_relevant ctx tq in
       let vars = List.map parens vars in
       let vars = separate space vars in
       nest 2
         (flow (break 1)
-           [string "abbrev"; doc_id_ctor ctx id; vars; colon; string "Bool"; coloneq; doc_nconstraint ctx nc]
+           [string "abbrev"; doc_id_ctor ctx id; vars; colon; string "Bool"; coloneq; doc_nconstraint ctx ctx.env nc]
         )
   | TD_variant (id, tq, ar, _) ->
       let pp_tus = concat (List.map (fun tu -> hardline ^^ doc_type_union ctx tu) ar) in
@@ -1317,7 +1337,7 @@ let doc_typdef ctx (TD_aux (td, tannot) as full_typdef) =
       let derivers = [string "Repr"] in
       let derivers = if IdSet.mem id !non_beq_types then derivers else string "BEq" :: derivers in
       let derivers = if List.length ar == 0 then derivers else string "Inhabited" :: derivers in
-      doc_typ_quant_in_comment ctx tq
+      doc_typ_quant_in_comment ctx ctx.env tq
       ^^ nest 2
            (nest 2 (flow space (remove_empties [string "inductive"; doc_id_ctor ctx id; rectyp; string "where"]))
            ^^ pp_tus ^^ hardline ^^ string "deriving" ^^ space ^^ separate comma_sp derivers ^^ hardline
@@ -1349,7 +1369,7 @@ let doc_val ctx pat exp =
         (global, id, Some typ)
     | _ -> failwith ("Pattern " ^ string_of_pat_con pat ^ " " ^ string_of_pat pat ^ " not translatable yet.")
   in
-  let typpp = match pat_typ with None -> empty | Some typ -> space ^^ colon ^^ space ^^ doc_typ ctx typ in
+  let typpp = match pat_typ with None -> empty | Some typ -> space ^^ colon ^^ space ^^ doc_typ ctx ctx.env typ in
   let idpp = doc_id_ctor ctx id in
   let base_pp =
     if has_effect exp then string "unwrapValue" ^^ space ^^ parens (doc_exp true ctx exp) else doc_exp false ctx exp
@@ -1459,7 +1479,7 @@ let type_enum ctx registers =
     [
       string "abbrev RegisterType : Register → Type";
       separate_map hardline
-        (fun (typ, id, _) -> string "  | ." ^^ doc_id_ctor ctx id ^^ string " => " ^^ doc_typ ctx typ)
+        (fun (typ, id, _) -> string "  | ." ^^ doc_id_ctor ctx id ^^ string " => " ^^ doc_typ ctx ctx.env typ)
         registers;
       empty;
     ]
@@ -1468,7 +1488,7 @@ let inhabit_enum_v2 ctx typ_map =
   separate_map hardline
     (fun (_, (id, typ)) ->
       string "instance : Inhabited (RegisterRef "
-      ^^ doc_typ ctx typ ^^ string ") where" ^^ hardline ^^ string "  default := .Reg " ^^ doc_id_ctor ctx id
+      ^^ doc_typ ctx ctx.env typ ^^ string ") where" ^^ hardline ^^ string "  default := .Reg " ^^ doc_id_ctor ctx id
     )
     typ_map
 
@@ -1476,7 +1496,7 @@ let inhabit_enum_v1 ctx typ_map =
   separate_map hardline
     (fun (_, (id, typ)) ->
       string "instance : Inhabited (RegisterRef RegisterType "
-      ^^ doc_typ ctx typ ^^ string ") where" ^^ hardline ^^ string "  default := .Reg " ^^ doc_id_ctor ctx id
+      ^^ doc_typ ctx ctx.env typ ^^ string ") where" ^^ hardline ^^ string "  default := .Reg " ^^ doc_id_ctor ctx id
     )
     typ_map
 
@@ -1516,17 +1536,17 @@ let doc_instantiations_v1 ctx env defs registers =
              [
                string "instance : Arch where";
                string "va_size := 64";
-               string "pa := " ^^ doc_typ ctx params.pa_type;
-               string "abort := " ^^ doc_typ ctx params.abort_type;
-               string "translation := " ^^ doc_typ ctx params.translation_summary_type;
-               string "trans_start := " ^^ doc_typ ctx params.trans_start_type;
-               string "trans_end := " ^^ doc_typ ctx params.trans_end_type;
-               string "fault := " ^^ doc_typ ctx params.fault_type;
-               string "tlb_op := " ^^ doc_typ ctx params.tlbi_type;
-               string "cache_op := " ^^ doc_typ ctx params.cache_op_type;
-               string "barrier := " ^^ doc_typ ctx params.barrier_type;
-               string "arch_ak := " ^^ doc_typ ctx params.arch_ak_type;
-               string "sys_reg_id := " ^^ doc_typ ctx params.sys_reg_id_type ^^ hardline;
+               string "pa := " ^^ doc_typ ctx env params.pa_type;
+               string "abort := " ^^ doc_typ ctx env params.abort_type;
+               string "translation := " ^^ doc_typ ctx env params.translation_summary_type;
+               string "trans_start := " ^^ doc_typ ctx env params.trans_start_type;
+               string "trans_end := " ^^ doc_typ ctx env params.trans_end_type;
+               string "fault := " ^^ doc_typ ctx env params.fault_type;
+               string "tlb_op := " ^^ doc_typ ctx env params.tlbi_type;
+               string "cache_op := " ^^ doc_typ ctx env params.cache_op_type;
+               string "barrier := " ^^ doc_typ ctx env params.barrier_type;
+               string "arch_ak := " ^^ doc_typ ctx env params.arch_ak_type;
+               string "sys_reg_id := " ^^ doc_typ ctx env params.sys_reg_id_type ^^ hardline;
              ]
           )
         ^^ hardline
@@ -1538,7 +1558,9 @@ let doc_instantiations_v1 ctx env defs registers =
 let doc_instantiations_v2 ctx defs registers =
   let has_regs = registers != [] in
   let type_substs, id_substs = Monad_params.find_instantiations defs in
-  let ts x d = KBindings.find_opt (mk_kid x) type_substs |> Option.fold ~none:(string d) ~some:(doc_typ_app ctx) in
+  let ts x d =
+    KBindings.find_opt (mk_kid x) type_substs |> Option.fold ~none:(string d) ~some:(doc_typ_app ctx ctx.env)
+  in
   let is x =
     Bindings.find_opt (mk_id x) id_substs |> Option.fold ~none:(string "fun _ => false") ~some:(doc_id_ctor ctx)
   in
@@ -1673,7 +1695,15 @@ let pp_ast_lean symbols (env : Type_check.env) effect_info ({ defs; _ } as ast :
   let fun_args = populate_fun_args defs in
   let ctor_renames = compute_ctor_renames env in
   let global =
-    { effect_info; fun_args; ctor_renames; kid_id_renames = KBindings.empty; kid_id_renames_rev = Bindings.empty }
+    {
+      effect_info;
+      fun_args;
+      ctor_renames;
+      kid_id_renames = KBindings.empty;
+      kid_id_renames_rev = Bindings.empty;
+      out_name_camel;
+      defined_functions = Env.get_defined_val_specs env;
+    }
   in
   let ctx = context_init env global in
   let inst_defs, defs = Callgraph.partition_instantiation_definitions false defs in
