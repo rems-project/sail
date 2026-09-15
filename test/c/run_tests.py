@@ -52,6 +52,8 @@ def test_c(name, c_opts, sail_opts, valgrind, compiler='cc', actually_cpp=False)
     else:
         extension = "c"
         target_opt = "-c"
+        if not '-Oconstant_fold' in sail_opts:
+            results.expect_failure("type_shadow.sail", "C output doesn't separate type and function names")
 
     for filenames in chunks(os.listdir('.'), parallel()):
         tests = {}
