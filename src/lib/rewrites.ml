@@ -4471,7 +4471,7 @@ let rec describe_rewriter = function
   | Literal_rewriter rw -> "(ocaml|lem|all)" :: describe_rewriter (rw (fun _ -> true))
   | Full_rewriter _ -> []
 
-let instantiate_rewriter rewriter args =
+let instantiate_rewriter name rewriter args =
   let selector_function = function
     | "ocaml" -> rewrite_lit_ocaml
     | "lem" -> rewrite_lit_lem
@@ -4495,7 +4495,7 @@ let instantiate_rewriter rewriter args =
   in
   match List.fold_left instantiate rewriter args with
   | Full_rewriter rw -> rw
-  | _ -> Reporting.unreachable Parse_ast.Unknown __POS__ "Rewrite not fully instantiated"
+  | _ -> Reporting.unreachable Parse_ast.Unknown __POS__ ("Rewrite " ^ name ^ " not fully instantiated")
 
 let all_rewriters =
   [
@@ -4617,7 +4617,7 @@ let instantiate_rewrites rws =
     | Some rewrite -> rewrite
     | None -> Reporting.unreachable Parse_ast.Unknown __POS__ ("Attempted to execute unknown rewrite " ^ name)
   in
-  List.map (fun (name, args) -> (name, instantiate_rewriter (get_rewriter name) args)) rws
+  List.map (fun (name, args) -> (name, instantiate_rewriter name (get_rewriter name) args)) rws
 
 let opt_ddump_rewrite_ast = ref None
 
