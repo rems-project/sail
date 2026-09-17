@@ -45,6 +45,7 @@ From stdpp Require Import base.
 
 From Sail Require Import Ast.
 From Sail Require Import Bit.
+From Sail Require PrimBits.
 
 Definition same_bits (bs : list bit) (vs : list bit) : bool :=
   fst (fold_left
@@ -163,6 +164,6 @@ Definition of_bin_lit (bin : list (non_empty bin_digit)) : list bit :=
 
 Definition to_gvector (v : value) : value :=
   match v with
-  | V_bitvector bs => V_vector (List.map (fun b => V_bitvector [b]) bs)
+  | V_bitvector bs => V_vector (List.map V_bitvector (PrimBits.to_single_bits bs))
   | v => v
   end.

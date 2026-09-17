@@ -89,6 +89,8 @@ function neq_bits(x, y) = not_bool(eq_bits(x, y))
 overload operator != = {neq_bits}
 
 val bitvector_length = pure {
+  ocaml: "length_bits",
+  interpreter: "length_bits",
   coq: "length_mword",
   lean: "Sail.BitVec.length",
   _: "length"

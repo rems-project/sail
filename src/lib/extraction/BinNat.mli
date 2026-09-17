@@ -20,6 +20,8 @@ module N :
 
   val mul : Big_int_Z.big_int -> Big_int_Z.big_int -> Big_int_Z.big_int
 
+  val eqb : Big_int_Z.big_int -> Big_int_Z.big_int -> bool
+
   val testbit : Big_int_Z.big_int -> Big_int_Z.big_int -> bool
 
   val to_nat : Big_int_Z.big_int -> Big_int_Z.big_int

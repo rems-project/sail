@@ -57,6 +57,7 @@ From Sail Require Import IdUtil.
 From Sail Require Import ListUtil.
 From Sail Require Import Tactics.
 From Sail Require BitList.
+From Sail Require PrimBits.
 
 Declare Scope Value_scope.
 Delimit Scope Value_scope with value.
@@ -68,8 +69,8 @@ Definition value_of_lit (lit : Ast.lit) : value :=
   | L_true => V_bool true
   | L_false => V_bool false
   | L_num n => V_int n
-  | L_hex h => V_bitvector (BitList.of_hex_lit h)
-  | L_bin b => V_bitvector (BitList.of_bin_lit b)
+  | L_hex h => V_bitvector (PrimBits.of_bit_list (BitList.of_hex_lit h))
+  | L_bin b => V_bitvector (PrimBits.of_bit_list (BitList.of_bin_lit b))
   | L_real r => V_real r
   | L_string s => V_string s
   end.
@@ -127,7 +128,7 @@ End value_ind.
 
 Fixpoint value_eqb (lhs rhs : value) : bool :=
   match (lhs, rhs) with
-  | (V_bitvector l_bv, V_bitvector r_bv) => list_eqb bit_eqb l_bv r_bv
+  | (V_bitvector l_bv, V_bitvector r_bv) => PrimBits.eq_bits l_bv r_bv
   | (V_vector l_v, V_vector r_v) => list_eqb value_eqb l_v r_v
   | (V_list l_xs, V_list r_ys) => list_eqb value_eqb l_xs r_ys
   | (V_int l, V_int r) => (l =? r)%Z
@@ -150,6 +151,7 @@ Create HintDb sail.
 
 Hint Immediate id_eqb_refl : sail.
 Hint Immediate bit_eqb_refl : sail.
+Hint Immediate PrimBits.eq_bits_refl : sail.
 Hint Immediate Z.eqb_refl : sail.
 Hint Immediate Qeq_bool_refl : sail.
 Hint Immediate eqb_reflx : sail.
@@ -211,7 +213,7 @@ Proof.
     intros ?? In;
     apply (Forall_in _ _ _ IH In)
   ).
-  - cbn; apply (list_eqb_comm _ _ _ _ (@Bit.bit_eqb_comm)).
+  - cbn; apply PrimBits.eq_bits_comm.
   - apply Z.eqb_sym.
   - apply Qeq_bool_comm.
   - cbn; destruct xb; destruct yb; reflexivity.
@@ -253,8 +255,7 @@ Proof.
   all: intro z; destruct z as [ zbv | zs | zs | zi | zr | zb | zs | | zstr | zid | zid | zid zs | zfields ]; try easy.
   all: intros L R.
   - cbn in *.
-    apply (fun P => list_eqb_trans _ bit_eqb xbv ybv zbv P L R).
-    intros x y z; destruct x, y, z; easy.
+    apply (PrimBits.eq_bits_trans xbv ybv zbv L R).
   - cbn in *.
     apply (fun P => list_eqb_trans_in _ _ xs ys zs P L R).
     intros x y z In_y XY YZ.
@@ -326,15 +327,15 @@ Module Primops.
     | _ => None
     end.
 
+  (** Narrowing is rejected, as before: Sail's [zero_extend] requires
+      the target width to be at least the source width. *)
   Definition zero_extend (bits : value) (n : value) : option value :=
     match (bits, n) with
-    | (V_bitvector bitlist, V_int n) =>
-      let len := List.length bitlist in
-      if Z.ltb n (Z.of_nat len) then
+    | (V_bitvector bv, V_int n) =>
+      if Z.ltb n (PrimBits.width bv) then
         None
       else
-        let extend := Nat.sub (Z.to_nat n) len in
-        Some (V_bitvector (List.repeat B0 extend ++ bitlist))
+        Some (V_bitvector (PrimBits.zero_extend bv n))
     | _ => None
     end.
 End Primops.

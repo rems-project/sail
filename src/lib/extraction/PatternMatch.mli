@@ -1,14 +1,13 @@
 open Ast
 open BinInt
-open Bit
 open BitList
 open Datatypes
 open IdUtil
 open List0
 open ListDef
 open ListUtil
-open Nat0
 open PeanoNat
+open PrimBits
 open QArith_base
 open TypeAnnot
 
@@ -21,10 +20,6 @@ val combine_binding :
 
 val merge_bindings :
   'a1 binding IdMap.t -> 'a1 binding IdMap.t -> 'a1 binding IdMap.t
-
-val update_list : bit list -> Big_int_Z.big_int -> bit -> bit list
-
-val update_subrange : bit list -> Big_int_Z.big_int -> bit list -> bit list
 
 val complete_value :
   ((value * Big_int_Z.big_int) * Big_int_Z.big_int) non_empty -> value

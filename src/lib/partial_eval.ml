@@ -91,7 +91,7 @@ module AbsValue : SAIL_VALUE = struct
     let buf = Buffer.create (List.length bv) in
     if len mod 4 = 0 && is_concrete_bitvector bv then (
       let bv = Option.get (Util.option_all (List.map concrete_bit bv)) in
-      Buffer.add_string buf (Sail_lib.string_of_bits (List.rev bv))
+      Buffer.add_string buf (Sail_lib.string_of_bits (Sail_lib.bits_of_bit_list (List.rev bv)))
     )
     else (
       Buffer.add_string buf "0b";
@@ -145,7 +145,9 @@ module AbsValue : SAIL_VALUE = struct
      input (its [bits_to_N] threads each bit through [acc := 2*acc +
      b], so the first element is most-significant) so we pass [bits]
      through unchanged. *)
-  let bitvector_of_bits bits = V_bitvector (Extraction.AbsBitvector.Dom.abst (Extraction.Bit.Bits.to_bvn bits))
+  let bitvector_of_bv bv = V_bitvector (Extraction.AbsBitvector.Dom.abst bv)
+
+  let bitvector_of_bits bits = bitvector_of_bv (Extraction.Bit.Bits.to_bvn bits)
 
   (** Define a module for lifting primitives.
 
@@ -160,7 +162,7 @@ module AbsValue : SAIL_VALUE = struct
       | Unit : unit ty
       | Int : Z.t ty
       | AbsInt : Extraction.Interval.Dom.t ty
-      | BV : Bit.bit list ty
+      | BV : Sail_lib.bits ty
       | AbsBV : Extraction.AbsBitvector.Dom.t ty
       | Bool : bool ty
       | Real : Q.t ty
@@ -176,7 +178,7 @@ module AbsValue : SAIL_VALUE = struct
       | Unit -> V_unit
       | Int -> V_int (Extraction.Interval.Dom.abst x)
       | AbsInt -> V_int x
-      | BV -> bitvector_of_bits x
+      | BV -> bitvector_of_bits (Sail_lib.bit_list_of_bits x)
       | AbsBV -> V_bitvector x
       | Bool -> V_bool x
       | Real -> v_real x
@@ -191,7 +193,10 @@ module AbsValue : SAIL_VALUE = struct
       | AbsBV, V_bitvector bv -> Some bv
       | BV, V_bitvector bv -> (
           match Extraction.AbsBitvector.Dom.to_bv_list bv with
-          | Some [bits] -> Option.map List.rev (Util.option_all (List.map concrete_bit bits))
+          | Some [bits] ->
+              Option.map
+                (fun bs -> Sail_lib.bits_of_bit_list (List.rev bs))
+                (Util.option_all (List.map concrete_bit bits))
           | _ -> None
         )
       | Bool, V_bool b -> Some b
@@ -367,6 +372,7 @@ module AbsValue : SAIL_VALUE = struct
         ("ones", lift (TransferBitvectorInterval.Ops.ones widths_cap) (AbsInt @-> Ret AbsBV));
         ("replicate_bits", lift Sail_lib.replicate_bits (BV @-> Int @-> Ret BV));
         ("length", primop_length);
+        ("length_bits", primop_length);
         ("eq_bits", primop_eq_bits);
         ("eq_anything", primop_eq_anything);
         ("not_vec", lift AbsBitvector.Dom.not (AbsBV @-> Ret AbsBV));
@@ -422,7 +428,7 @@ module AbsValue : SAIL_VALUE = struct
               )
             | [bv; n] -> (
                 match (concrete_bits bv, concrete_int n) with
-                | Some bs, Some n -> bitvector_of_bits (Sail_lib.access_inc bs n)
+                | Some bs, Some n -> bitvector_of_bv (Sail_lib.access_inc (Sail_lib.bits_of_bit_list bs) n)
                 | _ -> V_top
               )
             | _ -> V_top
@@ -464,7 +470,8 @@ module AbsValue : SAIL_VALUE = struct
               )
             | [bv; n; bit] -> (
                 match (concrete_bits bv, concrete_int n, concrete_bits bit) with
-                | Some bs, Some n, Some [b] -> bitvector_of_bits (Sail_lib.update bs n [b])
+                | Some bs, Some n, Some [b] ->
+                    bitvector_of_bv (Sail_lib.update (Sail_lib.bits_of_bit_list bs) n (Sail_lib.bits_of_bit_list [b]))
                 | _ -> V_top
               )
             | _ -> V_top
@@ -482,7 +489,9 @@ module AbsValue : SAIL_VALUE = struct
               )
             | [bv; n; bit] -> (
                 match (concrete_bits bv, concrete_int n, concrete_bits bit) with
-                | Some bs, Some n, Some [b] -> bitvector_of_bits (Sail_lib.update_inc bs n [b])
+                | Some bs, Some n, Some [b] ->
+                    bitvector_of_bv
+                      (Sail_lib.update_inc (Sail_lib.bits_of_bit_list bs) n (Sail_lib.bits_of_bit_list [b]))
                 | _ -> V_top
               )
             | _ -> V_top
@@ -577,11 +586,11 @@ module AbsValue : SAIL_VALUE = struct
             | [_out_len; _slice_len; out; n; slice] -> (
                 match (concrete_bits out, concrete_int n, concrete_bits slice) with
                 | Some out_bs, Some n, Some slice_bs ->
-                    bitvector_of_bits
+                    bitvector_of_bv
                       (Sail_lib.set_slice
                          (Z.of_int (List.length out_bs))
                          (Z.of_int (List.length slice_bs))
-                         out_bs n slice_bs
+                         (Sail_lib.bits_of_bit_list out_bs) n (Sail_lib.bits_of_bit_list slice_bs)
                       )
                 | _ -> V_top
               )

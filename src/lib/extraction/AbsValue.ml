@@ -591,7 +591,7 @@ module Dom =
   (** val abst : Ast.value -> value **)
 
   let rec abst = function
-  | Ast.V_bitvector bv -> V_bitvector (Dbv.abst (Bit.Bits.to_bvn bv))
+  | Ast.V_bitvector bv -> V_bitvector (Dbv.abst bv)
   | Ast.V_vector xs -> V_vector (map abst xs)
   | Ast.V_list xs -> V_list (map abst xs)
   | Ast.V_int i -> V_int (DZ.abst i)

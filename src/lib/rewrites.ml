@@ -2616,8 +2616,7 @@ let rewrite_ast_pat_string_append env =
 let rewrite_lit_lem (L_aux (lit, _)) =
   match lit with L_num _ | L_string _ | L_hex _ | L_bin _ | L_real _ -> true | _ -> false
 
-let rewrite_lit_ocaml (L_aux (lit, _)) =
-  match lit with L_num _ | L_string _ | L_hex _ | L_bin _ | L_real _ | L_unit -> false | _ -> true
+let rewrite_lit_ocaml (L_aux (lit, _)) = match lit with L_num _ | L_string _ | L_real _ | L_unit -> false | _ -> true
 
 let is_bitvector_lit (L_aux (lit, _)) = match lit with L_bin _ | L_hex _ -> true | _ -> false
 

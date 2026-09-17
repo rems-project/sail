@@ -133,7 +133,7 @@ let mk_real r = V_real (Util.Rational.to_rocq r)
 
 let rec eq_value v1 v2 =
   match (v1, v2) with
-  | V_bitvector b1s, V_bitvector b2s when List.length b1s = List.length b2s -> List.for_all2 ( = ) b1s b2s
+  | V_bitvector b1s, V_bitvector b2s -> Sail_lib.eq_list b1s b2s
   | V_vector v1s, V_vector v2s when List.length v1s = List.length v2s -> List.for_all2 eq_value v1s v2s
   | V_list v1s, V_list v2s when List.length v1s = List.length v2s -> List.for_all2 eq_value v1s v2s
   | V_int n, V_int m -> Big_int.equal n m
@@ -231,7 +231,7 @@ let value_string_length = function
 let value_eq_bit = function [v1; v2] -> V_bool (eq_value v1 v2) | _ -> failwith "value eq_bit"
 
 let value_length = function
-  | [V_bitvector bits] -> V_int (Big_int.of_int (List.length bits))
+  | [V_bitvector bits] -> V_int (Sail_lib.length_bits bits)
   | [V_vector vs] -> V_int (Big_int.of_int (List.length vs))
   | _ -> failwith "value length"
 
@@ -254,12 +254,12 @@ let value_access_inc = function
   | _ -> failwith "value access"
 
 let value_update = function
-  | [V_bitvector bits; n; V_bitvector [bit]] -> V_bitvector (Sail_lib.update_list bits (coerce_int n) bit)
+  | [V_bitvector bits; n; V_bitvector b] -> V_bitvector (Sail_lib.update bits (coerce_int n) b)
   | [V_vector vs; n; v] -> V_vector (Sail_lib.update_list vs (coerce_int n) v)
   | _ -> failwith "value update"
 
 let value_update_inc = function
-  | [V_bitvector bits; n; V_bitvector [bit]] -> V_bitvector (Sail_lib.update_list_inc bits (coerce_int n) bit)
+  | [V_bitvector bits; n; V_bitvector b] -> V_bitvector (Sail_lib.update_inc bits (coerce_int n) b)
   | [V_vector vs; n; v] -> V_vector (Sail_lib.update_list_inc vs (coerce_int n) v)
   | _ -> failwith "value update_inc"
 
@@ -274,7 +274,7 @@ let value_update_subrange_inc = function
   | _ -> failwith "value update_subrange_inc"
 
 let value_append = function
-  | [V_bitvector bv1; V_bitvector bv2] -> V_bitvector (bv1 @ bv2)
+  | [V_bitvector bv1; V_bitvector bv2] -> V_bitvector (Sail_lib.append bv1 bv2)
   | [V_vector v1; V_vector v2] -> V_vector (v1 @ v2)
   | _ -> failwith "value append"
 
@@ -284,12 +284,12 @@ let value_append_list = function
 
 let value_slice = function
   | [V_bitvector bits; n; m] -> V_bitvector (Sail_lib.slice bits (coerce_int n) (coerce_int m))
-  | [V_vector vs; n; m] -> V_vector (Sail_lib.slice vs (coerce_int n) (coerce_int m))
+  | [V_vector vs; n; m] -> V_vector (Sail_lib.slice_list vs (coerce_int n) (coerce_int m))
   | _ -> failwith "value slice"
 
 let value_slice_inc = function
   | [V_bitvector bits; n; m] -> V_bitvector (Sail_lib.slice_inc bits (coerce_int n) (coerce_int m))
-  | [V_vector vs; n; m] -> V_vector (Sail_lib.slice_inc vs (coerce_int n) (coerce_int m))
+  | [V_vector vs; n; m] -> V_vector (Sail_lib.slice_list_inc vs (coerce_int n) (coerce_int m))
   | _ -> failwith "value slice_inc"
 
 let value_not = function [v] -> V_bool (not (coerce_bool v)) | _ -> failwith "value not"
@@ -494,7 +494,7 @@ let value_undefined_range = function [v; _] -> v | _ -> failwith "value undefine
 let value_undefined_list = function [_] -> V_list [] | _ -> failwith "value undefined_list"
 
 let value_undefined_bitvector = function
-  | [v] -> V_bitvector (Sail_lib.undefined_vector (coerce_int v) B0)
+  | [v] -> V_bitvector (Sail_lib.undefined_bitvector (coerce_int v))
   | _ -> failwith "value undefined_bitvector"
 
 let value_read_ram = function
@@ -743,6 +743,7 @@ let primops =
          ("eq_bit", value_eq_bit);
          ("eq_anything", value_eq_anything);
          ("length", value_length);
+         ("length_bits", value_length);
          ("subrange", value_subrange);
          ("subrange_inc", value_subrange_inc);
          ("access", value_access);
@@ -836,7 +837,7 @@ let primops =
          ("print_real", value_print_real);
          ("random_real", value_random_real);
          ("undefined_unit", fun _ -> V_unit);
-         ("undefined_bit", fun _ -> V_bitvector [B0]);
+         ("undefined_bit", fun _ -> V_bitvector (Sail_lib.zeros (Big_int.of_int 1)));
          ("undefined_int", fun _ -> V_int Big_int.zero);
          ("undefined_range", value_undefined_range);
          ("undefined_nat", fun _ -> V_int Big_int.zero);
