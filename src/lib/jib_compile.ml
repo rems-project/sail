@@ -430,7 +430,8 @@ module Make (C : CONFIG) = struct
     | AV_lit (L_aux (L_num n, _), typ) when C.ignore_64 -> ([], V_lit (V_int n, ctyp_of_typ ctx typ), [])
     | AV_lit (L_aux (L_num n, _), typ) when Z.leq (min_int 64) n && Z.leq n (max_int 64) ->
         let gs = ngensym () in
-        ([iinit l CT_lint gs (V_lit (V_int n, CT_fint 64))], V_id (gs, CT_lint), [iclear CT_lint gs])
+        let ctyp = ctyp_of_typ ctx typ in
+        ([iinit l ctyp gs (V_lit (V_int n, CT_fint 64))], V_id (gs, ctyp), [iclear ctyp gs])
     | AV_lit (L_aux (L_num n, _), typ) ->
         let gs = ngensym () in
         ([iinit l CT_lint gs (V_lit (V_string (Z.to_string n), CT_string))], V_id (gs, CT_lint), [iclear CT_lint gs])
