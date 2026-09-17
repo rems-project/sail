@@ -120,7 +120,7 @@ module VariableUpdate = struct
         | Vector_range (n, m) -> (
             match BitList.to_gvector v with
             | V_vector vs ->
-                let vs = Sail_lib.subrange vs n m in
+                let vs = Sail_lib.subrange_list vs n m in
                 access (V_vector vs) accessors
             | _ -> None
           )
@@ -140,8 +140,10 @@ module VariableUpdate = struct
     match (m, xs) with
     | _, [] -> Some []
     | 0, xs -> (
-        let* ys = f (V_bitvector (List.rev (Util.take (n + 1) xs))) in
-        match ys with V_bitvector ys -> Some (List.rev ys @ Util.drop (n + 1) xs) | _ -> None
+        let* ys = f (V_bitvector (Sail_lib.bits_of_bit_list (List.rev (Util.take (n + 1) xs)))) in
+        match ys with
+        | V_bitvector ys -> Some (List.rev (Sail_lib.bit_list_of_bits ys) @ Util.drop (n + 1) xs)
+        | _ -> None
       )
     | m, x :: xs ->
         let* ys = bitvector_update_subrange f (n - 1) (m - 1) xs in
@@ -176,8 +178,18 @@ module VariableUpdate = struct
             let mk_vector vs =
               match v with
               | V_bitvector _ ->
-                  let* bs = Util.option_all @@ List.map (function V_bitvector [b] -> Some b | _ -> None) vs in
-                  Some (V_bitvector bs)
+                  let* bs =
+                    Util.option_all
+                    @@ List.map
+                         (function
+                           | V_bitvector b -> (
+                               match Sail_lib.bit_list_of_bits b with [x] -> Some x | _ -> None
+                             )
+                           | _ -> None
+                           )
+                         vs
+                  in
+                  Some (V_bitvector (Sail_lib.bits_of_bit_list bs))
               | _ -> Some (V_vector vs)
             in
             match BitList.to_gvector v with
@@ -192,21 +204,22 @@ module VariableUpdate = struct
           )
         | Vector_range (n, m) -> (
             match v with
-            | V_bitvector bs ->
+            | V_bitvector bv ->
+                let bs = Sail_lib.bit_list_of_bits bv in
                 if is_inc then
                   let* bs =
                     bitvector_update_subrange
                       (fun v -> update is_inc v v' accessors)
                       (Big_int.to_int m) (Big_int.to_int n) bs
                   in
-                  Some (V_bitvector bs)
+                  Some (V_bitvector (Sail_lib.bits_of_bit_list bs))
                 else
                   let* bs =
                     bitvector_update_subrange
                       (fun v -> update is_inc v v' accessors)
                       (Big_int.to_int n) (Big_int.to_int m) (List.rev bs)
                   in
-                  Some (V_bitvector (List.rev bs))
+                  Some (V_bitvector (Sail_lib.bits_of_bit_list (List.rev bs)))
             | V_vector vs ->
                 if is_inc then
                   let* vs =

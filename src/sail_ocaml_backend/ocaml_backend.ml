@@ -127,7 +127,7 @@ let ocaml_typ_id ctx = function
   | id when Id.compare id (mk_id "string") = 0 -> string "string"
   | id when Id.compare id (mk_id "string_literal") = 0 -> string "string"
   | id when Id.compare id (mk_id "list") = 0 -> string "list"
-  | id when Id.compare id (mk_id "bitvector") = 0 -> string "bit" ^^ space ^^ string "list"
+  | id when Id.compare id (mk_id "bitvector") = 0 -> string "bits"
   | id when Id.compare id (mk_id "int") = 0 -> string "Big_int.num"
   | id when Id.compare id (mk_id "implicit") = 0 -> string "Big_int.num"
   | id when Id.compare id (mk_id "nat") = 0 -> string "Big_int.num"
@@ -168,6 +168,16 @@ let string_lit str = dquotes (string (String.escaped str))
 
 let ocaml_bit = function B0 -> string "B0" | B1 -> string "B1"
 
+let ocaml_bits_lit bits =
+  let width = List.length bits in
+  let value = Sail_lib.uint (Sail_lib.bits_of_bit_list bits) in
+  parens
+    (string "to_bits" ^^ space
+    ^^ parens (string ("Big_int.of_int " ^ string_of_int width))
+    ^^ space
+    ^^ parens (string ("Big_int.of_string " ^ "\"" ^ Big_int.to_string value ^ "\""))
+    )
+
 let ocaml_lit (L_aux (lit_aux, _)) =
   match lit_aux with
   | L_unit -> string "()"
@@ -182,8 +192,8 @@ let ocaml_lit (L_aux (lit_aux, _)) =
   | L_real r ->
       let str = Q.to_string (Util.Rational.from_rocq r) in
       parens (string "real_of_string" ^^ space ^^ dquotes (string (String.escaped str)))
-  | L_bin bin -> brackets (separate_map (semi ^^ space) ocaml_bit (BitList.of_bin_lit bin))
-  | L_hex hex -> brackets (separate_map (semi ^^ space) ocaml_bit (BitList.of_hex_lit hex))
+  | L_bin bin -> ocaml_bits_lit (BitList.of_bin_lit bin)
+  | L_hex hex -> ocaml_bits_lit (BitList.of_hex_lit hex)
 
 let pat_record_id l pat =
   match typ_of_pat pat with
@@ -413,8 +423,10 @@ and ocaml_atomic_exp ctx (E_aux (exp_aux, _) as exp) =
       | Local (Mutable, _) -> bang ^^ zencode ctx id
     )
   | E_vector exps ->
-      parens
-        (string "List.concat" ^^ space ^^ enclose lbracket rbracket (separate_map (semi ^^ space) (ocaml_exp ctx) exps))
+      let elems = enclose lbracket rbracket (separate_map (semi ^^ space) (ocaml_exp ctx) exps) in
+      if is_bitvector_typ (typ_of exp) then
+        parens (string "List.fold_left append" ^^ space ^^ parens (string "zeros Big_int.zero") ^^ space ^^ elems)
+      else parens (string "List.concat" ^^ space ^^ elems)
   | E_list exps -> enclose lbracket rbracket (separate_map (semi ^^ space) (ocaml_exp ctx) exps)
   | E_tuple exps ->
       let len = List.length exps in

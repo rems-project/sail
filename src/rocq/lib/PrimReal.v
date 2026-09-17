@@ -41,48 +41,16 @@
 (*  SPDX-License-Identifier: BSD-2-Clause                                   *)
 (* ************************************************************************ *)
 
-Require Extraction.
+(** * Real primitives
 
-Set Extraction KeepSingleton.
-Set Extraction Output Directory ".".
+Concrete definitions of the Sail real primitives, over [Q].
 
-From Stdlib Require ExtrOcamlBasic.
-From Stdlib Require ExtrOcamlNatBigInt.
-From Stdlib Require ExtrOcamlNativeString.
-From Stdlib Require ExtrOcamlZBigInt.
+Note that [Q] extracts to a numerator/denominator record rather than to Zarith's
+normalising [Q.t], so values are not canonical: equality must go through
+[Qeq_bool] rather than structural comparison. The interpreter's [V_real] already
+holds a Rocq [Q], so moving these definitions here removes conversions rather
+than adding them. *)
 
-From Sail Require Import Ast.
-From Sail Require Import AstInduction.
-From Sail Require Import Bit.
-From Sail Require Import IdUtil.
-From Sail Require Import PatternMatch.
-From Sail Require PrimBits.
-From Sail Require PrimInt.
-From Sail Require PrimReal.
-From Sail Require PrimString.
-From Sail Require PrimVector.
-From Sail Require Import Semantics.
-From Sail Require Import ValueType.
-From Sail Require Import Domain.TransferBitvectorInterval.
-From Sail Require ZAst.
+From Stdlib Require Import QArith.
 
-Extraction Blacklist Nat List String.
-
-Separate Extraction
-  BitList.to_hex_digits
-  Primops
-  PrimBits
-  PrimInt
-  PrimReal
-  PrimString
-  PrimVector
-  Semantics.Make
-  TransferBitvectorInterval.Ops
-  ZAst.ExpBuilder
-  ZAst.Make
-  ZAst.Residual
-  Domain.Lattice
-  Domain.AbsValue.Dom
-  attribute_data
-  def
-  l.
+Definition add_real (x y : Q) : Q := Qplus x y.

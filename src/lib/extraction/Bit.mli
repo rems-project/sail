@@ -8,7 +8,11 @@ type bit =
 | B0
 | B1
 
+val bit_eqb : bit -> bit -> bool
+
 val bit_to_bool : bit -> bool
+
+val bool_to_bit : bool -> bit
 
 module Bits :
  sig

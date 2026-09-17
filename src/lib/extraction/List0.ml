@@ -1,11 +1,5 @@
 open Datatypes
 
-(** val tl : 'a1 list -> 'a1 list **)
-
-let tl = function
-| [] -> []
-| _ :: l' -> l'
-
 (** val nth_error : 'a1 list -> Big_int_Z.big_int -> 'a1 option **)
 
 let rec nth_error l n =
@@ -55,7 +49,7 @@ let rec forallb f = function
 let rec combine l l' =
   match l with
   | [] -> []
-  | x :: tl0 ->
+  | x :: tl ->
     (match l' with
      | [] -> []
-     | y :: tl' -> (x, y) :: (combine tl0 tl'))
+     | y :: tl' -> (x, y) :: (combine tl tl'))

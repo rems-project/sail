@@ -1,6 +1,6 @@
 open Assignment
 open Ast
-open Bit
+open BinInt
 open Datatypes
 open IdUtil
 open List0
@@ -8,10 +8,12 @@ open ListDef
 open ListUtil
 open PatternMatch
 open PeanoNat
+open PrimBits
 open Specif
 open TypeAnnot
 open ValueType
 open Wf
+open Definitions
 
 val is_value : 'a1 exp -> bool
 
@@ -126,7 +128,7 @@ module Make :
 
   val substitute_lexp : id -> value -> 'a1 lexp -> 'a1 lexp
 
-  val bv_concat : Parse_ast.l -> value list -> bit list Monad.t
+  val bv_concat : Parse_ast.l -> value list -> bvn Monad.t
 
   val lookup_field : Parse_ast.l -> id -> (id * value) list -> value Monad.t
 

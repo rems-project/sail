@@ -1,27 +1,8 @@
 open Ast
 open Bit
-open Datatypes
 open List0
 open ListDef
-
-(** val same_bits : bit list -> bit list -> bool **)
-
-let same_bits bs vs =
-  fst
-    (fold_left (fun match_info b ->
-      let (y, y0) = match_info in
-      if y
-      then (match y0 with
-            | [] -> (false, [])
-            | y1 :: vs0 ->
-              (match y1 with
-               | B0 -> (match b with
-                        | B0 -> (true, vs0)
-                        | B1 -> (false, []))
-               | B1 -> (match b with
-                        | B0 -> (false, [])
-                        | B1 -> (true, vs0))))
-      else (false, [])) bs (true, vs))
+open PrimBits
 
 (** val of_hex_digit : hex_digit -> bit list **)
 
@@ -128,5 +109,6 @@ let of_bin_lit bin =
 (** val to_gvector : value -> value **)
 
 let to_gvector v = match v with
-| V_bitvector bs -> V_vector (map (fun b -> V_bitvector (b :: [])) bs)
+| V_bitvector bs ->
+  V_vector (map (fun x -> V_bitvector x) (to_single_bits bs))
 | _ -> v

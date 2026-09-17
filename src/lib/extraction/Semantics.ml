@@ -1,6 +1,6 @@
 open Assignment
 open Ast
-open Bit
+open BinInt
 open Datatypes
 open IdUtil
 open List0
@@ -8,10 +8,12 @@ open ListDef
 open ListUtil
 open PatternMatch
 open PeanoNat
+open PrimBits
 open Specif
 open TypeAnnot
 open ValueType
 open Wf
+open Definitions
 
 (** val is_value : 'a1 exp -> bool **)
 
@@ -392,14 +394,15 @@ module Make =
        LE_aux ((LE_field ((substitute_lexp n v lx), f)), annot0)
      | _ -> l)
 
-  (** val bv_concat : Parse_ast.l -> value list -> bit list Monad.t **)
+  (** val bv_concat : Parse_ast.l -> value list -> bvn Monad.t **)
 
   let rec bv_concat l = function
-  | [] -> Monad.pure []
+  | [] -> Monad.pure (zeros Big_int_Z.zero_big_int)
   | v :: rest ->
     (match v with
      | V_bitvector bs ->
-       Monad.bind (bv_concat l rest) (fun rest' -> Monad.pure (app bs rest'))
+       Monad.bind (bv_concat l rest) (fun rest' ->
+         Monad.pure (append bs rest'))
      | _ -> Monad.Runtime_type_error l)
 
   (** val lookup_field :
@@ -419,7 +422,7 @@ module Make =
     | DL_tuple ds ->
       (match v with
        | V_tuple vs ->
-         if Nat.eqb (length ds) (length vs)
+         if Nat.eqb (Datatypes.length ds) (Datatypes.length vs)
          then let (assignment, _) =
                 fold_left (fun acc d0 ->
                   let (prev, y) = acc in
@@ -442,16 +445,17 @@ module Make =
              let (s, d1) = d0 in
              (match s with
               | Types.No_split ->
-                ((Monad.Runtime_type_error (fst annot0)), [])
+                ((Monad.Runtime_type_error (fst annot0)),
+                  (zeros Big_int_Z.zero_big_int))
               | Types.Split s0 ->
                 let (prev, bs0) = acc in
-                (match bs0 with
-                 | [] -> (prev, [])
-                 | _ :: _ ->
-                   let (bs_take, bs_drop) = take_drop s0 bs0 in
-                   ((Monad.bind prev (fun _ ->
-                      destructuring_assignment annot0 d1 (V_bitvector bs_take))),
-                   bs_drop))))
+                if Z.eqb (width bs0) Big_int_Z.zero_big_int
+                then (prev, bs0)
+                else let (bs_take, bs_drop) = split_at (Z.of_nat s0) bs0 in
+                     ((Monad.bind prev (fun _ ->
+                        destructuring_assignment annot0 d1 (V_bitvector
+                          bs_take))),
+                     bs_drop)))
              ds ((Monad.pure ()), bs)
          in
          assignment

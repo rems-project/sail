@@ -1,10 +1,7 @@
 open Ast
 open BinInt
-open Bit
 open BitList
-open Datatypes
-open ListDef
-open PeanoNat
+open PrimBits
 
 (** val value_of_lit : lit -> value **)
 
@@ -15,8 +12,8 @@ let value_of_lit = function
    | L_true -> V_bool true
    | L_false -> V_bool false
    | L_num n -> V_int n
-   | L_hex h -> V_bitvector (of_hex_lit h)
-   | L_bin b -> V_bitvector (of_bin_lit b)
+   | L_hex h -> V_bitvector (of_bit_list (of_hex_lit h))
+   | L_bin b -> V_bitvector (of_bit_list (of_bin_lit b))
    | L_string s -> V_string s
    | L_real r -> V_real r)
 
@@ -66,14 +63,12 @@ module Primops =
 
   let zero_extend bits n =
     match bits with
-    | V_bitvector bitlist ->
+    | V_bitvector bv ->
       (match n with
        | V_int n0 ->
-         let len = length bitlist in
-         if Z.ltb n0 (Z.of_nat len)
+         if Z.ltb n0 (width bv)
          then None
-         else let extend = Nat.sub (Z.to_nat n0) len in
-              Some (V_bitvector (app (repeat B0 extend) bitlist))
+         else Some (V_bitvector (zero_extend bv n0))
        | _ -> None)
     | _ -> None
  end

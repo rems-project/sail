@@ -1718,7 +1718,7 @@ Module Dom (DZ : SAIL_INT) (Dbv : SAIL_BITS) (T : SAIL_BITS_INT Dbv DZ) <: SAIL_
 
   Fixpoint abst (x : Ast.value) : value :=
     match x with
-    | Ast.V_bitvector bv => V_bitvector (Dbv.α (Bit.Bits.to_bvn bv))
+    | Ast.V_bitvector bv => V_bitvector (Dbv.α bv)
     | Ast.V_vector xs => V_vector (List.map abst xs)
     | Ast.V_list xs => V_list (List.map abst xs)
     | Ast.V_int i => V_int (DZ.α i)

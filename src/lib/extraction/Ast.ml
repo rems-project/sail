@@ -1,5 +1,5 @@
-open Bit
 open QArith_base
+open Definitions
 
 type l = Parse_ast.l
 
@@ -68,7 +68,7 @@ type id =
 | Id_aux of id_aux * Parse_ast.l
 
 type value =
-| V_bitvector of bit list
+| V_bitvector of bvn
 | V_vector of value list
 | V_list of value list
 | V_int of Big_int_Z.big_int

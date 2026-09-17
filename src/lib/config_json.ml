@@ -107,8 +107,8 @@ let bin_digit_to_bit = function Bin_0 -> B0 | Bin_1 -> B1
 
 let fix_length ~at:l ~len bitlist =
   let open Extraction.ValueType in
-  match Primops.zero_extend (V_bitvector bitlist) (V_int (Big_int.of_int len)) with
-  | Some (V_bitvector bitlist) -> bitlist
+  match Primops.zero_extend (V_bitvector (Sail_lib.bits_of_bit_list bitlist)) (V_int (Big_int.of_int len)) with
+  | Some (V_bitvector bits) -> Sail_lib.bit_list_of_bits bits
   | _ ->
       Reporting.warn ~force_show:true Version.v0_20_2 "Configuration" l
         "Forced to truncate configuration bitvector literal";
@@ -131,7 +131,7 @@ let parse_json_string_to_bits ~at:l ~len str =
     else
       let* dec_chars = List.filter_map valid_dec_char chars |> Util.option_all in
       let n = List.to_seq dec_chars |> String.of_seq |> Big_int.of_string in
-      Some (Sail_lib.get_slice_int (Big_int.of_int len) n Big_int.zero)
+      Some (Sail_lib.bit_list_of_bits (Sail_lib.get_slice_int (Big_int.of_int len) n Big_int.zero))
   in
   Some (mk_lit_exp ~loc:l (L_bin (bitlist_to_literal bitlist)))
 
@@ -230,9 +230,9 @@ module ConfigValue : CONFIG_VALUE with type t = value = struct
 
   let unit _ = V_unit
 
-  let hex _ digits = V_bitvector (Extraction.BitList.of_hex_lit digits)
+  let hex _ digits = V_bitvector (Sail_lib.bits_of_bit_list (Extraction.BitList.of_hex_lit digits))
 
-  let bin _ digits = V_bitvector (Extraction.BitList.of_bin_lit digits)
+  let bin _ digits = V_bitvector (Sail_lib.bits_of_bit_list (Extraction.BitList.of_bin_lit digits))
 
   let vector _ items = V_vector items
 
@@ -260,7 +260,7 @@ module Parse (V : CONFIG_VALUE) = struct
       else
         let* dec_chars = List.filter_map valid_dec_char chars |> Util.option_all in
         let n = List.to_seq dec_chars |> String.of_seq |> Big_int.of_string in
-        Some (Sail_lib.get_slice_int (Big_int.of_int len) n Big_int.zero)
+        Some (Sail_lib.bit_list_of_bits (Sail_lib.get_slice_int (Big_int.of_int len) n Big_int.zero))
     in
     Some (V.bin l (bitlist_to_literal bitlist))
 

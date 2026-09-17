@@ -1723,8 +1723,10 @@ and subst_lexp id value (LE_aux (lexp_aux, annot)) =
   wrap lexp_aux
 
 let hex_to_bin hex =
-  Util.string_to_list hex |> List.map Sail_lib.hex_char |> List.concat |> List.map Sail_lib.char_of_bit |> fun bits ->
-  String.init (List.length bits) (List.nth bits)
+  Util.string_to_list hex
+  |> List.map (fun c -> Sail_lib.bit_list_of_bits (Sail_lib.hex_char c))
+  |> List.concat |> List.map Sail_lib.char_of_bit
+  |> fun bits -> String.init (List.length bits) (List.nth bits)
 
 let explode s =
   let rec exp i l = if i < 0 then l else exp (i - 1) (s.[i] :: l) in

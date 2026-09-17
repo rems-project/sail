@@ -1,14 +1,13 @@
 open Ast
 open BinInt
-open Bit
 open BitList
 open Datatypes
 open IdUtil
 open List0
 open ListDef
 open ListUtil
-open Nat0
 open PeanoNat
+open PrimBits
 open QArith_base
 open TypeAnnot
 
@@ -42,23 +41,6 @@ let combine_binding l r =
 let merge_bindings l r =
   IdMap.map2 combine_binding l r
 
-(** val update_list : bit list -> Big_int_Z.big_int -> bit -> bit list **)
-
-let update_list xs n y =
-  let n0 =
-    sub (sub (length xs) n) (Big_int_Z.succ_big_int Big_int_Z.zero_big_int)
-  in
-  let (ys, zs) = take_drop n0 xs in app ys (app (y :: []) (tl zs))
-
-(** val update_subrange :
-    bit list -> Big_int_Z.big_int -> bit list -> bit list **)
-
-let rec update_subrange xs n = function
-| [] -> xs
-| y :: ys0 ->
-  update_subrange (update_list xs n y)
-    (sub n (Big_int_Z.succ_big_int Big_int_Z.zero_big_int)) ys0
-
 (** val complete_value :
     ((value * Big_int_Z.big_int) * Big_int_Z.big_int) non_empty -> value **)
 
@@ -74,15 +56,17 @@ let complete_value = function
       partial_values0 (n1, m1)
   in
   let len = Z.sub (Z.succ max0) min0 in
-  let zeros = repeat B0 (Z.to_nat len) in
+  let zeros0 = zeros len in
   let value0 =
     fold_left (fun bv pvalue ->
       let (y, _) = pvalue in
       let (slice, n) = y in
       (match slice with
-       | V_bitvector slice0 -> update_subrange bv (Z.to_nat n) slice0
+       | V_bitvector slice0 ->
+         update_subrange bv n
+           (Z.add (Z.sub n (width slice0)) Big_int_Z.unit_big_int) slice0
        | _ -> bv))
-      (((v1, n1), m1) :: partial_values0) zeros
+      (((v1, n1), m1) :: partial_values0) zeros0
   in
   V_bitvector value0
 
@@ -203,11 +187,13 @@ let pattern_match_literal l v =
       | _ -> Unmatched)
    | L_hex s ->
      (match v with
-      | V_bitvector vs -> simple_match_when (same_bits (of_hex_lit s) vs)
+      | V_bitvector vs ->
+        simple_match_when (eq_bits (of_bit_list (of_hex_lit s)) vs)
       | _ -> Unmatched)
    | L_bin s ->
      (match v with
-      | V_bitvector vs -> simple_match_when (same_bits (of_bin_lit s) vs)
+      | V_bitvector vs ->
+        simple_match_when (eq_bits (of_bit_list (of_bin_lit s)) vs)
       | _ -> Unmatched)
    | L_string s1 ->
      (match v with
@@ -282,16 +268,15 @@ module Typed =
             (fold_left (fun match_info p0 ->
               let P_aux (_, annot0) = p0 in
               (match Tannot.get_split (snd annot0) with
-               | Types.No_split -> (Unmatched, [])
+               | Types.No_split -> (Unmatched, (zeros Big_int_Z.zero_big_int))
                | Types.Split s ->
                  let (prev, bs0) = match_info in
-                 (match bs0 with
-                  | [] -> (Unmatched, [])
-                  | _ :: _ ->
-                    let (bs_take, bs_drop) = take_drop s bs0 in
-                    ((merge_match_result prev
-                       (pattern_match p0 (V_bitvector bs_take))),
-                    bs_drop))))
+                 if Z.eqb (width bs0) Big_int_Z.zero_big_int
+                 then (Unmatched, bs0)
+                 else let (bs_take, bs_drop) = split_at (Z.of_nat s) bs0 in
+                      ((merge_match_result prev
+                         (pattern_match p0 (V_bitvector bs_take))),
+                      bs_drop)))
               ps (simple_match, bs))
         | V_vector vs ->
           fst
@@ -327,7 +312,7 @@ module Typed =
      | P_list ps ->
        (match v with
         | V_list vs ->
-          if Nat.eqb (length ps) (length vs)
+          if Nat.eqb (Datatypes.length ps) (Datatypes.length vs)
           then fst (fold_match pattern_match ps (simple_match, vs))
           else Unmatched
         | _ -> Unmatched)

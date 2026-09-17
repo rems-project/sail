@@ -1,10 +1,8 @@
 open Ast
 open Bit
-open Datatypes
 open List0
 open ListDef
-
-val same_bits : bit list -> bit list -> bool
+open PrimBits
 
 val of_hex_digit : hex_digit -> bit list
 
