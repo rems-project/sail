@@ -97,7 +97,7 @@ let opt_disable_matchbv : bool ref = ref true
 let lean_version : string = "lean4:v4.29.0"
 let mathlib_version : string = "v4.29.0"
 let lib_default_git : string = "https://github.com/rems-project/lean-sail"
-let lib_default_rev : string = "v5"
+let lib_default_rev : string = "v6"
 
 let lean_options =
   [
