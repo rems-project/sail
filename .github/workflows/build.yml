@@ -32,7 +32,9 @@ jobs:
 
     - name: System dependencies (Linux)
       if: runner.os == 'Linux'
-      run: sudo apt install build-essential libgmp-dev cvc4
+      run: |
+        sudo apt update
+        sudo apt install build-essential libgmp-dev cvc4
 
     - name: System dependencies (macOS)
       if: runner.os == 'macOS'
