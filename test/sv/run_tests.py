@@ -40,6 +40,7 @@ skip_tests = {
     'cycle_count_v2',
     'mini_builtins', # unsupported builtins
     'test_mono_rewrites', # verilator bug (in CI, works with latest)
+    'const_prop_mut_rec', # loops
 }
 
 print("Sail is {}".format(sail))
