@@ -49,6 +49,7 @@ type t = { major : int; minor : int; patch : int }
 (** The current version of Sail. Must be updated manually on each release. *)
 val current : t
 
+val v0_20_3 : t
 val v0_20_2 : t
 
 (** Convert a string like "1.2.3" into a version. Will also parse numbers like "1.2" or "1" setting the minor and patch
