@@ -71,13 +71,16 @@ let wavedrom_label size = function
   | Some label -> Printf.sprintf ", attr: ['%d', '%s']" size label
 
 let binary_to_hex bin =
-  let open Sail2_values in
-  let str = string_of_bin_lit ~group_separator:"" bin in
-  let padded = match String.length str mod 4 with 0 -> str | 1 -> "000" ^ str | 2 -> "00" ^ str | _ -> "0" ^ str in
-  Util.string_to_list padded
-  |> List.map (function '0' -> B0 | _ -> B1)
-  |> hexstring_of_bits |> Option.get
-  |> Util.string_of_list "" (fun c -> String.make 1 c)
+  let bits =
+    string_of_bin_lit ~group_separator:"" bin
+    |> Util.string_to_list |> List.map Sail_lib.bin_char |> Sail_lib.bits_of_bit_list
+  in
+  (* Wavedrom displays the literal in hex, so round the width up to a whole number of nibbles *)
+  let width = Big_int.to_int (Sail_lib.length_bits bits) in
+  let bits = Sail_lib.zero_extend bits (Big_int.of_int (4 * ((width + 3) / 4))) in
+  (* For such a width [string_of_bits] gives us uppercase hex digits behind a 0x prefix *)
+  let str = Sail_lib.string_of_bits bits in
+  String.sub str 2 (String.length str - 2)
 
 let rec wavedrom_elem_string size label (P_aux (aux, _)) =
   match aux with

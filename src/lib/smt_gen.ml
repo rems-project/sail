@@ -134,7 +134,7 @@ let signed_size ?(checked = true) ~into:n ~from:m smt =
     let check =
       (* If the top bit of the truncated number is one *)
       Ite
-        ( Fn ("=", [Extract (n - 1, n - 1, m, smt); Bitvec_lit [Sail2_values.B1]]),
+        ( Fn ("=", [Extract (n - 1, n - 1, m, smt); bvone 1]),
           (* Then we have an overflow, unless all bits we truncated were also one *)
           Fn ("not", [Fn ("=", [Extract (m - 1, n, m, smt); bvones (m - n)])]),
           (* Otherwise, all the top bits must be zero *)
@@ -165,46 +165,15 @@ let unsigned_size ?max_value ?(checked = true) ~into:n ~from:m smt =
    don't have a very good way to get the binary representation of
    either an OCaml integer or a big integer. *)
 let bvpint ?(loc = Parse_ast.Unknown) sz x =
-  let open Sail2_values in
-  if Big_int.less_equal Big_int.zero x && Big_int.less_equal x (Big_int.of_int max_int) then (
-    let x = Big_int.to_int x in
-    match Printf.sprintf "%X" x |> Util.string_to_list |> List.map nibble_of_char |> Util.option_all with
-    | Some nibbles ->
-        let bin = List.concat_map (fun (a, b, c, d) -> [a; b; c; d]) nibbles in
-        let _, bin = Util.take_drop (function B0 -> true | _ -> false) bin in
-        let padding_amount = sz - List.length bin in
-        if padding_amount >= 0 then (
-          let padding = List.init padding_amount (fun _ -> B0) in
-          Bitvec_lit (padding @ bin)
-        )
-        else (
-          (* Negative padding can happen if sz is not a multiple of 4 *)
-          let extra_zeros, bin = Util.split_after padding_amount bin in
-          assert (List.for_all (function B0 -> true | _ -> false) extra_zeros);
-          Bitvec_lit bin
-        )
-    | None -> assert false
-  )
-  else if Big_int.greater x (Big_int.of_int max_int) then (
-    let y = ref x in
-    let bin = ref [] in
-    while not (Big_int.equal !y Big_int.zero) do
-      let q, m = Big_int.quomod !y (Big_int.of_int 2) in
-      bin := (if Big_int.equal m Big_int.zero then B0 else B1) :: !bin;
-      y := q
-    done;
-    let padding_size = sz - List.length !bin in
-    if padding_size < 0 then
-      raise
-        (Reporting.err_general loc
-           (Printf.sprintf "Could not create a %d-bit integer with value %s.\nTry increasing the maximum integer size."
-              sz (Big_int.to_string x)
-           )
-        );
-    let padding = List.init padding_size (fun _ -> B0) in
-    Bitvec_lit (padding @ !bin)
-  )
-  else Reporting.unreachable loc __POS__ "bvpint called on non-positive integer"
+  if Big_int.less x Big_int.zero then Reporting.unreachable loc __POS__ "bvpint called on non-positive integer"
+  else if Big_int.greater_equal x (Big_int.shift_left (Big_int.of_int 1) sz) then
+    raise
+      (Reporting.err_general loc
+         (Printf.sprintf "Could not create a %d-bit integer with value %s.\nTry increasing the maximum integer size." sz
+            (Big_int.to_string x)
+         )
+      )
+  else Bitvec_lit (Sail_lib.to_bits (Big_int.of_int sz) x)
 
 let bvint sz x =
   if Big_int.less x Big_int.zero then
@@ -287,9 +256,7 @@ module Make (Config : CONFIG) (Primop_gen : PRIMOP_GEN) = struct
   let literal vl ctyp =
     let open Ast in
     match (vl, ctyp) with
-    | V_bitvector bv, CT_fbits n ->
-        let bits = bitU_list_of_bvn bv in
-        unsigned_size ~into:n ~from:(List.length bits) (Bitvec_lit bits)
+    | V_bitvector bv, CT_fbits n -> unsigned_size ~into:n ~from:(bv_length bv) (Bitvec_lit bv)
     | V_member id, _ -> return (Member id)
     | V_bool b, _ -> return (Bool_lit b)
     | V_int n, CT_constant m -> return (bvint (required_width n) n)
@@ -531,9 +498,13 @@ module Make (Config : CONFIG) (Primop_gen : PRIMOP_GEN) = struct
     | _, CT_constant c -> return (bvint (required_width c) c)
     | CT_constant c, _ -> return (bvint (int_size ret_ctyp) (Big_int.negate c))
     | ctyp, _ ->
-        let open Sail2_values in
-        let* smt = bind (smt_cval v) (signed_size ~into:(int_size ret_ctyp) ~from:(int_size ctyp)) in
-        let* _ = overflow_check (Fn ("=", [smt; Bitvec_lit (B1 :: List.init (int_size ret_ctyp - 1) (fun _ -> B0))])) in
+        let ret_sz = int_size ret_ctyp in
+        let* smt = bind (smt_cval v) (signed_size ~into:ret_sz ~from:(int_size ctyp)) in
+        (* Negating the most negative integer overflows *)
+        let most_negative =
+          Sail_lib.to_bits (Big_int.of_int ret_sz) (Big_int.shift_left (Big_int.of_int 1) (ret_sz - 1))
+        in
+        let* _ = overflow_check (Fn ("=", [smt; Bitvec_lit most_negative])) in
         return (Fn ("bvneg", [smt]))
 
   let builtin_abs_int v ret_ctyp =
@@ -559,8 +530,8 @@ module Make (Config : CONFIG) (Primop_gen : PRIMOP_GEN) = struct
   let builtin_max_int = builtin_choose_int "bvsgt" max
   let builtin_min_int = builtin_choose_int "bvslt" min
 
-  let builtin_tdiv_int = builtin_arith ~fold:false "bvsdiv" Sail2_values.tdiv_int (fun x -> x)
-  let builtin_tmod_int = builtin_arith ~fold:false "bvsrem" Sail2_values.tmod_int (fun x -> x)
+  let builtin_tdiv_int = builtin_arith ~fold:false "bvsdiv" Sail_lib.tdiv_int (fun x -> x)
+  let builtin_tmod_int = builtin_arith ~fold:false "bvsrem" Sail_lib.tmod_int (fun x -> x)
 
   let int_comparison fn big_int_fn v1 v2 =
     let* sv1 = smt_cval v1 in
@@ -1291,11 +1262,7 @@ module Make (Config : CONFIG) (Primop_gen : PRIMOP_GEN) = struct
   let builtin_count_leading_zeros v ret_ctyp =
     let rec lzcnt ret_sz sz smt =
       if sz == 1 then
-        Ite
-          ( Fn ("=", [Extract (0, 0, sz, smt); Bitvec_lit [Sail2_values.B0]]),
-            bvint ret_sz (Big_int.of_int 1),
-            bvint ret_sz Big_int.zero
-          )
+        Ite (Fn ("=", [Extract (0, 0, sz, smt); bvzero 1]), bvint ret_sz (Big_int.of_int 1), bvint ret_sz Big_int.zero)
       else (
         assert (sz land (sz - 1) = 0);
         let hsz = sz / 2 in
@@ -1361,8 +1328,7 @@ module Make (Config : CONFIG) (Primop_gen : PRIMOP_GEN) = struct
 
   let builtin_count_trailing_zeros v ret_ctyp =
     let rec tzcnt ret_sz sz smt =
-      if sz == 1 then
-        Ite (Fn ("=", [smt; Bitvec_lit [Sail2_values.B0]]), bvint ret_sz (Big_int.of_int 1), bvint ret_sz Big_int.zero)
+      if sz == 1 then Ite (Fn ("=", [smt; bvzero 1]), bvint ret_sz (Big_int.of_int 1), bvint ret_sz Big_int.zero)
       else (
         assert (sz land (sz - 1) = 0);
         let hsz = sz / 2 in
