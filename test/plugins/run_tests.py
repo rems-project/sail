@@ -84,7 +84,7 @@ def test_plugin_dir_include_extra_plugin():
     def check(name, condition, detail):
         if condition:
             results.passes += 1
-            results.xml += '    <testcase name="{}"/>\n'.format(name)
+            results.xml += '    <testcase name="{}" classname="{}"/>\n'.format(name, results.name)
             print_ok(name)
         else:
             results._add_failure(name, detail)
