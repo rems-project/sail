@@ -49,9 +49,9 @@ open Printf
 let opt_file = ref None
 
 let log fmt args =
-  let chan = Option.value ~default:stdout !opt_file in
+  let chan = Option.value ~default:stderr !opt_file in
   fprintf chan "[sail_lsp] %s\n%!" (sprintf fmt args)
 
 let log_error fmt args =
-  let chan = Option.value ~default:stdout !opt_file in
+  let chan = Option.value ~default:stderr !opt_file in
   fprintf chan "[sail_lsp] Error: %s\n%!" (sprintf fmt args)
