@@ -53,5 +53,9 @@ jobs:
         commit: ${{ github.event.workflow_run.head_sha }}
         event_file: event.json
         event_name: ${{ github.event.workflow_run.event }}
+        # The same test name can appear in several suites (e.g. the C tests
+        # run the same files for each target), so report each run separately
+        # instead of grouping them into a single result
+        report_individual_runs: true
         files: |
           ./**/tests.xml

@@ -6,6 +6,9 @@ import datetime
 import argparse
 import signal
 import html
+import atexit
+import shutil
+import tempfile
 
 def signal_handler(sig, frame):
     sys.exit(0)
@@ -128,28 +131,101 @@ def project_chunks(filenames, cores):
     ys.append(list(chunk))
     return ys
 
+# Most test suites run each test in a forked child process, so the parent only
+# ever sees the child's exit status. To get something more useful than 'fail'
+# into the JUnit XML (and hence into the GitHub CI output), a failing child
+# leaves a description of what went wrong in this directory, in a file named
+# after its pid, which the parent picks up when it reaps the child.
+report_dir = tempfile.mkdtemp(prefix='sail-test-reports-')
+report_dir_owner = os.getpid()
+
+def cleanup_report_dir():
+    # Forked children run atexit handlers too, and must not delete the reports
+    # belonging to their siblings, so only the creating process cleans up.
+    if os.getpid() == report_dir_owner:
+        shutil.rmtree(report_dir, ignore_errors=True)
+
+atexit.register(cleanup_report_dir)
+
+def report_path(pid):
+    return os.path.join(report_dir, str(pid))
+
+def take_report(pid):
+    """Read and remove the failure report left behind by a child process."""
+    try:
+        with open(report_path(pid), 'r') as file:
+            report = file.read()
+        os.remove(report_path(pid))
+    except OSError:
+        return ''
+    return report.strip()
+
+# How much of each captured stream to keep in the report. The full output is
+# always in the test log; this is just what gets embedded in the XML.
+max_captured_output = 4000
+
+def truncate_output(string):
+    string = string.strip()
+    if len(string) > max_captured_output:
+        return string[:max_captured_output] + '\n[... truncated, see the full test log]'
+    return string
+
+def record_failure(command, status, expected_status, out, err, stderr_file, file_content):
+    lines = ['Command failed: {}'.format(command),
+             'Exited with status {} (expected {})'.format(status, expected_status)]
+    for header, content in [('stdout', out), ('stderr', err), (stderr_file, file_content)]:
+        content = truncate_output(content)
+        if content:
+            lines.append('{}:\n{}'.format(header, content))
+    try:
+        with open(report_path(os.getpid()), 'a') as file:
+            file.write('\n'.join(lines) + '\n')
+    except OSError:
+        # A missing report just means a less informative message
+        pass
+
+def describe_status(status):
+    if os.WIFSIGNALED(status):
+        return 'was killed by signal {}'.format(os.WTERMSIG(status))
+    if os.WIFEXITED(status):
+        return 'exited with status {}'.format(os.WEXITSTATUS(status))
+    return 'returned wait status {}'.format(status)
+
+ansi_escape = re.compile(r'\x1b\[[0-9;]*[a-zA-Z]')
+invalid_xml_char = re.compile(r'[^\x09\x0a\x0d\x20-\uD7FF\uE000-\uFFFD]')
+
+def xml_text(msg):
+    # Test output is full of terminal colour codes, and can contain other
+    # control characters that XML cannot represent at all.
+    return invalid_xml_char.sub('', ansi_escape.sub('', msg))
+
 def step_with_status(string, expected_status=0, cwd=None, name='', stderr_file=''):
     p = subprocess.Popen(string, shell=True, stderr=subprocess.PIPE, stdout=subprocess.PIPE, cwd=cwd)
     out, err = p.communicate()
     status = p.wait()
     if status != expected_status:
+        out = out.decode('utf-8', errors='replace')
+        err = err.decode('utf-8', errors='replace')
+        file_content = ''
+        if stderr_file != '':
+            try:
+                with open(stderr_file, 'r') as file:
+                    file_content = file.read()
+            except FileNotFoundError:
+                file_content = 'File {} not found'.format(stderr_file)
+        record_failure(string, status, expected_status, out, err, stderr_file, file_content)
         if is_compact():
             compact_char(color.FAIL, 'X')
         else:
             print("{}Failed{}: {} {}".format(color.FAIL, color.END, name, string))
         if not args.hide_error_output:
             print('{}stdout{}:'.format(color.NOTICE, color.END))
-            print(out.decode('utf-8'))
+            print(out)
             print('{}stderr{}:'.format(color.NOTICE, color.END))
-            print(err.decode('utf-8'))
+            print(err)
             if stderr_file != '':
-                try:
-                    with open(stderr_file, 'r') as file:
-                        content = file.read()
-                        print('{}stderr file{}:'.format(color.NOTICE, color.END))
-                        print(content)
-                except FileNotFoundError:
-                    print('File {} not found'.format(stderr_file))
+                print('{}stderr file{}:'.format(color.NOTICE, color.END))
+                print(file_content)
     return status
 
 def step(string, expected_status=0, cwd=None, name='', stderr_file=''):
@@ -170,21 +246,30 @@ class Results:
         self._xfail_reasons = {}
         self.xml = ""
         self.name = name
+        self._start = datetime.datetime.now()
 
     def expect_failure(self, test, reason):
         self._xfail_reasons[test] = reason
 
     def _add_status(self, test, result, msg):
-        qmsg = html.escape(msg)
-        self.xml += f'    <testcase name="{test}">\n      <{result} message="{qmsg}">{qmsg}</{result}>\n    </testcase>\n'
+        # The message attribute is what CI tends to show first, so it gets the
+        # summary line, and the full details go in the element body.
+        msg = xml_text(msg)
+        summary = html.escape(msg.split('\n')[0])
+        details = html.escape(msg)
+        test = html.escape(test)
+        suite = html.escape(self.name)
+        self.xml += f'    <testcase name="{test}" classname="{suite}">\n      <{result} message="{summary}">{details}</{result}>\n    </testcase>\n'
 
     def _add_failure(self, test, msg):
         self.failures += 1
-        self._add_status(test, "error", msg)
+        self._add_status(test, "failure", msg)
 
     def collect(self, tests):
         for test in tests:
-            _, status = os.waitpid(tests[test], 0)
+            pid = tests[test]
+            _, status = os.waitpid(pid, 0)
+            report = take_report(pid)
             if test in self._xfail_reasons:
                 reason = self._xfail_reasons[test]
                 if status == 0:
@@ -194,10 +279,11 @@ class Results:
                     self._add_status(test, "skipped", "XFAIL: " + reason)
                 continue
             if status != 0:
-                self._add_failure(test, "fail")
+                summary = '{} {}'.format(test, describe_status(status))
+                self._add_failure(test, (summary + '\n\n' + report) if report else summary)
             else:
                 self.passes += 1
-                self.xml += '    <testcase name="{}"/>\n'.format(test)
+                self.xml += '    <testcase name="{}" classname="{}"/>\n'.format(html.escape(test), html.escape(self.name))
         sys.stdout.flush()
 
     def finish(self):
@@ -206,7 +292,9 @@ class Results:
             print()
         print('{}{} passes and {} failures{}{}'.format(color.NOTICE, self.passes, self.failures, xfail_msg, color.END))
 
-        time = datetime.datetime.utcnow()
-        suite = '  <testsuite name="{}" tests="{}" failures="{}" timestamp="{}">\n{}  </testsuite>\n'
-        self.xml = suite.format(self.name, self.passes + self.failures, self.failures, time, self.xml)
+        timestamp = datetime.datetime.now(datetime.timezone.utc).isoformat(timespec='seconds')
+        duration = (datetime.datetime.now() - self._start).total_seconds()
+        tests = self.passes + self.failures + self.xfails
+        suite = '  <testsuite name="{}" tests="{}" failures="{}" errors="0" skipped="{}" time="{:.3f}" timestamp="{}">\n{}  </testsuite>\n'
+        self.xml = suite.format(html.escape(self.name), tests, self.failures, self.xfails, duration, timestamp, self.xml)
         return self.xml
