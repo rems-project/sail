@@ -116,14 +116,6 @@ exception Runtime_type_error of string
 
 let eq_anything a b = a = b
 
-let eq_bit a b = a = b
-
-let and_bit = Extraction.PrimBits.and_bit
-
-let or_bit = Extraction.PrimBits.or_bit
-
-let xor_bit = Extraction.PrimBits.xor_bit
-
 let require_width name = function
   | Some r -> r
   | None -> raise (Runtime_type_error (name ^ ": bitvector width mismatch"))
@@ -262,8 +254,6 @@ let tmod_int = Extraction.PrimInt.tmod_int
 let add_bit_with_carry = Extraction.PrimBits.add_bit_with_carry
 
 let sub_bit_with_carry = Extraction.PrimBits.sub_bit_with_carry
-
-let not_bit = Extraction.PrimBits.not_bit
 
 let not_vec = Extraction.PrimBits.not_vec
 

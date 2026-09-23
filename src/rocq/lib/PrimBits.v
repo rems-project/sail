@@ -66,31 +66,6 @@ Open Scope Z_scope.
 (** The width of a bitvector, as a Sail integer. *)
 Definition length (x : bvn) : Z := Z.of_N x.(bvn_n).
 
-Definition and_bit (x y : bit) : bit :=
-  match x, y with
-  | B1, B1 => B1
-  | _, _ => B0
-  end.
-
-Definition or_bit (x y : bit) : bit :=
-  match x, y with
-  | B0, B0 => B0
-  | _, _ => B1
-  end.
-
-Definition xor_bit (x y : bit) : bit :=
-  match x, y with
-  | B1, B0 => B1
-  | B0, B1 => B1
-  | _, _ => B0
-  end.
-
-Definition not_bit (b : bit) : bit :=
-  match b with
-  | B0 => B1
-  | B1 => B0
-  end.
-
 (** Full adder on bits, returning [(sum, carry_out)]. *)
 Definition add_bit_with_carry (x y carry : bit) : bit * bit :=
   match x, y, carry with
