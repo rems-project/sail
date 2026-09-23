@@ -514,36 +514,22 @@ module Make (Config : CONFIG) = struct
 
   let sv_signed x = string "signed'" ^^ parens x
 
-  let string_of_bitU = function Sail2_values.B0 -> "0" | Sail2_values.B1 -> "1" | Sail2_values.BU -> "X"
+  (* Print the value of a bitvector as hexadecimal digits, dropping any
+     leading zeros. Only used when the width is a multiple of four. *)
+  let hex_bitvector value =
+    let str = Sail_lib.hex_str value in
+    String.sub str 2 (String.length str - 2)
 
-  let all_ones = List.for_all (function Sail2_values.B1 -> true | _ -> false)
-
-  let all_zeros = List.for_all (function Sail2_values.B0 -> true | _ -> false)
-
-  let has_undefined_bit = List.exists (function Sail2_values.BU -> true | _ -> false)
-
-  let rec hex_bitvector ?(drop_leading_zeros = false) bits =
-    let open Sail2_values in
-    match bits with
-    | B0 :: B0 :: B0 :: B0 :: rest ->
-        if drop_leading_zeros then hex_bitvector ~drop_leading_zeros rest
-        else "0" ^ hex_bitvector ~drop_leading_zeros rest
-    | B0 :: B0 :: B0 :: B1 :: rest -> "1" ^ hex_bitvector rest
-    | B0 :: B0 :: B1 :: B0 :: rest -> "2" ^ hex_bitvector rest
-    | B0 :: B0 :: B1 :: B1 :: rest -> "3" ^ hex_bitvector rest
-    | B0 :: B1 :: B0 :: B0 :: rest -> "4" ^ hex_bitvector rest
-    | B0 :: B1 :: B0 :: B1 :: rest -> "5" ^ hex_bitvector rest
-    | B0 :: B1 :: B1 :: B0 :: rest -> "6" ^ hex_bitvector rest
-    | B0 :: B1 :: B1 :: B1 :: rest -> "7" ^ hex_bitvector rest
-    | B1 :: B0 :: B0 :: B0 :: rest -> "8" ^ hex_bitvector rest
-    | B1 :: B0 :: B0 :: B1 :: rest -> "9" ^ hex_bitvector rest
-    | B1 :: B0 :: B1 :: B0 :: rest -> "A" ^ hex_bitvector rest
-    | B1 :: B0 :: B1 :: B1 :: rest -> "B" ^ hex_bitvector rest
-    | B1 :: B1 :: B0 :: B0 :: rest -> "C" ^ hex_bitvector rest
-    | B1 :: B1 :: B0 :: B1 :: rest -> "D" ^ hex_bitvector rest
-    | B1 :: B1 :: B1 :: B0 :: rest -> "E" ^ hex_bitvector rest
-    | B1 :: B1 :: B1 :: B1 :: rest -> "F" ^ hex_bitvector rest
-    | _ -> ""
+  (* Print the value of a width-bit bitvector as binary digits *)
+  let binary_bitvector width value =
+    String.init width (fun i ->
+        if
+          Big_int.equal
+            (Big_int.bitwise_and (Big_int.shift_right value (width - 1 - i)) (Big_int.of_int 1))
+            Big_int.zero
+        then '0'
+        else '1'
+    )
 
   let rec tails = function
     | Var v -> Some (0, v)
@@ -561,13 +547,13 @@ module Make (Config : CONFIG) = struct
       | exp -> pp_smt_parens exp
     in
     function
-    | Bitvec_lit [] -> string "SAIL_ZWBV"
-    | Bitvec_lit bits ->
-        let len = List.length bits in
-        if all_zeros bits then ksprintf string "%d'h0" len
-        else if len mod 4 = 0 && not (has_undefined_bit bits) then
-          ksprintf string "%d'h%s" len (hex_bitvector ~drop_leading_zeros:true bits)
-        else ksprintf string "%d'b%s" len (Util.string_of_list "" string_of_bitU bits)
+    | Bitvec_lit bv when bv_length bv = 0 -> string "SAIL_ZWBV"
+    | Bitvec_lit bv ->
+        let len = bv_length bv in
+        let value = Sail_lib.uint bv in
+        if Big_int.equal value Big_int.zero then ksprintf string "%d'h0" len
+        else if len mod 4 = 0 then ksprintf string "%d'h%s" len (hex_bitvector value)
+        else ksprintf string "%d'b%s" len (binary_bitvector len value)
     | Bool_lit true -> string "1'h1"
     | Bool_lit false -> string "1'h0"
     | String_lit s -> if Config.no_strings then string "SAIL_UNIT" else ksprintf string "\"%s\"" s
@@ -627,7 +613,7 @@ module Make (Config : CONFIG) = struct
     | SignExtend (len, _, x) -> ksprintf string "unsigned'(%d'(signed'({" len ^^ pp_smt x ^^ string "})))"
     | ZeroExtend (len, _, x) -> ksprintf string "%d'({" len ^^ pp_smt x ^^ string "})"
     | Extract (n, m, _, Bitvec_lit bits) ->
-        pp_smt (Bitvec_lit (Sail2_operators_bitlists.subrange_vec_dec bits (Big_int.of_int n) (Big_int.of_int m)))
+        pp_smt (Bitvec_lit (Sail_lib.subrange bits (Big_int.of_int n) (Big_int.of_int m)))
     | Extract (n, m, len, Var v) ->
         if len = 1 then pp_name v
         else if n = m then pp_name v ^^ lbracket ^^ string (string_of_int n) ^^ rbracket
@@ -913,8 +899,7 @@ module Make (Config : CONFIG) = struct
                   | SVP_id id1, Var id2 when Name.compare id1 id2 = 0 ->
                       wrap (with_updates l updates (SVS_assign (SVP_index (ret, i), x)))
                   | _ ->
-                      if sz = 0 then
-                        wrap (with_updates l updates (SVS_assign (SVP_index (ret, Bitvec_lit [Sail2_values.B0]), x)))
+                      if sz = 0 then wrap (with_updates l updates (SVS_assign (SVP_index (ret, bvzero 1), x)))
                       else
                         wrap
                           (with_updates l updates

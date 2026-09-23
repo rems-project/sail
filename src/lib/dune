@@ -55,35 +55,6 @@
 
 (include_subdirs qualified)
 
-(copy_files ../gen_lib/*.lem)
-
-(rule
- (targets
-  sail2_values.ml
-  sail2_prompt.ml
-  sail2_instr_kinds.ml
-  sail2_prompt_monad.ml
-  sail2_operators.ml
-  sail2_operators_bitlists.ml)
- (deps
-  sail2_prompt.lem
-  sail2_values.lem
-  sail2_instr_kinds.lem
-  sail2_prompt_monad.lem
-  sail2_operators.lem
-  sail2_operators_bitlists.lem)
- (action
-  (run
-   lem
-   -wl_rename
-   ign
-   -wl_pat_comp
-   ign
-   -wl_comp_message
-   ign
-   -ocaml
-   %{deps})))
-
 (menhir
  (modules parser)
  (flags --external-tokens Token))
