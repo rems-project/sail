@@ -71,10 +71,6 @@ val trace_read : string -> string -> unit
 val sail_trace_call : string -> string -> ('t -> string) -> ('t return -> 't) -> 't
 val trace_call : string -> unit
 val eq_anything : 'a -> 'a -> bool
-val eq_bit : 'a -> 'a -> bool
-val and_bit : bit -> bit -> bit
-val or_bit : bit -> bit -> bit
-val xor_bit : bit -> bit -> bit
 val require_width : string -> 'a option -> 'a
 val and_vec : bits -> bits -> bits
 val and_bool : bool -> bool -> bool
@@ -140,7 +136,6 @@ val tdiv_int : Big_int_Z.big_int -> Big_int_Z.big_int -> Big_int_Z.big_int
 val tmod_int : Big_int_Z.big_int -> Big_int_Z.big_int -> Big_int_Z.big_int
 val add_bit_with_carry : bit -> bit -> bit -> bit * bit
 val sub_bit_with_carry : bit -> bit -> bit -> bit * bit
-val not_bit : bit -> bit
 val not_vec : bits -> bits
 val add_vec_carry : bits -> bits -> bit * bits
 val add_vec : bits -> bits -> bits

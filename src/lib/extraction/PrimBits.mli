@@ -11,14 +11,6 @@ open Definitions
 
 val length : bvn -> Big_int_Z.big_int
 
-val and_bit : bit -> bit -> bit
-
-val or_bit : bit -> bit -> bit
-
-val xor_bit : bit -> bit -> bit
-
-val not_bit : bit -> bit
-
 val add_bit_with_carry : bit -> bit -> bit -> bit * bit
 
 val sub_bit_with_carry : bit -> bit -> bit -> bit * bit

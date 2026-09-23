@@ -14,35 +14,6 @@ open Definitions
 let length x =
   Z.of_N x.bvn_n
 
-(** val and_bit : bit -> bit -> bit **)
-
-let and_bit x y =
-  match x with
-  | B0 -> B0
-  | B1 -> y
-
-(** val or_bit : bit -> bit -> bit **)
-
-let or_bit x y =
-  match x with
-  | B0 -> y
-  | B1 -> B1
-
-(** val xor_bit : bit -> bit -> bit **)
-
-let xor_bit x y =
-  match x with
-  | B0 -> y
-  | B1 -> (match y with
-           | B0 -> B1
-           | B1 -> B0)
-
-(** val not_bit : bit -> bit **)
-
-let not_bit = function
-| B0 -> B1
-| B1 -> B0
-
 (** val add_bit_with_carry : bit -> bit -> bit -> bit * bit **)
 
 let add_bit_with_carry x y carry =
