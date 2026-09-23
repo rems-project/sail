@@ -46,8 +46,9 @@
 
 type t = { major : int; minor : int; patch : int }
 
-let current = { major = 0; minor = 20; patch = 2 }
+let current = { major = 0; minor = 20; patch = 3 }
 
+let v0_20_3 = { major = 0; minor = 20; patch = 3 }
 let v0_20_2 = { major = 0; minor = 20; patch = 2 }
 
 (* Convert a string like "1.2.3" to a list [1; 2; 3] *)

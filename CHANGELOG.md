@@ -1,6 +1,31 @@
 Changelog
 =========
 
+Sail 0.20.3
+-----------
+
+This release includes some fixes for Sail to Lean/Rocq, fixing some internal
+rewrites to reduce memory usage.
+
+For users of custom Sail plugins, the behaviour of `SAIL_PLUGIN_DIR` has changed
+slightly. It now takes a list of directories separated by `:`, allowing multiple
+directories to be used.
+
+Sail model configuration files are in JSON with Javascript-style comments. This
+caused problems for consumers that couldn't handle these comments. There is now
+a small builtin utility to strip these comments.
+```
+sail --tool strip_json --compact file.json
+```
+There is now a builtin mechanism to provide subcommands with their own custom
+arguments using the `--tool` argument. The Sail formatter has been modified to
+use this mechanism so `sail --fmt` is equivalent to `sail --tool format`. This
+affects the order in which arguments must be passed to `sail --fmt` - all
+formatting arguments must be passed after `--fmt`.
+
+`where` is now reserved as a keyword for potential future use. We did not find
+any uses of this in existing Sail models, but it is a breaking change.
+
 Sail 0.20.2
 -----------
 
