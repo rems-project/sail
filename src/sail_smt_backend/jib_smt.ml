@@ -213,6 +213,13 @@ end
 module Make (Config : CONFIG) = struct
   open Jib_visitor
 
+  let reg_ref_lit r ctyp =
+    match r with
+    | Name (id, _) -> V_lit (V_ref id, ctyp)
+    | _ ->
+        Reporting.unreachable Parse_ast.Unknown __POS__
+          "Tried to construct a register reference to a register without a name"
+
   let lbits_index_width = required_width (Big_int.of_int Config.max_unknown_bitvector_width)
   let vector_index_width = required_width (Big_int.of_int (Config.max_unknown_generic_vector_length - 1))
 
@@ -973,9 +980,7 @@ module Make (Config : CONFIG) = struct
                     let try_reg r =
                       let next_label = label "next_reg_write_" in
                       [
-                        ijump l
-                          (V_call (Neq, [V_lit (VL_ref (string_of_name ~zencode:false r), reg_ctyp); V_id (id, ctyp)]))
-                          next_label;
+                        ijump l (V_call (Neq, [reg_ref_lit r reg_ctyp; V_id (id, ctyp)])) next_label;
                         ifuncall l (CL_id (r, reg_ctyp)) function_id args;
                         igoto end_label;
                         ilabel next_label;
@@ -1005,9 +1010,7 @@ module Make (Config : CONFIG) = struct
                         let try_reg r =
                           let next_label = label "next_reg_deref_" in
                           [
-                            ijump l
-                              (V_call (Neq, [V_lit (VL_ref (string_of_name ~zencode:false r), reg_ctyp); reg_ref]))
-                              next_label;
+                            ijump l (V_call (Neq, [reg_ref_lit r reg_ctyp; reg_ref])) next_label;
                             icopy l clexp (V_id (r, reg_ctyp));
                             igoto end_label;
                             ilabel next_label;
@@ -1032,9 +1035,7 @@ module Make (Config : CONFIG) = struct
                     let try_reg r =
                       let next_label = label "next_reg_write_" in
                       [
-                        ijump l
-                          (V_call (Neq, [V_lit (VL_ref (string_of_name ~zencode:false r), reg_ctyp); V_id (id, ctyp)]))
-                          next_label;
+                        ijump l (V_call (Neq, [reg_ref_lit r reg_ctyp; V_id (id, ctyp)])) next_label;
                         icopy l (CL_id (r, reg_ctyp)) cval;
                         igoto end_label;
                         ilabel next_label;
@@ -1144,17 +1145,14 @@ end) : Jib_compile.CONFIG = struct
 
   let literal_to_cval (L_aux (l_aux, _) as lit) =
     match l_aux with
-    | L_num n -> Some (V_lit (VL_int n, CT_constant n))
+    | L_num n -> Some (V_lit (V_int n, CT_constant n))
     | L_hex hex ->
         let len = hex_lit_length hex in
-        if len <= 64 then (
-          let content = BitList.of_hex_lit hex |> List.map (function B0 -> Sail2_values.B0 | B1 -> Sail2_values.B1) in
-          Some (V_lit (VL_bits content, CT_fbits len))
-        )
+        if len <= 64 then Some (V_lit (V_bitvector (Sail_lib.bits_of_bit_list (BitList.of_hex_lit hex)), CT_fbits len))
         else None
-    | L_unit -> Some (V_lit (VL_unit, CT_unit))
-    | L_true -> Some (V_lit (VL_bool true, CT_bool))
-    | L_false -> Some (V_lit (VL_bool false, CT_bool))
+    | L_unit -> Some (V_lit (V_unit, CT_unit))
+    | L_true -> Some (V_lit (V_bool true, CT_bool))
+    | L_false -> Some (V_lit (V_bool false, CT_bool))
     | _ -> None
 
   let smt_literals ctx =

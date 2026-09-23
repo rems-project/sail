@@ -56,7 +56,6 @@ open Jib_util
 open Jib_visitor
 open Type_check
 open PPrint
-open Value2
 module Document = Pretty_print_sail.Document
 
 open Anf
@@ -117,50 +116,23 @@ let rec is_stack_ctyp ctx ctyp =
   | CT_constant n -> Big_int.less_equal (min_int 64) n && Big_int.greater_equal n (max_int 64)
   | CT_memory_writes -> false
 
-let v_mask_lower i = V_lit (VL_bits (Util.list_init i (fun _ -> Sail2_values.B1)), CT_fbits i)
-
-let hex_char =
-  let open Sail2_values in
-  function
-  | '0' -> [B0; B0; B0; B0]
-  | '1' -> [B0; B0; B0; B1]
-  | '2' -> [B0; B0; B1; B0]
-  | '3' -> [B0; B0; B1; B1]
-  | '4' -> [B0; B1; B0; B0]
-  | '5' -> [B0; B1; B0; B1]
-  | '6' -> [B0; B1; B1; B0]
-  | '7' -> [B0; B1; B1; B1]
-  | '8' -> [B1; B0; B0; B0]
-  | '9' -> [B1; B0; B0; B1]
-  | 'A' | 'a' -> [B1; B0; B1; B0]
-  | 'B' | 'b' -> [B1; B0; B1; B1]
-  | 'C' | 'c' -> [B1; B1; B0; B0]
-  | 'D' | 'd' -> [B1; B1; B0; B1]
-  | 'E' | 'e' -> [B1; B1; B1; B0]
-  | 'F' | 'f' -> [B1; B1; B1; B1]
-  | _ -> failwith "Invalid hex character"
+let v_mask_lower i = V_lit (V_bitvector (Sail_lib.ones (Big_int.of_int i)), CT_fbits i)
 
 let literal_to_fragment (L_aux (l_aux, _)) =
   match l_aux with
   | L_num n when Big_int.less_equal (min_int 64) n && Big_int.less_equal n (max_int 64) ->
-      Some (V_lit (VL_int n, CT_fint 64))
+      Some (V_lit (V_int n, CT_fint 64))
   | L_bin bin ->
       let len = bin_lit_length bin in
-      if len <= 64 then (
-        let content = BitList.of_bin_lit bin |> List.map (function B0 -> Sail2_values.B0 | B1 -> Sail2_values.B1) in
-        Some (V_lit (VL_bits content, CT_fbits len))
-      )
+      if len <= 64 then Some (V_lit (V_bitvector (Sail_lib.bits_of_bit_list (BitList.of_bin_lit bin)), CT_fbits len))
       else None
   | L_hex hex ->
       let len = hex_lit_length hex in
-      if len <= 64 then (
-        let content = BitList.of_hex_lit hex |> List.map (function B0 -> Sail2_values.B0 | B1 -> Sail2_values.B1) in
-        Some (V_lit (VL_bits content, CT_fbits len))
-      )
+      if len <= 64 then Some (V_lit (V_bitvector (Sail_lib.bits_of_bit_list (BitList.of_hex_lit hex)), CT_fbits len))
       else None
-  | L_unit -> Some (V_lit (VL_unit, CT_unit))
-  | L_true -> Some (V_lit (VL_bool true, CT_bool))
-  | L_false -> Some (V_lit (VL_bool false, CT_bool))
+  | L_unit -> Some (V_lit (V_unit, CT_unit))
+  | L_true -> Some (V_lit (V_bool true, CT_bool))
+  | L_false -> Some (V_lit (V_bool false, CT_bool))
   | _ -> None
 
 let sail_create ?(prefix = "") ?(suffix = "") ctyp fmt =
@@ -334,7 +306,7 @@ end) : CONFIG = struct
 
   let value_of_aval_bit = function
     | AV_lit (L_aux (L_bin [Non_empty (b, [])], _), _) -> (
-        match b with Bin_0 -> Sail2_values.B0 | Bin_1 -> Sail2_values.B1
+        match b with Bin_0 -> Bit.B0 | Bin_1 -> Bit.B1
       )
     | _ -> assert false
 
@@ -381,7 +353,7 @@ end) : CONFIG = struct
         | _ -> v
       )
     | AV_vector (v, typ) when is_bitvector v && List.length v <= 64 ->
-        let bitstring = VL_bits (List.map value_of_aval_bit v) in
+        let bitstring = V_bitvector (Sail_lib.bits_of_bit_list (List.map value_of_aval_bit v)) in
         AV_cval (V_lit (bitstring, CT_fbits (List.length v)), typ)
     | AV_tuple avals -> AV_tuple (List.map (c_aval ctx) avals)
     | aval -> aval
@@ -463,7 +435,7 @@ end) : CONFIG = struct
         match destruct_bitvector ctx.tc_env typ with
         | Some (Nexp_aux (Nexp_constant n, _)) when Big_int.less_equal n (Big_int.of_int 64) ->
             let n = Big_int.to_int n in
-            AE_val (AV_cval (V_lit (VL_bits (Util.list_init n (fun _ -> Sail2_values.B0)), CT_fbits n), typ))
+            AE_val (AV_cval (V_lit (V_bitvector (Sail_lib.zeros (Big_int.of_int n)), CT_fbits n), typ))
         | _ -> no_change
       )
     | "zero_extend", [AV_cval (v, _); _] -> (
@@ -546,8 +518,8 @@ end) : CONFIG = struct
         | _, _ -> no_change
       )
     | "print_int", [_; AV_cval _] -> AE_app (Extern (mk_id "fast_print_int", None), args, typ)
-    | "undefined_bit", _ -> AE_val (AV_cval (V_lit (VL_bits [Sail2_values.B0], CT_fbits 1), typ))
-    | "undefined_bool", _ -> AE_val (AV_cval (V_lit (VL_bool false, CT_bool), typ))
+    | "undefined_bit", _ -> AE_val (AV_cval (V_lit (V_bitvector (Sail_lib.zeros (Big_int.of_int 1)), CT_fbits 1), typ))
+    | "undefined_bool", _ -> AE_val (AV_cval (V_lit (V_bool false, CT_bool), typ))
     | _, _ -> no_change
 
   let analyze_primop ctx id args typ =
@@ -1132,25 +1104,27 @@ module Codegen (Config : CODEGEN_CONFIG) = struct
     )
     else failwith "Tried to create a mask literal for a vector greater than 64 bits."
 
-  let sgen_value = function
-    | VL_bits [] -> "UINT64_C(0)"
-    | VL_bits bs -> "UINT64_C(" ^ Sail2_values.show_bitlist bs ^ ")"
-    | VL_int i -> if Big_int.equal i (min_int 64) then "INT64_MIN" else "INT64_C(" ^ Big_int.to_string i ^ ")"
-    | VL_bool true -> "true"
-    | VL_bool false -> "false"
-    | VL_unit -> "UNIT"
-    | VL_real str -> str
-    | VL_string str -> "\"" ^ str ^ "\""
-    | VL_enum element -> Util.zencode_string element
-    | VL_ref r -> "&" ^ sgen_id (mk_id r)
-    | VL_undefined -> Reporting.unreachable Parse_ast.Unknown __POS__ "Cannot generate C value for an undefined literal"
+  let sgen_value : Ast.value -> string = function
+    | V_bitvector bv when Big_int.equal (Sail_lib.length_bits bv) Big_int.zero -> "UINT64_C(0)"
+    | V_bitvector bv -> "UINT64_C(" ^ Sail_lib.string_of_bits bv ^ ")"
+    | V_int i -> if Big_int.equal i (min_int 64) then "INT64_MIN" else "INT64_C(" ^ Big_int.to_string i ^ ")"
+    | V_bool true -> "true"
+    | V_bool false -> "false"
+    | V_unit -> "UNIT"
+    | V_real q -> Q.to_string (Util.Rational.from_rocq q)
+    | V_string str -> "\"" ^ str ^ "\""
+    | V_member element -> sgen_id element
+    | V_ref r -> "&" ^ sgen_id r
+    | v ->
+        Reporting.unreachable Parse_ast.Unknown __POS__
+          ("Cannot generate a C value for the literal " ^ Value.string_of_value v)
 
   let sgen_tuple_id n = sgen_id (mk_id ("tup" ^ string_of_int n))
 
   let rec sgen_cval = function
     | V_id (id, _) -> sgen_name id
-    | V_member (id, _) -> sgen_id id
     | V_lit (vl, _) -> sgen_value vl
+    | V_undef _ -> Reporting.unreachable Parse_ast.Unknown __POS__ "Cannot generate a C value for an undefined value"
     | V_call (op, cvals) -> sgen_call op cvals
     | V_field (f, field, _) -> sprintf "%s.%s" (sgen_cval f) (sgen_id field)
     | V_tuple_member (f, _, n) -> sprintf "%s.%s" (sgen_cval f) (sgen_tuple_id n)
@@ -1537,8 +1511,8 @@ module Codegen (Config : CODEGEN_CONFIG) = struct
         match init with
         | Init_cval cval ->
             codegen_instr fid ctx (idecl l ctyp id) ^^ hardline ^^ codegen_conversion l ctx (CL_id (id, ctyp)) cval
-        | Init_static VL_undefined -> ksprintf string "  static %s %s;" (sgen_ctyp ctyp) (sgen_name id)
-        | Init_static vl -> ksprintf string "  static %s %s = %s;" (sgen_ctyp ctyp) (sgen_name id) (sgen_value vl)
+        | Init_static None -> ksprintf string "  static %s %s;" (sgen_ctyp ctyp) (sgen_name id)
+        | Init_static (Some vl) -> ksprintf string "  static %s %s = %s;" (sgen_ctyp ctyp) (sgen_name id) (sgen_value vl)
         | Init_json_key parts ->
             let name = sgen_name id in
             (* Separate declaration and assignment avoids errors about goto's crossing the initialisation

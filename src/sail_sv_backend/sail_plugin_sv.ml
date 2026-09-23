@@ -53,7 +53,6 @@ open Ast_util
 open Jib
 open Jib_compile
 open Jib_util
-open Value2
 open PPrint
 open Printf
 open Smt_exp

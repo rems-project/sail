@@ -285,21 +285,25 @@ module Make (Config : CONFIG) (Primop_gen : PRIMOP_GEN) = struct
           (Printf.sprintf "Type %s must be a bitvector in to_fbits" (string_of_ctyp ctyp))
 
   let literal vl ctyp =
-    let open Value2 in
+    let open Ast in
     match (vl, ctyp) with
-    | VL_bits bv, CT_fbits n -> unsigned_size ~into:n ~from:(List.length bv) (Bitvec_lit bv)
-    | VL_bool b, _ -> return (Bool_lit b)
-    | VL_int n, CT_constant m -> return (bvint (required_width n) n)
-    | VL_int n, CT_fint sz -> return (bvint sz n)
-    | VL_int n, CT_lint -> return (bvint Config.max_unknown_integer_width n)
-    | VL_unit, _ -> return Unit
-    | VL_string str, _ ->
+    | V_bitvector bv, CT_fbits n ->
+        let bits = bitU_list_of_bvn bv in
+        unsigned_size ~into:n ~from:(List.length bits) (Bitvec_lit bits)
+    | V_member id, _ -> return (Member id)
+    | V_bool b, _ -> return (Bool_lit b)
+    | V_int n, CT_constant m -> return (bvint (required_width n) n)
+    | V_int n, CT_fint sz -> return (bvint sz n)
+    | V_int n, CT_lint -> return (bvint Config.max_unknown_integer_width n)
+    | V_unit, _ -> return Unit
+    | V_string str, _ ->
         let* _ = string_used in
         return (String_lit str)
-    | VL_real str, _ ->
+    | V_real q, _ ->
         let* _ = real_used in
+        let str = Q.to_string (Util.Rational.from_rocq q) in
         return (if str.[0] = '-' then Fn ("-", [Real_lit (String.sub str 1 (String.length str - 1))]) else Real_lit str)
-    | VL_ref str, _ -> return (Config.register_ref str)
+    | V_ref id, _ -> return (Config.register_ref (string_of_id id))
     | _ ->
         let* l = current_location in
         Reporting.unreachable l __POS__
@@ -371,8 +375,11 @@ module Make (Config : CONFIG) (Primop_gen : PRIMOP_GEN) = struct
     | _ -> (
         match cval with
         | V_lit (vl, ctyp) -> literal vl ctyp
+        | V_undef ctyp ->
+            let* l = current_location in
+            Reporting.unreachable l __POS__
+              ("Cannot translate undefined value of type " ^ string_of_ctyp ctyp ^ " to SMT")
         | V_id (id, _) -> return (Var id)
-        | V_member (id, _) -> return (Member id)
         | V_call (List_hd, [arg]) ->
             let* l = current_location in
             let op = Primop_gen.hd l (cval_ctyp arg) in
@@ -395,7 +402,7 @@ module Make (Config : CONFIG) (Primop_gen : PRIMOP_GEN) = struct
                 let* vec = smt_cval vec in
                 let* i =
                   bind
-                    (smt_cval (V_lit (VL_int (Big_int.of_int i), CT_fint 64)))
+                    (smt_cval (V_lit (V_int (Big_int.of_int i), CT_fint 64)))
                     (unsigned_size ~checked:false ~into:(required_width (Big_int.of_int (len - 1)) - 1) ~from:64)
                 in
                 return (Fn ("select", [vec; i]))
@@ -456,7 +463,7 @@ module Make (Config : CONFIG) (Primop_gen : PRIMOP_GEN) = struct
   let bvzeint esz cval =
     let sz = int_size (cval_ctyp cval) in
     match cval with
-    | V_lit (VL_int n, _) -> return (bvint esz n)
+    | V_lit (V_int n, _) -> return (bvint esz n)
     | _ ->
         let* smt = smt_cval cval in
         return
