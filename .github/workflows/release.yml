@@ -135,7 +135,7 @@ jobs:
 
     - name: Install Sail
       run: |
-        git config --global --add safe.directory "$GITHUB_WORKSPACE"
+        git config --system --add safe.directory "*"
         opam pin --yes --no-action add .
         opam install sail --yes
 
