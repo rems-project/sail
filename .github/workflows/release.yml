@@ -88,6 +88,7 @@ jobs:
     - name: Unshallow git history
       run: |
         git config --global --add safe.directory '*'
+        git config --system --add safe.directory '*' || true
         git fetch --unshallow
 
     - name: Setup Z3 (Windows, Mac)
@@ -135,11 +136,7 @@ jobs:
 
     - name: Install Sail
       run: |
-        id; echo "HOME=$HOME"
-        ls -ld "$GITHUB_WORKSPACE" "$GITHUB_WORKSPACE/.git"
-        git config --show-origin --get-all safe.directory || true
-        /usr/bin/git -C "$GITHUB_WORKSPACE" ls-files | head
-        opam pin --yes --no-action add .
+        opam pin --yes --no-action --kind=path add .
         opam install sail --yes
 
     - name: Make release tarball (Linux)
