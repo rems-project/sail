@@ -1686,11 +1686,12 @@ module Codegen (Config : CODEGEN_CONFIG) = struct
         ]
     | CTD_enum (id, []) -> c_error ("Cannot compile empty enum " ^ string_of_id id)
     | CTD_abbrev (id, ctyp) ->
+        let name = string (NameGen.to_string ~suffix:"_t" () id) in
         [
           TypeDeclaration
             (ksprintf string "// type abbreviation %s" (string_of_id id)
             ^^ hardline
-            ^^ separate space [string "typedef"; string (sgen_ctyp ctyp); codegen_id id]
+            ^^ separate space [string "typedef"; string (sgen_ctyp ctyp); name]
             ^^ semi
             );
         ]

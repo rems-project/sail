@@ -1,6 +1,21 @@
 Changelog
 =========
 
+Sail 0.21
+---------
+
+Previously `type foo = bar` in Sail would generate a `zfoo` type alias in C
+(under the default Z-encode name-mangling scheme). However this could create
+name collisions if there existed a `function foo...`. Now type aliases will be
+generated with a `_t` suffix, so after name-mangling we would get `zfoo_t`.
+
+To override this and provide a user-specified unmangled name, one can use the
+`suffix` field of the `c_override` directive, like so:
+```
+$c_override { id = "foo", suffix = "_t", target = "unmangled_foo"}
+```
+in which case the type definition will be exactly `unmangled_foo` in C.
+
 Sail 0.20.3
 -----------
 

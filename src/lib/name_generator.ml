@@ -54,7 +54,7 @@ let parse_override obj =
     match List.assoc_opt "prefix" obj with Some (AD_aux (AD_string s, _)) -> Some s | Some _ -> None | None -> Some ""
   in
   let* suffix =
-    match List.assoc_opt "prefix" obj with Some (AD_aux (AD_string s, _)) -> Some s | Some _ -> None | None -> Some ""
+    match List.assoc_opt "suffix" obj with Some (AD_aux (AD_string s, _)) -> Some s | Some _ -> None | None -> Some ""
   in
   Some ((prefix, id, suffix), target)
 

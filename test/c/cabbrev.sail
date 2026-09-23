@@ -11,6 +11,7 @@ type my_pair = (range(0, 64), range(0, 64))
 
 $c_override {
   id = my_pair,
+  suffix = "_t",
   target = "my_pair_in_c"
 }
 
