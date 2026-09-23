@@ -692,7 +692,7 @@ module Make (Config : CONFIG) = struct
     | _ -> failwith "update_fbits 2"
 
   let cval_for_ctyp = function
-    | CT_unit -> return (V_lit (VL_unit, CT_unit))
+    | CT_unit -> return (V_lit (V_unit, CT_unit))
     | ctyp ->
         let* l = Smt_gen.current_location in
         Reporting.unreachable l __POS__ ("Cannot create undefined value of type " ^ string_of_ctyp ctyp)

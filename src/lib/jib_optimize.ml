@@ -52,7 +52,7 @@ open Jib_visitor
 open Jib_util
 
 let optimize_unit instrs =
-  let unit_cval cval = match cval_ctyp cval with CT_unit -> V_lit (VL_unit, CT_unit) | _ -> cval in
+  let unit_cval cval = match cval_ctyp cval with CT_unit -> V_lit (V_unit, CT_unit) | _ -> cval in
   let unit_instr = function
     | I_aux (I_funcall (CR_one clexp, extern, id, args), annot) as instr -> (
         match clexp_ctyp clexp with
@@ -224,8 +224,8 @@ let unique_per_function_ids cdefs =
 
 let rec cval_subst id subst = function
   | V_id (id', ctyp) -> if Name.compare id id' = 0 then subst else V_id (id', ctyp)
-  | V_member (id, ctyp) -> V_member (id, ctyp)
   | V_lit (vl, ctyp) -> V_lit (vl, ctyp)
+  | V_undef ctyp -> V_undef ctyp
   | V_call (op, cvals) -> V_call (op, List.map (cval_subst id subst) cvals)
   | V_field (cval, field, ctyp) -> V_field (cval_subst id subst cval, field, ctyp)
   | V_tuple_member (cval, len, n) -> V_tuple_member (cval_subst id subst cval, len, n)
@@ -236,8 +236,8 @@ let rec cval_subst id subst = function
 
 let rec cval_map_id f = function
   | V_id (id, ctyp) -> V_id (f id, ctyp)
-  | V_member (id, ctyp) -> V_member (id, ctyp)
   | V_lit (vl, ctyp) -> V_lit (vl, ctyp)
+  | V_undef ctyp -> V_undef ctyp
   | V_call (call, cvals) -> V_call (call, List.map (cval_map_id f) cvals)
   | V_field (cval, field, ctyp) -> V_field (cval_map_id f cval, field, ctyp)
   | V_tuple_member (cval, len, n) -> V_tuple_member (cval_map_id f cval, len, n)
@@ -254,9 +254,9 @@ module Remove_undefined = struct
   let gensym = symbol_generator ()
 
   let rec create_value l = function
-    | CT_unit -> ([], V_lit (VL_unit, CT_unit))
-    | CT_bool -> ([], V_lit (VL_bool false, CT_bool))
-    | CT_string -> ([], V_lit (VL_string "", CT_string))
+    | CT_unit -> ([], V_lit (V_unit, CT_unit))
+    | CT_bool -> ([], V_lit (V_bool false, CT_bool))
+    | CT_string -> ([], V_lit (V_string "", CT_string))
     | CT_tup ctyps ->
         let setup, values =
           List.fold_right
@@ -572,8 +572,8 @@ let remove_tuples cdefs ctx =
         ctyp
   and fix_cval = function
     | V_id (id, ctyp) -> V_id (id, ctyp)
-    | V_member (id, ctyp) -> V_member (id, ctyp)
     | V_lit (vl, ctyp) -> V_lit (vl, ctyp)
+    | V_undef ctyp -> V_undef (fix_tuples ctyp)
     | V_ctor_kind (cval, ctor) -> V_ctor_kind (fix_cval cval, ctor)
     | V_ctor_unwrap (cval, ctor, ctyp) -> V_ctor_unwrap (fix_cval cval, ctor, ctyp)
     | V_tuple_member (cval, _, n) as original_cval ->
@@ -723,7 +723,7 @@ let structure_control_flow_block instrs =
   let label_variables =
     List.map
       (fun (label, l) ->
-        (label, iinit (gen_loc l) CT_bool (name (mk_id ("goto_" ^ label))) (V_lit (VL_bool false, CT_bool)))
+        (label, iinit (gen_loc l) CT_bool (name (mk_id ("goto_" ^ label))) (V_lit (V_bool false, CT_bool)))
       )
       new_labels
   in
@@ -753,7 +753,7 @@ let structure_control_flow_block instrs =
         instr :: (iguard l guarded after_decl @ fix_block guarded rest)
     | I_aux (I_goto label, (_, l)) :: instrs ->
         let v = label_var label in
-        let set_goto = iguard l guarded [icopy l (CL_id (v, CT_bool)) (V_lit (VL_bool true, CT_bool))] in
+        let set_goto = iguard l guarded [icopy l (CL_id (v, CT_bool)) (V_lit (V_bool true, CT_bool))] in
         let guarded = NameSet.add v guarded in
         let after_jump, rest = split_after_jump instrs in
         set_goto @ iguard l guarded after_jump @ fix_block guarded rest
@@ -768,8 +768,8 @@ let structure_control_flow_block instrs =
           iguard l guarded
             [
               iif l cond
-                [icopy l (CL_id (v, CT_bool)) (V_lit (VL_bool true, CT_bool))]
-                [icopy l (CL_id (v, CT_bool)) (V_lit (VL_bool false, CT_bool))];
+                [icopy l (CL_id (v, CT_bool)) (V_lit (V_bool true, CT_bool))]
+                [icopy l (CL_id (v, CT_bool)) (V_lit (V_bool false, CT_bool))];
             ]
         in
         let guarded = NameSet.add v guarded in

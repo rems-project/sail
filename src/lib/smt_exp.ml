@@ -195,6 +195,11 @@ let bvlshr x y = Fn ("bvlshr", [x; y])
 let bvult x y = Fn ("bvult", [x; y])
 let bvslt x y = Fn ("bvslt", [x; y])
 
+(* [Bitvec_lit] still uses the Lem bit-list representation, whereas Jib
+   literals hold a [bvn]. This bridges the two. *)
+let bitU_list_of_bvn bv =
+  Sail_lib.bit_list_of_bits bv |> List.map (function Ast.Bit.B0 -> Sail2_values.B0 | Ast.Bit.B1 -> Sail2_values.B1)
+
 let bvzero n = Bitvec_lit (Sail2_operators_bitlists.zeros (Big_int.of_int n))
 
 let bvones n = Bitvec_lit (Sail2_operators_bitlists.ones (Big_int.of_int n))

@@ -50,7 +50,6 @@ open Ast
 open Ast_util
 open Jib
 open Jib_util
-open Value2
 open Printf
 
 let zencode_id id = Util.zencode_string (string_of_id id)

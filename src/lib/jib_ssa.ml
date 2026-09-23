@@ -545,8 +545,8 @@ let rename_variables globals graph root children =
           let i = top_stack id in
           V_id (ssa_name i id, ctyp)
         )
-    | V_member (id, ctyp) -> V_member (id, ctyp)
     | V_lit (vl, ctyp) -> V_lit (vl, ctyp)
+    | V_undef ctyp -> V_undef ctyp
     | V_call (id, fs) -> V_call (id, List.map fold_cval fs)
     | V_field (f, field, ctyp) -> V_field (fold_cval f, field, ctyp)
     | V_tuple_member (f, len, n) -> V_tuple_member (fold_cval f, len, n)
@@ -686,20 +686,20 @@ let rename_variables globals graph root children =
   | Some ((ssa, CF_start _), preds, succs) -> graph.nodes.(root) <- Some ((ssa, CF_start !phi_zeros), preds, succs)
   | _ -> failwith "root node is not CF_start"
 
-let is_true_literal = function V_lit (VL_bool true, _) -> true | _ -> false
+let is_true_literal = function V_lit (V_bool true, _) -> true | _ -> false
 
-let is_false_literal = function V_lit (VL_bool false, _) -> true | _ -> false
+let is_false_literal = function V_lit (V_bool false, _) -> true | _ -> false
 
 let simp_disj = function
-  | [x; V_call (Bnot, [y])] when x = y -> [V_lit (VL_bool true, CT_bool)]
+  | [x; V_call (Bnot, [y])] when x = y -> [V_lit (V_bool true, CT_bool)]
   | xs ->
-      if List.exists is_true_literal xs then [V_lit (VL_bool true, CT_bool)]
+      if List.exists is_true_literal xs then [V_lit (V_bool true, CT_bool)]
       else List.filter (fun x -> not (is_false_literal x)) xs
 
 let simp_conj = function
-  | [x; V_call (Bnot, [y])] when x = y -> [V_lit (VL_bool false, CT_bool)]
+  | [x; V_call (Bnot, [y])] when x = y -> [V_lit (V_bool false, CT_bool)]
   | xs ->
-      if List.exists is_false_literal xs then [V_lit (VL_bool false, CT_bool)]
+      if List.exists is_false_literal xs then [V_lit (V_bool false, CT_bool)]
       else List.filter (fun x -> not (is_true_literal x)) xs
 
 let place_pi_functions ~start ~finish ~post_idom ~post_df graph =
@@ -714,8 +714,8 @@ let place_pi_functions ~start ~finish ~post_idom ~post_df graph =
   in
   let get_pi ssanode = List.concat_map (function Pi guards -> guards | _ -> []) ssanode in
 
-  let mk_disj xs = match simp_disj xs with [] -> V_lit (VL_bool false, CT_bool) | [x] -> x | xs -> V_call (Bor, xs) in
-  let mk_conj xs = match simp_conj xs with [] -> V_lit (VL_bool true, CT_bool) | [x] -> x | xs -> V_call (Band, xs) in
+  let mk_disj xs = match simp_disj xs with [] -> V_lit (V_bool false, CT_bool) | [x] -> x | xs -> V_call (Bor, xs) in
+  let mk_conj xs = match simp_conj xs with [] -> V_lit (V_bool true, CT_bool) | [x] -> x | xs -> V_call (Band, xs) in
 
   let visited = ref IntSet.empty in
   let rec go n =

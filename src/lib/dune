@@ -9,8 +9,7 @@
 (rule
  (target jib.ml)
  (deps
-  (:jib_ott ../../language/jib.ott)
-  value2.ml)
+  (:jib_ott ../../language/jib.ott))
  (action
   (run
    ott
@@ -60,7 +59,6 @@
 
 (rule
  (targets
-  value2.ml
   sail2_values.ml
   sail2_prompt.ml
   sail2_instr_kinds.ml
@@ -68,7 +66,6 @@
   sail2_operators.ml
   sail2_operators_bitlists.ml)
  (deps
-  value2.lem
   sail2_prompt.lem
   sail2_values.lem
   sail2_instr_kinds.lem
