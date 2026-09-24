@@ -50,7 +50,6 @@ open Ast_defs
 open Ast_util
 open Util
 open Printf
-module Big_int = Nat_big_num
 
 module P = Parse_ast
 
@@ -180,7 +179,7 @@ let to_ast_kind (P.K_aux (k, l)) =
 let parse_kind_constraint l v = function
   | P.K_nat ->
       let v = Nexp_aux (Nexp_var v, kid_loc v) in
-      Some (NC_aux (NC_ge (v, Nexp_aux (Nexp_constant Big_int.zero, l)), l))
+      Some (NC_aux (NC_ge (v, Nexp_aux (Nexp_constant Z.zero, l)), l))
   | _ -> None
 
 let not_order_kind = function P.K_order -> false | _ -> true
@@ -558,10 +557,10 @@ module KindInference = struct
            which case we can infer that if N * M is a Nat then the
            non-constant case is also a Nat *)
         match (t1, t2) with
-        | P.ATyp_aux (P.ATyp_lit (P.L_aux (P.L_num n, _)), _), _ when Big_int.greater n Big_int.zero ->
+        | P.ATyp_aux (P.ATyp_lit (P.L_aux (P.L_num n, _)), _), _ when Z.gt n Z.zero ->
             let* t2 = check ctx t2 ik in
             wrap (P.ATyp_times (t1, t2))
-        | _, P.ATyp_aux (P.ATyp_lit (P.L_aux (P.L_num n, _)), _) when Big_int.greater n Big_int.zero ->
+        | _, P.ATyp_aux (P.ATyp_lit (P.L_aux (P.L_num n, _)), _) when Z.gt n Z.zero ->
             let* t1 = check ctx t1 ik in
             wrap (P.ATyp_times (t1, t2))
         | _ ->
@@ -1389,16 +1388,13 @@ let notation_attr l level strs =
   let parts =
     List.map
       (fun str ->
-        if Util.string_for_all is_ascii_digit str then AD_aux (AD_num (Big_int.of_string str), l)
+        if Util.string_for_all is_ascii_digit str then AD_aux (AD_num (Z.of_string str), l)
         else AD_aux (AD_string str, l)
       )
       strs
   in
   add_attribute l "notation"
-    (Some
-       (AD_aux
-          (AD_object [("level", AD_aux (AD_num (Big_int.of_int level), l)); ("syntax", AD_aux (AD_list parts, l))], l)
-       )
+    (Some (AD_aux (AD_object [("level", AD_aux (AD_num (Z.of_int level), l)); ("syntax", AD_aux (AD_list parts, l))], l))
     )
 
 let rec to_ast_exp ctx exp =
@@ -1432,7 +1428,7 @@ let rec to_ast_exp ctx exp =
       )
       else if id_str = "__LINE__" then (
         let lnum = match Reporting.simp_loc l with Some (p, _) -> p.pos_lnum | None -> -1 in
-        wrap (E_lit (L_aux (L_num (Big_int.of_int lnum), l)))
+        wrap (E_lit (L_aux (L_num (Z.of_int lnum), l)))
       )
       else wrap (E_id (to_ast_id ctx id))
   | P.E_ref id -> wrap (E_ref (to_ast_id ctx id))
@@ -2258,7 +2254,7 @@ let rec to_ast_def doc attrs vis ctx (P.DEF_aux (def, l)) : untyped_def list ctx
       let id = mk_id ~loc:l op in
       let prec = to_ast_prec prec in
       ( [DEF_aux (DEF_fixity (prec, n, id), annot)],
-        { ctx with fixities = StringMap.add op (prec, Big_int.to_int n) ctx.fixities }
+        { ctx with fixities = StringMap.add op (prec, Z.to_int n) ctx.fixities }
       )
   | P.DEF_type t_def -> to_ast_typedef ctx annot t_def
   | P.DEF_fundef f_def ->
@@ -2643,8 +2639,7 @@ let generate_enum_number_conversions defs =
                 let kid = mk_kid "e" in
                 let pexp n (id, _) =
                   let pat =
-                    if n = List.length elems - 1 then mk_pat P_wild
-                    else mk_pat (P_lit (mk_lit (L_num (Big_int.of_int n))))
+                    if n = List.length elems - 1 then mk_pat P_wild else mk_pat (P_lit (mk_lit (L_num (Z.of_int n))))
                   in
                   let pat = locate_pat (unknown_to l) pat in
                   mk_pexp (Pat_exp (pat, mk_exp ~loc:l (E_id id)))
@@ -2670,7 +2665,7 @@ let generate_enum_number_conversions defs =
               else (
                 let kid = mk_kid "e" in
                 let to_typ = mk_typ (Typ_exist ([mk_kopt K_int kid], range_constraint kid, atom_typ (nvar kid))) in
-                let pexp n (id, _) = mk_pexp (Pat_exp (mk_pat (P_id id), mk_lit_exp (L_num (Big_int.of_int n)))) in
+                let pexp n (id, _) = mk_pexp (Pat_exp (mk_pat (P_id id), mk_lit_exp (L_num (Z.of_int n)))) in
                 let funcl =
                   mk_funcl name
                     (mk_pat (P_id (mk_id "arg#")))

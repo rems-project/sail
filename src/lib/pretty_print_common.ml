@@ -45,7 +45,6 @@
 (****************************************************************************)
 
 open Ast
-module Big_int = Nat_big_num
 open PPrint
 
 let pipe = string "|"
@@ -72,7 +71,7 @@ let semi_sp = semi ^^ space
 let comma_sp = comma ^^ space
 let colon_sp = spaces colon
 
-let doc_int i = string (Big_int.to_string i)
+let doc_int i = string (Z.to_string i)
 let doc_op symb a b = infix 2 1 symb a b
 let doc_unop symb a = prefix 2 1 symb a
 

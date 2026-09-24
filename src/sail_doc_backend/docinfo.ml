@@ -224,8 +224,8 @@ let rec json_of_pat (P_aux (aux, _)) =
         [
           pat_type "vector_subrange";
           ("id", `String (string_of_id id));
-          ("from", `Int (Big_int.to_int n));
-          ("to", `Int (Big_int.to_int m));
+          ("from", `Int (Z.to_int n));
+          ("to", `Int (Z.to_int m));
         ]
   | P_tuple pats -> seq_pat_json "tuple" pats
   | P_list pats -> seq_pat_json "list" pats

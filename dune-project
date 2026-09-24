@@ -55,7 +55,7 @@ http://www.cl.cam.ac.uk/~pes20/sail/.
     (bisect_ppx (and :dev (>= "2.5.0")))
     (menhir (and (>= 20240715) :build))
     (ott (and (>= 0.28) :build))
-    (lem (>= "2018-12-14"))
+    (zarith (>= 1.11))
     (linksem (>= "0.3"))
     conf-gmp
     (yojson (>= 1.6.0))

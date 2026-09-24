@@ -107,7 +107,7 @@ let bin_digit_to_bit = function Bin_0 -> B0 | Bin_1 -> B1
 
 let fix_length ~at:l ~len bitlist =
   let open Extraction.ValueType in
-  match Primops.zero_extend (V_bitvector (Sail_lib.bits_of_bit_list bitlist)) (V_int (Big_int.of_int len)) with
+  match Primops.zero_extend (V_bitvector (Sail_lib.bits_of_bit_list bitlist)) (V_int (Z.of_int len)) with
   | Some (V_bitvector bits) -> Sail_lib.bit_list_of_bits bits
   | _ ->
       Reporting.warn ~force_show:true Version.v0_20_2 "Configuration" l
@@ -130,8 +130,8 @@ let parse_json_string_to_bits ~at:l ~len str =
       Some (List.concat_map BitList.of_hex_digit hex_digits |> fix_length ~at:l ~len)
     else
       let* dec_chars = List.filter_map valid_dec_char chars |> Util.option_all in
-      let n = List.to_seq dec_chars |> String.of_seq |> Big_int.of_string in
-      Some (Sail_lib.bit_list_of_bits (Sail_lib.get_slice_int (Big_int.of_int len) n Big_int.zero))
+      let n = List.to_seq dec_chars |> String.of_seq |> Z.of_string in
+      Some (Sail_lib.bit_list_of_bits (Sail_lib.get_slice_int (Z.of_int len) n Z.zero))
   in
   Some (mk_lit_exp ~loc:l (L_bin (bitlist_to_literal bitlist)))
 
@@ -145,9 +145,7 @@ let parse_json_string_to_abstract_bits ~at:l ~len str =
   in
   let slice_int n =
     mk_exp
-      (E_app
-         (mk_id "get_slice_int", [mk_exp (E_sizeof (nid len)); mk_lit_exp (L_num n); mk_lit_exp (L_num Big_int.zero)])
-      )
+      (E_app (mk_id "get_slice_int", [mk_exp (E_sizeof (nid len)); mk_lit_exp (L_num n); mk_lit_exp (L_num Z.zero)]))
     |> locate (fun _ -> l)
   in
   if str_len > 2 && String.sub str 0 2 = "0b" then
@@ -158,13 +156,13 @@ let parse_json_string_to_abstract_bits ~at:l ~len str =
     Some (List.concat_map BitList.of_hex_digit hex_digits |> mask)
   else
     let* dec_chars = List.filter_map valid_dec_char chars |> Util.option_all in
-    let n = List.to_seq dec_chars |> String.of_seq |> Big_int.of_string in
+    let n = List.to_seq dec_chars |> String.of_seq |> Z.of_string in
     Some (slice_int n)
 
 module type CONFIG_VALUE = sig
   type t
 
-  val num : Parse_ast.l -> Big_int.num -> t
+  val num : Parse_ast.l -> Z.t -> t
 
   val enum_member : Parse_ast.l -> string -> t
 
@@ -259,18 +257,18 @@ module Parse (V : CONFIG_VALUE) = struct
         Some (List.concat_map BitList.of_hex_digit hex_digits |> fix_length ~at:l ~len)
       else
         let* dec_chars = List.filter_map valid_dec_char chars |> Util.option_all in
-        let n = List.to_seq dec_chars |> String.of_seq |> Big_int.of_string in
-        Some (Sail_lib.bit_list_of_bits (Sail_lib.get_slice_int (Big_int.of_int len) n Big_int.zero))
+        let n = List.to_seq dec_chars |> String.of_seq |> Z.of_string in
+        Some (Sail_lib.bit_list_of_bits (Sail_lib.get_slice_int (Z.of_int len) n Z.zero))
     in
     Some (V.bin l (bitlist_to_literal bitlist))
 
   let rec from_json ~at:l abstracts env typ =
     let open Util.Option_monad in
     function
-    | `Int n -> V.num l (Big_int.of_int n)
-    | `Intlit n -> V.num l (Big_int.of_string n)
+    | `Int n -> V.num l (Z.of_int n)
+    | `Intlit n -> V.num l (Z.of_string n)
     | `String s ->
-        if Option.is_some (Type_check.destruct_numeric typ) then V.num l (Big_int.of_string s)
+        if Option.is_some (Type_check.destruct_numeric typ) then V.num l (Z.of_string s)
         else if typ_is_enum env typ then V.enum_member l s
         else V.string l s
     | `Bool b -> V.bool l b

@@ -116,7 +116,7 @@ module type CONFIG = sig
 end
 
 module Make (Config : CONFIG) = struct
-  let lbits_index_width = required_width (Big_int.of_int (Config.max_unknown_bitvector_width - 1))
+  let lbits_index_width = required_width (Z.of_int (Config.max_unknown_bitvector_width - 1))
 
   module Primops =
     Generate_primop2.Make
@@ -185,17 +185,17 @@ module Make (Config : CONFIG) = struct
     | CT_fbits len -> Some len
     | CT_lbits ->
         let w = Config.max_unknown_bitvector_width in
-        Some (required_width (Big_int.of_int (w - 1)) + 1 + w)
+        Some (required_width (Z.of_int (w - 1)) + 1 + w)
     | CT_enum enum_id ->
         let members = Jib_compile.enum_members Parse_ast.Unknown ctx enum_id in
-        Some (required_width (Big_int.of_int (IdSet.cardinal members - 1)))
+        Some (required_width (Z.of_int (IdSet.cardinal members - 1)))
     | CT_constant c -> Some (required_width c)
     | CT_variant _ as ctyp ->
         let open Util.Option_monad in
         let ctors = Jib_compile.variant_constructor_bindings Parse_ast.Unknown ctx ctyp |> snd |> Bindings.bindings in
         let* ctor_widths = List.map (fun (_, ctyp) -> bit_width ctx ctyp) ctors |> Util.option_all in
         let max_width = List.fold_left max 1 ctor_widths in
-        Some (max_width + required_width (Big_int.of_int (List.length ctors - 1)))
+        Some (max_width + required_width (Z.of_int (List.length ctors - 1)))
     | CT_struct _ as ctyp ->
         let fields = Jib_compile.struct_field_bindings Parse_ast.Unknown ctx ctyp |> snd |> Bindings.bindings in
         List.map (fun (_, ctyp) -> bit_width ctx ctyp) fields |> Util.option_all |> Option.map (List.fold_left ( + ) 0)
@@ -322,7 +322,7 @@ module Make (Config : CONFIG) = struct
         Reporting.unreachable (id_loc id) __POS__ "Abstract types not supported for SystemVerilog target"
     | CTD_abbrev _ -> empty
     | CTD_enum (id, ids) ->
-        let width = required_width (Big_int.of_int (List.length ids - 1)) in
+        let width = required_width (Z.of_int (List.length ids - 1)) in
         let width_doc = lbracket ^^ string (string_of_int (width - 1)) ^^ colon ^^ char '0' ^^ rbracket in
         string "typedef" ^^ space ^^ string "enum" ^^ space ^^ width_doc ^^ space
         ^^ group (lbrace ^^ nest 4 (hardline ^^ separate_map (comma ^^ hardline) pp_id ids) ^^ hardline ^^ rbrace)
@@ -344,7 +344,7 @@ module Make (Config : CONFIG) = struct
         let sv_ctor (id, ctyp) = wrap_type ctyp (pp_id id) in
         let tag_type = string ("sailtag_" ^ pp_id_string id) in
         let value_type = string ("sailunion_" ^ pp_id_string id) in
-        let tag_width = required_width (Big_int.of_int (List.length ctors - 1)) in
+        let tag_width = required_width (Z.of_int (List.length ctors - 1)) in
         let kind_enum =
           separate space
             [
@@ -523,12 +523,7 @@ module Make (Config : CONFIG) = struct
   (* Print the value of a width-bit bitvector as binary digits *)
   let binary_bitvector width value =
     String.init width (fun i ->
-        if
-          Big_int.equal
-            (Big_int.bitwise_and (Big_int.shift_right value (width - 1 - i)) (Big_int.of_int 1))
-            Big_int.zero
-        then '0'
-        else '1'
+        if Z.equal (Z.logand (Z.shift_right value (width - 1 - i)) (Z.of_int 1)) Z.zero then '0' else '1'
     )
 
   let rec tails = function
@@ -551,7 +546,7 @@ module Make (Config : CONFIG) = struct
     | Bitvec_lit bv ->
         let len = bv_length bv in
         let value = Sail_lib.uint bv in
-        if Big_int.equal value Big_int.zero then ksprintf string "%d'h0" len
+        if Z.equal value Z.zero then ksprintf string "%d'h0" len
         else if len mod 4 = 0 then ksprintf string "%d'h%s" len (hex_bitvector value)
         else ksprintf string "%d'b%s" len (binary_bitvector len value)
     | Bool_lit true -> string "1'h1"
@@ -612,8 +607,7 @@ module Make (Config : CONFIG) = struct
     | Store (_, store_fn, arr, i, x) -> string store_fn ^^ parens (separate_map (comma ^^ space) pp_smt [arr; i; x])
     | SignExtend (len, _, x) -> ksprintf string "unsigned'(%d'(signed'({" len ^^ pp_smt x ^^ string "})))"
     | ZeroExtend (len, _, x) -> ksprintf string "%d'({" len ^^ pp_smt x ^^ string "})"
-    | Extract (n, m, _, Bitvec_lit bits) ->
-        pp_smt (Bitvec_lit (Sail_lib.subrange bits (Big_int.of_int n) (Big_int.of_int m)))
+    | Extract (n, m, _, Bitvec_lit bits) -> pp_smt (Bitvec_lit (Sail_lib.subrange bits (Z.of_int n) (Z.of_int m)))
     | Extract (n, m, len, Var v) ->
         if len = 1 then pp_name v
         else if n = m then pp_name v ^^ lbracket ^^ string (string_of_int n) ^^ rbracket
@@ -662,7 +656,7 @@ module Make (Config : CONFIG) = struct
         match (cval_ctyp bv, cval_ctyp index) with
         | CT_fbits 1, _ -> Smt.smt_cval bit
         | CT_fbits sz, CT_constant c ->
-            let c = Big_int.to_int c in
+            let c = Z.to_int c in
             let* bv_smt = Smt.smt_cval bv in
             let bv_smt_1 = Extract (sz - 1, c + 1, sz, bv_smt) in
             let bv_smt_2 = Extract (c - 1, 0, sz, bv_smt) in
@@ -887,7 +881,7 @@ module Make (Config : CONFIG) = struct
               match cval_ctyp arr with
               | CT_fvector (len, _) -> (
                   let* arr = Smt.smt_cval arr in
-                  let sz = required_width (Big_int.of_int (len - 1)) - 1 in
+                  let sz = required_width (Z.of_int (len - 1)) - 1 in
                   let* i =
                     Smt_gen.bind (Smt.smt_cval i)
                       (Smt_gen.unsigned_size ~checked:false ~into:sz ~from:(Smt.int_size (cval_ctyp i)))
@@ -1656,7 +1650,7 @@ module Make (Config : CONFIG) = struct
         match t with
         | AD_string "invoke" -> Some (name, Invoke)
         | AD_string "return" -> Some (name, Ret)
-        | AD_num n -> Some (name, Arg (Big_int.to_int n))
+        | AD_num n -> Some (name, Arg (Z.to_int n))
         | _ -> None
       )
     | _ -> None

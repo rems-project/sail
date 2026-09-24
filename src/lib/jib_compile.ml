@@ -85,8 +85,8 @@ type funwire = Arg of int | Ret | Invoke
     instructions (to deallocate that memory) and possibly typing information about what has been translated. **)
 
 (* FIXME: This stage shouldn't care about this *)
-let max_int n = Big_int.pred (Big_int.pow_int_positive 2 (n - 1))
-let min_int n = Big_int.negate (Big_int.pow_int_positive 2 (n - 1))
+let max_int n = Z.pred (Z.shift_left Z.one (n - 1))
+let min_int n = Z.neg (Z.shift_left Z.one (n - 1))
 
 let is_ct_enum = function CT_enum _ -> true | _ -> false
 
@@ -244,7 +244,7 @@ let rec mangle_string_of_ctyp ctx = function
   | CT_lbits -> "b"
   | CT_sbits n -> "S" ^ string_of_int n
   | CT_fbits n -> "B" ^ string_of_int n
-  | CT_constant n -> "C" ^ Big_int.to_string n
+  | CT_constant n -> "C" ^ Z.to_string n
   | CT_unit -> "u"
   | CT_bool -> "o"
   | CT_real -> "r"
@@ -429,15 +429,12 @@ module Make (C : CONFIG) = struct
     | AV_ref (id, typ) -> ([], V_lit (V_ref id, CT_ref (ctyp_of_typ ctx (lvar_typ typ))), [])
     | AV_lit (L_aux (L_string str, _), typ) -> ([], V_lit (V_string (String.escaped str), ctyp_of_typ ctx typ), [])
     | AV_lit (L_aux (L_num n, _), typ) when C.ignore_64 -> ([], V_lit (V_int n, ctyp_of_typ ctx typ), [])
-    | AV_lit (L_aux (L_num n, _), typ) when Big_int.less_equal (min_int 64) n && Big_int.less_equal n (max_int 64) ->
+    | AV_lit (L_aux (L_num n, _), typ) when Z.leq (min_int 64) n && Z.leq n (max_int 64) ->
         let gs = ngensym () in
         ([iinit l CT_lint gs (V_lit (V_int n, CT_fint 64))], V_id (gs, CT_lint), [iclear CT_lint gs])
     | AV_lit (L_aux (L_num n, _), typ) ->
         let gs = ngensym () in
-        ( [iinit l CT_lint gs (V_lit (V_string (Big_int.to_string n), CT_string))],
-          V_id (gs, CT_lint),
-          [iclear CT_lint gs]
-        )
+        ([iinit l CT_lint gs (V_lit (V_string (Z.to_string n), CT_string))], V_id (gs, CT_lint), [iclear CT_lint gs])
     | AV_lit (L_aux (((L_hex _ | L_bin _) as l_aux), _), _) ->
         let bitlist =
           match l_aux with
@@ -516,7 +513,7 @@ module Make (C : CONFIG) = struct
     | AV_vector ([], typ) -> (
         let vector_ctyp = ctyp_of_typ ctx typ in
         match ctyp_of_typ ctx typ with
-        | CT_fbits 0 -> ([], V_lit (V_bitvector (Sail_lib.zeros Big_int.zero), vector_ctyp), [])
+        | CT_fbits 0 -> ([], V_lit (V_bitvector (Sail_lib.zeros Z.zero), vector_ctyp), [])
         | _ ->
             let gs = ngensym () in
             ( [
@@ -524,7 +521,7 @@ module Make (C : CONFIG) = struct
                 iextern l
                   (CL_id (gs, vector_ctyp))
                   (mk_id "internal_vector_init", [])
-                  [V_lit (V_int Big_int.zero, CT_fint 64)];
+                  [V_lit (V_int Z.zero, CT_fint 64)];
               ],
               V_id (gs, vector_ctyp),
               [iclear vector_ctyp gs]
@@ -535,14 +532,12 @@ module Make (C : CONFIG) = struct
         let len = List.length avals in
         let gs = ngensym () in
         let ctyp = CT_fbits len in
-        let mask i =
-          V_bitvector (Sail_lib.shiftl (Sail_lib.to_bits (Big_int.of_int len) (Big_int.of_int 1)) (Big_int.of_int i))
-        in
+        let mask i = V_bitvector (Sail_lib.shiftl (Sail_lib.to_bits (Z.of_int len) (Z.of_int 1)) (Z.of_int i)) in
         let aval_mask i aval =
           let setup, cval, cleanup = compile_aval l ctx aval in
           match cval with
-          | V_lit (V_bitvector bv, _) when Big_int.equal (Sail_lib.uint bv) Big_int.zero -> []
-          | V_lit (V_bitvector bv, _) when Big_int.equal (Sail_lib.uint bv) (Big_int.of_int 1) ->
+          | V_lit (V_bitvector bv, _) when Z.equal (Sail_lib.uint bv) Z.zero -> []
+          | V_lit (V_bitvector bv, _) when Z.equal (Sail_lib.uint bv) (Z.of_int 1) ->
               [icopy l (CL_id (gs, ctyp)) (V_call (Bvor, [V_id (gs, ctyp); V_lit (mask i, ctyp)]))]
           | _ ->
               setup
@@ -550,11 +545,11 @@ module Make (C : CONFIG) = struct
                   iextern l
                     (CL_id (gs, ctyp))
                     (mk_id "update_fbits", [])
-                    [V_id (gs, ctyp); V_lit (V_int (Big_int.of_int i), CT_constant (Big_int.of_int i)); cval];
+                    [V_id (gs, ctyp); V_lit (V_int (Z.of_int i), CT_constant (Z.of_int i)); cval];
                 ]
               @ cleanup
         in
-        ( [idecl l ctyp gs; icopy l (CL_id (gs, ctyp)) (V_lit (V_bitvector (Sail_lib.zeros (Big_int.of_int len)), ctyp))]
+        ( [idecl l ctyp gs; icopy l (CL_id (gs, ctyp)) (V_lit (V_bitvector (Sail_lib.zeros (Z.of_int len)), ctyp))]
           @ List.concat (List.mapi aval_mask (List.rev avals)),
           V_id (gs, ctyp),
           []
@@ -581,7 +576,7 @@ module Make (C : CONFIG) = struct
               iextern l
                 (CL_id (gs, vector_ctyp))
                 (mk_id "internal_vector_update", [])
-                [V_id (gs, vector_ctyp); V_lit (V_int (Big_int.of_int i), CT_fint 64); cval];
+                [V_id (gs, vector_ctyp); V_lit (V_int (Z.of_int i), CT_fint 64); cval];
             ]
           @ conversion_cleanup @ cleanup
         in
@@ -590,7 +585,7 @@ module Make (C : CONFIG) = struct
             iextern l
               (CL_id (gs, vector_ctyp))
               (mk_id "internal_vector_init", [])
-              [V_lit (V_int (Big_int.of_int len), CT_fint 64)];
+              [V_lit (V_int (Z.of_int len), CT_fint 64)];
           ]
           @ List.concat (List.mapi aval_set (if direction then List.rev avals else avals)),
           V_id (gs, vector_ctyp),
@@ -709,7 +704,7 @@ module Make (C : CONFIG) = struct
   let compile_config' l ctx key ctyp =
     let key_name = ngensym () in
     let json = ngensym () in
-    let args = [V_lit (V_int (Big_int.of_int (List.length key)), CT_fint 64); V_id (key_name, CT_json_key)] in
+    let args = [V_lit (V_int (Z.of_int (List.length key)), CT_fint 64); V_id (key_name, CT_json_key)] in
     let init =
       [
         ijson_key l key_name key;
@@ -903,10 +898,7 @@ module Make (C : CONFIG) = struct
           let index =
             V_call
               ( Isub,
-                [
-                  V_id (len, CT_fint 64);
-                  V_call (Iadd, [V_id (n, CT_fint 64); V_lit (V_int (Big_int.of_int 1), CT_fint 64)]);
-                ]
+                [V_id (len, CT_fint 64); V_call (Iadd, [V_id (n, CT_fint 64); V_lit (V_int (Z.of_int 1), CT_fint 64)])]
               )
           in
           let setup, call, cleanup = extract item_json item_ctyp in
@@ -914,12 +906,12 @@ module Make (C : CONFIG) = struct
               idecl l (CT_fint 64) len;
               iextern l (CL_id (len, CT_bool)) (mk_id "sail_config_list_length", []) [V_id (json, CT_json)];
               iif l
-                (V_call (Eq, [V_id (len, CT_fint 64); V_lit (V_int (Big_int.of_int (-1)), CT_fint 64)]))
+                (V_call (Eq, [V_id (len, CT_fint 64); V_lit (V_int (Z.of_int (-1)), CT_fint 64)]))
                 [ibad_config l]
                 [];
               idecl l (CT_vector item_ctyp) vec;
               iextern l (CL_id (vec, CT_vector item_ctyp)) (mk_id "internal_vector_init", []) [V_id (len, CT_fint 64)];
-              iinit l (CT_fint 64) n (V_lit (V_int Big_int.zero, CT_fint 64));
+              iinit l (CT_fint 64) n (V_lit (V_int Z.zero, CT_fint 64));
               ilabel loop;
               idecl l CT_json item_json;
               iextern l
@@ -942,7 +934,7 @@ module Make (C : CONFIG) = struct
                 iclear CT_json item_json;
                 icopy l
                   (CL_id (n, CT_fint 64))
-                  (V_call (Iadd, [V_id (n, CT_fint 64); V_lit (V_int (Big_int.of_int 1), CT_fint 64)]));
+                  (V_call (Iadd, [V_id (n, CT_fint 64); V_lit (V_int (Z.of_int 1), CT_fint 64)]));
                 ijump l (V_call (Ilt, [V_id (n, CT_fint 64); V_id (len, CT_fint 64)])) loop;
               ],
             (fun clexp -> icopy l clexp (V_id (vec, CT_vector item_ctyp))),
@@ -959,10 +951,7 @@ module Make (C : CONFIG) = struct
           let index =
             V_call
               ( Isub,
-                [
-                  V_id (len, CT_fint 64);
-                  V_call (Iadd, [V_id (n, CT_fint 64); V_lit (V_int (Big_int.of_int 1), CT_fint 64)]);
-                ]
+                [V_id (len, CT_fint 64); V_call (Iadd, [V_id (n, CT_fint 64); V_lit (V_int (Z.of_int 1), CT_fint 64)])]
               )
           in
           let setup, call, cleanup = extract item_json item_ctyp in
@@ -970,11 +959,11 @@ module Make (C : CONFIG) = struct
               idecl l (CT_fint 64) len;
               iextern l (CL_id (len, CT_bool)) (mk_id "sail_config_list_length", []) [V_id (json, CT_json)];
               iif l
-                (V_call (Eq, [V_id (len, CT_fint 64); V_lit (V_int (Big_int.of_int (-1)), CT_fint 64)]))
+                (V_call (Eq, [V_id (len, CT_fint 64); V_lit (V_int (Z.of_int (-1)), CT_fint 64)]))
                 [ibad_config l]
                 [];
               idecl l (CT_list item_ctyp) list;
-              iinit l (CT_fint 64) n (V_lit (V_int Big_int.zero, CT_fint 64));
+              iinit l (CT_fint 64) n (V_lit (V_int Z.zero, CT_fint 64));
               ilabel loop_start;
               ijump l (V_call (Igteq, [V_id (n, CT_fint 64); V_id (len, CT_fint 64)])) loop_end;
               idecl l CT_json item_json;
@@ -995,7 +984,7 @@ module Make (C : CONFIG) = struct
                 iclear CT_json item_json;
                 icopy l
                   (CL_id (n, CT_fint 64))
-                  (V_call (Iadd, [V_id (n, CT_fint 64); V_lit (V_int (Big_int.of_int 1), CT_fint 64)]));
+                  (V_call (Iadd, [V_id (n, CT_fint 64); V_lit (V_int (Z.of_int 1), CT_fint 64)]));
                 igoto loop_start;
                 ilabel loop_end;
               ],
@@ -1125,7 +1114,7 @@ module Make (C : CONFIG) = struct
             if (width <= 64 && total_width <= 64) || C.ignore_64 then (
               let pre', instrs', cleanup', ctx =
                 compile_match ctx apat
-                  (V_call (Slice width, [cval; V_lit (V_int (Big_int.of_int offset), CT_fint 64)]))
+                  (V_call (Slice width, [cval; V_lit (V_int (Z.of_int offset), CT_fint 64)]))
                   on_failure
               in
               (pre @ pre', instrs @ instrs', cleanup' @ cleanup, ctx)
@@ -1137,8 +1126,8 @@ module Make (C : CONFIG) = struct
               let mk_slice =
                 [
                   idecl l CT_lbits sliced;
-                  iinit l CT_lint offset_id (V_lit (V_int (Big_int.of_int offset), CT_fint 64));
-                  iinit l CT_lint width_id (V_lit (V_int (Big_int.of_int width), CT_fint 64));
+                  iinit l CT_lint offset_id (V_lit (V_int (Z.of_int offset), CT_fint 64));
+                  iinit l CT_lint width_id (V_lit (V_int (Z.of_int width), CT_fint 64));
                   iextern l
                     (CL_id (sliced, CT_lbits))
                     (mk_id "slice", [])
@@ -1667,10 +1656,9 @@ module Make (C : CONFIG) = struct
             @ [body_call (CL_id (body_gs, CT_unit))]
             @ body_cleanup
           in
-          if is_inc then
-            if Big_int.greater i loop_to then None else Some (Big_int.add i loop_step, iblock (loop_body ()))
-          else if Big_int.less i loop_to then None
-          else Some (Big_int.sub i loop_step, iblock (loop_body ()))
+          if is_inc then if Z.gt i loop_to then None else Some (Z.add i loop_step, iblock (loop_body ()))
+          else if Z.lt i loop_to then None
+          else Some (Z.sub i loop_step, iblock (loop_body ()))
         in
         let rec unroll acc i =
           match loop_iteration i with None -> List.rev acc | Some (next, instr) -> unroll (instr :: acc) next
@@ -1732,7 +1720,7 @@ module Make (C : CONFIG) = struct
           match (get_attribute "unroll" uannot, C.unroll_loops) with
           | Some attr_data_opt, Some _ -> (
               match attr_data_opt with
-              | _, Some (AD_aux (AD_num times, _)) -> unroll (Big_int.to_int times) 0
+              | _, Some (AD_aux (AD_num times, _)) -> unroll (Z.to_int times) 0
               | _, Some (AD_aux (_, l)) -> raise (Reporting.err_general l "Invalid argument on unroll attribute")
               | l, None -> raise (Reporting.err_general l "Expected numeric argument for unroll attribute")
             )
@@ -2085,7 +2073,7 @@ module Make (C : CONFIG) = struct
     in
 
     let funwire_attr_info = function
-      | Arg n -> AD_aux (AD_num (Big_int.of_int n), l)
+      | Arg n -> AD_aux (AD_num (Z.of_int n), l)
       | Ret -> AD_aux (AD_string "return", l)
       | Invoke -> AD_aux (AD_string "invoke", l)
     in
@@ -2116,7 +2104,7 @@ module Make (C : CONFIG) = struct
         iextern l
           (CL_id (funwire_name fw, vector_ctyp))
           (mk_id "internal_vector_update", [])
-          [V_id (funwire_name fw, vector_ctyp); V_lit (V_int (Big_int.of_int slot), CT_fint 64); cval]
+          [V_id (funwire_name fw, vector_ctyp); V_lit (V_int (Z.of_int slot), CT_fint 64); cval]
       )
       else icopy l (CL_id (funwire_name fw, funwire_ctyp fw)) (V_id (funwire_name fw, funwire_ctyp fw))
     in

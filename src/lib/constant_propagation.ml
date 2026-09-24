@@ -116,7 +116,7 @@ let threaded_map f state l =
 let lit_match = function
   | (L_bin [Non_empty (Bin_0, [])] | L_false), (L_bin [Non_empty (Bin_0, [])] | L_false) -> true
   | (L_bin [Non_empty (Bin_1, [])] | L_true), (L_bin [Non_empty (Bin_1, [])] | L_true) -> true
-  | L_num i1, L_num i2 -> Big_int.equal i1 i2
+  | L_num i1, L_num i2 -> Z.equal i1 i2
   | l1, l2 -> l1 = l2
 
 (* There's no undefined nexp, so replace undefined sizes with a plausible size.
@@ -195,7 +195,7 @@ let reduce_cast typ exp l annot =
       else
         raise
           (Reporting.err_unreachable l __POS__
-             ("Constant propagation error: literal " ^ Big_int.to_string n ^ " does not satisfy constraint "
+             ("Constant propagation error: literal " ^ Z.to_string n ^ " does not satisfy constraint "
             ^ string_of_n_constraint nc
              )
           )

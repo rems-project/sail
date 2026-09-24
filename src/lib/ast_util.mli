@@ -49,7 +49,6 @@
 open Ast
 open Ast_compare
 open Ast_defs
-module Big_int = Nat_big_num
 
 (** {1 Untyped AST annotations and locations} *)
 
@@ -79,7 +78,7 @@ val attribute_data_object : attribute_data -> (string * attribute_data) list opt
 
 val attribute_data_bool : attribute_data -> bool option
 
-val attribute_data_num : attribute_data -> Big_int.num option
+val attribute_data_num : attribute_data -> Z.t option
 
 val attribute_data_string : attribute_data -> string option
 
@@ -285,7 +284,7 @@ val is_bitvector_typ : typ -> bool
 val nexp_simp : nexp -> nexp
 val constraint_simp : n_constraint -> n_constraint
 
-val get_nexp_constant : nexp -> Big_int.num option
+val get_nexp_constant : nexp -> Z.t option
 
 (** If a constraint is a conjunction, return a list of all the top-level conjuncts *)
 val constraint_conj : n_constraint -> n_constraint list
@@ -306,7 +305,7 @@ val union_effects : effects -> effects -> effects
 
 (** {2 Functions for building numeric expressions} *)
 
-val nconstant : Big_int.num -> nexp
+val nconstant : Z.t -> nexp
 val nint : int -> nexp
 val nminus : nexp -> nexp -> nexp
 val nsum : nexp -> nexp -> nexp
@@ -330,7 +329,7 @@ val nc_or : n_constraint -> n_constraint -> n_constraint
 val nc_not : n_constraint -> n_constraint
 val nc_true : n_constraint
 val nc_false : n_constraint
-val nc_set : nexp -> Big_int.num list -> n_constraint
+val nc_set : nexp -> Z.t list -> n_constraint
 val nc_int_set : nexp -> int list -> n_constraint
 val nc_id : id -> n_constraint
 val nc_var : kid -> n_constraint
@@ -450,7 +449,7 @@ val bin_lit_length : bin_digit non_empty list -> int
 
 val nexp_identical : nexp -> nexp -> bool
 val is_nexp_constant : nexp -> bool
-val int_of_nexp_opt : nexp -> Big_int.num option
+val int_of_nexp_opt : nexp -> Z.t option
 
 val lexp_to_exp : 'a lexp -> 'a exp
 
@@ -477,7 +476,7 @@ val is_kid_generated : kid -> bool
 
 val undefined_of_typ : bool -> Ast.l -> (typ -> 'annot) -> typ -> 'annot exp
 
-val pattern_vector_subranges : 'a pat -> (Big_int.num * Big_int.num) list Bindings.t
+val pattern_vector_subranges : 'a pat -> (Z.t * Z.t) list Bindings.t
 
 val destruct_pexp : 'a pexp -> 'a pat * 'a exp option * 'a exp * (Ast.l * 'a)
 val construct_pexp : 'a pat * 'a exp option * 'a exp * (Ast.l * 'a) -> 'a pexp

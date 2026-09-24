@@ -44,11 +44,9 @@
 (*  SPDX-License-Identifier: BSD-2-Clause                                   *)
 (****************************************************************************)
 
-module Big_int = Nat_big_num
-
 let opt_elf_threads = ref 1
-let opt_elf_entry = ref Big_int.zero
-let opt_elf_tohost = ref Big_int.zero
+let opt_elf_entry = ref Z.zero
+let opt_elf_tohost = ref Z.zero
 
 (* the type of elf last loaded, and its symbol map *)
 type elf_class = ELF_Class_64 | ELF_Class_32
@@ -68,7 +66,7 @@ let hex_line bs =
 let break n xs =
   let rec helper acc = function
     | [] -> List.rev acc
-    | _ :: _ as xs -> helper ([Lem_list.take n xs] @ acc) (Lem_list.drop n xs)
+    | _ :: _ as xs -> helper ([Util.take n xs] @ acc) (Util.drop n xs)
   in
   helper [] xs
 
@@ -99,7 +97,7 @@ let read name =
 
   (* remove all the auto generated segments (they contain only 0s) *)
   let prune_segments segs =
-    Lem_list.mapMaybe (fun (seg, prov) -> if prov = Elf_file.FromELF then Some seg else None) segs
+    List.filter_map (fun (seg, prov) -> if prov = Elf_file.FromELF then Some seg else None) segs
   in
   let segments, e_entry, _e_machine =
     match (elf_epi, elf_file) with
@@ -111,36 +109,36 @@ let read name =
   in
   (segments, e_entry, symbol_map)
 
-let write_sail_lib paddr i byte = Sail_lib.wram (Big_int.add paddr (Big_int.of_int i)) byte
+let write_sail_lib paddr i byte = Sail_lib.wram (Z.add paddr (Z.of_int i)) byte
 
 let write_mem_zeros start len =
   (* write in order for mem tracing logs *)
-  let i = ref Big_int.zero in
-  while Big_int.less !i len do
-    Sail_lib.wram (Big_int.add start !i) 0;
-    i := Big_int.succ !i
+  let i = ref Z.zero in
+  while Z.lt !i len do
+    Sail_lib.wram (Z.add start !i) 0;
+    i := Z.succ !i
   done
 
 let write_file chan paddr i byte =
-  output_string chan (Big_int.to_string (Big_int.add paddr (Big_int.of_int i)) ^ "\n");
+  output_string chan (Z.to_string (Z.add paddr (Z.of_int i)) ^ "\n");
   output_string chan (string_of_int byte ^ "\n")
 
 let print_seg_info offset base paddr size memsz =
   prerr_endline "\nLoading Segment";
-  prerr_endline ("Segment offset: " ^ Printf.sprintf "0x%Lx" (Big_int.to_int64 offset));
-  prerr_endline ("Segment base address: " ^ Big_int.to_string base);
+  prerr_endline ("Segment offset: " ^ Printf.sprintf "0x%Lx" (Z.to_int64 offset));
+  prerr_endline ("Segment base address: " ^ Z.to_string base);
   (* NB don't attempt to convert paddr to int64 because on MIPS it is quite likely to exceed signed
      64-bit range e.g. addresses beginning 0x9.... Really need to_uint64 or to_string_hex but lem
      doesn't have them. *)
-  prerr_endline ("Segment physical address: " ^ Printf.sprintf "0x%Lx" (Big_int.to_int64 paddr));
-  prerr_endline ("Segment size: " ^ Printf.sprintf "0x%Lx" (Big_int.to_int64 size));
-  prerr_endline ("Segment memsz: " ^ Printf.sprintf "0x%Lx" (Big_int.to_int64 memsz))
+  prerr_endline ("Segment physical address: " ^ Printf.sprintf "0x%Lx" (Z.to_int64 paddr));
+  prerr_endline ("Segment size: " ^ Printf.sprintf "0x%Lx" (Z.to_int64 size));
+  prerr_endline ("Segment memsz: " ^ Printf.sprintf "0x%Lx" (Z.to_int64 memsz))
 
 let load_segment ?(writer = write_sail_lib) bs paddr base offset size memsz =
   print_seg_info offset base paddr size memsz;
   print_segment bs;
   List.iteri (writer paddr) (List.rev_map int_of_char (List.rev (Byte_sequence.char_list_of_byte_sequence bs)));
-  write_mem_zeros (Big_int.add paddr size) (Big_int.sub memsz size)
+  write_mem_zeros (Z.add paddr size) (Z.sub memsz size)
 
 let load_elf ?(writer = write_sail_lib) name =
   let segments, e_entry, symbol_map = read name in

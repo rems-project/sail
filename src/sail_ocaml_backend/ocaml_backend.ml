@@ -54,8 +54,6 @@ open PPrint
 open Type_check
 open Util
 
-module Big_int = Nat_big_num
-
 (* Option to turn tracing features on or off *)
 let opt_trace_ocaml = ref false
 
@@ -128,12 +126,12 @@ let ocaml_typ_id ctx = function
   | id when Id.compare id (mk_id "string_literal") = 0 -> string "string"
   | id when Id.compare id (mk_id "list") = 0 -> string "list"
   | id when Id.compare id (mk_id "bitvector") = 0 -> string "bits"
-  | id when Id.compare id (mk_id "int") = 0 -> string "Big_int.num"
-  | id when Id.compare id (mk_id "implicit") = 0 -> string "Big_int.num"
-  | id when Id.compare id (mk_id "nat") = 0 -> string "Big_int.num"
+  | id when Id.compare id (mk_id "int") = 0 -> string "Z.t"
+  | id when Id.compare id (mk_id "implicit") = 0 -> string "Z.t"
+  | id when Id.compare id (mk_id "nat") = 0 -> string "Z.t"
   | id when Id.compare id (mk_id "bool") = 0 -> string "bool"
   | id when Id.compare id (mk_id "unit") = 0 -> string "unit"
-  | id when Id.compare id (mk_id "real") = 0 -> string "Rational.t"
+  | id when Id.compare id (mk_id "real") = 0 -> string "Q.t"
   | id when Id.compare id (mk_id "exception") = 0 -> string "exn"
   | id when Id.compare id (mk_id "register") = 0 -> string "ref"
   | id when IdSet.mem id ctx.records -> zencode_upper ctx id ^^ dot ^^ zencode ctx id
@@ -173,9 +171,9 @@ let ocaml_bits_lit bits =
   let value = Sail_lib.uint (Sail_lib.bits_of_bit_list bits) in
   parens
     (string "to_bits" ^^ space
-    ^^ parens (string ("Big_int.of_int " ^ string_of_int width))
+    ^^ parens (string ("Z.of_int " ^ string_of_int width))
     ^^ space
-    ^^ parens (string ("Big_int.of_string " ^ "\"" ^ Big_int.to_string value ^ "\""))
+    ^^ parens (string ("Z.of_string " ^ "\"" ^ Z.to_string value ^ "\""))
     )
 
 let ocaml_lit (L_aux (lit_aux, _)) =
@@ -184,10 +182,10 @@ let ocaml_lit (L_aux (lit_aux, _)) =
   | L_true -> string "true"
   | L_false -> string "false"
   | L_num n ->
-      if Big_int.equal n Big_int.zero then string "Big_int.zero"
-      else if Big_int.less_equal (Big_int.of_int min_int) n && Big_int.less_equal n (Big_int.of_int max_int) then
-        parens (string "Big_int.of_int" ^^ space ^^ parens (string (Big_int.to_string n)))
-      else parens (string "Big_int.of_string" ^^ space ^^ dquotes (string (Big_int.to_string n)))
+      if Z.equal n Z.zero then string "Z.zero"
+      else if Z.leq (Z.of_int min_int) n && Z.leq n (Z.of_int max_int) then
+        parens (string "Z.of_int" ^^ space ^^ parens (string (Z.to_string n)))
+      else parens (string "Z.of_string" ^^ space ^^ dquotes (string (Z.to_string n)))
   | L_string str -> string_lit str
   | L_real r ->
       let str = Q.to_string (Util.Rational.from_rocq r) in
@@ -346,15 +344,11 @@ let rec ocaml_exp ctx (E_aux (exp_aux, (l, _)) as exp) =
       in
       let loop_mod =
         match ord with
-        | Ord_aux (Ord_inc, _) ->
-            string "Big_int.add" ^^ space ^^ zencode ctx id ^^ space ^^ ocaml_atomic_exp ctx exp_step
-        | Ord_aux (Ord_dec, _) ->
-            string "Big_int.sub" ^^ space ^^ zencode ctx id ^^ space ^^ ocaml_atomic_exp ctx exp_step
+        | Ord_aux (Ord_inc, _) -> string "Z.add" ^^ space ^^ zencode ctx id ^^ space ^^ ocaml_atomic_exp ctx exp_step
+        | Ord_aux (Ord_dec, _) -> string "Z.sub" ^^ space ^^ zencode ctx id ^^ space ^^ ocaml_atomic_exp ctx exp_step
       in
       let loop_compare =
-        match ord with
-        | Ord_aux (Ord_inc, _) -> string "Big_int.less_equal"
-        | Ord_aux (Ord_dec, _) -> string "Big_int.greater_equal"
+        match ord with Ord_aux (Ord_inc, _) -> string "Z.leq" | Ord_aux (Ord_dec, _) -> string "Z.geq"
       in
       let loop_body =
         separate space [string "if"; loop_compare; zencode ctx id; ocaml_atomic_exp ctx exp_to]
@@ -425,7 +419,7 @@ and ocaml_atomic_exp ctx (E_aux (exp_aux, _) as exp) =
   | E_vector exps ->
       let elems = enclose lbracket rbracket (separate_map (semi ^^ space) (ocaml_exp ctx) exps) in
       if is_bitvector_typ (typ_of exp) then
-        parens (string "List.fold_left append" ^^ space ^^ parens (string "zeros Big_int.zero") ^^ space ^^ elems)
+        parens (string "List.fold_left append" ^^ space ^^ parens (string "zeros Z.zero") ^^ space ^^ elems)
       else parens (string "List.concat" ^^ space ^^ elems)
   | E_list exps -> enclose lbracket rbracket (separate_map (semi ^^ space) (ocaml_exp ctx) exps)
   | E_tuple exps ->
@@ -972,7 +966,7 @@ let ocaml_pp_generators ctx defs orig_types required =
         match arg with
         | A_nexp (Nexp_aux (nexp, l) as full_nexp) -> (
             match nexp with
-            | Nexp_constant c -> string (Big_int.to_string c) (* TODO: overflow *)
+            | Nexp_constant c -> string (Z.to_string c) (* TODO: overflow *)
             | Nexp_var v -> mk_arg v
             | _ -> raise (Reporting.err_todo l ("Unsupported nexp for generators: " ^ string_of_nexp full_nexp))
           )
@@ -1105,7 +1099,6 @@ let ocaml_ast ast generator_info =
   in
   (string "open Libsail.Sail_lib;;" ^^ hardline)
   ^^ (string "open Libsail.Ast.Bit;;" ^^ hardline)
-  ^^ (string "module Big_int = Nat_big_num" ^^ ocaml_def_end)
   ^^ concat (List.map (ocaml_def ctx) ast.defs)
   ^^ empty_reg_init ^^ gen_pp
 
@@ -1169,7 +1162,7 @@ let dune_file spec =
     ^//^ parens (string "modes" ^^ space ^^ string "native")
     ^//^ parens (string "public_name" ^^ space ^^ string spec)
     ^//^ parens (string "package" ^^ space ^^ string spec)
-    ^//^ parens (string "libraries" ^^ space ^^ string "libsail")
+    ^//^ parens (string "libraries" ^^ space ^^ string "libsail zarith")
     )
 
 let ocaml_compile default_sail_dir spec ast generator_types =

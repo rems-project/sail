@@ -44,8 +44,6 @@
 (*  SPDX-License-Identifier: BSD-2-Clause                                   *)
 (****************************************************************************)
 
-module Big_int = Nat_big_num
-
 open Initial_check
 open Ast
 open Ast_compare
@@ -206,7 +204,7 @@ let field_accessors typ_name field order range =
 
 (* Generate all accessor functions for a given bitfield type *)
 let macro id size order ranges =
-  let full_range = BF_aux (BF_range (nminus size (nint 1), nconstant Big_int.zero), Parse_ast.Unknown) in
+  let full_range = BF_aux (BF_range (nminus size (nint 1), nconstant Z.zero), Parse_ast.Unknown) in
   let ranges = (mk_id "bits", full_range) :: Bindings.bindings ranges in
   let accessors = List.map (fun (field, range) -> field_accessors id field order range) ranges in
   List.concat ([constructor id size] @ accessors)

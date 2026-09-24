@@ -49,8 +49,6 @@ open Ast_compare
 open Ast_util
 open Util
 
-module Big_int = Nat_big_num
-
 open Type_internal
 
 (* Linearize cases involving power where we would otherwise require
@@ -1040,7 +1038,7 @@ and add_constraint ?(global = false) ?reason constr env =
           ( lazy
             (Util.("Linearizing " |> red |> clear)
             ^ string_of_n_constraint constr ^ " for " ^ string_of_kid v ^ " in "
-            ^ Util.string_of_list ", " Big_int.to_string solutions
+            ^ Util.string_of_list ", " Z.to_string solutions
             )
             ) [@coverage off];
         let linearized =

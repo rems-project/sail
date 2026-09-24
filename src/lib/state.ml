@@ -44,8 +44,6 @@
 (*  SPDX-License-Identifier: BSD-2-Clause                                   *)
 (****************************************************************************)
 
-module Big_int = Nat_big_num
-
 open Initial_check
 open Type_check
 open Ast
@@ -99,7 +97,7 @@ let rec id_of_nexp = function Nexp_aux (nexp, _) -> id_of_nexp_aux nexp
 and id_of_nexp_aux = function
   | Nexp_id id -> string_of_id id
   | Nexp_var kid -> string_of_kid kid
-  | Nexp_constant c -> Big_int.to_string c
+  | Nexp_constant c -> Z.to_string c
   | Nexp_times (n1, n2) -> id_of_nexp n1 ^ "_times_" ^ id_of_nexp n2
   | Nexp_sum (n1, n2) -> id_of_nexp n1 ^ "_plus_" ^ id_of_nexp n2
   | Nexp_minus (n1, n2) -> id_of_nexp n1 ^ "_minus_" ^ id_of_nexp n2
@@ -194,17 +192,13 @@ let generate_initial_regstate ctx env ast =
                by the typechecker for binary and hex literals) *)
             let literal_bitvec = has_default_order defs in
             let init_elem = if literal_bitvec then "0" else lookup_init_val vals bit_typ in
-            let rec elems len =
-              if Nat_big_num.less_equal len Nat_big_num.zero then [] else init_elem :: elems (Nat_big_num.pred len)
-            in
+            let rec elems len = if Z.leq len Z.zero then [] else init_elem :: elems (Z.pred len) in
             if literal_bitvec then "0b" ^ String.concat "" (elems len) else "[" ^ String.concat ", " (elems len) ^ "]"
         | Typ_app (id, [A_aux (A_nexp len, _); A_aux (A_typ etyp, _)]) when string_of_id id = "vector" ->
             let len = Type_check.solve_unique env len |> Option.get in
             (* Output a list of initial values of the vector elements. *)
             let init_elem = lookup_init_val vals etyp in
-            let rec elems len =
-              if Nat_big_num.less_equal len Nat_big_num.zero then [] else init_elem :: elems (Nat_big_num.pred len)
-            in
+            let rec elems len = if Z.leq len Z.zero then [] else init_elem :: elems (Z.pred len) in
             "[" ^ String.concat ", " (elems len) ^ "]"
         | Typ_app (id, args) -> Bindings.find id vals args
         | Typ_tuple typs -> "(" ^ String.concat ", " (List.map (lookup_init_val vals) typs) ^ ")"
@@ -215,7 +209,7 @@ let generate_initial_regstate ctx env ast =
               Typ_aux (Typ_app (id, [A_aux (A_nexp (Nexp_aux (Nexp_var k'', _)), _)]), _)
             )
           when Kid.compare (kopt_kid k) k' == 0 && Kid.compare k' k'' == 0 && string_of_id id = "atom" ->
-            Big_int.to_string h
+            Z.to_string h
         | Typ_exist (_, _, typ) -> lookup_init_val vals typ
         | _ -> raise Not_found
       in

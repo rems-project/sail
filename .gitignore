@@ -80,6 +80,9 @@ lib/hol/sail-heap
 /test/riscv/tests/*.iout
 /test/smt/*.out
 /test/smt/*.smt2
+/test/builtins/_sbuild*
+/test/builtins/*.c
+/test/builtins/*.h
 /test/c/*.c
 /test/c/*.cpp
 /test/c/*.h

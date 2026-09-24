@@ -46,8 +46,6 @@
 
 open Ast.Bit
 
-module Big_int = Nat_big_num
-
 type bits = Extraction.Definitions.bvn
 
 (* for ToFromInterp_lib_foo *)
@@ -60,7 +58,7 @@ end
 type 'a return = { return : 'b. 'a -> 'b }
 type 'za zoption = ZNone of unit | ZSome of 'za
 
-let zint_forwards i = string_of_int (Big_int.to_int i)
+let zint_forwards i = string_of_int (Z.to_int i)
 
 let opt_trace = ref false
 
@@ -70,7 +68,7 @@ let random = ref false
 let opt_cycle_limit = ref 0
 let cycle_count_var = ref 0
 
-let get_cycle_count () = Big_int.of_int !cycle_count_var
+let get_cycle_count () = Z.of_int !cycle_count_var
 
 let cycle_count () = incr cycle_count_var
 
@@ -137,7 +135,7 @@ let undefined_bit () = if !random then if Random.bool () then B0 else B1 else B0
 let undefined_bool () = if !random then Random.bool () else false
 
 let rec undefined_vector len item =
-  if Big_int.equal len Big_int.zero then [] else item :: undefined_vector (Big_int.sub len (Big_int.of_int 1)) item
+  if Z.equal len Z.zero then [] else item :: undefined_vector (Z.sub len (Z.of_int 1)) item
 
 let undefined_list _ = []
 
@@ -147,9 +145,9 @@ let undefined_string () = ""
 
 let undefined_unit () = ()
 
-let undefined_int () = if !random then Big_int.of_int (Random.int 0xFFFF) else Big_int.zero
+let undefined_int () = if !random then Z.of_int (Random.int 0xFFFF) else Z.zero
 
-let undefined_nat () = Big_int.zero
+let undefined_nat () = Z.zero
 
 let undefined_range lo _ = lo
 
@@ -189,9 +187,9 @@ let access = Extraction.PrimBits.access
 
 let access_inc = Extraction.PrimBits.access_inc
 
-let access_list xs n = List.nth (List.rev xs) (Big_int.to_int n)
+let access_list xs n = List.nth (List.rev xs) (Z.to_int n)
 
-let access_list_inc xs n = List.nth xs (Big_int.to_int n)
+let access_list_inc xs n = List.nth xs (Z.to_int n)
 
 let append = Extraction.PrimBits.append
 
@@ -199,7 +197,7 @@ let update bits n b = Extraction.PrimBits.set_slice bits n b
 
 let update_inc bits n b =
   let w = Extraction.PrimBits.width bits in
-  Extraction.PrimBits.set_slice bits (Big_int.sub (Big_int.pred w) n) b
+  Extraction.PrimBits.set_slice bits (Z.sub (Z.pred w) n) b
 
 let update_list = Extraction.PrimVector.update_list
 
@@ -209,7 +207,7 @@ let update_subrange = Extraction.PrimBits.update_subrange
 
 let update_subrange_inc xs n m ys =
   let w = Extraction.PrimBits.width xs in
-  Extraction.PrimBits.update_subrange xs (Big_int.sub (Big_int.pred w) n) (Big_int.sub (Big_int.pred w) m) ys
+  Extraction.PrimBits.update_subrange xs (Z.sub (Z.pred w) n) (Z.sub (Z.pred w) m) ys
 
 let vector_init = Extraction.PrimVector.vector_init
 
@@ -265,11 +263,11 @@ let replicate_bits = Extraction.PrimBits.replicate_bits
 
 let identity x = x
 
-let get_slice_int' n m o = Extraction.PrimBits.get_slice_int (Big_int.of_int n) m (Big_int.of_int o)
+let get_slice_int' n m o = Extraction.PrimBits.get_slice_int (Z.of_int n) m (Z.of_int o)
 
 let get_slice_int = Extraction.PrimBits.get_slice_int
 
-let to_bits' len n = Extraction.PrimBits.to_bits (Big_int.of_int len) n
+let to_bits' len n = Extraction.PrimBits.to_bits (Z.of_int len) n
 
 let to_bits = Extraction.PrimBits.to_bits
 
@@ -301,9 +299,9 @@ let hex_digit_value c =
   | _ -> raise (Runtime_type_error "Invalid hex character")
 
 let bits_of_string str =
-  let v = ref Big_int.zero in
-  String.iter (fun c -> v := Big_int.add (Big_int.shift_left !v 4) (Big_int.of_int (hex_digit_value c))) str;
-  Extraction.PrimBits.to_bits (Big_int.of_int (4 * String.length str)) !v
+  let v = ref Z.zero in
+  String.iter (fun c -> v := Z.add (Z.shift_left !v 4) (Z.of_int (hex_digit_value c))) str;
+  Extraction.PrimBits.to_bits (Z.of_int (4 * String.length str)) !v
 
 let hex_char c = bits_of_string (String.make 1 c)
 
@@ -328,9 +326,9 @@ let bit_of_bool = Extraction.PrimBits.bit_of_bool
 let bigint_of_bit = Extraction.PrimBits.bigint_of_bit
 
 let string_of_bits bits =
-  let w = Big_int.to_int (Extraction.PrimBits.width bits) in
+  let w = Z.to_int (Extraction.PrimBits.width bits) in
   let v = Extraction.PrimBits.uint bits in
-  let digit shift mask = Big_int.to_int (Big_int.bitwise_and (Big_int.shift_right v shift) (Big_int.of_int mask)) in
+  let digit shift mask = Z.to_int (Z.logand (Z.shift_right v shift) (Z.of_int mask)) in
   let buf = Buffer.create (2 + w) in
   if w mod 4 = 0 then (
     Buffer.add_string buf "0x";
@@ -349,28 +347,28 @@ let string_of_bits bits =
 
 let string_of_hex bits = string_of_bits bits
 
-let decimal_string_of_bits bits = Big_int.to_string (Extraction.PrimBits.uint bits)
+let decimal_string_of_bits bits = Z.to_string (Extraction.PrimBits.uint bits)
 
 let hex_slice str n m =
   let v = Extraction.PrimBits.uint (bits_of_string (String.sub str 2 (String.length str - 2))) in
-  Extraction.PrimBits.to_bits n (Big_int.shift_right v (Big_int.to_int m))
+  Extraction.PrimBits.to_bits n (Z.shift_right v (Z.to_int m))
 
 let putchar n =
-  print_char (char_of_int (Big_int.to_int n));
+  print_char (char_of_int (Z.to_int n));
   flush stdout
 
 let bits_of_int bit n =
   let rec width b acc = if b = 0 then acc else width (b / 2) (acc + 1) in
-  Extraction.PrimBits.to_bits (Big_int.of_int (width bit 0)) (Big_int.of_int n)
+  Extraction.PrimBits.to_bits (Z.of_int (width bit 0)) (Z.of_int n)
 
-let bits_of_big_int pow n = Extraction.PrimBits.to_bits (Big_int.of_int pow) n
+let bits_of_big_int pow n = Extraction.PrimBits.to_bits (Z.of_int pow) n
 
-let byte_of_int n = Extraction.PrimBits.to_bits (Big_int.of_int 8) (Big_int.of_int n)
+let byte_of_int n = Extraction.PrimBits.to_bits (Z.of_int 8) (Z.of_int n)
 
 module Mem = struct
   include Map.Make (struct
-    type t = Big_int.num
-    let compare = Big_int.compare
+    type t = Z.t
+    let compare = Z.compare
   end)
 end
 
@@ -379,9 +377,9 @@ let mem_pages = (ref Mem.empty : Bytes.t Mem.t ref)
 let page_shift_bits = 20 (* 1M page *)
 let page_size_bytes = 1 lsl page_shift_bits
 
-let page_no_of_addr a = Big_int.shift_right a page_shift_bits
-let bottom_addr_of_page p = Big_int.shift_left p page_shift_bits
-let top_addr_of_page p = Big_int.shift_left (Big_int.succ p) page_shift_bits
+let page_no_of_addr a = Z.shift_right a page_shift_bits
+let bottom_addr_of_page p = Z.shift_left p page_shift_bits
+let top_addr_of_page p = Z.shift_left (Z.succ p) page_shift_bits
 let get_mem_page p =
   try Mem.find p !mem_pages
   with Not_found ->
@@ -393,10 +391,10 @@ let rec add_mem_bytes addr buf off len =
   let page_no = page_no_of_addr addr in
   let page_bot = bottom_addr_of_page page_no in
   let page_top = top_addr_of_page page_no in
-  let page_off = Big_int.to_int (Big_int.sub addr page_bot) in
+  let page_off = Z.to_int (Z.sub addr page_bot) in
   let page = get_mem_page page_no in
-  let bytes_left_in_page = Big_int.sub page_top addr in
-  let to_copy = min (Big_int.to_int bytes_left_in_page) len in
+  let bytes_left_in_page = Z.sub page_top addr in
+  let to_copy = min (Z.to_int bytes_left_in_page) len in
   Bytes.blit buf off page page_off to_copy;
   if to_copy < len then add_mem_bytes page_top buf (off + to_copy) (len - to_copy)
 
@@ -404,19 +402,19 @@ let rec read_mem_bytes addr len =
   let page_no = page_no_of_addr addr in
   let page_bot = bottom_addr_of_page page_no in
   let page_top = top_addr_of_page page_no in
-  let page_off = Big_int.to_int (Big_int.sub addr page_bot) in
+  let page_off = Z.to_int (Z.sub addr page_bot) in
   let page = get_mem_page page_no in
-  let bytes_left_in_page = Big_int.sub page_top addr in
-  let to_get = min (Big_int.to_int bytes_left_in_page) len in
+  let bytes_left_in_page = Z.sub page_top addr in
+  let to_get = min (Z.to_int bytes_left_in_page) len in
   let bytes = Bytes.sub page page_off to_get in
   if to_get >= len then bytes else Bytes.cat bytes (read_mem_bytes page_top (len - to_get))
 
 let write_ram' data_size addr data =
-  let len = Big_int.to_int data_size in
+  let len = Z.to_int data_size in
   let bytes = Bytes.create len in
   let v = Extraction.PrimBits.uint data in
   for i = 0 to len - 1 do
-    let byte = Big_int.to_int (Big_int.bitwise_and (Big_int.shift_right v (8 * i)) (Big_int.of_int 255)) in
+    let byte = Z.to_int (Z.logand (Z.shift_right v (8 * i)) (Z.of_int 255)) in
     Bytes.set bytes i (char_of_int byte)
   done;
   add_mem_bytes addr bytes 0 len
@@ -430,13 +428,11 @@ let wram addr byte =
   add_mem_bytes addr bytes 0 1
 
 let read_mem_bits data_size addr =
-  let len = Big_int.to_int data_size in
+  let len = Z.to_int data_size in
   let bytes = read_mem_bytes addr len in
-  let v = ref Big_int.zero in
-  Bytes.iteri
-    (fun i byte -> v := Big_int.bitwise_or !v (Big_int.shift_left (Big_int.of_int (int_of_char byte)) (8 * i)))
-    bytes;
-  Extraction.PrimBits.to_bits (Big_int.mul (Big_int.of_int 8) data_size) !v
+  let v = ref Z.zero in
+  Bytes.iteri (fun i byte -> v := Z.logor !v (Z.shift_left (Z.of_int (int_of_char byte)) (8 * i))) bytes;
+  Extraction.PrimBits.to_bits (Z.mul (Z.of_int 8) data_size) !v
 
 let read_ram _addr_size data_size _hex_ram addr = read_mem_bits data_size (uint addr)
 
@@ -460,7 +456,7 @@ let lor_int = Extraction.PrimInt.lor_int
 let land_int = Extraction.PrimInt.land_int
 let lxor_int = Extraction.PrimInt.lxor_int
 
-let debug str1 n str2 v = prerr_endline (str1 ^ Big_int.to_string n ^ str2 ^ string_of_bits v)
+let debug str1 n str2 v = prerr_endline (str1 ^ Z.to_string n ^ str2 ^ string_of_bits v)
 
 let eq_string str1 str2 = String.compare str1 str2 == 0
 
@@ -468,21 +464,21 @@ let string_startswith str1 str2 =
   String.length str1 >= String.length str2 && String.compare (String.sub str1 0 (String.length str2)) str2 == 0
 
 let string_drop str n =
-  if Big_int.less_equal (Big_int.of_int (String.length str)) n then ""
+  if Z.leq (Z.of_int (String.length str)) n then ""
   else (
-    let n = Big_int.to_int n in
+    let n = Z.to_int n in
     String.sub str n (String.length str - n)
   )
 
 let string_take str n =
-  let n = Big_int.to_int n in
+  let n = Z.to_int n in
   if String.length str <= n then str else String.sub str 0 n
 
-let string_length str = Big_int.of_int (String.length str)
+let string_length str = Z.of_int (String.length str)
 
 let string_append s1 s2 = s1 ^ s2
 
-let int_of_string_opt s = try Some (Big_int.of_string s) with Invalid_argument _ -> None
+let int_of_string_opt s = try Some (Z.of_string s) with Invalid_argument _ -> None
 
 (* highly inefficient recursive implementation *)
 let rec maybe_int_of_prefix = function
@@ -490,7 +486,7 @@ let rec maybe_int_of_prefix = function
   | str -> (
       let len = String.length str in
       match int_of_string_opt str with
-      | Some n -> ZSome (n, Big_int.of_int len)
+      | Some n -> ZSome (n, Z.of_int len)
       | None -> maybe_int_of_prefix (String.sub str 0 (len - 1))
     )
 
@@ -530,13 +526,13 @@ let abs_real x = Q.abs x
 
 let sqrt_real x =
   let precision = 30 in
-  let s = Q.div (Q.of_bigint (Big_int.sqrt (Q.num x))) (Q.of_bigint (Big_int.sqrt (Q.den x))) in
+  let s = Q.div (Q.of_bigint (Z.sqrt (Q.num x))) (Q.of_bigint (Z.sqrt (Q.den x))) in
   if Q.equal (Q.mul s s) x then s
   else (
     let p = ref s in
     let n = ref (Q.of_int 0) in
     let num_convergence = if Q.gt x (Q.of_int 1) then Q.of_int 1 else x in
-    let convergence = ref (Q.div num_convergence (Q.of_bigint (Big_int.pow_int_positive 10 precision))) in
+    let convergence = ref (Q.div num_convergence (Q.of_bigint (Z.pow (Z.of_int 10) precision))) in
     let quit_loop = ref false in
     while not !quit_loop do
       n := Q.div (Q.add !p (Q.div x !p)) (Q.of_int 2);
@@ -559,7 +555,7 @@ let max_int = Extraction.PrimInt.max_int
 let min_int = Extraction.PrimInt.min_int
 let abs_int = Extraction.PrimInt.abs_int
 
-let string_of_int x = Big_int.to_string x
+let string_of_int x = Z.to_string x
 
 let undefined_real () = Q.of_int 0
 
@@ -571,9 +567,9 @@ let print str = Stdlib.print_string str
 
 let prerr str = Stdlib.prerr_string str
 
-let print_int str x = print_endline (str ^ Big_int.to_string x)
+let print_int str x = print_endline (str ^ Z.to_string x)
 
-let prerr_int str x = prerr_endline (str ^ Big_int.to_string x)
+let prerr_int str x = prerr_endline (str ^ Z.to_string x)
 
 let print_bits str xs = print_endline (str ^ string_of_bits xs)
 
@@ -586,9 +582,9 @@ let prerr_string str msg = prerr_endline (str ^ msg)
 let reg_deref r = !r
 
 let string_of_zbitvector bits = "0b" ^ Util.string_of_list "" (function B0 -> "0" | B1 -> "1") (bit_list_of_bits bits)
-let string_of_znat n = Big_int.to_string n
-let string_of_zint n = Big_int.to_string n
-let string_of_zimplicit n = Big_int.to_string n
+let string_of_znat n = Z.to_string n
+let string_of_zint n = Z.to_string n
+let string_of_zimplicit n = Z.to_string n
 let string_of_zunit () = "()"
 let string_of_zbool = function true -> "true" | false -> "false"
 let string_of_zreal _ = "REAL"
@@ -625,26 +621,26 @@ let shift_bits_left = Extraction.PrimBits.shift_bits_left
 let speculate_conditional_success () = true
 
 (* Return nanoseconds since epoch. Truncates to ocaml int but will be OK for next 100 years or so... *)
-let get_time_ns () = Big_int.of_int (int_of_float (1e9 *. Unix.gettimeofday ()))
+let get_time_ns () = Z.of_int (int_of_float (1e9 *. Unix.gettimeofday ()))
 
 let string_of_bool = function true -> "true" | false -> "false"
 
-let dec_str x = Big_int.to_string x
+let dec_str x = Z.to_string x
 
 let to_lower_hex_char n = if 10 <= n && n <= 15 then Char.chr (n + 87) else Char.chr (n + 48)
 
 let to_upper_hex_char n = if 10 <= n && n <= 15 then Char.chr (n + 55) else Char.chr (n + 48)
 
 let hex_str_helper to_char x =
-  let x, negative = if Big_int.less x Big_int.zero then (Big_int.abs x, "-") else (x, "") in
-  if Big_int.equal x Big_int.zero then "0x0"
+  let x, negative = if Z.lt x Z.zero then (Z.abs x, "-") else (x, "") in
+  if Z.equal x Z.zero then "0x0"
   else (
     let x = ref x in
     let s = ref "" in
-    while not (Big_int.equal !x Big_int.zero) do
-      let lower_4 = Big_int.to_int (Big_int.bitwise_and !x (Big_int.of_int 15)) in
+    while not (Z.equal !x Z.zero) do
+      let lower_4 = Z.to_int (Z.logand !x (Z.of_int 15)) in
       s := String.make 1 (to_char lower_4) ^ !s;
-      x := Big_int.shift_right !x 4
+      x := Z.shift_right !x 4
     done;
     negative ^ "0x" ^ !s
   )
@@ -684,7 +680,7 @@ let valid_hex_bits n s =
         is_valid := !is_valid && is_hex_char c
       )
       hex;
-    !actual_len <= Big_int.to_int n && !is_valid
+    !actual_len <= Z.to_int n && !is_valid
   )
 
 let parse_hex_bits n s =
@@ -698,14 +694,13 @@ let valid_dec_bits n s =
     String.iter (fun c -> is_valid := !is_valid && '0' <= c && c <= '9') s;
     if not !is_valid then false
     else (
-      let rec count_bits n = if Big_int.equal n Big_int.zero then 0 else 1 + count_bits (Big_int.shift_right n 1) in
-      let dec_value = Big_int.of_string s in
-      count_bits dec_value <= Big_int.to_int n
+      let rec count_bits n = if Z.equal n Z.zero then 0 else 1 + count_bits (Z.shift_right n 1) in
+      let dec_value = Z.of_string s in
+      count_bits dec_value <= Z.to_int n
     )
   )
 
-let parse_dec_bits n s =
-  if not (valid_dec_bits n s) then zeros n else Extraction.PrimBits.to_bits n (Big_int.of_string s)
+let parse_dec_bits n s = if not (valid_dec_bits n s) then zeros n else Extraction.PrimBits.to_bits n (Z.of_string s)
 
 let trace_memory_write _ _ _ = ()
 let trace_memory_read _ _ _ = ()
@@ -721,7 +716,7 @@ let load_raw paddr file =
   try
     while true do
       let byte = input_char in_chan |> Char.code in
-      wram (Big_int.add paddr (Big_int.of_int !i)) byte;
+      wram (Z.add paddr (Z.of_int !i)) byte;
       incr i
     done
   with End_of_file -> ()

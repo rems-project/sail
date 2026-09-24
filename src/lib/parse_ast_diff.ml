@@ -47,8 +47,6 @@
 open Parse_ast
 open Parse_ast.Attribute_data
 
-module Big_int = Nat_big_num
-
 let ( &&& ) (lhs : l option) (rhs : l option Lazy.t) : l option =
   match lhs with
   | Some l -> Some l
@@ -105,7 +103,7 @@ let rec diff_atyp lhs rhs =
       match rhs with ATyp_lit lit2 -> diff_lit lit1 lit2 | _ -> Some l
     )
   | ATyp_nset nums1 -> (
-      match rhs with ATyp_nset nums2 -> diff_eq_pred ~at:l (Util.equal_list Big_int.equal) nums1 nums2 | _ -> Some l
+      match rhs with ATyp_nset nums2 -> diff_eq_pred ~at:l (Util.equal_list Z.equal) nums1 nums2 | _ -> Some l
     )
   | ATyp_in (n1, set1) -> (
       match rhs with ATyp_in (n2, set2) -> diff_atyp n1 n2 &&& lazy (diff_atyp set1 set2) | _ -> Some l
@@ -215,7 +213,7 @@ let rec diff_attribute_data (AD_aux (lhs, l)) (AD_aux (rhs, _)) =
       match rhs with AD_list ads2 -> diff_list ~at:l diff_attribute_data ads1 ads2 | _ -> Some l
     )
   | AD_num n -> (
-      match rhs with AD_num m -> diff_eq_pred ~at:l Big_int.equal n m | _ -> Some l
+      match rhs with AD_num m -> diff_eq_pred ~at:l Z.equal n m | _ -> Some l
     )
   | AD_string _ -> diff_eq ~at:l lhs rhs
   | AD_bool _ -> diff_eq ~at:l lhs rhs
@@ -862,7 +860,7 @@ let rec diff_def (DEF_aux (lhs, l)) (DEF_aux (rhs, _)) =
   | DEF_fixity (prec1, n1, tok1) -> (
       match rhs with
       | DEF_fixity (prec2, n2, tok2) ->
-          diff_eq ~at:l prec1 prec2 &&& lazy (diff_eq_pred ~at:l Big_int.equal n1 n2) &&& lazy (diff_eq ~at:l tok1 tok2)
+          diff_eq ~at:l prec1 prec2 &&& lazy (diff_eq_pred ~at:l Z.equal n1 n2) &&& lazy (diff_eq ~at:l tok1 tok2)
       | _ -> Some l
     )
   | DEF_val vs1 -> (

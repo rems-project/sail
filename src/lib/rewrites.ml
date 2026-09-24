@@ -44,7 +44,6 @@
 (*  SPDX-License-Identifier: BSD-2-Clause                                   *)
 (****************************************************************************)
 
-module Big_int = Nat_big_num
 open Ast
 open Ast_compare
 open Ast_defs
@@ -247,7 +246,7 @@ let rewrite_ast_remove_vector_subrange_pats env ast =
     let appends = ref Bindings.empty in
     let rec insert_into_append (n1, m1, id1, typ1) = function
       | (n2, m2, id2, typ2) :: xs ->
-          if Big_int.greater m1 n2 then (n1, m1, id1, typ1) :: (n2, m2, id2, typ2) :: xs
+          if Z.gt m1 n2 then (n1, m1, id1, typ1) :: (n2, m2, id2, typ2) :: xs
           else (n2, m2, id2, typ2) :: insert_into_append (n1, m1, id1, typ1) xs
       | [] -> [(n1, m1, id1, typ1)]
     in
@@ -259,9 +258,7 @@ let rewrite_ast_remove_vector_subrange_pats env ast =
             let typ = typ_of_annot annot in
             match aux with
             | P_vector_subrange (id, n, m) ->
-                let range_id =
-                  Printf.ksprintf mk_id "%s_%s_%s#" (string_of_id id) (Big_int.to_string n) (Big_int.to_string m)
-                in
+                let range_id = Printf.ksprintf mk_id "%s_%s_%s#" (string_of_id id) (Z.to_string n) (Z.to_string m) in
                 appends :=
                   Bindings.update id
                     (fun a -> Some (insert_into_append (n, m, range_id, typ) (Option.value a ~default:[])))
@@ -442,8 +439,8 @@ let remove_vector_concat_pat pat =
             match (vector_start_index (env_of_annot rannot) rtyp, vector_typ_args_of rtyp) with
             | Nexp_aux (Nexp_constant start, _), (Nexp_aux (Nexp_constant length, _), _) ->
                 ( start,
-                  if is_order_inc ord then Big_int.sub (Big_int.add start length) (Big_int.of_int 1)
-                  else Big_int.add (Big_int.sub start length) (Big_int.of_int 1)
+                  if is_order_inc ord then Z.sub (Z.add start length) (Z.of_int 1)
+                  else Z.add (Z.sub start length) (Z.of_int 1)
                 )
             | _ ->
                 Reporting.unreachable (fst rannot') __POS__
@@ -455,8 +452,8 @@ let remove_vector_concat_pat pat =
             let pos', index_j =
               match Type_check.solve_unique (env_of_annot cannot) length with
               | Some i ->
-                  if is_order_inc ord then (Big_int.add pos i, Big_int.sub (Big_int.add pos i) (Big_int.of_int 1))
-                  else (Big_int.sub pos i, Big_int.add (Big_int.sub pos i) (Big_int.of_int 1))
+                  if is_order_inc ord then (Z.add pos i, Z.sub (Z.add pos i) (Z.of_int 1))
+                  else (Z.sub pos i, Z.add (Z.sub pos i) (Z.of_int 1))
               | None ->
                   if is_last then (pos, last_idx)
                   else
@@ -587,8 +584,8 @@ let remove_vector_concat_pat pat =
   (* at this point pat should be a flat pattern: no vector_concat patterns
      with vector_concats patterns as direct child-nodes anymore *)
   let range a b =
-    let rec aux a b = if Big_int.greater a b then [] else a :: aux (Big_int.add a (Big_int.of_int 1)) b in
-    if Big_int.greater a b then List.rev (aux b a) else aux a b
+    let rec aux a b = if Z.gt a b then [] else a :: aux (Z.add a (Z.of_int 1)) b in
+    if Z.gt a b then List.rev (aux b a) else aux a b
   in
 
   let remove_vector_concats =
@@ -609,8 +606,8 @@ let remove_vector_concat_pat pat =
           | P_vector ps, _ -> acc @ ps
           | _, (nexp, _) -> (
               match Type_check.solve_unique env nexp with
-              | Some length -> acc @ List.map wild (range Big_int.zero (Big_int.sub length (Big_int.of_int 1)))
-              | None -> acc @ [wild Big_int.zero]
+              | Some length -> acc @ List.map wild (range Z.zero (Z.sub length (Z.of_int 1)))
+              | None -> acc @ [wild Z.zero]
             )
         )
         else
@@ -867,7 +864,7 @@ let rec disjoint_pat env (P_aux (p1, annot1) as pat1) (P_aux (p2, annot2) as pat
       disjoint_pat env (vector_string_to_bits_pat lit (Unknown, empty_tannot)) pat2
   | _, P_lit (L_aux ((L_bin _ | L_hex _), _) as lit) ->
       disjoint_pat env pat1 (vector_string_to_bits_pat lit (Unknown, empty_tannot))
-  | P_lit (L_aux (L_num n1, _)), P_lit (L_aux (L_num n2, _)) -> not (Big_int.equal n1 n2)
+  | P_lit (L_aux (L_num n1, _)), P_lit (L_aux (L_num n2, _)) -> not (Z.equal n1 n2)
   | P_lit (L_aux (l1, _)), P_lit (L_aux (l2, _)) -> l1 <> l2
   | P_app (id1, args1), P_app (id2, args2) -> Id.compare id1 id2 <> 0 || List.exists2 (disjoint_pat env) args1 args2
   | P_vector pats1, P_vector pats2 | P_tuple pats1, P_tuple pats2 | P_list pats1, P_list pats2 ->
@@ -1231,7 +1228,7 @@ let remove_bitvector_pat (P_aux (_, (l, _)) as pat) =
     let subvec_exp =
       match (start, length) with
       | Nexp_aux (Nexp_constant s, _), Nexp_aux (Nexp_constant l, _)
-        when Big_int.equal s i && Big_int.equal l (Big_int.of_int (List.length lits)) ->
+        when Z.equal s i && Z.equal l (Z.of_int (List.length lits)) ->
           mk_exp (E_id rootid)
       | _ -> mk_exp (vector_subrange ~loc:l (mk_id_exp rootid) (mk_num_exp i) (mk_num_exp j))
     in
@@ -1270,9 +1267,7 @@ let remove_bitvector_pat (P_aux (_, (l, _)) as pat) =
               (Reporting.err_unreachable l __POS__ "guard_bitvector_pat called on pattern with non-constant start index")
       in
       let add_bit_pat (idx, current, guards, dls) pat =
-        let idx' =
-          if is_order_inc ord then Big_int.add idx (Big_int.of_int 1) else Big_int.sub idx (Big_int.of_int 1)
-        in
+        let idx' = if is_order_inc ord then Z.add idx (Z.of_int 1) else Z.sub idx (Z.of_int 1) in
         let ids =
           fst
             (fold_pat
@@ -2193,12 +2188,12 @@ let rewrite_vector_concat_assignments env defs =
   let lit_int i = mk_exp (E_lit (mk_lit (L_num i))) in
   let sub m n =
     match (m, n) with
-    | E_aux (E_lit (L_aux (L_num m, _)), _), E_aux (E_lit (L_aux (L_num n, _)), _) -> lit_int (Big_int.sub m n)
+    | E_aux (E_lit (L_aux (L_num m, _)), _), E_aux (E_lit (L_aux (L_num n, _)), _) -> lit_int (Z.sub m n)
     | _, _ -> mk_infix_exp m (mk_operator "-") n
   in
   let add m n =
     match (m, n) with
-    | E_aux (E_lit (L_aux (L_num m, _)), _), E_aux (E_lit (L_aux (L_num n, _)), _) -> lit_int (Big_int.add m n)
+    | E_aux (E_lit (L_aux (L_num m, _)), _), E_aux (E_lit (L_aux (L_num n, _)), _) -> lit_int (Z.add m n)
     | _, _ -> mk_infix_exp m (mk_operator "+") n
   in
 
@@ -2222,8 +2217,8 @@ let rewrite_vector_concat_assignments env defs =
             else Reporting.unreachable (fst lannot) __POS__ "Lexp in vector concatenation assignment is not a vector"
           in
           let next i step =
-            if is_order_inc ord then (sub (add i step) (lit_int (Big_int.of_int 1)), add i step)
-            else (add (sub i step) (lit_int (Big_int.of_int 1)), sub i step)
+            if is_order_inc ord then (sub (add i step) (lit_int (Z.of_int 1)), add i step)
+            else (add (sub i step) (lit_int (Z.of_int 1)), sub i step)
           in
           let i =
             match Type_check.solve_unique (env_of exp) start with
@@ -3912,7 +3907,7 @@ let rewrite_explicit_measure effect_info env ast =
                     ( mk_id "gteq_int",
                       [
                         E_aux (E_id limit, (loc, empty_tannot));
-                        E_aux (E_lit (L_aux (L_num Big_int.zero, loc)), (loc, empty_tannot));
+                        E_aux (E_lit (L_aux (L_num Z.zero, loc)), (loc, empty_tannot));
                       ]
                     ),
                   (loc, empty_tannot)
@@ -3928,7 +3923,7 @@ let rewrite_explicit_measure effect_info env ast =
             ( mk_id "sub_int",
               [
                 E_aux (E_id limit, (loc, empty_tannot));
-                E_aux (E_lit (L_aux (L_num (Big_int.of_int 1), loc)), (loc, empty_tannot));
+                E_aux (E_lit (L_aux (L_num (Z.of_int 1), loc)), (loc, empty_tannot));
               ]
             ),
           (loc, empty_tannot)
@@ -4129,7 +4124,7 @@ let rewrite_truncate_hex_literals _type_env defs =
           [E_aux (E_lit (L_aux (L_hex hex, l_ann)), _); E_aux (E_lit (L_aux (L_num len, _)), _)]
         ) ->
         let bin = BitList.of_hex_lit hex |> List.map (function B0 -> Bin_0 | B1 -> Bin_1) in
-        let len = Nat_big_num.to_int len in
+        let len = Z.to_int len in
         let truncation = Util.drop (List.length bin - len) bin in
         E_aux (E_lit (L_aux (L_bin (non_empty_singleton truncation), l_ann)), annot)
     | _ -> E_aux (e, annot)

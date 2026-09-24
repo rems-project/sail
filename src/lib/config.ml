@@ -112,11 +112,11 @@ end = struct
     type var
     val is_var : var -> nexp -> bool
 
-    val const : Big_int.num -> (string * J.t) list
-    val maximum : Big_int.num -> (string * J.t) list
-    val minimum : Big_int.num -> (string * J.t) list
-    val exclusive_maximum : Big_int.num -> (string * J.t) list
-    val exclusive_minimum : Big_int.num -> (string * J.t) list
+    val const : Z.t -> (string * J.t) list
+    val maximum : Z.t -> (string * J.t) list
+    val minimum : Z.t -> (string * J.t) list
+    val exclusive_maximum : Z.t -> (string * J.t) list
+    val exclusive_minimum : Z.t -> (string * J.t) list
   end
 
   module SchemaTypeConstraint (Gen : CONSTRAINT) = struct
@@ -162,29 +162,29 @@ end = struct
     type var = kid
     let is_var v = function Nexp_aux (Nexp_var v', _) -> Kid.compare v v' = 0 | _ -> false
 
-    let const n = [("const", `Intlit (Big_int.to_string n))]
-    let maximum n = [("maximum", `Intlit (Big_int.to_string n))]
-    let minimum n = [("minimum", `Intlit (Big_int.to_string n))]
-    let exclusive_maximum n = [("exclusiveMaximum", `Intlit (Big_int.to_string n))]
-    let exclusive_minimum n = [("exclusiveMinimum", `Intlit (Big_int.to_string n))]
+    let const n = [("const", `Intlit (Z.to_string n))]
+    let maximum n = [("maximum", `Intlit (Z.to_string n))]
+    let minimum n = [("minimum", `Intlit (Z.to_string n))]
+    let exclusive_maximum n = [("exclusiveMaximum", `Intlit (Z.to_string n))]
+    let exclusive_minimum n = [("exclusiveMinimum", `Intlit (Z.to_string n))]
   end)
 
   module IntegerIdConstraint = SchemaTypeConstraint (struct
     type var = id
     let is_var v = function Nexp_aux (Nexp_id v', _) -> Id.compare v v' = 0 | _ -> false
 
-    let const n = [("const", `Intlit (Big_int.to_string n))]
-    let maximum n = [("maximum", `Intlit (Big_int.to_string n))]
-    let minimum n = [("minimum", `Intlit (Big_int.to_string n))]
-    let exclusive_maximum n = [("exclusiveMaximum", `Intlit (Big_int.to_string n))]
-    let exclusive_minimum n = [("exclusiveMinimum", `Intlit (Big_int.to_string n))]
+    let const n = [("const", `Intlit (Z.to_string n))]
+    let maximum n = [("maximum", `Intlit (Z.to_string n))]
+    let minimum n = [("minimum", `Intlit (Z.to_string n))]
+    let exclusive_maximum n = [("exclusiveMaximum", `Intlit (Z.to_string n))]
+    let exclusive_minimum n = [("exclusiveMinimum", `Intlit (Z.to_string n))]
   end)
 
   let array_constraint ?min_length ?max_length () =
     Util.option_these
       [
-        Option.map (fun len -> ("minItems", `Intlit (Big_int.to_string len))) min_length;
-        Option.map (fun len -> ("maxItems", `Intlit (Big_int.to_string len))) max_length;
+        Option.map (fun len -> ("minItems", `Intlit (Z.to_string len))) min_length;
+        Option.map (fun len -> ("maxItems", `Intlit (Z.to_string len))) max_length;
       ]
 
   module ArrayConstraint = SchemaTypeConstraint (struct
@@ -194,8 +194,8 @@ end = struct
     let const n = array_constraint ~min_length:n ~max_length:n ()
     let maximum n = array_constraint ~max_length:n ()
     let minimum n = array_constraint ~min_length:n ()
-    let exclusive_maximum n = array_constraint ~max_length:(Big_int.pred n) ()
-    let exclusive_minimum n = array_constraint ~min_length:(Big_int.succ n) ()
+    let exclusive_maximum n = array_constraint ~max_length:(Z.pred n) ()
+    let exclusive_minimum n = array_constraint ~min_length:(Z.succ n) ()
   end)
 
   let bitvector_string_literal =
@@ -221,7 +221,7 @@ end = struct
           match (kopts, nc, arg) with
           | [], NC_aux (NC_true, _), nexp ->
               let* c = solve_unique env nexp in
-              Some (`Assoc (schema_integer [("const", `Intlit (Big_int.to_string c))]))
+              Some (`Assoc (schema_integer [("const", `Intlit (Z.to_string c))]))
           | [KOpt_aux (KOpt_kind (_, v), _)], nc, Nexp_aux (Nexp_var v', _) when Kid.compare v v' = 0 ->
               let* nc_logic =
                 nc |> constraint_simp |> IntegerConstraint.constraint_schema v |> Option.map (logic_type schema_integer)
@@ -262,7 +262,7 @@ end = struct
                        `List
                          [
                            `Assoc (schema_bool_array (array_constraint ~min_length:c ~max_length:c ()));
-                           `Assoc (schema_hex_object "integer" [("const", `Intlit (Big_int.to_string c))]);
+                           `Assoc (schema_hex_object "integer" [("const", `Intlit (Z.to_string c))]);
                          ]
                      );
                    ]

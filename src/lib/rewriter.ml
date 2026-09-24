@@ -44,7 +44,6 @@
 (*  SPDX-License-Identifier: BSD-2-Clause                                   *)
 (****************************************************************************)
 
-module Big_int = Nat_big_num
 open Ast
 open Ast_compare
 open Ast_defs
@@ -376,7 +375,7 @@ type ('a, 'pat, 'pat_aux) pat_alg = {
   p_app : id * 'pat list -> 'pat_aux;
   p_vector : 'pat list -> 'pat_aux;
   p_vector_concat : 'pat list -> 'pat_aux;
-  p_vector_subrange : id * Big_int.num * Big_int.num -> 'pat_aux;
+  p_vector_subrange : id * Z.t * Z.t -> 'pat_aux;
   p_tuple : 'pat list -> 'pat_aux;
   p_list : 'pat list -> 'pat_aux;
   p_cons : 'pat * 'pat -> 'pat_aux;
