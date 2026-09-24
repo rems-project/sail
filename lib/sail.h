@@ -419,11 +419,6 @@ void vector_update_subrange_inc_lbits(lbits *rop,
 				      const sail_int m_mpz,
 				      const lbits slice);
 
-fbits fast_update_subrange(const fbits op,
-			   const mach_int n,
-			   const mach_int m,
-			   const fbits slice);
-
 void slice(lbits *rop, const lbits op, const sail_int start_mpz, const sail_int len_mpz);
 void slice_inc(lbits *rop, const lbits op, const sail_int start_mpz, const sail_int len_mpz);
 
