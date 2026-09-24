@@ -48,11 +48,6 @@ open Ast.Bit
 
 module Big_int = Nat_big_num
 type bits = Extraction.Definitions.bvn
-module type BitType = sig
-  type t
-  val b0 : t
-  val b1 : t
-end
 type 'a return = { return : 'b. 'a -> 'b }
 type 'za zoption = ZNone of unit | ZSome of 'za
 val zint_forwards : Big_int.num -> string
