@@ -251,10 +251,6 @@ val __excl_res
   = impure { ocaml: "Platform.excl_res", c: "platform_excl_res", cpp: "platform_excl_res", _: "excl_result" }
   : unit -> bool
 
-val __barrier
-  = impure { ocaml: "Platform.barrier", c: "platform_barrier", cpp: "platform_barrier", _: "barrier" }
-  : barrier_kind -> unit
-
 val __branch_announce
   = impure { ocaml: "Platform.branch_announce", c: "platform_branch_announce", cpp: "platform_branch_announce", _ : "branch_announce" }
   : forall 'addrsize, 'addrsize in {32, 64}.
