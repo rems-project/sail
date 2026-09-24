@@ -46,7 +46,6 @@
 
 (** This module implements the interface with the Z3 (or other) SMT solver *)
 
-module Big_int = Nat_big_num
 open Ast
 open Ast_compare
 open Ast_util
@@ -67,8 +66,8 @@ val call_smt : l -> kind Bindings.t -> n_constraint -> smt_result
 
 val call_smt_solve_bitvector : l -> string -> (int * string) list -> (int * lit) list option
 
-val solve_smt : l -> kind Bindings.t -> n_constraint -> kid -> Big_int.num option
+val solve_smt : l -> kind Bindings.t -> n_constraint -> kid -> Z.t option
 
-val solve_all_smt : l -> kind Bindings.t -> n_constraint -> kid -> Big_int.num list option
+val solve_all_smt : l -> kind Bindings.t -> n_constraint -> kid -> Z.t list option
 
-val solve_unique_smt : l -> kind Bindings.t -> n_constraint -> kid -> Big_int.num option
+val solve_unique_smt : l -> kind Bindings.t -> n_constraint -> kid -> Z.t option

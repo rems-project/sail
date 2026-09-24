@@ -53,8 +53,6 @@ open Util
 open Lazy
 open Parse_ast.Attribute_data
 
-module Big_int = Nat_big_num
-
 open Type_internal
 open Coq_def_annot
 
@@ -700,9 +698,8 @@ and unify_nexp l env goals (Nexp_aux (nexp_aux1, _) as nexp1) (Nexp_aux (nexp_au
           | Nexp_times (n2a, n2b) when prove __POS__ env (nc_eq n1a n2a) -> unify_nexp l env goals n1b n2b
           | Nexp_constant c2 -> (
               match n1a with
-              | Nexp_aux (Nexp_constant c1, _)
-                when (not (Big_int.equal c1 Big_int.zero)) && Big_int.equal (Big_int.modulus c2 c1) Big_int.zero ->
-                  unify_nexp l env goals n1b (nconstant (Big_int.div c2 c1))
+              | Nexp_aux (Nexp_constant c1, _) when (not (Z.equal c1 Z.zero)) && Z.equal (Z.erem c2 c1) Z.zero ->
+                  unify_nexp l env goals n1b (nconstant (Z.ediv c2 c1))
               | _ ->
                   unify_error l ("Cannot unify Int expression " ^ string_of_nexp nexp1 ^ " with " ^ string_of_nexp nexp2)
             )
@@ -1530,10 +1527,10 @@ let typ_of_simple_numeric = function
 let rec big_int_of_nexp (Nexp_aux (nexp, _)) =
   match nexp with
   | Nexp_constant c -> Some c
-  | Nexp_times (n1, n2) -> Util.option_binop Big_int.mul (big_int_of_nexp n1) (big_int_of_nexp n2)
-  | Nexp_sum (n1, n2) -> Util.option_binop Big_int.add (big_int_of_nexp n1) (big_int_of_nexp n2)
-  | Nexp_minus (n1, n2) -> Util.option_binop Big_int.sub (big_int_of_nexp n1) (big_int_of_nexp n2)
-  | Nexp_exp n -> Option.map (fun n -> Big_int.pow_int_positive 2 (Big_int.to_int n)) (big_int_of_nexp n)
+  | Nexp_times (n1, n2) -> Util.option_binop Z.mul (big_int_of_nexp n1) (big_int_of_nexp n2)
+  | Nexp_sum (n1, n2) -> Util.option_binop Z.add (big_int_of_nexp n1) (big_int_of_nexp n2)
+  | Nexp_minus (n1, n2) -> Util.option_binop Z.sub (big_int_of_nexp n1) (big_int_of_nexp n2)
+  | Nexp_exp n -> Option.map (fun n -> Z.shift_left Z.one (Z.to_int n)) (big_int_of_nexp n)
   | _ -> None
 
 let assert_nexp env exp = destruct_atom_nexp env (typ_of exp)
@@ -1757,20 +1754,16 @@ let bitvector_typ_from_vector_subrange l env n m =
   let len =
     let order = Env.get_default_order env in
     match order with
-    | Ord_aux (Ord_dec, _) ->
-        if Big_int.greater_equal n m then Big_int.sub (Big_int.succ n) m
-        else typ_raise l (Err_vector_subrange { n; m; order })
+    | Ord_aux (Ord_dec, _) -> if Z.geq n m then Z.sub (Z.succ n) m else typ_raise l (Err_vector_subrange { n; m; order })
     (*
             (Printf.sprintf "First index %s must be greater than or equal to second index %s (when default Order dec)"
-               (Big_int.to_string n) (Big_int.to_string m)
+               (Z.to_string n) (Z.to_string m)
             )
 *)
-    | Ord_aux (Ord_inc, _) ->
-        if Big_int.less_equal n m then Big_int.sub (Big_int.succ m) n
-        else typ_raise l (Err_vector_subrange { n; m; order })
+    | Ord_aux (Ord_inc, _) -> if Z.leq n m then Z.sub (Z.succ m) n else typ_raise l (Err_vector_subrange { n; m; order })
     (*
             (Printf.sprintf "First index %s must be less than or equal to second index %s (when default Order inc)"
-               (Big_int.to_string n) (Big_int.to_string m)
+               (Z.to_string n) (Z.to_string m)
             )
 *)
   in
@@ -1782,17 +1775,17 @@ let each_pattern_vector_subranges f (P_aux (_, (l, _)) as pat) acc =
     (fun id ranges acc ->
       match ranges with
       | [(n, m)] ->
-          if Big_int.equal m Big_int.zero then f l id n m acc
+          if Z.equal m Z.zero then f l id n m acc
           else
             typ_error l
               (Printf.sprintf "Cannot bind %s as pattern subranges do not start at bit 0 (lowest bit is %s)."
-                 (string_of_id id) (Big_int.to_string m)
+                 (string_of_id id) (Z.to_string m)
               )
       | _ :: (m, _) :: _ ->
           typ_error l
             (Printf.sprintf "Cannot bind %s as pattern subranges are non-contiguous. %s[%s] is not defined."
                (string_of_id id) (string_of_id id)
-               (Big_int.to_string (Big_int.succ m))
+               (Z.to_string (Z.succ m))
             )
       | _ -> Reporting.unreachable l __POS__ "Found range pattern with no range"
     )
@@ -1800,7 +1793,7 @@ let each_pattern_vector_subranges f (P_aux (_, (l, _)) as pat) acc =
 
 let bind_pattern_vector_subranges pat env =
   each_pattern_vector_subranges
-    (fun l id n m -> Env.add_local id (Immutable, bitvector_typ (nconstant (Big_int.sub (Big_int.succ n) m))))
+    (fun l id n m -> Env.add_local id (Immutable, bitvector_typ (nconstant (Z.sub (Z.succ n) m))))
     pat env
 
 let check_pattern_vector_subranges pat env = each_pattern_vector_subranges (fun _ _ _ _ () -> ()) pat ()
@@ -3122,7 +3115,7 @@ and bind_vector_concat_generic :
           typ_error l
             (Printf.sprintf
                "Vector concatentation pattern does not have the correct width.\nExpected width %s, found %s."
-               (Big_int.to_string required_length) (string_of_nexp nexp)
+               (Z.to_string required_length) (string_of_nexp nexp)
             )
     | None -> ()
   in
@@ -3223,8 +3216,8 @@ and bind_vector_concat_generic :
     let check_constant_len l n =
       match solve_unique env n with
       | Some c ->
-          if Big_int.less c Big_int.zero then
-            typ_error l ("Vector concatenation subpattern cannot have a negative width (" ^ Big_int.to_string c ^ ")")
+          if Z.lt c Z.zero then
+            typ_error l ("Vector concatenation subpattern cannot have a negative width (" ^ Z.to_string c ^ ")")
           else nconstant c
       | None -> typ_error l "Could not infer constant length for vector concatenation subpattern"
     in
@@ -4482,15 +4475,11 @@ and infer_mpat allow_unknown other_env env (MP_aux (mpat_aux, (l, uannot)) as mp
       let len =
         match Env.get_default_order env with
         | Ord_aux (Ord_dec, _) ->
-            if Big_int.greater_equal n m then Big_int.sub (Big_int.succ n) m
-            else
-              typ_error l
-                (Printf.sprintf "%s must be greater than or equal to %s" (Big_int.to_string n) (Big_int.to_string m))
+            if Z.geq n m then Z.sub (Z.succ n) m
+            else typ_error l (Printf.sprintf "%s must be greater than or equal to %s" (Z.to_string n) (Z.to_string m))
         | Ord_aux (Ord_inc, _) ->
-            if Big_int.less_equal n m then Big_int.sub (Big_int.succ m) n
-            else
-              typ_error l
-                (Printf.sprintf "%s must be less than or equal to %s" (Big_int.to_string n) (Big_int.to_string m))
+            if Z.leq n m then Z.sub (Z.succ m) n
+            else typ_error l (Printf.sprintf "%s must be less than or equal to %s" (Z.to_string n) (Z.to_string m))
       in
       match Env.lookup_id id env with
       | Local (Immutable, _) | Unbound _ -> (
@@ -4501,12 +4490,12 @@ and infer_mpat allow_unknown other_env env (MP_aux (mpat_aux, (l, uannot)) as mp
           | Local (Immutable, other_typ) -> (
               let id_len = destruct_bitvector_typ l env other_typ in
               match id_len with
-              | Nexp_aux (Nexp_constant id_len, _) when Big_int.greater_equal id_len len ->
+              | Nexp_aux (Nexp_constant id_len, _) when Z.geq id_len len ->
                   (annot_mpat (MP_vector_subrange (id, n, m)) (bitvector_typ (nconstant len)), env, [])
               | _ ->
                   typ_error l
                     (Printf.sprintf "%s must have a constant length greater than or equal to %s" (string_of_id id)
-                       (Big_int.to_string len)
+                       (Z.to_string len)
                     )
             )
           | _ -> typ_error l "Invalid identifier in vector subrange pattern"

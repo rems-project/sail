@@ -44,8 +44,6 @@
 (*  SPDX-License-Identifier: BSD-2-Clause                                   *)
 (****************************************************************************)
 
-module Big_int = Nat_big_num
-
 module StringMap = Map.Make (String)
 
 open Ast
@@ -115,7 +113,7 @@ let rec string_of_value = function
   | V_vector vs -> "[" ^ Util.string_of_list ", " string_of_value vs ^ "]"
   | V_bool true -> "true"
   | V_bool false -> "false"
-  | V_int n -> Big_int.to_string n
+  | V_int n -> Z.to_string n
   | V_tuple vals -> "(" ^ Util.string_of_list ", " string_of_value vals ^ ")"
   | V_list vals -> "[|" ^ Util.string_of_list ", " string_of_value vals ^ "|]"
   | V_unit -> "()"
@@ -136,7 +134,7 @@ let rec eq_value v1 v2 =
   | V_bitvector b1s, V_bitvector b2s -> Sail_lib.eq_list b1s b2s
   | V_vector v1s, V_vector v2s when List.length v1s = List.length v2s -> List.for_all2 eq_value v1s v2s
   | V_list v1s, V_list v2s when List.length v1s = List.length v2s -> List.for_all2 eq_value v1s v2s
-  | V_int n, V_int m -> Big_int.equal n m
+  | V_int n, V_int m -> Z.equal n m
   | V_real n, V_real m -> Q.equal (Util.Rational.from_rocq n) (Util.Rational.from_rocq m)
   | V_bool b1, V_bool b2 -> b1 = b2
   | V_tuple v1s, V_tuple v2s when List.length v1s = List.length v2s -> List.for_all2 eq_value v1s v2s
@@ -232,7 +230,7 @@ let value_eq_bit = function [v1; v2] -> V_bool (eq_value v1 v2) | _ -> failwith 
 
 let value_length = function
   | [V_bitvector bits] -> V_int (Sail_lib.length_bits bits)
-  | [V_vector vs] -> V_int (Big_int.of_int (List.length vs))
+  | [V_vector vs] -> V_int (Z.of_int (List.length vs))
   | _ -> failwith "value length"
 
 let value_subrange = function
@@ -369,7 +367,7 @@ let value_modulus = function
   | [v1; v2] -> V_int (Sail_lib.modulus (coerce_int v1) (coerce_int v2))
   | _ -> failwith "value modulus"
 
-let value_abs_int = function [v] -> V_int (Big_int.abs (coerce_int v)) | _ -> failwith "value abs_int"
+let value_abs_int = function [v] -> V_int (Z.abs (coerce_int v)) | _ -> failwith "value abs_int"
 
 let value_add_vec_int = function
   | [v1; v2] -> V_bitvector (Sail_lib.add_vec_int (coerce_bv v1) (coerce_int v2))
@@ -515,7 +513,7 @@ let value_load_raw = function
 
 let value_putchar = function
   | [v] ->
-      output_char !print_chan (char_of_int (Big_int.to_int (coerce_int v)));
+      output_char !print_chan (char_of_int (Z.to_int (coerce_int v)));
       flush !print_chan;
       V_unit
   | _ -> failwith "value putchar"
@@ -837,10 +835,10 @@ let primops =
          ("print_real", value_print_real);
          ("random_real", value_random_real);
          ("undefined_unit", fun _ -> V_unit);
-         ("undefined_bit", fun _ -> V_bitvector (Sail_lib.zeros (Big_int.of_int 1)));
-         ("undefined_int", fun _ -> V_int Big_int.zero);
+         ("undefined_bit", fun _ -> V_bitvector (Sail_lib.zeros (Z.of_int 1)));
+         ("undefined_int", fun _ -> V_int Z.zero);
          ("undefined_range", value_undefined_range);
-         ("undefined_nat", fun _ -> V_int Big_int.zero);
+         ("undefined_nat", fun _ -> V_int Z.zero);
          ("undefined_bool", fun _ -> V_bool false);
          ("undefined_bitvector", value_undefined_bitvector);
          ("undefined_vector", value_undefined_vector);

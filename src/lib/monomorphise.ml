@@ -55,7 +55,6 @@ open Ast
 open Ast_compare
 open Ast_defs
 open Ast_util
-module Big_int = Nat_big_num
 open Type_check
 open Type_error
 
@@ -136,21 +135,18 @@ let ids_in_exp exp =
     exp
 
 let make_vector_lit sz i =
-  let f j =
-    if Big_int.equal (Big_int.modulus (Big_int.shift_right i (sz - j - 1)) (Big_int.of_int 2)) Big_int.zero then Bin_0
-    else Bin_1
-  in
+  let f j = if Z.equal (Z.erem (Z.shift_right i (sz - j - 1)) (Z.of_int 2)) Z.zero then Bin_0 else Bin_1 in
   let s = List.init sz f in
   L_aux (L_bin (non_empty_singleton s), Generated Unknown)
 
 let tabulate f n =
   let rec aux acc n =
     let acc' = f n :: acc in
-    if Big_int.equal n Big_int.zero then acc' else aux acc' (Big_int.sub n (Big_int.of_int 1))
+    if Z.equal n Z.zero then acc' else aux acc' (Z.sub n (Z.of_int 1))
   in
-  if Big_int.equal n Big_int.zero then [] else aux [] (Big_int.sub n (Big_int.of_int 1))
+  if Z.equal n Z.zero then [] else aux [] (Z.sub n (Z.of_int 1))
 
-let make_vectors sz = tabulate (make_vector_lit sz) (Big_int.shift_left (Big_int.of_int 1) sz)
+let make_vectors sz = tabulate (make_vector_lit sz) (Z.shift_left (Z.of_int 1) sz)
 
 let rec cross' = function
   | [] -> [[]]
@@ -190,10 +186,10 @@ let extract_set_nc env l var nc =
         match aux expanded nc2 with Some (is, nc2') -> Some (is, re (NC_and (nc1, nc2'))) | None -> None
       in
       let handle' n' kid' ncs =
-        let len = Big_int.succ (Big_int.sub n' n) in
-        if Big_int.less_equal Big_int.zero len && Big_int.less_equal len (Big_int.of_int !opt_size_set_limit) then (
-          let elem i = Big_int.add n (Big_int.of_int i) in
-          let is = List.init (Big_int.to_int len) elem in
+        let len = Z.succ (Z.sub n' n) in
+        if Z.leq Z.zero len && Z.leq len (Z.of_int !opt_size_set_limit) then (
+          let elem i = Z.add n (Z.of_int i) in
+          let is = List.init (Z.to_int len) elem in
           if aux expanded (List.fold_left nc_and nc_true ncs) <> None then
             raise (Reporting.err_general l ("Multiple set constraints for " ^ string_of_kid var))
           else Some (is, nc_full)
@@ -206,7 +202,7 @@ let extract_set_nc env l var nc =
           handle' n' kid' ncs
       | NC_aux (NC_lt (Nexp_aux (Nexp_var kid', _), Nexp_aux (Nexp_constant n', _)), _) :: ncs when KidSet.mem kid' vars
         ->
-          handle' (Nat_big_num.pred n') kid' ncs
+          handle' (Z.pred n') kid' ncs
       | _ -> aux2 ()
     in
 
@@ -220,7 +216,7 @@ let extract_set_nc env l var nc =
         handle_range n kid nc1 nc2
     | NC_and ((NC_aux (NC_lt (Nexp_aux (Nexp_constant n, _), Nexp_aux (Nexp_var kid, _)), _) as nc1), nc2)
       when KidSet.mem kid vars ->
-        handle_range (Nat_big_num.succ n) kid nc1 nc2
+        handle_range (Z.succ n) kid nc1 nc2
     | NC_and (nc1, nc2) -> (
         match (aux expanded nc1, aux expanded nc2) with
         | None, None -> None
@@ -379,7 +375,7 @@ let split_src_type all_errors env id ty q =
           | Id_aux (Id i, l) -> fun f -> Id_aux (Id (f i), Generated l)
           | Id_aux (Operator i, l) -> fun f -> Id_aux (Operator (f i), l)
         in
-        let name_seg = function _, None -> "" | k, Some i -> "#" ^ string_of_kid (kopt_kid k) ^ Big_int.to_string i in
+        let name_seg = function _, None -> "" | k, Some i -> "#" ^ string_of_kid (kopt_kid k) ^ Z.to_string i in
         let name l i = String.concat "" (i :: List.map name_seg l) in
         Some (List.map (fun (l, ty) -> (l, wrap (name l), ty)) variants)
       )
@@ -428,7 +424,7 @@ let refine_constructor refinements l env id args =
                   (fun v (_, w) ->
                     match (v, w) with
                     | _, None -> true
-                    | Some (A_aux (A_nexp (Nexp_aux (Nexp_constant n, _)), _)), Some m -> Big_int.equal n m
+                    | Some (A_aux (A_nexp (Nexp_aux (Nexp_constant n, _)), _)), Some m -> Z.equal n m
                     | _, _ -> false
                   )
                   bindings mapping
@@ -758,11 +754,11 @@ let split_defs target all_errors (splits : split_req list) env ast =
       )
     | Typ_app (Id_aux (Id "bitvector", _), [A_aux (A_nexp len, _)]) -> (
         match len with
-        | Nexp_aux (Nexp_constant sz, _) when Big_int.greater_equal sz Big_int.zero ->
-            let sz = Big_int.to_int sz in
-            let num_lits = Big_int.pow_int (Big_int.of_int 2) sz in
+        | Nexp_aux (Nexp_constant sz, _) when Z.geq sz Z.zero ->
+            let sz = Z.to_int sz in
+            let num_lits = Z.pow (Z.of_int 2) sz in
             (* Check that split size is within limits before generating the list of literals *)
-            if Big_int.less_equal num_lits (Big_int.of_int !opt_size_set_limit) then (
+            if Z.leq num_lits (Z.of_int !opt_size_set_limit) then (
               let lits = make_vectors sz in
               (* Some parts of Sail don't recognise complete bitvector
                  matches, so make the last one a wildcard. *)
@@ -1629,7 +1625,7 @@ let is_id env id =
 (* Type-agnostic pattern comparison for merging below *)
 
 let lit_eq' (L_aux (l1, _)) (L_aux (l2, _)) =
-  match (l1, l2) with L_num n1, L_num n2 -> Big_int.equal n1 n2 | _, _ -> l1 = l2
+  match (l1, l2) with L_num n1, L_num n2 -> Z.equal n1 n2 | _, _ -> l1 = l2
 
 let forall2 p x y = try List.for_all2 p x y with Invalid_argument _ -> false
 
@@ -2029,12 +2025,12 @@ module Analysis = struct
         | Nexp_aux (Nexp_constant len, _) ->
             Some
               (fun pat ->
-                let end_len = Big_int.pred (Big_int.sub len vend) in
+                let end_len = Z.pred (Z.sub len vend) in
                 (* Wrap pat in its type; in particular the type checker won't
                    manage P_wild in the middle of a P_vector_concat *)
                 let pat = P_aux (P_typ (typ_of_pat pat, pat), (Generated (pat_loc pat), empty_tannot)) in
                 let pats =
-                  if Big_int.greater end_len Big_int.zero then
+                  if Z.gt end_len Z.zero then
                     [
                       pat;
                       P_aux
@@ -2045,7 +2041,7 @@ module Analysis = struct
                   else [pat]
                 in
                 let pats =
-                  if Big_int.greater vstart Big_int.zero then
+                  if Z.gt vstart Z.zero then
                     P_aux
                       ( P_typ (bitvector_typ (nconstant vstart), P_aux (P_wild, (dummyl, empty_tannot))),
                         (dummyl, empty_tannot)
@@ -2105,12 +2101,12 @@ module Analysis = struct
        when is_id (env_of exp) (Id "append") append ->
         (* If the expression is a concatenation resulting in a small enough bitvector,
            perform a (total) case split on the sub-vectors *)
-        let vec_len v = try Option.map Big_int.to_int (get_constant_vec_len (env_of exp) v) with _ -> None in
-        let pow2 n = Big_int.pow_int (Big_int.of_int 2) n in
-        let size_set len1 len2 = Big_int.mul (pow2 len1) (pow2 len2) in
+        let vec_len v = try Option.map Z.to_int (get_constant_vec_len (env_of exp) v) with _ -> None in
+        let pow2 n = Z.pow (Z.of_int 2) n in
+        let size_set len1 len2 = Z.mul (pow2 len1) (pow2 len2) in
         begin match (vec_len (typ_of exp), vec_len (typ_of vec1), vec_len (typ_of vec2)) with
           | (Some len, Some len1, Some len2)
-            when Big_int.less_equal (size_set len1 len2) (Big_int.of_int size_set_limit) ->
+            when Z.leq (size_set len1 len2) (Z.of_int size_set_limit) ->
              let recur = refine_dependency env in
              (* Create pexps with dummy bodies (ignored by the recursive call) *)
              let mk_pexps len =
@@ -2773,7 +2769,7 @@ module Analysis = struct
       KBindings.iter
         (fun k (l, is) ->
           print_endline
-            (string_of_kid k ^ " @ " ^ simple_string_of_loc l ^ " " ^ String.concat "," (List.map Big_int.to_string is))
+            (string_of_kid k ^ " @ " ^ simple_string_of_loc l ^ " " ^ String.concat "," (List.map Z.to_string is))
         )
         set_assertions
     )
@@ -3163,7 +3159,7 @@ module MonoRewrites = struct
           | Some zlen ->
               (* Give the length explicitly rather than relying on the context;
                  it might not be sufficiently constrained. *)
-              let len1 = mk_exp (E_lit (L_aux (L_num (Nat_big_num.of_int (bin_lit_length lit)), Unknown))) in
+              let len1 = mk_exp (E_lit (L_aux (L_num (Z.of_int (bin_lit_length lit)), Unknown))) in
               let total = mk_infix_exp zlen (mk_operator "+") len1 in
               try_cast_to_typ (mk_exp (E_app (mk_id "slice_mask", [total; zlen; len1])))
           | None -> E_app (id, args)
@@ -3177,7 +3173,7 @@ module MonoRewrites = struct
               (* Give the length explicitly rather than relying on the context;
                  it might not be sufficiently constrained. *)
               let total = mk_infix_exp zlen (mk_operator "+") len2 in
-              let zero = mk_exp (E_lit (mk_lit (L_num Nat_big_num.zero))) in
+              let zero = mk_exp (E_lit (mk_lit (L_num Z.zero))) in
               try_cast_to_typ (mk_exp (E_app (mk_id "slice_mask", [total; zero; len2])))
           | None -> E_app (id, args)
         )
@@ -3187,16 +3183,16 @@ module MonoRewrites = struct
           | Some zlen ->
               (* Give the length explicitly rather than relying on the context;
                  it might not be sufficiently constrained. *)
-              let len2 = mk_exp (E_lit (L_aux (L_num (Nat_big_num.of_int (bin_lit_length lit)), Unknown))) in
+              let len2 = mk_exp (E_lit (L_aux (L_num (Z.of_int (bin_lit_length lit)), Unknown))) in
               let total = mk_infix_exp zlen (mk_operator "+") len2 in
-              let zero = mk_exp (E_lit (mk_lit (L_num Nat_big_num.zero))) in
+              let zero = mk_exp (E_lit (mk_lit (L_num Z.zero))) in
               try_cast_to_typ (mk_exp (E_app (mk_id "slice_mask", [total; zero; len2])))
           | None -> E_app (id, args)
         )
       (* ones @ variable *)
       | [E_aux (E_app (ones1, [len1]), _); (E_aux (E_id _, _) as vector2)] when is_ones ones1 && not (is_constant len1)
         ->
-          let one = mk_exp (E_lit (mk_lit (L_num (Big_int.of_int 1)))) in
+          let one = mk_exp (E_lit (mk_lit (L_num (Z.of_int 1)))) in
           let len2 = mk_exp (E_app (mk_id "length", [vector2])) in
           let total = mk_infix_exp len1 (mk_operator "+") len2 in
           try_cast_to_typ
@@ -3206,7 +3202,7 @@ module MonoRewrites = struct
                      [
                        E_aux (E_app (ones1, [total]), (Unknown, empty_tannot));
                        mk_infix_exp len2 (mk_operator "-") one;
-                       mk_exp (E_lit (mk_lit (L_num Big_int.zero)));
+                       mk_exp (E_lit (mk_lit (L_num Z.zero)));
                        vector2;
                      ]
                    ),
@@ -3246,8 +3242,8 @@ module MonoRewrites = struct
              && is_bitvector_typ (typ_of vector1)
              && not (is_constant_vec_typ env (typ_of exp1)) ->
           let op' = if is_subrange op then "subrange_subrange_concat" else "slice_slice_concat" in
-          let zero = mk_exp (E_lit (mk_lit (L_num Big_int.zero))) in
-          let one = mk_exp (E_lit (mk_lit (L_num (Big_int.of_int 1)))) in
+          let zero = mk_exp (E_lit (mk_lit (L_num Z.zero))) in
+          let one = mk_exp (E_lit (mk_lit (L_num (Z.of_int 1)))) in
           let length2 = mk_exp (E_app (mk_id "length", [vector2])) in
           let indices2 =
             if is_subrange op then [mk_infix_exp length2 (mk_operator "-") one; zero] else [zero; length2]
@@ -3344,7 +3340,7 @@ module MonoRewrites = struct
              && not (is_constant len1 && is_constant start1 && is_constant len2 && is_constant start2) ->
           let upper start len =
             mk_infix_exp start (mk_operator "+")
-              (mk_infix_exp len (mk_operator "-") (mk_exp (E_lit (mk_lit (L_num (Big_int.of_int 1))))))
+              (mk_infix_exp len (mk_operator "-") (mk_exp (E_lit (mk_lit (L_num (Z.of_int 1))))))
           in
           wrap
             (E_app
@@ -3374,7 +3370,7 @@ module MonoRewrites = struct
         when is_integer_subrange op1 && is_integer_subrange op2 && is_constant start1 && is_constant start2
              && (not (is_constant end1))
              && not (is_constant end2) ->
-          let zero = mk_exp (E_lit (mk_lit (L_num Big_int.zero))) in
+          let zero = mk_exp (E_lit (mk_lit (L_num Z.zero))) in
           wrap
             (E_app
                ( mk_id "subrange_subrange_eq",
@@ -3434,7 +3430,7 @@ module MonoRewrites = struct
                 | E_aux (E_app (slice1, [vector1; start1; length1]), _) -> (vector1, start1, length1)
                 | _ ->
                     let length1, _ = vector_typ_args_of (Env.base_typ_of env (typ_of vector1)) in
-                    (vector1, mk_exp (E_lit (mk_lit (L_num Big_int.zero))), mk_exp (E_sizeof length1))
+                    (vector1, mk_exp (E_lit (mk_lit (L_num Z.zero))), mk_exp (E_sizeof length1))
               in
               try_cast_to_typ (rewrap (E_app (mk_id "place_slice", length_arg @ [vector1; start1; length1; zlen])))
           | None -> E_app (id, args)
@@ -3489,7 +3485,7 @@ module MonoRewrites = struct
           try_cast_to_typ (rewrap (E_app (mk_id "zext_ones", length_arg @ [len1])))
       | [E_aux (E_app (replicate_bits, [E_aux (E_lit (L_aux (L_bin [Non_empty (Bin_1, [])], _)), _); len1]), _)]
         when is_id env (Id "replicate_bits") replicate_bits ->
-          let start1 = mk_exp (E_lit (mk_lit (L_num Big_int.zero))) in
+          let start1 = mk_exp (E_lit (mk_lit (L_num Z.zero))) in
           try_cast_to_typ (rewrap (E_app (mk_id "slice_mask", length_arg @ [start1; len1])))
       | ([E_aux (E_app (zeros, [len1]), _)] | [E_aux (E_typ (_, E_aux (E_app (zeros, [len1]), _)), _)])
         when is_zeros zeros ->
@@ -3674,7 +3670,7 @@ module MonoRewrites = struct
         let mid_point_high = E_aux (E_app (mk_operator "+", [end1; len]), new_annot) in
         let mid_point_low =
           E_aux
-            ( E_app (mk_operator "-", [mid_point_high; E_aux (E_lit (mk_lit (L_num (Big_int.of_int 1))), new_annot)]),
+            ( E_app (mk_operator "-", [mid_point_high; E_aux (E_lit (mk_lit (L_num (Z.of_int 1))), new_annot)]),
               new_annot
             )
         in
@@ -4327,8 +4323,7 @@ module ToplevelNexpRewrites = struct
       match nexp with
       | Nexp_id id -> string_of_id id
       | Nexp_var kid -> string_of_id (id_of_kid kid)
-      | Nexp_constant i ->
-          (if Big_int.greater_equal i Big_int.zero then "p" else "m") ^ Big_int.to_string (Big_int.abs i)
+      | Nexp_constant i -> (if Z.geq i Z.zero then "p" else "m") ^ Z.to_string (Z.abs i)
       | Nexp_times (n1, n2) -> mangle_nexp n1 ^ "_times_" ^ mangle_nexp n2
       | Nexp_sum (n1, n2) -> mangle_nexp n1 ^ "_plus_" ^ mangle_nexp n2
       | Nexp_minus (n1, n2) -> mangle_nexp n1 ^ "_minus_" ^ mangle_nexp n2

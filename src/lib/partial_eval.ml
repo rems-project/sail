@@ -51,7 +51,6 @@ open Ast_util
 
 open Extraction.ZAst
 
-module Big_int = Nat_big_num
 module StringMap = Util.StringMap
 
 module type SAIL_VALUE = sig

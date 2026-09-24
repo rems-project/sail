@@ -92,7 +92,7 @@ let instantiate_from_json ~at:l (json : Yojson.Safe.t) =
   | K_int -> (
       match json with
       | `Int n -> mk_typ_arg ~loc:l (A_nexp (nint n))
-      | `Intlit s -> mk_typ_arg ~loc:l (A_nexp (nconstant (Big_int.of_string s)))
+      | `Intlit s -> mk_typ_arg ~loc:l (A_nexp (nconstant (Z.of_string s)))
       | _ -> instantiate_error K_int
     )
   | K_bool -> (

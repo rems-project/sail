@@ -50,8 +50,6 @@ open Ast_defs
 open Ast_util
 open PPrint
 
-module Big_int = Nat_big_num
-
 module type PRINT_CONFIG = sig
   val insert_braces : bool
   val resugar : bool
@@ -93,7 +91,7 @@ module Printer (Config : PRINT_CONFIG) = struct
 
   let doc_kopt kopt = parens (doc_kopt_no_parens kopt)
 
-  let doc_int n = string (Big_int.to_string n)
+  let doc_int n = string (Z.to_string n)
 
   let doc_ord (Ord_aux (o, _)) = match o with Ord_inc -> string "inc" | Ord_dec -> string "dec"
 
@@ -105,7 +103,7 @@ module Printer (Config : PRINT_CONFIG) = struct
 
   let rec atomic_nexp (Nexp_aux (n_aux, _) as nexp) =
     match n_aux with
-    | Nexp_constant c -> string (Big_int.to_string c)
+    | Nexp_constant c -> string (Z.to_string c)
     | Nexp_app (Id_aux (Operator op, _), [n1; n2]) -> separate space [atomic_nexp n1; string op; atomic_nexp n2]
     | Nexp_app (_id, _nexps) -> string (string_of_nexp nexp)
     (* This segfaults??!!!!
@@ -123,8 +121,8 @@ module Printer (Config : PRINT_CONFIG) = struct
   and nexp1 (Nexp_aux (n_aux, _) as nexp) =
     match n_aux with
     | Nexp_sum (n1, Nexp_aux (Nexp_neg n2, _)) | Nexp_minus (n1, n2) -> separate space [nexp1 n1; string "-"; nexp2 n2]
-    | Nexp_sum (n1, Nexp_aux (Nexp_constant c, _)) when Big_int.less c Big_int.zero ->
-        separate space [nexp1 n1; string "-"; doc_int (Big_int.abs c)]
+    | Nexp_sum (n1, Nexp_aux (Nexp_constant c, _)) when Z.lt c Z.zero ->
+        separate space [nexp1 n1; string "-"; doc_int (Z.abs c)]
     | Nexp_sum (n1, n2) -> separate space [nexp1 n1; string "+"; nexp2 n2]
     | _ -> nexp2 nexp
 
@@ -277,12 +275,12 @@ module Printer (Config : PRINT_CONFIG) = struct
       | L_unit -> "()"
       | L_true -> "true"
       | L_false -> "false"
-      | L_num i -> Big_int.to_string i
+      | L_num i -> Z.to_string i
       | L_hex hex -> "0x" ^ string_of_hex_lit ~case:Uppercase hex
       | L_bin bin -> "0b" ^ string_of_bin_lit bin
       | L_real r ->
           let r = Util.Rational.from_rocq r in
-          Printf.sprintf "div_real(to_real(%s), to_real(%s))" (Big_int.to_string (Q.num r)) (Big_int.to_string (Q.den r))
+          Printf.sprintf "div_real(to_real(%s), to_real(%s))" (Z.to_string (Q.num r)) (Z.to_string (Q.den r))
       | L_string s -> "\"" ^ String.escaped s ^ "\""
       )
 
@@ -308,8 +306,8 @@ module Printer (Config : PRINT_CONFIG) = struct
       | P_vector pats -> brackets (separate_map (comma ^^ space) doc_pat pats)
       | P_vector_concat pats -> parens (separate_map (space ^^ string "@" ^^ space) doc_pat pats)
       | P_vector_subrange (id, n, m) ->
-          if Big_int.equal n m then doc_id id ^^ brackets (string (Big_int.to_string n))
-          else doc_id id ^^ brackets (string (Big_int.to_string n) ^^ string ".." ^^ string (Big_int.to_string m))
+          if Z.equal n m then doc_id id ^^ brackets (string (Z.to_string n))
+          else doc_id id ^^ brackets (string (Z.to_string n) ^^ string ".." ^^ string (Z.to_string m))
       | P_wild -> string "_"
       | P_as (pat, id) -> parens (separate space [doc_pat pat; string "as"; doc_id id])
       | P_app (id, pats) -> doc_id id ^^ parens (separate_map (comma ^^ space) doc_pat pats)
@@ -384,12 +382,12 @@ module Printer (Config : PRINT_CONFIG) = struct
     let* level = Option.bind (List.assoc_opt "level" obj) attribute_data_num in
     let* parts = Option.bind (List.assoc_opt "syntax" obj) attribute_data_list in
     let parse_part = function
-      | AD_aux (AD_num n, _) -> Some (Hole (Big_int.to_int n, ()))
+      | AD_aux (AD_num n, _) -> Some (Hole (Z.to_int n, ()))
       | AD_aux (AD_string str, _) -> Some (Part (separate_map space string (String.split_on_char ' ' str)))
       | _ -> None
     in
     let* parts = Util.option_all (List.map parse_part parts) in
-    Some (Big_int.to_int level, parts)
+    Some (Z.to_int level, parts)
 
   let attach_to_holes exps parts =
     let append p = function Some ps -> Some (ps @ [p]) | None -> None in
@@ -964,7 +962,7 @@ module Printer (Config : PRINT_CONFIG) = struct
         let open Parse_ast.Attribute_data in
         string ("$" ^ pragma) ^^ space ^^ string (string_of_attribute_data (AD_aux (AD_object data, Parse_ast.Unknown)))
     | DEF_fixity (prec, n, id) ->
-        fixities := Bindings.add id (prec, Big_int.to_int n) !fixities;
+        fixities := Bindings.add id (prec, Z.to_int n) !fixities;
         separate space [doc_prec prec; doc_int n; doc_id id]
     | DEF_overload (id, ids) ->
         separate space

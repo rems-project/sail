@@ -44,7 +44,6 @@
 (*  SPDX-License-Identifier: BSD-2-Clause                                   *)
 (****************************************************************************)
 
-module Big_int = Nat_big_num
 open Ast
 open Ast_compare
 open Ast_util
@@ -197,17 +196,16 @@ let to_smt solver l abstract vars constr =
     match aux with
     | Nexp_id id -> Atom (Util.zencode_string (string_of_id id))
     | Nexp_var v -> fst (smt_var v)
-    | Nexp_constant c when Big_int.less_equal c (Big_int.of_int (-1)) && not solver.negative_literals ->
-        sfun "-" [Atom "0"; Atom (Big_int.to_string (Big_int.abs c))]
-    | Nexp_constant c -> Atom (Big_int.to_string c)
+    | Nexp_constant c when Z.leq c (Z.of_int (-1)) && not solver.negative_literals ->
+        sfun "-" [Atom "0"; Atom (Z.to_string (Z.abs c))]
+    | Nexp_constant c -> Atom (Z.to_string c)
     | Nexp_app (id, nexps) -> sfun (string_of_id id) (List.map smt_nexp nexps)
     | Nexp_times (nexp1, nexp2) -> sfun "*" [smt_nexp nexp1; smt_nexp nexp2]
     | Nexp_sum (nexp1, nexp2) -> sfun "+" [smt_nexp nexp1; smt_nexp nexp2]
     | Nexp_minus (nexp1, nexp2) -> sfun "-" [smt_nexp nexp1; smt_nexp nexp2]
     | Nexp_exp nexp -> (
         match nexp_simp nexp with
-        | Nexp_aux (Nexp_constant c, _) when Big_int.greater_equal c Big_int.zero ->
-            Atom (Big_int.to_string (Big_int.pow_int_positive 2 (Big_int.to_int c)))
+        | Nexp_aux (Nexp_constant c, _) when Z.geq c Z.zero -> Atom (Z.to_string (Z.shift_left Z.one (Z.to_int c)))
         | nexp when solver.uninterpret_power ->
             let exp = smt_nexp nexp in
             exponentials := exp :: !exponentials;
@@ -228,7 +226,7 @@ let to_smt solver l abstract vars constr =
     | NC_lt (nexp1, nexp2) -> sfun "<" [smt_nexp nexp1; smt_nexp nexp2]
     | NC_ge (nexp1, nexp2) -> sfun ">=" [smt_nexp nexp1; smt_nexp nexp2]
     | NC_gt (nexp1, nexp2) -> sfun ">" [smt_nexp nexp1; smt_nexp nexp2]
-    | NC_set (nexp, ints) -> sfun "or" (List.map (fun i -> sfun "=" [smt_nexp nexp; Atom (Big_int.to_string i)]) ints)
+    | NC_set (nexp, ints) -> sfun "or" (List.map (fun i -> sfun "=" [smt_nexp nexp; Atom (Z.to_string i)]) ints)
     | NC_or (nc1, nc2) -> sfun "or" [smt_constraint nc1; smt_constraint nc2]
     | NC_and (nc1, nc2) -> sfun "and" [smt_constraint nc1; smt_constraint nc2]
     | NC_app (id, args) -> sfun (string_of_id id) (List.map smt_typ_arg args)
@@ -251,7 +249,7 @@ let sailexp_concrete n =
       sfun "=>" [sfun ">=" [Atom "n"; Atom "0"]; sfun ">=" [sfun "sailexp" [Atom "n"]; Atom "1"]];
     ]
   :: List.init (n + 1) (fun i ->
-      sfun "=" [sfun "sailexp" [Atom (string_of_int i)]; Atom (Big_int.to_string (Big_int.pow_int_positive 2 i))]
+      sfun "=" [sfun "sailexp" [Atom (string_of_int i)]; Atom (Z.to_string (Z.shift_left Z.one i))]
   )
 
 let smtlib_of_constraints ?(get_model = false) solver l abstract vars extra constr :
@@ -501,7 +499,7 @@ let call_smt_solve solver l smt_file smt_vars var =
   let regexp = {|(define-fun |} ^ smt_var ^ {| () Int[ ]+\([0-9]+\))|} in
   try
     let _ = Str.search_forward (Str.regexp regexp) smt_output 0 in
-    let result = Big_int.of_string (Str.matched_group 1 smt_output) in
+    let result = Z.of_string (Str.matched_group 1 smt_output) in
     Some result
   with Not_found -> None
 
@@ -537,10 +535,10 @@ let call_smt_solve_bitvector l smt_file smt_vars =
           let _ = Str.search_forward (Str.regexp regexp) smt_output 0 in
           let result = Str.matched_group 1 smt_output in
           if result.[0] = '(' then (
-            let n = Big_int.of_string (String.sub result 3 (String.length result - 4)) in
-            Some (smt_var, mk_lit (L_num (Big_int.negate n)))
+            let n = Z.of_string (String.sub result 3 (String.length result - 4)) in
+            Some (smt_var, mk_lit (L_num (Z.neg n)))
           )
-          else Some (smt_var, mk_lit (L_num (Big_int.of_string result)))
+          else Some (smt_var, mk_lit (L_num (Z.of_string result)))
         )
         else (
           let regexp = "(define-fun " ^ smt_var_str ^ " () " ^ smt_ty ^ {|[ ]+\(#[xb]\)\([0-9A-Fa-f]+\))|} in
@@ -578,7 +576,7 @@ let solve_unique_smt' solver l abstract constraints exp_defn exp_bound var =
   let digest = Digest.string (smt_file ^ pp_sexpr (fst (smt_vars var))) in
   let result =
     match DigestMap.find_opt digest !known_uniques with
-    | Some (Some result) -> Some (Big_int.of_int result)
+    | Some (Some result) -> Some (Z.of_int result)
     | Some None -> None
     | None -> (
         match call_smt_solve solver l smt_file smt_vars var with
@@ -590,8 +588,8 @@ let solve_unique_smt' solver l abstract constraints exp_defn exp_bound var =
             Profile.finish_smt t;
             match smt_result' with
             | Unsat ->
-                if Big_int.less_equal Big_int.zero result && Big_int.less result (Big_int.pow_int_positive 2 30) then
-                  known_uniques := DigestMap.add digest (Some (Big_int.to_int result)) !known_uniques
+                if Z.leq Z.zero result && Z.lt result (Z.shift_left Z.one 30) then
+                  known_uniques := DigestMap.add digest (Some (Z.to_int result)) !known_uniques
                 else ();
                 Some result
             | _ ->

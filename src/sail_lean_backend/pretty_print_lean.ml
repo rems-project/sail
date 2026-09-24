@@ -223,7 +223,7 @@ let string_of_typ_con (Typ_aux (t, _)) =
   | Typ_internal_unknown -> "Typ_internal_unknown"
   | Typ_id _ -> "Typ_id"
 
-let doc_big_int i = if i >= Z.zero then string (Big_int.to_string i) else parens (string (Big_int.to_string i))
+let doc_big_int i = if i >= Z.zero then string (Z.to_string i) else parens (string (Z.to_string i))
 
 let is_unit t = match t with Typ_aux (Typ_id (Id_aux (Id "unit", _)), _) -> true | _ -> false
 
@@ -284,11 +284,7 @@ and doc_nconstraint ctx env (NC_aux (nc, _)) =
   | NC_id i -> doc_id_ctor ctx i
   | NC_set (n, vs) ->
       flow (break 1)
-        [
-          string "List.elem";
-          doc_nexp ctx env n;
-          brackets (separate_map comma_sp (fun x -> string (Nat_big_num.to_string x)) vs);
-        ]
+        [string "List.elem"; doc_nexp ctx env n; brackets (separate_map comma_sp (fun x -> string (Z.to_string x)) vs)]
   | NC_var ki -> doc_kid ctx ki
 
 and doc_typ_arg ctx env rel (A_aux (t, _)) =
@@ -580,7 +576,7 @@ and doc_vector_concat ctx pats =
     | P_id id -> (
         match destruct_bitvector (env_of_pat pat) (typ_of_pat pat) with
         | Some (Nexp_aux (Nexp_constant n, _)) ->
-            doc_id_ctor ctx (fixup_match_id id) ^^ char ':' ^^ string (Big_int.to_string n)
+            doc_id_ctor ctx (fixup_match_id id) ^^ char ':' ^^ string (Z.to_string n)
         | _ -> Reporting.unreachable l __POS__ "Found subpattern with unclear width in bitvector pattern"
       )
     | P_typ (_, pat) -> doc_part pat

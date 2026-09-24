@@ -48,7 +48,6 @@
 
 %{
 
-module Big_int = Nat_big_num
 open Parse_ast
 open Parse_ast.Attribute_data
 open Sail_file.Position
@@ -224,7 +223,7 @@ let set_syntax_deprecated l =
 /*Terminals with content*/
 
 %token <string> Id TyVar
-%token <Nat_big_num.num> Num
+%token <Z.t> Num
 %token <string> String Bin Hex Real
 %token <string list> MultilineString
 
@@ -320,7 +319,7 @@ negative_num:
   | Num
     { $1 }
   | Minus Num
-    { Big_int.negate $2 }
+    { Z.neg $2 }
 
 num_list:
   | negative_num Comma?
@@ -604,7 +603,7 @@ lit:
 
 negative_lit:
   | Minus Num
-    { mk_lit (L_num (Big_int.negate $2)) $startpos $endpos }
+    { mk_lit (L_num (Z.neg $2)) $startpos $endpos }
   | lit
     { $1 }
 
@@ -638,7 +637,7 @@ loop_exp:
     }
   | v=id; From; f=exp; ord=to_or_downto; t=exp
     {
-      let step = mk_lit_exp (L_num (Big_int.of_int 1)) $startpos $endpos in
+      let step = mk_lit_exp (L_num (Z.of_int 1)) $startpos $endpos in
       let order =
         if ord = "to" then
           ATyp_aux (ATyp_inc, loc $startpos(ord) $endpos(ord))

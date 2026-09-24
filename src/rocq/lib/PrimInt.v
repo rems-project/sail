@@ -47,8 +47,7 @@ Concrete definitions of the Sail integer primitives, extracted to
 OCaml to provide the implementations in [sail_lib.ml].
 
 Sail integers are arbitrary precision, so they are represented by
-[Z], which extraction maps onto [Big_int_Z.big_int] which is the
-same type as Lem's [Nat_big_num.num]. *)
+[Z], which extraction maps onto [Big_int_Z.big_int]/[Z.t]. *)
 
 From Stdlib Require Import ZArith.
 From Stdlib Require Import micromega.Lia.

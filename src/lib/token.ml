@@ -120,7 +120,7 @@ type token =
   | Mutual
   | NAT
   | Newtype
-  | Num of Nat_big_num.num
+  | Num of Z.t
   | ORDER
   | Op
   | OpId of string

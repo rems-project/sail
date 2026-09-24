@@ -53,7 +53,6 @@ open Value
 open Extraction.ValueType
 open Extraction.TypeAnnot.Types
 
-module Big_int = Nat_big_num
 module Document = Pretty_print_sail.Document
 
 module Printer = Pretty_print_sail.Printer (struct
@@ -84,7 +83,7 @@ module VariableUpdate = struct
 
   type root = Register of id | Var of id * var_type
 
-  type accessor = Vector of Big_int.num | Vector_range of Big_int.num * Big_int.num | Field of id
+  type accessor = Vector of Z.t | Vector_range of Z.t * Z.t | Field of id
 
   let rec split_place = function
     | PL_id (id, ty) -> (Var (id, ty), [])
@@ -113,7 +112,7 @@ module VariableUpdate = struct
         | Vector n -> (
             match BitList.to_gvector v with
             | V_vector vs ->
-                let* v = List.nth_opt (List.rev vs) (Big_int.to_int n) in
+                let* v = List.nth_opt (List.rev vs) (Z.to_int n) in
                 access v accessors
             | _ -> None
           )
@@ -195,10 +194,10 @@ module VariableUpdate = struct
             match BitList.to_gvector v with
             | V_vector vs ->
                 if is_inc then
-                  let* vs = vector_update (fun v -> update is_inc v v' accessors) (Big_int.to_int n) vs in
+                  let* vs = vector_update (fun v -> update is_inc v v' accessors) (Z.to_int n) vs in
                   mk_vector vs
                 else
-                  let* vs = vector_update (fun v -> update is_inc v v' accessors) (Big_int.to_int n) (List.rev vs) in
+                  let* vs = vector_update (fun v -> update is_inc v v' accessors) (Z.to_int n) (List.rev vs) in
                   mk_vector (List.rev vs)
             | _ -> None
           )
@@ -208,31 +207,27 @@ module VariableUpdate = struct
                 let bs = Sail_lib.bit_list_of_bits bv in
                 if is_inc then
                   let* bs =
-                    bitvector_update_subrange
-                      (fun v -> update is_inc v v' accessors)
-                      (Big_int.to_int m) (Big_int.to_int n) bs
+                    bitvector_update_subrange (fun v -> update is_inc v v' accessors) (Z.to_int m) (Z.to_int n) bs
                   in
                   Some (V_bitvector (Sail_lib.bits_of_bit_list bs))
                 else
                   let* bs =
                     bitvector_update_subrange
                       (fun v -> update is_inc v v' accessors)
-                      (Big_int.to_int n) (Big_int.to_int m) (List.rev bs)
+                      (Z.to_int n) (Z.to_int m) (List.rev bs)
                   in
                   Some (V_bitvector (Sail_lib.bits_of_bit_list (List.rev bs)))
             | V_vector vs ->
                 if is_inc then
                   let* vs =
-                    vector_update_subrange
-                      (fun v -> update is_inc v v' accessors)
-                      (Big_int.to_int m) (Big_int.to_int n) vs
+                    vector_update_subrange (fun v -> update is_inc v v' accessors) (Z.to_int m) (Z.to_int n) vs
                   in
                   Some (V_vector vs)
                 else
                   let* vs =
                     vector_update_subrange
                       (fun v -> update is_inc v v' accessors)
-                      (Big_int.to_int n) (Big_int.to_int m) (List.rev vs)
+                      (Z.to_int n) (Z.to_int m) (List.rev vs)
                   in
                   Some (V_vector (List.rev vs))
             | _ -> None

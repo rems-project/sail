@@ -48,13 +48,13 @@ open Libsail
 open Elf_loader
 
 let opt_file_arguments = ref ([] : string list)
-let opt_raw_files = ref ([] : (string * Nat_big_num.num)  list)
+let opt_raw_files = ref ([] : (string * Z.t)  list)
 let options = Arg.align [
     ( "-raw",
       Arg.String (fun s ->
       let l = String.split_on_char '@' s in
       let (file, addr) = match l with
-        | [fname;addr] -> (fname, Nat_big_num.of_string addr)
+        | [fname;addr] -> (fname, Z.of_string addr)
         | _ -> raise (Arg.Bad (s ^ " not of form <filename>@<addr>")) in
       opt_raw_files := (file, addr) :: !opt_raw_files),
       "<file@0xADDR> load a raw binary in memory at given address.");
@@ -73,7 +73,7 @@ let rec load_raw_files = function
         while true do
           let b = input_byte ic in
           Sail_lib.wram !addr' b;
-          addr' := Nat_big_num.succ !addr';
+          addr' := Z.succ !addr';
         done
       with End_of_file -> ();
       load_raw_files files

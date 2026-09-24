@@ -95,9 +95,9 @@ type smt_exp =
 (* SMTLIB prints bitvector literals with a # prefix, using hexadecimal
    when the width is a multiple of four and binary otherwise. *)
 let smtlib_bitvec_string bv =
-  let width = Big_int.to_int (Sail_lib.length_bits bv) in
+  let width = Z.to_int (Sail_lib.length_bits bv) in
   let value = Sail_lib.uint bv in
-  let digit shift mask = Big_int.to_int (Big_int.bitwise_and (Big_int.shift_right value shift) (Big_int.of_int mask)) in
+  let digit shift mask = Z.to_int (Z.logand (Z.shift_right value shift) (Z.of_int mask)) in
   let buf = Buffer.create (2 + width) in
   if width mod 4 = 0 then (
     Buffer.add_string buf "#x";
@@ -216,13 +216,13 @@ let bvlshr x y = Fn ("bvlshr", [x; y])
 let bvult x y = Fn ("bvult", [x; y])
 let bvslt x y = Fn ("bvslt", [x; y])
 
-let bv_length bv = Big_int.to_int (Sail_lib.length_bits bv)
+let bv_length bv = Z.to_int (Sail_lib.length_bits bv)
 
-let bv_of_int ~width n = Sail_lib.to_bits (Big_int.of_int width) (Big_int.of_int n)
+let bv_of_int ~width n = Sail_lib.to_bits (Z.of_int width) (Z.of_int n)
 
-let bvzero n = Bitvec_lit (Sail_lib.zeros (Big_int.of_int n))
+let bvzero n = Bitvec_lit (Sail_lib.zeros (Z.of_int n))
 
-let bvones n = Bitvec_lit (Sail_lib.ones (Big_int.of_int n))
+let bvones n = Bitvec_lit (Sail_lib.ones (Z.of_int n))
 
 let bvone' n = bv_of_int ~width:n 1
 
@@ -230,7 +230,7 @@ let bvone n = Bitvec_lit (bvone' n)
 
 let is_bit_lit bv = bv_length bv = 1
 
-let bv_is_zero bv = Big_int.equal (Sail_lib.uint bv) Big_int.zero
+let bv_is_zero bv = Z.equal (Sail_lib.uint bv) Z.zero
 
 let smt_conj = function [] -> Bool_lit true | [x] -> x | xs -> Fn ("and", xs)
 
@@ -515,7 +515,7 @@ module Simplifier = struct
           let* var, size, lits = inequalities in
           let* max = if size <= 6 then Some (Util.power 2 size - 1) else None in
           let lits = List.map Sail_lib.uint lits in
-          let lits = List.fold_left (fun set i -> IntSet.add (Big_int.to_int i) set) IntSet.empty lits in
+          let lits = List.fold_left (fun set i -> IntSet.add (Z.to_int i) set) IntSet.empty lits in
           let unused = ref IntSet.empty in
           for v = 0 to max do
             if not (IntSet.mem v lits) then unused := IntSet.add v !unused
@@ -563,7 +563,7 @@ module Simplifier = struct
           let* var, size, lits = equalities in
           let* max = if size <= 6 then Some (Util.power 2 size - 1) else None in
           let lits = List.map Sail_lib.uint lits in
-          let lits = List.fold_left (fun set i -> IntSet.add (Big_int.to_int i) set) IntSet.empty lits in
+          let lits = List.fold_left (fun set i -> IntSet.add (Z.to_int i) set) IntSet.empty lits in
           let unused = ref IntSet.empty in
           for v = 0 to max do
             if not (IntSet.mem v lits) then unused := IntSet.add v !unused
@@ -602,8 +602,8 @@ module Simplifier = struct
   let rule_concat_literal_eq =
     mk_simple_rule __LOC__ @@ function
     | Fn ("=", [Fn ("concat", [Bitvec_lit xs; exp]); Bitvec_lit ys]) when bv_length xs <= bv_length ys ->
-        let prefix_len = Big_int.of_int (bv_length xs) in
-        let suffix_len = Big_int.of_int (bv_length ys - bv_length xs) in
+        let prefix_len = Z.of_int (bv_length xs) in
+        let suffix_len = Z.of_int (bv_length ys - bv_length xs) in
         let ys_prefix = Sail_lib.vector_truncateLSB ys prefix_len in
         let ys_suffix = Sail_lib.vector_truncate ys suffix_len in
         if Sail_lib.eq_list xs ys_prefix then change (Fn ("=", [exp; Bitvec_lit ys_suffix])) else change (Bool_lit false)
@@ -845,26 +845,26 @@ module Simplifier = struct
         | "bvlshr", [Bitvec_lit lhs; Bitvec_lit rhs] -> change (Bitvec_lit (shiftr lhs (sint rhs)))
         | "bvashr", [lhs; Bitvec_lit rhs] when bv_is_zero rhs -> change lhs
         | "bvashr", [Bitvec_lit lhs; Bitvec_lit rhs] -> change (Bitvec_lit (arith_shiftr lhs (sint rhs)))
-        | "bvslt", [Bitvec_lit lhs; Bitvec_lit rhs] -> change (Bool_lit (Big_int.less (sint lhs) (sint rhs)))
-        | "bvsle", [Bitvec_lit lhs; Bitvec_lit rhs] -> change (Bool_lit (Big_int.less_equal (sint lhs) (sint rhs)))
-        | "bvsgt", [Bitvec_lit lhs; Bitvec_lit rhs] -> change (Bool_lit (Big_int.greater (sint lhs) (sint rhs)))
-        | "bvsge", [Bitvec_lit lhs; Bitvec_lit rhs] -> change (Bool_lit (Big_int.greater_equal (sint lhs) (sint rhs)))
+        | "bvslt", [Bitvec_lit lhs; Bitvec_lit rhs] -> change (Bool_lit (Z.lt (sint lhs) (sint rhs)))
+        | "bvsle", [Bitvec_lit lhs; Bitvec_lit rhs] -> change (Bool_lit (Z.leq (sint lhs) (sint rhs)))
+        | "bvsgt", [Bitvec_lit lhs; Bitvec_lit rhs] -> change (Bool_lit (Z.gt (sint lhs) (sint rhs)))
+        | "bvsge", [Bitvec_lit lhs; Bitvec_lit rhs] -> change (Bool_lit (Z.geq (sint lhs) (sint rhs)))
         | _ -> NoChange
       )
     | _ -> NoChange
 
   let rule_extend_literal =
     mk_simple_rule __LOC__ @@ function
-    | ZeroExtend (to_len, by_len, Bitvec_lit bv) -> change (Bitvec_lit (Sail_lib.zero_extend bv (Big_int.of_int to_len)))
-    | SignExtend (to_len, by_len, Bitvec_lit bv) -> change (Bitvec_lit (Sail_lib.sign_extend bv (Big_int.of_int to_len)))
+    | ZeroExtend (to_len, by_len, Bitvec_lit bv) -> change (Bitvec_lit (Sail_lib.zero_extend bv (Z.of_int to_len)))
+    | SignExtend (to_len, by_len, Bitvec_lit bv) -> change (Bitvec_lit (Sail_lib.sign_extend bv (Z.of_int to_len)))
     | _ -> NoChange
 
   let rule_extract_shift =
     mk_simple_rule __LOC__ @@ function
     | Extract (n, m, len, Fn ("bvlshr", [bv; Bitvec_lit shift])) ->
         let shift = Sail_lib.sint shift in
-        if Big_int.less (Big_int.add (Big_int.of_int n) shift) (Big_int.of_int len) then (
-          let shift = Big_int.to_int shift in
+        if Z.lt (Z.add (Z.of_int n) shift) (Z.of_int len) then (
+          let shift = Z.to_int shift in
           change (Extract (n + shift, m + shift, len, bv))
         )
         else NoChange
@@ -872,8 +872,7 @@ module Simplifier = struct
 
   let rule_extract =
     mk_simple_rule __LOC__ @@ function
-    | Extract (n, m, _, Bitvec_lit bv) ->
-        change (Bitvec_lit (Sail_lib.subrange bv (Big_int.of_int n) (Big_int.of_int m)))
+    | Extract (n, m, _, Bitvec_lit bv) -> change (Bitvec_lit (Sail_lib.subrange bv (Z.of_int n) (Z.of_int m)))
     | _ -> NoChange
 
   let rule_simp_eq =
@@ -1116,13 +1115,13 @@ module Counterexample (Config : COUNTEREXAMPLE_CONFIG) = struct
   let parse_sexpr_int width = function
     | List [Atom "_"; Atom v; Atom m] when int_of_string m = width && String.length v > 2 && String.sub v 0 2 = "bv" ->
         let v = String.sub v 2 (String.length v - 2) in
-        Some (Big_int.of_string v)
+        Some (Z.of_string v)
     | Atom v when String.length v > 2 && String.sub v 0 2 = "#b" ->
         let v = String.sub v 2 (String.length v - 2) in
-        Some (Big_int.of_string ("0b" ^ v))
+        Some (Z.of_string ("0b" ^ v))
     | Atom v when String.length v > 2 && String.sub v 0 2 = "#x" ->
         let v = String.sub v 2 (String.length v - 2) in
-        Some (Big_int.of_string ("0x" ^ v))
+        Some (Z.of_string ("0x" ^ v))
     | _ -> None
 
   let rec value_of_sexpr l ctx sexpr =

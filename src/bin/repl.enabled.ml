@@ -491,7 +491,7 @@ let () =
   @@ let@ addr_s = Arg.String "addr" in
      let@ filename = Arg.String "file" in
      let@ _ = Arg.Get in
-     let addr = Big_int.of_string addr_s in
+     let addr = Z.of_string addr_s in
      Elf_loader.load_binary addr filename
   );
 

@@ -363,11 +363,7 @@ let maybe_expand_range_type (Typ_aux (typ, l) as full_typ) =
       let kid = mk_kid "n" in
       let var = nvar kid in
       Some
-        (Typ_aux
-           ( Typ_exist ([mk_kopt K_int kid], nc_gteq var (nconstant Nat_big_num.zero), atom_typ var),
-             Parse_ast.Generated l
-           )
-        )
+        (Typ_aux (Typ_exist ([mk_kopt K_int kid], nc_gteq var (nconstant Z.zero), atom_typ var), Parse_ast.Generated l))
   | _ -> None
 
 let expand_range_type typ = Option.value ~default:typ (maybe_expand_range_type typ)
@@ -702,8 +698,8 @@ and doc_nexp ctx env ?(skip_vars = KidSet.empty) nexp =
   and atomic (Nexp_aux (n, l) as nexp) =
     match n with
     | Nexp_constant i ->
-        let d = string (Big_int.to_string i) in
-        if Big_int.less i Big_int.zero then parens d else d
+        let d = string (Z.to_string i) in
+        if Z.lt i Z.zero then parens d else d
     | Nexp_var v when KidSet.mem v skip_vars -> string "_"
     | Nexp_var v -> doc_var ctx v
     | Nexp_id id -> doc_id ctx id
@@ -761,7 +757,7 @@ and doc_nc_exp ctx env nc =
           [
             string "member_Z_list";
             doc_nexp ctx env nexp;
-            brackets (separate (string "; ") (List.map (fun i -> string (Nat_big_num.to_string i)) is));
+            brackets (separate (string "; ") (List.map (fun i -> string (Z.to_string i)) is));
           ]
     | NC_app (f, args) -> separate space (doc_nc_fn ctx f :: List.map doc_typ_arg_exp args)
     | _ -> l0 nc_full
@@ -839,9 +835,9 @@ let doc_lit (L_aux (lit, l)) =
   | L_false -> utf8string "false"
   | L_true -> utf8string "true"
   | L_num i ->
-      let s = Big_int.to_string i in
+      let s = Z.to_string i in
       let ipp = utf8string s in
-      if Big_int.less i Big_int.zero then parens ipp else ipp
+      if Z.lt i Z.zero then parens ipp else ipp
   (* Not a typo, the bbv hex notation uses the letter O *)
   (* These need parens because of the 'sz 'b "..."' variants :( *)
   | L_hex hex -> utf8string ("(Ox\"" ^ string_of_hex_lit ~group_separator:"" ~case:Uppercase hex ^ "\")")
@@ -849,8 +845,7 @@ let doc_lit (L_aux (lit, l)) =
   | L_string s -> utf8string ("\"" ^ coq_escape_string s ^ "\"")
   | L_real r ->
       let r = Util.Rational.from_rocq r in
-      parens
-        (separate space (List.map string ["realFromFrac"; Big_int.to_string (Q.num r); Big_int.to_string (Q.den r)]))
+      parens (separate space (List.map string ["realFromFrac"; Z.to_string (Q.num r); Z.to_string (Q.den r)]))
 
 let doc_quant_item_id ?(prop_vars = false) ctx delimit (QI_aux (qi, _)) =
   match qi with
@@ -1101,10 +1096,10 @@ let rec nexp_const_eval (Nexp_aux (n, l) as nexp) =
     | n1' -> Nexp_aux (re n1', l)
   in
   match n with
-  | Nexp_times (n1, n2) -> binop Big_int.mul (fun n1 n2 -> Nexp_times (n1, n2)) l n1 n2
-  | Nexp_sum (n1, n2) -> binop Big_int.add (fun n1 n2 -> Nexp_sum (n1, n2)) l n1 n2
-  | Nexp_minus (n1, n2) -> binop Big_int.sub (fun n1 n2 -> Nexp_minus (n1, n2)) l n1 n2
-  | Nexp_neg n1 -> unop Big_int.negate (fun n -> Nexp_neg n) l n1
+  | Nexp_times (n1, n2) -> binop Z.mul (fun n1 n2 -> Nexp_times (n1, n2)) l n1 n2
+  | Nexp_sum (n1, n2) -> binop Z.add (fun n1 n2 -> Nexp_sum (n1, n2)) l n1 n2
+  | Nexp_minus (n1, n2) -> binop Z.sub (fun n1 n2 -> Nexp_minus (n1, n2)) l n1 n2
+  | Nexp_neg n1 -> unop Z.neg (fun n -> Nexp_neg n) l n1
   | _ -> nexp
 
 (* Decide whether two nexps used in a vector size are similar; if not
@@ -1126,7 +1121,7 @@ let similar_nexps ctxt env ?(existentials = []) n1 n2 =
         Kid.compare k1 k2 == 0
         || prove __POS__ env (nc_eq (nvar k1) (nvar k2))
            && ((not (KidSet.mem k1 ctxt.bound_nvars)) || not (KidSet.mem k2 ctxt.bound_nvars))
-    | Nexp_constant c1, Nexp_constant c2 -> Nat_big_num.equal c1 c2
+    | Nexp_constant c1, Nexp_constant c2 -> Z.equal c1 c2
     | Nexp_if (i1, t1, e1), Nexp_if (i2, t2, e2) ->
         NC.compare i1 i2 == 0 && same_nexp_shape t1 t2 && same_nexp_shape e1 e2
     | Nexp_app (f1, args1), Nexp_app (f2, args2) -> Id.compare f1 f2 == 0 && List.for_all2 same_nexp_shape args1 args2
@@ -1863,7 +1858,7 @@ let doc_exp, doc_let =
                       )
                       );
                   underscore
-              | Some (Nexp_aux (Nexp_var _, _)), Some (Nexp_aux (Nexp_constant c, _)) -> string (Big_int.to_string c)
+              | Some (Nexp_aux (Nexp_var _, _)), Some (Nexp_aux (Nexp_constant c, _)) -> string (Z.to_string c)
               (* If an integer argument is the same as a type variable, but we couldn't merge them, then use the type variable to ensure that the result type won't be the wrong one. *)
               | Some (Nexp_aux (Nexp_var v, _)), _
                 when KidSet.mem v ctxt.bound_nvars
@@ -3446,8 +3441,7 @@ let doc_funcl_init global proof_mode mutrec rec_opt ?rec_set (FCL_aux (FCL_funcl
         let id_pp = match id with Some id -> doc_id ctxt id | None -> underscore in
         match is_fixed_constant env exp_typ with
         | Some constant ->
-            parens
-              (separate space [id_pp; colon; doc_typ ctxt env typ; string ":="; string (Big_int.to_string constant)])
+            parens (separate space [id_pp; colon; doc_typ ctxt env typ; string ":="; string (Z.to_string constant)])
         | None -> (
             match classify_ex_type ctxt env ?binding:id exp_typ with
             | _, _, typ' -> parens (separate space [id_pp; colon; doc_typ ctxt env typ'])
@@ -3648,7 +3642,7 @@ let doc_regtype_fields global (tname, (n1, n2, fields)) =
                ("Unsupported type in field " ^ string_of_id fid ^ " of " ^ tname)
             )
     in
-    let fsize = Big_int.succ (Big_int.abs (Big_int.sub i j)) in
+    let fsize = Z.succ (Z.abs (Z.sub i j)) in
     let ftyp = vector_typ (nconstant fsize) bit_typ in
     let reftyp =
       mk_typ
@@ -3670,7 +3664,7 @@ let doc_regtype_fields global (tname, (n1, n2, fields)) =
            space;
            space;
            space;
-           string (" field_start = " ^ Big_int.to_string i ^ ";");
+           string (" field_start = " ^ Z.to_string i ^ ";");
            hardline;
            space;
            space;
@@ -3735,8 +3729,7 @@ let doc_axiom_typschm typ_env is_monadic l (tqs, typ) =
             parens (doc_var empty_ctxt kid ^^ string " := " ^^ doc_typ_arg empty_ctxt typ_env v)
         | Some (Nexp_aux (Nexp_var kid, _)) when KidSet.mem kid args -> parens (doc_var empty_ctxt kid ^^ string " : Z")
         (* This case is silly, but useful for tests *)
-        | Some (Nexp_aux (Nexp_constant n, _)) ->
-            parens (underscore ^^ string " : Z := " ^^ string (Big_int.to_string n))
+        | Some (Nexp_aux (Nexp_constant n, _)) -> parens (underscore ^^ string " : Z := " ^^ string (Z.to_string n))
         | _ -> (
             match Type_check.destruct_atom_bool typ_env typ with
             | Some (NC_aux (NC_var kid, _)) when KidSet.mem kid args ->

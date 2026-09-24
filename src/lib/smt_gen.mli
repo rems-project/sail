@@ -100,7 +100,7 @@ val unsigned_size :
 
 (** [bvint sz n] Create a (two's complement) SMT bitvector representing a the number [n] in a bitvector of length [sz].
     Raises an error if this is not possible. *)
-val bvint : int -> Big_int.num -> Smt_exp.smt_exp
+val bvint : int -> Z.t -> Smt_exp.smt_exp
 
 module type CONFIG = sig
   (** Sail has arbitrary precision integers, but in order to generate pure bitvectors we must constrain them to some

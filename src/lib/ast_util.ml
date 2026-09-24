@@ -50,7 +50,6 @@ open Ast_defs
 open Bit
 open Parse_ast.Attribute_data
 open Util
-module Big_int = Nat_big_num
 
 open Coq_def_annot
 open Coq_extern
@@ -68,7 +67,7 @@ let rec string_of_attribute_data (AD_aux (aux, _)) =
       ^ Util.string_of_list ", " (fun (k, v) -> Printf.sprintf "\"%s\" = %s" k (string_of_attribute_data v)) kvs
       ^ " }"
   | AD_string s -> "\"" ^ s ^ "\""
-  | AD_num n -> Big_int.to_string n
+  | AD_num n -> Z.to_string n
   | AD_list vs -> "[" ^ Util.string_of_list ", " string_of_attribute_data vs ^ "]"
   | AD_bool b -> string_of_bool b
 
@@ -80,9 +79,8 @@ let rec json_of_attribute_data (AD_aux (aux, _)) =
   match aux with
   | AD_object kvs -> `Assoc (List.map (fun (k, v) -> (k, json_of_attribute_data v)) kvs)
   | AD_string s -> `String s
-  | AD_num n when Big_int.less_equal (Big_int.of_int min_int) n && Big_int.less_equal n (Big_int.of_int max_int) ->
-      `Int (Big_int.to_int n)
-  | AD_num n -> `String (Big_int.to_string n)
+  | AD_num n when Z.leq (Z.of_int min_int) n && Z.leq n (Z.of_int max_int) -> `Int (Z.to_int n)
+  | AD_num n -> `String (Z.to_string n)
   | AD_list vs -> `List (List.map json_of_attribute_data vs)
   | AD_bool b -> `Bool b
 
@@ -343,7 +341,7 @@ let rec constant_arith_chain = function
       (root, c :: constants)
   | Nexp_aux (Nexp_minus (n, Nexp_aux (Nexp_constant c, _)), _) ->
       let root, constants = constant_arith_chain n in
-      (root, Big_int.negate c :: constants)
+      (root, Z.neg c :: constants)
   | nexp -> (nexp, [])
 
 let rec nexp_simp (Nexp_aux (nexp, l)) = Nexp_aux (nexp_simp_aux nexp, l)
@@ -360,14 +358,14 @@ and nexp_simp_aux = function
       let (Nexp_aux (n1_simp, _) as n1) = nexp_simp n1 in
       let (Nexp_aux (n2_simp, n2_loc) as n2) = nexp_simp n2 in
       match (n1_simp, n2_simp) with
-      | Nexp_constant c1, _ when Big_int.equal c1 Big_int.zero -> n2_simp
-      | _, Nexp_constant c2 when Big_int.equal c2 Big_int.zero -> n1_simp
-      | Nexp_constant c1, Nexp_constant c2 -> Nexp_constant (Big_int.add c1 c2)
+      | Nexp_constant c1, _ when Z.equal c1 Z.zero -> n2_simp
+      | _, Nexp_constant c2 when Z.equal c2 Z.zero -> n1_simp
+      | Nexp_constant c1, Nexp_constant c2 -> Nexp_constant (Z.add c1 c2)
       | _, Nexp_constant c when is_constant_arith_chain n1 >= 1 ->
           let root, constants = constant_arith_chain n1 in
-          let sum = List.fold_left Big_int.add c constants in
-          if Big_int.less sum Big_int.zero then Nexp_minus (root, Nexp_aux (Nexp_constant (Big_int.abs sum), n2_loc))
-          else if Big_int.greater sum Big_int.zero then Nexp_sum (root, Nexp_aux (Nexp_constant sum, n2_loc))
+          let sum = List.fold_left Z.add c constants in
+          if Z.lt sum Z.zero then Nexp_minus (root, Nexp_aux (Nexp_constant (Z.abs sum), n2_loc))
+          else if Z.gt sum Z.zero then Nexp_sum (root, Nexp_aux (Nexp_constant sum, n2_loc))
           else unaux_nexp root
       | _, Nexp_neg n2 -> Nexp_minus (n1, n2)
       | _, _ -> Nexp_sum (n1, n2)
@@ -376,53 +374,52 @@ and nexp_simp_aux = function
       let (Nexp_aux (n1_simp, _) as n1) = nexp_simp n1 in
       let (Nexp_aux (n2_simp, _) as n2) = nexp_simp n2 in
       match (n1_simp, n2_simp) with
-      | Nexp_constant c, _ when Big_int.equal c (Big_int.of_int 1) -> n2_simp
-      | _, Nexp_constant c when Big_int.equal c (Big_int.of_int 1) -> n1_simp
-      | Nexp_constant c1, Nexp_constant c2 -> Nexp_constant (Big_int.mul c1 c2)
+      | Nexp_constant c, _ when Z.equal c (Z.of_int 1) -> n2_simp
+      | _, Nexp_constant c when Z.equal c (Z.of_int 1) -> n1_simp
+      | Nexp_constant c1, Nexp_constant c2 -> Nexp_constant (Z.mul c1 c2)
       | _, _ -> Nexp_times (n1, n2)
     )
   | Nexp_minus (n1, n2) -> (
       let (Nexp_aux (n1_simp, _) as n1) = nexp_simp n1 in
       let (Nexp_aux (n2_simp, n2_loc) as n2) = nexp_simp n2 in
       match (n1_simp, n2_simp) with
-      | _, Nexp_constant c2 when Big_int.equal c2 Big_int.zero -> n1_simp
-      | Nexp_constant c1, Nexp_constant c2 -> Nexp_constant (Big_int.sub c1 c2)
+      | _, Nexp_constant c2 when Z.equal c2 Z.zero -> n1_simp
+      | Nexp_constant c1, Nexp_constant c2 -> Nexp_constant (Z.sub c1 c2)
       | _, Nexp_constant c when is_constant_arith_chain n1 >= 1 ->
           let root, constants = constant_arith_chain n1 in
-          let sum = List.fold_left Big_int.add (Big_int.negate c) constants in
-          if Big_int.less sum Big_int.zero then Nexp_minus (root, Nexp_aux (Nexp_constant (Big_int.abs sum), n2_loc))
-          else if Big_int.greater sum Big_int.zero then Nexp_sum (root, Nexp_aux (Nexp_constant sum, n2_loc))
+          let sum = List.fold_left Z.add (Z.neg c) constants in
+          if Z.lt sum Z.zero then Nexp_minus (root, Nexp_aux (Nexp_constant (Z.abs sum), n2_loc))
+          else if Z.gt sum Z.zero then Nexp_sum (root, Nexp_aux (Nexp_constant sum, n2_loc))
           else unaux_nexp root
       | _, _ -> Nexp_minus (n1, n2)
     )
   | Nexp_neg n -> (
       let (Nexp_aux (n_simp, _) as n) = nexp_simp n in
-      match n_simp with Nexp_constant c -> Nexp_constant (Big_int.negate c) | _ -> Nexp_neg n
+      match n_simp with Nexp_constant c -> Nexp_constant (Z.neg c) | _ -> Nexp_neg n
     )
   | Nexp_app ((Id_aux (Id "div", _) as id), [n1; n2]) -> (
       let (Nexp_aux (n1_simp, _) as n1) = nexp_simp n1 in
       let (Nexp_aux (n2_simp, _) as n2) = nexp_simp n2 in
       match (n1_simp, n2_simp) with
-      | Nexp_constant c1, Nexp_constant c2 -> Nexp_constant (Big_int.div c1 c2)
+      | Nexp_constant c1, Nexp_constant c2 -> Nexp_constant (Z.ediv c1 c2)
       | _, _ -> Nexp_app (id, [n1; n2])
     )
   | Nexp_app ((Id_aux (Id "mod", _) as id), [n1; n2]) -> (
       let (Nexp_aux (n1_simp, _) as n1) = nexp_simp n1 in
       let (Nexp_aux (n2_simp, _) as n2) = nexp_simp n2 in
       match (n1_simp, n2_simp) with
-      | Nexp_constant c1, Nexp_constant c2 -> Nexp_constant (Big_int.modulus c1 c2)
+      | Nexp_constant c1, Nexp_constant c2 -> Nexp_constant (Z.erem c1 c2)
       | _, _ -> Nexp_app (id, [n1; n2])
     )
   | Nexp_app ((Id_aux (Id "abs", _) as id), [n]) -> (
       let n = nexp_simp n in
-      match n with Nexp_aux (Nexp_constant c, _) -> Nexp_constant (Big_int.abs c) | _ -> Nexp_app (id, [n])
+      match n with Nexp_aux (Nexp_constant c, _) -> Nexp_constant (Z.abs c) | _ -> Nexp_app (id, [n])
     )
   | Nexp_exp nexp -> (
       let nexp = nexp_simp nexp in
       match nexp with
-      | Nexp_aux (Nexp_constant c, _)
-        when Big_int.greater_equal c Big_int.zero && Big_int.less_equal c (Big_int.of_int 7) ->
-          Nexp_constant (Big_int.pow_int_positive 2 (Big_int.to_int c))
+      | Nexp_aux (Nexp_constant c, _) when Z.geq c Z.zero && Z.leq c (Z.of_int 7) ->
+          Nexp_constant (Z.shift_left Z.one (Z.to_int c))
       | _ -> Nexp_exp nexp
     )
   | Nexp_if (i, t, e) -> (
@@ -439,7 +436,7 @@ and constraint_simp (NC_aux (nc_aux, l)) =
     | NC_set (nexp, ints) -> (
         let nexp = nexp_simp nexp in
         match nexp with
-        | Nexp_aux (Nexp_constant c, _) -> if List.exists (fun i -> Big_int.equal c i) ints then NC_true else NC_false
+        | Nexp_aux (Nexp_constant c, _) -> if List.exists (fun i -> Z.equal c i) ints then NC_true else NC_false
         | _ -> NC_set (nexp, ints)
       )
     | NC_equal (arg1, arg2) ->
@@ -448,7 +445,7 @@ and constraint_simp (NC_aux (nc_aux, l)) =
         else (
           match (arg1, arg2) with
           | A_aux (A_nexp (Nexp_aux (Nexp_constant c1, _)), _), A_aux (A_nexp (Nexp_aux (Nexp_constant c2, _)), _)
-            when not (Big_int.equal c1 c2) ->
+            when not (Z.equal c1 c2) ->
               NC_false
           | A_aux (A_bool (NC_aux (NC_true, _)), _), A_aux (A_bool (NC_aux (NC_false, _)), _) -> NC_false
           | A_aux (A_bool (NC_aux (NC_false, _)), _), A_aux (A_bool (NC_aux (NC_true, _)), _) -> NC_false
@@ -460,7 +457,7 @@ and constraint_simp (NC_aux (nc_aux, l)) =
         else (
           match (arg1, arg2) with
           | A_aux (A_nexp (Nexp_aux (Nexp_constant c1, _)), _), A_aux (A_nexp (Nexp_aux (Nexp_constant c2, _)), _)
-            when not (Big_int.equal c1 c2) ->
+            when not (Z.equal c1 c2) ->
               NC_true
           | A_aux (A_bool (NC_aux (NC_true, _)), _), A_aux (A_bool (NC_aux (NC_false, _)), _) -> NC_true
           | A_aux (A_bool (NC_aux (NC_false, _)), _), A_aux (A_bool (NC_aux (NC_true, _)), _) -> NC_true
@@ -487,29 +484,25 @@ and constraint_simp (NC_aux (nc_aux, l)) =
     | NC_ge (nexp1, nexp2) -> (
         let nexp1, nexp2 = (nexp_simp nexp1, nexp_simp nexp2) in
         match (nexp1, nexp2) with
-        | Nexp_aux (Nexp_constant c1, _), Nexp_aux (Nexp_constant c2, _) ->
-            if Big_int.greater_equal c1 c2 then NC_true else NC_false
+        | Nexp_aux (Nexp_constant c1, _), Nexp_aux (Nexp_constant c2, _) -> if Z.geq c1 c2 then NC_true else NC_false
         | _, _ -> NC_ge (nexp1, nexp2)
       )
     | NC_gt (nexp1, nexp2) -> (
         let nexp1, nexp2 = (nexp_simp nexp1, nexp_simp nexp2) in
         match (nexp1, nexp2) with
-        | Nexp_aux (Nexp_constant c1, _), Nexp_aux (Nexp_constant c2, _) ->
-            if Big_int.greater c1 c2 then NC_true else NC_false
+        | Nexp_aux (Nexp_constant c1, _), Nexp_aux (Nexp_constant c2, _) -> if Z.gt c1 c2 then NC_true else NC_false
         | _, _ -> NC_gt (nexp1, nexp2)
       )
     | NC_le (nexp1, nexp2) -> (
         let nexp1, nexp2 = (nexp_simp nexp1, nexp_simp nexp2) in
         match (nexp1, nexp2) with
-        | Nexp_aux (Nexp_constant c1, _), Nexp_aux (Nexp_constant c2, _) ->
-            if Big_int.less_equal c1 c2 then NC_true else NC_false
+        | Nexp_aux (Nexp_constant c1, _), Nexp_aux (Nexp_constant c2, _) -> if Z.leq c1 c2 then NC_true else NC_false
         | _, _ -> NC_le (nexp1, nexp2)
       )
     | NC_lt (nexp1, nexp2) -> (
         let nexp1, nexp2 = (nexp_simp nexp1, nexp_simp nexp2) in
         match (nexp1, nexp2) with
-        | Nexp_aux (Nexp_constant c1, _), Nexp_aux (Nexp_constant c2, _) ->
-            if Big_int.less c1 c2 then NC_true else NC_false
+        | Nexp_aux (Nexp_constant c1, _), Nexp_aux (Nexp_constant c2, _) -> if Z.lt c1 c2 then NC_true else NC_false
         | _, _ -> NC_lt (nexp1, nexp2)
       )
     | NC_app (id, [A_aux (A_bool nc, arg_l)]) when Id.compare (mk_id "not") id = 0 -> (
@@ -536,7 +529,7 @@ let rec get_nexp_constant (Nexp_aux (n, _)) =
   | Nexp_constant c -> Some c
   (* nexp_simp does not always expand large existentials *)
   | Nexp_exp e -> (
-      match get_nexp_constant e with Some c -> Some (Big_int.pow_int_positive 2 (Big_int.to_int c)) | None -> None
+      match get_nexp_constant e with Some c -> Some (Z.shift_left Z.one (Z.to_int c)) | None -> None
     )
   | _ -> None
 
@@ -579,7 +572,7 @@ let vector_typ n typ = mk_typ (Typ_app (mk_id "vector", [mk_typ_arg (A_nexp (nex
 
 let bitvector_typ n = mk_typ (Typ_app (mk_id "bitvector", [mk_typ_arg (A_nexp (nexp_simp n))]))
 
-let bit_typ = bitvector_typ (Nexp_aux (Nexp_constant (Big_int.of_int 1), Parse_ast.Unknown))
+let bit_typ = bitvector_typ (Nexp_aux (Nexp_constant (Z.of_int 1), Parse_ast.Unknown))
 
 let exc_typ = mk_id_typ (mk_id "exception")
 
@@ -588,7 +581,7 @@ let arg_typ ?loc:(l = Parse_ast.Unknown) typ = A_aux (A_typ typ, l)
 let arg_bool ?loc:(l = Parse_ast.Unknown) nc = A_aux (A_bool nc, l)
 
 let nconstant c = Nexp_aux (Nexp_constant c, Parse_ast.Unknown)
-let nint i = nconstant (Big_int.of_int i)
+let nint i = nconstant (Z.of_int i)
 let nminus n1 n2 = Nexp_aux (Nexp_minus (n1, n2), Parse_ast.Unknown)
 let nsum n1 n2 = Nexp_aux (Nexp_sum (n1, n2), Parse_ast.Unknown)
 let ntimes n1 n2 = Nexp_aux (Nexp_times (n1, n2), Parse_ast.Unknown)
@@ -599,7 +592,7 @@ let napp id args = Nexp_aux (Nexp_app (id, args), Parse_ast.Unknown)
 let nite nc n1 n2 = Nexp_aux (Nexp_if (nc, n1, n2), Parse_ast.Unknown)
 
 let nc_set kid nums = mk_nc (NC_set (kid, nums))
-let nc_int_set kid ints = mk_nc (NC_set (kid, List.map Big_int.of_int ints))
+let nc_int_set kid ints = mk_nc (NC_set (kid, List.map Z.of_int ints))
 let nc_eq n1 n2 = mk_nc (NC_equal (arg_nexp n1, arg_nexp n2))
 let nc_neq n1 n2 = mk_nc (NC_not_equal (arg_nexp n1, arg_nexp n2))
 let nc_lteq n1 n2 = NC_aux (NC_le (n1, n2), Parse_ast.Unknown)
@@ -659,9 +652,9 @@ let is_quant_constraint = function QI_aux (QI_constraint _, _) -> true | _ -> fa
 let rec insert_subrange ms (n1, n2) =
   match ms with
   | (m1, m2) :: ms ->
-      if Big_int.equal n2 (Big_int.succ m1) then (n1, m2) :: ms
-      else if Big_int.greater n2 m1 then (n1, n2) :: (m1, m2) :: ms
-      else if Big_int.equal m2 (Big_int.succ n1) then insert_subrange ms (m1, n2)
+      if Z.equal n2 (Z.succ m1) then (n1, m2) :: ms
+      else if Z.gt n2 m1 then (n1, n2) :: (m1, m2) :: ms
+      else if Z.equal m2 (Z.succ n1) then insert_subrange ms (m1, n2)
       else (m1, m2) :: insert_subrange ms (n1, n2)
   | [] -> [(n1, n2)]
 
@@ -669,7 +662,7 @@ let insert_subranges ns ms = List.fold_left insert_subrange ns ms
 
 let rec pattern_vector_subranges (P_aux (aux, _)) =
   match aux with
-  | P_vector_subrange (id, n, m) when Big_int.greater n m -> Bindings.singleton id [(n, m)]
+  | P_vector_subrange (id, n, m) when Z.gt n m -> Bindings.singleton id [(n, m)]
   | P_vector_subrange (id, n, m) -> Bindings.singleton id [(m, n)]
   | P_typ (_, pat) | P_var (pat, _) | P_as (pat, _) | P_not pat -> pattern_vector_subranges pat
   | P_cons (pat1, pat2) | P_or (pat1, pat2) ->
@@ -1010,7 +1003,7 @@ let rec string_of_nexp = function Nexp_aux (nexp, _) -> string_of_nexp_aux nexp
 and string_of_nexp_aux = function
   | Nexp_id id -> string_of_id id
   | Nexp_var kid -> string_of_kid kid
-  | Nexp_constant c -> Big_int.to_string c
+  | Nexp_constant c -> Z.to_string c
   | Nexp_times (n1, n2) -> "(" ^ string_of_nexp n1 ^ " * " ^ string_of_nexp n2 ^ ")"
   | Nexp_sum (n1, n2) -> "(" ^ string_of_nexp n1 ^ " + " ^ string_of_nexp n2 ^ ")"
   | Nexp_minus (n1, n2) -> "(" ^ string_of_nexp n1 ^ " - " ^ string_of_nexp n2 ^ ")"
@@ -1058,7 +1051,7 @@ and string_of_n_constraint = function
   | NC_aux (NC_lt (n1, n2), _) -> string_of_nexp n1 ^ " < " ^ string_of_nexp n2
   | NC_aux (NC_or (nc1, nc2), _) -> "(" ^ string_of_n_constraint nc1 ^ " | " ^ string_of_n_constraint nc2 ^ ")"
   | NC_aux (NC_and (nc1, nc2), _) -> "(" ^ string_of_n_constraint nc1 ^ " & " ^ string_of_n_constraint nc2 ^ ")"
-  | NC_aux (NC_set (n, ns), _) -> string_of_nexp n ^ " in {" ^ string_of_list ", " Big_int.to_string ns ^ "}"
+  | NC_aux (NC_set (n, ns), _) -> string_of_nexp n ^ " in {" ^ string_of_list ", " Z.to_string ns ^ "}"
   | NC_aux (NC_app (Id_aux (Operator op, _), [arg1; arg2]), _) ->
       "(" ^ string_of_typ_arg arg1 ^ " " ^ op ^ " " ^ string_of_typ_arg arg2 ^ ")"
   | NC_aux (NC_app (id, args), _) -> string_of_id id ^ "(" ^ string_of_list ", " string_of_typ_arg args ^ ")"
@@ -1117,7 +1110,7 @@ let string_of_lit (L_aux (lit, _)) =
   | L_unit -> "()"
   | L_true -> "true"
   | L_false -> "false"
-  | L_num n -> Big_int.to_string n
+  | L_num n -> Z.to_string n
   | L_hex hex -> "0x" ^ string_of_hex_lit ~case:Uppercase hex
   | L_bin bin -> "0b" ^ string_of_bin_lit bin
   | L_real r -> Q.to_string (Util.Rational.from_rocq r)
@@ -1206,8 +1199,8 @@ and string_of_pat (P_aux (pat, _)) =
   | P_list pats -> "[||" ^ string_of_list "," string_of_pat pats ^ "||]"
   | P_vector_concat pats -> string_of_list " @ " string_of_pat pats
   | P_vector_subrange (id, n, m) ->
-      if Big_int.equal n m then string_of_id id ^ "[" ^ Big_int.to_string n ^ "]"
-      else string_of_id id ^ "[" ^ Big_int.to_string n ^ ".." ^ Big_int.to_string m ^ "]"
+      if Z.equal n m then string_of_id id ^ "[" ^ Z.to_string n ^ "]"
+      else string_of_id id ^ "[" ^ Z.to_string n ^ ".." ^ Z.to_string m ^ "]"
   | P_vector pats -> "[" ^ string_of_list ", " string_of_pat pats ^ "]"
   | P_as (pat, id) -> "(" ^ string_of_pat pat ^ " as " ^ string_of_id id ^ ")"
   | P_string_append [] -> "\"\""
@@ -1229,7 +1222,7 @@ and string_of_mpat (MP_aux (pat, _)) =
   | MP_list pats -> "[||" ^ string_of_list "," string_of_mpat pats ^ "||]"
   | MP_vector_concat pats -> string_of_list " @ " string_of_mpat pats
   | MP_vector pats -> "[" ^ string_of_list ", " string_of_mpat pats ^ "]"
-  | MP_vector_subrange (id, n, m) -> string_of_id id ^ "[" ^ Big_int.to_string n ^ " .. " ^ Big_int.to_string m ^ "]"
+  | MP_vector_subrange (id, n, m) -> string_of_id id ^ "[" ^ Z.to_string n ^ " .. " ^ Z.to_string m ^ "]"
   | MP_string_append pats -> string_of_list " ^ " string_of_mpat pats
   | MP_typ (mpat, typ) -> "(" ^ string_of_mpat mpat ^ " : " ^ string_of_typ typ ^ ")"
   | MP_as (mpat, id) -> "((" ^ string_of_mpat mpat ^ ") as " ^ string_of_id id ^ ")"

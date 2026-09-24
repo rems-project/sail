@@ -60,8 +60,6 @@ module Document = Pretty_print_sail.Document
 
 open Anf
 
-module Big_int = Nat_big_num
-
 let opt_prefix = ref "z"
 let opt_extra_params = ref None
 let opt_extra_arguments = ref None
@@ -85,8 +83,8 @@ let c_error ?loc:(l = Parse_ast.Unknown) message = raise (Reporting.err_general 
 (* Converting Sail types to C types                                       *)
 (**************************************************************************)
 
-let max_int n = Big_int.pred (Big_int.pow_int_positive 2 (n - 1))
-let min_int n = Big_int.negate (Big_int.pow_int_positive 2 (n - 1))
+let max_int n = Z.pred (Z.shift_left Z.one (n - 1))
+let min_int n = Z.neg (Z.shift_left Z.one (n - 1))
 
 (** This function is used to split types into those we allocate on the stack, versus those which need to live on the
     heap, or otherwise require some additional memory management.
@@ -113,15 +111,14 @@ let rec is_stack_ctyp ctx ctyp =
   (* Is a reference to some immutable JSON data *)
   | CT_json -> true
   | CT_json_key -> true
-  | CT_constant n -> Big_int.less_equal (min_int 64) n && Big_int.greater_equal n (max_int 64)
+  | CT_constant n -> Z.leq (min_int 64) n && Z.geq n (max_int 64)
   | CT_memory_writes -> false
 
-let v_mask_lower i = V_lit (V_bitvector (Sail_lib.ones (Big_int.of_int i)), CT_fbits i)
+let v_mask_lower i = V_lit (V_bitvector (Sail_lib.ones (Z.of_int i)), CT_fbits i)
 
 let literal_to_fragment (L_aux (l_aux, _)) =
   match l_aux with
-  | L_num n when Big_int.less_equal (min_int 64) n && Big_int.less_equal n (max_int 64) ->
-      Some (V_lit (V_int n, CT_fint 64))
+  | L_num n when Z.leq (min_int 64) n && Z.leq n (max_int 64) -> Some (V_lit (V_int n, CT_fint 64))
   | L_bin bin ->
       let len = bin_lit_length bin in
       if len <= 64 then Some (V_lit (V_bitvector (Sail_lib.bits_of_bit_list (BitList.of_bin_lit bin)), CT_fbits len))
@@ -229,7 +226,7 @@ end) : CONFIG = struct
             in
             match (nexp_simp n, nexp_simp m) with
             | Nexp_aux (Nexp_constant n, _), Nexp_aux (Nexp_constant m, _)
-              when Big_int.less_equal (min_int 64) n && Big_int.less_equal m (max_int 64) ->
+              when Z.leq (min_int 64) n && Z.leq m (max_int 64) ->
                 CT_fint 64
             | n, m ->
                 if
@@ -246,7 +243,7 @@ end) : CONFIG = struct
        - If the length may be larger than 64, use a large bits type lbits. *)
     | Typ_app (id, [A_aux (A_nexp n, _)]) when string_of_id id = "bitvector" -> (
         match nexp_simp n with
-        | Nexp_aux (Nexp_constant n, _) when Big_int.less_equal n (Big_int.of_int 64) -> CT_fbits (Big_int.to_int n)
+        | Nexp_aux (Nexp_constant n, _) when Z.leq n (Z.of_int 64) -> CT_fbits (Z.to_int n)
         | n when prove __POS__ ctx.local_env (nc_lteq n (nint 64)) -> CT_sbits 64
         | _ -> CT_lbits
       )
@@ -433,21 +430,21 @@ end) : CONFIG = struct
     | "eq_bit", [AV_cval (v1, _); AV_cval (v2, _)] -> AE_val (AV_cval (V_call (Eq, [v1; v2]), typ))
     | "zeros", [_] -> (
         match destruct_bitvector ctx.tc_env typ with
-        | Some (Nexp_aux (Nexp_constant n, _)) when Big_int.less_equal n (Big_int.of_int 64) ->
-            let n = Big_int.to_int n in
-            AE_val (AV_cval (V_lit (V_bitvector (Sail_lib.zeros (Big_int.of_int n)), CT_fbits n), typ))
+        | Some (Nexp_aux (Nexp_constant n, _)) when Z.leq n (Z.of_int 64) ->
+            let n = Z.to_int n in
+            AE_val (AV_cval (V_lit (V_bitvector (Sail_lib.zeros (Z.of_int n)), CT_fbits n), typ))
         | _ -> no_change
       )
     | "zero_extend", [AV_cval (v, _); _] -> (
         match destruct_bitvector ctx.tc_env typ with
-        | Some (Nexp_aux (Nexp_constant n, _)) when Big_int.less_equal n (Big_int.of_int 64) ->
-            AE_val (AV_cval (V_call (Zero_extend (Big_int.to_int n), [v]), typ))
+        | Some (Nexp_aux (Nexp_constant n, _)) when Z.leq n (Z.of_int 64) ->
+            AE_val (AV_cval (V_call (Zero_extend (Z.to_int n), [v]), typ))
         | _ -> no_change
       )
     | "sign_extend", [AV_cval (v, _); _] -> (
         match destruct_bitvector ctx.tc_env typ with
-        | Some (Nexp_aux (Nexp_constant n, _)) when Big_int.less_equal n (Big_int.of_int 64) ->
-            AE_val (AV_cval (V_call (Sign_extend (Big_int.to_int n), [v]), typ))
+        | Some (Nexp_aux (Nexp_constant n, _)) when Z.leq n (Z.of_int 64) ->
+            AE_val (AV_cval (V_call (Sign_extend (Z.to_int n), [v]), typ))
         | _ -> no_change
       )
     | "lteq", [AV_cval (v1, _); AV_cval (v2, _)] -> AE_val (AV_cval (V_call (Ilteq, [v1; v2]), typ))
@@ -498,7 +495,7 @@ end) : CONFIG = struct
         | Some (_, _, n, m) -> (
             match (nexp_simp n, nexp_simp m) with
             | Nexp_aux (Nexp_constant n, _), Nexp_aux (Nexp_constant m, _)
-              when Big_int.less_equal (min_int 64) n && Big_int.less_equal m (max_int 64) ->
+              when Z.leq (min_int 64) n && Z.leq m (max_int 64) ->
                 AE_val (AV_cval (V_call (f, [op1; op2]), typ))
             | n, m
               when prove __POS__ ctx.local_env (nc_lteq (nconstant (min_int 64)) n)
@@ -509,16 +506,14 @@ end) : CONFIG = struct
       )
     | "replicate_bits", [AV_cval (vec, vtyp); _] -> (
         match (destruct_vector ctx.tc_env typ, destruct_vector ctx.tc_env vtyp) with
-        | Some (Nexp_aux (Nexp_constant n, _), _), Some (Nexp_aux (Nexp_constant m, _), _)
-          when Big_int.less_equal n (Big_int.of_int 64) ->
-            let times = Big_int.div n m in
-            if Big_int.equal (Big_int.mul m times) n then
-              AE_val (AV_cval (V_call (Replicate (Big_int.to_int times), [vec]), typ))
+        | Some (Nexp_aux (Nexp_constant n, _), _), Some (Nexp_aux (Nexp_constant m, _), _) when Z.leq n (Z.of_int 64) ->
+            let times = Z.ediv n m in
+            if Z.equal (Z.mul m times) n then AE_val (AV_cval (V_call (Replicate (Z.to_int times), [vec]), typ))
             else no_change
         | _, _ -> no_change
       )
     | "print_int", [_; AV_cval _] -> AE_app (Extern (mk_id "fast_print_int", None), args, typ)
-    | "undefined_bit", _ -> AE_val (AV_cval (V_lit (V_bitvector (Sail_lib.zeros (Big_int.of_int 1)), CT_fbits 1), typ))
+    | "undefined_bit", _ -> AE_val (AV_cval (V_lit (V_bitvector (Sail_lib.zeros (Z.of_int 1)), CT_fbits 1), typ))
     | "undefined_bool", _ -> AE_val (AV_cval (V_lit (V_bool false, CT_bool), typ))
     | _, _ -> no_change
 
@@ -526,7 +521,8 @@ end) : CONFIG = struct
     let no_change = AE_app (id, args, typ) in
     match id with
     | Sail_function id ->
-        if !optimize_primops then (try analyze_primop' ctx id args typ with Failure _ -> no_change) else no_change
+        if !optimize_primops then (try analyze_primop' ctx id args typ with Failure _ | Z.Overflow -> no_change)
+        else no_change
     | _ -> no_change
 
   let optimize_anf ctx aexp = analyze_functions ctx analyze_primop (c_literals ctx aexp)
@@ -1105,9 +1101,9 @@ module Codegen (Config : CODEGEN_CONFIG) = struct
     else failwith "Tried to create a mask literal for a vector greater than 64 bits."
 
   let sgen_value : Ast.value -> string = function
-    | V_bitvector bv when Big_int.equal (Sail_lib.length_bits bv) Big_int.zero -> "UINT64_C(0)"
+    | V_bitvector bv when Z.equal (Sail_lib.length_bits bv) Z.zero -> "UINT64_C(0)"
     | V_bitvector bv -> "UINT64_C(" ^ Sail_lib.string_of_bits bv ^ ")"
-    | V_int i -> if Big_int.equal i (min_int 64) then "INT64_MIN" else "INT64_C(" ^ Big_int.to_string i ^ ")"
+    | V_int i -> if Z.equal i (min_int 64) then "INT64_MIN" else "INT64_C(" ^ Z.to_string i ^ ")"
     | V_bool true -> "true"
     | V_bool false -> "false"
     | V_unit -> "UNIT"

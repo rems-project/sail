@@ -540,7 +540,7 @@ let chunk_of_lit (L_aux (aux, _)) =
   | L_one -> Atom "bitone"
   | L_true -> Atom "true"
   | L_false -> Atom "false"
-  | L_num n -> Atom (Big_int.to_string n)
+  | L_num n -> Atom (Z.to_string n)
   | L_hex b -> Atom ("0x" ^ b)
   | L_bin b -> Atom ("0b" ^ b)
   | L_string s -> String_literal s
@@ -665,7 +665,7 @@ let rec chunk_attribute_data comments chunks (AD_aux (aux, l)) =
         chunk_delimit ~within:l ~delim:"," ~get_loc:(fun (AD_aux (_, l)) -> l) ~chunk:chunk_attribute_data comments args
       in
       Queue.add (Tuple ("[", "]", 0, args)) chunks
-  | AD_num n -> Queue.add (Atom (Big_int.to_string n)) chunks
+  | AD_num n -> Queue.add (Atom (Z.to_string n)) chunks
   | AD_bool b -> Queue.add (Atom (string_of_bool b)) chunks
   | AD_string s ->
       if have_linebreak (starting_line_num l) (ending_line_num l) then (
@@ -702,7 +702,7 @@ let rec chunk_atyp comments chunks (ATyp_aux (aux, l)) =
   | ATyp_id id -> Queue.add (Atom (string_of_id id)) chunks
   | ATyp_var v -> Queue.add (Atom (string_of_var v)) chunks
   | ATyp_lit lit -> Queue.add (chunk_of_lit lit) chunks
-  | ATyp_nset set -> Queue.add (Atom ("{" ^ Util.string_of_list ", " Big_int.to_string set ^ "}")) chunks
+  | ATyp_nset set -> Queue.add (Atom ("{" ^ Util.string_of_list ", " Z.to_string set ^ "}")) chunks
   | ATyp_in (lhs, rhs) ->
       let lhs_chunks = rec_chunk_atyp lhs in
       let rhs_chunks = rec_chunk_atyp rhs in
@@ -818,12 +818,12 @@ let rec chunk_pat comments chunks (P_aux (aux, l)) =
       let id_chunks = Queue.create () in
       Queue.add (Atom (string_of_id id)) id_chunks;
       let ix_chunks = Queue.create () in
-      if Big_int.equal n m then Queue.add (Atom (Big_int.to_string n)) ix_chunks
+      if Z.equal n m then Queue.add (Atom (Z.to_string n)) ix_chunks
       else (
         let n_chunks = Queue.create () in
-        Queue.add (Atom (Big_int.to_string n)) n_chunks;
+        Queue.add (Atom (Z.to_string n)) n_chunks;
         let m_chunks = Queue.create () in
-        Queue.add (Atom (Big_int.to_string m)) m_chunks;
+        Queue.add (Atom (Z.to_string m)) m_chunks;
         Queue.add (Vector_binary (n_chunks, "..", m_chunks)) ix_chunks
       );
       Queue.add (Index (id_chunks, ix_chunks)) chunks
@@ -1136,7 +1136,7 @@ let rec chunk_exp comments chunks (E_aux (aux, l)) =
       chunk_exp comments to_chunks to_index;
       let step_chunks_opt =
         match step with
-        | E_aux (E_lit (L_aux (L_num n, _)), _) when Big_int.equal n (Big_int.of_int 1) -> None
+        | E_aux (E_lit (L_aux (L_num n, _)), _) when Z.equal n (Z.of_int 1) -> None
         | _ ->
             let step_chunks = Queue.create () in
             chunk_exp comments step_chunks step;
@@ -1575,7 +1575,7 @@ let rec chunk_def skip source last_line_span comments chunks (DEF_aux (def, l)) 
         | DEF_fixity (prec, n, op) ->
             pop_comments comments chunks l;
             let string_of_prec = function Infix -> "infix" | InfixL -> "infixl" | InfixR -> "infixr" in
-            Queue.add (Atom (Printf.sprintf "%s %s %s" (string_of_prec prec) (Big_int.to_string n) op)) chunks;
+            Queue.add (Atom (Printf.sprintf "%s %s %s" (string_of_prec prec) (Z.to_string n) op)) chunks;
             Queue.add (Spacer (true, 1)) chunks
         | DEF_register reg -> chunk_register comments chunks reg
         | DEF_let (pat, exp) -> chunk_toplevel_let l comments chunks pat exp

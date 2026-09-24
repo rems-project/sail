@@ -47,7 +47,6 @@
 open Ast
 open Ast_compare
 open Ast_util
-module Big_int = Nat_big_num
 
 module IntSet = Util.IntSet
 module IntIntSet = Util.IntIntSet
@@ -309,7 +308,7 @@ module Make (C : Config) = struct
     in
     go false pat
 
-  type gpat_num = GPN_var of kid | GPN_constant of Big_int.num
+  type gpat_num = GPN_var of kid | GPN_constant of Z.t
 
   type gpat =
     | GP_wild
@@ -318,7 +317,7 @@ module Make (C : Config) = struct
     | GP_tuple of gpat list
     | GP_app of id * id * gpat list
     | GP_bitvector of int * int * (bv_constraint -> bv_constraint)
-    | GP_num of int * Big_int.num * gpat_num option
+    | GP_num of int * Z.t * gpat_num option
     | GP_enum of id * id
     | GP_vector of gpat list
     | GP_bool of bool
@@ -334,7 +333,7 @@ module Make (C : Config) = struct
     | GP_tuple gpats -> "(" ^ Util.string_of_list ", " _string_of_gpat gpats ^ ")"
     | GP_app (_, ctor, gpats) -> string_of_id ctor ^ "(" ^ Util.string_of_list ", " _string_of_gpat gpats ^ ")"
     | GP_bitvector (_, _, bvc) -> string_of_bv_constraint (bvc (BVC_lit "x"))
-    | GP_num (_, n, _) -> Big_int.to_string n
+    | GP_num (_, n, _) -> Z.to_string n
     | GP_enum (_, id) -> string_of_id id
     | GP_bool b -> string_of_bool b
     | GP_vector gpats -> "[" ^ Util.string_of_list ", " _string_of_gpat gpats ^ "]"
@@ -395,7 +394,7 @@ module Make (C : Config) = struct
               | None -> None
               | Some lengths -> (
                   let nexp, _ = vector_typ_args_of typ in
-                  match int_of_nexp_opt nexp with Some n -> Some (Big_int.to_int n :: lengths) | None -> None
+                  match int_of_nexp_opt nexp with Some n -> Some (Z.to_int n :: lengths) | None -> None
                 )
             )
             (Some []) (List.map typ_of_pat pats)
@@ -541,9 +540,9 @@ module Make (C : Config) = struct
     | [] -> L_string (String.make (max_length + 1) '?')
 
   let rec unmatched_num_literal n = function
-    | (_, GP_lit (L_aux (L_num m, _))) :: rest -> unmatched_num_literal (Big_int.max n m) rest
+    | (_, GP_lit (L_aux (L_num m, _))) :: rest -> unmatched_num_literal (Z.max n m) rest
     | _ :: rest -> unmatched_num_literal n rest
-    | [] -> L_num (Big_int.succ n)
+    | [] -> L_num (Z.succ n)
 
   let rec unmatched_literal = function
     | (_, GP_lit (L_aux (L_string str, _))) :: rest -> Some (unmatched_string_literal (String.length str) rest)
@@ -586,20 +585,17 @@ module Make (C : Config) = struct
                     | Some (i, _), GP_bitvector (_, _, bvc) ->
                         Some (string_of_bv_constraint (bvc (BVC_lit ("p" ^ string_of_int i))))
                     | Some (i, _), GP_num (_, n, Some (GPN_constant c)) ->
-                        Some
-                          (Printf.sprintf "(or (= p%d %s) (not (= p%d %s)))" i (Big_int.to_string n) i
-                             (Big_int.to_string c)
-                          )
+                        Some (Printf.sprintf "(or (= p%d %s) (not (= p%d %s)))" i (Z.to_string n) i (Z.to_string c))
                     | Some (i, _), GP_num (_, n, Some (GPN_var v)) ->
                         let smt_var, created = var_map v in
                         (* If the variable was not already in the map (and has therefore just been created), then it is unconstrained *)
                         if created then created_vars := KidSet.add v !created_vars;
                         if not (KidSet.mem v !created_vars) then (
                           require_head_exp_constraint := true;
-                          Some (Printf.sprintf "(or (= p%d %s) (not (= p%d %s)))" i (Big_int.to_string n) i smt_var)
+                          Some (Printf.sprintf "(or (= p%d %s) (not (= p%d %s)))" i (Z.to_string n) i smt_var)
                         )
-                        else Some (Printf.sprintf "(= p%d %s)" i (Big_int.to_string n))
-                    | Some (i, _), GP_num (_, n, None) -> Some (Printf.sprintf "(= p%d %s)" i (Big_int.to_string n))
+                        else Some (Printf.sprintf "(= p%d %s)" i (Z.to_string n))
+                    | Some (i, _), GP_num (_, n, None) -> Some (Printf.sprintf "(= p%d %s)" i (Z.to_string n))
                     | _ -> None
                   )
                   vars row

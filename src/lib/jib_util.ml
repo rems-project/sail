@@ -215,7 +215,7 @@ let rec string_of_ctyp = function
   | CT_lbits -> "%bv"
   | CT_sbits n -> "%sbv" ^ string_of_int n
   | CT_fbits n -> "%bv" ^ string_of_int n
-  | CT_constant n -> Big_int.to_string n
+  | CT_constant n -> Z.to_string n
   | CT_unit -> "%unit"
   | CT_bool -> "%bool"
   | CT_real -> "%real"
@@ -247,9 +247,9 @@ and string_of_uid (id, ctyps) =
   | _ -> Util.zencode_string (string_of_id id) ^ "<" ^ Util.string_of_list "," string_of_ctyp ctyps ^ ">"
 
 let string_of_value : Ast.value -> string = function
-  | V_bitvector bv when Big_int.equal (Sail_lib.length_bits bv) Big_int.zero -> "UINT64_C(0)"
+  | V_bitvector bv when Z.equal (Sail_lib.length_bits bv) Z.zero -> "UINT64_C(0)"
   | V_bitvector bv -> Sail_lib.string_of_bits bv
-  | V_int i -> Big_int.to_string i
+  | V_int i -> Z.to_string i
   | V_bool true -> "true"
   | V_bool false -> "false"
   | V_unit -> "()"
@@ -478,7 +478,7 @@ let rec ctyp_equal ctyp1 ctyp2 =
   | CT_fint n, CT_fint m -> n = m
   | CT_float n, CT_float m -> n = m
   | CT_rounding_mode, CT_rounding_mode -> true
-  | CT_constant n, CT_constant m -> Big_int.equal n m
+  | CT_constant n, CT_constant m -> Z.equal n m
   | CT_unit, CT_unit -> true
   | CT_bool, CT_bool -> true
   | CT_struct (id1, ctyps1), CT_struct (id2, ctyps2) when List.compare_lengths ctyps1 ctyps2 = 0 ->
@@ -508,7 +508,7 @@ let rec ctyp_compare ctyp1 ctyp2 =
   | CT_fint n, CT_fint m -> Int.compare n m
   | CT_fint _, _ -> 1
   | _, CT_fint _ -> -1
-  | CT_constant n, CT_constant m -> Big_int.compare n m
+  | CT_constant n, CT_constant m -> Z.compare n m
   | CT_constant _, _ -> 1
   | _, CT_constant _ -> -1
   | CT_fbits n, CT_fbits m -> Int.compare n m

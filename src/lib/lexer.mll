@@ -50,7 +50,6 @@ open Parse_ast
 open Token
 open Sail_file.Position
 
-module Big_int = Nat_big_num
 
 module M = Map.Make(String)
 
@@ -256,11 +255,11 @@ rule token handle comments = parse
       lexbuf.lex_start_p <- startpos;
       Pragma (i, arg) }
   | "infix" ws (digit as p) ws (operator as op)
-    { Fixity (Infix, Big_int.of_string (Char.escaped p), op) }
+    { Fixity (Infix, Z.of_string (Char.escaped p), op) }
   | "infixl" ws (digit as p) ws (operator as op)
-    { Fixity (InfixL, Big_int.of_string (Char.escaped p), op) }
+    { Fixity (InfixL, Z.of_string (Char.escaped p), op) }
   | "infixr" ws (digit as p) ws (operator as op)
-    { Fixity (InfixR, Big_int.of_string (Char.escaped p), op) }
+    { Fixity (InfixR, Z.of_string (Char.escaped p), op) }
   | operator as op                        { OpId op }
   | tyvar_start startident ident* as i    { TyVar i }
   | "~"                                   { Id "~" }
@@ -269,7 +268,7 @@ rule token handle comments = parse
                                             else
                                               Id i }
   | (digit+ as i1) "." (digit+ as i2)     { Real (i1 ^ "." ^ i2) }
-  | digit+ as i                           { Num (Big_int.of_string i) }
+  | digit+ as i                           { Num (Z.of_string i) }
   | "0b" (binarydigit+ as b)              { Bin b }
   | "0x" (hexdigit+ as h)                 { Hex h }
   | "\"\"\"" wsc* '\n'                    { let startpos = Lexing.lexeme_start_p lexbuf in
