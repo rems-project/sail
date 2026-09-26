@@ -2307,6 +2307,17 @@ let rewrite_simple_assignments allow_fields env defs =
   let assign_defs = { rewriters_base with rewrite_exp = (fun _ -> fold_exp assign_exp) } in
   rewrite_ast_base assign_defs defs
 
+let rewrite_ast_short_circuit_to_if env =
+  let needs_monad exp = effectful exp || has_early_return exp in
+  let e_aux = function
+    | E_app (op, [e1; e2]), ((l, tannot) as annot) when (is_and_bool op || is_or_bool op) && needs_monad e2 ->
+        let env = env_of_tannot tannot in
+        let lit b = annot_exp (E_lit (mk_lit (if b then L_true else L_false))) (gen_loc l) env bool_typ in
+        if is_and_bool op then E_aux (E_if (e1, e2, lit false), annot) else E_aux (E_if (e1, lit true, e2), annot)
+    | e, annot -> E_aux (e, annot)
+  in
+  rewrite_ast_base { rewriters_base with rewrite_exp = (fun _ -> fold_exp { id_exp_alg with e_aux }) }
+
 let rewrite_ast_remove_blocks env =
   let letbind_wild v body =
     let l = get_loc_exp v in
@@ -4539,6 +4550,7 @@ let all_rewriters =
     ("early_return", base_rewriter rewrite_ast_early_return);
     ("nexp_ids", basic_rewriter rewrite_ast_nexp_ids);
     ("remove_blocks", basic_rewriter rewrite_ast_remove_blocks);
+    ("short_circuit_to_if", basic_rewriter rewrite_ast_short_circuit_to_if);
     ("letbind_effects", base_rewriter rewrite_ast_letbind_effects);
     ("remove_e_assign", basic_rewriter rewrite_ast_remove_e_assign);
     ("internal_lets", basic_rewriter rewrite_ast_internal_lets);
