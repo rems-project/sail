@@ -280,24 +280,24 @@ let get_slice_int_ref n m o =
 let to_bits_ref len n =
   get_slice_int_ref len n Big_int_Z.zero_big_int
 
-(** val add_vec : bvn -> bvn -> bvn option **)
+(** val add_bits : bvn -> bvn -> bvn option **)
 
-let add_vec x y =
+let add_bits x y =
   lift2 bv_add x y
 
-(** val sub_vec : bvn -> bvn -> bvn option **)
+(** val sub_bits : bvn -> bvn -> bvn option **)
 
-let sub_vec x y =
+let sub_bits x y =
   lift2 bv_sub x y
 
-(** val add_vec_int : bvn -> Big_int_Z.big_int -> bvn **)
+(** val add_bits_int : bvn -> Big_int_Z.big_int -> bvn **)
 
-let add_vec_int x n =
+let add_bits_int x n =
   { bvn_n = x.bvn_n; bvn_val = (bv_add_Z x.bvn_n x.bvn_val n) }
 
-(** val sub_vec_int : bvn -> Big_int_Z.big_int -> bvn **)
+(** val sub_bits_int : bvn -> Big_int_Z.big_int -> bvn **)
 
-let sub_vec_int x n =
+let sub_bits_int x n =
   { bvn_n = x.bvn_n; bvn_val = (bv_sub_Z x.bvn_n x.bvn_val n) }
 
 (** val count_leading_zeros : bvn -> Big_int_Z.big_int **)
@@ -444,10 +444,10 @@ let access_inc x n =
 let update_bit_inc x n b =
   update_bit x (Z.sub (Z.sub (width x) Big_int_Z.unit_big_int) n) b
 
-(** val add_vec_carry : bvn -> bvn -> (bit * bvn) option **)
+(** val add_bits_carry : bvn -> bvn -> (bit * bvn) option **)
 
-let add_vec_carry x y =
-  match add_vec x y with
+let add_bits_carry x y =
+  match add_bits x y with
   | Some sum ->
     let carry =
       Z.leb

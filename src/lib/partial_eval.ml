@@ -375,8 +375,8 @@ module AbsValue : SAIL_VALUE = struct
         ("eq_bits", primop_eq_bits);
         ("eq_anything", primop_eq_anything);
         ("not_vec", lift AbsBitvector.Dom.not (AbsBV @-> Ret AbsBV));
-        ("add_vec", lift AbsBitvector.Dom.add (AbsBV @-> AbsBV @-> Ret AbsBV));
-        ("sub_vec", lift AbsBitvector.Dom.sub (AbsBV @-> AbsBV @-> Ret AbsBV));
+        ("add_bits", lift AbsBitvector.Dom.add (AbsBV @-> AbsBV @-> Ret AbsBV));
+        ("sub_bits", lift AbsBitvector.Dom.sub (AbsBV @-> AbsBV @-> Ret AbsBV));
         ("and_vec", lift AbsBitvector.Dom.coq_and (AbsBV @-> AbsBV @-> Ret AbsBV));
         ("or_vec", lift AbsBitvector.Dom.coq_or (AbsBV @-> AbsBV @-> Ret AbsBV));
         ("xor_vec", lift AbsBitvector.Dom.xor (AbsBV @-> AbsBV @-> Ret AbsBV));
@@ -553,8 +553,8 @@ module AbsValue : SAIL_VALUE = struct
         );
         ("undefined_list", fun _ -> V_list []);
         ("get_slice_int", lift Sail_lib.get_slice_int (Int @-> Int @-> Int @-> Ret BV));
-        ("add_vec_int", lift Sail_lib.add_vec_int (BV @-> Int @-> Ret BV));
-        ("sub_vec_int", lift Sail_lib.sub_vec_int (BV @-> Int @-> Ret BV));
+        ("add_bits_int", lift Sail_lib.add_bits_int (BV @-> Int @-> Ret BV));
+        ("sub_bits_int", lift Sail_lib.sub_bits_int (BV @-> Int @-> Ret BV));
         ("valid_hex_bits", lift Sail_lib.valid_hex_bits (Int @-> String @-> Ret Bool));
         ("parse_dec_bits", lift Sail_lib.parse_dec_bits (Int @-> String @-> Ret BV));
         ("parse_hex_bits", lift Sail_lib.parse_hex_bits (Int @-> String @-> Ret BV));

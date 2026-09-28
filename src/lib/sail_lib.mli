@@ -131,8 +131,8 @@ val tmod_int : Z.t -> Z.t -> Z.t
 val add_bit_with_carry : bit -> bit -> bit -> bit * bit
 val sub_bit_with_carry : bit -> bit -> bit -> bit * bit
 val not_vec : bits -> bits
-val add_vec_carry : bits -> bits -> bit * bits
-val add_vec : bits -> bits -> bits
+val add_bits_carry : bits -> bits -> bit * bits
+val add_bits : bits -> bits -> bits
 val replicate_bits : bits -> Z.t -> bits
 val identity : 'a -> 'a
 val get_slice_int' : int -> Z.t -> int -> bits
@@ -141,9 +141,9 @@ val to_bits' : int -> Z.t -> bits
 val to_bits : Z.t -> Z.t -> bits
 val mult_vec : bits -> bits -> bits
 val mults_vec : bits -> bits -> bits
-val add_vec_int : bits -> Z.t -> bits
-val sub_vec : bits -> bits -> bits
-val sub_vec_int : bits -> Z.t -> bits
+val add_bits_int : bits -> Z.t -> bits
+val sub_bits : bits -> bits -> bits
+val sub_bits_int : bits -> Z.t -> bits
 val bin_char : char -> bit
 val bits_of_bit_list : bit list -> bits
 val bit_list_of_bits : bits -> bit list

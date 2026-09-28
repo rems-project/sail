@@ -98,13 +98,13 @@ val get_slice_int_ref :
 
 val to_bits_ref : Big_int_Z.big_int -> Big_int_Z.big_int -> bit list
 
-val add_vec : bvn -> bvn -> bvn option
+val add_bits : bvn -> bvn -> bvn option
 
-val sub_vec : bvn -> bvn -> bvn option
+val sub_bits : bvn -> bvn -> bvn option
 
-val add_vec_int : bvn -> Big_int_Z.big_int -> bvn
+val add_bits_int : bvn -> Big_int_Z.big_int -> bvn
 
-val sub_vec_int : bvn -> Big_int_Z.big_int -> bvn
+val sub_bits_int : bvn -> Big_int_Z.big_int -> bvn
 
 val count_leading_zeros : bvn -> Big_int_Z.big_int
 
@@ -151,7 +151,7 @@ val access_inc : bvn -> Big_int_Z.big_int -> bvn
 
 val update_bit_inc : bvn -> Big_int_Z.big_int -> bit -> bvn
 
-val add_vec_carry : bvn -> bvn -> (bit * bvn) option
+val add_bits_carry : bvn -> bvn -> (bit * bvn) option
 
 val replicate_bits_aux : Big_int_Z.big_int -> bvn -> bvn -> bvn
 
