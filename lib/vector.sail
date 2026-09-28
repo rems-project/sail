@@ -97,8 +97,6 @@ val bitvector_length = pure {
 } : forall 'n. bits('n) -> int('n)
 
 val vector_length = pure {
-  ocaml: "length",
-  interpreter: "length",
   lem: "length_list",
   coq: "vec_length",
   lean: "Vector.length",
