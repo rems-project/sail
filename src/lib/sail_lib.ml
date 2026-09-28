@@ -255,9 +255,9 @@ let sub_bit_with_carry = Extraction.PrimBits.sub_bit_with_carry
 
 let not_vec = Extraction.PrimBits.not_vec
 
-let add_vec_carry xs ys = require_width "add_vec_carry" (Extraction.PrimBits.add_vec_carry xs ys)
+let add_bits_carry xs ys = require_width "add_bits_carry" (Extraction.PrimBits.add_bits_carry xs ys)
 
-let add_vec xs ys = require_width "add_vec" (Extraction.PrimBits.add_vec xs ys)
+let add_bits xs ys = require_width "add_bits" (Extraction.PrimBits.add_bits xs ys)
 
 let replicate_bits = Extraction.PrimBits.replicate_bits
 
@@ -277,11 +277,11 @@ let mult_vec = Extraction.PrimBits.mult_vec
 (* signed multiplication bit lists producing a list of 2n bits. *)
 let mults_vec = Extraction.PrimBits.mults_vec
 
-let add_vec_int = Extraction.PrimBits.add_vec_int
+let add_bits_int = Extraction.PrimBits.add_bits_int
 
-let sub_vec xs ys = require_width "sub_vec" (Extraction.PrimBits.sub_vec xs ys)
+let sub_bits xs ys = require_width "sub_bits" (Extraction.PrimBits.sub_bits xs ys)
 
-let sub_vec_int = Extraction.PrimBits.sub_vec_int
+let sub_bits_int = Extraction.PrimBits.sub_bits_int
 
 let bin_char = function '0' -> B0 | '1' -> B1 | _ -> raise (Runtime_type_error "Invalid binary character")
 

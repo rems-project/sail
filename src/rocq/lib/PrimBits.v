@@ -235,11 +235,11 @@ Definition get_slice_int_ref (n m o : Z) : list bit := get_slice_int_ref_aux (Z.
 Definition to_bits_ref (len n : Z) : list bit := get_slice_int_ref len n 0.
 
 
-Definition add_vec (x y : bvn) : option bvn := lift2 (fun n => bv_add) x y.
-Definition sub_vec (x y : bvn) : option bvn := lift2 (fun n => bv_sub) x y.
+Definition add_bits (x y : bvn) : option bvn := lift2 (fun n => bv_add) x y.
+Definition sub_bits (x y : bvn) : option bvn := lift2 (fun n => bv_sub) x y.
 
-Definition add_vec_int (x : bvn) (n : Z) : bvn := bv_add_Z x.(bvn_val) n.
-Definition sub_vec_int (x : bvn) (n : Z) : bvn := bv_sub_Z x.(bvn_val) n.
+Definition add_bits_int (x : bvn) (n : Z) : bvn := bv_add_Z x.(bvn_val) n.
+Definition sub_bits_int (x : bvn) (n : Z) : bvn := bv_sub_Z x.(bvn_val) n.
 
 Definition count_leading_zeros (x : bvn) : Z :=
   let v := bv_unsigned x.(bvn_val) in
@@ -335,8 +335,8 @@ Definition access_inc (x : bvn) (n : Z) : bvn := access x (width x - 1 - n).
 Definition update_bit_inc (x : bvn) (n : Z) (b : bit) : bvn :=
   update_bit x (width x - 1 - n) b.
 
-Definition add_vec_carry (x y : bvn) : option (bit * bvn) :=
-  match add_vec x y with
+Definition add_bits_carry (x y : bvn) : option (bit * bvn) :=
+  match add_bits x y with
   | None => None
   | Some sum =>
       let carry := Z.leb (Z.pow 2 (width x)) (uint x + uint y) in

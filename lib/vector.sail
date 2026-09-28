@@ -260,8 +260,6 @@ val plain_vector_update = pure {
 overload vector_update = {bitvector_update, plain_vector_update}
 
 val add_bits = pure {
-  ocaml: "add_vec",
-  interpreter: "add_vec",
   lem: "add_vec",
   coq: "add_vec",
   lean: "_lean_add",
@@ -269,8 +267,6 @@ val add_bits = pure {
 } : forall 'n. (bits('n), bits('n)) -> bits('n)
 
 val add_bits_int = pure {
-  ocaml: "add_vec_int",
-  interpreter: "add_vec_int",
   lem: "add_vec_int",
   coq: "add_vec_int",
   lean: "BitVec.addInt",
@@ -280,8 +276,6 @@ val add_bits_int = pure {
 overload operator + = {add_bits, add_bits_int}
 
 val sub_bits = pure {
-  ocaml: "sub_vec",
-  interpreter: "sub_vec",
   lem: "sub_vec",
   coq: "sub_vec",
   lean: "_lean_sub",
