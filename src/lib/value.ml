@@ -292,19 +292,19 @@ let value_slice_inc = function
 
 let value_not = function [v] -> V_bool (not (coerce_bool v)) | _ -> failwith "value not"
 
-let value_not_vec = function [v] -> V_bitvector (Sail_lib.not_vec (coerce_bv v)) | _ -> failwith "value not_vec"
+let value_not_bits = function [v] -> V_bitvector (Sail_lib.not_bits (coerce_bv v)) | _ -> failwith "value not_bits"
 
-let value_and_vec = function
-  | [v1; v2] -> V_bitvector (Sail_lib.and_vec (coerce_bv v1) (coerce_bv v2))
-  | _ -> failwith "value not_vec"
+let value_and_bits = function
+  | [v1; v2] -> V_bitvector (Sail_lib.and_bits (coerce_bv v1) (coerce_bv v2))
+  | _ -> failwith "value not_bits"
 
-let value_or_vec = function
-  | [v1; v2] -> V_bitvector (Sail_lib.or_vec (coerce_bv v1) (coerce_bv v2))
-  | _ -> failwith "value not_vec"
+let value_or_bits = function
+  | [v1; v2] -> V_bitvector (Sail_lib.or_bits (coerce_bv v1) (coerce_bv v2))
+  | _ -> failwith "value or_bits"
 
-let value_xor_vec = function
-  | [v1; v2] -> V_bitvector (Sail_lib.xor_vec (coerce_bv v1) (coerce_bv v2))
-  | _ -> failwith "value xor_vec"
+let value_xor_bits = function
+  | [v1; v2] -> V_bitvector (Sail_lib.xor_bits (coerce_bv v1) (coerce_bv v2))
+  | _ -> failwith "value xor_bits"
 
 let value_uint = function [v] -> V_int (Sail_lib.uint (coerce_bv v)) | _ -> failwith "value uint"
 
@@ -755,10 +755,10 @@ let primops =
          ("append", value_append);
          ("append_list", value_append_list);
          ("not", value_not);
-         ("not_vec", value_not_vec);
-         ("and_vec", value_and_vec);
-         ("or_vec", value_or_vec);
-         ("xor_vec", value_xor_vec);
+         ("not_bits", value_not_bits);
+         ("and_bits", value_and_bits);
+         ("or_bits", value_or_bits);
+         ("xor_bits", value_xor_bits);
          ("uint", value_uint);
          ("sint", value_sint);
          ("get_slice_int", value_get_slice_int);

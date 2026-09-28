@@ -118,15 +118,15 @@ let require_width name = function
   | Some r -> r
   | None -> raise (Runtime_type_error (name ^ ": bitvector width mismatch"))
 
-let and_vec xs ys = require_width "and_vec" (Extraction.PrimBits.and_vec xs ys)
+let and_bits xs ys = require_width "and_bits" (Extraction.PrimBits.and_bits xs ys)
 
 let and_bool = Extraction.PrimBits.and_bool
 
-let or_vec xs ys = require_width "or_vec" (Extraction.PrimBits.or_vec xs ys)
+let or_bits xs ys = require_width "or_bits" (Extraction.PrimBits.or_bits xs ys)
 
 let or_bool = Extraction.PrimBits.or_bool
 
-let xor_vec xs ys = require_width "xor_vec" (Extraction.PrimBits.xor_vec xs ys)
+let xor_bits xs ys = require_width "xor_bits" (Extraction.PrimBits.xor_bits xs ys)
 
 let xor_bool = Extraction.PrimBits.xor_bool
 
@@ -253,7 +253,7 @@ let add_bit_with_carry = Extraction.PrimBits.add_bit_with_carry
 
 let sub_bit_with_carry = Extraction.PrimBits.sub_bit_with_carry
 
-let not_vec = Extraction.PrimBits.not_vec
+let not_bits = Extraction.PrimBits.not_bits
 
 let add_bits_carry xs ys = require_width "add_bits_carry" (Extraction.PrimBits.add_bits_carry xs ys)
 

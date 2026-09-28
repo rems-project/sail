@@ -283,10 +283,8 @@ val sub_bits = pure {
 } : forall 'n. (bits('n), bits('n)) -> bits('n)
 
 val not_vec = pure {
-  ocaml: "not_vec",
   lem: "not_vec",
   coq: "not_vec",
-  interpreter: "not_vec",
   lean: "Complement.complement",
   _: "not_bits"
 } : forall 'n. bits('n) -> bits('n)
@@ -294,8 +292,6 @@ val not_vec = pure {
 val and_vec = pure {
   lem: "and_vec",
   coq: "and_vec",
-  ocaml: "and_vec",
-  interpreter: "and_vec",
   lean: "_lean_bvand",
   _: "and_bits"
 } : forall 'n. (bits('n), bits('n)) -> bits('n)
@@ -305,8 +301,6 @@ overload operator & = {and_vec}
 val or_vec = pure {
   lem: "or_vec",
   coq: "or_vec",
-  ocaml: "or_vec",
-  interpreter: "or_vec",
   lean: "_lean_bvor",
   _: "or_bits"
 } : forall 'n. (bits('n), bits('n)) -> bits('n)
@@ -316,8 +310,6 @@ overload operator | = {or_vec}
 val xor_vec = pure {
   lem: "xor_vec",
   coq: "xor_vec",
-  ocaml: "xor_vec",
-  interpreter: "xor_vec",
   lean: "_lean_bvxor",
   _: "xor_bits"
 } : forall 'n. (bits('n), bits('n)) -> bits('n)
