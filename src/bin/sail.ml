@@ -189,6 +189,7 @@ let set_tool options tool_name =
     match tool_name with
     | "strip_json" -> Tools.load (module Tools.Strip_json_comments) fix_options options
     | "format" -> Tools.load (module Tools.Format) fix_options options
+    | "extern_json" -> Tools.load (module Tools.Extern_json) fix_options options
     | _ -> raise (Arg.Bad "unknown tool")
   in
   opt_tool := Some action

@@ -73,6 +73,8 @@ val merge_ctx : Parse_ast.l -> ctx -> ctx -> ctx
 
 val initial_ctx : ctx
 
+val parse_target_set : Parse_ast.l -> string -> string * string list
+
 (** {2 Desugar and process AST} *)
 
 val to_ast_typ_arg : kind_aux -> ctx -> Parse_ast.atyp -> typ_arg

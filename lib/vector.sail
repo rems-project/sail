@@ -130,9 +130,17 @@ val prerr_bits = pure "prerr_bits" : forall 'n. (string, bits('n)) -> unit
 
 $else
 
-val print_bits = impure "print_bits_effect" : forall 'n. (string, bits('n)) -> unit
+val print_bits = impure {
+  ocaml: "print_bits",
+  interpreter: "print_bits",
+  _: "print_bits_effect",
+} : forall 'n. (string, bits('n)) -> unit
 
-val prerr_bits = impure "prerr_bits_effect" : forall 'n. (string, bits('n)) -> unit
+val prerr_bits = impure {
+  ocaml: "prerr_bits",
+  interpreter: "prerr_bits",
+  _: "prerr_bits_effect"
+} : forall 'n. (string, bits('n)) -> unit
 
 $endif
 
@@ -193,7 +201,11 @@ val bitvector_concat = pure {
 overload append = {bitvector_concat}
 
 /* Used for creating long bitvector literals in the C backend. */
-val append_64 = pure "append_64" : forall 'n. (bits('n), bits(64)) -> bits('n + 64)
+val append_64 = pure {
+  ocaml: "append",
+  interpreter: "append",
+  _: "append_64"
+} : forall 'n. (bits('n), bits(64)) -> bits('n + 64)
 
 $ifdef _DEFAULT_DEC
 val bitvector_access = pure {

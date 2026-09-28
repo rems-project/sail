@@ -47,7 +47,7 @@
 $ifndef _ELF
 $define _ELF
 
-val elf_entry = {
+val elf_entry = pure {
   ocaml: "Elf_loader.elf_entry",
   interpreter: "Elf_loader.elf_entry",
   lem: "elf_entry",
@@ -55,7 +55,7 @@ val elf_entry = {
   cpp: "elf_entry"
 } : unit -> int
 
-val elf_tohost = {
+val elf_tohost = pure {
   ocaml: "Elf_loader.elf_tohost",
   interpreter: "Elf_loader.elf_tohost",
   lem: "elf_tohost",

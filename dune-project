@@ -33,7 +33,8 @@
   (synopsis "Helper tool for compiling Sail")
   (name sail_maker)
   (depends
-    (ocaml (>= 4.14.0))))
+    (ocaml (>= 4.14.0))
+    (yojson (>= 1.6.0))))
 
 (package
   (sites (share plugins))

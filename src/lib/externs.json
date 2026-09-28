@@ -1,0 +1,3225 @@
+{
+  "externs": [
+    {
+      "name": "add_atom",
+      "operator": false,
+      "pure": true,
+      "bindings": {
+        "ocaml": "add_int",
+        "interpreter": "add_int",
+        "lem": "integerAdd",
+        "coq": "Z.add",
+        "lean": "_lean_addi",
+        "_": "add_int"
+      },
+      "type": "forall 'n 'm. (int('n), int('m)) -> int('n + 'm)",
+      "ocaml_type": "Z.t -> Z.t -> Z.t",
+      "file": "lib/arith.sail",
+      "conditions": [
+        { "directive": "ifndef", "argument": "_ARITH", "branch": "then" }
+      ]
+    },
+    {
+      "name": "add_int",
+      "operator": false,
+      "pure": true,
+      "bindings": {
+        "ocaml": "add_int",
+        "interpreter": "add_int",
+        "lem": "integerAdd",
+        "coq": "Z.add",
+        "lean": "_lean_addi",
+        "_": "add_int"
+      },
+      "type": "(int, int) -> int",
+      "ocaml_type": "Z.t -> Z.t -> Z.t",
+      "file": "lib/arith.sail",
+      "conditions": [
+        { "directive": "ifndef", "argument": "_ARITH", "branch": "then" }
+      ]
+    },
+    {
+      "name": "sub_atom",
+      "operator": false,
+      "pure": true,
+      "bindings": {
+        "ocaml": "sub_int",
+        "interpreter": "sub_int",
+        "lem": "integerMinus",
+        "coq": "Z.sub",
+        "lean": "_lean_subi",
+        "_": "sub_int"
+      },
+      "type": "forall 'n 'm. (int('n), int('m)) -> int('n - 'm)",
+      "ocaml_type": "Z.t -> Z.t -> Z.t",
+      "file": "lib/arith.sail",
+      "conditions": [
+        { "directive": "ifndef", "argument": "_ARITH", "branch": "then" }
+      ]
+    },
+    {
+      "name": "sub_int",
+      "operator": false,
+      "pure": true,
+      "bindings": {
+        "ocaml": "sub_int",
+        "interpreter": "sub_int",
+        "lem": "integerMinus",
+        "coq": "Z.sub",
+        "lean": "_lean_subi",
+        "_": "sub_int"
+      },
+      "type": "(int, int) -> int",
+      "ocaml_type": "Z.t -> Z.t -> Z.t",
+      "file": "lib/arith.sail",
+      "conditions": [
+        { "directive": "ifndef", "argument": "_ARITH", "branch": "then" }
+      ]
+    },
+    {
+      "name": "sub_nat",
+      "operator": false,
+      "pure": true,
+      "bindings": {
+        "ocaml": "(fun x y -> let n = sub_int x y in if Z.leq n Z.zero then Z.zero else n)",
+        "lem": "integerMinus",
+        "coq": "Z.sub",
+        "lean": "_lean_subi",
+        "_": "sub_nat"
+      },
+      "type": "(nat, nat) -> nat",
+      "ocaml_type": "Z.t -> Z.t -> Z.t",
+      "file": "lib/arith.sail",
+      "conditions": [
+        { "directive": "ifndef", "argument": "_ARITH", "branch": "then" }
+      ]
+    },
+    {
+      "name": "negate_atom",
+      "operator": false,
+      "pure": true,
+      "bindings": {
+        "ocaml": "negate",
+        "interpreter": "negate",
+        "lem": "integerNegate",
+        "coq": "Z.opp",
+        "lean": "Neg.neg",
+        "_": "neg_int"
+      },
+      "type": "forall 'n. int('n) -> int(- 'n)",
+      "ocaml_type": "Z.t -> Z.t",
+      "file": "lib/arith.sail",
+      "conditions": [
+        { "directive": "ifndef", "argument": "_ARITH", "branch": "then" }
+      ]
+    },
+    {
+      "name": "negate_int",
+      "operator": false,
+      "pure": true,
+      "bindings": {
+        "ocaml": "negate",
+        "interpreter": "negate",
+        "lem": "integerNegate",
+        "coq": "Z.opp",
+        "lean": "Neg.neg",
+        "_": "neg_int"
+      },
+      "type": "int -> int",
+      "ocaml_type": "Z.t -> Z.t",
+      "file": "lib/arith.sail",
+      "conditions": [
+        { "directive": "ifndef", "argument": "_ARITH", "branch": "then" }
+      ]
+    },
+    {
+      "name": "mult_atom",
+      "operator": false,
+      "pure": true,
+      "bindings": {
+        "ocaml": "mult",
+        "interpreter": "mult",
+        "lem": "integerMult",
+        "coq": "Z.mul",
+        "lean": "_lean_muli",
+        "_": "mult_int"
+      },
+      "type": "forall 'n 'm. (int('n), int('m)) -> int('n * 'm)",
+      "ocaml_type": "Z.t -> Z.t -> Z.t",
+      "file": "lib/arith.sail",
+      "conditions": [
+        { "directive": "ifndef", "argument": "_ARITH", "branch": "then" }
+      ]
+    },
+    {
+      "name": "mult_int",
+      "operator": false,
+      "pure": true,
+      "bindings": {
+        "ocaml": "mult",
+        "interpreter": "mult",
+        "lem": "integerMult",
+        "coq": "Z.mul",
+        "lean": "_lean_muli",
+        "_": "mult_int"
+      },
+      "type": "(int, int) -> int",
+      "ocaml_type": "Z.t -> Z.t -> Z.t",
+      "file": "lib/arith.sail",
+      "conditions": [
+        { "directive": "ifndef", "argument": "_ARITH", "branch": "then" }
+      ]
+    },
+    {
+      "name": "print_int",
+      "operator": false,
+      "pure": true,
+      "bindings": { "_": "print_int" },
+      "type": "(string, int) -> unit",
+      "ocaml_type": "string -> Z.t -> unit",
+      "file": "lib/arith.sail",
+      "conditions": [
+        { "directive": "ifndef", "argument": "_ARITH", "branch": "then" },
+        {
+          "directive": "ifndef",
+          "argument": "PRINT_EFFECTS",
+          "branch": "then"
+        }
+      ]
+    },
+    {
+      "name": "prerr_int",
+      "operator": false,
+      "pure": true,
+      "bindings": { "_": "prerr_int" },
+      "type": "(string, int) -> unit",
+      "ocaml_type": "string -> Z.t -> unit",
+      "file": "lib/arith.sail",
+      "conditions": [
+        { "directive": "ifndef", "argument": "_ARITH", "branch": "then" },
+        {
+          "directive": "ifndef",
+          "argument": "PRINT_EFFECTS",
+          "branch": "then"
+        }
+      ]
+    },
+    {
+      "name": "print_int",
+      "operator": false,
+      "pure": false,
+      "bindings": {
+        "ocaml": "print_int",
+        "interpreter": "print_int",
+        "_": "print_int_effect"
+      },
+      "type": "(string, int) -> unit",
+      "ocaml_type": "string -> Z.t -> unit",
+      "file": "lib/arith.sail",
+      "conditions": [
+        { "directive": "ifndef", "argument": "_ARITH", "branch": "then" },
+        {
+          "directive": "ifndef",
+          "argument": "PRINT_EFFECTS",
+          "branch": "else"
+        }
+      ]
+    },
+    {
+      "name": "prerr_int",
+      "operator": false,
+      "pure": false,
+      "bindings": {
+        "ocaml": "prerr_int",
+        "interpreter": "prerr_int",
+        "_": "prerr_int_effect"
+      },
+      "type": "(string, int) -> unit",
+      "ocaml_type": "string -> Z.t -> unit",
+      "file": "lib/arith.sail",
+      "conditions": [
+        { "directive": "ifndef", "argument": "_ARITH", "branch": "then" },
+        {
+          "directive": "ifndef",
+          "argument": "PRINT_EFFECTS",
+          "branch": "else"
+        }
+      ]
+    },
+    {
+      "name": "pow2",
+      "operator": false,
+      "pure": true,
+      "bindings": { "lean": "_lean_pow2i", "_": "pow2" },
+      "type": "forall 'n, 'n >= 0. int('n) -> int(2 ^ 'n)",
+      "ocaml_type": "Z.t -> Z.t",
+      "file": "lib/arith.sail",
+      "conditions": [
+        { "directive": "ifndef", "argument": "_ARITH", "branch": "then" },
+        {
+          "directive": "ifdef",
+          "argument": "STRICT_EXPONENTIALS",
+          "branch": "then"
+        }
+      ]
+    },
+    {
+      "name": "pow2",
+      "operator": false,
+      "pure": true,
+      "bindings": { "lean": "_lean_pow2i", "_": "pow2" },
+      "type": "forall 'n. int('n) -> int(2 ^ 'n)",
+      "ocaml_type": "Z.t -> Z.t",
+      "file": "lib/arith.sail",
+      "conditions": [
+        { "directive": "ifndef", "argument": "_ARITH", "branch": "then" },
+        {
+          "directive": "ifdef",
+          "argument": "STRICT_EXPONENTIALS",
+          "branch": "else"
+        }
+      ]
+    },
+    {
+      "name": "_shl8",
+      "operator": false,
+      "pure": true,
+      "bindings": {
+        "c": "shl_mach_int",
+        "cpp": "shl_mach_int",
+        "lean": "Int.shiftl",
+        "_": "shl_int"
+      },
+      "type": "forall 'n, 0 <= 'n <= 3. (int(8), int('n)) -> {'m, 'm in {8, 16, 32, 64}. int('m)}",
+      "ocaml_type": "Z.t -> Z.t -> Z.t",
+      "file": "lib/arith.sail",
+      "conditions": [
+        { "directive": "ifndef", "argument": "_ARITH", "branch": "then" }
+      ]
+    },
+    {
+      "name": "_shl32",
+      "operator": false,
+      "pure": true,
+      "bindings": {
+        "c": "shl_mach_int",
+        "cpp": "shl_mach_int",
+        "lean": "Int.shiftl",
+        "_": "shl_int"
+      },
+      "type": "forall 'n, 'n in {0, 1}. (int(32), int('n)) -> {'m, 'm in {32, 64}. int('m)}",
+      "ocaml_type": "Z.t -> Z.t -> Z.t",
+      "file": "lib/arith.sail",
+      "conditions": [
+        { "directive": "ifndef", "argument": "_ARITH", "branch": "then" }
+      ]
+    },
+    {
+      "name": "_shl1",
+      "operator": false,
+      "pure": true,
+      "bindings": {
+        "c": "shl_mach_int",
+        "cpp": "shl_mach_int",
+        "lean": "Int.shiftl",
+        "_": "shl_int"
+      },
+      "type": "forall 'n, 0 <= 'n <= 3. (int(1), int('n)) -> {'m, 'm in {1, 2, 4, 8}. int('m)}",
+      "ocaml_type": "Z.t -> Z.t -> Z.t",
+      "file": "lib/arith.sail",
+      "conditions": [
+        { "directive": "ifndef", "argument": "_ARITH", "branch": "then" }
+      ]
+    },
+    {
+      "name": "_shl_int",
+      "operator": false,
+      "pure": true,
+      "bindings": { "lean": "Int.shiftl", "_": "shl_int" },
+      "type": "forall 'n, 0 <= 'n. (int, int('n)) -> int",
+      "ocaml_type": "Z.t -> Z.t -> Z.t",
+      "file": "lib/arith.sail",
+      "conditions": [
+        { "directive": "ifndef", "argument": "_ARITH", "branch": "then" }
+      ]
+    },
+    {
+      "name": "_shr32",
+      "operator": false,
+      "pure": true,
+      "bindings": {
+        "c": "shr_mach_int",
+        "cpp": "shr_mach_int",
+        "lean": "Int.shiftl",
+        "_": "shr_int"
+      },
+      "type": "forall 'n, 0 <= 'n <= 31. (int('n), int(1)) -> {'m, 0 <= 'm <= 15. int('m)}",
+      "ocaml_type": "Z.t -> Z.t -> Z.t",
+      "file": "lib/arith.sail",
+      "conditions": [
+        { "directive": "ifndef", "argument": "_ARITH", "branch": "then" }
+      ]
+    },
+    {
+      "name": "_shr_int",
+      "operator": false,
+      "pure": true,
+      "bindings": { "lean": "Int.shiftr", "_": "shr_int" },
+      "type": "forall 'n, 0 <= 'n. (int, int('n)) -> int",
+      "ocaml_type": "Z.t -> Z.t -> Z.t",
+      "file": "lib/arith.sail",
+      "conditions": [
+        { "directive": "ifndef", "argument": "_ARITH", "branch": "then" }
+      ]
+    },
+    {
+      "name": "tdiv_int",
+      "operator": false,
+      "pure": true,
+      "bindings": { "coq": "Z.quot", "lean": "Int.tdiv", "_": "tdiv_int" },
+      "type": "(int, int) -> int",
+      "ocaml_type": "Z.t -> Z.t -> Z.t",
+      "file": "lib/arith.sail",
+      "conditions": [
+        { "directive": "ifndef", "argument": "_ARITH", "branch": "then" }
+      ]
+    },
+    {
+      "name": "_tmod_int",
+      "operator": false,
+      "pure": true,
+      "bindings": { "coq": "Z.rem", "lean": "Int.tmod", "_": "tmod_int" },
+      "type": "(int, int) -> int",
+      "ocaml_type": "Z.t -> Z.t -> Z.t",
+      "file": "lib/arith.sail",
+      "conditions": [
+        { "directive": "ifndef", "argument": "_ARITH", "branch": "then" }
+      ]
+    },
+    {
+      "name": "_tmod_int_positive",
+      "operator": false,
+      "pure": true,
+      "bindings": {
+        "ocaml": "tmod_int",
+        "interpreter": "tmod_int",
+        "lem": "tmod_int",
+        "coq": "Z.rem",
+        "lean": "Int.tmod",
+        "_": "tmod_int"
+      },
+      "type": "forall 'n, 'n >= 1. (int, int('n)) -> nat",
+      "ocaml_type": "Z.t -> Z.t -> Z.t",
+      "file": "lib/arith.sail",
+      "conditions": [
+        { "directive": "ifndef", "argument": "_ARITH", "branch": "then" }
+      ]
+    },
+    {
+      "name": "abs_int_plain",
+      "operator": false,
+      "pure": true,
+      "bindings": {
+        "smt": "abs",
+        "ocaml": "abs_int",
+        "interpreter": "abs_int",
+        "lem": "integerAbs",
+        "coq": "Z.abs",
+        "lean": "Sail.Int.intAbs",
+        "_": "abs_int"
+      },
+      "type": "int -> int",
+      "ocaml_type": "Z.t -> Z.t",
+      "file": "lib/arith.sail",
+      "conditions": [
+        { "directive": "ifndef", "argument": "_ARITH", "branch": "then" }
+      ]
+    },
+    {
+      "name": "max_int",
+      "operator": false,
+      "pure": true,
+      "bindings": {
+        "lem": "integerMax",
+        "coq": "Z.max",
+        "lean": "Max.max",
+        "_": "max_int"
+      },
+      "type": "forall 'x 'y. (int('x), int('y)) -> {'z, ('x >= 'y & 'z == 'x) | ('x < 'y & 'z == 'y). int('z)}",
+      "ocaml_type": "Z.t -> Z.t -> Z.t",
+      "file": "lib/arith.sail",
+      "conditions": [
+        { "directive": "ifndef", "argument": "_ARITH", "branch": "then" }
+      ]
+    },
+    {
+      "name": "min_int",
+      "operator": false,
+      "pure": true,
+      "bindings": {
+        "lem": "integerMin",
+        "coq": "Z.min",
+        "lean": "Min.min",
+        "_": "min_int"
+      },
+      "type": "forall 'x 'y. (int('x), int('y)) -> {'z, ('x < 'y & 'z == 'x) | ('x >= 'y & 'z == 'y). int('z)}",
+      "ocaml_type": "Z.t -> Z.t -> Z.t",
+      "file": "lib/arith.sail",
+      "conditions": [
+        { "directive": "ifndef", "argument": "_ARITH", "branch": "then" }
+      ]
+    },
+    {
+      "name": "sail_instr_announce",
+      "operator": false,
+      "pure": false,
+      "bindings": { "_": "instr_announce" },
+      "type": "forall 'n, 'n > 0. bits('n) -> unit",
+      "ocaml_type": "bits -> unit",
+      "file": "lib/concurrency_interface/common.sail",
+      "conditions": [
+        {
+          "directive": "ifndef",
+          "argument": "_CONCURRENCY_INTERFACE_COMMON",
+          "branch": "then"
+        },
+        { "directive": "ifdef", "argument": "SYMBOLIC", "branch": "then" }
+      ]
+    },
+    {
+      "name": "sail_branch_announce",
+      "operator": false,
+      "pure": false,
+      "bindings": { "_": "branch_announce" },
+      "type": "forall 'addrsize, 'addrsize in {32, 64}. (int('addrsize), bits('addrsize)) -> unit",
+      "ocaml_type": "Z.t -> bits -> unit",
+      "file": "lib/concurrency_interface/common.sail",
+      "conditions": [
+        {
+          "directive": "ifndef",
+          "argument": "_CONCURRENCY_INTERFACE_COMMON",
+          "branch": "then"
+        },
+        { "directive": "ifdef", "argument": "SYMBOLIC", "branch": "then" }
+      ]
+    },
+    {
+      "name": "sail_end_cycle",
+      "operator": false,
+      "pure": false,
+      "bindings": { "_": "cycle_count" },
+      "type": "unit -> unit",
+      "ocaml_type": "unit -> unit",
+      "file": "lib/concurrency_interface/common.sail",
+      "conditions": [
+        {
+          "directive": "ifndef",
+          "argument": "_CONCURRENCY_INTERFACE_COMMON",
+          "branch": "then"
+        }
+      ]
+    },
+    {
+      "name": "sail_get_cycle_count",
+      "operator": false,
+      "pure": false,
+      "bindings": { "_": "get_cycle_count" },
+      "type": "unit -> int",
+      "ocaml_type": "unit -> Z.t",
+      "file": "lib/concurrency_interface/common.sail",
+      "conditions": [
+        {
+          "directive": "ifndef",
+          "argument": "_CONCURRENCY_INTERFACE_COMMON",
+          "branch": "then"
+        }
+      ]
+    },
+    {
+      "name": "sail_reset_registers",
+      "operator": false,
+      "pure": true,
+      "bindings": { "_": "reset_registers" },
+      "type": "unit -> unit",
+      "ocaml_type": "unit -> unit",
+      "file": "lib/concurrency_interface/common.sail",
+      "conditions": [
+        {
+          "directive": "ifndef",
+          "argument": "_CONCURRENCY_INTERFACE_COMMON",
+          "branch": "then"
+        },
+        { "directive": "ifdef", "argument": "SYMBOLIC", "branch": "then" }
+      ]
+    },
+    {
+      "name": "sail_synchronize_registers",
+      "operator": false,
+      "pure": true,
+      "bindings": { "_": "synchronize_registers" },
+      "type": "unit -> unit",
+      "ocaml_type": "unit -> unit",
+      "file": "lib/concurrency_interface/common.sail",
+      "conditions": [
+        {
+          "directive": "ifndef",
+          "argument": "_CONCURRENCY_INTERFACE_COMMON",
+          "branch": "then"
+        },
+        { "directive": "ifdef", "argument": "SYMBOLIC", "branch": "then" }
+      ]
+    },
+    {
+      "name": "sail_mark_register",
+      "operator": false,
+      "pure": true,
+      "bindings": { "_": "mark_register" },
+      "type": "forall ('a: Type). (register('a), string) -> unit",
+      "ocaml_type": "'a ref -> string -> unit",
+      "file": "lib/concurrency_interface/common.sail",
+      "conditions": [
+        {
+          "directive": "ifndef",
+          "argument": "_CONCURRENCY_INTERFACE_COMMON",
+          "branch": "then"
+        },
+        { "directive": "ifdef", "argument": "SYMBOLIC", "branch": "then" }
+      ]
+    },
+    {
+      "name": "sail_mark_register_pair",
+      "operator": false,
+      "pure": true,
+      "bindings": { "_": "mark_register_pair" },
+      "type": "forall ('a: Type) ('b: Type). (register('a), register('b), string) -> unit",
+      "ocaml_type": "'a ref -> 'b ref -> string -> unit",
+      "file": "lib/concurrency_interface/common.sail",
+      "conditions": [
+        {
+          "directive": "ifndef",
+          "argument": "_CONCURRENCY_INTERFACE_COMMON",
+          "branch": "then"
+        },
+        { "directive": "ifdef", "argument": "SYMBOLIC", "branch": "then" }
+      ]
+    },
+    {
+      "name": "__monomorphize",
+      "operator": false,
+      "pure": true,
+      "bindings": { "_": "monomorphize" },
+      "type": "forall 'n, 'n >= 0. bits('n) -> bits('n)",
+      "ocaml_type": "bits -> bits",
+      "file": "lib/concurrency_interface/common.sail",
+      "conditions": [
+        {
+          "directive": "ifndef",
+          "argument": "_CONCURRENCY_INTERFACE_COMMON",
+          "branch": "then"
+        },
+        { "directive": "ifdef", "argument": "SYMBOLIC", "branch": "then" }
+      ]
+    },
+    {
+      "name": "__monomorphize_int",
+      "operator": false,
+      "pure": true,
+      "bindings": { "_": "monomorphize" },
+      "type": "forall 'n. int('n) -> int('n)",
+      "ocaml_type": "Z.t -> Z.t",
+      "file": "lib/concurrency_interface/common.sail",
+      "conditions": [
+        {
+          "directive": "ifndef",
+          "argument": "_CONCURRENCY_INTERFACE_COMMON",
+          "branch": "then"
+        },
+        { "directive": "ifdef", "argument": "SYMBOLIC", "branch": "then" }
+      ]
+    },
+    {
+      "name": "__monomorphize_bool",
+      "operator": false,
+      "pure": true,
+      "bindings": { "_": "monomorphize" },
+      "type": "forall 'b. bool('b) -> bool('b)",
+      "ocaml_type": "bool -> bool",
+      "file": "lib/concurrency_interface/common.sail",
+      "conditions": [
+        {
+          "directive": "ifndef",
+          "argument": "_CONCURRENCY_INTERFACE_COMMON",
+          "branch": "then"
+        },
+        { "directive": "ifdef", "argument": "SYMBOLIC", "branch": "then" }
+      ]
+    },
+    {
+      "name": "read_mem#",
+      "operator": false,
+      "pure": false,
+      "bindings": { "_": "read_mem" },
+      "type": "forall ('a: Type) 'n 'addrsize, 'n >= 0 & 'addrsize in {32, 64}. ('a, int('addrsize), bits('addrsize), int('n)) -> bits(8 * 'n)",
+      "ocaml_type": "'a -> Z.t -> bits -> Z.t -> bits",
+      "file": "lib/concurrency_interface/emulator_memory.sail",
+      "conditions": [
+        {
+          "directive": "ifndef",
+          "argument": "_EMULATOR_MEMORY",
+          "branch": "then"
+        },
+        { "directive": "iftarget", "targets": [ "isla" ], "branch": "then" }
+      ]
+    },
+    {
+      "name": "__read_mem#",
+      "operator": false,
+      "pure": false,
+      "bindings": { "_": "emulator_read_mem" },
+      "type": "forall 'n 'addrsize, 'n >= 0 & 'addrsize in {32, 64}. (int('addrsize), bits('addrsize), int('n)) -> bits(8 * 'n)",
+      "ocaml_type": "Z.t -> bits -> Z.t -> bits",
+      "file": "lib/concurrency_interface/emulator_memory.sail",
+      "conditions": [
+        {
+          "directive": "ifndef",
+          "argument": "_EMULATOR_MEMORY",
+          "branch": "then"
+        },
+        { "directive": "iftarget", "targets": [ "isla" ], "branch": "else" },
+        {
+          "directive": "ifdef",
+          "argument": "_EMULATOR_MEMORY_PRIMOPS",
+          "branch": "then"
+        }
+      ]
+    },
+    {
+      "name": "read_mem_ifetch#",
+      "operator": false,
+      "pure": false,
+      "bindings": { "_": "read_mem_ifetch" },
+      "type": "forall ('a: Type) 'n 'addrsize, 'n >= 0 & 'addrsize in {32, 64}. ('a, int('addrsize), bits('addrsize), int('n)) -> bits(8 * 'n)",
+      "ocaml_type": "'a -> Z.t -> bits -> Z.t -> bits",
+      "file": "lib/concurrency_interface/emulator_memory.sail",
+      "conditions": [
+        {
+          "directive": "ifndef",
+          "argument": "_EMULATOR_MEMORY",
+          "branch": "then"
+        },
+        { "directive": "iftarget", "targets": [ "isla" ], "branch": "then" }
+      ]
+    },
+    {
+      "name": "__read_mem_ifetch#",
+      "operator": false,
+      "pure": false,
+      "bindings": { "_": "emulator_read_mem_ifetch" },
+      "type": "forall 'n 'addrsize, 'n >= 0 & 'addrsize in {32, 64}. (int('addrsize), bits('addrsize), int('n)) -> bits(8 * 'n)",
+      "ocaml_type": "Z.t -> bits -> Z.t -> bits",
+      "file": "lib/concurrency_interface/emulator_memory.sail",
+      "conditions": [
+        {
+          "directive": "ifndef",
+          "argument": "_EMULATOR_MEMORY",
+          "branch": "then"
+        },
+        { "directive": "iftarget", "targets": [ "isla" ], "branch": "else" },
+        {
+          "directive": "ifdef",
+          "argument": "_EMULATOR_MEMORY_PRIMOPS",
+          "branch": "then"
+        }
+      ]
+    },
+    {
+      "name": "read_mem_exclusive#",
+      "operator": false,
+      "pure": false,
+      "bindings": { "_": "read_mem_exclusive" },
+      "type": "forall ('a: Type) 'n 'addrsize, 'n >= 0 & 'addrsize in {32, 64}. ('a, int('addrsize), bits('addrsize), int('n)) -> bits(8 * 'n)",
+      "ocaml_type": "'a -> Z.t -> bits -> Z.t -> bits",
+      "file": "lib/concurrency_interface/emulator_memory.sail",
+      "conditions": [
+        {
+          "directive": "ifndef",
+          "argument": "_EMULATOR_MEMORY",
+          "branch": "then"
+        },
+        { "directive": "iftarget", "targets": [ "isla" ], "branch": "then" }
+      ]
+    },
+    {
+      "name": "__read_mem_exclusive#",
+      "operator": false,
+      "pure": false,
+      "bindings": { "_": "emulator_read_mem_exclusive" },
+      "type": "forall 'n 'addrsize, 'n >= 0 & 'addrsize in {32, 64}. (int('addrsize), bits('addrsize), int('n)) -> bits(8 * 'n)",
+      "ocaml_type": "Z.t -> bits -> Z.t -> bits",
+      "file": "lib/concurrency_interface/emulator_memory.sail",
+      "conditions": [
+        {
+          "directive": "ifndef",
+          "argument": "_EMULATOR_MEMORY",
+          "branch": "then"
+        },
+        { "directive": "iftarget", "targets": [ "isla" ], "branch": "else" },
+        {
+          "directive": "ifdef",
+          "argument": "_EMULATOR_MEMORY_PRIMOPS",
+          "branch": "then"
+        }
+      ]
+    },
+    {
+      "name": "write_mem#",
+      "operator": false,
+      "pure": false,
+      "bindings": { "_": "write_mem" },
+      "type": "forall ('a: Type) 'n 'addrsize, 'n > 0 & 'addrsize in {32, 64}. ('a, int('addrsize), bits('addrsize), int('n), bits(8 * 'n)) -> bool",
+      "ocaml_type": "'a -> Z.t -> bits -> Z.t -> bits -> bool",
+      "file": "lib/concurrency_interface/emulator_memory.sail",
+      "conditions": [
+        {
+          "directive": "ifndef",
+          "argument": "_EMULATOR_MEMORY",
+          "branch": "then"
+        },
+        { "directive": "iftarget", "targets": [ "isla" ], "branch": "then" }
+      ]
+    },
+    {
+      "name": "__write_mem#",
+      "operator": false,
+      "pure": false,
+      "bindings": { "_": "emulator_write_mem" },
+      "type": "forall 'n 'addrsize, 'n > 0 & 'addrsize in {32, 64}. (int('addrsize), bits('addrsize), int('n), bits(8 * 'n)) -> bool",
+      "ocaml_type": "Z.t -> bits -> Z.t -> bits -> bool",
+      "file": "lib/concurrency_interface/emulator_memory.sail",
+      "conditions": [
+        {
+          "directive": "ifndef",
+          "argument": "_EMULATOR_MEMORY",
+          "branch": "then"
+        },
+        { "directive": "iftarget", "targets": [ "isla" ], "branch": "else" },
+        {
+          "directive": "ifdef",
+          "argument": "_EMULATOR_MEMORY_PRIMOPS",
+          "branch": "then"
+        }
+      ]
+    },
+    {
+      "name": "write_mem_exclusive#",
+      "operator": false,
+      "pure": false,
+      "bindings": { "_": "write_mem_exclusive" },
+      "type": "forall ('a: Type) 'n 'addrsize, 'n > 0 & 'addrsize in {32, 64}. ('a, int('addrsize), bits('addrsize), int('n), bits(8 * 'n)) -> bool",
+      "ocaml_type": "'a -> Z.t -> bits -> Z.t -> bits -> bool",
+      "file": "lib/concurrency_interface/emulator_memory.sail",
+      "conditions": [
+        {
+          "directive": "ifndef",
+          "argument": "_EMULATOR_MEMORY",
+          "branch": "then"
+        },
+        { "directive": "iftarget", "targets": [ "isla" ], "branch": "then" }
+      ]
+    },
+    {
+      "name": "__write_mem_exclusive#",
+      "operator": false,
+      "pure": false,
+      "bindings": { "_": "emulator_write_mem_exclusive" },
+      "type": "forall 'n 'addrsize, 'n > 0 & 'addrsize in {32, 64}. (int('addrsize), bits('addrsize), int('n), bits(8 * 'n)) -> bool",
+      "ocaml_type": "Z.t -> bits -> Z.t -> bits -> bool",
+      "file": "lib/concurrency_interface/emulator_memory.sail",
+      "conditions": [
+        {
+          "directive": "ifndef",
+          "argument": "_EMULATOR_MEMORY",
+          "branch": "then"
+        },
+        { "directive": "iftarget", "targets": [ "isla" ], "branch": "else" },
+        {
+          "directive": "ifdef",
+          "argument": "_EMULATOR_MEMORY_PRIMOPS",
+          "branch": "then"
+        }
+      ]
+    },
+    {
+      "name": "read_tag#",
+      "operator": false,
+      "pure": false,
+      "bindings": { "_": "emulator_read_tag" },
+      "type": "forall 'addrsize, 'addrsize in {32, 64}. (int('addrsize), bits('addrsize)) -> bool",
+      "ocaml_type": "Z.t -> bits -> bool",
+      "file": "lib/concurrency_interface/emulator_memory.sail",
+      "conditions": [
+        {
+          "directive": "ifndef",
+          "argument": "_EMULATOR_MEMORY",
+          "branch": "then"
+        }
+      ]
+    },
+    {
+      "name": "write_tag#",
+      "operator": false,
+      "pure": false,
+      "bindings": { "_": "emulator_write_tag" },
+      "type": "forall 'addrsize, 'addrsize in {32, 64}. (int('addrsize), bits('addrsize), bool) -> unit",
+      "ocaml_type": "Z.t -> bits -> bool -> unit",
+      "file": "lib/concurrency_interface/emulator_memory.sail",
+      "conditions": [
+        {
+          "directive": "ifndef",
+          "argument": "_EMULATOR_MEMORY",
+          "branch": "then"
+        }
+      ]
+    },
+    {
+      "name": "sail_address_announce",
+      "operator": false,
+      "pure": false,
+      "bindings": { "_": "address_announce" },
+      "type": "forall 'addrsize, 'addrsize in {32, 64}. (int('addrsize), bits('addrsize)) -> unit",
+      "ocaml_type": "Z.t -> bits -> unit",
+      "file": "lib/concurrency_interface/read_write_v1.sail",
+      "conditions": [
+        {
+          "directive": "ifndef",
+          "argument": "_CONCURRENCY_INTERFACE_READ_WRITE_V1",
+          "branch": "then"
+        },
+        { "directive": "iftarget", "targets": [ "isla" ], "branch": "then" }
+      ]
+    },
+    {
+      "name": "sail_address_announce",
+      "operator": false,
+      "pure": false,
+      "bindings": { "_": "address_announce" },
+      "type": "forall 'addrsize, 'addrsize in {32, 64}. (int('addrsize), bits('addrsize)) -> unit",
+      "ocaml_type": "Z.t -> bits -> unit",
+      "file": "lib/concurrency_interface/read_write_v2.sail",
+      "conditions": [
+        {
+          "directive": "ifndef",
+          "argument": "_CONCURRENCY_INTERFACE_READ_WRITE_V2",
+          "branch": "then"
+        },
+        { "directive": "iftarget", "targets": [ "isla" ], "branch": "then" }
+      ]
+    },
+    {
+      "name": "__id",
+      "operator": false,
+      "pure": true,
+      "bindings": { "systemverilog": "id" },
+      "type": "forall 'n. int('n) -> int('n)",
+      "ocaml_type": "Z.t -> Z.t",
+      "file": "lib/core/corelib.sail",
+      "conditions": []
+    },
+    {
+      "name": "__deref",
+      "operator": false,
+      "pure": false,
+      "bindings": { "_": "reg_deref" },
+      "type": "forall ('a : Type). register('a) -> 'a",
+      "ocaml_type": "'a ref -> 'a",
+      "file": "lib/core/corelib.sail",
+      "conditions": []
+    },
+    {
+      "name": "lteq_int",
+      "operator": false,
+      "pure": true,
+      "bindings": { "coq": "Z.leb", "lean": "_lean_le", "_": "lteq" },
+      "type": "forall 'n 'm. (int('n), int('m)) -> bool('n <= 'm)",
+      "ocaml_type": "Z.t -> Z.t -> bool",
+      "file": "lib/core/corelib.sail",
+      "conditions": []
+    },
+    {
+      "name": "gteq_int",
+      "operator": false,
+      "pure": true,
+      "bindings": { "coq": "Z.geb", "lean": "_lean_ge", "_": "gteq" },
+      "type": "forall 'n 'm. (int('n), int('m)) -> bool('n >= 'm)",
+      "ocaml_type": "Z.t -> Z.t -> bool",
+      "file": "lib/core/corelib.sail",
+      "conditions": []
+    },
+    {
+      "name": "lt_int",
+      "operator": false,
+      "pure": true,
+      "bindings": { "coq": "Z.ltb", "lean": "_lean_lt", "_": "lt" },
+      "type": "forall 'n 'm. (int('n), int('m)) -> bool('n < 'm)",
+      "ocaml_type": "Z.t -> Z.t -> bool",
+      "file": "lib/core/corelib.sail",
+      "conditions": []
+    },
+    {
+      "name": "gt_int",
+      "operator": false,
+      "pure": true,
+      "bindings": { "coq": "Z.gtb", "lean": "_lean_gt", "_": "gt" },
+      "type": "forall 'n 'm. (int('n), int('m)) -> bool('n > 'm)",
+      "ocaml_type": "Z.t -> Z.t -> bool",
+      "file": "lib/core/corelib.sail",
+      "conditions": []
+    },
+    {
+      "name": "internal_pick",
+      "operator": false,
+      "pure": false,
+      "bindings": { "_": "internal_pick" },
+      "type": "forall ('a:Type). list('a) -> 'a",
+      "ocaml_type": "'a list -> 'a",
+      "file": "lib/core/corelib.sail",
+      "conditions": []
+    },
+    {
+      "name": "undefined_bool",
+      "operator": false,
+      "pure": false,
+      "bindings": { "_": "undefined_bool" },
+      "type": "unit -> bool",
+      "ocaml_type": "unit -> bool",
+      "file": "lib/core/corelib.sail",
+      "conditions": []
+    },
+    {
+      "name": "undefined_bit",
+      "operator": false,
+      "pure": false,
+      "bindings": { "_": "undefined_bit" },
+      "type": "unit -> bitvector(1)",
+      "ocaml_type": "unit -> bits",
+      "file": "lib/core/corelib.sail",
+      "conditions": []
+    },
+    {
+      "name": "undefined_int",
+      "operator": false,
+      "pure": false,
+      "bindings": { "_": "undefined_int" },
+      "type": "unit -> int",
+      "ocaml_type": "unit -> Z.t",
+      "file": "lib/core/corelib.sail",
+      "conditions": []
+    },
+    {
+      "name": "undefined_nat",
+      "operator": false,
+      "pure": false,
+      "bindings": { "_": "undefined_nat" },
+      "type": "unit -> nat",
+      "ocaml_type": "unit -> Z.t",
+      "file": "lib/core/corelib.sail",
+      "conditions": []
+    },
+    {
+      "name": "undefined_real",
+      "operator": false,
+      "pure": false,
+      "bindings": { "_": "undefined_real" },
+      "type": "unit -> real",
+      "ocaml_type": "unit -> Q.t",
+      "file": "lib/core/corelib.sail",
+      "conditions": []
+    },
+    {
+      "name": "undefined_string",
+      "operator": false,
+      "pure": false,
+      "bindings": { "_": "undefined_string" },
+      "type": "unit -> string",
+      "ocaml_type": "unit -> string",
+      "file": "lib/core/corelib.sail",
+      "conditions": []
+    },
+    {
+      "name": "undefined_list",
+      "operator": false,
+      "pure": false,
+      "bindings": { "_": "undefined_list" },
+      "type": "forall 'a. 'a -> list('a)",
+      "ocaml_type": "'a -> 'a list",
+      "file": "lib/core/corelib.sail",
+      "conditions": []
+    },
+    {
+      "name": "undefined_range",
+      "operator": false,
+      "pure": false,
+      "bindings": { "_": "undefined_range" },
+      "type": "forall 'n 'm. (int('n), int('m)) -> range('n, 'm)",
+      "ocaml_type": "Z.t -> Z.t -> Z.t",
+      "file": "lib/core/corelib.sail",
+      "conditions": []
+    },
+    {
+      "name": "undefined_vector",
+      "operator": false,
+      "pure": false,
+      "bindings": { "_": "undefined_vector" },
+      "type": "forall 'n 'a. (int('n), 'a) -> vector('n, 'a)",
+      "ocaml_type": "Z.t -> 'a -> 'a list",
+      "file": "lib/core/corelib.sail",
+      "conditions": []
+    },
+    {
+      "name": "undefined_bitvector",
+      "operator": false,
+      "pure": false,
+      "bindings": { "_": "undefined_bitvector" },
+      "type": "forall 'n. int('n) -> bitvector('n)",
+      "ocaml_type": "Z.t -> bits",
+      "file": "lib/core/corelib.sail",
+      "conditions": []
+    },
+    {
+      "name": "undefined_unit",
+      "operator": false,
+      "pure": false,
+      "bindings": { "_": "undefined_unit" },
+      "type": "unit -> unit",
+      "ocaml_type": "unit -> unit",
+      "file": "lib/core/corelib.sail",
+      "conditions": []
+    },
+    {
+      "name": "parse_dec_bits",
+      "operator": false,
+      "pure": true,
+      "bindings": { "_": "parse_dec_bits" },
+      "type": "forall 'n, 'n > 0. (int('n), string) -> bits('n)",
+      "ocaml_type": "Z.t -> string -> bits",
+      "file": "lib/dec_bits.sail",
+      "conditions": [
+        { "directive": "ifndef", "argument": "_DEC_BITS", "branch": "then" }
+      ]
+    },
+    {
+      "name": "valid_dec_bits",
+      "operator": false,
+      "pure": true,
+      "bindings": { "_": "valid_dec_bits" },
+      "type": "forall 'n, 'n > 0. (int('n), string) -> bool",
+      "ocaml_type": "Z.t -> string -> bool",
+      "file": "lib/dec_bits.sail",
+      "conditions": [
+        { "directive": "ifndef", "argument": "_DEC_BITS", "branch": "then" }
+      ]
+    },
+    {
+      "name": "elf_entry",
+      "operator": false,
+      "pure": true,
+      "bindings": {
+        "ocaml": "Elf_loader.elf_entry",
+        "interpreter": "Elf_loader.elf_entry",
+        "lem": "elf_entry",
+        "c": "elf_entry",
+        "cpp": "elf_entry"
+      },
+      "type": "unit -> int",
+      "ocaml_type": "unit -> Z.t",
+      "file": "lib/elf.sail",
+      "conditions": [
+        { "directive": "ifndef", "argument": "_ELF", "branch": "then" }
+      ]
+    },
+    {
+      "name": "elf_tohost",
+      "operator": false,
+      "pure": true,
+      "bindings": {
+        "ocaml": "Elf_loader.elf_tohost",
+        "interpreter": "Elf_loader.elf_tohost",
+        "lem": "elf_tohost",
+        "c": "elf_tohost",
+        "cpp": "elf_tohost"
+      },
+      "type": "unit -> int",
+      "ocaml_type": "unit -> Z.t",
+      "file": "lib/elf.sail",
+      "conditions": [
+        { "directive": "ifndef", "argument": "_ELF", "branch": "then" }
+      ]
+    },
+    {
+      "name": "eq_unit",
+      "operator": false,
+      "pure": true,
+      "bindings": { "lean": "_lean_beq", "_": "eq_unit" },
+      "type": "(unit, unit) -> bool(true)",
+      "ocaml_type": "unit -> unit -> bool",
+      "file": "lib/flow.sail",
+      "conditions": [
+        { "directive": "ifndef", "argument": "_FLOW", "branch": "then" }
+      ]
+    },
+    {
+      "name": "not_bool",
+      "operator": false,
+      "pure": true,
+      "bindings": { "coq": "negb", "lean": "_lean_not", "_": "not" },
+      "type": "forall ('p : Bool). bool('p) -> bool(not('p))",
+      "ocaml_type": "bool -> bool",
+      "file": "lib/flow.sail",
+      "conditions": [
+        { "directive": "ifndef", "argument": "_FLOW", "branch": "then" }
+      ]
+    },
+    {
+      "name": "and_bool",
+      "operator": false,
+      "pure": true,
+      "bindings": { "coq": "andb", "lean": "_lean_and", "_": "and_bool" },
+      "type": "forall ('p : Bool) ('q : Bool). (bool('p), bool('q)) -> bool('p & 'q)",
+      "ocaml_type": "bool -> bool -> bool",
+      "file": "lib/flow.sail",
+      "conditions": [
+        { "directive": "ifndef", "argument": "_FLOW", "branch": "then" }
+      ]
+    },
+    {
+      "name": "and_bool_no_flow",
+      "operator": false,
+      "pure": true,
+      "bindings": { "coq": "andb", "lean": "_lean_and", "_": "and_bool" },
+      "type": "(bool, bool) -> bool",
+      "ocaml_type": "bool -> bool -> bool",
+      "file": "lib/flow.sail",
+      "conditions": [
+        { "directive": "ifndef", "argument": "_FLOW", "branch": "then" }
+      ]
+    },
+    {
+      "name": "or_bool",
+      "operator": false,
+      "pure": true,
+      "bindings": { "coq": "orb", "lean": "_lean_or", "_": "or_bool" },
+      "type": "forall ('p : Bool) ('q : Bool). (bool('p), bool('q)) -> bool('p | 'q)",
+      "ocaml_type": "bool -> bool -> bool",
+      "file": "lib/flow.sail",
+      "conditions": [
+        { "directive": "ifndef", "argument": "_FLOW", "branch": "then" }
+      ]
+    },
+    {
+      "name": "eq_int",
+      "operator": false,
+      "pure": true,
+      "bindings": {
+        "ocaml": "eq_int",
+        "interpreter": "eq_int",
+        "lem": "eq",
+        "coq": "Z.eqb",
+        "lean": "_lean_beq",
+        "_": "eq_int"
+      },
+      "type": "forall 'n 'm. (int('n), int('m)) -> bool('n == 'm)",
+      "ocaml_type": "Z.t -> Z.t -> bool",
+      "file": "lib/flow.sail",
+      "conditions": [
+        { "directive": "ifndef", "argument": "_FLOW", "branch": "then" }
+      ]
+    },
+    {
+      "name": "eq_bool",
+      "operator": false,
+      "pure": true,
+      "bindings": {
+        "ocaml": "eq_bool",
+        "interpreter": "eq_bool",
+        "lem": "eq",
+        "coq": "Bool.eqb",
+        "lean": "_lean_beq",
+        "_": "eq_bool"
+      },
+      "type": "(bool, bool) -> bool",
+      "ocaml_type": "bool -> bool -> bool",
+      "file": "lib/flow.sail",
+      "conditions": [
+        { "directive": "ifndef", "argument": "_FLOW", "branch": "then" }
+      ]
+    },
+    {
+      "name": "neq_int",
+      "operator": false,
+      "pure": true,
+      "bindings": { "lem": "neq", "lean": "_lean_bne" },
+      "type": "forall 'n 'm. (int('n), int('m)) -> bool('n != 'm)",
+      "ocaml_type": "Z.t -> Z.t -> bool",
+      "file": "lib/flow.sail",
+      "conditions": [
+        { "directive": "ifndef", "argument": "_FLOW", "branch": "then" }
+      ]
+    },
+    {
+      "name": "eq_anything",
+      "operator": false,
+      "pure": true,
+      "bindings": {
+        "ocaml": "(fun x y -> x = y)",
+        "lem": "eq",
+        "coq": "generic_eq",
+        "lean": "_lean_beq",
+        "_": "eq_anything"
+      },
+      "type": "forall ('a : Type). ('a, 'a) -> bool",
+      "ocaml_type": "'a -> 'a -> bool",
+      "file": "lib/generic_equality.sail",
+      "conditions": [
+        {
+          "directive": "ifndef",
+          "argument": "_GENERIC_EQUALITY",
+          "branch": "then"
+        }
+      ]
+    },
+    {
+      "name": "neq_anything",
+      "operator": false,
+      "pure": true,
+      "bindings": { "lem": "neq", "lean": "bne", "coq": "generic_neq" },
+      "type": "forall ('a : Type). ('a, 'a) -> bool",
+      "ocaml_type": "'a -> 'a -> bool",
+      "file": "lib/generic_equality.sail",
+      "conditions": [
+        {
+          "directive": "ifndef",
+          "argument": "_GENERIC_EQUALITY",
+          "branch": "then"
+        }
+      ]
+    },
+    {
+      "name": "parse_hex_bits",
+      "operator": false,
+      "pure": true,
+      "bindings": { "_": "parse_hex_bits" },
+      "type": "forall 'n, 'n > 0. (int('n), string) -> bits('n)",
+      "ocaml_type": "Z.t -> string -> bits",
+      "file": "lib/hex_bits.sail",
+      "conditions": [
+        { "directive": "ifndef", "argument": "_HEX_BITS", "branch": "then" }
+      ]
+    },
+    {
+      "name": "valid_hex_bits",
+      "operator": false,
+      "pure": true,
+      "bindings": { "_": "valid_hex_bits" },
+      "type": "forall 'n, 'n > 0. (int('n), string) -> bool",
+      "ocaml_type": "Z.t -> string -> bool",
+      "file": "lib/hex_bits.sail",
+      "conditions": [
+        { "directive": "ifndef", "argument": "_HEX_BITS", "branch": "then" }
+      ]
+    },
+    {
+      "name": "isla_reset_registers",
+      "operator": false,
+      "pure": true,
+      "bindings": { "_": "reset_registers" },
+      "type": "unit -> unit",
+      "ocaml_type": "unit -> unit",
+      "file": "lib/isla.sail",
+      "conditions": [
+        { "directive": "ifndef", "argument": "_ISLA", "branch": "then" },
+        { "directive": "ifdef", "argument": "SYMBOLIC", "branch": "then" }
+      ]
+    },
+    {
+      "name": "isla_log_event",
+      "operator": false,
+      "pure": true,
+      "bindings": { "_": "log_event" },
+      "type": "forall ('a: Type). (string, 'a) -> unit",
+      "ocaml_type": "string -> 'a -> unit",
+      "file": "lib/isla.sail",
+      "conditions": [
+        { "directive": "ifndef", "argument": "_ISLA", "branch": "then" },
+        { "directive": "ifdef", "argument": "SYMBOLIC", "branch": "then" }
+      ]
+    },
+    {
+      "name": "isla_synchronize_registers",
+      "operator": false,
+      "pure": true,
+      "bindings": { "_": "synchronize_registers" },
+      "type": "unit -> unit",
+      "ocaml_type": "unit -> unit",
+      "file": "lib/isla.sail",
+      "conditions": [
+        { "directive": "ifndef", "argument": "_ISLA", "branch": "then" },
+        { "directive": "ifdef", "argument": "SYMBOLIC", "branch": "then" }
+      ]
+    },
+    {
+      "name": "isla_mark_register",
+      "operator": false,
+      "pure": true,
+      "bindings": { "_": "mark_register" },
+      "type": "forall ('a: Type). (register('a), string) -> unit",
+      "ocaml_type": "'a ref -> string -> unit",
+      "file": "lib/isla.sail",
+      "conditions": [
+        { "directive": "ifndef", "argument": "_ISLA", "branch": "then" },
+        { "directive": "ifdef", "argument": "SYMBOLIC", "branch": "then" }
+      ]
+    },
+    {
+      "name": "isla_mark_register_pair",
+      "operator": false,
+      "pure": true,
+      "bindings": { "_": "mark_register_pair" },
+      "type": "forall ('a: Type) ('b: Type). (register('a), register('b), string) -> unit",
+      "ocaml_type": "'a ref -> 'b ref -> string -> unit",
+      "file": "lib/isla.sail",
+      "conditions": [
+        { "directive": "ifndef", "argument": "_ISLA", "branch": "then" },
+        { "directive": "ifdef", "argument": "SYMBOLIC", "branch": "then" }
+      ]
+    },
+    {
+      "name": "isla_monomorphize",
+      "operator": false,
+      "pure": true,
+      "bindings": { "_": "monomorphize" },
+      "type": "forall 'n, 'n >= 0. bits('n) -> bits('n)",
+      "ocaml_type": "bits -> bits",
+      "file": "lib/isla.sail",
+      "conditions": [
+        { "directive": "ifndef", "argument": "_ISLA", "branch": "then" },
+        { "directive": "ifdef", "argument": "SYMBOLIC", "branch": "then" }
+      ]
+    },
+    {
+      "name": "isla_interrupt_pending",
+      "operator": false,
+      "pure": true,
+      "bindings": { "_": "interrupt_pending" },
+      "type": "unit -> bool",
+      "ocaml_type": "unit -> bool",
+      "file": "lib/isla.sail",
+      "conditions": [
+        { "directive": "ifndef", "argument": "_ISLA", "branch": "then" },
+        { "directive": "ifdef", "argument": "SYMBOLIC", "branch": "then" }
+      ]
+    },
+    {
+      "name": "string_take",
+      "operator": false,
+      "pure": true,
+      "bindings": { "lean": "String.takeStr", "_": "string_take" },
+      "type": "(string, nat) -> string",
+      "ocaml_type": "string -> Z.t -> string",
+      "file": "lib/mapping.sail",
+      "conditions": [
+        { "directive": "ifndef", "argument": "_MAPPING", "branch": "then" }
+      ]
+    },
+    {
+      "name": "string_drop",
+      "operator": false,
+      "pure": true,
+      "bindings": { "lean": "String.dropStr", "_": "string_drop" },
+      "type": "(string, nat) -> string",
+      "ocaml_type": "string -> Z.t -> string",
+      "file": "lib/mapping.sail",
+      "conditions": [
+        { "directive": "ifndef", "argument": "_MAPPING", "branch": "then" }
+      ]
+    },
+    {
+      "name": "string_length",
+      "operator": false,
+      "pure": true,
+      "bindings": { "lean": "String.length", "_": "string_length" },
+      "type": "string -> nat",
+      "ocaml_type": "string -> Z.t",
+      "file": "lib/mapping.sail",
+      "conditions": [
+        { "directive": "ifndef", "argument": "_MAPPING", "branch": "then" }
+      ]
+    },
+    {
+      "name": "string_append",
+      "operator": false,
+      "pure": true,
+      "bindings": {
+        "coq": "String.append",
+        "lean": "String.append",
+        "c": "concat_str",
+        "cpp": "concat_str",
+        "_": "string_append"
+      },
+      "type": "(string, string) -> string",
+      "ocaml_type": "string -> string -> string",
+      "file": "lib/mapping.sail",
+      "conditions": [
+        { "directive": "ifndef", "argument": "_MAPPING", "branch": "then" }
+      ]
+    },
+    {
+      "name": "string_startswith",
+      "operator": false,
+      "pure": true,
+      "bindings": { "lean": "String.startsWith", "_": "string_startswith" },
+      "type": "(string, string) -> bool",
+      "ocaml_type": "string -> string -> bool",
+      "file": "lib/mapping.sail",
+      "conditions": [
+        { "directive": "ifndef", "argument": "_MAPPING", "branch": "then" }
+      ]
+    },
+    {
+      "name": "n_leading_spaces",
+      "operator": false,
+      "pure": true,
+      "bindings": {
+        "coq": "n_leading_spaces_Z",
+        "lean": "String.leadingSpaces"
+      },
+      "type": "string -> nat",
+      "ocaml_type": "string -> Z.t",
+      "file": "lib/mapping.sail",
+      "conditions": [
+        { "directive": "ifndef", "argument": "_MAPPING", "branch": "then" }
+      ]
+    },
+    {
+      "name": "extzv",
+      "operator": false,
+      "pure": true,
+      "bindings": { "lem": "extz_vec" },
+      "type": "forall 'n 'm, 'm >= 0. (implicit('m), bitvector('n, dec)) -> bitvector('m, dec)",
+      "ocaml_type": "Z.t -> bits -> bits",
+      "file": "lib/mono_rewrites.sail",
+      "conditions": [
+        {
+          "directive": "ifndef",
+          "argument": "_MONO_REWRITES",
+          "branch": "then"
+        }
+      ]
+    },
+    {
+      "name": "extsv",
+      "operator": false,
+      "pure": true,
+      "bindings": { "lem": "exts_vec" },
+      "type": "forall 'n 'm, 'm >= 0. (implicit('m), bitvector('n, dec)) -> bitvector('m, dec)",
+      "ocaml_type": "Z.t -> bits -> bits",
+      "file": "lib/mono_rewrites.sail",
+      "conditions": [
+        {
+          "directive": "ifndef",
+          "argument": "_MONO_REWRITES",
+          "branch": "then"
+        }
+      ]
+    },
+    {
+      "name": "bitvector_cast_in",
+      "operator": false,
+      "pure": true,
+      "bindings": { "_": "zeroExtend" },
+      "type": "forall 'n. bits('n) -> bits('n)",
+      "ocaml_type": "bits -> bits",
+      "file": "lib/mono_rewrites.sail",
+      "conditions": [
+        {
+          "directive": "ifndef",
+          "argument": "_MONO_REWRITES",
+          "branch": "then"
+        }
+      ]
+    },
+    {
+      "name": "bitvector_cast_out",
+      "operator": false,
+      "pure": true,
+      "bindings": { "_": "zeroExtend" },
+      "type": "forall 'n. bits('n) -> bits('n)",
+      "ocaml_type": "bits -> bits",
+      "file": "lib/mono_rewrites.sail",
+      "conditions": [
+        {
+          "directive": "ifndef",
+          "argument": "_MONO_REWRITES",
+          "branch": "then"
+        }
+      ]
+    },
+    {
+      "name": "string_of_bits_subrange",
+      "operator": false,
+      "pure": true,
+      "bindings": { "_": "string_of_bits_subrange" },
+      "type": "forall 'n. (bits('n), int, int) -> string",
+      "ocaml_type": "bits -> Z.t -> Z.t -> string",
+      "file": "lib/mono_rewrites.sail",
+      "conditions": [
+        {
+          "directive": "ifndef",
+          "argument": "_MONO_REWRITES",
+          "branch": "then"
+        }
+      ]
+    },
+    {
+      "name": "_builtin_unsigned",
+      "operator": false,
+      "pure": true,
+      "bindings": {
+        "ocaml": "uint",
+        "lem": "uint",
+        "interpreter": "uint",
+        "c": "sail_unsigned",
+        "cpp": "sail_unsigned",
+        "systemverilog": "sail_unsigned",
+        "coq": "uint",
+        "lean": "BitVec.toNat"
+      },
+      "type": "forall 'n. bits('n) -> {'m, 0 <= 'm < 2 ^ 'n. int('m)}",
+      "ocaml_type": "bits -> Z.t",
+      "file": "lib/mono_rewrites.sail",
+      "conditions": [
+        {
+          "directive": "ifndef",
+          "argument": "_MONO_REWRITES",
+          "branch": "then"
+        }
+      ]
+    },
+    {
+      "name": "_builtin_mod_nat",
+      "operator": false,
+      "pure": true,
+      "bindings": {
+        "smt": "mod",
+        "ocaml": "modulus",
+        "interpreter": "modulus",
+        "lem": "integerMod",
+        "c": "tmod_int",
+        "cpp": "tmod_int",
+        "systemverilog": "tmod_int",
+        "coq": "Z.rem",
+        "lean": "Nat.mod"
+      },
+      "type": "forall 'n 'm, 'n >= 0 & 'm >= 0. (int('n), int('m)) -> {'r, 0 <= 'r < 'm. int('r)}",
+      "ocaml_type": "Z.t -> Z.t -> Z.t",
+      "file": "lib/mono_rewrites.sail",
+      "conditions": [
+        {
+          "directive": "ifndef",
+          "argument": "_MONO_REWRITES",
+          "branch": "then"
+        }
+      ]
+    },
+    {
+      "name": "_builtin_pow2",
+      "operator": false,
+      "pure": true,
+      "bindings": { "_": "pow2" },
+      "type": "forall 'n, 'n >= 0. int('n) -> {'m, 'm == 2 ^ 'n & 'm >= 0. int('m)}",
+      "ocaml_type": "Z.t -> Z.t",
+      "file": "lib/mono_rewrites.sail",
+      "conditions": [
+        {
+          "directive": "ifndef",
+          "argument": "_MONO_REWRITES",
+          "branch": "then"
+        }
+      ]
+    },
+    {
+      "name": "neg_real",
+      "operator": false,
+      "pure": true,
+      "bindings": { "_": "neg_real" },
+      "type": "real -> real",
+      "ocaml_type": "Q.t -> Q.t",
+      "file": "lib/real.sail",
+      "conditions": [
+        { "directive": "ifndef", "argument": "_REAL", "branch": "then" }
+      ]
+    },
+    {
+      "name": "mult_real",
+      "operator": false,
+      "pure": true,
+      "bindings": { "_": "mult_real" },
+      "type": "(real, real) -> real",
+      "ocaml_type": "Q.t -> Q.t -> Q.t",
+      "file": "lib/real.sail",
+      "conditions": [
+        { "directive": "ifndef", "argument": "_REAL", "branch": "then" }
+      ]
+    },
+    {
+      "name": "sub_real",
+      "operator": false,
+      "pure": true,
+      "bindings": { "_": "sub_real" },
+      "type": "(real, real) -> real",
+      "ocaml_type": "Q.t -> Q.t -> Q.t",
+      "file": "lib/real.sail",
+      "conditions": [
+        { "directive": "ifndef", "argument": "_REAL", "branch": "then" }
+      ]
+    },
+    {
+      "name": "add_real",
+      "operator": false,
+      "pure": true,
+      "bindings": { "_": "add_real" },
+      "type": "(real, real) -> real",
+      "ocaml_type": "Q.t -> Q.t -> Q.t",
+      "file": "lib/real.sail",
+      "conditions": [
+        { "directive": "ifndef", "argument": "_REAL", "branch": "then" }
+      ]
+    },
+    {
+      "name": "div_real",
+      "operator": false,
+      "pure": true,
+      "bindings": { "_": "div_real" },
+      "type": "(real, real) -> real",
+      "ocaml_type": "Q.t -> Q.t -> Q.t",
+      "file": "lib/real.sail",
+      "conditions": [
+        { "directive": "ifndef", "argument": "_REAL", "branch": "then" }
+      ]
+    },
+    {
+      "name": "sqrt",
+      "operator": false,
+      "pure": true,
+      "bindings": { "_": "sqrt_real" },
+      "type": "real -> real",
+      "ocaml_type": "Q.t -> Q.t",
+      "file": "lib/real.sail",
+      "conditions": [
+        { "directive": "ifndef", "argument": "_REAL", "branch": "then" }
+      ]
+    },
+    {
+      "name": "abs_real",
+      "operator": false,
+      "pure": true,
+      "bindings": { "_": "abs_real" },
+      "type": "real -> real",
+      "ocaml_type": "Q.t -> Q.t",
+      "file": "lib/real.sail",
+      "conditions": [
+        { "directive": "ifndef", "argument": "_REAL", "branch": "then" }
+      ]
+    },
+    {
+      "name": "floor",
+      "operator": false,
+      "pure": true,
+      "bindings": { "_": "round_down" },
+      "type": "real -> int",
+      "ocaml_type": "Q.t -> Z.t",
+      "file": "lib/real.sail",
+      "conditions": [
+        { "directive": "ifndef", "argument": "_REAL", "branch": "then" }
+      ]
+    },
+    {
+      "name": "ceil",
+      "operator": false,
+      "pure": true,
+      "bindings": { "_": "round_up" },
+      "type": "real -> int",
+      "ocaml_type": "Q.t -> Z.t",
+      "file": "lib/real.sail",
+      "conditions": [
+        { "directive": "ifndef", "argument": "_REAL", "branch": "then" }
+      ]
+    },
+    {
+      "name": "to_real",
+      "operator": false,
+      "pure": true,
+      "bindings": { "_": "to_real" },
+      "type": "int -> real",
+      "ocaml_type": "Z.t -> Q.t",
+      "file": "lib/real.sail",
+      "conditions": [
+        { "directive": "ifndef", "argument": "_REAL", "branch": "then" }
+      ]
+    },
+    {
+      "name": "eq_real",
+      "operator": false,
+      "pure": true,
+      "bindings": { "_": "eq_real" },
+      "type": "(real, real) -> bool",
+      "ocaml_type": "Q.t -> Q.t -> bool",
+      "file": "lib/real.sail",
+      "conditions": [
+        { "directive": "ifndef", "argument": "_REAL", "branch": "then" }
+      ]
+    },
+    {
+      "name": "lt_real",
+      "operator": false,
+      "pure": true,
+      "bindings": { "_": "lt_real" },
+      "type": "(real, real) -> bool",
+      "ocaml_type": "Q.t -> Q.t -> bool",
+      "file": "lib/real.sail",
+      "conditions": [
+        { "directive": "ifndef", "argument": "_REAL", "branch": "then" }
+      ]
+    },
+    {
+      "name": "gt_real",
+      "operator": false,
+      "pure": true,
+      "bindings": { "_": "gt_real" },
+      "type": "(real, real) -> bool",
+      "ocaml_type": "Q.t -> Q.t -> bool",
+      "file": "lib/real.sail",
+      "conditions": [
+        { "directive": "ifndef", "argument": "_REAL", "branch": "then" }
+      ]
+    },
+    {
+      "name": "lteq_real",
+      "operator": false,
+      "pure": true,
+      "bindings": { "_": "lteq_real" },
+      "type": "(real, real) -> bool",
+      "ocaml_type": "Q.t -> Q.t -> bool",
+      "file": "lib/real.sail",
+      "conditions": [
+        { "directive": "ifndef", "argument": "_REAL", "branch": "then" }
+      ]
+    },
+    {
+      "name": "gteq_real",
+      "operator": false,
+      "pure": true,
+      "bindings": { "_": "gteq_real" },
+      "type": "(real, real) -> bool",
+      "ocaml_type": "Q.t -> Q.t -> bool",
+      "file": "lib/real.sail",
+      "conditions": [
+        { "directive": "ifndef", "argument": "_REAL", "branch": "then" }
+      ]
+    },
+    {
+      "name": "pow_real",
+      "operator": false,
+      "pure": true,
+      "bindings": { "_": "real_power" },
+      "type": "(real, int) -> real",
+      "ocaml_type": "Q.t -> Z.t -> Q.t",
+      "file": "lib/real.sail",
+      "conditions": [
+        { "directive": "ifndef", "argument": "_REAL", "branch": "then" }
+      ]
+    },
+    {
+      "name": "print_real",
+      "operator": false,
+      "pure": true,
+      "bindings": { "_": "print_real" },
+      "type": "(string, real) -> unit",
+      "ocaml_type": "string -> Q.t -> unit",
+      "file": "lib/real.sail",
+      "conditions": [
+        { "directive": "ifndef", "argument": "_REAL", "branch": "then" }
+      ]
+    },
+    {
+      "name": "prerr_real",
+      "operator": false,
+      "pure": true,
+      "bindings": { "_": "prerr_real" },
+      "type": "(string, real) -> unit",
+      "ocaml_type": "string -> Q.t -> unit",
+      "file": "lib/real.sail",
+      "conditions": [
+        { "directive": "ifndef", "argument": "_REAL", "branch": "then" }
+      ]
+    },
+    {
+      "name": "random_real",
+      "operator": false,
+      "pure": true,
+      "bindings": { "_": "random_real" },
+      "type": "unit -> real",
+      "ocaml_type": "unit -> Q.t",
+      "file": "lib/real.sail",
+      "conditions": [
+        { "directive": "ifndef", "argument": "_REAL", "branch": "then" }
+      ]
+    },
+    {
+      "name": "__read_mem",
+      "operator": false,
+      "pure": false,
+      "bindings": {
+        "ocaml": "Platform.read_mem",
+        "c": "platform_read_mem",
+        "cpp": "platform_read_mem",
+        "_": "read_mem"
+      },
+      "type": "forall 'n 'addrsize, 'n > 0 & 'addrsize in {32, 64}. (read_kind, int('addrsize), bits('addrsize), int('n)) -> bits(8 * 'n)",
+      "ocaml_type": null,
+      "file": "lib/regfp.sail",
+      "conditions": [
+        { "directive": "ifndef", "argument": "_REGFP", "branch": "then" }
+      ]
+    },
+    {
+      "name": "__read_memt",
+      "operator": false,
+      "pure": false,
+      "bindings": {
+        "ocaml": "Platform.read_memt",
+        "c": "platform_read_memt",
+        "cpp": "platform_read_memt",
+        "_": "read_memt"
+      },
+      "type": "forall 'n 'addrsize, 'n > 0 & 'addrsize in {32, 64}. (read_kind, bits('addrsize), int('n)) -> (bits(8 * 'n), bit)",
+      "ocaml_type": null,
+      "file": "lib/regfp.sail",
+      "conditions": [
+        { "directive": "ifndef", "argument": "_REGFP", "branch": "then" }
+      ]
+    },
+    {
+      "name": "__write_mem_ea",
+      "operator": false,
+      "pure": false,
+      "bindings": {
+        "ocaml": "Platform.write_mem_ea",
+        "c": "platform_write_mem_ea",
+        "cpp": "platform_write_mem_ea",
+        "_": "write_mem_ea"
+      },
+      "type": "forall 'n 'addrsize, 'n > 0 & 'addrsize in {32, 64}. (write_kind, int('addrsize), bits('addrsize), int('n)) -> unit",
+      "ocaml_type": null,
+      "file": "lib/regfp.sail",
+      "conditions": [
+        { "directive": "ifndef", "argument": "_REGFP", "branch": "then" }
+      ]
+    },
+    {
+      "name": "__write_mem",
+      "operator": false,
+      "pure": false,
+      "bindings": {
+        "ocaml": "Platform.write_mem",
+        "c": "platform_write_mem",
+        "cpp": "platform_write_mem",
+        "_": "write_mem"
+      },
+      "type": "forall 'n 'addrsize, 'n > 0 & 'addrsize in {32, 64}. (write_kind, int('addrsize), bits('addrsize), int('n), bits(8 * 'n)) -> bool",
+      "ocaml_type": null,
+      "file": "lib/regfp.sail",
+      "conditions": [
+        { "directive": "ifndef", "argument": "_REGFP", "branch": "then" }
+      ]
+    },
+    {
+      "name": "__write_memt",
+      "operator": false,
+      "pure": false,
+      "bindings": {
+        "ocaml": "Platform.write_memt",
+        "c": "platform_write_memt",
+        "cpp": "platform_write_memt",
+        "_": "write_memt"
+      },
+      "type": "forall 'n 'addrsize, 'n > 0 & 'addrsize in {32, 64}. (write_kind, bits('addrsize), int('n), bits(8 * 'n), bit) -> bool",
+      "ocaml_type": null,
+      "file": "lib/regfp.sail",
+      "conditions": [
+        { "directive": "ifndef", "argument": "_REGFP", "branch": "then" }
+      ]
+    },
+    {
+      "name": "__write_tag",
+      "operator": false,
+      "pure": false,
+      "bindings": {
+        "ocaml": "Platform.write_tag",
+        "c": "platform_write_tag",
+        "cpp": "platform_write_tag",
+        "_": "write_tag"
+      },
+      "type": "forall 'addrsize, 'addrsize in {32, 64}. (write_kind, bits('addrsize), bit) -> bool",
+      "ocaml_type": null,
+      "file": "lib/regfp.sail",
+      "conditions": [
+        { "directive": "ifndef", "argument": "_REGFP", "branch": "then" }
+      ]
+    },
+    {
+      "name": "__excl_res",
+      "operator": false,
+      "pure": false,
+      "bindings": {
+        "ocaml": "Platform.excl_res",
+        "c": "platform_excl_res",
+        "cpp": "platform_excl_res",
+        "_": "excl_result"
+      },
+      "type": "unit -> bool",
+      "ocaml_type": "unit -> bool",
+      "file": "lib/regfp.sail",
+      "conditions": [
+        { "directive": "ifndef", "argument": "_REGFP", "branch": "then" }
+      ]
+    },
+    {
+      "name": "__barrier",
+      "operator": false,
+      "pure": false,
+      "bindings": {
+        "ocaml": "Platform.barrier",
+        "c": "platform_barrier",
+        "cpp": "platform_barrier",
+        "_": "barrier"
+      },
+      "type": "barrier_kind -> unit",
+      "ocaml_type": null,
+      "file": "lib/regfp.sail",
+      "conditions": [
+        { "directive": "ifndef", "argument": "_REGFP", "branch": "then" }
+      ]
+    },
+    {
+      "name": "__branch_announce",
+      "operator": false,
+      "pure": false,
+      "bindings": {
+        "ocaml": "Platform.branch_announce",
+        "c": "platform_branch_announce",
+        "cpp": "platform_branch_announce",
+        "_": "branch_announce"
+      },
+      "type": "forall 'addrsize, 'addrsize in {32, 64}. (int('addrsize), bits('addrsize)) -> unit",
+      "ocaml_type": "Z.t -> bits -> unit",
+      "file": "lib/regfp.sail",
+      "conditions": [
+        { "directive": "ifndef", "argument": "_REGFP", "branch": "then" }
+      ]
+    },
+    {
+      "name": "__cache_maintenance",
+      "operator": false,
+      "pure": false,
+      "bindings": {
+        "ocaml": "Platform.cache_maintenance",
+        "c": "platform_cache_maintenance",
+        "cpp": "platform_cache_maintenance",
+        "_": "cache_maintenance"
+      },
+      "type": "forall 'addrsize, 'addrsize in {32, 64}. (cache_op_kind, int('addrsize), bits('addrsize)) -> unit",
+      "ocaml_type": null,
+      "file": "lib/regfp.sail",
+      "conditions": [
+        { "directive": "ifndef", "argument": "_REGFP", "branch": "then" }
+      ]
+    },
+    {
+      "name": "__instr_announce",
+      "operator": false,
+      "pure": false,
+      "bindings": {
+        "ocaml": "Platform.instr_announce",
+        "c": "platform_instr_announce",
+        "cpp": "platform_instr_announce",
+        "_": "instr_announce"
+      },
+      "type": "forall 'n, 'n > 0. bits('n) -> unit",
+      "ocaml_type": "bits -> unit",
+      "file": "lib/regfp.sail",
+      "conditions": [
+        { "directive": "ifndef", "argument": "_REGFP", "branch": "then" }
+      ]
+    },
+    {
+      "name": "ediv_int",
+      "operator": false,
+      "pure": true,
+      "bindings": {
+        "ocaml": "quotient",
+        "interpreter": "quotient",
+        "lem": "integerDiv",
+        "coq": "e_div",
+        "lean": "Int.ediv",
+        "_": "ediv_int"
+      },
+      "type": "forall 'n 'm. (int('n), int('m)) -> int(div('n, 'm))",
+      "ocaml_type": "Z.t -> Z.t -> Z.t",
+      "file": "lib/smt.sail",
+      "conditions": [
+        { "directive": "ifndef", "argument": "_SMT", "branch": "then" }
+      ]
+    },
+    {
+      "name": "emod_int",
+      "operator": false,
+      "pure": true,
+      "bindings": {
+        "ocaml": "modulus",
+        "interpreter": "modulus",
+        "lem": "integerMod",
+        "coq": "e_modulo",
+        "lean": "Int.emod",
+        "_": "emod_int"
+      },
+      "type": "forall 'n 'm. (int('n), int('m)) -> int(mod('n, 'm))",
+      "ocaml_type": "Z.t -> Z.t -> Z.t",
+      "file": "lib/smt.sail",
+      "conditions": [
+        { "directive": "ifndef", "argument": "_SMT", "branch": "then" }
+      ]
+    },
+    {
+      "name": "abs_int_atom",
+      "operator": false,
+      "pure": true,
+      "bindings": {
+        "ocaml": "abs_int",
+        "interpreter": "abs_int",
+        "lem": "integerAbs",
+        "coq": "Z.abs",
+        "lean": "Int.natAbs",
+        "_": "abs_int"
+      },
+      "type": "forall 'n. int('n) -> int(abs('n))",
+      "ocaml_type": "Z.t -> Z.t",
+      "file": "lib/smt.sail",
+      "conditions": [
+        { "directive": "ifndef", "argument": "_SMT", "branch": "then" }
+      ]
+    },
+    {
+      "name": "eq_string",
+      "operator": false,
+      "pure": true,
+      "bindings": {
+        "lem": "eq",
+        "coq": "generic_eq",
+        "lean": "_lean_beq",
+        "_": "eq_string"
+      },
+      "type": "(string, string) -> bool",
+      "ocaml_type": "string -> string -> bool",
+      "file": "lib/string.sail",
+      "conditions": [
+        { "directive": "ifndef", "argument": "_STRING", "branch": "then" }
+      ]
+    },
+    {
+      "name": "concat_str",
+      "operator": false,
+      "pure": true,
+      "bindings": {
+        "coq": "String.append",
+        "lem": "stringAppend",
+        "lean": "HAppend.hAppend",
+        "_": "concat_str"
+      },
+      "type": "(string, string) -> string",
+      "ocaml_type": "string -> string -> string",
+      "file": "lib/string.sail",
+      "conditions": [
+        { "directive": "ifndef", "argument": "_STRING", "branch": "then" }
+      ]
+    },
+    {
+      "name": "dec_str",
+      "operator": false,
+      "pure": true,
+      "bindings": { "lean": "Int.repr", "_": "dec_str" },
+      "type": "int -> string",
+      "ocaml_type": "Z.t -> string",
+      "file": "lib/string.sail",
+      "conditions": [
+        { "directive": "ifndef", "argument": "_STRING", "branch": "then" }
+      ]
+    },
+    {
+      "name": "hex_str",
+      "operator": false,
+      "pure": true,
+      "bindings": { "lean": "Int.toHex", "_": "hex_str" },
+      "type": "int -> string",
+      "ocaml_type": "Z.t -> string",
+      "file": "lib/string.sail",
+      "conditions": [
+        { "directive": "ifndef", "argument": "_STRING", "branch": "then" }
+      ]
+    },
+    {
+      "name": "hex_str_upper",
+      "operator": false,
+      "pure": true,
+      "bindings": { "lean": "Int.toHexUpper", "_": "hex_str_upper" },
+      "type": "int -> string",
+      "ocaml_type": "Z.t -> string",
+      "file": "lib/string.sail",
+      "conditions": [
+        { "directive": "ifndef", "argument": "_STRING", "branch": "then" }
+      ]
+    },
+    {
+      "name": "bits_str",
+      "operator": false,
+      "pure": true,
+      "bindings": { "lean": "BitVec.toFormatted", "_": "string_of_bits" },
+      "type": "forall 'n. bitvector('n, dec) -> string",
+      "ocaml_type": "bits -> string",
+      "file": "lib/string.sail",
+      "conditions": [
+        { "directive": "ifndef", "argument": "_STRING", "branch": "then" }
+      ]
+    },
+    {
+      "name": "print_endline",
+      "operator": false,
+      "pure": true,
+      "bindings": { "_": "print_endline" },
+      "type": "string -> unit",
+      "ocaml_type": "string -> unit",
+      "file": "lib/string.sail",
+      "conditions": [
+        { "directive": "ifndef", "argument": "_STRING", "branch": "then" },
+        {
+          "directive": "ifndef",
+          "argument": "PRINT_EFFECTS",
+          "branch": "then"
+        }
+      ]
+    },
+    {
+      "name": "prerr_endline",
+      "operator": false,
+      "pure": true,
+      "bindings": { "_": "prerr_endline" },
+      "type": "string -> unit",
+      "ocaml_type": "string -> unit",
+      "file": "lib/string.sail",
+      "conditions": [
+        { "directive": "ifndef", "argument": "_STRING", "branch": "then" },
+        {
+          "directive": "ifndef",
+          "argument": "PRINT_EFFECTS",
+          "branch": "then"
+        }
+      ]
+    },
+    {
+      "name": "print",
+      "operator": false,
+      "pure": true,
+      "bindings": { "_": "print" },
+      "type": "string -> unit",
+      "ocaml_type": "string -> unit",
+      "file": "lib/string.sail",
+      "conditions": [
+        { "directive": "ifndef", "argument": "_STRING", "branch": "then" },
+        {
+          "directive": "ifndef",
+          "argument": "PRINT_EFFECTS",
+          "branch": "then"
+        }
+      ]
+    },
+    {
+      "name": "prerr",
+      "operator": false,
+      "pure": true,
+      "bindings": { "_": "prerr" },
+      "type": "string -> unit",
+      "ocaml_type": "string -> unit",
+      "file": "lib/string.sail",
+      "conditions": [
+        { "directive": "ifndef", "argument": "_STRING", "branch": "then" },
+        {
+          "directive": "ifndef",
+          "argument": "PRINT_EFFECTS",
+          "branch": "then"
+        }
+      ]
+    },
+    {
+      "name": "print_endline",
+      "operator": false,
+      "pure": false,
+      "bindings": {
+        "ocaml": "print_endline",
+        "interpreter": "print_endline",
+        "_": "print_endline_effect"
+      },
+      "type": "string -> unit",
+      "ocaml_type": "string -> unit",
+      "file": "lib/string.sail",
+      "conditions": [
+        { "directive": "ifndef", "argument": "_STRING", "branch": "then" },
+        {
+          "directive": "ifndef",
+          "argument": "PRINT_EFFECTS",
+          "branch": "else"
+        }
+      ]
+    },
+    {
+      "name": "prerr_endline",
+      "operator": false,
+      "pure": false,
+      "bindings": {
+        "ocaml": "prerr_endline",
+        "interpreter": "prerr_endline",
+        "_": "prerr_endline_effect"
+      },
+      "type": "string -> unit",
+      "ocaml_type": "string -> unit",
+      "file": "lib/string.sail",
+      "conditions": [
+        { "directive": "ifndef", "argument": "_STRING", "branch": "then" },
+        {
+          "directive": "ifndef",
+          "argument": "PRINT_EFFECTS",
+          "branch": "else"
+        }
+      ]
+    },
+    {
+      "name": "print",
+      "operator": false,
+      "pure": false,
+      "bindings": {
+        "ocaml": "print",
+        "interpreter": "print",
+        "_": "print_effect"
+      },
+      "type": "string -> unit",
+      "ocaml_type": "string -> unit",
+      "file": "lib/string.sail",
+      "conditions": [
+        { "directive": "ifndef", "argument": "_STRING", "branch": "then" },
+        {
+          "directive": "ifndef",
+          "argument": "PRINT_EFFECTS",
+          "branch": "else"
+        }
+      ]
+    },
+    {
+      "name": "prerr",
+      "operator": false,
+      "pure": false,
+      "bindings": {
+        "ocaml": "prerr",
+        "interpreter": "prerr",
+        "_": "prerr_effect"
+      },
+      "type": "string -> unit",
+      "ocaml_type": "string -> unit",
+      "file": "lib/string.sail",
+      "conditions": [
+        { "directive": "ifndef", "argument": "_STRING", "branch": "then" },
+        {
+          "directive": "ifndef",
+          "argument": "PRINT_EFFECTS",
+          "branch": "else"
+        }
+      ]
+    },
+    {
+      "name": "enable_tracing",
+      "operator": false,
+      "pure": true,
+      "bindings": { "c": "enable_tracing", "cpp": "enable_tracing" },
+      "type": "unit -> unit",
+      "ocaml_type": "unit -> unit",
+      "file": "lib/trace.sail",
+      "conditions": [
+        { "directive": "ifndef", "argument": "_TRACE", "branch": "then" }
+      ]
+    },
+    {
+      "name": "disable_tracing",
+      "operator": false,
+      "pure": true,
+      "bindings": { "c": "disable_tracing", "cpp": "disable_tracing" },
+      "type": "unit -> unit",
+      "ocaml_type": "unit -> unit",
+      "file": "lib/trace.sail",
+      "conditions": [
+        { "directive": "ifndef", "argument": "_TRACE", "branch": "then" }
+      ]
+    },
+    {
+      "name": "is_tracing",
+      "operator": false,
+      "pure": true,
+      "bindings": { "c": "is_tracing", "cpp": "is_tracing" },
+      "type": "unit -> bool",
+      "ocaml_type": "unit -> bool",
+      "file": "lib/trace.sail",
+      "conditions": [
+        { "directive": "ifndef", "argument": "_TRACE", "branch": "then" }
+      ]
+    },
+    {
+      "name": "eq_bit",
+      "operator": false,
+      "pure": true,
+      "bindings": {
+        "ocaml": "eq_list",
+        "interpreter": "eq_list",
+        "lem": "eq_vec",
+        "coq": "eq_vec",
+        "lean": "_lean_beq",
+        "_": "eq_bits"
+      },
+      "type": "(bit, bit) -> bool",
+      "ocaml_type": "bits -> bits -> bool",
+      "file": "lib/vector.sail",
+      "conditions": [
+        { "directive": "ifndef", "argument": "_VECTOR", "branch": "then" }
+      ]
+    },
+    {
+      "name": "eq_bits",
+      "operator": false,
+      "pure": true,
+      "bindings": {
+        "ocaml": "eq_list",
+        "interpreter": "eq_list",
+        "lem": "eq_vec",
+        "coq": "eq_vec",
+        "lean": "_lean_beq",
+        "_": "eq_bits"
+      },
+      "type": "forall 'n. (bits('n), bits('n)) -> bool",
+      "ocaml_type": "bits -> bits -> bool",
+      "file": "lib/vector.sail",
+      "conditions": [
+        { "directive": "ifndef", "argument": "_VECTOR", "branch": "then" }
+      ]
+    },
+    {
+      "name": "neq_bits",
+      "operator": false,
+      "pure": true,
+      "bindings": {
+        "lem": "neq_vec",
+        "coq": "neq_vec",
+        "c": "neq_bits",
+        "cpp": "neq_bits",
+        "lean": "_lean_bne"
+      },
+      "type": "forall 'n. (bits('n), bits('n)) -> bool",
+      "ocaml_type": "bits -> bits -> bool",
+      "file": "lib/vector.sail",
+      "conditions": [
+        { "directive": "ifndef", "argument": "_VECTOR", "branch": "then" }
+      ]
+    },
+    {
+      "name": "bitvector_length",
+      "operator": false,
+      "pure": true,
+      "bindings": {
+        "ocaml": "length_bits",
+        "interpreter": "length_bits",
+        "coq": "length_mword",
+        "lean": "Sail.BitVec.length",
+        "_": "length"
+      },
+      "type": "forall 'n. bits('n) -> int('n)",
+      "ocaml_type": "bits -> Z.t",
+      "file": "lib/vector.sail",
+      "conditions": [
+        { "directive": "ifndef", "argument": "_VECTOR", "branch": "then" }
+      ]
+    },
+    {
+      "name": "vector_length",
+      "operator": false,
+      "pure": true,
+      "bindings": {
+        "lem": "length_list",
+        "coq": "vec_length",
+        "lean": "Vector.length",
+        "_": "length"
+      },
+      "type": "forall 'n ('a : Type). vector('n, 'a) -> int('n)",
+      "ocaml_type": "'a list -> Z.t",
+      "file": "lib/vector.sail",
+      "conditions": [
+        { "directive": "ifndef", "argument": "_VECTOR", "branch": "then" }
+      ]
+    },
+    {
+      "name": "vector_init",
+      "operator": false,
+      "pure": true,
+      "bindings": { "lean": "vectorInit", "_": "vector_init" },
+      "type": "forall 'n ('a : Type), 'n >= 0. (implicit('n), 'a) -> vector('n, 'a)",
+      "ocaml_type": "Z.t -> 'a -> 'a list",
+      "file": "lib/vector.sail",
+      "conditions": [
+        { "directive": "ifndef", "argument": "_VECTOR", "branch": "then" }
+      ]
+    },
+    {
+      "name": "count_leading_zeros",
+      "operator": false,
+      "pure": true,
+      "bindings": {
+        "lean": "BitVec.countLeadingZeros",
+        "_": "count_leading_zeros"
+      },
+      "type": "forall 'N , 'N >= 1. bits('N) -> {'n, 0 <= 'n <= 'N . atom('n)}",
+      "ocaml_type": "bits -> Z.t",
+      "file": "lib/vector.sail",
+      "conditions": [
+        { "directive": "ifndef", "argument": "_VECTOR", "branch": "then" }
+      ]
+    },
+    {
+      "name": "count_trailing_zeros",
+      "operator": false,
+      "pure": true,
+      "bindings": {
+        "lean": "BitVec.countTrailingZeros",
+        "_": "count_trailing_zeros"
+      },
+      "type": "forall 'N , 'N >= 1. bits('N) -> {'n, 0 <= 'n <= 'N . atom('n)}",
+      "ocaml_type": "bits -> Z.t",
+      "file": "lib/vector.sail",
+      "conditions": [
+        { "directive": "ifndef", "argument": "_VECTOR", "branch": "then" }
+      ]
+    },
+    {
+      "name": "print_bits",
+      "operator": false,
+      "pure": true,
+      "bindings": { "_": "print_bits" },
+      "type": "forall 'n. (string, bits('n)) -> unit",
+      "ocaml_type": "string -> bits -> unit",
+      "file": "lib/vector.sail",
+      "conditions": [
+        { "directive": "ifndef", "argument": "_VECTOR", "branch": "then" },
+        {
+          "directive": "ifndef",
+          "argument": "PRINT_EFFECTS",
+          "branch": "then"
+        }
+      ]
+    },
+    {
+      "name": "prerr_bits",
+      "operator": false,
+      "pure": true,
+      "bindings": { "_": "prerr_bits" },
+      "type": "forall 'n. (string, bits('n)) -> unit",
+      "ocaml_type": "string -> bits -> unit",
+      "file": "lib/vector.sail",
+      "conditions": [
+        { "directive": "ifndef", "argument": "_VECTOR", "branch": "then" },
+        {
+          "directive": "ifndef",
+          "argument": "PRINT_EFFECTS",
+          "branch": "then"
+        }
+      ]
+    },
+    {
+      "name": "print_bits",
+      "operator": false,
+      "pure": false,
+      "bindings": {
+        "ocaml": "print_bits",
+        "interpreter": "print_bits",
+        "_": "print_bits_effect"
+      },
+      "type": "forall 'n. (string, bits('n)) -> unit",
+      "ocaml_type": "string -> bits -> unit",
+      "file": "lib/vector.sail",
+      "conditions": [
+        { "directive": "ifndef", "argument": "_VECTOR", "branch": "then" },
+        {
+          "directive": "ifndef",
+          "argument": "PRINT_EFFECTS",
+          "branch": "else"
+        }
+      ]
+    },
+    {
+      "name": "prerr_bits",
+      "operator": false,
+      "pure": false,
+      "bindings": {
+        "ocaml": "prerr_bits",
+        "interpreter": "prerr_bits",
+        "_": "prerr_bits_effect"
+      },
+      "type": "forall 'n. (string, bits('n)) -> unit",
+      "ocaml_type": "string -> bits -> unit",
+      "file": "lib/vector.sail",
+      "conditions": [
+        { "directive": "ifndef", "argument": "_VECTOR", "branch": "then" },
+        {
+          "directive": "ifndef",
+          "argument": "PRINT_EFFECTS",
+          "branch": "else"
+        }
+      ]
+    },
+    {
+      "name": "sail_sign_extend",
+      "operator": false,
+      "pure": true,
+      "bindings": { "lean": "Sail.BitVec.signExtend", "_": "sign_extend" },
+      "type": "forall 'n 'm, 'm >= 'n. (bits('n), int('m)) -> bits('m)",
+      "ocaml_type": "bits -> Z.t -> bits",
+      "file": "lib/vector.sail",
+      "conditions": [
+        { "directive": "ifndef", "argument": "_VECTOR", "branch": "then" }
+      ]
+    },
+    {
+      "name": "sail_zero_extend",
+      "operator": false,
+      "pure": true,
+      "bindings": { "lean": "Sail.BitVec.zeroExtend", "_": "zero_extend" },
+      "type": "forall 'n 'm, 'm >= 'n. (bits('n), int('m)) -> bits('m)",
+      "ocaml_type": "bits -> Z.t -> bits",
+      "file": "lib/vector.sail",
+      "conditions": [
+        { "directive": "ifndef", "argument": "_VECTOR", "branch": "then" }
+      ]
+    },
+    {
+      "name": "truncate",
+      "operator": false,
+      "pure": true,
+      "bindings": {
+        "ocaml": "vector_truncate",
+        "interpreter": "vector_truncate",
+        "lem": "vector_truncate",
+        "coq": "vector_truncate",
+        "lean": "Sail.BitVec.truncate",
+        "_": "sail_truncate"
+      },
+      "type": "forall 'm 'n, 'm >= 0 & 'm <= 'n. (bits('n), int('m)) -> bits('m)",
+      "ocaml_type": "bits -> Z.t -> bits",
+      "file": "lib/vector.sail",
+      "conditions": [
+        { "directive": "ifndef", "argument": "_VECTOR", "branch": "then" }
+      ]
+    },
+    {
+      "name": "truncateLSB",
+      "operator": false,
+      "pure": true,
+      "bindings": {
+        "ocaml": "vector_truncateLSB",
+        "interpreter": "vector_truncateLSB",
+        "lem": "vector_truncateLSB",
+        "coq": "vector_truncateLSB",
+        "lean": "Sail.BitVec.truncateLsb",
+        "_": "sail_truncateLSB"
+      },
+      "type": "forall 'm 'n, 'm >= 0 & 'm <= 'n. (bits('n), int('m)) -> bits('m)",
+      "ocaml_type": "bits -> Z.t -> bits",
+      "file": "lib/vector.sail",
+      "conditions": [
+        { "directive": "ifndef", "argument": "_VECTOR", "branch": "then" }
+      ]
+    },
+    {
+      "name": "bitvector_concat",
+      "operator": false,
+      "pure": true,
+      "bindings": {
+        "ocaml": "append",
+        "interpreter": "append",
+        "lem": "concat_vec",
+        "coq": "concat_vec",
+        "lean": "_lean_app",
+        "_": "append"
+      },
+      "type": "forall 'n 'm. (bits('n), bits('m)) -> bits('n + 'm)",
+      "ocaml_type": "bits -> bits -> bits",
+      "file": "lib/vector.sail",
+      "conditions": [
+        { "directive": "ifndef", "argument": "_VECTOR", "branch": "then" }
+      ]
+    },
+    {
+      "name": "append_64",
+      "operator": false,
+      "pure": true,
+      "bindings": {
+        "ocaml": "append",
+        "interpreter": "append",
+        "_": "append_64"
+      },
+      "type": "forall 'n. (bits('n), bits(64)) -> bits('n + 64)",
+      "ocaml_type": "bits -> bits -> bits",
+      "file": "lib/vector.sail",
+      "conditions": [
+        { "directive": "ifndef", "argument": "_VECTOR", "branch": "then" }
+      ]
+    },
+    {
+      "name": "bitvector_access",
+      "operator": false,
+      "pure": true,
+      "bindings": {
+        "ocaml": "access",
+        "interpreter": "access",
+        "lem": "access_vec_dec",
+        "coq": "access_vec_dec",
+        "lean": "BitVec.access",
+        "_": "vector_access"
+      },
+      "type": "forall ('n : Int) ('m : Int), 0 <= 'm < 'n . (bits('n), int('m)) -> bit",
+      "ocaml_type": "bits -> Z.t -> bits",
+      "file": "lib/vector.sail",
+      "conditions": [
+        { "directive": "ifndef", "argument": "_VECTOR", "branch": "then" },
+        {
+          "directive": "ifdef",
+          "argument": "_DEFAULT_DEC",
+          "branch": "then"
+        }
+      ]
+    },
+    {
+      "name": "bitvector_access",
+      "operator": false,
+      "pure": true,
+      "bindings": {
+        "ocaml": "access_inc",
+        "interpreter": "access_inc",
+        "lem": "access_vec_inc",
+        "coq": "access_vec_inc",
+        "lean": "BitVec.accessBE",
+        "_": "vector_access_inc"
+      },
+      "type": "forall ('n : Int) ('m : Int), 0 <= 'm < 'n . (bits('n), int('m)) -> bit",
+      "ocaml_type": "bits -> Z.t -> bits",
+      "file": "lib/vector.sail",
+      "conditions": [
+        { "directive": "ifndef", "argument": "_VECTOR", "branch": "then" },
+        {
+          "directive": "ifdef",
+          "argument": "_DEFAULT_DEC",
+          "branch": "else"
+        }
+      ]
+    },
+    {
+      "name": "plain_vector_access",
+      "operator": false,
+      "pure": true,
+      "bindings": {
+        "ocaml": "access_list",
+        "interpreter": "access",
+        "lem": "access_list_dec",
+        "coq": "vec_access_dec",
+        "lean": "GetElem?.getElem!",
+        "_": "vector_access"
+      },
+      "type": "forall ('n : Int) ('m : Int) ('a : Type), 0 <= 'm < 'n. (vector('n, dec, 'a), int('m)) -> 'a",
+      "ocaml_type": "'a list -> Z.t -> 'a",
+      "file": "lib/vector.sail",
+      "conditions": [
+        { "directive": "ifndef", "argument": "_VECTOR", "branch": "then" }
+      ]
+    },
+    {
+      "name": "bitvector_update",
+      "operator": false,
+      "pure": true,
+      "bindings": {
+        "ocaml": "update",
+        "interpreter": "update",
+        "lem": "update_vec_dec",
+        "coq": "update_vec_dec",
+        "lean": "BitVec.update",
+        "_": "vector_update"
+      },
+      "type": "forall 'n 'm, 0 <= 'm < 'n. (bits('n), int('m), bit) -> bits('n)",
+      "ocaml_type": "bits -> Z.t -> bits -> bits",
+      "file": "lib/vector.sail",
+      "conditions": [
+        { "directive": "ifndef", "argument": "_VECTOR", "branch": "then" },
+        {
+          "directive": "ifdef",
+          "argument": "_DEFAULT_DEC",
+          "branch": "then"
+        }
+      ]
+    },
+    {
+      "name": "bitvector_update",
+      "operator": false,
+      "pure": true,
+      "bindings": {
+        "ocaml": "update_inc",
+        "interpreter": "update_inc",
+        "lem": "update_vec_inc",
+        "coq": "update_vec_inc",
+        "lean": "BitVec.updateBE",
+        "_": "vector_update_inc"
+      },
+      "type": "forall 'n 'm, 0 <= 'm < 'n. (bits('n), int('m), bit) -> bits('n)",
+      "ocaml_type": "bits -> Z.t -> bits -> bits",
+      "file": "lib/vector.sail",
+      "conditions": [
+        { "directive": "ifndef", "argument": "_VECTOR", "branch": "then" },
+        {
+          "directive": "ifdef",
+          "argument": "_DEFAULT_DEC",
+          "branch": "else"
+        }
+      ]
+    },
+    {
+      "name": "plain_vector_update",
+      "operator": false,
+      "pure": true,
+      "bindings": {
+        "ocaml": "update_list",
+        "interpreter": "update",
+        "lem": "update_list_dec",
+        "coq": "vec_update_dec",
+        "lean": "vectorUpdate",
+        "_": "vector_update"
+      },
+      "type": "forall 'n 'm ('a : Type), 0 <= 'm < 'n. (vector('n, dec, 'a), int('m), 'a) -> vector('n, dec, 'a)",
+      "ocaml_type": "'a list -> Z.t -> 'a -> 'a list",
+      "file": "lib/vector.sail",
+      "conditions": [
+        { "directive": "ifndef", "argument": "_VECTOR", "branch": "then" }
+      ]
+    },
+    {
+      "name": "add_bits",
+      "operator": false,
+      "pure": true,
+      "bindings": {
+        "lem": "add_vec",
+        "coq": "add_vec",
+        "lean": "_lean_add",
+        "_": "add_bits"
+      },
+      "type": "forall 'n. (bits('n), bits('n)) -> bits('n)",
+      "ocaml_type": "bits -> bits -> bits",
+      "file": "lib/vector.sail",
+      "conditions": [
+        { "directive": "ifndef", "argument": "_VECTOR", "branch": "then" }
+      ]
+    },
+    {
+      "name": "add_bits_int",
+      "operator": false,
+      "pure": true,
+      "bindings": {
+        "lem": "add_vec_int",
+        "coq": "add_vec_int",
+        "lean": "BitVec.addInt",
+        "_": "add_bits_int"
+      },
+      "type": "forall 'n. (bits('n), int) -> bits('n)",
+      "ocaml_type": "bits -> Z.t -> bits",
+      "file": "lib/vector.sail",
+      "conditions": [
+        { "directive": "ifndef", "argument": "_VECTOR", "branch": "then" }
+      ]
+    },
+    {
+      "name": "sub_bits",
+      "operator": false,
+      "pure": true,
+      "bindings": {
+        "lem": "sub_vec",
+        "coq": "sub_vec",
+        "lean": "_lean_sub",
+        "_": "sub_bits"
+      },
+      "type": "forall 'n. (bits('n), bits('n)) -> bits('n)",
+      "ocaml_type": "bits -> bits -> bits",
+      "file": "lib/vector.sail",
+      "conditions": [
+        { "directive": "ifndef", "argument": "_VECTOR", "branch": "then" }
+      ]
+    },
+    {
+      "name": "not_vec",
+      "operator": false,
+      "pure": true,
+      "bindings": {
+        "lem": "not_vec",
+        "coq": "not_vec",
+        "lean": "Complement.complement",
+        "_": "not_bits"
+      },
+      "type": "forall 'n. bits('n) -> bits('n)",
+      "ocaml_type": "bits -> bits",
+      "file": "lib/vector.sail",
+      "conditions": [
+        { "directive": "ifndef", "argument": "_VECTOR", "branch": "then" }
+      ]
+    },
+    {
+      "name": "and_vec",
+      "operator": false,
+      "pure": true,
+      "bindings": {
+        "lem": "and_vec",
+        "coq": "and_vec",
+        "lean": "_lean_bvand",
+        "_": "and_bits"
+      },
+      "type": "forall 'n. (bits('n), bits('n)) -> bits('n)",
+      "ocaml_type": "bits -> bits -> bits",
+      "file": "lib/vector.sail",
+      "conditions": [
+        { "directive": "ifndef", "argument": "_VECTOR", "branch": "then" }
+      ]
+    },
+    {
+      "name": "or_vec",
+      "operator": false,
+      "pure": true,
+      "bindings": {
+        "lem": "or_vec",
+        "coq": "or_vec",
+        "lean": "_lean_bvor",
+        "_": "or_bits"
+      },
+      "type": "forall 'n. (bits('n), bits('n)) -> bits('n)",
+      "ocaml_type": "bits -> bits -> bits",
+      "file": "lib/vector.sail",
+      "conditions": [
+        { "directive": "ifndef", "argument": "_VECTOR", "branch": "then" }
+      ]
+    },
+    {
+      "name": "xor_vec",
+      "operator": false,
+      "pure": true,
+      "bindings": {
+        "lem": "xor_vec",
+        "coq": "xor_vec",
+        "lean": "_lean_bvxor",
+        "_": "xor_bits"
+      },
+      "type": "forall 'n. (bits('n), bits('n)) -> bits('n)",
+      "ocaml_type": "bits -> bits -> bits",
+      "file": "lib/vector.sail",
+      "conditions": [
+        { "directive": "ifndef", "argument": "_VECTOR", "branch": "then" }
+      ]
+    },
+    {
+      "name": "subrange_bits",
+      "operator": false,
+      "pure": true,
+      "bindings": {
+        "ocaml": "subrange",
+        "interpreter": "subrange",
+        "lem": "subrange_vec_dec",
+        "coq": "subrange_vec_dec",
+        "lean": "Sail.BitVec.extractLsb",
+        "_": "vector_subrange"
+      },
+      "type": "forall ('n : Int) ('m : Int) ('o : Int), 0 <= 'o <= 'm < 'n. (bits('n), int('m), int('o)) -> bits('m - 'o + 1)",
+      "ocaml_type": "bits -> Z.t -> Z.t -> bits",
+      "file": "lib/vector.sail",
+      "conditions": [
+        { "directive": "ifndef", "argument": "_VECTOR", "branch": "then" },
+        {
+          "directive": "ifdef",
+          "argument": "_DEFAULT_DEC",
+          "branch": "then"
+        }
+      ]
+    },
+    {
+      "name": "subrange_bits",
+      "operator": false,
+      "pure": true,
+      "bindings": {
+        "ocaml": "subrange_inc",
+        "interpreter": "subrange_inc",
+        "lem": "subrange_vec_inc",
+        "coq": "subrange_vec_inc",
+        "lean": "BitVec.subrangeBE",
+        "_": "vector_subrange_inc"
+      },
+      "type": "forall ('n : Int) ('m : Int) ('o : Int), 0 <= 'm <= 'o < 'n. (bits('n), int('m), int('o)) -> bits('o - 'm + 1)",
+      "ocaml_type": "bits -> Z.t -> Z.t -> bits",
+      "file": "lib/vector.sail",
+      "conditions": [
+        { "directive": "ifndef", "argument": "_VECTOR", "branch": "then" },
+        {
+          "directive": "ifdef",
+          "argument": "_DEFAULT_DEC",
+          "branch": "else"
+        }
+      ]
+    },
+    {
+      "name": "update_subrange_bits",
+      "operator": false,
+      "pure": true,
+      "bindings": {
+        "ocaml": "update_subrange",
+        "interpreter": "update_subrange",
+        "lem": "update_subrange_vec_dec",
+        "coq": "update_subrange_vec_dec",
+        "lean": "Sail.BitVec.updateSubrange",
+        "_": "vector_update_subrange"
+      },
+      "type": "forall 'n 'm 'o, 0 <= 'o <= 'm < 'n. (bits('n), int('m), int('o), bits('m - ('o - 1))) -> bits('n)",
+      "ocaml_type": "bits -> Z.t -> Z.t -> bits -> bits",
+      "file": "lib/vector.sail",
+      "conditions": [
+        { "directive": "ifndef", "argument": "_VECTOR", "branch": "then" },
+        {
+          "directive": "ifdef",
+          "argument": "_DEFAULT_DEC",
+          "branch": "then"
+        }
+      ]
+    },
+    {
+      "name": "update_subrange_bits",
+      "operator": false,
+      "pure": true,
+      "bindings": {
+        "ocaml": "update_subrange_inc",
+        "interpreter": "update_subrange_inc",
+        "lem": "update_subrange_vec_inc",
+        "coq": "update_subrange_vec_inc",
+        "lean": "Sail.BitVec.updateSubrangeBE",
+        "_": "vector_update_subrange_inc"
+      },
+      "type": "forall 'n 'm 'o, 0 <= 'm <= 'o < 'n. (bits('n), int('m), int('o), bits('o - ('m - 1))) -> bits('n)",
+      "ocaml_type": "bits -> Z.t -> Z.t -> bits -> bits",
+      "file": "lib/vector.sail",
+      "conditions": [
+        { "directive": "ifndef", "argument": "_VECTOR", "branch": "then" },
+        {
+          "directive": "ifdef",
+          "argument": "_DEFAULT_DEC",
+          "branch": "else"
+        }
+      ]
+    },
+    {
+      "name": "sail_shiftleft",
+      "operator": false,
+      "pure": true,
+      "bindings": { "lean": "_lean_shiftl", "_": "shiftl" },
+      "type": "forall 'n ('ord : Order). (bitvector('n, 'ord), int) -> bitvector('n, 'ord)",
+      "ocaml_type": "bits -> Z.t -> bits",
+      "file": "lib/vector.sail",
+      "conditions": [
+        { "directive": "ifndef", "argument": "_VECTOR", "branch": "then" }
+      ]
+    },
+    {
+      "name": "sail_shiftright",
+      "operator": false,
+      "pure": true,
+      "bindings": { "lean": "_lean_shiftr", "_": "shiftr" },
+      "type": "forall 'n ('ord : Order). (bitvector('n, 'ord), int) -> bitvector('n, 'ord)",
+      "ocaml_type": "bits -> Z.t -> bits",
+      "file": "lib/vector.sail",
+      "conditions": [
+        { "directive": "ifndef", "argument": "_VECTOR", "branch": "then" }
+      ]
+    },
+    {
+      "name": "sail_arith_shiftright",
+      "operator": false,
+      "pure": true,
+      "bindings": { "lean": "BitVec.sshiftRight", "_": "arith_shiftr" },
+      "type": "forall 'n ('ord : Order). (bitvector('n, 'ord), int) -> bitvector('n, 'ord)",
+      "ocaml_type": "bits -> Z.t -> bits",
+      "file": "lib/vector.sail",
+      "conditions": [
+        { "directive": "ifndef", "argument": "_VECTOR", "branch": "then" }
+      ]
+    },
+    {
+      "name": "sail_zeros",
+      "operator": false,
+      "pure": true,
+      "bindings": { "lean": "BitVec.zero", "_": "zeros" },
+      "type": "forall 'n, 'n >= 0. int('n) -> bits('n)",
+      "ocaml_type": "Z.t -> bits",
+      "file": "lib/vector.sail",
+      "conditions": [
+        { "directive": "ifndef", "argument": "_VECTOR", "branch": "then" }
+      ]
+    },
+    {
+      "name": "slice",
+      "operator": false,
+      "pure": true,
+      "bindings": { "lean": "BitVec.slice", "_": "slice" },
+      "type": "forall 'n 'm 'o, 0 <= 'm & 0 <= 'n. (bits('m), int('o), int('n)) -> bits('n)",
+      "ocaml_type": "bits -> Z.t -> Z.t -> bits",
+      "file": "lib/vector.sail",
+      "conditions": [
+        { "directive": "ifndef", "argument": "_VECTOR", "branch": "then" },
+        {
+          "directive": "ifdef",
+          "argument": "_DEFAULT_DEC",
+          "branch": "then"
+        }
+      ]
+    },
+    {
+      "name": "slice",
+      "operator": false,
+      "pure": true,
+      "bindings": { "lean": "BitVec.sliceBE", "_": "slice_inc" },
+      "type": "forall 'n 'm 'o, 0 <= 'o < 'm & 'o + 'n <= 'm. (bits('m), int('o), int('n)) -> bits('n)",
+      "ocaml_type": "bits -> Z.t -> Z.t -> bits",
+      "file": "lib/vector.sail",
+      "conditions": [
+        { "directive": "ifndef", "argument": "_VECTOR", "branch": "then" },
+        {
+          "directive": "ifdef",
+          "argument": "_DEFAULT_DEC",
+          "branch": "else"
+        }
+      ]
+    },
+    {
+      "name": "replicate_bits",
+      "operator": false,
+      "pure": true,
+      "bindings": { "lean": "BitVec.replicateBits", "_": "replicate_bits" },
+      "type": "forall 'n 'm, 'm >= 0. (bits('n), int('m)) -> bits('n * 'm)",
+      "ocaml_type": "bits -> Z.t -> bits",
+      "file": "lib/vector.sail",
+      "conditions": [
+        { "directive": "ifndef", "argument": "_VECTOR", "branch": "then" }
+      ]
+    },
+    {
+      "name": "get_slice_int",
+      "operator": false,
+      "pure": true,
+      "bindings": { "_": "get_slice_int" },
+      "type": "forall 'w. (int('w), int, int) -> bits('w)",
+      "ocaml_type": "Z.t -> Z.t -> Z.t -> bits",
+      "file": "lib/vector.sail",
+      "conditions": [
+        { "directive": "ifndef", "argument": "_VECTOR", "branch": "then" }
+      ]
+    },
+    {
+      "name": "set_slice_int",
+      "operator": false,
+      "pure": true,
+      "bindings": { "_": "set_slice_int" },
+      "type": "forall 'w. (int('w), int, int, bits('w)) -> int",
+      "ocaml_type": "Z.t -> Z.t -> Z.t -> bits -> Z.t",
+      "file": "lib/vector.sail",
+      "conditions": [
+        { "directive": "ifndef", "argument": "_VECTOR", "branch": "then" }
+      ]
+    },
+    {
+      "name": "set_slice_bits",
+      "operator": false,
+      "pure": true,
+      "bindings": { "_": "set_slice" },
+      "type": "forall 'n 'm. (implicit('n), int('m), bits('n), int, bits('m)) -> bits('n)",
+      "ocaml_type": "Z.t -> Z.t -> bits -> Z.t -> bits -> bits",
+      "file": "lib/vector.sail",
+      "conditions": [
+        { "directive": "ifndef", "argument": "_VECTOR", "branch": "then" }
+      ]
+    },
+    {
+      "name": "unsigned",
+      "operator": false,
+      "pure": true,
+      "bindings": {
+        "ocaml": "uint",
+        "lem": "uint",
+        "interpreter": "uint",
+        "coq": "uint",
+        "lean": "BitVec.toNatInt",
+        "_": "sail_unsigned"
+      },
+      "type": "forall 'n. bits('n) -> range(0, 2 ^ 'n - 1)",
+      "ocaml_type": "bits -> Z.t",
+      "file": "lib/vector.sail",
+      "conditions": [
+        { "directive": "ifndef", "argument": "_VECTOR", "branch": "then" },
+        {
+          "directive": "ifndef",
+          "argument": "NO_SIGNED_UNSIGNED",
+          "branch": "then"
+        }
+      ]
+    },
+    {
+      "name": "signed",
+      "operator": false,
+      "pure": true,
+      "bindings": {
+        "ocaml": "sint",
+        "lem": "sint",
+        "interpreter": "sint",
+        "coq": "sint",
+        "lean": "BitVec.toInt",
+        "_": "sail_signed"
+      },
+      "type": "forall 'n, 'n > 0. bits('n) -> range(- (2 ^ ('n - 1)), 2 ^ ('n - 1) - 1)",
+      "ocaml_type": "bits -> Z.t",
+      "file": "lib/vector.sail",
+      "conditions": [
+        { "directive": "ifndef", "argument": "_VECTOR", "branch": "then" },
+        {
+          "directive": "ifndef",
+          "argument": "NO_SIGNED_UNSIGNED",
+          "branch": "then"
+        }
+      ]
+    }
+  ]
+}
