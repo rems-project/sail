@@ -172,13 +172,13 @@ Definition lift2 (f : ∀ n, bv n → bv n → bv n) (x y : bvn) : option bvn :=
 
 (** ** Bitwise operations *)
 
-Definition not_vec (x : bvn) : bvn := lift1 (fun n => bv_not) x.
+Definition not_bits (x : bvn) : bvn := lift1 (fun n => bv_not) x.
 
-Definition and_vec (x y : bvn) : option bvn := lift2 (fun n => bv_and) x y.
+Definition and_bits (x y : bvn) : option bvn := lift2 (fun n => bv_and) x y.
 
-Definition or_vec (x y : bvn) : option bvn := lift2 (fun n => bv_or) x y.
+Definition or_bits (x y : bvn) : option bvn := lift2 (fun n => bv_or) x y.
 
-Definition xor_vec (x y : bvn) : option bvn := lift2 (fun n => bv_xor) x y.
+Definition xor_bits (x y : bvn) : option bvn := lift2 (fun n => bv_xor) x y.
 
 Definition uint (x : bvn) : Z := bv_unsigned x.(bvn_val).
 

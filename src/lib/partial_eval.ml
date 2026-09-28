@@ -374,12 +374,12 @@ module AbsValue : SAIL_VALUE = struct
         ("length_bits", primop_length);
         ("eq_bits", primop_eq_bits);
         ("eq_anything", primop_eq_anything);
-        ("not_vec", lift AbsBitvector.Dom.not (AbsBV @-> Ret AbsBV));
+        ("not_bits", lift AbsBitvector.Dom.not (AbsBV @-> Ret AbsBV));
         ("add_bits", lift AbsBitvector.Dom.add (AbsBV @-> AbsBV @-> Ret AbsBV));
         ("sub_bits", lift AbsBitvector.Dom.sub (AbsBV @-> AbsBV @-> Ret AbsBV));
-        ("and_vec", lift AbsBitvector.Dom.coq_and (AbsBV @-> AbsBV @-> Ret AbsBV));
-        ("or_vec", lift AbsBitvector.Dom.coq_or (AbsBV @-> AbsBV @-> Ret AbsBV));
-        ("xor_vec", lift AbsBitvector.Dom.xor (AbsBV @-> AbsBV @-> Ret AbsBV));
+        ("and_bits", lift AbsBitvector.Dom.coq_and (AbsBV @-> AbsBV @-> Ret AbsBV));
+        ("or_bits", lift AbsBitvector.Dom.coq_or (AbsBV @-> AbsBV @-> Ret AbsBV));
+        ("xor_bits", lift AbsBitvector.Dom.xor (AbsBV @-> AbsBV @-> Ret AbsBV));
         ("shiftl", lift Sail_lib.shiftl (BV @-> Int @-> Ret BV));
         ("shiftr", lift Sail_lib.shiftr (BV @-> Int @-> Ret BV));
         ("append", lift AbsBitvector.Dom.append (AbsBV @-> AbsBV @-> Ret AbsBV));

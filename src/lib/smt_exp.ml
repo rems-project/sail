@@ -287,7 +287,7 @@ module SimpSet = struct
     | Some simp_v -> (
         match exp with
         (* A single bit is only unequal to one literal, so we know its value *)
-        | Bitvec_lit bv when is_bit_lit bv -> add_var v (Bitvec_lit (Sail_lib.not_vec bv)) simpset
+        | Bitvec_lit bv when is_bit_lit bv -> add_var v (Bitvec_lit (Sail_lib.not_bits bv)) simpset
         | _ ->
             {
               simpset with
@@ -484,7 +484,7 @@ module Simplifier = struct
   let rule_bit_bool_inequality =
     mk_simple_rule __LOC__ @@ function
     | Fn ("not", [Fn ("=", [exp; Bitvec_lit bv])]) when is_bit_lit bv ->
-        change (Fn ("=", [exp; Bitvec_lit (Sail_lib.not_vec bv)]))
+        change (Fn ("=", [exp; Bitvec_lit (Sail_lib.not_bits bv)]))
     | Fn ("not", [Fn ("=", [exp; Bool_lit b])]) -> change (Fn ("=", [exp; Bool_lit (not b)]))
     | _ -> NoChange
 
@@ -833,10 +833,10 @@ module Simplifier = struct
     mk_simple_rule __LOC__ @@ function
     | Fn (f, args) -> (
         match (f, args) with
-        | "bvnot", [Bitvec_lit bv] -> change (Bitvec_lit (not_vec bv))
-        | "bvand", [Bitvec_lit lhs; Bitvec_lit rhs] -> change (Bitvec_lit (and_vec lhs rhs))
-        | "bvor", [Bitvec_lit lhs; Bitvec_lit rhs] -> change (Bitvec_lit (or_vec lhs rhs))
-        | "bvxor", [Bitvec_lit lhs; Bitvec_lit rhs] -> change (Bitvec_lit (xor_vec lhs rhs))
+        | "bvnot", [Bitvec_lit bv] -> change (Bitvec_lit (not_bits bv))
+        | "bvand", [Bitvec_lit lhs; Bitvec_lit rhs] -> change (Bitvec_lit (and_bits lhs rhs))
+        | "bvor", [Bitvec_lit lhs; Bitvec_lit rhs] -> change (Bitvec_lit (or_bits lhs rhs))
+        | "bvxor", [Bitvec_lit lhs; Bitvec_lit rhs] -> change (Bitvec_lit (xor_bits lhs rhs))
         | "bvadd", [Bitvec_lit lhs; Bitvec_lit rhs] -> change (Bitvec_lit (add_bits lhs rhs))
         | "bvsub", [Bitvec_lit lhs; Bitvec_lit rhs] -> change (Bitvec_lit (sub_bits lhs rhs))
         | "bvshl", [lhs; Bitvec_lit rhs] when bv_is_zero rhs -> change lhs

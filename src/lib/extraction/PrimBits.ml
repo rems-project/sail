@@ -137,24 +137,24 @@ let lift2 f x y =
   | Some y' -> Some { bvn_n = x.bvn_n; bvn_val = (f x.bvn_n x.bvn_val y') }
   | None -> None
 
-(** val not_vec : bvn -> bvn **)
+(** val not_bits : bvn -> bvn **)
 
-let not_vec x =
+let not_bits x =
   lift1 bv_not x
 
-(** val and_vec : bvn -> bvn -> bvn option **)
+(** val and_bits : bvn -> bvn -> bvn option **)
 
-let and_vec x y =
+let and_bits x y =
   lift2 bv_and x y
 
-(** val or_vec : bvn -> bvn -> bvn option **)
+(** val or_bits : bvn -> bvn -> bvn option **)
 
-let or_vec x y =
+let or_bits x y =
   lift2 bv_or x y
 
-(** val xor_vec : bvn -> bvn -> bvn option **)
+(** val xor_bits : bvn -> bvn -> bvn option **)
 
-let xor_vec x y =
+let xor_bits x y =
   lift2 bv_xor x y
 
 (** val uint : bvn -> Big_int_Z.big_int **)

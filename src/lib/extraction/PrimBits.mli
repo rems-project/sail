@@ -45,13 +45,13 @@ val lift1 : (Big_int_Z.big_int -> bv -> bv) -> bvn -> bvn
 
 val lift2 : (Big_int_Z.big_int -> bv -> bv -> bv) -> bvn -> bvn -> bvn option
 
-val not_vec : bvn -> bvn
+val not_bits : bvn -> bvn
 
-val and_vec : bvn -> bvn -> bvn option
+val and_bits : bvn -> bvn -> bvn option
 
-val or_vec : bvn -> bvn -> bvn option
+val or_bits : bvn -> bvn -> bvn option
 
-val xor_vec : bvn -> bvn -> bvn option
+val xor_bits : bvn -> bvn -> bvn option
 
 val uint : bvn -> Big_int_Z.big_int
 
