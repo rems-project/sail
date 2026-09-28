@@ -77,6 +77,12 @@ jobs:
         opam pin --yes --no-action add .
         opam install sail --yes
 
+    - name: Check externs.json is up to date
+      # Paths in externs.json use forward slashes
+      if: runner.os != 'Windows'
+      run: |
+        opam exec -- make check-externs EXTERNS_SAIL=sail
+
     - name: Test Sail
       # Tests use lots of unix-isms currently (fork, mkdir -p, etc).
       if: runner.os != 'Windows'

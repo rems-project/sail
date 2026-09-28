@@ -120,7 +120,6 @@
   (%{workspace_root}/lib/hol/sail2_valuesAuxiliaryScript.sml
    as
    lib/hol/sail2_valuesAuxiliaryScript.sml)
-  (%{workspace_root}/lib/instr_kinds.sail as lib/instr_kinds.sail)
   (%{workspace_root}/lib/int128/rts.c as lib/int128/rts.c)
   (%{workspace_root}/lib/int128/rts.h as lib/int128/rts.h)
   (%{workspace_root}/lib/int128/sail.c as lib/int128/sail.c)

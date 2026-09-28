@@ -86,6 +86,12 @@ type ctx = {
 
 type 'a ctx_out = 'a * ctx
 
+let parse_target_set l arg =
+  let args = String.split_on_char ' ' arg |> List.filter (fun s -> String.length s > 0) in
+  match args with
+  | set :: targets -> (set, targets)
+  | [] -> raise (Reporting.err_general l "No arguments provided to target set directive")
+
 let get_type_constructor id ctx =
   match Bindings.find_opt id ctx.type_constructors with
   | None -> None
@@ -2316,15 +2322,11 @@ let rec to_ast_def doc attrs vis ctx (P.DEF_aux (def, l)) : untyped_def list ctx
               )
           | None -> ([DEF_aux (DEF_pragma ("sail_internal", Pragma_line (arg, l)), annot)], ctx)
         )
-      | "target_set" -> (
-          let args = String.split_on_char ' ' arg |> List.filter (fun s -> String.length s > 0) in
-          match args with
-          | set :: targets ->
-              ( [DEF_aux (DEF_pragma ("target_set", Pragma_line (arg, l)), annot)],
-                { ctx with target_sets = StringMap.add set targets ctx.target_sets }
-              )
-          | [] -> raise (Reporting.err_general l "No arguments provided to target set directive")
-        )
+      | "target_set" ->
+          let set, targets = parse_target_set l arg in
+          ( [DEF_aux (DEF_pragma ("target_set", Pragma_line (arg, l)), annot)],
+            { ctx with target_sets = StringMap.add set targets ctx.target_sets }
+          )
       | _ -> ([DEF_aux (DEF_pragma (pragma, Pragma_line (arg, l)), annot)], ctx)
     )
   | P.DEF_pragma (pragma, P.Pragma_structured data) ->

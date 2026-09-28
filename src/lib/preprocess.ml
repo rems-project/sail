@@ -47,6 +47,7 @@
 open Parse_ast
 
 module StringSet = Util.StringSet
+module StringMap = Util.StringMap
 
 (* Adjust a pragma location so it doesn't end after the newline. *)
 let pragma_loc l =
@@ -60,7 +61,9 @@ let pragma_loc l =
     )
     l
 
-type symbol_set = StringSet.t
+type symbol_set = { symbols : StringSet.t; target_sets : string list StringMap.t }
+
+let add_symbol sym set = { set with symbols = StringSet.add sym set.symbols }
 
 let default_symbols =
   ref
@@ -78,11 +81,13 @@ let default_symbols =
        ]
     )
 
-let get_default_symbols () = !default_symbols
+let get_default_symbols () = { symbols = !default_symbols; target_sets = StringMap.empty }
 
 let add_default_symbol str = default_symbols := StringSet.add str !default_symbols
 
-let have_symbol str set = StringSet.mem str set
+let have_symbol str set = StringSet.mem str set.symbols
+
+let add_target_set name targets set = { set with target_sets = StringMap.add name targets set.target_sets }
 
 let cond_pragma l defs =
   let depth = ref 0 in
@@ -156,10 +161,12 @@ let get_argv_position ~plus =
       Some { p with pos_cnum = p.pos_cnum + char_offset }
 
 (* Check if an `$iftarget c ocaml` directive contains the given `target`.
-  `target_set` is the space-separated list of targets ("c ocaml" in this
+  `targets` is the space-separated list of targets ("c ocaml" in this
    example). *)
-let target_set_contains (target_set : string) (target : string) : bool =
-  String.split_on_char ' ' target_set |> List.mem target
+let target_set_contains (set : symbol_set) (targets : string) (target : string) =
+  String.split_on_char ' ' targets
+  |> List.concat_map (fun t -> match StringMap.find_opt t set.target_sets with Some ts -> ts | None -> [t])
+  |> List.mem target
 
 let rec find_warnings_off = function
   | DEF_aux (DEF_pragma ("suppress_warnings", Pragma_line ("off", _)), l) :: _ ->
@@ -173,7 +180,7 @@ let preprocess ~default_sail_dir ~target_name ~options ~symbols defs =
   let rec aux includes acc = function
     | [] -> List.rev acc
     | DEF_aux (DEF_pragma ("define", Pragma_line (symbol, _)), _) :: defs ->
-        symbols := StringSet.add symbol !symbols;
+        symbols := add_symbol symbol !symbols;
         aux includes acc defs
     | DEF_aux (DEF_pragma ("include_error", Pragma_line (message, _)), l) :: defs -> (
         match List.rev includes with
@@ -216,18 +223,21 @@ let preprocess ~default_sail_dir ~target_name ~options ~symbols defs =
         aux includes (opt_pragma :: acc) defs
     | DEF_aux (DEF_pragma ("ifndef", Pragma_line (symbol, _)), l) :: defs ->
         let then_defs, else_defs, defs = cond_pragma l defs in
-        if not (StringSet.mem symbol !symbols) then aux includes acc (then_defs @ defs)
+        if not (have_symbol symbol !symbols) then aux includes acc (then_defs @ defs)
         else aux includes acc (else_defs @ defs)
     | DEF_aux (DEF_pragma ("ifdef", Pragma_line (symbol, _)), l) :: defs ->
         let then_defs, else_defs, defs = cond_pragma l defs in
-        if StringSet.mem symbol !symbols then aux includes acc (then_defs @ defs)
-        else aux includes acc (else_defs @ defs)
-    | DEF_aux (DEF_pragma ("iftarget", Pragma_line (t, _)), l) :: defs -> (
+        if have_symbol symbol !symbols then aux includes acc (then_defs @ defs) else aux includes acc (else_defs @ defs)
+    | DEF_aux (DEF_pragma ("iftarget", Pragma_line (targets, _)), l) :: defs -> (
         let then_defs, else_defs, defs = cond_pragma l defs in
         match target_name with
-        | Some t' when target_set_contains t t' -> aux includes acc (then_defs @ defs)
+        | Some t when target_set_contains !symbols targets t -> aux includes acc (then_defs @ defs)
         | _ -> aux includes acc (else_defs @ defs)
       )
+    | (DEF_aux (DEF_pragma ("target_set", Pragma_line (arg, _)), l) as pragma_def) :: defs ->
+        let set, targets = Initial_check.parse_target_set l arg in
+        symbols := add_target_set set targets !symbols;
+        aux includes (pragma_def :: acc) defs
     | DEF_aux (DEF_pragma ("include", Pragma_line (file, _)), l) :: defs ->
         let len = String.length file in
         if len = 0 then (
@@ -297,13 +307,13 @@ let preprocess ~default_sail_dir ~target_name ~options ~symbols defs =
     | DEF_aux (DEF_outcome (outcome_spec, inner_defs), l) :: defs ->
         aux includes (DEF_aux (DEF_outcome (outcome_spec, aux includes [] inner_defs), l) :: acc) defs
     | (DEF_aux (DEF_default (DT_aux (DT_order (_, ATyp_aux (atyp, _)), _)), l) as def) :: defs -> (
-        symbols := StringSet.add "_DEFAULT_ORDER_SET" !symbols;
+        symbols := add_symbol "_DEFAULT_ORDER_SET" !symbols;
         match atyp with
         | Parse_ast.ATyp_inc ->
-            symbols := StringSet.add "_DEFAULT_INC" !symbols;
+            symbols := add_symbol "_DEFAULT_INC" !symbols;
             aux includes (def :: acc) defs
         | Parse_ast.ATyp_dec ->
-            symbols := StringSet.add "_DEFAULT_DEC" !symbols;
+            symbols := add_symbol "_DEFAULT_DEC" !symbols;
             aux includes (def :: acc) defs
         | _ -> aux includes (def :: acc) defs
       )

@@ -102,9 +102,17 @@ val prerr_int = pure "prerr_int" : (string, int) -> unit
 
 $else
 
-val print_int = impure "print_int_effect" : (string, int) -> unit
+val print_int = impure {
+  ocaml: "print_int",
+  interpreter: "print_int",
+  _: "print_int_effect",
+} : (string, int) -> unit
 
-val prerr_int = impure "prerr_int_effect" : (string, int) -> unit
+val prerr_int = impure {
+  ocaml: "prerr_int",
+  interpreter: "prerr_int",
+  _: "prerr_int_effect",
+} : (string, int) -> unit
 
 $endif
 

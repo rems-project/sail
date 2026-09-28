@@ -53,6 +53,29 @@
     --virtual-file
     "corelib.sail_project"))))
 
+; sail_lib.mli is generated from the externs in the Sail library
+; (externs.json), so the OCaml interface to the library primitives is
+; always kept in sync with the library. See `make externs`.
+
+(rule
+ (target sail_lib.mli)
+ (deps
+  (:externs externs.json)
+  (:header sail_lib_header.mli.in)
+  (:overrides sail_lib_overrides.json))
+ (action
+  (with-stdout-to
+   %{target}
+   (run
+    sail_maker
+    gen_sail_lib_mli
+    --externs
+    %{externs}
+    --header
+    %{header}
+    --overrides
+    %{overrides}))))
+
 (include_subdirs qualified)
 
 (menhir

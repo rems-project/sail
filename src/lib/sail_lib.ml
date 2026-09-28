@@ -130,7 +130,7 @@ let xor_bits xs ys = require_width "xor_bits" (Extraction.PrimBits.xor_bits xs y
 
 let xor_bool = Extraction.PrimBits.xor_bool
 
-let undefined_bit () = if !random then if Random.bool () then B0 else B1 else B0
+let undefined_bit () = Extraction.PrimBits.of_bit_list [(if !random then if Random.bool () then B0 else B1 else B0)]
 
 let undefined_bool () = if !random then Random.bool () else false
 

@@ -21,6 +21,7 @@ bug-reports: "https://github.com/rems-project/sail/issues"
 depends: [
   "dune" {>= "3.21"}
   "ocaml" {>= "4.14.0"}
+  "yojson" {>= "1.6.0"}
   "odoc" {with-doc}
 ]
 build: [

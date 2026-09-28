@@ -56,6 +56,8 @@ module Strip_json_comments : TOOL
 
 module Format : TOOL
 
+module Extern_json : TOOL
+
 val load :
   (module TOOL) ->
   ((Arg.key * Arg.spec * Arg.doc) list -> 'a) ->

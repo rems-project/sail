@@ -183,11 +183,141 @@ let embed tag file virt_opt =
   | None -> ()
   | Some virt -> printf "\nlet path, handle = Sail_file.add_virtual_file ~contents \"%s\"\n" virt
 
+let parse_gen_sail_lib_mli_args (args : string list) =
+  let usage_msg = "sail_maker gen_sail_lib_mli --externs=PATH --header=PATH --overrides=PATH" in
+  let externs = ref "" in
+  let header = ref "" in
+  let overrides = ref "" in
+
+  let speclist =
+    [
+      ("--externs", Arg.Set_string externs, "<path> JSON file produced by sail --tool extern_json");
+      ("--header", Arg.Set_string header, "<path> Hand-written header for the generated interface");
+      ("--overrides", Arg.Set_string overrides, "<path> JSON file with types for, and exclusions of, externs");
+    ]
+  in
+
+  let anon_fun _ = () in
+  let args = Array.of_list ("sail_maker" :: args) in
+
+  Arg.parse_argv args speclist anon_fun usage_msg;
+
+  List.iter
+    (fun (name, value) -> if value = "" then raise (Arg.Bad (sprintf "--%s argument is required\n\n%s" name usage_msg)))
+    [("externs", !externs); ("header", !header); ("overrides", !overrides)];
+
+  (!externs, !header, !overrides)
+
+(* Only bindings that are plain OCaml identifiers are implemented by
+   Sail_lib. Qualified names (e.g. Platform.read_mem) and inline
+   expressions are implemented elsewhere. *)
+let is_sail_lib_binding name =
+  String.length name > 0
+  && (match name.[0] with 'a' .. 'z' | '_' -> true | _ -> false)
+  && String.for_all (function 'a' .. 'z' | 'A' .. 'Z' | '0' .. '9' | '_' | '\'' -> true | _ -> false) name
+
+let read_file file =
+  let in_chan = open_in_bin file in
+  let n = in_channel_length in_chan in
+  let contents = really_input_string in_chan n in
+  close_in in_chan;
+  contents
+
+(* Generate sail_lib.mli from the externs in the Sail library. Every
+   extern with an OCaml binding must either appear in the generated
+   interface with its type, or be explicitly listed as unimplemented
+   in the overrides file, so the OCaml interface and the Sail library
+   are always kept in sync. *)
+let gen_sail_lib_mli externs_file header_file overrides_file =
+  let open Yojson.Safe.Util in
+  let errors = ref [] in
+  let error fmt = ksprintf (fun msg -> errors := msg :: !errors) fmt in
+
+  let overrides = Yojson.Safe.from_file overrides_file in
+  let override_types = overrides |> member "types" |> to_assoc |> List.map (fun (name, typ) -> (name, to_string typ)) in
+  let unimplemented = overrides |> member "unimplemented" |> to_list |> List.map to_string in
+
+  (* The OCaml binding for each extern, and its type (if known), in
+     the order they first appear. *)
+  let bindings = Hashtbl.create 256 in
+  let order = ref [] in
+  Yojson.Safe.from_file externs_file |> member "externs" |> to_list
+  |> List.iter (fun extern ->
+      let sail_bindings = extern |> member "bindings" in
+      let binding =
+        match sail_bindings |> member "ocaml" with `Null -> sail_bindings |> member "_" | binding -> binding
+      in
+      match binding with
+      | `String name when is_sail_lib_binding name ->
+          let typ = extern |> member "ocaml_type" |> to_string_option in
+          let sail_name = extern |> member "name" |> to_string in
+          if not (Hashtbl.mem bindings name) then order := name :: !order;
+          Hashtbl.add bindings name (sail_name, typ)
+      | _ -> ()
+  );
+  let order = List.rev !order in
+
+  List.iter
+    (fun name ->
+      if not (Hashtbl.mem bindings name) then error "%s is listed in %s, but is not an extern" name overrides_file;
+      if List.mem_assoc name override_types && List.mem name unimplemented then
+        error "%s is both given a type and listed as unimplemented in %s" name overrides_file
+    )
+    (List.map fst override_types @ unimplemented);
+
+  let header = read_file header_file in
+  let header_vals =
+    String.split_on_char '\n' header
+    |> List.filter_map (fun line ->
+        match String.split_on_char ' ' line with "val" :: name :: _ -> Some name | _ -> None
+    )
+  in
+
+  let vals =
+    List.filter_map
+      (fun name ->
+        let externs = Hashtbl.find_all bindings name |> List.rev in
+        let sail_names = String.concat ", " (List.sort_uniq String.compare (List.map fst externs)) in
+        if List.mem name header_vals then (
+          error "%s (for %s) is declared in %s, but should be generated" name sail_names header_file;
+          None
+        )
+        else if List.mem name unimplemented then None
+        else (
+          match List.assoc_opt name override_types with
+          | Some typ -> Some (name, typ)
+          | None -> (
+              match List.sort_uniq String.compare (List.filter_map snd externs) with
+              | _ when List.exists (fun (_, typ) -> Option.is_none typ) externs ->
+                  error "No OCaml type for %s (for %s), add it to %s" name sail_names overrides_file;
+                  None
+              | [typ] -> Some (name, typ)
+              | typs ->
+                  error "Conflicting OCaml types for %s (for %s): %s. Add the correct type to %s" name sail_names
+                    (String.concat ", " typs) overrides_file;
+                  None
+            )
+        )
+      )
+      order
+  in
+
+  match List.rev !errors with
+  | [] ->
+      print_string header;
+      printf "\n(* The following are generated from %s by sail_maker. *)\n\n" (Filename.basename externs_file);
+      List.iter (fun (name, typ) -> printf "val %s : %s\n" name typ) vals
+  | errors ->
+      List.iter (fun msg -> eprintf "Error: %s\n" msg) errors;
+      exit 1
+
 let usage =
   "sail_maker gen_manifest\n\n\
   \  Write manifest.ml to stdout containing Git commit and branch information.\n\n\n\n\
    sail_maker tarball --prefix=PREFIX [--z3=Z3_EXE_PATH] [--gmp=GMP_DLL_PATH]\n\n\
-  \  Used for fixing up the `dune install` output in preparation for making release tarballs.\n\n"
+  \  Used for fixing up the `dune install` output in preparation for making release tarballs.\n\n\n\n\
+   sail_maker gen_sail_lib_mli --externs=PATH --header=PATH --overrides=PATH\n\n\
+  \  Write sail_lib.mli to stdout, generated from the externs in the Sail library.\n\n"
 
 let main () =
   match Array.to_list Sys.argv with
@@ -198,6 +328,9 @@ let main () =
   | _ :: "embed" :: args ->
       let tag, file, virt = parse_embed_args args in
       embed tag file virt
+  | _ :: "gen_sail_lib_mli" :: args ->
+      let externs, header, overrides = parse_gen_sail_lib_mli_args args in
+      gen_sail_lib_mli externs header overrides
   | _ ->
       prerr_endline usage;
       exit 1

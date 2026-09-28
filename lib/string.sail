@@ -104,13 +104,29 @@ val prerr = pure "prerr" : string -> unit
 
 $else
 
-val print_endline = impure "print_endline_effect" : string -> unit
+val print_endline = impure {
+  ocaml: "print_endline",
+  interpreter: "print_endline",
+  _: "print_endline_effect"
+} : string -> unit
 
-val prerr_endline = impure "prerr_endline_effect" : string -> unit
+val prerr_endline = impure {
+  ocaml: "prerr_endline",
+  interpreter: "prerr_endline",
+  _: "prerr_endline_effect",
+} : string -> unit
 
-val print = impure "print_effect" : string -> unit
+val print = impure {
+  ocaml: "print",
+  interpreter: "print",
+  _: "print_effect",
+} : string -> unit
 
-val prerr = impure "prerr_effect" : string -> unit
+val prerr = impure {
+  ocaml: "prerr",
+  interpreter: "prerr",
+  _: "prerr_effect",
+} : string -> unit
 
 $endif
 
