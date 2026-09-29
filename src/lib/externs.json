@@ -2353,42 +2353,6 @@
       ]
     },
     {
-      "name": "enable_tracing",
-      "operator": false,
-      "pure": true,
-      "bindings": { "c": "enable_tracing", "cpp": "enable_tracing" },
-      "type": "unit -> unit",
-      "ocaml_type": "unit -> unit",
-      "file": "lib/trace.sail",
-      "conditions": [
-        { "directive": "ifndef", "argument": "_TRACE", "branch": "then" }
-      ]
-    },
-    {
-      "name": "disable_tracing",
-      "operator": false,
-      "pure": true,
-      "bindings": { "c": "disable_tracing", "cpp": "disable_tracing" },
-      "type": "unit -> unit",
-      "ocaml_type": "unit -> unit",
-      "file": "lib/trace.sail",
-      "conditions": [
-        { "directive": "ifndef", "argument": "_TRACE", "branch": "then" }
-      ]
-    },
-    {
-      "name": "is_tracing",
-      "operator": false,
-      "pure": true,
-      "bindings": { "c": "is_tracing", "cpp": "is_tracing" },
-      "type": "unit -> bool",
-      "ocaml_type": "unit -> bool",
-      "file": "lib/trace.sail",
-      "conditions": [
-        { "directive": "ifndef", "argument": "_TRACE", "branch": "then" }
-      ]
-    },
-    {
       "name": "eq_bit",
       "operator": false,
       "pure": true,
