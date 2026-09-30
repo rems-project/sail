@@ -69,8 +69,6 @@ val emod_int = pure {
 } : forall 'n 'm. (int('n), int('m)) -> int(mod('n, 'm))
 
 val abs_int_atom = pure {
-  ocaml: "abs_int",
-  interpreter: "abs_int",
   lem: "integerAbs",
   coq: "Z.abs",
   lean: "Int.natAbs",

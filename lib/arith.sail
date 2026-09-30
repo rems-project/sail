@@ -51,19 +51,19 @@ $include <flow.sail>
 
 // ***** Addition *****
 
-val add_atom = pure {ocaml: "add_int", interpreter: "add_int", lem: "integerAdd", coq: "Z.add", lean: "_lean_addi", _: "add_int"} : forall 'n 'm.
+val add_atom = pure {lem: "integerAdd", coq: "Z.add", lean: "_lean_addi", _: "add_int"} : forall 'n 'm.
   (int('n), int('m)) -> int('n + 'm)
 
-val add_int = pure {ocaml: "add_int", interpreter: "add_int", lem: "integerAdd", coq: "Z.add", lean: "_lean_addi", _: "add_int"} : (int, int) -> int
+val add_int = pure {lem: "integerAdd", coq: "Z.add", lean: "_lean_addi", _: "add_int"} : (int, int) -> int
 
 overload operator + = {add_atom, add_int}
 
 // ***** Subtraction *****
 
-val sub_atom = pure {ocaml: "sub_int", interpreter: "sub_int", lem: "integerMinus", coq: "Z.sub", lean: "_lean_subi", _: "sub_int"} : forall 'n 'm.
+val sub_atom = pure {lem: "integerMinus", coq: "Z.sub", lean: "_lean_subi", _: "sub_int"} : forall 'n 'm.
   (int('n), int('m)) -> int('n - 'm)
 
-val sub_int = pure {ocaml: "sub_int", interpreter: "sub_int", lem: "integerMinus", coq: "Z.sub", lean: "_lean_subi", _: "sub_int"} : (int, int) -> int
+val sub_int = pure {lem: "integerMinus", coq: "Z.sub", lean: "_lean_subi", _: "sub_int"} : (int, int) -> int
 
 overload operator - = {sub_atom, sub_int}
 
@@ -190,9 +190,6 @@ val _tmod_int = pure {
 
 /*! If we know the second argument is positive, we know the result is positive */
 val _tmod_int_positive = pure {
-  ocaml: "tmod_int",
-  interpreter: "tmod_int",
-  lem: "tmod_int",
   coq: "Z.rem",
   lean: "Int.tmod",
   _: "tmod_int"
@@ -220,8 +217,6 @@ function fmod_int(n: int, m: int) -> int = {
 
 val abs_int_plain = pure {
   smt : "abs",
-  ocaml: "abs_int",
-  interpreter: "abs_int",
   lem: "integerAbs",
   coq: "Z.abs",
   lean: "Sail.Int.intAbs",
