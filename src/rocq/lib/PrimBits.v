@@ -118,8 +118,6 @@ Definition and_bool (x y : bool) : bool := andb x y.
 
 Definition or_bool (x y : bool) : bool := orb x y.
 
-Definition xor_bool (x y : bool) : bool := xorb x y.
-
 Definition eq_bool (x y : bool) : bool := Bool.eqb x y.
 
 (** ** Bitlist conversion *)

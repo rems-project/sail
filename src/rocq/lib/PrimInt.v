@@ -127,9 +127,3 @@ Definition pow2 (x : Z) : Z := Z.pow 2 x.
 Definition shl_int (n m : Z) : Z := Z.shiftl n m.
 
 Definition shr_int (n m : Z) : Z := Z.shiftr n m.
-
-Definition lor_int (n m : Z) : Z := Z.lor n m.
-
-Definition land_int (n m : Z) : Z := Z.land n m.
-
-Definition lxor_int (n m : Z) : Z := Z.lxor n m.

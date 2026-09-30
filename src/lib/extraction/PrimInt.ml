@@ -116,21 +116,3 @@ let shl_int =
 
 let shr_int =
   Z.shiftr
-
-(** val lor_int :
-    Big_int_Z.big_int -> Big_int_Z.big_int -> Big_int_Z.big_int **)
-
-let lor_int =
-  Z.coq_lor
-
-(** val land_int :
-    Big_int_Z.big_int -> Big_int_Z.big_int -> Big_int_Z.big_int **)
-
-let land_int =
-  Z.coq_land
-
-(** val lxor_int :
-    Big_int_Z.big_int -> Big_int_Z.big_int -> Big_int_Z.big_int **)
-
-let lxor_int =
-  Z.coq_lxor

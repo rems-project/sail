@@ -5,11 +5,6 @@ type reflect =
 | ReflectT
 | ReflectF
 
-(** val xorb : bool -> bool -> bool **)
-
-let xorb b1 b2 =
-  if b1 then if b2 then false else true else b2
-
 (** val negb : bool -> bool **)
 
 let negb = function

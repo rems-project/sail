@@ -27,8 +27,6 @@ val and_bool : bool -> bool -> bool
 
 val or_bool : bool -> bool -> bool
 
-val xor_bool : bool -> bool -> bool
-
 val eq_bool : bool -> bool -> bool
 
 val of_bit_list : bit list -> bvn

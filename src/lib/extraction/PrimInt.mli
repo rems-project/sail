@@ -41,9 +41,3 @@ val pow2 : Big_int_Z.big_int -> Big_int_Z.big_int
 val shl_int : Big_int_Z.big_int -> Big_int_Z.big_int -> Big_int_Z.big_int
 
 val shr_int : Big_int_Z.big_int -> Big_int_Z.big_int -> Big_int_Z.big_int
-
-val lor_int : Big_int_Z.big_int -> Big_int_Z.big_int -> Big_int_Z.big_int
-
-val land_int : Big_int_Z.big_int -> Big_int_Z.big_int -> Big_int_Z.big_int
-
-val lxor_int : Big_int_Z.big_int -> Big_int_Z.big_int -> Big_int_Z.big_int

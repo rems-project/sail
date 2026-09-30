@@ -128,8 +128,6 @@ let or_bool = Extraction.PrimBits.or_bool
 
 let xor_bits xs ys = require_width "xor_bits" (Extraction.PrimBits.xor_bits xs ys)
 
-let xor_bool = Extraction.PrimBits.xor_bool
-
 let undefined_bit () = Extraction.PrimBits.of_bit_list [(if !random then if Random.bool () then B0 else B1 else B0)]
 
 let undefined_bool () = if !random then Random.bool () else false
@@ -448,11 +446,6 @@ let reverse_endianness = Extraction.PrimBits.reverse_endianness
 
 let shl_int = Extraction.PrimInt.shl_int
 let shr_int = Extraction.PrimInt.shr_int
-let lor_int = Extraction.PrimInt.lor_int
-let land_int = Extraction.PrimInt.land_int
-let lxor_int = Extraction.PrimInt.lxor_int
-
-let debug str1 n str2 v = prerr_endline (str1 ^ Z.to_string n ^ str2 ^ string_of_bits v)
 
 let eq_string str1 str2 = String.compare str1 str2 == 0
 
@@ -475,18 +468,6 @@ let string_length str = Z.of_int (String.length str)
 let string_append s1 s2 = s1 ^ s2
 
 let int_of_string_opt s = try Some (Z.of_string s) with Invalid_argument _ -> None
-
-(* highly inefficient recursive implementation *)
-let rec maybe_int_of_prefix = function
-  | "" -> ZNone ()
-  | str -> (
-      let len = String.length str in
-      match int_of_string_opt str with
-      | Some n -> ZSome (n, Z.of_int len)
-      | None -> maybe_int_of_prefix (String.sub str 0 (len - 1))
-    )
-
-let maybe_int_of_string str = match int_of_string_opt str with None -> ZNone () | Some n -> ZSome n
 
 let set_slice _out_len _slice_len out n slice = Extraction.PrimBits.set_slice out n slice
 

@@ -64,9 +64,6 @@ val trace : string -> unit
 val trace_write : string -> string -> unit
 val trace_read : string -> string -> unit
 val trace_call : string -> unit
-val xor_bool : bool -> bool -> bool
-val drop : int -> 'a list -> 'a list
-val take : int -> 'a list -> 'a list
 val subrange_list : 'a list -> Z.t -> Z.t -> 'a list
 val subrange_list_inc : 'a list -> Z.t -> Z.t -> 'a list
 val slice_list : 'a list -> Z.t -> Z.t -> 'a list
@@ -76,12 +73,9 @@ val update_list_inc : 'a list -> Z.t -> 'a -> 'a list
 val quot_round_zero : Z.t -> Z.t -> Z.t
 val rem_round_zero : Z.t -> Z.t -> Z.t
 val identity : 'a -> 'a
-val get_slice_int' : int -> Z.t -> int -> bits
-val to_bits' : int -> Z.t -> bits
 val to_bits : Z.t -> Z.t -> bits
 val mult_vec : bits -> bits -> bits
 val mults_vec : bits -> bits -> bits
-val sub_bits_int : bits -> Z.t -> bits
 val bits_of_bit_list : bit list -> bits
 val bit_list_of_bits : bits -> bit list
 val hex_digit_value : char -> int
@@ -116,13 +110,7 @@ val tag_ram : bool Mem.t ref
 val write_tag_bool : bits -> bool -> unit
 val read_tag_bool : bits -> bool
 val reverse_endianness : bits -> bits
-val lor_int : Z.t -> Z.t -> Z.t
-val land_int : Z.t -> Z.t -> Z.t
-val lxor_int : Z.t -> Z.t -> Z.t
-val debug : string -> Z.t -> string -> bits -> unit
 val int_of_string_opt : string -> Z.t option
-val maybe_int_of_prefix : string -> (Z.t * Z.t) zoption
-val maybe_int_of_string : string -> Z.t zoption
 val negate_real : Q.t -> Q.t
 val string_of_real : Q.t -> string
 val quotient_real : Q.t -> Q.t -> Q.t
@@ -130,8 +118,6 @@ val int_power : Z.t -> Z.t -> Z.t
 val string_of_int : Z.t -> string
 val pow : int -> int -> int
 val real_of_string : string -> Q.t
-val print_string : string -> string -> unit
-val prerr_string : string -> string -> unit
 val string_of_zbitvector : bits -> string
 val string_of_znat : Z.t -> string
 val string_of_zint : Z.t -> string
