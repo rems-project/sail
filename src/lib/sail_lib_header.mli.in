@@ -61,7 +61,6 @@ val trace_write : string -> string -> unit
 val trace_read : string -> string -> unit
 val sail_trace_call : string -> string -> ('t -> string) -> ('t return -> 't) -> 't
 val trace_call : string -> unit
-val eq_anything : 'a -> 'a -> bool
 val require_width : string -> 'a option -> 'a
 val xor_bool : bool -> bool -> bool
 val drop : int -> 'a list -> 'a list
@@ -73,7 +72,6 @@ val slice_list_inc : 'a list -> Z.t -> Z.t -> 'a list
 val access_list_inc : 'a list -> Z.t -> 'a
 val update_list_inc : 'a list -> Z.t -> 'a -> 'a list
 val big_int_of_bit : bit -> Z.t
-val sub_nat : Z.t -> Z.t -> Z.t
 val quot_round_zero : Z.t -> Z.t -> Z.t
 val rem_round_zero : Z.t -> Z.t -> Z.t
 val add_bit_with_carry : bit -> bit -> bit -> bit * bit
