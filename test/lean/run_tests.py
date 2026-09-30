@@ -69,11 +69,11 @@ def get_support_lib() -> str:
     step("lake build +Sail:c.o", cwd=lib_path)
     return lib_path
 
-def test_lean(subdir: str, support_lib: str, skip_list = None, runnable: bool = False):
+def test_lean(subdir: str, support_lib: str, skip_list = None, runnable: bool = False, single_file: bool = True):
     """
     Run all Sail files available in the `subdir`.
     If `runnable` is set to `True`, it will do `lake run`
-    instead of `lake build`.
+    instead of `lake build`. Set `single_file` to `False` to test split output.
     """
     banner(f'Testing lean target (sub-directory: {subdir})')
     results = Results(subdir)
@@ -105,8 +105,9 @@ def test_lean(subdir: str, support_lib: str, skip_list = None, runnable: bool = 
                 if not runnable:
                     extra_flags.append('--lean-matchbv')
                 extra_flags = ' '.join(extra_flags)
-                step("'{}' {} {} --lean --lean-single-file  --lean-executable --lean-output-dir {} --lean-lib-path {}".format(
-                    sail, extra_flags, filename, basename, support_lib), name=filename)
+                output_mode = '--lean-single-file' if single_file else ''
+                step("'{}' {} {} --lean {} --lean-executable --lean-output-dir {} --lean-lib-path {}".format(
+                    sail, extra_flags, filename, output_mode, basename, support_lib), name=filename)
                 step('lake update', cwd=f'{basename}/out', name=filename)
                 expected_status = 0
                 if runnable and basename.startswith('fail'):
@@ -121,7 +122,7 @@ def test_lean(subdir: str, support_lib: str, skip_list = None, runnable: bool = 
                     # NOTE: lake --dir does not behave the same as cd $dir && lake build...
                     step('lake build', cwd=f'{basename}/out', name=filename)
 
-                if not runnable:
+                if not runnable and single_file:
                     output = f"{basename}/output"
                     step(f'cat {basename}/out/Out/Defs.lean > {output}')
                     step(f'echo >> {output}; echo "XXXXXXXXX" >> {output}; echo >> {output}')
@@ -133,7 +134,7 @@ def test_lean(subdir: str, support_lib: str, skip_list = None, runnable: bool = 
                             step(f'cp {output} {basename}.expected.lean')
                         else:
                             sys.exit(1)
-                else:
+                elif runnable:
                     status = step_with_status(f'diff {basename}/out/expected {basename}.expect', name=filename)
                     if status != 0:
                         sys.exit(1)
@@ -154,6 +155,7 @@ print("...done!")
 xml = '<testsuites>\n'
 
 xml += test_lean('lean', support_lib)
+xml += test_lean('lean/multi_file', support_lib, single_file=False)
 xml += test_lean('c', support_lib, skip_list=skip_selftests, runnable=True)
 
 xml += '</testsuites>\n'
