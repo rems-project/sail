@@ -195,7 +195,6 @@
   (%{workspace_root}/lib/option.sail as lib/option.sail)
   (%{workspace_root}/lib/prelude.sail as lib/prelude.sail)
   (%{workspace_root}/lib/real.sail as lib/real.sail)
-  (%{workspace_root}/lib/regfp.sail as lib/regfp.sail)
   (%{workspace_root}/lib/result.sail as lib/result.sail)
   (%{workspace_root}/lib/float.sail as lib/float.sail)
   (%{workspace_root}/lib/float/common.sail as lib/float/common.sail)
