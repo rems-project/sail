@@ -515,7 +515,10 @@ let round_up x = Z.cdiv (Q.num x) (Q.den x)
 let quotient_real x y = Q.div x y
 let div_real x y = Q.div x y
 let mult_real x y = Q.mul x y
-let real_power _ _ = failwith "real_power"
+let real_power x n =
+  let e = Z.to_int (Z.abs n) in
+  let r = Q.make (Z.pow (Q.num x) e) (Z.pow (Q.den x) e) in
+  if Z.lt n Z.zero then Q.inv r else r
 let int_power = Extraction.PrimInt.int_power
 let add_real x y = Q.add x y
 let sub_real x y = Q.sub x y
