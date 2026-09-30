@@ -1,0 +1,14 @@
+default Order dec
+
+$include <prelude.sail>
+$include <isla.sail>
+
+register R : bits(32) = 0x0000_0000
+register S : bits(64) = 0x0000_0000_0000_0000
+
+// Test for the isla_mark_register_pair primitive
+function main() -> unit = {
+  isla_mark_register_pair(ref R, ref S, "test");
+  R = 0xDEAD_BEEF;
+  assert(R == 0xDEAD_BEEF);
+}
