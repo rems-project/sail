@@ -38,16 +38,7 @@ def test_name(extern):
     return extern.replace('#', '_hash')
 
 # Primitives that the interpreter does not (yet) support, and why.
-interpreter_xfails = {
-    'bitvector_cast_in': 'no zeroExtend primop',
-    'bitvector_cast_out': 'no zeroExtend primop',
-    'string_of_bits_subrange': 'no string_of_bits_subrange primop',
-    'eq_unit': 'no eq_unit primop',
-    'neg_real': 'no neg_real primop',
-    'pow_real': 'no real_power primop',
-    'prerr_real': 'no prerr_real primop',
-    'undefined_real': 'no undefined_real primop',
-}
+interpreter_xfails = {}
 
 def read_file(filename, default=''):
     try:
