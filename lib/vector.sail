@@ -189,8 +189,6 @@ infix 8 =^
 overload operator =^ = {sail_mask}
 
 val bitvector_concat = pure {
-  ocaml: "append",
-  interpreter: "append",
   lem: "concat_vec",
   coq: "concat_vec",
   lean: "_lean_app",

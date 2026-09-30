@@ -5,8 +5,6 @@
       "operator": false,
       "pure": true,
       "bindings": {
-        "ocaml": "add_int",
-        "interpreter": "add_int",
         "lem": "integerAdd",
         "coq": "Z.add",
         "lean": "_lean_addi",
@@ -24,8 +22,6 @@
       "operator": false,
       "pure": true,
       "bindings": {
-        "ocaml": "add_int",
-        "interpreter": "add_int",
         "lem": "integerAdd",
         "coq": "Z.add",
         "lean": "_lean_addi",
@@ -43,8 +39,6 @@
       "operator": false,
       "pure": true,
       "bindings": {
-        "ocaml": "sub_int",
-        "interpreter": "sub_int",
         "lem": "integerMinus",
         "coq": "Z.sub",
         "lean": "_lean_subi",
@@ -62,8 +56,6 @@
       "operator": false,
       "pure": true,
       "bindings": {
-        "ocaml": "sub_int",
-        "interpreter": "sub_int",
         "lem": "integerMinus",
         "coq": "Z.sub",
         "lean": "_lean_subi",
@@ -399,14 +391,7 @@
       "name": "_tmod_int_positive",
       "operator": false,
       "pure": true,
-      "bindings": {
-        "ocaml": "tmod_int",
-        "interpreter": "tmod_int",
-        "lem": "tmod_int",
-        "coq": "Z.rem",
-        "lean": "Int.tmod",
-        "_": "tmod_int"
-      },
+      "bindings": { "coq": "Z.rem", "lean": "Int.tmod", "_": "tmod_int" },
       "type": "forall 'n, 'n >= 1. (int, int('n)) -> nat",
       "ocaml_type": "Z.t -> Z.t -> Z.t",
       "file": "lib/arith.sail",
@@ -420,8 +405,6 @@
       "pure": true,
       "bindings": {
         "smt": "abs",
-        "ocaml": "abs_int",
-        "interpreter": "abs_int",
         "lem": "integerAbs",
         "coq": "Z.abs",
         "lean": "Sail.Int.intAbs",
@@ -1219,8 +1202,6 @@
       "operator": false,
       "pure": true,
       "bindings": {
-        "ocaml": "eq_int",
-        "interpreter": "eq_int",
         "lem": "eq",
         "coq": "Z.eqb",
         "lean": "_lean_beq",
@@ -1238,8 +1219,6 @@
       "operator": false,
       "pure": true,
       "bindings": {
-        "ocaml": "eq_bool",
-        "interpreter": "eq_bool",
         "lem": "eq",
         "coq": "Bool.eqb",
         "lean": "_lean_beq",
@@ -2102,8 +2081,6 @@
       "operator": false,
       "pure": true,
       "bindings": {
-        "ocaml": "abs_int",
-        "interpreter": "abs_int",
         "lem": "integerAbs",
         "coq": "Z.abs",
         "lean": "Int.natAbs",
@@ -2626,8 +2603,6 @@
       "operator": false,
       "pure": true,
       "bindings": {
-        "ocaml": "append",
-        "interpreter": "append",
         "lem": "concat_vec",
         "coq": "concat_vec",
         "lean": "_lean_app",

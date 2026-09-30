@@ -70,9 +70,9 @@ val and_bool_no_flow = pure {coq: "andb", lean: "_lean_and", _: "and_bool"} : (b
 
 val or_bool = pure {coq: "orb", lean: "_lean_or", _: "or_bool"} : forall ('p : Bool) ('q : Bool). (bool('p), bool('q)) -> bool('p | 'q)
 
-val eq_int = pure {ocaml: "eq_int", interpreter: "eq_int", lem: "eq", coq: "Z.eqb", lean: "_lean_beq", _: "eq_int"} : forall 'n 'm. (int('n), int('m)) -> bool('n == 'm)
+val eq_int = pure {lem: "eq", coq: "Z.eqb", lean: "_lean_beq", _: "eq_int"} : forall 'n 'm. (int('n), int('m)) -> bool('n == 'm)
 
-val eq_bool = pure {ocaml: "eq_bool", interpreter: "eq_bool", lem: "eq", coq: "Bool.eqb", lean: "_lean_beq", _: "eq_bool"} : (bool, bool) -> bool
+val eq_bool = pure {lem: "eq", coq: "Bool.eqb", lean: "_lean_beq", _: "eq_bool"} : (bool, bool) -> bool
 
 val neq_int = pure {lem: "neq", lean: "_lean_bne"} : forall 'n 'm. (int('n), int('m)) -> bool('n != 'm)
 function neq_int (x, y) = not_bool(eq_int(x, y))
