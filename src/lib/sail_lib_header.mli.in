@@ -46,22 +46,24 @@
 
 open Ast.Bit
 
-type bits = Extraction.Definitions.bvn
-type 'a return = { return : 'b. 'a -> 'b }
-type 'za zoption = ZNone of unit | ZSome of 'za
-val zint_forwards : Z.t -> string
 val opt_trace : bool ref
-val trace_depth : int ref
-val random : bool ref
 val opt_cycle_limit : int ref
-val cycle_limit_reached : unit -> bool
+
+type 'a return = { return : 'b. 'a -> 'b }
+
 val sail_call : ('t return -> 't) -> 't
+val sail_trace_call : string -> string -> ('t -> string) -> ('t return -> 't) -> 't
+
+type bits = Extraction.Definitions.bvn
+
+type 'za zoption = ZNone of unit | ZSome of 'za
+
+val zint_forwards : Z.t -> string
+val cycle_limit_reached : unit -> bool
 val trace : string -> unit
 val trace_write : string -> string -> unit
 val trace_read : string -> string -> unit
-val sail_trace_call : string -> string -> ('t -> string) -> ('t return -> 't) -> 't
 val trace_call : string -> unit
-val require_width : string -> 'a option -> 'a
 val xor_bool : bool -> bool -> bool
 val drop : int -> 'a list -> 'a list
 val take : int -> 'a list -> 'a list
@@ -132,7 +134,6 @@ val debug : string -> Z.t -> string -> bits -> unit
 val int_of_string_opt : string -> Z.t option
 val maybe_int_of_prefix : string -> (Z.t * Z.t) zoption
 val maybe_int_of_string : string -> Z.t zoption
-val lt_int : Z.t -> Z.t -> bool
 val negate_real : Q.t -> Q.t
 val string_of_real : Q.t -> string
 val quotient_real : Q.t -> Q.t -> Q.t
