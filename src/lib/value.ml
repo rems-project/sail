@@ -722,8 +722,8 @@ let primops =
          ("print_bits", value_print_bits);
          ("print_int", value_print_int);
          ("print_string", value_print_string);
-         ("prerr_bits", value_print_bits);
-         ("prerr_int", value_print_int);
+         ("prerr_bits", value_prerr_bits);
+         ("prerr_int", value_prerr_int);
          ("prerr_string", value_prerr_string);
          ("concat_str", value_concat_str);
          ("eq_int", value_eq_int);

@@ -49,8 +49,6 @@ interpreter_xfails = {
     'undefined_real': 'no undefined_real primop',
     'prerr': 'prints its argument quoted, as a Sail string literal',
     'prerr_endline': 'prints its argument quoted, as a Sail string literal',
-    'prerr_int': 'prints to stdout rather than stderr',
-    'prerr_bits': 'prints to stdout rather than stderr',
 }
 
 def read_file(filename, default=''):
