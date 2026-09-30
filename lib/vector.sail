@@ -290,6 +290,15 @@ val sub_bits = pure {
   _: "sub_bits"
 } : forall 'n. (bits('n), bits('n)) -> bits('n)
 
+val sub_bits_int = pure {
+  lem: "sub_vec_int",
+  coq: "sub_vec_int",
+  lean: "BitVec.subInt",
+  _: "sub_bits_int"
+} : forall 'n. (bits('n), int) -> bits('n)
+
+overload operator - = {sub_bits, sub_bits_int}
+
 val not_vec = pure {
   lem: "not_vec",
   coq: "not_vec",

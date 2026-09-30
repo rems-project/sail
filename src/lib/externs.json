@@ -2630,6 +2630,23 @@
       ]
     },
     {
+      "name": "sub_bits_int",
+      "operator": false,
+      "pure": true,
+      "bindings": {
+        "lem": "sub_vec_int",
+        "coq": "sub_vec_int",
+        "lean": "BitVec.subInt",
+        "_": "sub_bits_int"
+      },
+      "type": "forall 'n. (bits('n), int) -> bits('n)",
+      "ocaml_type": "bits -> Z.t -> bits",
+      "file": "lib/vector.sail",
+      "conditions": [
+        { "directive": "ifndef", "argument": "_VECTOR", "branch": "then" }
+      ]
+    },
+    {
       "name": "not_vec",
       "operator": false,
       "pure": true,

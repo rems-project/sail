@@ -5,8 +5,6 @@ type reflect =
 | ReflectT
 | ReflectF
 
-val xorb : bool -> bool -> bool
-
 val negb : bool -> bool
 
 val option_map : ('a1 -> 'a2) -> 'a1 option -> 'a2 option

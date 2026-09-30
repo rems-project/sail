@@ -88,11 +88,6 @@ let and_bool =
 let or_bool =
   (||)
 
-(** val xor_bool : bool -> bool -> bool **)
-
-let xor_bool =
-  xorb
-
 (** val eq_bool : bool -> bool -> bool **)
 
 let eq_bool =
