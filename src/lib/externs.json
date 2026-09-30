@@ -81,7 +81,6 @@
       "operator": false,
       "pure": true,
       "bindings": {
-        "ocaml": "(fun x y -> let n = sub_int x y in if Z.leq n Z.zero then Z.zero else n)",
         "lem": "integerMinus",
         "coq": "Z.sub",
         "lean": "_lean_subi",
@@ -1270,7 +1269,6 @@
       "operator": false,
       "pure": true,
       "bindings": {
-        "ocaml": "(fun x y -> x = y)",
         "lem": "eq",
         "coq": "generic_eq",
         "lean": "_lean_beq",

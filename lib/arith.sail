@@ -68,7 +68,6 @@ val sub_int = pure {ocaml: "sub_int", interpreter: "sub_int", lem: "integerMinus
 overload operator - = {sub_atom, sub_int}
 
 val sub_nat = pure {
-  ocaml: "(fun x y -> let n = sub_int x y in if Z.leq n Z.zero then Z.zero else n)",
   lem: "integerMinus",
   coq: "Z.sub",
   lean: "_lean_subi",
