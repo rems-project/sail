@@ -1715,10 +1715,12 @@ and subst_lexp id value (LE_aux (lexp_aux, annot)) =
   in
   wrap lexp_aux
 
+let char_of_bit = function B0 -> '0' | B1 -> '1'
+
 let hex_to_bin hex =
   Util.string_to_list hex
   |> List.map (fun c -> Sail_lib.bit_list_of_bits (Sail_lib.hex_char c))
-  |> List.concat |> List.map Sail_lib.char_of_bit
+  |> List.concat |> List.map char_of_bit
   |> fun bits -> String.init (List.length bits) (List.nth bits)
 
 let explode s =

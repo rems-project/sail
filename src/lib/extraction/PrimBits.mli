@@ -21,8 +21,6 @@ val bit_of_bool : bool -> bit
 
 val string_of_bit : bit -> string
 
-val char_of_bit : bit -> char
-
 val bigint_of_bit : bit -> Big_int_Z.big_int
 
 val and_bool : bool -> bool -> bool

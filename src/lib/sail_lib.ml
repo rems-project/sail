@@ -283,8 +283,6 @@ let sub_bits xs ys = require_width "sub_bits" (Extraction.PrimBits.sub_bits xs y
 
 let sub_bits_int = Extraction.PrimBits.sub_bits_int
 
-let bin_char = function '0' -> B0 | '1' -> B1 | _ -> raise (Runtime_type_error "Invalid binary character")
-
 (* Bitvector literals in the AST are still lists of bits, so the two
    conversions are needed where a literal becomes a value, and where a
    value is rendered back into a literal. *)
@@ -314,8 +312,6 @@ let concat_str str1 str2 = str1 ^ str2
 let rec break n = function [] -> [] | _ :: _ as xs -> [take n xs] @ break n (drop n xs)
 
 let string_of_bit = Extraction.PrimBits.string_of_bit
-
-let char_of_bit = Extraction.PrimBits.char_of_bit
 
 let int_of_bit = function B0 -> 0 | B1 -> 1
 

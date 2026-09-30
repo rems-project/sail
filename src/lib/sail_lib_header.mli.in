@@ -73,12 +73,8 @@ val slice_list : 'a list -> Z.t -> Z.t -> 'a list
 val slice_list_inc : 'a list -> Z.t -> Z.t -> 'a list
 val access_list_inc : 'a list -> Z.t -> 'a
 val update_list_inc : 'a list -> Z.t -> 'a -> 'a list
-val big_int_of_bit : bit -> Z.t
 val quot_round_zero : Z.t -> Z.t -> Z.t
 val rem_round_zero : Z.t -> Z.t -> Z.t
-val add_bit_with_carry : bit -> bit -> bit -> bit * bit
-val sub_bit_with_carry : bit -> bit -> bit -> bit * bit
-val add_bits_carry : bits -> bits -> bit * bits
 val identity : 'a -> 'a
 val get_slice_int' : int -> Z.t -> int -> bits
 val to_bits' : int -> Z.t -> bits
@@ -86,7 +82,6 @@ val to_bits : Z.t -> Z.t -> bits
 val mult_vec : bits -> bits -> bits
 val mults_vec : bits -> bits -> bits
 val sub_bits_int : bits -> Z.t -> bits
-val bin_char : char -> bit
 val bits_of_bit_list : bit list -> bits
 val bit_list_of_bits : bits -> bit list
 val hex_digit_value : char -> int
@@ -94,12 +89,6 @@ val bits_of_string : string -> bits
 val hex_char : char -> bits
 val list_of_string : string -> char list
 val break : int -> 'a list -> 'a list list
-val string_of_bit : bit -> string
-val char_of_bit : bit -> char
-val int_of_bit : bit -> int
-val bool_of_bit : bit -> bool
-val bit_of_bool : bool -> bit
-val bigint_of_bit : bit -> Z.t
 val string_of_hex : bits -> string
 val decimal_string_of_bits : bits -> string
 val hex_slice : string -> Z.t -> Z.t -> bits
@@ -172,7 +161,6 @@ val sleep_request : unit -> unit
 val wakeup_request : unit -> unit
 val load_raw : bits -> string -> unit
 val rand_zvector : 'generators -> int -> bool -> ('generators -> 'a) -> 'a list
-val rand_zbit : 'generators -> bit
 val rand_zbitvector : 'generators -> int -> bit list
 val rand_zbool : 'generators -> bool
 val rand_zunit : 'generators -> unit
