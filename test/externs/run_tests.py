@@ -39,17 +39,6 @@ def test_name(extern):
 
 # Primitives that the interpreter does not (yet) support, and why.
 interpreter_xfails = {
-    '__read_mem': 'no read_mem/write_mem primops',
-    '__read_memt': 'no read_memt/write_memt primops',
-    '__write_mem_ea': 'no write_mem_ea primop',
-    '__write_mem': 'no write_mem primop',
-    '__write_memt': 'no write_memt primop',
-    '__write_tag': 'no write_tag primop',
-    '__excl_res': 'no excl_result primop',
-    '__barrier': 'no barrier primop',
-    '__branch_announce': 'no branch_announce primop',
-    '__cache_maintenance': 'no cache_maintenance primop',
-    '__instr_announce': 'no instr_announce primop',
     'bitvector_cast_in': 'no zeroExtend primop',
     'bitvector_cast_out': 'no zeroExtend primop',
     'string_of_bits_subrange': 'no string_of_bits_subrange primop',
@@ -103,20 +92,40 @@ def check_output(basename, stream, expected_file, actual):
     fail(basename, 'Unexpected {}\nexpected:\n{}\nactual:\n{}'.format(stream, expected, actual))
 
 def test_coverage():
-    banner('Checking every extern has a test')
+    banner('Checking every extern has a test, and every test an extern')
     results = Results('coverage')
     with open(externs_json, 'r') as file:
         externs = json.load(file)['externs']
     names = sorted(set(extern['name'] for extern in externs))
-    missing = []
+    tests = set(test_name(name) for name in names)
+    problems = []
+
+    def problem(test, message):
+        problems.append(message)
+        results._add_failure(test, message)
+
     for name in names:
         if not os.path.exists(test_name(name) + '.sail'):
-            missing.append(name)
-            results._add_failure(name, 'No test file {}.sail for extern {}'.format(test_name(name), name))
+            problem(name, 'No test file {}.sail for extern {}'.format(test_name(name), name))
         else:
             results.passes += 1
-    for name in missing:
-        print('{}Missing test{}: {}.sail for extern {}'.format(color.FAIL, color.END, test_name(name), name))
+
+    # Tests (and their expected output) for externs that no longer exist
+    for filename in sorted(os.listdir('.')):
+        basename, ext = os.path.splitext(filename)
+        if ext == '.sail':
+            if basename in tests or (basename.endswith('_inc') and basename[:-len('_inc')] in tests):
+                continue
+            problem(filename, 'Test {} does not correspond to any extern'.format(filename))
+        elif ext in ['.expect', '.err_expect'] and not os.path.exists(basename + '.sail'):
+            problem(filename, 'Expected output {} has no test file {}.sail'.format(filename, basename))
+
+    for test in sorted(interpreter_xfails):
+        if not os.path.exists(test + '.sail'):
+            problem(test, 'Expected failure listed for {}, which has no test file {}.sail'.format(test, test))
+
+    for message in problems:
+        print('{}Failed{}: {}'.format(color.FAIL, color.END, message))
     return results.finish()
 
 def test_interpreter(name):
