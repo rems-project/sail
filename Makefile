@@ -25,11 +25,11 @@ EXTERNS_SAIL ?= dune exec --release -- sail
 EXTERNS_ARGS = --tool extern_json lib -exclude lib/float.sail
 
 externs:
-	$(EXTERNS_SAIL) $(EXTERNS_ARGS) -o src/lib/externs.json
+	SAIL_NO_PLUGINS=1 $(EXTERNS_SAIL) $(EXTERNS_ARGS) -o src/lib/externs.json
 
 check-externs:
 	mkdir -p _build
-	$(EXTERNS_SAIL) $(EXTERNS_ARGS) -o _build/externs.json
+	SAIL_NO_PLUGINS=1 $(EXTERNS_SAIL) $(EXTERNS_ARGS) -o _build/externs.json
 	@diff -u src/lib/externs.json _build/externs.json || (echo "src/lib/externs.json is out of date, run 'make externs' to update it"; exit 1)
 
 lsp:

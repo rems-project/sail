@@ -492,8 +492,6 @@ let rec maybe_int_of_prefix = function
 
 let maybe_int_of_string str = match int_of_string_opt str with None -> ZNone () | Some n -> ZSome n
 
-let lt_int = Extraction.PrimInt.lt
-
 let set_slice _out_len _slice_len out n slice = Extraction.PrimBits.set_slice out n slice
 
 let set_slice_int = Extraction.PrimBits.set_slice_int
