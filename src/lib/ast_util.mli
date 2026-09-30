@@ -519,6 +519,8 @@ val hex_to_bin : string -> string
 
 val vector_string_to_bit_list : lit -> lit list
 
+val char_of_bit : Bit.bit -> char
+
 val extern_assoc : string -> extern option -> string option
 
 (** {1 Manipulating locations} *)

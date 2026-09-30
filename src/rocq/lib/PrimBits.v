@@ -104,12 +104,6 @@ Definition string_of_bit (b : bit) : string :=
   | B1 => "1"%string
   end.
 
-Definition char_of_bit (b : bit) : ascii :=
-  match b with
-  | B0 => "0"%char
-  | B1 => "1"%char
-  end.
-
 (** FIXME: [sail_lib.ml] carries two names for this, [big_int_of_bit] and
     [bigint_of_bit]; both alias this single definition. *)
 Definition bigint_of_bit (b : bit) : Z :=

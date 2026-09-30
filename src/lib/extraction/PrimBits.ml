@@ -72,12 +72,6 @@ let string_of_bit = function
 | B0 -> "0"
 | B1 -> "1"
 
-(** val char_of_bit : bit -> char **)
-
-let char_of_bit = function
-| B0 -> '0'
-| B1 -> '1'
-
 (** val bigint_of_bit : bit -> Big_int_Z.big_int **)
 
 let bigint_of_bit = function

@@ -68,10 +68,11 @@ let wavedrom_label size = function
   | None -> Printf.sprintf ", attr: '%d'" size
   | Some label -> Printf.sprintf ", attr: ['%d', '%s']" size label
 
+let bin_char = function '0' -> Bit.B0 | '1' -> Bit.B1 | _ -> assert false
+
 let binary_to_hex bin =
   let bits =
-    string_of_bin_lit ~group_separator:"" bin
-    |> Util.string_to_list |> List.map Sail_lib.bin_char |> Sail_lib.bits_of_bit_list
+    string_of_bin_lit ~group_separator:"" bin |> Util.string_to_list |> List.map bin_char |> Sail_lib.bits_of_bit_list
   in
   (* Wavedrom displays the literal in hex, so round the width up to a whole number of nibbles *)
   let width = Z.to_int (Sail_lib.length_bits bits) in
