@@ -550,6 +550,18 @@ let value_prerr_int = function
       V_unit
   | _ -> failwith "value prerr_int"
 
+let value_prerr = function
+  | [str] ->
+      prerr_string (coerce_string str);
+      V_unit
+  | _ -> failwith "value prerr"
+
+let value_prerr_endline = function
+  | [str] ->
+      prerr_endline (coerce_string str);
+      V_unit
+  | _ -> failwith "value prerr_endline"
+
 let value_prerr_string = function
   | [msg; str] ->
       output_endline (coerce_string msg ^ coerce_string str);
@@ -703,18 +715,10 @@ let primops =
          ("and_bool", and_bool);
          ("or_bool", or_bool);
          ("print", value_print);
-         ( "prerr",
-           fun vs ->
-             prerr_string (string_of_value (List.hd vs));
-             V_unit
-         );
+         ("prerr", value_prerr);
          ("dec_str", value_dec_str);
          ("print_endline", value_print_endline);
-         ( "prerr_endline",
-           fun vs ->
-             prerr_endline (string_of_value (List.hd vs));
-             V_unit
-         );
+         ("prerr_endline", value_prerr_endline);
          ("putchar", value_putchar);
          ("string_of_int", fun vs -> V_string (string_of_value (List.hd vs)));
          ("string_of_bits", fun vs -> V_string (string_of_value (List.hd vs)));
