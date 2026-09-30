@@ -1944,11 +1944,22 @@ let unique l =
   incr unique_ref;
   l
 
+(* Cope with coq -> rocq rename *)
+let compare_extern = function
+  | "coq" | "rocq" -> (
+      function "coq", _ | "rocq", _ -> true | _ -> false
+    )
+  | backend -> (
+      function backend', _ -> backend = backend'
+    )
+
 let extern_assoc backend ext =
   match ext with
   | None -> None
   | Some ext -> (
-      match List.assoc_opt backend ext.bindings with Some f -> Some f | None -> List.assoc_opt "_" ext.bindings
+      match List.find_opt (compare_extern backend) ext.bindings with
+      | Some (_, f) -> Some f
+      | None -> List.assoc_opt "_" ext.bindings
     )
 
 (**************************************************************************)
