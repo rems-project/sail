@@ -73,6 +73,7 @@ jobs:
         eval $(opam env)
         opam pin --yes --no-action add .
         opam install . --yes --deps-only
+        opam install 'bisect_ppx>=2.5.0' --yes
         opam install src/sail_lsp --yes --deps-only
 
     - name: Build Sail with coverage
@@ -172,6 +173,7 @@ jobs:
         opam pin --yes --no-action -k path add .
         opam install --yes rocq-sail-stdpp coq-record-update
         opam install . --yes --deps-only
+        opam install 'bisect_ppx>=2.5.0' --yes
 
     - name: Build Sail with coverage
       run: |
