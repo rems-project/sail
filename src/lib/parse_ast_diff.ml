@@ -62,7 +62,7 @@ let diff_kind (K_aux (k1, l)) (K_aux (k2, _)) = if k1 = k2 then None else Some l
 
 let diff_kid (Kid_aux (Var v1, l)) (Kid_aux (Var v2, _)) = if v1 = v2 then None else Some l
 
-let diff_id (Id_aux (id1, l)) (Id_aux (id2, l)) = if id1 = id2 then None else Some l
+let diff_id (Id_aux (id1, l)) (Id_aux (id2, _)) = if id1 = id2 then None else Some l
 
 let diff_lit (L_aux (lit1, l)) (L_aux (lit2, _)) = if lit1 = lit2 then None else Some l
 
@@ -375,7 +375,7 @@ let rec diff_exp lhs rhs =
       | _ -> Some l
     )
   | E_vector_append (x1, y1) -> (
-      match rhs with E_vector_append (x2, y2) -> diff_exp x1 x2 &&& lazy (diff_exp x1 x2) | _ -> Some l
+      match rhs with E_vector_append (x2, y2) -> diff_exp x1 x2 &&& lazy (diff_exp y1 y2) | _ -> Some l
     )
   | E_list exps1 -> (
       match rhs with E_list exps2 -> diff_list ~at:l diff_exp exps1 exps2 | _ -> Some l
