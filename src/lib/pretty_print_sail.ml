@@ -354,8 +354,6 @@ module Printer (Config : PRINT_CONFIG) = struct
     in
     ref (fixities' : (prec * int) Bindings.t)
 
-  type 'a vector_update = VU_single of 'a exp * 'a exp | VU_range of 'a exp * 'a exp * 'a exp
-
   let get_overloaded_info uannot =
     let open Util.Option_monad in
     match get_attribute "overloaded" uannot with
@@ -702,15 +700,6 @@ module Printer (Config : PRINT_CONFIG) = struct
     | E_block _ | E_lit _ -> doc_exp exp
     | _ when Config.insert_braces -> group (lbrace ^^ nest 4 (hardline ^^ doc_block [exp]) ^^ hardline ^^ rbrace)
     | _ -> doc_exp exp
-
-  and doc_vector_update = function
-    | VU_single (idx, value) -> (
-        match (unaux_exp idx, unaux_exp value) with
-        | E_id id, E_id id' when Id.compare id id' == 0 -> doc_atomic_exp idx
-        | _, _ -> separate space [doc_atomic_exp idx; equals; doc_exp value]
-      )
-    | VU_range (high, low, value) ->
-        separate space [doc_atomic_exp high; string ".."; doc_atomic_exp low; equals; doc_exp value]
 
   let doc_funcl (FCL_aux (FCL_funcl (id, Pat_aux (pexp, _)), (def_annot, _))) =
     doc_def_annot def_annot

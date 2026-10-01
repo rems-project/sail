@@ -117,24 +117,6 @@ let fix_length ~at:l ~len bitlist =
 
 let bitlist_to_literal bitlist = non_empty_singleton (List.map (function B0 -> Bin_0 | B1 -> Bin_1) bitlist)
 
-let parse_json_string_to_bits ~at:l ~len str =
-  let open Util.Option_monad in
-  let str_len = String.length str in
-  let chars = str |> String.to_seq |> List.of_seq in
-  let* bitlist =
-    if str_len > 2 && String.sub str 0 2 = "0b" then
-      let* bin_digits = Util.drop 2 chars |> List.filter_map valid_bin_char |> Util.option_all in
-      Some (List.map bin_digit_to_bit bin_digits |> fix_length ~at:l ~len)
-    else if str_len > 2 && String.sub str 0 2 = "0x" then
-      let* hex_digits = Util.drop 2 chars |> List.filter_map valid_hex_char |> Util.option_all in
-      Some (List.concat_map BitList.of_hex_digit hex_digits |> fix_length ~at:l ~len)
-    else
-      let* dec_chars = List.filter_map valid_dec_char chars |> Util.option_all in
-      let n = List.to_seq dec_chars |> String.of_seq |> Z.of_string in
-      Some (Sail_lib.bit_list_of_bits (Sail_lib.get_slice_int (Z.of_int len) n Z.zero))
-  in
-  Some (mk_lit_exp ~loc:l (L_bin (bitlist_to_literal bitlist)))
-
 let parse_json_string_to_abstract_bits ~at:l ~len str =
   let open Util.Option_monad in
   let str_len = String.length str in

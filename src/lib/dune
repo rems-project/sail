@@ -1,10 +1,10 @@
 (env
  (dev
   (flags
-   (:standard -w -33 -w -27)))
+   (:standard %{dune-warnings} -w -69 -w -67 -w -33 -w -27)))
  (release
   (flags
-   (:standard -w -33 -w -27))))
+   (:standard %{dune-warnings} -w -69 -w -67 -w -33 -w -27))))
 
 (rule
  (target jib.ml)

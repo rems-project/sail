@@ -1723,10 +1723,6 @@ let hex_to_bin hex =
   |> List.concat |> List.map char_of_bit
   |> fun bits -> String.init (List.length bits) (List.nth bits)
 
-let explode s =
-  let rec exp i l = if i < 0 then l else exp (i - 1) (s.[i] :: l) in
-  exp (String.length s - 1) []
-
 let vector_string_to_bit_list (L_aux (lit, l)) =
   let s_bin =
     match lit with
@@ -2119,8 +2115,6 @@ module Scanner (Loc : sig
 end) =
 struct
   let subloc = Loc.subloc
-
-  type scan_id = App of id | Id of id | Other
 
   let rec option_mapm f = function
     | [] -> None

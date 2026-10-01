@@ -55,7 +55,6 @@ let opt_ddump_initial_ast = ref false
 let opt_ddump_side_effect = ref false
 let opt_ddump_tc_ast = ref false
 let opt_list_files = ref None
-let opt_just_parse_project = ref false
 
 let finalize_ast asserts_termination symbols ctx env ast =
   Lint.warn_unmodified_variables ast;

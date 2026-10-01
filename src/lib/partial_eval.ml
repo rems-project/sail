@@ -217,7 +217,7 @@ module AbsValue : SAIL_VALUE = struct
 
   let concrete_int = function V_int i -> Extraction.Interval.Dom.concrete i | _ -> None
 
-  let rec concrete_bits = function
+  let concrete_bits = function
     | V_bitvector dbv -> (
         match Extraction.AbsBitvector.Dom.to_bv_list dbv with
         | Some [bits] -> Option.map List.rev (Util.option_all (List.map concrete_bit bits))
@@ -706,8 +706,6 @@ module Make (Lattice : SAIL_VALUE) = struct
     open PPrint
     open Pretty_print_sail
 
-    let prepend c cs = c ^^ hardline ^^ twice space ^^ cs
-
     let truncate_str n s = if String.length s > n + 3 then String.sub s 0 n ^ "..." else s
 
     let hole n = string Util.(clear @@ magenta @@ string_of_int n)
@@ -885,8 +883,6 @@ module Make (Lattice : SAIL_VALUE) = struct
   let from_exp exp = { ctx = Z_top; state = Zinterp.R.empty; focus = Extraction.Datatypes.Coq_inl exp }
 
   let unaux_id = function Id_aux (id, _) -> id
-
-  let exp_of_value v = E_aux (E_internal_value v, (Parse_ast.Unknown, Type_check.empty_tannot))
 
   let arms_of_fundef (FD_aux (FD_function (_, _, funcls), annot)) =
     let destruct_pexp = function
