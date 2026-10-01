@@ -1,3 +1,4 @@
+[@@@warning "-a"]
 open Base
 
 module Coq_list :

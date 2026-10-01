@@ -1,3 +1,4 @@
+[@@@warning "-a"]
 open BinInt
 open Base
 open List_monad

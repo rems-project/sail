@@ -1,3 +1,4 @@
+[@@@warning "-a"]
 open Ast
 
 module Types =

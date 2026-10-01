@@ -1,3 +1,4 @@
+[@@@warning "-a"]
 open Datatypes
 
 module Backport_OT =

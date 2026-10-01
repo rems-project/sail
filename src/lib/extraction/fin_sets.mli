@@ -1,3 +1,4 @@
+[@@@warning "-a"]
 open Basics
 open Datatypes
 open Base

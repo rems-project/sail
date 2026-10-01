@@ -1,3 +1,4 @@
+[@@@warning "-a"]
 open List0
 
 (** val is_none : 'a1 option -> bool **)

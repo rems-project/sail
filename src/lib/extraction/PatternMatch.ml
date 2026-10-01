@@ -1,3 +1,4 @@
+[@@@warning "-a"]
 open Ast
 open BinInt
 open BitList

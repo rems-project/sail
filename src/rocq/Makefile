@@ -12,6 +12,9 @@ extraction: build
 	rm -f ../lib/extraction/*.mli
 	cp $(addprefix _build/default/extract/prelude/, $(addsuffix .ml, $(MODS))) ../lib/extraction/
 	cp $(addprefix _build/default/extract/prelude/, $(addsuffix .mli, $(MODS))) ../lib/extraction/
+	for f in $(addprefix ../lib/extraction/, $(addsuffix .ml, $(MODS)) $(addsuffix .mli, $(MODS))); do \
+	  printf '[@@@warning "-a"]\n' | cat - $$f > $$f.tmp && mv -f $$f.tmp $$f; \
+	done
 
 COQDOCJS := vendor/coqdocjs/extra
 

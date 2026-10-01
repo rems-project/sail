@@ -1,3 +1,4 @@
+[@@@warning "-a"]
 open BinPos
 open Datatypes
 open PosDef

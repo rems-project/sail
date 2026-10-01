@@ -1,3 +1,4 @@
+[@@@warning "-a"]
 open Base
 
 (** val coq_True_dec : coq_Decision **)

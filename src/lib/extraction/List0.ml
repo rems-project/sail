@@ -1,3 +1,4 @@
+[@@@warning "-a"]
 open Datatypes
 
 (** val nth_error : 'a1 list -> Big_int_Z.big_int -> 'a1 option **)
