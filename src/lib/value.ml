@@ -182,49 +182,53 @@ let coerce_ref = function V_ref str -> str | _ -> assert false
 
 let unit_value = V_unit
 
-let value_eq_int = function
-  | [v1; v2] -> V_bool (Sail_lib.eq_int (coerce_int v1) (coerce_int v2))
-  | _ -> failwith "value eq_int"
+exception Arity_error
 
-let value_eq_bool = function
-  | [v1; v2] -> V_bool (Sail_lib.eq_bool (coerce_bool v1) (coerce_bool v2))
-  | _ -> failwith "value eq_bool"
+module Lifting = struct
+  type _ ty =
+    | Unit : unit ty
+    | Int : Z.t ty
+    | BV : Sail_lib.bits ty
+    | Bool : bool ty
+    | Real : Q.t ty
+    | String : string ty
 
-let value_lteq = function
-  | [v1; v2] -> V_bool (Sail_lib.lteq (coerce_int v1) (coerce_int v2))
-  | _ -> failwith "value lteq"
+  type _ lifting = Ret : 'a ty -> 'a lifting | Arg : 'a ty * 'b lifting -> ('a -> 'b) lifting
 
-let value_gteq = function
-  | [v1; v2] -> V_bool (Sail_lib.gteq (coerce_int v1) (coerce_int v2))
-  | _ -> failwith "value gteq"
+  let ( @-> ) arg rest = Arg (arg, rest)
 
-let value_lt = function [v1; v2] -> V_bool (Sail_lib.lt (coerce_int v1) (coerce_int v2)) | _ -> failwith "value lt"
+  let encode : type a. a ty -> a -> value =
+   fun ty x ->
+    match ty with
+    | Unit -> V_unit
+    | Int -> V_int x
+    | BV -> V_bitvector x
+    | Bool -> V_bool x
+    | Real -> V_real (Util.Rational.to_rocq x)
+    | String -> V_string x
 
-let value_gt = function [v1; v2] -> V_bool (Sail_lib.gt (coerce_int v1) (coerce_int v2)) | _ -> failwith "value gt"
+  let decode : type a. a ty -> value -> a option =
+   fun ty v ->
+    match (ty, v) with
+    | Unit, V_unit -> Some ()
+    | Int, V_int n -> Some n
+    | BV, V_bitvector bv -> Some bv
+    | Bool, V_bool b -> Some b
+    | String, V_string s -> Some s
+    | Real, V_real q -> Some (Util.Rational.from_rocq q)
+    | _ -> None
 
-let value_eq_list = function
-  | [v1; v2] -> V_bool (Sail_lib.eq_list (coerce_bv v1) (coerce_bv v2))
-  | _ -> failwith "value eq_list"
+  let rec apply : type f. f -> f lifting -> value list -> value =
+   fun f lifting args ->
+    match (lifting, args) with
+    | Ret ty, [] -> encode ty f
+    | Arg (arg, rest), v :: vs -> (
+        match decode arg v with Some x -> apply (f x) rest vs | None -> raise Arity_error
+      )
+    | _ -> raise Arity_error
 
-let value_eq_string = function
-  | [v1; v2] -> V_bool (Sail_lib.eq_string (coerce_string v1) (coerce_string v2))
-  | _ -> failwith "value eq_string"
-
-let value_string_startswith = function
-  | [v1; v2] -> V_bool (Sail_lib.string_startswith (coerce_string v1) (coerce_string v2))
-  | _ -> failwith "value string_startswith"
-
-let value_string_drop = function
-  | [v1; v2] -> V_string (Sail_lib.string_drop (coerce_string v1) (coerce_int v2))
-  | _ -> failwith "value string_drop"
-
-let value_string_take = function
-  | [v1; v2] -> V_string (Sail_lib.string_take (coerce_string v1) (coerce_int v2))
-  | _ -> failwith "value string_take"
-
-let value_string_length = function
-  | [v] -> V_int (coerce_string v |> Sail_lib.string_length)
-  | _ -> failwith "value string_length"
+  let lift : type a b. (a -> b) -> (a -> b) lifting -> value list -> value = fun f lifting args -> apply f lifting args
+end
 
 let value_eq_bit = function [v1; v2] -> V_bool (eq_value v1 v2) | _ -> failwith "value eq_bit"
 
@@ -232,14 +236,6 @@ let value_length = function
   | [V_bitvector bits] -> V_int (Sail_lib.length_bits bits)
   | [V_vector vs] -> V_int (Z.of_int (List.length vs))
   | _ -> failwith "value length"
-
-let value_subrange = function
-  | [v1; v2; v3] -> V_bitvector (Sail_lib.subrange (coerce_bv v1) (coerce_int v2) (coerce_int v3))
-  | _ -> failwith "value subrange"
-
-let value_subrange_inc = function
-  | [v1; v2; v3] -> V_bitvector (Sail_lib.subrange_inc (coerce_bv v1) (coerce_int v2) (coerce_int v3))
-  | _ -> failwith "value subrange_inc"
 
 let value_access = function
   | [V_bitvector bits; n] -> V_bitvector (Sail_lib.access bits (coerce_int n))
@@ -261,16 +257,6 @@ let value_update_inc = function
   | [V_vector vs; n; v] -> V_vector (Sail_lib.update_list_inc vs (coerce_int n) v)
   | _ -> failwith "value update_inc"
 
-let value_update_subrange = function
-  | [v1; v2; v3; v4] ->
-      V_bitvector (Sail_lib.update_subrange (coerce_bv v1) (coerce_int v2) (coerce_int v3) (coerce_bv v4))
-  | _ -> failwith "value update_subrange"
-
-let value_update_subrange_inc = function
-  | [v1; v2; v3; v4] ->
-      V_bitvector (Sail_lib.update_subrange_inc (coerce_bv v1) (coerce_int v2) (coerce_int v3) (coerce_bv v4))
-  | _ -> failwith "value update_subrange_inc"
-
 let value_append = function
   | [V_bitvector bv1; V_bitvector bv2] -> V_bitvector (Sail_lib.append bv1 bv2)
   | [V_vector v1; V_vector v2] -> V_vector (v1 @ v2)
@@ -290,140 +276,9 @@ let value_slice_inc = function
   | [V_vector vs; n; m] -> V_vector (Sail_lib.slice_list_inc vs (coerce_int n) (coerce_int m))
   | _ -> failwith "value slice_inc"
 
-let value_not = function [v] -> V_bool (not (coerce_bool v)) | _ -> failwith "value not"
-
-let value_not_bits = function [v] -> V_bitvector (Sail_lib.not_bits (coerce_bv v)) | _ -> failwith "value not_bits"
-
-let value_and_bits = function
-  | [v1; v2] -> V_bitvector (Sail_lib.and_bits (coerce_bv v1) (coerce_bv v2))
-  | _ -> failwith "value not_bits"
-
-let value_or_bits = function
-  | [v1; v2] -> V_bitvector (Sail_lib.or_bits (coerce_bv v1) (coerce_bv v2))
-  | _ -> failwith "value or_bits"
-
-let value_xor_bits = function
-  | [v1; v2] -> V_bitvector (Sail_lib.xor_bits (coerce_bv v1) (coerce_bv v2))
-  | _ -> failwith "value xor_bits"
-
-let value_uint = function [v] -> V_int (Sail_lib.uint (coerce_bv v)) | _ -> failwith "value uint"
-
-let value_sint = function [v] -> V_int (Sail_lib.sint (coerce_bv v)) | _ -> failwith "value sint"
-
-let value_get_slice_int = function
-  | [v1; v2; v3] -> V_bitvector (Sail_lib.get_slice_int (coerce_int v1) (coerce_int v2) (coerce_int v3))
-  | _ -> failwith "value get_slice_int"
-
-let value_set_slice_int = function
-  | [v1; v2; v3; v4] -> V_int (Sail_lib.set_slice_int (coerce_int v1) (coerce_int v2) (coerce_int v3) (coerce_bv v4))
-  | _ -> failwith "value set_slice_int"
-
-let value_set_slice = function
-  | [v1; v2; v3; v4; v5] ->
-      V_bitvector (Sail_lib.set_slice (coerce_int v1) (coerce_int v2) (coerce_bv v3) (coerce_int v4) (coerce_bv v5))
-  | _ -> failwith "value set_slice"
-
-let value_hex_slice = function
-  | [v1; v2; v3] -> V_bitvector (Sail_lib.hex_slice (coerce_string v1) (coerce_int v2) (coerce_int v3))
-  | _ -> failwith "value hex_slice"
-
-let value_add_int = function
-  | [v1; v2] -> V_int (Sail_lib.add_int (coerce_int v1) (coerce_int v2))
-  | _ -> failwith "value add"
-
-let value_sub_int = function
-  | [v1; v2] -> V_int (Sail_lib.sub_int (coerce_int v1) (coerce_int v2))
-  | _ -> failwith "value sub"
-
-let value_sub_nat = function
-  | [v1; v2] -> V_int (Sail_lib.sub_nat (coerce_int v1) (coerce_int v2))
-  | _ -> failwith "value sub_nat"
-
-let value_negate = function [v1] -> V_int (Sail_lib.negate (coerce_int v1)) | _ -> failwith "value negate"
-
-let value_pow2 = function [v1] -> V_int (Sail_lib.pow2 (coerce_int v1)) | _ -> failwith "value pow2"
-
-let value_int_power = function
-  | [v1; v2] -> V_int (Sail_lib.int_power (coerce_int v1) (coerce_int v2))
-  | _ -> failwith "value int_power"
-
-let value_mult = function
-  | [v1; v2] -> V_int (Sail_lib.mult (coerce_int v1) (coerce_int v2))
-  | _ -> failwith "value mult"
-
-let value_tdiv_int = function
-  | [v1; v2] -> V_int (Sail_lib.tdiv_int (coerce_int v1) (coerce_int v2))
-  | _ -> failwith "value tdiv_int"
-
-let value_tmod_int = function
-  | [v1; v2] -> V_int (Sail_lib.tmod_int (coerce_int v1) (coerce_int v2))
-  | _ -> failwith "value tmod_int"
-
-let value_quotient = function
-  | [v1; v2] -> V_int (Sail_lib.quotient (coerce_int v1) (coerce_int v2))
-  | _ -> failwith "value quotient"
-
-let value_modulus = function
-  | [v1; v2] -> V_int (Sail_lib.modulus (coerce_int v1) (coerce_int v2))
-  | _ -> failwith "value modulus"
-
-let value_abs_int = function [v] -> V_int (Z.abs (coerce_int v)) | _ -> failwith "value abs_int"
-
-let value_add_bits_int = function
-  | [v1; v2] -> V_bitvector (Sail_lib.add_bits_int (coerce_bv v1) (coerce_int v2))
-  | _ -> failwith "value add_bits_int"
-
-let value_sub_bits_int = function
-  | [v1; v2] -> V_bitvector (Sail_lib.sub_bits_int (coerce_bv v1) (coerce_int v2))
-  | _ -> failwith "value sub_bits_int"
-
-let value_add_bits = function
-  | [v1; v2] -> V_bitvector (Sail_lib.add_bits (coerce_bv v1) (coerce_bv v2))
-  | _ -> failwith "value add_bits"
-
-let value_sub_bits = function
-  | [v1; v2] -> V_bitvector (Sail_lib.sub_bits (coerce_bv v1) (coerce_bv v2))
-  | _ -> failwith "value sub_bits"
-
-let value_shl_int = function
-  | [v1; v2] -> V_int (Sail_lib.shl_int (coerce_int v1) (coerce_int v2))
-  | _ -> failwith "value shl_int"
-
-let value_shr_int = function
-  | [v1; v2] -> V_int (Sail_lib.shr_int (coerce_int v1) (coerce_int v2))
-  | _ -> failwith "value shr_int"
-
-let value_max_int = function
-  | [v1; v2] -> V_int (Sail_lib.max_int (coerce_int v1) (coerce_int v2))
-  | _ -> failwith "value max_int"
-
-let value_min_int = function
-  | [v1; v2] -> V_int (Sail_lib.min_int (coerce_int v1) (coerce_int v2))
-  | _ -> failwith "value min_int"
-
-let value_replicate_bits = function
-  | [v1; v2] -> V_bitvector (Sail_lib.replicate_bits (coerce_bv v1) (coerce_int v2))
-  | _ -> failwith "value replicate_bits"
-
-let value_count_leading_zeros = function
-  | [v1] -> V_int (Sail_lib.count_leading_zeros (coerce_bv v1))
-  | _ -> failwith "value count_leading_zeros"
-
-let value_count_trailing_zeros = function
-  | [v1] -> V_int (Sail_lib.count_trailing_zeros (coerce_bv v1))
-  | _ -> failwith "value count_trailing_zeros"
-
 let is_member = function V_member _ -> true | _ -> false
 
 let is_ctor = function V_ctor _ -> true | _ -> false
-
-let value_sign_extend = function
-  | [v1; v2] -> V_bitvector (Sail_lib.sign_extend (coerce_bv v1) (coerce_int v2))
-  | _ -> failwith "value sign_extend"
-
-let value_zero_extend = function
-  | [v1; v2] -> V_bitvector (Sail_lib.zero_extend (coerce_bv v1) (coerce_int v2))
-  | _ -> failwith "value zero_extend"
 
 (* Generated by monomorphisation, a cast between bitvectors of the same length *)
 let value_bitvector_cast = function [v] -> v | _ -> failwith "value zeroExtend"
@@ -434,41 +289,9 @@ let value_string_of_bits_subrange = function
       V_string (string_of_value (V_bitvector (Sail_lib.subrange (coerce_bv v1) (coerce_int v2) (coerce_int v3))))
   | _ -> failwith "value string_of_bits_subrange"
 
-let value_zeros = function [v] -> V_bitvector (Sail_lib.zeros (coerce_int v)) | _ -> failwith "value zeros"
-
-let value_ones = function [v] -> V_bitvector (Sail_lib.ones (coerce_int v)) | _ -> failwith "value ones"
-
-let value_shiftl = function
-  | [v1; v2] -> V_bitvector (Sail_lib.shiftl (coerce_bv v1) (coerce_int v2))
-  | _ -> failwith "value shiftl"
-
-let value_shiftr = function
-  | [v1; v2] -> V_bitvector (Sail_lib.shiftr (coerce_bv v1) (coerce_int v2))
-  | _ -> failwith "value shiftr"
-
-let value_arith_shiftr = function
-  | [v1; v2] -> V_bitvector (Sail_lib.arith_shiftr (coerce_bv v1) (coerce_int v2))
-  | _ -> failwith "value arith_shiftr"
-
-let value_shift_bits_left = function
-  | [v1; v2] -> V_bitvector (Sail_lib.shift_bits_left (coerce_bv v1) (coerce_bv v2))
-  | _ -> failwith "value shift_bits_left"
-
-let value_shift_bits_right = function
-  | [v1; v2] -> V_bitvector (Sail_lib.shift_bits_right (coerce_bv v1) (coerce_bv v2))
-  | _ -> failwith "value shift_bits_right"
-
 let value_vector_init = function
   | [v1; v2] -> V_vector (Sail_lib.vector_init (coerce_int v1) v2)
   | _ -> failwith "value vector_init"
-
-let value_vector_truncate = function
-  | [v1; v2] -> V_bitvector (Sail_lib.vector_truncate (coerce_bv v1) (coerce_int v2))
-  | _ -> failwith "value vector_truncate"
-
-let value_vector_truncateLSB = function
-  | [v1; v2] -> V_bitvector (Sail_lib.vector_truncateLSB (coerce_bv v1) (coerce_int v2))
-  | _ -> failwith "value vector_truncateLSB"
 
 let value_eq_anything = function [v1; v2] -> V_bool (eq_value v1 v2) | _ -> failwith "value eq_anything"
 
@@ -499,26 +322,6 @@ let value_undefined_vector = function
 let value_undefined_range = function [v; _] -> v | _ -> failwith "value undefined_range"
 
 let value_undefined_list = function [_] -> V_list [] | _ -> failwith "value undefined_list"
-
-let value_undefined_bitvector = function
-  | [v] -> V_bitvector (Sail_lib.undefined_bitvector (coerce_int v))
-  | _ -> failwith "value undefined_bitvector"
-
-let value_read_ram = function
-  | [v1; v2; v3; v4] -> V_bitvector (Sail_lib.read_ram (coerce_int v1) (coerce_int v2) (coerce_bv v3) (coerce_bv v4))
-  | _ -> failwith "value read_ram"
-
-let value_write_ram = function
-  | [v1; v2; v3; v4; v5] ->
-      let b = Sail_lib.write_ram (coerce_int v1) (coerce_int v2) (coerce_bv v3) (coerce_bv v4) (coerce_bv v5) in
-      V_bool b
-  | _ -> failwith "value write_ram"
-
-let value_load_raw = function
-  | [v1; v2] ->
-      Sail_lib.load_raw (coerce_bv v1) (coerce_string v2);
-      V_unit
-  | _ -> failwith "value load_raw"
 
 let value_putchar = function
   | [v] ->
@@ -577,12 +380,6 @@ let value_prerr_string = function
       V_unit
   | _ -> failwith "value print_string"
 
-let value_concat_str = function
-  | [v1; v2] -> V_string (Sail_lib.concat_str (coerce_string v1) (coerce_string v2))
-  | _ -> failwith "value concat_str"
-
-let value_to_real = function [v] -> mk_real (Sail_lib.to_real (coerce_int v)) | _ -> failwith "value to_real"
-
 let value_print_real = function
   | [v1; v2] ->
       output_endline (coerce_string v1 ^ string_of_value v2);
@@ -599,130 +396,6 @@ let value_random_real = function [_] -> mk_real (Sail_lib.random_real ()) | _ ->
 
 let value_undefined_real = function [_] -> mk_real (Sail_lib.undefined_real ()) | _ -> failwith "value undefined_real"
 
-let value_neg_real = function [v] -> mk_real (Sail_lib.neg_real (coerce_real v)) | _ -> failwith "value neg_real"
-
-let value_real_power = function
-  | [v1; v2] -> mk_real (Sail_lib.real_power (coerce_real v1) (coerce_int v2))
-  | _ -> failwith "value real_power"
-
-let value_sqrt_real = function [v] -> mk_real (Sail_lib.sqrt_real (coerce_real v)) | _ -> failwith "value sqrt_real"
-
-let value_quotient_real = function
-  | [v1; v2] -> mk_real (Sail_lib.quotient_real (coerce_real v1) (coerce_real v2))
-  | _ -> failwith "value quotient_real"
-
-let value_round_up = function [v] -> V_int (Sail_lib.round_up (coerce_real v)) | _ -> failwith "value round_up"
-
-let value_round_down = function [v] -> V_int (Sail_lib.round_down (coerce_real v)) | _ -> failwith "value round_down"
-
-let value_quot_round_zero = function
-  | [v1; v2] -> V_int (Sail_lib.quot_round_zero (coerce_int v1) (coerce_int v2))
-  | _ -> failwith "value quot_round_zero"
-
-let value_rem_round_zero = function
-  | [v1; v2] -> V_int (Sail_lib.rem_round_zero (coerce_int v1) (coerce_int v2))
-  | _ -> failwith "value rem_round_zero"
-
-let value_add_real = function
-  | [v1; v2] -> mk_real (Sail_lib.add_real (coerce_real v1) (coerce_real v2))
-  | _ -> failwith "value add_real"
-
-let value_sub_real = function
-  | [v1; v2] -> mk_real (Sail_lib.sub_real (coerce_real v1) (coerce_real v2))
-  | _ -> failwith "value sub_real"
-
-let value_mult_real = function
-  | [v1; v2] -> mk_real (Sail_lib.mult_real (coerce_real v1) (coerce_real v2))
-  | _ -> failwith "value mult_real"
-
-let value_div_real = function
-  | [v1; v2] -> mk_real (Sail_lib.div_real (coerce_real v1) (coerce_real v2))
-  | _ -> failwith "value div_real"
-
-let value_abs_real = function [v] -> mk_real (Sail_lib.abs_real (coerce_real v)) | _ -> failwith "value abs_real"
-
-let value_eq_real = function
-  | [v1; v2] -> V_bool (Sail_lib.eq_real (coerce_real v1) (coerce_real v2))
-  | _ -> failwith "value eq_real"
-
-let value_lt_real = function
-  | [v1; v2] -> V_bool (Sail_lib.lt_real (coerce_real v1) (coerce_real v2))
-  | _ -> failwith "value lt_real"
-
-let value_gt_real = function
-  | [v1; v2] -> V_bool (Sail_lib.gt_real (coerce_real v1) (coerce_real v2))
-  | _ -> failwith "value gt_real"
-
-let value_lteq_real = function
-  | [v1; v2] -> V_bool (Sail_lib.lteq_real (coerce_real v1) (coerce_real v2))
-  | _ -> failwith "value lteq_real"
-
-let value_gteq_real = function
-  | [v1; v2] -> V_bool (Sail_lib.gteq_real (coerce_real v1) (coerce_real v2))
-  | _ -> failwith "value gteq_real"
-
-let value_string_append = function
-  | [v1; v2] -> V_string (Sail_lib.string_append (coerce_string v1) (coerce_string v2))
-  | _ -> failwith "value string_append"
-
-let value_decimal_string_of_bits = function
-  | [v] -> V_string (Sail_lib.decimal_string_of_bits (coerce_bv v))
-  | _ -> failwith "value decimal_string_of_bits"
-
-let value_hex_str = function [v] -> V_string (Sail_lib.hex_str (coerce_int v)) | _ -> failwith "value hex_str"
-
-let value_hex_str_upper = function
-  | [v] -> V_string (Sail_lib.hex_str_upper (coerce_int v))
-  | _ -> failwith "value hex_str_upper"
-
-let value_valid_hex_bits = function
-  | [v1; v2] -> V_bool (Sail_lib.valid_hex_bits (coerce_int v1) (coerce_string v2))
-  | _ -> failwith "value valid_hex_bits"
-
-let value_parse_hex_bits = function
-  | [v1; v2] -> V_bitvector (Sail_lib.parse_hex_bits (coerce_int v1) (coerce_string v2))
-  | _ -> failwith "value parse_hex_bits"
-
-let value_valid_dec_bits = function
-  | [v1; v2] -> V_bool (Sail_lib.valid_dec_bits (coerce_int v1) (coerce_string v2))
-  | _ -> failwith "value valid_dec_bits"
-
-let value_parse_dec_bits = function
-  | [v1; v2] -> V_bitvector (Sail_lib.parse_dec_bits (coerce_int v1) (coerce_string v2))
-  | _ -> failwith "value parse_dec_bits"
-
-let value_emulator_read_mem = function
-  | [v1; v2; v3] -> V_bitvector (Sail_lib.emulator_read_mem (coerce_int v1) (coerce_bv v2) (coerce_int v3))
-  | _ -> failwith "value emulator_read_mem"
-
-let value_emulator_read_mem_ifetch = function
-  | [v1; v2; v3] -> V_bitvector (Sail_lib.emulator_read_mem_ifetch (coerce_int v1) (coerce_bv v2) (coerce_int v3))
-  | _ -> failwith "value emulator_read_mem_ifetch"
-
-let value_emulator_read_mem_exclusive = function
-  | [v1; v2; v3] -> V_bitvector (Sail_lib.emulator_read_mem_exclusive (coerce_int v1) (coerce_bv v2) (coerce_int v3))
-  | _ -> failwith "value emulator_read_mem_exclusive"
-
-let value_emulator_write_mem = function
-  | [v1; v2; v3; v4] ->
-      V_bool (Sail_lib.emulator_write_mem (coerce_int v1) (coerce_bv v2) (coerce_int v3) (coerce_bv v4))
-  | _ -> failwith "value emulator_write_mem"
-
-let value_emulator_write_mem_exclusive = function
-  | [v1; v2; v3; v4] ->
-      V_bool (Sail_lib.emulator_write_mem_exclusive (coerce_int v1) (coerce_bv v2) (coerce_int v3) (coerce_bv v4))
-  | _ -> failwith "value emulator_write_mem_exclusive"
-
-let value_emulator_read_tag = function
-  | [v1; v2] -> V_bool (Sail_lib.emulator_read_tag (coerce_int v1) (coerce_bv v2))
-  | _ -> failwith "value emulator_read_tag"
-
-let value_emulator_write_tag = function
-  | [v1; v2; v3] ->
-      Sail_lib.emulator_write_tag (coerce_int v1) (coerce_bv v2) (coerce_bool v3);
-      V_unit
-  | _ -> failwith "value emulator_write_tag"
-
 let value_cycle_count _ =
   Sail_lib.cycle_count ();
   V_unit
@@ -730,6 +403,7 @@ let value_cycle_count _ =
 let value_get_cycle_count _ = V_int (Sail_lib.get_cycle_count ())
 
 let primops =
+  let open Lifting in
   ref
     (List.fold_left
        (fun r (x, y) -> StringMap.add x y r)
@@ -745,128 +419,130 @@ let primops =
          ("putchar", value_putchar);
          ("string_of_int", fun vs -> V_string (string_of_value (List.hd vs)));
          ("string_of_bits", fun vs -> V_string (string_of_value (List.hd vs)));
-         ("decimal_string_of_bits", value_decimal_string_of_bits);
+         ("decimal_string_of_bits", lift Sail_lib.decimal_string_of_bits (BV @-> Ret String));
          ("print_bits", value_print_bits);
          ("print_int", value_print_int);
          ("print_string", value_print_string);
          ("prerr_bits", value_prerr_bits);
          ("prerr_int", value_prerr_int);
          ("prerr_string", value_prerr_string);
-         ("concat_str", value_concat_str);
-         ("eq_int", value_eq_int);
-         ("lteq", value_lteq);
-         ("gteq", value_gteq);
-         ("lt", value_lt);
-         ("gt", value_gt);
-         ("eq_list", value_eq_list);
-         ("eq_bool", value_eq_bool);
+         ("concat_str", lift Sail_lib.concat_str (String @-> String @-> Ret String));
+         ("eq_int", lift Sail_lib.eq_int (Int @-> Int @-> Ret Bool));
+         ("lteq", lift Sail_lib.lteq (Int @-> Int @-> Ret Bool));
+         ("gteq", lift Sail_lib.gteq (Int @-> Int @-> Ret Bool));
+         ("lt", lift Sail_lib.lt (Int @-> Int @-> Ret Bool));
+         ("gt", lift Sail_lib.gt (Int @-> Int @-> Ret Bool));
+         ("eq_list", lift Sail_lib.eq_list (BV @-> BV @-> Ret Bool));
+         ("eq_bool", lift Sail_lib.eq_bool (Bool @-> Bool @-> Ret Bool));
          ("eq_unit", fun _ -> V_bool true);
-         ("eq_string", value_eq_string);
-         ("string_startswith", value_string_startswith);
-         ("string_drop", value_string_drop);
-         ("string_take", value_string_take);
-         ("string_length", value_string_length);
+         ("eq_string", lift Sail_lib.eq_string (String @-> String @-> Ret Bool));
+         ("string_startswith", lift Sail_lib.string_startswith (String @-> String @-> Ret Bool));
+         ("string_drop", lift Sail_lib.string_drop (String @-> Int @-> Ret String));
+         ("string_take", lift Sail_lib.string_take (String @-> Int @-> Ret String));
+         ("string_length", lift Sail_lib.string_length (String @-> Ret Int));
          ("eq_bit", value_eq_bit);
          ("eq_anything", value_eq_anything);
          ("length", value_length);
          ("length_bits", value_length);
-         ("subrange", value_subrange);
-         ("subrange_inc", value_subrange_inc);
+         ("subrange", lift Sail_lib.subrange (BV @-> Int @-> Int @-> Ret BV));
+         ("subrange_inc", lift Sail_lib.subrange_inc (BV @-> Int @-> Int @-> Ret BV));
          ("access", value_access);
          ("access_inc", value_access_inc);
          ("update", value_update);
          ("update_inc", value_update_inc);
-         ("update_subrange", value_update_subrange);
-         ("update_subrange_inc", value_update_subrange_inc);
+         ("update_subrange", lift Sail_lib.update_subrange (BV @-> Int @-> Int @-> BV @-> Ret BV));
+         ("update_subrange_inc", lift Sail_lib.update_subrange_inc (BV @-> Int @-> Int @-> BV @-> Ret BV));
          ("slice", value_slice);
          ("slice_inc", value_slice_inc);
          ("append", value_append);
          ("append_list", value_append_list);
-         ("not", value_not);
-         ("not_bits", value_not_bits);
-         ("and_bits", value_and_bits);
-         ("or_bits", value_or_bits);
-         ("xor_bits", value_xor_bits);
-         ("uint", value_uint);
-         ("sint", value_sint);
-         ("get_slice_int", value_get_slice_int);
-         ("set_slice_int", value_set_slice_int);
-         ("set_slice", value_set_slice);
-         ("hex_slice", value_hex_slice);
-         ("zero_extend", value_zero_extend);
+         ("not", lift not (Bool @-> Ret Bool));
+         ("not_bits", lift Sail_lib.not_bits (BV @-> Ret BV));
+         ("and_bits", lift Sail_lib.and_bits (BV @-> BV @-> Ret BV));
+         ("or_bits", lift Sail_lib.or_bits (BV @-> BV @-> Ret BV));
+         ("xor_bits", lift Sail_lib.xor_bits (BV @-> BV @-> Ret BV));
+         ("uint", lift Sail_lib.uint (BV @-> Ret Int));
+         ("sint", lift Sail_lib.sint (BV @-> Ret Int));
+         ("get_slice_int", lift Sail_lib.get_slice_int (Int @-> Int @-> Int @-> Ret BV));
+         ("set_slice_int", lift Sail_lib.set_slice_int (Int @-> Int @-> Int @-> BV @-> Ret Int));
+         ("set_slice", lift Sail_lib.set_slice (Int @-> Int @-> BV @-> Int @-> BV @-> Ret BV));
+         ("hex_slice", lift Sail_lib.hex_slice (String @-> Int @-> Int @-> Ret BV));
+         ("zero_extend", lift Sail_lib.zero_extend (BV @-> Int @-> Ret BV));
          ("zeroExtend", value_bitvector_cast);
          ("string_of_bits_subrange", value_string_of_bits_subrange);
-         ("sign_extend", value_sign_extend);
-         ("zeros", value_zeros);
-         ("ones", value_ones);
-         ("shiftr", value_shiftr);
-         ("shiftl", value_shiftl);
-         ("arith_shiftr", value_arith_shiftr);
-         ("shift_bits_left", value_shift_bits_left);
-         ("shift_bits_right", value_shift_bits_right);
-         ("add_int", value_add_int);
-         ("sub_int", value_sub_int);
-         ("sub_nat", value_sub_nat);
-         ("div_int", value_quotient);
-         ("tdiv_int", value_tdiv_int);
-         ("tmod_int", value_tmod_int);
-         ("mult_int", value_mult);
-         ("mult", value_mult);
-         ("quotient", value_quotient);
-         ("modulus", value_modulus);
-         ("negate", value_negate);
-         ("pow2", value_pow2);
-         ("int_power", value_int_power);
-         ("shr_int", value_shr_int);
-         ("shl_int", value_shl_int);
-         ("max_int", value_max_int);
-         ("min_int", value_min_int);
-         ("abs_int", value_abs_int);
-         ("add_bits_int", value_add_bits_int);
-         ("sub_bits_int", value_sub_bits_int);
-         ("add_bits", value_add_bits);
-         ("sub_bits", value_sub_bits);
+         ("sign_extend", lift Sail_lib.sign_extend (BV @-> Int @-> Ret BV));
+         ("zeros", lift Sail_lib.zeros (Int @-> Ret BV));
+         ("ones", lift Sail_lib.ones (Int @-> Ret BV));
+         ("shiftr", lift Sail_lib.shiftr (BV @-> Int @-> Ret BV));
+         ("shiftl", lift Sail_lib.shiftl (BV @-> Int @-> Ret BV));
+         ("arith_shiftr", lift Sail_lib.arith_shiftr (BV @-> Int @-> Ret BV));
+         ("shift_bits_left", lift Sail_lib.shift_bits_left (BV @-> BV @-> Ret BV));
+         ("shift_bits_right", lift Sail_lib.shift_bits_right (BV @-> BV @-> Ret BV));
+         ("add_int", lift Sail_lib.add_int (Int @-> Int @-> Ret Int));
+         ("sub_int", lift Sail_lib.sub_int (Int @-> Int @-> Ret Int));
+         ("sub_nat", lift Sail_lib.sub_nat (Int @-> Int @-> Ret Int));
+         ("div_int", lift Sail_lib.quotient (Int @-> Int @-> Ret Int));
+         ("tdiv_int", lift Sail_lib.tdiv_int (Int @-> Int @-> Ret Int));
+         ("tmod_int", lift Sail_lib.tmod_int (Int @-> Int @-> Ret Int));
+         ("mult_int", lift Sail_lib.mult (Int @-> Int @-> Ret Int));
+         ("mult", lift Sail_lib.mult (Int @-> Int @-> Ret Int));
+         ("quotient", lift Sail_lib.quotient (Int @-> Int @-> Ret Int));
+         ("modulus", lift Sail_lib.modulus (Int @-> Int @-> Ret Int));
+         ("negate", lift Sail_lib.negate (Int @-> Ret Int));
+         ("pow2", lift Sail_lib.pow2 (Int @-> Ret Int));
+         ("int_power", lift Sail_lib.int_power (Int @-> Int @-> Ret Int));
+         ("shr_int", lift Sail_lib.shr_int (Int @-> Int @-> Ret Int));
+         ("shl_int", lift Sail_lib.shl_int (Int @-> Int @-> Ret Int));
+         ("max_int", lift Sail_lib.max_int (Int @-> Int @-> Ret Int));
+         ("min_int", lift Sail_lib.min_int (Int @-> Int @-> Ret Int));
+         ("abs_int", lift Sail_lib.abs_int (Int @-> Ret Int));
+         ("add_bits_int", lift Sail_lib.add_bits_int (BV @-> Int @-> Ret BV));
+         ("sub_bits_int", lift Sail_lib.sub_bits_int (BV @-> Int @-> Ret BV));
+         ("add_bits", lift Sail_lib.add_bits (BV @-> BV @-> Ret BV));
+         ("sub_bits", lift Sail_lib.sub_bits (BV @-> BV @-> Ret BV));
          ("vector_init", value_vector_init);
-         ("vector_truncate", value_vector_truncate);
-         ("vector_truncateLSB", value_vector_truncateLSB);
-         ("read_ram", value_read_ram);
-         ("write_ram", value_write_ram);
-         ("emulator_read_mem", value_emulator_read_mem);
-         ("emulator_read_mem_ifetch", value_emulator_read_mem);
-         ("emulator_read_mem_exclusive", value_emulator_read_mem);
-         ("emulator_write_mem", value_emulator_write_mem);
-         ("emulator_write_mem_exclusive", value_emulator_write_mem);
-         ("emulator_read_tag", value_emulator_read_tag);
-         ("emulator_write_tag", value_emulator_write_tag);
+         ("vector_truncate", lift Sail_lib.vector_truncate (BV @-> Int @-> Ret BV));
+         ("vector_truncateLSB", lift Sail_lib.vector_truncateLSB (BV @-> Int @-> Ret BV));
+         ("read_ram", lift Sail_lib.read_ram (Int @-> Int @-> BV @-> BV @-> Ret BV));
+         ("write_ram", lift Sail_lib.write_ram (Int @-> Int @-> BV @-> BV @-> BV @-> Ret Bool));
+         ("emulator_read_mem", lift Sail_lib.emulator_read_mem (Int @-> BV @-> Int @-> Ret BV));
+         ("emulator_read_mem_ifetch", lift Sail_lib.emulator_read_mem_ifetch (Int @-> BV @-> Int @-> Ret BV));
+         ("emulator_read_mem_exclusive", lift Sail_lib.emulator_read_mem_exclusive (Int @-> BV @-> Int @-> Ret BV));
+         ("emulator_write_mem", lift Sail_lib.emulator_write_mem (Int @-> BV @-> Int @-> BV @-> Ret Bool));
+         ( "emulator_write_mem_exclusive",
+           lift Sail_lib.emulator_write_mem_exclusive (Int @-> BV @-> Int @-> BV @-> Ret Bool)
+         );
+         ("emulator_read_tag", lift Sail_lib.emulator_read_tag (Int @-> BV @-> Ret Bool));
+         ("emulator_write_tag", lift Sail_lib.emulator_write_tag (Int @-> BV @-> Bool @-> Ret Unit));
          ("cycle_count", value_cycle_count);
          ("get_cycle_count", value_get_cycle_count);
          ("trace_memory_read", fun _ -> V_unit);
          ("trace_memory_write", fun _ -> V_unit);
          ("get_time_ns", fun _ -> V_int (Sail_lib.get_time_ns ()));
          ("sail_assume", fun _ -> V_unit);
-         ("load_raw", value_load_raw);
-         ("to_real", value_to_real);
-         ("eq_real", value_eq_real);
-         ("lt_real", value_lt_real);
-         ("gt_real", value_gt_real);
-         ("lteq_real", value_lteq_real);
-         ("gteq_real", value_gteq_real);
-         ("add_real", value_add_real);
-         ("sub_real", value_sub_real);
-         ("mult_real", value_mult_real);
-         ("round_up", value_round_up);
-         ("round_down", value_round_down);
-         ("quot_round_zero", value_quot_round_zero);
-         ("rem_round_zero", value_rem_round_zero);
-         ("quotient_real", value_quotient_real);
-         ("abs_real", value_abs_real);
-         ("div_real", value_div_real);
-         ("sqrt_real", value_sqrt_real);
+         ("load_raw", lift Sail_lib.load_raw (BV @-> String @-> Ret Unit));
+         ("to_real", lift Sail_lib.to_real (Int @-> Ret Real));
+         ("eq_real", lift Sail_lib.eq_real (Real @-> Real @-> Ret Bool));
+         ("lt_real", lift Sail_lib.lt_real (Real @-> Real @-> Ret Bool));
+         ("gt_real", lift Sail_lib.gt_real (Real @-> Real @-> Ret Bool));
+         ("lteq_real", lift Sail_lib.lteq_real (Real @-> Real @-> Ret Bool));
+         ("gteq_real", lift Sail_lib.gteq_real (Real @-> Real @-> Ret Bool));
+         ("add_real", lift Sail_lib.add_real (Real @-> Real @-> Ret Real));
+         ("sub_real", lift Sail_lib.sub_real (Real @-> Real @-> Ret Real));
+         ("mult_real", lift Sail_lib.mult_real (Real @-> Real @-> Ret Real));
+         ("round_up", lift Sail_lib.round_up (Real @-> Ret Int));
+         ("round_down", lift Sail_lib.round_down (Real @-> Ret Int));
+         ("quot_round_zero", lift Sail_lib.quot_round_zero (Int @-> Int @-> Ret Int));
+         ("rem_round_zero", lift Sail_lib.rem_round_zero (Int @-> Int @-> Ret Int));
+         ("quotient_real", lift Sail_lib.quotient_real (Real @-> Real @-> Ret Real));
+         ("abs_real", lift Sail_lib.abs_real (Real @-> Ret Real));
+         ("div_real", lift Sail_lib.div_real (Real @-> Real @-> Ret Real));
+         ("sqrt_real", lift Sail_lib.sqrt_real (Real @-> Ret Real));
          ("print_real", value_print_real);
          ("prerr_real", value_prerr_real);
          ("random_real", value_random_real);
-         ("neg_real", value_neg_real);
-         ("real_power", value_real_power);
+         ("neg_real", lift Sail_lib.neg_real (Real @-> Ret Real));
+         ("real_power", lift Sail_lib.real_power (Real @-> Int @-> Ret Real));
          ("undefined_real", value_undefined_real);
          ("undefined_unit", fun _ -> V_unit);
          ("undefined_bit", fun _ -> V_bitvector (Sail_lib.zeros (Z.of_int 1)));
@@ -874,26 +550,26 @@ let primops =
          ("undefined_range", value_undefined_range);
          ("undefined_nat", fun _ -> V_int Z.zero);
          ("undefined_bool", fun _ -> V_bool false);
-         ("undefined_bitvector", value_undefined_bitvector);
+         ("undefined_bitvector", lift Sail_lib.undefined_bitvector (Int @-> Ret BV));
          ("undefined_vector", value_undefined_vector);
          ("undefined_list", value_undefined_list);
          ("undefined_string", fun _ -> V_string "");
          ("internal_pick", value_internal_pick);
-         ("replicate_bits", value_replicate_bits);
-         ("count_leading_zeros", value_count_leading_zeros);
-         ("count_trailing_zeros", value_count_trailing_zeros);
+         ("replicate_bits", lift Sail_lib.replicate_bits (BV @-> Int @-> Ret BV));
+         ("count_leading_zeros", lift Sail_lib.count_leading_zeros (BV @-> Ret Int));
+         ("count_trailing_zeros", lift Sail_lib.count_trailing_zeros (BV @-> Ret Int));
          ("Elf_loader.elf_entry", fun _ -> V_int !Elf_loader.opt_elf_entry);
          ("Elf_loader.elf_tohost", fun _ -> V_int !Elf_loader.opt_elf_tohost);
-         ("string_append", value_string_append);
-         ("string_length", value_string_length);
-         ("string_startswith", value_string_startswith);
-         ("string_drop", value_string_drop);
-         ("hex_str", value_hex_str);
-         ("hex_str_upper", value_hex_str_upper);
-         ("parse_hex_bits", value_parse_hex_bits);
-         ("valid_hex_bits", value_valid_hex_bits);
-         ("parse_dec_bits", value_parse_dec_bits);
-         ("valid_dec_bits", value_valid_dec_bits);
+         ("string_append", lift Sail_lib.string_append (String @-> String @-> Ret String));
+         ("string_length", lift Sail_lib.string_length (String @-> Ret Int));
+         ("string_startswith", lift Sail_lib.string_startswith (String @-> String @-> Ret Bool));
+         ("string_drop", lift Sail_lib.string_drop (String @-> Int @-> Ret String));
+         ("hex_str", lift Sail_lib.hex_str (Int @-> Ret String));
+         ("hex_str_upper", lift Sail_lib.hex_str_upper (Int @-> Ret String));
+         ("parse_hex_bits", lift Sail_lib.parse_hex_bits (Int @-> String @-> Ret BV));
+         ("valid_hex_bits", lift Sail_lib.valid_hex_bits (Int @-> String @-> Ret Bool));
+         ("parse_dec_bits", lift Sail_lib.parse_dec_bits (Int @-> String @-> Ret BV));
+         ("valid_dec_bits", lift Sail_lib.valid_dec_bits (Int @-> String @-> Ret Bool));
          ("skip", fun _ -> V_unit);
        ]
     )
