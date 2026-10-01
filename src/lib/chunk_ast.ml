@@ -460,7 +460,7 @@ let rec pop_comments ?(newline = false) ?last_comment_line ?(spacer = true) comm
     match last_comment_line with
     | Some (comment_type, last) when spacer && last < p.pos_lnum ->
         let spacing = p.pos_lnum - last - match comment_type with Comment_line -> 1 | Comment_block -> 2 in
-        for i = 0 to spacing do
+        for _ = 0 to spacing do
           Queue.add (Spacer (true, 1)) chunks
         done
     | _ -> ()

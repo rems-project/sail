@@ -48,13 +48,6 @@ open Ast.Bit
 
 type bits = Extraction.Definitions.bvn
 
-(* for ToFromInterp_lib_foo *)
-module type BitType = sig
-  type t
-  val b0 : t
-  val b1 : t
-end
-
 type 'a return = { return : 'b. 'a -> 'b }
 
 let opt_trace = ref false

@@ -130,9 +130,9 @@ let rec start_pos = function
 
 let rec end_pos = function
   | Parse_ast.Unknown -> None
-  | Parse_ast.Unique (_, l) -> start_pos l
-  | Parse_ast.Generated l -> start_pos l
-  | Parse_ast.Hint (_, _, l) -> start_pos l
+  | Parse_ast.Unique (_, l) -> end_pos l
+  | Parse_ast.Generated l -> end_pos l
+  | Parse_ast.Hint (_, _, l) -> end_pos l
   | Parse_ast.Range (_, p2) -> Some p2
 
 let range p1 p2 = match (p1, p2) with Some p1, Some p2 -> Parse_ast.Range (p1, p2) | _, _ -> Parse_ast.Unknown
