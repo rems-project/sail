@@ -56,67 +56,30 @@ val sail_trace_call : string -> string -> ('t -> string) -> ('t return -> 't) ->
 
 type bits = Extraction.Definitions.bvn
 
-type 'za zoption = ZNone of unit | ZSome of 'za
-
-val zint_forwards : Z.t -> string
-val cycle_limit_reached : unit -> bool
-val trace : string -> unit
 val trace_write : string -> string -> unit
 val trace_read : string -> string -> unit
-val trace_call : string -> unit
 val subrange_list : 'a list -> Z.t -> Z.t -> 'a list
-val subrange_list_inc : 'a list -> Z.t -> Z.t -> 'a list
 val slice_list : 'a list -> Z.t -> Z.t -> 'a list
 val slice_list_inc : 'a list -> Z.t -> Z.t -> 'a list
 val access_list_inc : 'a list -> Z.t -> 'a
 val update_list_inc : 'a list -> Z.t -> 'a -> 'a list
 val quot_round_zero : Z.t -> Z.t -> Z.t
 val rem_round_zero : Z.t -> Z.t -> Z.t
-val identity : 'a -> 'a
 val to_bits : Z.t -> Z.t -> bits
-val mult_vec : bits -> bits -> bits
-val mults_vec : bits -> bits -> bits
 val bits_of_bit_list : bit list -> bits
 val bit_list_of_bits : bits -> bit list
-val hex_digit_value : char -> int
-val bits_of_string : string -> bits
 val hex_char : char -> bits
-val list_of_string : string -> char list
-val break : int -> 'a list -> 'a list list
-val string_of_hex : bits -> string
 val decimal_string_of_bits : bits -> string
 val hex_slice : string -> Z.t -> Z.t -> bits
 val putchar : Z.t -> unit
-val bits_of_int : int -> int -> bits
-val bits_of_big_int : int -> Z.t -> bits
-val byte_of_int : int -> bits
-module Mem : Map.S with type key = Z.t
-val mem_pages : Bytes.t Mem.t ref
-val page_shift_bits : int
-val page_size_bytes : int
-val page_no_of_addr : Z.t -> Z.t
-val bottom_addr_of_page : Z.t -> Z.t
-val top_addr_of_page : Z.t -> Z.t
-val get_mem_page : Mem.key -> Bytes.t
-val add_mem_bytes : Z.t -> bytes -> int -> int -> unit
-val read_mem_bytes : Z.t -> int -> bytes
-val write_ram' : Z.t -> Z.t -> bits -> unit
 val write_ram : 'a -> Z.t -> 'b -> bits -> bits -> bool
 val wram : Z.t -> int -> unit
-val read_mem_bits : Z.t -> Z.t -> bits
 val read_ram : 'a -> Z.t -> 'b -> bits -> bits
-val fast_read_ram : Z.t -> bits -> bits
-val tag_ram : bool Mem.t ref
-val write_tag_bool : bits -> bool -> unit
-val read_tag_bool : bits -> bool
-val reverse_endianness : bits -> bits
-val int_of_string_opt : string -> Z.t option
 val negate_real : Q.t -> Q.t
 val string_of_real : Q.t -> string
 val quotient_real : Q.t -> Q.t -> Q.t
 val int_power : Z.t -> Z.t -> Z.t
 val string_of_int : Z.t -> string
-val pow : int -> int -> int
 val real_of_string : string -> Q.t
 val string_of_zbitvector : bits -> string
 val string_of_znat : Z.t -> string
@@ -127,22 +90,10 @@ val string_of_zbool : bool -> string
 val string_of_zreal : 'a -> string
 val string_of_zstring : string -> string
 val string_of_list : string -> ('a -> string) -> 'a list -> string
-val skip : unit -> unit
-val memea : 'a -> 'b -> unit
 val ones : Z.t -> bits
-val shift_bits_right_arith : bits -> bits -> bits
 val shift_bits_right : bits -> bits -> bits
 val shift_bits_left : bits -> bits -> bits
-val speculate_conditional_success : unit -> bool
 val get_time_ns : unit -> Z.t
-val string_of_bool : bool -> string
-val to_lower_hex_char : int -> char
-val to_upper_hex_char : int -> char
-val hex_str_helper : (int -> char) -> Z.t -> string
-val is_hex_char : char -> bool
-val hex_char_width : char -> int
-val trace_memory_write : 'a -> 'b -> 'c -> unit
-val trace_memory_read : 'a -> 'b -> 'c -> unit
 val sleep_request : unit -> unit
 val wakeup_request : unit -> unit
 val load_raw : bits -> string -> unit

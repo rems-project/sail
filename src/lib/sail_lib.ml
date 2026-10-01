@@ -56,9 +56,6 @@ module type BitType = sig
 end
 
 type 'a return = { return : 'b. 'a -> 'b }
-type 'za zoption = ZNone of unit | ZSome of 'za
-
-let zint_forwards i = string_of_int (Z.to_int i)
 
 let opt_trace = ref false
 
@@ -71,10 +68,6 @@ let cycle_count_var = ref 0
 let get_cycle_count () = Z.of_int !cycle_count_var
 
 let cycle_count () = incr cycle_count_var
-
-let cycle_limit_reached () =
-  incr cycle_count_var;
-  (not (Int.equal !opt_cycle_limit 0)) && !cycle_count_var >= !opt_cycle_limit
 
 let sail_call (type t) (f : _ -> t) =
   let module M = struct
@@ -105,10 +98,6 @@ let sail_trace_call (type t) (name : string) (in_string : string) (string_of_out
   decr trace_depth;
   trace ("Return: " ^ string_of_out result);
   result
-
-let trace_call str =
-  trace str;
-  incr trace_depth
 
 exception Runtime_type_error of string
 
@@ -155,10 +144,6 @@ let eq_int = Extraction.PrimInt.eq_int
 
 let eq_bool = Extraction.PrimBits.eq_bool
 
-let rec drop n xs = match (n, xs) with 0, xs -> xs | _, [] -> [] | n, _ :: xs -> drop (n - 1) xs
-
-let rec take n xs = match (n, xs) with 0, _ -> [] | n, x :: xs -> x :: take (n - 1) xs | _, [] -> []
-
 let count_leading_zeros = Extraction.PrimBits.count_leading_zeros
 
 let count_trailing_zeros = Extraction.PrimBits.count_trailing_zeros
@@ -170,8 +155,6 @@ let subrange_inc = Extraction.PrimBits.subrange_inc
 let slice = Extraction.PrimBits.slice
 
 let subrange_list = Extraction.PrimVector.subrange
-
-let subrange_list_inc = Extraction.PrimVector.subrange_inc
 
 let slice_list = Extraction.PrimVector.slice
 
@@ -217,8 +200,6 @@ let length = Extraction.PrimVector.length
 
 let length_bits = Extraction.PrimBits.width
 
-let big_int_of_bit = Extraction.PrimBits.bigint_of_bit
-
 let uint = Extraction.PrimBits.uint
 
 let sint = Extraction.PrimBits.sint
@@ -247,33 +228,15 @@ let tdiv_int = Extraction.PrimInt.tdiv_int
 
 let tmod_int = Extraction.PrimInt.tmod_int
 
-let add_bit_with_carry = Extraction.PrimBits.add_bit_with_carry
-
-let sub_bit_with_carry = Extraction.PrimBits.sub_bit_with_carry
-
 let not_bits = Extraction.PrimBits.not_bits
-
-let add_bits_carry xs ys = require_width "add_bits_carry" (Extraction.PrimBits.add_bits_carry xs ys)
 
 let add_bits xs ys = require_width "add_bits" (Extraction.PrimBits.add_bits xs ys)
 
 let replicate_bits = Extraction.PrimBits.replicate_bits
 
-let identity x = x
-
-let get_slice_int' n m o = Extraction.PrimBits.get_slice_int (Z.of_int n) m (Z.of_int o)
-
 let get_slice_int = Extraction.PrimBits.get_slice_int
 
-let to_bits' len n = Extraction.PrimBits.to_bits (Z.of_int len) n
-
 let to_bits = Extraction.PrimBits.to_bits
-
-(* unsigned multiplication producing a list of 2n bits *)
-let mult_vec = Extraction.PrimBits.mult_vec
-
-(* signed multiplication bit lists producing a list of 2n bits. *)
-let mults_vec = Extraction.PrimBits.mults_vec
 
 let add_bits_int = Extraction.PrimBits.add_bits_int
 
@@ -301,23 +264,9 @@ let bits_of_string str =
 
 let hex_char c = bits_of_string (String.make 1 c)
 
-let list_of_string s =
-  let rec aux i acc = if i < 0 then acc else aux (i - 1) (s.[i] :: acc) in
-  aux (String.length s - 1) []
-
 let concat_str str1 str2 = str1 ^ str2
 
-let rec break n = function [] -> [] | _ :: _ as xs -> [take n xs] @ break n (drop n xs)
-
-let string_of_bit = Extraction.PrimBits.string_of_bit
-
-let int_of_bit = function B0 -> 0 | B1 -> 1
-
-let bool_of_bit = Extraction.PrimBits.bool_of_bit
-
 let bit_of_bool = Extraction.PrimBits.bit_of_bool
-
-let bigint_of_bit = Extraction.PrimBits.bigint_of_bit
 
 let string_of_bits bits =
   let w = Z.to_int (Extraction.PrimBits.width bits) in
@@ -339,8 +288,6 @@ let string_of_bits bits =
   );
   Buffer.contents buf
 
-let string_of_hex bits = string_of_bits bits
-
 let decimal_string_of_bits bits = Z.to_string (Extraction.PrimBits.uint bits)
 
 let hex_slice str n m =
@@ -350,14 +297,6 @@ let hex_slice str n m =
 let putchar n =
   print_char (char_of_int (Z.to_int n));
   flush stdout
-
-let bits_of_int bit n =
-  let rec width b acc = if b = 0 then acc else width (b / 2) (acc + 1) in
-  Extraction.PrimBits.to_bits (Z.of_int (width bit 0)) (Z.of_int n)
-
-let bits_of_big_int pow n = Extraction.PrimBits.to_bits (Z.of_int pow) n
-
-let byte_of_int n = Extraction.PrimBits.to_bits (Z.of_int 8) (Z.of_int n)
 
 module Mem = struct
   include Map.Make (struct
@@ -442,8 +381,6 @@ let read_tag_bool addr =
   let addri = uint addr in
   try Mem.find addri !tag_ram with Not_found -> false
 
-let reverse_endianness = Extraction.PrimBits.reverse_endianness
-
 let shl_int = Extraction.PrimInt.shl_int
 let shr_int = Extraction.PrimInt.shr_int
 
@@ -466,8 +403,6 @@ let string_take str n =
 let string_length str = Z.of_int (String.length str)
 
 let string_append s1 s2 = s1 ^ s2
-
-let int_of_string_opt s = try Some (Z.of_string s) with Invalid_argument _ -> None
 
 let set_slice _out_len _slice_len out n slice = Extraction.PrimBits.set_slice out n slice
 
@@ -537,8 +472,6 @@ let string_of_int x = Z.to_string x
 
 let undefined_real () = Q.of_int 0
 
-let rec pow x = function 0 -> 1 | n -> x * pow x (n - 1)
-
 let real_of_string str = Q.of_string str
 
 let print str = Stdlib.print_string str
@@ -552,10 +485,6 @@ let prerr_int str x = prerr_endline (str ^ Z.to_string x)
 let print_bits str xs = print_endline (str ^ string_of_bits xs)
 
 let prerr_bits str xs = prerr_endline (str ^ string_of_bits xs)
-
-let print_string str msg = print_endline (str ^ msg)
-
-let prerr_string str msg = prerr_endline (str ^ msg)
 
 let reg_deref r = !r
 
@@ -573,18 +502,12 @@ let rec string_of_list sep string_of = function
   | [x] -> string_of x
   | x :: ls -> string_of x ^ sep ^ string_of_list sep string_of ls
 
-let skip () = ()
-
-let memea _ _ = ()
-
 let zero_extend = Extraction.PrimBits.zero_extend
 
 let sign_extend = Extraction.PrimBits.sign_extend
 
 let zeros = Extraction.PrimBits.zeros
 let ones = Extraction.PrimBits.ones
-
-let shift_bits_right_arith = Extraction.PrimBits.shift_bits_right_arith
 
 let shiftr = Extraction.PrimBits.shiftr
 
@@ -596,12 +519,8 @@ let shiftl = Extraction.PrimBits.shiftl
 
 let shift_bits_left = Extraction.PrimBits.shift_bits_left
 
-let speculate_conditional_success () = true
-
 (* Return nanoseconds since epoch. Truncates to ocaml int but will be OK for next 100 years or so... *)
 let get_time_ns () = Z.of_int (int_of_float (1e9 *. Unix.gettimeofday ()))
-
-let string_of_bool = function true -> "true" | false -> "false"
 
 let dec_str x = Z.to_string x
 
@@ -679,9 +598,6 @@ let valid_dec_bits n s =
   )
 
 let parse_dec_bits n s = if not (valid_dec_bits n s) then zeros n else Extraction.PrimBits.to_bits n (Z.of_string s)
-
-let trace_memory_write _ _ _ = ()
-let trace_memory_read _ _ _ = ()
 
 let sleep_request () = ()
 let wakeup_request () = ()
