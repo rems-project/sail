@@ -47,7 +47,6 @@
 open Initial_check
 open Ast
 open Ast_compare
-open Ast_defs
 open Ast_util
 
 let fun_typschm arg_typs ret_typ = mk_typschm [] (function_typ arg_typs ret_typ)

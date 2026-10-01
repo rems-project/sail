@@ -50,7 +50,6 @@ open Ast_defs
 open Ast_util
 open Bit
 open Type_check
-open Spec_analysis
 open Rewriter
 
 open Coq_def_annot

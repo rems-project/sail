@@ -46,9 +46,7 @@
 
 open Ast
 open Ast_compare
-open Ast_defs
 open Ast_util
-open Util
 
 (* Functions for finding the set of variables assigned to.  Used in constant propagation
    and monomorphisation. *)

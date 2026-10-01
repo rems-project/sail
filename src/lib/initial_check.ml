@@ -2231,7 +2231,6 @@ let to_ast_loop_measure ctx = function
   | P.Loop (P.Until, exp) -> (Until, map_exp_annot (fun (l, _) -> (l, ())) @@ to_ast_exp ctx exp)
 
 let pragma_arg_loc pragma arg_left_trim l =
-  let open Lexing in
   Reporting.map_loc_range
     (fun p1 p2 ->
       let left_trim = String.length pragma + arg_left_trim + 1 in

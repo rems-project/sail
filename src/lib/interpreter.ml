@@ -50,7 +50,6 @@ open Ast_defs
 open Ast_util
 open Value
 
-open Extraction.ValueType
 open Extraction.TypeAnnot.Types
 
 module Document = Pretty_print_sail.Document

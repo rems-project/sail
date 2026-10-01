@@ -48,7 +48,6 @@
 
 open Ast
 open Ast_compare
-open Ast_util
 
 (** Print generated SMT problems (for debugging) *)
 val opt_smt_verbose : bool ref

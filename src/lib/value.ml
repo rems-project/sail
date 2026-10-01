@@ -48,7 +48,6 @@ module StringMap = Map.Make (String)
 
 open Ast
 open Ast_compare
-open Bit
 
 let print_chan = ref stdout
 

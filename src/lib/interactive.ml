@@ -44,9 +44,6 @@
 (*  SPDX-License-Identifier: BSD-2-Clause                                   *)
 (****************************************************************************)
 
-open Ast
-open Ast_defs
-open Ast_util
 open Printf
 
 module StringMap = Util.StringMap
@@ -65,8 +62,6 @@ module State = struct
     config : Yojson.Safe.t option;
   }
 end
-
-open State
 
 let arg str = "<" ^ str ^ ">" |> Util.yellow |> Util.clear
 

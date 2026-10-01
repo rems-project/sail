@@ -48,7 +48,6 @@
 
 open Ast
 open Ast_compare
-open Ast_defs
 open Ast_util
 
 (** {2 Options} *)
