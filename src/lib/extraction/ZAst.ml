@@ -1,3 +1,4 @@
+[@@@warning "-a"]
 open Assignment
 open Ast
 open Datatypes

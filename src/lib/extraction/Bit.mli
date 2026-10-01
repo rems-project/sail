@@ -1,3 +1,4 @@
+[@@@warning "-a"]
 open BinNat
 open BvUtil
 open Datatypes

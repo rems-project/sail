@@ -1,3 +1,4 @@
+[@@@warning "-a"]
 
 val le_lt_dec : Big_int_Z.big_int -> Big_int_Z.big_int -> bool
 

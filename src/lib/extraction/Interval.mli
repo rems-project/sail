@@ -1,3 +1,4 @@
+[@@@warning "-a"]
 open BinInt
 open Datatypes
 open OptionUtil
