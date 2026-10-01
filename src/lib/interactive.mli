@@ -44,10 +44,6 @@
 (*  SPDX-License-Identifier: BSD-2-Clause                                   *)
 (****************************************************************************)
 
-open Ast
-open Ast_defs
-open Type_check
-
 val opt_interactive : bool ref
 
 (** Each interactive command is passed this struct, containing the abstract syntax tree, effect info and the

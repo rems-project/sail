@@ -46,8 +46,6 @@
 
 open Ast
 open Ast_compare
-open Ast_defs
-open Ast_util
 
 val opt_ddump_initial_ast : bool ref
 val opt_ddump_side_effect : bool ref

@@ -46,9 +46,6 @@
 
 open Ast
 open Ast_compare
-open Ast_defs
-open Ast_util
-open Util
 open Type_check
 
 (** Return the set of mutable variables assigned to in the given AST. *)

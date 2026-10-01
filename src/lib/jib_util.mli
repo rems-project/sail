@@ -48,7 +48,6 @@
 
 open Ast
 open Ast_compare
-open Ast_util
 open Jib
 
 (** {1 Instruction construction functions, and Jib names} *)

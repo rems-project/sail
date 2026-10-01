@@ -51,7 +51,6 @@
 open Ast
 open Ast_compare
 open Ast_util
-open Util
 
 (* opt_tc_debug controls the verbosity of the type checker. 0 is
    silent, 1 prints a tree of the type derivation and 2 is like 1 but

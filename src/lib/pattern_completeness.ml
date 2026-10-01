@@ -990,7 +990,7 @@ module Make (C : Config) = struct
 
   (* Just highlight the match keyword and not the whole match block. *)
   let shrink_loc keyword = function
-    | Parse_ast.Range (n, m) -> Lexing.(Parse_ast.Range (n, { n with pos_cnum = n.pos_cnum + String.length keyword }))
+    | Parse_ast.Range (n, m) -> Parse_ast.Range (n, { n with pos_cnum = n.pos_cnum + String.length keyword })
     | l -> l
 
   let rec cases_to_pats ctx from ~have_guard ~have_mapping = function

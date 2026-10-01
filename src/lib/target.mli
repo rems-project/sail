@@ -50,7 +50,6 @@
     various frontend behaviours. A target therefore specifies what kind of output Sail will produce. For example, we
     provide default plugins that define targets to output Lem, C, OCaml, Coq, and so on. *)
 
-open Ast_defs
 open Type_check
 
 (** {2 Target type and accessor functions} *)

@@ -50,7 +50,6 @@ open Ast_defs
 open Ast_util
 open Either
 open Util
-open Lazy
 open Parse_ast.Attribute_data
 
 open Type_internal

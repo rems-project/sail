@@ -45,7 +45,6 @@
 (****************************************************************************)
 
 {
-open Parser
 open Parse_ast
 open Token
 open Sail_file.Position

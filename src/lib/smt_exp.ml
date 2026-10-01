@@ -1035,7 +1035,6 @@ let pp_str_smt_typ (str, ty) =
 
 let pp_smt_def =
   let open PPrint in
-  let open Printf in
   function
   | Define_fun (name, args, ty, exp) ->
       parens

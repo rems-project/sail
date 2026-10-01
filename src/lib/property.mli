@@ -49,7 +49,6 @@
 open Ast
 open Ast_compare
 open Ast_defs
-open Ast_util
 open Type_check
 
 (** [find_properties defs] returns a mapping from ids to of 4-tuples of the form (prop_type, command, loc, val_spec),

@@ -133,7 +133,6 @@ let rec polymorphic_functions ctx defs =
    string so it is a valid identifier name, and prepend it to the
    previous function name. *)
 let string_of_instantiation instantiation =
-  let open Type_check in
   let kid_names = ref KOptMap.empty in
   let kid_counter = ref 0 in
   let kid_name kid =

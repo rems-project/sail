@@ -46,7 +46,6 @@
 
 (** Compile Sail builtins to SMT bitvector expressions *)
 
-open Ast_util
 open Jib
 
 (** The main limitiation when converting Sail into pure SMT bitvectors is that Sail has arbitrary precision types, as
