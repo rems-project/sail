@@ -461,6 +461,13 @@ let register_refs_lem pp_tannot env registers =
     in
     (* let field = if prefix_recordtype then string "regstate_" ^^ idd else idd in *)
     let of_regval, regval_of = regval_convs_lem typ in
+    let var_split, var_apply =
+      match typ with
+      | Typ_aux (Typ_tuple typs, _) ->
+          let vars = List.init (List.length typs) (fun i -> "v" ^ string_of_int i) in
+          ("(" ^ String.concat ", " vars ^ ")", String.concat " " vars)
+      | _ -> ("v", "v")
+    in
     let tannot = pp_tannot typ in
     concat
       [
@@ -486,9 +493,9 @@ let register_refs_lem pp_tannot env registers =
         string of_regval;
         string " v);";
         hardline;
-        string "  regval_of = (fun v -> ";
+        string ("  regval_of = (fun " ^ var_split ^ " -> ");
         string regval_of;
-        string " v) |>";
+        string (" " ^ var_apply ^ ") |>");
         hardline;
       ]
   in
