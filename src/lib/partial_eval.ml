@@ -347,8 +347,8 @@ module AbsValue : SAIL_VALUE = struct
         ("abs_int", lift Z.abs (Int @-> Ret Int));
         ("div_int", lift Z.div (Int @-> Int @-> Ret Int));
         ("tdiv_int", lift Z.div (Int @-> Int @-> Ret Int));
-        ("quotient", lift Z.ediv (Int @-> Int @-> Ret Int));
-        ("modulus", lift Z.erem (Int @-> Int @-> Ret Int));
+        ("ediv_int", lift Z.ediv (Int @-> Int @-> Ret Int));
+        ("emod_int", lift Z.erem (Int @-> Int @-> Ret Int));
         ("tmod_int", lift Z.rem (Int @-> Int @-> Ret Int));
         ("eq_int", lift Z.equal (Int @-> Int @-> Ret Bool));
         ("quot_round_zero", lift Z.div (Int @-> Int @-> Ret Int));
@@ -566,13 +566,11 @@ module AbsValue : SAIL_VALUE = struct
         ("round_up", lift Sail_lib.round_up (Real @-> Ret Int));
         ("sqrt_real", lift Sail_lib.sqrt_real (Real @-> Ret Real));
         ("abs_real", lift Sail_lib.abs_real (Real @-> Ret Real));
-        ("negate_real", lift Sail_lib.negate_real (Real @-> Ret Real));
         ("neg_real", lift Sail_lib.neg_real (Real @-> Ret Real));
         ("add_real", lift Sail_lib.add_real (Real @-> Real @-> Ret Real));
         ("sub_real", lift Sail_lib.sub_real (Real @-> Real @-> Ret Real));
         ("mult_real", lift Sail_lib.mult_real (Real @-> Real @-> Ret Real));
         ("div_real", lift Sail_lib.div_real (Real @-> Real @-> Ret Real));
-        ("quotient_real", lift Sail_lib.quotient_real (Real @-> Real @-> Ret Real));
         ("eq_real", lift Sail_lib.eq_real (Real @-> Real @-> Ret Bool));
         ("lt_real", lift Sail_lib.lt_real (Real @-> Real @-> Ret Bool));
         ("gt_real", lift Sail_lib.gt_real (Real @-> Real @-> Ret Bool));

@@ -44,39 +44,19 @@
 /*  SPDX-License-Identifier: BSD-2-Clause                                   */
 /*==========================================================================*/
 
-$ifndef _SMT
-$define _SMT
+$ifndef _ASL_COMPAT
+$define _ASL_COMPAT
 
-// see http://smtlib.cs.uiowa.edu/theories-Ints.shtml
+/* Sail library bindings for primitives that are output only via ASL to Sail.
+   This file should not be used by Sail code that is not generated from ASL. */
 
-/*! Euclidean division */
-val ediv_int = pure {
-  lem: "integerDiv",
-  coq: "e_div",
-  lean: "Int.ediv",
-  _: "ediv_int"
-} : forall 'n 'm. (int('n), int('m)) -> int(div('n, 'm))
+val __SleepRequest = impure "sleep_request" : unit -> unit
 
-val emod_int = pure {
-  lem: "integerMod",
-  coq: "e_modulo",
-  lean: "Int.emod",
-  _: "emod_int"
-} : forall 'n 'm. (int('n), int('m)) -> int(mod('n, 'm))
+val __WakeupRequest = impure "wakeup_request" : unit -> unit
 
-val abs_int_atom = pure {
-  lem: "integerAbs",
-  coq: "Z.abs",
-  lean: "Int.natAbs",
-  _: "abs_int"
-} : forall 'n. int('n) -> int(abs('n))
-
-overload abs_int = {abs_int_atom}
-
-$ifdef TEST
-
-let __smt_x : int(div(4, 2)) = div(8, 4)
-
-$endif
+val putchar = pure {
+  c: "sail_putchar",
+  _: "putchar"
+} : int -> unit
 
 $endif

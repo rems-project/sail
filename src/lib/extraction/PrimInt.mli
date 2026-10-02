@@ -27,9 +27,9 @@ val max_int : Big_int_Z.big_int -> Big_int_Z.big_int -> Big_int_Z.big_int
 
 val min_int : Big_int_Z.big_int -> Big_int_Z.big_int -> Big_int_Z.big_int
 
-val quotient : Big_int_Z.big_int -> Big_int_Z.big_int -> Big_int_Z.big_int
+val ediv_int : Big_int_Z.big_int -> Big_int_Z.big_int -> Big_int_Z.big_int
 
-val modulus : Big_int_Z.big_int -> Big_int_Z.big_int -> Big_int_Z.big_int
+val emod_int : Big_int_Z.big_int -> Big_int_Z.big_int -> Big_int_Z.big_int
 
 val tdiv_int : Big_int_Z.big_int -> Big_int_Z.big_int -> Big_int_Z.big_int
 

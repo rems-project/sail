@@ -203,17 +203,15 @@ let sub_nat = Extraction.PrimInt.sub_nat
 
 let mult = Extraction.PrimInt.mult
 
-(* This is euclidian division from lem *)
-let quotient = Extraction.PrimInt.quotient
+let ediv_int = Extraction.PrimInt.ediv_int
+
+let emod_int = Extraction.PrimInt.emod_int
 
 (* This is the same as tdiv_int, kept for compatibility with old preludes *)
 let quot_round_zero = Extraction.PrimInt.tdiv_int
 
 (* The corresponding remainder function for above just respects the sign of x *)
 let rem_round_zero = Extraction.PrimInt.tmod_int
-
-(* Lem provides euclidian modulo by default *)
-let modulus = Extraction.PrimInt.modulus
 
 let negate = Extraction.PrimInt.negate
 
@@ -349,7 +347,7 @@ let write_ram _addr_size data_size _hex_ram addr data =
   write_ram' data_size (uint addr) data;
   true
 
-let wram addr byte =
+let write_ram_byte addr byte =
   let bytes = Bytes.make 1 (char_of_int byte) in
   add_mem_bytes addr bytes 0 1
 
@@ -407,7 +405,6 @@ let gt_real x y = Q.gt x y
 let lteq_real x y = Q.leq x y
 let gteq_real x y = Q.geq x y
 let to_real x = Q.of_bigint x
-let negate_real x = Q.neg x
 let neg_real x = Q.neg x
 
 let string_of_real x = Q.to_string x
@@ -417,7 +414,6 @@ let prerr_real str r = prerr_endline (str ^ string_of_real r)
 
 let round_down x = Z.fdiv (Q.num x) (Q.den x)
 let round_up x = Z.cdiv (Q.num x) (Q.den x)
-let quotient_real x y = Q.div x y
 let div_real x y = Q.div x y
 let mult_real x y = Q.mul x y
 let real_power x n =
@@ -603,7 +599,7 @@ let load_raw paddr file =
   try
     while true do
       let byte = input_char in_chan |> Char.code in
-      wram (Z.add paddr (Z.of_int !i)) byte;
+      write_ram_byte (Z.add paddr (Z.of_int !i)) byte;
       incr i
     done
   with End_of_file -> ()

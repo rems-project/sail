@@ -480,13 +480,13 @@ let primops =
          ("add_int", lift Sail_lib.add_int (Int @-> Int @-> Ret Int));
          ("sub_int", lift Sail_lib.sub_int (Int @-> Int @-> Ret Int));
          ("sub_nat", lift Sail_lib.sub_nat (Int @-> Int @-> Ret Int));
-         ("div_int", lift Sail_lib.quotient (Int @-> Int @-> Ret Int));
+         ("div_int", lift Sail_lib.ediv_int (Int @-> Int @-> Ret Int));
          ("tdiv_int", lift Sail_lib.tdiv_int (Int @-> Int @-> Ret Int));
          ("tmod_int", lift Sail_lib.tmod_int (Int @-> Int @-> Ret Int));
          ("mult_int", lift Sail_lib.mult (Int @-> Int @-> Ret Int));
          ("mult", lift Sail_lib.mult (Int @-> Int @-> Ret Int));
-         ("quotient", lift Sail_lib.quotient (Int @-> Int @-> Ret Int));
-         ("modulus", lift Sail_lib.modulus (Int @-> Int @-> Ret Int));
+         ("ediv_int", lift Sail_lib.ediv_int (Int @-> Int @-> Ret Int));
+         ("emod_int", lift Sail_lib.emod_int (Int @-> Int @-> Ret Int));
          ("negate", lift Sail_lib.negate (Int @-> Ret Int));
          ("pow2", lift Sail_lib.pow2 (Int @-> Ret Int));
          ("int_power", lift Sail_lib.int_power (Int @-> Int @-> Ret Int));
@@ -533,7 +533,6 @@ let primops =
          ("round_down", lift Sail_lib.round_down (Real @-> Ret Int));
          ("quot_round_zero", lift Sail_lib.quot_round_zero (Int @-> Int @-> Ret Int));
          ("rem_round_zero", lift Sail_lib.rem_round_zero (Int @-> Int @-> Ret Int));
-         ("quotient_real", lift Sail_lib.quotient_real (Real @-> Real @-> Ret Real));
          ("abs_real", lift Sail_lib.abs_real (Real @-> Ret Real));
          ("div_real", lift Sail_lib.div_real (Real @-> Real @-> Ret Real));
          ("sqrt_real", lift Sail_lib.sqrt_real (Real @-> Ret Real));
@@ -569,6 +568,8 @@ let primops =
          ("valid_hex_bits", lift Sail_lib.valid_hex_bits (Int @-> String @-> Ret Bool));
          ("parse_dec_bits", lift Sail_lib.parse_dec_bits (Int @-> String @-> Ret BV));
          ("valid_dec_bits", lift Sail_lib.valid_dec_bits (Int @-> String @-> Ret Bool));
+         ("sleep_request", lift Sail_lib.sleep_request (Unit @-> Ret Unit));
+         ("wakeup_request", lift Sail_lib.wakeup_request (Unit @-> Ret Unit));
          ("skip", fun _ -> V_unit);
        ]
     )

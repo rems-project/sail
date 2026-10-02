@@ -71,13 +71,10 @@ val bit_list_of_bits : bits -> bit list
 val hex_char : char -> bits
 val decimal_string_of_bits : bits -> string
 val hex_slice : string -> Z.t -> Z.t -> bits
-val putchar : Z.t -> unit
 val write_ram : 'a -> Z.t -> 'b -> bits -> bits -> bool
-val wram : Z.t -> int -> unit
+val write_ram_byte : Z.t -> int -> unit
 val read_ram : 'a -> Z.t -> 'b -> bits -> bits
-val negate_real : Q.t -> Q.t
 val string_of_real : Q.t -> string
-val quotient_real : Q.t -> Q.t -> Q.t
 val int_power : Z.t -> Z.t -> Z.t
 val string_of_int : Z.t -> string
 val real_of_string : string -> Q.t
@@ -90,12 +87,9 @@ val string_of_zbool : bool -> string
 val string_of_zreal : 'a -> string
 val string_of_zstring : string -> string
 val string_of_list : string -> ('a -> string) -> 'a list -> string
-val ones : Z.t -> bits
 val shift_bits_right : bits -> bits -> bits
 val shift_bits_left : bits -> bits -> bits
 val get_time_ns : unit -> Z.t
-val sleep_request : unit -> unit
-val wakeup_request : unit -> unit
 val load_raw : bits -> string -> unit
 val rand_zvector : 'generators -> int -> bool -> ('generators -> 'a) -> 'a list
 val rand_zbitvector : 'generators -> int -> bit list

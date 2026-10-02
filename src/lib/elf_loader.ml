@@ -109,13 +109,13 @@ let read name =
   in
   (segments, e_entry, symbol_map)
 
-let write_sail_lib paddr i byte = Sail_lib.wram (Z.add paddr (Z.of_int i)) byte
+let write_sail_lib paddr i byte = Sail_lib.write_ram_byte (Z.add paddr (Z.of_int i)) byte
 
 let write_mem_zeros start len =
   (* write in order for mem tracing logs *)
   let i = ref Z.zero in
   while Z.lt !i len do
-    Sail_lib.wram (Z.add start !i) 0;
+    Sail_lib.write_ram_byte (Z.add start !i) 0;
     i := Z.succ !i
   done
 
