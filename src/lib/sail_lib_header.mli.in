@@ -72,7 +72,7 @@ val hex_char : char -> bits
 val decimal_string_of_bits : bits -> string
 val hex_slice : string -> Z.t -> Z.t -> bits
 val write_ram : 'a -> Z.t -> 'b -> bits -> bits -> bool
-val wram : Z.t -> int -> unit
+val write_ram_byte : Z.t -> int -> unit
 val read_ram : 'a -> Z.t -> 'b -> bits -> bits
 val string_of_real : Q.t -> string
 val int_power : Z.t -> Z.t -> Z.t

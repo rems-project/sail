@@ -568,6 +568,8 @@ let primops =
          ("valid_hex_bits", lift Sail_lib.valid_hex_bits (Int @-> String @-> Ret Bool));
          ("parse_dec_bits", lift Sail_lib.parse_dec_bits (Int @-> String @-> Ret BV));
          ("valid_dec_bits", lift Sail_lib.valid_dec_bits (Int @-> String @-> Ret Bool));
+         ("sleep_request", lift Sail_lib.sleep_request (Unit @-> Ret Unit));
+         ("wakeup_request", lift Sail_lib.wakeup_request (Unit @-> Ret Unit));
          ("skip", fun _ -> V_unit);
        ]
     )

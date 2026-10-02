@@ -72,7 +72,7 @@ let rec load_raw_files = function
       try
         while true do
           let b = input_byte ic in
-          Sail_lib.wram !addr' b;
+          Sail_lib.write_ram_byte !addr' b;
           addr' := Z.succ !addr';
         done
       with End_of_file -> ();

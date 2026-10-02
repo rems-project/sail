@@ -349,7 +349,7 @@ let write_ram _addr_size data_size _hex_ram addr data =
   write_ram' data_size (uint addr) data;
   true
 
-let wram addr byte =
+let write_ram_byte addr byte =
   let bytes = Bytes.make 1 (char_of_int byte) in
   add_mem_bytes addr bytes 0 1
 
@@ -601,7 +601,7 @@ let load_raw paddr file =
   try
     while true do
       let byte = input_char in_chan |> Char.code in
-      wram (Z.add paddr (Z.of_int !i)) byte;
+      write_ram_byte (Z.add paddr (Z.of_int !i)) byte;
       incr i
     done
   with End_of_file -> ()
