@@ -1375,7 +1375,7 @@ let doc_val ctx pat exp =
 let should_print_function_def def =
   match def with
   | DEF_aux (DEF_fundef fdef, dannot) -> not (Env.is_extern (id_of_fundef fdef) dannot.env "lean")
-  | DEF_aux (DEF_let (pat, exp), _) -> true
+  | DEF_aux ((DEF_internal_mutrec _ | DEF_let _), _) -> true
   | _ -> false
 
 let rec doc_defs_rec ctx defs types (former_funcs : document list) (docdefs : document) =
@@ -1431,7 +1431,7 @@ let rec collect_imports_rec (cg : Callgraph.callgraph) (defs : (tannot, env) def
   | [] -> accs @ [acc]
   | (DEF_aux ((DEF_fundef _ | DEF_internal_mutrec _ | DEF_let _ | DEF_register _), _) as d) :: defs' ->
       let map, acc = add_def_to_map_and_ref_set cg map acc idx d in
-      collect_imports_rec cg defs' map accs acc idx true
+      collect_imports_rec cg defs' map accs acc idx (nonempty_print || should_print_function_def d)
   | DEF_aux (DEF_type tdef, _) :: defs' -> collect_imports_rec cg defs' map accs acc idx nonempty_print
   | DEF_aux (DEF_pragma ("include_start", Pragma_line (file, _)), _) :: defs'
   | DEF_aux (DEF_pragma ("file_start", Pragma_line (file, _)), _) :: defs'
@@ -1649,12 +1649,12 @@ let rec collect_import_files_aux defs file_stack last_namespace ret =
   | DEF_aux (DEF_pragma ("include_start", Pragma_line (file, _)), _) :: ds
   | DEF_aux (DEF_pragma ("file_start", Pragma_line (file, _)), _) :: ds
     when Filename.check_suffix file ".sail" ->
-      collect_import_files_aux ds (file :: file_stack) last_namespace ret
+      collect_import_files_aux ds (file :: file_stack) None ret
   | DEF_aux (DEF_pragma ("include_end", Pragma_line (file, _)), _) :: ds
   | DEF_aux (DEF_pragma ("file_end", Pragma_line (file, _)), _) :: ds
     when Filename.check_suffix file ".sail" -> (
       match file_stack with
-      | f :: fs -> collect_import_files_aux ds fs last_namespace ret
+      | f :: fs -> collect_import_files_aux ds fs None ret
       | _ -> failwith "should not be reachable"
     )
   | d :: ds -> (
