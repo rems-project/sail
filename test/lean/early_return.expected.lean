@@ -82,7 +82,7 @@ open E
 def __id (x : Int) : Int :=
   x
 
-/-- Type quantifiers: k_ex2693_ : Bool, k_ex2692_ : Bool -/
+/-- Type quantifiers: k_ex2702_ : Bool, k_ex2701_ : Bool -/
 def neq_bool (x : Bool) (y : Bool) : Bool :=
   (! (x == y))
 
@@ -456,7 +456,7 @@ def match_early_return_loop (x : E) : SailM E := SailME.run do
   | .C => writeReg r_C A
   readReg r_B
 
-/-- Type quantifiers: k_ex2748_ : Bool -/
+/-- Type quantifiers: k_ex2758_ : Bool -/
 def ite_early_return (x : Bool) : SailM E := SailME.run do
   writeReg r_A (← readReg r_C)
   let y ← (( do
@@ -467,7 +467,7 @@ def ite_early_return (x : Bool) : SailM E := SailME.run do
     else readReg r_B ) : SailME E E )
   readReg r_B
 
-/-- Type quantifiers: k_ex2749_ : Bool -/
+/-- Type quantifiers: k_ex2759_ : Bool -/
 def ite_early_return_inloop (x : Bool) : SailM E := SailME.run do
   let loop_i_lower := 0
   let loop_i_upper := 10
@@ -486,7 +486,7 @@ def ite_early_return_inloop (x : Bool) : SailM E := SailME.run do
   (pure loop_vars)
   readReg r_B
 
-/-- Type quantifiers: k_ex2750_ : Bool -/
+/-- Type quantifiers: k_ex2760_ : Bool -/
 def ite_early_return_loop (x : Bool) : SailM E := SailME.run do
   if (x : Bool)
   then
@@ -506,7 +506,7 @@ def ite_early_return_loop (x : Bool) : SailM E := SailME.run do
 def unit_type (x : E) : SailM Unit := do
   writeReg r_A x
 
-/-- Type quantifiers: k_ex2751_ : Bool -/
+/-- Type quantifiers: k_ex2761_ : Bool -/
 def ite_early_return_seq (x : Bool) : SailM E := SailME.run do
   writeReg r_A (← readReg r_C)
   let y ← (( do
@@ -518,7 +518,7 @@ def ite_early_return_seq (x : Bool) : SailM E := SailME.run do
     else readReg r_B ) : SailME E E )
   readReg r_B
 
-/-- Type quantifiers: k_ex2752_ : Bool -/
+/-- Type quantifiers: k_ex2762_ : Bool -/
 def ite_early_return_exit (x : Bool) : SailM E := SailME.run do
   writeReg r_A (← readReg r_C)
   let y ← (( do

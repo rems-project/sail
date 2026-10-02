@@ -62,7 +62,7 @@ open option
 def __id (x : Int) : Int :=
   x
 
-/-- Type quantifiers: k_ex843_ : Bool, k_ex842_ : Bool -/
+/-- Type quantifiers: k_ex852_ : Bool, k_ex851_ : Bool -/
 def neq_bool (x : Bool) (y : Bool) : Bool :=
   (! (x == y))
 

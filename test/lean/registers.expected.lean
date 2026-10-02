@@ -92,7 +92,7 @@ open Register
 def __id (x : Int) : Int :=
   x
 
-/-- Type quantifiers: k_ex1090_ : Bool, k_ex1089_ : Bool -/
+/-- Type quantifiers: k_ex1099_ : Bool, k_ex1098_ : Bool -/
 def neq_bool (x : Bool) (y : Bool) : Bool :=
   (! (x == y))
 
@@ -189,7 +189,7 @@ def undefined_My_struct (_ : Unit) : SailM My_struct := do
   (pure { field1 := ← (undefined_int ())
           field2 := ← (undefined_bitvector 1) })
 
-/-- Type quantifiers: k_ex1137_ : Bool -/
+/-- Type quantifiers: k_ex1147_ : Bool -/
 def test_reg_if_struct (x : My_struct) (b : Bool) : SailM My_struct := do
   let y ← do
     (pure { x with field1 := ← if (b : Bool)

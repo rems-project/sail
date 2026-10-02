@@ -554,7 +554,7 @@ open AccessType
 def __id (x : Int) : Int :=
   x
 
-/-- Type quantifiers: k_ex8847_ : Bool, k_ex8846_ : Bool -/
+/-- Type quantifiers: k_ex8856_ : Bool, k_ex8855_ : Bool -/
 def neq_bool (x : Bool) (y : Bool) : Bool :=
   (! (x == y))
 
