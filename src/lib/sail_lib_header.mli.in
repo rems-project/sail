@@ -74,7 +74,6 @@ val hex_slice : string -> Z.t -> Z.t -> bits
 val write_ram : 'a -> Z.t -> 'b -> bits -> bits -> bool
 val wram : Z.t -> int -> unit
 val read_ram : 'a -> Z.t -> 'b -> bits -> bits
-val negate_real : Q.t -> Q.t
 val string_of_real : Q.t -> string
 val int_power : Z.t -> Z.t -> Z.t
 val string_of_int : Z.t -> string

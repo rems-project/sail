@@ -566,7 +566,6 @@ module AbsValue : SAIL_VALUE = struct
         ("round_up", lift Sail_lib.round_up (Real @-> Ret Int));
         ("sqrt_real", lift Sail_lib.sqrt_real (Real @-> Ret Real));
         ("abs_real", lift Sail_lib.abs_real (Real @-> Ret Real));
-        ("negate_real", lift Sail_lib.negate_real (Real @-> Ret Real));
         ("neg_real", lift Sail_lib.neg_real (Real @-> Ret Real));
         ("add_real", lift Sail_lib.add_real (Real @-> Real @-> Ret Real));
         ("sub_real", lift Sail_lib.sub_real (Real @-> Real @-> Ret Real));

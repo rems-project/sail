@@ -407,7 +407,6 @@ let gt_real x y = Q.gt x y
 let lteq_real x y = Q.leq x y
 let gteq_real x y = Q.geq x y
 let to_real x = Q.of_bigint x
-let negate_real x = Q.neg x
 let neg_real x = Q.neg x
 
 let string_of_real x = Q.to_string x
