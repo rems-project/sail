@@ -203,17 +203,15 @@ let sub_nat = Extraction.PrimInt.sub_nat
 
 let mult = Extraction.PrimInt.mult
 
-(* This is euclidian division from lem *)
-let quotient = Extraction.PrimInt.quotient
+let ediv_int = Extraction.PrimInt.ediv_int
+
+let emod_int = Extraction.PrimInt.emod_int
 
 (* This is the same as tdiv_int, kept for compatibility with old preludes *)
 let quot_round_zero = Extraction.PrimInt.tdiv_int
 
 (* The corresponding remainder function for above just respects the sign of x *)
 let rem_round_zero = Extraction.PrimInt.tmod_int
-
-(* Lem provides euclidian modulo by default *)
-let modulus = Extraction.PrimInt.modulus
 
 let negate = Extraction.PrimInt.negate
 

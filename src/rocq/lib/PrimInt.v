@@ -47,7 +47,7 @@ Concrete definitions of the Sail integer primitives, extracted to
 OCaml to provide the implementations in [sail_lib.ml].
 
 Sail integers are arbitrary precision, so they are represented by
-[Z], which extraction maps onto [Big_int_Z.big_int]/[Z.t]. *)
+[Z], which extraction maps onto Zarith's [Big_int_Z.big_int]/[Z.t]. *)
 
 From Stdlib Require Import ZArith.
 From Stdlib Require Import micromega.Lia.
@@ -84,35 +84,38 @@ Definition min_int (x y : Z) : Z := Z.min x y.
 
 (** ** Division
 
-Sail has three division operators, and [lib/arith.sail] and [lib/smt.sail] say
-define how each is bound:
+Sail has three division operators, defined in [lib/arith.sail] and
+[lib/smt.sail].
 
 - [tdiv_int] / [tmod_int] truncate towards zero, and bind to [tdiv_int] /
-  [tmod_int] here (Rocq [Z.quot] / [Z.rem]); - [ediv_int] / [emod_int] are
-  Euclidean, and bind to [quotient] / [modulus] here. These are the definitions
-  from the (deprecated) [Stdlib.ZArith.Zeuclid] module, inlined in terms of the
-  floor division of [BinInt], so the remainder is always non-negative; -
-  [fdiv_int] / [fmod_int] floor, and are defined in Sail itself in terms of
-  [tdiv_int], so they are not primitives at all. *)
+  [tmod_int] here (Rocq [Z.quot] / [Z.rem]).
 
-Definition quotient (x y : Z) : Z := Z.sgn y * (x / Z.abs y).
+- [ediv_int] / [emod_int] are Euclidean, and bind to [quotient] / [modulus]
+  here. These are the definitions from the (unfortunately deprecated)
+  [Stdlib.ZArith.Zeuclid] module, inlined in terms of the floor division of
+  [BinInt].
 
-Definition modulus (x y : Z) : Z := x mod (Z.abs y).
+- [fdiv_int] / [fmod_int] floor, and are defined in [lib/arith.sail] in terms of
+  [tdiv_int], so they are not mentioned here. *)
+
+Definition ediv_int (x y : Z) : Z := Z.sgn y * (x / Z.abs y).
+
+Definition emod_int (x y : Z) : Z := x mod (Z.abs y).
 
 (** The Euclidean division equation, and the fact that [modulus] is always
 non-negative, which is what distinguishes this Euclidean div/mod from the floor
 and truncating ones. *)
 
-Lemma quotient_modulus : forall x y, y <> 0 -> x = y * quotient x y + modulus x y.
+Lemma euclidian_div_mod : forall x y, y <> 0 -> x = y * ediv_int x y + emod_int x y.
 Proof.
-  intros x y Hy. unfold quotient, modulus.
+  intros x y Hy. unfold ediv_int, emod_int.
   rewrite Z.mul_assoc, Z.sgn_abs.
   apply Z.div_mod. now destruct y.
 Qed.
 
-Lemma modulus_pos : forall x y, y <> 0 -> 0 <= modulus x y < Z.abs y.
+Lemma euclidian_pos : forall x y, y <> 0 -> 0 <= emod_int x y < Z.abs y.
 Proof.
-  intros x y Hy. unfold modulus.
+  intros x y Hy. unfold emod_int.
   apply Z.mod_pos_bound. destruct y; compute; trivial. now destruct Hy.
 Qed.
 

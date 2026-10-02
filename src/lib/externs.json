@@ -1635,14 +1635,10 @@
       "pure": true,
       "bindings": {
         "smt": "mod",
-        "ocaml": "modulus",
-        "interpreter": "modulus",
         "lem": "integerMod",
-        "c": "tmod_int",
-        "cpp": "tmod_int",
-        "systemverilog": "tmod_int",
         "coq": "Z.rem",
-        "lean": "Nat.mod"
+        "lean": "Nat.mod",
+        "_": "tmod_int"
       },
       "type": "forall 'n 'm, 'n >= 0 & 'm >= 0. (int('n), int('m)) -> {'r, 0 <= 'r < 'm. int('r)}",
       "ocaml_type": "Z.t -> Z.t -> Z.t",
@@ -1904,8 +1900,6 @@
       "operator": false,
       "pure": true,
       "bindings": {
-        "ocaml": "quotient",
-        "interpreter": "quotient",
         "lem": "integerDiv",
         "coq": "e_div",
         "lean": "Int.ediv",
@@ -1923,8 +1917,6 @@
       "operator": false,
       "pure": true,
       "bindings": {
-        "ocaml": "modulus",
-        "interpreter": "modulus",
         "lem": "integerMod",
         "coq": "e_modulo",
         "lean": "Int.emod",

@@ -51,8 +51,6 @@ $define _SMT
 
 /*! Euclidean division */
 val ediv_int = pure {
-  ocaml: "quotient",
-  interpreter: "quotient",
   lem: "integerDiv",
   coq: "e_div",
   lean: "Int.ediv",
@@ -60,8 +58,6 @@ val ediv_int = pure {
 } : forall 'n 'm. (int('n), int('m)) -> int(div('n, 'm))
 
 val emod_int = pure {
-  ocaml: "modulus",
-  interpreter: "modulus",
   lem: "integerMod",
   coq: "e_modulo",
   lean: "Int.emod",

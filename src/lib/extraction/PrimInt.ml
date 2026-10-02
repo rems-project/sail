@@ -71,16 +71,16 @@ let max_int =
 let min_int =
   Z.min
 
-(** val quotient :
+(** val ediv_int :
     Big_int_Z.big_int -> Big_int_Z.big_int -> Big_int_Z.big_int **)
 
-let quotient x y =
+let ediv_int x y =
   Z.mul (Z.sgn y) (Z.div x (Z.abs y))
 
-(** val modulus :
+(** val emod_int :
     Big_int_Z.big_int -> Big_int_Z.big_int -> Big_int_Z.big_int **)
 
-let modulus x y =
+let emod_int x y =
   Z.modulo x (Z.abs y)
 
 (** val tdiv_int :
