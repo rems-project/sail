@@ -238,7 +238,8 @@ let gen_sail_lib_mli externs_file header_file overrides_file =
   let unimplemented = overrides |> member "unimplemented" |> to_list |> List.map to_string in
 
   (* The OCaml binding for each extern, and its type (if known), in
-     the order they first appear. *)
+     the order they first appear, along with the file of their first
+     appearance. *)
   let bindings = Hashtbl.create 256 in
   let order = ref [] in
   Yojson.Safe.from_file externs_file |> member "externs" |> to_list
@@ -251,11 +252,13 @@ let gen_sail_lib_mli externs_file header_file overrides_file =
       | `String name when is_sail_lib_binding name ->
           let typ = extern |> member "ocaml_type" |> to_string_option in
           let sail_name = extern |> member "name" |> to_string in
-          if not (Hashtbl.mem bindings name) then order := name :: !order;
+          let file = extern |> member "file" |> to_string in
+          if not (Hashtbl.mem bindings name) then order := (file, name) :: !order;
           Hashtbl.add bindings name (sail_name, typ)
       | _ -> ()
   );
-  let order = List.rev !order in
+  (* Group the bindings by file, keeping them in order within each file. *)
+  let order = List.stable_sort (fun (f1, _) (f2, _) -> String.compare f1 f2) (List.rev !order) in
 
   List.iter
     (fun name ->
@@ -275,7 +278,7 @@ let gen_sail_lib_mli externs_file header_file overrides_file =
 
   let vals =
     List.filter_map
-      (fun name ->
+      (fun (file, name) ->
         let externs = Hashtbl.find_all bindings name |> List.rev in
         let sail_names = String.concat ", " (List.sort_uniq String.compare (List.map fst externs)) in
         if List.mem name header_vals then (
@@ -285,13 +288,13 @@ let gen_sail_lib_mli externs_file header_file overrides_file =
         else if List.mem name unimplemented then None
         else (
           match List.assoc_opt name override_types with
-          | Some typ -> Some (name, typ)
+          | Some typ -> Some (file, name, typ)
           | None -> (
               match List.sort_uniq String.compare (List.filter_map snd externs) with
               | _ when List.exists (fun (_, typ) -> Option.is_none typ) externs ->
                   error "No OCaml type for %s (for %s), add it to %s" name sail_names overrides_file;
                   None
-              | [typ] -> Some (name, typ)
+              | [typ] -> Some (file, name, typ)
               | typs ->
                   error "Conflicting OCaml types for %s (for %s): %s. Add the correct type to %s" name sail_names
                     (String.concat ", " typs) overrides_file;
@@ -305,8 +308,16 @@ let gen_sail_lib_mli externs_file header_file overrides_file =
   match List.rev !errors with
   | [] ->
       print_string header;
-      printf "\n(* The following are generated from %s by sail_maker. *)\n\n" (Filename.basename externs_file);
-      List.iter (fun (name, typ) -> printf "val %s : %s\n" name typ) vals
+      printf "\n(* The following are generated from %s by sail_maker. *)\n" (Filename.basename externs_file);
+      ignore
+        (List.fold_left
+           (fun prev_file (file, name, typ) ->
+             if prev_file <> Some file then printf "\n(** {1 [%s]} *)\n\n" file;
+             printf "val %s : %s\n" name typ;
+             Some file
+           )
+           None vals
+        )
   | errors ->
       List.iter (fun msg -> eprintf "Error: %s\n" msg) errors;
       exit 1

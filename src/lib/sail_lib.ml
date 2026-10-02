@@ -417,7 +417,6 @@ let prerr_real str r = prerr_endline (str ^ string_of_real r)
 
 let round_down x = Z.fdiv (Q.num x) (Q.den x)
 let round_up x = Z.cdiv (Q.num x) (Q.den x)
-let quotient_real x y = Q.div x y
 let div_real x y = Q.div x y
 let mult_real x y = Q.mul x y
 let real_power x n =

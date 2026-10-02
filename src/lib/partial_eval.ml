@@ -572,7 +572,6 @@ module AbsValue : SAIL_VALUE = struct
         ("sub_real", lift Sail_lib.sub_real (Real @-> Real @-> Ret Real));
         ("mult_real", lift Sail_lib.mult_real (Real @-> Real @-> Ret Real));
         ("div_real", lift Sail_lib.div_real (Real @-> Real @-> Ret Real));
-        ("quotient_real", lift Sail_lib.quotient_real (Real @-> Real @-> Ret Real));
         ("eq_real", lift Sail_lib.eq_real (Real @-> Real @-> Ret Bool));
         ("lt_real", lift Sail_lib.lt_real (Real @-> Real @-> Ret Bool));
         ("gt_real", lift Sail_lib.gt_real (Real @-> Real @-> Ret Bool));

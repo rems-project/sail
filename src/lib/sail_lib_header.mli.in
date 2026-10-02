@@ -77,7 +77,6 @@ val wram : Z.t -> int -> unit
 val read_ram : 'a -> Z.t -> 'b -> bits -> bits
 val negate_real : Q.t -> Q.t
 val string_of_real : Q.t -> string
-val quotient_real : Q.t -> Q.t -> Q.t
 val int_power : Z.t -> Z.t -> Z.t
 val string_of_int : Z.t -> string
 val real_of_string : string -> Q.t

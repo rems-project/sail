@@ -533,7 +533,6 @@ let primops =
          ("round_down", lift Sail_lib.round_down (Real @-> Ret Int));
          ("quot_round_zero", lift Sail_lib.quot_round_zero (Int @-> Int @-> Ret Int));
          ("rem_round_zero", lift Sail_lib.rem_round_zero (Int @-> Int @-> Ret Int));
-         ("quotient_real", lift Sail_lib.quotient_real (Real @-> Real @-> Ret Real));
          ("abs_real", lift Sail_lib.abs_real (Real @-> Ret Real));
          ("div_real", lift Sail_lib.div_real (Real @-> Real @-> Ret Real));
          ("sqrt_real", lift Sail_lib.sqrt_real (Real @-> Ret Real));

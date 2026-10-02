@@ -295,7 +295,7 @@ val abs_real = {coq: "Rabs", _: "abs_real"} : real -> real
 
 overload abs = {abs_int_atom, abs_real}
 
-val quotient_real = {ocaml: "quotient_real", interpreter: "quotient_real", lem: "realDiv", c: "div_real", coq: "Rdiv"} : (real, real) -> real
+val quotient_real = {lem: "realDiv", coq: "Rdiv", _: "div_real"} : (real, real) -> real
 
 overload operator / = {ediv_int, quotient_real}
 overload div = {ediv_int}
