@@ -1154,23 +1154,6 @@ void vector_update_subrange_inc_lbits(lbits *rop,
   }
 }
 
-fbits fast_update_subrange(const fbits op,
-			   const mach_int n,
-			   const mach_int m,
-			   const fbits slice)
-{
-  fbits rop = op;
-  for (mach_int i = 0; i < n - (m - UINT64_C(1)); i++) {
-    uint64_t bit = UINT64_C(1) << ((uint64_t) i);
-    if (slice & bit) {
-      rop |= (bit << m);
-    } else {
-      rop &= ~(bit << m);
-    }
-  }
-  return rop;
-}
-
 void slice(lbits *rop, const lbits op, const sail_int start_mpz, const sail_int len_mpz)
 {
   assert(mpz_get_ui(start_mpz) + mpz_get_ui(len_mpz) <= op.len);
