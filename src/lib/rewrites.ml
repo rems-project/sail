@@ -2078,29 +2078,6 @@ let rewrite_split_fun_ctor_pats fun_name effect_info env ast =
   in
   ({ ast with defs }, new_effect_info, env)
 
-let rewrite_type_union_typs rw_typ (Tu_aux (Tu_ty_id (typ, id), annot)) = Tu_aux (Tu_ty_id (rw_typ typ, id), annot)
-
-let rewrite_type_def_typs rw_typ rw_typquant (TD_aux (td, annot)) =
-  match td with
-  | TD_abstract (id, kind, instantiation) -> TD_aux (TD_abstract (id, kind, instantiation), annot)
-  | TD_abbrev (id, typq, A_aux (A_typ typ, l)) ->
-      TD_aux (TD_abbrev (id, rw_typquant typq, A_aux (A_typ (rw_typ typ), l)), annot)
-  | TD_abbrev (id, typq, typ_arg) -> TD_aux (TD_abbrev (id, rw_typquant typq, typ_arg), annot)
-  | TD_record (id, typq, typ_ids, flag) ->
-      TD_aux
-        ( TD_record
-            (id, rw_typquant typq, List.map (fun ((id, typ), def_annot) -> ((id, rw_typ typ), def_annot)) typ_ids, flag),
-          annot
-        )
-  | TD_variant (id, typq, tus, flag) ->
-      TD_aux (TD_variant (id, rw_typquant typq, List.map (rewrite_type_union_typs rw_typ) tus, flag), annot)
-  | TD_enum (id, ids, flag) -> TD_aux (TD_enum (id, ids, flag), annot)
-  | TD_bitfield _ -> assert false (* Processed before re-writing *)
-
-(* FIXME: rewrite in opt_exp? *)
-let rewrite_dec_spec_typs rw_typ (DEC_aux (ds, annot)) =
-  match ds with DEC_reg (typ, id, opt_exp) -> DEC_aux (DEC_reg (rw_typ typ, id, opt_exp), annot)
-
 let rewrite_undefined mwords env =
   let rewrite_e_aux (E_aux (e_aux, (l, _)) as exp) =
     match e_aux with
@@ -2115,73 +2092,6 @@ let rewrite_undefined mwords env =
 
 let rewrite_undefined_if_gen always_bitvector env defs =
   rewrite_undefined (always_bitvector || !Monomorphise.opt_mwords) env defs
-
-let rec simple_typ (Typ_aux (typ_aux, l)) = Typ_aux (simple_typ_aux l typ_aux, l)
-
-and simple_typ_aux l = function
-  | Typ_id id -> Typ_id id
-  | Typ_app (id, [_; A_aux (A_typ typ, l)]) when Id.compare id (mk_id "vector") = 0 ->
-      Typ_app (mk_id "list", [A_aux (A_typ (simple_typ typ), l)])
-  | Typ_app (id, [_]) when Id.compare id (mk_id "bitvector") = 0 -> Typ_id id
-  | Typ_app (id, [_]) when Id.compare id (mk_id "atom") = 0 -> Typ_id (mk_id "int")
-  | Typ_app (id, [_; _]) when Id.compare id (mk_id "range") = 0 -> Typ_id (mk_id "int")
-  | Typ_app (id, [_]) when Id.compare id (mk_id "atom_bool") = 0 -> Typ_id (mk_id "bool")
-  | Typ_app (id, args) -> Typ_app (id, List.concat_map simple_typ_arg args)
-  | Typ_fn (arg_typs, ret_typ) -> Typ_fn (List.map simple_typ arg_typs, simple_typ ret_typ)
-  | Typ_tuple typs -> Typ_tuple (List.map simple_typ typs)
-  | Typ_exist (_, _, Typ_aux (typ, l)) -> simple_typ_aux l typ
-  | typ_aux -> typ_aux
-
-and simple_typ_arg (A_aux (typ_arg_aux, l)) =
-  match typ_arg_aux with A_typ typ -> [A_aux (A_typ (simple_typ typ), l)] | _ -> []
-
-(* This pass aims to remove all the Num quantifiers from the specification. *)
-let rewrite_simple_types env ast =
-  let is_simple = function QI_aux (QI_id kopt, annot) when is_typ_kopt kopt -> true | _ -> false in
-  let simple_typquant quants = List.filter (fun q -> is_simple q) quants in
-  let simple_typschm (TypSchm_aux (TypSchm_ts (typq, typ), annot)) =
-    TypSchm_aux (TypSchm_ts (simple_typquant typq, simple_typ typ), annot)
-  in
-  let simple_vs (VS_aux (vs_aux, annot)) =
-    match vs_aux with VS_val_spec (typschm, id, ext) -> VS_aux (VS_val_spec (simple_typschm typschm, id, ext), annot)
-  in
-  let simple_def (DEF_aux (aux, def_annot)) =
-    let aux =
-      match aux with
-      | DEF_val vs -> DEF_val (simple_vs vs)
-      | DEF_type td -> DEF_type (rewrite_type_def_typs simple_typ simple_typquant td)
-      | DEF_register ds -> DEF_register (rewrite_dec_spec_typs simple_typ ds)
-      | _ -> aux
-    in
-    DEF_aux (aux, def_annot)
-  in
-  let simple_pat =
-    {
-      id_pat_alg with
-      p_typ = (fun (typ, pat) -> P_typ (simple_typ typ, pat));
-      p_var = (fun (pat, kid) -> unaux_pat pat);
-      p_vector = (fun pats -> P_list pats);
-    }
-  in
-  let simple_exp =
-    {
-      id_exp_alg with
-      e_typ = (fun (typ, exp) -> E_typ (simple_typ typ, exp));
-      le_typ = (fun (typ, lexp) -> LE_typ (simple_typ typ, lexp));
-      e_aux =
-        (fun (aux, annot) ->
-          match aux with
-          | E_vector exps when not (is_bitvector_typ (typ_of_annot annot)) -> E_aux (E_list exps, annot)
-          | _ -> E_aux (aux, annot)
-        );
-      pat_alg = simple_pat;
-    }
-  in
-  let simple_defs =
-    { rewriters_base with rewrite_exp = (fun _ -> fold_exp simple_exp); rewrite_pat = (fun _ -> fold_pat simple_pat) }
-  in
-  let ast = { ast with defs = List.map simple_def ast.defs } in
-  rewrite_ast_base simple_defs ast
 
 let rewrite_vector_concat_assignments env defs =
   let lit_int i = mk_exp (E_lit (mk_lit (L_num i))) in
@@ -4543,7 +4453,6 @@ let all_rewriters =
     ("move_termination_measures", basic_rewriter move_termination_measures);
     ("rewrite_explicit_measure", base_rewriter rewrite_explicit_measure);
     ("rewrite_loops_with_escape_effect", basic_rewriter rewrite_loops_with_escape_effect);
-    ("simple_types", basic_rewriter rewrite_simple_types);
     ( "instantiate_outcomes",
       String_rewriter
         (fun target ->

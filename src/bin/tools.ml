@@ -256,9 +256,7 @@ module Extern_json : TOOL = struct
     |> List.rev
 
   (* Translation of Sail types into the OCaml types used by the OCaml
-     backend and Sail_lib. This follows Rewrites.simple_typ and
-     Ocaml_backend.ocaml_typ, but works over un-typechecked parse
-     ASTs. *)
+     backend and Sail_lib. *)
 
   exception Unsupported_type
 
