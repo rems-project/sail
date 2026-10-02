@@ -1,0 +1,156 @@
+name: Documentation
+
+on: [push, workflow_dispatch]
+
+permissions:
+  contents: read
+
+env:
+  OPAMVERBOSE: 1
+
+jobs:
+  odoc:
+    runs-on: ubuntu-24.04
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: System dependencies
+      run: |
+        sudo apt update
+        sudo apt install build-essential libgmp-dev
+
+    - name: Set-up OCaml
+      uses: ocaml/setup-ocaml@v3
+      with:
+        ocaml-compiler: 5.2.1
+
+    - name: Install dependencies
+      run: opam install . --deps-only --with-doc --yes
+
+    - name: Build OCaml documentation
+      run: opam exec -- dune build @doc --release
+
+    - uses: actions/upload-artifact@v4
+      with:
+        name: docs-ocaml
+        path: _build/default/_doc/_html
+
+  rocq:
+    runs-on: ubuntu-24.04
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: System dependencies
+      run: |
+        sudo apt update
+        sudo apt install build-essential libgmp-dev
+
+    - name: Set-up OCaml
+      uses: ocaml/setup-ocaml@v3
+      with:
+        ocaml-compiler: 5.2.1
+        opam-repositories: |
+          default: https://github.com/ocaml/opam-repository.git
+          rocq-released: https://rocq-prover.org/opam/released
+
+    - name: Install dependencies
+      run: |
+        opam install --yes "dune>=3.21" "rocq-stdlib>=9.1.1" "rocq-stdpp>=1.13.0" "rocq-stdpp-bitvector>=1.13.0"
+
+    - name: Build Rocq documentation
+      run: opam exec -- make -C src/rocq doc
+
+    - uses: actions/upload-artifact@v4
+      with:
+        name: docs-rocq
+        path: src/rocq/doc
+
+  manual:
+    runs-on: ubuntu-24.04
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: System dependencies
+      run: |
+        sudo apt update
+        sudo apt install build-essential libgmp-dev z3 ruby ruby-dev texlive-latex-base texlive-pictures poppler-utils
+
+    - name: Asciidoctor
+      run: sudo gem install asciidoctor asciidoctor-bibtex asciidoctor-sail rouge
+
+    - name: Install boon
+      run: cargo install boon-cli
+
+    - name: Set-up OCaml
+      uses: ocaml/setup-ocaml@v3
+      with:
+        ocaml-compiler: 5.2.1
+
+    - name: Install Sail
+      run: |
+        opam pin --yes --no-action add .
+        opam install sail obelisk --yes
+
+    - name: Build manual
+      run: |
+        opam exec -- make -C doc/asciidoc manual.html SAIL_LOGO_PATH=sail_logo_square.png
+        mkdir -p manual
+        cp doc/asciidoc/manual.html doc/asciidoc/ordering-tikz.png etc/logo/sail_logo_square.png manual/
+
+    - uses: actions/upload-artifact@v4
+      with:
+        name: docs-manual
+        path: manual
+
+  site:
+    needs: [odoc, rocq, manual]
+    runs-on: ubuntu-24.04
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - uses: actions/download-artifact@v4
+      with:
+        name: docs-ocaml
+        path: site/ocaml
+
+    - uses: actions/download-artifact@v4
+      with:
+        name: docs-rocq
+        path: site/rocq
+
+    - uses: actions/download-artifact@v4
+      with:
+        name: docs-manual
+        path: site/manual
+
+    - name: Assemble site
+      run: cp doc/site/index.html site/index.html
+
+    - uses: actions/upload-pages-artifact@v3
+      with:
+        path: site
+
+  deploy:
+    if: github.ref == 'refs/heads/sail2'
+    needs: site
+    runs-on: ubuntu-24.04
+
+    permissions:
+      pages: write
+      id-token: write
+
+    concurrency:
+      group: pages
+      cancel-in-progress: false
+
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+
+    steps:
+    - id: deployment
+      uses: actions/deploy-pages@v4

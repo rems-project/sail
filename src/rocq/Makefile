@@ -28,7 +28,7 @@ doc: build
 		--toc --toc-depth 2 \
 		--no-lib-name \
 		--with-header $(COQDOCJS)/header.html \
-		--with-footer $(COQDOCJS)/header.html \
+		--with-footer $(COQDOCJS)/footer.html \
 		--directory doc \
 		_build/default/lib/*.v \
 		_build/default/lib/Domain/*.v
