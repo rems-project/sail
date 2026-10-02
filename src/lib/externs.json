@@ -452,6 +452,54 @@
       ]
     },
     {
+      "name": "__SleepRequest",
+      "operator": false,
+      "pure": false,
+      "bindings": { "_": "sleep_request" },
+      "type": "unit -> unit",
+      "ocaml_type": "unit -> unit",
+      "file": "lib/asl_compat.sail",
+      "conditions": [
+        {
+          "directive": "ifndef",
+          "argument": "_ASL_COMPAT",
+          "branch": "then"
+        }
+      ]
+    },
+    {
+      "name": "__WakeupRequest",
+      "operator": false,
+      "pure": false,
+      "bindings": { "_": "wakeup_request" },
+      "type": "unit -> unit",
+      "ocaml_type": "unit -> unit",
+      "file": "lib/asl_compat.sail",
+      "conditions": [
+        {
+          "directive": "ifndef",
+          "argument": "_ASL_COMPAT",
+          "branch": "then"
+        }
+      ]
+    },
+    {
+      "name": "putchar",
+      "operator": false,
+      "pure": true,
+      "bindings": { "c": "sail_putchar", "_": "putchar" },
+      "type": "int -> unit",
+      "ocaml_type": "Z.t -> unit",
+      "file": "lib/asl_compat.sail",
+      "conditions": [
+        {
+          "directive": "ifndef",
+          "argument": "_ASL_COMPAT",
+          "branch": "then"
+        }
+      ]
+    },
+    {
       "name": "sail_instr_announce",
       "operator": false,
       "pure": false,
