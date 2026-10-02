@@ -69,7 +69,7 @@ open Register
 def __id (x : Int) : Int :=
   x
 
-/-- Type quantifiers: k_ex2776_ : Bool, k_ex2775_ : Bool -/
+/-- Type quantifiers: k_ex2785_ : Bool, k_ex2784_ : Bool -/
 def neq_bool (x : Bool) (y : Bool) : Bool :=
   (! (x == y))
 
