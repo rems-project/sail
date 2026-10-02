@@ -68,6 +68,7 @@ lib/hol/sail-heap
 /src/jib.lem
 /src/jib.ml
 /src/manifest.ml
+/src/rocq/doc
 
 /test/suites/__pycache__/
 /test/typecheck/rtpass*/
