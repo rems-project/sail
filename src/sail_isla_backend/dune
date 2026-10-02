@@ -1,0 +1,13 @@
+(executable
+ (name sail_plugin_isla)
+ (modes
+  (native plugin)
+  (byte plugin))
+ (libraries libsail))
+
+(install
+ (section
+  (site
+   (libsail plugins)))
+ (package sail_isla_backend)
+ (files sail_plugin_isla.cmxs sail_plugin_isla.cma))
