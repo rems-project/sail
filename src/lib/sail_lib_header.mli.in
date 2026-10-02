@@ -90,7 +90,6 @@ val string_of_zbool : bool -> string
 val string_of_zreal : 'a -> string
 val string_of_zstring : string -> string
 val string_of_list : string -> ('a -> string) -> 'a list -> string
-val ones : Z.t -> bits
 val shift_bits_right : bits -> bits -> bits
 val shift_bits_left : bits -> bits -> bits
 val get_time_ns : unit -> Z.t

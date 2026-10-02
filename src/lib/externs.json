@@ -2859,6 +2859,18 @@
       ]
     },
     {
+      "name": "sail_ones",
+      "operator": false,
+      "pure": true,
+      "bindings": { "interpreter": "ones", "ocaml": "ones" },
+      "type": "forall 'n, 'n >= 0. int('n) -> bits('n)",
+      "ocaml_type": "Z.t -> bits",
+      "file": "lib/vector.sail",
+      "conditions": [
+        { "directive": "ifndef", "argument": "_VECTOR", "branch": "then" }
+      ]
+    },
+    {
       "name": "slice",
       "operator": false,
       "pure": true,
