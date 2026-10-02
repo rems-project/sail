@@ -1164,18 +1164,17 @@ let remove_bitvector_pat (P_aux (_, (l, _)) as pat) =
     try env_of_pat pat with _ -> raise (Reporting.err_unreachable l __POS__ "Pattern without annotation found")
   in
 
-  (* first introduce names for bitvector patterns *)
+  (* first introduce names for bitvector patterns;
+     the argument to the subpattern functions p indicates whether the subpattern is directly inside P_as/P_var,
+     i.e., whether it already has a name
+  *)
   let name_bitvector_roots =
     {
       p_lit = (fun lit -> P_lit lit);
       p_typ = (fun (typ, p) -> P_typ (typ, p false));
-      p_wild =
-        P_wild
-        (* todo: I have no idea what the boolean parameter means - so I randomly
-         * passed "true".  A comment to explain the bool might be a good idea?
-         *);
-      p_or = (fun (pat1, pat2) -> P_or (pat1 true, pat2 true));
-      p_not = (fun pat -> P_not (pat true));
+      p_wild = P_wild;
+      p_or = (fun (pat1, pat2) -> P_or (pat1 false, pat2 false));
+      p_not = (fun pat -> P_not (pat false));
       p_as = (fun (pat, id) -> P_as (pat true, id));
       p_id = (fun id -> P_id id);
       p_var = (fun (pat, kid) -> P_var (pat true, kid));
