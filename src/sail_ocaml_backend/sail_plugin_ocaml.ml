@@ -96,7 +96,6 @@ let ocaml_rewrites =
     ("exp_lift_assign", []);
     ("top_sort_defs", []);
     ("recheck_defs", []);
-    ("simple_types", []);
   ]
 
 let ocaml_target out_file { default_sail_dir; ast; effect_info; env; _ } =
