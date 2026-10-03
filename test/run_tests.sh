@@ -25,10 +25,10 @@ printf "==========================================\n"
 ./latex/run_tests.sh
 
 printf "\n==========================================\n"
-printf "C tests\n"
+printf "Exec tests\n"
 printf "==========================================\n"
 
-TEST_PAR=8 ./c/run_tests.py
+TEST_PAR=8 ./exec/run_tests.py
 
 printf "\n==========================================\n"
 printf "SMT tests\n"

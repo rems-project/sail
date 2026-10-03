@@ -11,7 +11,7 @@ $iftarget c cpp
 $c_in_main sail_config_set_file("config_abstract_type.json");
 $c_in_main_post sail_config_cleanup();
 $else
-$option --config ../c/config_abstract_type.json
+$option --config ../exec/config_abstract_type.json
 $endif
 
 register R : bits(xlen)

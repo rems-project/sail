@@ -38,10 +38,10 @@ printf "==========================================\n"
 ./lem/run_tests.py || returncode=1
 
 printf "\n==========================================\n"
-printf "C tests\n"
+printf "Exec tests\n"
 printf "==========================================\n"
 
-./c/run_tests.py || returncode=1
+./exec/run_tests.py || returncode=1
 
 printf "\n==========================================\n"
 printf "SMT tests\n"

@@ -49,7 +49,7 @@ print("Sail dir is {}".format(sail_dir))
 def test_sv(name, opts, skip_list, just_check):
     banner('Testing {} with options:{}'.format(name, opts))
     results = Results(name)
-    for filenames in chunks(os.listdir('../c'), parallel()):
+    for filenames in chunks(os.listdir('../exec'), parallel()):
         tests = {}
         for filename in filenames:
             basename = os.path.splitext(os.path.basename(filename))[0]
@@ -60,11 +60,11 @@ def test_sv(name, opts, skip_list, just_check):
             if tests[filename] == 0:
                 step('rm -rf {}_obj_dir'.format(basename));
                 if basename.startswith('fail') or just_check:
-                    step('\'{}\' --no-warn --sv ../c/{} -o {} --sv-verilate compile{} --sv-verilate-jobs 1 > {}.out'.format(sail, filename, basename, opts, basename))
+                    step('\'{}\' --no-warn --sv ../exec/{} -o {} --sv-verilate compile{} --sv-verilate-jobs 1 > {}.out'.format(sail, filename, basename, opts, basename))
                 else:
-                    step('\'{}\' --no-warn --sv ../c/{} -o {} --sv-verilate run{} --sv-verilate-jobs 1 > {}.out'.format(sail, filename, basename, opts, basename))
+                    step('\'{}\' --no-warn --sv ../exec/{} -o {} --sv-verilate run{} --sv-verilate-jobs 1 > {}.out'.format(sail, filename, basename, opts, basename))
                     step('awk \'/SAIL START/{{flag=1;next}}/SAIL END/{{flag=0}}flag\' {}.out > {}.result'.format(basename, basename))
-                    step('diff ../c/{}.expect {}.result'.format(basename, basename))
+                    step('diff ../exec/{}.expect {}.result'.format(basename, basename))
                 print_ok(filename)
                 sys.exit()
         results.collect(tests)

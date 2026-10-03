@@ -19,7 +19,7 @@ local_support_lib = args.lean_local_support_library
 sail_dir = get_sail_dir()
 sail = get_sail()
 
-# Self-tests refers to self contained Sail programs in test/c/ which are Sail programs
+# Self-tests refers to self contained Sail programs in test/exec/ which are Sail programs
 # that you can run to exercise the language and the extracted output.
 # Not all self-tests are supported.
 skip_selftests = {
@@ -153,7 +153,7 @@ print("...done!")
 xml = '<testsuites>\n'
 
 xml += test_lean('lean', support_lib)
-xml += test_lean('c', support_lib, skip_list=skip_selftests, runnable=True)
+xml += test_lean('exec', support_lib, skip_list=skip_selftests, runnable=True)
 
 xml += '</testsuites>\n'
 
