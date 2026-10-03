@@ -45,7 +45,8 @@ class MonoTests(SailTest):
         step(f"mkdir -p _build_{filename}")
         step(
             f"'{self.sail}' --lem --lem-mwords --lem-lib Test_extra"
-            f" --lem-output-dir _build_{filename} -o out {arguments}"
+            f" --lem-output-dir _build_{filename} --isa-output-dir _build_{filename}"
+            f" -o out {arguments}"
         )
         os.chdir(f"_build_{filename}")
         step(

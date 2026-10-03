@@ -1,0 +1,5 @@
+[93mType error[0m:
+[96mfail/enum_clause_unknown.sail[0m:5.12-13:
+5[96m |[0menum clause F = A
+ [91m |[0m            [91m^[0m
+ [91m |[0m Enumeration F does not exist

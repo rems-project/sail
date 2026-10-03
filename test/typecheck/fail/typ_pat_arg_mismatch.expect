@@ -1,0 +1,5 @@
+[93mType error[0m:
+[96mfail/typ_pat_arg_mismatch.sail[0m:4.64-71:
+4[96m |[0mfunction f(x : bitvector(4)) -> unit = match x { y as bitvector(int('n)) => () }
+ [91m |[0m                                                                [91m^-----^[0m
+ [91m |[0m Couldn't bind type argument 4 with atom('n)

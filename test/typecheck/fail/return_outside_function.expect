@@ -1,0 +1,5 @@
+[93mType error[0m:
+[96mfail/return_outside_function.sail[0m:4.14-22:
+4[96m |[0mlet x : int = return 1
+ [91m |[0m              [91m^------^[0m
+ [91m |[0m Cannot use return outside a function

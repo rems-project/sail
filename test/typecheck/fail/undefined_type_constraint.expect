@@ -1,0 +1,10 @@
+[93mType error[0m:
+[96mfail/undefined_type_constraint.sail[0m:4.16-19:
+4[96m |[0mtype q : Bool = foo
+ [91m |[0m                [91m^-^[0m
+ [91m |[0m Well-formedness check failed for constraint
+ [91m |[0m 
+ [91m |[0m [93mCaused by [0m[96mfail/undefined_type_constraint.sail[0m:4.16-19:
+ [91m |[0m 4[96m |[0mtype q : Bool = foo
+ [91m |[0m  [91m |[0m                [91m^-^[0m
+ [91m |[0m  [91m |[0m Undefined type constraint foo

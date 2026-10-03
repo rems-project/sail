@@ -1,0 +1,5 @@
+[93mType error[0m:
+[96mfail/assign_toplevel_let.sail[0m:5.25-26:
+5[96m |[0mfunction f() -> unit = { x = 4 }
+ [91m |[0m                         [91m^[0m
+ [91m |[0m Cannot modify immutable let-bound constant or enumeration constructor x
