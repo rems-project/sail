@@ -65,10 +65,10 @@ docker:
 	@echo 'for example: docker run --volume `PWD`:/data/ sail:0.1 --help'
 
 test:
-	SAIL_DIR=`pwd` SAIL=`pwd`/sail test/run_tests.sh
+	test/run_tests.sh
 
 core-tests:
-	SAIL_DIR=`pwd` SAIL=`pwd`/sail test/run_core_tests.sh
+	test/run_core_tests.sh
 
 exec-tests:
-	SAIL_DIR=`pwd` SAIL=`pwd`/sail test/suites/runner.py -s exec.c -s exec.cpp -s exec.interpreter -s exec.ocaml -s exec.partial
+	test/suites/runner.py -s exec.c -s exec.cpp -s exec.interpreter -s exec.ocaml -s exec.partial

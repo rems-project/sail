@@ -21,6 +21,23 @@ signal.signal(signal.SIGINT, signal_handler)
 TEST_DIR = os.path.normpath(
     os.path.join(os.path.dirname(os.path.abspath(__file__)), "..")
 )
+REPO_DIR = os.path.dirname(TEST_DIR)
+
+
+def default_sail():
+    """The Sail executable to test when SAIL is not set.
+
+    If Sail has been built in this repository, use the `sail` script in the
+    repository root, which runs the binary in _build with SAIL_DIR and the
+    plugin directory set up. Otherwise fall back to `sail` on the PATH (e.g. a
+    version installed with opam).
+    """
+    if os.path.exists(
+        os.path.join(REPO_DIR, "_build", "install", "default", "bin", "sail")
+    ):
+        return os.path.join(REPO_DIR, "sail")
+    return "sail"
+
 
 parser = argparse.ArgumentParser()
 # args and parallelism are set by runner.py after argument parsing.
@@ -338,7 +355,7 @@ class SailTest(ABC):
     fail_on_error = False
 
     def __init__(self):
-        self.sail = os.environ.get("SAIL", "sail")
+        self.sail = os.environ.get("SAIL") or default_sail()
         self.sail_dir = self._get_sail_dir()
         self._xml_parts = []
         self.failures = 0
