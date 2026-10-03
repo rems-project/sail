@@ -58,4 +58,4 @@ jobs:
         # instead of grouping them into a single result
         report_individual_runs: true
         files: |
-          ./**/tests.xml
+          ./**/*.xml

@@ -113,7 +113,7 @@ jobs:
       with:
         name: test-results-${{ matrix.suite }}
         path: |
-          test/**/tests.xml
+          test/**/*.xml
           test/suite-${{ matrix.suite }}.coverage
 
     # Only do this for one job in the test matrix
@@ -186,9 +186,6 @@ jobs:
         eval $(opam env)
         export SAIL_DIR=$(pwd)
         etc/ci_coverage_tests.sh rocq
-        # Workflows using the results assume filenames are unique
-        mkdir test/exec-rocq
-        mv test/exec/tests.xml test/exec-rocq/tests.xml
         bisect-ppx-report merge --coverage-path=test/ test/suite-rocq.coverage
 
     - name: Upload test results
@@ -197,5 +194,5 @@ jobs:
       with:
         name: test-results-rocq
         path: |
-          test/**/tests.xml
+          test/**/*.xml
           test/suite-rocq.coverage

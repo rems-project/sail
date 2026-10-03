@@ -15,36 +15,36 @@ printf "\n==========================================\n"
 printf "Lexing tests\n"
 printf "==========================================\n"
 
-./lexing/run_tests.py || returncode=1
+./suites/runner.py -s lexing || returncode=1
 
 printf "\n==========================================\n"
 printf "Pattern completeness tests\n"
 printf "==========================================\n"
 
-./pattern_completeness/run_tests.py || returncode=1
+./suites/runner.py -s pattern_completeness || returncode=1
 
 printf "\n==========================================\n"
 printf "Typechecking tests\n"
 printf "==========================================\n"
 
-./typecheck/run_tests.py || returncode=1
+./suites/runner.py -s typecheck || returncode=1
 
 printf "\n==========================================\n"
 printf "OCaml tests\n"
 printf "==========================================\n"
 
-./ocaml/run_tests.py || returncode=1
+./suites/runner.py -s ocaml || returncode=1
 
 printf "\n==========================================\n"
 printf "Floating point tests\n"
 printf "==========================================\n"
 
-./float/run_tests.py || returncode=1
+./suites/runner.py -s float || returncode=1
 
 printf "\n==========================================\n"
 printf "Plugin tests\n"
 printf "==========================================\n"
 
-./plugins/run_tests.py || returncode=1
+./suites/runner.py -s plugins || returncode=1
 
 exit $returncode

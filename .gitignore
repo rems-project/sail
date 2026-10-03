@@ -69,14 +69,14 @@ lib/hol/sail-heap
 /src/jib.ml
 /src/manifest.ml
 
-/test/__pycache__/
-/test/sailtest.pyc
+/test/suites/__pycache__/
 /test/typecheck/rtpass*/
 /test/typecheck/tests.xml
 /test/latex/out
 /test/lem/*.thy
 /test/lem/*.lem
 /test/*/tests.xml
+/test/*/*.xml
 /test/riscv/tests/*.iout
 /test/smt/*.out
 /test/smt/*.smt2
@@ -93,7 +93,6 @@ lib/hol/sail-heap
 /test/exec/*.bin
 /test/exec/*_ocaml
 /test/exec/_sbuild*
-/test/exec/support-lib
 /test/exec/**/*.dSYM
 /test/exec/*_obj_dir
 /test/coq/.lia.cache

@@ -10,13 +10,13 @@ printf "\n==========================================\n"
 printf "Lem tests\n"
 printf "==========================================\n"
 
-./lem/run_tests.py
+./suites/runner.py -s lem
 
 printf "\n==========================================\n"
 printf "Monomorphisation tests\n"
 printf "==========================================\n"
 
-./mono/run_tests.py
+./suites/runner.py -s mono
 
 printf "\n==========================================\n"
 printf "LaTeX tests\n"
@@ -28,19 +28,19 @@ printf "\n==========================================\n"
 printf "Exec tests\n"
 printf "==========================================\n"
 
-TEST_PAR=8 ./exec/run_tests.py
+TEST_PAR=8 ./suites/runner.py -s exec.c -s exec.cpp -s exec.interpreter -s exec.ocaml -s exec.partial
 
 printf "\n==========================================\n"
 printf "SMT tests\n"
 printf "==========================================\n"
 
-TEST_PAR=8 ./smt/run_tests.py
+TEST_PAR=8 ./suites/runner.py -s smt
 
 printf "\n==========================================\n"
 printf "Builtins tests\n"
 printf "==========================================\n"
 
-TEST_PAR=4 ./builtins/run_tests.py
+TEST_PAR=4 ./suites/runner.py -s builtins.c -s builtins.ocaml
 
 printf "\n==========================================\n"
 printf "ARM spec tests\n"
@@ -52,7 +52,7 @@ printf "\n==========================================\n"
 printf "Lean tests\n"
 printf "==========================================\n"
 
-./lean/run_tests.py
+./suites/runner.py -s lean
 
 # This specification has bitrotted
 #
