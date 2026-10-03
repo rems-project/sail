@@ -1,0 +1,10 @@
+[93mType error[0m:
+[96mfail/nested_existential.sail[0m:4.0-75:
+4[96m |[0mfunction f(x : {'n, 'n > 0. (int('n), {'m, 'm > 0. int('m)})}) -> unit = ()
+ [91m |[0m[91m^-------------------------------------------------------------------------^[0m
+ [91m |[0m Well-formedness check failed for type here
+ [91m |[0m 
+ [91m |[0m [93mCaused by [0m[96mfail/nested_existential.sail[0m:4.38-59:
+ [91m |[0m 4[96m |[0mfunction f(x : {'n, 'n > 0. (int('n), {'m, 'm > 0. int('m)})}) -> unit = ()
+ [91m |[0m  [91m |[0m                                      [91m^-------------------^[0m
+ [91m |[0m  [91m |[0m Nested existentials are not allowed

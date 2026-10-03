@@ -1,0 +1,5 @@
+[93mType error[0m:
+[96mfail/infer_fn_type_from_id_pat.sail[0m:4.11-12:
+4[96m |[0mfunction f(x) -> int = x
+ [91m |[0m           [91m^[0m
+ [91m |[0m Cannot infer type from pattern x

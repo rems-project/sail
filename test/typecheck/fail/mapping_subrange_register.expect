@@ -1,0 +1,5 @@
+[93mType error[0m:
+[96mfail/mapping_subrange_register.sail[0m:5.44-53:
+5[96m |[0mmapping m : bits(8) <-> (bits(8), unit) = { R[7 .. 0] <-> (R, ()) }
+ [91m |[0m                                            [91m^-------^[0m
+ [91m |[0m Invalid identifier in vector subrange pattern

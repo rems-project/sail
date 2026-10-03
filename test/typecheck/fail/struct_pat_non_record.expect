@@ -1,0 +1,5 @@
+[93mType error[0m:
+[96mfail/struct_pat_non_record.sail[0m:5.40-56:
+5[96m |[0mfunction f(x : int) -> unit = match x { struct { a = y } => () }
+ [91m |[0m                                        [91m^--------------^[0m
+ [91m |[0m The type int('_#x) is not a record

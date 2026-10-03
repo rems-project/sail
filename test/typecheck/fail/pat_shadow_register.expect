@@ -1,0 +1,5 @@
+[93mType error[0m:
+[96mfail/pat_shadow_register.sail[0m:5.11-12:
+5[96m |[0mfunction f(R : int) -> unit = ()
+ [91m |[0m           [91m^[0m
+ [91m |[0m Cannot shadow register in pattern R

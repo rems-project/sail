@@ -1,0 +1,5 @@
+[93mError[0m:
+[96mfail/union_ctor_multiple_private.sail[0m:5.10-17:
+5[96m |[0m  private private A : int
+ [91m |[0m          [91m^-----^[0m
+ [91m |[0m Union constructor has multiple visibility modifiers

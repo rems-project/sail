@@ -1,0 +1,5 @@
+[93mError[0m:
+[96mfail/def_multiple_docs.sail[0m:5.0-11:
+5[96m |[0m/*! doc2 */
+ [91m |[0m[91m^---------^[0m
+ [91m |[0m Toplevel definition has multiple documentation comments

@@ -1,0 +1,5 @@
+[93mError[0m:
+[96mfail/abstract_order_kind.sail[0m:4.0-14:
+4[96m |[0mtype T : Order
+ [91m |[0m[91m^------------^[0m
+ [91m |[0m Abstract type cannot have Order kind
