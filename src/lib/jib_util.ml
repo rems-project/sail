@@ -616,7 +616,7 @@ let rec ctyp_suprema = function
   | CT_enum id -> CT_enum id
   (* Do we really never want to never call ctyp_suprema on constructor
      fields?  Doing it causes issues for structs (see
-     test/c/stack_struct.sail) but it might be wrong to not call it
+     test/exec/stack_struct.sail) but it might be wrong to not call it
      for nested variants... *)
   | CT_struct (id, ctyps) -> CT_struct (id, ctyps)
   | CT_variant (id, ctyps) -> CT_variant (id, ctyps)

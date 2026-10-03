@@ -1,4 +1,4 @@
-.PHONY: all isail sail install coverage clean asciidoc docker test core-tests c-tests extraction externs check-externs
+.PHONY: all isail sail install coverage clean asciidoc docker test core-tests exec-tests extraction externs check-externs
 
 all: sail
 
@@ -65,10 +65,10 @@ docker:
 	@echo 'for example: docker run --volume `PWD`:/data/ sail:0.1 --help'
 
 test:
-	SAIL_DIR=`pwd` SAIL=`pwd`/sail test/run_tests.sh
+	test/run_tests.sh
 
 core-tests:
-	SAIL_DIR=`pwd` SAIL=`pwd`/sail test/run_core_tests.sh
+	test/run_core_tests.sh
 
-c-tests:
-	SAIL_DIR=`pwd` SAIL=`pwd`/sail test/c/run_tests.py
+exec-tests:
+	test/suites/runner.py -s exec.c -s exec.cpp -s exec.interpreter -s exec.ocaml -s exec.partial
