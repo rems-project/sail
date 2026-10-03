@@ -1,0 +1,5 @@
+[93mType error[0m:
+[96mfail/assign_index_non_vector.sail[0m:7.2-6:
+7[96m |[0m  x[1] = 0
+ [91m |[0m  [91m^--^[0m
+ [91m |[0m Cannot assign vector element of non vector or bitfield type

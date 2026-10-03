@@ -1,0 +1,5 @@
+[93mType error[0m:
+[96mfail/assign_concat_vector_bits.sail[0m:8.3-8:
+8[96m |[0m  (x @ y) = 0b0000
+ [91m |[0m   [91m^---^[0m
+ [91m |[0m Vector concatenation l-expression must only contain vector types

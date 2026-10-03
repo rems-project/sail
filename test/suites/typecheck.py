@@ -10,6 +10,25 @@ _PASS_DIR = os.path.join(_SUITE_DIR, "pass")
 _PROJECT_DIR = os.path.join(_SUITE_DIR, "project")
 _FAIL_DIR = os.path.join(_SUITE_DIR, "fail")
 
+# Tests for known bugs. They describe the correct behaviour, so they are
+# expected to fail until the bug is fixed.
+_PASS_XFAILS = {
+    "typ_pat_synonym": "type patterns do not expand type synonyms such as bits",
+}
+
+_FAIL_XFAILS = {
+    "scattered_union_clause_after_end": "clauses are allowed after a scattered definition is ended",
+    "scattered_enum_clause_after_end": "clauses are allowed after a scattered definition is ended",
+    "scattered_function_clause_after_end": "clauses are allowed after a scattered definition is ended",
+    "assign_index_non_vector": "vector assignment on a non-bitfield Typ_id is treated as a bitfield access",
+    "assign_field_non_bitfield": "vector assignment on a non-bitfield Typ_id is treated as a bitfield access",
+    "int_synonym_applied": "kind error message always says '-> Type'",
+    "assign_deref_non_register": "error message has an unbalanced parenthesis",
+    "list_pat_non_list": "list pattern is printed with old [|| ||] syntax in error message",
+    "assign_concat_vector_bits": "error message refers to vector order",
+    "assign_concat_bits_vector": "error message refers to vector order",
+}
+
 
 @suite("typecheck.pass", _SUITE_DIR)
 class TypecheckPassTests(SailTest):
@@ -28,6 +47,7 @@ class TypecheckPassTests(SailTest):
             self._test,
             testdir=_SUITE_DIR,
             skip_set=skip_pass,
+            expected_failures={f"{test}.sail": reason for test, reason in _PASS_XFAILS.items()},
         )
 
     def _test(self, filename, basename):
@@ -84,7 +104,13 @@ class TypecheckProjectTests(SailTest):
 class TypecheckFailTests(SailTest):
     def run(self):
         self.banner("Testing failing programs")
-        self.run_tests("fail", Batcher(_FAIL_DIR), self._test, testdir=_SUITE_DIR)
+        self.run_tests(
+            "fail",
+            Batcher(_FAIL_DIR),
+            self._test,
+            testdir=_SUITE_DIR,
+            expected_failures={f"{test}.sail": reason for test, reason in _FAIL_XFAILS.items()},
+        )
 
     def _test(self, filename, basename):
         step(
