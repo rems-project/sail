@@ -239,6 +239,8 @@ let lean_rewrites =
     ("toplevel_let_patterns", []);
     ("recheck_defs", []);
     ("attach_effects", []);
+    ("short_circuit_to_if", []);
+    ("attach_effects", []);
   ]
 
 type lean_context = {
