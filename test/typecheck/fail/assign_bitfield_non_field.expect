@@ -1,0 +1,5 @@
+[93mType error[0m:
+[96mfail/assign_bitfield_non_field.sail[0m:6.25-29:
+6[96m |[0mfunction f() -> unit = { R[1] = 0b0000 }
+ [91m |[0m                         [91m^--^[0m
+ [91m |[0m 1 is not a bitfield accessor

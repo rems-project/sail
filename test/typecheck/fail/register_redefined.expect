@@ -1,0 +1,5 @@
+[93mType error[0m:
+[96mfail/register_redefined.sail[0m:5.9-10:
+5[96m |[0mregister R : int
+ [91m |[0m         [91m^[0m
+ [91m |[0m Register R is already bound

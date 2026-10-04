@@ -1,0 +1,5 @@
+[93mType error[0m:
+[96mfail/if_infer_incompatible.sail[0m:4.41-61:
+4[96m |[0mfunction f(b : bool) -> unit = { let x = if b then 1 else "a"; () }
+ [91m |[0m                                         [91m^------------------^[0m
+ [91m |[0m Incompatible types: 1 vs "a"

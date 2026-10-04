@@ -1,0 +1,5 @@
+[93mType error[0m:
+[96mfail/cons_pat_non_list.sail[0m:4.40-47:
+4[96m |[0mfunction f(x : int) -> unit = match x { y :: ys => (), _ => () }
+ [91m |[0m                                        [91m^-----^[0m
+ [91m |[0m Cannot match cons pattern against non-list type

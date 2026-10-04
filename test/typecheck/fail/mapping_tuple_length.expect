@@ -1,0 +1,5 @@
+[93mType error[0m:
+[96mfail/mapping_tuple_length.sail[0m:5.36-45:
+5[96m |[0mmapping m : (int, int) <-> bool = { (1, 2, 3) <-> true }
+ [91m |[0m                                    [91m^-------^[0m
+ [91m |[0m Tuple mapping-pattern and tuple type have different length

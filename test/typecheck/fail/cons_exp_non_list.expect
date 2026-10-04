@@ -1,0 +1,5 @@
+[93mType error[0m:
+[96mfail/cons_exp_non_list.sail[0m:4.38-47:
+4[96m |[0mfunction f() -> int = { let x : int = 1 :: [||]; x }
+ [91m |[0m                                      [91m^-------^[0m
+ [91m |[0m Cons 1 :: [||] must have list type

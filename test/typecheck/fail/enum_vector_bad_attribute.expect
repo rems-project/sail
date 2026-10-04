@@ -1,0 +1,5 @@
+[93mError[0m:
+[96mfail/enum_vector_bad_attribute.sail[0m:4.0-16:
+4[96m |[0m$[enum_vector 3]
+ [91m |[0m[91m^--------------^[0m
+ [91m |[0m Invalid enum_vector attribute

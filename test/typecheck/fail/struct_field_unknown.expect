@@ -1,0 +1,5 @@
+[93mType error[0m:
+[96mfail/struct_field_unknown.sail[0m:5.29-30:
+5[96m |[0mfunction f(s : S) -> int = s.b
+ [91m |[0m                             [91m^[0m
+ [91m |[0m No field accessor found for S.b
