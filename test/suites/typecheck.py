@@ -16,12 +16,6 @@ _PASS_XFAILS = {
     "typ_pat_synonym": "type patterns do not expand type synonyms such as bits",
 }
 
-_FAIL_XFAILS = {
-    "scattered_union_clause_after_end": "clauses are allowed after a scattered definition is ended",
-    "scattered_enum_clause_after_end": "clauses are allowed after a scattered definition is ended",
-    "scattered_function_clause_after_end": "clauses are allowed after a scattered definition is ended",
-}
-
 
 @suite("typecheck.pass", _SUITE_DIR)
 class TypecheckPassTests(SailTest):
@@ -40,7 +34,9 @@ class TypecheckPassTests(SailTest):
             self._test,
             testdir=_SUITE_DIR,
             skip_set=skip_pass,
-            expected_failures={f"{test}.sail": reason for test, reason in _PASS_XFAILS.items()},
+            expected_failures={
+                f"{test}.sail": reason for test, reason in _PASS_XFAILS.items()
+            },
         )
 
     def _test(self, filename, basename):
@@ -102,7 +98,6 @@ class TypecheckFailTests(SailTest):
             Batcher(_FAIL_DIR),
             self._test,
             testdir=_SUITE_DIR,
-            expected_failures={f"{test}.sail": reason for test, reason in _FAIL_XFAILS.items()},
         )
 
     def _test(self, filename, basename):

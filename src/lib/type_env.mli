@@ -240,6 +240,10 @@ val lookup_id : id -> t -> typ lvar
 val add_scattered_id : id -> (l * string * Ast.attribute_data option) list -> t -> t
 val is_scattered_id : id -> t -> bool
 val is_scattered_open : id -> t -> bool
+
+(** Raise a type error if the scattered definition has already been ended *)
+val check_scattered_not_ended : at:Ast.l -> kind:string -> id -> t -> unit
+
 val end_scattered_id : at:Ast.l -> id -> t -> t
 
 val expand_synonyms : t -> typ -> typ

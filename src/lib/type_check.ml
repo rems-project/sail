@@ -5209,6 +5209,7 @@ and check_scattered : Env.t -> env def_annot -> uannot scattered_def -> typed_de
         Env.add_scattered_enum id (get_def_attributes def_annot) env
       )
   | SD_enumcl (id, member) ->
+      Env.check_scattered_not_ended ~at:l ~kind:"enum" id env;
       ( [DEF_aux (DEF_scattered (SD_aux (SD_enumcl (id, member), (l, empty_tannot))), def_annot)],
         Env.add_enum_clause id member env
       )
@@ -5217,6 +5218,7 @@ and check_scattered : Env.t -> env def_annot -> uannot scattered_def -> typed_de
         Env.add_scattered_variant id typq env
       )
   | SD_unioncl (id, tu) ->
+      Env.check_scattered_not_ended ~at:l ~kind:"union" id env;
       ( [DEF_aux (DEF_scattered (SD_aux (SD_unioncl (id, tu), (l, empty_tannot))), def_annot)],
         let env = Env.add_variant_clause id tu env in
         let typq, _ = Env.get_variant id env in
@@ -5243,6 +5245,7 @@ and check_scattered : Env.t -> env def_annot -> uannot scattered_def -> typed_de
         env
       )
   | SD_funcl (FCL_aux (FCL_funcl (id, _), (fcl_def_annot, _)) as funcl) ->
+      Env.check_scattered_not_ended ~at:l ~kind:"function" id env;
       let typq, typ = Env.get_val_spec id env in
       let funcl_env = Env.add_typquant fcl_def_annot.loc typq env in
       let funcl = check_funcl funcl_env funcl typ in
@@ -5250,6 +5253,7 @@ and check_scattered : Env.t -> env def_annot -> uannot scattered_def -> typed_de
         Env.add_scattered_id id (get_def_attributes def_annot) env
       )
   | SD_mapcl (id, mapcl) ->
+      Env.check_scattered_not_ended ~at:l ~kind:"mapping" id env;
       let typq, typ = Env.get_val_spec id env in
       let mapcl_env = Env.add_typquant l typq env in
       let mapcl = check_mapcl mapcl_env mapcl typ in
