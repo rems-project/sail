@@ -1,0 +1,5 @@
+[93mType error[0m:
+[96mfail/typ_pat_synonym_repeated_param.sail[0m:6.62-69:
+6[96m |[0mfunction f(x : (int(1), int(2))) -> unit = match x { y as dup(int('n)) => () }
+ [91m |[0m                                                              [91m^-----^[0m
+ [91m |[0m Cannot bind type pattern atom('n) as the corresponding parameter of dup is used multiple times in its definition

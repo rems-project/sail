@@ -1,0 +1,6 @@
+[93mType error[0m:
+[96mfail/typ_pat_synonym_constant_mismatch.sail[0m:6.56-61:
+6[96m |[0mfunction f(x : vector(4, int)) -> unit = match x { y as v8(_) => () }
+ [91m |[0m                                                        [91m^---^[0m
+ [91m |[0m Couldn't bind type vector(4, int) with v8(_)
+ [91m |[0m as 8 == 4 cannot hold

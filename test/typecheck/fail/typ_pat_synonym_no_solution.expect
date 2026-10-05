@@ -1,0 +1,6 @@
+[93mType error[0m:
+[96mfail/typ_pat_synonym_no_solution.sail[0m:6.50-59:
+6[96m |[0mfunction f(x : bits(33)) -> unit = match x { y as bytes('n) => () }
+ [91m |[0m                                                  [91m^-------^[0m
+ [91m |[0m Couldn't bind type bitvector(33) with bytes('n)
+ [91m |[0m as (8 * 'n) == 33 cannot hold

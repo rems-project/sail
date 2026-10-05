@@ -13,7 +13,6 @@ _FAIL_DIR = os.path.join(_SUITE_DIR, "fail")
 # Tests for known bugs. They describe the correct behaviour, so they are
 # expected to fail until the bug is fixed.
 _PASS_XFAILS = {
-    "typ_pat_synonym": "type patterns do not expand type synonyms such as bits",
 }
 
 
