@@ -2862,7 +2862,7 @@ and bind_pat env (P_aux (pat_aux, (l, uannot)) as pat) typ =
           let pats, env, guards = process_pats env pats in
           (annot_pat (P_list pats) typ, env, guards)
       | _ ->
-          typ_error l ("Cannot match list pattern " ^ string_of_pat pat ^ "  against non-list type " ^ string_of_typ typ)
+          typ_error l ("Cannot match list pattern " ^ string_of_pat pat ^ " against non-list type " ^ string_of_typ typ)
     )
   | P_tuple [] -> (
       match Env.expand_synonyms env typ with

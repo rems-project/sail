@@ -24,7 +24,6 @@ _FAIL_XFAILS = {
     "assign_field_non_bitfield": "vector assignment on a non-bitfield Typ_id is treated as a bitfield access",
     "int_synonym_applied": "kind error message always says '-> Type'",
     "assign_deref_non_register": "error message has an unbalanced parenthesis",
-    "list_pat_non_list": "list pattern is printed with old [|| ||] syntax in error message",
     "assign_concat_vector_bits": "error message refers to vector order",
     "assign_concat_bits_vector": "error message refers to vector order",
 }
