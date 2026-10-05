@@ -3516,7 +3516,7 @@ and infer_lexp env (LE_aux (lexp_aux, (l, uannot)) as lexp) =
               (Err_failed_constraint
                  (bounds_check, [], Env.get_locals env, Env.get_typ_vars_info env, Env.get_constraints env)
               )
-      | Typ_id id -> (
+      | Typ_id id when Env.is_bitfield id env -> (
           match exp with
           | E_aux (E_id field, _) ->
               let field_lexp = Bitfield.set_bits_field_lexp v_lexp in
@@ -3529,7 +3529,10 @@ and infer_lexp env (LE_aux (lexp_aux, (l, uannot)) as lexp) =
               infer_lexp env (Bitfield.set_field_lexp index_range field_lexp)
           | _ -> typ_error l (string_of_exp exp ^ " is not a bitfield accessor")
         )
-      | _ -> typ_error l "Cannot assign vector element of non vector or bitfield type"
+      | _ ->
+          typ_error
+            (Hint ("Should be a vector or bitfield", lexp_loc v_lexp, l))
+            "Invalid vector assignment l-expression"
     )
   | LE_vector_concat [] -> typ_error l "Cannot have empty vector concatenation l-expression"
   | LE_vector_concat (v_lexp :: v_lexps) -> (

@@ -1,5 +1,8 @@
 [93mType error[0m:
+[96mfail/assign_field_non_bitfield.sail[0m:7.2-3:
+7[96m |[0m  x[foo] = 0
+ [92m |[0m  [92m^[0m [92mShould be a vector or bitfield[0m
 [96mfail/assign_field_non_bitfield.sail[0m:7.2-8:
 7[96m |[0m  x[foo] = 0
  [91m |[0m  [91m^----^[0m
- [91m |[0m Cannot assign vector element of non vector or bitfield type
+ [91m |[0m Invalid vector assignment l-expression

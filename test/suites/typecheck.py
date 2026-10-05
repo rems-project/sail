@@ -20,8 +20,6 @@ _FAIL_XFAILS = {
     "scattered_union_clause_after_end": "clauses are allowed after a scattered definition is ended",
     "scattered_enum_clause_after_end": "clauses are allowed after a scattered definition is ended",
     "scattered_function_clause_after_end": "clauses are allowed after a scattered definition is ended",
-    "assign_index_non_vector": "vector assignment on a non-bitfield Typ_id is treated as a bitfield access",
-    "assign_field_non_bitfield": "vector assignment on a non-bitfield Typ_id is treated as a bitfield access",
 }
 
 
