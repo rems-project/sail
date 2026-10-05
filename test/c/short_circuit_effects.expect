@@ -1,0 +1,21 @@
+f & boom = false
+t | boom = true
+f & boom & boom = false
+t & f & boom = false
+t | boom | boom = true
+f | t | boom = true
+(f & boom) | t = true
+(t | boom) & (f | t) = true
+if &: ok
+if |: ok
+let & = false
+let | = true
+f & bump: counter = 0
+t | bump: counter = 0
+t & bump: counter = 1
+f | bump: counter = 2
+bump | boom: counter = 3
+results = true
+t & f = false
+t | f = true
+f | t & t = true
