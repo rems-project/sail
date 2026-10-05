@@ -1,0 +1,8 @@
+[93mType error[0m:
+[96mfail/scattered_enum_clause_after_end.sail[0m:7.0-5:
+7[96m |[0mend E
+ [92m |[0m[92m^---^[0m [92mpreviously ended here[0m
+[96mfail/scattered_enum_clause_after_end.sail[0m:9.0-17:
+9[96m |[0menum clause E = B
+ [91m |[0m[91m^---------------^[0m
+ [91m |[0m Cannot add clause to scattered enum E as it has already been ended

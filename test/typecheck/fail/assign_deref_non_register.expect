@@ -1,0 +1,5 @@
+[93mType error[0m:
+[96mfail/assign_deref_non_register.sail[0m:7.3-5:
+7[96m |[0m  (*x) = 1
+ [91m |[0m   [91m^^[0m
+ [91m |[0m Cannot dereference x as it does not have a register reference type, found int

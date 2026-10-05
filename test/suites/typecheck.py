@@ -10,6 +10,11 @@ _PASS_DIR = os.path.join(_SUITE_DIR, "pass")
 _PROJECT_DIR = os.path.join(_SUITE_DIR, "project")
 _FAIL_DIR = os.path.join(_SUITE_DIR, "fail")
 
+# Tests for known bugs. They describe the correct behaviour, so they are
+# expected to fail until the bug is fixed.
+_PASS_XFAILS = {
+}
+
 
 @suite("typecheck.pass", _SUITE_DIR)
 class TypecheckPassTests(SailTest):
@@ -28,6 +33,9 @@ class TypecheckPassTests(SailTest):
             self._test,
             testdir=_SUITE_DIR,
             skip_set=skip_pass,
+            expected_failures={
+                f"{test}.sail": reason for test, reason in _PASS_XFAILS.items()
+            },
         )
 
     def _test(self, filename, basename):
@@ -84,7 +92,12 @@ class TypecheckProjectTests(SailTest):
 class TypecheckFailTests(SailTest):
     def run(self):
         self.banner("Testing failing programs")
-        self.run_tests("fail", Batcher(_FAIL_DIR), self._test, testdir=_SUITE_DIR)
+        self.run_tests(
+            "fail",
+            Batcher(_FAIL_DIR),
+            self._test,
+            testdir=_SUITE_DIR,
+        )
 
     def _test(self, filename, basename):
         step(

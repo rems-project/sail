@@ -1196,7 +1196,7 @@ and string_of_pat (P_aux (pat, _)) =
   | P_tuple pats -> "(" ^ string_of_list ", " string_of_pat pats ^ ")"
   | P_app (f, pats) -> string_of_id f ^ "(" ^ string_of_list ", " string_of_pat pats ^ ")"
   | P_cons (pat1, pat2) -> string_of_pat pat1 ^ " :: " ^ string_of_pat pat2
-  | P_list pats -> "[||" ^ string_of_list "," string_of_pat pats ^ "||]"
+  | P_list pats -> "[|" ^ string_of_list "," string_of_pat pats ^ "|]"
   | P_vector_concat pats -> string_of_list " @ " string_of_pat pats
   | P_vector_subrange (id, n, m) ->
       if Z.equal n m then string_of_id id ^ "[" ^ Z.to_string n ^ "]"
@@ -1219,7 +1219,7 @@ and string_of_mpat (MP_aux (pat, _)) =
   | MP_tuple pats -> "(" ^ string_of_list ", " string_of_mpat pats ^ ")"
   | MP_app (f, pats) -> string_of_id f ^ "(" ^ string_of_list ", " string_of_mpat pats ^ ")"
   | MP_cons (pat1, pat2) -> string_of_mpat pat1 ^ " :: " ^ string_of_mpat pat2
-  | MP_list pats -> "[||" ^ string_of_list "," string_of_mpat pats ^ "||]"
+  | MP_list pats -> "[|" ^ string_of_list "," string_of_mpat pats ^ "|]"
   | MP_vector_concat pats -> string_of_list " @ " string_of_mpat pats
   | MP_vector pats -> "[" ^ string_of_list ", " string_of_mpat pats ^ "]"
   | MP_vector_subrange (id, n, m) -> string_of_id id ^ "[" ^ Z.to_string n ^ " .. " ^ Z.to_string m ^ "]"

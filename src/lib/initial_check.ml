@@ -600,9 +600,9 @@ module KindInference = struct
               if List.compare_lengths args kinds <> 0 then
                 raise
                   (Reporting.err_typ l
-                     (sprintf "%s : %s -> Type expected %d arguments, given %d" (string_of_id id')
+                     (sprintf "%s : %s -> %s expected %d arguments, given %d" (string_of_id id')
                         (format_parse_kind_aux_list (filter_order_kinds kinds))
-                        (List.length kinds) (List.length args)
+                        (string_of_parse_kind_aux ret_kind) (List.length kinds) (List.length args)
                      )
                   );
               mapM (function arg, kind -> check ctx arg (Kind (kind, id_loc id'))) (List.combine args kinds)
@@ -921,7 +921,7 @@ module ConvertType = struct
         let id = to_ast_id ctx id in
         match get_type_constructor id ctx with
         | None -> raise (Reporting.err_typ l (sprintf "Could not find type constructor %s" (string_of_id id)))
-        | Some (kinds, _) ->
+        | Some (kinds, ret_kind) ->
             let non_order_kinds = List.filter_map to_ast_kind_aux kinds in
             let kinds = List.map to_ast_kind_aux kinds in
             let args_len = List.length args in
@@ -936,8 +936,9 @@ module ConvertType = struct
             else
               raise
                 (Reporting.err_typ l
-                   (sprintf "%s : %s -> Type expected %d arguments, given %d" (string_of_id id)
-                      (format_kind_aux_list non_order_kinds) (List.length kinds) (List.length args)
+                   (sprintf "%s : %s -> %s expected %d arguments, given %d" (string_of_id id)
+                      (format_kind_aux_list non_order_kinds) (string_of_parse_kind_aux ret_kind) (List.length kinds)
+                      (List.length args)
                    )
                 )
       )

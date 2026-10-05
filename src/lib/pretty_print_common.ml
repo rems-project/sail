@@ -55,12 +55,6 @@ let coloneq = string ":="
 let lsquarebar = string "[|"
 let rsquarebar = string "|]"
 let squarebars = enclose lsquarebar rsquarebar
-let lsquarebarbar = string "[||"
-let rsquarebarbar = string "||]"
-let squarebarbars = enclose lsquarebarbar rsquarebarbar
-let lsquarecolon = string "[:"
-let rsquarecolon = string ":]"
-let squarecolons = enclose lsquarecolon rsquarecolon
 let lcomment = string "(*"
 let rcomment = string "*)"
 let comment = enclose lcomment rcomment
