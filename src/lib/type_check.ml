@@ -3585,7 +3585,11 @@ and infer_lexp env (LE_aux (lexp_aux, (l, uannot)) as lexp) =
       match typ_of inferred_exp with
       | Typ_aux (Typ_app (r, [A_aux (A_typ vtyp, _)]), _) when string_of_id r = "register" ->
           annot_lexp (LE_deref inferred_exp) vtyp
-      | _ -> typ_error l (string_of_typ (typ_of inferred_exp) ^ " must be a register type in " ^ string_of_exp exp ^ ")")
+      | _ ->
+          typ_error l
+            ("Cannot dereference " ^ string_of_exp exp ^ " as it does not have a register reference type, found "
+            ^ string_of_typ (typ_of inferred_exp)
+            )
     )
   | LE_tuple lexps ->
       let inferred_lexps = List.map (infer_lexp env) lexps in

@@ -22,7 +22,6 @@ _FAIL_XFAILS = {
     "scattered_function_clause_after_end": "clauses are allowed after a scattered definition is ended",
     "assign_index_non_vector": "vector assignment on a non-bitfield Typ_id is treated as a bitfield access",
     "assign_field_non_bitfield": "vector assignment on a non-bitfield Typ_id is treated as a bitfield access",
-    "assign_deref_non_register": "error message has an unbalanced parenthesis",
     "assign_concat_vector_bits": "error message refers to vector order",
     "assign_concat_bits_vector": "error message refers to vector order",
 }
