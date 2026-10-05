@@ -2807,8 +2807,11 @@ and bind_pat env (P_aux (pat_aux, (l, uannot)) as pat) typ =
           (annot_pat (P_id v) typ, env, [])
     )
   | P_var (pat, typ_pat) ->
-      let env, typ = bind_typ_pat env typ_pat typ in
-      let typed_pat, env, guards = bind_pat env pat typ in
+      (* The type variables bound by the type pattern are only in scope
+         for the inner pattern, so the P_var itself is annotated with
+         the original type *)
+      let env, bound_typ = bind_typ_pat env typ_pat typ in
+      let typed_pat, env, guards = bind_pat env pat bound_typ in
       (annot_pat (P_var (typed_pat, typ_pat)) typ, env, guards)
   | P_wild ->
       let env =
