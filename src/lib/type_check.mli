@@ -144,6 +144,9 @@ module Env : sig
 
   val get_typ_var : kid -> t -> kind_aux
 
+  (** Check whether a type variable is bound, without copying the type variable map like [get_typ_vars]. *)
+  val is_typ_var : kid -> t -> bool
+
   val get_typ_vars : t -> kind_aux KBindings.t
 
   val get_typ_var_locs : t -> Ast.l KBindings.t
@@ -193,6 +196,10 @@ module Env : sig
   val lookup_id : id -> t -> typ lvar
 
   val get_toplevel_lets : t -> IdSet.t
+
+  (** Check whether an identifier is a top-level let binding, without building the set of all of them like
+      [get_toplevel_lets]. *)
+  val is_toplevel_let : id -> t -> bool
 
   val is_outcome : id -> t -> bool
 

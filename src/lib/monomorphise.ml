@@ -4167,7 +4167,7 @@ module BitvectorSizeCasts = struct
               | [] -> []
               | (E_aux (E_assert (assert_exp, msg), _) as h) :: t -> (
                   (* Check the assertion for constraints that instantiate kids *)
-                  let is_known_kid kid = KBindings.mem kid (Env.get_typ_vars env) in
+                  let is_known_kid kid = Env.is_typ_var kid env in
                   match Type_check.assert_constraint env true assert_exp with
                   | Some nc when KidSet.for_all is_known_kid (tyvars_of_constraint nc) ->
                       (* If the type checker can extract constraints from the assertion

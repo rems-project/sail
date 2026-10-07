@@ -427,8 +427,6 @@ let solve_unique env (Nexp_aux (_, l) as nexp) =
   | Nexp_aux (Nexp_constant n, _) -> Some n
   | _ ->
       let env = Env.add_typ_var l (mk_kopt K_int (mk_kid "solve#")) env in
-      let vars = Env.get_typ_vars env in
-      let _vars = KBindings.filter (fun _ k -> match k with K_int | K_bool -> true | _ -> false) vars in
       let abstract = Env.get_abstract_typs env in
       let constr = List.fold_left nc_and (nc_eq (nvar (mk_kid "solve#")) nexp) (Env.get_constraints env) in
       Constraint.solve_unique_smt l abstract constr (mk_kid "solve#")
@@ -1798,9 +1796,7 @@ let bind_pattern_vector_subranges pat env =
 let check_pattern_vector_subranges pat env = each_pattern_vector_subranges (fun _ _ _ _ () -> ()) pat ()
 
 let unbound_id_error ~at:l env v =
-  match Bindings.find_opt v (Env.get_val_specs env) with
-  | Some _ -> typ_raise l (Err_unbound_id { id = v; locals = Env.get_locals env; have_function = true })
-  | None -> typ_raise l (Err_unbound_id { id = v; locals = Env.get_locals env; have_function = false })
+  typ_raise l (Err_unbound_id { id = v; locals = Env.get_locals env; have_function = Env.has_val_spec v env })
 
 type overload_leaf_type = OL_app of id | OL_id of id | OL_unknown
 
@@ -4157,13 +4153,13 @@ and infer_funapp' l env f (typq, f_typ) xs uannot expected_ret_typ =
         (l, (Some { env; typ; monadic = no_effect; expected = expected_ret_typ; instantiation = Some inst }, uannot))
       )
   in
-  let is_bound env kid = KBindings.mem kid (Env.get_typ_vars env) in
+  let is_bound env kid = Env.is_typ_var kid env in
 
   (* First we record all the type variables when we start checking the
      application, so we can distinguish them from existentials
      introduced by instantiating function arguments later. *)
-  let universals = Env.get_typ_vars env in
-  let universal_constraints = Env.get_constraints env in
+  let universal_env = env in
+  let is_universal kid = Env.is_typ_var kid universal_env in
 
   let all_unifiers = ref KBindings.empty in
   let record_unifiers unifiers =
@@ -4345,20 +4341,14 @@ and infer_funapp' l env f (typq, f_typ) xs uannot expected_ret_typ =
       (Err_unresolved_quants (f, !quants, Env.get_locals env, Env.get_typ_vars_info env, Env.get_constraints env))
   else ();
 
-  let ty_vars = KBindings.bindings (Env.get_typ_vars env) |> List.map (fun (v, k) -> mk_kopt k v) in
-  let existentials = List.filter (fun kopt -> not (KBindings.mem (kopt_kid kopt) universals)) ty_vars in
-  let num_new_ncs = List.length (Env.get_constraints env) - List.length universal_constraints in
-  let ex_constraints = take num_new_ncs (Env.get_constraints env) in
+  let existentials = Env.get_typ_vars_since ~old:universal_env env in
+  let ex_constraints = Env.get_constraints_since ~old:universal_env env in
 
   typ_debug (lazy ("Existentials: " ^ string_of_list ", " string_of_kinded_id existentials));
   typ_debug (lazy ("Existential constraints: " ^ string_of_list ", " string_of_n_constraint ex_constraints));
 
-  let universals = KBindings.bindings universals |> List.map fst |> KidSet.of_list in
   let typ_ret =
-    if
-      KidSet.is_empty (KidSet.of_list (List.map kopt_kid existentials))
-      || KidSet.is_empty (KidSet.diff (tyvars_of_typ !typ_ret) universals)
-    then !typ_ret
+    if existentials = [] || KidSet.for_all is_universal (tyvars_of_typ !typ_ret) then !typ_ret
     else mk_typ (Typ_exist (existentials, List.fold_left nc_and nc_true ex_constraints, !typ_ret))
   in
   let typ_ret = simp_typ typ_ret in
