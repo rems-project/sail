@@ -90,6 +90,9 @@ let opt_lean_lib_git : string option ref = ref None
 
 let opt_lean_lib_rev : string option ref = ref None
 
+(* Emit the generated Lean as `module`s (Lean's module system, `--lean-module-system`). *)
+let opt_lean_module_system : bool ref = ref false
+
 (* We keep two flags to use the [If_flag] in the list of rewrites. They should never be equal. *)
 let opt_enable_matchbv : bool ref = ref false
 let opt_disable_matchbv : bool ref = ref true
@@ -169,6 +172,11 @@ let lean_options =
     ( Flag.create ~prefix:["lean"] "lib-rev",
       Arg.String (fun r -> opt_lean_lib_rev := Some r),
       "revision of the Lean support library"
+    );
+    ( Flag.create ~prefix:["lean"] "module-system",
+      Arg.Unit (fun () -> opt_lean_module_system := true),
+      "generate Lean module-system files: a `module` header, `public import`s and an `@[expose] public section` in \
+       every generated file (requires a support library that is itself a module library)"
     );
   ]
 
@@ -258,10 +266,21 @@ let file_to_module (filename : string) =
 
 let interface_module interface_v = if interface_v = 1 then "ConcurrencyInterfaceV1" else "ArchSem"
 
+(* Module-system spellings. A `module` file must start with the `module` keyword, import other
+   modules with `public import` for its API to be re-exported, and mark the definitions that
+   downstream code unfolds as exposed; the generated code is all definitions, so every file opens an
+   `@[expose] public section` right after its imports. *)
+let module_header () = if !opt_lean_module_system then "module\n\n" else ""
+
+let import_line m = (if !opt_lean_module_system then "public import " else "import ") ^ m ^ "\n"
+
+let expose_section () = if !opt_lean_module_system then "@[expose] public section\n\n" else ""
+
 let file_prelude version namespace =
   let non_computable = if !opt_lean_noncomputable then "noncomputable section\n" else "" in
-  Printf.sprintf
-    {|set_option maxHeartbeats 1_000_000_000
+  expose_section ()
+  ^ Printf.sprintf
+      {|set_option maxHeartbeats 1_000_000_000
 set_option maxRecDepth 1_000_000
 set_option linter.unusedVariables false
 set_option match.ignoreUnusedAlts true
@@ -272,27 +291,71 @@ open Sail.%s
 %snamespace %s
 
 |}
-    (interface_module version) non_computable namespace
+      (interface_module version) non_computable namespace
 
 let path_to_static_library sail_dir str = Filename.quote (sail_dir ^ "/src/sail_lean_backend/Sail/" ^ str ^ ".lean")
 
-let copy_from_static_library out_name_camel sail_dir lean_sail_dir str =
-  Unix.system
-    (Printf.sprintf "sed 's/THE_MODULE_NAME/%s/g' %s > %s.lean" out_name_camel (path_to_static_library sail_dir str)
-       (lean_sail_dir ^ "/" ^ str |> Filename.quote)
+(* Copy a hand-written Lean file into the generated project, instantiating THE_MODULE_NAME. Under
+   `--lean-module-system` the file also gets the module-system spelling: a `module` header, its
+   `import`s made `public`, and an `@[expose] public section` after the last import. *)
+let replace_all ~(pattern : string) ~(by : string) (s : string) =
+  let plen = String.length pattern and slen = String.length s in
+  let buf = Buffer.create slen in
+  let rec go i =
+    if i > slen - plen then Buffer.add_string buf (String.sub s i (slen - i))
+    else if String.sub s i plen = pattern then (
+      Buffer.add_string buf by;
+      go (i + plen)
     )
-  |> ignore
+    else (
+      Buffer.add_char buf s.[i];
+      go (i + 1)
+    )
+  in
+  go 0;
+  Buffer.contents buf
+
+let copy_lean_file_to_project out_name_camel (src : string) (dst : string) =
+  let lines = In_channel.with_open_text src In_channel.input_lines in
+  let lines = List.map (replace_all ~pattern:"THE_MODULE_NAME" ~by:out_name_camel) lines in
+  let lines =
+    if !opt_lean_module_system then (
+      let is_import line = String.length line >= 7 && String.sub line 0 7 = "import " in
+      let last_import =
+        List.fold_left (fun (i, last) line -> (i + 1, if is_import line then i else last)) (0, -1) lines |> snd
+      in
+      let rewritten =
+        List.mapi
+          (fun i line ->
+            let line = if is_import line then "public " ^ line else line in
+            if i = last_import then line ^ "\n\n@[expose] public section" else line
+          )
+          lines
+      in
+      "module" :: "" :: rewritten
+    )
+    else lines
+  in
+  let oc = open_out dst in
+  List.iter (fun line -> output_string oc (line ^ "\n")) lines;
+  close_out oc
+
+let copy_from_static_library out_name_camel sail_dir lean_sail_dir str =
+  copy_lean_file_to_project out_name_camel
+    (sail_dir ^ "/src/sail_lean_backend/Sail/" ^ str ^ ".lean")
+    (lean_sail_dir ^ "/" ^ str ^ ".lean")
 
 let print_function_file_prelude interface_v file out_name_camel (imp_refs : string list) =
+  output_string file (module_header ());
   let _ =
     match imp_refs with
     | [] ->
-        output_string file "import Sail\n";
-        output_string file ("import " ^ out_name_camel ^ ".Defs\n");
+        output_string file (import_line "Sail");
+        output_string file (import_line (out_name_camel ^ ".Defs"));
         List.iter
-          (fun filename -> output_string file ("import " ^ out_name_camel ^ "." ^ file_to_module filename ^ "\n"))
+          (fun filename -> output_string file (import_line (out_name_camel ^ "." ^ file_to_module filename)))
           !opt_lean_import_files
-    | ns -> List.iter (fun n -> output_string file ("import " ^ out_name_camel ^ "." ^ n ^ "\n")) ns
+    | ns -> List.iter (fun n -> output_string file (import_line (out_name_camel ^ "." ^ n))) ns
   in
   output_string file ("\n" ^ file_prelude interface_v out_name_camel);
   Printf.fprintf file "open %s\n\n" (interface_module interface_v);
@@ -330,14 +393,13 @@ let start_lean_output interface_v (out_name : string) (import_names : string lis
   opt_lean_import_files := (sail_dir ^ "/src/sail_lean_backend/Sail/" ^ specialization_file) :: !opt_lean_import_files;
   List.iter
     (fun filename ->
-      let filepath = Filename.concat lean_src_dir (file_to_module filename) in
-      Unix.system
-        (Printf.sprintf "sed 's/THE_MODULE_NAME/%s/g' %s > %s.lean" out_name_camel (Filename.quote filename) filepath)
-      |> ignore
+      let filepath = Filename.concat lean_src_dir (file_to_module filename ^ ".lean") in
+      copy_lean_file_to_project out_name_camel filename filepath
     )
     !opt_lean_import_files;
   let types_file = open_out (Filename.concat lean_src_dir "Defs.lean") in
-  output_string types_file "import Sail\n";
+  output_string types_file (module_header ());
+  output_string types_file (import_line "Sail");
   output_string types_file "open PreSail\n\n";
   output_string types_file (file_prelude interface_v out_name_camel);
   let funcs_file = open_out (Filename.concat project_dir (out_name_camel ^ ".lean")) in
