@@ -972,8 +972,7 @@ let filter_dep_pattern_tuple ctxt kopts (P_aux (p, ann) as pat) typ =
 
 (* If kid is bound by a pattern when in env, compute the actual kid bound due to shadowing *)
 let compute_kid_shadow env kid loc =
-  if KBindings.mem kid (Env.get_typ_vars env) then
-    Kid_aux (Var (string_of_kid kid ^ "#" ^ string_of_int (Env.shadows kid env)), loc)
+  if Env.is_typ_var kid env then Kid_aux (Var (string_of_kid kid ^ "#" ^ string_of_int (Env.shadows kid env)), loc)
   else kid
 
 (* Format a pattern, also eliminating dependent pairs when necessary. *)

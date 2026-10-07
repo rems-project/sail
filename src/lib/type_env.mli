@@ -174,6 +174,7 @@ val is_mutable : id -> t -> bool
 
 val add_toplevel_lets : IdSet.t -> t -> t
 val get_toplevel_lets : t -> IdSet.t
+val is_toplevel_let : id -> t -> bool
 
 val is_register : id -> t -> bool
 val get_register : id -> t -> typ
@@ -181,6 +182,11 @@ val get_registers : t -> typ Bindings.t
 val add_register : id -> typ -> t -> t
 
 val get_constraints : t -> n_constraint list
+
+(** Constraints that have been added to the environment since the [old] environment, which [env] must have been derived
+    from. *)
+val get_constraints_since : old:t -> t -> n_constraint list
+
 val get_global_constraints : t -> n_constraint list
 val get_constraint_reasons : t -> ((Ast.l * string) option * n_constraint) list
 val add_constraint : ?global:bool -> ?reason:Ast.l * string -> n_constraint -> t -> t
@@ -191,7 +197,13 @@ val is_outcome_typ_var : kid -> t -> bool
 val get_typ_var : kid -> t -> kind_aux
 val get_typ_var_opt : kid -> t -> (Ast.l * kind_aux) option
 val get_typ_var_loc_opt : kid -> t -> Ast.l option
+val is_typ_var : kid -> t -> bool
 val get_typ_vars : t -> kind_aux KBindings.t
+
+(** Type variables bound in the environment that are not bound in the [old] environment, in the same order as
+    [get_typ_vars]. *)
+val get_typ_vars_since : old:t -> t -> kinded_id list
+
 val get_typ_var_locs : t -> Ast.l KBindings.t
 
 type type_variables = Type_internal.type_variables

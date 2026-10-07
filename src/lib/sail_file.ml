@@ -518,24 +518,11 @@ let contents handle =
     lines;
   Buffer.contents buf
 
-module In_channel = struct
-  type t = { mutable pos : int; buf : string }
-
-  let from_file handle = { pos = -1; buf = contents handle }
-
-  let input_line_opt in_chan =
-    if in_chan.pos >= String.length in_chan.buf then None
-    else (
-      match String.index_from_opt in_chan.buf (in_chan.pos + 1) '\n' with
-      | None ->
-          let line = String.sub in_chan.buf (in_chan.pos + 1) (String.length in_chan.buf - (in_chan.pos + 1)) in
-          in_chan.pos <- String.length in_chan.buf;
-          Some line
-      | Some next_newline ->
-          let line = String.sub in_chan.buf (in_chan.pos + 1) (next_newline - (in_chan.pos + 1)) in
-          in_chan.pos <- next_newline;
-          Some line
-    )
-
-  let input_line in_chan = match input_line_opt in_chan with Some line -> line | None -> raise End_of_file
-end
+let line handle lnum =
+  match Hashtbl.find_opt files handle with
+  | None -> None
+  | Some info ->
+      let lines = info.contents in
+      if lnum = 1 && Array.length lines = 0 then Some ""
+      else if lnum >= 1 && lnum <= Array.length lines then Some lines.(lnum - 1)
+      else None
