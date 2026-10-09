@@ -1730,7 +1730,7 @@ let pp_ast_lean symbols (env : Type_check.env) effect_info ({ defs; _ } as ast :
   print types_file (types ^^ register_refs ^^ instantiation_deps ^^ instantiations);
   let _ =
     List.map2
-      (fun file defs -> print file (separate hardline (remove_empties [opens; defs])))
+      (fun file defs -> print ~len:!opt_line_width file (separate hardline (remove_empties [opens; defs])))
       imp_funcs_files imp_fundefss
   in
   print ~len:!opt_line_width funcs_file (separate hardline (remove_empties ([opens; main_fundefs] @ main_function)));
