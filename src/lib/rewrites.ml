@@ -1454,6 +1454,66 @@ let rewrite_ast_remove_bitvector_pats env ast =
   { ast with defs = List.flatten (List.map rewrite_def ast.defs) }
 (* )) *)
 
+(* When a pattern has a mix of bitvector literals and bitvector patterns, make everything a bitvector pattern.
+   This makes (e.g.) massive decode functions with the occasional literal more uniform, preventing blowup
+   in the guarded patterns rewrite when the pattern_literals rewrite isn't used. *)
+let remove_mixed_bitvector_literal_pats env =
+  (* The inner rewrite replaces literal bitvector patterns by a vector pattern *)
+  let rewrite_this_pat rws (P_aux (p, ann) as full_pat) =
+    match p with
+    | P_lit lit -> vector_string_to_bits_pat lit ann
+    | P_vector _ when is_bitvector_typ (typ_of_annot ann) -> full_pat
+    | _ -> rewrite_pat rws full_pat
+  in
+  let pat_rws =
+    {
+      rewrite_exp;
+      rewrite_lexp;
+      rewrite_pat = rewrite_this_pat;
+      rewrite_mpat;
+      rewrite_fun;
+      rewrite_def;
+      rewrite_ast = rewrite_ast_base;
+    }
+  in
+  (* The outer rewrite finds pattern matches where there are already vector patterns and rewrites only the
+     literals in those pattern matches *)
+  let rec clause rws pexp =
+    let pat, guard, rhs, pannot = destruct_pexp pexp in
+    construct_pexp (rewrite_this_pat pat_rws pat, Option.map (rw_exp rws) guard, rw_exp rws rhs, pannot)
+  and rw_exp rws (E_aux (exp, (l, annot)) as full_exp) =
+    match exp with
+    | E_match (e, ps) when List.exists contains_bitvector_pexp ps ->
+        E_aux (E_match (rw_exp rws e, List.map (clause rws) ps), (l, annot))
+    | _ -> rewrite_exp rws full_exp
+  in
+  let func rws (FD_aux (FD_function (recopt, topt, funcls), (l, ann)) as full_fun) =
+    if List.exists (function FCL_aux (FCL_funcl (_, pexp), _) -> contains_bitvector_pexp pexp) funcls then
+      FD_aux
+        ( FD_function
+            ( recopt,
+              topt,
+              List.map
+                (function FCL_aux (FCL_funcl (id, pexp), fclann) -> FCL_aux (FCL_funcl (id, clause rws pexp), fclann))
+                funcls
+            ),
+          (l, ann)
+        )
+    else rewrite_fun rws full_fun
+  in
+  let rws =
+    {
+      rewrite_exp = rw_exp;
+      rewrite_pat;
+      rewrite_mpat;
+      rewrite_lexp;
+      rewrite_fun = func;
+      rewrite_def;
+      rewrite_ast = rewrite_ast_base;
+    }
+  in
+  rewrite_ast_base rws
+
 (* Rewrite literal number patterns to guarded patterns
    Those numeral patterns are not handled very well by Lem (or Isabelle)
 *)
@@ -4427,6 +4487,7 @@ let all_rewriters =
     ("remove_not_pats", basic_rewriter rewrite_ast_not_pats);
     ("pattern_literals", Literal_rewriter (fun f -> basic_rewriter (rewrite_ast_pat_lits false f)));
     ("pattern_literals_typed", Literal_rewriter (fun f -> basic_rewriter (rewrite_ast_pat_lits true f)));
+    ("remove_mixed_bitvector_literal_pats", basic_rewriter remove_mixed_bitvector_literal_pats);
     ("vector_concat_assignments", basic_rewriter rewrite_vector_concat_assignments);
     ("tuple_assignments", basic_rewriter rewrite_tuple_assignments);
     ("simple_assignments", basic_rewriter (rewrite_simple_assignments false));
