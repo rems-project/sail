@@ -121,7 +121,7 @@ let lean_options =
         ),
       "use matchbv in the Lean output"
     );
-    ( Flag.create ~prefix:["lean"] "line_width",
+    ( Flag.create ~prefix:["lean"] ~arg:"width" "line_width",
       Arg.Int (fun n -> Pretty_print_lean.opt_line_width := n),
       "maximum line length of the generated Lean code"
     );
