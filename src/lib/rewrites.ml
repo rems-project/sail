@@ -2522,6 +2522,8 @@ let rewrite_lit_lem (L_aux (lit, _)) =
 
 let rewrite_lit_ocaml (L_aux (lit, _)) = match lit with L_num _ | L_string _ | L_real _ | L_unit -> false | _ -> true
 
+let rewrite_lit_lean (L_aux (lit, _)) = match lit with L_bin _ | L_hex _ -> true | _ -> false
+
 let is_bitvector_lit (L_aux (lit, _)) = match lit with L_bin _ | L_hex _ -> true | _ -> false
 
 let rewrite_ast_pat_lits add_types rewrite_lit env ast =
@@ -4378,6 +4380,7 @@ let instantiate_rewriter rewriter args =
   let selector_function = function
     | "ocaml" -> rewrite_lit_ocaml
     | "lem" -> rewrite_lit_lem
+    | "lean" -> rewrite_lit_lean
     | "all" -> fun _ -> true
     | arg ->
         raise

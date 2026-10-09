@@ -195,7 +195,7 @@ let lean_rewrites =
     ("remove_bitvector_pats", [If_flag opt_disable_matchbv]);
     ("recheck_defs", []);
     (* ("remove_numeral_pats", []); *)
-    (* ("pattern_literals", [Literal_arg "lem"]); *)
+    ("pattern_literals", [Literal_arg "lean"; If_flag opt_disable_matchbv]);
     ("fun_guarded_pats", [If_flag opt_enable_matchbv]);
     ("guarded_pats", [If_flag opt_disable_matchbv]);
     (* ("register_ref_writes", rewrite_register_ref_writes); *)
