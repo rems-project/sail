@@ -286,7 +286,7 @@ def while_print_fuel (_ : Unit) : SailM Unit := do
   let i ← (( do
     let loop_vars ← whileFuelM (fuel :=100) (fun i => (pure (i <b 100))) i
       fun i => do
-        assert true "loop dummy assert"
+        sail_assert true "loop dummy assert"
         (pure (i +i 1))
     (pure loop_vars) ) : SailM Int )
   (pure (print_int "i = " i))
@@ -297,7 +297,7 @@ def until_print_fuel (n : Int) : SailM Unit := do
   let i ← (( do
     let loop_vars ← untilFuelM (fuel :=n) (fun i => (pure (i <b 100))) i
       fun i => do
-        assert true "loop dummy assert"
+        sail_assert true "loop dummy assert"
         (pure (i +i 1))
     (pure loop_vars) ) : SailM Int )
   (pure (print_int "i = " i))

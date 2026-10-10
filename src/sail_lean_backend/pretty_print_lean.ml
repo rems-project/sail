@@ -1071,7 +1071,7 @@ and doc_exp (as_monadic : bool) ctx (E_aux (e, (l, annot)) as full_exp) =
         ^^ space
         ^^ parens (string "fun the_exception => " ^^ hardline ^^ cases)
         )
-  | E_assert (e1, e2) -> string "assert " ^^ d_of_arg ctx e1 ^^ space ^^ d_of_arg ctx e2
+  | E_assert (e1, e2) -> string "sail_assert " ^^ d_of_arg ctx e1 ^^ space ^^ d_of_arg ctx e2
   | E_list es -> brackets (separate_map comma_sp (doc_exp as_monadic ctx) es)
   | E_cons (hd_e, tl_e) -> parens (separate space [doc_exp false ctx hd_e; string "::"; doc_exp false ctx tl_e])
   | _ -> failwith ("Expression " ^ string_of_exp_con full_exp ^ " " ^ string_of_exp full_exp ^ " not translatable yet.")

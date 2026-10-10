@@ -165,7 +165,7 @@ def baz (_ : Unit) : SailM (BitVec 16) := do
 
 /-- Type quantifiers: x : Int -/
 def f (x : Int) : SailM Int := do
-  assert (x >b 4) "..."
+  sail_assert (x >b 4) "..."
   (pure x)
 
 def a_constant : Int := unwrapValue ((f 22))

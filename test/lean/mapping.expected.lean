@@ -270,7 +270,7 @@ def ta_flag_forwards (arg_ : String) : SailM (BitVec 1) := do
   | "tu" => (pure 0#1)
   | _ =>
     (do
-      assert false "Pattern match failure at unknown location"
+      sail_assert false "Pattern match failure at unknown location"
       throw Error.Exit)
 
 def ta_flag_backwards (arg_ : (BitVec 1)) : String :=
@@ -319,7 +319,7 @@ def hex_bits_2_forwards (arg_ : (BitVec 2)) : SailM String := do
   | .some result => (pure result)
   | _ =>
     (do
-      assert false "Pattern match failure at unknown location"
+      sail_assert false "Pattern match failure at unknown location"
       throw Error.Exit)
 
 def hex_bits_2_backwards (arg_ : String) : (BitVec 2) :=
@@ -377,7 +377,7 @@ def vtype_assembly2_forwards (arg_ : String) : SailM ((BitVec 1) × (BitVec 1)) 
   | .some result => (pure result)
   | _ =>
     (do
-      assert false "Pattern match failure at unknown location"
+      sail_assert false "Pattern match failure at unknown location"
       throw Error.Exit)
 
 def vtype_assembly2_backwards (arg_ : ((BitVec 1) × (BitVec 1))) : SailM String := do
