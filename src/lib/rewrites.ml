@@ -2859,6 +2859,19 @@ let rec rewrite_var_updates (E_aux (expaux, ((l, _) as annot)) as exp) =
           let v = E_aux (E_if (c, e1, e2), (gen_loc el, mk_tannot env typ)) in
           Added_vars (v, tuple_pat (if overwrite then varpats else pat :: varpats))
         )
+    | E_let (lpat, bind, body) when updates_vars body && not (updates_vars bind) ->
+        (* A let whose body updates variables (as rewrite_tuple_assignments
+           produces): its body returns them, as an if's branches do. Without
+           rewrite_ast_letbind_effects, which the Lean target omits, nothing
+           else lifts these updates out of the let. *)
+        let vars, varpats = find_updated_vars body |> IdSet.inter used_vars |> mk_var_exps_pats pl env in
+        if vars = [] then Same_vars (rewrite_var_updates full_exp)
+        else (
+          let body = rewrite_var_updates (add_vars overwrite body vars) in
+          let typ = typ_of body in
+          let v = E_aux (E_let (lpat, bind, body), (gen_loc el, mk_tannot env typ)) in
+          Added_vars (v, tuple_pat (if overwrite then varpats else pat :: varpats))
+        )
     | E_match (e1, ps) | E_try (e1, ps) ->
         let is_case = match expaux with E_match _ -> true | _ -> false in
         let vars, varpats =
