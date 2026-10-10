@@ -35,7 +35,7 @@ abbrev writeRegRef (reg_ref : RegisterRef α) (a : α) : SailM Unit := PreSail.w
 
 abbrev reg_deref (reg_ref : RegisterRef α) : SailM α := PreSail.reg_deref reg_ref
 
-abbrev assert (p : Bool) (s : String) : SailM Unit := PreSail.assert p s
+abbrev sail_assert (p : Bool) (s : String) : SailM Unit := PreSail.sail_assert p s
 
 namespace ArchSem
 

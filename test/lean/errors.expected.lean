@@ -166,7 +166,7 @@ def test_exit (b : Bool) : SailM Unit := do
 
 /-- Type quantifiers: k_ex894_ : Bool -/
 def test_assert (b : Bool) : SailM (BitVec 1) := do
-  assert b "b is false"
+  sail_assert b "b is false"
   (pure 1#1)
 
 def initialize_registers (_ : Unit) : SailM Unit := do
