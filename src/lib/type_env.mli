@@ -191,6 +191,15 @@ val get_global_constraints : t -> n_constraint list
 val get_constraint_reasons : t -> ((Ast.l * string) option * n_constraint) list
 val add_constraint : ?global:bool -> ?reason:Ast.l * string -> n_constraint -> t -> t
 
+(** The inclusive lower and upper bounds on a type variable implied by simple constraints of the form ['n op c] (with op
+    one of [==, <=, <, >, >=]) that have been added to the environment. *)
+val get_bounds : kid -> t -> Z.t option * Z.t option
+
+(** Returns true if the constraint can be shown to hold using only the bounds information, which are constraints of the
+    form ['n <op> <constant>] with [op] one of [==, <=, <, >=, >]. A false result does not mean the constraint is false.
+*)
+val prove_by_bounds : t -> n_constraint -> bool
+
 val add_typquant : ?from_outcome:bool -> l -> typquant -> t -> t
 
 val is_outcome_typ_var : kid -> t -> bool

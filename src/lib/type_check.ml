@@ -450,7 +450,10 @@ let prove pos env nc =
       ^ string_of_list ", " string_of_n_constraint ncs
       ^ " |- " ^ string_of_n_constraint nc
       );
-  match nc_aux with NC_true -> true | _ -> prove_smt ~abstract:(Env.get_abstract_typs env) ~assumptions:ncs nc
+  match nc_aux with
+  | NC_true -> true
+  | _ when Env.prove_by_bounds env nc -> true
+  | _ -> prove_smt ~abstract:(Env.get_abstract_typs env) ~assumptions:ncs nc
 
 (**************************************************************************)
 (* 3. Unification                                                         *)

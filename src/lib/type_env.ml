@@ -147,6 +147,7 @@ type env = {
   shadow_vars : int KBindings.t;
   allow_bindings : bool;
   constraints : (constraint_reason * n_constraint) list;
+  bounds : (Z.t option * Z.t option) KBindings.t;
   ret_typ : typ option;
   prove : (env -> n_constraint -> bool) option;
   allow_unknowns : bool;
@@ -254,6 +255,7 @@ let empty =
     shadow_vars = KBindings.empty;
     allow_bindings = true;
     constraints = [];
+    bounds = KBindings.empty;
     ret_typ = None;
     prove = None;
     allow_unknowns = false;
@@ -298,6 +300,7 @@ let add_typ_var_shadow ?(from_outcome = false) l (KOpt_aux (KOpt_kind (K_aux (k,
   if KBindings.mem v env.typ_vars then (
     let n = match KBindings.find_opt v env.shadow_vars with Some n -> n | None -> 0 in
     let s_l, s_k, s_origin = KBindings.find v env.typ_vars in
+    let s_bounds = Option.value ~default:(None, None) (KBindings.find_opt v env.bounds) in
     let s_v = Kid_aux (Var (string_of_kid v ^ "#" ^ string_of_int n), l) in
     typ_print
       ( lazy
@@ -309,6 +312,7 @@ let add_typ_var_shadow ?(from_outcome = false) l (KOpt_aux (KOpt_kind (K_aux (k,
         env with
         constraints = List.map (fun (l, nc) -> (l, constraint_subst v (arg_kopt (mk_kopt s_k s_v)) nc)) env.constraints;
         typ_vars = KBindings.add v (l, k, origin) (KBindings.add s_v (s_l, s_k, s_origin) env.typ_vars);
+        bounds = KBindings.add v (None, None) (KBindings.add s_v s_bounds env.bounds);
         locals = Bindings.map (fun (mut, typ) -> (mut, typ_subst v (arg_kopt (mk_kopt s_k s_v)) typ)) env.locals;
         shadow_vars = KBindings.add v (n + 1) env.shadow_vars;
       },
@@ -317,7 +321,13 @@ let add_typ_var_shadow ?(from_outcome = false) l (KOpt_aux (KOpt_kind (K_aux (k,
   )
   else (
     typ_print (lazy (adding ^ "type variable " ^ string_of_kid v ^ " : " ^ string_of_kind_aux k)) [@coverage off];
-    ({ env with typ_vars = KBindings.add v (l, k, origin) env.typ_vars }, None)
+    ( {
+        env with
+        typ_vars = KBindings.add v (l, k, origin) env.typ_vars;
+        bounds = KBindings.add v (None, None) env.bounds;
+      },
+      None
+    )
   )
 
 let add_typ_var ?(from_outcome = false) l kopt env = fst (add_typ_var_shadow ~from_outcome l kopt env)
@@ -590,6 +600,59 @@ let get_constraints_since ~old env =
   else fallback ()
 
 let get_constraint_reasons env = env.global.constraints @ env.constraints
+
+let simple_bound (NC_aux (aux, _)) =
+  match aux with
+  | NC_ge (Nexp_aux (Nexp_var v, _), Nexp_aux (Nexp_constant c, _))
+  | NC_le (Nexp_aux (Nexp_constant c, _), Nexp_aux (Nexp_var v, _)) ->
+      Some (v, Some c, None)
+  | NC_gt (Nexp_aux (Nexp_var v, _), Nexp_aux (Nexp_constant c, _))
+  | NC_lt (Nexp_aux (Nexp_constant c, _), Nexp_aux (Nexp_var v, _)) ->
+      Some (v, Some (Z.succ c), None)
+  | NC_le (Nexp_aux (Nexp_var v, _), Nexp_aux (Nexp_constant c, _))
+  | NC_ge (Nexp_aux (Nexp_constant c, _), Nexp_aux (Nexp_var v, _)) ->
+      Some (v, None, Some c)
+  | NC_lt (Nexp_aux (Nexp_var v, _), Nexp_aux (Nexp_constant c, _))
+  | NC_gt (Nexp_aux (Nexp_constant c, _), Nexp_aux (Nexp_var v, _)) ->
+      Some (v, None, Some (Z.pred c))
+  | NC_equal (A_aux (A_nexp (Nexp_aux (Nexp_var v, _)), _), A_aux (A_nexp (Nexp_aux (Nexp_constant c, _)), _))
+  | NC_equal (A_aux (A_nexp (Nexp_aux (Nexp_constant c, _)), _), A_aux (A_nexp (Nexp_aux (Nexp_var v, _)), _)) ->
+      Some (v, Some c, Some c)
+  | _ -> None
+
+let get_bounds v env = Option.value ~default:(None, None) (KBindings.find_opt v env.bounds)
+
+let add_bounds constr env =
+  let tighten f b1 b2 =
+    match (b1, b2) with Some x, Some y -> Some (f x y) | Some x, None | None, Some x -> Some x | None, None -> None
+  in
+  List.fold_left
+    (fun env nc ->
+      match simple_bound nc with
+      | Some (v, lo, hi) ->
+          let lo', hi' = get_bounds v env in
+          { env with bounds = KBindings.add v (tighten Z.max lo lo', tighten Z.min hi hi') env.bounds }
+      | None -> env
+    )
+    env (constraint_conj constr)
+
+let prove_by_bounds env nc =
+  let implied v lo hi =
+    let lo', hi' = get_bounds v env in
+    let ok cmp goal known =
+      match (goal, known) with None, _ -> true | Some g, Some k -> cmp k g | Some _, None -> false
+    in
+    ok Z.geq lo lo' && ok Z.leq hi hi'
+  in
+  List.for_all
+    (fun (NC_aux (aux, _) as nc) ->
+      match aux with
+      | NC_true -> true
+      | _ -> (
+          match simple_bound nc with Some (v, lo, hi) -> implied v lo hi | None -> false
+        )
+    )
+    (constraint_conj nc)
 
 module Well_formedness = struct
   type existential = { vars : KidSet.t; constr : n_constraint option }
@@ -1090,7 +1153,7 @@ and add_constraint ?(global = false) ?reason constr env =
           update_global
             (fun global_env -> { global_env with constraints = (reason, constr) :: global_env.constraints })
             env
-        else { env with constraints = (reason, constr) :: env.constraints }
+        else add_bounds constr { env with constraints = (reason, constr) :: env.constraints }
   )
 
 let simplify_constraints env =
