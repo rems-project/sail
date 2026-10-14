@@ -446,7 +446,7 @@ end = struct
               Hashtbl.add tbl part (create ());
               go (part :: parts) map
         )
-      | _ -> Reporting.unreachable l __POS__ "Failed to insert into config type map"
+      | _, obj -> subkey_error l full_parts obj
     in
     go full_parts map
 
