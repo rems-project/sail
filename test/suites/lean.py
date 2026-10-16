@@ -12,7 +12,6 @@ skip_selftests = {
     "outcome_impl_int",  # custom outcome types (not expected to work)
     "outcome_impl_bool",  # custom outcome types (not expected to work)
     "union_variant_names",
-    "varswap",
     "real",
     "poly_outcome",
     "string_of_bits",
@@ -34,7 +33,6 @@ skip_selftests = {
     "concurrency_interface_v2_var",
     "config_map_guard",
     "let_assert",
-    "tuple_tuple_lexp",
     "recursive_register",
 }
 
