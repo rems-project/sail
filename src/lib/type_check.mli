@@ -137,6 +137,9 @@ module Env : sig
   (** Get the current set of constraints. *)
   val get_constraints : t -> n_constraint list
 
+  (** Get the constraints introduced by top-level [constraint] declarations. *)
+  val get_global_constraints : t -> n_constraint list
+
   val add_constraint : ?global:bool -> ?reason:Ast.l * string -> n_constraint -> t -> t
 
   (** Push all the type variables and constraints from a typquant into an environment *)

@@ -57,10 +57,14 @@ val opt_list_files : string option ref
 (** env_update: This function takes a pre abstract instantiation type environment, and makes any abstract types concrete
     if they were instantiated.
 
-    config_ids: The set of identifiers that were instantiated from the provided configuration. *)
+    config_ids: The set of identifiers that were instantiated from the provided configuration.
+
+    instantiated: The value given to each abstract type that was instantiated, either from the configuration or the
+    command line. *)
 type abstract_instantiation = {
   env_update : Type_check.env -> Type_check.env;
   config_ids : (kind_aux * string list) Bindings.t;
+  instantiated : typ_arg Bindings.t;
 }
 
 val instantiate_abstract_types :
@@ -69,6 +73,10 @@ val instantiate_abstract_types :
   (kind_aux -> typ_arg) Bindings.t ->
   Type_check.typed_ast ->
   Type_check.typed_ast * abstract_instantiation
+
+(** Check that the global constraints in the (pre-instantiation) type environment still hold once abstract types have
+    been made concrete, raising an error that points at the first violated constraint otherwise. *)
+val check_instantiated_constraints : Type_check.env -> abstract_instantiation -> unit
 
 (** The [FILE_HANDLER] module type allows plugins to define handlers for custom file types. It defines how those files
     are processed and eventually generate Sail AST types. *)
