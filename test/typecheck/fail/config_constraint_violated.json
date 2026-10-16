@@ -1,0 +1,7 @@
+{
+  "arch" : {
+    "xlen" : 64,
+    "maskmax" : 64,
+    "frequency" : 1000000000
+  }
+}

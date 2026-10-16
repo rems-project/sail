@@ -508,6 +508,7 @@ let run_sail (config : Yojson.Safe.t option) tgt =
   in
   let config_json = get_model_config () in
   let ast, instantiation = Frontend.instantiate_abstract_types (Some tgt) config_json !opt_instantiations ast in
+  Frontend.check_instantiated_constraints env instantiation;
   let schema, ast = Config.rewrite_ast tgt env instantiation config_json ast in
   let ast, env = if Target.skip_initial_rewrite tgt then (ast, env) else Frontend.initial_rewrite effect_info env ast in
   let ast, env =

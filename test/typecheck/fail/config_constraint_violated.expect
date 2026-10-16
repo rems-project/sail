@@ -1,0 +1,7 @@
+[93mError[0m:
+[96mfail/config_constraint_violated.sail[0m:13.11-29:
+13[96m |[0mconstraint 0 < maskmax < xlen
+  [91m |[0m           [91m^----------------^[0m
+  [91m |[0m Constraint (0 < maskmax & maskmax < xlen) does not hold after instantiating abstract types with:
+  [91m |[0m   maskmax = 64 (from configuration key arch.maskmax)
+  [91m |[0m   xlen = 64 (from configuration key arch.xlen)

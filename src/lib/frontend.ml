@@ -69,6 +69,7 @@ let finalize_ast asserts_termination symbols ctx env ast =
 type abstract_instantiation = {
   env_update : Type_check.env -> Type_check.env;
   config_ids : (kind_aux * string list) Bindings.t;
+  instantiated : typ_arg Bindings.t;
 }
 
 let rec json_lookup key json =
@@ -106,7 +107,9 @@ let instantiate_abstract_types tgt config insts ast =
   let open Ast in
   let env_update = ref (fun env -> env) in
   let config_ids = ref Bindings.empty in
+  let instantiated = ref Bindings.empty in
   let add_to_env_update l id arg =
+    instantiated := Bindings.add id arg !instantiated;
     let prev_env_update = !env_update in
     env_update :=
       Type_check.Env.(
@@ -134,7 +137,7 @@ let instantiate_abstract_types tgt config insts ast =
     | def -> def
   in
   let defs = List.map instantiate ast.defs in
-  let inst = { env_update = !env_update; config_ids = !config_ids } in
+  let inst = { env_update = !env_update; config_ids = !config_ids; instantiated = !instantiated } in
   if Option.fold ~none:true ~some:Target.supports_abstract_types tgt then ({ ast with defs }, inst)
   else (
     match List.find_opt (function DEF_aux (DEF_type (TD_aux (TD_abstract _, _)), _) -> true | _ -> false) defs with
@@ -148,6 +151,50 @@ let instantiate_abstract_types tgt config insts ast =
              )
           )
     | None -> ({ ast with defs }, inst)
+  )
+
+let check_instantiated_constraints env inst =
+  let open Type_check in
+  if not (Bindings.is_empty inst.instantiated) then (
+    let updated_env = inst.env_update env in
+    let abstract = Env.get_abstract_typs updated_env in
+    let describe id =
+      match Bindings.find_opt id inst.instantiated with
+      | None -> None
+      | Some arg ->
+          let source =
+            match Bindings.find_opt id inst.config_ids with
+            | Some (_, key) -> " (from configuration key " ^ String.concat "." key ^ ")"
+            | None -> ""
+          in
+          Some ("  " ^ string_of_id id ^ " = " ^ string_of_typ_arg arg ^ source)
+    in
+    let violated (NC_aux (_, l) as nc) =
+      match constraint_simp (Env.expand_constraint_synonyms updated_env nc) with
+      | NC_aux (NC_true, _) -> false
+      | NC_aux (NC_false, _) -> true
+      | nc -> Constraint.call_smt l abstract nc = Constraint.Unsat
+    in
+    (* Global constraints are stored most recent first, so reverse them to report the first violation in the source. *)
+    List.iter
+      (fun (NC_aux (_, l) as nc) ->
+        if violated nc then (
+          let values = List.filter_map describe (IdSet.elements (ids_of_constraint nc)) in
+          raise
+            (Reporting.err_general l
+               ("Constraint " ^ string_of_n_constraint nc ^ " does not hold after instantiating abstract types"
+               ^ if values = [] then "" else " with:\n" ^ String.concat "\n" values
+               )
+            )
+        )
+      )
+      (List.rev (Env.get_global_constraints env));
+    let constrs = List.map (Env.expand_constraint_synonyms updated_env) (Env.get_global_constraints env) in
+    if Constraint.call_smt Parse_ast.Unknown abstract (List.fold_left nc_and nc_true constrs) = Constraint.Unsat then
+      raise
+        (Reporting.err_general Parse_ast.Unknown
+           "Global constraints are inconsistent with each other after instantiating abstract types"
+        )
   )
 
 type parse_continuation = {
