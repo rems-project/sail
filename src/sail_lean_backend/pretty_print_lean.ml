@@ -413,8 +413,8 @@ let doc_lit ~width (L_aux (lit, l)) =
       | _ -> utf8string ("0b" ^ string_of_bin_lit ~group_separator:"" bin ^ width_specifier)
     )
   | L_string s -> utf8string ("\"" ^ lean_escape_string s ^ "\"")
-  | L_real r -> utf8string (Q.to_string (Util.Rational.from_rocq r))
-(* TODO test if this is really working *)
+  (* Fractions need parens for precedence *)
+  | L_real r -> parens (utf8string (Q.to_string (Util.Rational.from_rocq r)))
 
 let string_of_exp_con (E_aux (e, _)) =
   match e with
