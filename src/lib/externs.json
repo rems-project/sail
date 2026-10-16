@@ -1,23 +1,6 @@
 {
   "externs": [
     {
-      "name": "add_atom",
-      "operator": false,
-      "pure": true,
-      "bindings": {
-        "lem": "integerAdd",
-        "coq": "Z.add",
-        "lean": "_lean_addi",
-        "_": "add_int"
-      },
-      "type": "forall 'n 'm. (int('n), int('m)) -> int('n + 'm)",
-      "ocaml_type": "Z.t -> Z.t -> Z.t",
-      "file": "lib/arith.sail",
-      "conditions": [
-        { "directive": "ifndef", "argument": "_ARITH", "branch": "then" }
-      ]
-    },
-    {
       "name": "add_int",
       "operator": false,
       "pure": true,
@@ -28,23 +11,6 @@
         "_": "add_int"
       },
       "type": "(int, int) -> int",
-      "ocaml_type": "Z.t -> Z.t -> Z.t",
-      "file": "lib/arith.sail",
-      "conditions": [
-        { "directive": "ifndef", "argument": "_ARITH", "branch": "then" }
-      ]
-    },
-    {
-      "name": "sub_atom",
-      "operator": false,
-      "pure": true,
-      "bindings": {
-        "lem": "integerMinus",
-        "coq": "Z.sub",
-        "lean": "_lean_subi",
-        "_": "sub_int"
-      },
-      "type": "forall 'n 'm. (int('n), int('m)) -> int('n - 'm)",
       "ocaml_type": "Z.t -> Z.t -> Z.t",
       "file": "lib/arith.sail",
       "conditions": [
@@ -86,25 +52,6 @@
       ]
     },
     {
-      "name": "negate_atom",
-      "operator": false,
-      "pure": true,
-      "bindings": {
-        "ocaml": "negate",
-        "interpreter": "negate",
-        "lem": "integerNegate",
-        "coq": "Z.opp",
-        "lean": "Neg.neg",
-        "_": "neg_int"
-      },
-      "type": "forall 'n. int('n) -> int(- 'n)",
-      "ocaml_type": "Z.t -> Z.t",
-      "file": "lib/arith.sail",
-      "conditions": [
-        { "directive": "ifndef", "argument": "_ARITH", "branch": "then" }
-      ]
-    },
-    {
       "name": "negate_int",
       "operator": false,
       "pure": true,
@@ -118,25 +65,6 @@
       },
       "type": "int -> int",
       "ocaml_type": "Z.t -> Z.t",
-      "file": "lib/arith.sail",
-      "conditions": [
-        { "directive": "ifndef", "argument": "_ARITH", "branch": "then" }
-      ]
-    },
-    {
-      "name": "mult_atom",
-      "operator": false,
-      "pure": true,
-      "bindings": {
-        "ocaml": "mult",
-        "interpreter": "mult",
-        "lem": "integerMult",
-        "coq": "Z.mul",
-        "lean": "_lean_muli",
-        "_": "mult_int"
-      },
-      "type": "forall 'n 'm. (int('n), int('m)) -> int('n * 'm)",
-      "ocaml_type": "Z.t -> Z.t -> Z.t",
       "file": "lib/arith.sail",
       "conditions": [
         { "directive": "ifndef", "argument": "_ARITH", "branch": "then" }
@@ -233,40 +161,6 @@
         {
           "directive": "ifndef",
           "argument": "PRINT_EFFECTS",
-          "branch": "else"
-        }
-      ]
-    },
-    {
-      "name": "pow2",
-      "operator": false,
-      "pure": true,
-      "bindings": { "lean": "_lean_pow2i", "_": "pow2" },
-      "type": "forall 'n, 'n >= 0. int('n) -> int(2 ^ 'n)",
-      "ocaml_type": "Z.t -> Z.t",
-      "file": "lib/arith.sail",
-      "conditions": [
-        { "directive": "ifndef", "argument": "_ARITH", "branch": "then" },
-        {
-          "directive": "ifdef",
-          "argument": "STRICT_EXPONENTIALS",
-          "branch": "then"
-        }
-      ]
-    },
-    {
-      "name": "pow2",
-      "operator": false,
-      "pure": true,
-      "bindings": { "lean": "_lean_pow2i", "_": "pow2" },
-      "type": "forall 'n. int('n) -> int(2 ^ 'n)",
-      "ocaml_type": "Z.t -> Z.t",
-      "file": "lib/arith.sail",
-      "conditions": [
-        { "directive": "ifndef", "argument": "_ARITH", "branch": "then" },
-        {
-          "directive": "ifdef",
-          "argument": "STRICT_EXPONENTIALS",
           "branch": "else"
         }
       ]
@@ -960,7 +854,7 @@
       "operator": false,
       "pure": false,
       "bindings": { "_": "reg_deref" },
-      "type": "forall ('a : Type). register('a) -> 'a",
+      "type": "forall 'a. register('a) -> 'a",
       "ocaml_type": "'a ref -> 'a",
       "file": "lib/core/corelib.sail",
       "conditions": []
@@ -1004,6 +898,177 @@
       "ocaml_type": "Z.t -> Z.t -> bool",
       "file": "lib/core/corelib.sail",
       "conditions": []
+    },
+    {
+      "name": "not_bool",
+      "operator": false,
+      "pure": true,
+      "bindings": { "coq": "negb", "lean": "_lean_not", "_": "not" },
+      "type": "forall 'p. bool('p) -> bool(not('p))",
+      "ocaml_type": "bool -> bool",
+      "file": "lib/core/corelib.sail",
+      "conditions": []
+    },
+    {
+      "name": "and_bool",
+      "operator": false,
+      "pure": true,
+      "bindings": { "coq": "andb", "lean": "_lean_and", "_": "and_bool" },
+      "type": "forall 'p 'q. (bool('p), bool('q)) -> bool('p & 'q)",
+      "ocaml_type": "bool -> bool -> bool",
+      "file": "lib/core/corelib.sail",
+      "conditions": []
+    },
+    {
+      "name": "or_bool",
+      "operator": false,
+      "pure": true,
+      "bindings": { "coq": "orb", "lean": "_lean_or", "_": "or_bool" },
+      "type": "forall 'p 'q. (bool('p), bool('q)) -> bool('p | 'q)",
+      "ocaml_type": "bool -> bool -> bool",
+      "file": "lib/core/corelib.sail",
+      "conditions": []
+    },
+    {
+      "name": "add_atom",
+      "operator": false,
+      "pure": true,
+      "bindings": {
+        "lem": "integerAdd",
+        "coq": "Z.add",
+        "lean": "_lean_addi",
+        "_": "add_int"
+      },
+      "type": "forall 'n 'm. (int('n), int('m)) -> int('n + 'm)",
+      "ocaml_type": "Z.t -> Z.t -> Z.t",
+      "file": "lib/core/corelib.sail",
+      "conditions": []
+    },
+    {
+      "name": "sub_atom",
+      "operator": false,
+      "pure": true,
+      "bindings": {
+        "lem": "integerMinus",
+        "coq": "Z.sub",
+        "lean": "_lean_subi",
+        "_": "sub_int"
+      },
+      "type": "forall 'n 'm. (int('n), int('m)) -> int('n - 'm)",
+      "ocaml_type": "Z.t -> Z.t -> Z.t",
+      "file": "lib/core/corelib.sail",
+      "conditions": []
+    },
+    {
+      "name": "negate_atom",
+      "operator": false,
+      "pure": true,
+      "bindings": {
+        "ocaml": "negate",
+        "interpreter": "negate",
+        "lem": "integerNegate",
+        "coq": "Z.opp",
+        "lean": "Neg.neg",
+        "_": "neg_int"
+      },
+      "type": "forall 'n. int('n) -> int(- 'n)",
+      "ocaml_type": "Z.t -> Z.t",
+      "file": "lib/core/corelib.sail",
+      "conditions": []
+    },
+    {
+      "name": "mult_atom",
+      "operator": false,
+      "pure": true,
+      "bindings": {
+        "ocaml": "mult",
+        "interpreter": "mult",
+        "lem": "integerMult",
+        "coq": "Z.mul",
+        "lean": "_lean_muli",
+        "_": "mult_int"
+      },
+      "type": "forall 'n 'm. (int('n), int('m)) -> int('n * 'm)",
+      "ocaml_type": "Z.t -> Z.t -> Z.t",
+      "file": "lib/core/corelib.sail",
+      "conditions": []
+    },
+    {
+      "name": "ediv_int",
+      "operator": false,
+      "pure": true,
+      "bindings": {
+        "lem": "integerDiv",
+        "coq": "e_div",
+        "lean": "Int.ediv",
+        "_": "ediv_int"
+      },
+      "type": "forall 'n 'm. (int('n), int('m)) -> int(div('n, 'm))",
+      "ocaml_type": "Z.t -> Z.t -> Z.t",
+      "file": "lib/core/corelib.sail",
+      "conditions": []
+    },
+    {
+      "name": "emod_int",
+      "operator": false,
+      "pure": true,
+      "bindings": {
+        "lem": "integerMod",
+        "coq": "e_modulo",
+        "lean": "Int.emod",
+        "_": "emod_int"
+      },
+      "type": "forall 'n 'm. (int('n), int('m)) -> int(mod('n, 'm))",
+      "ocaml_type": "Z.t -> Z.t -> Z.t",
+      "file": "lib/core/corelib.sail",
+      "conditions": []
+    },
+    {
+      "name": "abs_int_atom",
+      "operator": false,
+      "pure": true,
+      "bindings": {
+        "lem": "integerAbs",
+        "coq": "Z.abs",
+        "lean": "Int.natAbs",
+        "_": "abs_int"
+      },
+      "type": "forall 'n. int('n) -> int(abs('n))",
+      "ocaml_type": "Z.t -> Z.t",
+      "file": "lib/core/corelib.sail",
+      "conditions": []
+    },
+    {
+      "name": "pow2",
+      "operator": false,
+      "pure": true,
+      "bindings": { "lean": "_lean_pow2i", "_": "pow2" },
+      "type": "forall 'n, 'n >= 0. int('n) -> int(2 ^ 'n)",
+      "ocaml_type": "Z.t -> Z.t",
+      "file": "lib/core/corelib.sail",
+      "conditions": [
+        {
+          "directive": "ifdef",
+          "argument": "STRICT_EXPONENTIALS",
+          "branch": "then"
+        }
+      ]
+    },
+    {
+      "name": "pow2",
+      "operator": false,
+      "pure": true,
+      "bindings": { "lean": "_lean_pow2i", "_": "pow2" },
+      "type": "forall 'n. int('n) -> int(2 ^ 'n)",
+      "ocaml_type": "Z.t -> Z.t",
+      "file": "lib/core/corelib.sail",
+      "conditions": [
+        {
+          "directive": "ifdef",
+          "argument": "STRICT_EXPONENTIALS",
+          "branch": "else"
+        }
+      ]
     },
     {
       "name": "internal_pick",
@@ -1198,47 +1263,11 @@
       ]
     },
     {
-      "name": "not_bool",
-      "operator": false,
-      "pure": true,
-      "bindings": { "coq": "negb", "lean": "_lean_not", "_": "not" },
-      "type": "forall ('p : Bool). bool('p) -> bool(not('p))",
-      "ocaml_type": "bool -> bool",
-      "file": "lib/flow.sail",
-      "conditions": [
-        { "directive": "ifndef", "argument": "_FLOW", "branch": "then" }
-      ]
-    },
-    {
-      "name": "and_bool",
-      "operator": false,
-      "pure": true,
-      "bindings": { "coq": "andb", "lean": "_lean_and", "_": "and_bool" },
-      "type": "forall ('p : Bool) ('q : Bool). (bool('p), bool('q)) -> bool('p & 'q)",
-      "ocaml_type": "bool -> bool -> bool",
-      "file": "lib/flow.sail",
-      "conditions": [
-        { "directive": "ifndef", "argument": "_FLOW", "branch": "then" }
-      ]
-    },
-    {
       "name": "and_bool_no_flow",
       "operator": false,
       "pure": true,
       "bindings": { "coq": "andb", "lean": "_lean_and", "_": "and_bool" },
       "type": "(bool, bool) -> bool",
-      "ocaml_type": "bool -> bool -> bool",
-      "file": "lib/flow.sail",
-      "conditions": [
-        { "directive": "ifndef", "argument": "_FLOW", "branch": "then" }
-      ]
-    },
-    {
-      "name": "or_bool",
-      "operator": false,
-      "pure": true,
-      "bindings": { "coq": "orb", "lean": "_lean_or", "_": "or_bool" },
-      "type": "forall ('p : Bool) ('q : Bool). (bool('p), bool('q)) -> bool('p | 'q)",
       "ocaml_type": "bool -> bool -> bool",
       "file": "lib/flow.sail",
       "conditions": [
@@ -1893,57 +1922,6 @@
       "file": "lib/real.sail",
       "conditions": [
         { "directive": "ifndef", "argument": "_REAL", "branch": "then" }
-      ]
-    },
-    {
-      "name": "ediv_int",
-      "operator": false,
-      "pure": true,
-      "bindings": {
-        "lem": "integerDiv",
-        "coq": "e_div",
-        "lean": "Int.ediv",
-        "_": "ediv_int"
-      },
-      "type": "forall 'n 'm. (int('n), int('m)) -> int(div('n, 'm))",
-      "ocaml_type": "Z.t -> Z.t -> Z.t",
-      "file": "lib/smt.sail",
-      "conditions": [
-        { "directive": "ifndef", "argument": "_SMT", "branch": "then" }
-      ]
-    },
-    {
-      "name": "emod_int",
-      "operator": false,
-      "pure": true,
-      "bindings": {
-        "lem": "integerMod",
-        "coq": "e_modulo",
-        "lean": "Int.emod",
-        "_": "emod_int"
-      },
-      "type": "forall 'n 'm. (int('n), int('m)) -> int(mod('n, 'm))",
-      "ocaml_type": "Z.t -> Z.t -> Z.t",
-      "file": "lib/smt.sail",
-      "conditions": [
-        { "directive": "ifndef", "argument": "_SMT", "branch": "then" }
-      ]
-    },
-    {
-      "name": "abs_int_atom",
-      "operator": false,
-      "pure": true,
-      "bindings": {
-        "lem": "integerAbs",
-        "coq": "Z.abs",
-        "lean": "Int.natAbs",
-        "_": "abs_int"
-      },
-      "type": "forall 'n. int('n) -> int(abs('n))",
-      "ocaml_type": "Z.t -> Z.t",
-      "file": "lib/smt.sail",
-      "conditions": [
-        { "directive": "ifndef", "argument": "_SMT", "branch": "then" }
       ]
     },
     {

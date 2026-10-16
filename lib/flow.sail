@@ -60,15 +60,7 @@ type bit = bitvector(1)
 val eq_unit = pure { lean : "_lean_beq", _ : "eq_unit" } : (unit, unit) -> bool(true)
 function eq_unit(_, _) = true
 
-val not_bool = pure {coq: "negb", lean: "_lean_not", _: "not"} : forall ('p : Bool). bool('p) -> bool(not('p))
-/* NB: There are special cases in Sail for effectful uses of and_bool and
-   or_bool that are not shown here. */
-
-val and_bool = pure {coq: "andb", lean: "_lean_and", _: "and_bool"} : forall ('p : Bool) ('q : Bool). (bool('p), bool('q)) -> bool('p & 'q)
-
 val and_bool_no_flow = pure {coq: "andb", lean: "_lean_and", _: "and_bool"} : (bool, bool) -> bool
-
-val or_bool = pure {coq: "orb", lean: "_lean_or", _: "or_bool"} : forall ('p : Bool) ('q : Bool). (bool('p), bool('q)) -> bool('p | 'q)
 
 val eq_int = pure {lem: "eq", coq: "Z.eqb", lean: "_lean_beq", _: "eq_int"} : forall 'n 'm. (int('n), int('m)) -> bool('n == 'm)
 

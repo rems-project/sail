@@ -17,7 +17,6 @@ skip_selftests = {
     "string_of_bits",
     "pointer_assign",
     "concurrency_interface",
-    "for_shadow",
     "string_literal_type",
     "issue429",
     "type_if_bits",
