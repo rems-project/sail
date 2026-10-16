@@ -395,13 +395,13 @@ class SailTest(ABC):
         if args.compact:
             compact_char(Color.PASS, ".")
         else:
-            print(f'{(name + " ").ljust(40, ".")} {Color.PASS}ok{Color.END}')
+            print(f'{(name + " ").ljust(45, ".")} {Color.PASS}ok{Color.END}')
 
     def _print_skip(self, name):
         if args.compact:
             compact_char(Color.WARNING, "s")
         else:
-            print(f'{(name + " ").ljust(40, ".")} {Color.WARNING}skip{Color.END}')
+            print(f'{(name + " ").ljust(45, ".")} {Color.WARNING}skip{Color.END}')
             # Otherwise a child forked after this would print it again
             sys.stdout.flush()
 
