@@ -1238,21 +1238,22 @@ and rewrite_arg l env = function
 and rewrite_nc_aux l env =
   let op s = Id_aux (Operator s, l) in
   function
-  | NC_ge (n1, n2) -> E_app (op ">=", [rewrite_sizeof l env n1; rewrite_sizeof l env n2])
-  | NC_gt (n1, n2) -> E_app (op ">", [rewrite_sizeof l env n1; rewrite_sizeof l env n2])
-  | NC_le (n1, n2) -> E_app (op "<=", [rewrite_sizeof l env n1; rewrite_sizeof l env n2])
-  | NC_lt (n1, n2) -> E_app (op "<", [rewrite_sizeof l env n1; rewrite_sizeof l env n2])
+  | NC_ge (n1, n2) -> E_app (mk_id ~loc:l "gteq_int", [rewrite_sizeof l env n1; rewrite_sizeof l env n2])
+  | NC_gt (n1, n2) -> E_app (mk_id ~loc:l "gt_int", [rewrite_sizeof l env n1; rewrite_sizeof l env n2])
+  | NC_le (n1, n2) -> E_app (mk_id ~loc:l "lteq_int", [rewrite_sizeof l env n1; rewrite_sizeof l env n2])
+  | NC_lt (n1, n2) -> E_app (mk_id ~loc:l "lt_int", [rewrite_sizeof l env n1; rewrite_sizeof l env n2])
   | NC_equal (arg1, arg2) -> E_app (op "==", [rewrite_arg l env arg1; rewrite_arg l env arg2])
   | NC_not_equal (arg1, arg2) -> E_app (op "!=", [rewrite_arg l env arg1; rewrite_arg l env arg2])
-  | NC_and (nc1, nc2) -> E_app (op "&", [rewrite_nc env nc1; rewrite_nc env nc2])
-  | NC_or (nc1, nc2) -> E_app (op "|", [rewrite_nc env nc1; rewrite_nc env nc2])
+  | NC_and (nc1, nc2) -> E_app (mk_and_bool ~loc:l (), [rewrite_nc env nc1; rewrite_nc env nc2])
+  | NC_or (nc1, nc2) -> E_app (mk_or_bool ~loc:l (), [rewrite_nc env nc1; rewrite_nc env nc2])
   | NC_false -> E_lit (mk_lit L_false)
   | NC_true -> E_lit (mk_lit L_true)
   | NC_set (_, []) -> E_lit (mk_lit L_false)
   | NC_set (nexp, int :: ints) ->
       let nexp_eq int = nc_eq nexp (nconstant int) in
       unaux_exp (rewrite_nc env (List.fold_left (fun nc int -> nc_or nc (nexp_eq int)) (nexp_eq int) ints))
-  | NC_app (f, [A_aux (A_bool nc, _)]) when string_of_id f = "not" -> E_app (mk_id "not_bool", [rewrite_nc env nc])
+  | NC_app (f, [A_aux (A_bool nc, _)]) when string_of_id f = "not" ->
+      E_app (mk_id ~loc:l "not_bool", [rewrite_nc env nc])
   | NC_app (f, args) -> unaux_exp (rewrite_nc env (Env.expand_constraint_synonyms env (mk_nc (NC_app (f, args)))))
   | NC_var v ->
       if Env.is_outcome_typ_var v env then E_constraint (NC_aux (NC_var v, l))
