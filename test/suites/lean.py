@@ -140,7 +140,8 @@ class LeanTests(SailTest):
                 if status != 0:
                     sys.exit(1)
 
-            step(f"rm -rf {basename}")
+            if not args.keep_intermediate:
+                step(f"rm -rf {basename}")
             if is_skip:
                 print(f"{basename} now passes!")
 

@@ -61,9 +61,10 @@ class _ExecCBase(SailTest):
                     f" --errors-for-leak-kinds=all --error-exitcode=2 ./{basename}.bin",
                     expected_status=1 if basename.startswith("fail") else 0,
                 )
-            step(
-                f"rm {basename}.{extension} {basename}.h {basename}.bin {basename}.result"
-            )
+            if not args.keep_intermediate:
+                step(
+                    f"rm {basename}.{extension} {basename}.h {basename}.bin {basename}.result"
+                )
 
         self.run_tests(
             name,
@@ -148,7 +149,8 @@ class ExecInterpreterTests(SailTest):
             f" -iout {basename}.iresult {filename}"
         )
         step(f"diff {basename}.iresult {basename}.expect")
-        step(f"rm {basename}.iresult")
+        if not args.keep_intermediate:
+            step(f"rm {basename}.iresult")
 
 
 @suite("exec.partial", _SUITE_DIR)
@@ -165,7 +167,8 @@ class ExecPartialTests(SailTest):
             f"timeout 10s '{self.sail}' -is {script} -iout {basename}.iresult {filename}"
         )
         step(f"diff {basename}.iresult {basename}.expect")
-        step(f"rm {basename}.iresult")
+        if not args.keep_intermediate:
+            step(f"rm {basename}.iresult")
 
 
 @suite("exec.partial_inline", _SUITE_DIR)
@@ -189,8 +192,9 @@ class ExecOcamlTests(SailTest):
             cwd=f"_sbuild_{basename}",
         )
         step(f"diff {basename}.oresult {basename}.expect")
-        step(f"rm -rf _sbuild_{basename}")
-        step(f"rm {basename}.oresult")
+        if not args.keep_intermediate:
+            step(f"rm -rf _sbuild_{basename}")
+            step(f"rm {basename}.oresult")
 
 
 # Expected failures shared by the Lem-based targets (Lem via OCaml, and HOL4)
@@ -252,7 +256,8 @@ class ExecLemTests(SailTest):
         if os.path.exists(f"../{basename}.err_expect"):
             step(f"diff {basename}.lerr ../{basename}.err_expect")
         os.chdir("..")
-        step(f"rm -r _lbuild_{basename}")
+        if not args.keep_intermediate:
+            step(f"rm -r _lbuild_{basename}")
 
 
 # Note: lots of this will fail at the moment, because it doesn't try to
@@ -290,7 +295,8 @@ class ExecHol4Tests(SailTest):
             expected_status=1 if basename.startswith("fail") else 0,
         )
         os.chdir("..")
-        step(f"rm -r _holbuild_{basename}")
+        if not args.keep_intermediate:
+            step(f"rm -r _holbuild_{basename}")
 
 
 @suite("exec.rocq", _SUITE_DIR)
@@ -347,4 +353,5 @@ class ExecRocqTests(SailTest):
         if os.path.exists(f"../{basename}.err_expect"):
             step(f"{filter_command} error.out | diff - ../{basename}.err_expect")
         os.chdir("..")
-        step(f"rm -r _rocqbuild_{basename}")
+        if not args.keep_intermediate:
+            step(f"rm -r _rocqbuild_{basename}")

@@ -28,8 +28,9 @@ class _OcamlBase(SailTest):
         )
         step("dune exec --release out > ../result 2> /dev/null", cwd=f"{dir}/_sbuild")
         step("diff expect result", cwd=dir)
-        step("rm result", cwd=dir)
-        step("rm -rf _sbuild", cwd=dir)
+        if not args.keep_intermediate:
+            step("rm result", cwd=dir)
+            step("rm -rf _sbuild", cwd=dir)
 
 
 @suite("ocaml.default", _SUITE_DIR)
