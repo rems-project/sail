@@ -624,7 +624,7 @@ let wrap_with_left_arrow (needs_left_arrow : bool) (d : document) =
 
 let wrap_with_do (with_arrow : bool) (needs_return : bool) (d : document) =
   let ar_do = if with_arrow then string "← do" else string "do" in
-  if needs_return then parens (nest 2 (flow hardline [ar_do; d])) else d
+  if needs_return then parens (ifflat (ar_do ^^ space ^^ d) (nest 2 (flow hardline [ar_do; d]))) else d
 
 let get_fn_implicits (Typ_aux (t, _)) : bool list =
   let arg_implicit arg =
@@ -935,6 +935,12 @@ and doc_exp (as_monadic : bool) ctx (E_aux (e, (l, annot)) as full_exp) =
   | E_app ((Id_aux (Id "early_return", _) as f), [arg]) ->
       let throw = if ctx.in_sail_monad then string "SailME.throw " else string "throw " in
       nest 2 (throw ^^ d_of_arg ctx arg)
+  (* Preserve short-circuiting; merely putting an arrow on the rhs would lift it out *)
+  | E_app (Id_aux (((And_bool | Or_bool) as f), _), [lhs; rhs]) when has_effect rhs ->
+      let op = match f with And_bool -> "<&&>" | _ -> "<||>" in
+      let arrow sub = if as_monadic then sub else parens (leftarrow ^^ parens sub) in
+      let d_rhs = wrap_with_do false true (doc_exp true ctx rhs) in
+      arrow (d_of_arg ~with_arrow:false ctx lhs ^^ space ^^ string op ^^ space ^^ d_rhs)
   | E_app (f, args) -> (
       let _, f_typ = Env.get_val_spec f env in
       let implicits = get_fn_implicits f_typ in
