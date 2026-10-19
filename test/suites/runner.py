@@ -41,6 +41,11 @@ sailtest.parser.add_argument(
     help="Print available test suites as a tree and exit",
     action="store_true",
 )
+sailtest.parser.add_argument(
+    "--keep-intermediate",
+    help="Keep intermediate files for all tests",
+    action="store_true"
+)
 
 sailtest.args = sailtest.parser.parse_args()
 

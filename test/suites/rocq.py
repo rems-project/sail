@@ -79,6 +79,7 @@ class RocqTests(SailTest):
             step("coqc out_types.v", name=basename)
             step("coqc out.v", name=basename)
             os.chdir("..")
-            step(f"rm -r _build_{basename}")
+            if not args.keep_intermediate:
+                step(f"rm -r _build_{basename}")
 
         return fn

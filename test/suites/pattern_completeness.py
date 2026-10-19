@@ -27,4 +27,5 @@ class PatternCompletenessTests(SailTest):
                 step(f"'{self.sail}' --just-check {filename} 2> {basename}.expect")
             else:
                 sys.exit(1)
-        step(f"rm {basename}.error")
+        if not args.keep_intermediate:
+            step(f"rm {basename}.error")

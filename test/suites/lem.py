@@ -105,6 +105,7 @@ class LemTests(SailTest):
             step(
                 f"lem -lib '{self.sail_dir}'/src/gen_lib {basename}_types.lem {basename}.lem"
             )
-            step(f"rm {basename}_types.lem {basename}.lem")
+            if not args.keep_intermediate:
+                step(f"rm {basename}_types.lem {basename}.lem")
 
         return fn

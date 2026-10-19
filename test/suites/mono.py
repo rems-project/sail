@@ -61,4 +61,5 @@ class MonoTests(SailTest):
             f" {libml} test_extra.ml out_types.ml out.ml test.ml"
         )
         os.chdir("..")
-        step(f"rm -r _build_{filename}")
+        if not args.keep_intermediate:
+            step(f"rm -r _build_{filename}")
