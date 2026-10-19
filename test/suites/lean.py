@@ -71,7 +71,8 @@ class LeanTests(SailTest):
                 f"git clone https://github.com/rems-project/lean-sail.git '{lib_path}'"
             )
         print("Building the support library")
-        step("lake build +Sail:c.o", cwd=lib_path)
+        # Avoid races from parallel tests by prebuilding
+        step("lake build Sail:static", cwd=lib_path)
         return lib_path
 
     def _make_skip_fn(self, skip_list):
