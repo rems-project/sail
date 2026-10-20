@@ -168,7 +168,7 @@ def f (x : Int) : SailM Int := do
   sail_assert (x >b 4) "..."
   (pure x)
 
-def a_constant : Int := unwrapValue ((f 22))
+def a_constant : Int := unwrapValue (do (f 22))
 
 def g (_ : Unit) : SailM Int := do
   (pure (a_constant +i 3))

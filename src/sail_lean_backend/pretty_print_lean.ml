@@ -1373,8 +1373,10 @@ let doc_val ctx pat exp =
   in
   let typpp = match pat_typ with None -> empty | Some typ -> space ^^ colon ^^ space ^^ doc_typ ctx ctx.env typ in
   let idpp = doc_id_ctor ctx id in
+  let ctx = { ctx with in_sail_monad = has_effect exp } in
   let base_pp =
-    if has_effect exp then string "unwrapValue" ^^ space ^^ parens (doc_exp true ctx exp) else doc_exp false ctx exp
+    if ctx.in_sail_monad then string "unwrapValue" ^^ space ^^ parens (string "do" ^/^ doc_exp true ctx exp)
+    else doc_exp false ctx exp
   in
   (global, nest 2 (group (string "def" ^^ space ^^ idpp ^^ typpp ^^ space ^^ coloneq ^/^ base_pp)))
 
