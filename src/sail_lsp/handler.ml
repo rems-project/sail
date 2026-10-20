@@ -76,6 +76,10 @@ let find_sail_project file =
 
 let state : Server_state.state option ref = ref None
 
+(* Navigation must use the checking result for the requested document, rather
+   than whichever project was most recently checked. *)
+let document_asts : (Sail_file.handle, Type_check.typed_ast) Hashtbl.t = Hashtbl.create 16
+
 type scan_id = Scan_id of Ast.id | Scan_app of Ast.id
 
 module CursorScanner = Ast_util.Scanner (struct
@@ -144,12 +148,14 @@ let error_diagnostic (err : Reporting.error) =
     ~message:(`String message) ()
 
 let diagnostics_for_handle file handle =
+  Hashtbl.remove document_asts handle;
   let diags =
     match !state with
     | Some s -> (
         match Server_state.check_up_to s handle with
         | Ok s' ->
             state := Some s';
+            Hashtbl.replace document_asts handle (Server_state.force_last_ast s');
             []
         | Error err -> [error_diagnostic err]
       )
@@ -243,7 +249,7 @@ let on_hover ({ position = { line; character }; textDocument = { uri } } : Lsp.T
   let file = DocumentUri.to_path uri in
   let* handle = Hashtbl.find_opt file_to_handle file in
   let* p = Sail_file.lexing_position handle { line; character } in
-  let* ast = Option.map Server_state.force_last_ast !state in
+  let* ast = Hashtbl.find_opt document_asts handle in
   let* l, tannot, _ = CursorScanner.find_annot_ast p ast in
   let* _, typ = Type_check.destruct_tannot tannot in
   log "%s" (Reporting.loc_to_string l);
@@ -271,7 +277,7 @@ let on_definition ({ position = { line; character }; textDocument = { uri } } : 
   log "declaration: %s" file;
   let* handle = Hashtbl.find_opt file_to_handle file in
   let* p = Sail_file.lexing_position handle { line; character } in
-  let* ast = Option.map Server_state.force_last_ast !state in
+  let* ast = Hashtbl.find_opt document_asts handle in
   let* _, tannot, id_cat = CursorScanner.find_annot_ast p ast in
   match id_cat with
   | Some (Scan_app id) | Some (Scan_id id) ->
@@ -355,6 +361,7 @@ let on_notification ~config notif =
       ( match Hashtbl.find_opt file_to_handle file with
       | None -> ()
       | Some handle ->
+          Hashtbl.remove document_asts handle;
           Sail_file.editor_drop_file handle;
           unregister_handle handle
       );

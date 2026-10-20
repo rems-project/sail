@@ -345,6 +345,36 @@ def test_definition():
         client.exit()
 
 
+def test_definition_for_each_open_document():
+    """Navigation uses the requested document after another project is opened."""
+    code = (
+        "default Order dec\n"
+        "val foo : int -> int\n"
+        "function foo(x) = x\n"
+        "function main() -> int = foo(3)\n"
+    )
+    files = {
+        "a/proj.sail_project": PROJECT,
+        "a/m.sail": code,
+        "b/proj.sail_project": PROJECT,
+        "b/m.sail": code,
+    }
+    with Workspace(files) as ws, LspClient() as client:
+        client.initialize(ws.root_uri())
+        client.initialized()
+        uris = [ws.uri("a/m.sail"), ws.uri("b/m.sail")]
+        for uri in uris:
+            client.did_open(uri, code)
+            note = client.wait_notification("textDocument/publishDiagnostics")
+            check(diagnostics_uri(note) == uri, "diagnostics for wrong uri")
+            check(note["params"]["diagnostics"] == [], "initial project failed")
+        for uri in uris:
+            locations = client.definition(uri, 3, 26)
+            check(locations and locations[0]["uri"] == uri, "navigation used another document's AST")
+        client.shutdown()
+        client.exit()
+
+
 def test_definition_absent():
     """Requesting a definition where there is no identifier yields null."""
     code = "default Order dec\n"
@@ -635,6 +665,7 @@ TESTS = [
     test_folding_range,
     test_definition_capability,
     test_definition,
+    test_definition_for_each_open_document,
     test_definition_absent,
     test_formatting_capability,
     test_formatting,
