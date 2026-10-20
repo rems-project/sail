@@ -90,6 +90,12 @@ bool sleeping(const unit u);
 void write_mem(uint64_t, uint64_t);
 uint64_t read_mem(uint64_t);
 
+/* Transfer bytes in increasing address order, without changing memory tags.
+ * Reads of unallocated memory return zero. A zero length leaves buffer unused.
+ */
+void read_mem_bytes(uint64_t address, uint8_t *buffer, size_t length);
+void write_mem_bytes(uint64_t address, const uint8_t *buffer, size_t length);
+
 // These memory builtins are intended to match the semantics for the
 // __ReadRAM and __WriteRAM functions in ASL.
 
