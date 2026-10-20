@@ -1,5 +1,6 @@
 import os
 import sys
+import tempfile
 
 
 from sailtest import *
@@ -125,6 +126,73 @@ class ExecCppTests(_ExecCBase):
             actually_cpp=True,
             expected_failures=self._xfails,
         )
+
+
+@suite("exec.c.split", _SUITE_DIR)
+class ExecSplitTests(SailTest):
+    """Check that splitting changes calls, not just function definitions."""
+
+    fail_on_error = True
+
+    def run(self):
+        self.banner("Testing explicit function splitting")
+        self.run_tests(
+            "split calls",
+            Batcher(
+                _SUITE_DIR,
+                lambda path: os.path.basename(path) == "split_function.sail"
+                and sail_file(path),
+            ),
+            self._test,
+            testdir=_SUITE_DIR,
+        )
+
+    def _test(self, filename, basename):
+        with tempfile.TemporaryDirectory(prefix="sail-split-test-") as tmp:
+            for target in ("c", "cpp"):
+                target_option = "-c" if target == "c" else "--cpp"
+                output = os.path.join(tmp, target)
+                step(
+                    f"'{self.sail}' {target_option} --c-no-mangle {filename} -o '{output}'"
+                )
+                with open(f"{output}.{target}") as f:
+                    generated = f.read()
+                for caller, callee, dispatcher in (
+                    ("static_enum", "extension_enabled_ExtA", "extension_enabled"),
+                    ("static_union", "execute_Pair", "execute"),
+                    ("effectful_payload", "execute_Item", "execute"),
+                    ("dynamic_enum", "extension_enabled", None),
+                    ("dynamic_union", "execute", None),
+                ):
+                    definition = re.search(
+                        rf"\b{caller}\([^;{{}}]*\)\s*{{(.*?)^}}",
+                        generated,
+                        re.DOTALL | re.MULTILINE,
+                    )
+                    if not definition:
+                        sys.exit(f"Missing {target} definition of {caller}")
+                    body = definition.group(1)
+                    if not re.search(rf"\b{callee}\s*\(", body):
+                        sys.exit(f"{target} {caller} does not call {callee}")
+                    if dispatcher and re.search(rf"\b{dispatcher}\s*\(", body):
+                        sys.exit(f"{target} {caller} still calls {dispatcher}")
+
+                refusals = os.path.join(basename, "refusals.sail")
+                step(f"'{self.sail}' --just-check {refusals}")
+                for function in (
+                    "guarded", "wildcard", "collision", "missing",
+                    "external_function", "polymorphic", "register_collision",
+                ):
+                    error = os.path.join(tmp, "error")
+                    step(
+                        f"'{self.sail}' {target_option} --c-split {function}"
+                        f" {refusals} -o '{output}' 2> '{error}'",
+                        expected_status=1,
+                        stderr_file=error,
+                    )
+                    with open(error) as f:
+                        if f"Cannot split {function}:" not in f.read():
+                            sys.exit(f"Missing splitting diagnostic for {function}")
 
 
 @suite("exec.interpreter", _SUITE_DIR)
