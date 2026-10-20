@@ -3785,9 +3785,10 @@ let doc_val global pat exp =
     match pat_typ with None -> empty | Some typ -> space ^^ colon ^^ space ^^ doc_typ bare_ctxt Env.empty typ
   in
   let env = env_of exp in
-  let ctxt = { bare_ctxt with debug = List.mem (string_of_id id) !opt_debug_on } in
+  let is_monadic = effectful (effect_of exp) in
+  let ctxt = { bare_ctxt with debug = List.mem (string_of_id id) !opt_debug_on; is_monadic } in
   let () =
-    debug ctxt (lazy ("Checking definition " ^ string_of_id id));
+    debug ctxt (lazy ("Checking definition " ^ string_of_id id ^ if is_monadic then "  (monadic)" else "  (pure)"));
     debug_depth := 1
   in
   let typpp, exp =
@@ -3809,7 +3810,7 @@ let doc_val global pat exp =
   let base_pp = doc_exp ctxt false true exp in
   (* If the expression has assertions or incomplete pattern matches (if/when we allow that) then
      unwrap the value.  There will be a typechecking failure in Rocq if there's an effect. *)
-  let def_pp = if effectful (effect_of exp) then group (string "unwrap_value" ^/^ parens base_pp) else base_pp in
+  let def_pp = if is_monadic then group (string "unwrap_value" ^/^ parens base_pp) else base_pp in
   let () = debug_depth := 0 in
   group (string "Definition" ^^ space ^^ idpp ^^ typpp ^^ space ^^ coloneq ^/^ def_pp ^^ dot)
   ^^ hardline

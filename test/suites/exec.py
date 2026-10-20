@@ -320,7 +320,6 @@ class ExecRocqTests(SailTest):
                 "poly_mapping.sail": "test requires non-standard hex built-ins",
                 "real.sail": "print_real not available for Coq at present",
                 "real_prop.sail": "random_real not available for Coq at present",
-                "for_shadow.sail": "bug: remove_e_assign rewrite assumes <= available",
                 "newtype.sail": "Type definition with a parameter that should be merged, inferred, or made explicit",
                 "simple_while.sail": "Loop without termination measure",
                 "simple_while2.sail": "Loop without termination measure",
