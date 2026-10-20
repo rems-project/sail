@@ -2159,8 +2159,9 @@ let opt_split_functions = ref []
 
 let rewrite_split_functions effect_info env ast =
   let split (ast, effect_info, env) fun_name =
+    let fun_id = mk_id fun_name in
     let fail loc message = raise (Reporting.err_general loc ("Cannot split " ^ fun_name ^ ": " ^ message)) in
-    if Env.is_extern (mk_id fun_name) env "c" || Env.is_extern (mk_id fun_name) env "cpp" then
+    if Env.is_extern fun_id env "c" || Env.is_extern fun_id env "cpp" then
       fail Parse_ast.Unknown "extern functions are not supported";
     let rec constructor = function
       | P_aux (P_app (id, _), _) when Env.is_union_constructor id env -> Some id
@@ -2168,36 +2169,29 @@ let rewrite_split_functions effect_info env ast =
       | P_aux (P_tuple [pat], _) -> constructor pat
       | _ -> None
     in
-    let fundef =
-      List.find_opt
-        (function DEF_aux (DEF_fundef fundef, _) -> string_of_id (id_of_fundef fundef) = fun_name | _ -> false)
-        ast.defs
+    let clauses, loc =
+      match List.find_opt (is_fundef fun_id) ast.defs with
+      | Some (DEF_aux (DEF_fundef (FD_aux (FD_function (_, _, clauses), _)), def_annot)) -> (clauses, def_annot.loc)
+      | _ -> fail Parse_ast.Unknown "no function definition found"
     in
-    let helpers =
-      match fundef with
-      | None -> fail Parse_ast.Unknown "no function definition found"
-      | Some (DEF_aux (DEF_fundef (FD_aux (FD_function (_, _, clauses), _)), def_annot)) ->
-          let quantifiers, _ = Env.get_val_spec_orig (mk_id fun_name) env in
-          if quantifiers <> [] then fail def_annot.loc "polymorphic functions are not supported";
-          List.fold_left
-            (fun helpers (FCL_aux (FCL_funcl (_, pexp), _)) ->
-              let pat, guard, _, _ = destruct_pexp pexp in
-              if Option.is_some guard then fail (pat_loc pat) "guarded clauses are not supported";
-              match constructor pat with
-              | None -> fail (pat_loc pat) "expected an enum member or union constructor pattern"
-              | Some ctor_id ->
-                  let helper_id = prepend_id (fun_name ^ "_") ctor_id in
-                  if
-                    Option.is_some (Env.get_global_binding_loc env helper_id)
-                    || List.exists (is_fundef helper_id) ast.defs
-                  then fail (pat_loc pat) ("identifier " ^ string_of_id helper_id ^ " already exists");
-                  IdSet.add helper_id helpers
-            )
-            IdSet.empty clauses
-      | Some _ -> assert false
-    in
-    let _, fun_typ = Env.get_val_spec_orig (mk_id fun_name) env in
+    let quantifiers, fun_typ = Env.get_val_spec_orig fun_id env in
+    if quantifiers <> [] then fail loc "polymorphic functions are not supported";
     let return_type = match fun_typ with Typ_aux (Typ_fn (_, ret_typ), _) -> ret_typ | _ -> assert false in
+    let helpers =
+      List.fold_left
+        (fun helpers (FCL_aux (FCL_funcl (_, pexp), _)) ->
+          let pat, guard, _, _ = destruct_pexp pexp in
+          if Option.is_some guard then fail (pat_loc pat) "guarded clauses are not supported";
+          match constructor pat with
+          | None -> fail (pat_loc pat) "expected an enum member or union constructor pattern"
+          | Some ctor_id ->
+              let helper_id = prepend_id (fun_name ^ "_") ctor_id in
+              if Option.is_some (Env.get_global_binding_loc env helper_id) || List.exists (is_fundef helper_id) ast.defs
+              then fail (pat_loc pat) ("identifier " ^ string_of_id helper_id ^ " already exists");
+              IdSet.add helper_id helpers
+        )
+        IdSet.empty clauses
+    in
     let ast, effect_info, env =
       rewrite_split_fun_ctor_pats ~split_enums:true ~return_type fun_name effect_info env ast
     in
@@ -2208,16 +2202,7 @@ let rewrite_split_functions effect_info env ast =
         (function DEF_aux (DEF_val (VS_aux (VS_val_spec (_, id, _), _)), _) -> IdSet.mem id helpers | _ -> false)
         ast.defs
     in
-    let defs =
-      List.concat_map
-        (fun def ->
-          match def with
-          | DEF_aux (DEF_val (VS_aux (VS_val_spec (_, id, _), _)), _) when string_of_id id = fun_name ->
-              def :: helper_specs
-          | _ -> [def]
-        )
-        defs
-    in
+    let defs = List.concat_map (fun def -> if is_valspec fun_id def then def :: helper_specs else [def]) defs in
     ({ ast with defs }, effect_info, env)
   in
   match List.sort_uniq String.compare !opt_split_functions with
