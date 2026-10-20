@@ -4,7 +4,7 @@ $include <prelude.sail>
 
 $iftarget c cpp
 $option --c-split extension_enabled
-$option --c-split execute
+$option --c-split dispatch
 $option --c-split extension_enabled
 $endif
 
@@ -29,22 +29,22 @@ function clause extension_enabled ExtA = enabled
 function clause extension_enabled ExtB = false
 end extension_enabled
 
-val execute : Instruction -> int
-function execute (Item(0)) = bias
-and execute (Item(n)) = n + bias
-and execute (Pair(x, y)) = x + y + bias
-and execute (Empty()) = bias
+val dispatch : Instruction -> int
+function dispatch (Item(0)) = bias
+and dispatch (Item(n)) = n + bias
+and dispatch (Pair(x, y)) = x + y + bias
+and dispatch (Empty()) = bias
 
 function dynamic_enum() -> bool = extension_enabled(current_extension)
-function static_union(x : int) -> int = execute(Pair(x, 4))
-function dynamic_union() -> int = execute(current_instruction)
+function static_union(x : int) -> int = dispatch(Pair(x, 4))
+function dynamic_union() -> int = dispatch(current_instruction)
 
 function next_payload() -> int = {
   calls = calls + 1;
   calls
 }
 
-function effectful_payload() -> int = execute(Item(next_payload()))
+function effectful_payload() -> int = dispatch(Item(next_payload()))
 
 function main() -> unit = {
   enabled = true;

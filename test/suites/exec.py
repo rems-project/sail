@@ -159,10 +159,10 @@ class ExecSplitTests(SailTest):
                     generated = f.read()
                 for caller, callee, dispatcher in (
                     ("static_enum", "extension_enabled_ExtA", "extension_enabled"),
-                    ("static_union", "execute_Pair", "execute"),
-                    ("effectful_payload", "execute_Item", "execute"),
+                    ("static_union", "dispatch_Pair", "dispatch"),
+                    ("effectful_payload", "dispatch_Item", "dispatch"),
                     ("dynamic_enum", "extension_enabled", None),
-                    ("dynamic_union", "execute", None),
+                    ("dynamic_union", "dispatch", None),
                 ):
                     definition = re.search(
                         rf"\b{caller}\([^;{{}}]*\)\s*{{(.*?)^}}",
