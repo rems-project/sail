@@ -482,10 +482,11 @@ unit load_raw(fbits addr, const_sail_string file)
     exit(EXIT_FAILURE);
   }
 
-  uint64_t byte;
-  while ((byte = (uint64_t)fgetc(fp)) != EOF) {
-    write_mem(addr, byte);
-    addr++;
+  uint8_t buffer[4096];
+  size_t count;
+  while ((count = fread(buffer, 1, sizeof(buffer), fp)) > 0) {
+    write_mem_bytes(addr, buffer, count);
+    addr += count;
   }
 
   return UNIT;
