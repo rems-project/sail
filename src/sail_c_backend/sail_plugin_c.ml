@@ -99,6 +99,10 @@ let c_options =
       Arg.String (fun args -> C_backend.opt_extra_arguments := Some args),
       "supply extra argument to every generated C/C++ function call"
     );
+    ( Flag.create ~prefix:["c"] ~arg:"function" "split",
+      Arg.String (fun name -> Rewrites.opt_split_functions := !Rewrites.opt_split_functions @ [name]),
+      "split a function's constructor clauses for direct calls in C/C++ output (repeatable)"
+    );
     (Flag.create ~prefix:["c"] "specialize", Arg.Set opt_specialize_c, "specialize integer arguments in C/C++ output");
     ( Flag.create ~prefix:["c"] "preserve",
       Arg.String (fun str -> Specialize.add_initial_calls (IdSet.singleton (mk_id str))),
@@ -180,6 +184,7 @@ let c_cpp_rewrites (mode : c_backend_mode) =
     ("atoms_to_singletons", [String_arg target_name; If_mono_arg]);
     ("recheck_defs", [If_mono_arg]);
     ("undefined", [Bool_arg false]);
+    ("split_functions", []);
     ("remove_not_pats", []);
     ("pattern_literals_typed", [Literal_arg "all"]);
     ("tuple_assignments", []);
