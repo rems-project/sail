@@ -158,6 +158,11 @@ val bol_of_lnum : int -> handle -> int option
     the changes to disk. *)
 val write_file : contents:string -> handle -> unit
 
+(** Refresh a cached compiler-owned file from disk, preserving its handle. Editor-owned and virtual files are left
+    unchanged. If the file is no longer readable, discard its cache entries so the next [open_file] reports the failure
+    instead of returning stale contents. Files that have not been opened are left alone. *)
+val reload_file : path -> unit
+
 (** {1 Language-server-protocol (LSP) file lifecycle} *)
 
 (** The LSP takes control of a file by sending us a DidOpenTextDocument message, with the contents of the file as seen
