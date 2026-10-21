@@ -414,22 +414,6 @@ and count_nc_vars (NC_aux (nc, _)) =
   | NC_id _ | NC_true | NC_false -> KBindings.empty
   | NC_app (_, args) -> List.fold_left merge_kid_count KBindings.empty (List.map count_arg args)
 
-type ex_kind = ExNone | ExGeneral
-
-let string_of_ex_kind = function ExNone -> "none" | ExGeneral -> "general"
-
-(* Should a Sail type be turned into a dependent pair in Coq?
-   Optionally takes a variable that we're binding (to avoid trivial cases where
-   the type is exactly the boolean we're binding), and whether to turn bools
-   with interesting type-expressions into dependent pairs. *)
-let classify_ex_type ctxt env ?binding ?(rawbools = false) (Typ_aux (t, l) as t0) =
-  let is_binding kid =
-    match (binding, KBindings.find_opt kid ctxt.kid_id_renames) with
-    | Some id, Some (Some id') when Id.compare id id' == 0 -> true
-    | _ -> false
-  in
-  match t with Typ_exist (kopts, _, t1) -> (ExGeneral, kopts, t1) | _ -> (ExNone, [], t0)
-
 (* maybe TODO: this could be provided by the type checker, and shared with bind_pat *)
 let typ_of_constructor env f typ l =
   let quants, ctor_typ = Env.get_union_id f env in
@@ -1756,7 +1740,6 @@ let doc_exp, doc_let =
                  with the inferred type. *)
             let ret_typ_inst = subst_unifiers inst ret_typ in
 
-            (* TODO: clean up some remnants of the embedded proofs *)
             let autocast =
               let ann_typ = Env.expand_synonyms env (general_typ_of_annot (l, annot)) in
               let ann_typ = expand_range_type ann_typ in
@@ -1765,11 +1748,7 @@ let doc_exp, doc_let =
                 debug ctxt (lazy (" type returned " ^ string_of_typ ret_typ_inst));
                 debug ctxt (lazy (" type expected " ^ string_of_typ ann_typ))
               in
-              let in_typ =
-                match classify_ex_type ctxt inst_env ~rawbools:true ret_typ_inst with
-                | ExGeneral, _, t1 -> t1
-                | ExNone, _, t1 -> t1
-              in
+              let in_typ = match ret_typ_inst with Typ_aux (Typ_exist (_, _, t), _) -> t | t -> t in
               let out_typ_bound, out_typ, out_env =
                 match ann_typ with
                 | Typ_aux (Typ_exist (ks, nc, t1), l) -> (ks, t1, add_existential l ks nc env)
@@ -1991,16 +1970,23 @@ let doc_exp, doc_let =
           debug ctxt (lazy (" where type expected is " ^ string_of_typ outer_typ))
         in
         let epp = top_exp ctxt true tail_position e in
-        let outer_ex, _, outer_typ' = classify_ex_type ctxt env outer_typ in
-        let cast_ex, _, cast_typ' = classify_ex_type ctxt env ~rawbools:true cast_typ in
-        let inner_ex, _, inner_typ' = classify_ex_type ctxt env inner_typ in
+        (* TODO: maybe should use relevant_type_vars and suppress/change casts as appropriate *)
+        let outer_ex, outer_typ' =
+          match outer_typ with Typ_aux (Typ_exist (_, _, t), _) -> (true, t) | t -> (false, t)
+        in
+        let cast_ex, cast_typ' =
+          match cast_typ with Typ_aux (Typ_exist (_, _, t), _) -> (true, t) | t -> (false, t)
+        in
+        let inner_ex, inner_typ' =
+          match inner_typ with Typ_aux (Typ_exist (_, _, t), _) -> (true, t) | t -> (false, t)
+        in
         let autocast_out = autocast_req ctxt env outer_typ cast_typ outer_typ' cast_typ' in
         let needs_monad = effectful (effect_of e) || has_early_return e in
         let () =
           debug ctxt
             ( lazy
-              (" effectful: " ^ string_of_bool needs_monad ^ " outer_ex: " ^ string_of_ex_kind outer_ex ^ " cast_ex: "
-             ^ string_of_ex_kind cast_ex ^ " inner_ex: " ^ string_of_ex_kind inner_ex ^ " autocast_out: "
+              (" effectful: " ^ string_of_bool needs_monad ^ " outer_ex: " ^ string_of_bool outer_ex ^ " cast_ex: "
+             ^ string_of_bool cast_ex ^ " inner_ex: " ^ string_of_bool inner_ex ^ " autocast_out: "
              ^ string_of_auto_t autocast_out
               )
               )
@@ -3431,6 +3417,7 @@ let doc_funcl_init global proof_mode mutrec rec_opt ?rec_set (FCL_aux (FCL_funcl
     let env = env_of_annot ann in
     let typ = Type_check.subst_unifiers simple_type_equations typ in
     let exp_typ = Env.expand_synonyms env typ in
+    let typ' = match exp_typ with Typ_aux (Typ_exist (_, _, t), _) -> t | t -> t in
     let () =
       debug ctxt (lazy (" pattern " ^ string_of_pat pat));
       debug ctxt (lazy (" with expanded type " ^ string_of_typ exp_typ))
@@ -3441,16 +3428,12 @@ let doc_funcl_init global proof_mode mutrec rec_opt ?rec_set (FCL_aux (FCL_funcl
         match is_fixed_constant env exp_typ with
         | Some constant ->
             parens (separate space [id_pp; colon; doc_typ ctxt env typ; string ":="; string (Z.to_string constant)])
-        | None -> (
-            match classify_ex_type ctxt env ?binding:id exp_typ with
-            | _, _, typ' -> parens (separate space [id_pp; colon; doc_typ ctxt env typ'])
-          )
+        | None -> parens (separate space [id_pp; colon; doc_typ ctxt env typ'])
       )
     | None ->
-        let typ = match classify_ex_type ctxt env ~binding:id exp_typ with _, _, typ' -> typ' in
         used_a_pattern := true;
         let pat_pp = doc_pat ctxt true pat exp_typ in
-        squote ^^ parens (separate space [pat_pp; colon; doc_typ ctxt env typ])
+        squote ^^ parens (separate space [pat_pp; colon; doc_typ ctxt env typ'])
   in
   let binder_pps = List.map doc_binder pats in
   let patspp = flow (break 1) binder_pps in
