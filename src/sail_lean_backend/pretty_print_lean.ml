@@ -304,7 +304,7 @@ and doc_typ ctx env (Typ_aux (t, _) as typ) =
       nest 2 (parens (flow space [string "Vector"; doc_typ ctx env elem_typ; doc_nexp ctx env m]))
   | Typ_id (Id_aux (Id "unit", _)) -> string "Unit"
   | Typ_id (Id_aux (Id "int", _)) -> string "Int"
-  | Typ_id (Id_aux (Id "string", _)) -> string "String"
+  | Typ_id (Id_aux (Id ("string" | "string_literal"), _)) -> string "String"
   | Typ_app (Id_aux (Id "atom_bool", _), _) | Typ_id (Id_aux (Id "bool", _)) -> string "Bool"
   | Typ_id (Id_aux (Id "bit", _)) -> parens (string "BitVec 1")
   | Typ_id (Id_aux (Id "nat", _)) -> string "Nat"
@@ -554,7 +554,8 @@ let rec doc_pat ?(need_parens = false) ?(in_vector = false) ctx in_match_bv (P_a
         ^^ separate_map (string ", ") (doc_pat ~need_parens:true ctx in_match_bv) pats
         )
   | P_var (p, _) -> doc_pat ctx in_match_bv p
-  | P_as (pat, id) -> doc_pat ctx in_match_bv pat
+  | P_as (pat, id) when in_vector || in_match_bv -> doc_pat ctx in_match_bv pat
+  | P_as (pat, id) -> doc_id_ctor ctx id ^^ string "@" ^^ doc_pat ~need_parens:true ctx in_match_bv pat
   | P_struct (_, pats, _) ->
       let pats =
         List.map (fun (id, pat) -> separate space [doc_id_ctor ctx id; coloneq; doc_pat ctx in_match_bv pat]) pats
@@ -857,7 +858,13 @@ and doc_exp (as_monadic : bool) ctx (E_aux (e, (l, annot)) as full_exp) =
   match e with
   | E_id id ->
       if Env.is_register id env then wrap_with_left_arrow (not as_monadic) (string "readReg " ^^ doc_id_ctor ctx id)
-      else wrap_with_pure as_monadic (doc_id_ctor ~ren_ctor:true ctx id)
+      else (
+        match typ_of full_exp with
+        | Typ_aux (Typ_id enum_id, _) when Type_check.is_enum_member id env && Env.bound_typ_id env id ->
+            (* The enum member has the same name as a type that is in scope, so qualify it in Lean *)
+            wrap_with_pure as_monadic (doc_id_typ_ctor ctx env enum_id ^^ dot ^^ doc_id_ctor ctx id)
+        | _ -> wrap_with_pure as_monadic (doc_id_ctor ~ren_ctor:true ctx id)
+      )
   | E_lit l -> wrap_with_pure as_monadic (doc_lit ~width:true l)
   | E_app (Id_aux (Id "None", _), _) -> wrap_with_pure as_monadic (string "none")
   | E_app (Id_aux (Id "Some", _), args) ->

@@ -1,5 +1,7 @@
 default Order dec
 
+$option --lean-partial-function loop
+
 $include <flow.sail>
 $include <arith.sail>
 $include <vector_dec.sail>

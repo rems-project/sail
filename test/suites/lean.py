@@ -11,28 +11,21 @@ skip_selftests = {
     "outcome_impl",  # custom outcome types (not expected to work)
     "outcome_impl_int",  # custom outcome types (not expected to work)
     "outcome_impl_bool",  # custom outcome types (not expected to work)
-    "union_variant_names",
     "real",
     "poly_outcome",
     "string_of_bits",
     "pointer_assign",
     "concurrency_interface",
-    "string_literal_type",
     "issue429",
     "type_if_bits",
     "nexp_simp_euclidian",
-    "issue136",
-    "anf_as_pattern",
     "real_prop",
     "constructor247",
     "deep_poly_nest",
-    "config_abstract_bool",  # Register type unsupported in state.ml
     "newtype",
     "concurrency_interface_v2",
     "concurrency_interface_v2_var",
     "config_map_guard",
-    "let_assert",
-    "recursive_register",
 }
 
 
