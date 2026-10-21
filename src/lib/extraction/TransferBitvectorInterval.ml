@@ -1,3 +1,4 @@
+[@@@warning "-a"]
 open AbsBitvector
 open BinInt
 open BinNat

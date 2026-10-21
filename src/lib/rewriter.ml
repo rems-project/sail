@@ -44,7 +44,6 @@
 (*  SPDX-License-Identifier: BSD-2-Clause                                   *)
 (****************************************************************************)
 
-module Big_int = Nat_big_num
 open Ast
 open Ast_compare
 open Ast_defs
@@ -341,23 +340,21 @@ let rec rewrite_def rewriters (DEF_aux (aux, def_annot)) =
   DEF_aux (aux, def_annot)
 
 let rewrite_ast_defs rewriters defs =
-  let rec rewrite ds = match ds with [] -> [] | d :: ds -> rewriters.rewrite_def rewriters d :: rewrite ds in
-  rewrite defs
+  List.fold_left (fun defs d -> rewriters.rewrite_def rewriters d :: defs) [] (List.rev defs)
 
-let rewrite_ast_base rewriters ast =
-  let rec rewrite ds = match ds with [] -> [] | d :: ds -> rewriters.rewrite_def rewriters d :: rewrite ds in
-  { ast with defs = rewrite ast.defs }
+let rewrite_ast_base rewriters ast = { ast with defs = rewrite_ast_defs rewriters ast.defs }
 
 let rewrite_ast_base_progress prefix rewriters ast =
   let total = List.length ast.defs in
-  let rec rewrite n = function
-    | [] -> []
-    | d :: ds ->
+  let _, rev_defs =
+    List.fold_left
+      (fun (n, defs) d ->
         Util.progress (prefix ^ " ") (string_of_int n ^ "/" ^ string_of_int total) n total;
-        let d = rewriters.rewrite_def rewriters d in
-        d :: rewrite (n + 1) ds
+        (n + 1, rewriters.rewrite_def rewriters d :: defs)
+      )
+      (1, []) ast.defs
   in
-  { ast with defs = rewrite 1 ast.defs }
+  { ast with defs = List.rev rev_defs }
 
 let rewriters_base =
   { rewrite_exp; rewrite_pat; rewrite_mpat; rewrite_lexp; rewrite_fun; rewrite_def; rewrite_ast = rewrite_ast_base }
@@ -376,7 +373,7 @@ type ('a, 'pat, 'pat_aux) pat_alg = {
   p_app : id * 'pat list -> 'pat_aux;
   p_vector : 'pat list -> 'pat_aux;
   p_vector_concat : 'pat list -> 'pat_aux;
-  p_vector_subrange : id * Big_int.num * Big_int.num -> 'pat_aux;
+  p_vector_subrange : id * Z.t * Z.t -> 'pat_aux;
   p_tuple : 'pat list -> 'pat_aux;
   p_list : 'pat list -> 'pat_aux;
   p_cons : 'pat * 'pat -> 'pat_aux;

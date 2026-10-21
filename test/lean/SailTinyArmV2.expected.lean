@@ -518,7 +518,7 @@ open AccessType
 def __id (x : Int) : Int :=
   x
 
-/-- Type quantifiers: k_ex10021_ : Bool, k_ex10020_ : Bool -/
+/-- Type quantifiers: k_ex10030_ : Bool, k_ex10029_ : Bool -/
 def neq_bool (x : Bool) (y : Bool) : Bool :=
   (! (x == y))
 
@@ -1654,7 +1654,7 @@ def fetch_and_execute (_ : Unit) : SailM Unit := SailME.run do
   let instr := (decode machineCode)
   match instr with
   | .some instr => (execute instr)
-  | none => assert false "Unsupported Encoding"
+  | none => sail_assert false "Unsupported Encoding"
 
 def initialize_registers (_ : Unit) : SailM Unit := do
   writeReg _PC (← (undefined_bitvector 64))

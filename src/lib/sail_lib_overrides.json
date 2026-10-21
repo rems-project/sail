@@ -1,0 +1,25 @@
+{
+  "types": {},
+  "unimplemented": [
+    "instr_announce",
+    "branch_announce",
+    "synchronize_registers",
+    "mark_register",
+    "mark_register_pair",
+    "monomorphize",
+    "read_mem",
+    "read_mem_ifetch",
+    "read_mem_exclusive",
+    "write_mem",
+    "write_mem_exclusive",
+    "address_announce",
+    "eq_unit",
+    "not",
+    "log_event",
+    "interrupt_pending",
+    "zeroExtend",
+    "string_of_bits_subrange",
+    "print_endline",
+    "prerr_endline"
+  ]
+}

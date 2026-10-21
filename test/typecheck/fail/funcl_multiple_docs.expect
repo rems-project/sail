@@ -1,0 +1,5 @@
+[93mError[0m:
+[96mfail/funcl_multiple_docs.sail[0m:5.20-31:
+5[96m |[0mfunction /*! doc */ /*! doc2 */ f(x) = x
+ [91m |[0m                    [91m^---------^[0m
+ [91m |[0m Function clause has multiple documentation comments

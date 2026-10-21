@@ -120,7 +120,6 @@
   (%{workspace_root}/lib/hol/sail2_valuesAuxiliaryScript.sml
    as
    lib/hol/sail2_valuesAuxiliaryScript.sml)
-  (%{workspace_root}/lib/instr_kinds.sail as lib/instr_kinds.sail)
   (%{workspace_root}/lib/int128/rts.c as lib/int128/rts.c)
   (%{workspace_root}/lib/int128/rts.h as lib/int128/rts.h)
   (%{workspace_root}/lib/int128/sail.c as lib/int128/sail.c)
@@ -196,8 +195,8 @@
   (%{workspace_root}/lib/option.sail as lib/option.sail)
   (%{workspace_root}/lib/prelude.sail as lib/prelude.sail)
   (%{workspace_root}/lib/real.sail as lib/real.sail)
-  (%{workspace_root}/lib/regfp.sail as lib/regfp.sail)
   (%{workspace_root}/lib/result.sail as lib/result.sail)
+  (%{workspace_root}/lib/asl_compat.sail as lib/asl_compat.sail)
   (%{workspace_root}/lib/float.sail as lib/float.sail)
   (%{workspace_root}/lib/float/common.sail as lib/float/common.sail)
   (%{workspace_root}/lib/float/nan.sail as lib/float/nan.sail)
@@ -241,7 +240,6 @@
   (%{workspace_root}/lib/sail_failure.h as lib/sail_failure.h)
   (%{workspace_root}/lib/smt.sail as lib/smt.sail)
   (%{workspace_root}/lib/string.sail as lib/string.sail)
-  (%{workspace_root}/lib/trace.sail as lib/trace.sail)
   (%{workspace_root}/lib/vector.sail as lib/vector.sail)
   (%{workspace_root}/lib/vector_dec.sail as lib/vector_dec.sail)
   (%{workspace_root}/lib/vector_inc.sail as lib/vector_inc.sail)

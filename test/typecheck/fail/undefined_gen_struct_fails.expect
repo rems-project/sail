@@ -1,0 +1,5 @@
+[93mType error[0m:
+[96mfail/undefined_gen_struct_fails.sail[0m:6.0-20:
+6[96m |[0mstruct S = { a : U }
+ [91m |[0m[91m^------------------^[0m
+ [91m |[0m Cannot generate undefined function for struct S

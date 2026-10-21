@@ -82,7 +82,7 @@ open E
 def __id (x : Int) : Int :=
   x
 
-/-- Type quantifiers: k_ex2693_ : Bool, k_ex2692_ : Bool -/
+/-- Type quantifiers: k_ex2702_ : Bool, k_ex2701_ : Bool -/
 def neq_bool (x : Bool) (y : Bool) : Bool :=
   (! (x == y))
 
@@ -398,9 +398,7 @@ def while_inner_earlyreturnpure_catch (n : Nat) : Bool := ExceptM.run do
 
 def match_early_return (x : E) : SailM E := SailME.run do
   match x with
-  | .A =>
-    SailME.throw (← do
-        readReg r_A)
+  | .A => SailME.throw (← do readReg r_A)
   | .B => writeReg r_B A
   | .C => writeReg r_C A
   readReg r_B
@@ -413,9 +411,7 @@ def match_early_return_inloop (x : E) : SailM E := SailME.run do
     let () := loop_vars
     loop_vars ← do
       match x with
-      | .A =>
-        SailME.throw (← do
-            readReg r_A)
+      | .A => SailME.throw (← do readReg r_A)
       | .B => writeReg r_B A
       | .C => writeReg r_C A
   (pure loop_vars)
@@ -430,9 +426,7 @@ def match_early_return_inloop_2 (x : E) : SailM E := SailME.run do
     loop_vars ← do
       let y ← (( do
         match x with
-        | .A =>
-          SailME.throw (← do
-              readReg r_A)
+        | .A => SailME.throw (← do readReg r_A)
         | .B => readReg r_B
         | .C => readReg r_C ) : SailME E E )
       (pure ())
@@ -448,26 +442,22 @@ def match_early_return_loop (x : E) : SailM E := SailME.run do
       let mut loop_vars := ()
       for i in [loop_i_lower:loop_i_upper:1]i do
         let () := loop_vars
-        loop_vars ← do
-          SailME.throw (← do
-              readReg r_A)
+        loop_vars ← do SailME.throw (← do readReg r_A)
       (pure loop_vars))
   | .B => writeReg r_B A
   | .C => writeReg r_C A
   readReg r_B
 
-/-- Type quantifiers: k_ex2748_ : Bool -/
+/-- Type quantifiers: k_ex2758_ : Bool -/
 def ite_early_return (x : Bool) : SailM E := SailME.run do
   writeReg r_A (← readReg r_C)
   let y ← (( do
     if (x : Bool)
-    then
-      SailME.throw (← do
-          readReg r_A)
+    then SailME.throw (← do readReg r_A)
     else readReg r_B ) : SailME E E )
   readReg r_B
 
-/-- Type quantifiers: k_ex2749_ : Bool -/
+/-- Type quantifiers: k_ex2759_ : Bool -/
 def ite_early_return_inloop (x : Bool) : SailM E := SailME.run do
   let loop_i_lower := 0
   let loop_i_upper := 10
@@ -478,15 +468,13 @@ def ite_early_return_inloop (x : Bool) : SailM E := SailME.run do
       writeReg r_A (← readReg r_C)
       let y ← (( do
         if (x : Bool)
-        then
-          SailME.throw (← do
-              readReg r_A)
+        then SailME.throw (← do readReg r_A)
         else readReg r_B ) : SailME E E )
       (pure ())
   (pure loop_vars)
   readReg r_B
 
-/-- Type quantifiers: k_ex2750_ : Bool -/
+/-- Type quantifiers: k_ex2760_ : Bool -/
 def ite_early_return_loop (x : Bool) : SailM E := SailME.run do
   if (x : Bool)
   then
@@ -496,9 +484,7 @@ def ite_early_return_loop (x : Bool) : SailM E := SailME.run do
       let mut loop_vars := ()
       for i in [loop_i_lower:loop_i_upper:1]i do
         let () := loop_vars
-        loop_vars ← do
-          SailME.throw (← do
-              readReg r_A)
+        loop_vars ← do SailME.throw (← do readReg r_A)
       (pure loop_vars))
   else writeReg r_B A
   readReg r_B
@@ -506,7 +492,7 @@ def ite_early_return_loop (x : Bool) : SailM E := SailME.run do
 def unit_type (x : E) : SailM Unit := do
   writeReg r_A x
 
-/-- Type quantifiers: k_ex2751_ : Bool -/
+/-- Type quantifiers: k_ex2761_ : Bool -/
 def ite_early_return_seq (x : Bool) : SailM E := SailME.run do
   writeReg r_A (← readReg r_C)
   let y ← (( do
@@ -518,14 +504,12 @@ def ite_early_return_seq (x : Bool) : SailM E := SailME.run do
     else readReg r_B ) : SailME E E )
   readReg r_B
 
-/-- Type quantifiers: k_ex2752_ : Bool -/
+/-- Type quantifiers: k_ex2762_ : Bool -/
 def ite_early_return_exit (x : Bool) : SailM E := SailME.run do
   writeReg r_A (← readReg r_C)
   let y ← (( do
     if (x : Bool)
-    then
-      SailME.throw (← do
-          readReg r_A)
+    then SailME.throw (← do readReg r_A)
     else readReg r_B ) : SailME E E )
   if (x : Bool)
   then throw Error.Exit

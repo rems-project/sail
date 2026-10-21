@@ -288,7 +288,7 @@ with
 constraint 'addr_size > 0 & 'cap_size_log >= 0
 = {
     // For now, just drop these
-    impl emulator_or_isla(request) = ()
+    impl emulator_or_isla(_request) = ()
 }
 
 // Used when we want a non memory read/write to appear in Isla's addr relation

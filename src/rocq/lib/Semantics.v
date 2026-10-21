@@ -61,6 +61,9 @@ From Sail Require Import Bit.
 From Sail Require Import IdUtil.
 From Sail Require Import ListUtil.
 From Sail Require Import PatternMatch.
+From stdpp Require Import bitvector.definitions.
+
+From Sail Require PrimBits.
 From Sail Require Import ValueType.
 From Sail Require TypeAnnot.
 
@@ -532,12 +535,12 @@ Module Make (Tannot : TypeAnnot.S).
     | _ => l
     end.
 
-  Fixpoint bv_concat (l : loc) (vs : list value) : t (list bit) :=
+  Fixpoint bv_concat (l : loc) (vs : list value) : t bvn :=
     match vs with
-    | [] => pure []
+    | [] => pure (PrimBits.zeros 0)
     | V_bitvector bs :: rest =>
         rest' ← bv_concat l rest;
-        pure (bs ++ rest')
+        pure (PrimBits.append bs rest')
     | _ :: _ => Runtime_type_error l
     end.
 
@@ -744,12 +747,14 @@ Module Make (Tannot : TypeAnnot.S).
                    match s with
                    | Split s =>
                        match acc with
-                       | (prev, []) => (prev, [])
                        | (prev, bs) =>
-                           let '(bs_take, bs_drop) := take_drop s bs in
-                           (bind prev (fun _ => destructuring_assignment annot d (V_bitvector bs_take)), bs_drop)
+                           if Z.eqb (PrimBits.width bs) 0 then
+                             (prev, bs)
+                           else
+                             let '(bs_take, bs_drop) := PrimBits.split_at (Z.of_nat s) bs in
+                             (bind prev (fun _ => destructuring_assignment annot d (V_bitvector bs_take)), bs_drop)
                        end
-                   | No_split => (Runtime_type_error (fst annot), [])
+                   | No_split => (Runtime_type_error (fst annot), PrimBits.zeros 0)
                    end
                 )
                 ds

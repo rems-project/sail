@@ -1,3 +1,4 @@
+[@@@warning "-a"]
 open OrdersTac
 
 type 'x coq_Compare =

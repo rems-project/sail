@@ -97,7 +97,7 @@ let opt_disable_matchbv : bool ref = ref true
 let lean_version : string = "lean4:v4.29.0"
 let mathlib_version : string = "v4.29.0"
 let lib_default_git : string = "https://github.com/rems-project/lean-sail"
-let lib_default_rev : string = "v5"
+let lib_default_rev : string = "v7"
 
 let lean_options =
   [
@@ -121,7 +121,7 @@ let lean_options =
         ),
       "use matchbv in the Lean output"
     );
-    ( Flag.create ~prefix:["lean"] "line_width",
+    ( Flag.create ~prefix:["lean"] ~arg:"width" "line_width",
       Arg.Int (fun n -> Pretty_print_lean.opt_line_width := n),
       "maximum line length of the generated Lean code"
     );
@@ -191,6 +191,7 @@ let lean_rewrites =
     ("tuple_assignments", []);
     ("vector_concat_assignments", []);
     ("simple_assignments", []);
+    ("remove_mixed_bitvector_literal_pats", [If_flag opt_disable_matchbv]);
     ("remove_vector_concat", [If_flag opt_disable_matchbv]);
     ("remove_bitvector_pats", [If_flag opt_disable_matchbv]);
     ("recheck_defs", []);

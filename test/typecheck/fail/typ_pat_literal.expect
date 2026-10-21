@@ -1,0 +1,5 @@
+[93mType error[0m:
+[96mfail/typ_pat_literal.sail[0m:4.54-55:
+4[96m |[0mfunction f(x : bits(4)) -> unit = match x { y as bits(4) => () }
+ [91m |[0m                                                      [91m^[0m
+ [91m |[0m Unexpected type in type pattern

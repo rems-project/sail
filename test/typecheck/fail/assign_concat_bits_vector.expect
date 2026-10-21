@@ -1,0 +1,5 @@
+[93mType error[0m:
+[96mfail/assign_concat_bits_vector.sail[0m:8.3-8:
+8[96m |[0m  (x @ y) = 0b0000
+ [91m |[0m   [91m^---^[0m
+ [91m |[0m Bitvector concatenation l-expression must only contain bitvector types

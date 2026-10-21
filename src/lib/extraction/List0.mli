@@ -1,6 +1,5 @@
+[@@@warning "-a"]
 open Datatypes
-
-val tl : 'a1 list -> 'a1 list
 
 val nth_error : 'a1 list -> Big_int_Z.big_int -> 'a1 option
 

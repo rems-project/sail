@@ -1,0 +1,5 @@
+[93mType error[0m:
+[96mfail/typ_pat_no_numeric.sail[0m:4.48-50:
+4[96m |[0mfunction f(x : string) -> unit = match x { y as 'n => () }
+ [91m |[0m                                                [91m^^[0m
+ [91m |[0m No numeric expressions in string to bind 'n to

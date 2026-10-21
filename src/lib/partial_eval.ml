@@ -51,7 +51,6 @@ open Ast_util
 
 open Extraction.ZAst
 
-module Big_int = Nat_big_num
 module StringMap = Util.StringMap
 
 module type SAIL_VALUE = sig
@@ -91,7 +90,7 @@ module AbsValue : SAIL_VALUE = struct
     let buf = Buffer.create (List.length bv) in
     if len mod 4 = 0 && is_concrete_bitvector bv then (
       let bv = Option.get (Util.option_all (List.map concrete_bit bv)) in
-      Buffer.add_string buf (Sail_lib.string_of_bits (List.rev bv))
+      Buffer.add_string buf (Sail_lib.string_of_bits (Sail_lib.bits_of_bit_list (List.rev bv)))
     )
     else (
       Buffer.add_string buf "0b";
@@ -145,7 +144,9 @@ module AbsValue : SAIL_VALUE = struct
      input (its [bits_to_N] threads each bit through [acc := 2*acc +
      b], so the first element is most-significant) so we pass [bits]
      through unchanged. *)
-  let bitvector_of_bits bits = V_bitvector (Extraction.AbsBitvector.Dom.abst (Extraction.Bit.Bits.to_bvn bits))
+  let bitvector_of_bv bv = V_bitvector (Extraction.AbsBitvector.Dom.abst bv)
+
+  let bitvector_of_bits bits = bitvector_of_bv (Extraction.Bit.Bits.to_bvn bits)
 
   (** Define a module for lifting primitives.
 
@@ -160,7 +161,7 @@ module AbsValue : SAIL_VALUE = struct
       | Unit : unit ty
       | Int : Z.t ty
       | AbsInt : Extraction.Interval.Dom.t ty
-      | BV : Bit.bit list ty
+      | BV : Sail_lib.bits ty
       | AbsBV : Extraction.AbsBitvector.Dom.t ty
       | Bool : bool ty
       | Real : Q.t ty
@@ -176,7 +177,7 @@ module AbsValue : SAIL_VALUE = struct
       | Unit -> V_unit
       | Int -> V_int (Extraction.Interval.Dom.abst x)
       | AbsInt -> V_int x
-      | BV -> bitvector_of_bits x
+      | BV -> bitvector_of_bits (Sail_lib.bit_list_of_bits x)
       | AbsBV -> V_bitvector x
       | Bool -> V_bool x
       | Real -> v_real x
@@ -191,7 +192,10 @@ module AbsValue : SAIL_VALUE = struct
       | AbsBV, V_bitvector bv -> Some bv
       | BV, V_bitvector bv -> (
           match Extraction.AbsBitvector.Dom.to_bv_list bv with
-          | Some [bits] -> Option.map List.rev (Util.option_all (List.map concrete_bit bits))
+          | Some [bits] ->
+              Option.map
+                (fun bs -> Sail_lib.bits_of_bit_list (List.rev bs))
+                (Util.option_all (List.map concrete_bit bits))
           | _ -> None
         )
       | Bool, V_bool b -> Some b
@@ -213,7 +217,7 @@ module AbsValue : SAIL_VALUE = struct
 
   let concrete_int = function V_int i -> Extraction.Interval.Dom.concrete i | _ -> None
 
-  let rec concrete_bits = function
+  let concrete_bits = function
     | V_bitvector dbv -> (
         match Extraction.AbsBitvector.Dom.to_bv_list dbv with
         | Some [bits] -> Option.map List.rev (Util.option_all (List.map concrete_bit bits))
@@ -343,8 +347,8 @@ module AbsValue : SAIL_VALUE = struct
         ("abs_int", lift Z.abs (Int @-> Ret Int));
         ("div_int", lift Z.div (Int @-> Int @-> Ret Int));
         ("tdiv_int", lift Z.div (Int @-> Int @-> Ret Int));
-        ("quotient", lift Z.ediv (Int @-> Int @-> Ret Int));
-        ("modulus", lift Z.erem (Int @-> Int @-> Ret Int));
+        ("ediv_int", lift Z.ediv (Int @-> Int @-> Ret Int));
+        ("emod_int", lift Z.erem (Int @-> Int @-> Ret Int));
         ("tmod_int", lift Z.rem (Int @-> Int @-> Ret Int));
         ("eq_int", lift Z.equal (Int @-> Int @-> Ret Bool));
         ("quot_round_zero", lift Z.div (Int @-> Int @-> Ret Int));
@@ -367,14 +371,15 @@ module AbsValue : SAIL_VALUE = struct
         ("ones", lift (TransferBitvectorInterval.Ops.ones widths_cap) (AbsInt @-> Ret AbsBV));
         ("replicate_bits", lift Sail_lib.replicate_bits (BV @-> Int @-> Ret BV));
         ("length", primop_length);
+        ("length_bits", primop_length);
         ("eq_bits", primop_eq_bits);
         ("eq_anything", primop_eq_anything);
-        ("not_vec", lift AbsBitvector.Dom.not (AbsBV @-> Ret AbsBV));
-        ("add_vec", lift AbsBitvector.Dom.add (AbsBV @-> AbsBV @-> Ret AbsBV));
-        ("sub_vec", lift AbsBitvector.Dom.sub (AbsBV @-> AbsBV @-> Ret AbsBV));
-        ("and_vec", lift AbsBitvector.Dom.coq_and (AbsBV @-> AbsBV @-> Ret AbsBV));
-        ("or_vec", lift AbsBitvector.Dom.coq_or (AbsBV @-> AbsBV @-> Ret AbsBV));
-        ("xor_vec", lift AbsBitvector.Dom.xor (AbsBV @-> AbsBV @-> Ret AbsBV));
+        ("not_bits", lift AbsBitvector.Dom.not (AbsBV @-> Ret AbsBV));
+        ("add_bits", lift AbsBitvector.Dom.add (AbsBV @-> AbsBV @-> Ret AbsBV));
+        ("sub_bits", lift AbsBitvector.Dom.sub (AbsBV @-> AbsBV @-> Ret AbsBV));
+        ("and_bits", lift AbsBitvector.Dom.coq_and (AbsBV @-> AbsBV @-> Ret AbsBV));
+        ("or_bits", lift AbsBitvector.Dom.coq_or (AbsBV @-> AbsBV @-> Ret AbsBV));
+        ("xor_bits", lift AbsBitvector.Dom.xor (AbsBV @-> AbsBV @-> Ret AbsBV));
         ("shiftl", lift Sail_lib.shiftl (BV @-> Int @-> Ret BV));
         ("shiftr", lift Sail_lib.shiftr (BV @-> Int @-> Ret BV));
         ("append", lift AbsBitvector.Dom.append (AbsBV @-> AbsBV @-> Ret AbsBV));
@@ -422,7 +427,7 @@ module AbsValue : SAIL_VALUE = struct
               )
             | [bv; n] -> (
                 match (concrete_bits bv, concrete_int n) with
-                | Some bs, Some n -> bitvector_of_bits (Sail_lib.access_inc bs n)
+                | Some bs, Some n -> bitvector_of_bv (Sail_lib.access_inc (Sail_lib.bits_of_bit_list bs) n)
                 | _ -> V_top
               )
             | _ -> V_top
@@ -464,7 +469,8 @@ module AbsValue : SAIL_VALUE = struct
               )
             | [bv; n; bit] -> (
                 match (concrete_bits bv, concrete_int n, concrete_bits bit) with
-                | Some bs, Some n, Some [b] -> bitvector_of_bits (Sail_lib.update bs n [b])
+                | Some bs, Some n, Some [b] ->
+                    bitvector_of_bv (Sail_lib.update (Sail_lib.bits_of_bit_list bs) n (Sail_lib.bits_of_bit_list [b]))
                 | _ -> V_top
               )
             | _ -> V_top
@@ -482,7 +488,9 @@ module AbsValue : SAIL_VALUE = struct
               )
             | [bv; n; bit] -> (
                 match (concrete_bits bv, concrete_int n, concrete_bits bit) with
-                | Some bs, Some n, Some [b] -> bitvector_of_bits (Sail_lib.update_inc bs n [b])
+                | Some bs, Some n, Some [b] ->
+                    bitvector_of_bv
+                      (Sail_lib.update_inc (Sail_lib.bits_of_bit_list bs) n (Sail_lib.bits_of_bit_list [b]))
                 | _ -> V_top
               )
             | _ -> V_top
@@ -545,8 +553,8 @@ module AbsValue : SAIL_VALUE = struct
         );
         ("undefined_list", fun _ -> V_list []);
         ("get_slice_int", lift Sail_lib.get_slice_int (Int @-> Int @-> Int @-> Ret BV));
-        ("add_vec_int", lift Sail_lib.add_vec_int (BV @-> Int @-> Ret BV));
-        ("sub_vec_int", lift Sail_lib.sub_vec_int (BV @-> Int @-> Ret BV));
+        ("add_bits_int", lift Sail_lib.add_bits_int (BV @-> Int @-> Ret BV));
+        ("sub_bits_int", lift Sail_lib.sub_bits_int (BV @-> Int @-> Ret BV));
         ("valid_hex_bits", lift Sail_lib.valid_hex_bits (Int @-> String @-> Ret Bool));
         ("parse_dec_bits", lift Sail_lib.parse_dec_bits (Int @-> String @-> Ret BV));
         ("parse_hex_bits", lift Sail_lib.parse_hex_bits (Int @-> String @-> Ret BV));
@@ -558,13 +566,11 @@ module AbsValue : SAIL_VALUE = struct
         ("round_up", lift Sail_lib.round_up (Real @-> Ret Int));
         ("sqrt_real", lift Sail_lib.sqrt_real (Real @-> Ret Real));
         ("abs_real", lift Sail_lib.abs_real (Real @-> Ret Real));
-        ("negate_real", lift Sail_lib.negate_real (Real @-> Ret Real));
         ("neg_real", lift Sail_lib.neg_real (Real @-> Ret Real));
         ("add_real", lift Sail_lib.add_real (Real @-> Real @-> Ret Real));
         ("sub_real", lift Sail_lib.sub_real (Real @-> Real @-> Ret Real));
         ("mult_real", lift Sail_lib.mult_real (Real @-> Real @-> Ret Real));
         ("div_real", lift Sail_lib.div_real (Real @-> Real @-> Ret Real));
-        ("quotient_real", lift Sail_lib.quotient_real (Real @-> Real @-> Ret Real));
         ("eq_real", lift Sail_lib.eq_real (Real @-> Real @-> Ret Bool));
         ("lt_real", lift Sail_lib.lt_real (Real @-> Real @-> Ret Bool));
         ("gt_real", lift Sail_lib.gt_real (Real @-> Real @-> Ret Bool));
@@ -577,11 +583,11 @@ module AbsValue : SAIL_VALUE = struct
             | [_out_len; _slice_len; out; n; slice] -> (
                 match (concrete_bits out, concrete_int n, concrete_bits slice) with
                 | Some out_bs, Some n, Some slice_bs ->
-                    bitvector_of_bits
+                    bitvector_of_bv
                       (Sail_lib.set_slice
                          (Z.of_int (List.length out_bs))
                          (Z.of_int (List.length slice_bs))
-                         out_bs n slice_bs
+                         (Sail_lib.bits_of_bit_list out_bs) n (Sail_lib.bits_of_bit_list slice_bs)
                       )
                 | _ -> V_top
               )
@@ -697,8 +703,6 @@ module Make (Lattice : SAIL_VALUE) = struct
   module Pretty = struct
     open PPrint
     open Pretty_print_sail
-
-    let prepend c cs = c ^^ hardline ^^ twice space ^^ cs
 
     let truncate_str n s = if String.length s > n + 3 then String.sub s 0 n ^ "..." else s
 
@@ -877,8 +881,6 @@ module Make (Lattice : SAIL_VALUE) = struct
   let from_exp exp = { ctx = Z_top; state = Zinterp.R.empty; focus = Extraction.Datatypes.Coq_inl exp }
 
   let unaux_id = function Id_aux (id, _) -> id
-
-  let exp_of_value v = E_aux (E_internal_value v, (Parse_ast.Unknown, Type_check.empty_tannot))
 
   let arms_of_fundef (FD_aux (FD_function (_, _, funcls), annot)) =
     let destruct_pexp = function

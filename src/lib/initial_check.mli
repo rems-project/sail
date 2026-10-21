@@ -48,7 +48,6 @@
 
 open Ast
 open Ast_compare
-open Ast_defs
 open Ast_util
 
 (** {2 Options} *)
@@ -72,6 +71,8 @@ type ctx
 val merge_ctx : Parse_ast.l -> ctx -> ctx -> ctx
 
 val initial_ctx : ctx
+
+val parse_target_set : Parse_ast.l -> string -> string * string list
 
 (** {2 Desugar and process AST} *)
 

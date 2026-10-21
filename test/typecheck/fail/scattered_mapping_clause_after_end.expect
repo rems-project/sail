@@ -1,0 +1,8 @@
+[93mType error[0m:
+[96mfail/scattered_mapping_clause_after_end.sail[0m:9.0-5:
+9[96m |[0mend m
+ [92m |[0m[92m^---^[0m [92mpreviously ended here[0m
+[96mfail/scattered_mapping_clause_after_end.sail[0m:11.0-29:
+11[96m |[0mmapping clause m = 1 <-> true
+  [91m |[0m[91m^---------------------------^[0m
+  [91m |[0m Cannot add clause to scattered mapping m as it has already been ended

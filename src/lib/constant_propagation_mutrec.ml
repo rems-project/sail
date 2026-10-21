@@ -61,6 +61,10 @@ let targets = ref ([] : id list)
 
 let rec is_const_exp exp =
   match unaux_exp exp with
+  (* Enum constructors are constants too; ordinary local identifiers are not. *)
+  | E_id id -> (
+      match Env.lookup_id id (env_of exp) with Enum _ -> true | _ -> false
+    )
   | E_lit (L_aux ((L_true | L_false | L_bin [Non_empty (_, [])] | L_num _), _)) -> true
   | E_vector es -> List.for_all is_const_exp es && is_bitvector_typ (typ_of exp)
   | E_struct (_, fes) -> List.for_all is_const_fexp fes
@@ -70,6 +74,22 @@ let rec is_const_exp exp =
 and is_const_fexp (FE_aux (FE_fexp (_, e), _)) = is_const_exp e
 
 let recheck_exp exp = check_exp (env_of exp) (strip_exp exp) (typ_of exp)
+
+(* Explicit source annotations must agree with the specialized val spec. *)
+let specialize_pexp_types ksubsts =
+  let typ = KBindings.fold typ_subst ksubsts in
+  let nexp = KBindings.fold nexp_subst ksubsts in
+  let nc = KBindings.fold constraint_subst ksubsts in
+  fold_pexp
+    {
+      id_exp_alg with
+      pat_alg = { id_pat_alg with p_typ = (fun (t, p) -> P_typ (typ t, p)) };
+      e_typ = (fun (t, e) -> E_typ (typ t, e));
+      le_typ = (fun (t, id) -> LE_typ (typ t, id));
+      e_sizeof = (fun n -> E_sizeof (nexp n));
+      e_constraint = (fun c -> E_constraint (nc c));
+      e_internal_assume = (fun (c, e) -> E_internal_assume (nc c, e));
+    }
 
 (* Name function copy by encoding values of constant arguments *)
 let generate_fun_id id args =
@@ -94,6 +114,11 @@ let generate_fun_id id args =
 let generate_val_spec env id args l annot =
   match Env.get_val_spec_orig id env with
   | tq, Typ_aux (Typ_fn (arg_typs, ret_typ), _) ->
+      let constant_kids =
+        List.fold_left2
+          (fun kids arg typ -> if is_const_exp arg then KidSet.union kids (tyvars_of_typ typ) else kids)
+          KidSet.empty args arg_typs
+      in
       (* Get instantiation of type variables at call site *)
       let orig_ksubst (kid, typ_arg) =
         match typ_arg with
@@ -103,14 +128,17 @@ let generate_val_spec env id args l annot =
       let ksubsts =
         recheck_exp (E_aux (E_app (id, args), (l, annot)))
         |> instantiation_of |> KBindings.bindings |> List.map orig_ksubst
+        (* Specialize type variables fixed by constant arguments; keep the rest polymorphic. *)
+        |> List.filter (fun (kid, arg) -> KidSet.mem kid constant_kids && KidSet.is_empty (tyvars_of_typ_arg arg))
         |> List.fold_left (fun s (v, i) -> KBindings.add v i s) KBindings.empty
       in
       (* Apply instantiation to original function type.  Also collect the
          type variables in the new type together their kinds for the new
          val spec. *)
-      let kopts_of_typ env typ =
+      let decl_env = Env.add_typquant l tq env in
+      let kopts_of_typ typ =
         tyvars_of_typ typ |> KidSet.elements
-        |> List.map (fun kid -> mk_kopt (Env.get_typ_var kid env) kid)
+        |> List.map (fun kid -> mk_kopt (Env.get_typ_var kid decl_env) kid)
         |> KOptSet.of_list
       in
       let ret_typ' = KBindings.fold typ_subst ksubsts ret_typ in
@@ -120,12 +148,12 @@ let generate_val_spec env id args l annot =
             if is_const_exp arg then (arg_typs', kopts')
             else (
               let typ' = KBindings.fold typ_subst ksubsts typ in
-              let arg_kopts = kopts_of_typ (env_of arg) typ' in
+              let arg_kopts = kopts_of_typ typ' in
               (typ' :: arg_typs', KOptSet.union arg_kopts kopts')
             )
           )
           args arg_typs
-          ([], kopts_of_typ (env_of_tannot annot) ret_typ')
+          ([], kopts_of_typ ret_typ')
       in
       let arg_typs' = if arg_typs' = [] then [unit_typ] else arg_typs' in
       let typ' = mk_typ (Typ_fn (arg_typs', ret_typ')) in
@@ -160,7 +188,8 @@ let prop_args_pexp target env ast ksubsts args pexp =
   let match_arg (E_aux (_, (l, _)) as arg) pat (pats, substs) =
     if is_const_exp arg then (
       match pat with
-      | P_aux (P_id id, _) -> (pats, Bindings.add id arg substs)
+      | P_aux (P_id id, _) | P_aux (P_typ (_, P_aux (P_id id, _)), _) -> (pats, Bindings.add id arg substs)
+      | P_aux (P_wild, _) | P_aux (P_typ (_, P_aux (P_wild, _)), _) -> (pats, substs)
       | _ ->
           raise
             (Reporting.err_todo l
@@ -175,6 +204,18 @@ let prop_args_pexp target env ast ksubsts args pexp =
   let exp' = const_prop target env ast substs ksubsts exp in
   let pat' = match pats with [pat] -> pat | _ -> P_aux (P_tuple pats, (Parse_ast.Unknown, empty_tannot)) in
   construct_pexp (pat', guard, exp', annot)
+
+(* Apply the same constant arguments to a copied function's termination measure. *)
+let specialize_rec_opt target env ast ksubsts args = function
+  | Rec_aux (Rec_measure (pat, (E_aux (_, ann) as exp)), loc) ->
+      let pat, _, exp, _ =
+        construct_pexp (pat, None, exp, ann)
+        |> prop_args_pexp target env ast ksubsts args
+        |> specialize_pexp_types ksubsts |> destruct_pexp
+      in
+      Rec_aux (Rec_measure (strip_pat pat, strip_exp exp), loc)
+  | Rec_aux (Rec_rec, loc) -> Rec_aux (Rec_rec, loc)
+  | Rec_aux (Rec_nonrec, loc) -> Rec_aux (Rec_nonrec, loc)
 
 let rewrite_ast target effect_info env ({ defs; _ } as ast) =
   let effect_info = ref effect_info in
@@ -196,17 +237,22 @@ let rewrite_ast target effect_info env ({ defs; _ } as ast) =
             in
             if not (IdSet.mem id' (ids_of_defs !valspecs)) then (
               (* Generate copy of function with constant arguments propagated in *)
-              let (FD_aux (FD_function (_, _, fcls), _)) =
+              let (FD_aux (FD_function (rec_opt, _, fcls), _)) =
                 List.find (fun fd -> Id.compare id (id_of_fundef fd) = 0) mutrecs
               in
               let valspec, ksubsts = generate_val_spec env id args l annot in
+              let rec_opt = specialize_rec_opt target env ast ksubsts args rec_opt in
               let const_prop_funcl (FCL_aux (FCL_funcl (_, pexp), (fcl_def_annot, _))) =
-                let pexp' = prop_args_pexp target env ast ksubsts args pexp |> rewrite_pexp |> strip_pexp in
+                let pexp' =
+                  prop_args_pexp target env ast ksubsts args pexp
+                  |> rewrite_pexp |> strip_pexp |> specialize_pexp_types ksubsts
+                in
                 FCL_aux (FCL_funcl (id', pexp'), (def_annot_map_loc gen_loc fcl_def_annot, empty_uannot))
               in
               valspecs := valspec :: !valspecs;
-              let fundef = mk_fundef (List.map const_prop_funcl fcls) in
-              fundefs := fundef :: !fundefs
+              let tannot_opt = Typ_annot_opt_aux (Typ_annot_opt_none, l) in
+              let fundef = FD_aux (FD_function (rec_opt, tannot_opt, List.map const_prop_funcl fcls), no_annot) in
+              fundefs := DEF_aux (DEF_fundef fundef, mk_def_annot l ()) :: !fundefs
             )
             else ();
             E_aux (E_app (id', args'), (l, annot))

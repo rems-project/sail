@@ -237,14 +237,10 @@ val _builtin_unsigned = pure {
 
 val _builtin_mod_nat = pure {
   smt: "mod",
-  ocaml: "modulus",
-  interpreter: "modulus",
   lem: "integerMod",
-  c: "tmod_int",
-  cpp: "tmod_int",
-  systemverilog: "tmod_int",
   coq: "Z.rem",
-  lean: "Nat.mod"
+  lean: "Nat.mod",
+  _: "tmod_int"
 } : forall 'n 'm, 'n >= 0 & 'm >= 0. (int('n), int('m)) -> {'r, 0 <= 'r < 'm. int('r)}
 
 /* Below we need the fact that 2 ^ 'n >= 0, so we axiomatise it in the return

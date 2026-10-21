@@ -1,0 +1,5 @@
+[93mType error[0m:
+[96mfail/wildcard_type.sail[0m:4.8-9:
+4[96m |[0mval f : _ -> unit
+ [91m |[0m        [91m^[0m
+ [91m |[0m Wildcard type not allowed here

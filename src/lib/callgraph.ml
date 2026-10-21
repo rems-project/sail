@@ -190,13 +190,13 @@ let add_def_to_graph graph (DEF_aux (def, def_annot)) =
         match Env.lookup_id id env with
         | Register _ -> graph := G.add_edge self (Register id) !graph
         | Enum _ -> graph := G.add_edge self (Constructor id) !graph
-        | _ -> if IdSet.mem id (Env.get_toplevel_lets env) then graph := G.add_edge self (Letbind id) !graph else ()
+        | _ -> if Env.is_toplevel_let id env then graph := G.add_edge self (Letbind id) !graph else ()
       )
     | LE_id id -> (
         match Env.lookup_id id env with
         | Register _ -> graph := G.add_edge self (Register id) !graph
         | Enum _ -> graph := G.add_edge self (Constructor id) !graph
-        | _ -> if IdSet.mem id (Env.get_toplevel_lets env) then graph := G.add_edge self (Letbind id) !graph else ()
+        | _ -> if Env.is_toplevel_let id env then graph := G.add_edge self (Letbind id) !graph else ()
       )
     | _ -> ()
     );
@@ -210,7 +210,7 @@ let add_def_to_graph graph (DEF_aux (def, def_annot)) =
         match Env.lookup_id id env with
         | Register _ -> graph := G.add_edge self (Register id) !graph
         | Enum _ -> graph := G.add_edge self (Constructor id) !graph
-        | _ -> if IdSet.mem id (Env.get_toplevel_lets env) then graph := G.add_edge self (Letbind id) !graph else ()
+        | _ -> if Env.is_toplevel_let id env then graph := G.add_edge self (Letbind id) !graph else ()
       )
     | E_app (id, _) ->
         if Env.is_union_constructor id env then graph := G.add_edge self (Constructor id) !graph
@@ -427,12 +427,7 @@ let add_def_to_graph graph (DEF_aux (def, def_annot)) =
   );
   !graph
 
-let rec graph_of_defs defs =
-  match defs with
-  | def :: defs ->
-      let g = graph_of_defs defs in
-      add_def_to_graph g def
-  | [] -> G.empty
+let graph_of_defs defs = List.fold_left add_def_to_graph G.empty defs
 
 let graph_of_ast ast = graph_of_defs ast.defs
 
@@ -697,9 +692,14 @@ let function_call_graph ast =
   let module G = Graph.Make (Id) in
   let scan_funcl graph (FCL_aux (FCL_funcl (id, pexp), _)) =
     let callees =
-      fold_pexp { (pure_exp_alg [] ( @ )) with e_app = (fun (id', args) -> id' :: List.concat args) } pexp
+      fold_pexp
+        {
+          (pure_exp_alg IdSet.empty IdSet.union) with
+          e_app = (fun (id', args) -> IdSet.add id' (List.fold_left IdSet.union IdSet.empty args));
+        }
+        pexp
     in
-    FCG.add_edges id callees graph
+    FCG.add_edges id (IdSet.elements callees) graph
   in
   let scan_function graph (FD_aux (FD_function (_, _, funcls), _)) = List.fold_left scan_funcl graph funcls in
   let scan_def graph = function

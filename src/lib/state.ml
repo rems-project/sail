@@ -44,8 +44,6 @@
 (*  SPDX-License-Identifier: BSD-2-Clause                                   *)
 (****************************************************************************)
 
-module Big_int = Nat_big_num
-
 open Initial_check
 open Type_check
 open Ast
@@ -99,7 +97,7 @@ let rec id_of_nexp = function Nexp_aux (nexp, _) -> id_of_nexp_aux nexp
 and id_of_nexp_aux = function
   | Nexp_id id -> string_of_id id
   | Nexp_var kid -> string_of_kid kid
-  | Nexp_constant c -> Big_int.to_string c
+  | Nexp_constant c -> Z.to_string c
   | Nexp_times (n1, n2) -> id_of_nexp n1 ^ "_times_" ^ id_of_nexp n2
   | Nexp_sum (n1, n2) -> id_of_nexp n1 ^ "_plus_" ^ id_of_nexp n2
   | Nexp_minus (n1, n2) -> id_of_nexp n1 ^ "_minus_" ^ id_of_nexp n2
@@ -122,6 +120,8 @@ let rec id_of_regtyp builtins (Typ_aux (t, l) as typ) =
       in
       if IdSet.mem id builtins && not (is_bitvector_typ typ) then id
       else append_id id (String.concat "_" ("" :: List.map name_arg args))
+  | Typ_tuple typs ->
+      mk_id (String.concat "_" ("tuple_" :: List.map (fun typ -> string_of_id (id_of_regtyp builtins typ)) typs))
   | _ -> raise (Reporting.err_typ l ("Unsupported register type " ^ string_of_typ typ))
 
 let regstate_field typ = append_id (id_of_regtyp IdSet.empty typ) "_reg"
@@ -194,17 +194,13 @@ let generate_initial_regstate ctx env ast =
                by the typechecker for binary and hex literals) *)
             let literal_bitvec = has_default_order defs in
             let init_elem = if literal_bitvec then "0" else lookup_init_val vals bit_typ in
-            let rec elems len =
-              if Nat_big_num.less_equal len Nat_big_num.zero then [] else init_elem :: elems (Nat_big_num.pred len)
-            in
+            let rec elems len = if Z.leq len Z.zero then [] else init_elem :: elems (Z.pred len) in
             if literal_bitvec then "0b" ^ String.concat "" (elems len) else "[" ^ String.concat ", " (elems len) ^ "]"
         | Typ_app (id, [A_aux (A_nexp len, _); A_aux (A_typ etyp, _)]) when string_of_id id = "vector" ->
             let len = Type_check.solve_unique env len |> Option.get in
             (* Output a list of initial values of the vector elements. *)
             let init_elem = lookup_init_val vals etyp in
-            let rec elems len =
-              if Nat_big_num.less_equal len Nat_big_num.zero then [] else init_elem :: elems (Nat_big_num.pred len)
-            in
+            let rec elems len = if Z.leq len Z.zero then [] else init_elem :: elems (Z.pred len) in
             "[" ^ String.concat ", " (elems len) ^ "]"
         | Typ_app (id, args) -> Bindings.find id vals args
         | Typ_tuple typs -> "(" ^ String.concat ", " (List.map (lookup_init_val vals) typs) ^ ")"
@@ -215,7 +211,7 @@ let generate_initial_regstate ctx env ast =
               Typ_aux (Typ_app (id, [A_aux (A_nexp (Nexp_aux (Nexp_var k'', _)), _)]), _)
             )
           when Kid.compare (kopt_kid k) k' == 0 && Kid.compare k' k'' == 0 && string_of_id id = "atom" ->
-            Big_int.to_string h
+            Z.to_string h
         | Typ_exist (_, _, typ) -> lookup_init_val vals typ
         | _ -> raise Not_found
       in
@@ -393,17 +389,30 @@ let rec regval_convs wrap_fun (Typ_aux (t, _) as typ) =
   | Typ_app _ when (is_vector_typ typ || is_bitvector_typ typ) && not (is_bitvector_typ typ) ->
       let size, etyp = vector_typ_args_of typ in
       let etyp_of, of_etyp = regval_convs wrap_fun etyp in
-      ("vector_of_regval " ^ wrap_fun etyp_of, "regval_of_vector " ^ wrap_fun of_etyp)
+      ("vector_of_regval " ^ wrap_fun etyp true etyp_of, "regval_of_vector " ^ wrap_fun etyp false of_etyp)
   | Typ_app (id, [A_aux (A_typ etyp, _)]) when string_of_id id = "list" ->
       let etyp_of, of_etyp = regval_convs wrap_fun etyp in
-      ("list_of_regval " ^ wrap_fun etyp_of, "regval_of_list " ^ wrap_fun of_etyp)
+      ("list_of_regval " ^ wrap_fun etyp true etyp_of, "regval_of_list " ^ wrap_fun etyp false of_etyp)
   | Typ_app (id, [A_aux (A_typ etyp, _)]) when string_of_id id = "option" ->
       let etyp_of, of_etyp = regval_convs wrap_fun etyp in
-      ("option_of_regval " ^ wrap_fun etyp_of, "regval_of_option " ^ wrap_fun of_etyp)
+      ("option_of_regval " ^ wrap_fun etyp true etyp_of, "regval_of_option " ^ wrap_fun etyp false of_etyp)
   | _ -> regval_base_convs typ
 
-let regval_convs_lem = regval_convs (fun conv -> "(fun v -> " ^ conv ^ " v)")
-let regval_convs_isa = regval_convs (fun conv -> "(\\<lambda>v. " ^ conv ^ " v)")
+let var_wrapper = function
+  | Typ_aux (Typ_tuple typs, _) ->
+      let vars = List.init (List.length typs) (fun i -> "v" ^ string_of_int i) in
+      ("(" ^ String.concat ", " vars ^ ")", String.concat " " vars)
+  | _ -> ("v", "v")
+
+let lem_wrapper typ of_rv conv =
+  if of_rv then "(fun v -> " ^ conv ^ " v)"
+  else (
+    let vars_split, vars_apply = var_wrapper typ in
+    "(fun " ^ vars_split ^ " -> " ^ conv ^ " " ^ vars_apply ^ ")"
+  )
+
+let regval_convs_lem = regval_convs (fun typ of_rv conv -> lem_wrapper typ of_rv conv)
+let regval_convs_isa = regval_convs (fun _ _ conv -> "(\\<lambda>v. " ^ conv ^ " v)")
 
 let register_refs_lem pp_tannot env registers =
   let generic_convs =
@@ -465,6 +474,7 @@ let register_refs_lem pp_tannot env registers =
     in
     (* let field = if prefix_recordtype then string "regstate_" ^^ idd else idd in *)
     let of_regval, regval_of = regval_convs_lem typ in
+    let var_split, var_apply = var_wrapper typ in
     let tannot = pp_tannot typ in
     concat
       [
@@ -490,9 +500,9 @@ let register_refs_lem pp_tannot env registers =
         string of_regval;
         string " v);";
         hardline;
-        string "  regval_of = (fun v -> ";
+        string ("  regval_of = (fun " ^ var_split ^ " -> ");
         string regval_of;
-        string " v) |>";
+        string (" " ^ var_apply ^ ") |>");
         hardline;
       ]
   in
@@ -540,13 +550,15 @@ let generate_isa_lemmas env defs =
   in
   let remove_underscores str = remove_leading_underscores (remove_trailing_underscores str) in
   let registers = find_registers defs in
-  let regtyp_ids =
-    register_base_types env (List.map (fun (x, _, _) -> x) registers) |> Bindings.bindings |> List.map fst
+  let regtyp_ids_wrappers =
+    register_base_types env (List.map (fun (x, _, _) -> x) registers)
+    |> Bindings.bindings
+    |> List.map (fun (id, typ) -> (id, var_wrapper typ))
   in
   let bitfield_ids =
     register_bitfield_types env (List.map (fun (x, _, _) -> x) registers) |> Bindings.bindings |> List.map fst
   in
-  let regval_class_typ_ids = List.map (fun (t, _) -> mk_id t) regval_class_typs_lem in
+  let regval_class_typ_ids_wrappers = List.map (fun (t, _) -> (mk_id t, ("v", "v"))) regval_class_typs_lem in
   let register_defs =
     let add_reg_def (previous_names, regs) (_, id, _) =
       let id' = remove_leading_underscores (string_of_id id) ^ "_ref" in
@@ -563,7 +575,7 @@ let generate_isa_lemmas env defs =
          (["lemmas register_defs"; "="; "get_regval_unfold"; "set_regval_unfold"] @ List.rev regs)
       )
   in
-  let conv_lemma typ_id =
+  let conv_lemma (typ_id, (tuple, curry)) =
     let typ_id = remove_trailing_underscores (string_of_id typ_id) in
     let typ_id' = remove_leading_underscores typ_id in
     let of_rv, rv_of =
@@ -579,7 +591,7 @@ let generate_isa_lemmas env defs =
     ^^ hardline ^^ hardline
     ^^ string ("lemma regval_" ^ typ_id ^ "[simp]:")
     ^^ hardline
-    ^^ string ("  \"" ^ of_rv ^ " (" ^ rv_of ^ " v) = Some v\"")
+    ^^ string ("  \"" ^ of_rv ^ " (" ^ rv_of ^ " " ^ curry ^ ") = Some " ^ tuple ^ "\"")
     ^^ hardline ^^ string "  by auto"
   in
   let bitfield_conv_lemma typ_id =
@@ -697,7 +709,7 @@ let generate_isa_lemmas env defs =
         set_regval)\"" *)
   ^^ hardline
   ^^ hardline ^^ register_defs ^^ hardline ^^ hardline
-  ^^ separate_map (hardline ^^ hardline) conv_lemma (regval_class_typ_ids @ regtyp_ids)
+  ^^ separate_map (hardline ^^ hardline) conv_lemma (regval_class_typ_ids_wrappers @ regtyp_ids_wrappers)
   ^^ hardline ^^ hardline
   ^^ separate_map (hardline ^^ hardline) bitfield_conv_lemma bitfield_ids
   ^^ hardline ^^ hardline

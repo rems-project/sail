@@ -44,14 +44,11 @@
 (*  SPDX-License-Identifier: BSD-2-Clause                                   *)
 (****************************************************************************)
 
-module Big_int = Nat_big_num
-
 open Ast
 open Ast_compare
 open Ast_defs
 open Ast_util
 open Type_check
-open Type_error
 open Rewriter
 
 open Coq_extern

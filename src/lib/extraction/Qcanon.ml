@@ -1,3 +1,4 @@
+[@@@warning "-a"]
 open QArith_base
 open Qreduction
 

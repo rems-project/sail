@@ -268,6 +268,9 @@ let coq_target out_file { symbols; ctx; ast; effect_info; env; _ } =
   let out_file = match out_file with Some f -> f | None -> "out" in
   output !opt_libs_coq [(out_file, symbols, ctx, effect_info, env, ast)]
 
+(* Note: in addition to having two targets, there's a fixup in ast_util.ml so that all external functions can be found
+   by looking for rocq rather than coq. *)
+
 let _ =
   ignore
     (Target.register ~name:"rocq" ~options:rocq_options ~pre_parse_hook:check_flags ~rewrites:coq_rewrites

@@ -1,0 +1,5 @@
+[93mType error[0m:
+[96mfail/pat_not_ctor.sail[0m:5.40-44:
+5[96m |[0mfunction f(x : int) -> unit = match x { g(y) => () }
+ [91m |[0m                                        [91m^--^[0m
+ [91m |[0m g is not a union constructor or mapping in pattern g(y)

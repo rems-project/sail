@@ -1,4 +1,4 @@
-.PHONY: all isail sail install coverage clean asciidoc docker test core-tests c-tests extraction
+.PHONY: all isail sail install coverage clean asciidoc docker test core-tests exec-tests extraction externs check-externs
 
 all: sail
 
@@ -16,6 +16,21 @@ libsail_coverage:
 # TODO: Make this work on Windows.
 extraction:
 	$(MAKE) -C src/rocq extraction
+
+# src/lib/sail_lib.mli is generated from the externs in the Sail
+# library, recorded in src/lib/externs.json. Run `make externs` after
+# changing any extern in lib/ to update it. CI uses `make
+# check-externs` (with EXTERNS_SAIL=sail) to check it is up to date.
+EXTERNS_SAIL ?= dune exec --release -- sail
+EXTERNS_ARGS = --tool extern_json lib -exclude lib/float.sail
+
+externs:
+	SAIL_NO_PLUGINS=1 $(EXTERNS_SAIL) $(EXTERNS_ARGS) -o src/lib/externs.json
+
+check-externs:
+	mkdir -p _build
+	SAIL_NO_PLUGINS=1 $(EXTERNS_SAIL) $(EXTERNS_ARGS) -o _build/externs.json
+	@diff -u src/lib/externs.json _build/externs.json || (echo "src/lib/externs.json is out of date, run 'make externs' to update it"; exit 1)
 
 lsp:
 	$(MAKE) -C src/sail_lsp
@@ -50,10 +65,10 @@ docker:
 	@echo 'for example: docker run --volume `PWD`:/data/ sail:0.1 --help'
 
 test:
-	SAIL_DIR=`pwd` SAIL=`pwd`/sail test/run_tests.sh
+	test/run_tests.sh
 
 core-tests:
-	SAIL_DIR=`pwd` SAIL=`pwd`/sail test/run_core_tests.sh
+	test/run_core_tests.sh
 
-c-tests:
-	SAIL_DIR=`pwd` SAIL=`pwd`/sail test/c/run_tests.py
+exec-tests:
+	test/suites/runner.py -s exec.c -s exec.cpp -s exec.interpreter -s exec.ocaml -s exec.partial

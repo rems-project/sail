@@ -1,0 +1,5 @@
+[93mType error[0m:
+[96mfail/assign_concat_non_vector.sail[0m:4.60-65:
+4[96m |[0mfunction f() -> unit = { var x : int = 0; var y : int = 0; (x @ y) = 0b0000 }
+ [91m |[0m                                                            [91m^---^[0m
+ [91m |[0m Vector concatenation l-expression must only contain bitvector or vector types, found int

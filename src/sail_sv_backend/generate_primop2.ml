@@ -20,16 +20,14 @@ open Sv_ir
 module StringSet = Set.Make (String)
 
 let required_width n =
-  let rec required_width' n =
-    if Big_int.equal n Big_int.zero then 1 else 1 + required_width' (Big_int.shift_right n 1)
-  in
-  required_width' (Big_int.abs n)
+  let rec required_width' n = if Z.equal n Z.zero then 1 else 1 + required_width' (Z.shift_right n 1) in
+  required_width' (Z.abs n)
 
 let nf s = s
 let pf fmt = sprintf fmt
 
 let sail_bits width =
-  let index_top = required_width (Big_int.of_int (width - 1)) in
+  let index_top = required_width (Z.of_int (width - 1)) in
   [
     nf "typedef struct packed {";
     pf "    logic [%d:0] sb_size;" index_top;
@@ -120,7 +118,7 @@ module Make
     let name = sprintf "sail_array_store_%d_%s" len (Util.zencode_string (string_of_ctyp elem_ctyp)) in
     register_library_def name (fun () ->
         let arr_ctyp = CT_fvector (len, elem_ctyp) in
-        let ix_width = required_width (Big_int.of_int (len - 1)) - 1 in
+        let ix_width = required_width (Z.of_int (len - 1)) - 1 in
         let r = primop_name "r" in
         let arr = primop_name "arr" in
         let i = primop_name "i" in

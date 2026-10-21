@@ -1,0 +1,5 @@
+[93mType error[0m:
+[96mfail/string_literal_in_type.sail[0m:4.13-16:
+4[96m |[0mlet x : bits("a") = 0b0
+ [91m |[0m             [91m^-^[0m
+ [91m |[0m Unexpected literal in type

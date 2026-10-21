@@ -1,0 +1,5 @@
+[93mType error[0m:
+[96mfail/tuple_pat_length.sail[0m:4.47-56:
+4[96m |[0mfunction f(x : (int, int)) -> unit = match x { (a, b, c) => () }
+ [91m |[0m                                               [91m^-------^[0m
+ [91m |[0m Tuple pattern and tuple type have different length

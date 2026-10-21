@@ -45,7 +45,6 @@
 (****************************************************************************)
 
 open Ast
-open Ast_defs
 open Type_check
 
 (* Monomorphisation options *)
@@ -123,7 +122,5 @@ val rewrite :
   Initial_check.ctx * typed_ast * Effects.side_effect_info * Env.t
 
 val rewrites_interpreter : (string * rewriter_arg list) list
-
-val simple_typ : typ -> typ
 
 val pat_to_exp : Env.t -> tannot pat -> tannot exp

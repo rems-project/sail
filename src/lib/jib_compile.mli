@@ -49,7 +49,6 @@
 open Anf
 open Ast
 open Ast_compare
-open Ast_defs
 open Ast_util
 open Jib
 open Jib_util

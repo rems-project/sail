@@ -49,7 +49,6 @@
 open Ast
 open Ast_compare
 open Ast_defs
-open Ast_util
 
 val opt_debug_callgraph : string option ref
 

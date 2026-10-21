@@ -1,10 +1,8 @@
+[@@@warning "-a"]
 open Ast
 open BinInt
-open Bit
 open BitList
-open Datatypes
-open ListDef
-open PeanoNat
+open PrimBits
 
 val value_of_lit : lit -> value
 

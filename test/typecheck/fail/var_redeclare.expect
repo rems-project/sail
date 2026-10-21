@@ -1,0 +1,11 @@
+[93mWarning[0m: Redundant type annotation on assignment to x
+[96mfail/var_redeclare.sail[0m:4.46-53:
+4[96m |[0mfunction f() -> unit = { var x : int = 1; var x : int = 2; () }
+ [91m |[0m                                              [91m^-----^[0m
+ [91m |[0m Type is already known
+
+[93mType error[0m:
+[96mfail/var_redeclare.sail[0m:4.46-53:
+4[96m |[0mfunction f() -> unit = { var x : int = 1; var x : int = 2; () }
+ [91m |[0m                                              [91m^-----^[0m
+ [91m |[0m var expression can only be used to declare new variables, not update them

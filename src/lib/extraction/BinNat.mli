@@ -1,3 +1,4 @@
+[@@@warning "-a"]
 open BinPos
 open Datatypes
 open PosDef
@@ -19,6 +20,8 @@ module N :
   val add : Big_int_Z.big_int -> Big_int_Z.big_int -> Big_int_Z.big_int
 
   val mul : Big_int_Z.big_int -> Big_int_Z.big_int -> Big_int_Z.big_int
+
+  val eqb : Big_int_Z.big_int -> Big_int_Z.big_int -> bool
 
   val testbit : Big_int_Z.big_int -> Big_int_Z.big_int -> bool
 

@@ -73,6 +73,7 @@ jobs:
         eval $(opam env)
         opam pin --yes --no-action add .
         opam install . --yes --deps-only
+        opam install 'bisect_ppx>=2.5.0' --yes
         opam install src/sail_lsp --yes --deps-only
 
     - name: Build Sail with coverage
@@ -112,7 +113,7 @@ jobs:
       with:
         name: test-results-${{ matrix.suite }}
         path: |
-          test/**/tests.xml
+          test/**/*.xml
           test/suite-${{ matrix.suite }}.coverage
 
     # Only do this for one job in the test matrix
@@ -172,6 +173,7 @@ jobs:
         opam pin --yes --no-action -k path add .
         opam install --yes rocq-sail-stdpp coq-record-update
         opam install . --yes --deps-only
+        opam install 'bisect_ppx>=2.5.0' --yes
 
     - name: Build Sail with coverage
       run: |
@@ -184,9 +186,6 @@ jobs:
         eval $(opam env)
         export SAIL_DIR=$(pwd)
         etc/ci_coverage_tests.sh rocq
-        # Workflows using the results assume filenames are unique
-        mkdir test/c-rocq
-        mv test/c/tests.xml test/c-rocq/tests.xml
         bisect-ppx-report merge --coverage-path=test/ test/suite-rocq.coverage
 
     - name: Upload test results
@@ -195,5 +194,5 @@ jobs:
       with:
         name: test-results-rocq
         path: |
-          test/**/tests.xml
+          test/**/*.xml
           test/suite-rocq.coverage

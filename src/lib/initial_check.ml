@@ -50,7 +50,6 @@ open Ast_defs
 open Ast_util
 open Util
 open Printf
-module Big_int = Nat_big_num
 
 module P = Parse_ast
 
@@ -86,6 +85,12 @@ type ctx = {
 }
 
 type 'a ctx_out = 'a * ctx
+
+let parse_target_set l arg =
+  let args = String.split_on_char ' ' arg |> List.filter (fun s -> String.length s > 0) in
+  match args with
+  | set :: targets -> (set, targets)
+  | [] -> raise (Reporting.err_general l "No arguments provided to target set directive")
 
 let get_type_constructor id ctx =
   match Bindings.find_opt id ctx.type_constructors with
@@ -180,7 +185,7 @@ let to_ast_kind (P.K_aux (k, l)) =
 let parse_kind_constraint l v = function
   | P.K_nat ->
       let v = Nexp_aux (Nexp_var v, kid_loc v) in
-      Some (NC_aux (NC_ge (v, Nexp_aux (Nexp_constant Big_int.zero, l)), l))
+      Some (NC_aux (NC_ge (v, Nexp_aux (Nexp_constant Z.zero, l)), l))
   | _ -> None
 
 let not_order_kind = function P.K_order -> false | _ -> true
@@ -558,10 +563,10 @@ module KindInference = struct
            which case we can infer that if N * M is a Nat then the
            non-constant case is also a Nat *)
         match (t1, t2) with
-        | P.ATyp_aux (P.ATyp_lit (P.L_aux (P.L_num n, _)), _), _ when Big_int.greater n Big_int.zero ->
+        | P.ATyp_aux (P.ATyp_lit (P.L_aux (P.L_num n, _)), _), _ when Z.gt n Z.zero ->
             let* t2 = check ctx t2 ik in
             wrap (P.ATyp_times (t1, t2))
-        | _, P.ATyp_aux (P.ATyp_lit (P.L_aux (P.L_num n, _)), _) when Big_int.greater n Big_int.zero ->
+        | _, P.ATyp_aux (P.ATyp_lit (P.L_aux (P.L_num n, _)), _) when Z.gt n Z.zero ->
             let* t1 = check ctx t1 ik in
             wrap (P.ATyp_times (t1, t2))
         | _ ->
@@ -595,9 +600,9 @@ module KindInference = struct
               if List.compare_lengths args kinds <> 0 then
                 raise
                   (Reporting.err_typ l
-                     (sprintf "%s : %s -> Type expected %d arguments, given %d" (string_of_id id')
+                     (sprintf "%s : %s -> %s expected %d arguments, given %d" (string_of_id id')
                         (format_parse_kind_aux_list (filter_order_kinds kinds))
-                        (List.length kinds) (List.length args)
+                        (string_of_parse_kind_aux ret_kind) (List.length kinds) (List.length args)
                      )
                   );
               mapM (function arg, kind -> check ctx arg (Kind (kind, id_loc id'))) (List.combine args kinds)
@@ -916,7 +921,7 @@ module ConvertType = struct
         let id = to_ast_id ctx id in
         match get_type_constructor id ctx with
         | None -> raise (Reporting.err_typ l (sprintf "Could not find type constructor %s" (string_of_id id)))
-        | Some (kinds, _) ->
+        | Some (kinds, ret_kind) ->
             let non_order_kinds = List.filter_map to_ast_kind_aux kinds in
             let kinds = List.map to_ast_kind_aux kinds in
             let args_len = List.length args in
@@ -931,8 +936,9 @@ module ConvertType = struct
             else
               raise
                 (Reporting.err_typ l
-                   (sprintf "%s : %s -> Type expected %d arguments, given %d" (string_of_id id)
-                      (format_kind_aux_list non_order_kinds) (List.length kinds) (List.length args)
+                   (sprintf "%s : %s -> %s expected %d arguments, given %d" (string_of_id id)
+                      (format_kind_aux_list non_order_kinds) (string_of_parse_kind_aux ret_kind) (List.length kinds)
+                      (List.length args)
                    )
                 )
       )
@@ -1389,16 +1395,13 @@ let notation_attr l level strs =
   let parts =
     List.map
       (fun str ->
-        if Util.string_for_all is_ascii_digit str then AD_aux (AD_num (Big_int.of_string str), l)
+        if Util.string_for_all is_ascii_digit str then AD_aux (AD_num (Z.of_string str), l)
         else AD_aux (AD_string str, l)
       )
       strs
   in
   add_attribute l "notation"
-    (Some
-       (AD_aux
-          (AD_object [("level", AD_aux (AD_num (Big_int.of_int level), l)); ("syntax", AD_aux (AD_list parts, l))], l)
-       )
+    (Some (AD_aux (AD_object [("level", AD_aux (AD_num (Z.of_int level), l)); ("syntax", AD_aux (AD_list parts, l))], l))
     )
 
 let rec to_ast_exp ctx exp =
@@ -1432,7 +1435,7 @@ let rec to_ast_exp ctx exp =
       )
       else if id_str = "__LINE__" then (
         let lnum = match Reporting.simp_loc l with Some (p, _) -> p.pos_lnum | None -> -1 in
-        wrap (E_lit (L_aux (L_num (Big_int.of_int lnum), l)))
+        wrap (E_lit (L_aux (L_num (Z.of_int lnum), l)))
       )
       else wrap (E_id (to_ast_id ctx id))
   | P.E_ref id -> wrap (E_ref (to_ast_id ctx id))
@@ -2229,7 +2232,6 @@ let to_ast_loop_measure ctx = function
   | P.Loop (P.Until, exp) -> (Until, map_exp_annot (fun (l, _) -> (l, ())) @@ to_ast_exp ctx exp)
 
 let pragma_arg_loc pragma arg_left_trim l =
-  let open Lexing in
   Reporting.map_loc_range
     (fun p1 p2 ->
       let left_trim = String.length pragma + arg_left_trim + 1 in
@@ -2258,7 +2260,7 @@ let rec to_ast_def doc attrs vis ctx (P.DEF_aux (def, l)) : untyped_def list ctx
       let id = mk_id ~loc:l op in
       let prec = to_ast_prec prec in
       ( [DEF_aux (DEF_fixity (prec, n, id), annot)],
-        { ctx with fixities = StringMap.add op (prec, Big_int.to_int n) ctx.fixities }
+        { ctx with fixities = StringMap.add op (prec, Z.to_int n) ctx.fixities }
       )
   | P.DEF_type t_def -> to_ast_typedef ctx annot t_def
   | P.DEF_fundef f_def ->
@@ -2320,15 +2322,11 @@ let rec to_ast_def doc attrs vis ctx (P.DEF_aux (def, l)) : untyped_def list ctx
               )
           | None -> ([DEF_aux (DEF_pragma ("sail_internal", Pragma_line (arg, l)), annot)], ctx)
         )
-      | "target_set" -> (
-          let args = String.split_on_char ' ' arg |> List.filter (fun s -> String.length s > 0) in
-          match args with
-          | set :: targets ->
-              ( [DEF_aux (DEF_pragma ("target_set", Pragma_line (arg, l)), annot)],
-                { ctx with target_sets = StringMap.add set targets ctx.target_sets }
-              )
-          | [] -> raise (Reporting.err_general l "No arguments provided to target set directive")
-        )
+      | "target_set" ->
+          let set, targets = parse_target_set l arg in
+          ( [DEF_aux (DEF_pragma ("target_set", Pragma_line (arg, l)), annot)],
+            { ctx with target_sets = StringMap.add set targets ctx.target_sets }
+          )
       | _ -> ([DEF_aux (DEF_pragma (pragma, Pragma_line (arg, l)), annot)], ctx)
     )
   | P.DEF_pragma (pragma, P.Pragma_structured data) ->
@@ -2643,8 +2641,7 @@ let generate_enum_number_conversions defs =
                 let kid = mk_kid "e" in
                 let pexp n (id, _) =
                   let pat =
-                    if n = List.length elems - 1 then mk_pat P_wild
-                    else mk_pat (P_lit (mk_lit (L_num (Big_int.of_int n))))
+                    if n = List.length elems - 1 then mk_pat P_wild else mk_pat (P_lit (mk_lit (L_num (Z.of_int n))))
                   in
                   let pat = locate_pat (unknown_to l) pat in
                   mk_pexp (Pat_exp (pat, mk_exp ~loc:l (E_id id)))
@@ -2670,7 +2667,7 @@ let generate_enum_number_conversions defs =
               else (
                 let kid = mk_kid "e" in
                 let to_typ = mk_typ (Typ_exist ([mk_kopt K_int kid], range_constraint kid, atom_typ (nvar kid))) in
-                let pexp n (id, _) = mk_pexp (Pat_exp (mk_pat (P_id id), mk_lit_exp (L_num (Big_int.of_int n)))) in
+                let pexp n (id, _) = mk_pexp (Pat_exp (mk_pat (P_id id), mk_lit_exp (L_num (Z.of_int n)))) in
                 let funcl =
                   mk_funcl name
                     (mk_pat (P_id (mk_id "arg#")))

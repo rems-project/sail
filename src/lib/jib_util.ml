@@ -49,7 +49,6 @@ open Ast_compare
 open Ast_util
 open Jib
 open Jib_visitor
-open Value2
 open PPrint
 module Document = Pretty_print_sail.Document
 
@@ -216,7 +215,7 @@ let rec string_of_ctyp = function
   | CT_lbits -> "%bv"
   | CT_sbits n -> "%sbv" ^ string_of_int n
   | CT_fbits n -> "%bv" ^ string_of_int n
-  | CT_constant n -> Big_int.to_string n
+  | CT_constant n -> Z.to_string n
   | CT_unit -> "%unit"
   | CT_bool -> "%bool"
   | CT_real -> "%real"
@@ -247,23 +246,24 @@ and string_of_uid (id, ctyps) =
   | [] -> Util.zencode_string (string_of_id id)
   | _ -> Util.zencode_string (string_of_id id) ^ "<" ^ Util.string_of_list "," string_of_ctyp ctyps ^ ">"
 
-let string_of_value = function
-  | VL_bits [] -> "UINT64_C(0)"
-  | VL_bits bs -> Sail2_values.show_bitlist bs
-  | VL_int i -> Big_int.to_string i
-  | VL_bool true -> "true"
-  | VL_bool false -> "false"
-  | VL_unit -> "()"
-  | VL_real str -> str
-  | VL_string str -> "\"" ^ str ^ "\""
-  | VL_enum element -> Util.zencode_string element
-  | VL_ref r -> "&" ^ Util.zencode_string r
-  | VL_undefined -> "undefined"
+let string_of_value : Ast.value -> string = function
+  | V_bitvector bv when Z.equal (Sail_lib.length_bits bv) Z.zero -> "UINT64_C(0)"
+  | V_bitvector bv -> Sail_lib.string_of_bits bv
+  | V_int i -> Z.to_string i
+  | V_bool true -> "true"
+  | V_bool false -> "false"
+  | V_unit -> "()"
+  | V_real q -> Q.to_string (Util.Rational.from_rocq q)
+  | V_string str -> "\"" ^ str ^ "\""
+  | V_member element -> Util.zencode_string (string_of_id element)
+  | V_ref r -> "&" ^ Util.zencode_string (string_of_id r)
+  (* Jib literals only ever use the scalar part of [Ast.value]; fall back to the
+     generic printer rather than failing, so this stays safe to use in errors. *)
+  | v -> Value.string_of_value v
 
 let rec string_of_cval = function
   | V_id (id, _) -> string_of_name id
-  | V_member (id, _) -> Util.zencode_string (string_of_id id)
-  | V_lit (VL_undefined, ctyp) -> string_of_value VL_undefined ^ " : " ^ string_of_ctyp ctyp
+  | V_undef ctyp -> "undefined : " ^ string_of_ctyp ctyp
   | V_lit (vl, ctyp) -> string_of_value vl
   | V_call (op, cvals) -> Printf.sprintf "%s(%s)" (string_of_op op) (Util.string_of_list ", " string_of_cval cvals)
   | V_field (f, field, _) -> Printf.sprintf "%s.%s" (string_of_cval f) (Util.zencode_string (string_of_id field))
@@ -297,7 +297,8 @@ let string_of_creturn = function
 
 let string_of_init = function
   | Init_cval cval -> string_of_cval cval
-  | Init_static vl -> "static " ^ string_of_value vl
+  | Init_static None -> "static undefined"
+  | Init_static (Some vl) -> "static " ^ string_of_value vl
   | Init_json_key parts -> Util.string_of_list "." (fun part -> "\"" ^ part ^ "\"") parts
 
 let rec doc_instr (I_aux (aux, _)) =
@@ -477,7 +478,7 @@ let rec ctyp_equal ctyp1 ctyp2 =
   | CT_fint n, CT_fint m -> n = m
   | CT_float n, CT_float m -> n = m
   | CT_rounding_mode, CT_rounding_mode -> true
-  | CT_constant n, CT_constant m -> Big_int.equal n m
+  | CT_constant n, CT_constant m -> Z.equal n m
   | CT_unit, CT_unit -> true
   | CT_bool, CT_bool -> true
   | CT_struct (id1, ctyps1), CT_struct (id2, ctyps2) when List.compare_lengths ctyps1 ctyps2 = 0 ->
@@ -507,7 +508,7 @@ let rec ctyp_compare ctyp1 ctyp2 =
   | CT_fint n, CT_fint m -> Int.compare n m
   | CT_fint _, _ -> 1
   | _, CT_fint _ -> -1
-  | CT_constant n, CT_constant m -> Big_int.compare n m
+  | CT_constant n, CT_constant m -> Z.compare n m
   | CT_constant _, _ -> 1
   | _, CT_constant _ -> -1
   | CT_fbits n, CT_fbits m -> Int.compare n m
@@ -615,7 +616,7 @@ let rec ctyp_suprema = function
   | CT_enum id -> CT_enum id
   (* Do we really never want to never call ctyp_suprema on constructor
      fields?  Doing it causes issues for structs (see
-     test/c/stack_struct.sail) but it might be wrong to not call it
+     test/exec/stack_struct.sail) but it might be wrong to not call it
      for nested variants... *)
   | CT_struct (id, ctyps) -> CT_struct (id, ctyps)
   | CT_variant (id, ctyps) -> CT_variant (id, ctyps)
@@ -699,7 +700,7 @@ let rec is_polymorphic = function
 
 let rec cval_deps = function
   | V_id (id, _) -> NameSet.singleton id
-  | V_lit _ | V_member _ -> NameSet.empty
+  | V_lit _ | V_undef _ -> NameSet.empty
   | V_field (cval, _, _) | V_tuple_member (cval, _, _) -> cval_deps cval
   | V_call (_, cvals) | V_tuple cvals -> List.fold_left NameSet.union NameSet.empty (List.map cval_deps cvals)
   | V_ctor_kind (cval, _) -> cval_deps cval
@@ -765,7 +766,7 @@ let is_reference_to id = function Some id' -> Name.compare id id' = 0 | None -> 
 
 let rec cval_references read = function
   | V_id (id, _) -> is_reference_to id read
-  | V_lit _ | V_member _ -> false
+  | V_lit _ | V_undef _ -> false
   | V_field (cval, _, _) | V_tuple_member (cval, _, _) | V_ctor_kind (cval, _) | V_ctor_unwrap (cval, _, _) ->
       cval_references read cval
   | V_call (_, cvals) | V_tuple cvals -> List.exists (cval_references read) cvals
@@ -847,8 +848,8 @@ let rec map_clexp_ctyp f = function
 
 let rec map_cval_ctyp f = function
   | V_id (id, ctyp) -> V_id (id, f ctyp)
-  | V_member (id, ctyp) -> V_member (id, f ctyp)
   | V_lit (vl, ctyp) -> V_lit (vl, f ctyp)
+  | V_undef ctyp -> V_undef (f ctyp)
   | V_ctor_kind (cval, (id, unifiers)) -> V_ctor_kind (map_cval_ctyp f cval, (id, List.map f unifiers))
   | V_ctor_unwrap (cval, (id, unifiers), ctyp) -> V_ctor_unwrap (map_cval_ctyp f cval, (id, List.map f unifiers), f ctyp)
   | V_tuple_member (cval, i, j) -> V_tuple_member (map_cval_ctyp f cval, i, j)
@@ -1134,8 +1135,7 @@ let rec infer_call op vs =
 
 and cval_ctyp = function
   | V_id (_, ctyp) -> ctyp
-  | V_member (_, ctyp) -> ctyp
-  | V_lit (_, ctyp) -> ctyp
+  | V_lit (_, ctyp) | V_undef ctyp -> ctyp
   | V_ctor_kind _ -> CT_bool
   | V_ctor_unwrap (_, _, ctyp) -> ctyp
   | V_tuple_member (cval, _, n) -> (
@@ -1209,7 +1209,7 @@ let instr_split_at f =
   instr_split_at' f []
 
 let rec cval_has_ctyp pred = function
-  | V_id (_, ctyp) | V_member (_, ctyp) | V_lit (_, ctyp) -> pred ctyp
+  | V_id (_, ctyp) | V_lit (_, ctyp) | V_undef ctyp -> pred ctyp
   | V_field (cval, _, ctyp) -> cval_has_ctyp pred cval || pred ctyp
   | V_tuple_member (cval, _, _) -> cval_has_ctyp pred cval
   | V_tuple cvals | V_call (_, cvals) -> List.exists (cval_has_ctyp pred) cvals

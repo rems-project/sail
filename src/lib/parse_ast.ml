@@ -44,8 +44,6 @@
 (*  SPDX-License-Identifier: BSD-2-Clause                                   *)
 (****************************************************************************)
 
-module Big_int = Nat_big_num
-
 type text = string
 
 type l =
@@ -65,7 +63,7 @@ module Attribute_data = struct
   type attribute_data_aux =
     | AD_object of (string * attribute_data) list
     | AD_list of attribute_data list
-    | AD_num of Big_int.num
+    | AD_num of Z.t
     | AD_string of string
     | AD_bool of bool
 
@@ -119,7 +117,7 @@ type lit_aux =
   | L_one (* $_ : _$ *)
   | L_true (* $_ : _$ *)
   | L_false (* $_ : _$ *)
-  | L_num of Big_int.num (* natural number constant *)
+  | L_num of Z.t (* natural number constant *)
   | L_hex of string (* bit vector constant, C-style *)
   | L_bin of string (* bit vector constant, C-style *)
   | L_string of string (* string constant *)
@@ -133,7 +131,7 @@ type atyp_aux =
   | ATyp_id of id (* identifier *)
   | ATyp_var of kid (* ticked variable *)
   | ATyp_lit of lit (* literal *)
-  | ATyp_nset of Big_int.num list (* set type *)
+  | ATyp_nset of Z.t list (* set type *)
   | ATyp_in of atyp * atyp (* set type *)
   | ATyp_times of atyp * atyp (* product *)
   | ATyp_sum of atyp * atyp (* sum *)
@@ -191,7 +189,7 @@ type pat_aux =
   | P_app of id * pat list (* union constructor pattern *)
   | P_vector of pat list (* vector pattern *)
   | P_vector_concat of pat list (* concatenated vector pattern *)
-  | P_vector_subrange of id * Big_int.num * Big_int.num
+  | P_vector_subrange of id * Z.t * Z.t
   | P_tuple of pat list (* tuple pattern *)
   | P_list of pat list (* list pattern *)
   | P_cons of pat * pat (* cons pattern *)
@@ -332,7 +330,7 @@ type mpat_aux =
   | MP_app of id * mpat list
   | MP_vector of mpat list
   | MP_vector_concat of mpat list
-  | MP_vector_subrange of id * Big_int.num * Big_int.num
+  | MP_vector_subrange of id * Z.t * Z.t
   | MP_tuple of mpat list
   | MP_list of mpat list
   | MP_cons of mpat * mpat
@@ -421,7 +419,7 @@ type scattered_def = SD_aux of scattered_def_aux * l
 
 type prec = Infix | InfixL | InfixR
 
-type fixity_token = prec * Big_int.num * string
+type fixity_token = prec * Z.t * string
 
 type pragma =
   (* pragma contents *)
@@ -437,7 +435,7 @@ type def_aux =
   | DEF_impl of funcl (* impl definition *)
   | DEF_let of pat * exp (* value definition *)
   | DEF_overload of id * id list (* operator overload specifications *)
-  | DEF_fixity of prec * Big_int.num * string (* fixity declaration *)
+  | DEF_fixity of prec * Z.t * string (* fixity declaration *)
   | DEF_val of val_spec (* top-level type constraint *)
   | DEF_outcome of outcome_spec * def list (* top-level outcome definition *)
   | DEF_instantiation of id * subst list (* instantiation *)

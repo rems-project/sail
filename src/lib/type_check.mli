@@ -50,7 +50,6 @@ open Ast
 open Ast_compare
 open Ast_defs
 open Ast_util
-module Big_int = Nat_big_num
 
 (** [set_tc_debug] controls the verbosity of the type checker. 0 is silent, 1 prints a tree of the type derivation and 2
     is like 1 but with much more debugging information. 3 is the highest level, and is even more verbose still. *)
@@ -138,12 +137,18 @@ module Env : sig
   (** Get the current set of constraints. *)
   val get_constraints : t -> n_constraint list
 
+  (** Get the constraints introduced by top-level [constraint] declarations. *)
+  val get_global_constraints : t -> n_constraint list
+
   val add_constraint : ?global:bool -> ?reason:Ast.l * string -> n_constraint -> t -> t
 
   (** Push all the type variables and constraints from a typquant into an environment *)
   val add_typquant : ?from_outcome:bool -> Ast.l -> typquant -> t -> t
 
   val get_typ_var : kid -> t -> kind_aux
+
+  (** Check whether a type variable is bound, without copying the type variable map like [get_typ_vars]. *)
+  val is_typ_var : kid -> t -> bool
 
   val get_typ_vars : t -> kind_aux KBindings.t
 
@@ -194,6 +199,10 @@ module Env : sig
   val lookup_id : id -> t -> typ lvar
 
   val get_toplevel_lets : t -> IdSet.t
+
+  (** Check whether an identifier is a top-level let binding, without building the set of all of them like
+      [get_toplevel_lets]. *)
+  val is_toplevel_let : id -> t -> bool
 
   val is_outcome : id -> t -> bool
 
@@ -373,7 +382,7 @@ val check_funcls_complete :
 val prove : string * int * int * int -> Env.t -> n_constraint -> bool
 
 (** Returns Some c if there is a unique c such that nexp = c *)
-val solve_unique : Env.t -> nexp -> Big_int.num option
+val solve_unique : Env.t -> nexp -> Z.t option
 
 val canonicalize : Env.t -> typ -> typ
 
@@ -490,7 +499,7 @@ val instantiation_of_without_type : tannot exp -> typ_arg KBindings.t
 (** Type variable instantiations that inference will extract from constraints *)
 val instantiate_simple_equations : quant_item list -> typ_arg KBindings.t
 
-val big_int_of_nexp : nexp -> Big_int.num option
+val big_int_of_nexp : nexp -> Z.t option
 
 (** {2 Checking full ASTs} *)
 

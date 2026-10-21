@@ -1,0 +1,5 @@
+[93mType error[0m:
+[96mfail/bitfield_int_underlying.sail[0m:4.0-33:
+4[96m |[0mbitfield B : int = { F : 3 .. 0 }
+ [91m |[0m[91m^-------------------------------^[0m
+ [91m |[0m Underlying bitfield type int must be a constant-width bitvector

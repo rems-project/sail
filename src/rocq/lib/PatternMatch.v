@@ -56,6 +56,7 @@ From Sail Require Import ListUtil.
 From Sail Require Import ValueType.
 
 From Sail Require BitList.
+From Sail Require PrimBits.
 From Sail Require TypeAnnot.
 
 Import TypeAnnot.Types.
@@ -414,18 +415,6 @@ Proof.
     ).
 Qed.
 
-Definition update_list (xs : list bit) (n : nat) (y : bit) : list bit :=
-  let n := List.length xs - n - 1 in
-  let '(ys, zs) := take_drop n xs in
-  ys ++ [y] ++ List.tl zs.
-
-Fixpoint update_subrange (xs : list bit) (n : nat) (ys : list bit) : list bit :=
-  match ys with
-  | [] => xs
-  | y :: ys =>
-    update_subrange (update_list xs n y) (n - 1) ys
-  end.
-
 Definition complete_value (partial_values : non_empty (value * Z * Z)) : value :=
   let '(Non_empty (v1, n1, m1) partial_values) := partial_values in
     let '(max, min) :=
@@ -437,13 +426,14 @@ Definition complete_value (partial_values : non_empty (value * Z * Z)) : value :
         partial_values (n1, m1)
     in
     let len := Z.sub (Z.succ max) min in
-    let zeros := List.repeat B0 (Z.to_nat len) in
+    let zeros := PrimBits.zeros len in
     let value :=
       List.fold_left
         (fun bv pvalue =>
          let '(slice, n, _) := pvalue in
          match slice with
-         | V_bitvector slice => update_subrange bv (Z.to_nat n) slice
+         | V_bitvector slice =>
+             PrimBits.update_subrange bv n (n - PrimBits.width slice + 1) slice
          | _ => bv
          end)
         ((v1, n1, m1) :: partial_values)
@@ -553,8 +543,10 @@ Definition pattern_match_literal (l : Ast.lit) (v : value) : match_result value 
   | (L_true,      V_bool true   ) => simple_match value
   | (L_false,     V_bool false  ) => simple_match value
   | (L_num n,     V_int m       ) => simple_match_when value (Z.eqb n m)
-  | (L_hex s,     V_bitvector vs) => simple_match_when value (BitList.same_bits (BitList.of_hex_lit s) vs)
-  | (L_bin s,     V_bitvector vs) => simple_match_when value (BitList.same_bits (BitList.of_bin_lit s) vs)
+  | (L_hex s,     V_bitvector vs) =>
+      simple_match_when value (PrimBits.eq_bits (PrimBits.of_bit_list (BitList.of_hex_lit s)) vs)
+  | (L_bin s,     V_bitvector vs) =>
+      simple_match_when value (PrimBits.eq_bits (PrimBits.of_bit_list (BitList.of_bin_lit s)) vs)
   | (L_string s1, V_string s2   ) => simple_match_when value (String.eqb s1 s2)
   | (L_real r1,   V_real r2     ) => simple_match_when value (QArith_base.Qeq_bool r1 r2)
   | _ => Unmatched
@@ -645,12 +637,14 @@ Module Typed (Tannot : TypeAnnot.S).
                     match Tannot.get_split (snd annot) with
                     | Split s =>
                         match match_info with
-                        | (_, []) => (Unmatched, [])
                         | (prev, bs) =>
-                            let '(bs_take, bs_drop) := take_drop s bs in
-                            (prev ⋈ pattern_match p (V_bitvector bs_take), bs_drop)
+                            if Z.eqb (PrimBits.width bs) 0 then
+                              (Unmatched, bs)
+                            else
+                              let '(bs_take, bs_drop) := PrimBits.split_at (Z.of_nat s) bs in
+                              (prev ⋈ pattern_match p (V_bitvector bs_take), bs_drop)
                         end
-                    | No_split => (Unmatched, [])
+                    | No_split => (Unmatched, PrimBits.zeros 0)
                     end)
                    ps
                    (simple_match value, bs))

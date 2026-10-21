@@ -259,7 +259,7 @@ val sub_vec_int = {
 
 val sub_real = {ocaml: "sub_real", interpreter: "sub_real", lem: "realMinus", c: "sub_real", coq: "Rminus"} : (real, real) -> real
 
-val negate_real = {ocaml: "negate_real", interpreter: "negate_real", lem: "realNegate", c: "neg_real", coq: "Ropp"} : real -> real
+val negate_real = {lem: "realNegate", coq: "Ropp", _: "neg_real"} : real -> real
 
 overload operator - = {sub_vec, sub_vec_int, sub_real}
 
@@ -295,7 +295,7 @@ val abs_real = {coq: "Rabs", _: "abs_real"} : real -> real
 
 overload abs = {abs_int_atom, abs_real}
 
-val quotient_real = {ocaml: "quotient_real", interpreter: "quotient_real", lem: "realDiv", c: "div_real", coq: "Rdiv"} : (real, real) -> real
+val quotient_real = {lem: "realDiv", coq: "Rdiv", _: "div_real"} : (real, real) -> real
 
 overload operator / = {ediv_int, quotient_real}
 overload div = {ediv_int}

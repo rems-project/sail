@@ -223,7 +223,7 @@ let string_of_typ_con (Typ_aux (t, _)) =
   | Typ_internal_unknown -> "Typ_internal_unknown"
   | Typ_id _ -> "Typ_id"
 
-let doc_big_int i = if i >= Z.zero then string (Big_int.to_string i) else parens (string (Big_int.to_string i))
+let doc_big_int i = if i >= Z.zero then string (Z.to_string i) else parens (string (Z.to_string i))
 
 let is_unit t = match t with Typ_aux (Typ_id (Id_aux (Id "unit", _)), _) -> true | _ -> false
 
@@ -284,11 +284,7 @@ and doc_nconstraint ctx env (NC_aux (nc, _)) =
   | NC_id i -> doc_id_ctor ctx i
   | NC_set (n, vs) ->
       flow (break 1)
-        [
-          string "List.elem";
-          doc_nexp ctx env n;
-          brackets (separate_map comma_sp (fun x -> string (Nat_big_num.to_string x)) vs);
-        ]
+        [string "List.elem"; doc_nexp ctx env n; brackets (separate_map comma_sp (fun x -> string (Z.to_string x)) vs)]
   | NC_var ki -> doc_kid ctx ki
 
 and doc_typ_arg ctx env rel (A_aux (t, _)) =
@@ -417,8 +413,8 @@ let doc_lit ~width (L_aux (lit, l)) =
       | _ -> utf8string ("0b" ^ string_of_bin_lit ~group_separator:"" bin ^ width_specifier)
     )
   | L_string s -> utf8string ("\"" ^ lean_escape_string s ^ "\"")
-  | L_real r -> utf8string (Q.to_string (Util.Rational.from_rocq r))
-(* TODO test if this is really working *)
+  (* Fractions need parens for precedence *)
+  | L_real r -> parens (utf8string (Q.to_string (Util.Rational.from_rocq r)))
 
 let string_of_exp_con (E_aux (e, _)) =
   match e with
@@ -580,7 +576,7 @@ and doc_vector_concat ctx pats =
     | P_id id -> (
         match destruct_bitvector (env_of_pat pat) (typ_of_pat pat) with
         | Some (Nexp_aux (Nexp_constant n, _)) ->
-            doc_id_ctor ctx (fixup_match_id id) ^^ char ':' ^^ string (Big_int.to_string n)
+            doc_id_ctor ctx (fixup_match_id id) ^^ char ':' ^^ string (Z.to_string n)
         | _ -> Reporting.unreachable l __POS__ "Found subpattern with unclear width in bitvector pattern"
       )
     | P_typ (_, pat) -> doc_part pat
@@ -628,7 +624,7 @@ let wrap_with_left_arrow (needs_left_arrow : bool) (d : document) =
 
 let wrap_with_do (with_arrow : bool) (needs_return : bool) (d : document) =
   let ar_do = if with_arrow then string "← do" else string "do" in
-  if needs_return then parens (nest 2 (flow hardline [ar_do; d])) else d
+  if needs_return then parens (ifflat (ar_do ^^ space ^^ d) (nest 2 (flow hardline [ar_do; d]))) else d
 
 let get_fn_implicits (Typ_aux (t, _)) : bool list =
   let arg_implicit arg =
@@ -939,6 +935,12 @@ and doc_exp (as_monadic : bool) ctx (E_aux (e, (l, annot)) as full_exp) =
   | E_app ((Id_aux (Id "early_return", _) as f), [arg]) ->
       let throw = if ctx.in_sail_monad then string "SailME.throw " else string "throw " in
       nest 2 (throw ^^ d_of_arg ctx arg)
+  (* Preserve short-circuiting; merely putting an arrow on the rhs would lift it out *)
+  | E_app (Id_aux (((And_bool | Or_bool) as f), _), [lhs; rhs]) when has_effect rhs ->
+      let op = match f with And_bool -> "<&&>" | _ -> "<||>" in
+      let arrow sub = if as_monadic then sub else parens (leftarrow ^^ parens sub) in
+      let d_rhs = wrap_with_do false true (doc_exp true ctx rhs) in
+      arrow (d_of_arg ~with_arrow:false ctx lhs ^^ space ^^ string op ^^ space ^^ d_rhs)
   | E_app (f, args) -> (
       let _, f_typ = Env.get_val_spec f env in
       let implicits = get_fn_implicits f_typ in
@@ -1075,7 +1077,7 @@ and doc_exp (as_monadic : bool) ctx (E_aux (e, (l, annot)) as full_exp) =
         ^^ space
         ^^ parens (string "fun the_exception => " ^^ hardline ^^ cases)
         )
-  | E_assert (e1, e2) -> string "assert " ^^ d_of_arg ctx e1 ^^ space ^^ d_of_arg ctx e2
+  | E_assert (e1, e2) -> string "sail_assert " ^^ d_of_arg ctx e1 ^^ space ^^ d_of_arg ctx e2
   | E_list es -> brackets (separate_map comma_sp (doc_exp as_monadic ctx) es)
   | E_cons (hd_e, tl_e) -> parens (separate space [doc_exp false ctx hd_e; string "::"; doc_exp false ctx tl_e])
   | _ -> failwith ("Expression " ^ string_of_exp_con full_exp ^ " " ^ string_of_exp full_exp ^ " not translatable yet.")
@@ -1371,8 +1373,10 @@ let doc_val ctx pat exp =
   in
   let typpp = match pat_typ with None -> empty | Some typ -> space ^^ colon ^^ space ^^ doc_typ ctx ctx.env typ in
   let idpp = doc_id_ctor ctx id in
+  let ctx = { ctx with in_sail_monad = has_effect exp } in
   let base_pp =
-    if has_effect exp then string "unwrapValue" ^^ space ^^ parens (doc_exp true ctx exp) else doc_exp false ctx exp
+    if ctx.in_sail_monad then string "unwrapValue" ^^ space ^^ parens (string "do" ^/^ doc_exp true ctx exp)
+    else doc_exp false ctx exp
   in
   (global, nest 2 (group (string "def" ^^ space ^^ idpp ^^ typpp ^^ space ^^ coloneq ^/^ base_pp)))
 
@@ -1433,7 +1437,7 @@ let rec collect_imports_rec (cg : Callgraph.callgraph) (defs : (tannot, env) def
     (accs : IntSet.t list) (acc : IntSet.t) (idx : int) (nonempty_print : bool) : IntSet.t list =
   match defs with
   | [] -> accs @ [acc]
-  | (DEF_aux ((DEF_fundef _ | DEF_internal_mutrec _ | DEF_let _ | DEF_register _), _) as d) :: defs' ->
+  | (DEF_aux ((DEF_fundef _ | DEF_internal_mutrec _ | DEF_let _), _) as d) :: defs' ->
       let map, acc = add_def_to_map_and_ref_set cg map acc idx d in
       collect_imports_rec cg defs' map accs acc idx true
   | DEF_aux (DEF_type tdef, _) :: defs' -> collect_imports_rec cg defs' map accs acc idx nonempty_print
@@ -1734,7 +1738,7 @@ let pp_ast_lean symbols (env : Type_check.env) effect_info ({ defs; _ } as ast :
   print types_file (types ^^ register_refs ^^ instantiation_deps ^^ instantiations);
   let _ =
     List.map2
-      (fun file defs -> print file (separate hardline (remove_empties [opens; defs])))
+      (fun file defs -> print ~len:!opt_line_width file (separate hardline (remove_empties [opens; defs])))
       imp_funcs_files imp_fundefss
   in
   print ~len:!opt_line_width funcs_file (separate hardline (remove_empties ([opens; main_fundefs] @ main_function)));

@@ -21,6 +21,7 @@ jobs:
 
     - name: System dependencies
       run: |
+        sudo apt update
         sudo apt install build-essential libgmp-dev z3 cvc4 opam
 
     - name: Restore cached opam

@@ -74,9 +74,6 @@ let read name =
   in
   (segments, e_entry, symbol_map)
 
-(*let write_sail_lib paddr i byte =
-  Sail_lib.wram (Nat_big_num.add paddr (Nat_big_num.of_int i)) byte*)
-
 let write_file chan paddr i byte =
   output_string chan (Nat_big_num.to_string (Nat_big_num.add paddr (Nat_big_num.of_int i)) ^ "\n");
   output_string chan (string_of_int byte ^ "\n")

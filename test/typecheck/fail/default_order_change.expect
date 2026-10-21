@@ -1,0 +1,5 @@
+[93mType error[0m:
+[96mfail/default_order_change.sail[0m:4.14-17:
+4[96m |[0mdefault Order inc
+ [91m |[0m              [91m^-^[0m
+ [91m |[0m Cannot change default order once already set

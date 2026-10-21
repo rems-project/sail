@@ -44,19 +44,6 @@
 (*  SPDX-License-Identifier: BSD-2-Clause                                   *)
 (****************************************************************************)
 
-let rec skip_lines in_chan = function
-  | n when n <= 0 -> ()
-  | n ->
-      ignore (Sail_file.In_channel.input_line in_chan);
-      skip_lines in_chan (n - 1)
-
-let rec read_lines in_chan = function
-  | n when n <= 0 -> []
-  | n ->
-      let l = Sail_file.In_channel.input_line in_chan in
-      let ls = read_lines in_chan (n - 1) in
-      l :: ls
-
 (* Replace unprintable ASCII characters with an escape
    sequence. Optional color argument lets us change the color of the
    escape sequence in the output. Note that rather than using \t for
@@ -127,9 +114,7 @@ let underline_single color cnum_from cnum_to =
 
 let format_hint color = function Some hint -> " " ^ Util.(hint |> color |> clear) | None -> ""
 
-let format_code_single' prefix hint fname in_chan lnum cnum_from cnum_to contents ppf =
-  skip_lines in_chan (lnum - 1);
-  let line = Sail_file.In_channel.input_line in_chan in
+let format_code_single' prefix hint fname line lnum cnum_from cnum_to contents ppf =
   let line_prefix = string_of_int lnum ^ Util.(clear (cyan " |")) in
   let blank_prefix = String.make (String.length (string_of_int lnum)) ' ' ^ Util.(clear (ppf.loc_color " |")) in
   format_endline (Printf.sprintf "%s%s:%d.%d-%d:" prefix (format_filename fname) lnum cnum_from cnum_to) ppf;
@@ -146,11 +131,7 @@ let underline_double_from color cnum_from eol =
 let underline_double_to color cnum_to =
   if cnum_to = 0 then Util.(clear (color "^")) else Util.(clear (color (String.make (cnum_to - 1) '-' ^ "^")))
 
-let format_code_double' prefix fname in_chan lnum_from cnum_from lnum_to cnum_to contents ppf =
-  skip_lines in_chan (lnum_from - 1);
-  let line_from = Sail_file.In_channel.input_line in_chan in
-  skip_lines in_chan (lnum_to - lnum_from - 1);
-  let line_to = Sail_file.In_channel.input_line in_chan in
+let format_code_double' prefix fname line_from lnum_from cnum_from line_to lnum_to cnum_to contents ppf =
   let line_to_prefix = string_of_int lnum_to ^ Util.(clear (cyan " |")) in
   let line_from_padding =
     String.make (String.length (string_of_int lnum_to) - String.length (string_of_int lnum_from)) ' '
@@ -175,10 +156,9 @@ let format_code_single_fallback prefix fname lnum cnum_from cnum_to contents ppf
   contents { ppf with indent = ppf.indent ^ blank_prefix ^ " " }
 
 let format_code_single prefix hint handle lnum cnum_from cnum_to contents ppf =
-  try
-    let in_chan = Sail_file.In_channel.from_file handle in
-    format_code_single' prefix hint handle in_chan lnum cnum_from cnum_to contents ppf
-  with _ -> format_code_single_fallback prefix handle lnum cnum_from cnum_to contents ppf
+  match Sail_file.line handle lnum with
+  | Some line -> format_code_single' prefix hint handle line lnum cnum_from cnum_to contents ppf
+  | None -> format_code_single_fallback prefix handle lnum cnum_from cnum_to contents ppf
 
 let format_code_double_fallback prefix handle lnum_from cnum_from lnum_to cnum_to contents ppf =
   let blank_prefix = String.make (String.length (string_of_int lnum_to)) ' ' ^ Util.(clear (ppf.loc_color " |")) in
@@ -188,10 +168,10 @@ let format_code_double_fallback prefix handle lnum_from cnum_from lnum_to cnum_t
   contents { ppf with indent = ppf.indent ^ blank_prefix ^ " " }
 
 let format_code_double prefix handle lnum_from cnum_from lnum_to cnum_to contents ppf =
-  try
-    let in_chan = Sail_file.In_channel.from_file handle in
-    format_code_double' prefix handle in_chan lnum_from cnum_from lnum_to cnum_to contents ppf
-  with _ -> format_code_double_fallback prefix handle lnum_from cnum_from lnum_to cnum_to contents ppf
+  match (Sail_file.line handle lnum_from, Sail_file.line handle lnum_to) with
+  | Some line_from, Some line_to ->
+      format_code_double' prefix handle line_from lnum_from cnum_from line_to lnum_to cnum_to contents ppf
+  | _ -> format_code_double_fallback prefix handle lnum_from cnum_from lnum_to cnum_to contents ppf
 
 let format_pos prefix hint p1 p2 contents ppf =
   let open Sail_file.Position in

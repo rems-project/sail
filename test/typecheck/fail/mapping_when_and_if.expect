@@ -1,0 +1,8 @@
+[93mError[0m:
+[96mfail/mapping_when_and_if.sail[0m:5.16-21:
+5[96m |[0m  forwards x if x > 0 => true when x < 5,
+ [92m |[0m                [92m^---^[0m [92m'if' clause here[0m
+[96mfail/mapping_when_and_if.sail[0m:5.35-40:
+5[96m |[0m  forwards x if x > 0 => true when x < 5,
+ [91m |[0m                                   [91m^---^[0m
+ [91m |[0m Mapping clause has both a 'when' guard and an 'if' clause

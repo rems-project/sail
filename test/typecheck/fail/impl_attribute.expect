@@ -1,0 +1,5 @@
+[93mError[0m:
+[96mfail/impl_attribute.sail[0m:7.7-11:
+7[96m |[0m  impl $[a] foo() = ()
+ [91m |[0m       [91m^--^[0m
+ [91m |[0m Attributes or documentation comment not permitted here

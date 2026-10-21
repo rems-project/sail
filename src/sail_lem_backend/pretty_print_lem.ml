@@ -160,9 +160,9 @@ let is_regtyp (Typ_aux (typ, _)) env =
   match typ with Typ_app (id, _) when string_of_id id = "register" -> true | _ -> false
 
 let lemnum default n =
-  if Big_int.less_equal Big_int.zero n && Big_int.less_equal n (Big_int.of_int 128) then "int" ^ Big_int.to_string n
-  else if Big_int.greater_equal n Big_int.zero then default n
-  else "(int0 - " ^ default (Big_int.abs n) ^ ")"
+  if Z.leq Z.zero n && Z.leq n (Z.of_int 128) then "int" ^ Z.to_string n
+  else if Z.geq n Z.zero then default n
+  else "(int0 - " ^ default (Z.abs n) ^ ")"
 
 let doc_nexp_lem nexp =
   let nice_kid kid =
@@ -171,14 +171,14 @@ let doc_nexp_lem nexp =
   in
   let (Nexp_aux (nexp, l) as full_nexp) = nexp_simp nexp in
   match nexp with
-  | Nexp_constant i -> string ("ty" ^ Big_int.to_string i)
+  | Nexp_constant i -> string ("ty" ^ Z.to_string i)
   | Nexp_var v -> string (string_of_kid (nice_kid v))
   | _ ->
       let rec mangle_nexp (Nexp_aux (nexp, _)) =
         match nexp with
         | Nexp_id id -> string_of_id id
         | Nexp_var kid -> string_of_id (id_of_kid (nice_kid kid))
-        | Nexp_constant i -> lemnum Big_int.to_string i
+        | Nexp_constant i -> lemnum Z.to_string i
         | Nexp_times (n1, n2) -> mangle_nexp n1 ^ "_times_" ^ mangle_nexp n2
         | Nexp_sum (n1, n2) -> mangle_nexp n1 ^ "_plus_" ^ mangle_nexp n2
         | Nexp_minus (n1, n2) -> mangle_nexp n1 ^ "_minus_" ^ mangle_nexp n2
@@ -496,8 +496,8 @@ let doc_tannot_lem ctxt env eff typ =
       let ta = doc_typ_lem ctxt.params_to_print env typ in
       if eff then string " : M " ^^ parens ta else string " : " ^^ ta
 
-let min_int32 = Big_int.of_int64 (Int64.of_int32 Int32.min_int)
-let max_int32 = Big_int.of_int64 (Int64.of_int32 Int32.max_int)
+let min_int32 = Z.of_int64 (Int64.of_int32 Int32.min_int)
+let max_int32 = Z.of_int64 (Int64.of_int32 Int32.max_int)
 
 let doc_bit = function B0 -> string "B0" | B1 -> string "B1"
 
@@ -507,8 +507,8 @@ let rec doc_lit_lem (L_aux (lit, l)) =
   | L_false -> utf8string "false"
   | L_true -> utf8string "true"
   | L_num i ->
-      let ipp = Big_int.to_string i in
-      utf8string (if Big_int.less i Big_int.zero then "((0" ^ ipp ^ "):ii)" else "(" ^ ipp ^ ":ii)")
+      let ipp = Z.to_string i in
+      utf8string (if Z.lt i Z.zero then "((0" ^ ipp ^ "):ii)" else "(" ^ ipp ^ ":ii)")
   | L_hex hex when !Monomorphise.opt_mwords ->
       utf8string ("0x" ^ string_of_hex_lit ~group_separator:"" ~case:Uppercase hex)
   | L_bin bin when !Monomorphise.opt_mwords -> utf8string ("0b" ^ string_of_bin_lit ~group_separator:"" bin)
@@ -517,8 +517,7 @@ let rec doc_lit_lem (L_aux (lit, l)) =
   | L_string s -> utf8string ("\"" ^ String.escaped s ^ "\"")
   | L_real r ->
       let r = Util.Rational.from_rocq r in
-      parens
-        (separate space (List.map string ["realFromFrac"; Big_int.to_string (Q.num r); Big_int.to_string (Q.den r)]))
+      parens (separate space (List.map string ["realFromFrac"; Z.to_string (Q.num r); Z.to_string (Q.den r)]))
 
 let kid_nexps_of_typquant tq =
   quant_kopts tq |> List.filter (fun k -> is_int_kopt k || is_typ_kopt k) |> List.map kopt_kid |> List.map nvar
@@ -1644,7 +1643,7 @@ let doc_regtype_fields (tname, (n1, n2, fields)) =
                ("Unsupported type in field " ^ string_of_id fid ^ " of " ^ tname)
             )
     in
-    let fsize = Big_int.succ (Big_int.abs (Big_int.sub i j)) in
+    let fsize = Z.succ (Z.abs (Z.sub i j)) in
     let ftyp = bitvector_typ (nconstant fsize) in
     let reftyp =
       mk_typ
@@ -1666,7 +1665,7 @@ let doc_regtype_fields (tname, (n1, n2, fields)) =
            space;
            space;
            space;
-           string (" field_start = " ^ Big_int.to_string i ^ ";");
+           string (" field_start = " ^ Z.to_string i ^ ";");
            hardline;
            space;
            space;

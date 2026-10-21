@@ -51,24 +51,17 @@ $include <flow.sail>
 
 // ***** Addition *****
 
-val add_atom = pure {ocaml: "add_int", interpreter: "add_int", lem: "integerAdd", coq: "Z.add", lean: "_lean_addi", _: "add_int"} : forall 'n 'm.
-  (int('n), int('m)) -> int('n + 'm)
-
-val add_int = pure {ocaml: "add_int", interpreter: "add_int", lem: "integerAdd", coq: "Z.add", lean: "_lean_addi", _: "add_int"} : (int, int) -> int
+val add_int = pure {lem: "integerAdd", coq: "Z.add", lean: "_lean_addi", _: "add_int"} : (int, int) -> int
 
 overload operator + = {add_atom, add_int}
 
 // ***** Subtraction *****
 
-val sub_atom = pure {ocaml: "sub_int", interpreter: "sub_int", lem: "integerMinus", coq: "Z.sub", lean: "_lean_subi", _: "sub_int"} : forall 'n 'm.
-  (int('n), int('m)) -> int('n - 'm)
-
-val sub_int = pure {ocaml: "sub_int", interpreter: "sub_int", lem: "integerMinus", coq: "Z.sub", lean: "_lean_subi", _: "sub_int"} : (int, int) -> int
+val sub_int = pure {lem: "integerMinus", coq: "Z.sub", lean: "_lean_subi", _: "sub_int"} : (int, int) -> int
 
 overload operator - = {sub_atom, sub_int}
 
 val sub_nat = pure {
-  ocaml: "(fun x y -> let n = sub_int x y in if Big_int.less_equal n Big_int.zero then Big_int.zero else n)",
   lem: "integerMinus",
   coq: "Z.sub",
   lean: "_lean_subi",
@@ -77,16 +70,11 @@ val sub_nat = pure {
 
 // ***** Negation *****
 
-val negate_atom = pure {ocaml: "negate", interpreter: "negate", lem: "integerNegate", coq: "Z.opp", lean: "Neg.neg", _: "neg_int"} : forall 'n. int('n) -> int(- 'n)
-
 val negate_int = pure {ocaml: "negate", interpreter: "negate", lem: "integerNegate", coq: "Z.opp", lean: "Neg.neg", _: "neg_int"} : int -> int
 
 overload negate = {negate_atom, negate_int}
 
 // ***** Multiplication *****
-
-val mult_atom = pure {ocaml: "mult", interpreter: "mult", lem: "integerMult", coq: "Z.mul", lean: "_lean_muli", _: "mult_int"} : forall 'n 'm.
-  (int('n), int('m)) -> int('n * 'm)
 
 val mult_int = pure {ocaml: "mult", interpreter: "mult", lem: "integerMult", coq: "Z.mul", lean: "_lean_muli", _: "mult_int"} : (int, int) -> int
 
@@ -102,22 +90,17 @@ val prerr_int = pure "prerr_int" : (string, int) -> unit
 
 $else
 
-val print_int = impure "print_int_effect" : (string, int) -> unit
+val print_int = impure {
+  ocaml: "print_int",
+  interpreter: "print_int",
+  _: "print_int_effect",
+} : (string, int) -> unit
 
-val prerr_int = impure "prerr_int_effect" : (string, int) -> unit
-
-$endif
-
-$ifdef STRICT_EXPONENTIALS
-
-val pow2 = pure {lean : "_lean_pow2i", _:"pow2"} : forall 'n, 'n >= 0. int('n) -> int(2 ^ 'n)
-
-$else
-
-/*!
-We have special support for raising values to the power of two. Any Sail expression `2 ^ x` will be compiled to this builtin.
-*/
-val pow2 = pure {lean : "_lean_pow2i", _:"pow2"} : forall 'n. int('n) -> int(2 ^ 'n)
+val prerr_int = impure {
+  ocaml: "prerr_int",
+  interpreter: "prerr_int",
+  _: "prerr_int_effect",
+} : (string, int) -> unit
 
 $endif
 
@@ -183,9 +166,6 @@ val _tmod_int = pure {
 
 /*! If we know the second argument is positive, we know the result is positive */
 val _tmod_int_positive = pure {
-  ocaml: "tmod_int",
-  interpreter: "tmod_int",
-  lem: "tmod_int",
   coq: "Z.rem",
   lean: "Int.tmod",
   _: "tmod_int"
@@ -213,8 +193,6 @@ function fmod_int(n: int, m: int) -> int = {
 
 val abs_int_plain = pure {
   smt : "abs",
-  ocaml: "abs_int",
-  interpreter: "abs_int",
   lem: "integerAbs",
   coq: "Z.abs",
   lean: "Sail.Int.intAbs",

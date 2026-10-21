@@ -46,8 +46,6 @@
 
 {
 
-open Project
-open Project_parser
 open Project_token
 open Sail_file.Position
 

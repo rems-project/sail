@@ -51,8 +51,6 @@
 
 open Ast
 open Ast_compare
-open Ast_defs
-open Ast_util
 
 (** A function is side-effectful if it throws an exception, can exit abnormally (either via an assertion failing or an
     explicit exit statement), contains a (possibly) incomplete pattern match, or touches a register. Finally, it is

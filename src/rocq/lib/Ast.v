@@ -55,6 +55,8 @@ From Stdlib Require Import String.
 From Stdlib Require Import ZArith.
 From Stdlib Require Import QArith.
 
+From stdpp Require Import bitvector.definitions.
+
 From Sail Require Import Bit.
 
 (** * External types
@@ -204,7 +206,7 @@ Inductive id : Set :=
 | Id_aux : id_aux → loc → id.
 
 Inductive value : Set :=
-| V_bitvector : list bit → value
+| V_bitvector : bvn → value
 | V_vector : list value → value
 | V_list : list value → value
 | V_int : Z → value
@@ -226,7 +228,11 @@ of digits. Furthermore, we distinguish the binary digit type from the
 underlying [bit] type. This is because in bitvectors ([V_bitvector]),
 bits have significance - there is a least significant bit and a most
 significant bit, whereas a list of [bin_digit] is just a sequence of
-ones and zeros with no intrinsic meaning attached. *)
+ones and zeros with no intrinsic meaning attached.
+
+A [V_bitvector] holds a [bvn], a stdpp bitvector paired with its width.
+It cannot name [PrimBits] here, since that module depends on this one;
+the operations on these values live there. *)
 
 Inductive hex_digit : Set :=
 | Hex_0 : hex_digit

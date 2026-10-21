@@ -1,16 +1,15 @@
 (env
  (dev
   (flags
-   (:standard -w -33 -w -27)))
+   (:standard %{dune-warnings} -w -69 -w -67 -w -27)))
  (release
   (flags
-   (:standard -w -33 -w -27))))
+   (:standard %{dune-warnings} -w -69 -w -67 -w -27))))
 
 (rule
  (target jib.ml)
  (deps
-  (:jib_ott ../../language/jib.ott)
-  value2.ml)
+  (:jib_ott ../../language/jib.ott))
  (action
   (run
    ott
@@ -54,38 +53,30 @@
     --virtual-file
     "corelib.sail_project"))))
 
-(include_subdirs qualified)
-
-(copy_files ../gen_lib/*.lem)
+; sail_lib.mli is generated from the externs in the Sail library
+; (externs.json), so the OCaml interface to the library primitives is
+; always kept in sync with the library. See `make externs`.
 
 (rule
- (targets
-  value2.ml
-  sail2_values.ml
-  sail2_prompt.ml
-  sail2_instr_kinds.ml
-  sail2_prompt_monad.ml
-  sail2_operators.ml
-  sail2_operators_bitlists.ml)
+ (target sail_lib.mli)
  (deps
-  value2.lem
-  sail2_prompt.lem
-  sail2_values.lem
-  sail2_instr_kinds.lem
-  sail2_prompt_monad.lem
-  sail2_operators.lem
-  sail2_operators_bitlists.lem)
+  (:externs externs.json)
+  (:header sail_lib_header.mli.in)
+  (:overrides sail_lib_overrides.json))
  (action
-  (run
-   lem
-   -wl_rename
-   ign
-   -wl_pat_comp
-   ign
-   -wl_comp_message
-   ign
-   -ocaml
-   %{deps})))
+  (with-stdout-to
+   %{target}
+   (run
+    sail_maker
+    gen_sail_lib_mli
+    --externs
+    %{externs}
+    --header
+    %{header}
+    --overrides
+    %{overrides}))))
+
+(include_subdirs qualified)
 
 (menhir
  (modules parser)
@@ -128,7 +119,7 @@
 (library
  (name libsail)
  (public_name libsail)
- (libraries lem linksem pprint dune-site yojson menhirLib)
+ (libraries zarith linksem pprint dune-site yojson menhirLib)
  (modes byte native)
  (instrumentation
   (backend bisect_ppx --exclusions src/lib/bisect.exclude)
