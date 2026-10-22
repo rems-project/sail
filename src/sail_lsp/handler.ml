@@ -75,6 +75,11 @@ let find_sail_project file =
   search (Filename.dirname file)
 
 let state : Server_state.state option ref = ref None
+let current_project : string option ref = ref None
+
+(* Navigation must use the checking result for the requested document, rather
+   than whichever project was most recently checked. *)
+let document_asts : (Sail_file.handle, Type_check.typed_ast) Hashtbl.t = Hashtbl.create 16
 
 type scan_id = Scan_id of Ast.id | Scan_app of Ast.id
 
@@ -143,6 +148,10 @@ let error_diagnostic (err : Reporting.error) =
   Lsp.Types.Diagnostic.create ~range ~severity:Lsp.Types.DiagnosticSeverity.Error ~source:"sail"
     ~message:(`String message) ()
 
+let publish_diagnostics file diagnostics =
+  let params = Lsp.Types.PublishDiagnosticsParams.create ~uri:(Lsp.Types.DocumentUri.of_path file) ~diagnostics () in
+  Lsp.Server_notification.PublishDiagnostics params
+
 let diagnostics_for_handle file handle =
   let diags =
     match !state with
@@ -150,15 +159,13 @@ let diagnostics_for_handle file handle =
         match Server_state.check_up_to s handle with
         | Ok s' ->
             state := Some s';
+            Hashtbl.replace document_asts handle (Server_state.force_last_ast s');
             []
         | Error err -> [error_diagnostic err]
       )
     | None -> []
   in
-  let params =
-    Lsp.Types.PublishDiagnosticsParams.create ~uri:(Lsp.Types.DocumentUri.of_path file) ~diagnostics:diags ()
-  in
-  Lsp.Server_notification.PublishDiagnostics params
+  publish_diagnostics file diags
 
 let on_initialize ~(config : Server_config.t) _params =
   let server_info = Lsp.Types.InitializeResult.create_serverInfo ~name:"sail_lsp" () in
@@ -243,7 +250,7 @@ let on_hover ({ position = { line; character }; textDocument = { uri } } : Lsp.T
   let file = DocumentUri.to_path uri in
   let* handle = Hashtbl.find_opt file_to_handle file in
   let* p = Sail_file.lexing_position handle { line; character } in
-  let* ast = Option.map Server_state.force_last_ast !state in
+  let* ast = Hashtbl.find_opt document_asts handle in
   let* l, tannot, _ = CursorScanner.find_annot_ast p ast in
   let* _, typ = Type_check.destruct_tannot tannot in
   log "%s" (Reporting.loc_to_string l);
@@ -271,7 +278,7 @@ let on_definition ({ position = { line; character }; textDocument = { uri } } : 
   log "declaration: %s" file;
   let* handle = Hashtbl.find_opt file_to_handle file in
   let* p = Sail_file.lexing_position handle { line; character } in
-  let* ast = Option.map Server_state.force_last_ast !state in
+  let* ast = Hashtbl.find_opt document_asts handle in
   let* _, tannot, id_cat = CursorScanner.find_annot_ast p ast in
   match id_cat with
   | Some (Scan_app id) | Some (Scan_id id) ->
@@ -281,10 +288,36 @@ let on_definition ({ position = { line; character }; textDocument = { uri } } : 
   | _ -> None
 
 let refresh_project ~(config : Server_config.t) file =
-  match find_sail_project file with
+  state := None;
+  current_project := find_sail_project file;
+  match !current_project with
   | Some project_file ->
       state := Some (Server_state.load_project ~default_sail_dir:config.default_sail_dir [project_file])
-  | None -> state := None
+  | None -> ()
+
+let check_document ~config ~reload file handle =
+  Hashtbl.remove document_asts handle;
+  let failed err =
+    state := None;
+    publish_diagnostics file [error_diagnostic err]
+  in
+  try
+    let invalidated =
+      if reload || find_sail_project file <> !current_project then None
+      else Option.bind !state (fun s -> Server_state.invalidate s handle)
+    in
+    (match invalidated with Some s -> state := Some s | None -> refresh_project ~config file);
+    diagnostics_for_handle file handle
+  with
+  | Sys_error msg -> failed (Reporting.Err_general (Parse_ast.Unknown, msg))
+  | Unix.Unix_error (err, call, path) ->
+      failed (Reporting.Err_general (Parse_ast.Unknown, call ^ ": " ^ path ^ ": " ^ Unix.error_message err))
+  | Reporting.Fatal_error err -> failed err
+
+let refresh_open_documents ~config () =
+  Hashtbl.to_seq file_to_handle |> List.of_seq
+  |> List.sort (fun (a, _) (b, _) -> String.compare a b)
+  |> List.map (fun (file, handle) -> check_document ~config ~reload:true file handle)
 
 let on_notification ~config notif =
   let open Lsp.Types in
@@ -296,15 +329,7 @@ let on_notification ~config notif =
       let text = params.textDocument.text in
       let handle = Sail_file.editor_take_file ~contents:text file in
       register_handle file handle;
-      ( match !state with
-      | None -> refresh_project ~config file
-      | Some s -> (
-          match Server_state.invalidate s handle with
-          | Some s' -> state := Some s'
-          | None -> refresh_project ~config file
-        )
-      );
-      [diagnostics_for_handle file handle]
+      [check_document ~config ~reload:false file handle]
   | Lsp.Client_notification.TextDocumentDidChange params -> (
       let file = DocumentUri.to_path params.textDocument.uri in
       log "didChange: %s" file;
@@ -326,14 +351,13 @@ let on_notification ~config notif =
             )
             params.contentChanges;
           Sail_file.apply_edits handle;
-          ( match !state with
-          | Some s -> (
-              match Server_state.invalidate s handle with Some s' -> state := Some s' | None -> ()
-            )
-          | None -> ()
-          );
-          [diagnostics_for_handle file handle]
+          [check_document ~config ~reload:false file handle]
     )
+  | Lsp.Client_notification.DidChangeWatchedFiles params ->
+      List.iter
+        (fun (change : FileEvent.t) -> Sail_file.reload_file (Sail_file.Path.actual (DocumentUri.to_path change.uri)))
+        params.changes;
+      if params.changes = [] then [] else refresh_open_documents ~config ()
   | Lsp.Client_notification.DidSaveTextDocument params -> (
       let file = DocumentUri.to_path params.textDocument.uri in
       log "didSave: %s" file;
@@ -341,13 +365,7 @@ let on_notification ~config notif =
       | None -> []
       | Some handle ->
           Sail_file.apply_edits handle;
-          ( match !state with
-          | Some s -> (
-              match Server_state.invalidate s handle with Some s' -> state := Some s' | None -> ()
-            )
-          | None -> ()
-          );
-          [diagnostics_for_handle file handle]
+          refresh_open_documents ~config ()
     )
   | Lsp.Client_notification.TextDocumentDidClose params ->
       let file = DocumentUri.to_path params.textDocument.uri in
@@ -355,8 +373,10 @@ let on_notification ~config notif =
       ( match Hashtbl.find_opt file_to_handle file with
       | None -> ()
       | Some handle ->
+          Hashtbl.remove document_asts handle;
           Sail_file.editor_drop_file handle;
+          Sail_file.reload_file (Sail_file.Path.actual file);
           unregister_handle handle
       );
-      []
+      refresh_open_documents ~config ()
   | _ -> []

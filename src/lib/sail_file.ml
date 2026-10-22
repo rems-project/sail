@@ -452,9 +452,16 @@ let file_to_line_array filename =
     Array.init (Queue.length lines) (fun _ -> Queue.take lines)
 
 let open_file given_path =
-  let path = Path.canonicalize given_path in
+  (* An open editor buffer remains usable even if its disk file was deleted. *)
+  let path =
+    match Hashtbl.find_opt opened given_path with
+    | Some handle when (Hashtbl.find files handle).owner = Editor -> given_path
+    | _ -> Path.canonicalize given_path
+  in
   match Hashtbl.find_opt opened path with
-  | Some handle -> handle
+  | Some handle ->
+      Hashtbl.replace opened given_path handle;
+      handle
   | None -> (
       match path with
       | Actual path ->
@@ -464,16 +471,40 @@ let open_file given_path =
           let info = new_info ~owner:Compiler ~given_path ~canonical_path:(Path.Actual path) ~contents () in
           Hashtbl.add files handle info;
           Hashtbl.add opened (Path.Actual path) handle;
+          Hashtbl.replace opened given_path handle;
           handle
       | Virtual path -> assert false
     )
 
-let write_file ~contents handle =
-  let info = Hashtbl.find files handle in
-  let contents = Array.of_list (String.split_on_char '\n' contents) in
+let replace_contents info contents =
   Array.fill info.edits 0 (Array.length info.edits) None;
   info.contents <- contents;
   info.next_edit <- 0
+
+let write_file ~contents handle =
+  replace_contents (Hashtbl.find files handle) (Array.of_list (String.split_on_char '\n' contents))
+
+let reload_file path =
+  if not (Path.is_virtual path) then (
+    let canonical_path = try Path.canonicalize path with Unix.Unix_error _ -> path in
+    let cached =
+      match Hashtbl.find_opt opened canonical_path with
+      | Some handle -> Some handle
+      | None -> Hashtbl.find_opt opened path
+    in
+    match cached with
+    | None -> ()
+    | Some handle ->
+        let info = Hashtbl.find files handle in
+        if info.owner = Compiler then (
+          try
+            (* An alias may now resolve to another file. Reload the recorded target. *)
+            replace_contents info (file_to_line_array (Path.to_string info.canonical_path))
+          with Sys_error _ | Unix.Unix_error _ ->
+            (* Do not return stale contents when the next open should fail. *)
+            Hashtbl.filter_map_inplace (fun _ h -> if handle_equal h handle then None else Some h) opened
+        )
+  )
 
 let editor_take_file ~contents path =
   let path = Path.Actual path in

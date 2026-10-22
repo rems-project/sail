@@ -15,6 +15,7 @@ Sail test suites, and a non-zero exit code is returned if anything fails.
 import datetime
 import html
 import os
+import pathlib
 import sys
 import traceback
 
@@ -38,6 +39,15 @@ UNICODE = "// π ≈ 3.14  — comment with wide chars\ndefault Order dec\n"
 PROJECT = "M {\n  files m.sail\n}\n"
 
 
+# Dependency fixtures deliberately use a declaration in another file, so a
+# stale file cache can be distinguished from a fresh successful check.
+DEPENDENCY_PROJECT = "M {\n  files dependency.sail, m.sail\n}\n"
+DEPENDENCY = "default Order dec\nval helper : int -> int\nfunction helper(x) = x\n"
+BOOL_DEPENDENCY = "default Order dec\nval helper : bool -> bool\nfunction helper(x) = x\n"
+DEPENDENT = "val use_helper : unit -> int\nfunction use_helper() = helper(4)\n"
+BOOL_DEPENDENT = "val use_helper : unit -> bool\nfunction use_helper() = helper(true)\n"
+
+
 def check(condition, message):
     if not condition:
         raise AssertionError(message)
@@ -49,6 +59,33 @@ def diagnostics_uri(notification):
         "expected publishDiagnostics, got {}".format(notification.get("method")),
     )
     return notification["params"]["uri"]
+
+
+def write_workspace_file(ws, name, contents):
+    with open(ws.path(name), "w", encoding="utf-8") as f:
+        f.write(contents)
+
+
+def watched_file(client, uri, change_type=2):
+    client.notify("workspace/didChangeWatchedFiles", {"changes": [{"uri": uri, "type": change_type}]})
+
+
+def document_diagnostics(client, uris):
+    pending = set(uris)
+    result = {}
+    while pending:
+        note = client.wait_notification("textDocument/publishDiagnostics")
+        uri = diagnostics_uri(note)
+        check(uri in pending, "unexpected or duplicate diagnostics for {}".format(uri))
+        pending.remove(uri)
+        result[uri] = note["params"]["diagnostics"]
+    return result
+
+
+def dependency_definition(client, uri, code=DEPENDENT):
+    lines = code.splitlines()
+    line = next(i for i, text in enumerate(lines) if "= helper(" in text)
+    return client.definition(uri, line, lines[line].rindex("helper(") + 1)
 
 
 # -- test cases --------------------------------------------------------------
@@ -345,6 +382,36 @@ def test_definition():
         client.exit()
 
 
+def test_definition_for_each_open_document():
+    """Navigation uses the requested document after another project is opened."""
+    code = (
+        "default Order dec\n"
+        "val foo : int -> int\n"
+        "function foo(x) = x\n"
+        "function main() -> int = foo(3)\n"
+    )
+    files = {
+        "a/proj.sail_project": PROJECT,
+        "a/m.sail": code,
+        "b/proj.sail_project": PROJECT,
+        "b/m.sail": code,
+    }
+    with Workspace(files) as ws, LspClient() as client:
+        client.initialize(ws.root_uri())
+        client.initialized()
+        uris = [ws.uri("a/m.sail"), ws.uri("b/m.sail")]
+        for uri in uris:
+            client.did_open(uri, code)
+            note = client.wait_notification("textDocument/publishDiagnostics")
+            check(diagnostics_uri(note) == uri, "diagnostics for wrong uri")
+            check(note["params"]["diagnostics"] == [], "initial project failed")
+        for uri in uris:
+            locations = client.definition(uri, 3, 26)
+            check(locations and locations[0]["uri"] == uri, "navigation used another document's AST")
+        client.shutdown()
+        client.exit()
+
+
 def test_definition_absent():
     """Requesting a definition where there is no identifier yields null."""
     code = "default Order dec\n"
@@ -618,6 +685,265 @@ def test_valid_file_has_no_diagnostics():
         client.exit()
 
 
+def test_watched_dependency_rechecks_all_documents():
+    """A disk edit and repair refresh every open consumer of a dependency."""
+    project = "M {\n  files dependency.sail, m.sail, n.sail\n}\n"
+    other = DEPENDENT.replace("use_helper", "another_helper")
+    files = {
+        "proj.sail_project": project,
+        "dependency.sail": DEPENDENCY,
+        "m.sail": DEPENDENT,
+        "n.sail": other,
+    }
+    with Workspace(files) as ws, LspClient() as client:
+        client.initialize(ws.root_uri())
+        client.initialized()
+        uris = [ws.uri("m.sail"), ws.uri("n.sail")]
+        for uri, code in zip(uris, [DEPENDENT, other]):
+            client.did_open(uri, code)
+            check(document_diagnostics(client, [uri])[uri] == [], "initial consumer did not check")
+        write_workspace_file(ws, "dependency.sail", BOOL_DEPENDENCY)
+        watched_file(client, ws.uri("dependency.sail"))
+        diags = document_diagnostics(client, uris)
+        check(all(diags[uri] for uri in uris), "changed dependency was not checked by both consumers")
+        write_workspace_file(ws, "dependency.sail", DEPENDENCY)
+        watched_file(client, ws.uri("dependency.sail"))
+        check(all(not ds for ds in document_diagnostics(client, uris).values()), "repair left stale diagnostics")
+        client.shutdown()
+        client.exit()
+
+
+def test_saved_dependency_rechecks_dependents():
+    """didSave refreshes other open files, without requiring a watcher event."""
+    files = {
+        "proj.sail_project": DEPENDENCY_PROJECT,
+        "dependency.sail": DEPENDENCY,
+        "m.sail": DEPENDENT,
+    }
+    with Workspace(files) as ws, LspClient() as client:
+        client.initialize(ws.root_uri())
+        client.initialized()
+        main_uri, dep_uri = ws.uri("m.sail"), ws.uri("dependency.sail")
+        for uri, code in [(main_uri, DEPENDENT), (dep_uri, DEPENDENCY)]:
+            client.did_open(uri, code)
+            document_diagnostics(client, [uri])
+        client.did_change(dep_uri, full_change(BOOL_DEPENDENCY))
+        document_diagnostics(client, [dep_uri])
+        client.did_save(dep_uri)
+        diags = document_diagnostics(client, [main_uri, dep_uri])
+        check(diags[dep_uri] == [] and diags[main_uri], "save did not refresh dependent diagnostics")
+        client.did_change(dep_uri, full_change(DEPENDENCY), version=3)
+        document_diagnostics(client, [dep_uri])
+        client.did_save(dep_uri)
+        check(
+            all(not ds for ds in document_diagnostics(client, [main_uri, dep_uri]).values()),
+            "saved repair did not clear dependent diagnostics",
+        )
+        client.shutdown()
+        client.exit()
+
+
+def test_watched_dependency_preserves_unsaved_buffers():
+    """Watchers preserve unsaved consumers and dependencies, even through aliases."""
+    project = DEPENDENCY_PROJECT.replace("dependency.sail", '"./dependency.sail"')
+    files = {
+        "proj.sail_project": project,
+        "dependency.sail": DEPENDENCY,
+        "m.sail": DEPENDENT,
+    }
+    with Workspace(files) as ws, LspClient() as client:
+        client.initialize(ws.root_uri())
+        client.initialized()
+        main_uri, dep_uri = ws.uri("m.sail"), ws.uri("dependency.sail")
+        for uri, code in [(dep_uri, DEPENDENCY), (main_uri, DEPENDENT)]:
+            client.did_open(uri, code)
+            document_diagnostics(client, [uri])
+        client.did_change(dep_uri, full_change(BOOL_DEPENDENCY))
+        document_diagnostics(client, [dep_uri])
+        client.did_change(main_uri, full_change(BOOL_DEPENDENT))
+        diags = document_diagnostics(client, [main_uri])[main_uri]
+        check(diags == [], "unsaved buffers did not check: {}".format(diags))
+        write_workspace_file(ws, "dependency.sail", "not valid Sail\n")
+        watched_file(client, dep_uri)
+        check(
+            all(not ds for ds in document_diagnostics(client, [main_uri, dep_uri]).values()),
+            "disk edit replaced an unsaved buffer",
+        )
+        os.unlink(ws.path("dependency.sail"))
+        watched_file(client, dep_uri, 3)
+        check(
+            all(not ds for ds in document_diagnostics(client, [main_uri, dep_uri]).values()),
+            "disk deletion discarded an editor-owned buffer",
+        )
+        check(dependency_definition(client, main_uri, BOOL_DEPENDENT), "unsaved dependency lost navigation")
+        client.did_close(dep_uri)
+        check(document_diagnostics(client, [main_uri])[main_uri], "close retained the missing dependency's buffer")
+        write_workspace_file(ws, "dependency.sail", BOOL_DEPENDENCY)
+        watched_file(client, dep_uri, 1)
+        check(document_diagnostics(client, [main_uri])[main_uri] == [], "restoration did not recover")
+        client.shutdown()
+        client.exit()
+
+
+def test_deleted_dependency_clears_navigation_and_recovers():
+    """A missing dependency reports failure and cannot serve its previous AST."""
+    files = {
+        "proj.sail_project": DEPENDENCY_PROJECT,
+        "dependency.sail": DEPENDENCY,
+        "m.sail": DEPENDENT,
+    }
+    with Workspace(files) as ws, LspClient() as client:
+        client.initialize(ws.root_uri())
+        client.initialized()
+        uri = ws.uri("m.sail")
+        client.did_open(uri, DEPENDENT)
+        document_diagnostics(client, [uri])
+        check(dependency_definition(client, uri), "initial dependency had no definition")
+        os.unlink(ws.path("dependency.sail"))
+        watched_file(client, ws.uri("dependency.sail"), 3)
+        check(document_diagnostics(client, [uri])[uri], "missing dependency produced no error")
+        check(dependency_definition(client, uri) is None, "missing dependency served a stale definition")
+        hover = client.request(
+            "textDocument/hover",
+            {"textDocument": {"uri": uri}, "position": {"line": 1, "character": 25}},
+        )
+        check(hover is None, "missing dependency served a stale hover")
+        write_workspace_file(ws, "dependency.sail", DEPENDENCY)
+        watched_file(client, ws.uri("dependency.sail"), 1)
+        check(document_diagnostics(client, [uri])[uri] == [], "restored dependency still failed")
+        locations = dependency_definition(client, uri)
+        check(locations and locations[0]["uri"] == ws.uri("dependency.sail"), "restoration lost definition")
+        client.shutdown()
+        client.exit()
+
+
+def test_watched_include_refreshes_definition_locations():
+    """An included file's cached contents and definition positions are refreshed."""
+    code = '$include "dependency.sail"\n' + DEPENDENT
+    files = {
+        "proj.sail_project": PROJECT,
+        "dependency.sail": DEPENDENCY,
+        "m.sail": code,
+    }
+    with Workspace(files) as ws, LspClient() as client:
+        client.initialize(ws.root_uri())
+        client.initialized()
+        uri = ws.uri("m.sail")
+        client.did_open(uri, code)
+        check(document_diagnostics(client, [uri])[uri] == [], "initial include failed")
+        write_workspace_file(ws, "dependency.sail", "// moved\n// down\n" + DEPENDENCY)
+        watched_file(client, ws.uri("dependency.sail"))
+        check(document_diagnostics(client, [uri])[uri] == [], "changed include failed")
+        locations = dependency_definition(client, uri, code)
+        check(
+            locations and locations[0]["range"]["start"]["line"] == 3,
+            "include definition retained its old location: {}".format(locations),
+        )
+        client.shutdown()
+        client.exit()
+
+
+def test_watched_project_file_refreshes_and_recovers():
+    """Project membership and syntax changes are read again from disk."""
+    files = {
+        "proj.sail_project": DEPENDENCY_PROJECT,
+        "dependency.sail": DEPENDENCY,
+        "m.sail": DEPENDENT,
+    }
+    with Workspace(files) as ws, LspClient() as client:
+        client.initialize(ws.root_uri())
+        client.initialized()
+        uri, project_uri = ws.uri("m.sail"), ws.uri("proj.sail_project")
+        client.did_open(uri, DEPENDENT)
+        document_diagnostics(client, [uri])
+        for project in [PROJECT, "M {\n"]:
+            write_workspace_file(ws, "proj.sail_project", project)
+            watched_file(client, project_uri)
+            check(document_diagnostics(client, [uri])[uri], "bad project produced no error")
+            check(dependency_definition(client, uri) is None, "bad project served a stale definition")
+            write_workspace_file(ws, "proj.sail_project", DEPENDENCY_PROJECT)
+            watched_file(client, project_uri)
+            check(document_diagnostics(client, [uri])[uri] == [], "project repair did not recover")
+        client.shutdown()
+        client.exit()
+
+
+def test_watched_failure_isolated_between_projects():
+    """A broken project cannot discard a different project's diagnostics or AST."""
+    files = {}
+    for directory in ["a", "b"]:
+        files[directory + "/proj.sail_project"] = DEPENDENCY_PROJECT
+        files[directory + "/dependency.sail"] = DEPENDENCY
+        files[directory + "/m.sail"] = DEPENDENT
+    files["unrelated.sail"] = ""
+    with Workspace(files) as ws, LspClient() as client:
+        client.initialize(ws.root_uri())
+        client.initialized()
+        uris = [ws.uri("a/m.sail"), ws.uri("b/m.sail")]
+        for uri in uris:
+            client.did_open(uri, DEPENDENT)
+            check(document_diagnostics(client, [uri])[uri] == [], "initial project failed")
+        os.unlink(ws.path("a/dependency.sail"))
+        watched_file(client, ws.uri("a/dependency.sail"), 3)
+        diags = document_diagnostics(client, uris)
+        check(diags[uris[0]] and diags[uris[1]] == [], "failure leaked between projects")
+        check(dependency_definition(client, uris[0]) is None, "broken project retained navigation")
+        locations = dependency_definition(client, uris[1])
+        check(locations and locations[0]["uri"] == ws.uri("b/dependency.sail"), "other project lost navigation")
+        write_workspace_file(ws, "a/dependency.sail", DEPENDENCY)
+        watched_file(client, ws.uri("a/dependency.sail"), 1)
+        check(all(not ds for ds in document_diagnostics(client, uris).values()), "project did not recover")
+        for uri, directory in zip(uris, ["a", "b"]):
+            locations = dependency_definition(client, uri)
+            check(
+                locations and locations[0]["uri"] == ws.uri(directory + "/dependency.sail"),
+                "navigation used another project's AST",
+            )
+        os.unlink(ws.path("unrelated.sail"))
+        watched_file(client, ws.uri("unrelated.sail"), 3)
+        check(all(not ds for ds in document_diagnostics(client, uris).values()), "unrelated deletion caused errors")
+        client.shutdown()
+        client.exit()
+
+
+def test_watched_symlink_does_not_replace_old_target():
+    """Retargeting an alias cannot overwrite its previous target's cached bytes."""
+    files = {
+        "old.sail": DEPENDENCY,
+        "new.sail": BOOL_DEPENDENCY,
+        "a/proj.sail_project": "M {\n  files ../dependency.sail, m.sail\n}\n",
+        "b/proj.sail_project": "M {\n  files ../old.sail, m.sail\n}\n",
+        "a/m.sail": DEPENDENT,
+        "b/m.sail": DEPENDENT,
+    }
+    with Workspace(files) as ws, LspClient() as client:
+        alias = os.path.join(ws.dir, "dependency.sail")
+        ws.paths["dependency.sail"] = alias
+        os.symlink(ws.path("old.sail"), alias)
+        # Preserve the alias spelling: Workspace.uri resolves symlinks.
+        alias_uri = pathlib.Path(alias).as_uri()
+        client.initialize(ws.root_uri())
+        client.initialized()
+        client.did_open(alias_uri, DEPENDENCY)
+        document_diagnostics(client, [alias_uri])
+        client.did_close(alias_uri)
+        uris = [ws.uri("a/m.sail"), ws.uri("b/m.sail")]
+        for uri in uris:
+            client.did_open(uri, DEPENDENT)
+            check(document_diagnostics(client, [uri])[uri] == [], "initial project failed")
+        os.unlink(alias)
+        os.symlink(ws.path("new.sail"), alias)
+        watched_file(client, alias_uri)
+        diags = document_diagnostics(client, uris)
+        check(diags[uris[0]], "alias consumer did not see its new target")
+        check(
+            diags[uris[1]] == [],
+            "retargeting the alias corrupted the old target's cache: {}".format(diags[uris[1]]),
+        )
+        client.shutdown()
+        client.exit()
+
+
 TESTS = [
     test_initialize,
     test_shutdown_exit,
@@ -635,6 +961,7 @@ TESTS = [
     test_folding_range,
     test_definition_capability,
     test_definition,
+    test_definition_for_each_open_document,
     test_definition_absent,
     test_formatting_capability,
     test_formatting,
@@ -647,6 +974,14 @@ TESTS = [
     test_range_formatting_attributes,
     test_error_diagnostic,
     test_valid_file_has_no_diagnostics,
+    test_watched_dependency_rechecks_all_documents,
+    test_saved_dependency_rechecks_dependents,
+    test_watched_dependency_preserves_unsaved_buffers,
+    test_deleted_dependency_clears_navigation_and_recovers,
+    test_watched_include_refreshes_definition_locations,
+    test_watched_project_file_refreshes_and_recovers,
+    test_watched_failure_isolated_between_projects,
+    test_watched_symlink_does_not_replace_old_target,
 ]
 
 
