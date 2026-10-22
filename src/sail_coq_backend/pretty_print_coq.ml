@@ -762,12 +762,38 @@ and doc_nc_exp ctx env nc =
   newnc l70 nc
 
 (* Sometimes we need to print a type in a position where any existential has already been stripped
-   out. *)
+   out.  Where the existential variables should appear we attempt to get a concrete value by
+   unification with another type (e.g., in a let binding), and otherwise use _ and hope that Rocq
+   can figure it out. *)
 
-let doc_typ_exists_unfolded ctx env (Typ_aux (t, l) as ty) =
+let doc_typ_exists_unfolded ctx env ?instantiated_type (Typ_aux (t, l) as ty) =
   match t with
   | Typ_exist (kopts, _nc, ty') ->
       let skip_vars = List.fold_left (fun s kopt -> KidSet.add (kopt_kid kopt) s) KidSet.empty kopts in
+      let ty' =
+        match instantiated_type with
+        | None -> ty'
+        | Some ityp -> (
+            match Type_check.unify (typ_loc ityp) env skip_vars ty' ityp with
+            | kmap ->
+                let kmap' =
+                  KBindings.filter_map
+                    (fun kid v ->
+                      match v with A_aux (A_nexp (Nexp_aux (Nexp_constant _, _) as nexp), _) -> Some nexp | _ -> None
+                    )
+                    kmap
+                in
+                subst_kids_typ kmap' ty'
+            | exception _ ->
+                debug ctx
+                  ( lazy
+                    ("Unification failed when trying to fill in type variables using " ^ string_of_typ ty ^ " against "
+                   ^ string_of_typ ityp
+                    )
+                    );
+                ty'
+          )
+      in
       doc_typ ctx env ~skip_vars ty'
   | _ -> doc_typ ctx env ~skip_vars:KidSet.empty ty
 
@@ -813,15 +839,17 @@ let doc_tannot ctxt env tail_position eff typ = string " : " ^^ doc_tannot_core 
 (* Only double-quotes need escaped - by doubling them. *)
 let coq_escape_string s = Str.global_replace (Str.regexp "\"") "\"\"" s
 
+let doc_num i =
+  let s = Z.to_string i in
+  let ipp = utf8string s in
+  if Z.lt i Z.zero then parens ipp else ipp
+
 let doc_lit (L_aux (lit, l)) =
   match lit with
   | L_unit -> utf8string "tt"
   | L_false -> utf8string "false"
   | L_true -> utf8string "true"
-  | L_num i ->
-      let s = Z.to_string i in
-      let ipp = utf8string s in
-      if Z.lt i Z.zero then parens ipp else ipp
+  | L_num i -> doc_num i
   (* Not a typo, the bbv hex notation uses the letter O *)
   (* These need parens because of the 'sz 'b "..."' variants :( *)
   | L_hex hex -> utf8string ("(Ox\"" ^ string_of_hex_lit ~group_separator:"" ~case:Uppercase hex ^ "\")")
@@ -1088,7 +1116,7 @@ let rec nexp_const_eval (Nexp_aux (n, l) as nexp) =
 (* Decide whether two nexps used in a vector size are similar; if not
    a cast will be inserted *)
 let similar_nexps ctxt env ?(existentials = []) n1 n2 =
-  let rec same_nexp_shape (Nexp_aux (n1, _) as nexp1) (Nexp_aux (n2, _)) =
+  let rec same_nexp_shape (Nexp_aux (n1, _) as nexp1) (Nexp_aux (n2, _) as nexp2) =
     match (n1, n2) with
     | Nexp_id _, Nexp_id _ -> true
     (* An existential can take on any compatible value *)
@@ -1113,7 +1141,8 @@ let similar_nexps ctxt env ?(existentials = []) n1 n2 =
     | Nexp_minus (n1, n2), Nexp_minus (n3, n4) ->
         same_nexp_shape n1 n3 && same_nexp_shape n2 n4
     | Nexp_exp n1, Nexp_exp n2 | Nexp_neg n1, Nexp_neg n2 -> same_nexp_shape n1 n2
-    | _ -> false
+    (* Don't cast to a size with an existential, because it won't be bound *)
+    | _ -> List.exists (fun k -> KidSet.mem k (tyvars_of_nexp nexp2)) existentials
   in
   if same_nexp_shape (nexp_const_eval n1) (nexp_const_eval n2) then true else false
 
@@ -2233,6 +2262,7 @@ let doc_exp, doc_let =
   (* In suitable places we translate terms with existential types into dependent pairs *)
   and construct_dep_pairs ctxt env want_parens exp typ =
     debug ctxt (lazy ("Constructing " ^ string_of_exp exp ^ "  at type  " ^ string_of_typ typ));
+    debug ctxt (lazy ("  expression type: " ^ string_of_typ (typ_of exp)));
     let kids_to_print, typ = relevant_type_vars ctxt env typ in
     debug ctxt
       ( lazy
@@ -2240,6 +2270,23 @@ let doc_exp, doc_let =
         @@ List.map (fun k -> string_of_kid @@ kopt_kid k) kids_to_print
         )
         );
+    (* Look for concrete values for existentially bound integer type variables by unififcation with
+       the inferred type for the expression. *)
+    let found_kids =
+      let goals = KidSet.of_list (List.map kopt_kid kids_to_print) in
+      debug ctxt (lazy ("Looking for " ^ String.concat ", " (List.map string_of_kid (KidSet.elements goals))));
+      if KidSet.is_empty goals then KBindings.empty
+      else (
+        try
+          let kmap = Type_check.unify (typ_loc typ) env goals typ (typ_of exp) in
+          KBindings.filter_map
+            (fun kid v -> match v with A_aux (A_nexp (Nexp_aux (Nexp_constant c, _)), _) -> Some c | _ -> None)
+            kmap
+        with _ ->
+          debug ctxt (lazy "Unification failed");
+          KBindings.empty
+      )
+    in
     let inner =
       match (exp, typ) with
       | (E_aux (E_tuple exps, _) | E_aux (E_typ (_, E_aux (E_tuple exps, _)), _)), Typ_aux (Typ_tuple typs, _) ->
@@ -2247,7 +2294,12 @@ let doc_exp, doc_let =
           parens (separate (string ", ") exp_pps)
       | _ -> top_exp ctxt (match kids_to_print with [] -> want_parens | _ -> false) false exp
     in
-    let pp = List.fold_left (fun pp kid -> string "@existT _ _ _" ^^ space ^^ parens pp) inner kids_to_print in
+    let pp_ex_kopt kopt =
+      match KBindings.find_opt (kopt_kid kopt) found_kids with Some c -> doc_num c | None -> underscore
+    in
+    let pp =
+      List.fold_left (fun pp kopt -> string "@existT _ _ " ^^ pp_ex_kopt kopt ^^ space ^^ parens pp) inner kids_to_print
+    in
     if want_parens then parens pp else pp
   and if_exp ctxt full_env full_typ (elseif : bool) (tail_position : bool) c t e =
     let if_pp = string (if elseif then "else if" else "if") in
@@ -2284,7 +2336,15 @@ let doc_exp, doc_let =
         prefix 2 1 (separate space [string "let"; doc_id ctxt id; coloneq]) (top_exp ctxt false false e)
     | P_aux (P_typ (typ, P_aux (P_id id, _)), _), e when not (is_enum (env_of e) id) ->
         prefix 2 1
-          (separate space [string "let"; doc_id ctxt id; colon; doc_typ_exists_unfolded ctxt (env_of e) typ; coloneq])
+          (separate space
+             [
+               string "let";
+               doc_id ctxt id;
+               colon;
+               doc_typ_exists_unfolded ctxt (env_of e) ~instantiated_type:(typ_of e) typ;
+               coloneq;
+             ]
+          )
           (top_exp ctxt false false e)
     | P_aux (P_typ (typ, pat), _), (E_aux (_, e_ann) as e) ->
         let pat_pp = doc_pat ctxt true pat (typ_of_pat pat) in

@@ -26,6 +26,8 @@ skip_selftests = {
     "concurrency_interface_v2",
     "concurrency_interface_v2_var",
     "config_map_guard",
+    "exists_tuple_order", # needs proper dependent pair
+    "exists_union_order", # needs proper dependent pair
 }
 
 
