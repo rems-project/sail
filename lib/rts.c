@@ -175,6 +175,57 @@ uint64_t read_mem(uint64_t address)
   return 0x00;
 }
 
+void read_mem_bytes(uint64_t address, uint8_t *buffer, size_t length)
+{
+  while (length > 0) {
+    uint64_t mask = address & ~MASK;
+    uint64_t offset = address & MASK;
+    uint64_t available = MASK + 1 - offset;
+    size_t count = length < available ? length : available;
+    struct block *current = sail_memory;
+
+    while (current != NULL && current->block_id != mask) {
+      current = current->next;
+    }
+    if (current != NULL) {
+      memcpy(buffer, current->mem + offset, count);
+    } else {
+      memset(buffer, 0, count);
+    }
+
+    address += count;
+    buffer += count;
+    length -= count;
+  }
+}
+
+void write_mem_bytes(uint64_t address, const uint8_t *buffer, size_t length)
+{
+  while (length > 0) {
+    uint64_t mask = address & ~MASK;
+    uint64_t offset = address & MASK;
+    uint64_t available = MASK + 1 - offset;
+    size_t count = length < available ? length : available;
+    struct block *current = sail_memory;
+
+    while (current != NULL && current->block_id != mask) {
+      current = current->next;
+    }
+    if (current == NULL) {
+      current = (struct block *)malloc(sizeof(struct block));
+      current->block_id = mask;
+      current->mem = (uint8_t *)calloc(MASK + 1, sizeof(uint8_t));
+      current->next = sail_memory;
+      sail_memory = current;
+    }
+    memcpy(current->mem + offset, buffer, count);
+
+    address += count;
+    buffer += count;
+    length -= count;
+  }
+}
+
 unit write_tag_bool(const uint64_t address, const bool tag)
 {
   uint64_t mask = address & ~MASK;
@@ -431,10 +482,11 @@ unit load_raw(fbits addr, const_sail_string file)
     exit(EXIT_FAILURE);
   }
 
-  uint64_t byte;
-  while ((byte = (uint64_t)fgetc(fp)) != EOF) {
-    write_mem(addr, byte);
-    addr++;
+  uint8_t buffer[4096];
+  size_t count;
+  while ((count = fread(buffer, 1, sizeof(buffer), fp)) > 0) {
+    write_mem_bytes(addr, buffer, count);
+    addr += count;
   }
 
   return UNIT;
