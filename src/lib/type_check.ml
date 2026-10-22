@@ -656,8 +656,16 @@ and unify_nexp l env goals (Nexp_aux (nexp_aux1, _) as nexp1) (Nexp_aux (nexp_au
         | _ -> unify_error l "Cannot unify if-then-else with non-conditional expression"
       )
     | Nexp_sum (n1a, n1b) ->
-        if KidSet.is_empty (tyvars_of_nexp n1b) then unify_nexp l env goals n1a (nminus nexp2 n1b)
-        else if KidSet.is_empty (tyvars_of_nexp n1a) then unify_nexp l env goals n1b (nminus nexp2 n1a)
+        if KidSet.is_empty (tyvars_of_nexp n1b) then (
+          match nexp_aux2 with
+          | Nexp_sum (n2a, n2b) when prove __POS__ env (nc_eq n1b n2b) -> unify_nexp l env goals n1a n2a
+          | _ -> unify_nexp l env goals n1a (nminus nexp2 n1b)
+        )
+        else if KidSet.is_empty (tyvars_of_nexp n1a) then (
+          match nexp_aux2 with
+          | Nexp_sum (n2a, n2b) when prove __POS__ env (nc_eq n1a n2a) -> unify_nexp l env goals n1b n2b
+          | _ -> unify_nexp l env goals n1b (nminus nexp2 n1a)
+        )
         else (
           match nexp_aux2 with
           | Nexp_sum (n2a, n2b) ->
@@ -671,7 +679,11 @@ and unify_nexp l env goals (Nexp_aux (nexp_aux1, _) as nexp1) (Nexp_aux (nexp_au
                 )
         )
     | Nexp_minus (n1a, n1b) ->
-        if KidSet.is_empty (tyvars_of_nexp n1b) then unify_nexp l env goals n1a (nsum nexp2 n1b)
+        if KidSet.is_empty (tyvars_of_nexp n1b) then (
+          match nexp_aux2 with
+          | Nexp_minus (n2a, n2b) when prove __POS__ env (nc_eq n1b n2b) -> unify_nexp l env goals n1a n2a
+          | _ -> unify_nexp l env goals n1a (nsum nexp2 n1b)
+        )
         else
           unify_error l ("Cannot unify minus Int expression " ^ string_of_nexp nexp1 ^ " with " ^ string_of_nexp nexp2)
     | Nexp_times (n1a, n1b) ->
