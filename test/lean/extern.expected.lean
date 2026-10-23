@@ -236,7 +236,7 @@ def extern__shl_int (_ : Unit) : Int :=
   (Int.shiftl 4 2)
 
 def extern__shr32 (_ : Unit) : Int :=
-  (Int.shiftl 30 1)
+  (Int.shiftr 30 1)
 
 def extern__shr_int (_ : Unit) : Int :=
   (Int.shiftr 8 2)
