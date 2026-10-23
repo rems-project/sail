@@ -133,7 +133,7 @@ val _shl_int = pure {
 
 val _shr32 = pure {
   c: "shr_mach_int", cpp: "shr_mach_int",
-  lean: "Int.shiftl",
+  lean: "Int.shiftr",
   _: "shr_int"
 } : forall 'n, 0 <= 'n <= 31. (int('n), int(1)) -> {'m, 0 <= 'm <= 15. int('m)}
 
