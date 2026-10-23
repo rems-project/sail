@@ -235,7 +235,7 @@
       "bindings": {
         "c": "shr_mach_int",
         "cpp": "shr_mach_int",
-        "lean": "Int.shiftl",
+        "lean": "Int.shiftr",
         "_": "shr_int"
       },
       "type": "forall 'n, 0 <= 'n <= 31. (int('n), int(1)) -> {'m, 0 <= 'm <= 15. int('m)}",
