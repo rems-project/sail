@@ -324,33 +324,6 @@ and orig_typ_arg (A_aux (arg, l)) =
   | A_bool nc -> rewrap (A_bool (orig_nc nc))
   | A_typ _ -> raise (Reporting.err_unreachable l __POS__ "Tried to pass Type or Order kind to SMT function")
 
-(* Returns the set of type variables that will appear in the Coq output,
-   which may be smaller than those in the Sail type.  May need to be
-   updated with do *)
-let rec coq_nvars_of_typ (Typ_aux (t, l)) =
-  let trec = coq_nvars_of_typ in
-  match t with
-  | Typ_id _ -> KidSet.empty
-  | Typ_var kid -> tyvars_of_nexp (orig_nexp (nvar kid))
-  | Typ_fn (t1, t2) -> List.fold_left KidSet.union (trec t2) (List.map trec t1)
-  | Typ_tuple ts -> List.fold_left (fun s t -> KidSet.union s (trec t)) KidSet.empty ts
-  | Typ_app (Id_aux (Id "register", _), [A_aux (A_typ etyp, _)]) -> trec etyp
-  | Typ_app (Id_aux (Id "implicit", _), _)
-  (* TODO: update when complex atom types are sorted out *)
-  | Typ_app (Id_aux (Id "atom", _), _) ->
-      KidSet.empty
-  | Typ_app (Id_aux (Id "atom_bool", _), _) -> KidSet.empty
-  | Typ_app (_, tas) -> List.fold_left (fun s ta -> KidSet.union s (coq_nvars_of_typ_arg ta)) KidSet.empty tas
-  | Typ_exist (kopts, _, t) -> List.fold_left (fun vs kopt -> KidSet.remove (kopt_kid kopt) vs) (trec t) kopts
-  | Typ_bidir _ -> unreachable l __POS__ "Coq doesn't support bidir types"
-  | Typ_internal_unknown -> unreachable l __POS__ "escaped Typ_internal_unknown"
-
-and coq_nvars_of_typ_arg (A_aux (ta, _)) =
-  match ta with
-  | A_nexp nexp -> tyvars_of_nexp (orig_nexp nexp)
-  | A_typ typ -> coq_nvars_of_typ typ
-  | A_bool nc -> tyvars_of_constraint (orig_nc nc)
-
 let maybe_expand_range_type (Typ_aux (typ, l) as full_typ) =
   match typ with
   | Typ_app (Id_aux (Id "range", _), [A_aux (A_nexp low, _); A_aux (A_nexp high, _)]) ->
@@ -436,18 +409,6 @@ let typ_of_constructor env f typ l =
            ("Mal-formed constructor " ^ string_of_id f ^ " with type " ^ string_of_typ ctor_typ)
         )
 
-(* Calculate the existential type bindings that should make it into the Rocq output as dependent pairs. *)
-
-let relevant_existential_vars ctxt env kopts typ =
-  let relevant_kids = coq_nvars_of_typ typ in
-  let relevant_kopts = List.filter (fun kopt -> KidSet.mem (kopt_kid kopt) relevant_kids) kopts in
-  (relevant_kopts, typ)
-
-let relevant_type_vars ctxt env typ =
-  match typ with
-  | Typ_aux (Typ_exist (kopts, _nc, typ'), _) -> relevant_existential_vars ctxt env kopts typ'
-  | _ -> ([], typ)
-
 let destruct_atom_kid env typ =
   match destruct_atom_nexp env typ with
   | Some (Nexp_aux (Nexp_var kid, _)) -> Some kid
@@ -460,7 +421,7 @@ let destruct_atom_kid env typ =
    we will be able to use instead, and update the context to add them to the kid_id_renames mapping. *)
 let merge_kid_ids_in_pat ctxt env pat =
   let rec aux kids (P_aux (p, ann) as pat) typ =
-    let more_kids, (Typ_aux (t, typ_l) as typ) = relevant_type_vars ctxt env typ in
+    let more_kids, (Typ_aux (t, typ_l) as typ) = Deptype_targets.relevant_type_vars env typ in
     let kids = List.fold_left (fun s kopt -> KidSet.add (kopt_kid kopt) s) kids more_kids in
     match (p, t) with
     | P_lit _, _ | P_wild, _ | P_vector_subrange _, _ | P_app (_, []), _ -> ([], pat)
@@ -624,7 +585,7 @@ let rec doc_typ_fns ctx env =
         if atyp_needed then parens tpp else tpp
     (* TODO: handle non-integer kopts *)
     | Typ_exist (kopts, nc, ty') -> (
-        match relevant_existential_vars ctx env kopts ty' with
+        match Deptype_targets.relevant_existential_vars env kopts ty' with
         | [], ty'' -> atomic_typ atyp_needed ty''
         | kopts_to_print, ty'' ->
             let inner = atomic_typ false ty'' in
@@ -766,40 +727,13 @@ and doc_nc_exp ctx env nc =
    unification with another type (e.g., in a let binding), and otherwise use _ and hope that Rocq
    can figure it out. *)
 
-let doc_typ_exists_unfolded ctx env ?instantiated_type (Typ_aux (t, l) as ty) =
-  match t with
-  | Typ_exist (kopts, _nc, ty') ->
-      let skip_vars = List.fold_left (fun s kopt -> KidSet.add (kopt_kid kopt) s) KidSet.empty kopts in
-      let ty' =
-        match instantiated_type with
-        | None -> ty'
-        | Some ityp -> (
-            match Type_check.unify (typ_loc ityp) env skip_vars ty' ityp with
-            | kmap ->
-                let kmap' =
-                  KBindings.filter_map
-                    (fun kid v ->
-                      match v with A_aux (A_nexp (Nexp_aux (Nexp_constant _, _) as nexp), _) -> Some nexp | _ -> None
-                    )
-                    kmap
-                in
-                subst_kids_typ kmap' ty'
-            | exception _ ->
-                debug ctx
-                  ( lazy
-                    ("Unification failed when trying to fill in type variables using " ^ string_of_typ ty ^ " against "
-                   ^ string_of_typ ityp
-                    )
-                    );
-                ty'
-          )
-      in
-      doc_typ ctx env ~skip_vars ty'
-  | _ -> doc_typ ctx env ~skip_vars:KidSet.empty ty
+let doc_typ_exists_unfolded ctx env ?instantiated_type (Typ_aux (t, l) as typ) =
+  let skip_vars, typ' = Deptype_targets.unfold_exists_typ (debug ctx) env ?instantiated_type typ in
+  doc_typ ctx env ~skip_vars typ'
 
 (* Check for variables in types that would be pretty-printed and are not
    bound in the val spec of the function. *)
-let contains_t_pp_var ctxt (Typ_aux (t, a) as typ) = KidSet.subset (coq_nvars_of_typ typ) ctxt.bound_nvars
+let contains_t_pp_var ctxt (Typ_aux (t, a) as typ) = KidSet.subset (Deptype_targets.tyvars_of_typ typ) ctxt.bound_nvars
 
 (* TODO: should we resurrect this?
    let replace_typ_size ctxt env (Typ_aux (t,a)) =
@@ -991,7 +925,7 @@ let compute_kid_shadow env kid loc =
 
 let rec doc_pat ctxt apat_needed pat typ =
   let env = env_of_pat pat in
-  let kids_to_print, typ = relevant_type_vars ctxt env typ in
+  let kids_to_print, typ = Deptype_targets.relevant_type_vars env typ in
   match kids_to_print with
   | [] -> doc_pat_no_existential ctxt apat_needed pat typ
   | h :: t ->
@@ -1921,7 +1855,9 @@ let doc_exp, doc_let =
 
             (* If the function returns a dependent pair, unpack it. *)
             let epp =
-              let relevant_kids, typ = relevant_type_vars ctxt inst_env (Env.expand_synonyms inst_env ret_typ_inst) in
+              let relevant_kids, typ =
+                Deptype_targets.relevant_type_vars inst_env (Env.expand_synonyms inst_env ret_typ_inst)
+              in
               List.fold_left (fun pp _kid -> string "projT2 " ^^ parens pp) epp relevant_kids
             in
 
@@ -2263,7 +2199,7 @@ let doc_exp, doc_let =
   and construct_dep_pairs ctxt env want_parens exp typ =
     debug ctxt (lazy ("Constructing " ^ string_of_exp exp ^ "  at type  " ^ string_of_typ typ));
     debug ctxt (lazy ("  expression type: " ^ string_of_typ (typ_of exp)));
-    let kids_to_print, typ = relevant_type_vars ctxt env typ in
+    let kids_to_print, typ = Deptype_targets.relevant_type_vars env typ in
     debug ctxt
       ( lazy
         (" existential kids to print: " ^ String.concat ", "
@@ -3425,7 +3361,7 @@ let doc_funcl_init global proof_mode mutrec rec_opt ?rec_set (FCL_aux (FCL_funcl
       kid_id_renames = kid_to_arg_rename;
       kid_id_renames_rev = kir_rev;
       fixed_toplevel_kids = simple_type_equations;
-      dropped_kids = KidSet.diff bound_kids (coq_nvars_of_typ typ);
+      dropped_kids = KidSet.diff bound_kids (Deptype_targets.tyvars_of_typ typ);
       bound_nvars = bound_kids;
       build_at_return = None;
       (* filled in below *)
@@ -3439,6 +3375,12 @@ let doc_funcl_init global proof_mode mutrec rec_opt ?rec_set (FCL_aux (FCL_funcl
       none_nesting_depth = 0;
     }
   in
+  debug ctxt0
+    ( lazy
+      ("coq_nvars_of_typ " ^ string_of_typ typ ^ ": "
+      ^ String.concat ", " (List.map string_of_kid (KidSet.elements (Deptype_targets.tyvars_of_typ typ)))
+      )
+      );
   let ctxt =
     {
       ctxt0 with
