@@ -1,0 +1,9 @@
+static enum: true
+dynamic enum: true
+dynamic enum: false
+static union: 17
+dynamic zero: 10
+dynamic item: 15
+dynamic empty: 10
+effectful payload: 11
+payload calls: 1

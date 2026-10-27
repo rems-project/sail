@@ -1949,13 +1949,6 @@ let rewrite_add_unspecified_rec env ast =
   in
   { ast with defs = List.map rewrite_def ast.defs }
 
-let pat_var (P_aux (paux, a)) =
-  let env = env_of_annot a in
-  let is_var id =
-    (not (Env.is_union_constructor id env)) && match Env.lookup_id id env with Enum _ -> false | _ -> true
-  in
-  match paux with (P_as (_, id) | P_id id) when is_var id -> Some id | _ -> None
-
 (** Split out function clauses for individual union constructor patterns (e.g. AST nodes) into auxiliary functions. Used
     for the execute function.
 
@@ -1979,16 +1972,24 @@ let pat_var (P_aux (paux, a)) =
         Instr : {'r, 'r in {32, 64}. (int('x), bits('r))}
       }
     ]} *)
-let rewrite_split_fun_ctor_pats fun_name effect_info env ast =
+let rewrite_split_fun_ctor_pats ?(split_enums = false) ?return_type fun_name effect_info env ast =
+  let rec constructor_pattern = function
+    | P_aux (P_app (ctor_id, args), annot) -> Some (ctor_id, args, annot, false)
+    | P_aux (P_id ctor_id, annot) when split_enums && is_enum_member ctor_id (env_of_annot annot) ->
+        let unit_pat = P_aux (P_lit (mk_lit L_unit), swaptyp unit_typ annot) in
+        Some (ctor_id, [unit_pat], annot, true)
+    | P_aux (P_tuple [pat], _) -> constructor_pattern pat
+    | _ -> None
+  in
   let rewrite_fundef typquant (FD_aux (FD_function (r_o, t_o, clauses), ((l, _) as fdannot))) def_annot =
     (* let rec_clauses, clauses = List.partition is_funcl_rec clauses in *)
     let clauses, aux_funs =
       List.fold_left
         (fun (clauses, aux_funs) (FCL_aux (FCL_funcl (id, pexp), fannot) as clause) ->
           let pat, guard, exp, annot = destruct_pexp pexp in
-          match pat with
-          | P_aux (P_app (ctor_id, args), pannot) | P_aux (P_tuple [P_aux (P_app (ctor_id, args), pannot)], _) -> (
-              let ctor_typq, ctor_typ = Env.get_union_id ctor_id env in
+          match constructor_pattern pat with
+          | Some (ctor_id, args, pannot, is_enum) -> (
+              let ctor_type = if is_enum then None else Some (Env.get_union_id ctor_id env) in
               let args = match args with [P_aux (P_tuple args, _)] -> args | _ -> args in
               let argstup_typ = tuple_typ (List.map typ_of_pat args) in
               let pannot' = swaptyp argstup_typ pannot in
@@ -1998,43 +1999,50 @@ let rewrite_split_fun_ctor_pats fun_name effect_info env ast =
               let aux_funcl = FCL_aux (FCL_funcl (aux_fun_id, pexp'), (mk_def_annot (fst pannot') (), snd pannot')) in
               try
                 let aux_clauses = Bindings.find aux_fun_id aux_funs in
-                (clauses, Bindings.add aux_fun_id (aux_clauses @ [(aux_funcl, ctor_typq, ctor_typ)]) aux_funs)
+                (clauses, Bindings.add aux_fun_id (aux_clauses @ [(aux_funcl, ctor_type)]) aux_funs)
               with Not_found ->
                 let argpats, argexps =
                   List.split
-                    (List.mapi
-                       (fun idx (P_aux (_, a) as pat) ->
-                         let id = match pat_var pat with Some id -> id | None -> mk_id ("arg" ^ string_of_int idx) in
+                    (List.map
+                       (fun (P_aux (_, a)) ->
+                         let id = fresh_id "arg" (fst a) in
                          (P_aux (P_id id, a), E_aux (E_id id, a))
                        )
                        args
                     )
                 in
-                let pexp =
-                  construct_pexp
-                    (P_aux (P_app (ctor_id, argpats), pannot), None, E_aux (E_app (aux_fun_id, argexps), annot), annot)
+                let wrapper_pat, argexps =
+                  if is_enum then
+                    (P_aux (P_id ctor_id, pannot), [E_aux (E_lit (mk_lit L_unit), swaptyp unit_typ pannot)])
+                  else (P_aux (P_app (ctor_id, argpats), pannot), argexps)
                 in
+                let pexp = construct_pexp (wrapper_pat, None, E_aux (E_app (aux_fun_id, argexps), annot), annot) in
                 ( clauses @ [FCL_aux (FCL_funcl (id, pexp), fannot)],
-                  Bindings.add aux_fun_id [(aux_funcl, ctor_typq, ctor_typ)] aux_funs
+                  Bindings.add aux_fun_id [(aux_funcl, ctor_type)] aux_funs
                 )
             )
           | _ -> (clauses @ [clause], aux_funs)
         )
         ([], Bindings.empty) clauses
     in
+    let ret_typ exp = Option.value return_type ~default:(typ_of exp) in
+
     let add_aux_def id aux_funs (valdefs, fundefs) =
-      let funcls = List.map (fun (fcl, _, _) -> fcl) aux_funs in
+      let funcls = List.map fst aux_funs in
       let env, quants, args_typ, ret_typ =
         match aux_funs with
-        | (FCL_aux (FCL_funcl (_, pexp), _), ctor_typq, ctor_typ) :: _ -> (
+        | (FCL_aux (FCL_funcl (_, pexp), _), None) :: _ ->
+            let _, _, exp, _ = destruct_pexp pexp in
+            (env_of exp, typquant, unit_typ, ret_typ exp)
+        | (FCL_aux (FCL_funcl (_, pexp), _), Some (ctor_typq, ctor_typ)) :: _ -> (
             let pat, _, exp, _ = destruct_pexp pexp in
             let ctor_quants args_typ =
               List.filter (fun qi -> KOptSet.subset (kopts_of_quant_item qi) (kopts_of_typ args_typ)) ctor_typq
             in
             match ctor_typ with
             | Typ_aux (Typ_fn ([Typ_aux (Typ_exist (kopts, nc, args_typ), _)], _), _) ->
-                (env_of exp, ctor_quants args_typ @ List.map mk_qi_kopt kopts @ [mk_qi_nc nc], args_typ, typ_of exp)
-            | Typ_aux (Typ_fn ([args_typ], _), _) -> (env_of exp, ctor_quants args_typ, args_typ, typ_of exp)
+                (env_of exp, ctor_quants args_typ @ List.map mk_qi_kopt kopts @ [mk_qi_nc nc], args_typ, ret_typ exp)
+            | Typ_aux (Typ_fn ([args_typ], _), _) -> (env_of exp, ctor_quants args_typ, args_typ, ret_typ exp)
             | _ ->
                 raise
                   (Reporting.err_unreachable l __POS__
@@ -2072,26 +2080,36 @@ let rewrite_split_fun_ctor_pats fun_name effect_info env ast =
       )
       [] ast.defs
   in
-  let defs, new_effect_info =
+  let defs, new_effect_info, helpers =
     List.fold_right
-      (fun def (defs, effect_info) ->
+      (fun def (defs, effect_info, helpers) ->
         match def with
         | DEF_aux (DEF_fundef fundef, def_annot) when string_of_id (id_of_fundef fundef) = fun_name ->
             let new_defs, new_ids = rewrite_fundef typquant fundef def_annot in
-            (new_defs @ defs, List.fold_left (Effects.copy_function_effect (id_of_fundef fundef)) effect_info new_ids)
-        | _ -> (def :: defs, effect_info)
+            ( new_defs @ defs,
+              List.fold_left (Effects.copy_function_effect (id_of_fundef fundef)) effect_info new_ids,
+              List.fold_left (fun helpers id -> IdSet.add id helpers) helpers new_ids
+            )
+        | _ -> (def :: defs, effect_info, helpers)
       )
-      ast.defs ([], effect_info)
+      ast.defs ([], effect_info, IdSet.empty)
   in
-
   (* If we have a call to execute(Clause(...)) we can directly
      transform that to execute_Clause(...). This removes recursion
      from when one execute clause is implemented in terms of another,
      like RISC-V compressed instructions. *)
   let optimize_split_call (f, args) =
+    let helper ctor_id = prepend_id (fun_name ^ "_") ctor_id in
     match args with
+    | [E_aux (E_id ctor_id, annot)]
+      when string_of_id f = fun_name
+           && is_enum_member ctor_id (env_of_annot annot)
+           && IdSet.mem (helper ctor_id) helpers ->
+        E_app (helper ctor_id, [E_aux (E_lit (mk_lit L_unit), swaptyp unit_typ annot)])
     | [E_aux (E_app (ctor_id, ctor_args), annot)]
-      when string_of_id f = fun_name && Env.is_union_constructor ctor_id (env_of_annot annot) -> (
+      when string_of_id f = fun_name
+           && Env.is_union_constructor ctor_id (env_of_annot annot)
+           && IdSet.mem (helper ctor_id) helpers -> (
         match ctor_args with
         | [E_aux (E_tuple ctor_args, _)] -> E_app (prepend_id (fun_name ^ "_") ctor_id, ctor_args)
         | [ctor_arg] -> E_app (prepend_id (fun_name ^ "_") ctor_id, [ctor_arg])
@@ -2136,6 +2154,63 @@ let rewrite_split_fun_ctor_pats fun_name effect_info env ast =
       defs
   in
   ({ ast with defs }, new_effect_info, env)
+
+let opt_split_functions = ref []
+
+let rewrite_split_functions effect_info env ast =
+  let split (ast, effect_info, env) fun_name =
+    let fun_id = mk_id fun_name in
+    let fail loc message = raise (Reporting.err_general loc ("Cannot split " ^ fun_name ^ ": " ^ message)) in
+    if Env.is_extern fun_id env "c" || Env.is_extern fun_id env "cpp" then
+      fail Parse_ast.Unknown "extern functions are not supported";
+    let rec constructor = function
+      | P_aux (P_app (id, _), _) when Env.is_union_constructor id env -> Some id
+      | P_aux (P_id id, annot) when is_enum_member id (env_of_annot annot) -> Some id
+      | P_aux (P_tuple [pat], _) -> constructor pat
+      | _ -> None
+    in
+    let clauses, loc =
+      match List.find_opt (is_fundef fun_id) ast.defs with
+      | Some (DEF_aux (DEF_fundef (FD_aux (FD_function (_, _, clauses), _)), def_annot)) -> (clauses, def_annot.loc)
+      | _ -> fail Parse_ast.Unknown "no function definition found"
+    in
+    let quantifiers, fun_typ = Env.get_val_spec_orig fun_id env in
+    if quantifiers <> [] then fail loc "polymorphic functions are not supported";
+    let return_type = match fun_typ with Typ_aux (Typ_fn (_, ret_typ), _) -> ret_typ | _ -> assert false in
+    let helpers =
+      List.fold_left
+        (fun helpers (FCL_aux (FCL_funcl (_, pexp), _)) ->
+          let pat, guard, _, _ = destruct_pexp pexp in
+          if Option.is_some guard then fail (pat_loc pat) "guarded clauses are not supported";
+          match constructor pat with
+          | None -> fail (pat_loc pat) "expected an enum member or union constructor pattern"
+          | Some ctor_id ->
+              let helper_id = prepend_id (fun_name ^ "_") ctor_id in
+              if Option.is_some (Env.get_global_binding_loc env helper_id) || List.exists (is_fundef helper_id) ast.defs
+              then fail (pat_loc pat) ("identifier " ^ string_of_id helper_id ^ " already exists");
+              IdSet.add helper_id helpers
+        )
+        IdSet.empty clauses
+    in
+    let ast, effect_info, env =
+      rewrite_split_fun_ctor_pats ~split_enums:true ~return_type fun_name effect_info env ast
+    in
+    (* A caller may precede the definition of a scattered function. Put the
+       helper signatures beside the original signature so those calls recheck. *)
+    let helper_specs, defs =
+      List.partition
+        (function DEF_aux (DEF_val (VS_aux (VS_val_spec (_, id, _), _)), _) -> IdSet.mem id helpers | _ -> false)
+        ast.defs
+    in
+    let defs = List.concat_map (fun def -> if is_valspec fun_id def then def :: helper_specs else [def]) defs in
+    ({ ast with defs }, effect_info, env)
+  in
+  match List.sort_uniq String.compare !opt_split_functions with
+  | [] -> (ast, effect_info, env)
+  | names ->
+      let ast, effect_info, env = List.fold_left split (ast, effect_info, env) names in
+      let ast, env = Type_error.check initial_env ~internal:"After function splitting" (strip_ast ast) in
+      (ast, effect_info, env)
 
 let rewrite_undefined mwords env =
   let rewrite_e_aux (E_aux (e_aux, (l, _)) as exp) =
@@ -4538,6 +4613,7 @@ let all_rewriters =
       String_rewriter (fun target -> basic_rewriter Constant_fold.(rewrite_constant_function_calls no_fixed target))
     );
     ("split", String_rewriter (fun str -> base_rewriter (rewrite_split_fun_ctor_pats str)));
+    ("split_functions", base_rewriter rewrite_split_functions);
     ("properties", basic_rewriter (fun _ -> Property.rewrite));
     ( "infer_effects",
       Bool_rewriter
