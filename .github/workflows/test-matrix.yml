@@ -154,7 +154,9 @@ jobs:
         opam init --yes --no-setup --shell=sh --compiler=$OCAML_VERSION
         opam repo add --yes rocq-released https://rocq-prover.org/opam/released
         opam update --yes
-        opam install --yes rocq-core.$ROCQ_VERSION rocq-stdlib.$ROCQ_STDLIB
+        opam pin --yes --no-action add rocq-core $ROCQ_VERSION
+        opam pin --yes --no-action add rocq-stdlib $ROCQ_STDLIB
+        opam install --yes rocq-core rocq-stdlib
         opam clean --yes
 
     - name: Save cached opam
