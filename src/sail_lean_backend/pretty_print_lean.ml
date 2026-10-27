@@ -328,15 +328,23 @@ and doc_typ ctx env (Typ_aux (t, _) as typ) =
   | Typ_var kid -> doc_kid ctx kid
   | Typ_app (id, args) ->
       parens (doc_id_typ_ctor ctx env id ^^ space ^^ separate_map space (doc_typ_arg ctx env `Only_relevant) args)
-  | Typ_exist (kids, _, typ) ->
+  | Typ_exist (kids, _, typ) -> (
+      let kids_to_print, typ = Deptype_targets.relevant_existential_vars env kids typ in
       let ctx =
         List.fold_left
           (fun ctx (KOpt_aux (KOpt_kind (_, kid), annot)) ->
-            add_single_kid_id_rename ctx (Id_aux (Id "_lean_wildcard", annot)) kid
+            if List.exists (fun k' -> Kid.compare kid (kopt_kid k') == 0) kids_to_print then ctx
+            else add_single_kid_id_rename ctx (Id_aux (Id "_lean_wildcard", annot)) kid
           )
           ctx kids
       in
-      doc_typ ctx env typ
+      match kids_to_print with
+      | [] -> doc_typ ctx env typ
+      | _ :: _ ->
+          let inner = doc_typ ctx env typ in
+          let parameters = separate_map space (fun kopt -> doc_kid ctx (kopt_kid kopt)) kids_to_print in
+          parens (string "Σ " ^^ parameters ^^ string ", " ^^ inner)
+    )
   | _ -> failwith ("Type " ^ string_of_typ_con typ ^ " " ^ string_of_typ typ ^ " not translatable yet.")
 
 and doc_typ_app ctx env (A_aux (t, _) as typ) =
@@ -517,18 +525,33 @@ let rec update_ctx_pat (ctx : context) (P_aux (p, (l, annot)) as pat) =
       List.fold_left update_ctx_pat ctx pats
   | _ -> ctx
 
-let rec doc_pat ?(need_parens = false) ?(in_vector = false) ctx in_match_bv (P_aux (p, (l, annot)) as pat) =
+let rec doc_pat ?(need_parens = false) ?(in_vector = false) ctx in_match_bv (P_aux (p, (l, annot)) as pat) typ =
+  let env = env_of_pat pat in
+  let kids_to_print, typ = Deptype_targets.relevant_type_vars env typ in
+  match kids_to_print with
+  | [] -> doc_pat_no_existential ~need_parens ~in_vector ctx in_match_bv pat typ
+  | _ :: _ ->
+      let inner = doc_pat_no_existential ~need_parens:false ~in_vector ctx in_match_bv pat typ in
+      let pp =
+        string "⟨"
+        ^^ separate_map (string ", ") (fun kid -> doc_kid ctx (kopt_kid kid)) kids_to_print
+        ^^ string ", " ^^ inner ^^ string "⟩"
+      in
+      if need_parens then parens pp else pp
+
+and doc_pat_no_existential ?(need_parens = false) ?(in_vector = false) ctx in_match_bv (P_aux (p, (l, annot)) as pat)
+    typ =
   let opt_parens doc = if need_parens then parens doc else doc in
   let env = env_of_tannot annot in
   match p with
   | P_wild -> underscore
   | P_lit lit -> doc_lit ~width:false lit
-  | P_typ (Typ_aux (Typ_id (Id_aux (Id "bit", _)), _), p) when in_vector -> doc_pat ctx in_match_bv p ^^ string ":1"
+  | P_typ (Typ_aux (Typ_id (Id_aux (Id "bit", _)), _), p) when in_vector -> doc_pat ctx in_match_bv p typ ^^ string ":1"
   | P_typ (Typ_aux (Typ_app (Id_aux (Id id, _), [A_aux (A_nexp (Nexp_aux (Nexp_constant i, _)), _)]), _), p)
     when in_vector && (id = "bits" || id = "bitvector") ->
-      doc_pat ctx in_match_bv p ^^ string ":" ^^ doc_big_int i
-  | P_typ (ptyp, p) when in_vector -> doc_pat ctx in_match_bv p ^^ string ":" ^^ doc_typ ctx env ptyp
-  | P_typ (ptyp, p) -> doc_pat ctx in_match_bv p
+      doc_pat ctx in_match_bv p typ ^^ string ":" ^^ doc_big_int i
+  | P_typ (ptyp, p) when in_vector -> doc_pat ctx in_match_bv p typ ^^ string ":" ^^ doc_typ ctx env ptyp
+  | P_typ (ptyp, p) -> doc_pat ctx in_match_bv p typ
   | P_id id -> (
       match typ_of_pat pat with
       | Typ_aux (Typ_app (Id_aux (Id id', _), [A_aux (A_nexp (Nexp_aux (Nexp_constant i, _)), _)]), _)
@@ -538,31 +561,44 @@ let rec doc_pat ?(need_parens = false) ?(in_vector = false) ctx in_match_bv (P_a
           let prefix = if Type_check.is_enum_member id ctx.env then string "." else empty in
           prefix ^^ (fixup_match_id id |> doc_id_ctor ctx)
     )
-  | P_tuple pats -> separate (string ", ") (List.map (doc_pat ctx in_match_bv) pats) |> parens
-  | P_list pats -> separate (string ", ") (List.map (doc_pat ctx in_match_bv) pats) |> brackets
+  | P_tuple pats ->
+      let typs =
+        match typ with
+        | Typ_aux (Typ_tuple typs, _) -> typs
+        | _ -> unreachable l __POS__ "Tuple pattern with non-tuple type"
+      in
+      separate (string ", ") (List.map2 (doc_pat ctx in_match_bv) pats typs) |> parens
+  | P_list pats ->
+      separate (string ", ") (List.map (fun p -> doc_pat ctx in_match_bv p (typ_of_pat p)) pats) |> brackets
   | P_vector pats
     when List.for_all (fun p -> match p with P_aux (P_lit _, _) -> true | _ -> false) pats && not in_match_bv ->
-      string "0b" ^^ concat (List.map (doc_pat ~in_vector:true ctx in_match_bv) pats)
-  | P_vector pats -> concat (List.map (doc_pat ~in_vector:true ctx in_match_bv) pats)
+      string "0b" ^^ concat (List.map (fun p -> doc_pat ~in_vector:true ctx in_match_bv p (typ_of_pat p)) pats)
+  | P_vector pats -> concat (List.map (fun p -> doc_pat ~in_vector:true ctx in_match_bv p (typ_of_pat p)) pats)
   | P_vector_concat pats -> doc_vector_concat ctx pats
   | P_app (Id_aux (Id "None", _), p) -> string "none"
   | P_app (cons, pats) ->
+      let arg_typ = Deptype_targets.typ_of_constructor env cons typ l in
       opt_parens
         (string "."
         ^^ doc_id_ctor ctx (fixup_match_id cons)
         ^^ space
-        ^^ separate_map (string ", ") (doc_pat ~need_parens:true ctx in_match_bv) pats
+        ^^ separate_map (string ", ") (fun p -> doc_pat ~need_parens:true ctx in_match_bv p arg_typ) pats
         )
-  | P_var (p, _) -> doc_pat ctx in_match_bv p
-  | P_as (pat, id) when in_vector || in_match_bv -> doc_pat ctx in_match_bv pat
-  | P_as (pat, id) -> doc_id_ctor ctx id ^^ string "@" ^^ doc_pat ~need_parens:true ctx in_match_bv pat
+  | P_var (p, _) -> doc_pat ctx in_match_bv p typ
+  | P_as (pat, id) when in_vector || in_match_bv -> doc_pat ctx in_match_bv pat typ
+  | P_as (pat, id) -> doc_id_ctor ctx id ^^ string "@" ^^ doc_pat ~need_parens:true ctx in_match_bv pat typ
   | P_struct (_, pats, _) ->
       let pats =
-        List.map (fun (id, pat) -> separate space [doc_id_ctor ctx id; coloneq; doc_pat ctx in_match_bv pat]) pats
+        List.map
+          (fun (id, pat) -> separate space [doc_id_ctor ctx id; coloneq; doc_pat ctx in_match_bv pat (typ_of_pat pat)])
+          pats
       in
       braces (space ^^ separate (comma ^^ space) pats ^^ space)
   | P_cons (hd_pat, tl_pat) ->
-      parens (separate space [doc_pat ctx in_match_bv hd_pat; string "::"; doc_pat ctx in_match_bv tl_pat])
+      parens
+        (separate space
+           [doc_pat ctx in_match_bv hd_pat (typ_of_pat hd_pat); string "::"; doc_pat ctx in_match_bv tl_pat typ]
+        )
   | _ -> failwith ("Doc Pattern " ^ string_of_pat_con pat ^ " " ^ string_of_pat pat ^ " not translatable yet.")
 
 and doc_vector_concat ctx pats =
@@ -586,8 +622,17 @@ and doc_vector_concat ctx pats =
   in
   brackets (separate_map comma doc_part pats)
 
-let doc_pat_typ_ascription ctx env (P_aux (p, (l, annot)) as pat) =
-  match p with P_typ (ptyp, p) -> Some (doc_typ ctx env ptyp) | _ -> None
+let doc_pat_typ_ascription ctx env (P_aux (p, (l, annot)) as pat) exp_typ =
+  match p with
+  | P_typ (ptyp, p) ->
+      let new_vars, typ = Deptype_targets.unfold_exists_typ (fun _ -> ()) env ~instantiated_type:exp_typ ptyp in
+      let ctx =
+        KidSet.fold
+          (fun kid ctx -> add_single_kid_id_rename ctx (Id_aux (Id "_lean_wildcard", Parse_ast.Generated l)) kid)
+          new_vars ctx
+      in
+      (Some (doc_typ ctx env typ), p)
+  | _ -> (None, pat)
 
 (* Copied from the Coq PP *)
 let rebind_cast_pattern_vars pat typ exp =
@@ -634,6 +679,18 @@ let get_fn_implicits (Typ_aux (t, _)) : bool list =
     | _ -> false
   in
   match t with Typ_fn (args, cod) -> List.map arg_implicit args | _ -> []
+
+(* Given a function type and the type annotation for an application of that function, provide the
+   types of the arguments with the function's type parameters filled in by the instantiation that
+   the type checker found (as opposed to the subtype that the type checker might have found for
+   the argument during inference). *)
+
+let get_arg_types env (Typ_aux (t, _)) l annot =
+  let inst = Type_check.get_instantiations annot in
+  match (t, inst) with
+  | Typ_fn (args, _), Some inst -> List.map (Type_check.subst_unifiers inst) args
+  | _, None -> raise (Reporting.err_unreachable l __POS__ "Function has no instantiation")
+  | _, _ -> raise (Reporting.err_unreachable l __POS__ "Function not a function type")
 
 let rec is_bitvector_pattern (P_aux (pat, _)) =
   match pat with P_vector _ | P_vector_concat _ -> true | P_as (pat, _) -> is_bitvector_pattern pat | _ -> false
@@ -732,12 +789,12 @@ let prepend_monad ctx exp doc =
 
 let match_or_match_bv (is_match_bv : bool) brs = if is_match_bv then "match_bv " else "match "
 
-let rec doc_match_clause (is_bv : bool) (as_monadic : bool) ctx (Pat_aux (cl, l) as p) =
+let rec doc_match_clause (is_bv : bool) (as_monadic : bool) ctx (Pat_aux (cl, l) as p) typ =
   match cl with
   | Pat_exp (pat, branch) ->
       group
         (nest 2
-           (string "| " ^^ doc_pat ctx is_bv pat ^^ string " =>"
+           (string "| " ^^ doc_pat ctx is_bv pat typ ^^ string " =>"
            ^^ string (if is_bv && as_monadic then " do" else "")
            ^^ break 1 ^^ wrap_exp as_monadic ctx branch
            )
@@ -745,7 +802,7 @@ let rec doc_match_clause (is_bv : bool) (as_monadic : bool) ctx (Pat_aux (cl, l)
   | Pat_when (pat, when_, branch) when is_bv ->
       group
         (nest 2
-           (string "| " ^^ doc_pat ctx is_bv pat ^^ string " if " ^^ doc_exp false ctx when_ ^^ string " =>"
+           (string "| " ^^ doc_pat ctx is_bv pat typ ^^ string " if " ^^ doc_exp false ctx when_ ^^ string " =>"
            ^^ string (if is_bv && as_monadic then " do" else "")
            ^^ break 1 ^^ wrap_exp as_monadic ctx branch
            )
@@ -837,23 +894,56 @@ and doc_loop l as_monadic ctx loop_kind args =
       let full_loop = prefix 2 1 loop_head loop_body in
       separate hardline [vars_dec_pp; full_loop; loop_footer; wrap_with_pure as_monadic vars_pp]
 
+(* TODO: more dependent type support: at the moment it only really adds dependent pairs for
+   constructor/function arguments, so we should extend it to other points where we might need
+   to communicate size information, such as values returned by functions or embedded in tuples. *)
+
 and doc_exp (as_monadic : bool) ctx (E_aux (e, (l, annot)) as full_exp) =
   let env = env_of_tannot annot in
-  let d_of_arg ?(with_arrow = true) ctx arg =
+  let d_of_arg_with_typ ?(with_arrow = true) ctx (E_aux (_, lannot) as arg) arg_typ =
+    (* First, do we need to make a dependent pair? *)
+    let add_dep_pair add_parens d =
+      let kids_to_print, arg_typ = Deptype_targets.relevant_type_vars env arg_typ in
+      (* Look for concrete values for existentially bound integer type variables by unififcation with
+           the inferred type for the expression. *)
+      let found_kids =
+        let goals = KidSet.of_list (List.map kopt_kid kids_to_print) in
+        (*          debug ctxt (lazy ("Looking for " ^ String.concat ", " (List.map string_of_kid (KidSet.elements goals))));*)
+        if KidSet.is_empty goals then KBindings.empty
+        else (
+          try
+            let kmap = Type_check.unify (typ_loc arg_typ) env goals arg_typ (typ_of arg) in
+            KBindings.filter_map
+              (fun kid v -> match v with A_aux (A_nexp (Nexp_aux (Nexp_constant c, _)), _) -> Some c | _ -> None)
+              kmap
+          with _ -> KBindings.empty (* TODO: if the backend gets a debug mode, warn about this *)
+        )
+      in
+      let pp_ex_kopt kopt =
+        match KBindings.find_opt (kopt_kid kopt) found_kids with Some c -> doc_big_int c | None -> underscore
+      in
+      match kids_to_print with
+      | [] -> if add_parens then parens d else d
+      | _ :: _ -> string "⟨" ^^ separate_map (string ", ") pp_ex_kopt kids_to_print ^^ string ", " ^^ d ^^ string "⟩"
+    in
+
     let wrap, arg_monadic =
       match arg with
       | E_aux (arg', _) -> (
           match arg' with
           | E_typ (_, e) when has_effect e -> ((fun x -> wrap_with_do with_arrow true x), true)
-          | E_typ (_, e) when has_early_return e -> (parens, false)
+          | E_typ (_, e) when has_early_return e -> (add_dep_pair true, false)
           | E_let _ | E_internal_plet _ | E_if _ | E_match _ | E_var _ | E_block _ ->
-              if has_effect arg then ((fun x -> wrap_with_do with_arrow true x), true) else (parens, false)
+              if has_effect arg then ((fun x -> wrap_with_do with_arrow true x), true) else (add_dep_pair true, false)
           | _ when has_loop arg -> ((fun x -> wrap_with_do with_arrow true x), true)
-          | _ -> ((fun x -> x), not with_arrow) (* for [sailTryCatch] the argument should be a computation *)
+          | _ -> (add_dep_pair false, not with_arrow) (* for [sailTryCatch] the argument should be a computation *)
         )
     in
     wrap (doc_exp arg_monadic ctx arg)
   in
+
+  let d_of_arg ?(with_arrow = true) ctx exp = d_of_arg_with_typ ~with_arrow ctx exp (typ_of exp) in
+
   let d_of_field (FE_aux (FE_fexp (field, e), _) as fexp) = doc_fexp (has_effect e) ctx fexp in
   match e with
   | E_id id ->
@@ -950,12 +1040,14 @@ and doc_exp (as_monadic : bool) ctx (E_aux (e, (l, annot)) as full_exp) =
       arrow (d_of_arg ~with_arrow:false ctx lhs ^^ space ^^ string op ^^ space ^^ d_rhs)
   | E_app (f, args) -> (
       let _, f_typ = Env.get_val_spec f env in
+      let _, f_typ' = if Env.is_union_constructor f env then Env.get_union_id f env else Env.get_val_spec f env in
       let implicits = get_fn_implicits f_typ in
       let arg_names = Bindings.find_opt f ctx.global.fun_args in
       let arg_names = Option.value ~default:[] arg_names in
       let extern_id = if Env.is_extern f env "lean" then Some (Env.get_extern f env "lean") else None in
       let d_id = Option.fold ~some:string ~none:(doc_id_ctor ~ren_ctor:true ctx f) extern_id in
-      let d_args = List.map (d_of_arg ctx) args in
+      let arg_typs = get_arg_types env f_typ' l annot in
+      let d_args = List.map2 (d_of_arg_with_typ ctx) args arg_typs in
       let d_imargs = doc_implicit_args arg_names implicits d_args in
       let d_args = List.map snd (List.filter (fun x -> not (fst x)) (List.combine implicits d_args)) in
       let fn_monadic = not (Effects.function_is_pure f ctx.global.effect_info) in
@@ -991,8 +1083,8 @@ and doc_exp (as_monadic : bool) ctx (E_aux (e, (l, annot)) as full_exp) =
   | E_let (lpat, lexp, e') | E_internal_plet (lpat, lexp, e') ->
       let has_loop = has_loop lexp in
       let is_arrow_do = match e with E_let _ when not has_loop -> false | _ -> true in
-      let id_typ = doc_pat ctx false lpat in
-      let typ_ascription = doc_pat_typ_ascription ctx env lpat in
+      let typ_ascription, lpat = doc_pat_typ_ascription ctx env lpat (typ_of lexp) in
+      let id_typ = doc_pat ctx false lpat (typ_of_pat lpat) in
       let ctx = update_ctx_pat ctx lpat in
       let pp_let_line_f l = group (nest 2 (flow (break 1) l)) in
       let pp_let_line =
@@ -1051,7 +1143,7 @@ and doc_exp (as_monadic : bool) ctx (E_aux (e, (l, annot)) as full_exp) =
         List.exists (fun x -> effectful (effect_of_annot (match x with Pat_aux (_, (_, annot)) -> annot))) brs
         || as_monadic
       in
-      let cases = separate_map hardline (doc_match_clause is_match_bv as_monadic' ctx) brs in
+      let cases = separate_map hardline (fun p -> doc_match_clause is_match_bv as_monadic' ctx p (typ_of discr)) brs in
       string (match_or_match_bv is_match_bv brs) ^^ d_of_arg ctx discr ^^ string " with" ^^ hardline ^^ cases
   | E_assign ((LE_aux (le_act, tannot) as le), e) ->
       wrap_with_left_arrow (not as_monadic)
@@ -1074,7 +1166,7 @@ and doc_exp (as_monadic : bool) ctx (E_aux (e, (l, annot)) as full_exp) =
       let arrow = if as_monadic then empty else leftarrow in
       arrow ^^ string "sailThrow " ^^ parens (doc_exp false ctx e)
   | E_try (e, cases) ->
-      let x = E_aux (E_id (Id_aux (Id "the_exception", Unknown)), (Unknown, annot)) in
+      let x = E_aux (E_id (Id_aux (Id "the_exception", Unknown)), (Unknown, mk_tannot env exc_typ)) in
       let cases = nest 2 (doc_exp true ctx (E_aux (E_match (x, cases), (Unknown, annot)))) in
       let try_catch = if has_early_return e then string "sailTryCatchE " else string "sailTryCatch " in
       let arrow = if as_monadic then empty else leftarrow in

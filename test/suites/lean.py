@@ -17,7 +17,6 @@ skip_selftests = {
     "pointer_assign",
     "concurrency_interface",
     "issue429",
-    "type_if_bits",
     "nexp_simp_euclidian",
     "real_prop",
     "constructor247",
