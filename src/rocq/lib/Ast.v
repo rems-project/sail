@@ -517,8 +517,6 @@ Inductive mpexp_aux (A : Set) : Set :=
 Inductive mpexp (A : Set) : Set :=
 | MPat_aux : mpexp_aux A → annot A → mpexp A.
 
-Definition pexp_funcl (A : Set) : Set := pexp A.
-
 Definition typquant : Set := list quant_item.
 
 Inductive typschm_aux : Set :=
@@ -530,7 +528,7 @@ Inductive mapcl_aux (A : Set) : Set :=
 | MCL_backwards : pexp A → mapcl_aux A.
 
 Inductive funcl_aux (A : Set) : Set :=
-| FCL_funcl : id → pexp_funcl A → funcl_aux A.
+| FCL_funcl : id → pexp A → funcl_aux A.
 
 Inductive tannot_opt_aux : Set :=
 | Typ_annot_opt_none : tannot_opt_aux

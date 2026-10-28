@@ -303,8 +303,6 @@ type 'a mpexp_aux =
 type 'a mpexp =
 | MPat_aux of 'a mpexp_aux * 'a annot
 
-type 'a pexp_funcl = 'a pexp
-
 type typquant = quant_item list
 
 type typschm_aux =
@@ -316,7 +314,7 @@ type 'a mapcl_aux =
 | MCL_backwards of 'a pexp
 
 type 'a funcl_aux =
-| FCL_funcl of id * 'a pexp_funcl
+| FCL_funcl of id * 'a pexp
 
 type tannot_opt_aux =
 | Typ_annot_opt_none
