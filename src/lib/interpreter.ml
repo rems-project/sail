@@ -554,7 +554,7 @@ let initial_gstate ?fold_target ?config primops defs env =
 
 let rec initialize_registers allow_registers undef_registers gstate =
   let process_def = function
-    | Def_aux (Def_register (DEC_aux (DEC_reg (typ, id, opt_exp), annot)), _) when allow_registers -> (
+    | Def_aux (Def_register (Reg_aux (Reg (typ, id, opt_exp), annot)), _) when allow_registers -> (
         match opt_exp with
         | None when undef_registers ->
             let env = Type_check.env_of_annot annot in

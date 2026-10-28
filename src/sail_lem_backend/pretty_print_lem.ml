@@ -1589,7 +1589,7 @@ let doc_fundef_lem effect_info params_to_print env (FD_aux (FD_function (r, typa
       separate space ([string "let"] @ doc_rec @ [doc_fundef_rhs_lem required_monadic params_to_print env fd])
   | _ -> empty
 
-let doc_dec_lem (DEC_aux (reg, (l, _))) = match reg with DEC_reg (typ, id, _) -> empty
+let doc_dec_lem (Reg_aux (reg, (l, _))) = match reg with Reg (typ, id, _) -> empty
 
 let doc_spec_lem effect_info params_to_print env (VS_aux (valspec, annot)) =
   match valspec with

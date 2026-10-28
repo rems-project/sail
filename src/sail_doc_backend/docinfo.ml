@@ -466,7 +466,7 @@ module Generator (Converter : Markdown.CONVERTER) (Config : CONFIG) = struct
   let docinfo_for_type_def (TD_aux (_, annot) as td) =
     doc_loc (fst annot) Type_check.strip_typedef Reformatter.doc_type_def td
 
-  let docinfo_for_register def_annot (DEC_aux (DEC_reg ((Typ_aux (_, typ_l) as typ), _, exp), rd_annot) as rd) =
+  let docinfo_for_register def_annot (Reg_aux (Reg ((Typ_aux (_, typ_l) as typ), _, exp), rd_annot) as rd) =
     {
       source = doc_loc (fst rd_annot) Type_check.strip_register Reformatter.doc_register rd;
       type_source = doc_loc typ_l (fun typ -> typ) Reformatter.doc_typ typ;
@@ -710,7 +710,7 @@ module Generator (Converter : Markdown.CONVERTER) (Config : CONFIG) = struct
             skips
           )
       | Def_register rd ->
-          let id = id_of_dec_spec rd in
+          let id = id_of_reg_spec rd in
           ( {
               docinfo with
               registers =

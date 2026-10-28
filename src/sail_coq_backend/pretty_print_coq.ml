@@ -3558,10 +3558,10 @@ let doc_fundef global (FD_aux (FD_function (r, typa, fcls), fannot)) =
   | [_] -> empty (* extern *)
   | _ -> failwith "FD_function with more than one clause"
 
-let doc_dec global (DEC_aux (reg, (l, _))) =
+let doc_reg_spec global (Reg_aux (reg, (l, _))) =
   let bare_ctxt = { empty_ctxt with global } in
   match reg with
-  | DEC_reg (typ, id, None) -> empty
+  | Reg (typ, id, None) -> empty
   (*
        let env = env_of_annot annot in
        let rt = Env.base_typ_of env typ in
@@ -3581,7 +3581,7 @@ let doc_dec global (DEC_aux (reg, (l, _))) =
          else raise (Reporting.err_unreachable l __POS__ ("can't deal with register type " ^ string_of_typ typ))
        else raise (Reporting.err_unreachable l __POS__ ("can't deal with register type " ^ string_of_typ typ)) *)
   (* For now treat configuration registers as regular registers *)
-  | DEC_reg (typ, id, Some exp) -> empty
+  | Reg (typ, id, Some exp) -> empty
 (*separate space [string "Definition"; doc_id bare_ctxt id; coloneq; doc_exp empty_ctxt false exp] ^^ dot ^^ hardline*)
 
 let is_field_accessor regtypes fdef =
@@ -3810,7 +3810,7 @@ let doc_def global unimplemented generic_eq_types countable_types enum_number_de
   | Def_type t_def ->
       if List.mem (string_of_id (id_of_type_def t_def)) !opt_extern_types <> !opt_generate_extern_types then empty
       else doc_typdef global generic_eq_types countable_types enum_number_defs t_def
-  | Def_register dec -> group (doc_dec global dec)
+  | Def_register dec -> group (doc_reg_spec global dec)
   | Def_default df -> empty
   | Def_fundef fdef -> group (doc_fundef global fdef) ^/^ hardline
   | Def_internal_mutrec fundefs -> doc_mutrec global (ids_of_def def) fundefs ^/^ hardline

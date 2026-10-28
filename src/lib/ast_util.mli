@@ -365,7 +365,7 @@ val map_fundef_annot : ('a annot -> 'b annot) -> 'a fundef -> 'b fundef
 val map_funcl_annot : ('a annot -> 'b annot) -> 'a funcl -> 'b funcl
 val map_mapdef_annot : ('a annot -> 'b annot) -> 'a mapdef -> 'b mapdef
 val map_valspec_annot : ('a annot -> 'b annot) -> 'a val_spec -> 'b val_spec
-val map_register_annot : ('a annot -> 'b annot) -> 'a dec_spec -> 'b dec_spec
+val map_register_annot : ('a annot -> 'b annot) -> 'a reg_spec -> 'b reg_spec
 val map_scattered_annot : ('a annot -> 'b annot) -> 'a scattered_def -> 'b scattered_def
 
 val map_def_annot : ('a annot -> 'b annot) -> ('a, 'c) def -> ('b, 'c) def
@@ -424,7 +424,7 @@ val id_of_mapdef : 'a mapdef -> id
 val id_of_type_def_aux : type_def_aux -> id
 val id_of_type_def : 'a type_def -> id
 val id_of_val_spec : 'a val_spec -> id
-val id_of_dec_spec : 'a dec_spec -> id
+val id_of_reg_spec : 'a reg_spec -> id
 
 (** {2 Functions for manipulating identifiers} *)
 

@@ -94,7 +94,7 @@ module Printer (Config : PRINT_CONFIG) : sig
 
   val doc_type_def : uannot type_def -> PPrint.document
 
-  val doc_register : uannot dec_spec -> PPrint.document
+  val doc_register : uannot reg_spec -> PPrint.document
 
   val doc_def : untyped_def -> PPrint.document
 

@@ -95,7 +95,7 @@ end = struct
     match aux with
     | Def_fundef fdef -> in_fundef fdef
     | Def_mapdef (MD_aux (MD_mapping (_, _, mapcls), _)) -> List.iter in_mapcl mapcls
-    | Def_register (DEC_aux (DEC_reg (_, _, exp_opt), _)) -> Option.iter F.do_exp exp_opt
+    | Def_register (Reg_aux (Reg (_, _, exp_opt), _)) -> Option.iter F.do_exp exp_opt
     | Def_outcome (_, defs) -> List.iter in_def defs
     | Def_impl funcl -> in_funcl funcl
     | Def_let (_, exp) -> F.do_exp exp

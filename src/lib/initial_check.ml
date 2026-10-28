@@ -2146,12 +2146,12 @@ let to_ast_mapdef ctx (P.MD_aux (md, l) : P.mapdef) : uannot mapdef =
       let tannot_opt, ctx = to_ast_typschm_opt ~at:l ctx typschm_opt in
       MD_aux (MD_mapping (to_ast_id ctx id, tannot_opt, List.map (to_ast_mapcl None [] ctx) mapcls), (l, empty_uannot))
 
-let to_ast_dec ctx (P.DEC_aux (regdec, l)) =
-  DEC_aux
+let to_ast_reg_spec ctx (P.Reg_aux (regdec, l)) =
+  Reg_aux
     ( ( match regdec with
-      | P.DEC_reg (typ, id, opt_exp) ->
+      | P.Reg (typ, id, opt_exp) ->
           let opt_exp = match opt_exp with None -> None | Some exp -> Some (to_ast_exp ctx exp) in
-          DEC_reg (to_ast_typ ctx typ, to_ast_id ctx id, opt_exp)
+          Reg (to_ast_typ ctx typ, to_ast_id ctx id, opt_exp)
       ),
       (l, empty_uannot)
     )
@@ -2306,7 +2306,7 @@ let rec to_ast_def doc attrs vis ctx (P.Def_aux (def, l)) : untyped_def list ctx
       let default, ctx = to_ast_default ctx typ_spec in
       ([Def_aux (Def_default default, annot)], ctx)
   | P.Def_register dec ->
-      let d = to_ast_dec ctx dec in
+      let d = to_ast_reg_spec ctx dec in
       ([Def_aux (Def_register d, annot)], ctx)
   | P.Def_constraint nc ->
       let nc = to_ast_constraint ctx nc in
@@ -2556,7 +2556,7 @@ let make_global (Def_aux (def, def_annot)) =
   Def_aux (def, add_def_attribute (gen_loc def_annot.loc) "global" None def_annot)
 
 let rec get_uninitialized_registers = function
-  | Def_aux (Def_register (DEC_aux (DEC_reg (typ, id, None), _)), _) :: defs -> (
+  | Def_aux (Def_register (Reg_aux (Reg (typ, id, None), _)), _) :: defs -> (
       match typ with
       | Typ_aux (Typ_app (Id_aux (Id "option", _), [_]), _) -> get_uninitialized_registers defs
       | _ -> (id, typ) :: get_uninitialized_registers defs

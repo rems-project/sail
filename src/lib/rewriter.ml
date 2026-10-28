@@ -317,8 +317,8 @@ let rewrite_scattered rewriters (SD_aux (sd, (l, annot))) =
 let rec rewrite_def rewriters (Def_aux (aux, def_annot)) =
   let aux =
     match aux with
-    | Def_register (DEC_aux (DEC_reg (typ, id, Some exp), annot)) ->
-        Def_register (DEC_aux (DEC_reg (typ, id, Some (rewriters.rewrite_exp rewriters exp)), annot))
+    | Def_register (Reg_aux (Reg (typ, id, Some exp), annot)) ->
+        Def_register (Reg_aux (Reg (typ, id, Some (rewriters.rewrite_exp rewriters exp)), annot))
     | Def_type _ | Def_constraint _ | Def_val _ | Def_default _ | Def_register _ | Def_overload _ | Def_fixity _
     | Def_instantiation _ ->
         aux

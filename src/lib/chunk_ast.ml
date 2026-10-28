@@ -1353,7 +1353,7 @@ let chunk_val_spec comments chunks (VS_aux (VS_val_spec (typschm, id, extern_opt
   pop_trailing_comment ~space:1 comments chunks (ending_line_num l);
   Queue.push (Spacer (true, 1)) chunks
 
-let chunk_register comments chunks (DEC_aux (DEC_reg ((ATyp_aux (_, typ_l) as typ), id, opt_exp), l)) =
+let chunk_register comments chunks (Reg_aux (Reg ((ATyp_aux (_, typ_l) as typ), id, opt_exp), l)) =
   pop_comments comments chunks l;
   let def_chunks = Queue.create () in
   Queue.push (Atom "register") def_chunks;

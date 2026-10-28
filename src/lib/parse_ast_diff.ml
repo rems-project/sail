@@ -817,9 +817,9 @@ let diff_subst (IS_aux (lhs, l)) (IS_aux (rhs, _)) =
       match rhs with IS_typ (v2, atyp2) -> diff_kid v1 v2 &&& lazy (diff_atyp atyp1 atyp2) | _ -> Some l
     )
 
-let diff_dec_spec (DEC_aux (lhs, l)) (DEC_aux (rhs, _)) =
-  let (DEC_reg (atyp1, id1, opt_exp1)) = lhs in
-  let (DEC_reg (atyp2, id2, opt_exp2)) = rhs in
+let diff_reg_spec (Reg_aux (lhs, l)) (Reg_aux (rhs, _)) =
+  let (Reg (atyp1, id1, opt_exp1)) = lhs in
+  let (Reg (atyp2, id2, opt_exp2)) = rhs in
   diff_id id1 id2 &&& lazy (diff_atyp atyp1 atyp2) &&& lazy (diff_option ~at:l diff_exp opt_exp1 opt_exp2)
 
 let diff_outcome (OV_aux (lhs, l)) (OV_aux (rhs, _)) =
@@ -898,8 +898,8 @@ let rec diff_def (Def_aux (lhs, l)) (Def_aux (rhs, _)) =
                 )
       | _ -> Some l
     )
-  | Def_register dec_spec1 -> (
-      match rhs with Def_register dec_spec2 -> diff_dec_spec dec_spec1 dec_spec2 | _ -> Some l
+  | Def_register reg_spec1 -> (
+      match rhs with Def_register reg_spec2 -> diff_reg_spec reg_spec1 reg_spec2 | _ -> Some l
     )
   | Def_pragma (cmd1, arg1) -> (
       match rhs with

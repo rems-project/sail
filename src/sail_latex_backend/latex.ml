@@ -509,8 +509,8 @@ let defs { defs; _ } =
         Some (latex_command ~docstring Type id (Pretty_print_sail.doc_def def) (fst annot))
     | Def_fundef (FD_aux (FD_function (_, _, funcls), annot)) as def -> Some (latex_funcls def funcls)
     | Def_pragma ("latex", Pragma_line (command, l)) -> process_pragma l command
-    | Def_register (DEC_aux (_, annot) as dec) ->
-        let id = id_of_dec_spec dec in
+    | Def_register (Reg_aux (_, annot) as dec) ->
+        let id = id_of_reg_spec dec in
         regdefs := Bindings.add id id !regdefs;
         Some (latex_command ~docstring Register id (Pretty_print_sail.doc_def def) (fst annot))
     | Def_outcome (OV_aux (OV_outcome (id, _, _), l), _) ->

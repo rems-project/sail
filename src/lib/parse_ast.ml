@@ -386,9 +386,9 @@ type val_spec_aux =
   (* Value type specification *)
   | VS_val_spec of typschm * id * extern option
 
-type dec_spec_aux =
+type reg_spec_aux =
   (* Register declarations *)
-  | DEC_reg of atyp * id * exp option
+  | Reg of atyp * id * exp option
 
 type scattered_def_aux =
   (* Function and type union definitions that can be spread across
@@ -411,7 +411,7 @@ type type_def = TD_aux of type_def_aux * l
 
 type val_spec = VS_aux of val_spec_aux * l
 
-type dec_spec = DEC_aux of dec_spec_aux * l
+type reg_spec = Reg_aux of reg_spec_aux * l
 
 type loop_measure = Loop of loop * exp
 
@@ -443,7 +443,7 @@ type def_aux =
   | Def_scattered of scattered_def (* scattered definition *)
   | Def_measure of id * pat * exp (* separate termination measure declaration *)
   | Def_loop_measures of id * loop_measure list (* separate termination measure declaration *)
-  | Def_register of dec_spec (* register declaration *)
+  | Def_register of reg_spec (* register declaration *)
   | Def_pragma of string * pragma
   | Def_private of def
   | Def_attribute of (l * string * attribute_data option) list * def

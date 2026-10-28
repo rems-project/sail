@@ -115,7 +115,7 @@ let mk_funcl f n m = FCL_aux (f, loc n m)
 let mk_fun fn n m = FD_aux (fn, loc n m)
 let mk_td t n m = TD_aux (t, loc n m)
 let mk_vs v n m = VS_aux (v, loc n m)
-let mk_reg_dec d n m = DEC_aux (d, loc n m)
+let mk_reg_spec d n m = Reg_aux (d, loc n m)
 let mk_default d n m = DT_aux (d, loc n m)
 let mk_outcome ev n m = OV_aux (ev, loc n m)
 let mk_subst ev n m = IS_aux (ev, loc n m)
@@ -1317,15 +1317,15 @@ val_spec_def:
 
 register_def:
   | Register id Colon typ
-    { mk_reg_dec (DEC_reg ($4, $2, None)) $startpos $endpos }
+    { mk_reg_spec (Reg ($4, $2, None)) $startpos $endpos }
   | Register id Colon typ Eq exp
-    { mk_reg_dec (DEC_reg ($4, $2, Some $6)) $startpos $endpos }
+    { mk_reg_spec (Reg ($4, $2, Some $6)) $startpos $endpos }
   | Register effect_set effect_set id Colon typ
-    { mk_reg_dec (DEC_reg ($6, $4, None)) $startpos $endpos }
+    { mk_reg_spec (Reg ($6, $4, None)) $startpos $endpos }
   | Register effect_set effect_set id Colon typ Eq exp
-    { mk_reg_dec (DEC_reg ($6, $4, Some $8)) $startpos $endpos }
+    { mk_reg_spec (Reg ($6, $4, Some $8)) $startpos $endpos }
   | Register Configuration id Colon typ Eq exp
-    { mk_reg_dec (DEC_reg ($5, $3, Some $7)) $startpos $endpos }
+    { mk_reg_spec (Reg ($5, $3, Some $7)) $startpos $endpos }
 
 default_def:
   | Default kind Inc

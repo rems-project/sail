@@ -5572,16 +5572,13 @@ and check_def : Env.t -> untyped_def -> typed_def list * Env.t =
   | Def_instantiation (ispec, substs) -> check_outcome_instantiation env def_annot ispec substs
   | Def_default default -> check_default env def_annot default
   | Def_overload (id, ids) -> ([Def_aux (Def_overload (id, ids), def_annot)], Env.add_overloads def_annot.loc id ids env)
-  | Def_register (DEC_aux (DEC_reg (typ, id, None), (l, uannot)))
+  | Def_register (Reg_aux (Reg (typ, id, None), (l, uannot)))
     when Option.is_some (get_def_attribute "initialized_elsewhere" def_annot) ->
       let env = Env.add_register id typ env in
-      ( [
-          Def_aux
-            (Def_register (DEC_aux (DEC_reg (typ, id, None), (l, mk_expected_tannot env typ (Some typ)))), def_annot);
-        ],
+      ( [Def_aux (Def_register (Reg_aux (Reg (typ, id, None), (l, mk_expected_tannot env typ (Some typ)))), def_annot)],
         env
       )
-  | Def_register (DEC_aux (DEC_reg (typ, id, None), (l, uannot))) -> (
+  | Def_register (Reg_aux (Reg (typ, id, None), (l, uannot))) -> (
       Env.wf_typ ~at:l env typ;
       match typ with
       | Typ_aux (Typ_app (Id_aux (Id "option", _), [_]), _) ->
@@ -5589,27 +5586,26 @@ and check_def : Env.t -> untyped_def -> typed_def list * Env.t =
             "Registers of type option should explicitly be given a default value";
           let none_ctor = locate (fun _ -> gen_loc l) (mk_exp (E_app (mk_id "None", [mk_lit_exp L_unit]))) in
           check_def env
-            (Def_aux (Def_register (DEC_aux (DEC_reg (typ, id, Some none_ctor), (l, uannot))), strip_def_annot def_annot)
-            )
+            (Def_aux (Def_register (Reg_aux (Reg (typ, id, Some none_ctor), (l, uannot))), strip_def_annot def_annot))
       | _ ->
           if not (can_be_undefined ~at:l env typ) then
             typ_error l ("Must provide a default register value for a register of type " ^ string_of_typ typ);
           let env = Env.add_register id typ env in
           ( [
               Def_aux
-                (Def_register (DEC_aux (DEC_reg (typ, id, None), (l, mk_expected_tannot env typ (Some typ)))), def_annot);
+                (Def_register (Reg_aux (Reg (typ, id, None), (l, mk_expected_tannot env typ (Some typ)))), def_annot);
             ],
             env
           )
     )
-  | Def_register (DEC_aux (DEC_reg (typ, id, Some exp), (l, _))) ->
+  | Def_register (Reg_aux (Reg (typ, id, Some exp), (l, _))) ->
       typ_print (lazy "WF reg");
       Env.wf_typ ~at:l env typ;
       let checked_exp = crule check_exp env exp typ in
       let env = Env.add_register id typ env in
       ( [
           Def_aux
-            ( Def_register (DEC_aux (DEC_reg (typ, id, Some checked_exp), (l, mk_expected_tannot env typ (Some typ)))),
+            ( Def_register (Reg_aux (Reg (typ, id, Some checked_exp), (l, mk_expected_tannot env typ (Some typ)))),
               def_annot
             );
         ],

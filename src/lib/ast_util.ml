@@ -844,11 +844,11 @@ and map_scattered_annot_aux f = function
   | SD_enum id -> SD_enum id
   | SD_enumcl (id, member) -> SD_enumcl (id, member)
 
-and map_register_annot f = function DEC_aux (dec_aux, annot) -> DEC_aux (map_register_annot_aux f dec_aux, f annot)
+and map_register_annot f = function Reg_aux (reg_aux, annot) -> Reg_aux (map_register_annot_aux f reg_aux, f annot)
 
 and map_register_annot_aux f = function
-  | DEC_reg (typ, id, None) -> DEC_reg (typ, id, None)
-  | DEC_reg (typ, id, Some exp) -> DEC_reg (typ, id, Some (map_exp_annot f exp))
+  | Reg (typ, id, None) -> Reg (typ, id, None)
+  | Reg (typ, id, Some exp) -> Reg (typ, id, Some (map_exp_annot f exp))
 
 and map_def_annot f (Def_aux (aux, annot)) =
   let aux =
@@ -1300,7 +1300,7 @@ let id_of_type_def (TD_aux (td_aux, _)) = id_of_type_def_aux td_aux
 
 let id_of_val_spec (VS_aux (VS_val_spec (_, id, _), _)) = id
 
-let id_of_dec_spec (DEC_aux (DEC_reg (_, id, _), _)) = id
+let id_of_reg_spec (Reg_aux (Reg (_, id, _), _)) = id
 
 let id_of_scattered (SD_aux (sdef, _)) =
   match sdef with
@@ -1322,7 +1322,7 @@ let ids_of_def (Def_aux (aux, _)) =
   | Def_fundef fd -> IdSet.singleton (id_of_fundef fd)
   | Def_mapdef md -> IdSet.singleton (id_of_mapdef md)
   | Def_let (pat, _) -> pat_ids pat
-  | Def_register (DEC_aux (DEC_reg (_, id, _), _)) -> IdSet.singleton id
+  | Def_register (Reg_aux (Reg (_, id, _), _)) -> IdSet.singleton id
   | Def_val vs -> IdSet.singleton (id_of_val_spec vs)
   | Def_internal_mutrec fds -> IdSet.of_list (List.map id_of_fundef fds)
   | Def_scattered sdef -> IdSet.singleton (id_of_scattered sdef)

@@ -328,7 +328,7 @@ val strip_mpexp : tannot mpexp -> uannot mpexp
 val strip_mapcl : tannot mapcl -> uannot mapcl
 val strip_val_spec : tannot val_spec -> uannot val_spec
 val strip_funcl : tannot funcl -> uannot funcl
-val strip_register : tannot dec_spec -> uannot dec_spec
+val strip_register : tannot reg_spec -> uannot reg_spec
 val strip_typedef : tannot type_def -> uannot type_def
 val strip_def_annot : env def_annot -> unit def_annot
 val strip_def : typed_def -> untyped_def

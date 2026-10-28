@@ -2300,12 +2300,12 @@ module Make (C : CONFIG) = struct
     let def_annot = strip_def_annot def_annot in
     let ctx = { ctx with local_env = def_env; def_annot = Some def_annot } in
     match aux with
-    | Def_register (DEC_aux (DEC_reg (typ, id, None), _)) ->
+    | Def_register (Reg_aux (Reg (typ, id, None), _)) ->
         let ctyp = ctyp_of_typ ctx typ in
         ( Compiled [CDef_aux (CDef_register (name id, ctyp, []), def_annot)],
           { ctx with registers = Bindings.add id ctyp ctx.registers }
         )
-    | Def_register (DEC_aux (DEC_reg (typ, id, Some exp), _)) ->
+    | Def_register (Reg_aux (Reg (typ, id, Some exp), _)) ->
         let ctyp = ctyp_of_typ ctx typ in
         let aexp = C.optimize_anf ctx (no_shadow (letbind_ids ctx) (anf exp)) in
         let setup, call, cleanup = compile_aexp ctx aexp in

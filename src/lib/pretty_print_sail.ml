@@ -768,9 +768,9 @@ module Printer (Config : PRINT_CONFIG) = struct
         let clauses = separate_map sep doc_mapcl mapcls in
         string "mapping" ^^ space ^^ doc_id id ^^ space ^^ string "=" ^^ space ^^ surround 2 0 lbrace clauses rbrace
 
-  let doc_register (DEC_aux (reg, _)) =
+  let doc_register (Reg_aux (reg, _)) =
     match reg with
-    | DEC_reg (typ, id, opt_exp) -> (
+    | Reg (typ, id, opt_exp) -> (
         match opt_exp with
         | None -> separate space [string "register"; doc_id id; colon; doc_typ typ]
         | Some exp -> separate space [string "register"; doc_id id; colon; doc_typ typ; equals; doc_exp exp]

@@ -593,9 +593,6 @@ Inductive scattered_def_aux (A : Set) : Set :=
 | SD_enumcl : id → id → scattered_def_aux A
 | SD_end : id → scattered_def_aux A.
 
-Inductive dec_spec_aux (A : Set) : Set :=
-| DEC_reg : typ → id → option (exp A) → dec_spec_aux A.
-
 Inductive subst_aux : Set :=
 | IS_typ : kid → typ_arg → subst_aux
 | IS_id : id → id → subst_aux.
@@ -629,8 +626,11 @@ Inductive default_spec : Set :=
 Inductive scattered_def (A : Set) : Set :=
 | SD_aux : scattered_def_aux A → annot A → scattered_def A.
 
-Inductive dec_spec (A : Set) : Set :=
-| DEC_aux : dec_spec_aux A → annot A → dec_spec A.
+Inductive reg_spec_aux (A : Set) : Set :=
+| Reg : typ → id → option (exp A) → reg_spec_aux A.
+
+Inductive reg_spec (A : Set) : Set :=
+| Reg_aux : reg_spec_aux A → annot A → reg_spec A.
 
 Inductive prec : Set :=
 | Infix : prec
@@ -673,7 +673,7 @@ Inductive def_aux (A B : Set) : Set :=
 | Def_scattered : scattered_def A → def_aux A B
 | Def_measure : id → pat A → exp A → def_aux A B
 | Def_loop_measures : id → list loop_measure → def_aux A B
-| Def_register : dec_spec A → def_aux A B
+| Def_register : reg_spec A → def_aux A B
 | Def_internal_mutrec : list (fundef A) → def_aux A B
 | Def_pragma : string → pragma → def_aux A B
 

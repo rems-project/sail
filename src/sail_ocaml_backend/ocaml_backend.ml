@@ -524,9 +524,9 @@ let initial_value_for id inits =
   | Some init -> init
   | None -> failwith ("No assignment to register ^ " ^ string_of_id id ^ " in initialize_registers")
 
-let ocaml_dec_spec ctx (DEC_aux (reg, _)) =
+let ocaml_reg_spec ctx (Reg_aux (reg, _)) =
   match reg with
-  | DEC_reg (typ, id, None) ->
+  | Reg (typ, id, None) ->
       separate space
         [
           string "let";
@@ -538,7 +538,7 @@ let ocaml_dec_spec ctx (DEC_aux (reg, _)) =
           string "ref";
           parens (ocaml_exp ctx (initial_value_for id ctx.register_inits));
         ]
-  | DEC_reg (typ, id, Some exp) ->
+  | Reg (typ, id, Some exp) ->
       separate space
         [
           string "let";
@@ -861,7 +861,7 @@ let nf_group doc =
 
 let ocaml_def ctx (Def_aux (aux, _)) =
   match aux with
-  | Def_register ds -> nf_group (ocaml_dec_spec ctx ds) ^^ ocaml_def_end
+  | Def_register ds -> nf_group (ocaml_reg_spec ctx ds) ^^ ocaml_def_end
   | Def_fundef fd -> group (ocaml_fundef ctx fd) ^^ twice hardline
   | Def_internal_mutrec fds ->
       separate_map (twice hardline) (fun fd -> group (ocaml_fundef ctx fd)) fds ^^ twice hardline

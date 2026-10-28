@@ -1603,8 +1603,8 @@ module AtomToItself = struct
               | TypSchm_aux (TypSchm_ts (tq, typ), l) -> TypSchm_aux (TypSchm_ts (tq, replace_funtype id typ), l)
             in
             Def_val (VS_aux (VS_val_spec (typschm, id, extern), (l, annot)))
-        | Def_register (DEC_aux (DEC_reg (typ, id, Some exp), a)) ->
-            Def_register (DEC_aux (DEC_reg (typ, id, Some (rewrite_exp exp)), a))
+        | Def_register (Reg_aux (Reg (typ, id, Some exp), a)) ->
+            Def_register (Reg_aux (Reg (typ, id, Some (rewrite_exp exp)), a))
         | _ -> aux
       in
       Def_aux (aux, def_annot)
@@ -4615,7 +4615,7 @@ module ToplevelNexpRewrites = struct
       | TD_enum (id, ids, flag) -> TD_aux (TD_enum (id, ids, flag), annot)
       | TD_bitfield _ -> assert false (* Processed before re-writing *)
     in
-    let rw_register (DEC_aux (DEC_reg (typ, id, init), annot)) = DEC_aux (DEC_reg (expand_type typ, id, init), annot) in
+    let rw_register (Reg_aux (Reg (typ, id, init), annot)) = Reg_aux (Reg (expand_type typ, id, init), annot) in
     let rw_def rws (Def_aux (aux, def_annot)) =
       let aux' =
         match aux with

@@ -75,7 +75,7 @@ let find_registers defs =
   List.fold_left
     (fun acc def ->
       match def with
-      | Def_aux (Def_register (DEC_aux (DEC_reg (typ, id, opt_exp), (_, tannot))), _) ->
+      | Def_aux (Def_register (Reg_aux (Reg (typ, id, opt_exp), (_, tannot))), _) ->
           let env = match destruct_tannot tannot with Some (env, _) -> env | _ -> Env.empty in
           (Env.expand_synonyms env typ, id, Option.is_some opt_exp) :: acc
       | _ -> acc
@@ -930,7 +930,7 @@ let add_regstate_defs mwords ctx env ast =
    inter-register dependencies anyway... *)
 let add_register_init_function ctx env ast =
   let init_exp = function
-    | Def_aux (Def_register (DEC_aux (DEC_reg (_typ, id, Some exp), _)), _) ->
+    | Def_aux (Def_register (Reg_aux (Reg (_typ, id, Some exp), _)), _) ->
         let loc = gen_loc (exp_loc exp) in
         Some (mk_exp ~loc (E_assign (mk_lexp ~loc (LE_id id), strip_exp exp)))
     | _ -> None
@@ -943,9 +943,9 @@ let add_register_init_function ctx env ast =
   let val_spec = mk_val_spec (VS_val_spec (mk_typschm [] (function_typ [unit_typ] unit_typ), id, None)) in
   let new_defs, env = Type_error.check_defs env [val_spec; fundef] in
   let drop_init = function
-    | Def_aux (Def_register (DEC_aux (DEC_reg (typ, id, Some exp), an)), def_annot) ->
+    | Def_aux (Def_register (Reg_aux (Reg (typ, id, Some exp), an)), def_annot) ->
         let def_annot = add_def_attribute def_annot.loc "initialized_elsewhere" None def_annot in
-        Def_aux (Def_register (DEC_aux (DEC_reg (typ, id, None), an)), def_annot)
+        Def_aux (Def_register (Reg_aux (Reg (typ, id, None), an)), def_annot)
     | d -> d
   in
   let ast = { ast with defs = List.map drop_init ast.defs } in

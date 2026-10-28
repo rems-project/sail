@@ -378,9 +378,6 @@ type 'a scattered_def_aux =
 | SD_enumcl of id * id
 | SD_end of id
 
-type 'a dec_spec_aux =
-| DEC_reg of typ * id * 'a exp option
-
 type subst_aux =
 | IS_typ of kid * typ_arg
 | IS_id of id * id
@@ -414,8 +411,11 @@ type default_spec =
 type 'a scattered_def =
 | SD_aux of 'a scattered_def_aux * 'a annot
 
-type 'a dec_spec =
-| DEC_aux of 'a dec_spec_aux * 'a annot
+type 'a reg_spec_aux =
+| Reg of typ * id * 'a exp option
+
+type 'a reg_spec =
+| Reg_aux of 'a reg_spec_aux * 'a annot
 
 type prec =
 | Infix
@@ -456,7 +456,7 @@ type ('a, 'b) def_aux =
 | Def_scattered of 'a scattered_def
 | Def_measure of id * 'a pat * 'a exp
 | Def_loop_measures of id * loop_measure list
-| Def_register of 'a dec_spec
+| Def_register of 'a reg_spec
 | Def_internal_mutrec of 'a fundef list
 | Def_pragma of string * pragma
 and ('a, 'b) def =

@@ -365,7 +365,7 @@ let add_def_to_graph graph (Def_aux (def, def_annot)) =
       IdSet.iter (fun id -> ignore (fold_pat (rw_pat (Letbind id)) pat)) ids;
       IdSet.iter (fun id -> ignore (fold_exp (rw_exp (Letbind id)) exp)) ids
   | Def_type tdef -> add_type_def_to_graph tdef
-  | Def_register (DEC_aux (DEC_reg (typ, id, opt_exp), annot)) ->
+  | Def_register (Reg_aux (Reg (typ, id, opt_exp), annot)) ->
       (* Determine dependencies of initial expressions (or `undefined` if missing, which will add
            dependencies to `undefined_*` functions) *)
       let exp = match opt_exp with Some exp -> exp | None -> E_aux (E_undef, annot) in
@@ -431,7 +431,7 @@ let graph_of_defs defs = List.fold_left add_def_to_graph G.empty defs
 
 let graph_of_ast ast = graph_of_defs ast.defs
 
-let id_of_reg_dec (DEC_aux (DEC_reg (_, id, _), _)) = id
+let id_of_reg_spec (Reg_aux (Reg (_, id, _), _)) = id
 
 let id_of_funcl (FCL_aux (FCL_funcl (id, _), _)) = id
 
@@ -452,7 +452,7 @@ let nodes_of_def (Def_aux (def, _)) =
   | Def_mapdef mdef -> NS.singleton (Mapping (id_of_mapdef mdef))
   | Def_measure (id, _, _) -> NS.singleton (FunctionMeasure id)
   | Def_loop_measures (id, _) -> NS.singleton (LoopMeasures id)
-  | Def_register rdec -> NS.singleton (Register (id_of_reg_dec rdec))
+  | Def_register rdec -> NS.singleton (Register (id_of_reg_spec rdec))
   | Def_let (pat, _) -> pat_ids pat |> IdSet.elements |> List.map (fun id -> Letbind id) |> NS.of_list
   | Def_type tdef -> NS.singleton (Type (id_of_type_def tdef))
   | Def_outcome (OV_aux (OV_outcome (id, _, _), _), _) -> NS.singleton (Outcome id)
