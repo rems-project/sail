@@ -221,14 +221,14 @@ let rewrite_ast_nexp_ids, _rewrite_typ_nexp_ids =
         Def_aux (Def_val (VS_aux (VS_val_spec (typschm, id, exts), a)), def_annot)
     | Def_aux (Def_type (TD_aux (TD_abbrev (id, typq, typ_arg), a)), def_annot) ->
         Def_aux (Def_type (TD_aux (TD_abbrev (id, typq, rewrite_typ_arg env typ_arg), a)), def_annot)
-    | Def_aux (Def_type (TD_aux (TD_record (id, typq, fields, b), a)), def_annot) ->
+    | Def_aux (Def_type (TD_aux (TD_record (id, typq, fields), a)), def_annot) ->
         let fields' = List.map (fun ((id, t), def_annot) -> ((id, rewrite_typ env t), def_annot)) fields in
-        Def_aux (Def_type (TD_aux (TD_record (id, typq, fields', b), a)), def_annot)
-    | Def_aux (Def_type (TD_aux (TD_variant (id, typq, constrs, b), a)), def_annot) ->
+        Def_aux (Def_type (TD_aux (TD_record (id, typq, fields'), a)), def_annot)
+    | Def_aux (Def_type (TD_aux (TD_variant (id, typq, constrs, is_newtype), a)), def_annot) ->
         let constrs' =
           List.map (fun (Tu_aux (Tu_ty_id (t, id), l)) -> Tu_aux (Tu_ty_id (rewrite_typ env t, id), l)) constrs
         in
-        Def_aux (Def_type (TD_aux (TD_variant (id, typq, constrs', b), a)), def_annot)
+        Def_aux (Def_type (TD_aux (TD_variant (id, typq, constrs', is_newtype), a)), def_annot)
     | d -> Rewriter.rewrite_def rewriters d
   in
 
@@ -4244,7 +4244,7 @@ let rewrite_unroll_constant_loops _type_env defs =
 let remove_bitfield_records type_env =
   let rewrite_def rewriters = function
     (* Avoid using Env.get_bitfield in case the typing environment is out of date (e.g., due to nexp_ids) *)
-    | Def_aux (Def_type (TD_aux (TD_record (id, tq, [((_, typ), _)], _), t_annot)), def_annot)
+    | Def_aux (Def_type (TD_aux (TD_record (id, tq, [((_, typ), _)]), t_annot)), def_annot)
       when Env.is_bitfield id type_env ->
         Def_aux (Def_type (TD_aux (TD_abbrev (id, tq, mk_typ_arg (A_typ typ)), t_annot)), def_annot)
     | d -> rewriters_base.rewrite_def rewriters d

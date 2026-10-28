@@ -81,7 +81,7 @@ let rec get_union_records id acc = function
   | Def_aux (Def_scattered (SD_aux (SD_internal_unioncl_record (uid, record_id, typq, fields), annot)), def_annot)
     :: defs
     when Id.compare uid id = 0 ->
-      let def = Def_aux (Def_type (TD_aux (TD_record (record_id, typq, fields, false), annot)), def_annot) in
+      let def = Def_aux (Def_type (TD_aux (TD_record (record_id, typq, fields), annot)), def_annot) in
       get_union_records id (def :: acc) defs
   | def :: defs -> get_union_records id acc defs
   | [] -> acc
@@ -220,8 +220,7 @@ let rec descatter' global_env annots accumulator funcls mapcls = function
                 |> add_def_attribute (gen_loc l) "undefined_gen" (Some (AD_aux (AD_string "forbid", gen_loc l)))
               in
               let accumulator =
-                Def_aux
-                  (Def_type (TD_aux (TD_enum (id, members, false), (gen_loc l, Type_check.empty_tannot))), def_annot)
+                Def_aux (Def_type (TD_aux (TD_enum (id, members), (gen_loc l, Type_check.empty_tannot))), def_annot)
                 :: accumulator
               in
               descatter' global_env annots accumulator funcls mapcls (filter_enum_clauses id defs)

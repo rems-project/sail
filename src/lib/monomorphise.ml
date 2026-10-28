@@ -4519,7 +4519,7 @@ module ToplevelNexpRewrites = struct
   let rewrite_complete_record_params env ast =
     let lift_params (additions_map, tl) def =
       match def with
-      | Def_aux (Def_type (TD_aux (TD_record (id, qs, fields, semi), annot)), def_annot) as def -> (
+      | Def_aux (Def_type (TD_aux (TD_record (id, qs, fields), annot)), def_annot) as def -> (
           (* TODO: replace with a local environment *)
           let env = Env.add_typquant def_annot.loc qs env in
           let nexp_map, fields' =
@@ -4543,9 +4543,7 @@ module ToplevelNexpRewrites = struct
               in
               let tyqs' = qs @ new_vars @ new_constraints in
               let additions_map' = Bindings.add id (qs, nexp_map) additions_map in
-              ( additions_map',
-                Def_aux (Def_type (TD_aux (TD_record (id, tyqs', fields', semi), annot)), def_annot) :: tl
-              )
+              (additions_map', Def_aux (Def_type (TD_aux (TD_record (id, tyqs', fields'), annot)), def_annot) :: tl)
         )
       | def -> (additions_map, def :: tl)
     in
@@ -4605,14 +4603,13 @@ module ToplevelNexpRewrites = struct
           TD_aux (TD_abbrev (id, typq, A_aux (A_typ (expand_type typ), l)), annot)
       | TD_abbrev (id, typq, typ_arg) -> TD_aux (TD_abbrev (id, typq, typ_arg), annot)
       | TD_abstract (id, kind, instantiation) -> TD_aux (TD_abstract (id, kind, instantiation), annot)
-      | TD_record (id, typq, typ_ids, flag) ->
+      | TD_record (id, typq, typ_ids) ->
           TD_aux
-            ( TD_record
-                (id, typq, List.map (fun ((id, typ), def_annot) -> ((id, expand_type typ), def_annot)) typ_ids, flag),
+            ( TD_record (id, typq, List.map (fun ((id, typ), def_annot) -> ((id, expand_type typ), def_annot)) typ_ids),
               annot
             )
       | TD_variant (id, typq, tus, flag) -> TD_aux (TD_variant (id, typq, List.map rw_union tus, flag), annot)
-      | TD_enum (id, ids, flag) -> TD_aux (TD_enum (id, ids, flag), annot)
+      | TD_enum (id, ids) -> TD_aux (TD_enum (id, ids), annot)
       | TD_bitfield _ -> assert false (* Processed before re-writing *)
     in
     let rw_register (Reg_aux (Reg (typ, id, init), annot)) = Reg_aux (Reg (expand_type typ, id, init), annot) in

@@ -812,7 +812,7 @@ module Printer (Config : PRINT_CONFIG) = struct
         | None ->
             doc_op equals (concat [string "type"; space; doc_id id; doc_typ_arg_kind ":" typ_arg]) (doc_typ_arg typ_arg)
       )
-    | TD_enum (id, members, _) ->
+    | TD_enum (id, members) ->
         separate space
           [
             string "enum";
@@ -820,7 +820,7 @@ module Printer (Config : PRINT_CONFIG) = struct
             equals;
             surround 2 0 lbrace (separate_map (comma ^^ break 1) doc_enum_member members) rbrace;
           ]
-    | TD_record (id, [], fields, _) ->
+    | TD_record (id, [], fields) ->
         separate space
           [
             string "struct";
@@ -828,7 +828,7 @@ module Printer (Config : PRINT_CONFIG) = struct
             equals;
             surround 2 0 lbrace (separate_map (comma ^^ break 1) doc_field fields) rbrace;
           ]
-    | TD_record (id, qs, fields, _) ->
+    | TD_record (id, qs, fields) ->
         separate space
           [
             string "struct";

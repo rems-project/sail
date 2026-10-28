@@ -1904,7 +1904,7 @@ let rec to_ast_typedef ctx def_annot (P.TD_aux (aux, l) : P.type_def) : untyped_
     )
   | P.TD_record (id, typq, fields) ->
       let id, typq, fields, ctx = to_ast_record ctx id typq fields in
-      ([Def_aux (Def_type (TD_aux (TD_record (id, typq, fields, false), (l, empty_uannot))), def_annot)], ctx)
+      ([Def_aux (Def_type (TD_aux (TD_record (id, typq, fields), (l, empty_uannot))), def_annot)], ctx)
   | P.TD_variant (id, typq, arms, is_newtype) as union ->
       let (typq, arms), kenv = KindInference.infer_union ctx typq arms KindInference.initial_env in
       (* First generate auxilliary record types for anonymous records in constructors *)
@@ -1954,7 +1954,7 @@ let rec to_ast_typedef ctx def_annot (P.TD_aux (aux, l) : P.type_def) : untyped_
       let fns = generate_enum_functions l ctx id fns members in
       let members = List.map fst members in
       check_duplicate_enum_ids members;
-      ( fns @ [Def_aux (Def_type (TD_aux (TD_enum (id, members, false), (l, empty_uannot))), def_annot)],
+      ( fns @ [Def_aux (Def_type (TD_aux (TD_enum (id, members), (l, empty_uannot))), def_annot)],
         { ctx with type_constructors = Bindings.add id ([], P.K_type) ctx.type_constructors }
       )
   | P.TD_abstract (id, kind, instantiation) -> (
@@ -2593,7 +2593,7 @@ let update_def_annot f (Def_aux (def, annot)) = Def_aux (def, f annot)
 let generate_enum_number_conversions defs =
   let vs_ids = val_spec_ids defs in
   let rec gen_enums acc = function
-    | (Def_aux (Def_type (TD_aux (TD_enum (id, elems, _), _)), def_annot) as enum) :: defs -> (
+    | (Def_aux (Def_type (TD_aux (TD_enum (id, elems), _)), def_annot) as enum) :: defs -> (
         match get_def_attribute "no_enum_number_conversions" def_annot with
         | Some _ -> gen_enums (enum :: acc) defs
         | None ->

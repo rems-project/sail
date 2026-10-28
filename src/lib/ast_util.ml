@@ -1289,9 +1289,9 @@ let id_of_mapdef (MD_aux (MD_mapping (id, _, _), _)) = id
 
 let id_of_type_def_aux = function
   | TD_abbrev (id, _, _)
-  | TD_record (id, _, _, _)
+  | TD_record (id, _, _)
   | TD_variant (id, _, _, _)
-  | TD_enum (id, _, _)
+  | TD_enum (id, _)
   | TD_abstract (id, _, _)
   | TD_bitfield (id, _, _) ->
       id
@@ -1341,7 +1341,7 @@ let val_spec_ids defs =
 
 let record_ids defs =
   let rec rec_ids = function
-    | Def_aux (Def_type (TD_aux (TD_record (id, _, _, _), _)), _) :: defs -> id :: rec_ids defs
+    | Def_aux (Def_type (TD_aux (TD_record (id, _, _), _)), _) :: defs -> id :: rec_ids defs
     | _ :: defs -> rec_ids defs
     | [] -> []
   in

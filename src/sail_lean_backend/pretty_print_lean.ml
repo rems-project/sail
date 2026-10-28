@@ -1375,7 +1375,7 @@ let string_of_type_def_con (TD_aux (td, _)) =
 
 let doc_typdef ctx (TD_aux (td, tannot) as full_typdef) =
   match td with
-  | TD_enum (id, members, _) ->
+  | TD_enum (id, members) ->
       let ids = List.map fst members in
       let ids = List.map (doc_id_ctor ctx) ids in
       let ids = List.map (fun i -> space ^^ pipe ^^ space ^^ i) ids in
@@ -1389,7 +1389,7 @@ let doc_typdef ctx (TD_aux (td, tannot) as full_typdef) =
         ^^ enums_doc ^^ hardline ^^ string "deriving" ^^ space ^^ separate comma_sp derivers ^^ hardline
         ^^ string "open" ^^ space ^^ id
         )
-  | TD_record (id, tq, fields, _) ->
+  | TD_record (id, tq, fields) ->
       let fields = List.map (doc_typ_id ctx ctx.env) fields in
       let fields_doc = separate hardline fields in
       let rectyp = doc_typ_quant_relevant ctx tq in

@@ -390,9 +390,9 @@ type 'a fundef_aux =
 
 type type_def_aux =
 | TD_abbrev of id * typquant * typ_arg
-| TD_record of id * typquant * ((id * typ) * unit def_annot) list * bool
+| TD_record of id * typquant * ((id * typ) * unit def_annot) list
 | TD_variant of id * typquant * type_union list * bool
-| TD_enum of id * (id * unit def_annot) list * bool
+| TD_enum of id * (id * unit def_annot) list
 | TD_abstract of id * kind * string list option
 | TD_bitfield of id * typ * ((id * index_range) * unit def_annot) list
 

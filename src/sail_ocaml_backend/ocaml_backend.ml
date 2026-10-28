@@ -810,7 +810,7 @@ let ocaml_string_of_variant ctx id typq cases =
 
 let ocaml_typedef ctx (TD_aux (td_aux, (l, _))) =
   match td_aux with
-  | TD_record (id, typq, fields, _) ->
+  | TD_record (id, typq, fields) ->
       (separate space [string "module"; zencode_upper ctx id; equals; string "struct"]
       ^//^ ((separate space [string "type"; ocaml_typquant typq; zencode ctx id; equals; lbrace]
             ^//^ ocaml_fields ctx fields
@@ -833,7 +833,7 @@ let ocaml_typedef ctx (TD_aux (td_aux, (l, _))) =
       ^^ ocaml_def_end
       ^^ ocaml_string_of_variant ctx id typq cases
       ^^ ocaml_def_end
-  | TD_enum (id, members, _) ->
+  | TD_enum (id, members) ->
       let ids = List.map fst members in
       (separate space [string "type"; zencode ctx id; equals] ^//^ bar ^^ space ^^ ocaml_enum ctx ids)
       ^^ ocaml_def_end ^^ ocaml_string_of_enum ctx id ids ^^ ocaml_def_end
@@ -929,7 +929,7 @@ let ocaml_pp_generators ctx defs orig_types required =
     | TD_abbrev (_, _, A_aux (A_typ typ, _)) -> add_req_from_typ required typ
     | TD_abbrev _ -> required
     | TD_abstract _ -> required
-    | TD_record (_, _, fields, _) -> List.fold_left (fun req ((_, typ), _) -> add_req_from_typ req typ) required fields
+    | TD_record (_, _, fields) -> List.fold_left (fun req ((_, typ), _) -> add_req_from_typ req typ) required fields
     | TD_variant (_, _, variants, _) ->
         List.fold_left (fun req (Tu_aux (Tu_ty_id (typ, _), _)) -> add_req_from_typ req typ) required variants
     | TD_enum _ -> required
@@ -943,7 +943,7 @@ let ocaml_pp_generators ctx defs orig_types required =
       | TD_aux (td, _) -> (
           match td with
           | TD_abbrev (_, tqs, A_aux (A_typ _, _)) -> tqs
-          | TD_record (_, tqs, _, _) -> tqs
+          | TD_record (_, tqs, _) -> tqs
           | TD_variant (_, tqs, _, _) -> tqs
           | TD_abstract _ | TD_enum _ -> []
           | TD_abbrev (_, _, _) -> assert false
@@ -1042,7 +1042,7 @@ let ocaml_pp_generators ctx defs orig_types required =
               Some (separate_map (string ";" ^^ break 1) variant_constructor variants),
               Some (separate_map (break 1) build_constructor variants)
             )
-        | TD_enum (_, members, _) ->
+        | TD_enum (_, members) ->
             let ids = List.map fst members in
             ( [],
               string "rand_choice ["
@@ -1051,7 +1051,7 @@ let ocaml_pp_generators ctx defs orig_types required =
               Some (separate_map (string ";" ^^ break 1) enum_constructor ids),
               Some (separate_map (break 1) build_enum_constructor ids)
             )
-        | TD_record (_, tqs, fields, _) ->
+        | TD_record (_, tqs, fields) ->
             (tqs, braces (separate_map (string ";" ^^ break 1) rand_field fields), None, None)
         | _ -> raise (Reporting.err_todo l "Generators for bitfields not yet supported")
       in

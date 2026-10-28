@@ -2354,9 +2354,9 @@ let type_dependencies defs =
         let new_def =
           match td with
           | TD_abbrev (id, tq, arg) -> Some (id, typs_of_arg arg)
-          | TD_record (id, tq, fields, _) -> Some (id, List.map (fun ((_, typ), _) -> typ) fields)
+          | TD_record (id, tq, fields) -> Some (id, List.map (fun ((_, typ), _) -> typ) fields)
           | TD_variant (id, tq, branches, _) -> Some (id, List.map (fun (Tu_aux (Tu_ty_id (typ, _), _)) -> typ) branches)
-          | TD_enum (id, _, _) -> Some (id, [])
+          | TD_enum (id, _) -> Some (id, [])
           | TD_abstract _ -> None
           | TD_bitfield _ -> unreachable l __POS__ "bitfield not removed before Coq backend"
         in
@@ -2462,9 +2462,9 @@ let countable_types defs =
         let new_def =
           match td with
           | TD_abbrev (id, tq, arg) -> Some (id, typs_of_arg arg)
-          | TD_record (id, tq, fields, _) -> Some (id, List.map (fun ((_, typ), _) -> typ) fields)
+          | TD_record (id, tq, fields) -> Some (id, List.map (fun ((_, typ), _) -> typ) fields)
           | TD_variant (id, tq, branches, _) -> Some (id, List.map (fun (Tu_aux (Tu_ty_id (typ, _), _)) -> typ) branches)
-          | TD_enum (id, _, _) -> Some (id, [])
+          | TD_enum (id, _) -> Some (id, [])
           | TD_abstract _ -> None
           | TD_bitfield _ -> unreachable l __POS__ "bitfield not removed before Coq backend"
         in
@@ -2504,7 +2504,7 @@ let countable_types defs =
 let enum_fn_names defs =
   let aux (enum_map, fn_set) (Def_aux (d, def_annot)) =
     match d with
-    | Def_type (TD_aux (TD_enum (id, _, _), _)) ->
+    | Def_type (TD_aux (TD_enum (id, _), _)) ->
         let attr_opt = get_def_attribute "enum_number_conversions" def_annot in
         let names =
           let open Util.Option_monad in
@@ -2689,7 +2689,7 @@ let doc_typdef global generic_eq_types countable_types enum_number_defs (TD_aux 
       ^^ twice hardline
   | TD_abstract _ -> unreachable l __POS__ "Abstract type not supported by Coq backend"
   | TD_bitfield _ -> empty (* TODO? *)
-  | TD_record (id, typq, fs, _) ->
+  | TD_record (id, typq, fs) ->
       let fname fid = doc_field_name bare_ctxt id fid in
       let f_pp ((fid, typ), _) = concat [fname fid; space; colon; space; doc_typ bare_ctxt Env.empty typ; semi] in
       let rectyp =
@@ -3007,7 +3007,7 @@ let doc_typdef global generic_eq_types countable_types enum_number_defs (TD_aux 
           in
           typ_pp ^^ dot ^^ hardline ^^ reset_implicits_pp ^^ hardline ^^ eq_pp ^^ hardline ^^ inhabited_pp ^^ hardline
     )
-  | TD_enum (id, members, _) ->
+  | TD_enum (id, members) ->
       let enums = List.map fst members in
       let enums_doc = group (separate_map (break 1 ^^ pipe ^^ space) (doc_id_ctor bare_ctxt) enums) in
       let id_pp = doc_id_type global None id in
@@ -3838,7 +3838,7 @@ let doc_isla_typ global (TD_aux (td, _)) =
   let type_id_pp id = doc_id_type global None id in
   let bare_ctxt = { empty_ctxt with global } in
   match td with
-  | TD_record (id, typq, fs, _) ->
+  | TD_record (id, typq, fs) ->
       let fname fid = doc_id bare_ctxt fid in
       let full_fname fid = doc_field_name bare_ctxt id fid in
       separate hardline
@@ -3866,7 +3866,7 @@ let doc_isla_typ global (TD_aux (td, _)) =
           empty;
           empty;
         ]
-  | TD_enum (id, members, _) ->
+  | TD_enum (id, members) ->
       let enums = List.map fst members in
       hang 2
         (string "#[export] Instance get_isla_" ^^ type_id_pp id ^^ string " : IslaEnum " ^^ type_id_pp id
@@ -4635,10 +4635,10 @@ end = struct
             && IdSet.mem typ_id register_type_ids
           then (
             match td with
-            | TD_aux (TD_record (id, quant, fields, _), _) -> generic_fns_for_record id quant fields
+            | TD_aux (TD_record (id, quant, fields), _) -> generic_fns_for_record id quant fields
             | TD_aux (TD_variant (Id_aux (Id "option", _), _quant, _arms, _), _) -> []
             | TD_aux (TD_variant (id, quant, arms, _), _) -> generic_fns_for_variant id quant arms
-            | TD_aux (TD_enum (id, elements, _), _) -> generic_fns_for_enum id elements
+            | TD_aux (TD_enum (id, elements), _) -> generic_fns_for_enum id elements
             | _ -> []
           )
           else []

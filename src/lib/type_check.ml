@@ -5174,7 +5174,7 @@ let rec check_typedef : Env.t -> env def_annot -> uannot type_def -> typed_def l
           ([Def_aux (Def_type (TD_aux (tdef, (l, empty_tannot))), def_annot)], Env.add_abstract_typ id kind key env)
       | K_type -> raise (Reporting.err_general l "Abstract type must be either a boolean or integer type")
     )
-  | TD_record (id, typq, fields, _) -> (
+  | TD_record (id, typq, fields) -> (
       let env = check_record l env def_annot id typq fields in
       match get_def_attribute "undefined_gen" def_annot with
       | Some (_, Some (AD_aux (AD_string "forbid", _))) ->
@@ -5234,7 +5234,7 @@ let rec check_typedef : Env.t -> env def_annot -> uannot type_def -> typed_def l
         rec_env |> fun env -> List.fold_left (fun env tu -> check_type_union l non_rec_env env id typq tu) env arms
       in
       ([Def_aux (Def_type (TD_aux (tdef, (l, empty_tannot))), def_annot)], env)
-  | TD_enum (id, members, _) -> (
+  | TD_enum (id, members) -> (
       let ids = List.map fst members in
       let env = Env.add_enum id ids env in
       (* If the enumeration has the "enum_vector" attribute, we will generate a
@@ -5292,7 +5292,7 @@ let rec check_typedef : Env.t -> env def_annot -> uannot type_def -> typed_def l
             | BF_aux (BF_concat (r1, r2), l) ->
                 BF_aux (BF_concat (expand_range_synonyms r1, expand_range_synonyms r2), l)
           in
-          let record_tdef = TD_record (id, [], [((mk_id "bits", typ), mk_def_annot l ())], false) in
+          let record_tdef = TD_record (id, [], [((mk_id "bits", typ), mk_def_annot l ())]) in
           let ranges =
             List.map (fun ((f, r), _) -> (f, expand_range_synonyms r)) ranges |> List.to_seq |> Bindings.of_seq
           in

@@ -142,7 +142,7 @@ let generate_regstate env registers =
         )
         else List.map (fun (t, i, _) -> ((i, t), mk_def_annot (id_loc i) ())) registers
       in
-      TD_record (mk_id "regstate", [], fields, false)
+      TD_record (mk_id "regstate", [], fields)
     )
   in
   [
@@ -220,7 +220,7 @@ let generate_initial_regstate ctx env ast =
       in
       let typ_subst_typquant tq args typ = List.fold_left2 typ_subst_quant_item typ tq args in
       let add_typ_init_val (defs', vals) = function
-        | TD_enum (id, (id1, _) :: _, _) ->
+        | TD_enum (id, (id1, _) :: _) ->
             (* Choose the first value of an enumeration type as default *)
             (defs', Bindings.add id (fun _ -> string_of_id id1) vals)
         | TD_variant (id, tq, Tu_aux (Tu_ty_id (typ1, id1), _) :: _, _) ->
@@ -233,7 +233,7 @@ let generate_initial_regstate ctx env ast =
         | TD_abbrev (id, tq, A_aux (A_typ typ, _)) ->
             let init_val args = lookup_init_val vals (typ_subst_typquant tq args typ) in
             (defs', Bindings.add id init_val vals)
-        | TD_record (id, tq, fields, _) ->
+        | TD_record (id, tq, fields) ->
             let init_val args =
               let init_field ((id, typ), _) =
                 let typ = typ_subst_typquant tq args typ in
