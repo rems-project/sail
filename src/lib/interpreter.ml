@@ -295,7 +295,11 @@ module Semantics = Extraction.Semantics.Make (struct
   let fallthrough () = fallthrough ()
 end)
 
-module Monad = Extraction.Semantics.Monad
+module Monad = struct
+  type 'a t = 'a Extraction.Semantics.t
+
+  let pure = Extraction.Monad.pure
+end
 
 let step exp = Semantics.step exp
 
@@ -369,6 +373,8 @@ let rec eval_frame' = function
       | Runtime_type_error l, _ ->
           Fail (out, state, m, stack, "Runtime type error at " ^ Reporting.short_loc_to_string l)
       | Assertion_failed s, _ -> Fail (out, state, m, stack, "Assertion failed: " ^ s)
+      (* The interpreter does not generate [Exit], it only exists for the partial evaluator *)
+      | Exit _, _ -> Fail (out, state, m, stack, "Unexpected exit")
       | Call (id, args, cont), _ ->
           let env = gstate.typecheck_env in
           let interpreter_extern = is_interpreter_extern id env in
@@ -554,7 +560,7 @@ let initial_gstate ?fold_target ?config primops defs env =
 
 let rec initialize_registers allow_registers undef_registers gstate =
   let process_def = function
-    | DEF_aux (DEF_register (DEC_aux (DEC_reg (typ, id, opt_exp), annot)), _) when allow_registers -> (
+    | Def_aux (Def_register (Reg_aux (Reg (typ, id, opt_exp), annot)), _) when allow_registers -> (
         match opt_exp with
         | None when undef_registers ->
             let env = Type_check.env_of_annot annot in
@@ -567,7 +573,7 @@ let rec initialize_registers allow_registers undef_registers gstate =
             let evaluated = eval_exp (initial_lstate, gstate) exp in
             { gstate with registers = Bindings.add id evaluated gstate.registers }
       )
-    | DEF_aux (DEF_let (pat, exp), def_annot) -> (
+    | Def_aux (Def_let (pat, exp), def_annot) -> (
         try
           let evaluated = eval_exp (initial_lstate, gstate) exp in
           match pattern_match pat evaluated with
@@ -590,7 +596,7 @@ let rec initialize_registers allow_registers undef_registers gstate =
 let initial_state ?(registers = true) ?(undef_registers = true) ?fold_target ?config ast env primops =
   let gstate = initial_gstate ?fold_target ?config primops ast.defs env in
   let add_function gstate = function
-    | DEF_aux (DEF_fundef fdef, _) -> { gstate with fundefs = Bindings.add (id_of_fundef fdef) fdef gstate.fundefs }
+    | Def_aux (Def_fundef fdef, _) -> { gstate with fundefs = Bindings.add (id_of_fundef fdef) fdef gstate.fundefs }
     | _ -> gstate
   in
   let gstate = List.fold_left add_function gstate ast.defs in

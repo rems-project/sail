@@ -7,6 +7,7 @@ open IdUtil
 open List0
 open ListDef
 open ListUtil
+open Monad
 open PatternMatch
 open PeanoNat
 open PrimBits
@@ -38,57 +39,21 @@ type destructure =
 | DL_vector_concat of (Types.vector_concat_split * destructure) list
 | DL_place of place
 
-module Monad :
- sig
-  type 'a t =
-  | Pure of 'a
-  | Early_return of value
-  | Exception of value
-  | Runtime_type_error of Parse_ast.l
-  | Match_failure of Parse_ast.l
-  | Assertion_failed of string
-  | Call of id * value list * (return_value -> 'a t)
-  | Read_var of place * (value -> 'a t)
-  | Write_var of place * value * (unit -> 'a t)
-  | Get_config of Parse_ast.l * string list * typ * (value -> 'a t)
-  | Get_undefined of Parse_ast.l * typ * (value -> 'a t)
-
-  val bind : 'a1 t -> ('a1 -> 'a2 t) -> 'a2 t
-
-  val fmap : ('a1 -> 'a2) -> 'a1 t -> 'a2 t
-
-  val pure : 'a1 -> 'a1 t
-
-  val lift_option : Parse_ast.l -> 'a1 option -> 'a1 t
-
-  val sequence : 'a1 t list -> 'a1 list t
-
-  val get_config : Parse_ast.l -> string list -> typ -> value t
-
-  val get_undefined : Parse_ast.l -> typ -> value t
-
-  val throw : value -> 'a1 t
-
-  type 'a caught =
-  | Continue of 'a
-  | Caught of value
-
-  val catch : 'a1 t -> 'a1 caught t
- end
+type 'a t = (value, return_value, place, 'a) Monad.t
 
 type 'a evaluated =
 | Evaluated of 'a
 | Unevaluated
 
-val get_bool : 'a1 exp -> bool evaluated Monad.t
+val get_bool : 'a1 exp -> bool evaluated t
 
-val get_string : 'a1 exp -> string evaluated Monad.t
+val get_string : 'a1 exp -> string evaluated t
 
 val get_value : 'a1 exp -> value evaluated
 
 val all_evaluated : 'a1 exp list -> value list
 
-val coerce_place : Parse_ast.l -> destructure -> place Monad.t
+val coerce_place : Parse_ast.l -> destructure -> place t
 
 val left_to_right : 'a1 exp list -> 'a1 exp list * 'a1 exp list
 
@@ -129,16 +94,16 @@ module Make :
 
   val substitute_lexp : id -> value -> 'a1 lexp -> 'a1 lexp
 
-  val bv_concat : Parse_ast.l -> value list -> bvn Monad.t
+  val bv_concat : Parse_ast.l -> value list -> bvn t
 
-  val lookup_field : Parse_ast.l -> id -> (id * value) list -> value Monad.t
+  val lookup_field : Parse_ast.l -> id -> (id * value) list -> value t
 
   val destructuring_assignment :
-    Tannot.t annot -> destructure -> value -> unit Monad.t
+    Tannot.t annot -> destructure -> value -> unit t
 
-  val lexp_to_destructure : Tannot.t lexp -> destructure Monad.t
+  val lexp_to_destructure : Tannot.t lexp -> destructure t
 
   val update_field : id -> value -> (id * value) list -> (id * value) list
 
-  val step : Tannot.t exp -> Tannot.t exp Monad.t
+  val step : Tannot.t exp -> Tannot.t exp t
  end

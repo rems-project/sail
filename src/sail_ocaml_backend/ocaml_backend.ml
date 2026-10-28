@@ -502,8 +502,8 @@ and ocaml_atomic_lexp ctx (LE_aux (lexp_aux, _) as lexp) =
   match lexp_aux with LE_typ (_, id) -> zencode ctx id | LE_id id -> zencode ctx id | _ -> parens (ocaml_lexp ctx lexp)
 
 let rec get_initialize_registers = function
-  | DEF_aux
-      ( DEF_fundef
+  | Def_aux
+      ( Def_fundef
           (FD_aux
              (FD_function (_, _, [FCL_aux (FCL_funcl (id, Pat_aux (Pat_exp (_, E_aux (E_block inits, _)), _)), _)]), _)
             ),
@@ -524,9 +524,9 @@ let initial_value_for id inits =
   | Some init -> init
   | None -> failwith ("No assignment to register ^ " ^ string_of_id id ^ " in initialize_registers")
 
-let ocaml_dec_spec ctx (DEC_aux (reg, _)) =
+let ocaml_reg_spec ctx (Reg_aux (reg, _)) =
   match reg with
-  | DEC_reg (typ, id, None) ->
+  | Reg (typ, id, None) ->
       separate space
         [
           string "let";
@@ -538,7 +538,7 @@ let ocaml_dec_spec ctx (DEC_aux (reg, _)) =
           string "ref";
           parens (ocaml_exp ctx (initial_value_for id ctx.register_inits));
         ]
-  | DEC_reg (typ, id, Some exp) ->
+  | Reg (typ, id, Some exp) ->
       separate space
         [
           string "let";
@@ -810,7 +810,7 @@ let ocaml_string_of_variant ctx id typq cases =
 
 let ocaml_typedef ctx (TD_aux (td_aux, (l, _))) =
   match td_aux with
-  | TD_record (id, typq, fields, _) ->
+  | TD_record (id, typq, fields) ->
       (separate space [string "module"; zencode_upper ctx id; equals; string "struct"]
       ^//^ ((separate space [string "type"; ocaml_typquant typq; zencode ctx id; equals; lbrace]
             ^//^ ocaml_fields ctx fields
@@ -833,7 +833,7 @@ let ocaml_typedef ctx (TD_aux (td_aux, (l, _))) =
       ^^ ocaml_def_end
       ^^ ocaml_string_of_variant ctx id typq cases
       ^^ ocaml_def_end
-  | TD_enum (id, members, _) ->
+  | TD_enum (id, members) ->
       let ids = List.map fst members in
       (separate space [string "type"; zencode ctx id; equals] ^//^ bar ^^ space ^^ ocaml_enum ctx ids)
       ^^ ocaml_def_end ^^ ocaml_string_of_enum ctx id ids ^^ ocaml_def_end
@@ -849,7 +849,7 @@ let get_externs defs =
     match Ast_util.extern_assoc "ocaml" exts with None -> [] | Some ext -> [(id, mk_id ext)]
   in
   let rec extern_ids = function
-    | DEF_aux (DEF_val vs, _) :: defs -> extern_id vs :: extern_ids defs
+    | Def_aux (Def_val vs, _) :: defs -> extern_id vs :: extern_ids defs
     | def :: defs -> extern_ids defs
     | [] -> []
   in
@@ -859,14 +859,14 @@ let nf_group doc =
   first_function := true;
   group doc
 
-let ocaml_def ctx (DEF_aux (aux, _)) =
+let ocaml_def ctx (Def_aux (aux, _)) =
   match aux with
-  | DEF_register ds -> nf_group (ocaml_dec_spec ctx ds) ^^ ocaml_def_end
-  | DEF_fundef fd -> group (ocaml_fundef ctx fd) ^^ twice hardline
-  | DEF_internal_mutrec fds ->
+  | Def_register ds -> nf_group (ocaml_reg_spec ctx ds) ^^ ocaml_def_end
+  | Def_fundef fd -> group (ocaml_fundef ctx fd) ^^ twice hardline
+  | Def_internal_mutrec fds ->
       separate_map (twice hardline) (fun fd -> group (ocaml_fundef ctx fd)) fds ^^ twice hardline
-  | DEF_type td -> nf_group (ocaml_typedef ctx td)
-  | DEF_let (pat, exp) -> nf_group (string "let" ^^ space ^^ ocaml_letbind ctx pat exp) ^^ ocaml_def_end
+  | Def_type td -> nf_group (ocaml_typedef ctx td)
+  | Def_let (pat, exp) -> nf_group (string "let" ^^ space ^^ ocaml_letbind ctx pat exp) ^^ ocaml_def_end
   | _ -> empty
 
 let val_spec_typs defs =
@@ -875,7 +875,7 @@ let val_spec_typs defs =
     match vs_aux with VS_val_spec (TypSchm_aux (TypSchm_ts (_, typ), _), id, _) -> typs := Bindings.add id typ !typs
   in
   let rec vs_typs = function
-    | DEF_aux (DEF_val vs, _) :: defs ->
+    | Def_aux (Def_val vs, _) :: defs ->
         val_spec_typ vs;
         vs_typs defs
     | _ :: defs -> vs_typs defs
@@ -893,7 +893,7 @@ let val_spec_typs defs =
 *)
 
 let orig_types_for_ocaml_generator defs =
-  List.filter_map (function DEF_aux (DEF_type td, _) -> Some td | _ -> None) defs
+  List.filter_map (function Def_aux (Def_type td, _) -> Some td | _ -> None) defs
 
 let ocaml_pp_generators ctx defs orig_types required =
   let add_def typemap td = Bindings.add (id_of_type_def td) td typemap in
@@ -929,7 +929,7 @@ let ocaml_pp_generators ctx defs orig_types required =
     | TD_abbrev (_, _, A_aux (A_typ typ, _)) -> add_req_from_typ required typ
     | TD_abbrev _ -> required
     | TD_abstract _ -> required
-    | TD_record (_, _, fields, _) -> List.fold_left (fun req ((_, typ), _) -> add_req_from_typ req typ) required fields
+    | TD_record (_, _, fields) -> List.fold_left (fun req ((_, typ), _) -> add_req_from_typ req typ) required fields
     | TD_variant (_, _, variants, _) ->
         List.fold_left (fun req (Tu_aux (Tu_ty_id (typ, _), _)) -> add_req_from_typ req typ) required variants
     | TD_enum _ -> required
@@ -943,7 +943,7 @@ let ocaml_pp_generators ctx defs orig_types required =
       | TD_aux (td, _) -> (
           match td with
           | TD_abbrev (_, tqs, A_aux (A_typ _, _)) -> tqs
-          | TD_record (_, tqs, _, _) -> tqs
+          | TD_record (_, tqs, _) -> tqs
           | TD_variant (_, tqs, _, _) -> tqs
           | TD_abstract _ | TD_enum _ -> []
           | TD_abbrev (_, _, _) -> assert false
@@ -1042,7 +1042,7 @@ let ocaml_pp_generators ctx defs orig_types required =
               Some (separate_map (string ";" ^^ break 1) variant_constructor variants),
               Some (separate_map (break 1) build_constructor variants)
             )
-        | TD_enum (_, members, _) ->
+        | TD_enum (_, members) ->
             let ids = List.map fst members in
             ( [],
               string "rand_choice ["
@@ -1051,7 +1051,7 @@ let ocaml_pp_generators ctx defs orig_types required =
               Some (separate_map (string ";" ^^ break 1) enum_constructor ids),
               Some (separate_map (break 1) build_enum_constructor ids)
             )
-        | TD_record (_, tqs, fields, _) ->
+        | TD_record (_, tqs, fields) ->
             (tqs, braces (separate_map (string ";" ^^ break 1) rand_field fields), None, None)
         | _ -> raise (Reporting.err_todo l "Generators for bitfields not yet supported")
       in

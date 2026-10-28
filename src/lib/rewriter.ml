@@ -314,30 +314,30 @@ let rewrite_scattered rewriters (SD_aux (sd, (l, annot))) =
   in
   SD_aux (sd, (l, annot))
 
-let rec rewrite_def rewriters (DEF_aux (aux, def_annot)) =
+let rec rewrite_def rewriters (Def_aux (aux, def_annot)) =
   let aux =
     match aux with
-    | DEF_register (DEC_aux (DEC_reg (typ, id, Some exp), annot)) ->
-        DEF_register (DEC_aux (DEC_reg (typ, id, Some (rewriters.rewrite_exp rewriters exp)), annot))
-    | DEF_type _ | DEF_constraint _ | DEF_val _ | DEF_default _ | DEF_register _ | DEF_overload _ | DEF_fixity _
-    | DEF_instantiation _ ->
+    | Def_register (Reg_aux (Reg (typ, id, Some exp), annot)) ->
+        Def_register (Reg_aux (Reg (typ, id, Some (rewriters.rewrite_exp rewriters exp)), annot))
+    | Def_type _ | Def_constraint _ | Def_val _ | Def_default _ | Def_register _ | Def_overload _ | Def_fixity _
+    | Def_instantiation _ ->
         aux
-    | DEF_fundef fdef -> DEF_fundef (rewriters.rewrite_fun rewriters fdef)
-    | DEF_mapdef mdef -> DEF_mapdef (rewrite_mapdef rewriters mdef)
-    | DEF_impl funcl -> DEF_impl (rewrite_funcl rewriters funcl)
-    | DEF_outcome (outcome_spec, defs) -> DEF_outcome (outcome_spec, List.map (rewrite_def rewriters) defs)
-    | DEF_internal_mutrec fdefs -> DEF_internal_mutrec (List.map (rewriters.rewrite_fun rewriters) fdefs)
-    | DEF_let (pat, exp) -> DEF_let (rewriters.rewrite_pat rewriters pat, rewriters.rewrite_exp rewriters exp)
-    | DEF_pragma (pragma, arg) -> DEF_pragma (pragma, arg)
-    | DEF_scattered sd -> DEF_scattered (rewrite_scattered rewriters sd)
-    | DEF_measure (id, pat, exp) ->
-        DEF_measure (id, rewriters.rewrite_pat rewriters pat, rewriters.rewrite_exp rewriters exp)
-    | DEF_loop_measures (id, measures) ->
+    | Def_fundef fdef -> Def_fundef (rewriters.rewrite_fun rewriters fdef)
+    | Def_mapdef mdef -> Def_mapdef (rewrite_mapdef rewriters mdef)
+    | Def_impl funcl -> Def_impl (rewrite_funcl rewriters funcl)
+    | Def_outcome (outcome_spec, defs) -> Def_outcome (outcome_spec, List.map (rewrite_def rewriters) defs)
+    | Def_internal_mutrec fdefs -> Def_internal_mutrec (List.map (rewriters.rewrite_fun rewriters) fdefs)
+    | Def_let (pat, exp) -> Def_let (rewriters.rewrite_pat rewriters pat, rewriters.rewrite_exp rewriters exp)
+    | Def_pragma (pragma, arg) -> Def_pragma (pragma, arg)
+    | Def_scattered sd -> Def_scattered (rewrite_scattered rewriters sd)
+    | Def_measure (id, pat, exp) ->
+        Def_measure (id, rewriters.rewrite_pat rewriters pat, rewriters.rewrite_exp rewriters exp)
+    | Def_loop_measures (id, measures) ->
         (* We can't rewrite in here because the measure expressions haven't been typechecked, so
            the rewrite needs to run early. *)
         aux
   in
-  DEF_aux (aux, def_annot)
+  Def_aux (aux, def_annot)
 
 let rewrite_ast_defs rewriters defs =
   List.fold_left (fun defs d -> rewriters.rewrite_def rewriters d :: defs) [] (List.rev defs)

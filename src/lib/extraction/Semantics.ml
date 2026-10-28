@@ -7,6 +7,7 @@ open IdUtil
 open List0
 open ListDef
 open ListUtil
+open Monad
 open PatternMatch
 open PeanoNat
 open PrimBits
@@ -43,138 +44,33 @@ type destructure =
 | DL_vector_concat of (Types.vector_concat_split * destructure) list
 | DL_place of place
 
-module Monad =
- struct
-  type 'a t =
-  | Pure of 'a
-  | Early_return of value
-  | Exception of value
-  | Runtime_type_error of Parse_ast.l
-  | Match_failure of Parse_ast.l
-  | Assertion_failed of string
-  | Call of id * value list * (return_value -> 'a t)
-  | Read_var of place * (value -> 'a t)
-  | Write_var of place * value * (unit -> 'a t)
-  | Get_config of Parse_ast.l * string list * typ * (value -> 'a t)
-  | Get_undefined of Parse_ast.l * typ * (value -> 'a t)
-
-  (** val bind : 'a1 t -> ('a1 -> 'a2 t) -> 'a2 t **)
-
-  let rec bind m f =
-    match m with
-    | Pure x -> f x
-    | Early_return v -> Early_return v
-    | Exception v -> Exception v
-    | Runtime_type_error l -> Runtime_type_error l
-    | Match_failure l -> Match_failure l
-    | Assertion_failed msg -> Assertion_failed msg
-    | Call (id0, args, cont) -> Call (id0, args, (fun v -> bind (cont v) f))
-    | Read_var (r, cont) -> Read_var (r, (fun v -> bind (cont v) f))
-    | Write_var (r, v, cont) -> Write_var (r, v, (fun u -> bind (cont u) f))
-    | Get_config (l, key, t0, cont) ->
-      Get_config (l, key, t0, (fun v -> bind (cont v) f))
-    | Get_undefined (l, t0, cont) ->
-      Get_undefined (l, t0, (fun v -> bind (cont v) f))
-
-  (** val fmap : ('a1 -> 'a2) -> 'a1 t -> 'a2 t **)
-
-  let rec fmap f = function
-  | Pure x -> Pure (f x)
-  | Early_return v -> Early_return v
-  | Exception v -> Exception v
-  | Runtime_type_error l -> Runtime_type_error l
-  | Match_failure l -> Match_failure l
-  | Assertion_failed msg -> Assertion_failed msg
-  | Call (id0, args, cont) -> Call (id0, args, (fun v -> fmap f (cont v)))
-  | Read_var (r, cont) -> Read_var (r, (fun v -> fmap f (cont v)))
-  | Write_var (r, v, cont) -> Write_var (r, v, (fun u -> fmap f (cont u)))
-  | Get_config (l, key, t0, cont) ->
-    Get_config (l, key, t0, (fun v -> fmap f (cont v)))
-  | Get_undefined (l, t0, cont) ->
-    Get_undefined (l, t0, (fun v -> fmap f (cont v)))
-
-  (** val pure : 'a1 -> 'a1 t **)
-
-  let pure x =
-    Pure x
-
-  (** val lift_option : Parse_ast.l -> 'a1 option -> 'a1 t **)
-
-  let lift_option l = function
-  | Some y -> Pure y
-  | None -> Runtime_type_error l
-
-  (** val sequence : 'a1 t list -> 'a1 list t **)
-
-  let rec sequence = function
-  | [] -> pure []
-  | m :: ms -> bind m (fun x -> bind (sequence ms) (fun xs -> pure (x :: xs)))
-
-  (** val get_config : Parse_ast.l -> string list -> typ -> value t **)
-
-  let get_config l key typ0 =
-    Get_config (l, key, typ0, pure)
-
-  (** val get_undefined : Parse_ast.l -> typ -> value t **)
-
-  let get_undefined l typ0 =
-    Get_undefined (l, typ0, pure)
-
-  (** val throw : value -> 'a1 t **)
-
-  let throw v =
-    Exception v
-
-  type 'a caught =
-  | Continue of 'a
-  | Caught of value
-
-  (** val catch : 'a1 t -> 'a1 caught t **)
-
-  let catch = function
-  | Pure x -> Pure (Continue x)
-  | Early_return v -> Early_return v
-  | Exception v -> Pure (Caught v)
-  | Runtime_type_error l -> Runtime_type_error l
-  | Match_failure l -> Match_failure l
-  | Assertion_failed msg -> Assertion_failed msg
-  | Call (id0, args, cont) ->
-    Call (id0, args, (fun v -> fmap (fun x -> Continue x) (cont v)))
-  | Read_var (r, cont) ->
-    Read_var (r, (fun v -> fmap (fun x -> Continue x) (cont v)))
-  | Write_var (r, v, cont) ->
-    Write_var (r, v, (fun _ -> fmap (fun x -> Continue x) (cont ())))
-  | Get_config (l, key, t0, cont) ->
-    Get_config (l, key, t0, (fun v -> fmap (fun x -> Continue x) (cont v)))
-  | Get_undefined (l, t0, cont) ->
-    Get_undefined (l, t0, (fun v -> fmap (fun x -> Continue x) (cont v)))
- end
+type 'a t = (value, return_value, place, 'a) Monad.t
 
 type 'a evaluated =
 | Evaluated of 'a
 | Unevaluated
 
-(** val get_bool : 'a1 exp -> bool evaluated Monad.t **)
+(** val get_bool : 'a1 exp -> bool evaluated t **)
 
 let get_bool = function
 | E_aux (e, annot0) ->
   (match e with
    | E_internal_value v ->
      (match v with
-      | V_bool b -> Monad.pure (Evaluated b)
-      | _ -> Monad.Runtime_type_error (fst annot0))
-   | _ -> Monad.pure Unevaluated)
+      | V_bool b -> pure (Evaluated b)
+      | _ -> Runtime_type_error (fst annot0))
+   | _ -> pure Unevaluated)
 
-(** val get_string : 'a1 exp -> string evaluated Monad.t **)
+(** val get_string : 'a1 exp -> string evaluated t **)
 
 let get_string = function
 | E_aux (e, annot0) ->
   (match e with
    | E_internal_value v ->
      (match v with
-      | V_string s -> Monad.pure (Evaluated s)
-      | _ -> Monad.Runtime_type_error (fst annot0))
-   | _ -> Monad.pure Unevaluated)
+      | V_string s -> pure (Evaluated s)
+      | _ -> Runtime_type_error (fst annot0))
+   | _ -> pure Unevaluated)
 
 (** val get_value : 'a1 exp -> value evaluated **)
 
@@ -194,11 +90,11 @@ let rec all_evaluated = function
    | E_internal_value v -> v :: (all_evaluated xs0)
    | _ -> all_evaluated xs0)
 
-(** val coerce_place : Parse_ast.l -> destructure -> place Monad.t **)
+(** val coerce_place : Parse_ast.l -> destructure -> place t **)
 
 let coerce_place loc = function
-| DL_place p -> Monad.pure p
-| _ -> Monad.Runtime_type_error loc
+| DL_place p -> pure p
+| _ -> Runtime_type_error loc
 
 (** val left_to_right : 'a1 exp list -> 'a1 exp list * 'a1 exp list **)
 
@@ -297,7 +193,7 @@ module Make =
        then E_aux ((E_internal_value v), annot0)
        else E_aux ((E_id m), annot0)
      | E_lit _ -> E_aux (aux, annot0)
-     | E_typ (typ0, x0) -> E_aux ((E_typ (typ0, (substitute n v x0))), annot0)
+     | E_typ (typ, x0) -> E_aux ((E_typ (typ, (substitute n v x0))), annot0)
      | E_app (f, args) ->
        E_aux ((E_app (f, (map (substitute n v) args))), annot0)
      | E_tuple xs -> E_aux ((E_tuple (map (substitute n v) xs)), annot0)
@@ -395,28 +291,26 @@ module Make =
        LE_aux ((LE_field ((substitute_lexp n v lx), f)), annot0)
      | _ -> l)
 
-  (** val bv_concat : Parse_ast.l -> value list -> bvn Monad.t **)
+  (** val bv_concat : Parse_ast.l -> value list -> bvn t **)
 
   let rec bv_concat l = function
-  | [] -> Monad.pure (zeros Big_int_Z.zero_big_int)
+  | [] -> pure (zeros Big_int_Z.zero_big_int)
   | v :: rest ->
     (match v with
      | V_bitvector bs ->
-       Monad.bind (bv_concat l rest) (fun rest' ->
-         Monad.pure (append bs rest'))
-     | _ -> Monad.Runtime_type_error l)
+       bind (bv_concat l rest) (fun rest' -> pure (append bs rest'))
+     | _ -> Runtime_type_error l)
 
-  (** val lookup_field :
-      Parse_ast.l -> id -> (id * value) list -> value Monad.t **)
+  (** val lookup_field : Parse_ast.l -> id -> (id * value) list -> value t **)
 
   let rec lookup_field l name = function
-  | [] -> Monad.Runtime_type_error l
+  | [] -> Runtime_type_error l
   | p :: fields0 ->
     let (name', v) = p in
-    if id_eqb name name' then Monad.pure v else lookup_field l name fields0
+    if id_eqb name name' then pure v else lookup_field l name fields0
 
   (** val destructuring_assignment :
-      Tannot.t annot -> destructure -> value -> unit Monad.t **)
+      Tannot.t annot -> destructure -> value -> unit t **)
 
   let rec destructuring_assignment annot0 d v =
     match d with
@@ -430,14 +324,14 @@ module Make =
                   (match y with
                    | [] -> (prev, [])
                    | v0 :: vs0 ->
-                     ((Monad.bind prev (fun _ ->
+                     ((bind prev (fun _ ->
                         destructuring_assignment annot0 d0 v0)),
                        vs0)))
-                  ds ((Monad.pure ()), vs)
+                  ds ((pure ()), vs)
               in
               assignment
-         else Monad.Runtime_type_error (fst annot0)
-       | _ -> Monad.Runtime_type_error (fst annot0))
+         else Runtime_type_error (fst annot0)
+       | _ -> Runtime_type_error (fst annot0))
     | DL_vector_concat ds ->
       (match v with
        | V_bitvector bs ->
@@ -446,18 +340,18 @@ module Make =
              let (s, d1) = d0 in
              (match s with
               | Types.No_split ->
-                ((Monad.Runtime_type_error (fst annot0)),
+                ((Runtime_type_error (fst annot0)),
                   (zeros Big_int_Z.zero_big_int))
               | Types.Split s0 ->
                 let (prev, bs0) = acc in
                 if Z.eqb (width bs0) Big_int_Z.zero_big_int
                 then (prev, bs0)
                 else let (bs_take, bs_drop) = split_at (Z.of_nat s0) bs0 in
-                     ((Monad.bind prev (fun _ ->
+                     ((bind prev (fun _ ->
                         destructuring_assignment annot0 d1 (V_bitvector
                           bs_take))),
                      bs_drop)))
-             ds ((Monad.pure ()), bs)
+             ds ((pure ()), bs)
          in
          assignment
        | V_vector vs ->
@@ -465,76 +359,69 @@ module Make =
            fold_left (fun acc d0 ->
              let (s, d1) = d0 in
              (match s with
-              | Types.No_split ->
-                ((Monad.Runtime_type_error (fst annot0)), [])
+              | Types.No_split -> ((Runtime_type_error (fst annot0)), [])
               | Types.Split s0 ->
                 let (prev, vs0) = acc in
                 (match vs0 with
                  | [] -> (prev, [])
                  | _ :: _ ->
                    let (vs_take, vs_drop) = take_drop s0 vs0 in
-                   ((Monad.bind prev (fun _ ->
+                   ((bind prev (fun _ ->
                       destructuring_assignment annot0 d1 (V_vector vs_take))),
                    vs_drop))))
-             ds ((Monad.pure ()), vs)
+             ds ((pure ()), vs)
          in
          assignment
-       | _ -> Monad.Runtime_type_error (fst annot0))
-    | DL_place p -> Monad.Write_var (p, v, (fun _ -> Monad.pure ()))
+       | _ -> Runtime_type_error (fst annot0))
+    | DL_place p -> Write_var (p, v, (fun _ -> pure ()))
 
-  (** val lexp_to_destructure : Tannot.t lexp -> destructure Monad.t **)
+  (** val lexp_to_destructure : Tannot.t lexp -> destructure t **)
 
   let rec lexp_to_destructure = function
   | LE_aux (aux, annot0) ->
     (match aux with
      | LE_id var ->
        (match Tannot.get_id_type (snd annot0) var with
-        | Types.Local_variable ->
-          Monad.pure (DL_place (PL_id (var, Var_local)))
-        | Types.Global_register ->
-          Monad.pure (DL_place (PL_id (var, Var_register)))
-        | Types.Enum_member -> Monad.Runtime_type_error (fst annot0))
+        | Types.Local_variable -> pure (DL_place (PL_id (var, Var_local)))
+        | Types.Global_register -> pure (DL_place (PL_id (var, Var_register)))
+        | Types.Enum_member -> Runtime_type_error (fst annot0))
      | LE_deref x ->
        let E_aux (e, _) = x in
        (match e with
         | E_internal_value v ->
           (match v with
-           | V_ref r -> Monad.pure (DL_place (PL_register r))
-           | _ -> Monad.Runtime_type_error (fst annot0))
-        | _ -> Monad.Runtime_type_error (fst annot0))
+           | V_ref r -> pure (DL_place (PL_register r))
+           | _ -> Runtime_type_error (fst annot0))
+        | _ -> Runtime_type_error (fst annot0))
      | LE_typ (_, var) ->
        (match Tannot.get_id_type (snd annot0) var with
-        | Types.Local_variable ->
-          Monad.pure (DL_place (PL_id (var, Var_local)))
-        | Types.Global_register ->
-          Monad.pure (DL_place (PL_id (var, Var_register)))
-        | Types.Enum_member -> Monad.Runtime_type_error (fst annot0))
+        | Types.Local_variable -> pure (DL_place (PL_id (var, Var_local)))
+        | Types.Global_register -> pure (DL_place (PL_id (var, Var_register)))
+        | Types.Enum_member -> Runtime_type_error (fst annot0))
      | LE_tuple ls ->
-       Monad.bind (Monad.sequence (map lexp_to_destructure ls)) (fun ds ->
-         Monad.pure (DL_tuple ds))
+       bind (sequence (map lexp_to_destructure ls)) (fun ds ->
+         pure (DL_tuple ds))
      | LE_vector_concat ls ->
-       Monad.bind
-         (Monad.sequence
+       bind
+         (sequence
            (map (fun l0 ->
              let LE_aux (_, annot1) = l0 in
-             Monad.bind (lexp_to_destructure l0) (fun d ->
-               Monad.pure ((Tannot.get_split (snd annot1)), d)))
+             bind (lexp_to_destructure l0) (fun d ->
+               pure ((Tannot.get_split (snd annot1)), d)))
              ls))
-         (fun ds -> Monad.pure (DL_vector_concat ds))
+         (fun ds -> pure (DL_vector_concat ds))
      | LE_vector (l0, n) ->
-       Monad.bind
-         (Monad.bind (lexp_to_destructure l0) (coerce_place (fst annot0)))
+       bind (bind (lexp_to_destructure l0) (coerce_place (fst annot0)))
          (fun p ->
          let E_aux (e, _) = n in
          (match e with
           | E_internal_value v ->
             (match v with
-             | V_int n0 -> Monad.pure (DL_place (PL_vector (p, n0)))
-             | _ -> Monad.Runtime_type_error (fst annot0))
-          | _ -> Monad.Runtime_type_error (fst annot0)))
+             | V_int n0 -> pure (DL_place (PL_vector (p, n0)))
+             | _ -> Runtime_type_error (fst annot0))
+          | _ -> Runtime_type_error (fst annot0)))
      | LE_vector_range (l0, n, m) ->
-       Monad.bind
-         (Monad.bind (lexp_to_destructure l0) (coerce_place (fst annot0)))
+       bind (bind (lexp_to_destructure l0) (coerce_place (fst annot0)))
          (fun p ->
          let E_aux (e1, _) = n in
          (match e1 with
@@ -545,16 +432,14 @@ module Make =
                (match e2 with
                 | E_internal_value v0 ->
                   (match v0 with
-                   | V_int m0 ->
-                     Monad.pure (DL_place (PL_vector_range (p, n0, m0)))
-                   | _ -> Monad.Runtime_type_error (fst annot0))
-                | _ -> Monad.Runtime_type_error (fst annot0))
-             | _ -> Monad.Runtime_type_error (fst annot0))
-          | _ -> Monad.Runtime_type_error (fst annot0)))
+                   | V_int m0 -> pure (DL_place (PL_vector_range (p, n0, m0)))
+                   | _ -> Runtime_type_error (fst annot0))
+                | _ -> Runtime_type_error (fst annot0))
+             | _ -> Runtime_type_error (fst annot0))
+          | _ -> Runtime_type_error (fst annot0)))
      | LE_field (l0, f) ->
-       Monad.bind
-         (Monad.bind (lexp_to_destructure l0) (coerce_place (fst annot0)))
-         (fun p -> Monad.pure (DL_place (PL_field (p, f)))))
+       bind (bind (lexp_to_destructure l0) (coerce_place (fst annot0)))
+         (fun p -> pure (DL_place (PL_field (p, f)))))
 
   (** val update_field :
       id -> value -> (id * value) list -> (id * value) list **)
@@ -567,13 +452,13 @@ module Make =
     then (name, v) :: rest
     else (name', old_v) :: (update_field name v rest)
 
-  (** val step : Tannot.t exp -> Tannot.t exp Monad.t **)
+  (** val step : Tannot.t exp -> Tannot.t exp t **)
 
   let step =
     coq_Fix_sub (fun recarg step' ->
       let step0 = fun orig_exp -> step' (Coq_exist orig_exp) in
       let E_aux (aux, annot0) = recarg in
-      let wrap = fun e_aux' -> Monad.pure (E_aux (e_aux', annot0)) in
+      let wrap = fun e_aux' -> pure (E_aux (e_aux', annot0)) in
       (match aux with
        | E_block xs ->
          (match xs with
@@ -589,188 +474,157 @@ module Make =
                   let xs1 = e0 :: l in
                   if is_value x0
                   then wrap (E_block xs1)
-                  else Monad.bind (step0 x0) (fun x' ->
-                         wrap (E_block (x' :: xs1))))
+                  else bind (step0 x0) (fun x' -> wrap (E_block (x' :: xs1))))
              | E_id i ->
                let x0 = E_aux ((E_id i), annot1) in
                if is_value x0
                then wrap (E_block xs0)
-               else Monad.bind (step0 x0) (fun x' ->
-                      wrap (E_block (x' :: xs0)))
+               else bind (step0 x0) (fun x' -> wrap (E_block (x' :: xs0)))
              | E_lit l ->
                let x0 = E_aux ((E_lit l), annot1) in
                if is_value x0
                then wrap (E_block xs0)
-               else Monad.bind (step0 x0) (fun x' ->
-                      wrap (E_block (x' :: xs0)))
+               else bind (step0 x0) (fun x' -> wrap (E_block (x' :: xs0)))
              | E_typ (t0, e0) ->
                let x0 = E_aux ((E_typ (t0, e0)), annot1) in
                if is_value x0
                then wrap (E_block xs0)
-               else Monad.bind (step0 x0) (fun x' ->
-                      wrap (E_block (x' :: xs0)))
+               else bind (step0 x0) (fun x' -> wrap (E_block (x' :: xs0)))
              | E_app (i, l) ->
                let x0 = E_aux ((E_app (i, l)), annot1) in
                if is_value x0
                then wrap (E_block xs0)
-               else Monad.bind (step0 x0) (fun x' ->
-                      wrap (E_block (x' :: xs0)))
+               else bind (step0 x0) (fun x' -> wrap (E_block (x' :: xs0)))
              | E_tuple l ->
                let x0 = E_aux ((E_tuple l), annot1) in
                if is_value x0
                then wrap (E_block xs0)
-               else Monad.bind (step0 x0) (fun x' ->
-                      wrap (E_block (x' :: xs0)))
+               else bind (step0 x0) (fun x' -> wrap (E_block (x' :: xs0)))
              | E_if (e0, e1, e2) ->
                let x0 = E_aux ((E_if (e0, e1, e2)), annot1) in
                if is_value x0
                then wrap (E_block xs0)
-               else Monad.bind (step0 x0) (fun x' ->
-                      wrap (E_block (x' :: xs0)))
+               else bind (step0 x0) (fun x' -> wrap (E_block (x' :: xs0)))
              | E_loop (l, i, e0, e1) ->
                let x0 = E_aux ((E_loop (l, i, e0, e1)), annot1) in
                if is_value x0
                then wrap (E_block xs0)
-               else Monad.bind (step0 x0) (fun x' ->
-                      wrap (E_block (x' :: xs0)))
+               else bind (step0 x0) (fun x' -> wrap (E_block (x' :: xs0)))
              | E_for (i, e0, e1, e2, o, e3) ->
                let x0 = E_aux ((E_for (i, e0, e1, e2, o, e3)), annot1) in
                if is_value x0
                then wrap (E_block xs0)
-               else Monad.bind (step0 x0) (fun x' ->
-                      wrap (E_block (x' :: xs0)))
+               else bind (step0 x0) (fun x' -> wrap (E_block (x' :: xs0)))
              | E_vector l ->
                let x0 = E_aux ((E_vector l), annot1) in
                if is_value x0
                then wrap (E_block xs0)
-               else Monad.bind (step0 x0) (fun x' ->
-                      wrap (E_block (x' :: xs0)))
+               else bind (step0 x0) (fun x' -> wrap (E_block (x' :: xs0)))
              | E_vector_append (e0, e1) ->
                let x0 = E_aux ((E_vector_append (e0, e1)), annot1) in
                if is_value x0
                then wrap (E_block xs0)
-               else Monad.bind (step0 x0) (fun x' ->
-                      wrap (E_block (x' :: xs0)))
+               else bind (step0 x0) (fun x' -> wrap (E_block (x' :: xs0)))
              | E_list l ->
                let x0 = E_aux ((E_list l), annot1) in
                if is_value x0
                then wrap (E_block xs0)
-               else Monad.bind (step0 x0) (fun x' ->
-                      wrap (E_block (x' :: xs0)))
+               else bind (step0 x0) (fun x' -> wrap (E_block (x' :: xs0)))
              | E_cons (e0, e1) ->
                let x0 = E_aux ((E_cons (e0, e1)), annot1) in
                if is_value x0
                then wrap (E_block xs0)
-               else Monad.bind (step0 x0) (fun x' ->
-                      wrap (E_block (x' :: xs0)))
+               else bind (step0 x0) (fun x' -> wrap (E_block (x' :: xs0)))
              | E_struct (s, l) ->
                let x0 = E_aux ((E_struct (s, l)), annot1) in
                if is_value x0
                then wrap (E_block xs0)
-               else Monad.bind (step0 x0) (fun x' ->
-                      wrap (E_block (x' :: xs0)))
+               else bind (step0 x0) (fun x' -> wrap (E_block (x' :: xs0)))
              | E_struct_update (e0, l) ->
                let x0 = E_aux ((E_struct_update (e0, l)), annot1) in
                if is_value x0
                then wrap (E_block xs0)
-               else Monad.bind (step0 x0) (fun x' ->
-                      wrap (E_block (x' :: xs0)))
+               else bind (step0 x0) (fun x' -> wrap (E_block (x' :: xs0)))
              | E_field (e0, i) ->
                let x0 = E_aux ((E_field (e0, i)), annot1) in
                if is_value x0
                then wrap (E_block xs0)
-               else Monad.bind (step0 x0) (fun x' ->
-                      wrap (E_block (x' :: xs0)))
+               else bind (step0 x0) (fun x' -> wrap (E_block (x' :: xs0)))
              | E_match (e0, l) ->
                let x0 = E_aux ((E_match (e0, l)), annot1) in
                if is_value x0
                then wrap (E_block xs0)
-               else Monad.bind (step0 x0) (fun x' ->
-                      wrap (E_block (x' :: xs0)))
+               else bind (step0 x0) (fun x' -> wrap (E_block (x' :: xs0)))
              | E_let (p, e0, e1) ->
                let x0 = E_aux ((E_let (p, e0, e1)), annot1) in
                if is_value x0
                then wrap (E_block xs0)
-               else Monad.bind (step0 x0) (fun x' ->
-                      wrap (E_block (x' :: xs0)))
+               else bind (step0 x0) (fun x' -> wrap (E_block (x' :: xs0)))
              | E_assign (l, e0) ->
                let x0 = E_aux ((E_assign (l, e0)), annot1) in
                if is_value x0
                then wrap (E_block xs0)
-               else Monad.bind (step0 x0) (fun x' ->
-                      wrap (E_block (x' :: xs0)))
+               else bind (step0 x0) (fun x' -> wrap (E_block (x' :: xs0)))
              | E_sizeof n ->
                let x0 = E_aux ((E_sizeof n), annot1) in
                if is_value x0
                then wrap (E_block xs0)
-               else Monad.bind (step0 x0) (fun x' ->
-                      wrap (E_block (x' :: xs0)))
+               else bind (step0 x0) (fun x' -> wrap (E_block (x' :: xs0)))
              | E_return e0 ->
                let x0 = E_aux ((E_return e0), annot1) in
                if is_value x0
                then wrap (E_block xs0)
-               else Monad.bind (step0 x0) (fun x' ->
-                      wrap (E_block (x' :: xs0)))
+               else bind (step0 x0) (fun x' -> wrap (E_block (x' :: xs0)))
              | E_exit e0 ->
                let x0 = E_aux ((E_exit e0), annot1) in
                if is_value x0
                then wrap (E_block xs0)
-               else Monad.bind (step0 x0) (fun x' ->
-                      wrap (E_block (x' :: xs0)))
+               else bind (step0 x0) (fun x' -> wrap (E_block (x' :: xs0)))
              | E_config l ->
                let x0 = E_aux ((E_config l), annot1) in
                if is_value x0
                then wrap (E_block xs0)
-               else Monad.bind (step0 x0) (fun x' ->
-                      wrap (E_block (x' :: xs0)))
+               else bind (step0 x0) (fun x' -> wrap (E_block (x' :: xs0)))
              | E_ref i ->
                let x0 = E_aux ((E_ref i), annot1) in
                if is_value x0
                then wrap (E_block xs0)
-               else Monad.bind (step0 x0) (fun x' ->
-                      wrap (E_block (x' :: xs0)))
+               else bind (step0 x0) (fun x' -> wrap (E_block (x' :: xs0)))
              | E_throw e0 ->
                let x0 = E_aux ((E_throw e0), annot1) in
                if is_value x0
                then wrap (E_block xs0)
-               else Monad.bind (step0 x0) (fun x' ->
-                      wrap (E_block (x' :: xs0)))
+               else bind (step0 x0) (fun x' -> wrap (E_block (x' :: xs0)))
              | E_try (e0, l) ->
                let x0 = E_aux ((E_try (e0, l)), annot1) in
                if is_value x0
                then wrap (E_block xs0)
-               else Monad.bind (step0 x0) (fun x' ->
-                      wrap (E_block (x' :: xs0)))
+               else bind (step0 x0) (fun x' -> wrap (E_block (x' :: xs0)))
              | E_assert (e0, e1) ->
                let x0 = E_aux ((E_assert (e0, e1)), annot1) in
                if is_value x0
                then wrap (E_block xs0)
-               else Monad.bind (step0 x0) (fun x' ->
-                      wrap (E_block (x' :: xs0)))
+               else bind (step0 x0) (fun x' -> wrap (E_block (x' :: xs0)))
              | E_var (l, e0, e1) ->
                let x0 = E_aux ((E_var (l, e0, e1)), annot1) in
                if is_value x0
                then wrap (E_block xs0)
-               else Monad.bind (step0 x0) (fun x' ->
-                      wrap (E_block (x' :: xs0)))
+               else bind (step0 x0) (fun x' -> wrap (E_block (x' :: xs0)))
              | E_undef ->
                let x0 = E_aux (E_undef, annot1) in
                if is_value x0
                then wrap (E_block xs0)
-               else Monad.bind (step0 x0) (fun x' ->
-                      wrap (E_block (x' :: xs0)))
+               else bind (step0 x0) (fun x' -> wrap (E_block (x' :: xs0)))
              | E_internal_plet (p, e0, e1) ->
                let x0 = E_aux ((E_internal_plet (p, e0, e1)), annot1) in
                if is_value x0
                then wrap (E_block xs0)
-               else Monad.bind (step0 x0) (fun x' ->
-                      wrap (E_block (x' :: xs0)))
+               else bind (step0 x0) (fun x' -> wrap (E_block (x' :: xs0)))
              | E_internal_return e0 ->
                let x0 = E_aux ((E_internal_return e0), annot1) in
                if is_value x0
                then wrap (E_block xs0)
-               else Monad.bind (step0 x0) (fun x' ->
-                      wrap (E_block (x' :: xs0)))
+               else bind (step0 x0) (fun x' -> wrap (E_block (x' :: xs0)))
              | E_internal_value v ->
                (match xs0 with
                 | [] -> wrap (E_internal_value v)
@@ -779,28 +633,25 @@ module Make =
                   let xs1 = e0 :: l in
                   if is_value x0
                   then wrap (E_block xs1)
-                  else Monad.bind (step0 x0) (fun x' ->
-                         wrap (E_block (x' :: xs1))))
+                  else bind (step0 x0) (fun x' -> wrap (E_block (x' :: xs1))))
              | E_internal_assume (n, e0) ->
                let x0 = E_aux ((E_internal_assume (n, e0)), annot1) in
                if is_value x0
                then wrap (E_block xs0)
-               else Monad.bind (step0 x0) (fun x' ->
-                      wrap (E_block (x' :: xs0)))
+               else bind (step0 x0) (fun x' -> wrap (E_block (x' :: xs0)))
              | E_constraint n ->
                let x0 = E_aux ((E_constraint n), annot1) in
                if is_value x0
                then wrap (E_block xs0)
-               else Monad.bind (step0 x0) (fun x' ->
-                      wrap (E_block (x' :: xs0)))))
+               else bind (step0 x0) (fun x' -> wrap (E_block (x' :: xs0)))))
        | E_id id0 ->
          let filtered_var = Tannot.get_id_type (snd annot0) id0 in
          (match filtered_var with
           | Types.Local_variable ->
-            Monad.Read_var ((PL_id (id0, Var_local)), (fun v ->
+            Read_var ((PL_id (id0, Var_local)), (fun v ->
               wrap (E_internal_value v)))
           | Types.Global_register ->
-            Monad.Read_var ((PL_id (id0, Var_register)), (fun v ->
+            Read_var ((PL_id (id0, Var_register)), (fun v ->
               wrap (E_internal_value v)))
           | Types.Enum_member -> wrap (E_internal_value (V_member id0)))
        | E_lit lit -> wrap (E_internal_value (value_of_lit lit))
@@ -810,55 +661,54 @@ module Make =
          (match i with
           | And_bool ->
             (match args with
-             | [] -> Monad.Runtime_type_error (fst annot0)
+             | [] -> Runtime_type_error (fst annot0)
              | lhs :: l ->
                (match l with
-                | [] -> Monad.Runtime_type_error (fst annot0)
+                | [] -> Runtime_type_error (fst annot0)
                 | rhs :: l0 ->
                   (match l0 with
                    | [] ->
-                     Monad.bind (get_bool lhs) (fun b ->
+                     bind (get_bool lhs) (fun b ->
                        match b with
                        | Evaluated b0 ->
                          if b0
-                         then Monad.pure rhs
+                         then pure rhs
                          else wrap (E_internal_value (V_bool false))
                        | Unevaluated ->
-                         Monad.bind (step0 lhs) (fun lhs' ->
+                         bind (step0 lhs) (fun lhs' ->
                            wrap (E_app (id0, (lhs' :: (rhs :: []))))))
-                   | _ :: _ -> Monad.Runtime_type_error (fst annot0))))
+                   | _ :: _ -> Runtime_type_error (fst annot0))))
           | Or_bool ->
             (match args with
-             | [] -> Monad.Runtime_type_error (fst annot0)
+             | [] -> Runtime_type_error (fst annot0)
              | lhs :: l ->
                (match l with
-                | [] -> Monad.Runtime_type_error (fst annot0)
+                | [] -> Runtime_type_error (fst annot0)
                 | rhs :: l0 ->
                   (match l0 with
                    | [] ->
-                     Monad.bind (get_bool lhs) (fun b ->
+                     bind (get_bool lhs) (fun b ->
                        match b with
                        | Evaluated b0 ->
                          if b0
                          then wrap (E_internal_value (V_bool true))
-                         else Monad.pure rhs
+                         else pure rhs
                        | Unevaluated ->
-                         Monad.bind (step0 lhs) (fun lhs' ->
+                         bind (step0 lhs) (fun lhs' ->
                            wrap (E_app (id0, (lhs' :: (rhs :: []))))))
-                   | _ :: _ -> Monad.Runtime_type_error (fst annot0))))
+                   | _ :: _ -> Runtime_type_error (fst annot0))))
           | _ ->
             let filtered_var = left_to_right args in
             let (evaluated0, unevaluated) = filtered_var in
             (match unevaluated with
              | [] ->
-               Monad.bind (Monad.Call (id0, (all_evaluated evaluated0),
-                 Monad.pure)) (fun r ->
+               bind (Call (id0, (all_evaluated evaluated0), pure)) (fun r ->
                  match r with
                  | Return_ok v -> wrap (E_internal_value v)
                  | Return_exception exn ->
                    wrap (E_throw (E_aux ((E_internal_value exn), annot0))))
              | u :: us ->
-               Monad.bind (step0 u) (fun u' ->
+               bind (step0 u) (fun u' ->
                  wrap (E_app (id0, (app evaluated0 (u' :: us)))))))
        | E_tuple xs ->
          let filtered_var = left_to_right xs in
@@ -866,14 +716,13 @@ module Make =
          (match unevaluated with
           | [] -> wrap (E_internal_value (V_tuple (all_evaluated evaluated0)))
           | x :: xs0 ->
-            Monad.bind (step0 x) (fun x' ->
+            bind (step0 x) (fun x' ->
               wrap (E_tuple (app evaluated0 (x' :: xs0)))))
        | E_if (i, t0, e) ->
-         Monad.bind (get_bool i) (fun b ->
+         bind (get_bool i) (fun b ->
            match b with
-           | Evaluated b0 -> if b0 then Monad.pure t0 else Monad.pure e
-           | Unevaluated ->
-             Monad.bind (step0 i) (fun i' -> wrap (E_if (i', t0, e))))
+           | Evaluated b0 -> if b0 then pure t0 else pure e
+           | Unevaluated -> bind (step0 i) (fun i' -> wrap (E_if (i', t0, e))))
        | E_loop (l, _, cond, body) ->
          (match l with
           | While ->
@@ -887,27 +736,26 @@ module Make =
          let filtered_var = left_to_right3 from to0 amount in
          (match filtered_var with
           | LTR3_0 (_, _, _) ->
-            Monad.bind (step0 from) (fun from' ->
+            bind (step0 from) (fun from' ->
               wrap (E_for (loop_var, from', to0, amount, ord, body)))
           | LTR3_1 (_, _, _) ->
-            Monad.bind (step0 to0) (fun to' ->
+            bind (step0 to0) (fun to' ->
               wrap (E_for (loop_var, from, to', amount, ord, body)))
           | LTR3_2 (_, _, _) ->
-            Monad.bind (step0 amount) (fun amount' ->
+            bind (step0 amount) (fun amount' ->
               wrap (E_for (loop_var, from, to0, amount', ord, body)))
           | LTR3_3 (v_from, v_to, v_amount) ->
             let Ord_aux (o, _) = ord in
             (match o with
              | Ord_inc ->
-               Monad.bind
-                 (Monad.lift_option (fst annot0) (Primops.gt_int v_from v_to))
+               bind (lift_option (fst annot0) (Primops.gt_int v_from v_to))
                  (fun cmp ->
                  match cmp with
                  | V_bool b ->
                    if b
                    then wrap (E_internal_value V_unit)
-                   else Monad.bind
-                          (Monad.lift_option (fst annot0)
+                   else bind
+                          (lift_option (fst annot0)
                             (Primops.add_int v_from v_amount))
                           (fun next ->
                           wrap (E_block
@@ -915,17 +763,16 @@ module Make =
                             ((E_for (loop_var, (E_aux ((E_internal_value
                             next), annot0)), to0, amount, ord, body)),
                             annot0)) :: []))))
-                 | _ -> Monad.Runtime_type_error (fst annot0))
+                 | _ -> Runtime_type_error (fst annot0))
              | Ord_dec ->
-               Monad.bind
-                 (Monad.lift_option (fst annot0) (Primops.lt_int v_from v_to))
+               bind (lift_option (fst annot0) (Primops.lt_int v_from v_to))
                  (fun cmp ->
                  match cmp with
                  | V_bool b ->
                    if b
                    then wrap (E_internal_value V_unit)
-                   else Monad.bind
-                          (Monad.lift_option (fst annot0)
+                   else bind
+                          (lift_option (fst annot0)
                             (Primops.sub_int v_from v_amount))
                           (fun next ->
                           wrap (E_block
@@ -933,40 +780,38 @@ module Make =
                             ((E_for (loop_var, (E_aux ((E_internal_value
                             next), annot0)), to0, amount, ord, body)),
                             annot0)) :: []))))
-                 | _ -> Monad.Runtime_type_error (fst annot0))))
+                 | _ -> Runtime_type_error (fst annot0))))
        | E_vector xs ->
          let filtered_var = left_to_right xs in
          let (evaluated0, unevaluated) = filtered_var in
          (match unevaluated with
           | [] ->
             if Tannot.is_bitvector (snd annot0)
-            then Monad.bind
-                   (bv_concat (fst annot0) (all_evaluated evaluated0))
+            then bind (bv_concat (fst annot0) (all_evaluated evaluated0))
                    (fun bits -> wrap (E_internal_value (V_bitvector bits)))
             else wrap (E_internal_value (V_vector (all_evaluated evaluated0)))
           | u :: us ->
-            Monad.bind (step0 u) (fun u' ->
+            bind (step0 u) (fun u' ->
               wrap (E_vector (app evaluated0 (u' :: us)))))
-       | E_vector_append (_, _) -> Monad.Runtime_type_error (fst annot0)
+       | E_vector_append (_, _) -> Runtime_type_error (fst annot0)
        | E_list xs ->
          let filtered_var = left_to_right xs in
          let (evaluated0, unevaluated) = filtered_var in
          (match unevaluated with
           | [] -> wrap (E_internal_value (V_list (all_evaluated evaluated0)))
           | u :: us ->
-            Monad.bind (step0 u) (fun u' ->
+            bind (step0 u) (fun u' ->
               wrap (E_list (app evaluated0 (u' :: us)))))
        | E_cons (x, xs) ->
          let filtered_var = left_to_right2 x xs in
          (match filtered_var with
-          | LTR2_0 (_, _) ->
-            Monad.bind (step0 x) (fun x' -> wrap (E_cons (x', xs)))
+          | LTR2_0 (_, _) -> bind (step0 x) (fun x' -> wrap (E_cons (x', xs)))
           | LTR2_1 (_, _) ->
-            Monad.bind (step0 xs) (fun xs' -> wrap (E_cons (x, xs')))
+            bind (step0 xs) (fun xs' -> wrap (E_cons (x, xs')))
           | LTR2_2 (vx, vxs) ->
             (match vxs with
              | V_list elems -> wrap (E_internal_value (V_list (vx :: elems)))
-             | _ -> Monad.Runtime_type_error (fst annot0)))
+             | _ -> Runtime_type_error (fst annot0)))
        | E_struct (struct_id, fs) ->
          let filtered_var = left_to_right_fields fs in
          let (evaluated0, unevaluated) = filtered_var in
@@ -977,7 +822,7 @@ module Make =
           | f :: xs ->
             let FE_aux (f0, annot1) = f in
             let FE_fexp (name, x) = f0 in
-            Monad.bind (step0 x) (fun x' ->
+            bind (step0 x) (fun x' ->
               wrap (E_struct (struct_id,
                 (app evaluated0 ((FE_aux ((FE_fexp (name, x')),
                   annot1)) :: xs))))))
@@ -1000,30 +845,28 @@ module Make =
                 | f :: ys ->
                   let FE_aux (f0, annot1) = f in
                   let FE_fexp (name, y) = f0 in
-                  Monad.bind (step0 y) (fun y' ->
+                  bind (step0 y) (fun y' ->
                     wrap (E_struct_update (x,
                       (app evaluated0 ((FE_aux ((FE_fexp (name, y')),
                         annot1)) :: ys))))))
-             | _ -> Monad.Runtime_type_error (fst annot0))
-          | _ ->
-            Monad.bind (step0 x) (fun x' -> wrap (E_struct_update (x', fs))))
+             | _ -> Runtime_type_error (fst annot0))
+          | _ -> bind (step0 x) (fun x' -> wrap (E_struct_update (x', fs))))
        | E_field (x, f) ->
          let filtered_var = get_value x in
          (match filtered_var with
           | Evaluated v ->
             (match v with
              | V_record fields ->
-               Monad.bind (lookup_field (fst annot0) f fields)
-                 (fun v_field -> wrap (E_internal_value v_field))
-             | _ -> Monad.Runtime_type_error (fst annot0))
-          | Unevaluated ->
-            Monad.bind (step0 x) (fun x' -> wrap (E_field (x', f))))
+               bind (lookup_field (fst annot0) f fields) (fun v_field ->
+                 wrap (E_internal_value v_field))
+             | _ -> Runtime_type_error (fst annot0))
+          | Unevaluated -> bind (step0 x) (fun x' -> wrap (E_field (x', f))))
        | E_match (head_exp, arms) ->
          let E_aux (e, _) = head_exp in
          (match e with
           | E_internal_value v ->
             (match arms with
-             | [] -> Monad.Match_failure (fst annot0)
+             | [] -> Match_failure (fst annot0)
              | p :: next_arms ->
                let Pat_aux (p0, pexp_annot) = p in
                (match p0 with
@@ -1031,7 +874,7 @@ module Make =
                   let filtered_var = PM.pattern_match pat0 v in
                   (match filtered_var with
                    | Matched arm_substs ->
-                     Monad.pure
+                     pure
                        (IdMap.fold substitute (complete_bindings arm_substs)
                          body)
                    | _ -> wrap (E_match (head_exp, next_arms)))
@@ -1052,20 +895,20 @@ module Make =
                            then let filtered_var0 = PM.pattern_match pat0 v in
                                 (match filtered_var0 with
                                  | Matched arm_substs0 ->
-                                   Monad.pure
+                                   pure
                                      (IdMap.fold substitute
                                        (complete_bindings arm_substs0) body)
                                  | _ -> wrap (E_match (head_exp, next_arms)))
                            else wrap (E_match (head_exp, next_arms))
-                         | _ -> Monad.Runtime_type_error (fst pexp_annot))
+                         | _ -> Runtime_type_error (fst pexp_annot))
                       | _ ->
-                        Monad.bind (step0 guard0) (fun guard' ->
+                        bind (step0 guard0) (fun guard' ->
                           wrap (E_match (head_exp, ((Pat_aux ((Pat_when
                             (pat0, guard', body)),
                             pexp_annot)) :: next_arms)))))
                    | _ -> wrap (E_match (head_exp, next_arms)))))
           | _ ->
-            Monad.bind (step0 head_exp) (fun head_exp' ->
+            bind (step0 head_exp) (fun head_exp' ->
               wrap (E_match (head_exp', arms))))
        | E_let (pat0, x, body) ->
          let E_aux (e, _) = x in
@@ -1074,11 +917,10 @@ module Make =
             let filtered_var = PM.pattern_match pat0 v in
             (match filtered_var with
              | Matched body_substs ->
-               Monad.pure
+               pure
                  (IdMap.fold substitute (complete_bindings body_substs) body)
-             | _ -> Monad.Match_failure (fst annot0))
-          | _ ->
-            Monad.bind (step0 x) (fun x' -> wrap (E_let (pat0, x', body))))
+             | _ -> Match_failure (fst annot0))
+          | _ -> bind (step0 x) (fun x' -> wrap (E_let (pat0, x', body))))
        | E_assign (lx, x) ->
          let subexps = lexp_subexps lx in
          let filtered_var = left_to_right subexps in
@@ -1088,70 +930,66 @@ module Make =
             let filtered_var0 = get_value x in
             (match filtered_var0 with
              | Evaluated v ->
-               Monad.bind (lexp_to_destructure lx) (fun d ->
-                 Monad.bind (destructuring_assignment annot0 d v) (fun _ ->
+               bind (lexp_to_destructure lx) (fun d ->
+                 bind (destructuring_assignment annot0 d v) (fun _ ->
                    wrap (E_internal_value V_unit)))
              | Unevaluated ->
-               Monad.bind (step0 x) (fun x' -> wrap (E_assign (lx, x'))))
+               bind (step0 x) (fun x' -> wrap (E_assign (lx, x'))))
           | u :: us ->
-            Monad.bind (step0 u) (fun u' ->
+            bind (step0 u) (fun u' ->
               let filtered_var0 =
                 update_lexp_subexps (app evaluated0 (u' :: us)) lx
               in
               let (l', _) = filtered_var0 in wrap (E_assign (l', x))))
-       | E_sizeof _ -> Monad.Runtime_type_error (fst annot0)
+       | E_sizeof _ -> Runtime_type_error (fst annot0)
        | E_return x ->
          let filtered_var = get_value x in
          (match filtered_var with
-          | Evaluated v -> Monad.Early_return v
-          | Unevaluated -> Monad.bind (step0 x) (fun x' -> wrap (E_return x')))
-       | E_exit _ -> Monad.Runtime_type_error (fst annot0)
+          | Evaluated v -> Early_return v
+          | Unevaluated -> bind (step0 x) (fun x' -> wrap (E_return x')))
+       | E_exit _ -> Runtime_type_error (fst annot0)
        | E_config key ->
-         Monad.bind
-           (Monad.get_config (fst annot0) key (Tannot.get_type (snd annot0)))
+         bind (get_config (fst annot0) key (Tannot.get_type (snd annot0)))
            (fun v -> wrap (E_internal_value v))
        | E_ref register_name -> wrap (E_internal_value (V_ref register_name))
        | E_throw x ->
          let filtered_var = get_value x in
          (match filtered_var with
-          | Evaluated v -> Monad.throw v
-          | Unevaluated -> Monad.bind (step0 x) (fun x' -> wrap (E_throw x')))
+          | Evaluated v -> throw v
+          | Unevaluated -> bind (step0 x) (fun x' -> wrap (E_throw x')))
        | E_try (x, arms) ->
          let E_aux (e, annot1) = x in
          (match e with
-          | E_internal_value v ->
-            Monad.pure (E_aux ((E_internal_value v), annot1))
+          | E_internal_value v -> pure (E_aux ((E_internal_value v), annot1))
           | _ ->
-            Monad.bind (Monad.catch (step0 x)) (fun x' ->
+            bind (catch (step0 x)) (fun x' ->
               match x' with
-              | Monad.Continue x'' -> wrap (E_try (x'', arms))
-              | Monad.Caught exn ->
+              | Continue x'' -> wrap (E_try (x'', arms))
+              | Caught exn ->
                 wrap (E_match ((E_aux ((E_internal_value exn), annot0)),
                   (app arms ((Tannot.fallthrough ()) :: []))))))
        | E_assert (x, msg) ->
-         Monad.bind (get_bool x) (fun b ->
+         bind (get_bool x) (fun b ->
            match b with
            | Evaluated b0 ->
-             Monad.bind (get_string msg) (fun s ->
+             bind (get_string msg) (fun s ->
                match s with
                | Evaluated s0 ->
                  if b0
                  then wrap (E_internal_value V_unit)
-                 else Monad.Assertion_failed s0
+                 else Assertion_failed s0
                | Unevaluated ->
-                 Monad.bind (step0 msg) (fun msg' ->
-                   wrap (E_assert (x, msg'))))
+                 bind (step0 msg) (fun msg' -> wrap (E_assert (x, msg'))))
            | Unevaluated ->
-             Monad.bind (step0 x) (fun x' -> wrap (E_assert (x', msg))))
+             bind (step0 x) (fun x' -> wrap (E_assert (x', msg))))
        | E_var (l, x, body) ->
          wrap (E_block ((E_aux ((E_assign (l, x)), annot0)) :: (body :: [])))
        | E_undef ->
-         Monad.bind
-           (Monad.get_undefined (fst annot0) (Tannot.get_type (snd annot0)))
+         bind (get_undefined (fst annot0) (Tannot.get_type (snd annot0)))
            (fun u -> wrap (E_internal_value u))
-       | E_internal_plet (_, _, _) -> Monad.Runtime_type_error (fst annot0)
-       | E_internal_return _ -> Monad.Runtime_type_error (fst annot0)
+       | E_internal_plet (_, _, _) -> Runtime_type_error (fst annot0)
+       | E_internal_return _ -> Runtime_type_error (fst annot0)
        | E_internal_value v -> wrap (E_internal_value v)
-       | E_internal_assume (_, _) -> Monad.Runtime_type_error (fst annot0)
-       | E_constraint _ -> Monad.Runtime_type_error (fst annot0)))
+       | E_internal_assume (_, _) -> Runtime_type_error (fst annot0)
+       | E_constraint _ -> Runtime_type_error (fst annot0)))
  end

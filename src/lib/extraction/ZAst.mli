@@ -6,6 +6,7 @@ open IdUtil
 open Lattice
 open List0
 open ListDef
+open Monad
 open OptionUtil
 open PatternMatch
 open TypeAnnot
@@ -481,66 +482,34 @@ module Make :
     val assign : Tannot.t zlexp -> t list -> t -> state -> state
    end
 
-  module Monad :
-   sig
-    type function_return =
-    | Return_inlined of ((Tannot.t pat * Tannot.t exp option) * Tannot.t exp)
-                        list
-    | Return_value of R.value
+  type function_return =
+  | Return_inlined of ((Tannot.t pat * Tannot.t exp option) * Tannot.t exp)
+                      list
+  | Return_value of R.value
 
-    val function_return_rect :
-      (((Tannot.t pat * Tannot.t exp option) * Tannot.t exp) list -> 'a1) ->
-      (R.value -> 'a1) -> function_return -> 'a1
+  val function_return_rect :
+    (((Tannot.t pat * Tannot.t exp option) * Tannot.t exp) list -> 'a1) ->
+    (R.value -> 'a1) -> function_return -> 'a1
 
-    val function_return_rec :
-      (((Tannot.t pat * Tannot.t exp option) * Tannot.t exp) list -> 'a1) ->
-      (R.value -> 'a1) -> function_return -> 'a1
+  val function_return_rec :
+    (((Tannot.t pat * Tannot.t exp option) * Tannot.t exp) list -> 'a1) ->
+    (R.value -> 'a1) -> function_return -> 'a1
 
-    type 'a t =
-    | Pure of 'a
-    | Early_return of R.value * (unit -> 'a t)
-    | Exit of R.value * (unit -> 'a t)
-    | Call of id * R.value list * (function_return -> 'a t)
-    | Get_config of Parse_ast.l * string list * typ * (R.value -> 'a t)
-    | Runtime_type_error of Parse_ast.l
-    | Get_undefined of typ * (R.value -> 'a t)
-
-    val t_rect :
-      ('a1 -> 'a2) -> (R.value -> (unit -> 'a1 t) -> (unit -> 'a2) -> 'a2) ->
-      (R.value -> (unit -> 'a1 t) -> (unit -> 'a2) -> 'a2) -> (id -> R.value
-      list -> (function_return -> 'a1 t) -> (function_return -> 'a2) -> 'a2)
-      -> (Parse_ast.l -> string list -> typ -> (R.value -> 'a1 t) -> (R.value
-      -> 'a2) -> 'a2) -> (Parse_ast.l -> 'a2) -> (typ -> (R.value -> 'a1 t)
-      -> (R.value -> 'a2) -> 'a2) -> 'a1 t -> 'a2
-
-    val t_rec :
-      ('a1 -> 'a2) -> (R.value -> (unit -> 'a1 t) -> (unit -> 'a2) -> 'a2) ->
-      (R.value -> (unit -> 'a1 t) -> (unit -> 'a2) -> 'a2) -> (id -> R.value
-      list -> (function_return -> 'a1 t) -> (function_return -> 'a2) -> 'a2)
-      -> (Parse_ast.l -> string list -> typ -> (R.value -> 'a1 t) -> (R.value
-      -> 'a2) -> 'a2) -> (Parse_ast.l -> 'a2) -> (typ -> (R.value -> 'a1 t)
-      -> (R.value -> 'a2) -> 'a2) -> 'a1 t -> 'a2
-
-    val bind : 'a1 t -> ('a1 -> 'a2 t) -> 'a2 t
-
-    val lift_sum : (Parse_ast.l, 'a1) sum -> 'a1 t
-   end
-
-  val pure : 'a1 -> 'a1 Monad.t
+  type 'a coq_M = (R.value, function_return, coq_Empty_set, 'a) t
 
   type t = (L.t option IdMap.t, R.t, R.state, Tannot.t) zexp
 
   val down :
     t -> R.state -> Tannot.t exp -> ((t * R.state) * (Tannot.t exp, R.t) sum)
-    Monad.t
+    coq_M
 
   val join_inline_return : R.t -> t -> t option
 
   val next :
     (L.t option IdMap.t, R.t, R.state, Tannot.t) zexp_aux -> Tannot.t annot
-    -> R.state -> R.t -> ((t * R.state) * (Tannot.t exp, R.t) sum) Monad.t
+    -> R.state -> R.t -> ((t * R.state) * (Tannot.t exp, R.t) sum) coq_M
 
   val step :
     t -> R.state -> (Tannot.t exp, R.t) sum -> ((t * R.state) * (Tannot.t
-    exp, R.t) sum) Monad.t
+    exp, R.t) sum) coq_M
  end

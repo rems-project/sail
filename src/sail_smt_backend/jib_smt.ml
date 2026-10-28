@@ -628,7 +628,7 @@ module Make (Config : CONFIG) = struct
 
   let generate_reg_decs inits cdefs =
     let rec go acc = function
-      | CDEF_aux (CDEF_register (id, ctyp, _), _) :: cdefs when not (NameMap.mem (Jib_ssa.ssa_name 0 id) inits) ->
+      | CDef_aux (CDef_register (id, ctyp, _), _) :: cdefs when not (NameMap.mem (Jib_ssa.ssa_name 0 id) inits) ->
           let* smt_typ = smt_ctyp ctyp in
           go (Declare_const (Jib_ssa.ssa_name 0 id, smt_typ) :: acc) cdefs
       | _ :: cdefs -> go acc cdefs
@@ -687,7 +687,7 @@ module Make (Config : CONFIG) = struct
         return (Some (declare_datatypes (mk_variant (zencode_upper_id id) ctors)))
 
   let rec generate_ctype_defs acc = function
-    | CDEF_aux (CDEF_type ctd, _) :: cdefs ->
+    | CDef_aux (CDef_type ctd, _) :: cdefs ->
         let* smt_type_def_opt = smt_ctype_def ctd in
         generate_ctype_defs (Option.to_list smt_type_def_opt @ acc) cdefs
     | _ :: cdefs -> generate_ctype_defs acc cdefs
@@ -819,13 +819,13 @@ module Make (Config : CONFIG) = struct
 
     return (stack, state)
 
-  (** When we generate a property for a CDEF_val, we find it's associated function body in a CDEF_fundef node. However,
+  (** When we generate a property for a CDef_val, we find it's associated function body in a CDef_fundef node. However,
       we must keep track of any global letbindings between the spec and the fundef, so they can appear in the generated
       SMT. *)
   let rec find_function lets id = function
-    | CDEF_aux (CDEF_fundef (id', heap_return, args, body), def_annot) :: _ when Id.compare id id' = 0 ->
+    | CDef_aux (CDef_fundef (id', heap_return, args, body), def_annot) :: _ when Id.compare id id' = 0 ->
         (lets, Some (heap_return, args, body, def_annot))
-    | CDEF_aux (CDEF_let (_, vars, setup), _) :: cdefs ->
+    | CDef_aux (CDef_let (_, vars, setup), _) :: cdefs ->
         let vars = List.map (fun (id, ctyp) -> idecl (id_loc id) ctyp (name id)) vars in
         find_function (lets @ vars @ setup) id cdefs
     | _ :: cdefs -> find_function lets id cdefs
@@ -851,9 +851,9 @@ module Make (Config : CONFIG) = struct
     arg_smt_names : (name * string option) list;
   }
 
-  let smt_cdef props lets name_file ctx all_cdefs smt_includes (CDEF_aux (aux, def_annot)) =
+  let smt_cdef props lets name_file ctx all_cdefs smt_includes (CDef_aux (aux, def_annot)) =
     match aux with
-    | CDEF_val (function_id, _, arg_ctyps, ret_ctyp, _) when Bindings.mem function_id props -> (
+    | CDef_val (function_id, _, arg_ctyps, ret_ctyp, _) when Bindings.mem function_id props -> (
         match find_function [] function_id all_cdefs with
         | intervening_lets, Some (Return_plain, args, instrs, function_def_annot) ->
             let function_id_string = string_of_id function_id in
@@ -943,7 +943,7 @@ module Make (Config : CONFIG) = struct
     | _ -> None
 
   let rec smt_cdefs acc props lets name_file ctx all_cdefs smt_includes = function
-    | CDEF_aux (CDEF_let (_, vars, setup), _) :: cdefs ->
+    | CDef_aux (CDef_let (_, vars, setup), _) :: cdefs ->
         let vars = List.map (fun (id, ctyp) -> idecl (id_loc id) ctyp (name id)) vars in
         smt_cdefs acc props (lets @ vars @ setup) name_file ctx all_cdefs smt_includes cdefs
     | cdef :: cdefs -> (
@@ -1299,7 +1299,7 @@ end
    all the registers that such a reference could be pointing to.
 *)
 let rec build_register_map rmap = function
-  | CDEF_aux (CDEF_register (reg, ctyp, _), _) :: cdefs ->
+  | CDef_aux (CDef_register (reg, ctyp, _), _) :: cdefs ->
       let rmap =
         match CTMap.find_opt ctyp rmap with
         | Some regs -> CTMap.add ctyp (reg :: regs) rmap

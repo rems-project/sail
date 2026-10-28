@@ -386,9 +386,9 @@ type val_spec_aux =
   (* Value type specification *)
   | VS_val_spec of typschm * id * extern option
 
-type dec_spec_aux =
+type reg_spec_aux =
   (* Register declarations *)
-  | DEC_reg of atyp * id * exp option
+  | Reg of atyp * id * exp option
 
 type scattered_def_aux =
   (* Function and type union definitions that can be spread across
@@ -411,7 +411,7 @@ type type_def = TD_aux of type_def_aux * l
 
 type val_spec = VS_aux of val_spec_aux * l
 
-type dec_spec = DEC_aux of dec_spec_aux * l
+type reg_spec = Reg_aux of reg_spec_aux * l
 
 type loop_measure = Loop of loop * exp
 
@@ -428,29 +428,29 @@ type pragma =
 
 type def_aux =
   (* Top-level definition *)
-  | DEF_type of type_def (* type definition *)
-  | DEF_constraint of atyp (* global constraint *)
-  | DEF_fundef of fundef (* function definition *)
-  | DEF_mapdef of mapdef (* mapping definition *)
-  | DEF_impl of funcl (* impl definition *)
-  | DEF_let of pat * exp (* value definition *)
-  | DEF_overload of id * id list (* operator overload specifications *)
-  | DEF_fixity of prec * Z.t * string (* fixity declaration *)
-  | DEF_val of val_spec (* top-level type constraint *)
-  | DEF_outcome of outcome_spec * def list (* top-level outcome definition *)
-  | DEF_instantiation of id * subst list (* instantiation *)
-  | DEF_default of default_typing_spec (* default kind and type assumptions *)
-  | DEF_scattered of scattered_def (* scattered definition *)
-  | DEF_measure of id * pat * exp (* separate termination measure declaration *)
-  | DEF_loop_measures of id * loop_measure list (* separate termination measure declaration *)
-  | DEF_register of dec_spec (* register declaration *)
-  | DEF_pragma of string * pragma
-  | DEF_private of def
-  | DEF_attribute of (l * string * attribute_data option) list * def
-  | DEF_doc of doc_comment * def
-  | DEF_internal_mutrec of fundef list
+  | Def_type of type_def (* type definition *)
+  | Def_constraint of atyp (* global constraint *)
+  | Def_fundef of fundef (* function definition *)
+  | Def_mapdef of mapdef (* mapping definition *)
+  | Def_impl of funcl (* impl definition *)
+  | Def_let of pat * exp (* value definition *)
+  | Def_overload of id * id list (* operator overload specifications *)
+  | Def_fixity of prec * Z.t * string (* fixity declaration *)
+  | Def_val of val_spec (* top-level type constraint *)
+  | Def_outcome of outcome_spec * def list (* top-level outcome definition *)
+  | Def_instantiation of id * subst list (* instantiation *)
+  | Def_default of default_typing_spec (* default kind and type assumptions *)
+  | Def_scattered of scattered_def (* scattered definition *)
+  | Def_measure of id * pat * exp (* separate termination measure declaration *)
+  | Def_loop_measures of id * loop_measure list (* separate termination measure declaration *)
+  | Def_register of reg_spec (* register declaration *)
+  | Def_pragma of string * pragma
+  | Def_private of def
+  | Def_attribute of (l * string * attribute_data option) list * def
+  | Def_doc of doc_comment * def
+  | Def_internal_mutrec of fundef list
 
-and def = DEF_aux of def_aux * l
+and def = Def_aux of def_aux * l
 
 type defs =
   (* Definition sequence *)

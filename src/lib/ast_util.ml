@@ -255,11 +255,11 @@ let mk_qi_kopt ?loc:(l = Parse_ast.Unknown) kopt = QI_aux (QI_id kopt, l)
 let mk_fundef ?loc:(l = Parse_ast.Unknown) funcls =
   let tannot_opt = Typ_annot_opt_aux (Typ_annot_opt_none, l) in
   let rec_opt = Rec_aux (Rec_nonrec, l) in
-  DEF_aux (DEF_fundef (FD_aux (FD_function (rec_opt, tannot_opt, funcls), no_annot)), mk_def_annot l ())
+  Def_aux (Def_fundef (FD_aux (FD_function (rec_opt, tannot_opt, funcls), no_annot)), mk_def_annot l ())
 
-let mk_val_spec ?loc:(l = Parse_ast.Unknown) vs_aux = DEF_aux (DEF_val (VS_aux (vs_aux, no_annot)), mk_def_annot l ())
+let mk_val_spec ?loc:(l = Parse_ast.Unknown) vs_aux = Def_aux (Def_val (VS_aux (vs_aux, no_annot)), mk_def_annot l ())
 
-let mk_def ?loc:(l = Parse_ast.Unknown) def env = DEF_aux (def, mk_def_annot l env)
+let mk_def ?loc:(l = Parse_ast.Unknown) def env = Def_aux (def, mk_def_annot l env)
 
 let is_vector_syntax (Id_aux (aux, _)) =
   match aux with
@@ -844,63 +844,63 @@ and map_scattered_annot_aux f = function
   | SD_enum id -> SD_enum id
   | SD_enumcl (id, member) -> SD_enumcl (id, member)
 
-and map_register_annot f = function DEC_aux (dec_aux, annot) -> DEC_aux (map_register_annot_aux f dec_aux, f annot)
+and map_register_annot f = function Reg_aux (reg_aux, annot) -> Reg_aux (map_register_annot_aux f reg_aux, f annot)
 
 and map_register_annot_aux f = function
-  | DEC_reg (typ, id, None) -> DEC_reg (typ, id, None)
-  | DEC_reg (typ, id, Some exp) -> DEC_reg (typ, id, Some (map_exp_annot f exp))
+  | Reg (typ, id, None) -> Reg (typ, id, None)
+  | Reg (typ, id, Some exp) -> Reg (typ, id, Some (map_exp_annot f exp))
 
-and map_def_annot f (DEF_aux (aux, annot)) =
+and map_def_annot f (Def_aux (aux, annot)) =
   let aux =
     match aux with
-    | DEF_type td -> DEF_type (map_typedef_annot f td)
-    | DEF_constraint nc -> DEF_constraint nc
-    | DEF_fundef fd -> DEF_fundef (map_fundef_annot f fd)
-    | DEF_mapdef md -> DEF_mapdef (map_mapdef_annot f md)
-    | DEF_outcome (outcome_spec, defs) -> DEF_outcome (outcome_spec, List.map (map_def_annot f) defs)
-    | DEF_instantiation (IN_aux (IN_id id, annot), substs) -> DEF_instantiation (IN_aux (IN_id id, f annot), substs)
-    | DEF_impl funcl -> DEF_impl (map_funcl_annot f funcl)
-    | DEF_let (pat, exp) -> DEF_let (map_pat_annot f pat, map_exp_annot f exp)
-    | DEF_val vs -> DEF_val (map_valspec_annot f vs)
-    | DEF_fixity (prec, n, id) -> DEF_fixity (prec, n, id)
-    | DEF_overload (name, overloads) -> DEF_overload (name, overloads)
-    | DEF_default ds -> DEF_default ds
-    | DEF_scattered sd -> DEF_scattered (map_scattered_annot f sd)
-    | DEF_measure (id, pat, exp) -> DEF_measure (id, map_pat_annot f pat, map_exp_annot f exp)
-    | DEF_loop_measures (id, measures) -> DEF_loop_measures (id, measures)
-    | DEF_register ds -> DEF_register (map_register_annot f ds)
-    | DEF_internal_mutrec fds -> DEF_internal_mutrec (List.map (map_fundef_annot f) fds)
-    | DEF_pragma (pragma, arg) -> DEF_pragma (pragma, arg)
+    | Def_type td -> Def_type (map_typedef_annot f td)
+    | Def_constraint nc -> Def_constraint nc
+    | Def_fundef fd -> Def_fundef (map_fundef_annot f fd)
+    | Def_mapdef md -> Def_mapdef (map_mapdef_annot f md)
+    | Def_outcome (outcome_spec, defs) -> Def_outcome (outcome_spec, List.map (map_def_annot f) defs)
+    | Def_instantiation (IN_aux (IN_id id, annot), substs) -> Def_instantiation (IN_aux (IN_id id, f annot), substs)
+    | Def_impl funcl -> Def_impl (map_funcl_annot f funcl)
+    | Def_let (pat, exp) -> Def_let (map_pat_annot f pat, map_exp_annot f exp)
+    | Def_val vs -> Def_val (map_valspec_annot f vs)
+    | Def_fixity (prec, n, id) -> Def_fixity (prec, n, id)
+    | Def_overload (name, overloads) -> Def_overload (name, overloads)
+    | Def_default ds -> Def_default ds
+    | Def_scattered sd -> Def_scattered (map_scattered_annot f sd)
+    | Def_measure (id, pat, exp) -> Def_measure (id, map_pat_annot f pat, map_exp_annot f exp)
+    | Def_loop_measures (id, measures) -> Def_loop_measures (id, measures)
+    | Def_register ds -> Def_register (map_register_annot f ds)
+    | Def_internal_mutrec fds -> Def_internal_mutrec (List.map (map_fundef_annot f) fds)
+    | Def_pragma (pragma, arg) -> Def_pragma (pragma, arg)
   in
-  DEF_aux (aux, annot)
+  Def_aux (aux, annot)
 
 and map_ast_annot f ast = { ast with defs = List.map (map_def_annot f) ast.defs }
 
-let rec map_def_def_annot f (DEF_aux (aux, annot)) =
+let rec map_def_def_annot f (Def_aux (aux, annot)) =
   let aux =
     match aux with
-    | DEF_type td -> DEF_type td
-    | DEF_constraint nc -> DEF_constraint nc
-    | DEF_fundef fd -> DEF_fundef fd
-    | DEF_mapdef md -> DEF_mapdef md
-    | DEF_outcome (outcome_spec, defs) -> DEF_outcome (outcome_spec, List.map (map_def_def_annot f) defs)
-    | DEF_instantiation (inst_spec, substs) -> DEF_instantiation (inst_spec, substs)
-    | DEF_impl funcl -> DEF_impl funcl
-    | DEF_let (pat, exp) -> DEF_let (pat, exp)
-    | DEF_val vs -> DEF_val vs
-    | DEF_fixity (prec, n, id) -> DEF_fixity (prec, n, id)
-    | DEF_overload (name, overloads) -> DEF_overload (name, overloads)
-    | DEF_default ds -> DEF_default ds
-    | DEF_scattered sd -> DEF_scattered sd
-    | DEF_measure (id, pat, exp) -> DEF_measure (id, pat, exp)
-    | DEF_loop_measures (id, measures) -> DEF_loop_measures (id, measures)
-    | DEF_register ds -> DEF_register ds
-    | DEF_internal_mutrec fds -> DEF_internal_mutrec fds
-    | DEF_pragma (pragma, arg) -> DEF_pragma (pragma, arg)
+    | Def_type td -> Def_type td
+    | Def_constraint nc -> Def_constraint nc
+    | Def_fundef fd -> Def_fundef fd
+    | Def_mapdef md -> Def_mapdef md
+    | Def_outcome (outcome_spec, defs) -> Def_outcome (outcome_spec, List.map (map_def_def_annot f) defs)
+    | Def_instantiation (inst_spec, substs) -> Def_instantiation (inst_spec, substs)
+    | Def_impl funcl -> Def_impl funcl
+    | Def_let (pat, exp) -> Def_let (pat, exp)
+    | Def_val vs -> Def_val vs
+    | Def_fixity (prec, n, id) -> Def_fixity (prec, n, id)
+    | Def_overload (name, overloads) -> Def_overload (name, overloads)
+    | Def_default ds -> Def_default ds
+    | Def_scattered sd -> Def_scattered sd
+    | Def_measure (id, pat, exp) -> Def_measure (id, pat, exp)
+    | Def_loop_measures (id, measures) -> Def_loop_measures (id, measures)
+    | Def_register ds -> Def_register ds
+    | Def_internal_mutrec fds -> Def_internal_mutrec fds
+    | Def_pragma (pragma, arg) -> Def_pragma (pragma, arg)
   in
-  DEF_aux (aux, f annot)
+  Def_aux (aux, f annot)
 
-let def_loc (DEF_aux (_, annot)) = annot.loc
+let def_loc (Def_aux (_, annot)) = annot.loc
 
 type id_chunk = Id_chunk_int of int | Id_chunk_string of string
 
@@ -1289,9 +1289,9 @@ let id_of_mapdef (MD_aux (MD_mapping (id, _, _), _)) = id
 
 let id_of_type_def_aux = function
   | TD_abbrev (id, _, _)
-  | TD_record (id, _, _, _)
+  | TD_record (id, _, _)
   | TD_variant (id, _, _, _)
-  | TD_enum (id, _, _)
+  | TD_enum (id, _)
   | TD_abstract (id, _, _)
   | TD_bitfield (id, _, _) ->
       id
@@ -1300,7 +1300,7 @@ let id_of_type_def (TD_aux (td_aux, _)) = id_of_type_def_aux td_aux
 
 let id_of_val_spec (VS_aux (VS_val_spec (_, id, _), _)) = id
 
-let id_of_dec_spec (DEC_aux (DEC_reg (_, id, _), _)) = id
+let id_of_reg_spec (Reg_aux (Reg (_, id, _), _)) = id
 
 let id_of_scattered (SD_aux (sdef, _)) =
   match sdef with
@@ -1316,16 +1316,16 @@ let id_of_scattered (SD_aux (sdef, _)) =
   | SD_enumcl (id, _) ->
       id
 
-let ids_of_def (DEF_aux (aux, _)) =
+let ids_of_def (Def_aux (aux, _)) =
   match aux with
-  | DEF_type td -> IdSet.singleton (id_of_type_def td)
-  | DEF_fundef fd -> IdSet.singleton (id_of_fundef fd)
-  | DEF_mapdef md -> IdSet.singleton (id_of_mapdef md)
-  | DEF_let (pat, _) -> pat_ids pat
-  | DEF_register (DEC_aux (DEC_reg (_, id, _), _)) -> IdSet.singleton id
-  | DEF_val vs -> IdSet.singleton (id_of_val_spec vs)
-  | DEF_internal_mutrec fds -> IdSet.of_list (List.map id_of_fundef fds)
-  | DEF_scattered sdef -> IdSet.singleton (id_of_scattered sdef)
+  | Def_type td -> IdSet.singleton (id_of_type_def td)
+  | Def_fundef fd -> IdSet.singleton (id_of_fundef fd)
+  | Def_mapdef md -> IdSet.singleton (id_of_mapdef md)
+  | Def_let (pat, _) -> pat_ids pat
+  | Def_register (Reg_aux (Reg (_, id, _), _)) -> IdSet.singleton id
+  | Def_val vs -> IdSet.singleton (id_of_val_spec vs)
+  | Def_internal_mutrec fds -> IdSet.of_list (List.map id_of_fundef fds)
+  | Def_scattered sdef -> IdSet.singleton (id_of_scattered sdef)
   | _ -> IdSet.empty
 let ids_of_defs defs = List.fold_left IdSet.union IdSet.empty (List.map ids_of_def defs)
 let ids_of_ast ast = ids_of_defs ast.defs
@@ -1333,7 +1333,7 @@ let ids_of_ast ast = ids_of_defs ast.defs
 let val_spec_ids defs =
   let val_spec_id (VS_aux (vs_aux, _)) = match vs_aux with VS_val_spec (_, id, _) -> id in
   let rec vs_ids = function
-    | DEF_aux (DEF_val vs, _) :: defs -> val_spec_id vs :: vs_ids defs
+    | Def_aux (Def_val vs, _) :: defs -> val_spec_id vs :: vs_ids defs
     | _ :: defs -> vs_ids defs
     | [] -> []
   in
@@ -1341,21 +1341,21 @@ let val_spec_ids defs =
 
 let record_ids defs =
   let rec rec_ids = function
-    | DEF_aux (DEF_type (TD_aux (TD_record (id, _, _, _), _)), _) :: defs -> id :: rec_ids defs
+    | Def_aux (Def_type (TD_aux (TD_record (id, _, _), _)), _) :: defs -> id :: rec_ids defs
     | _ :: defs -> rec_ids defs
     | [] -> []
   in
   IdSet.of_list (rec_ids defs)
 
 let rec get_scattered_union_clauses id = function
-  | DEF_aux (DEF_scattered (SD_aux (SD_unioncl (uid, Tu_aux (tu, _)), _)), def_annot) :: defs when Id.compare id uid = 0
+  | Def_aux (Def_scattered (SD_aux (SD_unioncl (uid, Tu_aux (tu, _)), _)), def_annot) :: defs when Id.compare id uid = 0
     ->
       Tu_aux (tu, def_annot_map_env (fun _ -> ()) def_annot) :: get_scattered_union_clauses id defs
   | _ :: defs -> get_scattered_union_clauses id defs
   | [] -> []
 
 let rec get_scattered_enum_clauses id = function
-  | DEF_aux (DEF_scattered (SD_aux (SD_enumcl (uid, member), _)), def_annot) :: defs when Id.compare id uid = 0 ->
+  | Def_aux (Def_scattered (SD_aux (SD_enumcl (uid, member), _)), def_annot) :: defs when Id.compare id uid = 0 ->
       (member, def_annot_map_env (fun _ -> ()) def_annot) :: get_scattered_enum_clauses id defs
   | _ :: defs -> get_scattered_enum_clauses id defs
   | [] -> []
@@ -1602,11 +1602,11 @@ let construct_mpexp (mpat, guard, ann) =
   match guard with None -> MPat_aux (MPat_pat mpat, ann) | Some guard -> MPat_aux (MPat_when (mpat, guard), ann)
 
 let is_valspec id = function
-  | DEF_aux (DEF_val (VS_aux (VS_val_spec (_, id', _), _)), _) when Id.compare id id' = 0 -> true
+  | Def_aux (Def_val (VS_aux (VS_val_spec (_, id', _), _)), _) when Id.compare id id' = 0 -> true
   | _ -> false
 
 let is_fundef id = function
-  | DEF_aux (DEF_fundef (FD_aux (FD_function (_, _, FCL_aux (FCL_funcl (id', _), _) :: _), _)), _)
+  | Def_aux (Def_fundef (FD_aux (FD_function (_, _, FCL_aux (FCL_funcl (id', _), _) :: _), _)), _)
     when Id.compare id' id = 0 ->
       true
   | _ -> false
@@ -2218,10 +2218,10 @@ struct
     )
 
   let rec find_annot_defs sl = function
-    | DEF_aux (DEF_fundef fdef, _) :: defs -> (
+    | Def_aux (Def_fundef fdef, _) :: defs -> (
         match find_annot_fundef sl fdef with None -> find_annot_defs sl defs | result -> result
       )
-    | DEF_aux (DEF_scattered sdef, _) :: defs -> (
+    | Def_aux (Def_scattered sdef, _) :: defs -> (
         match find_annot_scattered sl sdef with None -> find_annot_defs sl defs | result -> result
       )
     | _ :: defs -> find_annot_defs sl defs

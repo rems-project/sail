@@ -163,19 +163,19 @@ module Ir_formatter = struct
     let uid_ctyp (uid, ctyp) = sprintf "%s: %s" (string_of_uid uid) (C.typ ctyp)
 
     let output_def buf = function
-      | CDEF_register (id, ctyp, _) ->
+      | CDef_register (id, ctyp, _) ->
           Buffer.add_string buf (sprintf "%s %s : %s" (C.keyword "register") (zencode_id id) (C.typ ctyp))
-      | CDEF_val (id, None, ctyps, ctyp) ->
+      | CDef_val (id, None, ctyps, ctyp) ->
           Buffer.add_string buf
             (sprintf "%s %s : (%s) ->  %s" (C.keyword "val") (zencode_id id) (Util.string_of_list ", " C.typ ctyps)
                (C.typ ctyp)
             )
-      | CDEF_val (id, Some extern, ctyps, ctyp) ->
+      | CDef_val (id, Some extern, ctyps, ctyp) ->
           Buffer.add_string buf
             (sprintf "%s %s = \"%s\" : (%s) ->  %s" (C.keyword "val") (zencode_id id) extern
                (Util.string_of_list ", " C.typ ctyps) (C.typ ctyp)
             )
-      | CDEF_fundef (id, ret, args, instrs) ->
+      | CDef_fundef (id, ret, args, instrs) ->
           let instrs = C.modify_instrs instrs in
           let label_map = C.make_label_map instrs in
           let ret = match ret with None -> "" | Some id -> " " ^ zencode_id id in
@@ -183,23 +183,23 @@ module Ir_formatter = struct
             (sprintf "%s %s%s(%s) {\n" (C.keyword "fn") (zencode_id id) ret (Util.string_of_list ", " zencode_id args));
           output_instrs 0 buf 2 label_map instrs;
           Buffer.add_string buf "}"
-      | CDEF_type (CTD_enum (id, ids)) ->
+      | CDef_type (CTD_enum (id, ids)) ->
           Buffer.add_string buf
             (sprintf "%s %s {\n  %s\n}" (C.keyword "enum") (zencode_id id) (Util.string_of_list ",\n  " zencode_id ids))
-      | CDEF_type (CTD_struct (id, ids)) ->
+      | CDef_type (CTD_struct (id, ids)) ->
           Buffer.add_string buf
             (sprintf "%s %s {\n  %s\n}" (C.keyword "struct") (zencode_id id) (Util.string_of_list ",\n  " id_ctyp ids))
-      | CDEF_type (CTD_variant (id, ids)) ->
+      | CDef_type (CTD_variant (id, ids)) ->
           Buffer.add_string buf
             (sprintf "%s %s {\n  %s\n}" (C.keyword "union") (zencode_id id) (Util.string_of_list ",\n  " id_ctyp ids))
-      | CDEF_let (_, bindings, instrs) ->
+      | CDef_let (_, bindings, instrs) ->
           let instrs = C.modify_instrs instrs in
           let label_map = C.make_label_map instrs in
           Buffer.add_string buf (sprintf "%s (%s) {\n" (C.keyword "let") (Util.string_of_list ", " id_ctyp bindings));
           output_instrs 0 buf 2 label_map instrs;
           Buffer.add_string buf "}"
-      | CDEF_startup _ | CDEF_finish _ -> Reporting.unreachable Parse_ast.Unknown __POS__ "Unexpected startup / finish"
-      | CDEF_pragma _ -> ()
+      | CDef_startup _ | CDef_finish _ -> Reporting.unreachable Parse_ast.Unknown __POS__ "Unexpected startup / finish"
+      | CDef_pragma _ -> ()
 
     let rec output_defs' buf = function
       | def :: defs ->

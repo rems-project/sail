@@ -117,21 +117,21 @@ let instantiate_abstract_types tgt config insts ast =
       )
   in
   let instantiate = function
-    | DEF_aux (DEF_type (TD_aux (TD_abstract (id, kind, None), (l, _))), def_annot) as def -> (
+    | Def_aux (Def_type (TD_aux (TD_abstract (id, kind, None), (l, _))), def_annot) as def -> (
         match Bindings.find_opt id insts with
         | Some arg_fun ->
             let arg = arg_fun (unaux_kind kind) in
             add_to_env_update l id arg;
-            DEF_aux (DEF_type (TD_aux (TD_abbrev (id, [], arg), (l, Type_check.empty_tannot))), def_annot)
+            Def_aux (Def_type (TD_aux (TD_abbrev (id, [], arg), (l, Type_check.empty_tannot))), def_annot)
         | None -> def
       )
-    | DEF_aux (DEF_type (TD_aux (TD_abstract (id, kind, Some key), (l, _))), def_annot) as def -> (
+    | Def_aux (Def_type (TD_aux (TD_abstract (id, kind, Some key), (l, _))), def_annot) as def -> (
         config_ids := Bindings.add id (unaux_kind kind, key) !config_ids;
         match json_lookup key config with
         | Some json ->
             let arg = instantiate_from_json ~at:l json (unaux_kind kind) in
             add_to_env_update l id arg;
-            DEF_aux (DEF_type (TD_aux (TD_abbrev (id, [], arg), (l, Type_check.empty_tannot))), def_annot)
+            Def_aux (Def_type (TD_aux (TD_abbrev (id, [], arg), (l, Type_check.empty_tannot))), def_annot)
         | None -> def
       )
     | def -> def
@@ -140,8 +140,8 @@ let instantiate_abstract_types tgt config insts ast =
   let inst = { env_update = !env_update; config_ids = !config_ids; instantiated = !instantiated } in
   if Option.fold ~none:true ~some:Target.supports_abstract_types tgt then ({ ast with defs }, inst)
   else (
-    match List.find_opt (function DEF_aux (DEF_type (TD_aux (TD_abstract _, _)), _) -> true | _ -> false) defs with
-    | Some (DEF_aux (_, def_annot)) ->
+    match List.find_opt (function Def_aux (Def_type (TD_aux (TD_abstract _, _)), _) -> true | _ -> false) defs with
+    | Some (Def_aux (_, def_annot)) ->
         let target_name = Option.get tgt |> Target.name in
         raise
           (Reporting.err_general def_annot.loc
@@ -219,7 +219,7 @@ let wrap_module proj parsed_module =
   let module P = Parse_ast in
   let open Project in
   let name, l = module_name proj parsed_module.id in
-  let bracket_pragma p = [Generated [P.DEF_aux (P.DEF_pragma (p, P.Pragma_line (name, 1)), to_loc l)]] in
+  let bracket_pragma p = [Generated [P.Def_aux (P.Def_pragma (p, P.Pragma_line (name, 1)), to_loc l)]] in
   { parsed_module with files = bracket_pragma "start_module#" @ parsed_module.files @ bracket_pragma "end_module#" }
 
 let filter_modules proj is_included ast =
@@ -230,12 +230,12 @@ let filter_modules proj is_included ast =
     | None -> Reporting.unreachable l __POS__ "Failed to get module id"
   in
   let rec go skipping acc = function
-    | DEF_aux (DEF_pragma ("ended_module#", Pragma_line (name, l)), def_annot) :: defs -> (
+    | Def_aux (Def_pragma ("ended_module#", Pragma_line (name, l)), def_annot) :: defs -> (
         let mod_id = get_module_id l name in
         match skipping with Some skip_id when mod_id = skip_id -> go None acc defs | _ -> go skipping acc defs
       )
     | _ :: defs when Option.is_some skipping -> go skipping acc defs
-    | DEF_aux (DEF_pragma ("started_module#", Pragma_line (name, l)), def_annot) :: defs ->
+    | Def_aux (Def_pragma ("started_module#", Pragma_line (name, l)), def_annot) :: defs ->
         let mod_id = get_module_id l name in
         if is_included mod_id then go None acc defs else go (Some mod_id) acc defs
     | def :: defs -> go None (def :: acc) defs

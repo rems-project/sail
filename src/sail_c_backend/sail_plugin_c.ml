@@ -201,13 +201,13 @@ let collect_c_name_info ast (mode : c_backend_mode) =
   let overrides = ref Name_generator.Overrides.empty in
   List.iter
     (function
-      | DEF_aux (DEF_val (VS_aux (VS_val_spec (_, _, extern), _)), _) -> (
+      | Def_aux (Def_val (VS_aux (VS_val_spec (_, _, extern), _)), _) -> (
           match extern_assoc target_name extern with
           | Some name -> reserved := Util.StringSet.add name !reserved
           | None -> ()
         )
-      | DEF_aux (DEF_pragma ("c_reserved", Pragma_line (name, _)), _) -> reserved := Util.StringSet.add name !reserved
-      | DEF_aux (DEF_pragma ("c_override", Pragma_structured data), def_annot) -> (
+      | Def_aux (Def_pragma ("c_reserved", Pragma_line (name, _)), _) -> reserved := Util.StringSet.add name !reserved
+      | Def_aux (Def_pragma ("c_override", Pragma_structured data), def_annot) -> (
           match Name_generator.parse_override data with
           | Some (from, target) -> overrides := Name_generator.Overrides.add from target !overrides
           | None -> raise (Reporting.err_general def_annot.loc "Failed to interpret $c_override directive")

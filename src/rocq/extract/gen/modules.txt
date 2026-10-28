@@ -23,6 +23,7 @@ Lattice
 List0
 ListDef
 ListUtil
+Monad
 Nat0
 NatDef
 Number

@@ -251,15 +251,15 @@ let type_parameters_to_print env defs : Util.IntSet.t Bindings.t =
     let is = List.fold_left (fun is typ -> check_typ is typ) type_params typs in
     Bindings.add id is type_size_map
   in
-  let check_def type_size_map (DEF_aux (def, _)) =
+  let check_def type_size_map (Def_aux (def, _)) =
     match def with
-    | DEF_type (TD_aux (TD_record (id, typq, fs, _), _)) ->
+    | Def_type (TD_aux (TD_record (id, typq, fs), _)) ->
         let env = Env.add_typquant Unknown typq env in
         make_type_size_map env id typq (List.map (fun ((_, t), _) -> t) fs) type_size_map
-    | DEF_type (TD_aux (TD_variant (id, typq, tus, _), _)) ->
+    | Def_type (TD_aux (TD_variant (id, typq, tus, _), _)) ->
         let env = Env.add_typquant Unknown typq env in
         make_type_size_map env id typq (List.map (fun (Tu_aux (Tu_ty_id (t, _), _)) -> t) tus) type_size_map
-    | DEF_type (TD_aux (TD_abbrev (id, typq, typ_arg), _)) -> (
+    | Def_type (TD_aux (TD_abbrev (id, typq, typ_arg), _)) -> (
         let env = Env.add_typquant Unknown typq env in
         match typ_arg with
         | A_aux (A_typ typ, _) -> make_type_size_map env id typq [typ] type_size_map
@@ -1250,7 +1250,7 @@ let doc_typdef_lem params_to_print env (TD_aux (td, (l, annot))) =
         (doc_typschm_lem params_to_print env false typschm)
       ^^ hardline ^^ sorts_pp
   | TD_abbrev _ -> empty
-  | TD_record (id, typq, fs, _) ->
+  | TD_record (id, typq, fs) ->
       let f_pp ((fid, typ), _) =
         let field_env = Env.add_typquant (id_loc id) typq env in
         concat [doc_fieldname_lem id fid; space; colon; space; doc_typ_lem params_to_print field_env typ; semi]
@@ -1370,7 +1370,7 @@ let doc_typdef_lem params_to_print env (TD_aux (td, (l, annot))) =
             ^^ hardline
           else empty
     )
-  | TD_enum (id, members, _) -> (
+  | TD_enum (id, members) -> (
       let enums = List.map fst members in
       match id with
       | Id_aux (Id "regfp", _) -> empty
@@ -1589,7 +1589,7 @@ let doc_fundef_lem effect_info params_to_print env (FD_aux (FD_function (r, typa
       separate space ([string "let"] @ doc_rec @ [doc_fundef_rhs_lem required_monadic params_to_print env fd])
   | _ -> empty
 
-let doc_dec_lem (DEC_aux (reg, (l, _))) = match reg with DEC_reg (typ, id, _) -> empty
+let doc_dec_lem (Reg_aux (reg, (l, _))) = match reg with Reg (typ, id, _) -> empty
 
 let doc_spec_lem effect_info params_to_print env (VS_aux (valspec, annot)) =
   match valspec with
@@ -1696,26 +1696,26 @@ let doc_def_let ctxt pat exp =
   in
   group (prefix 2 1 (separate space [string "let"; pat_pp; equals]) body_pp) ^/^ hardline
 
-let doc_def_lem effect_info params_to_print type_env (DEF_aux (aux, _) as def) =
+let doc_def_lem effect_info params_to_print type_env (Def_aux (aux, _) as def) =
   match aux with
-  | DEF_val v_spec -> doc_spec_lem effect_info params_to_print type_env v_spec
-  | DEF_fixity _ -> empty
-  | DEF_overload _ -> empty
-  | DEF_type t_def ->
+  | Def_val v_spec -> doc_spec_lem effect_info params_to_print type_env v_spec
+  | Def_fixity _ -> empty
+  | Def_overload _ -> empty
+  | Def_type t_def ->
       if List.mem (string_of_id (id_of_type_def t_def)) !opt_extern_types then empty
       else group (doc_typdef_lem params_to_print type_env t_def) ^/^ hardline
-  | DEF_constraint _ -> empty
-  | DEF_register dec -> group (doc_dec_lem dec)
-  | DEF_default df -> empty
-  | DEF_fundef fdef -> group (doc_fundef_lem effect_info params_to_print type_env fdef) ^/^ hardline
-  | DEF_internal_mutrec fundefs -> doc_mutrec_lem effect_info params_to_print type_env fundefs ^/^ hardline
-  | DEF_let (pat, exp) -> doc_def_let { empty_ctxt with params_to_print } pat exp
-  | DEF_scattered sdef -> unreachable (def_loc def) __POS__ "doc_def_lem: shoulnd't have DEF_scattered at this point"
-  | DEF_mapdef (MD_aux (_, (l, _))) -> unreachable l __POS__ "Lem doesn't support mappings"
-  | DEF_outcome _ | DEF_impl _ | DEF_instantiation _ -> empty
-  | DEF_pragma _ -> empty
-  | DEF_measure _ -> empty (* we might use these in future *)
-  | DEF_loop_measures _ -> empty
+  | Def_constraint _ -> empty
+  | Def_register dec -> group (doc_dec_lem dec)
+  | Def_default df -> empty
+  | Def_fundef fdef -> group (doc_fundef_lem effect_info params_to_print type_env fdef) ^/^ hardline
+  | Def_internal_mutrec fundefs -> doc_mutrec_lem effect_info params_to_print type_env fundefs ^/^ hardline
+  | Def_let (pat, exp) -> doc_def_let { empty_ctxt with params_to_print } pat exp
+  | Def_scattered sdef -> unreachable (def_loc def) __POS__ "doc_def_lem: shoulnd't have Def_scattered at this point"
+  | Def_mapdef (MD_aux (_, (l, _))) -> unreachable l __POS__ "Lem doesn't support mappings"
+  | Def_outcome _ | Def_impl _ | Def_instantiation _ -> empty
+  | Def_pragma _ -> empty
+  | Def_measure _ -> empty (* we might use these in future *)
+  | Def_loop_measures _ -> empty
 
 let doc_defs_lem effect_info params_to_print type_env defs =
   separate empty (List.map (doc_def_lem effect_info params_to_print type_env) defs)
@@ -1732,7 +1732,7 @@ let doc_header_lem top_line imports =
 
 let find_exc_typ defs =
   let is_exc_typ_def = function
-    | DEF_aux (DEF_type td, _) -> string_of_id (id_of_type_def td) = "exception"
+    | Def_aux (Def_type td, _) -> string_of_id (id_of_type_def td) = "exception"
     | _ -> false
   in
   if List.exists is_exc_typ_def defs then "exception" else "unit"
@@ -1740,16 +1740,16 @@ let find_exc_typ defs =
 let group_defs_by_file top_filename defs =
   let rec group current_filename current_defs groups defs =
     let is_file_start = function
-      | DEF_aux (DEF_pragma ("file_start", Pragma_line (f, _)), a) ->
+      | Def_aux (Def_pragma ("file_start", Pragma_line (f, _)), a) ->
           (* Ignore file markers from generated blocks and spliced files;
              we want to preserve the original input file structure *)
           f <> "" && get_def_attribute "spliced" a = None
       | _ -> false
     in
     match (defs, current_filename) with
-    | (DEF_aux (DEF_pragma ("file_start", Pragma_line (f, _)), _) as d) :: defs, None when is_file_start d ->
+    | (Def_aux (Def_pragma ("file_start", Pragma_line (f, _)), _) as d) :: defs, None when is_file_start d ->
         group (Some f) current_defs groups defs
-    | DEF_aux (DEF_pragma ("file_end", Pragma_line (f, _)), _) :: defs, Some f' when f' = f ->
+    | Def_aux (Def_pragma ("file_end", Pragma_line (f, _)), _) :: defs, Some f' when f' = f ->
         if current_defs = [] then group None [] groups defs
         else group None [] (groups @ [(f', List.rev current_defs)]) defs
     | d :: defs, _ -> group current_filename (d :: current_defs) groups defs
@@ -1763,11 +1763,11 @@ let doc_ast_lem out_filename split_files base_imports extra_imports symbols ctx 
   let concurrency_monad_params = Monad_params.find_monad_parameters type_env in
   let state_ids = fst (State.generate_regstate_defs ctx type_env ast) |> val_spec_ids in
   let is_state_def = function
-    | DEF_aux (DEF_val vs, _) -> IdSet.mem (id_of_val_spec vs) state_ids
-    | DEF_aux (DEF_fundef fd, _) -> IdSet.mem (id_of_fundef fd) state_ids
+    | Def_aux (Def_val vs, _) -> IdSet.mem (id_of_val_spec vs) state_ids
+    | Def_aux (Def_fundef fd, _) -> IdSet.mem (id_of_fundef fd) state_ids
     | _ -> false
   in
-  let is_typ_def = function DEF_aux (DEF_type _, _) -> true | _ -> false in
+  let is_typ_def = function Def_aux (Def_type _, _) -> true | _ -> false in
   let exc_typ = find_exc_typ defs in
   let params_to_print = type_parameters_to_print type_env defs in
   let callgraph = Callgraph.graph_of_ast ast in

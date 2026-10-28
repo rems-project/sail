@@ -4,6 +4,8 @@ Changelog
 Sail 0.21
 ---------
 
+##### C type alias fixes
+
 Previously `type foo = bar` in Sail would generate a `zfoo` type alias in C
 (under the default Z-encode name-mangling scheme). However this could create
 name collisions if there existed a `function foo...`. Now type aliases will be
@@ -15,6 +17,14 @@ To override this and provide a user-specified unmangled name, one can use the
 $c_override { id = "foo", suffix = "_t", target = "unmangled_foo"}
 ```
 in which case the type definition will be exactly `unmangled_foo` in C.
+
+##### Internal AST changes
+
+Various internal AST constructors have been renamed. The `DEF_` constructor
+prefix for definitions has been renamed `Def_` for consistency (it is not an
+acronym, so should not have been allcaps). The prefix for the register types is
+now `Reg_` rather than `DEC_`. Unused boolean flags have been removed from
+`TD_record` and `TD_enum` in the type definition types.
 
 Sail 0.20.3
 -----------

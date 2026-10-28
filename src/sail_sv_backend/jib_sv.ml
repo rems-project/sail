@@ -2189,7 +2189,7 @@ module Make (Config : CONFIG) = struct
     List.fold_left
       (fun rmap cdef ->
         match cdef with
-        | CDEF_aux (CDEF_register (id, ctyp, _), _) ->
+        | CDef_aux (CDef_register (id, ctyp, _), _) ->
             CTMap.update ctyp (function Some ids -> Some (id :: ids) | None -> Some [id]) rmap
         | _ -> rmap
       )
@@ -2302,9 +2302,9 @@ module Make (Config : CONFIG) = struct
 
   let empty_cdef_doc = { outside_module = empty; inside_module_prefix = empty; inside_module = empty }
 
-  let svir_cdef spec_info ctx fn_ctyps (CDEF_aux (aux, def_annot)) =
+  let svir_cdef spec_info ctx fn_ctyps (CDef_aux (aux, def_annot)) =
     match aux with
-    | CDEF_val (f, _, param_ctyps, ret_ctyp, ext_name) ->
+    | CDef_val (f, _, param_ctyps, ret_ctyp, ext_name) ->
         let attr, (module FunctionAttr) = get_sv_def_attribute "sv_function" def_annot in
         if Option.is_some attr then
           let module Attr = AttributeParser (FunctionAttr) in
@@ -2335,7 +2335,7 @@ module Make (Config : CONFIG) = struct
               in
               ([dpi_import], Bindings.add f (def_annot, param_ctyps, ret_ctyp) fn_ctyps)
         else ([], Bindings.add f (def_annot, param_ctyps, ret_ctyp) fn_ctyps)
-    | CDEF_fundef (f, _, params, body) ->
+    | CDef_fundef (f, _, params, body) ->
         let debug_attr = get_def_attribute "jib_debug" def_annot in
         if List.mem (string_of_id f) Config.ignore then ([], fn_ctyps)
         else (
@@ -2361,8 +2361,8 @@ module Make (Config : CONFIG) = struct
               )
           | None -> Reporting.unreachable (id_loc f) __POS__ ("No function type found for " ^ string_of_id f)
         )
-    | CDEF_type type_def -> ([SVD_aux (SVD_type type_def, def_annot.loc)], fn_ctyps)
-    | CDEF_let (n, bindings, setup) ->
+    | CDef_type type_def -> ([SVD_aux (SVD_type type_def, def_annot.loc)], fn_ctyps)
+    | CDef_let (n, bindings, setup) ->
         let setup =
           Jib_optimize.(
             setup |> remove_undefined |> remove_functions_to_references |> flatten_instrs |> remove_dead_code
@@ -2380,7 +2380,7 @@ module Make (Config : CONFIG) = struct
           @ [SVD_aux (SVD_module setup_module, def_annot.loc)],
           fn_ctyps
         )
-    | CDEF_register (id, ctyp, setup) -> (
+    | CDef_register (id, ctyp, setup) -> (
         match setup with
         | [] -> ([], fn_ctyps)
         | _ ->
@@ -2400,9 +2400,9 @@ module Make (Config : CONFIG) = struct
       )
     | _ -> ([], fn_ctyps)
 
-  let sv_cdef spec_info ctx fn_ctyps setup_calls (CDEF_aux (aux, _)) =
+  let sv_cdef spec_info ctx fn_ctyps setup_calls (CDef_aux (aux, _)) =
     match aux with
-    | CDEF_register (id, ctyp, setup) ->
+    | CDef_register (id, ctyp, setup) ->
         let binding_doc = wrap_type ctyp (pp_name id) ^^ semi ^^ twice hardline in
         let name = sprintf "sail_setup_reg_%s" (pp_name_string id) in
         ( {
@@ -2413,11 +2413,11 @@ module Make (Config : CONFIG) = struct
           fn_ctyps,
           name :: setup_calls
         )
-    | CDEF_type td ->
+    | CDef_type td ->
         ({ empty_cdef_doc with outside_module = pp_type_def ctx td ^^ twice hardline }, fn_ctyps, setup_calls)
-    | CDEF_val (f, _, param_ctyps, ret_ctyp, _) ->
+    | CDef_val (f, _, param_ctyps, ret_ctyp, _) ->
         (empty_cdef_doc, Bindings.add f (param_ctyps, ret_ctyp) fn_ctyps, setup_calls)
-    | CDEF_fundef (f, _, params, body) ->
+    | CDef_fundef (f, _, params, body) ->
         if List.mem (string_of_id f) Config.ignore then (empty_cdef_doc, fn_ctyps, setup_calls)
         else (
           let body =
@@ -2438,7 +2438,7 @@ module Make (Config : CONFIG) = struct
               )
           | None -> Reporting.unreachable (id_loc f) __POS__ ("No function type found for " ^ string_of_id f)
         )
-    | CDEF_let (n, bindings, setup) ->
+    | CDef_let (n, bindings, setup) ->
         let bindings_doc =
           separate_map (semi ^^ hardline) (fun (id, ctyp) -> wrap_type ctyp (pp_id id)) bindings
           ^^ semi ^^ twice hardline
@@ -2452,7 +2452,7 @@ module Make (Config : CONFIG) = struct
 
   let main_args main fn_ctyps =
     match main with
-    | Some (CDEF_aux (CDEF_fundef (f, _, params, body), _)) -> (
+    | Some (CDef_aux (CDef_fundef (f, _, params, body), _)) -> (
         match Bindings.find_opt f fn_ctyps with
         | Some (param_ctyps, ret_ctyp) -> (
             let main_args =

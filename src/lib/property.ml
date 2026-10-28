@@ -53,12 +53,12 @@ open Parser_combinators
 
 let find_properties { defs; _ } =
   let rec find_prop acc = function
-    | DEF_aux (DEF_pragma ((("property" | "counterexample") as prop_type), Pragma_line (command, l)), _) :: defs -> (
-        match Util.find_next (function DEF_aux (DEF_val _, _) -> true | _ -> false) defs with
-        | _, Some (DEF_aux (DEF_val vs, _), defs) -> find_prop ((prop_type, command, l, vs) :: acc) defs
+    | Def_aux (Def_pragma ((("property" | "counterexample") as prop_type), Pragma_line (command, l)), _) :: defs -> (
+        match Util.find_next (function Def_aux (Def_val _, _) -> true | _ -> false) defs with
+        | _, Some (Def_aux (Def_val vs, _), defs) -> find_prop ((prop_type, command, l, vs) :: acc) defs
         | _, _ -> raise (Reporting.err_general l "Property is not attached to any function signature")
       )
-    | DEF_aux (DEF_val vs, def_annot) :: defs -> (
+    | Def_aux (Def_val vs, def_annot) :: defs -> (
         let attrs = get_attributes (uannot_of_def_annot def_annot) in
         match List.find_opt (fun (_, name, _) -> name = "property" || name = "counterexample") attrs with
         | Some (l, prop_type, Some (AD_aux (AD_string command, _))) ->
@@ -123,7 +123,7 @@ let add_property_guards props ast =
   let open Type_check in
   let open Type_error in
   let rec add_property_guards' acc = function
-    | (DEF_aux (DEF_fundef (FD_aux (FD_function (r_opt, t_opt, funcls), fd_aux) as fdef), def_annot) as def) :: defs
+    | (Def_aux (Def_fundef (FD_aux (FD_function (r_opt, t_opt, funcls), fd_aux) as fdef), def_annot) as def) :: defs
       -> (
         match Bindings.find_opt (id_of_fundef fdef) props with
         | Some (_, _, pragma_l, VS_aux (VS_val_spec (TypSchm_aux (TypSchm_ts (quant, fn_typ), _), _, _), _)) -> (
@@ -167,7 +167,7 @@ let add_property_guards props ast =
                 let funcls = List.map add_checks_to_funcl funcls in
                 let fdef = FD_aux (FD_function (r_opt, t_opt, funcls), fd_aux) in
 
-                add_property_guards' (DEF_aux (DEF_fundef fdef, def_annot) :: acc) defs
+                add_property_guards' (Def_aux (Def_fundef fdef, def_annot) :: acc) defs
           )
         | None -> add_property_guards' (def :: acc) defs
       )

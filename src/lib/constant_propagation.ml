@@ -266,7 +266,7 @@ let never_fold_ids ast =
   List.fold_left
     (fun ids def ->
       match def with
-      | DEF_aux (DEF_val vs, def_annot) -> (
+      | Def_aux (Def_val vs, def_annot) -> (
           let id = id_of_val_spec vs in
           match get_def_attribute "never_fold" def_annot with Some _ -> IdSet.add id ids | None -> ids
         )
@@ -299,7 +299,7 @@ let const_props target env ast =
   fun ref_vars ->
     let constants =
       let add m = function
-        | DEF_aux (DEF_let (P_aux ((P_id id | P_typ (_, P_aux (P_id id, _))), _), exp), _)
+        | Def_aux (Def_let (P_aux ((P_id id | P_typ (_, P_aux (P_id id, _))), _), exp), _)
           when Constant_fold.is_constant exp ->
             Bindings.add id exp m
         | _ -> m

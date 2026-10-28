@@ -57,7 +57,7 @@ open Pretty_print_common
 open Pretty_print_lem
 open Callgraph
 
-let outcome_spec_of_def = function DEF_outcome (OV_aux (outcome, _), _) -> Some outcome | _ -> None
+let outcome_spec_of_def = function Def_outcome (OV_aux (outcome, _), _) -> Some outcome | _ -> None
 
 let outcome_specs_of_ast ast = List.filter_map outcome_spec_of_def ast.defs
 
@@ -115,7 +115,7 @@ let outcome_dependencies env ast =
 
 let doc_dependencies effect_info env ast =
   let deps_ast = outcome_dependencies env ast in
-  let type_defs = List.filter (function DEF_type _ -> true | _ -> false) deps_ast.defs in
+  let type_defs = List.filter (function Def_type _ -> true | _ -> false) deps_ast.defs in
   separate empty (List.map (doc_def_lem effect_info env) type_defs)
 
 let doc_lem_monad env ast = doc_typdef_lem env (gen_monad_def env ast)

@@ -190,17 +190,17 @@ let infer_def_direct_effects asserts_termination def =
   ignore (rewrite_ast_defs { rewriters_base with rewrite_exp = rw_exp; rewrite_pat = (fun _ -> fold_pat pat_alg) } [def]);
 
   ( match def with
-  | DEF_aux (DEF_val (VS_aux (VS_val_spec (_, id, Some { pure = false; _ }), _)), _) ->
+  | Def_aux (Def_val (VS_aux (VS_val_spec (_, id, Some { pure = false; _ }), _)), _) ->
       effects := EffectSet.add External !effects
-  | DEF_aux (DEF_fundef (FD_aux (FD_function (_, _, funcls), (l, _))), def_annot) -> (
+  | Def_aux (Def_fundef (FD_aux (FD_function (_, _, funcls), (l, _))), def_annot) -> (
       match funcls_info funcls with
       | Some (id, typ, env) ->
           if Option.is_some (get_def_attribute "incomplete" def_annot) then
             effects := EffectSet.add IncompleteMatch !effects
       | None -> Reporting.unreachable l __POS__ "Empty funcls in infer_def_direct_effects"
     )
-  | DEF_aux (DEF_mapdef _, _) -> effects := EffectSet.add IncompleteMatch !effects
-  | DEF_aux (DEF_scattered _, _) -> effects := EffectSet.add Scattered !effects
+  | Def_aux (Def_mapdef _, _) -> effects := EffectSet.add IncompleteMatch !effects
+  | Def_aux (Def_scattered _, _) -> effects := EffectSet.add Scattered !effects
   | _ -> ()
   );
 
@@ -240,7 +240,7 @@ let infer_mapdef_extra_direct_effects def =
   in
 
   ( match def with
-  | DEF_aux (DEF_mapdef (MD_aux (MD_mapping (_, _, mapcls), _)), _) -> List.iter scan_mapcl mapcls
+  | Def_aux (Def_mapdef (MD_aux (MD_mapping (_, _, mapcls), _)), _) -> List.iter scan_mapcl mapcls
   | _ -> ()
   );
 
@@ -248,26 +248,26 @@ let infer_mapdef_extra_direct_effects def =
 
 (* A top-level definition can have a side effect if it contains an
    expression which could have some side effect *)
-let can_have_direct_side_effect (DEF_aux (aux, _)) =
+let can_have_direct_side_effect (Def_aux (aux, _)) =
   match aux with
-  | DEF_type _ -> false
-  | DEF_constraint _ -> false
-  | DEF_fundef _ -> true
-  | DEF_mapdef _ -> false
-  | DEF_impl _ -> true
-  | DEF_let _ -> true
-  | DEF_val _ -> true
-  | DEF_outcome _ -> true
-  | DEF_instantiation _ -> false
-  | DEF_fixity _ -> false
-  | DEF_overload _ -> false
-  | DEF_default _ -> false
-  | DEF_scattered _ -> true
-  | DEF_measure _ -> true
-  | DEF_loop_measures _ -> true
-  | DEF_register _ -> true
-  | DEF_internal_mutrec _ -> true
-  | DEF_pragma _ -> false
+  | Def_type _ -> false
+  | Def_constraint _ -> false
+  | Def_fundef _ -> true
+  | Def_mapdef _ -> false
+  | Def_impl _ -> true
+  | Def_let _ -> true
+  | Def_val _ -> true
+  | Def_outcome _ -> true
+  | Def_instantiation _ -> false
+  | Def_fixity _ -> false
+  | Def_overload _ -> false
+  | Def_default _ -> false
+  | Def_scattered _ -> true
+  | Def_measure _ -> true
+  | Def_loop_measures _ -> true
+  | Def_register _ -> true
+  | Def_internal_mutrec _ -> true
+  | Def_pragma _ -> false
 
 type side_effect_info = {
   functions : EffectSet.t Bindings.t;
@@ -301,7 +301,7 @@ let infer_side_effects asserts_termination ast =
   let infer_fun_termination_assert def =
     if asserts_termination then (
       match def with
-      | DEF_aux (DEF_measure (id, _, _), _) -> fun_termination_asserts := IdSet.add id !fun_termination_asserts
+      | Def_aux (Def_measure (id, _, _), _) -> fun_termination_asserts := IdSet.add id !fun_termination_asserts
       | _ -> ()
     )
   in
@@ -310,7 +310,7 @@ let infer_side_effects asserts_termination ast =
       Util.progress "Effects (direct) " (string_of_int (i + 1) ^ "/" ^ string_of_int total) (i + 1) total;
       (* Handle mapping separately to allow different effects for both directions *)
       match def with
-      | DEF_aux (DEF_mapdef mdef, _) ->
+      | Def_aux (Def_mapdef mdef, _) ->
           let effs = infer_def_direct_effects asserts_termination def in
           let fw, bk = infer_mapdef_extra_direct_effects def in
           let id = id_of_mapdef mdef in
@@ -387,10 +387,10 @@ let infer_side_effects asserts_termination ast =
 let check_side_effects effect_info ast =
   let allowed_nonexec = ref IdSet.empty in
   List.iter
-    (fun (DEF_aux (aux, _) as def) ->
+    (fun (Def_aux (aux, _) as def) ->
       match aux with
-      | DEF_pragma ("non_exec", Pragma_line (name, _)) -> allowed_nonexec := IdSet.add (mk_id name) !allowed_nonexec
-      | DEF_let _ ->
+      | Def_pragma ("non_exec", Pragma_line (name, _)) -> allowed_nonexec := IdSet.add (mk_id name) !allowed_nonexec
+      | Def_let _ ->
           IdSet.iter
             (fun id ->
               match Bindings.find_opt id effect_info.letbinds with
@@ -404,7 +404,7 @@ let check_side_effects effect_info ast =
               | _ -> ()
             )
             (ids_of_def def)
-      | DEF_fundef fdef ->
+      | Def_fundef fdef ->
           let id = id_of_fundef fdef in
           let eff =
             Bindings.find_opt (id_of_fundef fdef) effect_info.functions |> Option.value ~default:EffectSet.empty
