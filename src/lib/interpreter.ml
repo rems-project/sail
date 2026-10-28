@@ -295,7 +295,11 @@ module Semantics = Extraction.Semantics.Make (struct
   let fallthrough () = fallthrough ()
 end)
 
-module Monad = Extraction.Semantics.Monad
+module Monad = struct
+  type 'a t = 'a Extraction.Semantics.t
+
+  let pure = Extraction.Monad.pure
+end
 
 let step exp = Semantics.step exp
 
@@ -369,6 +373,8 @@ let rec eval_frame' = function
       | Runtime_type_error l, _ ->
           Fail (out, state, m, stack, "Runtime type error at " ^ Reporting.short_loc_to_string l)
       | Assertion_failed s, _ -> Fail (out, state, m, stack, "Assertion failed: " ^ s)
+      (* The interpreter does not generate [Exit], it only exists for the partial evaluator *)
+      | Exit _, _ -> Fail (out, state, m, stack, "Unexpected exit")
       | Call (id, args, cont), _ ->
           let env = gstate.typecheck_env in
           let interpreter_extern = is_interpreter_extern id env in

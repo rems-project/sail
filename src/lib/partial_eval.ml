@@ -959,7 +959,7 @@ module Make (Lattice : SAIL_VALUE) = struct
     | _ -> p
 
   let mk_interpreter ~inlining gstate =
-    let open Zinterp.Monad in
+    let open Extraction.Monad in
     let stack = Stack.create () in
 
     let step p =
@@ -970,7 +970,7 @@ module Make (Lattice : SAIL_VALUE) = struct
                 match Stack.pop_opt stack with
                 | Some cont -> (
                     let state = Zinterp.R.pop_scope state in
-                    match cont (Return_value v) with
+                    match cont (Zinterp.Return_value v) with
                     | Pure ((ctx', _), focus') -> go state (Pure ((ctx', state), focus'))
                     | other -> go state other
                   )
@@ -978,11 +978,11 @@ module Make (Lattice : SAIL_VALUE) = struct
               )
             | None -> { ctx; state; focus }
           )
-        | Early_return (v, _) -> (
+        | Early_return v -> (
             match Stack.pop_opt stack with
             | Some cont -> (
                 let state = Zinterp.R.pop_scope state in
-                match cont (Return_value v) with
+                match cont (Zinterp.Return_value v) with
                 | Pure ((ctx', _), focus') -> go state (Pure ((ctx', state), focus'))
                 | other -> go state other
               )
@@ -998,7 +998,7 @@ module Make (Lattice : SAIL_VALUE) = struct
                       (v, E_aux (E_lit (mk_lit L_unit), (Parse_ast.Unknown, Type_check.empty_tannot)));
                 }
           )
-        | Exit (v, _) ->
+        | Exit v ->
             Stack.clear stack;
             {
               ctx = Z_top;
@@ -1032,10 +1032,18 @@ module Make (Lattice : SAIL_VALUE) = struct
                 )
                 else if Type_check.Env.is_outcome id gstate.typecheck_env then
                   go state
-                    (cont (Return_value { this = Some (Lattice.mk_ctor (unaux_id id) args'); exn = None; eff = false }))
+                    (cont
+                       (Zinterp.Return_value
+                          { this = Some (Lattice.mk_ctor (unaux_id id) args'); exn = None; eff = false }
+                       )
+                    )
                 else if Type_check.Env.is_union_constructor id gstate.typecheck_env then
                   go state
-                    (cont (Return_value { this = Some (Lattice.mk_ctor (unaux_id id) args'); exn = None; eff = false }))
+                    (cont
+                       (Zinterp.Return_value
+                          { this = Some (Lattice.mk_ctor (unaux_id id) args'); exn = None; eff = false }
+                       )
+                    )
                 else if Type_check.Env.is_extern id gstate.typecheck_env "interpreter" then (
                   let extern = Type_check.Env.get_extern id gstate.typecheck_env "interpreter" in
                   if extern = "reg_deref" then (
@@ -1053,12 +1061,13 @@ module Make (Lattice : SAIL_VALUE) = struct
                         )
                       | _ -> Lattice.top
                     in
-                    go state (cont (Return_value { this = Some v; exn = None; eff = false }))
+                    go state (cont (Zinterp.Return_value { this = Some v; exn = None; eff = false }))
                   )
                   else (
                     let is_pure = Type_check.Env.is_pure_extern id gstate.typecheck_env in
                     match StringMap.find_opt extern gstate.primops with
-                    | Some op -> go state (cont (Return_value { this = Some (op args'); exn = None; eff = not is_pure }))
+                    | Some op ->
+                        go state (cont (Zinterp.Return_value { this = Some (op args'); exn = None; eff = not is_pure }))
                     | None -> failwith ("no primop: " ^ extern)
                   )
                 )
@@ -1068,12 +1077,13 @@ module Make (Lattice : SAIL_VALUE) = struct
                   match fdef with
                   | None -> (
                       match StringMap.find_opt (string_of_id id) gstate.primops with
-                      | Some op -> go state (cont (Return_value { this = Some (op args'); exn = None; eff = false }))
+                      | Some op ->
+                          go state (cont (Zinterp.Return_value { this = Some (op args'); exn = None; eff = false }))
                       | None -> failwith ("unknown function: " ^ string_of_id id)
                     )
                   | Some fdef ->
                       let arms, annot = arms_of_fundef fdef in
-                      if inlining then go state (cont (Return_inlined arms))
+                      if inlining then go state (cont (Zinterp.Return_inlined arms))
                       else (
                         Stack.push cont stack;
                         {
@@ -1095,7 +1105,14 @@ module Make (Lattice : SAIL_VALUE) = struct
                 go state (cont { this = Some (Lattice.abst value); exn = None; eff = false })
           )
         | Runtime_type_error l -> raise (Reporting.err_general l "Type error")
-        | Get_undefined (_, cont) -> go state (cont { this = Some Lattice.top; exn = None; eff = false })
+        | Get_undefined (_, _, cont) -> go state (cont { this = Some Lattice.top; exn = None; eff = false })
+        (* The partial evaluator tracks variable state itself, so the type of places is empty *)
+        | Read_var _ | Write_var _ ->
+            Reporting.unreachable Parse_ast.Unknown __POS__ "Variable access in partial evaluator monad"
+        | Exception _ -> Reporting.unreachable Parse_ast.Unknown __POS__ "Exception in partial evaluator monad"
+        | Match_failure l -> Reporting.unreachable l __POS__ "Match failure in partial evaluator monad"
+        | Assertion_failed _ ->
+            Reporting.unreachable Parse_ast.Unknown __POS__ "Assertion failure in partial evaluator monad"
       in
       let p = preprocess_focus p in
       go p.state (Zinterp.step p.ctx p.state p.focus)

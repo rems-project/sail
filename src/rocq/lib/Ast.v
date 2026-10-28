@@ -510,55 +510,19 @@ Arguments pexp A : clear implicits.
 
 (** * Top-level constructs *)
 
-Inductive mpexp_aux (A : Set) : Set :=
-| MPat_pat : mpat A → mpexp_aux A
-| MPat_when : mpat A → exp A → mpexp_aux A.
-
-Inductive mpexp (A : Set) : Set :=
-| MPat_aux : mpexp_aux A → annot A → mpexp A.
+(** ** Type definitions *)
 
 Definition typquant : Set := list quant_item.
-
-Inductive typschm_aux : Set :=
-| TypSchm_ts : typquant → typ → typschm_aux.
-
-Inductive mapcl_aux (A : Set) : Set :=
-| MCL_bidir : mpexp A → mpexp A → mapcl_aux A
-| MCL_forwards : pexp A → mapcl_aux A
-| MCL_backwards : pexp A → mapcl_aux A.
-
-Inductive funcl_aux (A : Set) : Set :=
-| FCL_funcl : id → pexp A → funcl_aux A.
-
-Inductive tannot_opt_aux : Set :=
-| Typ_annot_opt_none : tannot_opt_aux
-| Typ_annot_opt_some : typquant → typ → tannot_opt_aux.
 
 Inductive type_union_aux : Set :=
 | Tu_ty_id : typ → id → type_union_aux.
 
-Inductive rec_opt_aux (A : Set) : Set :=
-| Rec_nonrec : rec_opt_aux A
-| Rec_rec : rec_opt_aux A
-| Rec_measure : pat A → exp A → rec_opt_aux A.
-
-Inductive typschm : Set :=
-| TypSchm_aux : typschm_aux → loc → typschm.
-
-Inductive mapcl (A : Set) : Set :=
-| MCL_aux : mapcl_aux A → clause_annot A → mapcl A.
-
-Inductive funcl (A : Set) : Set :=
-| FCL_aux : funcl_aux A → clause_annot A → funcl A.
-
-Inductive tannot_opt : Set :=
-| Typ_annot_opt_aux : tannot_opt_aux → loc → tannot_opt.
-
 Inductive type_union : Set :=
 | Tu_aux : type_union_aux → def_annot unit → type_union.
 
-Inductive rec_opt (A : Set) : Set :=
-| Rec_aux : rec_opt_aux A → loc → rec_opt A.
+(** A field of a bitfield is either a single bit, a contiguous range of bits,
+
+or a possibly non-contiguous concatenation of various ranges. *)
 
 Inductive index_range_aux : Set :=
 | BF_single : nexp → index_range_aux
@@ -568,17 +532,87 @@ Inductive index_range_aux : Set :=
 with index_range : Set :=
 | BF_aux : index_range_aux → loc → index_range.
 
+Inductive type_def_aux : Set :=
+| TD_abbrev : id → typquant → typ_arg → type_def_aux
+| TD_record : id → typquant → list (id * typ * def_annot unit) → type_def_aux
+| TD_variant : id → typquant → list type_union → bool → type_def_aux
+| TD_enum : id → list (id * def_annot unit) → type_def_aux
+| TD_abstract : id → kind → option (list string) → type_def_aux
+| TD_bitfield : id → typ → list (id * index_range * def_annot unit) → type_def_aux.
+
+Inductive type_def (A : Set) : Set :=
+| TD_aux : type_def_aux → annot A → type_def A.
+
+(** ** Mapping clauses *)
+
+Inductive mpexp_aux (A : Set) : Set :=
+| MPat_pat : mpat A → mpexp_aux A
+| MPat_when : mpat A → exp A → mpexp_aux A.
+
+Inductive mpexp (A : Set) : Set :=
+| MPat_aux : mpexp_aux A → annot A → mpexp A.
+
+Inductive mapcl_aux (A : Set) : Set :=
+| MCL_bidir : mpexp A → mpexp A → mapcl_aux A
+| MCL_forwards : pexp A → mapcl_aux A
+| MCL_backwards : pexp A → mapcl_aux A.
+
+Inductive mapcl (A : Set) : Set :=
+| MCL_aux : mapcl_aux A → clause_annot A → mapcl A.
+
+(** ** Function clauses *)
+
+Inductive funcl_aux (A : Set) : Set :=
+| FCL_funcl : id → pexp A → funcl_aux A.
+
+Inductive funcl (A : Set) : Set :=
+| FCL_aux : funcl_aux A → clause_annot A → funcl A.
+
+Inductive tannot_opt_aux : Set :=
+| Typ_annot_opt_none : tannot_opt_aux
+| Typ_annot_opt_some : typquant → typ → tannot_opt_aux.
+
+(** ** Toplevel type annotations *)
+
+Inductive rec_opt_aux (A : Set) : Set :=
+| Rec_nonrec : rec_opt_aux A
+| Rec_rec : rec_opt_aux A
+| Rec_measure : pat A → exp A → rec_opt_aux A.
+
+Inductive typschm_aux : Set :=
+| TypSchm_ts : typquant → typ → typschm_aux.
+
+Inductive typschm : Set :=
+| TypSchm_aux : typschm_aux → loc → typschm.
+
+Inductive tannot_opt : Set :=
+| Typ_annot_opt_aux : tannot_opt_aux → loc → tannot_opt.
+
+Inductive rec_opt (A : Set) : Set :=
+| Rec_aux : rec_opt_aux A → loc → rec_opt A.
+
+(** ** Outcomes and instantiations *)
+
 Inductive outcome_spec_aux : Set :=
 | OV_outcome : id → typschm → typquant → outcome_spec_aux.
+
+Inductive outcome_spec : Set :=
+| OV_aux : outcome_spec_aux → loc → outcome_spec.
 
 Inductive instantiation_spec_aux (A : Set) : Set :=
 | IN_id : id → instantiation_spec_aux A.
 
-Inductive val_spec_aux : Set :=
-| VS_val_spec : typschm → id → option extern → val_spec_aux.
+Inductive instantiation_spec (A : Set) : Set :=
+| IN_aux : instantiation_spec_aux A → annot A → instantiation_spec A.
 
-Inductive default_spec_aux : Set :=
-| DT_order : order → default_spec_aux.
+Inductive subst_aux : Set :=
+| IS_typ : kid → typ_arg → subst_aux
+| IS_id : id → id → subst_aux.
+
+Inductive subst : Set :=
+| IS_aux : subst_aux → loc → subst.
+
+(** ** Scattered definitions *)
 
 Inductive scattered_def_aux (A : Set) : Set :=
 | SD_function : id → tannot_opt → scattered_def_aux A
@@ -593,38 +627,22 @@ Inductive scattered_def_aux (A : Set) : Set :=
 | SD_enumcl : id → id → scattered_def_aux A
 | SD_end : id → scattered_def_aux A.
 
-Inductive subst_aux : Set :=
-| IS_typ : kid → typ_arg → subst_aux
-| IS_id : id → id → subst_aux.
+Inductive scattered_def (A : Set) : Set :=
+| SD_aux : scattered_def_aux A → annot A → scattered_def A.
 
-Inductive mapdef_aux (A : Set) : Set :=
-| MD_mapping : id → tannot_opt → list (mapcl A) → mapdef_aux A.
+(** ** Definitions *)
 
-Inductive fundef_aux (A : Set) : Set :=
-| FD_function : rec_opt A → tannot_opt → list (funcl A) → fundef_aux A.
-
-Inductive type_def_aux : Set :=
-| TD_abbrev : id → typquant → typ_arg → type_def_aux
-| TD_record : id → typquant → list (id * typ * def_annot unit) → type_def_aux
-| TD_variant : id → typquant → list type_union → bool → type_def_aux
-| TD_enum : id → list (id * def_annot unit) → type_def_aux
-| TD_abstract : id → kind → option (list string) → type_def_aux
-| TD_bitfield : id → typ → list (id * index_range * def_annot unit) → type_def_aux.
-
-Inductive outcome_spec : Set :=
-| OV_aux : outcome_spec_aux → loc → outcome_spec.
-
-Inductive instantiation_spec (A : Set) : Set :=
-| IN_aux : instantiation_spec_aux A → annot A → instantiation_spec A.
+Inductive val_spec_aux : Set :=
+| VS_val_spec : typschm → id → option extern → val_spec_aux.
 
 Inductive val_spec (A : Set) : Set :=
 | VS_aux : val_spec_aux → annot A → val_spec A.
 
+Inductive default_spec_aux : Set :=
+| DT_order : order → default_spec_aux.
+
 Inductive default_spec : Set :=
 | DT_aux : default_spec_aux → loc → default_spec.
-
-Inductive scattered_def (A : Set) : Set :=
-| SD_aux : scattered_def_aux A → annot A → scattered_def A.
 
 Inductive reg_spec_aux (A : Set) : Set :=
 | Reg : typ → id → option (exp A) → reg_spec_aux A.
@@ -643,19 +661,17 @@ Inductive pragma : Set :=
 | Pragma_line : string → loc → pragma
 | Pragma_structured : list (string * attribute_data) → pragma.
 
-Inductive subst : Set :=
-| IS_aux : subst_aux → loc → subst.
+Inductive mapdef_aux (A : Set) : Set :=
+| MD_mapping : id → tannot_opt → list (mapcl A) → mapdef_aux A.
 
 Inductive mapdef (A : Set) : Set :=
 | MD_aux : mapdef_aux A → annot A → mapdef A.
 
+Inductive fundef_aux (A : Set) : Set :=
+| FD_function : rec_opt A → tannot_opt → list (funcl A) → fundef_aux A.
+
 Inductive fundef (A : Set) : Set :=
 | FD_aux : fundef_aux A → annot A → fundef A.
-
-Inductive type_def (A : Set) : Set :=
-| TD_aux : type_def_aux → annot A → type_def A.
-
-(** ** Definitions *)
 
 Inductive def_aux (A B : Set) : Set :=
 | Def_type : type_def A → def_aux A B

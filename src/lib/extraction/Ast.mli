@@ -296,55 +296,13 @@ and 'a pexp_aux =
 and 'a pexp =
 | Pat_aux of 'a pexp_aux * 'a annot
 
-type 'a mpexp_aux =
-| MPat_pat of 'a mpat
-| MPat_when of 'a mpat * 'a exp
-
-type 'a mpexp =
-| MPat_aux of 'a mpexp_aux * 'a annot
-
 type typquant = quant_item list
-
-type typschm_aux =
-| TypSchm_ts of typquant * typ
-
-type 'a mapcl_aux =
-| MCL_bidir of 'a mpexp * 'a mpexp
-| MCL_forwards of 'a pexp
-| MCL_backwards of 'a pexp
-
-type 'a funcl_aux =
-| FCL_funcl of id * 'a pexp
-
-type tannot_opt_aux =
-| Typ_annot_opt_none
-| Typ_annot_opt_some of typquant * typ
 
 type type_union_aux =
 | Tu_ty_id of typ * id
 
-type 'a rec_opt_aux =
-| Rec_nonrec
-| Rec_rec
-| Rec_measure of 'a pat * 'a exp
-
-type typschm =
-| TypSchm_aux of typschm_aux * Parse_ast.l
-
-type 'a mapcl =
-| MCL_aux of 'a mapcl_aux * 'a clause_annot
-
-type 'a funcl =
-| FCL_aux of 'a funcl_aux * 'a clause_annot
-
-type tannot_opt =
-| Typ_annot_opt_aux of tannot_opt_aux * Parse_ast.l
-
 type type_union =
 | Tu_aux of type_union_aux * unit def_annot
-
-type 'a rec_opt =
-| Rec_aux of 'a rec_opt_aux * Parse_ast.l
 
 type index_range_aux =
 | BF_single of nexp
@@ -353,17 +311,77 @@ type index_range_aux =
 and index_range =
 | BF_aux of index_range_aux * Parse_ast.l
 
+type type_def_aux =
+| TD_abbrev of id * typquant * typ_arg
+| TD_record of id * typquant * ((id * typ) * unit def_annot) list
+| TD_variant of id * typquant * type_union list * bool
+| TD_enum of id * (id * unit def_annot) list
+| TD_abstract of id * kind * string list option
+| TD_bitfield of id * typ * ((id * index_range) * unit def_annot) list
+
+type 'a type_def =
+| TD_aux of type_def_aux * 'a annot
+
+type 'a mpexp_aux =
+| MPat_pat of 'a mpat
+| MPat_when of 'a mpat * 'a exp
+
+type 'a mpexp =
+| MPat_aux of 'a mpexp_aux * 'a annot
+
+type 'a mapcl_aux =
+| MCL_bidir of 'a mpexp * 'a mpexp
+| MCL_forwards of 'a pexp
+| MCL_backwards of 'a pexp
+
+type 'a mapcl =
+| MCL_aux of 'a mapcl_aux * 'a clause_annot
+
+type 'a funcl_aux =
+| FCL_funcl of id * 'a pexp
+
+type 'a funcl =
+| FCL_aux of 'a funcl_aux * 'a clause_annot
+
+type tannot_opt_aux =
+| Typ_annot_opt_none
+| Typ_annot_opt_some of typquant * typ
+
+type 'a rec_opt_aux =
+| Rec_nonrec
+| Rec_rec
+| Rec_measure of 'a pat * 'a exp
+
+type typschm_aux =
+| TypSchm_ts of typquant * typ
+
+type typschm =
+| TypSchm_aux of typschm_aux * Parse_ast.l
+
+type tannot_opt =
+| Typ_annot_opt_aux of tannot_opt_aux * Parse_ast.l
+
+type 'a rec_opt =
+| Rec_aux of 'a rec_opt_aux * Parse_ast.l
+
 type outcome_spec_aux =
 | OV_outcome of id * typschm * typquant
+
+type outcome_spec =
+| OV_aux of outcome_spec_aux * Parse_ast.l
 
 type 'a instantiation_spec_aux =
 | IN_id of id
 
-type val_spec_aux =
-| VS_val_spec of typschm * id * extern option
+type 'a instantiation_spec =
+| IN_aux of 'a instantiation_spec_aux * 'a annot
 
-type default_spec_aux =
-| DT_order of order
+type subst_aux =
+| IS_typ of kid * typ_arg
+| IS_id of id * id
+
+type subst =
+| IS_aux of subst_aux * Parse_ast.l
 
 type 'a scattered_def_aux =
 | SD_function of id * tannot_opt
@@ -378,38 +396,20 @@ type 'a scattered_def_aux =
 | SD_enumcl of id * id
 | SD_end of id
 
-type subst_aux =
-| IS_typ of kid * typ_arg
-| IS_id of id * id
+type 'a scattered_def =
+| SD_aux of 'a scattered_def_aux * 'a annot
 
-type 'a mapdef_aux =
-| MD_mapping of id * tannot_opt * 'a mapcl list
-
-type 'a fundef_aux =
-| FD_function of 'a rec_opt * tannot_opt * 'a funcl list
-
-type type_def_aux =
-| TD_abbrev of id * typquant * typ_arg
-| TD_record of id * typquant * ((id * typ) * unit def_annot) list
-| TD_variant of id * typquant * type_union list * bool
-| TD_enum of id * (id * unit def_annot) list
-| TD_abstract of id * kind * string list option
-| TD_bitfield of id * typ * ((id * index_range) * unit def_annot) list
-
-type outcome_spec =
-| OV_aux of outcome_spec_aux * Parse_ast.l
-
-type 'a instantiation_spec =
-| IN_aux of 'a instantiation_spec_aux * 'a annot
+type val_spec_aux =
+| VS_val_spec of typschm * id * extern option
 
 type 'a val_spec =
 | VS_aux of val_spec_aux * 'a annot
 
+type default_spec_aux =
+| DT_order of order
+
 type default_spec =
 | DT_aux of default_spec_aux * Parse_ast.l
-
-type 'a scattered_def =
-| SD_aux of 'a scattered_def_aux * 'a annot
 
 type 'a reg_spec_aux =
 | Reg of typ * id * 'a exp option
@@ -428,17 +428,17 @@ type pragma =
 | Pragma_line of string * Parse_ast.l
 | Pragma_structured of (string * attribute_data) list
 
-type subst =
-| IS_aux of subst_aux * Parse_ast.l
+type 'a mapdef_aux =
+| MD_mapping of id * tannot_opt * 'a mapcl list
 
 type 'a mapdef =
 | MD_aux of 'a mapdef_aux * 'a annot
 
+type 'a fundef_aux =
+| FD_function of 'a rec_opt * tannot_opt * 'a funcl list
+
 type 'a fundef =
 | FD_aux of 'a fundef_aux * 'a annot
-
-type 'a type_def =
-| TD_aux of type_def_aux * 'a annot
 
 type ('a, 'b) def_aux =
 | Def_type of 'a type_def
