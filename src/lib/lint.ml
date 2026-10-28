@@ -91,20 +91,20 @@ end = struct
 
   let in_fundef (FD_aux (FD_function (_, _, funcls), _)) = List.iter in_funcl funcls
 
-  let rec in_def (DEF_aux (aux, _)) =
+  let rec in_def (Def_aux (aux, _)) =
     match aux with
-    | DEF_fundef fdef -> in_fundef fdef
-    | DEF_mapdef (MD_aux (MD_mapping (_, _, mapcls), _)) -> List.iter in_mapcl mapcls
-    | DEF_register (DEC_aux (DEC_reg (_, _, exp_opt), _)) -> Option.iter F.do_exp exp_opt
-    | DEF_outcome (_, defs) -> List.iter in_def defs
-    | DEF_impl funcl -> in_funcl funcl
-    | DEF_let (_, exp) -> F.do_exp exp
-    | DEF_scattered sdef -> in_scattered_def sdef
-    | DEF_internal_mutrec fdefs -> List.iter in_fundef fdefs
-    | DEF_loop_measures _ -> ()
-    | DEF_measure (_, _, exp) -> F.do_exp exp
-    | DEF_type _ | DEF_constraint _ | DEF_val _ | DEF_fixity _ | DEF_overload _ | DEF_default _ | DEF_pragma _
-    | DEF_instantiation _ ->
+    | Def_fundef fdef -> in_fundef fdef
+    | Def_mapdef (MD_aux (MD_mapping (_, _, mapcls), _)) -> List.iter in_mapcl mapcls
+    | Def_register (DEC_aux (DEC_reg (_, _, exp_opt), _)) -> Option.iter F.do_exp exp_opt
+    | Def_outcome (_, defs) -> List.iter in_def defs
+    | Def_impl funcl -> in_funcl funcl
+    | Def_let (_, exp) -> F.do_exp exp
+    | Def_scattered sdef -> in_scattered_def sdef
+    | Def_internal_mutrec fdefs -> List.iter in_fundef fdefs
+    | Def_loop_measures _ -> ()
+    | Def_measure (_, _, exp) -> F.do_exp exp
+    | Def_type _ | Def_constraint _ | Def_val _ | Def_fixity _ | Def_overload _ | Def_default _ | Def_pragma _
+    | Def_instantiation _ ->
         ()
 end
 

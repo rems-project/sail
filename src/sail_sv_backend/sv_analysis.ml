@@ -222,7 +222,7 @@ let collect_spec_info ctx cdefs =
     List.fold_left
       (fun (ctyp_map, regs, inits) cdef ->
         match cdef with
-        | CDEF_aux (CDEF_register (id, ctyp, setup), def_annot) ->
+        | CDef_aux (CDef_register (id, ctyp, setup), def_annot) ->
             let setup_id = match setup with [] -> [] | _ -> [id] in
             ( CTMap.update ctyp
                 (function Some ids -> Some (NameSet.add id ids) | None -> Some (NameSet.singleton id))
@@ -239,7 +239,7 @@ let collect_spec_info ctx cdefs =
     List.fold_left
       (fun acc cdef ->
         match cdef with
-        | CDEF_aux (CDEF_type (CTD_variant (_, _, ctors)), _) ->
+        | CDef_aux (CDef_type (CTD_variant (_, _, ctors)), _) ->
             List.fold_left (fun acc (id, _) -> IdSet.add id acc) acc ctors
         | _ -> acc
       )
@@ -249,7 +249,7 @@ let collect_spec_info ctx cdefs =
     List.fold_left
       (fun (names, nums) cdef ->
         match cdef with
-        | CDEF_aux (CDEF_let (n, bindings, _), _) ->
+        | CDef_aux (CDef_let (n, bindings, _), _) ->
             ( List.fold_left
                 (fun acc (id, ctyp) ->
                   Globals.add id ctyp;
@@ -266,7 +266,7 @@ let collect_spec_info ctx cdefs =
     List.fold_left
       (fun footprints cdef ->
         match cdef with
-        | CDEF_aux (CDEF_fundef (f, _, _, body), _) ->
+        | CDef_aux (CDef_fundef (f, _, _, body), _) ->
             let direct_footprint = empty_direct_footprint () in
             let _ = visit_cdef (new footprint_visitor ctx registers direct_footprint) cdef in
             CTSet.iter
@@ -301,7 +301,7 @@ let collect_spec_info ctx cdefs =
     List.fold_left
       (fun footprints cdef ->
         match cdef with
-        | CDEF_aux (CDEF_fundef (f, _, _, body), _) ->
+        | CDef_aux (CDef_fundef (f, _, _, body), _) ->
             let footprint = Bindings.find f footprints in
             let callees = cfg |> IdGraph.reachable (IdSet.singleton f) IdSet.empty |> IdSet.remove f in
             let all_reads, all_writes, throws, need_stdout, need_stderr, reads_mem, writes_mem, contains_assert, exits =
@@ -377,7 +377,7 @@ let collect_spec_info ctx cdefs =
     List.fold_left
       (fun ctyp cdef ->
         match cdef with
-        | CDEF_aux (CDEF_type ctd, _) when Id.compare (ctype_def_id ctd) (mk_id "exception") = 0 ->
+        | CDef_aux (CDef_type ctd, _) when Id.compare (ctype_def_id ctd) (mk_id "exception") = 0 ->
             ctype_def_to_ctyp ctd
         | _ -> ctyp
       )

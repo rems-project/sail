@@ -502,8 +502,8 @@ and ocaml_atomic_lexp ctx (LE_aux (lexp_aux, _) as lexp) =
   match lexp_aux with LE_typ (_, id) -> zencode ctx id | LE_id id -> zencode ctx id | _ -> parens (ocaml_lexp ctx lexp)
 
 let rec get_initialize_registers = function
-  | DEF_aux
-      ( DEF_fundef
+  | Def_aux
+      ( Def_fundef
           (FD_aux
              (FD_function (_, _, [FCL_aux (FCL_funcl (id, Pat_aux (Pat_exp (_, E_aux (E_block inits, _)), _)), _)]), _)
             ),
@@ -849,7 +849,7 @@ let get_externs defs =
     match Ast_util.extern_assoc "ocaml" exts with None -> [] | Some ext -> [(id, mk_id ext)]
   in
   let rec extern_ids = function
-    | DEF_aux (DEF_val vs, _) :: defs -> extern_id vs :: extern_ids defs
+    | Def_aux (Def_val vs, _) :: defs -> extern_id vs :: extern_ids defs
     | def :: defs -> extern_ids defs
     | [] -> []
   in
@@ -859,14 +859,14 @@ let nf_group doc =
   first_function := true;
   group doc
 
-let ocaml_def ctx (DEF_aux (aux, _)) =
+let ocaml_def ctx (Def_aux (aux, _)) =
   match aux with
-  | DEF_register ds -> nf_group (ocaml_dec_spec ctx ds) ^^ ocaml_def_end
-  | DEF_fundef fd -> group (ocaml_fundef ctx fd) ^^ twice hardline
-  | DEF_internal_mutrec fds ->
+  | Def_register ds -> nf_group (ocaml_dec_spec ctx ds) ^^ ocaml_def_end
+  | Def_fundef fd -> group (ocaml_fundef ctx fd) ^^ twice hardline
+  | Def_internal_mutrec fds ->
       separate_map (twice hardline) (fun fd -> group (ocaml_fundef ctx fd)) fds ^^ twice hardline
-  | DEF_type td -> nf_group (ocaml_typedef ctx td)
-  | DEF_let (pat, exp) -> nf_group (string "let" ^^ space ^^ ocaml_letbind ctx pat exp) ^^ ocaml_def_end
+  | Def_type td -> nf_group (ocaml_typedef ctx td)
+  | Def_let (pat, exp) -> nf_group (string "let" ^^ space ^^ ocaml_letbind ctx pat exp) ^^ ocaml_def_end
   | _ -> empty
 
 let val_spec_typs defs =
@@ -875,7 +875,7 @@ let val_spec_typs defs =
     match vs_aux with VS_val_spec (TypSchm_aux (TypSchm_ts (_, typ), _), id, _) -> typs := Bindings.add id typ !typs
   in
   let rec vs_typs = function
-    | DEF_aux (DEF_val vs, _) :: defs ->
+    | Def_aux (Def_val vs, _) :: defs ->
         val_spec_typ vs;
         vs_typs defs
     | _ :: defs -> vs_typs defs
@@ -893,7 +893,7 @@ let val_spec_typs defs =
 *)
 
 let orig_types_for_ocaml_generator defs =
-  List.filter_map (function DEF_aux (DEF_type td, _) -> Some td | _ -> None) defs
+  List.filter_map (function Def_aux (Def_type td, _) -> Some td | _ -> None) defs
 
 let ocaml_pp_generators ctx defs orig_types required =
   let add_def typemap td = Bindings.add (id_of_type_def td) td typemap in

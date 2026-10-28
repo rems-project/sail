@@ -2348,9 +2348,9 @@ let type_dependencies defs =
     | Typ_exist (_, _, typ') -> ids_of_typ typ'
   and ids_of_arg (A_aux (a, _)) = match a with A_typ typ -> ids_of_typ typ | A_nexp _ | A_bool _ -> [] in
   let typs_of_arg (A_aux (a, _)) = match a with A_typ typ -> [typ] | A_nexp _ | A_bool _ -> [] in
-  let aux_def depmap (DEF_aux (aux, _)) =
+  let aux_def depmap (Def_aux (aux, _)) =
     match aux with
-    | DEF_type (TD_aux (td, (l, _))) -> (
+    | Def_type (TD_aux (td, (l, _))) -> (
         let new_def =
           match td with
           | TD_abbrev (id, tq, arg) -> Some (id, typs_of_arg arg)
@@ -2423,15 +2423,15 @@ let types_used_with_generic_eq defs =
   let typs_req_fundef (FD_aux (FD_function (_, _, fcls), _)) =
     List.fold_left IdSet.union IdSet.empty (List.map typs_req_funcl fcls)
   in
-  let typs_req_def (DEF_aux (aux, _) as def) =
+  let typs_req_def (Def_aux (aux, _) as def) =
     match aux with
-    | DEF_type _ | DEF_constraint _ | DEF_val _ | DEF_fixity _ | DEF_overload _ | DEF_default _ | DEF_pragma _
-    | DEF_register _ | DEF_instantiation _ | DEF_outcome _ ->
+    | Def_type _ | Def_constraint _ | Def_val _ | Def_fixity _ | Def_overload _ | Def_default _ | Def_pragma _
+    | Def_register _ | Def_instantiation _ | Def_outcome _ ->
         IdSet.empty
-    | DEF_fundef fd -> typs_req_fundef fd
-    | DEF_internal_mutrec fds -> List.fold_left IdSet.union IdSet.empty (List.map typs_req_fundef fds)
-    | DEF_let (pat, e) -> IdSet.union (fst (fold_pat alg.pat_alg pat)) (fst (fold_exp alg e))
-    | DEF_mapdef _ | DEF_scattered _ | DEF_measure _ | DEF_loop_measures _ | DEF_impl _ ->
+    | Def_fundef fd -> typs_req_fundef fd
+    | Def_internal_mutrec fds -> List.fold_left IdSet.union IdSet.empty (List.map typs_req_fundef fds)
+    | Def_let (pat, e) -> IdSet.union (fst (fold_pat alg.pat_alg pat)) (fst (fold_exp alg e))
+    | Def_mapdef _ | Def_scattered _ | Def_measure _ | Def_loop_measures _ | Def_impl _ ->
         unreachable (def_loc def) __POS__ "Definition found in the Coq back-end that should have been rewritten away"
   in
   List.fold_left IdSet.union IdSet.empty (List.map typs_req_def defs)
@@ -2446,7 +2446,7 @@ let types_used_in_registers deps final_env =
 (* Uses the immediate dependencies rather than the full set above *)
 let countable_types defs =
   let typs_of_arg (A_aux (a, _)) = match a with A_typ typ -> [typ] | A_nexp _ | A_bool _ -> [] in
-  let aux_def countable (DEF_aux (aux, _)) =
+  let aux_def countable (Def_aux (aux, _)) =
     let rec check_typ (Typ_aux (typ, l) as typ_full) =
       match typ with
       | Typ_internal_unknown | Typ_fn _ | Typ_bidir _ ->
@@ -2458,7 +2458,7 @@ let countable_types defs =
       | Typ_exist (_, _, typ') -> check_typ typ'
     and check_arg (A_aux (a, _)) = match a with A_typ typ -> check_typ typ | A_nexp _ | A_bool _ -> true in
     match aux with
-    | DEF_type (TD_aux (td, (l, _))) -> (
+    | Def_type (TD_aux (td, (l, _))) -> (
         let new_def =
           match td with
           | TD_abbrev (id, tq, arg) -> Some (id, typs_of_arg arg)
@@ -2502,9 +2502,9 @@ let countable_types defs =
    the default names and the functions might not exist.  We can't check "no_enum_number_conversions" because it is
    added automatically when the functions are generated. *)
 let enum_fn_names defs =
-  let aux (enum_map, fn_set) (DEF_aux (d, def_annot)) =
+  let aux (enum_map, fn_set) (Def_aux (d, def_annot)) =
     match d with
-    | DEF_type (TD_aux (TD_enum (id, _, _), _)) ->
+    | Def_type (TD_aux (TD_enum (id, _, _), _)) ->
         let attr_opt = get_def_attribute "enum_number_conversions" def_annot in
         let names =
           let open Util.Option_monad in
@@ -3518,7 +3518,7 @@ let doc_fundef_rhs global proof_mode ?(mutrec = NotMutrec) rec_set (FD_aux (FD_f
       unreachable l __POS__ ("function " ^ string_of_id id ^ " has multiple clauses in backend")
 
 let doc_mutrec global rec_set = function
-  | [] -> failwith "DEF_internal_mutrec with empty function list"
+  | [] -> failwith "Def_internal_mutrec with empty function list"
   | fundef :: fundefs ->
       let pre1, ctxt1, details1 = doc_fundef_rhs global true ~mutrec:FirstFn rec_set fundef in
       let pren, ctxtn, detailsn = Util.split3 (List.map (doc_fundef_rhs global true ~mutrec:LaterFn rec_set) fundefs) in
@@ -3802,35 +3802,35 @@ let doc_val global pat exp =
   ^^ group (separate space [string "#[export] Hint Unfold"; idpp; colon; string "sail."])
   ^^ hardline
 
-let doc_def global unimplemented generic_eq_types countable_types enum_number_defs (DEF_aux (aux, def_annot) as def) =
+let doc_def global unimplemented generic_eq_types countable_types enum_number_defs (Def_aux (aux, def_annot) as def) =
   match aux with
-  | DEF_val v_spec -> doc_val_spec global def_annot unimplemented v_spec
-  | DEF_fixity _ -> empty
-  | DEF_overload _ -> empty
-  | DEF_type t_def ->
+  | Def_val v_spec -> doc_val_spec global def_annot unimplemented v_spec
+  | Def_fixity _ -> empty
+  | Def_overload _ -> empty
+  | Def_type t_def ->
       if List.mem (string_of_id (id_of_type_def t_def)) !opt_extern_types <> !opt_generate_extern_types then empty
       else doc_typdef global generic_eq_types countable_types enum_number_defs t_def
-  | DEF_register dec -> group (doc_dec global dec)
-  | DEF_default df -> empty
-  | DEF_fundef fdef -> group (doc_fundef global fdef) ^/^ hardline
-  | DEF_internal_mutrec fundefs -> doc_mutrec global (ids_of_def def) fundefs ^/^ hardline
-  | DEF_let (pat, exp) -> doc_val global pat exp
-  | DEF_scattered sdef -> failwith "doc_def: shoulnd't have DEF_scattered at this point"
-  | DEF_mapdef (MD_aux (_, (l, _))) -> unreachable l __POS__ "Coq doesn't support mappings"
-  | DEF_pragma _ -> empty
-  | DEF_measure (id, _, _) ->
+  | Def_register dec -> group (doc_dec global dec)
+  | Def_default df -> empty
+  | Def_fundef fdef -> group (doc_fundef global fdef) ^/^ hardline
+  | Def_internal_mutrec fundefs -> doc_mutrec global (ids_of_def def) fundefs ^/^ hardline
+  | Def_let (pat, exp) -> doc_val global pat exp
+  | Def_scattered sdef -> failwith "doc_def: shoulnd't have Def_scattered at this point"
+  | Def_mapdef (MD_aux (_, (l, _))) -> unreachable l __POS__ "Coq doesn't support mappings"
+  | Def_pragma _ -> empty
+  | Def_measure (id, _, _) ->
       unreachable (id_loc id) __POS__
         ("Termination measure for " ^ string_of_id id ^ " should have been rewritten before backend")
-  | DEF_loop_measures (id, _) ->
+  | Def_loop_measures (id, _) ->
       unreachable (id_loc id) __POS__
         ("Loop termination measures for " ^ string_of_id id ^ " should have been rewritten before backend")
-  | DEF_impl _ -> unreachable (def_loc def) __POS__ "Event definition should have been rewritten before backend"
+  | Def_impl _ -> unreachable (def_loc def) __POS__ "Event definition should have been rewritten before backend"
   (* The instantiation has already been applied by a rewrite and we don't need to output anything for it
      here.  They are still present to provide information for instantiating the concurrency interface. *)
-  | DEF_instantiation _ | DEF_outcome _ -> empty
+  | Def_instantiation _ | Def_outcome _ -> empty
   (* This backend doesn't currently support abstract types, so they must have been instantiated by now and
      the constraints don't need to appear in the output. *)
-  | DEF_constraint _ -> empty
+  | Def_constraint _ -> empty
 
 (* Definitions to help translate Isla trace values embedded in Coq into directly
    translated Coq datatypes. *)
@@ -3909,9 +3909,9 @@ let doc_isla_typ global (TD_aux (td, _)) =
     )
   | _ -> empty
 
-let doc_isla global (DEF_aux (aux, _)) =
+let doc_isla global (Def_aux (aux, _)) =
   match aux with
-  | DEF_type t_def ->
+  | Def_type t_def ->
       if List.mem (string_of_id (id_of_type_def t_def)) !opt_extern_types <> !opt_generate_extern_types then empty
       else doc_isla_typ global t_def
   | _ -> empty
@@ -4628,7 +4628,7 @@ end = struct
         ]
     in
     let update_for_def = function
-      | DEF_aux (DEF_type td, _) ->
+      | Def_aux (Def_type td, _) ->
           let typ_id = id_of_type_def td in
           if
             List.mem (string_of_id typ_id) !opt_extern_types == !opt_generate_extern_types
@@ -4652,7 +4652,7 @@ end
 
 let find_exc_typ defs =
   let is_exc_typ_def = function
-    | DEF_aux (DEF_type td, _) -> string_of_id (id_of_type_def td) = "exception"
+    | Def_aux (Def_type td, _) -> string_of_id (id_of_type_def td) = "exception"
     | _ -> false
   in
   if List.exists is_exc_typ_def defs then "exception" else "unit"
@@ -4662,18 +4662,18 @@ let find_unimplemented defs =
     match funcls with [] -> unimplemented | FCL_aux (FCL_funcl (id, _), _) :: _ -> IdSet.remove id unimplemented
   in
   let adjust_def unimplemented = function
-    | DEF_aux (DEF_val (VS_aux (VS_val_spec (_, id, exts), _)), _) -> (
+    | Def_aux (Def_val (VS_aux (VS_val_spec (_, id, exts), _)), _) -> (
         match Ast_util.extern_assoc "coq" exts with Some _ -> unimplemented | None -> IdSet.add id unimplemented
       )
-    | DEF_aux (DEF_internal_mutrec fds, _) -> List.fold_left adjust_fundef unimplemented fds
-    | DEF_aux (DEF_fundef fd, _) -> adjust_fundef unimplemented fd
+    | Def_aux (Def_internal_mutrec fds, _) -> List.fold_left adjust_fundef unimplemented fds
+    | Def_aux (Def_fundef fd, _) -> adjust_fundef unimplemented fd
     | _ -> unimplemented
   in
   List.fold_left adjust_def IdSet.empty defs
 
 let builtin_target_names defs =
   let check_def names = function
-    | DEF_aux (DEF_val (VS_aux (VS_val_spec (_, _, exts), _)), _) -> (
+    | Def_aux (Def_val (VS_aux (VS_val_spec (_, _, exts), _)), _) -> (
         match Ast_util.extern_assoc "coq" exts with Some name -> StringSet.add name names | None -> names
       )
     | _ -> names
@@ -4698,7 +4698,7 @@ let pp_ast_coq library_style (types_file, types_modules) (interface_file, interf
     type_defs_module opt_coq_isla symbols ctx effect_info type_env ({ defs; _ } as ast) concurrency_monad_params
     top_line suppress_MR_M =
   try
-    let is_typ_def = function DEF_aux (DEF_type _, _) -> true | _ -> false in
+    let is_typ_def = function Def_aux (Def_type _, _) -> true | _ -> false in
     let exc_typ = find_exc_typ defs in
     let unimplemented = find_unimplemented defs in
     let avoid_target_names = builtin_target_names defs in
@@ -4901,7 +4901,7 @@ let pp_ast_coq library_style (types_file, types_modules) (interface_file, interf
       Util.map_split
         (fun def ->
           match def with
-          | DEF_aux (DEF_fundef (FD_aux (FD_function (_, _, [FCL_aux (FCL_funcl (id, _), _)]), _)), _)
+          | Def_aux (Def_fundef (FD_aux (FD_function (_, _, [FCL_aux (FCL_funcl (id, _), _)]), _)), _)
             when IdSet.mem id enum_fn_set ->
               Ok (id, doc_def def)
           | _ -> Error def

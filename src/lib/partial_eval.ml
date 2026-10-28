@@ -851,9 +851,9 @@ module Make (Lattice : SAIL_VALUE) = struct
       }
     in
     let add_def gstate = function
-      | DEF_aux (DEF_fundef fdef, _) -> { gstate with fundefs = Bindings.add (id_of_fundef fdef) fdef gstate.fundefs }
-      | DEF_aux (DEF_let (pat, exp), annot) -> { gstate with letbinds = (pat, exp, annot) :: gstate.letbinds }
-      | DEF_aux (DEF_register (DEC_aux (DEC_reg (typ, id, init), _)), _) ->
+      | Def_aux (Def_fundef fdef, _) -> { gstate with fundefs = Bindings.add (id_of_fundef fdef) fdef gstate.fundefs }
+      | Def_aux (Def_let (pat, exp), annot) -> { gstate with letbinds = (pat, exp, annot) :: gstate.letbinds }
+      | Def_aux (Def_register (DEC_aux (DEC_reg (typ, id, init), _)), _) ->
           { gstate with registers = (id, typ, init) :: gstate.registers }
       | _ -> gstate
     in

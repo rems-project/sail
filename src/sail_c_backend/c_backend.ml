@@ -599,24 +599,24 @@ let fix_early_stack_return ret ret_ctyp instrs =
   rewrite_return instrs
 
 let rec insert_heap_returns ctx ret_ctyps = function
-  | (CDEF_aux (CDEF_val (id, _, _, ret_ctyp, _), _) as cdef) :: cdefs ->
+  | (CDef_aux (CDef_val (id, _, _, ret_ctyp, _), _) as cdef) :: cdefs ->
       cdef :: insert_heap_returns ctx (Bindings.add id ret_ctyp ret_ctyps) cdefs
-  | CDEF_aux (CDEF_fundef (id, Return_plain, args, body), def_annot) :: cdefs -> (
+  | CDef_aux (CDef_fundef (id, Return_plain, args, body), def_annot) :: cdefs -> (
       let gs = ngensym () in
       match Bindings.find_opt id ret_ctyps with
       | None -> raise (Reporting.err_general (id_loc id) ("Cannot find return type for function " ^ string_of_id id))
       | Some ret_ctyp when not (is_stack_ctyp ctx ret_ctyp) ->
-          CDEF_aux (CDEF_fundef (id, Return_via gs, args, fix_early_heap_return gs body), def_annot)
+          CDef_aux (CDef_fundef (id, Return_via gs, args, fix_early_heap_return gs body), def_annot)
           :: insert_heap_returns ctx ret_ctyps cdefs
       | Some ret_ctyp ->
-          CDEF_aux
-            ( CDEF_fundef
+          CDef_aux
+            ( CDef_fundef
                 (id, Return_plain, args, fix_early_stack_return gs ret_ctyp (idecl (id_loc id) ret_ctyp gs :: body)),
               def_annot
             )
           :: insert_heap_returns ctx ret_ctyps cdefs
     )
-  | CDEF_aux (CDEF_fundef (id, _, _, _), _) :: _ ->
+  | CDef_aux (CDef_fundef (id, _, _, _), _) :: _ ->
       Reporting.unreachable (id_loc id) __POS__ "Found function with return already re-written in insert_heap_returns"
   | cdef :: cdefs -> cdef :: insert_heap_returns ctx ret_ctyps cdefs
   | [] -> []
@@ -634,8 +634,8 @@ let hoist_id () =
   name id
 
 let hoist_allocations recursive_functions = function
-  | CDEF_aux (CDEF_fundef (function_id, _, _, _), _) as cdef when IdSet.mem function_id recursive_functions -> [cdef]
-  | CDEF_aux (CDEF_fundef (function_id, heap_return, args, body), def_annot) ->
+  | CDef_aux (CDef_fundef (function_id, _, _, _), _) as cdef when IdSet.mem function_id recursive_functions -> [cdef]
+  | CDef_aux (CDef_fundef (function_id, heap_return, args, body), def_annot) ->
       let decls = ref [] in
       let cleanups = ref [] in
       let rec hoist = function
@@ -660,12 +660,12 @@ let hoist_allocations recursive_functions = function
         | [] -> []
       in
       let body = hoist body in
-      if !decls = [] then [CDEF_aux (CDEF_fundef (function_id, heap_return, args, body), def_annot)]
+      if !decls = [] then [CDef_aux (CDef_fundef (function_id, heap_return, args, body), def_annot)]
       else
         [
-          CDEF_aux (CDEF_startup (function_id, List.rev !decls), mk_def_annot (gen_loc def_annot.loc) ());
-          CDEF_aux (CDEF_fundef (function_id, heap_return, args, body), def_annot);
-          CDEF_aux (CDEF_finish (function_id, !cleanups), mk_def_annot (gen_loc def_annot.loc) ());
+          CDef_aux (CDef_startup (function_id, List.rev !decls), mk_def_annot (gen_loc def_annot.loc) ());
+          CDef_aux (CDef_fundef (function_id, heap_return, args, body), def_annot);
+          CDef_aux (CDef_finish (function_id, !cleanups), mk_def_annot (gen_loc def_annot.loc) ());
         ]
   | cdef -> [cdef]
 
@@ -738,8 +738,8 @@ let remove_alias =
     | [] -> []
   in
   function
-  | CDEF_aux (CDEF_fundef (function_id, heap_return, args, body), def_annot) ->
-      [CDEF_aux (CDEF_fundef (function_id, heap_return, args, opt body), def_annot)]
+  | CDef_aux (CDef_fundef (function_id, heap_return, args, body), def_annot) ->
+      [CDef_aux (CDef_fundef (function_id, heap_return, args, opt body), def_annot)]
   | cdef -> [cdef]
 
 (** This optimization looks for patterns of the form
@@ -873,7 +873,7 @@ module Combine_variables = struct
           )
         | _ -> DoChildren
 
-      method! vcdef = function CDEF_aux (CDEF_fundef _, _) -> DoChildren | _ -> SkipChildren
+      method! vcdef = function CDef_aux (CDef_fundef _, _) -> DoChildren | _ -> SkipChildren
     end
 end
 
@@ -2204,9 +2204,9 @@ module Codegen (Config : CODEGEN_CONFIG) = struct
     | _ -> assert false
 
   (* Generate C code for a global register, constant (let), function definition, etc. *)
-  let codegen_def' ctx (CDEF_aux (aux, _)) =
+  let codegen_def' ctx (CDef_aux (aux, _)) =
     match aux with
-    | CDEF_register (id, ctyp, _) ->
+    | CDef_register (id, ctyp, _) ->
         let definition =
           VariableDefinition
             (string (Printf.sprintf "// register %s" (string_of_name id))
@@ -2224,7 +2224,7 @@ module Codegen (Config : CODEGEN_CONFIG) = struct
               );
             definition;
           ]
-    | CDEF_val (id, _, arg_ctyps, ret_ctyp, _) ->
+    | CDef_val (id, _, arg_ctyps, ret_ctyp, _) ->
         if ctx_is_extern id ctx then []
         else if is_stack_ctyp ctx ret_ctyp then
           [
@@ -2244,7 +2244,7 @@ module Codegen (Config : CODEGEN_CONFIG) = struct
                  )
               );
           ]
-    | CDEF_fundef (id, ret_arg, args, instrs) ->
+    | CDef_fundef (id, ret_arg, args, instrs) ->
         (* We can skip the Sail version of a function if we're going to call the
           externally defined version anyway. *)
         if ctx_is_extern id ctx then []
@@ -2300,8 +2300,8 @@ module Codegen (Config : CODEGEN_CONFIG) = struct
               );
           ]
         )
-    | CDEF_type ctype_def -> codegen_type_def ctx ctype_def
-    | CDEF_startup (id, instrs) ->
+    | CDef_type ctype_def -> codegen_type_def ctx ctype_def
+    | CDef_startup (id, instrs) ->
         let startup_header =
           string (Printf.sprintf "void %sstartup_%s(void)" (class_impl_prefix ()) (sgen_function_id id))
         in
@@ -2314,7 +2314,7 @@ module Codegen (Config : CODEGEN_CONFIG) = struct
         let startup_decl = string (Printf.sprintf "void startup_%s(void);" (sgen_function_id id)) in
         if Config.cpp then [FunctionDefinition startup_impl; FunctionDeclaration startup_decl]
         else [FunctionDefinition startup_impl]
-    | CDEF_finish (id, instrs) ->
+    | CDef_finish (id, instrs) ->
         let finish_header =
           string (Printf.sprintf "void %sfinish_%s(void)" (class_impl_prefix ()) (sgen_function_id id))
         in
@@ -2327,7 +2327,7 @@ module Codegen (Config : CODEGEN_CONFIG) = struct
         let finish_decl = string (Printf.sprintf "void finish_%s(void);" (sgen_function_id id)) in
         if Config.cpp then [FunctionDefinition finish_impl; FunctionDeclaration finish_decl]
         else [FunctionDefinition finish_impl]
-    | CDEF_let (number, bindings, instrs) ->
+    | CDef_let (number, bindings, instrs) ->
         let setup = List.concat (List.map (fun (id, ctyp) -> [idecl (id_loc id) ctyp (name id)]) bindings) in
         let cleanup = List.concat (List.map (fun (id, ctyp) -> [iclear ~loc:(id_loc id) ctyp (name id)]) bindings) in
         let variable_defs =
@@ -2356,7 +2356,7 @@ module Codegen (Config : CODEGEN_CONFIG) = struct
         in
 
         [VariableDefinition variable_defs; FunctionDeclaration function_decls; FunctionDefinition impl]
-    | CDEF_pragma _ -> []
+    | CDef_pragma _ -> []
 
   (** As we generate C we need to generate specialized version of tuple, list, and vector type. These must be generated
       in the correct order. The ctyp_dependencies function generates a list of c_gen_typs in the order they must be
@@ -2429,18 +2429,18 @@ module Codegen (Config : CODEGEN_CONFIG) = struct
       List.concat (List.map (codegen_ctg ctx) deps) @ codegen_def' ctx def
     )
 
-  let is_cdef_startup = function CDEF_aux (CDEF_startup _, _) -> true | _ -> false
+  let is_cdef_startup = function CDef_aux (CDef_startup _, _) -> true | _ -> false
 
   let sgen_startup = function
-    | CDEF_aux (CDEF_startup (id, _), _) -> Printf.sprintf "  startup_%s();" (sgen_function_id id)
+    | CDef_aux (CDef_startup (id, _), _) -> Printf.sprintf "  startup_%s();" (sgen_function_id id)
     | _ -> assert false
 
   let sgen_instr id ctx instr = Document.to_string (codegen_instr id ctx instr)
 
-  let is_cdef_finish = function CDEF_aux (CDEF_startup _, _) -> true | _ -> false
+  let is_cdef_finish = function CDef_aux (CDef_startup _, _) -> true | _ -> false
 
   let sgen_finish = function
-    | CDEF_aux (CDEF_startup (id, _), _) -> Printf.sprintf "  finish_%s();" (sgen_function_id id)
+    | CDef_aux (CDef_startup (id, _), _) -> Printf.sprintf "  finish_%s();" (sgen_function_id id)
     | _ -> assert false
 
   let get_recursive_functions cdefs =
@@ -2461,7 +2461,7 @@ module Codegen (Config : CODEGEN_CONFIG) = struct
     Jibc.compile_ast ctx ast
 
   let rec c_ast_registers ~early = function
-    | CDEF_aux (CDEF_register (id, ctyp, instrs), def_annot) :: ast
+    | CDef_aux (CDef_register (id, ctyp, instrs), def_annot) :: ast
       when early = Option.is_some (get_def_attribute "early_init" def_annot) ->
         (id, ctyp, instrs) :: c_ast_registers ~early ast
     | _ :: ast -> c_ast_registers ~early ast
@@ -2470,7 +2470,7 @@ module Codegen (Config : CODEGEN_CONFIG) = struct
   let get_unit_tests cdefs =
     List.fold_left
       (fun ids -> function
-        | CDEF_aux (CDEF_val (id, _, _, _, _), def_annot) when Option.is_some (get_def_attribute "test" def_annot) ->
+        | CDef_aux (CDef_val (id, _, _, _, _), def_annot) when Option.is_some (get_def_attribute "test" def_annot) ->
             IdSet.add id ids
         | _ -> ids
         )
@@ -2776,12 +2776,12 @@ module Codegen (Config : CODEGEN_CONFIG) = struct
       let actual_main =
         let extra_pre =
           List.filter_map
-            (function CDEF_aux (CDEF_pragma ("c_in_main", arg), _) -> Some ("  " ^ arg) | _ -> None)
+            (function CDef_aux (CDef_pragma ("c_in_main", arg), _) -> Some ("  " ^ arg) | _ -> None)
             cdefs
         in
         let extra_post =
           List.filter_map
-            (function CDEF_aux (CDEF_pragma ("c_in_main_post", arg), _) -> Some ("  " ^ arg) | _ -> None)
+            (function CDef_aux (CDef_pragma ("c_in_main_post", arg), _) -> Some ("  " ^ arg) | _ -> None)
             cdefs
         in
         separate hardline

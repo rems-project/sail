@@ -268,12 +268,12 @@ module Extern_json : TOOL = struct
      synonym to its parameters and definition. *)
   let synonyms : (string, kid list * atyp) Hashtbl.t = Hashtbl.create 64
 
-  let rec collect_definitions (DEF_aux (aux, l)) =
+  let rec collect_definitions (Def_aux (aux, l)) =
     match aux with
-    | DEF_pragma ("target_set", Pragma_line (arg, _)) ->
+    | Def_pragma ("target_set", Pragma_line (arg, _)) ->
         let set, targets = Initial_check.parse_target_set l arg in
         Hashtbl.replace target_sets set targets
-    | DEF_type (TD_aux (TD_abbrev (id, TypQ_aux (typq, _), _, atyp), _)) ->
+    | Def_type (TD_aux (TD_abbrev (id, TypQ_aux (typq, _), _, atyp), _)) ->
         let params =
           match typq with
           | TypQ_no_forall -> []
@@ -283,7 +283,7 @@ module Extern_json : TOOL = struct
                 qis
         in
         Hashtbl.replace synonyms (string_of_id id) (params, atyp)
-    | DEF_private def | DEF_attribute (_, def) | DEF_doc (_, def) -> collect_definitions def
+    | Def_private def | Def_attribute (_, def) | Def_doc (_, def) -> collect_definitions def
     | _ -> ()
 
   let parens_if b s = if b then "(" ^ s ^ ")" else s
@@ -369,28 +369,28 @@ module Extern_json : TOOL = struct
   let externs_in_file file defs =
     let externs = ref [] in
     let conditions = ref [] in
-    let rec go (DEF_aux (aux, l)) =
+    let rec go (Def_aux (aux, l)) =
       match aux with
-      | DEF_val (VS_aux (VS_val_spec (typschm, id, Some ext), _)) ->
+      | Def_val (VS_aux (VS_val_spec (typschm, id, Some ext), _)) ->
           externs := json_of_extern ~file ~conditions:!conditions typschm id ext :: !externs
-      | DEF_pragma ("ifdef", Pragma_line (symbol, _)) ->
+      | Def_pragma ("ifdef", Pragma_line (symbol, _)) ->
           conditions := { test = Ifdef (String.trim symbol); in_else = false } :: !conditions
-      | DEF_pragma ("ifndef", Pragma_line (symbol, _)) ->
+      | Def_pragma ("ifndef", Pragma_line (symbol, _)) ->
           conditions := { test = Ifndef (String.trim symbol); in_else = false } :: !conditions
-      | DEF_pragma ("iftarget", Pragma_line (targets, _)) ->
+      | Def_pragma ("iftarget", Pragma_line (targets, _)) ->
           conditions := { test = Iftarget (expand_targets targets); in_else = false } :: !conditions
-      | DEF_pragma ("else", _) -> (
+      | Def_pragma ("else", _) -> (
           match !conditions with
           | c :: cs -> conditions := { c with in_else = true } :: cs
           | [] -> raise (Reporting.err_general l "$else without matching $ifdef, $ifndef, or $iftarget")
         )
-      | DEF_pragma ("endif", _) -> (
+      | Def_pragma ("endif", _) -> (
           match !conditions with
           | _ :: cs -> conditions := cs
           | [] -> raise (Reporting.err_general l "$endif without matching $ifdef, $ifndef, or $iftarget")
         )
-      | DEF_outcome (_, defs) -> List.iter go defs
-      | DEF_private def | DEF_attribute (_, def) | DEF_doc (_, def) -> go def
+      | Def_outcome (_, defs) -> List.iter go defs
+      | Def_private def | Def_attribute (_, def) | Def_doc (_, def) -> go def
       | _ -> ()
     in
     List.iter go defs;

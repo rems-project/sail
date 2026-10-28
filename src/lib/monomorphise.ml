@@ -676,9 +676,9 @@ let split_defs target all_errors (splits : split_req list) env ast =
     in
     let sc_def d =
       match d with
-      | DEF_aux (DEF_type td, def_annot) ->
+      | Def_aux (Def_type td, def_annot) ->
           let refinements, td' = sc_type_def td in
-          (refinements, DEF_aux (DEF_type td', def_annot))
+          (refinements, Def_aux (Def_type td', def_annot))
       | _ -> ([], d)
     in
     let refinements, defs' = List.split (List.map sc_def defs) in
@@ -1229,19 +1229,19 @@ let split_defs target all_errors (splits : split_req list) env ast =
       | _ -> [sd]
     in
     let num_defs = List.length defs in
-    let map_def idx (DEF_aux (aux, def_annot) as def) =
+    let map_def idx (Def_aux (aux, def_annot) as def) =
       Util.progress "Monomorphising " (string_of_int idx ^ "/" ^ string_of_int num_defs) idx num_defs;
       match aux with
-      | DEF_type _ | DEF_constraint _ | DEF_val _ | DEF_default _ | DEF_register _ | DEF_overload _ | DEF_fixity _
-      | DEF_pragma _ | DEF_internal_mutrec _ | DEF_outcome _ | DEF_impl _ | DEF_instantiation _ ->
+      | Def_type _ | Def_constraint _ | Def_val _ | Def_default _ | Def_register _ | Def_overload _ | Def_fixity _
+      | Def_pragma _ | Def_internal_mutrec _ | Def_outcome _ | Def_impl _ | Def_instantiation _ ->
           [def]
-      | DEF_fundef fd -> [DEF_aux (DEF_fundef (map_fundef fd), def_annot)]
-      | DEF_let (pat, exp) ->
+      | Def_fundef fd -> [Def_aux (Def_fundef (map_fundef fd), def_annot)]
+      | Def_let (pat, exp) ->
           let pat, exp = map_letbind pat exp in
-          [DEF_aux (DEF_let (pat, exp), def_annot)]
-      | DEF_scattered sd -> List.map (fun x -> DEF_aux (DEF_scattered x, def_annot)) (map_scattered_def sd)
-      | DEF_measure (id, pat, exp) -> [DEF_aux (DEF_measure (id, pat, map_exp exp), def_annot)]
-      | DEF_mapdef _ | DEF_loop_measures _ ->
+          [Def_aux (Def_let (pat, exp), def_annot)]
+      | Def_scattered sd -> List.map (fun x -> Def_aux (Def_scattered x, def_annot)) (map_scattered_def sd)
+      | Def_measure (id, pat, exp) -> [Def_aux (Def_measure (id, pat, map_exp exp), def_annot)]
+      | Def_mapdef _ | Def_loop_measures _ ->
           Reporting.unreachable (def_loc def) __POS__
             "Found definition that should have been rewritten previously during monomorphisation"
     in
@@ -1480,7 +1480,7 @@ module AtomToItself = struct
       | exception Not_found -> Bindings.add id (parameters_to_rewrite, new_nexps) fsizes
     in
     let sizes_def fsizes = function
-      | DEF_aux (DEF_fundef (FD_aux (FD_function (_, _, funcls), _)), _) -> List.fold_left sizes_funcl fsizes funcls
+      | Def_aux (Def_fundef (FD_aux (FD_function (_, _, funcls), _)), _) -> List.fold_left sizes_funcl fsizes funcls
       | _ -> fsizes
     in
     let fn_sizes = List.fold_left sizes_def Bindings.empty ast.defs in
@@ -1562,10 +1562,10 @@ module AtomToItself = struct
       in
       Bindings.fold update_val_spec fn_sizes type_env
     in
-    let rewrite_def (DEF_aux (aux, def_annot)) =
+    let rewrite_def (Def_aux (aux, def_annot)) =
       let aux =
         match aux with
-        | DEF_fundef (FD_aux (FD_function (recopt, tannopt, funcls), (l, _))) ->
+        | Def_fundef (FD_aux (FD_function (recopt, tannopt, funcls), (l, _))) ->
             let funcls = List.map rewrite_funcl funcls in
             (* Check whether we have ended up with itself('n) expressions where 'n
                is not constant.  If so, try and see if constant propagation can
@@ -1595,19 +1595,19 @@ module AtomToItself = struct
             in
             let funcls = List.map check_funcl funcls in
             (* TODO rewrite tannopt? *)
-            DEF_fundef (FD_aux (FD_function (recopt, tannopt, funcls), (l, empty_tannot)))
-        | DEF_let (pat, exp) -> DEF_let (pat, rewrite_exp exp)
-        | DEF_val (VS_aux (VS_val_spec (typschm, id, extern), (l, annot))) ->
+            Def_fundef (FD_aux (FD_function (recopt, tannopt, funcls), (l, empty_tannot)))
+        | Def_let (pat, exp) -> Def_let (pat, rewrite_exp exp)
+        | Def_val (VS_aux (VS_val_spec (typschm, id, extern), (l, annot))) ->
             let typschm =
               match typschm with
               | TypSchm_aux (TypSchm_ts (tq, typ), l) -> TypSchm_aux (TypSchm_ts (tq, replace_funtype id typ), l)
             in
-            DEF_val (VS_aux (VS_val_spec (typschm, id, extern), (l, annot)))
-        | DEF_register (DEC_aux (DEC_reg (typ, id, Some exp), a)) ->
-            DEF_register (DEC_aux (DEC_reg (typ, id, Some (rewrite_exp exp)), a))
+            Def_val (VS_aux (VS_val_spec (typschm, id, extern), (l, annot)))
+        | Def_register (DEC_aux (DEC_reg (typ, id, Some exp), a)) ->
+            Def_register (DEC_aux (DEC_reg (typ, id, Some (rewrite_exp exp)), a))
         | _ -> aux
       in
-      DEF_aux (aux, def_annot)
+      Def_aux (aux, def_annot)
     in
     (*
   Bindings.iter (fun id args ->
@@ -2831,11 +2831,11 @@ module Analysis = struct
     let _ = if debug > 2 then print_result r else () in
     r
 
-  let analyse_def debug effect_info env globals (DEF_aux (aux, _)) =
+  let analyse_def debug effect_info env globals (Def_aux (aux, _)) =
     match aux with
-    | DEF_fundef (FD_aux (FD_function (_, _, funcls), _)) ->
+    | Def_fundef (FD_aux (FD_function (_, _, funcls), _)) ->
         (globals, List.fold_left (fun r f -> merge r (analyse_funcl debug effect_info env globals f)) empty funcls)
-    | DEF_let (P_aux ((P_id id | P_typ (_, P_aux (P_id id, _))), _), exp) ->
+    | Def_let (P_aux ((P_id id | P_typ (_, P_aux (P_id id, _))), _), exp) ->
         (Bindings.add id (Constant_fold.is_constant exp) globals, empty)
     | _ -> (globals, empty)
 
@@ -2853,7 +2853,7 @@ module Analysis = struct
     let total_defs = List.length ast.defs in
     let def (idx, globals, r) d =
       ( match d with
-      | DEF_aux (DEF_fundef fd, _) -> Util.progress "Analysing " (string_of_id (id_of_fundef fd)) idx total_defs
+      | Def_aux (Def_fundef fd, _) -> Util.progress "Analysing " (string_of_id (id_of_fundef fd)) idx total_defs
       | _ -> ()
       );
       let globals, r' = analyse_def debug effect_info env globals d in
@@ -2959,9 +2959,9 @@ let add_extra_splits extras defs =
     (FCL_aux (FCL_funcl (id, Pat_aux (pexp, peannot)), (def_annot, annot)), splits)
   in
   let add_to_def = function
-    | DEF_aux (DEF_fundef (FD_aux (FD_function (re, ta, funcls), annot)), def_annot) ->
+    | Def_aux (Def_fundef (FD_aux (FD_function (re, ta, funcls), annot)), def_annot) ->
         let funcls, splits = List.split (List.map add_to_funcl funcls) in
-        (DEF_aux (DEF_fundef (FD_aux (FD_function (re, ta, funcls), annot)), def_annot), List.concat splits)
+        (Def_aux (Def_fundef (FD_aux (FD_function (re, ta, funcls), annot)), def_annot), List.concat splits)
     | d -> (d, [])
   in
   let defs, splits = List.split (List.map add_to_def defs) in
@@ -4263,9 +4263,9 @@ module BitvectorSizeCasts = struct
       FCL_aux (FCL_funcl (id, pexp), fcl_ann)
     in
     let rewrite_def idx = function
-      | DEF_aux (DEF_fundef (FD_aux (FD_function (r, t, fcls), fd_ann) as fd), def_annot) ->
+      | Def_aux (Def_fundef (FD_aux (FD_function (r, t, fcls), fd_ann) as fd), def_annot) ->
           Util.progress "Adding casts " (string_of_id (id_of_fundef fd)) idx (List.length defs);
-          DEF_aux (DEF_fundef (FD_aux (FD_function (r, t, List.map rewrite_funcl fcls), fd_ann)), def_annot)
+          Def_aux (Def_fundef (FD_aux (FD_function (r, t, List.map rewrite_funcl fcls), fd_ann)), def_annot)
       | d -> d
     in
     specs_required := IdSet.empty;
@@ -4487,19 +4487,19 @@ module ToplevelNexpRewrites = struct
     in
     let rewrite_def spec_map def =
       match def with
-      | DEF_aux (DEF_val vs, def_annot) -> (
+      | Def_aux (Def_val vs, def_annot) -> (
           match rewrite_valspec vs with
           | None -> (spec_map, def)
-          | Some (id, nexp_map, vs) -> (Bindings.add id nexp_map spec_map, DEF_aux (DEF_val vs, def_annot))
+          | Some (id, nexp_map, vs) -> (Bindings.add id nexp_map spec_map, Def_aux (Def_val vs, def_annot))
         )
-      | DEF_aux (DEF_fundef (FD_aux (FD_function (recopt, _, funcls), ann)), def_annot) ->
+      | Def_aux (Def_fundef (FD_aux (FD_function (recopt, _, funcls), ann)), def_annot) ->
           (* Type annotations on function definitions will have been turned into
              valspecs by type checking, so it should be safe to drop them rather
              than updating them. *)
           let tann = Typ_annot_opt_aux (Typ_annot_opt_none, Generated Unknown) in
           ( spec_map,
-            DEF_aux
-              ( DEF_fundef (FD_aux (FD_function (recopt, tann, List.map (rewrite_funcl spec_map) funcls), ann)),
+            Def_aux
+              ( Def_fundef (FD_aux (FD_function (recopt, tann, List.map (rewrite_funcl spec_map) funcls), ann)),
                 def_annot
               )
           )
@@ -4519,7 +4519,7 @@ module ToplevelNexpRewrites = struct
   let rewrite_complete_record_params env ast =
     let lift_params (additions_map, tl) def =
       match def with
-      | DEF_aux (DEF_type (TD_aux (TD_record (id, qs, fields, semi), annot)), def_annot) as def -> (
+      | Def_aux (Def_type (TD_aux (TD_record (id, qs, fields, semi), annot)), def_annot) as def -> (
           (* TODO: replace with a local environment *)
           let env = Env.add_typquant def_annot.loc qs env in
           let nexp_map, fields' =
@@ -4544,7 +4544,7 @@ module ToplevelNexpRewrites = struct
               let tyqs' = qs @ new_vars @ new_constraints in
               let additions_map' = Bindings.add id (qs, nexp_map) additions_map in
               ( additions_map',
-                DEF_aux (DEF_type (TD_aux (TD_record (id, tyqs', fields', semi), annot)), def_annot) :: tl
+                Def_aux (Def_type (TD_aux (TD_record (id, tyqs', fields', semi), annot)), def_annot) :: tl
               )
         )
       | def -> (additions_map, def :: tl)
@@ -4616,15 +4616,15 @@ module ToplevelNexpRewrites = struct
       | TD_bitfield _ -> assert false (* Processed before re-writing *)
     in
     let rw_register (DEC_aux (DEC_reg (typ, id, init), annot)) = DEC_aux (DEC_reg (expand_type typ, id, init), annot) in
-    let rw_def rws (DEF_aux (aux, def_annot)) =
+    let rw_def rws (Def_aux (aux, def_annot)) =
       let aux' =
         match aux with
-        | DEF_val vs -> DEF_val (rw_spec vs)
-        | DEF_type td -> DEF_type (rw_typedef td)
-        | DEF_register reg -> DEF_register (rw_register reg)
+        | Def_val vs -> Def_val (rw_spec vs)
+        | Def_type td -> Def_type (rw_typedef td)
+        | Def_register reg -> Def_register (rw_register reg)
         | def -> def
       in
-      rewrite_def rws (DEF_aux (aux', def_annot))
+      rewrite_def rws (Def_aux (aux', def_annot))
     in
     rewrite_ast_base
       {

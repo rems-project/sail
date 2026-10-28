@@ -4722,12 +4722,12 @@ let check_letdef orig_env def_annot pat bind =
       Env.wf_typ ~at:def_annot.loc orig_env typ_annot;
       let checked_bind = crule check_exp orig_env bind typ_annot in
       let tpat, env = bind_pat_no_guard orig_env pat typ_annot in
-      ([DEF_aux (DEF_let (tpat, checked_bind), def_annot)], Env.add_toplevel_lets (pat_ids tpat) env)
+      ([Def_aux (Def_let (tpat, checked_bind), def_annot)], Env.add_toplevel_lets (pat_ids tpat) env)
   | _ ->
       check_duplicate_letbinding def_annot.loc pat orig_env;
       let inferred_bind = irule infer_exp orig_env bind in
       let tpat, env = bind_pat_no_guard orig_env pat (typ_of inferred_bind) in
-      ([DEF_aux (DEF_let (tpat, inferred_bind), def_annot)], Env.add_toplevel_lets (pat_ids tpat) env)
+      ([Def_aux (Def_let (tpat, inferred_bind), def_annot)], Env.add_toplevel_lets (pat_ids tpat) env)
 
 let bind_funcl_arg_typ l env typ =
   match typ with
@@ -4819,8 +4819,8 @@ let infer_funtyp l env tannotopt funcls =
 
 (* This is used for functions and mappings that do not have an explicit type signature using val *)
 let synthesize_val_spec env id typq typ def_annot =
-  DEF_aux
-    ( DEF_val
+  Def_aux
+    ( Def_val
         (VS_aux
            ( VS_val_spec (TypSchm_aux (TypSchm_ts (typq, typ), Parse_ast.Unknown), id, None),
              (Parse_ast.Unknown, mk_tannot (Env.add_typquant (id_loc id) typq env) typ)
@@ -4857,7 +4857,7 @@ let check_termination_measure_decl env def_annot (id, pat, exp) =
   in
   let env = Env.add_typquant l quant env in
   let tpat, texp = check_termination_measure env arg_typs pat exp in
-  DEF_aux (DEF_measure (id, tpat, texp), def_annot)
+  Def_aux (Def_measure (id, tpat, texp), def_annot)
 
 let check_funcls_complete ?global_env ?(allow_redundant = false) l env funcls typ =
   let typ_arg, _, env = bind_funcl_arg_typ l env typ in
@@ -4994,7 +4994,7 @@ let check_fundef_lazy env def_annot (FD_aux (FD_function (recopt, tannot_opt, fu
          else check_funcls_complete l funcl_env funcls typ
        in
        let def_annot = fix_body_visibility (update_attr def_annot) |> remove_def_attribute "test" in
-       DEF_aux (DEF_fundef (FD_aux (FD_function (recopt, empty_tannot_opt, funcls), (l, empty_tannot))), def_annot)
+       Def_aux (Def_fundef (FD_aux (FD_function (recopt, empty_tannot_opt, funcls), (l, empty_tannot))), def_annot)
       )
   in
   let env = Env.define_val_spec id env in
@@ -5046,14 +5046,14 @@ let check_mapdef env def_annot (MD_aux (MD_mapping (id, tannot_opt, mapcls), (l,
   let mapcls = List.map (fun mapcl -> check_mapcl mapcl_env mapcl typ) mapcls in
   let def_annot = fix_body_visibility def_annot in
   let env = Env.define_val_spec id env in
-  ( vs_def @ [DEF_aux (DEF_mapdef (MD_aux (MD_mapping (id, empty_tannot_opt, mapcls), (l, empty_tannot))), def_annot)],
+  ( vs_def @ [Def_aux (Def_mapdef (MD_aux (MD_mapping (id, empty_tannot_opt, mapcls), (l, empty_tannot))), def_annot)],
     env
   )
 
 (* Checking a val spec simply adds the type as a binding in the context. *)
 let check_val_spec env def_annot (VS_aux (vs, (l, _))) =
   let annotate vs typq typ =
-    DEF_aux (DEF_val (VS_aux (vs, (l, mk_tannot (Env.add_typquant l typq env) typ))), def_annot)
+    Def_aux (Def_val (VS_aux (vs, (l, mk_tannot (Env.add_typquant l typq env) typ))), def_annot)
   in
   let vs, id, typq, typ, env =
     match vs with
@@ -5074,7 +5074,7 @@ let check_val_spec env def_annot (VS_aux (vs, (l, _))) =
   ([annotate vs typq typ], Env.add_val_spec id (typq, typ) env)
 
 let check_default env def_annot (DT_aux (DT_order order, l)) =
-  ([DEF_aux (DEF_default (DT_aux (DT_order order, l)), def_annot)], Env.set_default_order order env)
+  ([Def_aux (Def_default (DT_aux (DT_order order, l)), def_annot)], Env.set_default_order order env)
 
 let kinded_id_arg kind_id =
   let typ_arg l arg = A_aux (arg, l) in
@@ -5148,7 +5148,7 @@ let check_global_constraint env def_annot nc =
   let env = Env.add_constraint ~global:true nc env in
   if prove __POS__ env nc_false then
     typ_error def_annot.loc "Global constraint appears inconsistent with previous global constraints";
-  ([DEF_aux (DEF_constraint nc, def_annot)], env)
+  ([Def_aux (Def_constraint nc, def_annot)], env)
 
 let undefined_skip l = Some (AD_aux (AD_string "skip", gen_loc l))
 let undefined_forbid l = Some (AD_aux (AD_string "forbid", gen_loc l))
@@ -5167,20 +5167,20 @@ let rec check_typedef : Env.t -> env def_annot -> uannot type_def -> typed_def l
           let env = Env.add_typquant l typq env in
           Env.wf_constraint ~at:a_l env nc
       );
-      ([DEF_aux (DEF_type (TD_aux (tdef, (l, empty_tannot))), def_annot)], Env.add_typ_synonym id typq typ_arg env)
+      ([Def_aux (Def_type (TD_aux (tdef, (l, empty_tannot))), def_annot)], Env.add_typ_synonym id typq typ_arg env)
   | TD_abstract (id, kind, key) -> (
       match unaux_kind kind with
       | K_int | K_bool ->
-          ([DEF_aux (DEF_type (TD_aux (tdef, (l, empty_tannot))), def_annot)], Env.add_abstract_typ id kind key env)
+          ([Def_aux (Def_type (TD_aux (tdef, (l, empty_tannot))), def_annot)], Env.add_abstract_typ id kind key env)
       | K_type -> raise (Reporting.err_general l "Abstract type must be either a boolean or integer type")
     )
   | TD_record (id, typq, fields, _) -> (
       let env = check_record l env def_annot id typq fields in
       match get_def_attribute "undefined_gen" def_annot with
       | Some (_, Some (AD_aux (AD_string "forbid", _))) ->
-          ([DEF_aux (DEF_type (TD_aux (tdef, (l, empty_tannot))), def_annot)], env)
+          ([Def_aux (Def_type (TD_aux (tdef, (l, empty_tannot))), def_annot)], env)
       | Some (_, Some (AD_aux (AD_string "skip", _))) ->
-          ([DEF_aux (DEF_type (TD_aux (tdef, (l, empty_tannot))), def_annot)], Env.allow_user_undefined id env)
+          ([Def_aux (Def_type (TD_aux (tdef, (l, empty_tannot))), def_annot)], Env.allow_user_undefined id env)
       | (Some (_, Some (AD_aux (AD_string "generate", _))) | None) as attr ->
           let field_env = Env.add_typquant l typq env in
           let field_env =
@@ -5195,7 +5195,7 @@ let rec check_typedef : Env.t -> env def_annot -> uannot type_def -> typed_def l
           if (not gen_undefined) && Option.is_none attr then (
             (* If we cannot generate an undefined value, and we weren't explicitly asked to *)
             let def_annot = add_def_attribute (gen_loc l) "undefined_gen" (undefined_forbid l) def_annot in
-            ([DEF_aux (DEF_type (TD_aux (tdef, (l, empty_tannot))), def_annot)], env)
+            ([Def_aux (Def_type (TD_aux (tdef, (l, empty_tannot))), def_annot)], env)
           )
           else if not gen_undefined then
             (* If we cannot generate an undefined value, but we were
@@ -5209,13 +5209,13 @@ let rec check_typedef : Env.t -> env def_annot -> uannot type_def -> typed_def l
                 def_annot |> remove_def_attribute "undefined_gen"
                 |> add_def_attribute (gen_loc l) "undefined_gen" (undefined_skip l)
               in
-              ( DEF_aux (DEF_type (TD_aux (tdef, (l, empty_tannot))), def_annot) :: undefined_defs,
+              ( Def_aux (Def_type (TD_aux (tdef, (l, empty_tannot))), def_annot) :: undefined_defs,
                 Env.allow_user_undefined id env
               )
             with
             | Type_error _ when Option.is_none attr ->
                 let def_annot = add_def_attribute (gen_loc l) "undefined_gen" (undefined_forbid l) def_annot in
-                ([DEF_aux (DEF_type (TD_aux (tdef, (l, empty_tannot))), def_annot)], env)
+                ([Def_aux (Def_type (TD_aux (tdef, (l, empty_tannot))), def_annot)], env)
             | Type_error _ -> typ_error l ("Cannot generate undefined function for struct " ^ string_of_id id)
           )
       | Some (attr_l, Some arg) ->
@@ -5233,7 +5233,7 @@ let rec check_typedef : Env.t -> env def_annot -> uannot type_def -> typed_def l
       let env =
         rec_env |> fun env -> List.fold_left (fun env tu -> check_type_union l non_rec_env env id typq tu) env arms
       in
-      ([DEF_aux (DEF_type (TD_aux (tdef, (l, empty_tannot))), def_annot)], env)
+      ([Def_aux (Def_type (TD_aux (tdef, (l, empty_tannot))), def_annot)], env)
   | TD_enum (id, members, _) -> (
       let ids = List.map fst members in
       let env = Env.add_enum id ids env in
@@ -5256,9 +5256,9 @@ let rec check_typedef : Env.t -> env def_annot -> uannot type_def -> typed_def l
       in
       match get_def_attribute "undefined_gen" def_annot with
       | Some (_, Some (AD_aux (AD_string "forbid", _))) ->
-          ([DEF_aux (DEF_type (TD_aux (tdef, (l, empty_tannot))), def_annot)] @ enum_vector, env)
+          ([Def_aux (Def_type (TD_aux (tdef, (l, empty_tannot))), def_annot)] @ enum_vector, env)
       | Some (_, Some (AD_aux (AD_string "skip", _))) ->
-          ( [DEF_aux (DEF_type (TD_aux (tdef, (l, empty_tannot))), def_annot)] @ enum_vector,
+          ( [Def_aux (Def_type (TD_aux (tdef, (l, empty_tannot))), def_annot)] @ enum_vector,
             Env.allow_user_undefined id env
           )
       | Some (_, Some (AD_aux (AD_string "generate", _))) | None ->
@@ -5268,7 +5268,7 @@ let rec check_typedef : Env.t -> env def_annot -> uannot type_def -> typed_def l
             def_annot |> remove_def_attribute "undefined_gen"
             |> add_def_attribute (gen_loc l) "undefined_gen" (undefined_skip l)
           in
-          ( (DEF_aux (DEF_type (TD_aux (tdef, (l, empty_tannot))), def_annot) :: undefined_defs) @ enum_vector,
+          ( (Def_aux (Def_type (TD_aux (tdef, (l, empty_tannot))), def_annot) :: undefined_defs) @ enum_vector,
             Env.allow_user_undefined id env
           )
       | Some (attr_l, Some arg) ->
@@ -5307,7 +5307,7 @@ let rec check_typedef : Env.t -> env def_annot -> uannot type_def -> typed_def l
             ranges;
           let def_annot = add_def_attribute l "bitfield" None def_annot in
           let defs =
-            DEF_aux (DEF_type (TD_aux (record_tdef, (l, empty_uannot))), strip_def_annot def_annot)
+            Def_aux (Def_type (TD_aux (record_tdef, (l, empty_uannot))), strip_def_annot def_annot)
             :: Bitfield.macro id size (Env.get_default_order env) ranges
           in
           let defs, env =
@@ -5317,7 +5317,7 @@ let rec check_typedef : Env.t -> env def_annot -> uannot type_def -> typed_def l
           in
           let env = Env.add_bitfield id typ ranges env in
           if !opt_no_bitfield_expansion then
-            ([DEF_aux (DEF_type (TD_aux (unexpanded, (l, empty_tannot))), def_annot)], env)
+            ([Def_aux (Def_type (TD_aux (unexpanded, (l, empty_tannot))), def_annot)], env)
           else (defs, env)
       | typ -> typ_error l ("Underlying bitfield type " ^ string_of_typ typ ^ " must be a constant-width bitvector")
     )
@@ -5326,30 +5326,30 @@ and check_scattered : Env.t -> env def_annot -> uannot scattered_def -> typed_de
  fun env def_annot (SD_aux (sdef, (l, uannot))) ->
   match sdef with
   | SD_function (id, tannot_opt) ->
-      ( [DEF_aux (DEF_scattered (SD_aux (SD_function (id, tannot_opt), (l, empty_tannot))), def_annot)],
+      ( [Def_aux (Def_scattered (SD_aux (SD_function (id, tannot_opt), (l, empty_tannot))), def_annot)],
         Env.add_scattered_id id (get_def_attributes def_annot) env
       )
   | SD_mapping (id, tannot_opt) ->
-      ( [DEF_aux (DEF_scattered (SD_aux (SD_mapping (id, tannot_opt), (l, empty_tannot))), def_annot)],
+      ( [Def_aux (Def_scattered (SD_aux (SD_mapping (id, tannot_opt), (l, empty_tannot))), def_annot)],
         Env.add_scattered_id id (get_def_attributes def_annot) env
       )
   | SD_end id -> ([], Env.end_scattered_id ~at:l id env)
   | SD_enum id ->
-      ( [DEF_aux (DEF_scattered (SD_aux (SD_enum id, (l, empty_tannot))), def_annot)],
+      ( [Def_aux (Def_scattered (SD_aux (SD_enum id, (l, empty_tannot))), def_annot)],
         Env.add_scattered_enum id (get_def_attributes def_annot) env
       )
   | SD_enumcl (id, member) ->
       Env.check_scattered_not_ended ~at:l ~kind:"enum" id env;
-      ( [DEF_aux (DEF_scattered (SD_aux (SD_enumcl (id, member), (l, empty_tannot))), def_annot)],
+      ( [Def_aux (Def_scattered (SD_aux (SD_enumcl (id, member), (l, empty_tannot))), def_annot)],
         Env.add_enum_clause id member env
       )
   | SD_variant (id, typq) ->
-      ( [DEF_aux (DEF_scattered (SD_aux (SD_variant (id, typq), (l, empty_tannot))), def_annot)],
+      ( [Def_aux (Def_scattered (SD_aux (SD_variant (id, typq), (l, empty_tannot))), def_annot)],
         Env.add_scattered_variant id typq env
       )
   | SD_unioncl (id, tu) -> (
       Env.check_scattered_not_ended ~at:l ~kind:"union" id env;
-      ( [DEF_aux (DEF_scattered (SD_aux (SD_unioncl (id, tu), (l, empty_tannot))), def_annot)],
+      ( [Def_aux (Def_scattered (SD_aux (SD_unioncl (id, tu), (l, empty_tannot))), def_annot)],
         let env = Env.add_variant_clause id tu env in
         let typq, _ = Env.get_variant id env in
         let definition_env = Env.get_scattered_variant_env id env in
@@ -5368,8 +5368,8 @@ and check_scattered : Env.t -> env def_annot -> uannot scattered_def -> typed_de
       let env = Env.set_scattered_variant_env ~variant_env:definition_env id env in
       let env = Env.add_record record_id typq fields env in
       ( [
-          DEF_aux
-            ( DEF_scattered (SD_aux (SD_internal_unioncl_record (id, record_id, typq, fields), (l, empty_tannot))),
+          Def_aux
+            ( Def_scattered (SD_aux (SD_internal_unioncl_record (id, record_id, typq, fields), (l, empty_tannot))),
               def_annot
             );
         ],
@@ -5380,7 +5380,7 @@ and check_scattered : Env.t -> env def_annot -> uannot scattered_def -> typed_de
       let typq, typ = Env.get_val_spec id env in
       let funcl_env = Env.add_typquant fcl_def_annot.loc typq env in
       let funcl = check_funcl funcl_env funcl typ in
-      ( [DEF_aux (DEF_scattered (SD_aux (SD_funcl funcl, (l, mk_tannot ~uannot funcl_env typ))), def_annot)],
+      ( [Def_aux (Def_scattered (SD_aux (SD_funcl funcl, (l, mk_tannot ~uannot funcl_env typ))), def_annot)],
         Env.add_scattered_id id (get_def_attributes def_annot) env
       )
   | SD_mapcl (id, mapcl) ->
@@ -5388,14 +5388,14 @@ and check_scattered : Env.t -> env def_annot -> uannot scattered_def -> typed_de
       let typq, typ = Env.get_val_spec id env in
       let mapcl_env = Env.add_typquant l typq env in
       let mapcl = check_mapcl mapcl_env mapcl typ in
-      ( [DEF_aux (DEF_scattered (SD_aux (SD_mapcl (id, mapcl), (l, empty_tannot))), def_annot)],
+      ( [Def_aux (Def_scattered (SD_aux (SD_mapcl (id, mapcl), (l, empty_tannot))), def_annot)],
         Env.add_scattered_id id (get_def_attributes def_annot) env
       )
 
 and check_outcome : Env.t -> outcome_spec -> untyped_def list -> outcome_spec * typed_def list * Env.t =
  fun env (OV_aux (OV_outcome (id, typschm, params), l)) defs ->
   let valid_outcome_def = function
-    | DEF_aux ((DEF_impl _ | DEF_val _), _) -> ()
+    | Def_aux ((Def_impl _ | Def_val _), _) -> ()
     | def -> typ_error (def_loc def) "Forbidden definition in outcome block"
   in
   typ_print (lazy (Util.("Check outcome " |> cyan |> clear) ^ string_of_id id ^ " : " ^ string_of_typschm typschm));
@@ -5411,7 +5411,7 @@ and check_outcome : Env.t -> outcome_spec -> untyped_def list -> outcome_spec * 
         let defs, local_env = check_defs local_env defs in
         let vals =
           List.filter_map
-            (function DEF_aux (DEF_val (VS_aux (VS_val_spec (_, id, _), _)), _) -> Some id | _ -> None)
+            (function Def_aux (Def_val (VS_aux (VS_val_spec (_, id, _), _)), _) -> Some id | _ -> None)
             defs
         in
         decr depth;
@@ -5433,7 +5433,7 @@ and check_impldef : Env.t -> env def_annot -> uannot funcl -> typed_def list * E
   match Env.get_outcome_typschm_opt env with
   | Some (quant, typ) ->
       let funcl_env = Env.add_typquant fcl_def_annot.loc quant env in
-      ([DEF_aux (DEF_impl (check_funcl funcl_env funcl typ), def_annot)], env)
+      ([Def_aux (Def_impl (check_funcl funcl_env funcl typ), def_annot)], env)
   | None -> typ_error fcl_def_annot.loc "Cannot declare an implementation outside of an outcome"
 
 and check_outcome_instantiation :
@@ -5543,45 +5543,45 @@ and check_outcome_instantiation :
     )
     fns;
 
-  ( [DEF_aux (DEF_instantiation (IN_aux (IN_id id, (l, mk_tannot env unit_typ)), substs), def_annot)],
+  ( [Def_aux (Def_instantiation (IN_aux (IN_id id, (l, mk_tannot env unit_typ)), substs), def_annot)],
     Env.add_val_spec id (typq, typ) env
   )
 
 and check_def : Env.t -> untyped_def -> typed_def list * Env.t =
- fun env (DEF_aux (aux, def_annot)) ->
+ fun env (Def_aux (aux, def_annot)) ->
   let def_annot = def_annot_map_env (fun _ -> env) def_annot in
   match aux with
-  | DEF_fixity (prec, n, op) -> ([DEF_aux (DEF_fixity (prec, n, op), def_annot)], env)
-  | DEF_type tdef -> check_typedef env def_annot tdef
-  | DEF_constraint nc -> check_global_constraint env def_annot nc
-  | DEF_fundef fdef -> check_fundef env def_annot fdef
-  | DEF_mapdef mdef -> check_mapdef env def_annot mdef
-  | DEF_impl funcl -> check_impldef env def_annot funcl
-  | DEF_internal_mutrec fdefs ->
+  | Def_fixity (prec, n, op) -> ([Def_aux (Def_fixity (prec, n, op), def_annot)], env)
+  | Def_type tdef -> check_typedef env def_annot tdef
+  | Def_constraint nc -> check_global_constraint env def_annot nc
+  | Def_fundef fdef -> check_fundef env def_annot fdef
+  | Def_mapdef mdef -> check_mapdef env def_annot mdef
+  | Def_impl funcl -> check_impldef env def_annot funcl
+  | Def_internal_mutrec fdefs ->
       let defs = List.concat_map (fun fdef -> fst (check_fundef env def_annot fdef)) fdefs in
       let split_fundef (defs, fdefs) def =
-        match def with DEF_aux (DEF_fundef fdef, _) -> (defs, fdefs @ [fdef]) | _ -> (defs @ [def], fdefs)
+        match def with Def_aux (Def_fundef fdef, _) -> (defs, fdefs @ [fdef]) | _ -> (defs @ [def], fdefs)
       in
       let defs, fdefs = List.fold_left split_fundef ([], []) defs in
-      (defs @ [DEF_aux (DEF_internal_mutrec fdefs, def_annot)], env)
-  | DEF_let (pat, exp) -> check_letdef env def_annot pat exp
-  | DEF_val vs -> check_val_spec env def_annot vs
-  | DEF_outcome (outcome, defs) ->
+      (defs @ [Def_aux (Def_internal_mutrec fdefs, def_annot)], env)
+  | Def_let (pat, exp) -> check_letdef env def_annot pat exp
+  | Def_val vs -> check_val_spec env def_annot vs
+  | Def_outcome (outcome, defs) ->
       let outcome, defs, env = check_outcome env outcome defs in
-      ([DEF_aux (DEF_outcome (outcome, defs), def_annot)], env)
-  | DEF_instantiation (ispec, substs) -> check_outcome_instantiation env def_annot ispec substs
-  | DEF_default default -> check_default env def_annot default
-  | DEF_overload (id, ids) -> ([DEF_aux (DEF_overload (id, ids), def_annot)], Env.add_overloads def_annot.loc id ids env)
-  | DEF_register (DEC_aux (DEC_reg (typ, id, None), (l, uannot)))
+      ([Def_aux (Def_outcome (outcome, defs), def_annot)], env)
+  | Def_instantiation (ispec, substs) -> check_outcome_instantiation env def_annot ispec substs
+  | Def_default default -> check_default env def_annot default
+  | Def_overload (id, ids) -> ([Def_aux (Def_overload (id, ids), def_annot)], Env.add_overloads def_annot.loc id ids env)
+  | Def_register (DEC_aux (DEC_reg (typ, id, None), (l, uannot)))
     when Option.is_some (get_def_attribute "initialized_elsewhere" def_annot) ->
       let env = Env.add_register id typ env in
       ( [
-          DEF_aux
-            (DEF_register (DEC_aux (DEC_reg (typ, id, None), (l, mk_expected_tannot env typ (Some typ)))), def_annot);
+          Def_aux
+            (Def_register (DEC_aux (DEC_reg (typ, id, None), (l, mk_expected_tannot env typ (Some typ)))), def_annot);
         ],
         env
       )
-  | DEF_register (DEC_aux (DEC_reg (typ, id, None), (l, uannot))) -> (
+  | Def_register (DEC_aux (DEC_reg (typ, id, None), (l, uannot))) -> (
       Env.wf_typ ~at:l env typ;
       match typ with
       | Typ_aux (Typ_app (Id_aux (Id "option", _), [_]), _) ->
@@ -5589,54 +5589,54 @@ and check_def : Env.t -> untyped_def -> typed_def list * Env.t =
             "Registers of type option should explicitly be given a default value";
           let none_ctor = locate (fun _ -> gen_loc l) (mk_exp (E_app (mk_id "None", [mk_lit_exp L_unit]))) in
           check_def env
-            (DEF_aux (DEF_register (DEC_aux (DEC_reg (typ, id, Some none_ctor), (l, uannot))), strip_def_annot def_annot)
+            (Def_aux (Def_register (DEC_aux (DEC_reg (typ, id, Some none_ctor), (l, uannot))), strip_def_annot def_annot)
             )
       | _ ->
           if not (can_be_undefined ~at:l env typ) then
             typ_error l ("Must provide a default register value for a register of type " ^ string_of_typ typ);
           let env = Env.add_register id typ env in
           ( [
-              DEF_aux
-                (DEF_register (DEC_aux (DEC_reg (typ, id, None), (l, mk_expected_tannot env typ (Some typ)))), def_annot);
+              Def_aux
+                (Def_register (DEC_aux (DEC_reg (typ, id, None), (l, mk_expected_tannot env typ (Some typ)))), def_annot);
             ],
             env
           )
     )
-  | DEF_register (DEC_aux (DEC_reg (typ, id, Some exp), (l, _))) ->
+  | Def_register (DEC_aux (DEC_reg (typ, id, Some exp), (l, _))) ->
       typ_print (lazy "WF reg");
       Env.wf_typ ~at:l env typ;
       let checked_exp = crule check_exp env exp typ in
       let env = Env.add_register id typ env in
       ( [
-          DEF_aux
-            ( DEF_register (DEC_aux (DEC_reg (typ, id, Some checked_exp), (l, mk_expected_tannot env typ (Some typ)))),
+          Def_aux
+            ( Def_register (DEC_aux (DEC_reg (typ, id, Some checked_exp), (l, mk_expected_tannot env typ (Some typ)))),
               def_annot
             );
         ],
         env
       )
-  | DEF_pragma ("project#", Pragma_line (arg, l)) ->
+  | Def_pragma ("project#", Pragma_line (arg, l)) ->
       let start_p = match Reporting.simp_loc l with Some (p, _) -> Some p | None -> None in
       let proj_defs = Initial_check.parse_project_from_string ?inline:start_p arg in
       let proj = Project.initialize_project_structure ~variables:(ref Util.StringMap.empty) proj_defs in
       typ_print (lazy "set modules");
       ([], Env.set_modules proj env)
-  | DEF_pragma ("start_module#", Pragma_line (arg, l)) ->
+  | Def_pragma ("start_module#", Pragma_line (arg, l)) ->
       let mod_id = Env.get_module_id ~at:l env arg in
       typ_print (lazy (Printf.sprintf "module start %d '%s'" (Project.ModId.to_int mod_id) arg));
-      ([DEF_aux (DEF_pragma ("started_module#", Pragma_line (arg, l)), def_annot)], Env.start_module ~at:l mod_id env)
-  | DEF_pragma ("end_module#", Pragma_line (arg, l)) ->
-      ([DEF_aux (DEF_pragma ("ended_module#", Pragma_line (arg, l)), def_annot)], Env.end_module env)
-  | DEF_pragma (pragma, cmd) -> ([DEF_aux (DEF_pragma (pragma, cmd), def_annot)], env)
-  | DEF_scattered sdef -> check_scattered env def_annot sdef
-  | DEF_measure (id, pat, exp) -> ([check_termination_measure_decl env def_annot (id, pat, exp)], env)
-  | DEF_loop_measures (id, measures) ->
+      ([Def_aux (Def_pragma ("started_module#", Pragma_line (arg, l)), def_annot)], Env.start_module ~at:l mod_id env)
+  | Def_pragma ("end_module#", Pragma_line (arg, l)) ->
+      ([Def_aux (Def_pragma ("ended_module#", Pragma_line (arg, l)), def_annot)], Env.end_module env)
+  | Def_pragma (pragma, cmd) -> ([Def_aux (Def_pragma (pragma, cmd), def_annot)], env)
+  | Def_scattered sdef -> check_scattered env def_annot sdef
+  | Def_measure (id, pat, exp) -> ([check_termination_measure_decl env def_annot (id, pat, exp)], env)
+  | Def_loop_measures (id, measures) ->
       (* These will be checked during the move_loop_measures rewrite *)
-      ([DEF_aux (DEF_loop_measures (id, measures), def_annot)], env)
+      ([Def_aux (Def_loop_measures (id, measures), def_annot)], env)
 
 and check_def_lazy env def =
   match def with
-  | DEF_aux (DEF_fundef fdef, def_annot) ->
+  | Def_aux (Def_fundef fdef, def_annot) ->
       let def_annot = def_annot_map_env (fun _ -> env) def_annot in
       let vs_def, id, check_body, env = check_fundef_lazy env def_annot fdef in
       (List.map (fun def -> Strict_def def) vs_def @ [Lazy_fundef (id, check_body)], env)
@@ -5650,7 +5650,7 @@ and check_defs_progress :
   let rec aux n total acc env defs =
     match defs with
     | [] -> (List.rev acc, env)
-    | (DEF_aux (_, def_annot) as def) :: defs ->
+    | (Def_aux (_, def_annot) as def) :: defs ->
         Util.progress "Type check " (string_of_int n ^ "/" ^ string_of_int total) n total;
         let env, restore =
           if Option.is_some (get_def_attribute "global" def_annot) then (

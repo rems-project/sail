@@ -497,7 +497,7 @@ let rewrite_exp tgt global_env env_update types json (aux, annot) =
   | _ -> E_aux (aux, annot)
 
 let rec abstract_schema config_ids types = function
-  | DEF_aux (DEF_constraint nc, def_annot) :: defs ->
+  | Def_aux (Def_constraint nc, def_annot) :: defs ->
       let nc_ids = ids_of_constraint nc in
       Bindings.iter
         (fun id (_, json_key) -> if IdSet.mem id nc_ids then ConfigTypes.insert_abstract_constraint json_key nc types)

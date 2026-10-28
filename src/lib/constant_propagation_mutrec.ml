@@ -221,7 +221,7 @@ let rewrite_ast target effect_info env ({ defs; _ } as ast) =
   let effect_info = ref effect_info in
   let rec rewrite acc = function
     | [] -> List.rev acc
-    | DEF_aux (DEF_internal_mutrec mutrecs, def_annot) :: ds ->
+    | Def_aux (Def_internal_mutrec mutrecs, def_annot) :: ds ->
         let mutrec_ids = IdSet.of_list (List.map id_of_fundef mutrecs) in
         let valspecs = ref ([] : untyped_def list) in
         let fundefs = ref ([] : untyped_def list) in
@@ -252,7 +252,7 @@ let rewrite_ast target effect_info env ({ defs; _ } as ast) =
               valspecs := valspec :: !valspecs;
               let tannot_opt = Typ_annot_opt_aux (Typ_annot_opt_none, l) in
               let fundef = FD_aux (FD_function (rec_opt, tannot_opt, List.map const_prop_funcl fcls), no_annot) in
-              fundefs := DEF_aux (DEF_fundef fundef, mk_def_annot l ()) :: !fundefs
+              fundefs := Def_aux (Def_fundef fundef, mk_def_annot l ()) :: !fundefs
             )
             else ();
             E_aux (E_app (id', args'), (l, annot))
@@ -275,11 +275,11 @@ let rewrite_ast target effect_info env ({ defs; _ } as ast) =
           let fcls' = List.map rewrite_funcl fcls in
           FD_aux (FD_function (ropt, topt, fcls'), a)
         in
-        let mutrecs' = List.map (fun fd -> DEF_aux (DEF_fundef (rewrite_fundef fd), def_annot)) mutrecs in
+        let mutrecs' = List.map (fun fd -> Def_aux (Def_fundef (rewrite_fundef fd), def_annot)) mutrecs in
         let fdefs = fst (check_defs env (!valspecs @ !fundefs)) in
         rewrite (List.rev (mutrecs' @ fdefs) @ acc) ds
     | d :: ds -> rewrite (d :: acc) ds
   in
-  let has_mutrecs = List.exists (function DEF_aux (DEF_internal_mutrec _, _) -> true | _ -> false) ast.defs in
+  let has_mutrecs = List.exists (function Def_aux (Def_internal_mutrec _, _) -> true | _ -> false) ast.defs in
   let new_ast = if has_mutrecs then Callgraph.top_sort_defs { ast with defs = rewrite [] defs } else ast in
   (new_ast, !effect_info, env)

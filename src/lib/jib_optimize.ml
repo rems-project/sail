@@ -158,12 +158,12 @@ let flatten_instrs instrs =
   Queue.to_seq flat |> List.of_seq
 
 let flatten_cdef_aux = function
-  | CDEF_fundef (function_id, heap_return, args, body) ->
+  | CDef_fundef (function_id, heap_return, args, body) ->
       flat_counter := 0;
-      CDEF_fundef (function_id, heap_return, args, flatten_instrs body)
-  | CDEF_let (n, bindings, instrs) ->
+      CDef_fundef (function_id, heap_return, args, flatten_instrs body)
+  | CDef_let (n, bindings, instrs) ->
       flat_counter := 0;
-      CDEF_let (n, bindings, flatten_instrs instrs)
+      CDef_let (n, bindings, flatten_instrs instrs)
   | cdef -> cdef
 
 let rec instr_nesting_depth (I_aux (aux, _)) =
@@ -174,22 +174,22 @@ let rec instr_nesting_depth (I_aux (aux, _)) =
 
 and instrs_nesting_depth is = List.fold_left (fun depth i -> max depth (instr_nesting_depth i)) 0 is
 
-let cdef_nesting_depth (CDEF_aux (aux, _)) =
+let cdef_nesting_depth (CDef_aux (aux, _)) =
   match aux with
-  | CDEF_register (_, _, instrs)
-  | CDEF_let (_, _, instrs)
-  | CDEF_startup (_, instrs)
-  | CDEF_finish (_, instrs)
-  | CDEF_fundef (_, _, _, instrs) ->
+  | CDef_register (_, _, instrs)
+  | CDef_let (_, _, instrs)
+  | CDef_startup (_, instrs)
+  | CDef_finish (_, instrs)
+  | CDef_fundef (_, _, _, instrs) ->
       instrs_nesting_depth instrs
-  | CDEF_type _ | CDEF_pragma _ | CDEF_val _ -> 0
+  | CDef_type _ | CDef_pragma _ | CDef_val _ -> 0
 
-let flatten_cdef ?max_depth (CDEF_aux (aux, def_annot) as cdef) =
+let flatten_cdef ?max_depth (CDef_aux (aux, def_annot) as cdef) =
   match max_depth with
-  | None -> CDEF_aux (flatten_cdef_aux aux, def_annot)
+  | None -> CDef_aux (flatten_cdef_aux aux, def_annot)
   | Some n ->
       let depth = cdef_nesting_depth cdef in
-      if depth > n then CDEF_aux (flatten_cdef_aux aux, def_annot) else cdef
+      if depth > n then CDef_aux (flatten_cdef_aux aux, def_annot) else cdef
 
 let unique_per_function_ids cdefs =
   let unique_id i = function
@@ -210,16 +210,16 @@ let unique_per_function_ids cdefs =
     | [] -> []
   in
   let unique_cdef_aux i = function
-    | CDEF_register (id, ctyp, instrs) -> CDEF_register (id, ctyp, unique_instrs i instrs)
-    | CDEF_type ctd -> CDEF_type ctd
-    | CDEF_let (n, bindings, instrs) -> CDEF_let (n, bindings, unique_instrs i instrs)
-    | CDEF_val (id, tyvars, ctyps, ctyp, extern) -> CDEF_val (id, tyvars, ctyps, ctyp, extern)
-    | CDEF_fundef (id, heap_return, args, instrs) -> CDEF_fundef (id, heap_return, args, unique_instrs i instrs)
-    | CDEF_startup (id, instrs) -> CDEF_startup (id, unique_instrs i instrs)
-    | CDEF_finish (id, instrs) -> CDEF_finish (id, unique_instrs i instrs)
-    | CDEF_pragma (name, str) -> CDEF_pragma (name, str)
+    | CDef_register (id, ctyp, instrs) -> CDef_register (id, ctyp, unique_instrs i instrs)
+    | CDef_type ctd -> CDef_type ctd
+    | CDef_let (n, bindings, instrs) -> CDef_let (n, bindings, unique_instrs i instrs)
+    | CDef_val (id, tyvars, ctyps, ctyp, extern) -> CDef_val (id, tyvars, ctyps, ctyp, extern)
+    | CDef_fundef (id, heap_return, args, instrs) -> CDef_fundef (id, heap_return, args, unique_instrs i instrs)
+    | CDef_startup (id, instrs) -> CDef_startup (id, unique_instrs i instrs)
+    | CDef_finish (id, instrs) -> CDef_finish (id, unique_instrs i instrs)
+    | CDef_pragma (name, str) -> CDef_pragma (name, str)
   in
-  let unique_cdef i (CDEF_aux (aux, def_annot)) = CDEF_aux (unique_cdef_aux i aux, def_annot) in
+  let unique_cdef i (CDef_aux (aux, def_annot)) = CDef_aux (unique_cdef_aux i aux, def_annot) in
   List.mapi unique_cdef cdefs
 
 let rec cval_subst id subst = function
@@ -374,7 +374,7 @@ let creturn_subst id subst = function
   | CR_multi clexps -> CR_multi (List.map (clexp_subst id subst) clexps)
 
 let rec find_function fid = function
-  | CDEF_aux (CDEF_fundef (fid', heap_return, args, body), _) :: _ when Id.compare fid fid' = 0 ->
+  | CDef_aux (CDef_fundef (fid', heap_return, args, body), _) :: _ when Id.compare fid fid' = 0 ->
       Some (heap_return, args, body)
   | cdef :: cdefs -> find_function fid cdefs
   | [] -> None
@@ -467,12 +467,12 @@ let remove_mutrec cdefs =
   let get_mutrec id = List.find_opt (fun component -> IdSet.mem id component) mutrecs in
   List.map
     (function
-      | CDEF_aux (CDEF_fundef (function_id, heap_return, args, body), annot) as cdef -> (
+      | CDef_aux (CDef_fundef (function_id, heap_return, args, body), annot) as cdef -> (
           match get_mutrec function_id with
           | None -> cdef
           | Some component ->
               let body = inline cdefs (fun call -> Id.compare call function_id <> 0 && IdSet.mem call component) body in
-              CDEF_aux (CDEF_fundef (function_id, heap_return, args, body), annot)
+              CDef_aux (CDef_fundef (function_id, heap_return, args, body), annot)
         )
       | cdef -> cdef
       )
@@ -663,9 +663,9 @@ let remove_tuples cdefs ctx =
             { ctx with records = Bindings.add (mk_id name) ([], Bindings.of_seq (List.to_seq fields)) ctx.records }
           ),
           [
-            CDEF_aux (CDEF_type (CTD_struct (mk_id name, [], fields)), mk_def_annot Parse_ast.Unknown ());
-            CDEF_aux
-              ( CDEF_pragma
+            CDef_aux (CDef_type (CTD_struct (mk_id name, [], fields)), mk_def_annot Parse_ast.Unknown ());
+            CDef_aux
+              ( CDef_pragma
                   ( "tuplestruct",
                     Util.string_of_list " "
                       (fun x -> x)

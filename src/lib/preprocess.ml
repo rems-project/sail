@@ -98,15 +98,15 @@ let cond_pragma l defs =
   let push_def def = if !in_then then then_defs := def :: !then_defs else else_defs := def :: !else_defs in
 
   let rec scan = function
-    | DEF_aux (DEF_pragma ("endif", _), _) :: defs when !depth = 0 -> (List.rev !then_defs, List.rev !else_defs, defs)
-    | DEF_aux (DEF_pragma ("else", _), _) :: defs when !depth = 0 ->
+    | Def_aux (Def_pragma ("endif", _), _) :: defs when !depth = 0 -> (List.rev !then_defs, List.rev !else_defs, defs)
+    | Def_aux (Def_pragma ("else", _), _) :: defs when !depth = 0 ->
         in_then := false;
         scan defs
-    | (DEF_aux (DEF_pragma (p, _), _) as def) :: defs when p = "ifdef" || p = "ifndef" || p = "iftarget" ->
+    | (Def_aux (Def_pragma (p, _), _) as def) :: defs when p = "ifdef" || p = "ifndef" || p = "iftarget" ->
         incr depth;
         push_def def;
         scan defs
-    | (DEF_aux (DEF_pragma ("endif", _), _) as def) :: defs ->
+    | (Def_aux (Def_pragma ("endif", _), _) as def) :: defs ->
         decr depth;
         push_def def;
         scan defs
@@ -120,9 +120,9 @@ let cond_pragma l defs =
 let wrap_include l file = function
   | [] -> []
   | defs ->
-      [DEF_aux (DEF_pragma ("include_start", Pragma_line (file, 1)), l)]
+      [Def_aux (Def_pragma ("include_start", Pragma_line (file, 1)), l)]
       @ defs
-      @ [DEF_aux (DEF_pragma ("include_end", Pragma_line (file, 1)), l)]
+      @ [Def_aux (Def_pragma ("include_end", Pragma_line (file, 1)), l)]
 
 type argv_offsets = Argv_actual | Argv_unknown | Argv_inline of int ref * Sail_file.position * int list
 
@@ -169,7 +169,7 @@ let target_set_contains (set : symbol_set) (targets : string) (target : string) 
   |> List.mem target
 
 let rec find_warnings_off = function
-  | DEF_aux (DEF_pragma ("suppress_warnings", Pragma_line ("off", _)), l) :: _ ->
+  | Def_aux (Def_pragma ("suppress_warnings", Pragma_line ("off", _)), l) :: _ ->
       Option.map snd (Reporting.simp_loc (pragma_loc l))
   | def :: defs -> find_warnings_off defs
   | [] -> None
@@ -179,10 +179,10 @@ let preprocess ~default_sail_dir ~target_name ~options ~symbols defs =
   let symbols = ref symbols in
   let rec aux includes acc = function
     | [] -> List.rev acc
-    | DEF_aux (DEF_pragma ("define", Pragma_line (symbol, _)), _) :: defs ->
+    | Def_aux (Def_pragma ("define", Pragma_line (symbol, _)), _) :: defs ->
         symbols := add_symbol symbol !symbols;
         aux includes acc defs
-    | DEF_aux (DEF_pragma ("include_error", Pragma_line (message, _)), l) :: defs -> (
+    | Def_aux (Def_pragma ("include_error", Pragma_line (message, _)), l) :: defs -> (
         match List.rev includes with
         | [] -> raise (Reporting.err_general (pragma_loc l) message)
         | (include_root, l) :: ls ->
@@ -196,10 +196,10 @@ let preprocess ~default_sail_dir ~target_name ~options ~symbols defs =
             format_message message (buffer_formatter b);
             raise (Reporting.err_general l (Buffer.contents b))
       )
-    | DEF_aux (DEF_pragma ("warn", Pragma_line (msg, _)), l) :: defs ->
+    | Def_aux (Def_pragma ("warn", Pragma_line (msg, _)), l) :: defs ->
         Reporting.warn Version.v0_20_2 "Directive" (pragma_loc l) msg;
         aux includes acc defs
-    | (DEF_aux (DEF_pragma ("option", Pragma_line (command, ltrim)), l) as opt_pragma) :: defs ->
+    | (Def_aux (Def_pragma ("option", Pragma_line (command, ltrim)), l) as opt_pragma) :: defs ->
         let l = pragma_loc l in
         let first_line err_msg =
           match String.split_on_char '\n' err_msg with line :: _ -> "\n" ^ line | [] -> ("" [@coverage off])
@@ -221,24 +221,24 @@ let preprocess ~default_sail_dir ~target_name ~options ~symbols defs =
         );
         reset ();
         aux includes (opt_pragma :: acc) defs
-    | DEF_aux (DEF_pragma ("ifndef", Pragma_line (symbol, _)), l) :: defs ->
+    | Def_aux (Def_pragma ("ifndef", Pragma_line (symbol, _)), l) :: defs ->
         let then_defs, else_defs, defs = cond_pragma l defs in
         if not (have_symbol symbol !symbols) then aux includes acc (then_defs @ defs)
         else aux includes acc (else_defs @ defs)
-    | DEF_aux (DEF_pragma ("ifdef", Pragma_line (symbol, _)), l) :: defs ->
+    | Def_aux (Def_pragma ("ifdef", Pragma_line (symbol, _)), l) :: defs ->
         let then_defs, else_defs, defs = cond_pragma l defs in
         if have_symbol symbol !symbols then aux includes acc (then_defs @ defs) else aux includes acc (else_defs @ defs)
-    | DEF_aux (DEF_pragma ("iftarget", Pragma_line (targets, _)), l) :: defs -> (
+    | Def_aux (Def_pragma ("iftarget", Pragma_line (targets, _)), l) :: defs -> (
         let then_defs, else_defs, defs = cond_pragma l defs in
         match target_name with
         | Some t when target_set_contains !symbols targets t -> aux includes acc (then_defs @ defs)
         | _ -> aux includes acc (else_defs @ defs)
       )
-    | (DEF_aux (DEF_pragma ("target_set", Pragma_line (arg, _)), l) as pragma_def) :: defs ->
+    | (Def_aux (Def_pragma ("target_set", Pragma_line (arg, _)), l) as pragma_def) :: defs ->
         let set, targets = Initial_check.parse_target_set l arg in
         symbols := add_target_set set targets !symbols;
         aux includes (pragma_def :: acc) defs
-    | DEF_aux (DEF_pragma ("include", Pragma_line (file, _)), l) :: defs ->
+    | Def_aux (Def_pragma ("include", Pragma_line (file, _)), l) :: defs ->
         let len = String.length file in
         if len = 0 then (
           Reporting.warn Version.v0_20_2 "" (pragma_loc l) "Skipping bad $include. No file argument.";
@@ -277,7 +277,7 @@ let preprocess ~default_sail_dir ~target_name ~options ~symbols defs =
           Reporting.warn Version.v0_20_2 "" (pragma_loc l) ("Skipping bad $include " ^ file ^ ". " ^ help);
           aux includes acc defs
         )
-    | DEF_aux (DEF_pragma ("suppress_warnings", arg), l) :: defs ->
+    | Def_aux (Def_pragma ("suppress_warnings", arg), l) :: defs ->
         ( match Reporting.simp_loc l with
         | None -> () (* This shouldn't happen, but if it does just continue *)
         | Some (p, _) -> (
@@ -298,15 +298,15 @@ let preprocess ~default_sail_dir ~target_name ~options ~symbols defs =
     (* Filter file_start and file_end out of the AST so when we
        round-trip files through the compiler we don't end up with
        incorrect start/end annotations *)
-    | (DEF_aux (DEF_pragma ("file_start", _), _) | DEF_aux (DEF_pragma ("file_end", _), _)) :: defs ->
+    | (Def_aux (Def_pragma ("file_start", _), _) | Def_aux (Def_pragma ("file_end", _), _)) :: defs ->
         aux includes acc defs
-    | (DEF_aux (DEF_pragma (p, _), l) as pragma_def) :: defs ->
+    | (Def_aux (Def_pragma (p, _), l) as pragma_def) :: defs ->
         if not (StringSet.mem p (Pragma.all ()) || String.contains p '#') then
           Reporting.warn Version.v0_20_2 "" (pragma_loc l) ("Unrecognised directive: " ^ p);
         aux includes (pragma_def :: acc) defs
-    | DEF_aux (DEF_outcome (outcome_spec, inner_defs), l) :: defs ->
-        aux includes (DEF_aux (DEF_outcome (outcome_spec, aux includes [] inner_defs), l) :: acc) defs
-    | (DEF_aux (DEF_default (DT_aux (DT_order (_, ATyp_aux (atyp, _)), _)), l) as def) :: defs -> (
+    | Def_aux (Def_outcome (outcome_spec, inner_defs), l) :: defs ->
+        aux includes (Def_aux (Def_outcome (outcome_spec, aux includes [] inner_defs), l) :: acc) defs
+    | (Def_aux (Def_default (DT_aux (DT_order (_, ATyp_aux (atyp, _)), _)), l) as def) :: defs -> (
         symbols := add_symbol "_DEFAULT_ORDER_SET" !symbols;
         match atyp with
         | Parse_ast.ATyp_inc ->

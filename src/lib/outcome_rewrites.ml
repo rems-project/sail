@@ -74,12 +74,12 @@ let instantiate_typquant substs typq =
     typq (KBindings.bindings substs)
 
 let instantiate_def target id substs = function
-  | DEF_aux (DEF_impl (FCL_aux (FCL_funcl (target_id, pexp), (fcl_def_annot, tannot))), def_annot)
+  | Def_aux (Def_impl (FCL_aux (FCL_funcl (target_id, pexp), (fcl_def_annot, tannot))), def_annot)
     when string_of_id target_id = target ->
       let l = gen_loc (id_loc id) in
       Some
-        (DEF_aux
-           ( DEF_fundef
+        (Def_aux
+           ( Def_fundef
                (FD_aux
                   ( FD_function
                       ( Rec_aux (Rec_nonrec, l),
@@ -105,10 +105,10 @@ let rec instantiated_or_abstract l = function
     hook up to a particular interface; they can set [?keep_original_defs] to [true]. *)
 let instantiate ?(keep_original_defs = false) target ast =
   let process_def outcomes = function
-    | DEF_aux (DEF_outcome (OV_aux (OV_outcome (id, TypSchm_aux (TypSchm_ts (typq, typ), _), args), l), outcome_defs), _)
+    | Def_aux (Def_outcome (OV_aux (OV_outcome (id, TypSchm_aux (TypSchm_ts (typq, typ), _), args), l), outcome_defs), _)
       as def ->
         (Bindings.add id (typq, typ, args, l, outcome_defs) outcomes, if keep_original_defs then [def] else [])
-    | DEF_aux (DEF_instantiation (IN_aux (IN_id id, annot), id_substs), def_annot) as def ->
+    | Def_aux (Def_instantiation (IN_aux (IN_id id, annot), id_substs), def_annot) as def ->
         let l = gen_loc (id_loc id) in
         let env = env_of_annot annot in
         let substs = Env.get_outcome_instantiation env in
@@ -147,8 +147,8 @@ let instantiate ?(keep_original_defs = false) target ast =
 
         let valspec is_extern =
           let extern = if is_extern then Some { pure = false; bindings = [("_", string_of_id id)] } else None in
-          DEF_aux
-            ( DEF_val
+          Def_aux
+            ( Def_val
                 (VS_aux
                    ( VS_val_spec
                        ( TypSchm_aux (TypSchm_ts (instantiate_typquant substs typq, instantiate_typ substs typ), l),
@@ -170,8 +170,8 @@ let instantiate ?(keep_original_defs = false) target ast =
           ( match instantiated_def with
             | None ->
                 [
-                  DEF_aux
-                    ( DEF_pragma ("abstract", Pragma_line (string_of_id id, gen_loc (id_loc id))),
+                  Def_aux
+                    ( Def_pragma ("abstract", Pragma_line (string_of_id id, gen_loc (id_loc id))),
                       mk_def_annot (gen_loc (id_loc id)) ()
                     );
                   valspec true;

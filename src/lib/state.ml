@@ -69,13 +69,13 @@ let regval_base_typ env typ =
   match get_bitfield_typ_id env typ with Some id -> fst (Env.get_bitfield id env) | _ -> typ
 
 let has_default_order defs =
-  List.exists (function DEF_aux (DEF_default (DT_aux (DT_order _, _)), _) -> true | _ -> false) defs
+  List.exists (function Def_aux (Def_default (DT_aux (DT_order _, _)), _) -> true | _ -> false) defs
 
 let find_registers defs =
   List.fold_left
     (fun acc def ->
       match def with
-      | DEF_aux (DEF_register (DEC_aux (DEC_reg (typ, id, opt_exp), (_, tannot))), _) ->
+      | Def_aux (Def_register (DEC_aux (DEC_reg (typ, id, opt_exp), (_, tannot))), _) ->
           let env = match destruct_tannot tannot with Some (env, _) -> env | _ -> Env.empty in
           (Env.expand_synonyms env typ, id, Option.is_some opt_exp) :: acc
       | _ -> acc
@@ -146,8 +146,8 @@ let generate_regstate env registers =
     )
   in
   [
-    DEF_aux
-      ( DEF_type (TD_aux (regstate_def, (Unknown, empty_uannot))),
+    Def_aux
+      ( Def_type (TD_aux (regstate_def, (Unknown, empty_uannot))),
         add_def_attribute Unknown "undefined_gen" (Some (AD_aux (AD_string "forbid", Unknown))) (mk_def_annot Unknown ())
       );
   ]
@@ -253,7 +253,7 @@ let generate_initial_regstate ctx env ast =
       let init_defs, init_vals =
         List.fold_left
           (fun inits def ->
-            match def with DEF_aux (DEF_type (TD_aux (td, _)), _) -> add_typ_init_val inits td | _ -> inits
+            match def with Def_aux (Def_type (TD_aux (td, _)), _) -> add_typ_init_val inits td | _ -> inits
           )
           ([], Bindings.empty) defs
       in
@@ -911,8 +911,8 @@ let generate_regstate_defs ctx env ast =
     |> List.concat
     |> Bindings.fold (add_regval_conv ctx env) regtyps_with_ids
   in
-  let typdefs, defs = List.partition (function DEF_aux (DEF_type _, _) -> true | _ -> false) defs in
-  let valspecs, defs = List.partition (function DEF_aux (DEF_val _, _) -> true | _ -> false) defs in
+  let typdefs, defs = List.partition (function Def_aux (Def_type _, _) -> true | _ -> false) defs in
+  let valspecs, defs = List.partition (function Def_aux (Def_val _, _) -> true | _ -> false) defs in
   (typdefs @ valspecs @ defs, ctx)
 
 let add_regstate_defs mwords ctx env ast =
@@ -930,7 +930,7 @@ let add_regstate_defs mwords ctx env ast =
    inter-register dependencies anyway... *)
 let add_register_init_function ctx env ast =
   let init_exp = function
-    | DEF_aux (DEF_register (DEC_aux (DEC_reg (_typ, id, Some exp), _)), _) ->
+    | Def_aux (Def_register (DEC_aux (DEC_reg (_typ, id, Some exp), _)), _) ->
         let loc = gen_loc (exp_loc exp) in
         Some (mk_exp ~loc (E_assign (mk_lexp ~loc (LE_id id), strip_exp exp)))
     | _ -> None
@@ -943,9 +943,9 @@ let add_register_init_function ctx env ast =
   let val_spec = mk_val_spec (VS_val_spec (mk_typschm [] (function_typ [unit_typ] unit_typ), id, None)) in
   let new_defs, env = Type_error.check_defs env [val_spec; fundef] in
   let drop_init = function
-    | DEF_aux (DEF_register (DEC_aux (DEC_reg (typ, id, Some exp), an)), def_annot) ->
+    | Def_aux (Def_register (DEC_aux (DEC_reg (typ, id, Some exp), an)), def_annot) ->
         let def_annot = add_def_attribute def_annot.loc "initialized_elsewhere" None def_annot in
-        DEF_aux (DEF_register (DEC_aux (DEC_reg (typ, id, None), an)), def_annot)
+        Def_aux (Def_register (DEC_aux (DEC_reg (typ, id, None), an)), def_annot)
     | d -> d
   in
   let ast = { ast with defs = List.map drop_init ast.defs } in

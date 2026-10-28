@@ -441,23 +441,23 @@ type 'a type_def =
 | TD_aux of type_def_aux * 'a annot
 
 type ('a, 'b) def_aux =
-| DEF_type of 'a type_def
-| DEF_constraint of n_constraint
-| DEF_fundef of 'a fundef
-| DEF_mapdef of 'a mapdef
-| DEF_impl of 'a funcl
-| DEF_let of 'a pat * 'a exp
-| DEF_val of 'a val_spec
-| DEF_outcome of outcome_spec * ('a, 'b) def list
-| DEF_instantiation of 'a instantiation_spec * subst list
-| DEF_fixity of prec * Big_int_Z.big_int * id
-| DEF_overload of id * id list
-| DEF_default of default_spec
-| DEF_scattered of 'a scattered_def
-| DEF_measure of id * 'a pat * 'a exp
-| DEF_loop_measures of id * loop_measure list
-| DEF_register of 'a dec_spec
-| DEF_internal_mutrec of 'a fundef list
-| DEF_pragma of string * pragma
+| Def_type of 'a type_def
+| Def_constraint of n_constraint
+| Def_fundef of 'a fundef
+| Def_mapdef of 'a mapdef
+| Def_impl of 'a funcl
+| Def_let of 'a pat * 'a exp
+| Def_val of 'a val_spec
+| Def_outcome of outcome_spec * ('a, 'b) def list
+| Def_instantiation of 'a instantiation_spec * subst list
+| Def_fixity of prec * Big_int_Z.big_int * id
+| Def_overload of id * id list
+| Def_default of default_spec
+| Def_scattered of 'a scattered_def
+| Def_measure of id * 'a pat * 'a exp
+| Def_loop_measures of id * loop_measure list
+| Def_register of 'a dec_spec
+| Def_internal_mutrec of 'a fundef list
+| Def_pragma of string * pragma
 and ('a, 'b) def =
-| DEF_aux of ('a, 'b) def_aux * 'b def_annot
+| Def_aux of ('a, 'b) def_aux * 'b def_annot

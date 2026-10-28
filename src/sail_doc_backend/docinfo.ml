@@ -666,17 +666,17 @@ module Generator (Converter : Markdown.CONVERTER) (Config : CONFIG) = struct
     let initial_skip = match files with [] -> false | _ -> true in
     let skip_file file = if List.exists (same_file file) files then false else initial_skip in
     let skipping = function true :: _ -> true | _ -> false in
-    let docinfo_for_def (docinfo, skips) (DEF_aux (aux, def_annot) as def) =
+    let docinfo_for_def (docinfo, skips) (Def_aux (aux, def_annot) as def) =
       let module_path = get_module_path def_annot.env in
       let links = hyperlinks files def in
       match aux with
       (* Maintain a stack of booleans, for each file if it was not
          specified via --doc-file, we push true to skip it. If no
          --doc-file flags are passed, include everything. *)
-      | DEF_pragma (("file_start" | "include_start"), Pragma_line (path, _)) -> (docinfo, skip_file path :: skips)
-      | DEF_pragma (("file_end" | "include_end"), _) -> (docinfo, match skips with _ :: skips -> skips | [] -> [])
+      | Def_pragma (("file_start" | "include_start"), Pragma_line (path, _)) -> (docinfo, skip_file path :: skips)
+      | Def_pragma (("file_end" | "include_end"), _) -> (docinfo, match skips with _ :: skips -> skips | [] -> [])
       (* Function definiton may be scattered, so we can't skip it *)
-      | DEF_fundef fdef ->
+      | Def_fundef fdef ->
           let id = id_of_fundef fdef in
           ( ( match docinfo_for_fundef ~ast def_annot files fdef with
             | None -> docinfo
@@ -684,7 +684,7 @@ module Generator (Converter : Markdown.CONVERTER) (Config : CONFIG) = struct
             ),
             skips
           )
-      | DEF_mapdef mdef ->
+      | Def_mapdef mdef ->
           let id = id_of_mapdef mdef in
           ( ( match docinfo_for_mapdef files mdef with
             | None -> docinfo
@@ -693,7 +693,7 @@ module Generator (Converter : Markdown.CONVERTER) (Config : CONFIG) = struct
             skips
           )
       | _ when skipping skips -> (docinfo, skips)
-      | DEF_val vs ->
+      | Def_val vs ->
           let id = id_of_val_spec vs in
           ( {
               docinfo with
@@ -701,7 +701,7 @@ module Generator (Converter : Markdown.CONVERTER) (Config : CONFIG) = struct
             },
             skips
           )
-      | DEF_type td ->
+      | Def_type td ->
           let id = id_of_type_def td in
           ( {
               docinfo with
@@ -709,7 +709,7 @@ module Generator (Converter : Markdown.CONVERTER) (Config : CONFIG) = struct
             },
             skips
           )
-      | DEF_register rd ->
+      | Def_register rd ->
           let id = id_of_dec_spec rd in
           ( {
               docinfo with
@@ -718,7 +718,7 @@ module Generator (Converter : Markdown.CONVERTER) (Config : CONFIG) = struct
             },
             skips
           )
-      | DEF_let (pat, exp) ->
+      | Def_let (pat, exp) ->
           let ids = pat_ids pat in
           ( IdSet.fold
               (fun id docinfo ->
@@ -737,10 +737,10 @@ module Generator (Converter : Markdown.CONVERTER) (Config : CONFIG) = struct
     let process_anchors docinfo =
       let anchored = ref Bindings.empty in
       List.iter
-        (fun (DEF_aux (aux, def_annot) as def) ->
+        (fun (Def_aux (aux, def_annot) as def) ->
           let l = def_loc def in
           match aux with
-          | DEF_pragma ("anchor", Pragma_line (arg, _)) ->
+          | Def_pragma ("anchor", Pragma_line (arg, _)) ->
               let links = hyperlinks files def in
               let module_path = get_module_path def_annot.env in
               let anchor_info =
@@ -771,14 +771,14 @@ module Generator (Converter : Markdown.CONVERTER) (Config : CONFIG) = struct
       in
       let exp_alg = { id_exp_alg with e_aux = (fun (e_aux, annot) -> scan_exp e_aux annot) } in
       List.iter
-        (fun (DEF_aux (aux, def_annot)) ->
+        (fun (Def_aux (aux, def_annot)) ->
           match aux with
-          | DEF_pragma ("span", Pragma_line (arg, _)) when Option.is_none !current_span -> (
+          | Def_pragma ("span", Pragma_line (arg, _)) when Option.is_none !current_span -> (
               match String.split_on_char ' ' arg with
               | ["start"; name] -> current_span := Some (name, def_annot.loc)
               | _ -> raise (Reporting.err_general def_annot.loc "Invalid span directive")
             )
-          | DEF_pragma ("span", Pragma_line (arg, _)) when arg = "end" -> (
+          | Def_pragma ("span", Pragma_line (arg, _)) when arg = "end" -> (
               match !current_span with
               | Some (name, start_l) -> (
                   current_span := None;
@@ -792,7 +792,7 @@ module Generator (Converter : Markdown.CONVERTER) (Config : CONFIG) = struct
                 )
               | None -> raise (Reporting.err_general def_annot.loc "No start span for this end span")
             )
-          | DEF_pragma ("span", _) ->
+          | Def_pragma ("span", _) ->
               raise (Reporting.err_general def_annot.loc "Previous span must be ended before this one can begin")
           | _ -> ()
         )
@@ -803,7 +803,7 @@ module Generator (Converter : Markdown.CONVERTER) (Config : CONFIG) = struct
     let docinfo = process_spans docinfo in
 
     let module StringMap = Map.Make (String) in
-    let process_file_hashes hashes (DEF_aux (_, doc_annot)) =
+    let process_file_hashes hashes (Def_aux (_, doc_annot)) =
       if included_loc files doc_annot.loc then (
         match Reporting.simp_loc doc_annot.loc with
         | None -> hashes

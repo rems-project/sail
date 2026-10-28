@@ -489,26 +489,26 @@ let string_of_pat_con (P_aux (p, _)) =
   | P_string_append _ -> "P_string_append"
   | P_struct _ -> "P_struct"
 
-let string_of_def (DEF_aux (d, _)) =
+let string_of_def (Def_aux (d, _)) =
   match d with
-  | DEF_type _ -> "DEF_type"
-  | DEF_constraint _ -> "DEF_constraint"
-  | DEF_fundef _ -> "DEF_fundef"
-  | DEF_mapdef _ -> "DEF_mapdef"
-  | DEF_impl _ -> "DEF_impl"
-  | DEF_let _ -> "DEF_let"
-  | DEF_val (VS_aux (VS_val_spec (_, id, _), _)) -> "DEF_val " ^ string_of_id id
-  | DEF_outcome _ -> "DEF_outcome"
-  | DEF_instantiation _ -> "DEF_instantiation"
-  | DEF_fixity _ -> "DEF_fixity"
-  | DEF_overload _ -> "DEF_overload"
-  | DEF_default _ -> "DEF_default"
-  | DEF_scattered _ -> "DEF_scattered"
-  | DEF_measure _ -> "DEF_measure"
-  | DEF_loop_measures _ -> "DEF_loop_measures"
-  | DEF_register _ -> "DEF_register"
-  | DEF_internal_mutrec _ -> "DEF_internal_mutrec"
-  | DEF_pragma _ -> "DEF_pragma"
+  | Def_type _ -> "Def_type"
+  | Def_constraint _ -> "Def_constraint"
+  | Def_fundef _ -> "Def_fundef"
+  | Def_mapdef _ -> "Def_mapdef"
+  | Def_impl _ -> "Def_impl"
+  | Def_let _ -> "Def_let"
+  | Def_val (VS_aux (VS_val_spec (_, id, _), _)) -> "Def_val " ^ string_of_id id
+  | Def_outcome _ -> "Def_outcome"
+  | Def_instantiation _ -> "Def_instantiation"
+  | Def_fixity _ -> "Def_fixity"
+  | Def_overload _ -> "Def_overload"
+  | Def_default _ -> "Def_default"
+  | Def_scattered _ -> "Def_scattered"
+  | Def_measure _ -> "Def_measure"
+  | Def_loop_measures _ -> "Def_loop_measures"
+  | Def_register _ -> "Def_register"
+  | Def_internal_mutrec _ -> "Def_internal_mutrec"
+  | Def_pragma _ -> "Def_pragma"
 
 (** Fix identifiers to match the standard Lean library. *)
 let fixup_match_id (Id_aux (id, l) as id') =
@@ -1481,36 +1481,36 @@ let doc_val ctx pat exp =
 
 let should_print_function_def def =
   match def with
-  | DEF_aux (DEF_fundef fdef, dannot) -> not (Env.is_extern (id_of_fundef fdef) dannot.env "lean")
-  | DEF_aux (DEF_let (pat, exp), _) -> true
+  | Def_aux (Def_fundef fdef, dannot) -> not (Env.is_extern (id_of_fundef fdef) dannot.env "lean")
+  | Def_aux (Def_let (pat, exp), _) -> true
   | _ -> false
 
 let rec doc_defs_rec ctx defs types (former_funcs : document list) (docdefs : document) =
   match defs with
   | [] -> (types, former_funcs @ [docdefs])
-  | DEF_aux (DEF_fundef fdef, dannot) :: defs' ->
+  | Def_aux (Def_fundef fdef, dannot) :: defs' ->
       let env = dannot.env in
       let pp_f =
         if Env.is_extern (id_of_fundef fdef) env "lean" then docdefs
         else docdefs ^^ group (doc_fundef ctx fdef) ^/^ hardline
       in
       doc_defs_rec ctx defs' types former_funcs pp_f
-  | DEF_aux (DEF_internal_mutrec fdefs, dannot) :: defs' ->
+  | Def_aux (Def_internal_mutrec fdefs, dannot) :: defs' ->
       let funs = separate_map hardline (fun fdef -> doc_fundef ctx fdef) fdefs in
       let res = string "mutual" ^^ hardline ^^ funs ^^ hardline ^^ string "end" ^^ hardline in
       doc_defs_rec ctx defs' types former_funcs (docdefs ^^ hardline ^^ res ^^ hardline)
-  | DEF_aux (DEF_type tdef, _) :: defs' when List.mem (string_of_id (id_of_type_def tdef)) !opt_extern_types ->
+  | Def_aux (Def_type tdef, _) :: defs' when List.mem (string_of_id (id_of_type_def tdef)) !opt_extern_types ->
       doc_defs_rec ctx defs' types former_funcs docdefs
-  | DEF_aux (DEF_type tdef, _) :: defs' ->
+  | Def_aux (Def_type tdef, _) :: defs' ->
       doc_defs_rec ctx defs' (types ^^ group (doc_typdef ctx tdef) ^/^ hardline) former_funcs docdefs
-  | DEF_aux (DEF_let (pat, exp), _) :: defs' ->
+  | Def_aux (Def_let (pat, exp), _) :: defs' ->
       let global, pp_val = doc_val ctx pat exp in
       let ctx = { ctx with global } in
       doc_defs_rec ctx defs' types former_funcs (docdefs ^^ group pp_val ^/^ hardline)
-  | DEF_aux (DEF_pragma ("include_start", Pragma_line (file, _)), _) :: defs'
-  | DEF_aux (DEF_pragma ("file_start", Pragma_line (file, _)), _) :: defs'
-  | DEF_aux (DEF_pragma ("include_end", Pragma_line (file, _)), _) :: defs'
-  | DEF_aux (DEF_pragma ("file_end", Pragma_line (file, _)), _) :: defs'
+  | Def_aux (Def_pragma ("include_start", Pragma_line (file, _)), _) :: defs'
+  | Def_aux (Def_pragma ("file_start", Pragma_line (file, _)), _) :: defs'
+  | Def_aux (Def_pragma ("include_end", Pragma_line (file, _)), _) :: defs'
+  | Def_aux (Def_pragma ("file_end", Pragma_line (file, _)), _) :: defs'
     when Filename.check_suffix file ".sail" ->
       if docdefs = empty then doc_defs_rec ctx defs' types former_funcs docdefs
       else doc_defs_rec ctx defs' types (former_funcs @ [docdefs]) empty
@@ -1536,14 +1536,14 @@ let rec collect_imports_rec (cg : Callgraph.callgraph) (defs : (tannot, env) def
     (accs : IntSet.t list) (acc : IntSet.t) (idx : int) (nonempty_print : bool) : IntSet.t list =
   match defs with
   | [] -> accs @ [acc]
-  | (DEF_aux ((DEF_fundef _ | DEF_internal_mutrec _ | DEF_let _), _) as d) :: defs' ->
+  | (Def_aux ((Def_fundef _ | Def_internal_mutrec _ | Def_let _), _) as d) :: defs' ->
       let map, acc = add_def_to_map_and_ref_set cg map acc idx d in
       collect_imports_rec cg defs' map accs acc idx true
-  | DEF_aux (DEF_type tdef, _) :: defs' -> collect_imports_rec cg defs' map accs acc idx nonempty_print
-  | DEF_aux (DEF_pragma ("include_start", Pragma_line (file, _)), _) :: defs'
-  | DEF_aux (DEF_pragma ("file_start", Pragma_line (file, _)), _) :: defs'
-  | DEF_aux (DEF_pragma ("include_end", Pragma_line (file, _)), _) :: defs'
-  | DEF_aux (DEF_pragma ("file_end", Pragma_line (file, _)), _) :: defs'
+  | Def_aux (Def_type tdef, _) :: defs' -> collect_imports_rec cg defs' map accs acc idx nonempty_print
+  | Def_aux (Def_pragma ("include_start", Pragma_line (file, _)), _) :: defs'
+  | Def_aux (Def_pragma ("file_start", Pragma_line (file, _)), _) :: defs'
+  | Def_aux (Def_pragma ("include_end", Pragma_line (file, _)), _) :: defs'
+  | Def_aux (Def_pragma ("file_end", Pragma_line (file, _)), _) :: defs'
     when Filename.check_suffix file ".sail" ->
       if not nonempty_print then collect_imports_rec cg defs' map accs acc idx nonempty_print
       else collect_imports_rec cg defs' map (accs @ [acc]) IntSet.empty (idx + 1) false
@@ -1558,8 +1558,8 @@ let collect_imports (cg : Callgraph.callgraph) (defs : (tannot, env) def list) =
 let rec remove_imports (defs : (Libsail.Type_check.tannot, Libsail.Type_check.env) def list) depth =
   match defs with
   | [] -> []
-  | DEF_aux (DEF_pragma ("include_start", _), _) :: ds -> remove_imports ds (depth + 1)
-  | DEF_aux (DEF_pragma ("include_end", _), _) :: ds -> remove_imports ds (depth - 1)
+  | Def_aux (Def_pragma ("include_start", _), _) :: ds -> remove_imports ds (depth + 1)
+  | Def_aux (Def_pragma ("include_end", _), _) :: ds -> remove_imports ds (depth - 1)
   | d :: ds -> if depth > 0 then remove_imports ds depth else d :: remove_imports ds depth
 
 let add_reg_typ typ_map (typ, id, _) =
@@ -1610,7 +1610,7 @@ let doc_reg_info env global registers =
 let doc_monad_abbrev ~version defs =
   let find_exc_typ defs =
     let is_exc_typ_def = function
-      | DEF_aux (DEF_type td, _) -> string_of_id (id_of_type_def td) = "exception"
+      | Def_aux (Def_type td, _) -> string_of_id (id_of_type_def td) = "exception"
       | _ -> false
     in
     if List.exists is_exc_typ_def defs then empty else string "abbrev exception := Unit\n"
@@ -1728,9 +1728,9 @@ let main_function_stub effect_info has_registers =
     )
 
 let populate_fun_args defs =
-  let add_args args (DEF_aux (d, _)) =
+  let add_args args (Def_aux (d, _)) =
     match d with
-    | DEF_fundef (FD_aux (FD_function (_, _, [FCL_aux (FCL_funcl (id, Pat_aux (Pat_exp (P_aux (p, _), _), _)), _)]), _))
+    | Def_fundef (FD_aux (FD_function (_, _, [FCL_aux (FCL_funcl (id, Pat_aux (Pat_exp (P_aux (p, _), _), _)), _)]), _))
       -> (
         match p with
         | P_tuple ps ->
@@ -1753,12 +1753,12 @@ let populate_fun_args defs =
 let rec collect_import_files_aux defs file_stack last_namespace ret =
   match defs with
   | [] -> ret
-  | DEF_aux (DEF_pragma ("include_start", Pragma_line (file, _)), _) :: ds
-  | DEF_aux (DEF_pragma ("file_start", Pragma_line (file, _)), _) :: ds
+  | Def_aux (Def_pragma ("include_start", Pragma_line (file, _)), _) :: ds
+  | Def_aux (Def_pragma ("file_start", Pragma_line (file, _)), _) :: ds
     when Filename.check_suffix file ".sail" ->
       collect_import_files_aux ds (file :: file_stack) last_namespace ret
-  | DEF_aux (DEF_pragma ("include_end", Pragma_line (file, _)), _) :: ds
-  | DEF_aux (DEF_pragma ("file_end", Pragma_line (file, _)), _) :: ds
+  | Def_aux (Def_pragma ("include_end", Pragma_line (file, _)), _) :: ds
+  | Def_aux (Def_pragma ("file_end", Pragma_line (file, _)), _) :: ds
     when Filename.check_suffix file ".sail" -> (
       match file_stack with
       | f :: fs -> collect_import_files_aux ds fs last_namespace ret

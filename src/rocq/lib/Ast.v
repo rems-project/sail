@@ -658,24 +658,24 @@ Inductive type_def (A : Set) : Set :=
 (** ** Definitions *)
 
 Inductive def_aux (A B : Set) : Set :=
-| DEF_type : type_def A → def_aux A B
-| DEF_constraint : n_constraint → def_aux A B
-| DEF_fundef : fundef A → def_aux A B
-| DEF_mapdef : mapdef A → def_aux A B
-| DEF_impl : funcl A → def_aux A B
-| DEF_let : pat A → exp A → def_aux A B
-| DEF_val : val_spec A → def_aux A B
-| DEF_outcome : outcome_spec → list (def A B) → def_aux A B
-| DEF_instantiation : instantiation_spec A → list subst → def_aux A B
-| DEF_fixity : prec → Z → id → def_aux A B
-| DEF_overload : id → list id → def_aux A B
-| DEF_default : default_spec → def_aux A B
-| DEF_scattered : scattered_def A → def_aux A B
-| DEF_measure : id → pat A → exp A → def_aux A B
-| DEF_loop_measures : id → list loop_measure → def_aux A B
-| DEF_register : dec_spec A → def_aux A B
-| DEF_internal_mutrec : list (fundef A) → def_aux A B
-| DEF_pragma : string → pragma → def_aux A B
+| Def_type : type_def A → def_aux A B
+| Def_constraint : n_constraint → def_aux A B
+| Def_fundef : fundef A → def_aux A B
+| Def_mapdef : mapdef A → def_aux A B
+| Def_impl : funcl A → def_aux A B
+| Def_let : pat A → exp A → def_aux A B
+| Def_val : val_spec A → def_aux A B
+| Def_outcome : outcome_spec → list (def A B) → def_aux A B
+| Def_instantiation : instantiation_spec A → list subst → def_aux A B
+| Def_fixity : prec → Z → id → def_aux A B
+| Def_overload : id → list id → def_aux A B
+| Def_default : default_spec → def_aux A B
+| Def_scattered : scattered_def A → def_aux A B
+| Def_measure : id → pat A → exp A → def_aux A B
+| Def_loop_measures : id → list loop_measure → def_aux A B
+| Def_register : dec_spec A → def_aux A B
+| Def_internal_mutrec : list (fundef A) → def_aux A B
+| Def_pragma : string → pragma → def_aux A B
 
 with def (A B : Set) : Set :=
-| DEF_aux : def_aux A B → def_annot B → def A B.
+| Def_aux : def_aux A B → def_annot B → def A B.

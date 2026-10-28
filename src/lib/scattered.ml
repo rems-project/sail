@@ -52,14 +52,14 @@ open Ast_util
 let funcl_id (FCL_aux (FCL_funcl (id, _), _)) = id
 
 let rec last_scattered_funcl id = function
-  | DEF_aux (DEF_scattered (SD_aux (SD_funcl funcl, _)), _) :: _ when Id.compare (funcl_id funcl) id = 0 -> false
-  | DEF_aux (DEF_scattered (SD_aux (SD_end fid, _)), _) :: _ when Id.compare fid id = 0 -> false
+  | Def_aux (Def_scattered (SD_aux (SD_funcl funcl, _)), _) :: _ when Id.compare (funcl_id funcl) id = 0 -> false
+  | Def_aux (Def_scattered (SD_aux (SD_end fid, _)), _) :: _ when Id.compare fid id = 0 -> false
   | _ :: defs -> last_scattered_funcl id defs
   | [] -> true
 
 let rec last_scattered_mapcl id = function
-  | DEF_aux (DEF_scattered (SD_aux (SD_mapcl (mid, _), _)), _) :: _ when Id.compare mid id = 0 -> false
-  | DEF_aux (DEF_scattered (SD_aux (SD_end mid, _)), _) :: _ when Id.compare mid id = 0 -> false
+  | Def_aux (Def_scattered (SD_aux (SD_mapcl (mid, _), _)), _) :: _ when Id.compare mid id = 0 -> false
+  | Def_aux (Def_scattered (SD_aux (SD_end mid, _)), _) :: _ when Id.compare mid id = 0 -> false
   | _ :: defs -> last_scattered_mapcl id defs
   | [] -> true
 
@@ -78,25 +78,25 @@ let fake_rec_opt l = Rec_aux (Rec_nonrec, gen_loc l)
 let no_tannot_opt l = Typ_annot_opt_aux (Typ_annot_opt_none, gen_loc l)
 
 let rec get_union_records id acc = function
-  | DEF_aux (DEF_scattered (SD_aux (SD_internal_unioncl_record (uid, record_id, typq, fields), annot)), def_annot)
+  | Def_aux (Def_scattered (SD_aux (SD_internal_unioncl_record (uid, record_id, typq, fields), annot)), def_annot)
     :: defs
     when Id.compare uid id = 0 ->
-      let def = DEF_aux (DEF_type (TD_aux (TD_record (record_id, typq, fields, false), annot)), def_annot) in
+      let def = Def_aux (Def_type (TD_aux (TD_record (record_id, typq, fields, false), annot)), def_annot) in
       get_union_records id (def :: acc) defs
   | def :: defs -> get_union_records id acc defs
   | [] -> acc
 
 let rec filter_union_clauses id = function
-  | DEF_aux (DEF_scattered (SD_aux (SD_unioncl (uid, _), _)), _) :: defs when Id.compare id uid = 0 ->
+  | Def_aux (Def_scattered (SD_aux (SD_unioncl (uid, _), _)), _) :: defs when Id.compare id uid = 0 ->
       filter_union_clauses id defs
-  | DEF_aux (DEF_scattered (SD_aux (SD_internal_unioncl_record (uid, _, _, _), _)), _) :: defs
+  | Def_aux (Def_scattered (SD_aux (SD_internal_unioncl_record (uid, _, _, _), _)), _) :: defs
     when Id.compare id uid = 0 ->
       filter_union_clauses id defs
   | def :: defs -> def :: filter_union_clauses id defs
   | [] -> []
 
 let rec filter_enum_clauses id = function
-  | DEF_aux (DEF_scattered (SD_aux (SD_enumcl (uid, _), _)), _) :: defs when Id.compare id uid = 0 ->
+  | Def_aux (Def_scattered (SD_aux (SD_enumcl (uid, _), _)), _) :: defs when Id.compare id uid = 0 ->
       filter_enum_clauses id defs
   | def :: defs -> def :: filter_enum_clauses id defs
   | [] -> []
@@ -124,12 +124,12 @@ let final_funcl = function SD_funcl funcl -> Some funcl | _ -> None
 let final_mapcl = function SD_mapcl (_, mapcl) -> Some mapcl | _ -> None
 
 let rec descatter' global_env annots accumulator funcls mapcls = function
-  | DEF_aux (DEF_scattered (SD_aux (aux, (l, tannot))), def_annot) :: defs -> (
+  | Def_aux (Def_scattered (SD_aux (aux, (l, tannot))), def_annot) :: defs -> (
       match aux with
       | SD_function (id, _) ->
           (* For scattered functions we collect all the seperate
              function clauses until we find the last one (or SD_end),
-             then we turn that function clause into a DEF_fundef
+             then we turn that function clause into a Def_fundef
              containing all the clauses. *)
           descatter' global_env (Bindings.add id def_annot annots) accumulator funcls mapcls defs
       | _ when scattered_function_end aux funcls defs ->
@@ -148,8 +148,8 @@ let rec descatter' global_env annots accumulator funcls mapcls = function
             Option.value ~default:(mk_def_annot (gen_loc l) def_annot.env) (Bindings.find_opt id annots)
           in
           let accumulator =
-            DEF_aux
-              ( DEF_fundef (FD_aux (FD_function (fake_rec_opt l, no_tannot_opt l, clauses), (gen_loc l, tannot))),
+            Def_aux
+              ( Def_fundef (FD_aux (FD_function (fake_rec_opt l, no_tannot_opt l, clauses), (gen_loc l, tannot))),
                 update_attr def_annot
               )
             :: accumulator
@@ -176,7 +176,7 @@ let rec descatter' global_env annots accumulator funcls mapcls = function
             Option.value ~default:(mk_def_annot (gen_loc l) def_annot.env) (Bindings.find_opt id annots)
           in
           let accumulator =
-            DEF_aux (DEF_mapdef (MD_aux (MD_mapping (id, no_tannot_opt l, clauses), (gen_loc l, tannot))), def_annot)
+            Def_aux (Def_mapdef (MD_aux (MD_mapping (id, no_tannot_opt l, clauses), (gen_loc l, tannot))), def_annot)
             :: accumulator
           in
           descatter' global_env annots accumulator funcls mapcls defs
@@ -197,8 +197,8 @@ let rec descatter' global_env annots accumulator funcls mapcls = function
           | [] -> raise (Reporting.err_general l "No clauses found for scattered union type")
           | _ ->
               let accumulator =
-                DEF_aux
-                  ( DEF_type (TD_aux (TD_variant (id, typq, tus, false), (gen_loc l, Type_check.empty_tannot))),
+                Def_aux
+                  ( Def_type (TD_aux (TD_variant (id, typq, tus, false), (gen_loc l, Type_check.empty_tannot))),
                     def_annot
                   )
                 :: records
@@ -220,8 +220,8 @@ let rec descatter' global_env annots accumulator funcls mapcls = function
                 |> add_def_attribute (gen_loc l) "undefined_gen" (Some (AD_aux (AD_string "forbid", gen_loc l)))
               in
               let accumulator =
-                DEF_aux
-                  (DEF_type (TD_aux (TD_enum (id, members, false), (gen_loc l, Type_check.empty_tannot))), def_annot)
+                Def_aux
+                  (Def_type (TD_aux (TD_enum (id, members, false), (gen_loc l, Type_check.empty_tannot))), def_annot)
                 :: accumulator
               in
               descatter' global_env annots accumulator funcls mapcls (filter_enum_clauses id defs)

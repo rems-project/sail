@@ -907,20 +907,20 @@ module Printer (Config : PRINT_CONFIG) = struct
     | SD_enumcl (id, member) -> separate space [string "enum clause"; doc_id id; equals; doc_id member]
 
   let doc_filter = function
-    | DEF_aux ((DEF_pragma ("file_start", _) | DEF_pragma ("file_end", _)), _) -> false
+    | Def_aux ((Def_pragma ("file_start", _) | Def_pragma ("file_end", _)), _) -> false
     | _ -> true
 
-  let rec doc_def_no_hardline (DEF_aux (aux, def_annot)) =
+  let rec doc_def_no_hardline (Def_aux (aux, def_annot)) =
     doc_def_annot def_annot
     ^^
     match aux with
-    | DEF_default df -> doc_default df
-    | DEF_val v_spec -> doc_spec v_spec
-    | DEF_type t_def -> doc_type_def t_def
-    | DEF_fundef f_def -> doc_fundef f_def
-    | DEF_mapdef m_def -> doc_mapdef m_def
-    | DEF_constraint nc -> string "constraint" ^^ space ^^ doc_nc nc
-    | DEF_outcome (OV_aux (OV_outcome (id, typschm, args), _), defs) -> (
+    | Def_default df -> doc_default df
+    | Def_val v_spec -> doc_spec v_spec
+    | Def_type t_def -> doc_type_def t_def
+    | Def_fundef f_def -> doc_fundef f_def
+    | Def_mapdef m_def -> doc_mapdef m_def
+    | Def_constraint nc -> string "constraint" ^^ space ^^ doc_nc nc
+    | Def_outcome (OV_aux (OV_outcome (id, typschm, args), _), defs) -> (
         string "outcome" ^^ space ^^ doc_id id ^^ space ^^ colon ^^ space ^^ doc_typschm typschm ^^ break 1
         ^^ (match doc_typquant ~parenthesize:false args with Some doc -> string "with" ^//^ doc | None -> empty)
         ^^
@@ -929,31 +929,31 @@ module Printer (Config : PRINT_CONFIG) = struct
         | _ ->
             break 1 ^^ (string "= {" ^//^ separate_map (hardline ^^ hardline) doc_def_no_hardline defs) ^/^ string "}"
       )
-    | DEF_instantiation (IN_aux (IN_id id, _), substs) -> (
+    | Def_instantiation (IN_aux (IN_id id, _), substs) -> (
         string "instantiation" ^^ space ^^ doc_id id
         ^^
         match substs with
         | [] -> empty
         | _ -> (space ^^ string "with") ^//^ separate_map (comma ^^ break 1) doc_subst substs
       )
-    | DEF_impl funcl -> string "impl" ^^ space ^^ doc_funcl funcl
-    | DEF_let (pat, exp) -> string "let" ^^ space ^^ separate space [doc_pat pat; equals; doc_exp exp]
-    | DEF_internal_mutrec fundefs ->
+    | Def_impl funcl -> string "impl" ^^ space ^^ doc_funcl funcl
+    | Def_let (pat, exp) -> string "let" ^^ space ^^ separate space [doc_pat pat; equals; doc_exp exp]
+    | Def_internal_mutrec fundefs ->
         (string "mutual {" ^//^ separate_map (hardline ^^ hardline) doc_fundef fundefs) ^^ hardline ^^ string "}"
-    | DEF_register dec -> doc_register dec
-    | DEF_scattered sdef -> doc_scattered sdef
-    | DEF_measure (id, pat, exp) ->
+    | Def_register dec -> doc_register dec
+    | Def_scattered sdef -> doc_scattered sdef
+    | Def_measure (id, pat, exp) ->
         string "termination_measure" ^^ space ^^ doc_id id ^/^ doc_pat pat ^^ space ^^ equals ^/^ doc_exp exp
-    | DEF_loop_measures (id, measures) ->
+    | Def_loop_measures (id, measures) ->
         string "termination_measure" ^^ space ^^ doc_id id ^/^ doc_loop_measures measures
-    | DEF_pragma (pragma, Pragma_line (arg, _)) -> string ("$" ^ pragma ^ " " ^ arg)
-    | DEF_pragma (pragma, Pragma_structured data) ->
+    | Def_pragma (pragma, Pragma_line (arg, _)) -> string ("$" ^ pragma ^ " " ^ arg)
+    | Def_pragma (pragma, Pragma_structured data) ->
         let open Parse_ast.Attribute_data in
         string ("$" ^ pragma) ^^ space ^^ string (string_of_attribute_data (AD_aux (AD_object data, Parse_ast.Unknown)))
-    | DEF_fixity (prec, n, id) ->
+    | Def_fixity (prec, n, id) ->
         fixities := Bindings.add id (prec, Z.to_int n) !fixities;
         separate space [doc_prec prec; doc_int n; doc_id id]
-    | DEF_overload (id, ids) ->
+    | Def_overload (id, ids) ->
         separate space
           [
             string "overload"; doc_id id; equals; surround 2 0 lbrace (separate_map (comma ^^ break 1) doc_id ids) rbrace;
@@ -1005,12 +1005,12 @@ let reformat ~into_directory:dir { defs; _ } =
   in
 
   let format_def = function
-    | DEF_aux (DEF_pragma ("file_start", Pragma_line (path, _)), _) -> push (Some (adjust_path path))
-    | DEF_aux (DEF_pragma ("file_end", _), _) -> pop ()
-    | DEF_aux (DEF_pragma ("include_start", Pragma_line (path, _)), _) ->
+    | Def_aux (Def_pragma ("file_start", Pragma_line (path, _)), _) -> push (Some (adjust_path path))
+    | Def_aux (Def_pragma ("file_end", _), _) -> pop ()
+    | Def_aux (Def_pragma ("include_start", Pragma_line (path, _)), _) ->
         output_include path;
         if Filename.is_relative path then push (Some (adjust_path path)) else push None
-    | DEF_aux (DEF_pragma ("include_end", _), _) -> pop ()
+    | Def_aux (Def_pragma ("include_end", _), _) -> pop ()
     | def -> output_def def
   in
 

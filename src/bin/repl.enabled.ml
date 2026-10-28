@@ -645,7 +645,7 @@ let () =
          let v_l = string_location ~start:pos ~trim:true v in
          let defs, env =
            Type_check.check_defs istate.env
-             [mk_def ~loc:arg_l (DEF_let (mk_pat ~loc:v_l (P_id (mk_id ~loc:v_l (String.trim v))), exp)) ()]
+             [mk_def ~loc:arg_l (Def_let (mk_pat ~loc:v_l (P_id (mk_id ~loc:v_l (String.trim v))), exp)) ()]
          in
          Some { istate with ast = append_ast_defs istate.ast defs; env }
      | _ -> failwith "Invalid arguments for :let"

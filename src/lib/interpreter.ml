@@ -554,7 +554,7 @@ let initial_gstate ?fold_target ?config primops defs env =
 
 let rec initialize_registers allow_registers undef_registers gstate =
   let process_def = function
-    | DEF_aux (DEF_register (DEC_aux (DEC_reg (typ, id, opt_exp), annot)), _) when allow_registers -> (
+    | Def_aux (Def_register (DEC_aux (DEC_reg (typ, id, opt_exp), annot)), _) when allow_registers -> (
         match opt_exp with
         | None when undef_registers ->
             let env = Type_check.env_of_annot annot in
@@ -567,7 +567,7 @@ let rec initialize_registers allow_registers undef_registers gstate =
             let evaluated = eval_exp (initial_lstate, gstate) exp in
             { gstate with registers = Bindings.add id evaluated gstate.registers }
       )
-    | DEF_aux (DEF_let (pat, exp), def_annot) -> (
+    | Def_aux (Def_let (pat, exp), def_annot) -> (
         try
           let evaluated = eval_exp (initial_lstate, gstate) exp in
           match pattern_match pat evaluated with
@@ -590,7 +590,7 @@ let rec initialize_registers allow_registers undef_registers gstate =
 let initial_state ?(registers = true) ?(undef_registers = true) ?fold_target ?config ast env primops =
   let gstate = initial_gstate ?fold_target ?config primops ast.defs env in
   let add_function gstate = function
-    | DEF_aux (DEF_fundef fdef, _) -> { gstate with fundefs = Bindings.add (id_of_fundef fdef) fdef gstate.fundefs }
+    | Def_aux (Def_fundef fdef, _) -> { gstate with fundefs = Bindings.add (id_of_fundef fdef) fdef gstate.fundefs }
     | _ -> gstate
   in
   let gstate = List.fold_left add_function gstate ast.defs in

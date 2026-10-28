@@ -1391,63 +1391,63 @@ overload_def:
 
 def_trailing_constraint_aux:
   | scattered_def
-    { DEF_scattered $1 }
+    { Def_scattered $1 }
   | outcome_spec_def
-    { DEF_outcome ($1, []) }
+    { Def_outcome ($1, []) }
 
 def_constraint_aux:
   | Constraint typ
-    { DEF_constraint $2 }
+    { Def_constraint $2 }
 
 def_aux:
   | fun_def
-    { DEF_fundef $1 }
+    { Def_fundef $1 }
   | map_def
-    { DEF_mapdef $1 }
+    { Def_mapdef $1 }
   | Impl funcl
-    { DEF_impl $2 }
+    { Def_impl $2 }
   | Fixity
-    { let (prec, n, op) = $1 in DEF_fixity (prec, n, op) }
+    { let (prec, n, op) = $1 in Def_fixity (prec, n, op) }
   | val_spec_def
-    { DEF_val $1 }
+    { Def_val $1 }
   | outcome_spec_def Eq Lcurly defs_list Rcurly
-    { DEF_outcome ($1, $4) }
+    { Def_outcome ($1, $4) }
   | instantiation_def
-    { let (id, substs) = $1 in DEF_instantiation (id, substs) }
+    { let (id, substs) = $1 in Def_instantiation (id, substs) }
   | type_def
-    { DEF_type $1 }
+    { Def_type $1 }
   | let_def
-    { DEF_let (fst $1, snd $1) }
+    { Def_let (fst $1, snd $1) }
   | register_def
-    { DEF_register $1 }
+    { Def_register $1 }
   | overload_def
-    { let (id, ids) = $1 in DEF_overload (id, ids) }
+    { let (id, ids) = $1 in Def_overload (id, ids) }
   | default_def
-    { DEF_default $1 }
+    { Def_default $1 }
   | Typedef Constraint typ
-    { DEF_constraint $3 }
+    { Def_constraint $3 }
   | Mutual Lcurly fun_def_list Rcurly
-    { DEF_internal_mutrec $3 }
+    { Def_internal_mutrec $3 }
   | pragma = StructuredPragma; kvs = separated_list(Comma, attribute_data_key_value); Rcurly
-    { DEF_pragma (pragma, Pragma_structured kvs) }
+    { Def_pragma (pragma, Pragma_structured kvs) }
   | Pragma
     { let (pragma, arg) = $1 in
       let ltrim = pragma_left_spaces pragma $startpos arg in
-      DEF_pragma (pragma, Pragma_line (String.trim arg, ltrim)) }
+      Def_pragma (pragma, Pragma_line (String.trim arg, ltrim)) }
   | TerminationMeasure id pat Eq exp
-    { DEF_measure ($2, $3, $5) }
+    { Def_measure ($2, $3, $5) }
   | TerminationMeasure id loop_measures
-    { DEF_loop_measures ($2,$3) }
+    { Def_loop_measures ($2,$3) }
 
 def(AUX):
   | visibility = Private; def = def(AUX)
-    { DEF_aux (DEF_private def, loc $startpos(visibility) $endpos(visibility)) }
+    { Def_aux (Def_private def, loc $startpos(visibility) $endpos(visibility)) }
   | attrs = attributes; def = def(AUX)
-    { DEF_aux (DEF_attribute (attrs, def), loc $startpos(attrs) $endpos(attrs)) }
+    { Def_aux (Def_attribute (attrs, def), loc $startpos(attrs) $endpos(attrs)) }
   | doc = doc_comment; def = def(AUX)
-    { DEF_aux (DEF_doc (doc, def), loc $startpos(doc) $endpos(doc)) }
+    { Def_aux (Def_doc (doc, def), loc $startpos(doc) $endpos(doc)) }
   | d = AUX
-    { DEF_aux (d, loc $startpos(d) $endpos(d)) }
+    { Def_aux (d, loc $startpos(d) $endpos(d)) }
 
 defs_post_trailing_constraint_list:
   | def(def_trailing_constraint_aux)
