@@ -179,6 +179,7 @@ let lean_rewrites =
     ("move_termination_measures", []);
     ("instantiate_outcomes", [String_arg "lean"; Bool_arg true]);
     ("realize_mappings", []);
+    ("rewrite_if_eq", [IdSet_arg Pretty_print_lean.non_beq_types]);
     ("remove_vector_subrange_pats", []);
     ("remove_duplicate_valspecs", []);
     ("toplevel_string_append", []);

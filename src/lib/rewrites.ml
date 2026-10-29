@@ -4362,6 +4362,100 @@ let rewrite_remove_extern_defs target env ast =
   in
   { ast with defs = List.filter is_not_extern_def ast.defs }
 
+let rec pat_of_exp (E_aux (e, ann)) =
+  let env = env_of_annot ann in
+  let ( let* ) = Option.bind in
+  let pat_of_fexp (FE_aux (FE_fexp (id, e), _)) =
+    let* pat = pat_of_exp e in
+    Some (id, pat)
+  in
+  let wrap p = Some (P_aux (p, ann)) in
+  match e with
+  | E_id id when is_enum_member id env -> wrap (P_id id)
+  | E_lit lit -> wrap (P_lit lit)
+  | E_typ (typ, exp) ->
+      let* pat = pat_of_exp exp in
+      wrap (P_typ (typ, pat))
+  | E_app (f, args) when Env.is_union_constructor f env ->
+      let* pats = Util.map_all pat_of_exp args in
+      wrap (P_app (f, pats))
+  | E_tuple exps ->
+      let* pats = Util.map_all pat_of_exp exps in
+      wrap (P_tuple pats)
+  | E_vector exps ->
+      let* pats = Util.map_all pat_of_exp exps in
+      wrap (P_vector pats)
+  | E_list exps ->
+      let* pats = Util.map_all pat_of_exp exps in
+      wrap (P_list pats)
+  | E_cons (e1, e2) ->
+      let* p1 = pat_of_exp e1 in
+      let* p2 = pat_of_exp e2 in
+      wrap (P_cons (p1, p2))
+  | E_struct (n, flds) ->
+      let* fldpats = Util.map_all pat_of_fexp flds in
+      wrap (P_struct (n, fldpats, FP_no_wild))
+  | _ -> None
+
+(* Change [if ... == ...] to [match ... with ...] for a given set of types.  Note that the caller
+   should ensure that the set of types is closed.  Do this early to avoid reintroducing patterns
+   that have already been rewritten away. *)
+let rewrite_if_eq types_to_rewrite _env ast =
+  let rec should_rw (Typ_aux (t, _)) =
+    match t with
+    | Typ_id id -> IdSet.mem id types_to_rewrite
+    | Typ_tuple typs -> List.exists should_rw typs
+    | Typ_app (id, typs) -> IdSet.mem id types_to_rewrite || List.exists should_rw_arg typs
+    | _ -> false
+  and should_rw_arg (A_aux (a, _)) = match a with A_typ typ -> should_rw typ | _ -> false in
+
+  (* Support unfolding identifiers fixed by a top-level let *)
+  let values : tannot exp Bindings.t ref = ref Bindings.empty in
+  let scan_def d =
+    match d with
+    | Def_aux (Def_let (P_aux ((P_id id | P_typ (_, P_aux (P_id id, _))), _), exp), _) ->
+        values := Bindings.add id exp !values
+    | _ -> ()
+  in
+  List.iter scan_def ast.defs;
+  let unfold (E_aux (e, _) as exp) =
+    match e with
+    | E_id id | E_typ (_, E_aux (E_id id, _)) -> (
+        match Bindings.find_opt id !values with Some exp' -> exp' | None -> exp
+      )
+    | _ -> exp
+  in
+
+  let rw_if (cond, e_true, e_false) =
+    match cond with
+    | (E_aux (E_typ (_, E_aux (E_app (id, [lhs; rhs]), _)), _) | E_aux (E_app (id, [lhs; rhs]), _))
+      when Id.compare id (mk_id "eq_anything") == 0 && should_rw (typ_of lhs) -> (
+        let emp_annot = (Parse_ast.Unknown, empty_tannot) in
+        let wild_annot = (Parse_ast.Unknown, mk_tannot (env_of lhs) (typ_of lhs)) in
+        match (pat_of_exp (unfold lhs), pat_of_exp (unfold rhs)) with
+        | _, Some pat ->
+            E_match
+              ( lhs,
+                [
+                  Pat_aux (Pat_exp (pat, e_true), emp_annot);
+                  Pat_aux (Pat_exp (P_aux (P_wild, wild_annot), e_false), emp_annot);
+                ]
+              )
+        | Some pat, _ ->
+            E_match
+              ( rhs,
+                [
+                  Pat_aux (Pat_exp (pat, e_true), emp_annot);
+                  Pat_aux (Pat_exp (P_aux (P_wild, wild_annot), e_false), emp_annot);
+                ]
+              )
+        | None, None -> E_if (cond, e_true, e_false)
+      )
+    | _ -> E_if (cond, e_true, e_false)
+  in
+  let rewrite_exp _ = fold_exp { id_exp_alg with e_if = rw_if } in
+  rewrite_ast_base { rewriters_base with rewrite_exp; rewrite_def } ast
+
 let opt_mono_rewrites = ref false
 let opt_mono_complex_nexps = ref true
 
@@ -4414,6 +4508,7 @@ type rewriter =
   | Bool_rewriter of (bool -> rewriter)
   | String_rewriter of (string -> rewriter)
   | Literal_rewriter of ((lit -> bool) -> rewriter)
+  | IdSet_rewriter of (IdSet.t -> rewriter)
 
 let basic_rewriter f = Full_rewriter (fun ctx effect_info env ast -> (ctx, f env ast, effect_info, env))
 
@@ -4439,11 +4534,13 @@ type rewriter_arg =
   | Flag_arg of bool ref
   | String_arg of string
   | Literal_arg of string
+  | IdSet_arg of IdSet.t ref
 
 let rec describe_rewriter = function
   | String_rewriter rw -> "<string>" :: describe_rewriter (rw "")
   | Bool_rewriter rw -> "<bool>" :: describe_rewriter (rw false)
   | Literal_rewriter rw -> "(ocaml|lem|all)" :: describe_rewriter (rw (fun _ -> true))
+  | IdSet_rewriter rw -> "<idset>" :: describe_rewriter (rw IdSet.empty)
   | Full_rewriter _ -> []
 
 let instantiate_rewriter rewriter args =
@@ -4466,6 +4563,7 @@ let instantiate_rewriter rewriter args =
     | Bool_rewriter rw, Bool_arg b -> rw b
     | String_rewriter rw, String_arg str -> rw str
     | Literal_rewriter rw, Literal_arg selector -> rw (selector_function selector)
+    | IdSet_rewriter rw, IdSet_arg idset -> rw !idset
     | _, _ -> Reporting.unreachable Parse_ast.Unknown __POS__ "Invalid rewrite argument"
   in
   match List.fold_left instantiate rewriter args with
@@ -4563,6 +4661,7 @@ let all_rewriters =
     ("toplevel_let_patterns", basic_rewriter rewrite_toplevel_let_patterns);
     ("remove_bitfield_records", basic_rewriter remove_bitfield_records);
     ("remove_extern_defs", String_rewriter (fun target -> basic_rewriter (rewrite_remove_extern_defs target)));
+    ("rewrite_if_eq", IdSet_rewriter (fun typs -> basic_rewriter (rewrite_if_eq typs)));
   ]
 
 let rewrites_interpreter =
