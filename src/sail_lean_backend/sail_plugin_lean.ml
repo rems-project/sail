@@ -321,6 +321,13 @@ let replace_all ~(pattern : string) ~(by : string) (s : string) =
 let copy_lean_file_to_project out_name_camel (src : string) (dst : string) =
   let lines = In_channel.with_open_text src In_channel.input_lines in
   let lines = List.map (replace_all ~pattern:"THE_MODULE_NAME" ~by:out_name_camel) lines in
+  (* Older model supplements open the former Defs namespace. The file is still
+     named Defs.lean, but generated types now live directly in the model namespace. *)
+  let lines =
+    List.map
+      (fun line -> if String.trim line = "open " ^ out_name_camel ^ ".Defs" then "open " ^ out_name_camel else line)
+      lines
+  in
   let lines =
     if !opt_lean_module_system && not (List.exists (fun line -> String.trim line = "module") lines) then (
       let starts_with prefix line = String.starts_with ~prefix (String.trim line) in
