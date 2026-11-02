@@ -1925,10 +1925,17 @@ Module Make (Tannot : TypeAnnot.S).
     | E_config key =>
         v ← get_config (fst annot) key (Tannot.get_type (snd annot));
         wrap (E_internal_value v)
+    | E_exit x =>
+        match get_value x with
+        | Evaluated v =>
+            Exit v
+        | Unevaluated =>
+            x' ← step x;
+            wrap (E_exit x')
+        end
     | E_vector_append _ _ => Runtime_type_error (fst annot)
     | E_sizeof _ => Runtime_type_error (fst annot)
     | E_constraint _ => Runtime_type_error (fst annot)
-    | E_exit _ => Runtime_type_error (fst annot)
     | E_internal_plet _ _ _ => Runtime_type_error (fst annot)
     | E_internal_return _ => Runtime_type_error (fst annot)
     | E_internal_assume _ _ => Runtime_type_error (fst annot)
