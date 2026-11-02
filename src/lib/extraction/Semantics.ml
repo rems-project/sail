@@ -947,7 +947,11 @@ module Make =
          (match filtered_var with
           | Evaluated v -> Early_return v
           | Unevaluated -> bind (step0 x) (fun x' -> wrap (E_return x')))
-       | E_exit _ -> Runtime_type_error (fst annot0)
+       | E_exit x ->
+         let filtered_var = get_value x in
+         (match filtered_var with
+          | Evaluated v -> Exit v
+          | Unevaluated -> bind (step0 x) (fun x' -> wrap (E_exit x')))
        | E_config key ->
          bind (get_config (fst annot0) key (Tannot.get_type (snd annot0)))
            (fun v -> wrap (E_internal_value v))
