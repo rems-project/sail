@@ -212,6 +212,7 @@ let lean_rewrites =
     (* ("remove_assert", rewrite_ast_remove_assert); *)
     ("top_sort_defs", []);
     ("add_register_init_function", []);
+    ("attach_effects", []);
     ("const_prop_mutrec", [String_arg "lean"]);
     ("exp_lift_assign", []);
     ("early_return", []);

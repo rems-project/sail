@@ -161,6 +161,7 @@ let coq_rewrites =
     (* ("remove_assert", rewrite_ast_remove_assert); *)
     ("top_sort_defs", []);
     ("add_register_init_function", []);
+    ("attach_effects", []);
     ("const_prop_mutrec", [String_arg "coq"]);
     ("exp_lift_assign", []);
     ("early_return", []);
