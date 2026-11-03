@@ -2320,6 +2320,8 @@ let letbind (v : 'a exp) (body : 'a exp -> 'a exp) : 'a exp =
 let rec mapCont (f : 'b -> ('b -> 'a exp) -> 'a exp) (l : 'b list) (k : 'b list -> 'a exp) : 'a exp =
   match l with [] -> k [] | exp :: exps -> f exp (fun exp -> mapCont f exps (fun exps -> k (exp :: exps)))
 
+(* Sequence all effects using a ANF transformation like Flanagan et al's PLDI 1993 paper. *)
+
 let rewrite_ast_letbind_effects effect_info env =
   let monadic (E_aux (aux, (l, tannot))) = E_aux (aux, (l, add_effect_annot tannot monadic_effect)) in
 
@@ -2648,9 +2650,153 @@ let rewrite_ast_pat_lits add_types rewrite_lit env ast =
   let ast = rewrite_ast_base { rewriters_base with rewrite_exp = (fun _ -> fold_exp alg) } ast in
   { ast with defs = List.map rewrite_def ast.defs }
 
-(* Now all expressions have no blocks anymore, any term is a sequence of let-expressions,
- * internal let-expressions, or internal plet-expressions ended by a term that does not
- * access memory or registers and does not update variables *)
+(* The Lean backend doesn't use letbind_effects because it uses Lean's do syntax to keep more of the
+   structure of the model.  However, we still rewrite variable updates, so this rewrite pulls
+   assignments out into their own let-bound expressions.  Note that we also need to lift out any
+   other complex subexpressions to maintain ordering. *)
+
+let lift_out_var_updates _env ast =
+  let is_trivial = function E_aux ((E_id _ | E_lit _), _) -> true | _ -> false in
+
+  let rec aux (E_aux (e, ((l, _) as annot)) as exp) =
+    match e with
+    | E_tuple exps -> if updates_vars exp then aux_exps (fun exps -> E_aux (E_tuple exps, annot)) exps l annot else exp
+    | E_app (f, args) ->
+        if updates_vars exp then aux_exps (fun exps -> E_aux (E_app (f, exps), annot)) args l annot else exp
+    | E_vector exps ->
+        if updates_vars exp then aux_exps (fun exps -> E_aux (E_vector exps, annot)) exps l annot else exp
+    | E_list exps -> if updates_vars exp then aux_exps (fun exps -> E_aux (E_list exps, annot)) exps l annot else exp
+    | E_cons (e1, e2) ->
+        if updates_vars exp then
+          aux
+            (lift_exp e1 (typ_of e1) (fun e1' -> lift_exp e2 (typ_of e2) (fun e2' -> E_aux (E_cons (e1', e2'), annot))))
+        else exp
+    (* A different choice would be to push E_typ down... *)
+    | E_typ (typ, exp) -> E_aux (E_typ (typ, aux exp), annot)
+    | E_if (cond, e_true, e_false) ->
+        if updates_vars cond then (
+          let v = fresh_id "c__" l in
+          let pat = add_p_typ (env_of_annot annot) bool_typ (P_aux (P_id v, swaptyp bool_typ annot)) in
+          aux
+            (E_aux
+               (E_let (pat, cond, E_aux (E_if (E_aux (E_id v, swaptyp bool_typ annot), e_true, e_false), annot)), annot)
+            )
+        )
+        else E_aux (E_if (cond, aux e_true, aux e_false), annot)
+    | E_loop (loop, measure, cond, body) ->
+        if updates_vars cond then raise (Reporting.err_todo l "Assignment in loop condition")
+        else E_aux (E_loop (loop, measure, cond, aux body), annot)
+    | E_for (id, start, stop, by, dir, body) ->
+        if updates_vars start || updates_vars stop || updates_vars by then
+          raise (Reporting.err_todo l "Assignment in loop condition")
+        else E_aux (E_for (id, start, stop, by, dir, aux body), annot)
+    | E_struct (id, fexps) ->
+        if updates_vars exp then (
+          let id_annots, exps =
+            List.split (List.map (fun (FE_aux (FE_fexp (id, e), annot)) -> ((id, annot), e)) fexps)
+          in
+          let wrap exps =
+            let fexps = List.map2 (fun (id, annot) e -> FE_aux (FE_fexp (id, e), annot)) id_annots exps in
+            E_aux (E_struct (id, fexps), annot)
+          in
+          aux_exps wrap exps l annot
+        )
+        else exp
+    | E_struct_update (e_struct, fexps) ->
+        if updates_vars e_struct then
+          aux (lift_exp e_struct (typ_of e_struct) (fun e -> E_aux (E_struct_update (e, fexps), annot)))
+        else if updates_vars exp then (
+          let id_annots, exps =
+            List.split (List.map (fun (FE_aux (FE_fexp (id, e), annot)) -> ((id, annot), e)) fexps)
+          in
+          let wrap exps =
+            let fexps = List.map2 (fun (id, annot) e -> FE_aux (FE_fexp (id, e), annot)) id_annots exps in
+            E_aux (E_struct_update (e_struct, fexps), annot)
+          in
+          aux_exps wrap exps l annot
+        )
+        else exp
+    | E_field (e_struct, id) ->
+        if updates_vars exp then
+          aux (lift_exp e_struct (typ_of e_struct) (fun e -> E_aux (E_field (e_struct, id), annot)))
+        else exp
+    | E_match (e_discr, cases) ->
+        if updates_vars e_discr then
+          aux (lift_exp e_discr (typ_of e_discr) (fun e -> E_aux (E_match (e_discr, cases), annot)))
+        else E_aux (E_match (e_discr, List.map aux_pexp cases), annot)
+    | E_let (pat, e1, e2) -> E_aux (E_let (pat, aux e1, aux e2), annot)
+    | E_assign (lexp, e) ->
+        if updates_vars e then aux (lift_exp e (typ_of e) (fun e -> E_aux (E_assign (lexp, e), annot))) else exp
+    | E_return e -> if updates_vars e then aux (lift_exp e (typ_of e) (fun e -> E_aux (E_return e, annot))) else exp
+    | E_exit e -> if updates_vars e then aux (lift_exp e (typ_of e) (fun e -> E_aux (E_return e, annot))) else exp
+    | E_throw e -> if updates_vars e then aux (lift_exp e (typ_of e) (fun e -> E_aux (E_throw e, annot))) else exp
+    | E_try (body, cases) -> E_aux (E_try (aux body, List.map aux_pexp cases), annot)
+    | E_assert (e1, e2) ->
+        if updates_vars exp then
+          aux
+            (lift_exp e1 (typ_of e1) (fun e1' -> lift_exp e2 (typ_of e2) (fun e2' -> E_aux (E_assert (e1', e2'), annot)))
+            )
+        else exp
+    | E_var (lexp, e_init, body) ->
+        if updates_vars e_init then aux (lift_exp e_init (typ_of e_init) (fun e -> E_aux (E_var (lexp, e, body), annot)))
+        else E_aux (E_var (lexp, e_init, aux body), annot)
+    | E_internal_assume (nc, body) -> E_aux (E_internal_assume (nc, aux body), annot)
+    | E_vector_append _ (* TODO: is this still used? *) | E_id _ | E_lit _ | E_sizeof _ | E_config _ | E_ref _ | E_undef
+    | E_internal_value _ | E_constraint _ ->
+        exp
+    | E_block _ ->
+        Reporting.unreachable l __POS__
+          ("Expression should have been rewritten away before lift_out_var_updates: " ^ string_of_exp exp)
+    | E_internal_plet _ | E_internal_return _ ->
+        Reporting.unreachable l __POS__
+          ("Internal expression form that lift_out_var_updates doesn't expect: " ^ string_of_exp exp)
+  and aux_pexp (Pat_aux (p, ((l, _) as annot))) =
+    match p with
+    | Pat_exp (pat, exp) -> Pat_aux (Pat_exp (pat, aux exp), annot)
+    | Pat_when (pat, guard, exp) ->
+        if updates_vars guard then
+          Reporting.unreachable l __POS__ ("Assignment in pattern guard: " ^ string_of_exp guard)
+        else Pat_aux (Pat_when (pat, guard, aux exp), annot)
+  and lift_exp (E_aux (_, ((l, _) as annot)) as exp) typ k =
+    if is_trivial exp then k exp
+    else (
+      let v = fresh_id "l__" l in
+      let pat = add_p_typ (env_of_annot annot) typ (P_aux (P_id v, annot)) in
+      let (E_aux (_, annot') as tail) = k (E_aux (E_id v, annot)) in
+      E_aux (E_let (pat, aux exp, tail), annot')
+    )
+  and aux_exps wrap exps l annot =
+    let bindings = List.map (fun exp -> (fresh_id "t__" l, typ_of exp, exp)) exps in
+    let trivial_exp =
+      wrap
+        (List.map
+           (fun (id, typ, exp) ->
+             if is_trivial exp then exp
+             else if is_unit_typ typ then E_aux (E_lit (L_aux (L_unit, l)), swaptyp unit_typ annot)
+             else E_aux (E_id id, swaptyp typ annot)
+           )
+           bindings
+        )
+    in
+    List.fold_right
+      (fun (id, typ, exp) out_exp ->
+        if is_trivial exp then out_exp
+        else (
+          let pat =
+            if is_unit_typ typ then P_aux (P_wild, swaptyp typ annot)
+            else add_p_typ (env_of_annot annot) typ (P_aux (P_id id, swaptyp typ annot))
+          in
+          E_aux (E_let (pat, exp, out_exp), annot)
+        )
+      )
+      bindings trivial_exp
+  in
+  let rewrite_exp _ exp = aux exp in
+  rewrite_ast_base { rewriters_base with rewrite_exp } ast
+
+(* Now all expressions have no blocks anymore, and all variable updates have been lifted out into
+   their own, properly sequenced, (internal-)let expressions by letbind_effects or
+   lift_out_var_updates. *)
 
 type 'a updated_term = Added_vars of 'a exp * 'a pat | Same_vars of 'a exp
 
@@ -2673,6 +2819,9 @@ let rec rewrite_var_updates (E_aux (expaux, ((l, _) as annot)) as exp) =
         add_p_typ env typ (annot_pat (P_tuple pats) l env typ)
   in
 
+  (* Add a tuple for the variables at the end of an expression; i.e., at the end of a sequence of
+     bindings.  The overwrite argument indicates that the result of the expression is thrown
+     away, so only the variables are required. *)
   let rec add_vars overwrite (E_aux (expaux, annot) as exp) vars =
     match expaux with
     | E_let (pat, bind, exp) ->
@@ -2701,14 +2850,19 @@ let rec rewrite_var_updates (E_aux (expaux, ((l, _) as annot)) as exp) =
     | E_internal_assume (nc, exp) ->
         let exp = add_vars overwrite exp vars in
         E_aux (E_internal_assume (nc, exp), swaptyp (typ_of exp) annot)
+    | E_block _ -> Reporting.unreachable (fst annot) __POS__ "Block expression in rewrite_var_updates"
     | _ ->
-        (* after rewrite_ast_letbind_effects there cannot be terms that have
-           effects/update local variables in "tail-position": check n_exp_term
-           and where it is used. *)
         if overwrite then (
           let wild = P_aux (P_wild, annot) in
           let exp' = tuple_exp vars in
           E_aux (E_let (wild, exp, exp'), swaptyp (typ_of exp') annot) |> add_typs_let env (typ_of exp) (typ_of exp')
+          (* If we only did the lift_vars rewrite there might be an if/match expression at the end,
+           but we'll add variables inside the cases later, not here. *)
+        )
+        else if updates_vars exp then (
+          let var_id = fresh_id "a__" (fst annot) in
+          let final_exp = tuple_exp (E_aux (E_id var_id, annot) :: vars) in
+          E_aux (E_let (P_aux (P_id var_id, annot), exp, final_exp), swaptyp (typ_of final_exp) annot)
         )
         else tuple_exp (exp :: vars)
   in
@@ -2859,19 +3013,40 @@ let rec rewrite_var_updates (E_aux (expaux, ((l, _) as annot)) as exp) =
           let v = E_aux (E_if (c, e1, e2), (gen_loc el, mk_tannot env typ)) in
           Added_vars (v, tuple_pat (if overwrite then varpats else pat :: varpats))
         )
-    | E_let (lpat, bind, body) when updates_vars body && not (updates_vars bind) ->
-        (* A let whose body updates variables (as rewrite_tuple_assignments
-           produces): its body returns them, as an if's branches do. Without
-           rewrite_ast_letbind_effects, which the Lean target omits, nothing
-           else lifts these updates out of the let. *)
-        let vars, varpats = find_updated_vars body |> IdSet.inter used_vars |> mk_var_exps_pats pl env in
-        if vars = [] then Same_vars (rewrite_var_updates full_exp)
-        else (
-          let body = rewrite_var_updates (add_vars overwrite body vars) in
-          let typ = typ_of body in
-          let v = E_aux (E_let (lpat, bind, body), (gen_loc el, mk_tannot env typ)) in
-          Added_vars (v, tuple_pat (if overwrite then varpats else pat :: varpats))
-        )
+    (* Note that this rule isn't required when letbind_effects has been used; the ANF-like form
+       doesn't allow nested lets. *)
+    | E_let ((P_aux (lpaux, (lpl, lpannot)) as lpat), bind, body) -> (
+        let overwrite_bind = match lpaux with P_wild | P_typ (_, P_aux (P_wild, _)) -> true | _ -> false in
+        let vars_bind = find_updated_vars bind in
+        let vars_body = find_updated_vars body in
+        let add_vars_body, varpats =
+          IdSet.union vars_bind vars_body |> IdSet.inter used_vars |> mk_var_exps_pats pl env
+        in
+        let add_vars_bind, varpats_body =
+          IdSet.inter vars_bind (IdSet.union used_vars (find_used_vars body)) |> mk_var_exps_pats lpl env
+        in
+        match (add_vars_bind, add_vars_body) with
+        | [], [] -> Same_vars (E_aux (E_let (lpat, rewrite_var_updates bind, rewrite_var_updates body), annot))
+        | [], _ :: _ ->
+            let bind = rewrite_var_updates bind in
+            let body = rewrite_var_updates (add_vars overwrite body add_vars_body) in
+            let e = E_aux (E_let (lpat, bind, body), (gen_loc el, mk_tannot env (typ_of body))) in
+            Added_vars (e, tuple_pat (if overwrite then varpats else pat :: varpats))
+        | _ :: _, [] ->
+            let bind = rewrite_var_updates (add_vars overwrite_bind bind add_vars_bind) in
+            let body = rewrite_var_updates body in
+            let e =
+              E_aux
+                (E_let (tuple_pat (if overwrite_bind then varpats_body else lpat :: varpats_body), bind, body), annot)
+            in
+            Same_vars e
+        | _ :: _, _ :: _ ->
+            let bind = rewrite_var_updates (add_vars overwrite_bind bind add_vars_bind) in
+            let body = rewrite_var_updates (add_vars overwrite body add_vars_body) in
+            let lpat = tuple_pat (if overwrite then varpats_body else lpat :: varpats_body) in
+            let e = E_aux (E_let (lpat, bind, body), (gen_loc el, mk_tannot env (typ_of body))) in
+            Added_vars (e, tuple_pat (if overwrite then varpats else pat :: varpats))
+      )
     | E_match (e1, ps) | E_try (e1, ps) ->
         let is_case = match expaux with E_match _ -> true | _ -> false in
         let vars, varpats =
@@ -2942,15 +3117,8 @@ let rec rewrite_var_updates (E_aux (expaux, ((l, _) as annot)) as exp) =
         | Added_vars (exp', pat') -> Added_vars (add_e_typ (env_of exp') (typ_of exp') exp', pat')
         | Same_vars exp' -> Same_vars (E_aux (E_typ (typ, exp'), annot))
       )
-    | _ ->
-        if updates_vars full_exp then Same_vars (rewrite_var_updates full_exp)
-        else
-          (* after rewrite_ast_letbind_effects this expression is pure and updates
-           no variables: check n_exp_term and where it's used. *)
-          Same_vars (E_aux (expaux, annot))
+    | _ -> if updates_vars full_exp then Same_vars (rewrite_var_updates full_exp) else Same_vars (E_aux (expaux, annot))
   in
-
-  let is_trivial = function E_aux ((E_id _ | E_lit _), _) -> true | _ -> false in
 
   match expaux with
   | E_let (pat, v, body) ->
@@ -2990,93 +3158,8 @@ let rec rewrite_var_updates (E_aux (expaux, ((l, _) as annot)) as exp) =
   | E_internal_assume (nc, exp) ->
       let exp' = rewrite_var_updates exp in
       E_aux (E_internal_assume (nc, exp'), annot)
-  | E_tuple exps ->
-      (* We may need to sequence side effects in a tuple, such as:
-
-         {v
-            (i = 3, i) : (unit, int)
-         v}
-
-         To handle this, rewrite it to:
-
-         {v
-            let _ = (i = 3) in ((), i)
-         v}
-
-         If i = 3 was instead a side-effecting expression with a non-unit type
-         we would introduce a new variable rather than using a wildcard and unit literal
-      *)
-      if IdSet.is_empty @@ find_updated_vars exp then exp
-      else (
-        let tuple_typ = typ_of exp in
-        let typs =
-          match tuple_typ with
-          | Typ_aux (Typ_tuple typs, _) -> typs
-          | _ -> Reporting.unreachable l __POS__ "Found tuple without tuple type"
-        in
-        let bindings = List.map2 (fun typ exp -> (fresh_id "t__" l, typ, exp)) typs exps in
-        let trivial_tuple =
-          E_aux
-            ( E_tuple
-                (List.map
-                   (fun (id, typ, exp) ->
-                     if is_trivial exp then exp
-                     else if is_unit_typ typ then E_aux (E_lit (L_aux (L_unit, l)), swaptyp unit_typ annot)
-                     else E_aux (E_id id, swaptyp typ annot)
-                   )
-                   bindings
-                ),
-              annot
-            )
-        in
-        let exp =
-          List.fold_right
-            (fun (id, typ, exp) tup ->
-              if is_trivial exp then tup
-              else (
-                let pat =
-                  if is_unit_typ typ then P_aux (P_wild, swaptyp typ annot)
-                  else add_p_typ env typ (P_aux (P_id id, swaptyp typ annot))
-                in
-                E_aux (E_let (pat, exp, tup), annot)
-              )
-            )
-            bindings trivial_tuple
-        in
-        rewrite_var_updates exp
-      )
-  | E_app (f, args) ->
-      if IdSet.is_empty @@ find_updated_vars exp then exp
-      else (
-        let args = List.map (fun arg -> (fresh_id "a__" l, typ_of arg, arg)) args in
-        let trivial_args =
-          List.map
-            (fun (id, typ, arg) ->
-              if is_trivial arg then arg
-              else if is_unit_typ typ then E_aux (E_lit (L_aux (L_unit, l)), swaptyp unit_typ annot)
-              else E_aux (E_id id, swaptyp typ annot)
-            )
-            args
-        in
-        let trivial_app = E_aux (E_app (f, trivial_args), annot) in
-        let exp =
-          List.fold_right
-            (fun (id, typ, arg) app ->
-              if is_trivial arg then app
-              else (
-                let pat =
-                  if is_unit_typ typ then P_aux (P_wild, swaptyp typ annot)
-                  else add_p_typ env typ (P_aux (P_id id, swaptyp typ annot))
-                in
-                E_aux (E_let (pat, arg, app), annot)
-              )
-            )
-            args trivial_app
-        in
-        rewrite_var_updates exp
-      )
   | _ ->
-      (* There are no other expressions that have effects or variable updates in
+      (* There are no other expressions that have variable updates in
        "tail-position": check the definition n_exp_term and where it is used. *)
       exp
 
@@ -4615,6 +4698,7 @@ let all_rewriters =
     ("nexp_ids", basic_rewriter rewrite_ast_nexp_ids);
     ("remove_blocks", basic_rewriter rewrite_ast_remove_blocks);
     ("letbind_effects", base_rewriter rewrite_ast_letbind_effects);
+    ("lift_out_var_updates", basic_rewriter lift_out_var_updates);
     ("remove_e_assign", basic_rewriter rewrite_ast_remove_e_assign);
     ("internal_lets", basic_rewriter rewrite_ast_internal_lets);
     ("remove_superfluous_letbinds", basic_rewriter rewrite_ast_remove_superfluous_letbinds);
