@@ -230,7 +230,7 @@ let lean_rewrites =
     ("attach_effects", []);
     ("remove_blocks", []);
     ("attach_effects", []);
-    (* ("letbind_effects", []); *)
+    ("lift_out_var_updates", []);
     ("remove_e_assign", []);
     (* ^^^^ replace loops by dummy function calls *)
     ("attach_effects", []);
