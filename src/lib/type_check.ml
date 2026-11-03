@@ -102,6 +102,17 @@ let is_atom (Typ_aux (typ_aux, _)) =
 let is_atom_bool (Typ_aux (typ_aux, _)) =
   match typ_aux with Typ_app (f, [_]) when string_of_id f = "atom_bool" -> true | _ -> false
 
+let rec generalize_typ (Typ_aux (aux, l) as typ) =
+  match aux with
+  | Typ_app (id, _) -> (
+      match string_of_id id with
+      | "atom" -> Typ_aux (Typ_id (mk_id ~loc:(id_loc id) "int"), gen_loc l)
+      | "atom_bool" -> Typ_aux (Typ_id (mk_id ~loc:(id_loc id) "bool"), gen_loc l)
+      | _ -> typ
+    )
+  | Typ_tuple typs -> Typ_aux (Typ_tuple (List.map generalize_typ typs), l)
+  | Typ_id _ | Typ_var _ | Typ_fn _ | Typ_bidir _ | Typ_exist _ | Typ_internal_unknown -> typ
+
 let rec typ_constraints (Typ_aux (typ_aux, _)) =
   match typ_aux with
   | Typ_internal_unknown -> []
@@ -4190,6 +4201,13 @@ and infer_funapp' l env f (typq, f_typ) xs uannot expected_ret_typ =
     | _ -> typ_error l (string_of_typ f_typ ^ " is not a function type")
   in
 
+  let ret_typ_vars = tyvars_of_typ !typ_ret in
+  let generalizable =
+    quant_kopts typq |> List.filter is_typ_kopt |> List.map kopt_kid
+    |> List.filter (fun v -> not (KidSet.mem v ret_typ_vars))
+    |> KidSet.of_list
+  in
+
   let unifiers = instantiate_simple_equations !quants in
   typ_debug (lazy "Instantiating from equations");
   typ_debug
@@ -4277,6 +4295,16 @@ and infer_funapp' l env f (typq, f_typ) xs uannot expected_ret_typ =
       | exception Unification_error (l, m) -> Arg_defer (l, 1, Err_function_arg (exp_loc arg, typ, Err_other m))
       | exception Type_error (l, err) -> Arg_defer (l, 0, Err_function_arg (exp_loc arg, typ, err))
       | inferred_arg, unifiers, env ->
+          let unifiers =
+            KBindings.mapi
+              (fun v arg ->
+                if KidSet.mem v generalizable then (
+                  match arg with A_aux (A_typ typ, l) -> A_aux (A_typ (generalize_typ typ), l) | arg -> arg
+                )
+                else arg
+              )
+              unifiers
+          in
           record_unifiers unifiers;
           let unifiers = KBindings.bindings unifiers in
           typ_debug
