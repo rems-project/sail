@@ -126,6 +126,12 @@ http://www.cl.cam.ac.uk/~pes20/sail/.
     (omd (and (>= 1.3.1) (< 1.4.0)))))
 
 (package
+  (name sail_json_backend)
+  (synopsis "Sail to JSON translation")
+  (depends
+    (libsail (= :version))))
+
+(package
   (name sail)
   (synopsis "Sail is a language for describing the instruction semantics of processors")
   (description "\
