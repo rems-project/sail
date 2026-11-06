@@ -322,20 +322,25 @@ let copy_lean_file_to_project out_name_camel (src : string) (dst : string) =
   let lines = In_channel.with_open_text src In_channel.input_lines in
   let lines = List.map (replace_all ~pattern:"THE_MODULE_NAME" ~by:out_name_camel) lines in
   let lines =
-    if !opt_lean_module_system then (
-      let is_import line = String.length line >= 7 && String.sub line 0 7 = "import " in
+    if !opt_lean_module_system && not (List.exists (fun line -> String.trim line = "module") lines) then (
+      let starts_with prefix line = String.starts_with ~prefix (String.trim line) in
+      let is_import line =
+        starts_with "import " line || starts_with "meta import " line || starts_with "public import " line
+        || starts_with "public meta import " line
+      in
       let last_import =
         List.fold_left (fun (i, last) line -> (i + 1, if is_import line then i else last)) (0, -1) lines |> snd
       in
       let rewritten =
         List.mapi
           (fun i line ->
-            let line = if is_import line then "public " ^ line else line in
+            let line = if is_import line && not (starts_with "public " line) then "public " ^ String.trim line else line in
             if i = last_import then line ^ "\n\n@[expose] public section" else line
           )
           lines
       in
-      "module" :: "" :: rewritten
+      let header = if last_import < 0 then ["module"; ""; "@[expose] public section"; ""] else ["module"; ""] in
+      header @ rewritten
     )
     else lines
   in
