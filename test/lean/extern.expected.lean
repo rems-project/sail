@@ -215,7 +215,7 @@ def extern_sub (_ : Unit) : Int :=
   (5 -i (Neg.neg 4))
 
 def extern_sub_nat (_ : Unit) : Nat :=
-  (5 -i 4)
+  (Nat.sub 5 4)
 
 def extern_negate (_ : Unit) : Int :=
   (Neg.neg 5)

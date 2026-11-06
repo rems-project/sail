@@ -27,10 +27,10 @@ def sqrt_real (x : real) : real := Float.sqrt x
 def abs_real (x : real) : real := x.abs
 
 -- val floor = pure "round_down" : real -> int
-def round_down (x : real) : Int := x.toUInt64.toNat
+def round_down (x : real) : Int := x.floor.toInt64.toInt
 
 -- val ceil = pure "round_up" : real -> int
-def round_up (x : real) : Int := round_down (x + 0.5)
+def round_up (x : real) : Int := x.ceil.toInt64.toInt
 
 -- val "to_real" : int -> real
 def to_real (x : Int) : real := Float.ofInt x

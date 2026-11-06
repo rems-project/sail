@@ -41,7 +41,7 @@
       "bindings": {
         "lem": "integerMinus",
         "coq": "Z.sub",
-        "lean": "_lean_subi",
+        "lean": "Nat.sub",
         "_": "sub_nat"
       },
       "type": "(nat, nat) -> nat",
