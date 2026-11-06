@@ -56,6 +56,9 @@ val opt_auto_mono : bool ref
 val opt_dall_split_errors : bool ref
 val opt_dmono_continue : bool ref
 
+(** Functions selected for constructor splitting by the C/C++ backend. *)
+val opt_split_functions : string list ref
+
 (** Unroll loops with constant bounds if less than 'max_iter' iterations *)
 val opt_unroll_loops : bool ref
 
