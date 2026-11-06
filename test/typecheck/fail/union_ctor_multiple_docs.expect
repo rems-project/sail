@@ -1,0 +1,5 @@
+[93mError[0m:
+[96mfail/union_ctor_multiple_docs.sail[0m:6.2-13:
+6[96m |[0m  /*! doc2 */
+ [91m |[0m  [91m^---------^[0m
+ [91m |[0m Union constructor has multiple documentation comments

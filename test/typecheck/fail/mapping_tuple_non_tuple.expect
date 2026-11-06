@@ -1,0 +1,5 @@
+[93mType error[0m:
+[96mfail/mapping_tuple_non_tuple.sail[0m:5.29-35:
+5[96m |[0mmapping m : int <-> bool = { (1, 2) <-> true }
+ [91m |[0m                             [91m^----^[0m
+ [91m |[0m Cannot bind tuple mapping-pattern against non tuple type

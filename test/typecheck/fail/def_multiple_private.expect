@@ -1,0 +1,5 @@
+[93mError[0m:
+[96mfail/def_multiple_private.sail[0m:4.8-15:
+4[96m |[0mprivate private function f() -> unit = ()
+ [91m |[0m        [91m^-----^[0m
+ [91m |[0m Toplevel definition has multiple visibility modifiers

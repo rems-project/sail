@@ -43,8 +43,11 @@ metavar bool ::=
 
 metavar value ::=
   {{ phantom }}
-  {{ lem vl }}
-  {{ ocaml vl }}
+  {{ ocaml Ast.value }}
+
+metavar value_opt ::=
+  {{ phantom }}
+  {{ ocaml Ast.value option }}
 
 metavar alpha ::=
   {{ phantom }}
@@ -54,7 +57,6 @@ embed
 {{ ocaml
 
 open Ast
-open Value2
 
 type iannot = int * Parse_ast.l
 
@@ -126,8 +128,8 @@ uid :: 'UId_' ::=
 
 cval :: 'V_' ::=
   | name : ctyp                                     :: :: id
-  | id : ctyp                                       :: :: member
   | value : ctyp                                    :: :: lit
+  | undefined : ctyp                                :: :: undef
   | ( cval0 , ... , cvaln )                         :: :: tuple
   | struct { id0 = cval0 , ... , idn = cvaln } ctyp :: :: struct
   | cval is uid                                     :: :: ctor_kind
@@ -215,7 +217,7 @@ creturn :: 'CR_' ::=
 
 init :: 'Init_' ::=
   | cval                             :: :: cval
-  | static value                     :: :: static
+  | static value_opt                 :: :: static
   | json_key string0 . ... . stringn :: :: json_key
 
 % A Jib function call may be to a Sail function defined by a valspec
@@ -291,7 +293,7 @@ def_annot :: '' ::=
   {{ lem def_annot unit }}
   {{ ocaml unit def_annot }}
 
-cdef :: 'CDEF_' ::=
+cdef :: 'CDef_' ::=
   {{ aux _ def_annot }}
   | register name : ctyp = {
       instr0 ; ... ; instrn
@@ -313,8 +315,8 @@ cdef :: 'CDEF_' ::=
       instr0 ; ... ; instrm
     } :: :: fundef
 
-% Each function can have custom global state. In CDEF_startup and
-% CDEF_finish all I_decl and I_init nodes are treated as global and no
+% Each function can have custom global state. In CDef_startup and
+% CDef_finish all I_decl and I_init nodes are treated as global and no
 % nested-instructions (if/block) are allowed.
   | startup id {
       instr0 ; ... ; instrn

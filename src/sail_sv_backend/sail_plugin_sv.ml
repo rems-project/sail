@@ -53,7 +53,6 @@ open Ast_util
 open Jib
 open Jib_compile
 open Jib_util
-open Value2
 open PPrint
 open Printf
 open Smt_exp
@@ -281,8 +280,8 @@ module Verilog_config (C : JIB_CONFIG) : Jib_compile.CONFIG = struct
   open Type_check
   open Jib_compile
 
-  let max_int n = Big_int.pred (Big_int.pow_int_positive 2 (n - 1))
-  let min_int n = Big_int.negate (Big_int.pow_int_positive 2 (n - 1))
+  let max_int n = Z.pred (Z.shift_left Z.one (n - 1))
+  let min_int n = Z.neg (Z.shift_left Z.one (n - 1))
 
   let rec convert_typ ctx typ =
     let (Typ_aux (typ_aux, l) as typ) = Env.expand_synonyms ctx.local_env typ in
@@ -312,9 +311,9 @@ module Verilog_config (C : JIB_CONFIG) : Jib_compile.CONFIG = struct
               }
             in
             match (nexp_simp n, nexp_simp m) with
-            | Nexp_aux (Nexp_constant n, _), Nexp_aux (Nexp_constant m, _) when Big_int.equal n m -> CT_constant n
+            | Nexp_aux (Nexp_constant n, _), Nexp_aux (Nexp_constant m, _) when Z.equal n m -> CT_constant n
             | Nexp_aux (Nexp_constant n, _), Nexp_aux (Nexp_constant m, _)
-              when Big_int.less_equal (min_int 64) n && Big_int.less_equal m (max_int 64) ->
+              when Z.leq (min_int 64) n && Z.leq m (max_int 64) ->
                 CT_fint 64
             | n, m ->
                 if
@@ -330,11 +329,11 @@ module Verilog_config (C : JIB_CONFIG) : Jib_compile.CONFIG = struct
        - If the length is less than 64, then use a small bits type, sbits.
        - If the length may be larger than 64, use a large bits type lbits. *)
     | Typ_app (id, [A_aux (A_nexp n, _)]) when string_of_id id = "bitvector" -> (
-        match solve_unique ctx.local_env n with Some n -> CT_fbits (Big_int.to_int n) | _ -> CT_lbits
+        match solve_unique ctx.local_env n with Some n -> CT_fbits (Z.to_int n) | _ -> CT_lbits
       )
     | Typ_app (id, [A_aux (A_nexp n, _); A_aux (A_typ typ, _)]) when string_of_id id = "vector" -> (
         match nexp_simp n with
-        | Nexp_aux (Nexp_constant c, _) -> CT_fvector (Big_int.to_int c, convert_typ ctx typ)
+        | Nexp_aux (Nexp_constant c, _) -> CT_fvector (Z.to_int c, convert_typ ctx typ)
         | _ -> CT_vector (convert_typ ctx typ)
       )
     | Typ_app (id, [A_aux (A_typ typ, _)]) when string_of_id id = "register" -> CT_ref (convert_typ ctx typ)
@@ -390,7 +389,7 @@ end
 
 let register_types cdefs =
   List.fold_left
-    (fun acc cdef -> match cdef with CDEF_aux (CDEF_register (id, ctyp, _), _) -> NameMap.add id ctyp acc | _ -> acc)
+    (fun acc cdef -> match cdef with CDef_aux (CDef_register (id, ctyp, _), _) -> NameMap.add id ctyp acc | _ -> acc)
     NameMap.empty cdefs
 
 let jib_of_ast make_call_precise env ast effect_info =
@@ -632,7 +631,7 @@ let verilog_target out_opt { ast; effect_info; env; default_sail_dir; _ } =
       separate empty
         (List.filter_map
            (function
-             | CDEF_aux (CDEF_register (id, ctyp, _), _) ->
+             | CDef_aux (CDef_register (id, ctyp, _), _) ->
                  Some (pp_id id ^^ space ^^ equals ^^ space ^^ pp_id id ^^ string "_in" ^^ semi ^^ hardline)
              | _ -> None
              )
@@ -646,7 +645,7 @@ let verilog_target out_opt { ast; effect_info; env; default_sail_dir; _ } =
       separate empty
         (List.filter_map
            (function
-             | CDEF_aux (CDEF_register (id, ctyp, _), _) ->
+             | CDef_aux (CDef_register (id, ctyp, _), _) ->
                  Some (pp_id id ^^ string "_out" ^^ space ^^ equals ^^ space ^^ pp_id id ^^ semi ^^ hardline)
              | _ -> None
              )
@@ -656,7 +655,7 @@ let verilog_target out_opt { ast; effect_info; env; default_sail_dir; _ } =
   in
 
   let main =
-    List.find_opt (function CDEF_aux (CDEF_fundef (id, _, _, _), _) -> pp_id_string id = "main" | _ -> false) cdefs
+    List.find_opt (function CDef_aux (CDef_fundef (id, _, _, _), _) -> pp_id_string id = "main" | _ -> false) cdefs
   in
   let main_args, main_result, module_main_in_out = main_args main fn_ctyps in
 
@@ -681,7 +680,7 @@ let verilog_target out_opt { ast; effect_info; env; default_sail_dir; _ } =
     if !opt_inregs then
       List.filter_map
         (function
-          | CDEF_aux (CDEF_register (id, ctyp, _), _) ->
+          | CDef_aux (CDef_register (id, ctyp, _), _) ->
               Some (string "input" ^^ space ^^ wrap_type ctyp (pp_id id ^^ string "_in"))
           | _ -> None
           )
@@ -693,7 +692,7 @@ let verilog_target out_opt { ast; effect_info; env; default_sail_dir; _ } =
     if !opt_inregs then
       List.filter_map
         (function
-          | CDEF_aux (CDEF_register (id, ctyp, _), _) ->
+          | CDef_aux (CDef_register (id, ctyp, _), _) ->
               Some (string "output" ^^ space ^^ wrap_type ctyp (pp_id id ^^ string "_out"))
           | _ -> None
           )

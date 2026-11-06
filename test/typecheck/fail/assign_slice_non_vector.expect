@@ -1,0 +1,5 @@
+[93mType error[0m:
+[96mfail/assign_slice_non_vector.sail[0m:4.42-51:
+4[96m |[0mfunction f() -> unit = { var x : int = 0; x[3 .. 0] = 0b0000 }
+ [91m |[0m                                          [91m^-------^[0m
+ [91m |[0m Cannot assign slice of non vector type

@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Sail Documentation</title>
+  <style>
+    :root {
+      --bg: #ffffff;
+      --fg: #1f2328;
+      --muted: #59636e;
+      --card: #f6f8fa;
+      --border: #d1d9e0;
+      --link: #0969da;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: #0d1117;
+        --fg: #e6edf3;
+        --muted: #9198a1;
+        --card: #151b23;
+        --border: #3d444d;
+        --link: #4493f8;
+      }
+    }
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--fg);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+      line-height: 1.5;
+    }
+    main {
+      max-width: 48rem;
+      margin: 0 auto;
+      padding: 2rem 1rem;
+    }
+    header {
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+      margin-bottom: 2rem;
+    }
+    header img { width: 72px; height: 72px; }
+    h1 { margin: 0; font-size: 2rem; }
+    header p { margin: 0; color: var(--muted); }
+    a { color: var(--link); }
+    .card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 1rem 1.25rem;
+      margin-bottom: 1rem;
+    }
+    .card h2 { margin: 0 0 0.25rem 0; font-size: 1.25rem; }
+    .card p { margin: 0.25rem 0; color: var(--muted); }
+    .links a { margin-right: 1rem; }
+    footer { margin-top: 2rem; color: var(--muted); font-size: 0.875rem; }
+  </style>
+</head>
+<body>
+<main>
+  <header>
+    <img src="manual/sail_logo_square.png" alt="Sail logo">
+    <div>
+      <h1>Sail Documentation</h1>
+      <p>The Sail instruction-set semantics specification language</p>
+    </div>
+  </header>
+
+  <section class="card">
+    <h2>User Manual</h2>
+    <p>The Sail language reference and user guide: language features, command-line usage, model configuration, and modules.</p>
+    <p class="links">
+      <a href="manual/manual.html">Read the manual</a>
+    </p>
+  </section>
+
+  <section class="card">
+    <h2>OCaml API</h2>
+    <p>odoc documentation for libsail and the Sail backend plugins.</p>
+    <p class="links"><a href="ocaml/index.html">Browse the API</a></p>
+  </section>
+
+  <section class="card">
+    <h2>Rocq Definitions</h2>
+    <p>The formal definitions of Sail's abstract syntax and semantics in Rocq.</p>
+    <p class="links">
+      <a href="rocq/toc.html">Table of contents</a>
+      <a href="rocq/indexpage.html">Index</a>
+    </p>
+  </section>
+
+  <footer>
+    Built from <a href="https://github.com/rems-project/sail">rems-project/sail</a>.
+  </footer>
+</main>
+</body>
+</html>

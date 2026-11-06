@@ -62,7 +62,7 @@ open option
 def __id (x : Int) : Int :=
   x
 
-/-- Type quantifiers: k_ex1469_ : Bool, k_ex1468_ : Bool -/
+/-- Type quantifiers: k_ex1478_ : Bool, k_ex1477_ : Bool -/
 def neq_bool (x : Bool) (y : Bool) : Bool :=
   (! (x == y))
 
@@ -174,7 +174,7 @@ def write_CSR (merge_var : (BitVec 12)) : SailM Bool := do
     (pure true)
   | _ => do
     (do
-      assert false "Pattern match failure at match_bv.sail:36.0-38.1"
+      sail_assert false "Pattern match failure at match_bv.sail:36.0-38.1"
       throw Error.Exit)
 
 def write_CSR2 (merge_var : (BitVec 12)) : SailM Bool := do
@@ -183,7 +183,7 @@ def write_CSR2 (merge_var : (BitVec 12)) : SailM Bool := do
     (pure true)
   | _ => do
     (do
-      assert false "Pattern match failure at match_bv.sail:41.0-43.1"
+      sail_assert false "Pattern match failure at match_bv.sail:41.0-43.1"
       throw Error.Exit)
 
 def initialize_registers (_ : Unit) : Unit :=

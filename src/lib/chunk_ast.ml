@@ -452,7 +452,7 @@ let rec pop_header_comments comments chunks l lnum =
 
 let chunk_header_comments comments chunks = function
   | [] -> ()
-  | DEF_aux (_, l) :: _ -> pop_header_comments comments chunks l 1
+  | Def_aux (_, l) :: _ -> pop_header_comments comments chunks l 1
 
 (* Pop comments preceeding location into the chunkstream *)
 let rec pop_comments ?(newline = false) ?last_comment_line ?(spacer = true) comments chunks l =
@@ -460,7 +460,7 @@ let rec pop_comments ?(newline = false) ?last_comment_line ?(spacer = true) comm
     match last_comment_line with
     | Some (comment_type, last) when spacer && last < p.pos_lnum ->
         let spacing = p.pos_lnum - last - match comment_type with Comment_line -> 1 | Comment_block -> 2 in
-        for i = 0 to spacing do
+        for _ = 0 to spacing do
           Queue.add (Spacer (true, 1)) chunks
         done
     | _ -> ()
@@ -540,7 +540,7 @@ let chunk_of_lit (L_aux (aux, _)) =
   | L_one -> Atom "bitone"
   | L_true -> Atom "true"
   | L_false -> Atom "false"
-  | L_num n -> Atom (Big_int.to_string n)
+  | L_num n -> Atom (Z.to_string n)
   | L_hex b -> Atom ("0x" ^ b)
   | L_bin b -> Atom ("0b" ^ b)
   | L_string s -> String_literal s
@@ -665,7 +665,7 @@ let rec chunk_attribute_data comments chunks (AD_aux (aux, l)) =
         chunk_delimit ~within:l ~delim:"," ~get_loc:(fun (AD_aux (_, l)) -> l) ~chunk:chunk_attribute_data comments args
       in
       Queue.add (Tuple ("[", "]", 0, args)) chunks
-  | AD_num n -> Queue.add (Atom (Big_int.to_string n)) chunks
+  | AD_num n -> Queue.add (Atom (Z.to_string n)) chunks
   | AD_bool b -> Queue.add (Atom (string_of_bool b)) chunks
   | AD_string s ->
       if have_linebreak (starting_line_num l) (ending_line_num l) then (
@@ -702,7 +702,7 @@ let rec chunk_atyp comments chunks (ATyp_aux (aux, l)) =
   | ATyp_id id -> Queue.add (Atom (string_of_id id)) chunks
   | ATyp_var v -> Queue.add (Atom (string_of_var v)) chunks
   | ATyp_lit lit -> Queue.add (chunk_of_lit lit) chunks
-  | ATyp_nset set -> Queue.add (Atom ("{" ^ Util.string_of_list ", " Big_int.to_string set ^ "}")) chunks
+  | ATyp_nset set -> Queue.add (Atom ("{" ^ Util.string_of_list ", " Z.to_string set ^ "}")) chunks
   | ATyp_in (lhs, rhs) ->
       let lhs_chunks = rec_chunk_atyp lhs in
       let rhs_chunks = rec_chunk_atyp rhs in
@@ -818,12 +818,12 @@ let rec chunk_pat comments chunks (P_aux (aux, l)) =
       let id_chunks = Queue.create () in
       Queue.add (Atom (string_of_id id)) id_chunks;
       let ix_chunks = Queue.create () in
-      if Big_int.equal n m then Queue.add (Atom (Big_int.to_string n)) ix_chunks
+      if Z.equal n m then Queue.add (Atom (Z.to_string n)) ix_chunks
       else (
         let n_chunks = Queue.create () in
-        Queue.add (Atom (Big_int.to_string n)) n_chunks;
+        Queue.add (Atom (Z.to_string n)) n_chunks;
         let m_chunks = Queue.create () in
-        Queue.add (Atom (Big_int.to_string m)) m_chunks;
+        Queue.add (Atom (Z.to_string m)) m_chunks;
         Queue.add (Vector_binary (n_chunks, "..", m_chunks)) ix_chunks
       );
       Queue.add (Index (id_chunks, ix_chunks)) chunks
@@ -1136,7 +1136,7 @@ let rec chunk_exp comments chunks (E_aux (aux, l)) =
       chunk_exp comments to_chunks to_index;
       let step_chunks_opt =
         match step with
-        | E_aux (E_lit (L_aux (L_num n, _)), _) when Big_int.equal n (Big_int.of_int 1) -> None
+        | E_aux (E_lit (L_aux (L_num n, _)), _) when Z.equal n (Z.of_int 1) -> None
         | _ ->
             let step_chunks = Queue.create () in
             chunk_exp comments step_chunks step;
@@ -1353,7 +1353,7 @@ let chunk_val_spec comments chunks (VS_aux (VS_val_spec (typschm, id, extern_opt
   pop_trailing_comment ~space:1 comments chunks (ending_line_num l);
   Queue.push (Spacer (true, 1)) chunks
 
-let chunk_register comments chunks (DEC_aux (DEC_reg ((ATyp_aux (_, typ_l) as typ), id, opt_exp), l)) =
+let chunk_register comments chunks (Reg_aux (Reg ((ATyp_aux (_, typ_l) as typ), id, opt_exp), l)) =
   pop_comments comments chunks l;
   let def_chunks = Queue.create () in
   Queue.push (Atom "register") def_chunks;
@@ -1520,7 +1520,7 @@ let rec has_skip_attr skip = function
   | (_, "fmt", Some (AD_aux (AD_string "skip", _))) :: _ -> true
   | _ :: attrs -> has_skip_attr skip attrs
 
-let rec chunk_def skip source last_line_span comments chunks (DEF_aux (def, l)) =
+let rec chunk_def skip source last_line_span comments chunks (Def_aux (def, l)) =
   let line_span = (starting_line_num l, ending_line_num l) in
   let spacing = def_spacer last_line_span line_span in
   if spacing > 0 then Queue.add (Spacer (true, spacing)) chunks;
@@ -1542,17 +1542,17 @@ let rec chunk_def skip source last_line_span comments chunks (DEF_aux (def, l)) 
           )
   in
   match def with
-  | DEF_doc (doc, def) ->
+  | Def_doc (doc, def) ->
       pop_comments comments chunks l;
       Queue.add (Doc_comment doc) chunks;
       chunk_def skip source last_line_span comments chunks def
-  | DEF_attribute (attrs, def) ->
+  | Def_attribute (attrs, def) ->
       pop_comments comments chunks l;
       chunk_attributes comments chunks attrs;
       Queue.add (Spacer (false, 1)) chunks;
       let skip = has_skip_attr skip attrs in
       chunk_def skip source last_line_span comments chunks def
-  | DEF_private def ->
+  | Def_private def ->
       pop_comments comments chunks l;
       chunk_keyword "private" chunks;
       chunk_def skip source line_span comments chunks def
@@ -1560,28 +1560,28 @@ let rec chunk_def skip source last_line_span comments chunks (DEF_aux (def, l)) 
       if skip then raw_source ()
       else (
         match def with
-        | DEF_fundef fdef -> chunk_fundef comments chunks fdef
-        | DEF_pragma (pragma, Pragma_line (arg, _)) ->
+        | Def_fundef fdef -> chunk_fundef comments chunks fdef
+        | Def_pragma (pragma, Pragma_line (arg, _)) ->
             pop_comments comments chunks l;
             Queue.add (Pragma (pragma, arg)) chunks;
             pragma_span := true
-        | DEF_pragma (pragma, Pragma_structured data) ->
+        | Def_pragma (pragma, Pragma_structured data) ->
             let open Parse_ast.Attribute_data in
             pop_comments comments chunks l;
             Queue.add
               (Pragma (pragma, Ast_util.string_of_attribute_data (AD_aux (AD_object data, Parse_ast.Unknown))))
               chunks
-        | DEF_default dts -> chunk_default_typing_spec comments chunks dts
-        | DEF_fixity (prec, n, op) ->
+        | Def_default dts -> chunk_default_typing_spec comments chunks dts
+        | Def_fixity (prec, n, op) ->
             pop_comments comments chunks l;
             let string_of_prec = function Infix -> "infix" | InfixL -> "infixl" | InfixR -> "infixr" in
-            Queue.add (Atom (Printf.sprintf "%s %s %s" (string_of_prec prec) (Big_int.to_string n) op)) chunks;
+            Queue.add (Atom (Printf.sprintf "%s %s %s" (string_of_prec prec) (Z.to_string n) op)) chunks;
             Queue.add (Spacer (true, 1)) chunks
-        | DEF_register reg -> chunk_register comments chunks reg
-        | DEF_let (pat, exp) -> chunk_toplevel_let l comments chunks pat exp
-        | DEF_val vs -> chunk_val_spec comments chunks vs
-        | DEF_scattered sd when can_handle_sd sd -> chunk_scattered comments chunks sd
-        | DEF_type td when can_handle_td td -> chunk_type_def comments chunks td
+        | Def_register reg -> chunk_register comments chunks reg
+        | Def_let (pat, exp) -> chunk_toplevel_let l comments chunks pat exp
+        | Def_val vs -> chunk_val_spec comments chunks vs
+        | Def_scattered sd when can_handle_sd sd -> chunk_scattered comments chunks sd
+        | Def_type td when can_handle_td td -> chunk_type_def comments chunks td
         | _ -> raw_source ()
       );
       (* Adjust the line span of a pragma to a single line so the spacing works out *)

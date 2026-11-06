@@ -44,10 +44,8 @@
 (*  SPDX-License-Identifier: BSD-2-Clause                                   *)
 (****************************************************************************)
 
-open Util
 open Ast
 open Ast_compare
-open Ast_defs
 open Ast_util
 open Type_check
 
@@ -302,13 +300,13 @@ let message_of_type_error type_error =
         | Ord_aux (Ord_dec, _) ->
             let msg =
               Printf.sprintf "First index %s must be greater than or equal to second index %s (when default Order dec)"
-                (Big_int.to_string n) (Big_int.to_string m)
+                (Z.to_string n) (Z.to_string m)
             in
             (Line msg, None)
         | Ord_aux (Ord_inc, _) ->
             let msg =
               Printf.sprintf "First index %s must be less than or equal to second index %s (when default Order inc)"
-                (Big_int.to_string n) (Big_int.to_string m)
+                (Z.to_string n) (Z.to_string m)
             in
             (Line msg, None)
       )

@@ -116,7 +116,7 @@ let threaded_map f state l =
 let lit_match = function
   | (L_bin [Non_empty (Bin_0, [])] | L_false), (L_bin [Non_empty (Bin_0, [])] | L_false) -> true
   | (L_bin [Non_empty (Bin_1, [])] | L_true), (L_bin [Non_empty (Bin_1, [])] | L_true) -> true
-  | L_num i1, L_num i2 -> Big_int.equal i1 i2
+  | L_num i1, L_num i2 -> Z.equal i1 i2
   | l1, l2 -> l1 = l2
 
 (* There's no undefined nexp, so replace undefined sizes with a plausible size.
@@ -195,7 +195,7 @@ let reduce_cast typ exp l annot =
       else
         raise
           (Reporting.err_unreachable l __POS__
-             ("Constant propagation error: literal " ^ Big_int.to_string n ^ " does not satisfy constraint "
+             ("Constant propagation error: literal " ^ Z.to_string n ^ " does not satisfy constraint "
             ^ string_of_n_constraint nc
              )
           )
@@ -266,7 +266,7 @@ let never_fold_ids ast =
   List.fold_left
     (fun ids def ->
       match def with
-      | DEF_aux (DEF_val vs, def_annot) -> (
+      | Def_aux (Def_val vs, def_annot) -> (
           let id = id_of_val_spec vs in
           match get_def_attribute "never_fold" def_annot with Some _ -> IdSet.add id ids | None -> ids
         )
@@ -299,7 +299,7 @@ let const_props target env ast =
   fun ref_vars ->
     let constants =
       let add m = function
-        | DEF_aux (DEF_let (P_aux ((P_id id | P_typ (_, P_aux (P_id id, _))), _), exp), _)
+        | Def_aux (Def_let (P_aux ((P_id id | P_typ (_, P_aux (P_id id, _))), _), exp), _)
           when Constant_fold.is_constant exp ->
             Bindings.add id exp m
         | _ -> m
@@ -643,7 +643,7 @@ let const_props target env ast =
     and can_match_with_env l env (E_aux (e, (_l, annot)) as exp0) cases (substs, ksubsts) assigns =
       let rec check_exp_pat (E_aux (e, (l, annot)) as exp) (P_aux (p, (l', p_annot)) as pat) =
         match (e, p) with
-        | _, P_wild -> DoesMatch ([], [])
+        | _, P_wild -> if effectful (Type_check.effect_of_annot annot) then GiveUp else DoesMatch ([], [])
         | _, P_typ (typ, p') -> (
             match (typ_has_existential typ, check_exp_pat exp p') with
             | false, DoesMatch ([(id, v)], ns) -> DoesMatch ([(id, E_aux (E_typ (typ, v), (l', p_annot)))], ns)

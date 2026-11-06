@@ -50,7 +50,6 @@ open Ast_defs
 open Bit
 open Parse_ast.Attribute_data
 open Util
-module Big_int = Nat_big_num
 
 open Coq_def_annot
 open Coq_extern
@@ -68,7 +67,7 @@ let rec string_of_attribute_data (AD_aux (aux, _)) =
       ^ Util.string_of_list ", " (fun (k, v) -> Printf.sprintf "\"%s\" = %s" k (string_of_attribute_data v)) kvs
       ^ " }"
   | AD_string s -> "\"" ^ s ^ "\""
-  | AD_num n -> Big_int.to_string n
+  | AD_num n -> Z.to_string n
   | AD_list vs -> "[" ^ Util.string_of_list ", " string_of_attribute_data vs ^ "]"
   | AD_bool b -> string_of_bool b
 
@@ -80,9 +79,8 @@ let rec json_of_attribute_data (AD_aux (aux, _)) =
   match aux with
   | AD_object kvs -> `Assoc (List.map (fun (k, v) -> (k, json_of_attribute_data v)) kvs)
   | AD_string s -> `String s
-  | AD_num n when Big_int.less_equal (Big_int.of_int min_int) n && Big_int.less_equal n (Big_int.of_int max_int) ->
-      `Int (Big_int.to_int n)
-  | AD_num n -> `String (Big_int.to_string n)
+  | AD_num n when Z.leq (Z.of_int min_int) n && Z.leq n (Z.of_int max_int) -> `Int (Z.to_int n)
+  | AD_num n -> `String (Z.to_string n)
   | AD_list vs -> `List (List.map json_of_attribute_data vs)
   | AD_bool b -> `Bool b
 
@@ -257,11 +255,11 @@ let mk_qi_kopt ?loc:(l = Parse_ast.Unknown) kopt = QI_aux (QI_id kopt, l)
 let mk_fundef ?loc:(l = Parse_ast.Unknown) funcls =
   let tannot_opt = Typ_annot_opt_aux (Typ_annot_opt_none, l) in
   let rec_opt = Rec_aux (Rec_nonrec, l) in
-  DEF_aux (DEF_fundef (FD_aux (FD_function (rec_opt, tannot_opt, funcls), no_annot)), mk_def_annot l ())
+  Def_aux (Def_fundef (FD_aux (FD_function (rec_opt, tannot_opt, funcls), no_annot)), mk_def_annot l ())
 
-let mk_val_spec ?loc:(l = Parse_ast.Unknown) vs_aux = DEF_aux (DEF_val (VS_aux (vs_aux, no_annot)), mk_def_annot l ())
+let mk_val_spec ?loc:(l = Parse_ast.Unknown) vs_aux = Def_aux (Def_val (VS_aux (vs_aux, no_annot)), mk_def_annot l ())
 
-let mk_def ?loc:(l = Parse_ast.Unknown) def env = DEF_aux (def, mk_def_annot l env)
+let mk_def ?loc:(l = Parse_ast.Unknown) def env = Def_aux (def, mk_def_annot l env)
 
 let is_vector_syntax (Id_aux (aux, _)) =
   match aux with
@@ -343,7 +341,7 @@ let rec constant_arith_chain = function
       (root, c :: constants)
   | Nexp_aux (Nexp_minus (n, Nexp_aux (Nexp_constant c, _)), _) ->
       let root, constants = constant_arith_chain n in
-      (root, Big_int.negate c :: constants)
+      (root, Z.neg c :: constants)
   | nexp -> (nexp, [])
 
 let rec nexp_simp (Nexp_aux (nexp, l)) = Nexp_aux (nexp_simp_aux nexp, l)
@@ -360,14 +358,14 @@ and nexp_simp_aux = function
       let (Nexp_aux (n1_simp, _) as n1) = nexp_simp n1 in
       let (Nexp_aux (n2_simp, n2_loc) as n2) = nexp_simp n2 in
       match (n1_simp, n2_simp) with
-      | Nexp_constant c1, _ when Big_int.equal c1 Big_int.zero -> n2_simp
-      | _, Nexp_constant c2 when Big_int.equal c2 Big_int.zero -> n1_simp
-      | Nexp_constant c1, Nexp_constant c2 -> Nexp_constant (Big_int.add c1 c2)
+      | Nexp_constant c1, _ when Z.equal c1 Z.zero -> n2_simp
+      | _, Nexp_constant c2 when Z.equal c2 Z.zero -> n1_simp
+      | Nexp_constant c1, Nexp_constant c2 -> Nexp_constant (Z.add c1 c2)
       | _, Nexp_constant c when is_constant_arith_chain n1 >= 1 ->
           let root, constants = constant_arith_chain n1 in
-          let sum = List.fold_left Big_int.add c constants in
-          if Big_int.less sum Big_int.zero then Nexp_minus (root, Nexp_aux (Nexp_constant (Big_int.abs sum), n2_loc))
-          else if Big_int.greater sum Big_int.zero then Nexp_sum (root, Nexp_aux (Nexp_constant sum, n2_loc))
+          let sum = List.fold_left Z.add c constants in
+          if Z.lt sum Z.zero then Nexp_minus (root, Nexp_aux (Nexp_constant (Z.abs sum), n2_loc))
+          else if Z.gt sum Z.zero then Nexp_sum (root, Nexp_aux (Nexp_constant sum, n2_loc))
           else unaux_nexp root
       | _, Nexp_neg n2 -> Nexp_minus (n1, n2)
       | _, _ -> Nexp_sum (n1, n2)
@@ -376,53 +374,52 @@ and nexp_simp_aux = function
       let (Nexp_aux (n1_simp, _) as n1) = nexp_simp n1 in
       let (Nexp_aux (n2_simp, _) as n2) = nexp_simp n2 in
       match (n1_simp, n2_simp) with
-      | Nexp_constant c, _ when Big_int.equal c (Big_int.of_int 1) -> n2_simp
-      | _, Nexp_constant c when Big_int.equal c (Big_int.of_int 1) -> n1_simp
-      | Nexp_constant c1, Nexp_constant c2 -> Nexp_constant (Big_int.mul c1 c2)
+      | Nexp_constant c, _ when Z.equal c (Z.of_int 1) -> n2_simp
+      | _, Nexp_constant c when Z.equal c (Z.of_int 1) -> n1_simp
+      | Nexp_constant c1, Nexp_constant c2 -> Nexp_constant (Z.mul c1 c2)
       | _, _ -> Nexp_times (n1, n2)
     )
   | Nexp_minus (n1, n2) -> (
       let (Nexp_aux (n1_simp, _) as n1) = nexp_simp n1 in
       let (Nexp_aux (n2_simp, n2_loc) as n2) = nexp_simp n2 in
       match (n1_simp, n2_simp) with
-      | _, Nexp_constant c2 when Big_int.equal c2 Big_int.zero -> n1_simp
-      | Nexp_constant c1, Nexp_constant c2 -> Nexp_constant (Big_int.sub c1 c2)
+      | _, Nexp_constant c2 when Z.equal c2 Z.zero -> n1_simp
+      | Nexp_constant c1, Nexp_constant c2 -> Nexp_constant (Z.sub c1 c2)
       | _, Nexp_constant c when is_constant_arith_chain n1 >= 1 ->
           let root, constants = constant_arith_chain n1 in
-          let sum = List.fold_left Big_int.add (Big_int.negate c) constants in
-          if Big_int.less sum Big_int.zero then Nexp_minus (root, Nexp_aux (Nexp_constant (Big_int.abs sum), n2_loc))
-          else if Big_int.greater sum Big_int.zero then Nexp_sum (root, Nexp_aux (Nexp_constant sum, n2_loc))
+          let sum = List.fold_left Z.add (Z.neg c) constants in
+          if Z.lt sum Z.zero then Nexp_minus (root, Nexp_aux (Nexp_constant (Z.abs sum), n2_loc))
+          else if Z.gt sum Z.zero then Nexp_sum (root, Nexp_aux (Nexp_constant sum, n2_loc))
           else unaux_nexp root
       | _, _ -> Nexp_minus (n1, n2)
     )
   | Nexp_neg n -> (
       let (Nexp_aux (n_simp, _) as n) = nexp_simp n in
-      match n_simp with Nexp_constant c -> Nexp_constant (Big_int.negate c) | _ -> Nexp_neg n
+      match n_simp with Nexp_constant c -> Nexp_constant (Z.neg c) | _ -> Nexp_neg n
     )
   | Nexp_app ((Id_aux (Id "div", _) as id), [n1; n2]) -> (
       let (Nexp_aux (n1_simp, _) as n1) = nexp_simp n1 in
       let (Nexp_aux (n2_simp, _) as n2) = nexp_simp n2 in
       match (n1_simp, n2_simp) with
-      | Nexp_constant c1, Nexp_constant c2 -> Nexp_constant (Big_int.div c1 c2)
+      | Nexp_constant c1, Nexp_constant c2 -> Nexp_constant (Z.ediv c1 c2)
       | _, _ -> Nexp_app (id, [n1; n2])
     )
   | Nexp_app ((Id_aux (Id "mod", _) as id), [n1; n2]) -> (
       let (Nexp_aux (n1_simp, _) as n1) = nexp_simp n1 in
       let (Nexp_aux (n2_simp, _) as n2) = nexp_simp n2 in
       match (n1_simp, n2_simp) with
-      | Nexp_constant c1, Nexp_constant c2 -> Nexp_constant (Big_int.modulus c1 c2)
+      | Nexp_constant c1, Nexp_constant c2 -> Nexp_constant (Z.erem c1 c2)
       | _, _ -> Nexp_app (id, [n1; n2])
     )
   | Nexp_app ((Id_aux (Id "abs", _) as id), [n]) -> (
       let n = nexp_simp n in
-      match n with Nexp_aux (Nexp_constant c, _) -> Nexp_constant (Big_int.abs c) | _ -> Nexp_app (id, [n])
+      match n with Nexp_aux (Nexp_constant c, _) -> Nexp_constant (Z.abs c) | _ -> Nexp_app (id, [n])
     )
   | Nexp_exp nexp -> (
       let nexp = nexp_simp nexp in
       match nexp with
-      | Nexp_aux (Nexp_constant c, _)
-        when Big_int.greater_equal c Big_int.zero && Big_int.less_equal c (Big_int.of_int 7) ->
-          Nexp_constant (Big_int.pow_int_positive 2 (Big_int.to_int c))
+      | Nexp_aux (Nexp_constant c, _) when Z.geq c Z.zero && Z.leq c (Z.of_int 7) ->
+          Nexp_constant (Z.shift_left Z.one (Z.to_int c))
       | _ -> Nexp_exp nexp
     )
   | Nexp_if (i, t, e) -> (
@@ -439,7 +436,7 @@ and constraint_simp (NC_aux (nc_aux, l)) =
     | NC_set (nexp, ints) -> (
         let nexp = nexp_simp nexp in
         match nexp with
-        | Nexp_aux (Nexp_constant c, _) -> if List.exists (fun i -> Big_int.equal c i) ints then NC_true else NC_false
+        | Nexp_aux (Nexp_constant c, _) -> if List.exists (fun i -> Z.equal c i) ints then NC_true else NC_false
         | _ -> NC_set (nexp, ints)
       )
     | NC_equal (arg1, arg2) ->
@@ -448,7 +445,7 @@ and constraint_simp (NC_aux (nc_aux, l)) =
         else (
           match (arg1, arg2) with
           | A_aux (A_nexp (Nexp_aux (Nexp_constant c1, _)), _), A_aux (A_nexp (Nexp_aux (Nexp_constant c2, _)), _)
-            when not (Big_int.equal c1 c2) ->
+            when not (Z.equal c1 c2) ->
               NC_false
           | A_aux (A_bool (NC_aux (NC_true, _)), _), A_aux (A_bool (NC_aux (NC_false, _)), _) -> NC_false
           | A_aux (A_bool (NC_aux (NC_false, _)), _), A_aux (A_bool (NC_aux (NC_true, _)), _) -> NC_false
@@ -460,7 +457,7 @@ and constraint_simp (NC_aux (nc_aux, l)) =
         else (
           match (arg1, arg2) with
           | A_aux (A_nexp (Nexp_aux (Nexp_constant c1, _)), _), A_aux (A_nexp (Nexp_aux (Nexp_constant c2, _)), _)
-            when not (Big_int.equal c1 c2) ->
+            when not (Z.equal c1 c2) ->
               NC_true
           | A_aux (A_bool (NC_aux (NC_true, _)), _), A_aux (A_bool (NC_aux (NC_false, _)), _) -> NC_true
           | A_aux (A_bool (NC_aux (NC_false, _)), _), A_aux (A_bool (NC_aux (NC_true, _)), _) -> NC_true
@@ -487,29 +484,25 @@ and constraint_simp (NC_aux (nc_aux, l)) =
     | NC_ge (nexp1, nexp2) -> (
         let nexp1, nexp2 = (nexp_simp nexp1, nexp_simp nexp2) in
         match (nexp1, nexp2) with
-        | Nexp_aux (Nexp_constant c1, _), Nexp_aux (Nexp_constant c2, _) ->
-            if Big_int.greater_equal c1 c2 then NC_true else NC_false
+        | Nexp_aux (Nexp_constant c1, _), Nexp_aux (Nexp_constant c2, _) -> if Z.geq c1 c2 then NC_true else NC_false
         | _, _ -> NC_ge (nexp1, nexp2)
       )
     | NC_gt (nexp1, nexp2) -> (
         let nexp1, nexp2 = (nexp_simp nexp1, nexp_simp nexp2) in
         match (nexp1, nexp2) with
-        | Nexp_aux (Nexp_constant c1, _), Nexp_aux (Nexp_constant c2, _) ->
-            if Big_int.greater c1 c2 then NC_true else NC_false
+        | Nexp_aux (Nexp_constant c1, _), Nexp_aux (Nexp_constant c2, _) -> if Z.gt c1 c2 then NC_true else NC_false
         | _, _ -> NC_gt (nexp1, nexp2)
       )
     | NC_le (nexp1, nexp2) -> (
         let nexp1, nexp2 = (nexp_simp nexp1, nexp_simp nexp2) in
         match (nexp1, nexp2) with
-        | Nexp_aux (Nexp_constant c1, _), Nexp_aux (Nexp_constant c2, _) ->
-            if Big_int.less_equal c1 c2 then NC_true else NC_false
+        | Nexp_aux (Nexp_constant c1, _), Nexp_aux (Nexp_constant c2, _) -> if Z.leq c1 c2 then NC_true else NC_false
         | _, _ -> NC_le (nexp1, nexp2)
       )
     | NC_lt (nexp1, nexp2) -> (
         let nexp1, nexp2 = (nexp_simp nexp1, nexp_simp nexp2) in
         match (nexp1, nexp2) with
-        | Nexp_aux (Nexp_constant c1, _), Nexp_aux (Nexp_constant c2, _) ->
-            if Big_int.less c1 c2 then NC_true else NC_false
+        | Nexp_aux (Nexp_constant c1, _), Nexp_aux (Nexp_constant c2, _) -> if Z.lt c1 c2 then NC_true else NC_false
         | _, _ -> NC_lt (nexp1, nexp2)
       )
     | NC_app (id, [A_aux (A_bool nc, arg_l)]) when Id.compare (mk_id "not") id = 0 -> (
@@ -536,7 +529,7 @@ let rec get_nexp_constant (Nexp_aux (n, _)) =
   | Nexp_constant c -> Some c
   (* nexp_simp does not always expand large existentials *)
   | Nexp_exp e -> (
-      match get_nexp_constant e with Some c -> Some (Big_int.pow_int_positive 2 (Big_int.to_int c)) | None -> None
+      match get_nexp_constant e with Some c -> Some (Z.shift_left Z.one (Z.to_int c)) | None -> None
     )
   | _ -> None
 
@@ -579,7 +572,7 @@ let vector_typ n typ = mk_typ (Typ_app (mk_id "vector", [mk_typ_arg (A_nexp (nex
 
 let bitvector_typ n = mk_typ (Typ_app (mk_id "bitvector", [mk_typ_arg (A_nexp (nexp_simp n))]))
 
-let bit_typ = bitvector_typ (Nexp_aux (Nexp_constant (Big_int.of_int 1), Parse_ast.Unknown))
+let bit_typ = bitvector_typ (Nexp_aux (Nexp_constant (Z.of_int 1), Parse_ast.Unknown))
 
 let exc_typ = mk_id_typ (mk_id "exception")
 
@@ -588,7 +581,7 @@ let arg_typ ?loc:(l = Parse_ast.Unknown) typ = A_aux (A_typ typ, l)
 let arg_bool ?loc:(l = Parse_ast.Unknown) nc = A_aux (A_bool nc, l)
 
 let nconstant c = Nexp_aux (Nexp_constant c, Parse_ast.Unknown)
-let nint i = nconstant (Big_int.of_int i)
+let nint i = nconstant (Z.of_int i)
 let nminus n1 n2 = Nexp_aux (Nexp_minus (n1, n2), Parse_ast.Unknown)
 let nsum n1 n2 = Nexp_aux (Nexp_sum (n1, n2), Parse_ast.Unknown)
 let ntimes n1 n2 = Nexp_aux (Nexp_times (n1, n2), Parse_ast.Unknown)
@@ -599,7 +592,7 @@ let napp id args = Nexp_aux (Nexp_app (id, args), Parse_ast.Unknown)
 let nite nc n1 n2 = Nexp_aux (Nexp_if (nc, n1, n2), Parse_ast.Unknown)
 
 let nc_set kid nums = mk_nc (NC_set (kid, nums))
-let nc_int_set kid ints = mk_nc (NC_set (kid, List.map Big_int.of_int ints))
+let nc_int_set kid ints = mk_nc (NC_set (kid, List.map Z.of_int ints))
 let nc_eq n1 n2 = mk_nc (NC_equal (arg_nexp n1, arg_nexp n2))
 let nc_neq n1 n2 = mk_nc (NC_not_equal (arg_nexp n1, arg_nexp n2))
 let nc_lteq n1 n2 = NC_aux (NC_le (n1, n2), Parse_ast.Unknown)
@@ -659,9 +652,9 @@ let is_quant_constraint = function QI_aux (QI_constraint _, _) -> true | _ -> fa
 let rec insert_subrange ms (n1, n2) =
   match ms with
   | (m1, m2) :: ms ->
-      if Big_int.equal n2 (Big_int.succ m1) then (n1, m2) :: ms
-      else if Big_int.greater n2 m1 then (n1, n2) :: (m1, m2) :: ms
-      else if Big_int.equal m2 (Big_int.succ n1) then insert_subrange ms (m1, n2)
+      if Z.equal n2 (Z.succ m1) then (n1, m2) :: ms
+      else if Z.gt n2 m1 then (n1, n2) :: (m1, m2) :: ms
+      else if Z.equal m2 (Z.succ n1) then insert_subrange ms (m1, n2)
       else (m1, m2) :: insert_subrange ms (n1, n2)
   | [] -> [(n1, n2)]
 
@@ -669,7 +662,7 @@ let insert_subranges ns ms = List.fold_left insert_subrange ns ms
 
 let rec pattern_vector_subranges (P_aux (aux, _)) =
   match aux with
-  | P_vector_subrange (id, n, m) when Big_int.greater n m -> Bindings.singleton id [(n, m)]
+  | P_vector_subrange (id, n, m) when Z.gt n m -> Bindings.singleton id [(n, m)]
   | P_vector_subrange (id, n, m) -> Bindings.singleton id [(m, n)]
   | P_typ (_, pat) | P_var (pat, _) | P_as (pat, _) | P_not pat -> pattern_vector_subranges pat
   | P_cons (pat1, pat2) | P_or (pat1, pat2) ->
@@ -851,63 +844,63 @@ and map_scattered_annot_aux f = function
   | SD_enum id -> SD_enum id
   | SD_enumcl (id, member) -> SD_enumcl (id, member)
 
-and map_register_annot f = function DEC_aux (dec_aux, annot) -> DEC_aux (map_register_annot_aux f dec_aux, f annot)
+and map_register_annot f = function Reg_aux (reg_aux, annot) -> Reg_aux (map_register_annot_aux f reg_aux, f annot)
 
 and map_register_annot_aux f = function
-  | DEC_reg (typ, id, None) -> DEC_reg (typ, id, None)
-  | DEC_reg (typ, id, Some exp) -> DEC_reg (typ, id, Some (map_exp_annot f exp))
+  | Reg (typ, id, None) -> Reg (typ, id, None)
+  | Reg (typ, id, Some exp) -> Reg (typ, id, Some (map_exp_annot f exp))
 
-and map_def_annot f (DEF_aux (aux, annot)) =
+and map_def_annot f (Def_aux (aux, annot)) =
   let aux =
     match aux with
-    | DEF_type td -> DEF_type (map_typedef_annot f td)
-    | DEF_constraint nc -> DEF_constraint nc
-    | DEF_fundef fd -> DEF_fundef (map_fundef_annot f fd)
-    | DEF_mapdef md -> DEF_mapdef (map_mapdef_annot f md)
-    | DEF_outcome (outcome_spec, defs) -> DEF_outcome (outcome_spec, List.map (map_def_annot f) defs)
-    | DEF_instantiation (IN_aux (IN_id id, annot), substs) -> DEF_instantiation (IN_aux (IN_id id, f annot), substs)
-    | DEF_impl funcl -> DEF_impl (map_funcl_annot f funcl)
-    | DEF_let (pat, exp) -> DEF_let (map_pat_annot f pat, map_exp_annot f exp)
-    | DEF_val vs -> DEF_val (map_valspec_annot f vs)
-    | DEF_fixity (prec, n, id) -> DEF_fixity (prec, n, id)
-    | DEF_overload (name, overloads) -> DEF_overload (name, overloads)
-    | DEF_default ds -> DEF_default ds
-    | DEF_scattered sd -> DEF_scattered (map_scattered_annot f sd)
-    | DEF_measure (id, pat, exp) -> DEF_measure (id, map_pat_annot f pat, map_exp_annot f exp)
-    | DEF_loop_measures (id, measures) -> DEF_loop_measures (id, measures)
-    | DEF_register ds -> DEF_register (map_register_annot f ds)
-    | DEF_internal_mutrec fds -> DEF_internal_mutrec (List.map (map_fundef_annot f) fds)
-    | DEF_pragma (pragma, arg) -> DEF_pragma (pragma, arg)
+    | Def_type td -> Def_type (map_typedef_annot f td)
+    | Def_constraint nc -> Def_constraint nc
+    | Def_fundef fd -> Def_fundef (map_fundef_annot f fd)
+    | Def_mapdef md -> Def_mapdef (map_mapdef_annot f md)
+    | Def_outcome (outcome_spec, defs) -> Def_outcome (outcome_spec, List.map (map_def_annot f) defs)
+    | Def_instantiation (IN_aux (IN_id id, annot), substs) -> Def_instantiation (IN_aux (IN_id id, f annot), substs)
+    | Def_impl funcl -> Def_impl (map_funcl_annot f funcl)
+    | Def_let (pat, exp) -> Def_let (map_pat_annot f pat, map_exp_annot f exp)
+    | Def_val vs -> Def_val (map_valspec_annot f vs)
+    | Def_fixity (prec, n, id) -> Def_fixity (prec, n, id)
+    | Def_overload (name, overloads) -> Def_overload (name, overloads)
+    | Def_default ds -> Def_default ds
+    | Def_scattered sd -> Def_scattered (map_scattered_annot f sd)
+    | Def_measure (id, pat, exp) -> Def_measure (id, map_pat_annot f pat, map_exp_annot f exp)
+    | Def_loop_measures (id, measures) -> Def_loop_measures (id, measures)
+    | Def_register ds -> Def_register (map_register_annot f ds)
+    | Def_internal_mutrec fds -> Def_internal_mutrec (List.map (map_fundef_annot f) fds)
+    | Def_pragma (pragma, arg) -> Def_pragma (pragma, arg)
   in
-  DEF_aux (aux, annot)
+  Def_aux (aux, annot)
 
 and map_ast_annot f ast = { ast with defs = List.map (map_def_annot f) ast.defs }
 
-let rec map_def_def_annot f (DEF_aux (aux, annot)) =
+let rec map_def_def_annot f (Def_aux (aux, annot)) =
   let aux =
     match aux with
-    | DEF_type td -> DEF_type td
-    | DEF_constraint nc -> DEF_constraint nc
-    | DEF_fundef fd -> DEF_fundef fd
-    | DEF_mapdef md -> DEF_mapdef md
-    | DEF_outcome (outcome_spec, defs) -> DEF_outcome (outcome_spec, List.map (map_def_def_annot f) defs)
-    | DEF_instantiation (inst_spec, substs) -> DEF_instantiation (inst_spec, substs)
-    | DEF_impl funcl -> DEF_impl funcl
-    | DEF_let (pat, exp) -> DEF_let (pat, exp)
-    | DEF_val vs -> DEF_val vs
-    | DEF_fixity (prec, n, id) -> DEF_fixity (prec, n, id)
-    | DEF_overload (name, overloads) -> DEF_overload (name, overloads)
-    | DEF_default ds -> DEF_default ds
-    | DEF_scattered sd -> DEF_scattered sd
-    | DEF_measure (id, pat, exp) -> DEF_measure (id, pat, exp)
-    | DEF_loop_measures (id, measures) -> DEF_loop_measures (id, measures)
-    | DEF_register ds -> DEF_register ds
-    | DEF_internal_mutrec fds -> DEF_internal_mutrec fds
-    | DEF_pragma (pragma, arg) -> DEF_pragma (pragma, arg)
+    | Def_type td -> Def_type td
+    | Def_constraint nc -> Def_constraint nc
+    | Def_fundef fd -> Def_fundef fd
+    | Def_mapdef md -> Def_mapdef md
+    | Def_outcome (outcome_spec, defs) -> Def_outcome (outcome_spec, List.map (map_def_def_annot f) defs)
+    | Def_instantiation (inst_spec, substs) -> Def_instantiation (inst_spec, substs)
+    | Def_impl funcl -> Def_impl funcl
+    | Def_let (pat, exp) -> Def_let (pat, exp)
+    | Def_val vs -> Def_val vs
+    | Def_fixity (prec, n, id) -> Def_fixity (prec, n, id)
+    | Def_overload (name, overloads) -> Def_overload (name, overloads)
+    | Def_default ds -> Def_default ds
+    | Def_scattered sd -> Def_scattered sd
+    | Def_measure (id, pat, exp) -> Def_measure (id, pat, exp)
+    | Def_loop_measures (id, measures) -> Def_loop_measures (id, measures)
+    | Def_register ds -> Def_register ds
+    | Def_internal_mutrec fds -> Def_internal_mutrec fds
+    | Def_pragma (pragma, arg) -> Def_pragma (pragma, arg)
   in
-  DEF_aux (aux, f annot)
+  Def_aux (aux, f annot)
 
-let def_loc (DEF_aux (_, annot)) = annot.loc
+let def_loc (Def_aux (_, annot)) = annot.loc
 
 type id_chunk = Id_chunk_int of int | Id_chunk_string of string
 
@@ -1010,7 +1003,7 @@ let rec string_of_nexp = function Nexp_aux (nexp, _) -> string_of_nexp_aux nexp
 and string_of_nexp_aux = function
   | Nexp_id id -> string_of_id id
   | Nexp_var kid -> string_of_kid kid
-  | Nexp_constant c -> Big_int.to_string c
+  | Nexp_constant c -> Z.to_string c
   | Nexp_times (n1, n2) -> "(" ^ string_of_nexp n1 ^ " * " ^ string_of_nexp n2 ^ ")"
   | Nexp_sum (n1, n2) -> "(" ^ string_of_nexp n1 ^ " + " ^ string_of_nexp n2 ^ ")"
   | Nexp_minus (n1, n2) -> "(" ^ string_of_nexp n1 ^ " - " ^ string_of_nexp n2 ^ ")"
@@ -1058,7 +1051,7 @@ and string_of_n_constraint = function
   | NC_aux (NC_lt (n1, n2), _) -> string_of_nexp n1 ^ " < " ^ string_of_nexp n2
   | NC_aux (NC_or (nc1, nc2), _) -> "(" ^ string_of_n_constraint nc1 ^ " | " ^ string_of_n_constraint nc2 ^ ")"
   | NC_aux (NC_and (nc1, nc2), _) -> "(" ^ string_of_n_constraint nc1 ^ " & " ^ string_of_n_constraint nc2 ^ ")"
-  | NC_aux (NC_set (n, ns), _) -> string_of_nexp n ^ " in {" ^ string_of_list ", " Big_int.to_string ns ^ "}"
+  | NC_aux (NC_set (n, ns), _) -> string_of_nexp n ^ " in {" ^ string_of_list ", " Z.to_string ns ^ "}"
   | NC_aux (NC_app (Id_aux (Operator op, _), [arg1; arg2]), _) ->
       "(" ^ string_of_typ_arg arg1 ^ " " ^ op ^ " " ^ string_of_typ_arg arg2 ^ ")"
   | NC_aux (NC_app (id, args), _) -> string_of_id id ^ "(" ^ string_of_list ", " string_of_typ_arg args ^ ")"
@@ -1117,7 +1110,7 @@ let string_of_lit (L_aux (lit, _)) =
   | L_unit -> "()"
   | L_true -> "true"
   | L_false -> "false"
-  | L_num n -> Big_int.to_string n
+  | L_num n -> Z.to_string n
   | L_hex hex -> "0x" ^ string_of_hex_lit ~case:Uppercase hex
   | L_bin bin -> "0b" ^ string_of_bin_lit bin
   | L_real r -> Q.to_string (Util.Rational.from_rocq r)
@@ -1203,11 +1196,11 @@ and string_of_pat (P_aux (pat, _)) =
   | P_tuple pats -> "(" ^ string_of_list ", " string_of_pat pats ^ ")"
   | P_app (f, pats) -> string_of_id f ^ "(" ^ string_of_list ", " string_of_pat pats ^ ")"
   | P_cons (pat1, pat2) -> string_of_pat pat1 ^ " :: " ^ string_of_pat pat2
-  | P_list pats -> "[||" ^ string_of_list "," string_of_pat pats ^ "||]"
+  | P_list pats -> "[|" ^ string_of_list "," string_of_pat pats ^ "|]"
   | P_vector_concat pats -> string_of_list " @ " string_of_pat pats
   | P_vector_subrange (id, n, m) ->
-      if Big_int.equal n m then string_of_id id ^ "[" ^ Big_int.to_string n ^ "]"
-      else string_of_id id ^ "[" ^ Big_int.to_string n ^ ".." ^ Big_int.to_string m ^ "]"
+      if Z.equal n m then string_of_id id ^ "[" ^ Z.to_string n ^ "]"
+      else string_of_id id ^ "[" ^ Z.to_string n ^ ".." ^ Z.to_string m ^ "]"
   | P_vector pats -> "[" ^ string_of_list ", " string_of_pat pats ^ "]"
   | P_as (pat, id) -> "(" ^ string_of_pat pat ^ " as " ^ string_of_id id ^ ")"
   | P_string_append [] -> "\"\""
@@ -1226,10 +1219,10 @@ and string_of_mpat (MP_aux (pat, _)) =
   | MP_tuple pats -> "(" ^ string_of_list ", " string_of_mpat pats ^ ")"
   | MP_app (f, pats) -> string_of_id f ^ "(" ^ string_of_list ", " string_of_mpat pats ^ ")"
   | MP_cons (pat1, pat2) -> string_of_mpat pat1 ^ " :: " ^ string_of_mpat pat2
-  | MP_list pats -> "[||" ^ string_of_list "," string_of_mpat pats ^ "||]"
+  | MP_list pats -> "[|" ^ string_of_list "," string_of_mpat pats ^ "|]"
   | MP_vector_concat pats -> string_of_list " @ " string_of_mpat pats
   | MP_vector pats -> "[" ^ string_of_list ", " string_of_mpat pats ^ "]"
-  | MP_vector_subrange (id, n, m) -> string_of_id id ^ "[" ^ Big_int.to_string n ^ " .. " ^ Big_int.to_string m ^ "]"
+  | MP_vector_subrange (id, n, m) -> string_of_id id ^ "[" ^ Z.to_string n ^ " .. " ^ Z.to_string m ^ "]"
   | MP_string_append pats -> string_of_list " ^ " string_of_mpat pats
   | MP_typ (mpat, typ) -> "(" ^ string_of_mpat mpat ^ " : " ^ string_of_typ typ ^ ")"
   | MP_as (mpat, id) -> "((" ^ string_of_mpat mpat ^ ") as " ^ string_of_id id ^ ")"
@@ -1296,9 +1289,9 @@ let id_of_mapdef (MD_aux (MD_mapping (id, _, _), _)) = id
 
 let id_of_type_def_aux = function
   | TD_abbrev (id, _, _)
-  | TD_record (id, _, _, _)
+  | TD_record (id, _, _)
   | TD_variant (id, _, _, _)
-  | TD_enum (id, _, _)
+  | TD_enum (id, _)
   | TD_abstract (id, _, _)
   | TD_bitfield (id, _, _) ->
       id
@@ -1307,7 +1300,7 @@ let id_of_type_def (TD_aux (td_aux, _)) = id_of_type_def_aux td_aux
 
 let id_of_val_spec (VS_aux (VS_val_spec (_, id, _), _)) = id
 
-let id_of_dec_spec (DEC_aux (DEC_reg (_, id, _), _)) = id
+let id_of_reg_spec (Reg_aux (Reg (_, id, _), _)) = id
 
 let id_of_scattered (SD_aux (sdef, _)) =
   match sdef with
@@ -1323,16 +1316,16 @@ let id_of_scattered (SD_aux (sdef, _)) =
   | SD_enumcl (id, _) ->
       id
 
-let ids_of_def (DEF_aux (aux, _)) =
+let ids_of_def (Def_aux (aux, _)) =
   match aux with
-  | DEF_type td -> IdSet.singleton (id_of_type_def td)
-  | DEF_fundef fd -> IdSet.singleton (id_of_fundef fd)
-  | DEF_mapdef md -> IdSet.singleton (id_of_mapdef md)
-  | DEF_let (pat, _) -> pat_ids pat
-  | DEF_register (DEC_aux (DEC_reg (_, id, _), _)) -> IdSet.singleton id
-  | DEF_val vs -> IdSet.singleton (id_of_val_spec vs)
-  | DEF_internal_mutrec fds -> IdSet.of_list (List.map id_of_fundef fds)
-  | DEF_scattered sdef -> IdSet.singleton (id_of_scattered sdef)
+  | Def_type td -> IdSet.singleton (id_of_type_def td)
+  | Def_fundef fd -> IdSet.singleton (id_of_fundef fd)
+  | Def_mapdef md -> IdSet.singleton (id_of_mapdef md)
+  | Def_let (pat, _) -> pat_ids pat
+  | Def_register (Reg_aux (Reg (_, id, _), _)) -> IdSet.singleton id
+  | Def_val vs -> IdSet.singleton (id_of_val_spec vs)
+  | Def_internal_mutrec fds -> IdSet.of_list (List.map id_of_fundef fds)
+  | Def_scattered sdef -> IdSet.singleton (id_of_scattered sdef)
   | _ -> IdSet.empty
 let ids_of_defs defs = List.fold_left IdSet.union IdSet.empty (List.map ids_of_def defs)
 let ids_of_ast ast = ids_of_defs ast.defs
@@ -1340,7 +1333,7 @@ let ids_of_ast ast = ids_of_defs ast.defs
 let val_spec_ids defs =
   let val_spec_id (VS_aux (vs_aux, _)) = match vs_aux with VS_val_spec (_, id, _) -> id in
   let rec vs_ids = function
-    | DEF_aux (DEF_val vs, _) :: defs -> val_spec_id vs :: vs_ids defs
+    | Def_aux (Def_val vs, _) :: defs -> val_spec_id vs :: vs_ids defs
     | _ :: defs -> vs_ids defs
     | [] -> []
   in
@@ -1348,21 +1341,21 @@ let val_spec_ids defs =
 
 let record_ids defs =
   let rec rec_ids = function
-    | DEF_aux (DEF_type (TD_aux (TD_record (id, _, _, _), _)), _) :: defs -> id :: rec_ids defs
+    | Def_aux (Def_type (TD_aux (TD_record (id, _, _), _)), _) :: defs -> id :: rec_ids defs
     | _ :: defs -> rec_ids defs
     | [] -> []
   in
   IdSet.of_list (rec_ids defs)
 
 let rec get_scattered_union_clauses id = function
-  | DEF_aux (DEF_scattered (SD_aux (SD_unioncl (uid, Tu_aux (tu, _)), _)), def_annot) :: defs when Id.compare id uid = 0
+  | Def_aux (Def_scattered (SD_aux (SD_unioncl (uid, Tu_aux (tu, _)), _)), def_annot) :: defs when Id.compare id uid = 0
     ->
       Tu_aux (tu, def_annot_map_env (fun _ -> ()) def_annot) :: get_scattered_union_clauses id defs
   | _ :: defs -> get_scattered_union_clauses id defs
   | [] -> []
 
 let rec get_scattered_enum_clauses id = function
-  | DEF_aux (DEF_scattered (SD_aux (SD_enumcl (uid, member), _)), def_annot) :: defs when Id.compare id uid = 0 ->
+  | Def_aux (Def_scattered (SD_aux (SD_enumcl (uid, member), _)), def_annot) :: defs when Id.compare id uid = 0 ->
       (member, def_annot_map_env (fun _ -> ()) def_annot) :: get_scattered_enum_clauses id defs
   | _ :: defs -> get_scattered_enum_clauses id defs
   | [] -> []
@@ -1609,11 +1602,11 @@ let construct_mpexp (mpat, guard, ann) =
   match guard with None -> MPat_aux (MPat_pat mpat, ann) | Some guard -> MPat_aux (MPat_when (mpat, guard), ann)
 
 let is_valspec id = function
-  | DEF_aux (DEF_val (VS_aux (VS_val_spec (_, id', _), _)), _) when Id.compare id id' = 0 -> true
+  | Def_aux (Def_val (VS_aux (VS_val_spec (_, id', _), _)), _) when Id.compare id id' = 0 -> true
   | _ -> false
 
 let is_fundef id = function
-  | DEF_aux (DEF_fundef (FD_aux (FD_function (_, _, FCL_aux (FCL_funcl (id', _), _) :: _), _)), _)
+  | Def_aux (Def_fundef (FD_aux (FD_function (_, _, FCL_aux (FCL_funcl (id', _), _) :: _), _)), _)
     when Id.compare id' id = 0 ->
       true
   | _ -> false
@@ -1722,13 +1715,13 @@ and subst_lexp id value (LE_aux (lexp_aux, annot)) =
   in
   wrap lexp_aux
 
-let hex_to_bin hex =
-  Util.string_to_list hex |> List.map Sail_lib.hex_char |> List.concat |> List.map Sail_lib.char_of_bit |> fun bits ->
-  String.init (List.length bits) (List.nth bits)
+let char_of_bit = function B0 -> '0' | B1 -> '1'
 
-let explode s =
-  let rec exp i l = if i < 0 then l else exp (i - 1) (s.[i] :: l) in
-  exp (String.length s - 1) []
+let hex_to_bin hex =
+  Util.string_to_list hex
+  |> List.map (fun c -> Sail_lib.bit_list_of_bits (Sail_lib.hex_char c))
+  |> List.concat |> List.map char_of_bit
+  |> fun bits -> String.init (List.length bits) (List.nth bits)
 
 let vector_string_to_bit_list (L_aux (lit, l)) =
   let s_bin =
@@ -1942,11 +1935,22 @@ let unique l =
   incr unique_ref;
   l
 
+(* Cope with coq -> rocq rename *)
+let compare_extern = function
+  | "coq" | "rocq" -> (
+      function "coq", _ | "rocq", _ -> true | _ -> false
+    )
+  | backend -> (
+      function backend', _ -> backend = backend'
+    )
+
 let extern_assoc backend ext =
   match ext with
   | None -> None
   | Some ext -> (
-      match List.assoc_opt backend ext.bindings with Some f -> Some f | None -> List.assoc_opt "_" ext.bindings
+      match List.find_opt (compare_extern backend) ext.bindings with
+      | Some (_, f) -> Some f
+      | None -> List.assoc_opt "_" ext.bindings
     )
 
 (**************************************************************************)
@@ -2112,8 +2116,6 @@ end) =
 struct
   let subloc = Loc.subloc
 
-  type scan_id = App of id | Id of id | Other
-
   let rec option_mapm f = function
     | [] -> None
     | x :: xs -> (
@@ -2216,10 +2218,10 @@ struct
     )
 
   let rec find_annot_defs sl = function
-    | DEF_aux (DEF_fundef fdef, _) :: defs -> (
+    | Def_aux (Def_fundef fdef, _) :: defs -> (
         match find_annot_fundef sl fdef with None -> find_annot_defs sl defs | result -> result
       )
-    | DEF_aux (DEF_scattered sdef, _) :: defs -> (
+    | Def_aux (Def_scattered sdef, _) :: defs -> (
         match find_annot_scattered sl sdef with None -> find_annot_defs sl defs | result -> result
       )
     | _ :: defs -> find_annot_defs sl defs

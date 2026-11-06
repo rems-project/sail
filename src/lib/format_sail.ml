@@ -324,8 +324,6 @@ let precedence n opts = { opts with precedence = n }
 
 let atomic_parens opts doc = if opts.precedence <= 0 then parens doc else doc
 
-let subatomic_parens opts doc = if opts.precedence < 0 then parens doc else doc
-
 (* While everything in Sail is an expression, for formatting we
    recognize that some constructs will appear as either statement-like
    or expression-like depending on where they occur. For example, and

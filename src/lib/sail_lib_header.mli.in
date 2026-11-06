@@ -1,0 +1,98 @@
+(****************************************************************************)
+(*     Sail                                                                 *)
+(*                                                                          *)
+(*  Sail and the Sail architecture models here, comprising all files and    *)
+(*  directories except the ASL-derived Sail code in the aarch64 directory,  *)
+(*  are subject to the BSD two-clause licence below.                        *)
+(*                                                                          *)
+(*  The ASL derived parts of the ARMv8.3 specification in                   *)
+(*  aarch64/no_vector and aarch64/full are copyright ARM Ltd.               *)
+(*                                                                          *)
+(*  Copyright (c) 2013-2021                                                 *)
+(*    Kathyrn Gray                                                          *)
+(*    Shaked Flur                                                           *)
+(*    Stephen Kell                                                          *)
+(*    Gabriel Kerneis                                                       *)
+(*    Robert Norton-Wright                                                  *)
+(*    Christopher Pulte                                                     *)
+(*    Peter Sewell                                                          *)
+(*    Alasdair Armstrong                                                    *)
+(*    Brian Campbell                                                        *)
+(*    Thomas Bauereiss                                                      *)
+(*    Anthony Fox                                                           *)
+(*    Jon French                                                            *)
+(*    Dominic Mulligan                                                      *)
+(*    Stephen Kell                                                          *)
+(*    Mark Wassell                                                          *)
+(*    Alastair Reid (Arm Ltd)                                               *)
+(*                                                                          *)
+(*  All rights reserved.                                                    *)
+(*                                                                          *)
+(*  This work was partially supported by EPSRC grant EP/K008528/1 <a        *)
+(*  href="http://www.cl.cam.ac.uk/users/pes20/rems">REMS: Rigorous          *)
+(*  Engineering for Mainstream Systems</a>, an ARM iCASE award, EPSRC IAA   *)
+(*  KTF funding, and donations from Arm.  This project has received         *)
+(*  funding from the European Research Council (ERC) under the European     *)
+(*  Union’s Horizon 2020 research and innovation programme (grant           *)
+(*  agreement No 789108, ELVER).                                            *)
+(*                                                                          *)
+(*  This software was developed by SRI International and the University of  *)
+(*  Cambridge Computer Laboratory (Department of Computer Science and       *)
+(*  Technology) under DARPA/AFRL contracts FA8650-18-C-7809 ("CIFV")        *)
+(*  and FA8750-10-C-0237 ("CTSRD").                                         *)
+(*                                                                          *)
+(*  SPDX-License-Identifier: BSD-2-Clause                                   *)
+(****************************************************************************)
+
+open Ast.Bit
+
+val opt_trace : bool ref
+val opt_cycle_limit : int ref
+
+type 'a return = { return : 'b. 'a -> 'b }
+
+val sail_call : ('t return -> 't) -> 't
+val sail_trace_call : string -> string -> ('t -> string) -> ('t return -> 't) -> 't
+
+type bits = Extraction.Definitions.bvn
+
+val trace_write : string -> string -> unit
+val trace_read : string -> string -> unit
+val subrange_list : 'a list -> Z.t -> Z.t -> 'a list
+val slice_list : 'a list -> Z.t -> Z.t -> 'a list
+val slice_list_inc : 'a list -> Z.t -> Z.t -> 'a list
+val access_list_inc : 'a list -> Z.t -> 'a
+val update_list_inc : 'a list -> Z.t -> 'a -> 'a list
+val quot_round_zero : Z.t -> Z.t -> Z.t
+val rem_round_zero : Z.t -> Z.t -> Z.t
+val to_bits : Z.t -> Z.t -> bits
+val bits_of_bit_list : bit list -> bits
+val bit_list_of_bits : bits -> bit list
+val hex_char : char -> bits
+val decimal_string_of_bits : bits -> string
+val hex_slice : string -> Z.t -> Z.t -> bits
+val write_ram : 'a -> Z.t -> 'b -> bits -> bits -> bool
+val write_ram_byte : Z.t -> int -> unit
+val read_ram : 'a -> Z.t -> 'b -> bits -> bits
+val string_of_real : Q.t -> string
+val int_power : Z.t -> Z.t -> Z.t
+val string_of_int : Z.t -> string
+val real_of_string : string -> Q.t
+val string_of_zbitvector : bits -> string
+val string_of_znat : Z.t -> string
+val string_of_zint : Z.t -> string
+val string_of_zimplicit : Z.t -> string
+val string_of_zunit : unit -> string
+val string_of_zbool : bool -> string
+val string_of_zreal : 'a -> string
+val string_of_zstring : string -> string
+val string_of_list : string -> ('a -> string) -> 'a list -> string
+val shift_bits_right : bits -> bits -> bits
+val shift_bits_left : bits -> bits -> bits
+val get_time_ns : unit -> Z.t
+val load_raw : bits -> string -> unit
+val rand_zvector : 'generators -> int -> bool -> ('generators -> 'a) -> 'a list
+val rand_zbitvector : 'generators -> int -> bit list
+val rand_zbool : 'generators -> bool
+val rand_zunit : 'generators -> unit
+val rand_choice : 'a list -> 'a

@@ -1,0 +1,5 @@
+[93mError[0m:
+[96mfail/extension_bad_attribute.sail[0m:5.2-16:
+5[96m |[0m  $[extension 3]
+ [91m |[0m  [91m^------------^[0m
+ [91m |[0m Malformed extension attribute, expected a string argument

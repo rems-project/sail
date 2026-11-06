@@ -35,7 +35,7 @@ abbrev writeRegRef (reg_ref : RegisterRef α) (a : α) : SailM Unit := PreSail.w
 
 abbrev reg_deref (reg_ref : RegisterRef α) : SailM α := PreSail.reg_deref reg_ref
 
-abbrev assert (p : Bool) (s : String) : SailM Unit := PreSail.assert p s
+abbrev sail_assert (p : Bool) (s : String) : SailM Unit := PreSail.sail_assert p s
 
 namespace ConcurrencyInterfaceV1
 
@@ -68,12 +68,14 @@ abbrev get_cycle_count (a : Unit) : SailM Nat := PreSail.get_cycle_count a
 
 
 abbrev print_effect (str : String) : SailM Unit := PreSail.print_effect str
-
 abbrev print_int_effect (str : String) (n : Int) : SailM Unit := PreSail.print_int_effect str n
-
 abbrev print_bits_effect {w : Nat} (str : String) (x : BitVec w) : SailM Unit := PreSail.print_bits_effect str x
-
 abbrev print_endline_effect (str : String) : SailM Unit := PreSail.print_endline_effect str
+
+abbrev prerr_effect (str : String) : SailM Unit := PreSail.prerr_effect str
+abbrev prerr_int_effect (str : String) (n : Int) : SailM Unit := PreSail.prerr_int_effect str n
+abbrev prerr_bits_effect {w : Nat} (str : String) (x : BitVec w) : SailM Unit := PreSail.prerr_bits_effect str x
+abbrev prerr_endline_effect (str : String) : SailM Unit := PreSail.prerr_endline_effect str
 
 def SailME.run (m : SailME α α) : SailM α := PreSail.PreSailME.run m
 

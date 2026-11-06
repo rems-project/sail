@@ -66,14 +66,12 @@ let zencode_upper_id id = Util.zencode_upper_string (string_of_id id)
 let zencode_id id = Util.zencode_string (string_of_id id)
 let zencode_name id = string_of_name ~deref_current_exception:false ~zencode:true id
 
-let max_int n = Big_int.pred (Big_int.pow_int_positive 2 (n - 1))
-let min_int n = Big_int.negate (Big_int.pow_int_positive 2 (n - 1))
+let max_int n = Z.pred (Z.shift_left Z.one (n - 1))
+let min_int n = Z.neg (Z.shift_left Z.one (n - 1))
 
 let required_width n =
-  let rec required_width' n =
-    if Big_int.equal n Big_int.zero then 1 else 1 + required_width' (Big_int.shift_right n 1)
-  in
-  required_width' (Big_int.abs n)
+  let rec required_width' n = if Z.equal n Z.zero then 1 else 1 + required_width' (Z.shift_right n 1) in
+  required_width' (Z.abs n)
 
 module type Sequence = sig
   type 'a t
@@ -213,8 +211,15 @@ end
 module Make (Config : CONFIG) = struct
   open Jib_visitor
 
-  let lbits_index_width = required_width (Big_int.of_int Config.max_unknown_bitvector_width)
-  let vector_index_width = required_width (Big_int.of_int (Config.max_unknown_generic_vector_length - 1))
+  let reg_ref_lit r ctyp =
+    match r with
+    | Name (id, _) -> V_lit (V_ref id, ctyp)
+    | _ ->
+        Reporting.unreachable Parse_ast.Unknown __POS__
+          "Tried to construct a register reference to a register without a name"
+
+  let lbits_index_width = required_width (Z.of_int Config.max_unknown_bitvector_width)
+  let vector_index_width = required_width (Z.of_int (Config.max_unknown_generic_vector_length - 1))
 
   module Smt =
     Smt_gen.Make
@@ -232,7 +237,7 @@ module Make (Config : CONFIG) = struct
           match CTMap.min_binding_opt rmap with
           | Some (ctyp, regs) -> (
               match Util.list_index (fun reg -> Name.compare reg id = 0) regs with
-              | Some i -> Smt_gen.bvint (required_width (Big_int.of_int (List.length regs))) (Big_int.of_int i)
+              | Some i -> Smt_gen.bvint (required_width (Z.of_int (List.length regs))) (Z.of_int i)
               | None -> assert false
             )
           | _ -> assert false
@@ -322,7 +327,7 @@ module Make (Config : CONFIG) = struct
         return (mk_variant (zencode_upper_id id) ctors)
     | CT_fvector (n, ctyp) ->
         let* ctyp = smt_ctyp ctyp in
-        return (Array (Bitvec (required_width (Big_int.of_int (n - 1)) - 1), ctyp))
+        return (Array (Bitvec (required_width (Z.of_int (n - 1)) - 1), ctyp))
     | CT_vector ctyp ->
         let* ctyp = smt_ctyp ctyp in
         return (Array (Bitvec vector_index_width, ctyp))
@@ -334,7 +339,7 @@ module Make (Config : CONFIG) = struct
         return Real
     | CT_ref ctyp -> (
         match CTMap.find_opt ctyp Config.register_map with
-        | Some regs -> return (Bitvec (required_width (Big_int.of_int (List.length regs))))
+        | Some regs -> return (Bitvec (required_width (Z.of_int (List.length regs))))
         | _ ->
             let* l = Smt_gen.current_location in
             Reporting.unreachable l __POS__ ("No registers with ctyp: " ^ string_of_ctyp ctyp)
@@ -561,7 +566,7 @@ module Make (Config : CONFIG) = struct
         else if extern && string_of_id function_id = "internal_vector_update" then (
           match args with
           | [vec; i; x] ->
-              let sz = required_width (Big_int.of_int (Smt.generic_vector_length (cval_ctyp vec) - 1)) - 1 in
+              let sz = required_width (Z.of_int (Smt.generic_vector_length (cval_ctyp vec) - 1)) - 1 in
               let* vec = Smt.smt_cval vec in
               let* i =
                 Smt_gen.bind (Smt.smt_cval i) (Smt_gen.unsigned_size ~into:sz ~from:(Smt.int_size (cval_ctyp i)))
@@ -623,7 +628,7 @@ module Make (Config : CONFIG) = struct
 
   let generate_reg_decs inits cdefs =
     let rec go acc = function
-      | CDEF_aux (CDEF_register (id, ctyp, _), _) :: cdefs when not (NameMap.mem (Jib_ssa.ssa_name 0 id) inits) ->
+      | CDef_aux (CDef_register (id, ctyp, _), _) :: cdefs when not (NameMap.mem (Jib_ssa.ssa_name 0 id) inits) ->
           let* smt_typ = smt_ctyp ctyp in
           go (Declare_const (Jib_ssa.ssa_name 0 id, smt_typ) :: acc) cdefs
       | _ :: cdefs -> go acc cdefs
@@ -682,7 +687,7 @@ module Make (Config : CONFIG) = struct
         return (Some (declare_datatypes (mk_variant (zencode_upper_id id) ctors)))
 
   let rec generate_ctype_defs acc = function
-    | CDEF_aux (CDEF_type ctd, _) :: cdefs ->
+    | CDef_aux (CDef_type ctd, _) :: cdefs ->
         let* smt_type_def_opt = smt_ctype_def ctd in
         generate_ctype_defs (Option.to_list smt_type_def_opt @ acc) cdefs
     | _ :: cdefs -> generate_ctype_defs acc cdefs
@@ -814,13 +819,13 @@ module Make (Config : CONFIG) = struct
 
     return (stack, state)
 
-  (** When we generate a property for a CDEF_val, we find it's associated function body in a CDEF_fundef node. However,
+  (** When we generate a property for a CDef_val, we find it's associated function body in a CDef_fundef node. However,
       we must keep track of any global letbindings between the spec and the fundef, so they can appear in the generated
       SMT. *)
   let rec find_function lets id = function
-    | CDEF_aux (CDEF_fundef (id', heap_return, args, body), def_annot) :: _ when Id.compare id id' = 0 ->
+    | CDef_aux (CDef_fundef (id', heap_return, args, body), def_annot) :: _ when Id.compare id id' = 0 ->
         (lets, Some (heap_return, args, body, def_annot))
-    | CDEF_aux (CDEF_let (_, vars, setup), _) :: cdefs ->
+    | CDef_aux (CDef_let (_, vars, setup), _) :: cdefs ->
         let vars = List.map (fun (id, ctyp) -> idecl (id_loc id) ctyp (name id)) vars in
         find_function (lets @ vars @ setup) id cdefs
     | _ :: cdefs -> find_function lets id cdefs
@@ -846,9 +851,9 @@ module Make (Config : CONFIG) = struct
     arg_smt_names : (name * string option) list;
   }
 
-  let smt_cdef props lets name_file ctx all_cdefs smt_includes (CDEF_aux (aux, def_annot)) =
+  let smt_cdef props lets name_file ctx all_cdefs smt_includes (CDef_aux (aux, def_annot)) =
     match aux with
-    | CDEF_val (function_id, _, arg_ctyps, ret_ctyp, _) when Bindings.mem function_id props -> (
+    | CDef_val (function_id, _, arg_ctyps, ret_ctyp, _) when Bindings.mem function_id props -> (
         match find_function [] function_id all_cdefs with
         | intervening_lets, Some (Return_plain, args, instrs, function_def_annot) ->
             let function_id_string = string_of_id function_id in
@@ -938,7 +943,7 @@ module Make (Config : CONFIG) = struct
     | _ -> None
 
   let rec smt_cdefs acc props lets name_file ctx all_cdefs smt_includes = function
-    | CDEF_aux (CDEF_let (_, vars, setup), _) :: cdefs ->
+    | CDef_aux (CDef_let (_, vars, setup), _) :: cdefs ->
         let vars = List.map (fun (id, ctyp) -> idecl (id_loc id) ctyp (name id)) vars in
         smt_cdefs acc props (lets @ vars @ setup) name_file ctx all_cdefs smt_includes cdefs
     | cdef :: cdefs -> (
@@ -973,9 +978,7 @@ module Make (Config : CONFIG) = struct
                     let try_reg r =
                       let next_label = label "next_reg_write_" in
                       [
-                        ijump l
-                          (V_call (Neq, [V_lit (VL_ref (string_of_name ~zencode:false r), reg_ctyp); V_id (id, ctyp)]))
-                          next_label;
+                        ijump l (V_call (Neq, [reg_ref_lit r reg_ctyp; V_id (id, ctyp)])) next_label;
                         ifuncall l (CL_id (r, reg_ctyp)) function_id args;
                         igoto end_label;
                         ilabel next_label;
@@ -1005,9 +1008,7 @@ module Make (Config : CONFIG) = struct
                         let try_reg r =
                           let next_label = label "next_reg_deref_" in
                           [
-                            ijump l
-                              (V_call (Neq, [V_lit (VL_ref (string_of_name ~zencode:false r), reg_ctyp); reg_ref]))
-                              next_label;
+                            ijump l (V_call (Neq, [reg_ref_lit r reg_ctyp; reg_ref])) next_label;
                             icopy l clexp (V_id (r, reg_ctyp));
                             igoto end_label;
                             ilabel next_label;
@@ -1032,9 +1033,7 @@ module Make (Config : CONFIG) = struct
                     let try_reg r =
                       let next_label = label "next_reg_write_" in
                       [
-                        ijump l
-                          (V_call (Neq, [V_lit (VL_ref (string_of_name ~zencode:false r), reg_ctyp); V_id (id, ctyp)]))
-                          next_label;
+                        ijump l (V_call (Neq, [reg_ref_lit r reg_ctyp; V_id (id, ctyp)])) next_label;
                         icopy l (CL_id (r, reg_ctyp)) cval;
                         igoto end_label;
                         ilabel next_label;
@@ -1090,7 +1089,7 @@ end) : Jib_compile.CONFIG = struct
             match (nexp_simp n, nexp_simp m) with
             | Nexp_aux (Nexp_constant n, _), Nexp_aux (Nexp_constant m, _) when n = m -> CT_constant n
             | Nexp_aux (Nexp_constant n, _), Nexp_aux (Nexp_constant m, _)
-              when Big_int.less_equal (min_int 64) n && Big_int.less_equal m (max_int 64) ->
+              when Z.leq (min_int 64) n && Z.leq m (max_int 64) ->
                 CT_fint 64
             | n, m ->
                 if
@@ -1104,13 +1103,13 @@ end) : Jib_compile.CONFIG = struct
     (* Note that we have to use lbits for zero-length bitvectors because they are not allowed by SMTLIB *)
     | Typ_app (id, [A_aux (A_nexp n, _)]) when string_of_id id = "bitvector" -> (
         match nexp_simp n with
-        | Nexp_aux (Nexp_constant n, _) when Big_int.equal n Big_int.zero -> CT_lbits
-        | Nexp_aux (Nexp_constant n, _) -> CT_fbits (Big_int.to_int n)
+        | Nexp_aux (Nexp_constant n, _) when Z.equal n Z.zero -> CT_lbits
+        | Nexp_aux (Nexp_constant n, _) -> CT_fbits (Z.to_int n)
         | _ -> CT_lbits
       )
     | Typ_app (id, [A_aux (A_nexp n, _); A_aux (A_typ typ, _)]) when string_of_id id = "vector" -> (
         match nexp_simp n with
-        | Nexp_aux (Nexp_constant c, _) -> CT_fvector (Big_int.to_int c, convert_typ ctx typ)
+        | Nexp_aux (Nexp_constant c, _) -> CT_fvector (Z.to_int c, convert_typ ctx typ)
         | _ -> CT_vector (convert_typ ctx typ)
       )
     | Typ_app (id, [A_aux (A_typ typ, _)]) when string_of_id id = "register" -> CT_ref (convert_typ ctx typ)
@@ -1144,17 +1143,14 @@ end) : Jib_compile.CONFIG = struct
 
   let literal_to_cval (L_aux (l_aux, _) as lit) =
     match l_aux with
-    | L_num n -> Some (V_lit (VL_int n, CT_constant n))
+    | L_num n -> Some (V_lit (V_int n, CT_constant n))
     | L_hex hex ->
         let len = hex_lit_length hex in
-        if len <= 64 then (
-          let content = BitList.of_hex_lit hex |> List.map (function B0 -> Sail2_values.B0 | B1 -> Sail2_values.B1) in
-          Some (V_lit (VL_bits content, CT_fbits len))
-        )
+        if len <= 64 then Some (V_lit (V_bitvector (Sail_lib.bits_of_bit_list (BitList.of_hex_lit hex)), CT_fbits len))
         else None
-    | L_unit -> Some (V_lit (VL_unit, CT_unit))
-    | L_true -> Some (V_lit (VL_bool true, CT_bool))
-    | L_false -> Some (V_lit (VL_bool false, CT_bool))
+    | L_unit -> Some (V_lit (V_unit, CT_unit))
+    | L_true -> Some (V_lit (V_bool true, CT_bool))
+    | L_false -> Some (V_lit (V_bool false, CT_bool))
     | _ -> None
 
   let smt_literals ctx =
@@ -1183,7 +1179,7 @@ end) : Jib_compile.CONFIG = struct
             let new_annot = { annot with loc = gen_loc annot.loc; uannot = empty_uannot } in
             let i = ref f in
             let unrolled = ref [] in
-            while Big_int.less_equal !i t do
+            while Z.leq !i t do
               let current_index =
                 AE_aux (AE_val (AV_lit (L_aux (L_num !i, gen_loc annot.loc), atom_typ (nconstant !i))), new_annot)
               in
@@ -1191,7 +1187,7 @@ end) : Jib_compile.CONFIG = struct
                 AE_aux (AE_let (Immutable, id, atom_typ (nconstant !i), current_index, body, unit_typ), new_annot)
               in
               unrolled := iteration :: !unrolled;
-              i := Big_int.add !i b
+              i := Z.add !i b
             done;
             match !unrolled with
             | last :: iterations ->
@@ -1303,7 +1299,7 @@ end
    all the registers that such a reference could be pointing to.
 *)
 let rec build_register_map rmap = function
-  | CDEF_aux (CDEF_register (reg, ctyp, _), _) :: cdefs ->
+  | CDef_aux (CDef_register (reg, ctyp, _), _) :: cdefs ->
       let rmap =
         match CTMap.find_opt ctyp rmap with
         | Some regs -> CTMap.add ctyp (reg :: regs) rmap

@@ -61,8 +61,12 @@ From Sail Require Import Bit.
 From Sail Require Import IdUtil.
 From Sail Require Import ListUtil.
 From Sail Require Import PatternMatch.
+From stdpp Require Import bitvector.definitions.
+
+From Sail Require PrimBits.
 From Sail Require Import ValueType.
 From Sail Require TypeAnnot.
+From Sail Require Import Monad.
 
 Import TypeAnnot.Types.
 
@@ -92,145 +96,8 @@ Inductive destructure : Set :=
 | DL_vector_concat : list (vector_concat_split * destructure) → destructure
 | DL_place : place → destructure.
 
-Module Monad.
-  Inductive t (A : Set) : Set :=
-  | Pure : A → t A
-  | Early_return : value → t A
-  | Exception : value → t A
-  | Runtime_type_error : Ast.loc → t A
-  | Match_failure : Ast.loc → t A
-  | Assertion_failed : string → t A
-  | Call : id → list value → (return_value → t A) → t A
-  | Read_var : place → (value → t A) → t A
-  | Write_var : place → value → (unit → t A) → t A
-  | Get_config : Ast.loc → list string → typ → (value → t A) → t A
-  | Get_undefined : Ast.loc → typ → (value → t A) → t A.
-
-  Arguments Pure {_}.
-  Arguments Early_return {_}.
-  Arguments Exception {_}.
-  Arguments Runtime_type_error {_}.
-  Arguments Match_failure {_}.
-  Arguments Assertion_failed {_}.
-  Arguments Call {_}.
-  Arguments Read_var {_}.
-  Arguments Write_var {_}.
-  Arguments Get_config {_}.
-  Arguments Get_undefined {_}.
-
-  Fixpoint bind {A B : Set} (m : t A) (f : A → t B) : t B :=
-    match m with
-    | Pure x => f x
-    | Early_return v => Early_return v
-    | Exception v => Exception v
-    | Runtime_type_error l => Runtime_type_error l
-    | Match_failure l => Match_failure l
-    | Assertion_failed msg => Assertion_failed msg
-    | Call id args cont => Call id args (fun v => bind (cont v) f)
-    | Read_var r cont => Read_var r (fun v => bind (cont v) f)
-    | Write_var r v cont => Write_var r v (fun u => bind (cont u) f)
-    | Get_config l key t cont => Get_config l key t (fun v => bind (cont v) f)
-    | Get_undefined l t cont => Get_undefined l t (fun v => bind (cont v) f)
-    end.
-
-  Notation "x ← y ; z" := (bind y (fun x : _ => z))
-    (at level 20, y at level 100, z at level 200, only parsing).
-
-  Fixpoint fmap {A B : Set} (f : A → B) (m : t A) : t B :=
-    match m with
-    | Pure x => Pure (f x)
-    | Early_return v => Early_return v
-    | Exception v => Exception v
-    | Runtime_type_error l => Runtime_type_error l
-    | Match_failure l => Match_failure l
-    | Assertion_failed msg => Assertion_failed msg
-    | Call id args cont => Call id args (fun v => fmap f (cont v))
-    | Read_var r cont => Read_var r (fun v => fmap f (cont v))
-    | Write_var r v cont => Write_var r v (fun u => fmap f (cont u))
-    | Get_config l key t cont => Get_config l key t (fun v => fmap f (cont v))
-    | Get_undefined l t cont => Get_undefined l t (fun v => fmap f (cont v))
-    end.
-
-  Definition pure {A : Set} (x : A) : t A := Pure x.
-
-  Definition lift_option {A : Set} (l : loc) (x : option A) : t A :=
-    match x with
-    | Some y => Pure y
-    | None => Runtime_type_error l
-    end.
-
-  Fixpoint sequence {A : Set} (ls : list (t A)) : t (list A) :=
-  match ls with
-  | m :: ms =>
-      x ← m;
-      xs ← sequence ms;
-      pure (x :: xs)
-  | [] => pure []
-  end.
-
-  Definition get_config (l : Ast.loc) (key : list string) (typ : Ast.typ) : t value := Get_config l key typ pure.
-
-  Definition get_undefined (l : Ast.loc) (typ : Ast.typ) : t value := Get_undefined l typ pure.
-
-  Definition throw {A : Set} (v : value) : t A := Exception v.
-
-  Inductive caught (a : Set) : Set :=
-  | Continue : a → caught a
-  | Caught : value → caught a.
-
-  Arguments Continue {_}.
-  Arguments Caught {_}.
-
-  Definition catch {A : Set} (m : t A) : t (caught A) :=
-    match m with
-    | Pure x => Pure (Continue x)
-    | Early_return v => Early_return v
-    | Exception v => Pure (Caught v)
-    | Runtime_type_error l => Runtime_type_error l
-    | Match_failure l => Match_failure l
-    | Assertion_failed msg => Assertion_failed msg
-    | Call id args cont => Call id args (fun v => fmap Continue (cont v))
-    | Read_var r cont => Read_var r (fun v => fmap Continue (cont v))
-    | Write_var r v cont => Write_var r v (fun _ => fmap Continue (cont ()))
-    | Get_config l key t cont => Get_config l key t (fun v => fmap Continue (cont v))
-    | Get_undefined l t cont => Get_undefined l t (fun v => fmap Continue (cont v))
-    end.
-
-  Lemma bind_left_id : ∀ (A B : Set) (f : A → t B) (x : A), bind (pure x) f = f x.
-  Proof.
-    cbn. reflexivity.
-  Qed.
-
-  Lemma bind_right_id : ∀ (A : Set) (m : t A), bind m pure = m.
-  Proof.
-    intros A m.
-    induction m as [| | | | | | ? ? cont H | ? cont H | ? ? cont H | ? ? ? cont H | ? ? cont H]; try easy.
-    all: cbn.
-    all: f_equal.
-    all: apply functional_extensionality.
-    all: intros x.
-    all: specialize (H x).
-    all: assumption.
-  Qed.
-
-  Lemma bind_assoc : ∀ (A B C : Set) (f : A → t B) (g : B → t C) (x : t A),
-      bind (bind x f) g = bind x (fun y => bind (f y) g).
-  Proof.
-    intros A B C f g x.
-    induction x as [| | | | | | ? ? cont H | ? cont H | ? ? cont H | ? ? ? cont H | ? ? cont H]; try easy.
-    all: cbn.
-    all: f_equal.
-    all: apply functional_extensionality.
-    all: intros x.
-    all: remember (cont x) as z eqn : Heqz.
-    all: specialize (H x).
-    all: rewrite <- Heqz in H.
-    all: cbn in H.
-    all: assumption.
- Qed.
-End Monad.
-
-Import Monad.
+(** The interpreter monad, specialised to concrete values. *)
+Definition t (A : Type) : Type := Monad.t value return_value place A.
 
 Inductive evaluated (a : Set) : Set :=
 | Evaluated : a → evaluated a
@@ -532,12 +399,12 @@ Module Make (Tannot : TypeAnnot.S).
     | _ => l
     end.
 
-  Fixpoint bv_concat (l : loc) (vs : list value) : t (list bit) :=
+  Fixpoint bv_concat (l : loc) (vs : list value) : t bvn :=
     match vs with
-    | [] => pure []
+    | [] => pure (PrimBits.zeros 0)
     | V_bitvector bs :: rest =>
         rest' ← bv_concat l rest;
-        pure (bs ++ rest')
+        pure (PrimBits.append bs rest')
     | _ :: _ => Runtime_type_error l
     end.
 
@@ -744,12 +611,14 @@ Module Make (Tannot : TypeAnnot.S).
                    match s with
                    | Split s =>
                        match acc with
-                       | (prev, []) => (prev, [])
                        | (prev, bs) =>
-                           let '(bs_take, bs_drop) := take_drop s bs in
-                           (bind prev (fun _ => destructuring_assignment annot d (V_bitvector bs_take)), bs_drop)
+                           if Z.eqb (PrimBits.width bs) 0 then
+                             (prev, bs)
+                           else
+                             let '(bs_take, bs_drop) := PrimBits.split_at (Z.of_nat s) bs in
+                             (bind prev (fun _ => destructuring_assignment annot d (V_bitvector bs_take)), bs_drop)
                        end
-                   | No_split => (Runtime_type_error (fst annot), [])
+                   | No_split => (Runtime_type_error (fst annot), PrimBits.zeros 0)
                    end
                 )
                 ds
@@ -2056,10 +1925,17 @@ Module Make (Tannot : TypeAnnot.S).
     | E_config key =>
         v ← get_config (fst annot) key (Tannot.get_type (snd annot));
         wrap (E_internal_value v)
+    | E_exit x =>
+        match get_value x with
+        | Evaluated v =>
+            Exit v
+        | Unevaluated =>
+            x' ← step x;
+            wrap (E_exit x')
+        end
     | E_vector_append _ _ => Runtime_type_error (fst annot)
     | E_sizeof _ => Runtime_type_error (fst annot)
     | E_constraint _ => Runtime_type_error (fst annot)
-    | E_exit _ => Runtime_type_error (fst annot)
     | E_internal_plet _ _ _ => Runtime_type_error (fst annot)
     | E_internal_return _ => Runtime_type_error (fst annot)
     | E_internal_assume _ _ => Runtime_type_error (fst annot)

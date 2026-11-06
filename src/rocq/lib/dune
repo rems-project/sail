@@ -16,8 +16,14 @@
   Domain.TransferBitvectorInterval
   IdUtil
   ListUtil
+  Monad
   OptionUtil
   PatternMatch
+  PrimBits
+  PrimInt
+  PrimReal
+  PrimString
+  PrimVector
   SailBase
   Semantics
   Tactics

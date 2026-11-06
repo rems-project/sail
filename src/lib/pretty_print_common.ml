@@ -44,8 +44,6 @@
 (*  SPDX-License-Identifier: BSD-2-Clause                                   *)
 (****************************************************************************)
 
-open Ast
-module Big_int = Nat_big_num
 open PPrint
 
 let pipe = string "|"
@@ -57,12 +55,6 @@ let coloneq = string ":="
 let lsquarebar = string "[|"
 let rsquarebar = string "|]"
 let squarebars = enclose lsquarebar rsquarebar
-let lsquarebarbar = string "[||"
-let rsquarebarbar = string "||]"
-let squarebarbars = enclose lsquarebarbar rsquarebarbar
-let lsquarecolon = string "[:"
-let rsquarecolon = string ":]"
-let squarecolons = enclose lsquarecolon rsquarecolon
 let lcomment = string "(*"
 let rcomment = string "*)"
 let comment = enclose lcomment rcomment
@@ -72,7 +64,7 @@ let semi_sp = semi ^^ space
 let comma_sp = comma ^^ space
 let colon_sp = spaces colon
 
-let doc_int i = string (Big_int.to_string i)
+let doc_int i = string (Z.to_string i)
 let doc_op symb a b = infix 2 1 symb a b
 let doc_unop symb a = prefix 2 1 symb a
 

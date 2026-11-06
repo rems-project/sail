@@ -50,10 +50,8 @@ open Ast_defs
 open Ast_util
 open Value
 
-open Extraction.ValueType
 open Extraction.TypeAnnot.Types
 
-module Big_int = Nat_big_num
 module Document = Pretty_print_sail.Document
 
 module Printer = Pretty_print_sail.Printer (struct
@@ -84,7 +82,7 @@ module VariableUpdate = struct
 
   type root = Register of id | Var of id * var_type
 
-  type accessor = Vector of Big_int.num | Vector_range of Big_int.num * Big_int.num | Field of id
+  type accessor = Vector of Z.t | Vector_range of Z.t * Z.t | Field of id
 
   let rec split_place = function
     | PL_id (id, ty) -> (Var (id, ty), [])
@@ -113,14 +111,14 @@ module VariableUpdate = struct
         | Vector n -> (
             match BitList.to_gvector v with
             | V_vector vs ->
-                let* v = List.nth_opt (List.rev vs) (Big_int.to_int n) in
+                let* v = List.nth_opt (List.rev vs) (Z.to_int n) in
                 access v accessors
             | _ -> None
           )
         | Vector_range (n, m) -> (
             match BitList.to_gvector v with
             | V_vector vs ->
-                let vs = Sail_lib.subrange vs n m in
+                let vs = Sail_lib.subrange_list vs n m in
                 access (V_vector vs) accessors
             | _ -> None
           )
@@ -140,8 +138,10 @@ module VariableUpdate = struct
     match (m, xs) with
     | _, [] -> Some []
     | 0, xs -> (
-        let* ys = f (V_bitvector (List.rev (Util.take (n + 1) xs))) in
-        match ys with V_bitvector ys -> Some (List.rev ys @ Util.drop (n + 1) xs) | _ -> None
+        let* ys = f (V_bitvector (Sail_lib.bits_of_bit_list (List.rev (Util.take (n + 1) xs)))) in
+        match ys with
+        | V_bitvector ys -> Some (List.rev (Sail_lib.bit_list_of_bits ys) @ Util.drop (n + 1) xs)
+        | _ -> None
       )
     | m, x :: xs ->
         let* ys = bitvector_update_subrange f (n - 1) (m - 1) xs in
@@ -176,50 +176,57 @@ module VariableUpdate = struct
             let mk_vector vs =
               match v with
               | V_bitvector _ ->
-                  let* bs = Util.option_all @@ List.map (function V_bitvector [b] -> Some b | _ -> None) vs in
-                  Some (V_bitvector bs)
+                  let* bs =
+                    Util.option_all
+                    @@ List.map
+                         (function
+                           | V_bitvector b -> (
+                               match Sail_lib.bit_list_of_bits b with [x] -> Some x | _ -> None
+                             )
+                           | _ -> None
+                           )
+                         vs
+                  in
+                  Some (V_bitvector (Sail_lib.bits_of_bit_list bs))
               | _ -> Some (V_vector vs)
             in
             match BitList.to_gvector v with
             | V_vector vs ->
                 if is_inc then
-                  let* vs = vector_update (fun v -> update is_inc v v' accessors) (Big_int.to_int n) vs in
+                  let* vs = vector_update (fun v -> update is_inc v v' accessors) (Z.to_int n) vs in
                   mk_vector vs
                 else
-                  let* vs = vector_update (fun v -> update is_inc v v' accessors) (Big_int.to_int n) (List.rev vs) in
+                  let* vs = vector_update (fun v -> update is_inc v v' accessors) (Z.to_int n) (List.rev vs) in
                   mk_vector (List.rev vs)
             | _ -> None
           )
         | Vector_range (n, m) -> (
             match v with
-            | V_bitvector bs ->
+            | V_bitvector bv ->
+                let bs = Sail_lib.bit_list_of_bits bv in
                 if is_inc then
                   let* bs =
-                    bitvector_update_subrange
-                      (fun v -> update is_inc v v' accessors)
-                      (Big_int.to_int m) (Big_int.to_int n) bs
+                    bitvector_update_subrange (fun v -> update is_inc v v' accessors) (Z.to_int m) (Z.to_int n) bs
                   in
-                  Some (V_bitvector bs)
+                  Some (V_bitvector (Sail_lib.bits_of_bit_list bs))
                 else
                   let* bs =
                     bitvector_update_subrange
                       (fun v -> update is_inc v v' accessors)
-                      (Big_int.to_int n) (Big_int.to_int m) (List.rev bs)
+                      (Z.to_int n) (Z.to_int m) (List.rev bs)
                   in
-                  Some (V_bitvector (List.rev bs))
+                  Some (V_bitvector (Sail_lib.bits_of_bit_list (List.rev bs)))
             | V_vector vs ->
                 if is_inc then
                   let* vs =
-                    vector_update_subrange
-                      (fun v -> update is_inc v v' accessors)
-                      (Big_int.to_int m) (Big_int.to_int n) vs
+                    vector_update_subrange (fun v -> update is_inc v v' accessors) (Z.to_int m) (Z.to_int n) vs
                   in
                   Some (V_vector vs)
                 else
                   let* vs =
                     vector_update_subrange
                       (fun v -> update is_inc v v' accessors)
-                      (Big_int.to_int n) (Big_int.to_int m) (List.rev vs)
+                      (Z.to_int n) (Z.to_int m) (List.rev vs)
                   in
                   Some (V_vector (List.rev vs))
             | _ -> None
@@ -288,7 +295,11 @@ module Semantics = Extraction.Semantics.Make (struct
   let fallthrough () = fallthrough ()
 end)
 
-module Monad = Extraction.Semantics.Monad
+module Monad = struct
+  type 'a t = 'a Extraction.Semantics.t
+
+  let pure = Extraction.Monad.pure
+end
 
 let step exp = Semantics.step exp
 
@@ -362,6 +373,8 @@ let rec eval_frame' = function
       | Runtime_type_error l, _ ->
           Fail (out, state, m, stack, "Runtime type error at " ^ Reporting.short_loc_to_string l)
       | Assertion_failed s, _ -> Fail (out, state, m, stack, "Assertion failed: " ^ s)
+      (* The interpreter does not generate [Exit], it only exists for the partial evaluator *)
+      | Exit _, _ -> Fail (out, state, m, stack, "Unexpected exit")
       | Call (id, args, cont), _ ->
           let env = gstate.typecheck_env in
           let interpreter_extern = is_interpreter_extern id env in
@@ -547,7 +560,7 @@ let initial_gstate ?fold_target ?config primops defs env =
 
 let rec initialize_registers allow_registers undef_registers gstate =
   let process_def = function
-    | DEF_aux (DEF_register (DEC_aux (DEC_reg (typ, id, opt_exp), annot)), _) when allow_registers -> (
+    | Def_aux (Def_register (Reg_aux (Reg (typ, id, opt_exp), annot)), _) when allow_registers -> (
         match opt_exp with
         | None when undef_registers ->
             let env = Type_check.env_of_annot annot in
@@ -560,7 +573,7 @@ let rec initialize_registers allow_registers undef_registers gstate =
             let evaluated = eval_exp (initial_lstate, gstate) exp in
             { gstate with registers = Bindings.add id evaluated gstate.registers }
       )
-    | DEF_aux (DEF_let (pat, exp), def_annot) -> (
+    | Def_aux (Def_let (pat, exp), def_annot) -> (
         try
           let evaluated = eval_exp (initial_lstate, gstate) exp in
           match pattern_match pat evaluated with
@@ -583,7 +596,7 @@ let rec initialize_registers allow_registers undef_registers gstate =
 let initial_state ?(registers = true) ?(undef_registers = true) ?fold_target ?config ast env primops =
   let gstate = initial_gstate ?fold_target ?config primops ast.defs env in
   let add_function gstate = function
-    | DEF_aux (DEF_fundef fdef, _) -> { gstate with fundefs = Bindings.add (id_of_fundef fdef) fdef gstate.fundefs }
+    | Def_aux (Def_fundef fdef, _) -> { gstate with fundefs = Bindings.add (id_of_fundef fdef) fdef gstate.fundefs }
     | _ -> gstate
   in
   let gstate = List.fold_left add_function gstate ast.defs in

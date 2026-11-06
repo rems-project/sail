@@ -45,7 +45,6 @@
 (****************************************************************************)
 
 open Ast
-module Big_int = Nat_big_num
 
 module Kid = struct
   type t = kid
@@ -95,7 +94,7 @@ let rec nexp_compare (Nexp_aux (nexp1, _)) (Nexp_aux (nexp2, _)) =
   match (nexp1, nexp2) with
   | Nexp_id v1, Nexp_id v2 -> Id.compare v1 v2
   | Nexp_var kid1, Nexp_var kid2 -> Kid.compare kid1 kid2
-  | Nexp_constant c1, Nexp_constant c2 -> Big_int.compare c1 c2
+  | Nexp_constant c1, Nexp_constant c2 -> Z.compare c1 c2
   | Nexp_app (op1, args1), Nexp_app (op2, args2) ->
       let lex1 = Id.compare op1 op2 in
       let lex2 = List.length args1 - List.length args2 in
@@ -143,7 +142,7 @@ and nc_compare (NC_aux (nc1, _)) (NC_aux (nc2, _)) =
   | NC_le (n1, n2), NC_le (n3, n4)
   | NC_lt (n1, n2), NC_lt (n3, n4) ->
       lex_ord nexp_compare nexp_compare n1 n3 n2 n4
-  | NC_set (n1, s1), NC_set (n2, s2) -> lex_ord nexp_compare (Util.compare_list Nat_big_num.compare) n1 n2 s1 s2
+  | NC_set (n1, s1), NC_set (n2, s2) -> lex_ord nexp_compare (Util.compare_list Z.compare) n1 n2 s1 s2
   | NC_or (nc1, nc2), NC_or (nc3, nc4) | NC_and (nc1, nc2), NC_and (nc3, nc4) ->
       lex_ord nc_compare nc_compare nc1 nc3 nc2 nc4
   | NC_app (f1, args1), NC_app (f2, args2) -> lex_ord Id.compare (Util.compare_list typ_arg_compare) f1 f2 args1 args2
@@ -238,7 +237,7 @@ let lit_compare (L_aux (l1, _)) (L_aux (l2, _)) =
   | L_false, L_false -> 0
   | L_false, _ -> -1
   | _, L_false -> 1
-  | L_num n1, L_num n2 -> Big_int_Z.compare_big_int n1 n2
+  | L_num n1, L_num n2 -> Z.compare n1 n2
   | L_num _, _ -> -1
   | _, L_num _ -> 1
   | L_hex h1, L_hex h2 -> List.compare bit_compare (BitList.of_hex_lit h1) (BitList.of_hex_lit h2)

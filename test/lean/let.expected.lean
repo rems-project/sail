@@ -62,7 +62,7 @@ open option
 def __id (x : Int) : Int :=
   x
 
-/-- Type quantifiers: k_ex981_ : Bool, k_ex980_ : Bool -/
+/-- Type quantifiers: k_ex990_ : Bool, k_ex989_ : Bool -/
 def neq_bool (x : Bool) (y : Bool) : Bool :=
   (! (x == y))
 
@@ -165,10 +165,10 @@ def baz (_ : Unit) : SailM (BitVec 16) := do
 
 /-- Type quantifiers: x : Int -/
 def f (x : Int) : SailM Int := do
-  assert (x >b 4) "..."
+  sail_assert (x >b 4) "..."
   (pure x)
 
-def a_constant : Int := unwrapValue ((f 22))
+def a_constant : Int := unwrapValue (do (f 22))
 
 def g (_ : Unit) : SailM Int := do
   (pure (a_constant +i 3))

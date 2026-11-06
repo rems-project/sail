@@ -3,13 +3,13 @@ AbsValue
 Ascii
 Assignment
 Ast
+Basics
 BinInt
 BinNat
 BinPos
 Bit
 BitList
 Bool
-Basics
 BvUtil
 Compare_dec
 Datatypes
@@ -23,6 +23,7 @@ Lattice
 List0
 ListDef
 ListUtil
+Monad
 Nat0
 NatDef
 Number
@@ -34,6 +35,11 @@ OrdersTac
 PatternMatch
 PeanoNat
 PosDef
+PrimBits
+PrimInt
+PrimReal
+PrimString
+PrimVector
 QArith_base
 Qcanon
 Qreduction

@@ -54,8 +54,6 @@ open PPrint
 open Type_check
 open Util
 
-module Big_int = Nat_big_num
-
 (* Option to turn tracing features on or off *)
 let opt_trace_ocaml = ref false
 
@@ -93,11 +91,35 @@ let ocaml_string_parens inside = string "\"(\" ^ " ^^ inside ^^ string " ^ \")\"
 
 let ocaml_string_comma = string " ^ \", \" ^ "
 
+(* Type-kinded arguments of a type application. Numeric and boolean
+   arguments have no OCaml equivalent, so are dropped. *)
+let ocaml_typ_args args = List.filter_map (function A_aux (A_typ typ, _) -> Some typ | _ -> None) args
+
+(* The type variables that remain in the generated OCaml type, i.e. only
+   those of kind Type. *)
+let rec ocaml_tyvars (Typ_aux (typ_aux, _)) =
+  match typ_aux with
+  | Typ_var kid -> KidSet.singleton kid
+  | Typ_id _ | Typ_internal_unknown -> KidSet.empty
+  | Typ_app (_, args) -> ocaml_tyvars_list (ocaml_typ_args args)
+  | Typ_fn (typs, typ) -> ocaml_tyvars_list (typ :: typs)
+  | Typ_bidir (typ1, typ2) -> ocaml_tyvars_list [typ1; typ2]
+  | Typ_tuple typs -> ocaml_tyvars_list typs
+  | Typ_exist (_, _, typ) -> ocaml_tyvars typ
+
+and ocaml_tyvars_list typs = List.fold_left (fun kids typ -> KidSet.union kids (ocaml_tyvars typ)) KidSet.empty typs
+
 let rec ocaml_string_typ (Typ_aux (typ_aux, l)) arg =
   match typ_aux with
   | Typ_id id when string_of_id id = "exception" -> string "Printexc.to_string" ^^ space ^^ arg
   | Typ_id id -> ocaml_string_of id ^^ space ^^ arg
-  | Typ_app (id, []) -> ocaml_string_of id ^^ space ^^ arg
+  | Typ_app (id, [_; A_aux (A_typ typ, l)]) when string_of_id id = "vector" ->
+      ocaml_string_typ (Typ_aux (Typ_app (mk_id "list", [A_aux (A_typ typ, l)]), l)) arg
+  | Typ_app (id, _) when string_of_id id = "bitvector" -> ocaml_string_of id ^^ space ^^ arg
+  | Typ_app (id, _) when List.mem (string_of_id id) ["atom"; "range"; "implicit"] ->
+      ocaml_string_of (mk_id "int") ^^ space ^^ arg
+  | Typ_app (id, _) when string_of_id id = "atom_bool" -> ocaml_string_of (mk_id "bool") ^^ space ^^ arg
+  | Typ_app (id, args) when ocaml_typ_args args = [] -> ocaml_string_of id ^^ space ^^ arg
   | Typ_app (id, [A_aux (A_typ (Typ_aux (Typ_id eid, _)), _)]) when string_of_id id = "list" && string_of_id eid = "bit"
     ->
       string "string_of_bits" ^^ space ^^ arg
@@ -120,20 +142,20 @@ let rec ocaml_string_typ (Typ_aux (typ_aux, l)) arg =
   | Typ_fn (typ1, typ2) -> string "\"FN\""
   | Typ_bidir (t1, t2) -> string "\"BIDIR\""
   | Typ_var kid -> string "\"VAR\""
-  | Typ_exist _ -> assert false
+  | Typ_exist (_, _, typ) -> ocaml_string_typ typ arg
   | Typ_internal_unknown -> raise (Reporting.err_unreachable l __POS__ "escaped Typ_internal_unknown")
 
 let ocaml_typ_id ctx = function
   | id when Id.compare id (mk_id "string") = 0 -> string "string"
   | id when Id.compare id (mk_id "string_literal") = 0 -> string "string"
   | id when Id.compare id (mk_id "list") = 0 -> string "list"
-  | id when Id.compare id (mk_id "bitvector") = 0 -> string "bit" ^^ space ^^ string "list"
-  | id when Id.compare id (mk_id "int") = 0 -> string "Big_int.num"
-  | id when Id.compare id (mk_id "implicit") = 0 -> string "Big_int.num"
-  | id when Id.compare id (mk_id "nat") = 0 -> string "Big_int.num"
+  | id when Id.compare id (mk_id "bitvector") = 0 -> string "bits"
+  | id when Id.compare id (mk_id "int") = 0 -> string "Z.t"
+  | id when Id.compare id (mk_id "implicit") = 0 -> string "Z.t"
+  | id when Id.compare id (mk_id "nat") = 0 -> string "Z.t"
   | id when Id.compare id (mk_id "bool") = 0 -> string "bool"
   | id when Id.compare id (mk_id "unit") = 0 -> string "unit"
-  | id when Id.compare id (mk_id "real") = 0 -> string "Rational.t"
+  | id when Id.compare id (mk_id "real") = 0 -> string "Q.t"
   | id when Id.compare id (mk_id "exception") = 0 -> string "exn"
   | id when Id.compare id (mk_id "register") = 0 -> string "ref"
   | id when IdSet.mem id ctx.records -> zencode_upper ctx id ^^ dot ^^ zencode ctx id
@@ -142,31 +164,42 @@ let ocaml_typ_id ctx = function
 let rec ocaml_typ ctx (Typ_aux (typ_aux, l)) =
   match typ_aux with
   | Typ_id id -> ocaml_typ_id ctx id
-  | Typ_app (id, []) -> ocaml_typ_id ctx id
-  | Typ_app (id, typs) -> parens (separate_map (string ", ") (ocaml_typ_arg ctx) typs) ^^ space ^^ ocaml_typ_id ctx id
+  | Typ_app (id, [_; A_aux (A_typ typ, _)]) when string_of_id id = "vector" ->
+      parens (ocaml_typ ctx typ) ^^ space ^^ string "list"
+  | Typ_app (id, _) when string_of_id id = "bitvector" -> string "bits"
+  | Typ_app (id, _) when List.mem (string_of_id id) ["atom"; "range"; "implicit"] -> string "Z.t"
+  | Typ_app (id, _) when string_of_id id = "atom_bool" -> string "bool"
+  | Typ_app (id, args) -> (
+      match ocaml_typ_args args with
+      | [] -> ocaml_typ_id ctx id
+      | typs -> parens (separate_map (string ", ") (ocaml_typ ctx) typs) ^^ space ^^ ocaml_typ_id ctx id
+    )
   | Typ_tuple typs -> parens (separate_map (string " * ") (ocaml_typ ctx) typs)
   | Typ_fn (typs, typ) -> separate (string " -> ") (List.map (ocaml_typ ctx) typs @ [ocaml_typ ctx typ])
   | Typ_bidir _ -> raise (Reporting.err_general l "Ocaml doesn't support bidir types")
   | Typ_var kid -> zencode_kid kid
-  | Typ_exist _ -> assert false
+  | Typ_exist (_, _, typ) -> ocaml_typ ctx typ
   | Typ_internal_unknown -> raise (Reporting.err_unreachable l __POS__ "escaped Typ_internal_unknown")
 
-and ocaml_typ_arg ctx (A_aux (typ_arg_aux, _) as typ_arg) =
-  match typ_arg_aux with
-  | A_typ typ -> ocaml_typ ctx typ
-  | _ -> failwith ("OCaml: unexpected type argument " ^ string_of_typ_arg typ_arg)
-
+(* Only type-kinded quantifiers are kept, as OCaml types cannot depend
+   on numbers or booleans. *)
 let ocaml_typquant typq =
-  let ocaml_qi = function
-    | QI_aux (QI_id kopt, _) -> zencode_kid (kopt_kid kopt)
-    | QI_aux (QI_constraint _, l) ->
-        raise (Reporting.err_general l "Ocaml: type quantifiers should no longer contain constraints")
-  in
-  match typq with [] -> empty | [qi] -> ocaml_qi qi | qis -> parens (separate_map (string ", ") ocaml_qi qis)
+  let kids = List.filter_map (fun kopt -> if is_typ_kopt kopt then Some (kopt_kid kopt) else None) (quant_kopts typq) in
+  match kids with [] -> empty | [kid] -> zencode_kid kid | kids -> parens (separate_map (string ", ") zencode_kid kids)
 
 let string_lit str = dquotes (string (String.escaped str))
 
 let ocaml_bit = function B0 -> string "B0" | B1 -> string "B1"
+
+let ocaml_bits_lit bits =
+  let width = List.length bits in
+  let value = Sail_lib.uint (Sail_lib.bits_of_bit_list bits) in
+  parens
+    (string "to_bits" ^^ space
+    ^^ parens (string ("Z.of_int " ^ string_of_int width))
+    ^^ space
+    ^^ parens (string ("Z.of_string " ^ "\"" ^ Z.to_string value ^ "\""))
+    )
 
 let ocaml_lit (L_aux (lit_aux, _)) =
   match lit_aux with
@@ -174,16 +207,16 @@ let ocaml_lit (L_aux (lit_aux, _)) =
   | L_true -> string "true"
   | L_false -> string "false"
   | L_num n ->
-      if Big_int.equal n Big_int.zero then string "Big_int.zero"
-      else if Big_int.less_equal (Big_int.of_int min_int) n && Big_int.less_equal n (Big_int.of_int max_int) then
-        parens (string "Big_int.of_int" ^^ space ^^ parens (string (Big_int.to_string n)))
-      else parens (string "Big_int.of_string" ^^ space ^^ dquotes (string (Big_int.to_string n)))
+      if Z.equal n Z.zero then string "Z.zero"
+      else if Z.leq (Z.of_int min_int) n && Z.leq n (Z.of_int max_int) then
+        parens (string "Z.of_int" ^^ space ^^ parens (string (Z.to_string n)))
+      else parens (string "Z.of_string" ^^ space ^^ dquotes (string (Z.to_string n)))
   | L_string str -> string_lit str
   | L_real r ->
       let str = Q.to_string (Util.Rational.from_rocq r) in
       parens (string "real_of_string" ^^ space ^^ dquotes (string (String.escaped str)))
-  | L_bin bin -> brackets (separate_map (semi ^^ space) ocaml_bit (BitList.of_bin_lit bin))
-  | L_hex hex -> brackets (separate_map (semi ^^ space) ocaml_bit (BitList.of_hex_lit hex))
+  | L_bin bin -> ocaml_bits_lit (BitList.of_bin_lit bin)
+  | L_hex hex -> ocaml_bits_lit (BitList.of_hex_lit hex)
 
 let pat_record_id l pat =
   match typ_of_pat pat with
@@ -202,9 +235,9 @@ let rec ocaml_pat ctx (P_aux (pat_aux, (l, _)) as pat) =
       | _ -> failwith ("Ocaml: Cannot pattern match on register: " ^ string_of_pat pat)
     )
   | P_lit lit -> ocaml_lit lit
-  | P_typ (_, pat) -> ocaml_pat ctx pat
+  | P_typ (_, pat) | P_var (pat, _) -> ocaml_pat ctx pat
   | P_tuple pats -> parens (separate_map (comma ^^ space) (ocaml_pat ctx) pats)
-  | P_list pats -> brackets (separate_map (semi ^^ space) (ocaml_pat ctx) pats)
+  | P_list pats | P_vector pats -> brackets (separate_map (semi ^^ space) (ocaml_pat ctx) pats)
   | P_wild -> string "_"
   | P_as (pat, id) -> separate space [ocaml_pat ctx pat; string "as"; zencode ctx id]
   | P_app (id, pats) -> (
@@ -306,8 +339,7 @@ let rec ocaml_exp ctx (E_aux (exp_aux, (l, _)) as exp) =
           ocaml_atomic_lexp ctx lexp;
           equals;
           string "ref";
-          parens
-            (ocaml_atomic_exp ctx exp1 ^^ space ^^ colon ^^ space ^^ ocaml_typ ctx (Rewrites.simple_typ (typ_of exp1)));
+          parens (ocaml_atomic_exp ctx exp1 ^^ space ^^ colon ^^ space ^^ ocaml_typ ctx (typ_of exp1));
           string "in";
         ]
       ^/^ ocaml_exp ctx exp2
@@ -336,15 +368,11 @@ let rec ocaml_exp ctx (E_aux (exp_aux, (l, _)) as exp) =
       in
       let loop_mod =
         match ord with
-        | Ord_aux (Ord_inc, _) ->
-            string "Big_int.add" ^^ space ^^ zencode ctx id ^^ space ^^ ocaml_atomic_exp ctx exp_step
-        | Ord_aux (Ord_dec, _) ->
-            string "Big_int.sub" ^^ space ^^ zencode ctx id ^^ space ^^ ocaml_atomic_exp ctx exp_step
+        | Ord_aux (Ord_inc, _) -> string "Z.add" ^^ space ^^ zencode ctx id ^^ space ^^ ocaml_atomic_exp ctx exp_step
+        | Ord_aux (Ord_dec, _) -> string "Z.sub" ^^ space ^^ zencode ctx id ^^ space ^^ ocaml_atomic_exp ctx exp_step
       in
       let loop_compare =
-        match ord with
-        | Ord_aux (Ord_inc, _) -> string "Big_int.less_equal"
-        | Ord_aux (Ord_dec, _) -> string "Big_int.greater_equal"
+        match ord with Ord_aux (Ord_inc, _) -> string "Z.leq" | Ord_aux (Ord_dec, _) -> string "Z.geq"
       in
       let loop_body =
         separate space [string "if"; loop_compare; zencode ctx id; ocaml_atomic_exp ctx exp_to]
@@ -395,7 +423,7 @@ and ocaml_atomic_exp ctx (E_aux (exp_aux, _) as exp) =
       | Register typ ->
           if !opt_trace_ocaml then (
             let var = gensym () in
-            let str_typ = parens (ocaml_string_typ (Rewrites.simple_typ typ) var) in
+            let str_typ = parens (ocaml_string_typ typ var) in
             parens
               (separate space
                  [
@@ -413,8 +441,10 @@ and ocaml_atomic_exp ctx (E_aux (exp_aux, _) as exp) =
       | Local (Mutable, _) -> bang ^^ zencode ctx id
     )
   | E_vector exps ->
-      parens
-        (string "List.concat" ^^ space ^^ enclose lbracket rbracket (separate_map (semi ^^ space) (ocaml_exp ctx) exps))
+      let elems = enclose lbracket rbracket (separate_map (semi ^^ space) (ocaml_exp ctx) exps) in
+      if is_bitvector_typ (typ_of exp) then
+        parens (string "List.fold_left append" ^^ space ^^ parens (string "zeros Z.zero") ^^ space ^^ elems)
+      else elems
   | E_list exps -> enclose lbracket rbracket (separate_map (semi ^^ space) (ocaml_exp ctx) exps)
   | E_tuple exps ->
       let len = List.length exps in
@@ -440,7 +470,7 @@ and ocaml_assignment ctx (LE_aux (lexp_aux, _) as lexp) exp =
           let traced_exp =
             if !opt_trace_ocaml then (
               let var = gensym () in
-              let str_typ = parens (ocaml_string_typ (Rewrites.simple_typ typ) var) in
+              let str_typ = parens (ocaml_string_typ typ var) in
               parens
                 (separate space
                    [
@@ -472,8 +502,8 @@ and ocaml_atomic_lexp ctx (LE_aux (lexp_aux, _) as lexp) =
   match lexp_aux with LE_typ (_, id) -> zencode ctx id | LE_id id -> zencode ctx id | _ -> parens (ocaml_lexp ctx lexp)
 
 let rec get_initialize_registers = function
-  | DEF_aux
-      ( DEF_fundef
+  | Def_aux
+      ( Def_fundef
           (FD_aux
              (FD_function (_, _, [FCL_aux (FCL_funcl (id, Pat_aux (Pat_exp (_, E_aux (E_block inits, _)), _)), _)]), _)
             ),
@@ -494,9 +524,9 @@ let initial_value_for id inits =
   | Some init -> init
   | None -> failwith ("No assignment to register ^ " ^ string_of_id id ^ " in initialize_registers")
 
-let ocaml_dec_spec ctx (DEC_aux (reg, _)) =
+let ocaml_reg_spec ctx (Reg_aux (reg, _)) =
   match reg with
-  | DEC_reg (typ, id, None) ->
+  | Reg (typ, id, None) ->
       separate space
         [
           string "let";
@@ -508,7 +538,7 @@ let ocaml_dec_spec ctx (DEC_aux (reg, _)) =
           string "ref";
           parens (ocaml_exp ctx (initial_value_for id ctx.register_inits));
         ]
-  | DEC_reg (typ, id, Some exp) ->
+  | Reg (typ, id, Some exp) ->
       separate space
         [
           string "let";
@@ -544,7 +574,7 @@ let ocaml_funcls ctx =
   let trace_info typ1 typ2 =
     let arg_sym = gensym () in
     let ret_sym = gensym () in
-    let kids = KidSet.union (tyvars_of_typ typ1) (tyvars_of_typ typ2) in
+    let kids = KidSet.union (ocaml_tyvars typ1) (ocaml_tyvars typ2) in
     let foralls =
       if KidSet.is_empty kids then empty else separate space (List.map zencode_kid (KidSet.elements kids)) ^^ dot
     in
@@ -604,10 +634,10 @@ let ocaml_funcls ctx =
           | _ -> failwith "Found val spec which was not a function!"
           | exception Not_found -> failwith ("No val spec found for " ^ string_of_id id)
         in
-        (* Any remaining type variables after simple_typ rewrite should
-           indicate Type-polymorphism. If we have it, we need to generate
-           explicit type signatures with universal quantification. *)
-        let kids = List.fold_left KidSet.union (tyvars_of_typ ret_typ) (List.map tyvars_of_typ arg_typs) in
+        (* Any type variables of kind Type indicate type-polymorphism. If
+           we have it, we need to generate explicit type signatures with
+           universal quantification. *)
+        let kids = ocaml_tyvars_list (ret_typ :: arg_typs) in
         let pat, guard, exp =
           match pexp with
           | Pat_aux (Pat_exp (pat, exp), _) -> (pat, None, exp)
@@ -680,7 +710,7 @@ let ocaml_funcls ctx =
           | Typ_aux (Typ_fn (typs, typ), _) -> (typs, typ)
           | _ -> failwith "Found val spec which was not a function!"
         in
-        let kids = List.fold_left KidSet.union (tyvars_of_typ ret_typ) (List.map tyvars_of_typ arg_typs) in
+        let kids = ocaml_tyvars_list (ret_typ :: arg_typs) in
         if not (KidSet.is_empty kids) then failwith "Cannot handle polymorphic multi-clause function in OCaml backend"
         else ();
         let syms = List.map (fun _ -> gensym ()) arg_typs in
@@ -780,7 +810,7 @@ let ocaml_string_of_variant ctx id typq cases =
 
 let ocaml_typedef ctx (TD_aux (td_aux, (l, _))) =
   match td_aux with
-  | TD_record (id, typq, fields, _) ->
+  | TD_record (id, typq, fields) ->
       (separate space [string "module"; zencode_upper ctx id; equals; string "struct"]
       ^//^ ((separate space [string "type"; ocaml_typquant typq; zencode ctx id; equals; lbrace]
             ^//^ ocaml_fields ctx fields
@@ -803,7 +833,7 @@ let ocaml_typedef ctx (TD_aux (td_aux, (l, _))) =
       ^^ ocaml_def_end
       ^^ ocaml_string_of_variant ctx id typq cases
       ^^ ocaml_def_end
-  | TD_enum (id, members, _) ->
+  | TD_enum (id, members) ->
       let ids = List.map fst members in
       (separate space [string "type"; zencode ctx id; equals] ^//^ bar ^^ space ^^ ocaml_enum ctx ids)
       ^^ ocaml_def_end ^^ ocaml_string_of_enum ctx id ids ^^ ocaml_def_end
@@ -819,7 +849,7 @@ let get_externs defs =
     match Ast_util.extern_assoc "ocaml" exts with None -> [] | Some ext -> [(id, mk_id ext)]
   in
   let rec extern_ids = function
-    | DEF_aux (DEF_val vs, _) :: defs -> extern_id vs :: extern_ids defs
+    | Def_aux (Def_val vs, _) :: defs -> extern_id vs :: extern_ids defs
     | def :: defs -> extern_ids defs
     | [] -> []
   in
@@ -829,14 +859,14 @@ let nf_group doc =
   first_function := true;
   group doc
 
-let ocaml_def ctx (DEF_aux (aux, _)) =
+let ocaml_def ctx (Def_aux (aux, _)) =
   match aux with
-  | DEF_register ds -> nf_group (ocaml_dec_spec ctx ds) ^^ ocaml_def_end
-  | DEF_fundef fd -> group (ocaml_fundef ctx fd) ^^ twice hardline
-  | DEF_internal_mutrec fds ->
+  | Def_register ds -> nf_group (ocaml_reg_spec ctx ds) ^^ ocaml_def_end
+  | Def_fundef fd -> group (ocaml_fundef ctx fd) ^^ twice hardline
+  | Def_internal_mutrec fds ->
       separate_map (twice hardline) (fun fd -> group (ocaml_fundef ctx fd)) fds ^^ twice hardline
-  | DEF_type td -> nf_group (ocaml_typedef ctx td)
-  | DEF_let (pat, exp) -> nf_group (string "let" ^^ space ^^ ocaml_letbind ctx pat exp) ^^ ocaml_def_end
+  | Def_type td -> nf_group (ocaml_typedef ctx td)
+  | Def_let (pat, exp) -> nf_group (string "let" ^^ space ^^ ocaml_letbind ctx pat exp) ^^ ocaml_def_end
   | _ -> empty
 
 let val_spec_typs defs =
@@ -845,7 +875,7 @@ let val_spec_typs defs =
     match vs_aux with VS_val_spec (TypSchm_aux (TypSchm_ts (_, typ), _), id, _) -> typs := Bindings.add id typ !typs
   in
   let rec vs_typs = function
-    | DEF_aux (DEF_val vs, _) :: defs ->
+    | Def_aux (Def_val vs, _) :: defs ->
         val_spec_typ vs;
         vs_typs defs
     | _ :: defs -> vs_typs defs
@@ -863,7 +893,7 @@ let val_spec_typs defs =
 *)
 
 let orig_types_for_ocaml_generator defs =
-  List.filter_map (function DEF_aux (DEF_type td, _) -> Some td | _ -> None) defs
+  List.filter_map (function Def_aux (Def_type td, _) -> Some td | _ -> None) defs
 
 let ocaml_pp_generators ctx defs orig_types required =
   let add_def typemap td = Bindings.add (id_of_type_def td) td typemap in
@@ -899,7 +929,7 @@ let ocaml_pp_generators ctx defs orig_types required =
     | TD_abbrev (_, _, A_aux (A_typ typ, _)) -> add_req_from_typ required typ
     | TD_abbrev _ -> required
     | TD_abstract _ -> required
-    | TD_record (_, _, fields, _) -> List.fold_left (fun req ((_, typ), _) -> add_req_from_typ req typ) required fields
+    | TD_record (_, _, fields) -> List.fold_left (fun req ((_, typ), _) -> add_req_from_typ req typ) required fields
     | TD_variant (_, _, variants, _) ->
         List.fold_left (fun req (Tu_aux (Tu_ty_id (typ, _), _)) -> add_req_from_typ req typ) required variants
     | TD_enum _ -> required
@@ -913,7 +943,7 @@ let ocaml_pp_generators ctx defs orig_types required =
       | TD_aux (td, _) -> (
           match td with
           | TD_abbrev (_, tqs, A_aux (A_typ _, _)) -> tqs
-          | TD_record (_, tqs, _, _) -> tqs
+          | TD_record (_, tqs, _) -> tqs
           | TD_variant (_, tqs, _, _) -> tqs
           | TD_abstract _ | TD_enum _ -> []
           | TD_abbrev (_, _, _) -> assert false
@@ -935,7 +965,6 @@ let ocaml_pp_generators ctx defs orig_types required =
     let targs = List.map make_tyarg tquants in
     let gen_tyvars_pp = match gen_tyvars with [] -> empty | _ -> separate space gen_tyvars ^^ dot ^^ space in
     let out_typ = mk_typ (Typ_app (id, targs)) in
-    let out_typ = Rewrites.simple_typ out_typ in
     let types = (string "generators" :: List.map print_quant tquants) @ [ocaml_typ ctx out_typ] in
     string name ^^ colon ^^ space ^^ gen_tyvars_pp ^^ separate (string " -> ") types
   in
@@ -960,7 +989,7 @@ let ocaml_pp_generators ctx defs orig_types required =
         match arg with
         | A_nexp (Nexp_aux (nexp, l) as full_nexp) -> (
             match nexp with
-            | Nexp_constant c -> string (Big_int.to_string c) (* TODO: overflow *)
+            | Nexp_constant c -> string (Z.to_string c) (* TODO: overflow *)
             | Nexp_var v -> mk_arg v
             | _ -> raise (Reporting.err_todo l ("Unsupported nexp for generators: " ^ string_of_nexp full_nexp))
           )
@@ -1013,7 +1042,7 @@ let ocaml_pp_generators ctx defs orig_types required =
               Some (separate_map (string ";" ^^ break 1) variant_constructor variants),
               Some (separate_map (break 1) build_constructor variants)
             )
-        | TD_enum (_, members, _) ->
+        | TD_enum (_, members) ->
             let ids = List.map fst members in
             ( [],
               string "rand_choice ["
@@ -1022,7 +1051,7 @@ let ocaml_pp_generators ctx defs orig_types required =
               Some (separate_map (string ";" ^^ break 1) enum_constructor ids),
               Some (separate_map (break 1) build_enum_constructor ids)
             )
-        | TD_record (_, tqs, fields, _) ->
+        | TD_record (_, tqs, fields) ->
             (tqs, braces (separate_map (string ";" ^^ break 1) rand_field fields), None, None)
         | _ -> raise (Reporting.err_todo l "Generators for bitfields not yet supported")
       in
@@ -1093,7 +1122,6 @@ let ocaml_ast ast generator_info =
   in
   (string "open Libsail.Sail_lib;;" ^^ hardline)
   ^^ (string "open Libsail.Ast.Bit;;" ^^ hardline)
-  ^^ (string "module Big_int = Nat_big_num" ^^ ocaml_def_end)
   ^^ concat (List.map (ocaml_def ctx) ast.defs)
   ^^ empty_reg_init ^^ gen_pp
 
@@ -1157,7 +1185,7 @@ let dune_file spec =
     ^//^ parens (string "modes" ^^ space ^^ string "native")
     ^//^ parens (string "public_name" ^^ space ^^ string spec)
     ^//^ parens (string "package" ^^ space ^^ string spec)
-    ^//^ parens (string "libraries" ^^ space ^^ string "libsail")
+    ^//^ parens (string "libraries" ^^ space ^^ string "libsail zarith")
     )
 
 let ocaml_compile default_sail_dir spec ast generator_types =

@@ -48,7 +48,6 @@
 
 open Ast
 open Ast_compare
-open Ast_util
 open Jib
 
 (** {1 Instruction construction functions, and Jib names} *)
@@ -57,7 +56,7 @@ open Jib
 val symbol_generator : unit -> unit -> name
 
 val idecl : l -> ctyp -> name -> instr
-val istatic : l -> ctyp -> Value2.vl -> name * instr
+val istatic : l -> ctyp -> Ast.value option -> name * instr
 val ireset : l -> ctyp -> name -> instr
 val iinit : l -> ctyp -> name -> cval -> instr
 val ijson_key : l -> name -> string list -> instr
@@ -115,7 +114,7 @@ val string_of_name : ?deref_current_exception:bool -> ?zencode:bool -> name -> s
 val string_of_op : op -> string
 val string_of_ctyp : ctyp -> string
 val string_of_uid : id * ctyp list -> string
-val string_of_value : Value2.vl -> string
+val string_of_value : Ast.value -> string
 val string_of_cval : cval -> string
 val string_of_clexp : clexp -> string
 val string_of_instr : instr -> string

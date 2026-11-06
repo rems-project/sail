@@ -1,3 +1,4 @@
+[@@@warning "-a"]
 open BinPos
 open Datatypes
 open PosDef
@@ -71,6 +72,10 @@ module N =
       Big_int_Z.big_int -> Big_int_Z.big_int -> Big_int_Z.big_int **)
 
   let mul = Big_int_Z.mult_big_int
+
+  (** val eqb : Big_int_Z.big_int -> Big_int_Z.big_int -> bool **)
+
+  let eqb = Big_int_Z.eq_big_int
 
   (** val testbit : Big_int_Z.big_int -> Big_int_Z.big_int -> bool **)
 

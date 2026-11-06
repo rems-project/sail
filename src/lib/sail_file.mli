@@ -200,16 +200,6 @@ val apply_edits : handle -> unit
     units, so this converts a byte length (or, applied to a substring, a byte offset) into the LSP's units. *)
 val utf16_length : string -> int
 
-(** {1 Channel interface} *)
-
-(** This module aims to provide a drop-in replacement for the stdlib in_channel functionality used by Sail, essentially
-    providing an iterator style interface to the file contents. *)
-module In_channel : sig
-  type t
-
-  val from_file : handle -> t
-
-  val input_line_opt : t -> string option
-
-  val input_line : t -> string
-end
+(** [line handle lnum] is the contents of line [lnum] (counting from 1) of the file, without the trailing newline, or
+    [None] if the file has no such line. An empty file has a single empty line. *)
+val line : handle -> int -> string option

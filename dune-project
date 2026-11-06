@@ -4,7 +4,7 @@
 (using dune_site 0.1)
 
 (name sail)
-(version 0.20.2)
+(version 0.20.3)
 
 (generate_opam_files true)
 
@@ -33,7 +33,8 @@
   (synopsis "Helper tool for compiling Sail")
   (name sail_maker)
   (depends
-    (ocaml (>= 4.14.0))))
+    (ocaml (>= 4.14.0))
+    (yojson (>= 1.6.0))))
 
 (package
   (sites (share plugins))
@@ -52,10 +53,9 @@ http://www.cl.cam.ac.uk/~pes20/sail/.
   (depends
     (sail_maker (and (= :version) :build))
     (dune-site (>= 3.0.2))
-    (bisect_ppx (and :dev (>= "2.5.0")))
     (menhir (and (>= 20240715) :build))
     (ott (and (>= 0.28) :build))
-    (lem (>= "2018-12-14"))
+    (zarith (>= 1.11))
     (linksem (>= "0.3"))
     conf-gmp
     (yojson (>= 1.6.0))

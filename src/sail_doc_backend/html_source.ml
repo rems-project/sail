@@ -78,7 +78,7 @@ let hyperlink_targets ast =
   let open Callgraph in
   let targets = ref NodeMap.empty in
   List.iter
-    (fun (DEF_aux (_, def_annot) as def) ->
+    (fun (Def_aux (_, def_annot) as def) ->
       match Reporting.simp_loc def_annot.loc with
       | Some (p, _) -> NodeSet.iter (fun node -> targets := NodeMap.add node p !targets) (nodes_of_def def)
       | None -> ()

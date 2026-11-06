@@ -1,3 +1,4 @@
+[@@@warning "-a"]
 open Decimal
 open Hexadecimal
 

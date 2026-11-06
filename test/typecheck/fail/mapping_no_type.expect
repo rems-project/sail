@@ -1,0 +1,5 @@
+[93mType error[0m:
+[96mfail/mapping_no_type.sail[0m:4.0-26:
+4[96m |[0mmapping m = { 1 <-> true }
+ [91m |[0m[91m^------------------------^[0m
+ [91m |[0m Mapping does not have any declared type

@@ -554,7 +554,7 @@ open AccessType
 def __id (x : Int) : Int :=
   x
 
-/-- Type quantifiers: k_ex8847_ : Bool, k_ex8846_ : Bool -/
+/-- Type quantifiers: k_ex8856_ : Bool, k_ex8855_ : Bool -/
 def neq_bool (x : Bool) (y : Bool) : Bool :=
   (! (x == y))
 
@@ -2062,7 +2062,7 @@ def fetch_and_execute (_ : Unit) : SailM Unit := do
   let instr := (decode machineCode)
   match instr with
   | .some instr => (execute instr)
-  | none => assert false "Unsupported Encoding"
+  | none => sail_assert false "Unsupported Encoding"
 
 /-- Type quantifiers: k_a : Type, k_b : Type -/
 def is_ok (r : (Result k_a k_b)) : Bool :=

@@ -55,7 +55,6 @@ open Ast
 open Ast_compare
 open Ast_defs
 open Ast_util
-module Big_int = Nat_big_num
 open Type_check
 open Type_error
 
@@ -136,21 +135,18 @@ let ids_in_exp exp =
     exp
 
 let make_vector_lit sz i =
-  let f j =
-    if Big_int.equal (Big_int.modulus (Big_int.shift_right i (sz - j - 1)) (Big_int.of_int 2)) Big_int.zero then Bin_0
-    else Bin_1
-  in
+  let f j = if Z.equal (Z.erem (Z.shift_right i (sz - j - 1)) (Z.of_int 2)) Z.zero then Bin_0 else Bin_1 in
   let s = List.init sz f in
   L_aux (L_bin (non_empty_singleton s), Generated Unknown)
 
 let tabulate f n =
   let rec aux acc n =
     let acc' = f n :: acc in
-    if Big_int.equal n Big_int.zero then acc' else aux acc' (Big_int.sub n (Big_int.of_int 1))
+    if Z.equal n Z.zero then acc' else aux acc' (Z.sub n (Z.of_int 1))
   in
-  if Big_int.equal n Big_int.zero then [] else aux [] (Big_int.sub n (Big_int.of_int 1))
+  if Z.equal n Z.zero then [] else aux [] (Z.sub n (Z.of_int 1))
 
-let make_vectors sz = tabulate (make_vector_lit sz) (Big_int.shift_left (Big_int.of_int 1) sz)
+let make_vectors sz = tabulate (make_vector_lit sz) (Z.shift_left (Z.of_int 1) sz)
 
 let rec cross' = function
   | [] -> [[]]
@@ -190,10 +186,10 @@ let extract_set_nc env l var nc =
         match aux expanded nc2 with Some (is, nc2') -> Some (is, re (NC_and (nc1, nc2'))) | None -> None
       in
       let handle' n' kid' ncs =
-        let len = Big_int.succ (Big_int.sub n' n) in
-        if Big_int.less_equal Big_int.zero len && Big_int.less_equal len (Big_int.of_int !opt_size_set_limit) then (
-          let elem i = Big_int.add n (Big_int.of_int i) in
-          let is = List.init (Big_int.to_int len) elem in
+        let len = Z.succ (Z.sub n' n) in
+        if Z.leq Z.zero len && Z.leq len (Z.of_int !opt_size_set_limit) then (
+          let elem i = Z.add n (Z.of_int i) in
+          let is = List.init (Z.to_int len) elem in
           if aux expanded (List.fold_left nc_and nc_true ncs) <> None then
             raise (Reporting.err_general l ("Multiple set constraints for " ^ string_of_kid var))
           else Some (is, nc_full)
@@ -206,7 +202,7 @@ let extract_set_nc env l var nc =
           handle' n' kid' ncs
       | NC_aux (NC_lt (Nexp_aux (Nexp_var kid', _), Nexp_aux (Nexp_constant n', _)), _) :: ncs when KidSet.mem kid' vars
         ->
-          handle' (Nat_big_num.pred n') kid' ncs
+          handle' (Z.pred n') kid' ncs
       | _ -> aux2 ()
     in
 
@@ -220,7 +216,7 @@ let extract_set_nc env l var nc =
         handle_range n kid nc1 nc2
     | NC_and ((NC_aux (NC_lt (Nexp_aux (Nexp_constant n, _), Nexp_aux (Nexp_var kid, _)), _) as nc1), nc2)
       when KidSet.mem kid vars ->
-        handle_range (Nat_big_num.succ n) kid nc1 nc2
+        handle_range (Z.succ n) kid nc1 nc2
     | NC_and (nc1, nc2) -> (
         match (aux expanded nc1, aux expanded nc2) with
         | None, None -> None
@@ -379,7 +375,7 @@ let split_src_type all_errors env id ty q =
           | Id_aux (Id i, l) -> fun f -> Id_aux (Id (f i), Generated l)
           | Id_aux (Operator i, l) -> fun f -> Id_aux (Operator (f i), l)
         in
-        let name_seg = function _, None -> "" | k, Some i -> "#" ^ string_of_kid (kopt_kid k) ^ Big_int.to_string i in
+        let name_seg = function _, None -> "" | k, Some i -> "#" ^ string_of_kid (kopt_kid k) ^ Z.to_string i in
         let name l i = String.concat "" (i :: List.map name_seg l) in
         Some (List.map (fun (l, ty) -> (l, wrap (name l), ty)) variants)
       )
@@ -428,7 +424,7 @@ let refine_constructor refinements l env id args =
                   (fun v (_, w) ->
                     match (v, w) with
                     | _, None -> true
-                    | Some (A_aux (A_nexp (Nexp_aux (Nexp_constant n, _)), _)), Some m -> Big_int.equal n m
+                    | Some (A_aux (A_nexp (Nexp_aux (Nexp_constant n, _)), _)), Some m -> Z.equal n m
                     | _, _ -> false
                   )
                   bindings mapping
@@ -680,9 +676,9 @@ let split_defs target all_errors (splits : split_req list) env ast =
     in
     let sc_def d =
       match d with
-      | DEF_aux (DEF_type td, def_annot) ->
+      | Def_aux (Def_type td, def_annot) ->
           let refinements, td' = sc_type_def td in
-          (refinements, DEF_aux (DEF_type td', def_annot))
+          (refinements, Def_aux (Def_type td', def_annot))
       | _ -> ([], d)
     in
     let refinements, defs' = List.split (List.map sc_def defs) in
@@ -758,11 +754,11 @@ let split_defs target all_errors (splits : split_req list) env ast =
       )
     | Typ_app (Id_aux (Id "bitvector", _), [A_aux (A_nexp len, _)]) -> (
         match len with
-        | Nexp_aux (Nexp_constant sz, _) when Big_int.greater_equal sz Big_int.zero ->
-            let sz = Big_int.to_int sz in
-            let num_lits = Big_int.pow_int (Big_int.of_int 2) sz in
+        | Nexp_aux (Nexp_constant sz, _) when Z.geq sz Z.zero ->
+            let sz = Z.to_int sz in
+            let num_lits = Z.pow (Z.of_int 2) sz in
             (* Check that split size is within limits before generating the list of literals *)
-            if Big_int.less_equal num_lits (Big_int.of_int !opt_size_set_limit) then (
+            if Z.leq num_lits (Z.of_int !opt_size_set_limit) then (
               let lits = make_vectors sz in
               (* Some parts of Sail don't recognise complete bitvector
                  matches, so make the last one a wildcard. *)
@@ -1233,19 +1229,19 @@ let split_defs target all_errors (splits : split_req list) env ast =
       | _ -> [sd]
     in
     let num_defs = List.length defs in
-    let map_def idx (DEF_aux (aux, def_annot) as def) =
+    let map_def idx (Def_aux (aux, def_annot) as def) =
       Util.progress "Monomorphising " (string_of_int idx ^ "/" ^ string_of_int num_defs) idx num_defs;
       match aux with
-      | DEF_type _ | DEF_constraint _ | DEF_val _ | DEF_default _ | DEF_register _ | DEF_overload _ | DEF_fixity _
-      | DEF_pragma _ | DEF_internal_mutrec _ | DEF_outcome _ | DEF_impl _ | DEF_instantiation _ ->
+      | Def_type _ | Def_constraint _ | Def_val _ | Def_default _ | Def_register _ | Def_overload _ | Def_fixity _
+      | Def_pragma _ | Def_internal_mutrec _ | Def_outcome _ | Def_impl _ | Def_instantiation _ ->
           [def]
-      | DEF_fundef fd -> [DEF_aux (DEF_fundef (map_fundef fd), def_annot)]
-      | DEF_let (pat, exp) ->
+      | Def_fundef fd -> [Def_aux (Def_fundef (map_fundef fd), def_annot)]
+      | Def_let (pat, exp) ->
           let pat, exp = map_letbind pat exp in
-          [DEF_aux (DEF_let (pat, exp), def_annot)]
-      | DEF_scattered sd -> List.map (fun x -> DEF_aux (DEF_scattered x, def_annot)) (map_scattered_def sd)
-      | DEF_measure (id, pat, exp) -> [DEF_aux (DEF_measure (id, pat, map_exp exp), def_annot)]
-      | DEF_mapdef _ | DEF_loop_measures _ ->
+          [Def_aux (Def_let (pat, exp), def_annot)]
+      | Def_scattered sd -> List.map (fun x -> Def_aux (Def_scattered x, def_annot)) (map_scattered_def sd)
+      | Def_measure (id, pat, exp) -> [Def_aux (Def_measure (id, pat, map_exp exp), def_annot)]
+      | Def_mapdef _ | Def_loop_measures _ ->
           Reporting.unreachable (def_loc def) __POS__
             "Found definition that should have been rewritten previously during monomorphisation"
     in
@@ -1484,7 +1480,7 @@ module AtomToItself = struct
       | exception Not_found -> Bindings.add id (parameters_to_rewrite, new_nexps) fsizes
     in
     let sizes_def fsizes = function
-      | DEF_aux (DEF_fundef (FD_aux (FD_function (_, _, funcls), _)), _) -> List.fold_left sizes_funcl fsizes funcls
+      | Def_aux (Def_fundef (FD_aux (FD_function (_, _, funcls), _)), _) -> List.fold_left sizes_funcl fsizes funcls
       | _ -> fsizes
     in
     let fn_sizes = List.fold_left sizes_def Bindings.empty ast.defs in
@@ -1566,10 +1562,10 @@ module AtomToItself = struct
       in
       Bindings.fold update_val_spec fn_sizes type_env
     in
-    let rewrite_def (DEF_aux (aux, def_annot)) =
+    let rewrite_def (Def_aux (aux, def_annot)) =
       let aux =
         match aux with
-        | DEF_fundef (FD_aux (FD_function (recopt, tannopt, funcls), (l, _))) ->
+        | Def_fundef (FD_aux (FD_function (recopt, tannopt, funcls), (l, _))) ->
             let funcls = List.map rewrite_funcl funcls in
             (* Check whether we have ended up with itself('n) expressions where 'n
                is not constant.  If so, try and see if constant propagation can
@@ -1599,19 +1595,19 @@ module AtomToItself = struct
             in
             let funcls = List.map check_funcl funcls in
             (* TODO rewrite tannopt? *)
-            DEF_fundef (FD_aux (FD_function (recopt, tannopt, funcls), (l, empty_tannot)))
-        | DEF_let (pat, exp) -> DEF_let (pat, rewrite_exp exp)
-        | DEF_val (VS_aux (VS_val_spec (typschm, id, extern), (l, annot))) ->
+            Def_fundef (FD_aux (FD_function (recopt, tannopt, funcls), (l, empty_tannot)))
+        | Def_let (pat, exp) -> Def_let (pat, rewrite_exp exp)
+        | Def_val (VS_aux (VS_val_spec (typschm, id, extern), (l, annot))) ->
             let typschm =
               match typschm with
               | TypSchm_aux (TypSchm_ts (tq, typ), l) -> TypSchm_aux (TypSchm_ts (tq, replace_funtype id typ), l)
             in
-            DEF_val (VS_aux (VS_val_spec (typschm, id, extern), (l, annot)))
-        | DEF_register (DEC_aux (DEC_reg (typ, id, Some exp), a)) ->
-            DEF_register (DEC_aux (DEC_reg (typ, id, Some (rewrite_exp exp)), a))
+            Def_val (VS_aux (VS_val_spec (typschm, id, extern), (l, annot)))
+        | Def_register (Reg_aux (Reg (typ, id, Some exp), a)) ->
+            Def_register (Reg_aux (Reg (typ, id, Some (rewrite_exp exp)), a))
         | _ -> aux
       in
-      DEF_aux (aux, def_annot)
+      Def_aux (aux, def_annot)
     in
     (*
   Bindings.iter (fun id args ->
@@ -1629,7 +1625,7 @@ let is_id env id =
 (* Type-agnostic pattern comparison for merging below *)
 
 let lit_eq' (L_aux (l1, _)) (L_aux (l2, _)) =
-  match (l1, l2) with L_num n1, L_num n2 -> Big_int.equal n1 n2 | _, _ -> l1 = l2
+  match (l1, l2) with L_num n1, L_num n2 -> Z.equal n1 n2 | _, _ -> l1 = l2
 
 let forall2 p x y = try List.for_all2 p x y with Invalid_argument _ -> false
 
@@ -2029,12 +2025,12 @@ module Analysis = struct
         | Nexp_aux (Nexp_constant len, _) ->
             Some
               (fun pat ->
-                let end_len = Big_int.pred (Big_int.sub len vend) in
+                let end_len = Z.pred (Z.sub len vend) in
                 (* Wrap pat in its type; in particular the type checker won't
                    manage P_wild in the middle of a P_vector_concat *)
                 let pat = P_aux (P_typ (typ_of_pat pat, pat), (Generated (pat_loc pat), empty_tannot)) in
                 let pats =
-                  if Big_int.greater end_len Big_int.zero then
+                  if Z.gt end_len Z.zero then
                     [
                       pat;
                       P_aux
@@ -2045,7 +2041,7 @@ module Analysis = struct
                   else [pat]
                 in
                 let pats =
-                  if Big_int.greater vstart Big_int.zero then
+                  if Z.gt vstart Z.zero then
                     P_aux
                       ( P_typ (bitvector_typ (nconstant vstart), P_aux (P_wild, (dummyl, empty_tannot))),
                         (dummyl, empty_tannot)
@@ -2105,12 +2101,12 @@ module Analysis = struct
        when is_id (env_of exp) (Id "append") append ->
         (* If the expression is a concatenation resulting in a small enough bitvector,
            perform a (total) case split on the sub-vectors *)
-        let vec_len v = try Option.map Big_int.to_int (get_constant_vec_len (env_of exp) v) with _ -> None in
-        let pow2 n = Big_int.pow_int (Big_int.of_int 2) n in
-        let size_set len1 len2 = Big_int.mul (pow2 len1) (pow2 len2) in
+        let vec_len v = try Option.map Z.to_int (get_constant_vec_len (env_of exp) v) with _ -> None in
+        let pow2 n = Z.pow (Z.of_int 2) n in
+        let size_set len1 len2 = Z.mul (pow2 len1) (pow2 len2) in
         begin match (vec_len (typ_of exp), vec_len (typ_of vec1), vec_len (typ_of vec2)) with
           | (Some len, Some len1, Some len2)
-            when Big_int.less_equal (size_set len1 len2) (Big_int.of_int size_set_limit) ->
+            when Z.leq (size_set len1 len2) (Z.of_int size_set_limit) ->
              let recur = refine_dependency env in
              (* Create pexps with dummy bodies (ignored by the recursive call) *)
              let mk_pexps len =
@@ -2773,7 +2769,7 @@ module Analysis = struct
       KBindings.iter
         (fun k (l, is) ->
           print_endline
-            (string_of_kid k ^ " @ " ^ simple_string_of_loc l ^ " " ^ String.concat "," (List.map Big_int.to_string is))
+            (string_of_kid k ^ " @ " ^ simple_string_of_loc l ^ " " ^ String.concat "," (List.map Z.to_string is))
         )
         set_assertions
     )
@@ -2835,11 +2831,11 @@ module Analysis = struct
     let _ = if debug > 2 then print_result r else () in
     r
 
-  let analyse_def debug effect_info env globals (DEF_aux (aux, _)) =
+  let analyse_def debug effect_info env globals (Def_aux (aux, _)) =
     match aux with
-    | DEF_fundef (FD_aux (FD_function (_, _, funcls), _)) ->
+    | Def_fundef (FD_aux (FD_function (_, _, funcls), _)) ->
         (globals, List.fold_left (fun r f -> merge r (analyse_funcl debug effect_info env globals f)) empty funcls)
-    | DEF_let (P_aux ((P_id id | P_typ (_, P_aux (P_id id, _))), _), exp) ->
+    | Def_let (P_aux ((P_id id | P_typ (_, P_aux (P_id id, _))), _), exp) ->
         (Bindings.add id (Constant_fold.is_constant exp) globals, empty)
     | _ -> (globals, empty)
 
@@ -2857,7 +2853,7 @@ module Analysis = struct
     let total_defs = List.length ast.defs in
     let def (idx, globals, r) d =
       ( match d with
-      | DEF_aux (DEF_fundef fd, _) -> Util.progress "Analysing " (string_of_id (id_of_fundef fd)) idx total_defs
+      | Def_aux (Def_fundef fd, _) -> Util.progress "Analysing " (string_of_id (id_of_fundef fd)) idx total_defs
       | _ -> ()
       );
       let globals, r' = analyse_def debug effect_info env globals d in
@@ -2963,9 +2959,9 @@ let add_extra_splits extras defs =
     (FCL_aux (FCL_funcl (id, Pat_aux (pexp, peannot)), (def_annot, annot)), splits)
   in
   let add_to_def = function
-    | DEF_aux (DEF_fundef (FD_aux (FD_function (re, ta, funcls), annot)), def_annot) ->
+    | Def_aux (Def_fundef (FD_aux (FD_function (re, ta, funcls), annot)), def_annot) ->
         let funcls, splits = List.split (List.map add_to_funcl funcls) in
-        (DEF_aux (DEF_fundef (FD_aux (FD_function (re, ta, funcls), annot)), def_annot), List.concat splits)
+        (Def_aux (Def_fundef (FD_aux (FD_function (re, ta, funcls), annot)), def_annot), List.concat splits)
     | d -> (d, [])
   in
   let defs, splits = List.split (List.map add_to_def defs) in
@@ -3163,7 +3159,7 @@ module MonoRewrites = struct
           | Some zlen ->
               (* Give the length explicitly rather than relying on the context;
                  it might not be sufficiently constrained. *)
-              let len1 = mk_exp (E_lit (L_aux (L_num (Nat_big_num.of_int (bin_lit_length lit)), Unknown))) in
+              let len1 = mk_exp (E_lit (L_aux (L_num (Z.of_int (bin_lit_length lit)), Unknown))) in
               let total = mk_infix_exp zlen (mk_operator "+") len1 in
               try_cast_to_typ (mk_exp (E_app (mk_id "slice_mask", [total; zlen; len1])))
           | None -> E_app (id, args)
@@ -3177,7 +3173,7 @@ module MonoRewrites = struct
               (* Give the length explicitly rather than relying on the context;
                  it might not be sufficiently constrained. *)
               let total = mk_infix_exp zlen (mk_operator "+") len2 in
-              let zero = mk_exp (E_lit (mk_lit (L_num Nat_big_num.zero))) in
+              let zero = mk_exp (E_lit (mk_lit (L_num Z.zero))) in
               try_cast_to_typ (mk_exp (E_app (mk_id "slice_mask", [total; zero; len2])))
           | None -> E_app (id, args)
         )
@@ -3187,16 +3183,16 @@ module MonoRewrites = struct
           | Some zlen ->
               (* Give the length explicitly rather than relying on the context;
                  it might not be sufficiently constrained. *)
-              let len2 = mk_exp (E_lit (L_aux (L_num (Nat_big_num.of_int (bin_lit_length lit)), Unknown))) in
+              let len2 = mk_exp (E_lit (L_aux (L_num (Z.of_int (bin_lit_length lit)), Unknown))) in
               let total = mk_infix_exp zlen (mk_operator "+") len2 in
-              let zero = mk_exp (E_lit (mk_lit (L_num Nat_big_num.zero))) in
+              let zero = mk_exp (E_lit (mk_lit (L_num Z.zero))) in
               try_cast_to_typ (mk_exp (E_app (mk_id "slice_mask", [total; zero; len2])))
           | None -> E_app (id, args)
         )
       (* ones @ variable *)
       | [E_aux (E_app (ones1, [len1]), _); (E_aux (E_id _, _) as vector2)] when is_ones ones1 && not (is_constant len1)
         ->
-          let one = mk_exp (E_lit (mk_lit (L_num (Big_int.of_int 1)))) in
+          let one = mk_exp (E_lit (mk_lit (L_num (Z.of_int 1)))) in
           let len2 = mk_exp (E_app (mk_id "length", [vector2])) in
           let total = mk_infix_exp len1 (mk_operator "+") len2 in
           try_cast_to_typ
@@ -3206,7 +3202,7 @@ module MonoRewrites = struct
                      [
                        E_aux (E_app (ones1, [total]), (Unknown, empty_tannot));
                        mk_infix_exp len2 (mk_operator "-") one;
-                       mk_exp (E_lit (mk_lit (L_num Big_int.zero)));
+                       mk_exp (E_lit (mk_lit (L_num Z.zero)));
                        vector2;
                      ]
                    ),
@@ -3246,8 +3242,8 @@ module MonoRewrites = struct
              && is_bitvector_typ (typ_of vector1)
              && not (is_constant_vec_typ env (typ_of exp1)) ->
           let op' = if is_subrange op then "subrange_subrange_concat" else "slice_slice_concat" in
-          let zero = mk_exp (E_lit (mk_lit (L_num Big_int.zero))) in
-          let one = mk_exp (E_lit (mk_lit (L_num (Big_int.of_int 1)))) in
+          let zero = mk_exp (E_lit (mk_lit (L_num Z.zero))) in
+          let one = mk_exp (E_lit (mk_lit (L_num (Z.of_int 1)))) in
           let length2 = mk_exp (E_app (mk_id "length", [vector2])) in
           let indices2 =
             if is_subrange op then [mk_infix_exp length2 (mk_operator "-") one; zero] else [zero; length2]
@@ -3344,7 +3340,7 @@ module MonoRewrites = struct
              && not (is_constant len1 && is_constant start1 && is_constant len2 && is_constant start2) ->
           let upper start len =
             mk_infix_exp start (mk_operator "+")
-              (mk_infix_exp len (mk_operator "-") (mk_exp (E_lit (mk_lit (L_num (Big_int.of_int 1))))))
+              (mk_infix_exp len (mk_operator "-") (mk_exp (E_lit (mk_lit (L_num (Z.of_int 1))))))
           in
           wrap
             (E_app
@@ -3374,7 +3370,7 @@ module MonoRewrites = struct
         when is_integer_subrange op1 && is_integer_subrange op2 && is_constant start1 && is_constant start2
              && (not (is_constant end1))
              && not (is_constant end2) ->
-          let zero = mk_exp (E_lit (mk_lit (L_num Big_int.zero))) in
+          let zero = mk_exp (E_lit (mk_lit (L_num Z.zero))) in
           wrap
             (E_app
                ( mk_id "subrange_subrange_eq",
@@ -3434,7 +3430,7 @@ module MonoRewrites = struct
                 | E_aux (E_app (slice1, [vector1; start1; length1]), _) -> (vector1, start1, length1)
                 | _ ->
                     let length1, _ = vector_typ_args_of (Env.base_typ_of env (typ_of vector1)) in
-                    (vector1, mk_exp (E_lit (mk_lit (L_num Big_int.zero))), mk_exp (E_sizeof length1))
+                    (vector1, mk_exp (E_lit (mk_lit (L_num Z.zero))), mk_exp (E_sizeof length1))
               in
               try_cast_to_typ (rewrap (E_app (mk_id "place_slice", length_arg @ [vector1; start1; length1; zlen])))
           | None -> E_app (id, args)
@@ -3489,7 +3485,7 @@ module MonoRewrites = struct
           try_cast_to_typ (rewrap (E_app (mk_id "zext_ones", length_arg @ [len1])))
       | [E_aux (E_app (replicate_bits, [E_aux (E_lit (L_aux (L_bin [Non_empty (Bin_1, [])], _)), _); len1]), _)]
         when is_id env (Id "replicate_bits") replicate_bits ->
-          let start1 = mk_exp (E_lit (mk_lit (L_num Big_int.zero))) in
+          let start1 = mk_exp (E_lit (mk_lit (L_num Z.zero))) in
           try_cast_to_typ (rewrap (E_app (mk_id "slice_mask", length_arg @ [start1; len1])))
       | ([E_aux (E_app (zeros, [len1]), _)] | [E_aux (E_typ (_, E_aux (E_app (zeros, [len1]), _)), _)])
         when is_zeros zeros ->
@@ -3674,7 +3670,7 @@ module MonoRewrites = struct
         let mid_point_high = E_aux (E_app (mk_operator "+", [end1; len]), new_annot) in
         let mid_point_low =
           E_aux
-            ( E_app (mk_operator "-", [mid_point_high; E_aux (E_lit (mk_lit (L_num (Big_int.of_int 1))), new_annot)]),
+            ( E_app (mk_operator "-", [mid_point_high; E_aux (E_lit (mk_lit (L_num (Z.of_int 1))), new_annot)]),
               new_annot
             )
         in
@@ -4171,7 +4167,7 @@ module BitvectorSizeCasts = struct
               | [] -> []
               | (E_aux (E_assert (assert_exp, msg), _) as h) :: t -> (
                   (* Check the assertion for constraints that instantiate kids *)
-                  let is_known_kid kid = KBindings.mem kid (Env.get_typ_vars env) in
+                  let is_known_kid kid = Env.is_typ_var kid env in
                   match Type_check.assert_constraint env true assert_exp with
                   | Some nc when KidSet.for_all is_known_kid (tyvars_of_constraint nc) ->
                       (* If the type checker can extract constraints from the assertion
@@ -4267,9 +4263,9 @@ module BitvectorSizeCasts = struct
       FCL_aux (FCL_funcl (id, pexp), fcl_ann)
     in
     let rewrite_def idx = function
-      | DEF_aux (DEF_fundef (FD_aux (FD_function (r, t, fcls), fd_ann) as fd), def_annot) ->
+      | Def_aux (Def_fundef (FD_aux (FD_function (r, t, fcls), fd_ann) as fd), def_annot) ->
           Util.progress "Adding casts " (string_of_id (id_of_fundef fd)) idx (List.length defs);
-          DEF_aux (DEF_fundef (FD_aux (FD_function (r, t, List.map rewrite_funcl fcls), fd_ann)), def_annot)
+          Def_aux (Def_fundef (FD_aux (FD_function (r, t, List.map rewrite_funcl fcls), fd_ann)), def_annot)
       | d -> d
     in
     specs_required := IdSet.empty;
@@ -4327,8 +4323,7 @@ module ToplevelNexpRewrites = struct
       match nexp with
       | Nexp_id id -> string_of_id id
       | Nexp_var kid -> string_of_id (id_of_kid kid)
-      | Nexp_constant i ->
-          (if Big_int.greater_equal i Big_int.zero then "p" else "m") ^ Big_int.to_string (Big_int.abs i)
+      | Nexp_constant i -> (if Z.geq i Z.zero then "p" else "m") ^ Z.to_string (Z.abs i)
       | Nexp_times (n1, n2) -> mangle_nexp n1 ^ "_times_" ^ mangle_nexp n2
       | Nexp_sum (n1, n2) -> mangle_nexp n1 ^ "_plus_" ^ mangle_nexp n2
       | Nexp_minus (n1, n2) -> mangle_nexp n1 ^ "_minus_" ^ mangle_nexp n2
@@ -4492,19 +4487,19 @@ module ToplevelNexpRewrites = struct
     in
     let rewrite_def spec_map def =
       match def with
-      | DEF_aux (DEF_val vs, def_annot) -> (
+      | Def_aux (Def_val vs, def_annot) -> (
           match rewrite_valspec vs with
           | None -> (spec_map, def)
-          | Some (id, nexp_map, vs) -> (Bindings.add id nexp_map spec_map, DEF_aux (DEF_val vs, def_annot))
+          | Some (id, nexp_map, vs) -> (Bindings.add id nexp_map spec_map, Def_aux (Def_val vs, def_annot))
         )
-      | DEF_aux (DEF_fundef (FD_aux (FD_function (recopt, _, funcls), ann)), def_annot) ->
+      | Def_aux (Def_fundef (FD_aux (FD_function (recopt, _, funcls), ann)), def_annot) ->
           (* Type annotations on function definitions will have been turned into
              valspecs by type checking, so it should be safe to drop them rather
              than updating them. *)
           let tann = Typ_annot_opt_aux (Typ_annot_opt_none, Generated Unknown) in
           ( spec_map,
-            DEF_aux
-              ( DEF_fundef (FD_aux (FD_function (recopt, tann, List.map (rewrite_funcl spec_map) funcls), ann)),
+            Def_aux
+              ( Def_fundef (FD_aux (FD_function (recopt, tann, List.map (rewrite_funcl spec_map) funcls), ann)),
                 def_annot
               )
           )
@@ -4524,7 +4519,7 @@ module ToplevelNexpRewrites = struct
   let rewrite_complete_record_params env ast =
     let lift_params (additions_map, tl) def =
       match def with
-      | DEF_aux (DEF_type (TD_aux (TD_record (id, qs, fields, semi), annot)), def_annot) as def -> (
+      | Def_aux (Def_type (TD_aux (TD_record (id, qs, fields), annot)), def_annot) as def -> (
           (* TODO: replace with a local environment *)
           let env = Env.add_typquant def_annot.loc qs env in
           let nexp_map, fields' =
@@ -4548,9 +4543,7 @@ module ToplevelNexpRewrites = struct
               in
               let tyqs' = qs @ new_vars @ new_constraints in
               let additions_map' = Bindings.add id (qs, nexp_map) additions_map in
-              ( additions_map',
-                DEF_aux (DEF_type (TD_aux (TD_record (id, tyqs', fields', semi), annot)), def_annot) :: tl
-              )
+              (additions_map', Def_aux (Def_type (TD_aux (TD_record (id, tyqs', fields'), annot)), def_annot) :: tl)
         )
       | def -> (additions_map, def :: tl)
     in
@@ -4610,26 +4603,25 @@ module ToplevelNexpRewrites = struct
           TD_aux (TD_abbrev (id, typq, A_aux (A_typ (expand_type typ), l)), annot)
       | TD_abbrev (id, typq, typ_arg) -> TD_aux (TD_abbrev (id, typq, typ_arg), annot)
       | TD_abstract (id, kind, instantiation) -> TD_aux (TD_abstract (id, kind, instantiation), annot)
-      | TD_record (id, typq, typ_ids, flag) ->
+      | TD_record (id, typq, typ_ids) ->
           TD_aux
-            ( TD_record
-                (id, typq, List.map (fun ((id, typ), def_annot) -> ((id, expand_type typ), def_annot)) typ_ids, flag),
+            ( TD_record (id, typq, List.map (fun ((id, typ), def_annot) -> ((id, expand_type typ), def_annot)) typ_ids),
               annot
             )
       | TD_variant (id, typq, tus, flag) -> TD_aux (TD_variant (id, typq, List.map rw_union tus, flag), annot)
-      | TD_enum (id, ids, flag) -> TD_aux (TD_enum (id, ids, flag), annot)
+      | TD_enum (id, ids) -> TD_aux (TD_enum (id, ids), annot)
       | TD_bitfield _ -> assert false (* Processed before re-writing *)
     in
-    let rw_register (DEC_aux (DEC_reg (typ, id, init), annot)) = DEC_aux (DEC_reg (expand_type typ, id, init), annot) in
-    let rw_def rws (DEF_aux (aux, def_annot)) =
+    let rw_register (Reg_aux (Reg (typ, id, init), annot)) = Reg_aux (Reg (expand_type typ, id, init), annot) in
+    let rw_def rws (Def_aux (aux, def_annot)) =
       let aux' =
         match aux with
-        | DEF_val vs -> DEF_val (rw_spec vs)
-        | DEF_type td -> DEF_type (rw_typedef td)
-        | DEF_register reg -> DEF_register (rw_register reg)
+        | Def_val vs -> Def_val (rw_spec vs)
+        | Def_type td -> Def_type (rw_typedef td)
+        | Def_register reg -> Def_register (rw_register reg)
         | def -> def
       in
-      rewrite_def rws (DEF_aux (aux', def_annot))
+      rewrite_def rws (Def_aux (aux', def_annot))
     in
     rewrite_ast_base
       {

@@ -1,3 +1,4 @@
+[@@@warning "-a"]
 open Bool
 open QArith_base
 open Qcanon

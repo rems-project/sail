@@ -46,7 +46,6 @@
 
 open Ast
 open Ast_compare
-open Ast_defs
 open Ast_util
 open Type_check
 
@@ -131,7 +130,7 @@ let find_instantiations defs =
   List.fold_left
     (fun (type_substs, id_substs) def ->
       match def with
-      | DEF_aux (DEF_instantiation (_, substs), _) ->
+      | Def_aux (Def_instantiation (_, substs), _) ->
           List.fold_left
             (fun (type_substs, id_substs) (IS_aux (is, _)) ->
               match is with

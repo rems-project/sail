@@ -161,6 +161,7 @@ let coq_rewrites =
     (* ("remove_assert", rewrite_ast_remove_assert); *)
     ("top_sort_defs", []);
     ("add_register_init_function", []);
+    ("attach_effects", []);
     ("const_prop_mutrec", [String_arg "coq"]);
     ("exp_lift_assign", []);
     ("early_return", []);
@@ -267,6 +268,9 @@ let check_flags () =
 let coq_target out_file { symbols; ctx; ast; effect_info; env; _ } =
   let out_file = match out_file with Some f -> f | None -> "out" in
   output !opt_libs_coq [(out_file, symbols, ctx, effect_info, env, ast)]
+
+(* Note: in addition to having two targets, there's a fixup in ast_util.ml so that all external functions can be found
+   by looking for rocq rather than coq. *)
 
 let _ =
   ignore

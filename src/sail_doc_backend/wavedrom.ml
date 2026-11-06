@@ -49,8 +49,6 @@ open Libsail
 open Ast
 open Ast_util
 
-module Big_int = Nat_big_num
-
 exception Invalid_wavedrom
 
 (* Process the $[wavedrom] attribute for a vector concatenation pattern of length n *)
@@ -70,14 +68,18 @@ let wavedrom_label size = function
   | None -> Printf.sprintf ", attr: '%d'" size
   | Some label -> Printf.sprintf ", attr: ['%d', '%s']" size label
 
+let bin_char = function '0' -> Bit.B0 | '1' -> Bit.B1 | _ -> assert false
+
 let binary_to_hex bin =
-  let open Sail2_values in
-  let str = string_of_bin_lit ~group_separator:"" bin in
-  let padded = match String.length str mod 4 with 0 -> str | 1 -> "000" ^ str | 2 -> "00" ^ str | _ -> "0" ^ str in
-  Util.string_to_list padded
-  |> List.map (function '0' -> B0 | _ -> B1)
-  |> hexstring_of_bits |> Option.get
-  |> Util.string_of_list "" (fun c -> String.make 1 c)
+  let bits =
+    string_of_bin_lit ~group_separator:"" bin |> Util.string_to_list |> List.map bin_char |> Sail_lib.bits_of_bit_list
+  in
+  (* Wavedrom displays the literal in hex, so round the width up to a whole number of nibbles *)
+  let width = Z.to_int (Sail_lib.length_bits bits) in
+  let bits = Sail_lib.zero_extend bits (Z.of_int (4 * ((width + 3) / 4))) in
+  (* For such a width [string_of_bits] gives us uppercase hex digits behind a 0x prefix *)
+  let str = Sail_lib.string_of_bits bits in
+  String.sub str 2 (String.length str - 2)
 
 let rec wavedrom_elem_string size label (P_aux (aux, _)) =
   match aux with
@@ -91,11 +93,11 @@ let rec wavedrom_elem_string size label (P_aux (aux, _)) =
   | P_lit (L_aux (L_hex hex, _)) ->
       let hexstr = string_of_hex_lit ~group_separator:"" ~case:Uppercase hex in
       Printf.sprintf "    { bits: %d, name: 0x%s%s, type: 8 }" size hexstr (wavedrom_label size label)
-  | P_vector_subrange (_, n, m) when Big_int.equal n m ->
-      Printf.sprintf "    { bits: %d, name: '[%s]'%s, type: 3 }" size (Big_int.to_string n) (wavedrom_label size label)
+  | P_vector_subrange (_, n, m) when Z.equal n m ->
+      Printf.sprintf "    { bits: %d, name: '[%s]'%s, type: 3 }" size (Z.to_string n) (wavedrom_label size label)
   | P_vector_subrange (id, n, m) ->
-      Printf.sprintf "    { bits: %d, name: '%s[%s..%s]'%s, type: 3 }" size (string_of_id id) (Big_int.to_string n)
-        (Big_int.to_string m) (wavedrom_label size label)
+      Printf.sprintf "    { bits: %d, name: '%s[%s..%s]'%s, type: 3 }" size (string_of_id id) (Z.to_string n)
+        (Z.to_string m) (wavedrom_label size label)
   | P_app (_, [P_aux (P_id arg, _)]) ->
       Printf.sprintf "    { bits: %d, name: '%s'%s, type: 4 }" size (string_of_id arg) (wavedrom_label size label)
   | P_app (id, _) ->
@@ -109,7 +111,7 @@ let wavedrom_elem (label, (P_aux (_, (_, tannot)) as pat)) =
   | Some (env, typ) -> (
       match Type_check.destruct_bitvector env typ with
       | Some (Nexp_aux (Nexp_constant size, _)) ->
-          let size = Big_int.to_int size in
+          let size = Z.to_int size in
           wavedrom_elem_string size label pat
       | _ -> raise Invalid_wavedrom
     )

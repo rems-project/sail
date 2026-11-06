@@ -91,7 +91,7 @@ open My_enum
 def __id (x : Int) : Int :=
   x
 
-/-- Type quantifiers: k_ex941_ : Bool, k_ex940_ : Bool -/
+/-- Type quantifiers: k_ex950_ : Bool, k_ex949_ : Bool -/
 def neq_bool (x : Bool) (y : Bool) : Bool :=
   (! (x == y))
 

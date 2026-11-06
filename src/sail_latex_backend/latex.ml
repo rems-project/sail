@@ -477,25 +477,25 @@ let defs { defs; _ } =
   let regdefs = ref Bindings.empty in
   let outcomedefs = ref Bindings.empty in
 
-  let latex_def (DEF_aux (aux, def_annot) as def) =
+  let latex_def (Def_aux (aux, def_annot) as def) =
     state.this <- (match ids_of_def def |> IdSet.elements with [id] -> Some id | _ -> None);
     let docstring = latex_docstring def_annot in
     match aux with
-    | DEF_overload (id, ids) ->
+    | Def_overload (id, ids) ->
         let doc =
           string (Printf.sprintf "overload %s = {%s}" (string_of_id id) (Util.string_of_list ", " string_of_id ids))
         in
         overload_counters := Bindings.update id (function None -> Some 0 | Some n -> Some (n + 1)) !overload_counters;
         let count = Bindings.find id !overload_counters in
         Some (latex_command ~docstring (Overload count) id doc (id_loc id))
-    | DEF_val (VS_aux (VS_val_spec (_, id, _), annot) as vs) ->
+    | Def_val (VS_aux (VS_val_spec (_, id, _), annot) as vs) ->
         valspecs := Bindings.add id id !valspecs;
         if !opt_simple_val then Some (latex_command ~docstring Val id (doc_spec_simple vs) (fst annot))
         else Some (latex_command ~docstring Val id (Pretty_print_sail.doc_spec vs) (fst annot))
-    | DEF_fundef (FD_aux (FD_function (_, _, [FCL_aux (FCL_funcl (id, _), _)]), annot)) ->
+    | Def_fundef (FD_aux (FD_function (_, _, [FCL_aux (FCL_funcl (id, _), _)]), annot)) ->
         fundefs := Bindings.add id id !fundefs;
         Some (latex_command ~docstring Function id (Pretty_print_sail.doc_def def) (fst annot))
-    | DEF_let (pat, _) -> (
+    | Def_let (pat, _) -> (
         let ids = pat_ids pat in
         match IdSet.min_elt_opt ids with
         | None -> None
@@ -503,17 +503,17 @@ let defs { defs; _ } =
             letdefs := IdSet.fold (fun id -> Bindings.add id base_id) ids !letdefs;
             Some (latex_command ~docstring Let base_id (Pretty_print_sail.doc_def def) def_annot.loc)
       )
-    | DEF_type (TD_aux (_, annot) as tdef) ->
+    | Def_type (TD_aux (_, annot) as tdef) ->
         let id = id_of_type_def tdef in
         typedefs := Bindings.add id id !typedefs;
         Some (latex_command ~docstring Type id (Pretty_print_sail.doc_def def) (fst annot))
-    | DEF_fundef (FD_aux (FD_function (_, _, funcls), annot)) as def -> Some (latex_funcls def funcls)
-    | DEF_pragma ("latex", Pragma_line (command, l)) -> process_pragma l command
-    | DEF_register (DEC_aux (_, annot) as dec) ->
-        let id = id_of_dec_spec dec in
+    | Def_fundef (FD_aux (FD_function (_, _, funcls), annot)) as def -> Some (latex_funcls def funcls)
+    | Def_pragma ("latex", Pragma_line (command, l)) -> process_pragma l command
+    | Def_register (Reg_aux (_, annot) as dec) ->
+        let id = id_of_reg_spec dec in
         regdefs := Bindings.add id id !regdefs;
         Some (latex_command ~docstring Register id (Pretty_print_sail.doc_def def) (fst annot))
-    | DEF_outcome (OV_aux (OV_outcome (id, _, _), l), _) ->
+    | Def_outcome (OV_aux (OV_outcome (id, _, _), l), _) ->
         outcomedefs := Bindings.add id id !outcomedefs;
         Some (latex_command ~docstring Outcome id (Pretty_print_sail.doc_def def) l)
     | _ -> None

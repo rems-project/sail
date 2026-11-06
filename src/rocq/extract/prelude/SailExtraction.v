@@ -56,6 +56,11 @@ From Sail Require Import AstInduction.
 From Sail Require Import Bit.
 From Sail Require Import IdUtil.
 From Sail Require Import PatternMatch.
+From Sail Require PrimBits.
+From Sail Require PrimInt.
+From Sail Require PrimReal.
+From Sail Require PrimString.
+From Sail Require PrimVector.
 From Sail Require Import Semantics.
 From Sail Require Import ValueType.
 From Sail Require Import Domain.TransferBitvectorInterval.
@@ -66,6 +71,11 @@ Extraction Blacklist Nat List String.
 Separate Extraction
   BitList.to_hex_digits
   Primops
+  PrimBits
+  PrimInt
+  PrimReal
+  PrimString
+  PrimVector
   Semantics.Make
   TransferBitvectorInterval.Ops
   ZAst.ExpBuilder

@@ -95,7 +95,7 @@ open Register
 def __id (x : Int) : Int :=
   x
 
-/-- Type quantifiers: k_ex994_ : Bool, k_ex993_ : Bool -/
+/-- Type quantifiers: k_ex1003_ : Bool, k_ex1002_ : Bool -/
 def neq_bool (x : Bool) (y : Bool) : Bool :=
   (! (x == y))
 
@@ -249,7 +249,7 @@ def execute (merge_var : ast) : SailM Unit := do
   | .LOAD (imm, rs1, rd) => (execute_LOAD imm rs1 rd)
   | _ =>
     (do
-      assert false "Pattern match failure at riscv_duopod.sail:138.0-142.1"
+      sail_assert false "Pattern match failure at riscv_duopod.sail:138.0-142.1"
       throw Error.Exit)
 
 def decode (merge_var : (BitVec 32)) : (Option ast) :=

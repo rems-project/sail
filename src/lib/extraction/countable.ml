@@ -1,3 +1,4 @@
+[@@@warning "-a"]
 open BinNat
 open BinPos
 open Base

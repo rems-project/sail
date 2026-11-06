@@ -1,0 +1,5 @@
+[93mType error[0m:
+[96mfail/int_synonym_applied.sail[0m:7.13-17:
+7[96m |[0mlet x : bits(n(1)) = 0b000
+ [91m |[0m             [91m^--^[0m
+ [91m |[0m n : () -> Int expected 0 arguments, given 1

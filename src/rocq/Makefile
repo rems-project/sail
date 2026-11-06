@@ -12,6 +12,9 @@ extraction: build
 	rm -f ../lib/extraction/*.mli
 	cp $(addprefix _build/default/extract/prelude/, $(addsuffix .ml, $(MODS))) ../lib/extraction/
 	cp $(addprefix _build/default/extract/prelude/, $(addsuffix .mli, $(MODS))) ../lib/extraction/
+	for f in $(addprefix ../lib/extraction/, $(addsuffix .ml, $(MODS)) $(addsuffix .mli, $(MODS))); do \
+	  printf '[@@@warning "-a"]\n' | cat - $$f > $$f.tmp && mv -f $$f.tmp $$f; \
+	done
 
 COQDOCJS := vendor/coqdocjs/extra
 
@@ -25,7 +28,7 @@ doc: build
 		--toc --toc-depth 2 \
 		--no-lib-name \
 		--with-header $(COQDOCJS)/header.html \
-		--with-footer $(COQDOCJS)/header.html \
+		--with-footer $(COQDOCJS)/footer.html \
 		--directory doc \
 		_build/default/lib/*.v \
 		_build/default/lib/Domain/*.v

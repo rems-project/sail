@@ -1,0 +1,5 @@
+[93mType error[0m:
+[96mfail/union_clause_not_scattered.sail[0m:4.0-24:
+4[96m |[0munion clause U = A : int
+ [91m |[0m[91m^----------------------^[0m
+ [91m |[0m No scattered union declaration found for U

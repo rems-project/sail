@@ -1,3 +1,4 @@
+[@@@warning "-a"]
 open Specif
 
 (** val coq_Fix_F_sub :

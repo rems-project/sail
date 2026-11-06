@@ -56,12 +56,9 @@ open Jib_util
 open Jib_visitor
 open Type_check
 open PPrint
-open Value2
 module Document = Pretty_print_sail.Document
 
 open Anf
-
-module Big_int = Nat_big_num
 
 let opt_prefix = ref "z"
 let opt_extra_params = ref None
@@ -86,8 +83,8 @@ let c_error ?loc:(l = Parse_ast.Unknown) message = raise (Reporting.err_general 
 (* Converting Sail types to C types                                       *)
 (**************************************************************************)
 
-let max_int n = Big_int.pred (Big_int.pow_int_positive 2 (n - 1))
-let min_int n = Big_int.negate (Big_int.pow_int_positive 2 (n - 1))
+let max_int n = Z.pred (Z.shift_left Z.one (n - 1))
+let min_int n = Z.neg (Z.shift_left Z.one (n - 1))
 
 (** This function is used to split types into those we allocate on the stack, versus those which need to live on the
     heap, or otherwise require some additional memory management.
@@ -114,53 +111,25 @@ let rec is_stack_ctyp ctx ctyp =
   (* Is a reference to some immutable JSON data *)
   | CT_json -> true
   | CT_json_key -> true
-  | CT_constant n -> Big_int.less_equal (min_int 64) n && Big_int.greater_equal n (max_int 64)
+  | CT_constant n -> Z.leq (min_int 64) n && Z.geq n (max_int 64)
   | CT_memory_writes -> false
 
-let v_mask_lower i = V_lit (VL_bits (Util.list_init i (fun _ -> Sail2_values.B1)), CT_fbits i)
-
-let hex_char =
-  let open Sail2_values in
-  function
-  | '0' -> [B0; B0; B0; B0]
-  | '1' -> [B0; B0; B0; B1]
-  | '2' -> [B0; B0; B1; B0]
-  | '3' -> [B0; B0; B1; B1]
-  | '4' -> [B0; B1; B0; B0]
-  | '5' -> [B0; B1; B0; B1]
-  | '6' -> [B0; B1; B1; B0]
-  | '7' -> [B0; B1; B1; B1]
-  | '8' -> [B1; B0; B0; B0]
-  | '9' -> [B1; B0; B0; B1]
-  | 'A' | 'a' -> [B1; B0; B1; B0]
-  | 'B' | 'b' -> [B1; B0; B1; B1]
-  | 'C' | 'c' -> [B1; B1; B0; B0]
-  | 'D' | 'd' -> [B1; B1; B0; B1]
-  | 'E' | 'e' -> [B1; B1; B1; B0]
-  | 'F' | 'f' -> [B1; B1; B1; B1]
-  | _ -> failwith "Invalid hex character"
+let v_mask_lower i = V_lit (V_bitvector (Sail_lib.ones (Z.of_int i)), CT_fbits i)
 
 let literal_to_fragment (L_aux (l_aux, _)) =
   match l_aux with
-  | L_num n when Big_int.less_equal (min_int 64) n && Big_int.less_equal n (max_int 64) ->
-      Some (V_lit (VL_int n, CT_fint 64))
+  | L_num n when Z.leq (min_int 64) n && Z.leq n (max_int 64) -> Some (V_lit (V_int n, CT_fint 64))
   | L_bin bin ->
       let len = bin_lit_length bin in
-      if len <= 64 then (
-        let content = BitList.of_bin_lit bin |> List.map (function B0 -> Sail2_values.B0 | B1 -> Sail2_values.B1) in
-        Some (V_lit (VL_bits content, CT_fbits len))
-      )
+      if len <= 64 then Some (V_lit (V_bitvector (Sail_lib.bits_of_bit_list (BitList.of_bin_lit bin)), CT_fbits len))
       else None
   | L_hex hex ->
       let len = hex_lit_length hex in
-      if len <= 64 then (
-        let content = BitList.of_hex_lit hex |> List.map (function B0 -> Sail2_values.B0 | B1 -> Sail2_values.B1) in
-        Some (V_lit (VL_bits content, CT_fbits len))
-      )
+      if len <= 64 then Some (V_lit (V_bitvector (Sail_lib.bits_of_bit_list (BitList.of_hex_lit hex)), CT_fbits len))
       else None
-  | L_unit -> Some (V_lit (VL_unit, CT_unit))
-  | L_true -> Some (V_lit (VL_bool true, CT_bool))
-  | L_false -> Some (V_lit (VL_bool false, CT_bool))
+  | L_unit -> Some (V_lit (V_unit, CT_unit))
+  | L_true -> Some (V_lit (V_bool true, CT_bool))
+  | L_false -> Some (V_lit (V_bool false, CT_bool))
   | _ -> None
 
 let sail_create ?(prefix = "") ?(suffix = "") ctyp fmt =
@@ -257,7 +226,7 @@ end) : CONFIG = struct
             in
             match (nexp_simp n, nexp_simp m) with
             | Nexp_aux (Nexp_constant n, _), Nexp_aux (Nexp_constant m, _)
-              when Big_int.less_equal (min_int 64) n && Big_int.less_equal m (max_int 64) ->
+              when Z.leq (min_int 64) n && Z.leq m (max_int 64) ->
                 CT_fint 64
             | n, m ->
                 if
@@ -274,7 +243,7 @@ end) : CONFIG = struct
        - If the length may be larger than 64, use a large bits type lbits. *)
     | Typ_app (id, [A_aux (A_nexp n, _)]) when string_of_id id = "bitvector" -> (
         match nexp_simp n with
-        | Nexp_aux (Nexp_constant n, _) when Big_int.less_equal n (Big_int.of_int 64) -> CT_fbits (Big_int.to_int n)
+        | Nexp_aux (Nexp_constant n, _) when Z.leq n (Z.of_int 64) -> CT_fbits (Z.to_int n)
         | n when prove __POS__ ctx.local_env (nc_lteq n (nint 64)) -> CT_sbits 64
         | _ -> CT_lbits
       )
@@ -334,7 +303,7 @@ end) : CONFIG = struct
 
   let value_of_aval_bit = function
     | AV_lit (L_aux (L_bin [Non_empty (b, [])], _), _) -> (
-        match b with Bin_0 -> Sail2_values.B0 | Bin_1 -> Sail2_values.B1
+        match b with Bin_0 -> Bit.B0 | Bin_1 -> Bit.B1
       )
     | _ -> assert false
 
@@ -381,7 +350,7 @@ end) : CONFIG = struct
         | _ -> v
       )
     | AV_vector (v, typ) when is_bitvector v && List.length v <= 64 ->
-        let bitstring = VL_bits (List.map value_of_aval_bit v) in
+        let bitstring = V_bitvector (Sail_lib.bits_of_bit_list (List.map value_of_aval_bit v)) in
         AV_cval (V_lit (bitstring, CT_fbits (List.length v)), typ)
     | AV_tuple avals -> AV_tuple (List.map (c_aval ctx) avals)
     | aval -> aval
@@ -461,21 +430,21 @@ end) : CONFIG = struct
     | "eq_bit", [AV_cval (v1, _); AV_cval (v2, _)] -> AE_val (AV_cval (V_call (Eq, [v1; v2]), typ))
     | "zeros", [_] -> (
         match destruct_bitvector ctx.tc_env typ with
-        | Some (Nexp_aux (Nexp_constant n, _)) when Big_int.less_equal n (Big_int.of_int 64) ->
-            let n = Big_int.to_int n in
-            AE_val (AV_cval (V_lit (VL_bits (Util.list_init n (fun _ -> Sail2_values.B0)), CT_fbits n), typ))
+        | Some (Nexp_aux (Nexp_constant n, _)) when Z.leq n (Z.of_int 64) ->
+            let n = Z.to_int n in
+            AE_val (AV_cval (V_lit (V_bitvector (Sail_lib.zeros (Z.of_int n)), CT_fbits n), typ))
         | _ -> no_change
       )
     | "zero_extend", [AV_cval (v, _); _] -> (
         match destruct_bitvector ctx.tc_env typ with
-        | Some (Nexp_aux (Nexp_constant n, _)) when Big_int.less_equal n (Big_int.of_int 64) ->
-            AE_val (AV_cval (V_call (Zero_extend (Big_int.to_int n), [v]), typ))
+        | Some (Nexp_aux (Nexp_constant n, _)) when Z.leq n (Z.of_int 64) ->
+            AE_val (AV_cval (V_call (Zero_extend (Z.to_int n), [v]), typ))
         | _ -> no_change
       )
     | "sign_extend", [AV_cval (v, _); _] -> (
         match destruct_bitvector ctx.tc_env typ with
-        | Some (Nexp_aux (Nexp_constant n, _)) when Big_int.less_equal n (Big_int.of_int 64) ->
-            AE_val (AV_cval (V_call (Sign_extend (Big_int.to_int n), [v]), typ))
+        | Some (Nexp_aux (Nexp_constant n, _)) when Z.leq n (Z.of_int 64) ->
+            AE_val (AV_cval (V_call (Sign_extend (Z.to_int n), [v]), typ))
         | _ -> no_change
       )
     | "lteq", [AV_cval (v1, _); AV_cval (v2, _)] -> AE_val (AV_cval (V_call (Ilteq, [v1; v2]), typ))
@@ -526,7 +495,7 @@ end) : CONFIG = struct
         | Some (_, _, n, m) -> (
             match (nexp_simp n, nexp_simp m) with
             | Nexp_aux (Nexp_constant n, _), Nexp_aux (Nexp_constant m, _)
-              when Big_int.less_equal (min_int 64) n && Big_int.less_equal m (max_int 64) ->
+              when Z.leq (min_int 64) n && Z.leq m (max_int 64) ->
                 AE_val (AV_cval (V_call (f, [op1; op2]), typ))
             | n, m
               when prove __POS__ ctx.local_env (nc_lteq (nconstant (min_int 64)) n)
@@ -537,24 +506,23 @@ end) : CONFIG = struct
       )
     | "replicate_bits", [AV_cval (vec, vtyp); _] -> (
         match (destruct_vector ctx.tc_env typ, destruct_vector ctx.tc_env vtyp) with
-        | Some (Nexp_aux (Nexp_constant n, _), _), Some (Nexp_aux (Nexp_constant m, _), _)
-          when Big_int.less_equal n (Big_int.of_int 64) ->
-            let times = Big_int.div n m in
-            if Big_int.equal (Big_int.mul m times) n then
-              AE_val (AV_cval (V_call (Replicate (Big_int.to_int times), [vec]), typ))
+        | Some (Nexp_aux (Nexp_constant n, _), _), Some (Nexp_aux (Nexp_constant m, _), _) when Z.leq n (Z.of_int 64) ->
+            let times = Z.ediv n m in
+            if Z.equal (Z.mul m times) n then AE_val (AV_cval (V_call (Replicate (Z.to_int times), [vec]), typ))
             else no_change
         | _, _ -> no_change
       )
     | "print_int", [_; AV_cval _] -> AE_app (Extern (mk_id "fast_print_int", None), args, typ)
-    | "undefined_bit", _ -> AE_val (AV_cval (V_lit (VL_bits [Sail2_values.B0], CT_fbits 1), typ))
-    | "undefined_bool", _ -> AE_val (AV_cval (V_lit (VL_bool false, CT_bool), typ))
+    | "undefined_bit", _ -> AE_val (AV_cval (V_lit (V_bitvector (Sail_lib.zeros (Z.of_int 1)), CT_fbits 1), typ))
+    | "undefined_bool", _ -> AE_val (AV_cval (V_lit (V_bool false, CT_bool), typ))
     | _, _ -> no_change
 
   let analyze_primop ctx id args typ =
     let no_change = AE_app (id, args, typ) in
     match id with
     | Sail_function id ->
-        if !optimize_primops then (try analyze_primop' ctx id args typ with Failure _ -> no_change) else no_change
+        if !optimize_primops then (try analyze_primop' ctx id args typ with Failure _ | Z.Overflow -> no_change)
+        else no_change
     | _ -> no_change
 
   let optimize_anf ctx aexp = analyze_functions ctx analyze_primop (c_literals ctx aexp)
@@ -631,24 +599,24 @@ let fix_early_stack_return ret ret_ctyp instrs =
   rewrite_return instrs
 
 let rec insert_heap_returns ctx ret_ctyps = function
-  | (CDEF_aux (CDEF_val (id, _, _, ret_ctyp, _), _) as cdef) :: cdefs ->
+  | (CDef_aux (CDef_val (id, _, _, ret_ctyp, _), _) as cdef) :: cdefs ->
       cdef :: insert_heap_returns ctx (Bindings.add id ret_ctyp ret_ctyps) cdefs
-  | CDEF_aux (CDEF_fundef (id, Return_plain, args, body), def_annot) :: cdefs -> (
+  | CDef_aux (CDef_fundef (id, Return_plain, args, body), def_annot) :: cdefs -> (
       let gs = ngensym () in
       match Bindings.find_opt id ret_ctyps with
       | None -> raise (Reporting.err_general (id_loc id) ("Cannot find return type for function " ^ string_of_id id))
       | Some ret_ctyp when not (is_stack_ctyp ctx ret_ctyp) ->
-          CDEF_aux (CDEF_fundef (id, Return_via gs, args, fix_early_heap_return gs body), def_annot)
+          CDef_aux (CDef_fundef (id, Return_via gs, args, fix_early_heap_return gs body), def_annot)
           :: insert_heap_returns ctx ret_ctyps cdefs
       | Some ret_ctyp ->
-          CDEF_aux
-            ( CDEF_fundef
+          CDef_aux
+            ( CDef_fundef
                 (id, Return_plain, args, fix_early_stack_return gs ret_ctyp (idecl (id_loc id) ret_ctyp gs :: body)),
               def_annot
             )
           :: insert_heap_returns ctx ret_ctyps cdefs
     )
-  | CDEF_aux (CDEF_fundef (id, _, _, _), _) :: _ ->
+  | CDef_aux (CDef_fundef (id, _, _, _), _) :: _ ->
       Reporting.unreachable (id_loc id) __POS__ "Found function with return already re-written in insert_heap_returns"
   | cdef :: cdefs -> cdef :: insert_heap_returns ctx ret_ctyps cdefs
   | [] -> []
@@ -666,8 +634,8 @@ let hoist_id () =
   name id
 
 let hoist_allocations recursive_functions = function
-  | CDEF_aux (CDEF_fundef (function_id, _, _, _), _) as cdef when IdSet.mem function_id recursive_functions -> [cdef]
-  | CDEF_aux (CDEF_fundef (function_id, heap_return, args, body), def_annot) ->
+  | CDef_aux (CDef_fundef (function_id, _, _, _), _) as cdef when IdSet.mem function_id recursive_functions -> [cdef]
+  | CDef_aux (CDef_fundef (function_id, heap_return, args, body), def_annot) ->
       let decls = ref [] in
       let cleanups = ref [] in
       let rec hoist = function
@@ -692,12 +660,12 @@ let hoist_allocations recursive_functions = function
         | [] -> []
       in
       let body = hoist body in
-      if !decls = [] then [CDEF_aux (CDEF_fundef (function_id, heap_return, args, body), def_annot)]
+      if !decls = [] then [CDef_aux (CDef_fundef (function_id, heap_return, args, body), def_annot)]
       else
         [
-          CDEF_aux (CDEF_startup (function_id, List.rev !decls), mk_def_annot (gen_loc def_annot.loc) ());
-          CDEF_aux (CDEF_fundef (function_id, heap_return, args, body), def_annot);
-          CDEF_aux (CDEF_finish (function_id, !cleanups), mk_def_annot (gen_loc def_annot.loc) ());
+          CDef_aux (CDef_startup (function_id, List.rev !decls), mk_def_annot (gen_loc def_annot.loc) ());
+          CDef_aux (CDef_fundef (function_id, heap_return, args, body), def_annot);
+          CDef_aux (CDef_finish (function_id, !cleanups), mk_def_annot (gen_loc def_annot.loc) ());
         ]
   | cdef -> [cdef]
 
@@ -770,8 +738,8 @@ let remove_alias =
     | [] -> []
   in
   function
-  | CDEF_aux (CDEF_fundef (function_id, heap_return, args, body), def_annot) ->
-      [CDEF_aux (CDEF_fundef (function_id, heap_return, args, opt body), def_annot)]
+  | CDef_aux (CDef_fundef (function_id, heap_return, args, body), def_annot) ->
+      [CDef_aux (CDef_fundef (function_id, heap_return, args, opt body), def_annot)]
   | cdef -> [cdef]
 
 (** This optimization looks for patterns of the form
@@ -905,7 +873,7 @@ module Combine_variables = struct
           )
         | _ -> DoChildren
 
-      method! vcdef = function CDEF_aux (CDEF_fundef _, _) -> DoChildren | _ -> SkipChildren
+      method! vcdef = function CDef_aux (CDef_fundef _, _) -> DoChildren | _ -> SkipChildren
     end
 end
 
@@ -1132,25 +1100,27 @@ module Codegen (Config : CODEGEN_CONFIG) = struct
     )
     else failwith "Tried to create a mask literal for a vector greater than 64 bits."
 
-  let sgen_value = function
-    | VL_bits [] -> "UINT64_C(0)"
-    | VL_bits bs -> "UINT64_C(" ^ Sail2_values.show_bitlist bs ^ ")"
-    | VL_int i -> if Big_int.equal i (min_int 64) then "INT64_MIN" else "INT64_C(" ^ Big_int.to_string i ^ ")"
-    | VL_bool true -> "true"
-    | VL_bool false -> "false"
-    | VL_unit -> "UNIT"
-    | VL_real str -> str
-    | VL_string str -> "\"" ^ str ^ "\""
-    | VL_enum element -> Util.zencode_string element
-    | VL_ref r -> "&" ^ sgen_id (mk_id r)
-    | VL_undefined -> Reporting.unreachable Parse_ast.Unknown __POS__ "Cannot generate C value for an undefined literal"
+  let sgen_value : Ast.value -> string = function
+    | V_bitvector bv when Z.equal (Sail_lib.length_bits bv) Z.zero -> "UINT64_C(0)"
+    | V_bitvector bv -> "UINT64_C(" ^ Sail_lib.string_of_bits bv ^ ")"
+    | V_int i -> if Z.equal i (min_int 64) then "INT64_MIN" else "INT64_C(" ^ Z.to_string i ^ ")"
+    | V_bool true -> "true"
+    | V_bool false -> "false"
+    | V_unit -> "UNIT"
+    | V_real q -> Q.to_string (Util.Rational.from_rocq q)
+    | V_string str -> "\"" ^ str ^ "\""
+    | V_member element -> sgen_id element
+    | V_ref r -> "&" ^ sgen_id r
+    | v ->
+        Reporting.unreachable Parse_ast.Unknown __POS__
+          ("Cannot generate a C value for the literal " ^ Value.string_of_value v)
 
   let sgen_tuple_id n = sgen_id (mk_id ("tup" ^ string_of_int n))
 
   let rec sgen_cval = function
     | V_id (id, _) -> sgen_name id
-    | V_member (id, _) -> sgen_id id
     | V_lit (vl, _) -> sgen_value vl
+    | V_undef _ -> Reporting.unreachable Parse_ast.Unknown __POS__ "Cannot generate a C value for an undefined value"
     | V_call (op, cvals) -> sgen_call op cvals
     | V_field (f, field, _) -> sprintf "%s.%s" (sgen_cval f) (sgen_id field)
     | V_tuple_member (f, _, n) -> sprintf "%s.%s" (sgen_cval f) (sgen_tuple_id n)
@@ -1537,8 +1507,8 @@ module Codegen (Config : CODEGEN_CONFIG) = struct
         match init with
         | Init_cval cval ->
             codegen_instr fid ctx (idecl l ctyp id) ^^ hardline ^^ codegen_conversion l ctx (CL_id (id, ctyp)) cval
-        | Init_static VL_undefined -> ksprintf string "  static %s %s;" (sgen_ctyp ctyp) (sgen_name id)
-        | Init_static vl -> ksprintf string "  static %s %s = %s;" (sgen_ctyp ctyp) (sgen_name id) (sgen_value vl)
+        | Init_static None -> ksprintf string "  static %s %s;" (sgen_ctyp ctyp) (sgen_name id)
+        | Init_static (Some vl) -> ksprintf string "  static %s %s = %s;" (sgen_ctyp ctyp) (sgen_name id) (sgen_value vl)
         | Init_json_key parts ->
             let name = sgen_name id in
             (* Separate declaration and assignment avoids errors about goto's crossing the initialisation
@@ -1686,11 +1656,12 @@ module Codegen (Config : CODEGEN_CONFIG) = struct
         ]
     | CTD_enum (id, []) -> c_error ("Cannot compile empty enum " ^ string_of_id id)
     | CTD_abbrev (id, ctyp) ->
+        let name = string (NameGen.to_string ~suffix:"_t" () id) in
         [
           TypeDeclaration
             (ksprintf string "// type abbreviation %s" (string_of_id id)
             ^^ hardline
-            ^^ separate space [string "typedef"; string (sgen_ctyp ctyp); codegen_id id]
+            ^^ separate space [string "typedef"; string (sgen_ctyp ctyp); name]
             ^^ semi
             );
         ]
@@ -2233,9 +2204,9 @@ module Codegen (Config : CODEGEN_CONFIG) = struct
     | _ -> assert false
 
   (* Generate C code for a global register, constant (let), function definition, etc. *)
-  let codegen_def' ctx (CDEF_aux (aux, _)) =
+  let codegen_def' ctx (CDef_aux (aux, _)) =
     match aux with
-    | CDEF_register (id, ctyp, _) ->
+    | CDef_register (id, ctyp, _) ->
         let definition =
           VariableDefinition
             (string (Printf.sprintf "// register %s" (string_of_name id))
@@ -2253,7 +2224,7 @@ module Codegen (Config : CODEGEN_CONFIG) = struct
               );
             definition;
           ]
-    | CDEF_val (id, _, arg_ctyps, ret_ctyp, _) ->
+    | CDef_val (id, _, arg_ctyps, ret_ctyp, _) ->
         if ctx_is_extern id ctx then []
         else if is_stack_ctyp ctx ret_ctyp then
           [
@@ -2273,7 +2244,7 @@ module Codegen (Config : CODEGEN_CONFIG) = struct
                  )
               );
           ]
-    | CDEF_fundef (id, ret_arg, args, instrs) ->
+    | CDef_fundef (id, ret_arg, args, instrs) ->
         (* We can skip the Sail version of a function if we're going to call the
           externally defined version anyway. *)
         if ctx_is_extern id ctx then []
@@ -2329,8 +2300,8 @@ module Codegen (Config : CODEGEN_CONFIG) = struct
               );
           ]
         )
-    | CDEF_type ctype_def -> codegen_type_def ctx ctype_def
-    | CDEF_startup (id, instrs) ->
+    | CDef_type ctype_def -> codegen_type_def ctx ctype_def
+    | CDef_startup (id, instrs) ->
         let startup_header =
           string (Printf.sprintf "void %sstartup_%s(void)" (class_impl_prefix ()) (sgen_function_id id))
         in
@@ -2343,7 +2314,7 @@ module Codegen (Config : CODEGEN_CONFIG) = struct
         let startup_decl = string (Printf.sprintf "void startup_%s(void);" (sgen_function_id id)) in
         if Config.cpp then [FunctionDefinition startup_impl; FunctionDeclaration startup_decl]
         else [FunctionDefinition startup_impl]
-    | CDEF_finish (id, instrs) ->
+    | CDef_finish (id, instrs) ->
         let finish_header =
           string (Printf.sprintf "void %sfinish_%s(void)" (class_impl_prefix ()) (sgen_function_id id))
         in
@@ -2356,7 +2327,7 @@ module Codegen (Config : CODEGEN_CONFIG) = struct
         let finish_decl = string (Printf.sprintf "void finish_%s(void);" (sgen_function_id id)) in
         if Config.cpp then [FunctionDefinition finish_impl; FunctionDeclaration finish_decl]
         else [FunctionDefinition finish_impl]
-    | CDEF_let (number, bindings, instrs) ->
+    | CDef_let (number, bindings, instrs) ->
         let setup = List.concat (List.map (fun (id, ctyp) -> [idecl (id_loc id) ctyp (name id)]) bindings) in
         let cleanup = List.concat (List.map (fun (id, ctyp) -> [iclear ~loc:(id_loc id) ctyp (name id)]) bindings) in
         let variable_defs =
@@ -2385,7 +2356,7 @@ module Codegen (Config : CODEGEN_CONFIG) = struct
         in
 
         [VariableDefinition variable_defs; FunctionDeclaration function_decls; FunctionDefinition impl]
-    | CDEF_pragma _ -> []
+    | CDef_pragma _ -> []
 
   (** As we generate C we need to generate specialized version of tuple, list, and vector type. These must be generated
       in the correct order. The ctyp_dependencies function generates a list of c_gen_typs in the order they must be
@@ -2458,18 +2429,18 @@ module Codegen (Config : CODEGEN_CONFIG) = struct
       List.concat (List.map (codegen_ctg ctx) deps) @ codegen_def' ctx def
     )
 
-  let is_cdef_startup = function CDEF_aux (CDEF_startup _, _) -> true | _ -> false
+  let is_cdef_startup = function CDef_aux (CDef_startup _, _) -> true | _ -> false
 
   let sgen_startup = function
-    | CDEF_aux (CDEF_startup (id, _), _) -> Printf.sprintf "  startup_%s();" (sgen_function_id id)
+    | CDef_aux (CDef_startup (id, _), _) -> Printf.sprintf "  startup_%s();" (sgen_function_id id)
     | _ -> assert false
 
   let sgen_instr id ctx instr = Document.to_string (codegen_instr id ctx instr)
 
-  let is_cdef_finish = function CDEF_aux (CDEF_startup _, _) -> true | _ -> false
+  let is_cdef_finish = function CDef_aux (CDef_startup _, _) -> true | _ -> false
 
   let sgen_finish = function
-    | CDEF_aux (CDEF_startup (id, _), _) -> Printf.sprintf "  finish_%s();" (sgen_function_id id)
+    | CDef_aux (CDef_startup (id, _), _) -> Printf.sprintf "  finish_%s();" (sgen_function_id id)
     | _ -> assert false
 
   let get_recursive_functions cdefs =
@@ -2490,7 +2461,7 @@ module Codegen (Config : CODEGEN_CONFIG) = struct
     Jibc.compile_ast ctx ast
 
   let rec c_ast_registers ~early = function
-    | CDEF_aux (CDEF_register (id, ctyp, instrs), def_annot) :: ast
+    | CDef_aux (CDef_register (id, ctyp, instrs), def_annot) :: ast
       when early = Option.is_some (get_def_attribute "early_init" def_annot) ->
         (id, ctyp, instrs) :: c_ast_registers ~early ast
     | _ :: ast -> c_ast_registers ~early ast
@@ -2499,7 +2470,7 @@ module Codegen (Config : CODEGEN_CONFIG) = struct
   let get_unit_tests cdefs =
     List.fold_left
       (fun ids -> function
-        | CDEF_aux (CDEF_val (id, _, _, _, _), def_annot) when Option.is_some (get_def_attribute "test" def_annot) ->
+        | CDef_aux (CDef_val (id, _, _, _, _), def_annot) when Option.is_some (get_def_attribute "test" def_annot) ->
             IdSet.add id ids
         | _ -> ids
         )
@@ -2805,12 +2776,12 @@ module Codegen (Config : CODEGEN_CONFIG) = struct
       let actual_main =
         let extra_pre =
           List.filter_map
-            (function CDEF_aux (CDEF_pragma ("c_in_main", arg), _) -> Some ("  " ^ arg) | _ -> None)
+            (function CDef_aux (CDef_pragma ("c_in_main", arg), _) -> Some ("  " ^ arg) | _ -> None)
             cdefs
         in
         let extra_post =
           List.filter_map
-            (function CDEF_aux (CDEF_pragma ("c_in_main_post", arg), _) -> Some ("  " ^ arg) | _ -> None)
+            (function CDef_aux (CDef_pragma ("c_in_main_post", arg), _) -> Some ("  " ^ arg) | _ -> None)
             cdefs
         in
         separate hardline

@@ -1,0 +1,5 @@
+[93mType error[0m:
+[96mfail/struct_literal_no_type.sail[0m:4.33-49:
+4[96m |[0mfunction f() -> unit = { let x = struct { a = 1 }; () }
+ [91m |[0m                                 [91m^--------------^[0m
+ [91m |[0m Cannot infer type of struct literal

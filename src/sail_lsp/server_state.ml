@@ -250,7 +250,7 @@ let wrap_module proj mod_id files =
   let module P = Parse_ast in
   let open Project in
   let name, l = module_name proj mod_id in
-  let bracket_pragma p = [Ok (Generated [P.DEF_aux (P.DEF_pragma (p, P.Pragma_line (name, 1)), to_loc l)])] in
+  let bracket_pragma p = [Ok (Generated [P.Def_aux (P.Def_pragma (p, P.Pragma_line (name, 1)), to_loc l)])] in
   bracket_pragma "start_module#" @ files @ bracket_pragma "end_module#"
 
 let load_modules ~default_sail_dir proj =

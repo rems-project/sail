@@ -50,8 +50,6 @@ open Ast_defs
 open Ast_util
 open PPrint
 
-module Big_int = Nat_big_num
-
 module type PRINT_CONFIG = sig
   val insert_braces : bool
   val resugar : bool
@@ -93,7 +91,7 @@ module Printer (Config : PRINT_CONFIG) = struct
 
   let doc_kopt kopt = parens (doc_kopt_no_parens kopt)
 
-  let doc_int n = string (Big_int.to_string n)
+  let doc_int n = string (Z.to_string n)
 
   let doc_ord (Ord_aux (o, _)) = match o with Ord_inc -> string "inc" | Ord_dec -> string "dec"
 
@@ -105,7 +103,7 @@ module Printer (Config : PRINT_CONFIG) = struct
 
   let rec atomic_nexp (Nexp_aux (n_aux, _) as nexp) =
     match n_aux with
-    | Nexp_constant c -> string (Big_int.to_string c)
+    | Nexp_constant c -> string (Z.to_string c)
     | Nexp_app (Id_aux (Operator op, _), [n1; n2]) -> separate space [atomic_nexp n1; string op; atomic_nexp n2]
     | Nexp_app (_id, _nexps) -> string (string_of_nexp nexp)
     (* This segfaults??!!!!
@@ -123,8 +121,8 @@ module Printer (Config : PRINT_CONFIG) = struct
   and nexp1 (Nexp_aux (n_aux, _) as nexp) =
     match n_aux with
     | Nexp_sum (n1, Nexp_aux (Nexp_neg n2, _)) | Nexp_minus (n1, n2) -> separate space [nexp1 n1; string "-"; nexp2 n2]
-    | Nexp_sum (n1, Nexp_aux (Nexp_constant c, _)) when Big_int.less c Big_int.zero ->
-        separate space [nexp1 n1; string "-"; doc_int (Big_int.abs c)]
+    | Nexp_sum (n1, Nexp_aux (Nexp_constant c, _)) when Z.lt c Z.zero ->
+        separate space [nexp1 n1; string "-"; doc_int (Z.abs c)]
     | Nexp_sum (n1, n2) -> separate space [nexp1 n1; string "+"; nexp2 n2]
     | _ -> nexp2 nexp
 
@@ -277,12 +275,12 @@ module Printer (Config : PRINT_CONFIG) = struct
       | L_unit -> "()"
       | L_true -> "true"
       | L_false -> "false"
-      | L_num i -> Big_int.to_string i
+      | L_num i -> Z.to_string i
       | L_hex hex -> "0x" ^ string_of_hex_lit ~case:Uppercase hex
       | L_bin bin -> "0b" ^ string_of_bin_lit bin
       | L_real r ->
           let r = Util.Rational.from_rocq r in
-          Printf.sprintf "div_real(to_real(%s), to_real(%s))" (Big_int.to_string (Q.num r)) (Big_int.to_string (Q.den r))
+          Printf.sprintf "div_real(to_real(%s), to_real(%s))" (Z.to_string (Q.num r)) (Z.to_string (Q.den r))
       | L_string s -> "\"" ^ String.escaped s ^ "\""
       )
 
@@ -308,8 +306,8 @@ module Printer (Config : PRINT_CONFIG) = struct
       | P_vector pats -> brackets (separate_map (comma ^^ space) doc_pat pats)
       | P_vector_concat pats -> parens (separate_map (space ^^ string "@" ^^ space) doc_pat pats)
       | P_vector_subrange (id, n, m) ->
-          if Big_int.equal n m then doc_id id ^^ brackets (string (Big_int.to_string n))
-          else doc_id id ^^ brackets (string (Big_int.to_string n) ^^ string ".." ^^ string (Big_int.to_string m))
+          if Z.equal n m then doc_id id ^^ brackets (string (Z.to_string n))
+          else doc_id id ^^ brackets (string (Z.to_string n) ^^ string ".." ^^ string (Z.to_string m))
       | P_wild -> string "_"
       | P_as (pat, id) -> parens (separate space [doc_pat pat; string "as"; doc_id id])
       | P_app (id, pats) -> doc_id id ^^ parens (separate_map (comma ^^ space) doc_pat pats)
@@ -356,8 +354,6 @@ module Printer (Config : PRINT_CONFIG) = struct
     in
     ref (fixities' : (prec * int) Bindings.t)
 
-  type 'a vector_update = VU_single of 'a exp * 'a exp | VU_range of 'a exp * 'a exp * 'a exp
-
   let get_overloaded_info uannot =
     let open Util.Option_monad in
     match get_attribute "overloaded" uannot with
@@ -384,12 +380,12 @@ module Printer (Config : PRINT_CONFIG) = struct
     let* level = Option.bind (List.assoc_opt "level" obj) attribute_data_num in
     let* parts = Option.bind (List.assoc_opt "syntax" obj) attribute_data_list in
     let parse_part = function
-      | AD_aux (AD_num n, _) -> Some (Hole (Big_int.to_int n, ()))
+      | AD_aux (AD_num n, _) -> Some (Hole (Z.to_int n, ()))
       | AD_aux (AD_string str, _) -> Some (Part (separate_map space string (String.split_on_char ' ' str)))
       | _ -> None
     in
     let* parts = Util.option_all (List.map parse_part parts) in
-    Some (Big_int.to_int level, parts)
+    Some (Z.to_int level, parts)
 
   let attach_to_holes exps parts =
     let append p = function Some ps -> Some (ps @ [p]) | None -> None in
@@ -705,15 +701,6 @@ module Printer (Config : PRINT_CONFIG) = struct
     | _ when Config.insert_braces -> group (lbrace ^^ nest 4 (hardline ^^ doc_block [exp]) ^^ hardline ^^ rbrace)
     | _ -> doc_exp exp
 
-  and doc_vector_update = function
-    | VU_single (idx, value) -> (
-        match (unaux_exp idx, unaux_exp value) with
-        | E_id id, E_id id' when Id.compare id id' == 0 -> doc_atomic_exp idx
-        | _, _ -> separate space [doc_atomic_exp idx; equals; doc_exp value]
-      )
-    | VU_range (high, low, value) ->
-        separate space [doc_atomic_exp high; string ".."; doc_atomic_exp low; equals; doc_exp value]
-
   let doc_funcl (FCL_aux (FCL_funcl (id, Pat_aux (pexp, _)), (def_annot, _))) =
     doc_def_annot def_annot
     ^^
@@ -781,9 +768,9 @@ module Printer (Config : PRINT_CONFIG) = struct
         let clauses = separate_map sep doc_mapcl mapcls in
         string "mapping" ^^ space ^^ doc_id id ^^ space ^^ string "=" ^^ space ^^ surround 2 0 lbrace clauses rbrace
 
-  let doc_register (DEC_aux (reg, _)) =
+  let doc_register (Reg_aux (reg, _)) =
     match reg with
-    | DEC_reg (typ, id, opt_exp) -> (
+    | Reg (typ, id, opt_exp) -> (
         match opt_exp with
         | None -> separate space [string "register"; doc_id id; colon; doc_typ typ]
         | Some exp -> separate space [string "register"; doc_id id; colon; doc_typ typ; equals; doc_exp exp]
@@ -825,7 +812,7 @@ module Printer (Config : PRINT_CONFIG) = struct
         | None ->
             doc_op equals (concat [string "type"; space; doc_id id; doc_typ_arg_kind ":" typ_arg]) (doc_typ_arg typ_arg)
       )
-    | TD_enum (id, members, _) ->
+    | TD_enum (id, members) ->
         separate space
           [
             string "enum";
@@ -833,7 +820,7 @@ module Printer (Config : PRINT_CONFIG) = struct
             equals;
             surround 2 0 lbrace (separate_map (comma ^^ break 1) doc_enum_member members) rbrace;
           ]
-    | TD_record (id, [], fields, _) ->
+    | TD_record (id, [], fields) ->
         separate space
           [
             string "struct";
@@ -841,7 +828,7 @@ module Printer (Config : PRINT_CONFIG) = struct
             equals;
             surround 2 0 lbrace (separate_map (comma ^^ break 1) doc_field fields) rbrace;
           ]
-    | TD_record (id, qs, fields, _) ->
+    | TD_record (id, qs, fields) ->
         separate space
           [
             string "struct";
@@ -920,20 +907,20 @@ module Printer (Config : PRINT_CONFIG) = struct
     | SD_enumcl (id, member) -> separate space [string "enum clause"; doc_id id; equals; doc_id member]
 
   let doc_filter = function
-    | DEF_aux ((DEF_pragma ("file_start", _) | DEF_pragma ("file_end", _)), _) -> false
+    | Def_aux ((Def_pragma ("file_start", _) | Def_pragma ("file_end", _)), _) -> false
     | _ -> true
 
-  let rec doc_def_no_hardline (DEF_aux (aux, def_annot)) =
+  let rec doc_def_no_hardline (Def_aux (aux, def_annot)) =
     doc_def_annot def_annot
     ^^
     match aux with
-    | DEF_default df -> doc_default df
-    | DEF_val v_spec -> doc_spec v_spec
-    | DEF_type t_def -> doc_type_def t_def
-    | DEF_fundef f_def -> doc_fundef f_def
-    | DEF_mapdef m_def -> doc_mapdef m_def
-    | DEF_constraint nc -> string "constraint" ^^ space ^^ doc_nc nc
-    | DEF_outcome (OV_aux (OV_outcome (id, typschm, args), _), defs) -> (
+    | Def_default df -> doc_default df
+    | Def_val v_spec -> doc_spec v_spec
+    | Def_type t_def -> doc_type_def t_def
+    | Def_fundef f_def -> doc_fundef f_def
+    | Def_mapdef m_def -> doc_mapdef m_def
+    | Def_constraint nc -> string "constraint" ^^ space ^^ doc_nc nc
+    | Def_outcome (OV_aux (OV_outcome (id, typschm, args), _), defs) -> (
         string "outcome" ^^ space ^^ doc_id id ^^ space ^^ colon ^^ space ^^ doc_typschm typschm ^^ break 1
         ^^ (match doc_typquant ~parenthesize:false args with Some doc -> string "with" ^//^ doc | None -> empty)
         ^^
@@ -942,31 +929,31 @@ module Printer (Config : PRINT_CONFIG) = struct
         | _ ->
             break 1 ^^ (string "= {" ^//^ separate_map (hardline ^^ hardline) doc_def_no_hardline defs) ^/^ string "}"
       )
-    | DEF_instantiation (IN_aux (IN_id id, _), substs) -> (
+    | Def_instantiation (IN_aux (IN_id id, _), substs) -> (
         string "instantiation" ^^ space ^^ doc_id id
         ^^
         match substs with
         | [] -> empty
         | _ -> (space ^^ string "with") ^//^ separate_map (comma ^^ break 1) doc_subst substs
       )
-    | DEF_impl funcl -> string "impl" ^^ space ^^ doc_funcl funcl
-    | DEF_let (pat, exp) -> string "let" ^^ space ^^ separate space [doc_pat pat; equals; doc_exp exp]
-    | DEF_internal_mutrec fundefs ->
+    | Def_impl funcl -> string "impl" ^^ space ^^ doc_funcl funcl
+    | Def_let (pat, exp) -> string "let" ^^ space ^^ separate space [doc_pat pat; equals; doc_exp exp]
+    | Def_internal_mutrec fundefs ->
         (string "mutual {" ^//^ separate_map (hardline ^^ hardline) doc_fundef fundefs) ^^ hardline ^^ string "}"
-    | DEF_register dec -> doc_register dec
-    | DEF_scattered sdef -> doc_scattered sdef
-    | DEF_measure (id, pat, exp) ->
+    | Def_register dec -> doc_register dec
+    | Def_scattered sdef -> doc_scattered sdef
+    | Def_measure (id, pat, exp) ->
         string "termination_measure" ^^ space ^^ doc_id id ^/^ doc_pat pat ^^ space ^^ equals ^/^ doc_exp exp
-    | DEF_loop_measures (id, measures) ->
+    | Def_loop_measures (id, measures) ->
         string "termination_measure" ^^ space ^^ doc_id id ^/^ doc_loop_measures measures
-    | DEF_pragma (pragma, Pragma_line (arg, _)) -> string ("$" ^ pragma ^ " " ^ arg)
-    | DEF_pragma (pragma, Pragma_structured data) ->
+    | Def_pragma (pragma, Pragma_line (arg, _)) -> string ("$" ^ pragma ^ " " ^ arg)
+    | Def_pragma (pragma, Pragma_structured data) ->
         let open Parse_ast.Attribute_data in
         string ("$" ^ pragma) ^^ space ^^ string (string_of_attribute_data (AD_aux (AD_object data, Parse_ast.Unknown)))
-    | DEF_fixity (prec, n, id) ->
-        fixities := Bindings.add id (prec, Big_int.to_int n) !fixities;
+    | Def_fixity (prec, n, id) ->
+        fixities := Bindings.add id (prec, Z.to_int n) !fixities;
         separate space [doc_prec prec; doc_int n; doc_id id]
-    | DEF_overload (id, ids) ->
+    | Def_overload (id, ids) ->
         separate space
           [
             string "overload"; doc_id id; equals; surround 2 0 lbrace (separate_map (comma ^^ break 1) doc_id ids) rbrace;
@@ -1018,12 +1005,12 @@ let reformat ~into_directory:dir { defs; _ } =
   in
 
   let format_def = function
-    | DEF_aux (DEF_pragma ("file_start", Pragma_line (path, _)), _) -> push (Some (adjust_path path))
-    | DEF_aux (DEF_pragma ("file_end", _), _) -> pop ()
-    | DEF_aux (DEF_pragma ("include_start", Pragma_line (path, _)), _) ->
+    | Def_aux (Def_pragma ("file_start", Pragma_line (path, _)), _) -> push (Some (adjust_path path))
+    | Def_aux (Def_pragma ("file_end", _), _) -> pop ()
+    | Def_aux (Def_pragma ("include_start", Pragma_line (path, _)), _) ->
         output_include path;
         if Filename.is_relative path then push (Some (adjust_path path)) else push None
-    | DEF_aux (DEF_pragma ("include_end", _), _) -> pop ()
+    | Def_aux (Def_pragma ("include_end", _), _) -> pop ()
     | def -> output_def def
   in
 

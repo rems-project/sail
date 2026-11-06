@@ -1,0 +1,10 @@
+[93mType error[0m:
+[96mfail/mapping_same_types.sail[0m:4.12-23:
+4[96m |[0mmapping m : int <-> int = { 1 <-> 2 }
+ [91m |[0m            [91m^---------^[0m
+ [91m |[0m Well-formedness check failed for type
+ [91m |[0m 
+ [91m |[0m [93mCaused by [0m[96mfail/mapping_same_types.sail[0m:4.12-23:
+ [91m |[0m 4[96m |[0mmapping m : int <-> int = { 1 <-> 2 }
+ [91m |[0m  [91m |[0m            [91m^---------^[0m
+ [91m |[0m  [91m |[0m Bidirectional types cannot be the same on both sides

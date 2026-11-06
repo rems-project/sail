@@ -1,3 +1,4 @@
+[@@@warning "-a"]
 
 type uint =
 | Nil

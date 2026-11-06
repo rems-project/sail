@@ -55,6 +55,7 @@ jobs:
         eval $(opam env)
         opam pin --yes --no-action add .
         opam install . --yes --deps-only
+        opam install 'bisect_ppx>=2.5.0' --yes
 
     - name: Build Sail with coverage
       run: |

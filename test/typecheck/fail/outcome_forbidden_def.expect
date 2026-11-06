@@ -1,0 +1,5 @@
+[93mType error[0m:
+[96mfail/outcome_forbidden_def.sail[0m:7.2-17:
+7[96m |[0m  let x : int = 3
+ [91m |[0m  [91m^-------------^[0m
+ [91m |[0m Forbidden definition in outcome block

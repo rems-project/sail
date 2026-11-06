@@ -1,0 +1,5 @@
+[93mType error[0m:
+[96mfail/infer_fn_type_unannotated.sail[0m:4.0-22:
+4[96m |[0mfunction f x : int = x
+ [91m |[0m[91m^--------------------^[0m
+ [91m |[0m Cannot infer function type for unannotated function

@@ -1,0 +1,5 @@
+[93mType error[0m:
+[96mfail/mapping_shadow_register.sail[0m:5.36-37:
+5[96m |[0mmapping m : int <-> (int, unit) = { R <-> (R, ()) }
+ [91m |[0m                                    [91m^[0m
+ [91m |[0m Cannot shadow mutable local or register in switch statement mapping-pattern R

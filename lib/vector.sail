@@ -89,14 +89,14 @@ function neq_bits(x, y) = not_bool(eq_bits(x, y))
 overload operator != = {neq_bits}
 
 val bitvector_length = pure {
+  ocaml: "length_bits",
+  interpreter: "length_bits",
   coq: "length_mword",
   lean: "Sail.BitVec.length",
   _: "length"
 } : forall 'n. bits('n) -> int('n)
 
 val vector_length = pure {
-  ocaml: "length",
-  interpreter: "length",
   lem: "length_list",
   coq: "vec_length",
   lean: "Vector.length",
@@ -130,9 +130,17 @@ val prerr_bits = pure "prerr_bits" : forall 'n. (string, bits('n)) -> unit
 
 $else
 
-val print_bits = impure "print_bits_effect" : forall 'n. (string, bits('n)) -> unit
+val print_bits = impure {
+  ocaml: "print_bits",
+  interpreter: "print_bits",
+  _: "print_bits_effect",
+} : forall 'n. (string, bits('n)) -> unit
 
-val prerr_bits = impure "prerr_bits_effect" : forall 'n. (string, bits('n)) -> unit
+val prerr_bits = impure {
+  ocaml: "prerr_bits",
+  interpreter: "prerr_bits",
+  _: "prerr_bits_effect"
+} : forall 'n. (string, bits('n)) -> unit
 
 $endif
 
@@ -181,8 +189,6 @@ infix 8 =^
 overload operator =^ = {sail_mask}
 
 val bitvector_concat = pure {
-  ocaml: "append",
-  interpreter: "append",
   lem: "concat_vec",
   coq: "concat_vec",
   lean: "_lean_app",
@@ -193,7 +199,11 @@ val bitvector_concat = pure {
 overload append = {bitvector_concat}
 
 /* Used for creating long bitvector literals in the C backend. */
-val append_64 = pure "append_64" : forall 'n. (bits('n), bits(64)) -> bits('n + 64)
+val append_64 = pure {
+  ocaml: "append",
+  interpreter: "append",
+  _: "append_64"
+} : forall 'n. (bits('n), bits(64)) -> bits('n + 64)
 
 $ifdef _DEFAULT_DEC
 val bitvector_access = pure {
@@ -258,8 +268,6 @@ val plain_vector_update = pure {
 overload vector_update = {bitvector_update, plain_vector_update}
 
 val add_bits = pure {
-  ocaml: "add_vec",
-  interpreter: "add_vec",
   lem: "add_vec",
   coq: "add_vec",
   lean: "_lean_add",
@@ -267,8 +275,6 @@ val add_bits = pure {
 } : forall 'n. (bits('n), bits('n)) -> bits('n)
 
 val add_bits_int = pure {
-  ocaml: "add_vec_int",
-  interpreter: "add_vec_int",
   lem: "add_vec_int",
   coq: "add_vec_int",
   lean: "BitVec.addInt",
@@ -278,19 +284,24 @@ val add_bits_int = pure {
 overload operator + = {add_bits, add_bits_int}
 
 val sub_bits = pure {
-  ocaml: "sub_vec",
-  interpreter: "sub_vec",
   lem: "sub_vec",
   coq: "sub_vec",
   lean: "_lean_sub",
   _: "sub_bits"
 } : forall 'n. (bits('n), bits('n)) -> bits('n)
 
+val sub_bits_int = pure {
+  lem: "sub_vec_int",
+  coq: "sub_vec_int",
+  lean: "BitVec.subInt",
+  _: "sub_bits_int"
+} : forall 'n. (bits('n), int) -> bits('n)
+
+overload operator - = {sub_bits, sub_bits_int}
+
 val not_vec = pure {
-  ocaml: "not_vec",
   lem: "not_vec",
   coq: "not_vec",
-  interpreter: "not_vec",
   lean: "Complement.complement",
   _: "not_bits"
 } : forall 'n. bits('n) -> bits('n)
@@ -298,8 +309,6 @@ val not_vec = pure {
 val and_vec = pure {
   lem: "and_vec",
   coq: "and_vec",
-  ocaml: "and_vec",
-  interpreter: "and_vec",
   lean: "_lean_bvand",
   _: "and_bits"
 } : forall 'n. (bits('n), bits('n)) -> bits('n)
@@ -309,8 +318,6 @@ overload operator & = {and_vec}
 val or_vec = pure {
   lem: "or_vec",
   coq: "or_vec",
-  ocaml: "or_vec",
-  interpreter: "or_vec",
   lean: "_lean_bvor",
   _: "or_bits"
 } : forall 'n. (bits('n), bits('n)) -> bits('n)
@@ -320,8 +327,6 @@ overload operator | = {or_vec}
 val xor_vec = pure {
   lem: "xor_vec",
   coq: "xor_vec",
-  ocaml: "xor_vec",
-  interpreter: "xor_vec",
   lean: "_lean_bvxor",
   _: "xor_bits"
 } : forall 'n. (bits('n), bits('n)) -> bits('n)
@@ -391,7 +396,10 @@ val sail_zeros = pure {
   lean: "BitVec.zero",
   _: "zeros" }: forall 'n, 'n >= 0. int('n) -> bits('n)
 
-val sail_ones : forall 'n, 'n >= 0. int('n) -> bits('n)
+val sail_ones = pure {
+  interpreter: "ones",
+  ocaml: "ones",
+} : forall 'n, 'n >= 0. int('n) -> bits('n)
 
 function sail_ones(n) = not_vec(sail_zeros(n))
 

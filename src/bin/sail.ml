@@ -189,6 +189,7 @@ let set_tool options tool_name =
     match tool_name with
     | "strip_json" -> Tools.load (module Tools.Strip_json_comments) fix_options options
     | "format" -> Tools.load (module Tools.Format) fix_options options
+    | "extern_json" -> Tools.load (module Tools.Extern_json) fix_options options
     | _ -> raise (Arg.Bad "unknown tool")
   in
   opt_tool := Some action
@@ -507,6 +508,7 @@ let run_sail (config : Yojson.Safe.t option) tgt =
   in
   let config_json = get_model_config () in
   let ast, instantiation = Frontend.instantiate_abstract_types (Some tgt) config_json !opt_instantiations ast in
+  Frontend.check_instantiated_constraints env instantiation;
   let schema, ast = Config.rewrite_ast tgt env instantiation config_json ast in
   let ast, env = if Target.skip_initial_rewrite tgt then (ast, env) else Frontend.initial_rewrite effect_info env ast in
   let ast, env =

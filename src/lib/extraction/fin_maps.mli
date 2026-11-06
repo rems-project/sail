@@ -1,3 +1,4 @@
+[@@@warning "-a"]
 open Base
 open Option
 

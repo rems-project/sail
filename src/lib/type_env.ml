@@ -49,8 +49,6 @@ open Ast_compare
 open Ast_util
 open Util
 
-module Big_int = Nat_big_num
-
 open Type_internal
 
 (* Linearize cases involving power where we would otherwise require
@@ -149,6 +147,7 @@ type env = {
   shadow_vars : int KBindings.t;
   allow_bindings : bool;
   constraints : (constraint_reason * n_constraint) list;
+  bounds : (Z.t option * Z.t option) KBindings.t;
   ret_typ : typ option;
   prove : (env -> n_constraint -> bool) option;
   allow_unknowns : bool;
@@ -256,6 +255,7 @@ let empty =
     shadow_vars = KBindings.empty;
     allow_bindings = true;
     constraints = [];
+    bounds = KBindings.empty;
     ret_typ = None;
     prove = None;
     allow_unknowns = false;
@@ -271,15 +271,17 @@ let fresh_kid ?(kid = mk_kid "") _env =
   incr counter;
   fresh
 
-let freshen_kid env kid (typq, typ) =
-  if KidSet.mem kid (KidSet.of_list (List.map kopt_kid (quant_kopts typq))) then (
-    let fresh = fresh_kid ~kid env in
-    (typquant_subst_kid kid fresh typq, subst_kid typ_subst kid fresh typ)
-  )
-  else (typq, typ)
-
-let freshen_bind env bind =
-  List.fold_left (fun bind (kid, _) -> freshen_kid env kid bind) bind (KBindings.bindings env.typ_vars)
+let freshen_bind env ((typq, _) as bind) =
+  let quant_kids = KidSet.of_list (List.map kopt_kid (quant_kopts typq)) in
+  KidSet.fold
+    (fun kid ((typq, typ) as bind) ->
+      if KBindings.mem kid env.typ_vars then (
+        let fresh = fresh_kid ~kid env in
+        (typquant_subst_kid kid fresh typq, subst_kid typ_subst kid fresh typ)
+      )
+      else bind
+    )
+    quant_kids bind
 
 let set_prover f env = { env with prove = f }
 
@@ -291,11 +293,6 @@ let is_user_undefined id env = IdSet.mem id env.global.allow_undefined
 let allow_user_undefined id env =
   update_global (fun global -> { global with allow_undefined = IdSet.add id global.allow_undefined }) env
 
-(* First, we define how type variables are added to the
-   environment. If we add a new variable shadowing a previous
-   variable, we need to modify the environment so the shadowed
-   variable is renamed. We can't just remove it because it may be
-   referenced by constraints. *)
 let shadows v env = match KBindings.find_opt v env.shadow_vars with Some n -> n | None -> 0
 
 let add_typ_var_shadow ?(from_outcome = false) l (KOpt_aux (KOpt_kind (K_aux (k, _), v), _)) env =
@@ -303,6 +300,7 @@ let add_typ_var_shadow ?(from_outcome = false) l (KOpt_aux (KOpt_kind (K_aux (k,
   if KBindings.mem v env.typ_vars then (
     let n = match KBindings.find_opt v env.shadow_vars with Some n -> n | None -> 0 in
     let s_l, s_k, s_origin = KBindings.find v env.typ_vars in
+    let s_bounds = Option.value ~default:(None, None) (KBindings.find_opt v env.bounds) in
     let s_v = Kid_aux (Var (string_of_kid v ^ "#" ^ string_of_int n), l) in
     typ_print
       ( lazy
@@ -314,6 +312,7 @@ let add_typ_var_shadow ?(from_outcome = false) l (KOpt_aux (KOpt_kind (K_aux (k,
         env with
         constraints = List.map (fun (l, nc) -> (l, constraint_subst v (arg_kopt (mk_kopt s_k s_v)) nc)) env.constraints;
         typ_vars = KBindings.add v (l, k, origin) (KBindings.add s_v (s_l, s_k, s_origin) env.typ_vars);
+        bounds = KBindings.add v (None, None) (KBindings.add s_v s_bounds env.bounds);
         locals = Bindings.map (fun (mut, typ) -> (mut, typ_subst v (arg_kopt (mk_kopt s_k s_v)) typ)) env.locals;
         shadow_vars = KBindings.add v (n + 1) env.shadow_vars;
       },
@@ -322,7 +321,13 @@ let add_typ_var_shadow ?(from_outcome = false) l (KOpt_aux (KOpt_kind (K_aux (k,
   )
   else (
     typ_print (lazy (adding ^ "type variable " ^ string_of_kid v ^ " : " ^ string_of_kind_aux k)) [@coverage off];
-    ({ env with typ_vars = KBindings.add v (l, k, origin) env.typ_vars }, None)
+    ( {
+        env with
+        typ_vars = KBindings.add v (l, k, origin) env.typ_vars;
+        bounds = KBindings.add v (None, None) env.bounds;
+      },
+      None
+    )
   )
 
 let add_typ_var ?(from_outcome = false) l kopt env = fst (add_typ_var_shadow ~from_outcome l kopt env)
@@ -339,6 +344,16 @@ let get_typ_var kid env =
   match KBindings.find_opt kid env.typ_vars with
   | Some (_, k, _) -> k
   | None -> typ_error (kid_loc kid) ("No type variable " ^ string_of_kid kid)
+
+let is_typ_var kid env = KBindings.mem kid env.typ_vars
+
+let get_typ_vars_since ~old env =
+  if env.typ_vars == old.typ_vars then []
+  else
+    KBindings.fold
+      (fun kid (_, k, _) acc -> if KBindings.mem kid old.typ_vars then acc else mk_kopt k kid :: acc)
+      env.typ_vars []
+    |> List.rev
 
 let get_typ_vars env = KBindings.map (fun (_, k, _) -> k) env.typ_vars
 let get_typ_var_locs env = KBindings.map (fun (l, _, _) -> l) env.typ_vars
@@ -566,7 +581,78 @@ let infer_kind env id =
 
 let get_constraints env = List.map snd env.constraints @ List.map snd env.global.constraints
 let get_global_constraints env = List.map snd env.global.constraints
+
+let get_constraints_since ~old env =
+  (* Constraints are added to the front of the local constraint list,
+     so in the common case the old local constraints are a (physically
+     equal) tail of the new ones. *)
+  let rec new_locals acc ncs =
+    if ncs == old.constraints then Some (List.rev acc)
+    else (match ncs with [] -> None | (_, nc) :: ncs -> new_locals (nc :: acc) ncs)
+  in
+  let fallback () =
+    let ncs = get_constraints env in
+    Util.take (List.length ncs - List.length (get_constraints old)) ncs
+  in
+  if env.global.constraints == old.global.constraints then (
+    match new_locals [] env.constraints with Some ncs -> ncs | None -> fallback ()
+  )
+  else fallback ()
+
 let get_constraint_reasons env = env.global.constraints @ env.constraints
+
+let simple_bound (NC_aux (aux, _)) =
+  match aux with
+  | NC_ge (Nexp_aux (Nexp_var v, _), Nexp_aux (Nexp_constant c, _))
+  | NC_le (Nexp_aux (Nexp_constant c, _), Nexp_aux (Nexp_var v, _)) ->
+      Some (v, Some c, None)
+  | NC_gt (Nexp_aux (Nexp_var v, _), Nexp_aux (Nexp_constant c, _))
+  | NC_lt (Nexp_aux (Nexp_constant c, _), Nexp_aux (Nexp_var v, _)) ->
+      Some (v, Some (Z.succ c), None)
+  | NC_le (Nexp_aux (Nexp_var v, _), Nexp_aux (Nexp_constant c, _))
+  | NC_ge (Nexp_aux (Nexp_constant c, _), Nexp_aux (Nexp_var v, _)) ->
+      Some (v, None, Some c)
+  | NC_lt (Nexp_aux (Nexp_var v, _), Nexp_aux (Nexp_constant c, _))
+  | NC_gt (Nexp_aux (Nexp_constant c, _), Nexp_aux (Nexp_var v, _)) ->
+      Some (v, None, Some (Z.pred c))
+  | NC_equal (A_aux (A_nexp (Nexp_aux (Nexp_var v, _)), _), A_aux (A_nexp (Nexp_aux (Nexp_constant c, _)), _))
+  | NC_equal (A_aux (A_nexp (Nexp_aux (Nexp_constant c, _)), _), A_aux (A_nexp (Nexp_aux (Nexp_var v, _)), _)) ->
+      Some (v, Some c, Some c)
+  | _ -> None
+
+let get_bounds v env = Option.value ~default:(None, None) (KBindings.find_opt v env.bounds)
+
+let add_bounds constr env =
+  let tighten f b1 b2 =
+    match (b1, b2) with Some x, Some y -> Some (f x y) | Some x, None | None, Some x -> Some x | None, None -> None
+  in
+  List.fold_left
+    (fun env nc ->
+      match simple_bound nc with
+      | Some (v, lo, hi) ->
+          let lo', hi' = get_bounds v env in
+          { env with bounds = KBindings.add v (tighten Z.max lo lo', tighten Z.min hi hi') env.bounds }
+      | None -> env
+    )
+    env (constraint_conj constr)
+
+let prove_by_bounds env nc =
+  let implied v lo hi =
+    let lo', hi' = get_bounds v env in
+    let ok cmp goal known =
+      match (goal, known) with None, _ -> true | Some g, Some k -> cmp k g | Some _, None -> false
+    in
+    ok Z.geq lo lo' && ok Z.leq hi hi'
+  in
+  List.for_all
+    (fun (NC_aux (aux, _) as nc) ->
+      match aux with
+      | NC_true -> true
+      | _ -> (
+          match simple_bound nc with Some (v, lo, hi) -> implied v lo hi | None -> false
+        )
+    )
+    (constraint_conj nc)
 
 module Well_formedness = struct
   type existential = { vars : KidSet.t; constr : n_constraint option }
@@ -1040,7 +1126,7 @@ and add_constraint ?(global = false) ?reason constr env =
           ( lazy
             (Util.("Linearizing " |> red |> clear)
             ^ string_of_n_constraint constr ^ " for " ^ string_of_kid v ^ " in "
-            ^ Util.string_of_list ", " Big_int.to_string solutions
+            ^ Util.string_of_list ", " Z.to_string solutions
             )
             ) [@coverage off];
         let linearized =
@@ -1067,7 +1153,7 @@ and add_constraint ?(global = false) ?reason constr env =
           update_global
             (fun global_env -> { global_env with constraints = (reason, constr) :: global_env.constraints })
             env
-        else { env with constraints = (reason, constr) :: env.constraints }
+        else add_bounds constr { env with constraints = (reason, constr) :: env.constraints }
   )
 
 let simplify_constraints env =
@@ -1192,9 +1278,7 @@ let get_val_spec_opt id env =
               (KBindings.bindings env.typ_vars)
           )
           ) [@coverage off];
-      let bind' =
-        List.fold_left (fun bind (kid, _) -> freshen_kid env kid bind) bind (KBindings.bindings env.typ_vars)
-      in
+      let bind' = freshen_bind env bind in
       typ_debug (lazy ("get_val_spec: freshened to " ^ string_of_bind bind')) [@coverage off];
       Some (bind', item.loc)
   | None -> None
@@ -1222,7 +1306,7 @@ let add_union_id ?in_module id bind env =
 
 let get_union_id id env =
   match Option.map (get_item (id_loc id) env) (Bindings.find_opt id env.global.union_ids) with
-  | Some bind -> List.fold_left (fun bind (kid, _) -> freshen_kid env kid bind) bind (KBindings.bindings env.typ_vars)
+  | Some bind -> freshen_bind env bind
   | None -> typ_error (id_loc id) ("No union constructor found for " ^ string_of_id id)
 
 let rec valid_implicits env start = function
@@ -1444,6 +1528,14 @@ let is_scattered_id id env = Bindings.mem id env.global.scattered_ids
 let is_scattered_open id env =
   match Bindings.find_opt id env.global.scattered_ids with Some (Ok _) -> true | _ -> false
 
+let check_scattered_not_ended ~at:l ~kind id env =
+  match Bindings.find_opt id env.global.scattered_ids with
+  | Some (Error end_l) ->
+      typ_error
+        (Hint ("previously ended here", end_l, l))
+        ("Cannot add clause to scattered " ^ kind ^ " " ^ string_of_id id ^ " as it has already been ended")
+  | _ -> ()
+
 let end_scattered_id ~at:l id env =
   let attrs = ref [] in
   let updater = function
@@ -1543,10 +1635,7 @@ let add_record id typq fields env =
   )
 
 let get_accessor_fn record_id field env =
-  let freshen_bind bind =
-    List.fold_left (fun bind (kid, _) -> freshen_kid env kid bind) bind (KBindings.bindings env.typ_vars)
-  in
-  try freshen_bind (get_item (id_loc field) env (IdPairMap.find (record_id, field) env.global.accessors))
+  try freshen_bind env (get_item (id_loc field) env (IdPairMap.find (record_id, field) env.global.accessors))
   with Not_found ->
     typ_error (id_loc field) ("No field accessor found for " ^ string_of_id record_id ^ "." ^ string_of_id field)
 
@@ -1577,6 +1666,7 @@ let add_toplevel_lets ids (env : env) =
     ids env
 
 let get_toplevel_lets env = Bindings.bindings env.global.letbinds |> List.map fst |> IdSet.of_list
+let is_toplevel_let id env = Bindings.mem id env.global.letbinds
 
 let is_variant id env = Bindings.mem id env.global.unions
 

@@ -1,6 +1,6 @@
 open Libsail
 
-(* Exists only for regression test in test/plugins/run_tests.py
+(* Exists only for regression test in test/suites/plugins.py
    Provides a plugin adding a marker that can never appear
    unless this plugin was loaded. *)
 let _ =

@@ -1,3 +1,4 @@
+[@@@warning "-a"]
 open BinInt
 open ListDef
 open Base

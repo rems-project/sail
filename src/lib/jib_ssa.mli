@@ -44,7 +44,6 @@
 (*  SPDX-License-Identifier: BSD-2-Clause                                   *)
 (****************************************************************************)
 
-open Array
 open Jib_util
 
 val ssa_name : int -> Jib.name -> Jib.name

@@ -44,12 +44,9 @@
 (*  SPDX-License-Identifier: BSD-2-Clause                                   *)
 (****************************************************************************)
 
-module Big_int = Nat_big_num
-
 open Initial_check
 open Ast
 open Ast_compare
-open Ast_defs
 open Ast_util
 
 let fun_typschm arg_typs ret_typ = mk_typschm [] (function_typ arg_typs ret_typ)
@@ -67,8 +64,8 @@ let range_loc (BF_aux (_, l)) = l
 
 let fix_locations l defs =
   let rec go acc = function
-    | DEF_aux (def, def_annot) :: defs ->
-        go (DEF_aux (def, add_def_attribute (gen_loc l) "fix_location" None def_annot) :: acc) defs
+    | Def_aux (def, def_annot) :: defs ->
+        go (Def_aux (def, add_def_attribute (gen_loc l) "fix_location" None def_annot) :: acc) defs
     | [] -> acc
   in
   List.rev (go [] defs)
@@ -206,7 +203,7 @@ let field_accessors typ_name field order range =
 
 (* Generate all accessor functions for a given bitfield type *)
 let macro id size order ranges =
-  let full_range = BF_aux (BF_range (nminus size (nint 1), nconstant Big_int.zero), Parse_ast.Unknown) in
+  let full_range = BF_aux (BF_range (nminus size (nint 1), nconstant Z.zero), Parse_ast.Unknown) in
   let ranges = (mk_id "bits", full_range) :: Bindings.bindings ranges in
   let accessors = List.map (fun (field, range) -> field_accessors id field order range) ranges in
   List.concat ([constructor id size] @ accessors)

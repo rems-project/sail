@@ -46,8 +46,6 @@
 
 open Ast
 open Ast_compare
-open Ast_defs
-open Ast_util
 open Type_check
 
 (** [const_prop target ast ref_vars substs assigns exp] performs constant propagation on [exp] where [substs] is a pair

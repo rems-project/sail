@@ -32,7 +32,9 @@ jobs:
 
     - name: System dependencies (Linux)
       if: runner.os == 'Linux'
-      run: sudo apt install build-essential libgmp-dev cvc4
+      run: |
+        sudo apt update
+        sudo apt install build-essential libgmp-dev cvc4
 
     - name: System dependencies (macOS)
       if: runner.os == 'macOS'
@@ -74,6 +76,12 @@ jobs:
       run: |
         opam pin --yes --no-action add .
         opam install sail --yes
+
+    - name: Check externs.json is up to date
+      # Paths in externs.json use forward slashes
+      if: runner.os != 'Windows'
+      run: |
+        opam exec -- make check-externs EXTERNS_SAIL=sail
 
     - name: Test Sail
       # Tests use lots of unix-isms currently (fork, mkdir -p, etc).

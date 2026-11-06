@@ -46,8 +46,6 @@
 
 open Ast
 open Ast_compare
-open Ast_util
-open Ast_defs
 open Type_check
 open Value
 

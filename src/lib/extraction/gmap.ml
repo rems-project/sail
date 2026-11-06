@@ -1,3 +1,4 @@
+[@@@warning "-a"]
 open Datatypes
 open Base
 open Countable

@@ -62,6 +62,7 @@ From Sail Require Domain.Interval.
 From Sail Require Domain.TransferBitvectorInterval.
 From Sail Require PatternMatch.
 From Sail Require TypeAnnot.
+From Sail Require Import Monad.
 
 (**
 Now we define a 'zipper' type [zexp] for the Sail expression ([exp])
@@ -802,51 +803,21 @@ End Residual.
 Module Make (Tannot : TypeAnnot.S) (B : BUILDER Tannot) (L : SAIL_VALUE).
   Module R := Residual Tannot B L.
 
-  Module Monad.
-    Inductive function_return : Type :=
-    | Return_inlined : list (pat Tannot.t * option (exp Tannot.t) * exp Tannot.t) → function_return
-    | Return_value : R.value → function_return.
+  Inductive function_return : Type :=
+  | Return_inlined : list (pat Tannot.t * option (exp Tannot.t) * exp Tannot.t) → function_return
+  | Return_value : R.value → function_return.
 
-    Inductive t {A : Type} : Type :=
-    | Pure : A → t
-    | Early_return : R.value → (unit → t) → t
-    | Exit : R.value → (unit → t) → t
-    | Call : id → list R.value → (function_return → t) → t
-    | Get_config : Ast.loc → list string → typ → (R.value → t) → t
-    | Runtime_type_error : Ast.loc → t
-    | Get_undefined : typ → (R.value → t) → t.
-
-    Arguments t A : clear implicits.
-
-    Fixpoint bind {A B : Type} (m : t A) (f : A → t B) : t B :=
-      match m with
-      | Pure x => f x
-      | Early_return v cont => Early_return v (fun v => bind (cont tt) f)
-      | Exit v cont => Exit v (fun v => bind (cont tt) f)
-      | Call id args cont => Call id args (fun v => bind (cont v) f)
-      | Get_config l key t cont => Get_config l key t (fun v => bind (cont v) f)
-      | Runtime_type_error l => Runtime_type_error l
-      | Get_undefined t cont => Get_undefined t (fun v => bind (cont v) f)
-      end.
-
-    Definition lift_sum {A : Type} (mr : Ast.loc + A) : t A :=
-      match mr with
-      | inl l => Runtime_type_error l
-      | inr r => Pure r
-      end.
-  End Monad.
-
-  Notation "x ← y ; z" := (Monad.bind y (fun x : _ => z))
-    (at level 20, y at level 100, z at level 200, only parsing).
-
-  Definition pure {A : Type} (x : A) : Monad.t A := Monad.Pure x.
+  (** The partial evaluator monad. Variable state is tracked in
+      [R.state] rather than via [Read_var] and [Write_var], so the type
+      of places is empty. *)
+  Definition M (A : Type) : Type := Monad.t R.value function_return Empty_set A.
 
   Definition t := zexp (IdMap.t (option L.t)) R.t R.state Tannot.t.
 
   Definition down (ctx : t)
                   (σ : R.state)
                   (focus : exp Tannot.t)
-                : Monad.t (t * R.state * (exp Tannot.t + R.t)) :=
+                : M (t * R.state * (exp Tannot.t + R.t)) :=
     let 'E_aux aux annot := focus in
     let wrap aux exp := pure (Z_aux aux annot, σ, inl exp) in
     match aux with
@@ -870,8 +841,8 @@ Module Make (Tannot : TypeAnnot.S) (B : BUILDER Tannot) (L : SAIL_VALUE).
         | [] =>
             ret ← Monad.Call f [] pure;
             match ret with
-            | Monad.Return_value r => pure (ctx, σ, inr (r, B.mk_app annot f []))
-            | Monad.Return_inlined arms =>
+            | Return_value r => pure (ctx, σ, inr (r, B.mk_app annot f []))
+            | Return_inlined arms =>
                 pure (
                   Z_aux (Z_match_head (Z_aux (Z_inline ctx None) annot) Match [] (Some arms)) annot,
                   R.push_scope σ, inr (R.from_semilattice (L.mk_unit ()),
@@ -918,7 +889,7 @@ Module Make (Tannot : TypeAnnot.S) (B : BUILDER Tannot) (L : SAIL_VALUE).
     | E_internal_assume constr exp => wrap (Z_single ctx (Internal_assume constr)) exp
     | E_internal_return exp => wrap (Z_single ctx Internal_return) exp
     | E_undef =>
-        u ← Monad.Get_undefined (Tannot.get_type (snd annot)) pure;
+        u ← Monad.Get_undefined (fst annot) (Tannot.get_type (snd annot)) pure;
         pure (ctx, σ, inr (u, B.mk_undef annot))
     | E_assign l exp =>
         let subexps := lexp_subexps l in
@@ -1011,7 +982,7 @@ Module Make (Tannot : TypeAnnot.S) (B : BUILDER Tannot) (L : SAIL_VALUE).
                   (annot : annot Tannot.t)
                   (σ : R.state)
                   (focus : R.t)
-                : Monad.t (t * R.state * (exp Tannot.t + R.t)) :=
+                : M (t * R.state * (exp Tannot.t + R.t)) :=
     match aux with
     | Z_if_cond parent t e =>
         if R.is_true (fst focus) then
@@ -1035,16 +1006,14 @@ Module Make (Tannot : TypeAnnot.S) (B : BUILDER Tannot) (L : SAIL_VALUE).
         match join_inline_return focus parent with
         | Some parent' => pure (parent', σ, inr (R.mk_return annot focus))
         | None =>
-            _ ← Monad.Early_return (fst focus) pure;
-            pure (parent, σ, inr (R.mk_return annot focus))
+            Monad.Early_return (fst focus)
         end
 
     | Z_inline parent acc =>
         pure (parent, R.pop_scope σ, inr (R.mk_inline annot acc focus))
 
     | Z_exit parent =>
-        _ ← Monad.Exit (fst focus) pure;
-        pure (parent, σ, inr (R.mk_exit annot focus))
+        Monad.Exit (fst focus)
 
     | Z_pair_1 parent γ y =>
         pure (Z_aux (Z_pair_2 parent γ focus) annot, σ, inl y)
@@ -1106,9 +1075,9 @@ Module Make (Tannot : TypeAnnot.S) (B : BUILDER Tannot) (L : SAIL_VALUE).
         | _, _, [] =>
             ret ← Monad.Call f (List.rev (List.map fst (focus :: evaluated))) pure;
             match ret with
-            | Monad.Return_value r =>
+            | Return_value r =>
                 pure (parent, σ, inr (r, B.mk_app annot f (List.rev (List.map snd (focus :: evaluated)))))
-            | Monad.Return_inlined arms =>
+            | Return_inlined arms =>
                 match evaluated with
                 | [] =>
                     pure (Z_aux (Z_match_head (Z_aux (Z_inline parent None) annot) Match [] (Some arms)) annot, R.push_scope σ, inr focus)
@@ -1223,7 +1192,7 @@ Module Make (Tannot : TypeAnnot.S) (B : BUILDER Tannot) (L : SAIL_VALUE).
   Definition step (ctx : t)
                   (σ : R.state)
                   (focus : exp Tannot.t + R.t)
-                : Monad.t (t * R.state * (exp Tannot.t + R.t)) :=
+                : M (t * R.state * (exp Tannot.t + R.t)) :=
     match focus with
     | inl exp => down ctx σ exp
     | inr v  =>

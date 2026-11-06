@@ -47,36 +47,6 @@
 $ifndef _SMT
 $define _SMT
 
-// see http://smtlib.cs.uiowa.edu/theories-Ints.shtml
-
-/*! Euclidean division */
-val ediv_int = pure {
-  ocaml: "quotient",
-  interpreter: "quotient",
-  lem: "integerDiv",
-  coq: "e_div",
-  lean: "Int.ediv",
-  _: "ediv_int"
-} : forall 'n 'm. (int('n), int('m)) -> int(div('n, 'm))
-
-val emod_int = pure {
-  ocaml: "modulus",
-  interpreter: "modulus",
-  lem: "integerMod",
-  coq: "e_modulo",
-  lean: "Int.emod",
-  _: "emod_int"
-} : forall 'n 'm. (int('n), int('m)) -> int(mod('n, 'm))
-
-val abs_int_atom = pure {
-  ocaml: "abs_int",
-  interpreter: "abs_int",
-  lem: "integerAbs",
-  coq: "Z.abs",
-  lean: "Int.natAbs",
-  _: "abs_int"
-} : forall 'n. int('n) -> int(abs('n))
-
 overload abs_int = {abs_int_atom}
 
 $ifdef TEST

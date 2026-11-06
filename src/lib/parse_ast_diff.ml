@@ -47,8 +47,6 @@
 open Parse_ast
 open Parse_ast.Attribute_data
 
-module Big_int = Nat_big_num
-
 let ( &&& ) (lhs : l option) (rhs : l option Lazy.t) : l option =
   match lhs with
   | Some l -> Some l
@@ -64,7 +62,7 @@ let diff_kind (K_aux (k1, l)) (K_aux (k2, _)) = if k1 = k2 then None else Some l
 
 let diff_kid (Kid_aux (Var v1, l)) (Kid_aux (Var v2, _)) = if v1 = v2 then None else Some l
 
-let diff_id (Id_aux (id1, l)) (Id_aux (id2, l)) = if id1 = id2 then None else Some l
+let diff_id (Id_aux (id1, l)) (Id_aux (id2, _)) = if id1 = id2 then None else Some l
 
 let diff_lit (L_aux (lit1, l)) (L_aux (lit2, _)) = if lit1 = lit2 then None else Some l
 
@@ -105,7 +103,7 @@ let rec diff_atyp lhs rhs =
       match rhs with ATyp_lit lit2 -> diff_lit lit1 lit2 | _ -> Some l
     )
   | ATyp_nset nums1 -> (
-      match rhs with ATyp_nset nums2 -> diff_eq_pred ~at:l (Util.equal_list Big_int.equal) nums1 nums2 | _ -> Some l
+      match rhs with ATyp_nset nums2 -> diff_eq_pred ~at:l (Util.equal_list Z.equal) nums1 nums2 | _ -> Some l
     )
   | ATyp_in (n1, set1) -> (
       match rhs with ATyp_in (n2, set2) -> diff_atyp n1 n2 &&& lazy (diff_atyp set1 set2) | _ -> Some l
@@ -215,7 +213,7 @@ let rec diff_attribute_data (AD_aux (lhs, l)) (AD_aux (rhs, _)) =
       match rhs with AD_list ads2 -> diff_list ~at:l diff_attribute_data ads1 ads2 | _ -> Some l
     )
   | AD_num n -> (
-      match rhs with AD_num m -> diff_eq_pred ~at:l Big_int.equal n m | _ -> Some l
+      match rhs with AD_num m -> diff_eq_pred ~at:l Z.equal n m | _ -> Some l
     )
   | AD_string _ -> diff_eq ~at:l lhs rhs
   | AD_bool _ -> diff_eq ~at:l lhs rhs
@@ -377,7 +375,7 @@ let rec diff_exp lhs rhs =
       | _ -> Some l
     )
   | E_vector_append (x1, y1) -> (
-      match rhs with E_vector_append (x2, y2) -> diff_exp x1 x2 &&& lazy (diff_exp x1 x2) | _ -> Some l
+      match rhs with E_vector_append (x2, y2) -> diff_exp x1 x2 &&& lazy (diff_exp y1 y2) | _ -> Some l
     )
   | E_list exps1 -> (
       match rhs with E_list exps2 -> diff_list ~at:l diff_exp exps1 exps2 | _ -> Some l
@@ -819,9 +817,9 @@ let diff_subst (IS_aux (lhs, l)) (IS_aux (rhs, _)) =
       match rhs with IS_typ (v2, atyp2) -> diff_kid v1 v2 &&& lazy (diff_atyp atyp1 atyp2) | _ -> Some l
     )
 
-let diff_dec_spec (DEC_aux (lhs, l)) (DEC_aux (rhs, _)) =
-  let (DEC_reg (atyp1, id1, opt_exp1)) = lhs in
-  let (DEC_reg (atyp2, id2, opt_exp2)) = rhs in
+let diff_reg_spec (Reg_aux (lhs, l)) (Reg_aux (rhs, _)) =
+  let (Reg (atyp1, id1, opt_exp1)) = lhs in
+  let (Reg (atyp2, id2, opt_exp2)) = rhs in
   diff_id id1 id2 &&& lazy (diff_atyp atyp1 atyp2) &&& lazy (diff_option ~at:l diff_exp opt_exp1 opt_exp2)
 
 let diff_outcome (OV_aux (lhs, l)) (OV_aux (rhs, _)) =
@@ -834,64 +832,64 @@ let diff_default_typing_spec (DT_aux (lhs, l)) (DT_aux (rhs, _)) =
   let (DT_order (k2, atyp2)) = rhs in
   diff_kind k1 k2 &&& lazy (diff_atyp atyp1 atyp2)
 
-let rec diff_def (DEF_aux (lhs, l)) (DEF_aux (rhs, _)) =
+let rec diff_def (Def_aux (lhs, l)) (Def_aux (rhs, _)) =
   match lhs with
-  | DEF_type td1 -> (
-      match rhs with DEF_type td2 -> diff_type_def td1 td2 | _ -> Some l
+  | Def_type td1 -> (
+      match rhs with Def_type td2 -> diff_type_def td1 td2 | _ -> Some l
     )
-  | DEF_constraint atyp1 -> (
-      match rhs with DEF_constraint atyp2 -> diff_atyp atyp1 atyp2 | _ -> Some l
+  | Def_constraint atyp1 -> (
+      match rhs with Def_constraint atyp2 -> diff_atyp atyp1 atyp2 | _ -> Some l
     )
-  | DEF_fundef fdef1 -> (
-      match rhs with DEF_fundef fdef2 -> diff_fundef fdef1 fdef2 | _ -> Some l
+  | Def_fundef fdef1 -> (
+      match rhs with Def_fundef fdef2 -> diff_fundef fdef1 fdef2 | _ -> Some l
     )
-  | DEF_mapdef mdef1 -> (
-      match rhs with DEF_mapdef mdef2 -> diff_mapdef mdef1 mdef2 | _ -> Some l
+  | Def_mapdef mdef1 -> (
+      match rhs with Def_mapdef mdef2 -> diff_mapdef mdef1 mdef2 | _ -> Some l
     )
-  | DEF_impl funcl1 -> (
-      match rhs with DEF_impl funcl2 -> diff_funcl funcl1 funcl2 | _ -> Some l
+  | Def_impl funcl1 -> (
+      match rhs with Def_impl funcl2 -> diff_funcl funcl1 funcl2 | _ -> Some l
     )
-  | DEF_let (pat1, exp1) -> (
-      match rhs with DEF_let (pat2, exp2) -> diff_pat pat1 pat2 &&& lazy (diff_exp exp1 exp2) | _ -> Some l
+  | Def_let (pat1, exp1) -> (
+      match rhs with Def_let (pat2, exp2) -> diff_pat pat1 pat2 &&& lazy (diff_exp exp1 exp2) | _ -> Some l
     )
-  | DEF_overload (id1, ids1) -> (
+  | Def_overload (id1, ids1) -> (
       match rhs with
-      | DEF_overload (id2, ids2) -> diff_id id1 id2 &&& lazy (diff_list ~at:l diff_id ids1 ids2)
+      | Def_overload (id2, ids2) -> diff_id id1 id2 &&& lazy (diff_list ~at:l diff_id ids1 ids2)
       | _ -> Some l
     )
-  | DEF_fixity (prec1, n1, tok1) -> (
+  | Def_fixity (prec1, n1, tok1) -> (
       match rhs with
-      | DEF_fixity (prec2, n2, tok2) ->
-          diff_eq ~at:l prec1 prec2 &&& lazy (diff_eq_pred ~at:l Big_int.equal n1 n2) &&& lazy (diff_eq ~at:l tok1 tok2)
+      | Def_fixity (prec2, n2, tok2) ->
+          diff_eq ~at:l prec1 prec2 &&& lazy (diff_eq_pred ~at:l Z.equal n1 n2) &&& lazy (diff_eq ~at:l tok1 tok2)
       | _ -> Some l
     )
-  | DEF_val vs1 -> (
-      match rhs with DEF_val vs2 -> diff_val_spec vs1 vs2 | _ -> Some l
+  | Def_val vs1 -> (
+      match rhs with Def_val vs2 -> diff_val_spec vs1 vs2 | _ -> Some l
     )
-  | DEF_outcome (o1, defs1) -> (
+  | Def_outcome (o1, defs1) -> (
       match rhs with
-      | DEF_outcome (o2, defs2) -> diff_outcome o1 o2 &&& lazy (diff_list ~at:l diff_def defs1 defs2)
+      | Def_outcome (o2, defs2) -> diff_outcome o1 o2 &&& lazy (diff_list ~at:l diff_def defs1 defs2)
       | _ -> Some l
     )
-  | DEF_instantiation (id1, substs1) -> (
+  | Def_instantiation (id1, substs1) -> (
       match rhs with
-      | DEF_instantiation (id2, substs2) -> diff_id id1 id2 &&& lazy (diff_list ~at:l diff_subst substs1 substs2)
+      | Def_instantiation (id2, substs2) -> diff_id id1 id2 &&& lazy (diff_list ~at:l diff_subst substs1 substs2)
       | _ -> Some l
     )
-  | DEF_default dtspec1 -> (
-      match rhs with DEF_default dtspec2 -> diff_default_typing_spec dtspec1 dtspec2 | _ -> Some l
+  | Def_default dtspec1 -> (
+      match rhs with Def_default dtspec2 -> diff_default_typing_spec dtspec1 dtspec2 | _ -> Some l
     )
-  | DEF_scattered sdef1 -> (
-      match rhs with DEF_scattered sdef2 -> diff_scattered_def sdef1 sdef2 | _ -> Some l
+  | Def_scattered sdef1 -> (
+      match rhs with Def_scattered sdef2 -> diff_scattered_def sdef1 sdef2 | _ -> Some l
     )
-  | DEF_measure (id1, pat1, exp1) -> (
+  | Def_measure (id1, pat1, exp1) -> (
       match rhs with
-      | DEF_measure (id2, pat2, exp2) -> diff_id id1 id2 &&& lazy (diff_pat pat1 pat2) &&& lazy (diff_exp exp1 exp2)
+      | Def_measure (id2, pat2, exp2) -> diff_id id1 id2 &&& lazy (diff_pat pat1 pat2) &&& lazy (diff_exp exp1 exp2)
       | _ -> Some l
     )
-  | DEF_loop_measures (id1, measures1) -> (
+  | Def_loop_measures (id1, measures1) -> (
       match rhs with
-      | DEF_loop_measures (id2, measures2) ->
+      | Def_loop_measures (id2, measures2) ->
           diff_id id1 id2
           &&& lazy
                 (diff_list ~at:l
@@ -900,27 +898,27 @@ let rec diff_def (DEF_aux (lhs, l)) (DEF_aux (rhs, _)) =
                 )
       | _ -> Some l
     )
-  | DEF_register dec_spec1 -> (
-      match rhs with DEF_register dec_spec2 -> diff_dec_spec dec_spec1 dec_spec2 | _ -> Some l
+  | Def_register reg_spec1 -> (
+      match rhs with Def_register reg_spec2 -> diff_reg_spec reg_spec1 reg_spec2 | _ -> Some l
     )
-  | DEF_pragma (cmd1, arg1) -> (
+  | Def_pragma (cmd1, arg1) -> (
       match rhs with
-      | DEF_pragma (cmd2, arg2) -> diff_eq ~at:l cmd1 cmd2 &&& lazy (diff_pragma ~at:l arg1 arg2)
+      | Def_pragma (cmd2, arg2) -> diff_eq ~at:l cmd1 cmd2 &&& lazy (diff_pragma ~at:l arg1 arg2)
       | _ -> Some l
     )
-  | DEF_private def1 -> (
-      match rhs with DEF_private def2 -> diff_def def1 def2 | _ -> Some l
+  | Def_private def1 -> (
+      match rhs with Def_private def2 -> diff_def def1 def2 | _ -> Some l
     )
-  | DEF_attribute (attrs1, def1) -> (
+  | Def_attribute (attrs1, def1) -> (
       match rhs with
-      | DEF_attribute (attrs2, def2) -> diff_attributes ~at:l attrs1 attrs2 &&& lazy (diff_def def1 def2)
+      | Def_attribute (attrs2, def2) -> diff_attributes ~at:l attrs1 attrs2 &&& lazy (diff_def def1 def2)
       | _ -> Some l
     )
-  | DEF_doc (comment1, def1) -> (
+  | Def_doc (comment1, def1) -> (
       match rhs with
-      | DEF_doc (comment2, def2) -> diff_eq ~at:l comment1 comment2 &&& lazy (diff_def def1 def2)
+      | Def_doc (comment2, def2) -> diff_eq ~at:l comment1 comment2 &&& lazy (diff_def def1 def2)
       | _ -> Some l
     )
-  | DEF_internal_mutrec fundefs1 -> (
-      match rhs with DEF_internal_mutrec fundefs2 -> diff_list ~at:l diff_fundef fundefs1 fundefs2 | _ -> Some l
+  | Def_internal_mutrec fundefs1 -> (
+      match rhs with Def_internal_mutrec fundefs2 -> diff_list ~at:l diff_fundef fundefs1 fundefs2 | _ -> Some l
     )

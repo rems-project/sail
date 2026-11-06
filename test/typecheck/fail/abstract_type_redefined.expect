@@ -1,0 +1,5 @@
+[93mType error[0m:
+[96mfail/abstract_type_redefined.sail[0m:5.5-6:
+5[96m |[0mtype n : Int
+ [91m |[0m     [91m^[0m
+ [91m |[0m Cannot introduce abstract type n as a type or synonym with that name already exists

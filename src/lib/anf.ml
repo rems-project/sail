@@ -52,8 +52,6 @@ open Jib_util
 open Type_check
 open PPrint
 
-module Big_int = Nat_big_num
-
 (**************************************************************************)
 (* 1. Conversion to A-normal form (ANF)                                   *)
 (**************************************************************************)
@@ -665,7 +663,7 @@ let rec anf_pat ?(global = false) (P_aux (p_aux, (l, tannot)) as pat) =
             let typ = typ_of_pat pat in
             let env = env_of_pat pat in
             match destruct_bitvector env typ with
-            | Some (Nexp_aux (Nexp_constant n, _)) -> (Big_int.to_int n, anf_pat ~global pat)
+            | Some (Nexp_aux (Nexp_constant n, _)) -> (Z.to_int n, anf_pat ~global pat)
             | _ ->
                 Reporting.unreachable l __POS__
                   ("No width information for vector concat subpattern during ANF conversion: " ^ string_of_pat pat)

@@ -1,0 +1,5 @@
+[93mType error[0m:
+[96mfail/list_pat_non_list.sail[0m:6.2-7:
+6[96m |[0m  [|y|] => (),
+ [91m |[0m  [91m^---^[0m
+ [91m |[0m Cannot match list pattern [|y|] against non-list type int('_#x)

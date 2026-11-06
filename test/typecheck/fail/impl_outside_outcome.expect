@@ -1,0 +1,5 @@
+[93mType error[0m:
+[96mfail/impl_outside_outcome.sail[0m:4.5-13:
+4[96m |[0mimpl f() = ()
+ [91m |[0m     [91m^------^[0m
+ [91m |[0m Cannot declare an implementation outside of an outcome

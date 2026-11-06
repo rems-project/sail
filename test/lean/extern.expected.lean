@@ -62,7 +62,7 @@ open option
 def __id (x : Int) : Int :=
   x
 
-/-- Type quantifiers: k_ex1347_ : Bool, k_ex1346_ : Bool -/
+/-- Type quantifiers: k_ex1356_ : Bool, k_ex1355_ : Bool -/
 def neq_bool (x : Bool) (y : Bool) : Bool :=
   (! (x == y))
 
@@ -215,7 +215,7 @@ def extern_sub (_ : Unit) : Int :=
   (5 -i (Neg.neg 4))
 
 def extern_sub_nat (_ : Unit) : Nat :=
-  (5 -i 4)
+  (Nat.sub 5 4)
 
 def extern_negate (_ : Unit) : Int :=
   (Neg.neg 5)
@@ -236,7 +236,7 @@ def extern__shl_int (_ : Unit) : Int :=
   (Int.shiftl 4 2)
 
 def extern__shr32 (_ : Unit) : Int :=
-  (Int.shiftl 30 1)
+  (Int.shiftr 30 1)
 
 def extern__shr_int (_ : Unit) : Int :=
   (Int.shiftr 8 2)

@@ -87,17 +87,17 @@ let compute ~config handle =
   | source, _, formatted when String.equal formatted source -> Ok []
   | source, _, formatted -> Ok [Lsp.Types.TextEdit.create ~newText:formatted ~range:(whole_document source)]
 
-let def_loc (Parse_ast.DEF_aux (_, l)) = l
+let def_loc (Parse_ast.Def_aux (_, l)) = l
 
 (* The extent of a definition in the source it was parsed from. A definition with
    attributes, a doc comment or a [private] marker attached to it is a definition
    wrapped in another one, and the wrapper's location spans only the wrapper
    itself - the [$[attr]] and not what it is attached to - so the extent has to
    be stitched together from the wrapper and the definition inside it. *)
-let rec def_extent (Parse_ast.DEF_aux (aux, l)) =
+let rec def_extent (Parse_ast.Def_aux (aux, l)) =
   let wrapper = Reporting.simp_loc l in
   match aux with
-  | Parse_ast.DEF_private def | Parse_ast.DEF_attribute (_, def) | Parse_ast.DEF_doc (_, def) -> (
+  | Parse_ast.Def_private def | Parse_ast.Def_attribute (_, def) | Parse_ast.Def_doc (_, def) -> (
       match (wrapper, def_extent def) with
       | Some (p1, _), Some (_, p2) -> Some (p1, p2)
       | Some _, None -> wrapper

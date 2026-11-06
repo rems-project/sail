@@ -1,5 +1,8 @@
+[@@@warning "-a"]
 
 type __ = Obj.t
+
+type coq_Empty_set = |
 
 type reflect =
 | ReflectT

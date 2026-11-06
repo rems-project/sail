@@ -100,7 +100,7 @@ let opt_disable_matchbv : bool ref = ref true
 let lean_version : string = "lean4:v4.29.0"
 let mathlib_version : string = "v4.29.0"
 let lib_default_git : string = "https://github.com/rems-project/lean-sail"
-let lib_default_rev : string = "v5"
+let lib_default_rev : string = "v9"
 
 let lean_options =
   [
@@ -124,7 +124,7 @@ let lean_options =
         ),
       "use matchbv in the Lean output"
     );
-    ( Flag.create ~prefix:["lean"] "line_width",
+    ( Flag.create ~prefix:["lean"] ~arg:"width" "line_width",
       Arg.Int (fun n -> Pretty_print_lean.opt_line_width := n),
       "maximum line length of the generated Lean code"
     );
@@ -187,6 +187,7 @@ let lean_rewrites =
     ("move_termination_measures", []);
     ("instantiate_outcomes", [String_arg "lean"; Bool_arg true]);
     ("realize_mappings", []);
+    ("rewrite_if_eq", [IdSet_arg Pretty_print_lean.non_beq_types]);
     ("remove_vector_subrange_pats", []);
     ("remove_duplicate_valspecs", []);
     ("toplevel_string_append", []);
@@ -199,6 +200,7 @@ let lean_rewrites =
     ("tuple_assignments", []);
     ("vector_concat_assignments", []);
     ("simple_assignments", []);
+    ("remove_mixed_bitvector_literal_pats", [If_flag opt_disable_matchbv]);
     ("remove_vector_concat", [If_flag opt_disable_matchbv]);
     ("remove_bitvector_pats", [If_flag opt_disable_matchbv]);
     ("recheck_defs", []);
@@ -218,6 +220,7 @@ let lean_rewrites =
     (* ("remove_assert", rewrite_ast_remove_assert); *)
     ("top_sort_defs", []);
     ("add_register_init_function", []);
+    ("attach_effects", []);
     ("const_prop_mutrec", [String_arg "lean"]);
     ("exp_lift_assign", []);
     ("early_return", []);
@@ -235,7 +238,7 @@ let lean_rewrites =
     ("attach_effects", []);
     ("remove_blocks", []);
     ("attach_effects", []);
-    (* ("letbind_effects", []); *)
+    ("lift_out_var_updates", []);
     ("remove_e_assign", []);
     (* ^^^^ replace loops by dummy function calls *)
     ("attach_effects", []);

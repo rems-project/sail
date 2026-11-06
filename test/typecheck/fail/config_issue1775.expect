@@ -1,0 +1,10 @@
+[93mError[0m:
+[96mfail/config_issue1775.sail[0m:6.17-31:
+6[96m |[0m  let x : bool = config foo.bar;
+ [91m |[0m                 [91m^------------^[0m
+ [91m |[0m Attempting to access key foo.bar, but various subkeys have already been used
+ [91m |[0m 
+ [91m |[0m For example:
+ [91m |[0m [96mfail/config_issue1775.sail[0m:7.17-27:
+ [91m |[0m 7[96m |[0m  let y : bool = config foo;
+ [91m |[0m  [91m |[0m                 [91m^--------^[0m [91mused here[0m

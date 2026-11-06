@@ -48,13 +48,11 @@ open Ast
 open Ast_compare
 open Ast_defs
 open Ast_util
-open Bit
 open Parse_ast.Attribute_data
 open Jib
 open Jib_util
 open Jib_visitor
 open Type_check
-open Value2
 module Document = Pretty_print_sail.Document
 
 open Anf
@@ -86,8 +84,8 @@ type funwire = Arg of int | Ret | Invoke
     instructions (to deallocate that memory) and possibly typing information about what has been translated. **)
 
 (* FIXME: This stage shouldn't care about this *)
-let max_int n = Big_int.pred (Big_int.pow_int_positive 2 (n - 1))
-let min_int n = Big_int.negate (Big_int.pow_int_positive 2 (n - 1))
+let max_int n = Z.pred (Z.shift_left Z.one (n - 1))
+let min_int n = Z.neg (Z.shift_left Z.one (n - 1))
 
 let is_ct_enum = function CT_enum _ -> true | _ -> false
 
@@ -245,7 +243,7 @@ let rec mangle_string_of_ctyp ctx = function
   | CT_lbits -> "b"
   | CT_sbits n -> "S" ^ string_of_int n
   | CT_fbits n -> "B" ^ string_of_int n
-  | CT_constant n -> "C" ^ Big_int.to_string n
+  | CT_constant n -> "C" ^ Z.to_string n
   | CT_unit -> "u"
   | CT_bool -> "o"
   | CT_real -> "r"
@@ -300,7 +298,7 @@ let callgraph cdefs =
   List.fold_left
     (fun graph cdef ->
       match cdef with
-      | CDEF_aux (CDEF_fundef (id, _, _, body), _) ->
+      | CDef_aux (CDef_fundef (id, _, _, body), _) ->
           let graph = ref graph in
           List.iter
             (iter_instr (function
@@ -382,7 +380,7 @@ module Make (C : CONFIG) = struct
         [iraw (Printf.sprintf "sail_function_entry(%d, \"%s\", %s);" function_id (string_of_id id) args)]
     | _ -> []
 
-  let unit_cval = V_lit (VL_unit, CT_unit)
+  let unit_cval = V_lit (V_unit, CT_unit)
 
   let assert_exception l msg =
     let exception_ctyp = CT_variant (mk_id "exception", []) in
@@ -415,7 +413,7 @@ module Make (C : CONFIG) = struct
           ([iinit l ctyp' gs cval], V_id (gs, ctyp'), [iclear ctyp' gs])
         )
         else ([], cval, [])
-    | AV_id (Name (id, _), Enum typ) -> ([], V_member (id, ctyp_of_typ ctx typ), [])
+    | AV_id (Name (id, _), Enum typ) -> ([], V_lit (V_member id, ctyp_of_typ ctx typ), [])
     | AV_id (id, typ) -> (
         match get_variable_ctyp id ctx with
         | Some (_, ctyp) -> ([], V_id (id, ctyp), [])
@@ -427,33 +425,29 @@ module Make (C : CONFIG) = struct
         | None ->
             Reporting.unreachable l __POS__ ("Failed to find a C-type for abstract type variable " ^ string_of_id id)
       )
-    | AV_ref (id, typ) -> ([], V_lit (VL_ref (string_of_id id), CT_ref (ctyp_of_typ ctx (lvar_typ typ))), [])
-    | AV_lit (L_aux (L_string str, _), typ) -> ([], V_lit (VL_string (String.escaped str), ctyp_of_typ ctx typ), [])
-    | AV_lit (L_aux (L_num n, _), typ) when C.ignore_64 -> ([], V_lit (VL_int n, ctyp_of_typ ctx typ), [])
-    | AV_lit (L_aux (L_num n, _), typ) when Big_int.less_equal (min_int 64) n && Big_int.less_equal n (max_int 64) ->
+    | AV_ref (id, typ) -> ([], V_lit (V_ref id, CT_ref (ctyp_of_typ ctx (lvar_typ typ))), [])
+    | AV_lit (L_aux (L_string str, _), typ) -> ([], V_lit (V_string (String.escaped str), ctyp_of_typ ctx typ), [])
+    | AV_lit (L_aux (L_num n, _), typ) when C.ignore_64 -> ([], V_lit (V_int n, ctyp_of_typ ctx typ), [])
+    | AV_lit (L_aux (L_num n, _), typ) when Z.leq (min_int 64) n && Z.leq n (max_int 64) ->
         let gs = ngensym () in
-        ([iinit l CT_lint gs (V_lit (VL_int n, CT_fint 64))], V_id (gs, CT_lint), [iclear CT_lint gs])
+        let ctyp = ctyp_of_typ ctx typ in
+        ([iinit l ctyp gs (V_lit (V_int n, CT_fint 64))], V_id (gs, ctyp), [iclear ctyp gs])
     | AV_lit (L_aux (L_num n, _), typ) ->
         let gs = ngensym () in
-        ( [iinit l CT_lint gs (V_lit (VL_string (Big_int.to_string n), CT_string))],
-          V_id (gs, CT_lint),
-          [iclear CT_lint gs]
-        )
+        ([iinit l CT_lint gs (V_lit (V_string (Z.to_string n), CT_string))], V_id (gs, CT_lint), [iclear CT_lint gs])
     | AV_lit (L_aux (((L_hex _ | L_bin _) as l_aux), _), _) ->
         let bitlist =
-          ( match l_aux with
-            | L_hex hex -> BitList.of_hex_lit hex
-            | L_bin bin -> BitList.of_bin_lit bin
-            | _ -> assert false
-            )
-          |> List.map (function B0 -> Sail2_values.B0 | B1 -> Sail2_values.B1)
+          match l_aux with
+          | L_hex hex -> BitList.of_hex_lit hex
+          | L_bin bin -> BitList.of_bin_lit bin
+          | _ -> assert false
         in
         let len = List.length bitlist in
         (* For small bitvectors, or when we permit arbitrary-length literals > 64 we can emit a literal directly,
            otherwise we use the special append_64 builtin to construct a literal from 64-bit chunks. *)
-        if len <= 64 || C.ignore_64 then ([], V_lit (VL_bits bitlist, CT_fbits len), [])
+        if len <= 64 || C.ignore_64 then ([], V_lit (V_bitvector (Sail_lib.bits_of_bit_list bitlist), CT_fbits len), [])
         else (
-          let bv_literal len bits = V_lit (VL_bits bits, CT_fbits len) in
+          let bv_literal len bits = V_lit (V_bitvector (Sail_lib.bits_of_bit_list bits), CT_fbits len) in
           let first_chunk = Util.take (len mod 64) bitlist |> bv_literal (len mod 64) in
           let chunks = Util.drop (len mod 64) bitlist |> chunkify 64 |> List.map (bv_literal 64) in
           let gs = ngensym () in
@@ -465,19 +459,19 @@ module Make (C : CONFIG) = struct
             [iclear CT_lbits gs]
           )
         )
-    | AV_lit (L_aux (L_true, _), _) -> ([], V_lit (VL_bool true, CT_bool), [])
-    | AV_lit (L_aux (L_false, _), _) -> ([], V_lit (VL_bool false, CT_bool), [])
+    | AV_lit (L_aux (L_true, _), _) -> ([], V_lit (V_bool true, CT_bool), [])
+    | AV_lit (L_aux (L_false, _), _) -> ([], V_lit (V_bool false, CT_bool), [])
     | AV_lit (L_aux (L_real r, _), _) ->
-        let str = Q.to_string (Util.Rational.from_rocq r) in
-        if C.use_real then ([], V_lit (VL_real str, CT_real), [])
+        if C.use_real then ([], V_lit (V_real r, CT_real), [])
         else (
+          let str = Q.to_string (Util.Rational.from_rocq r) in
           let gs = ngensym () in
-          ([iinit l CT_real gs (V_lit (VL_string str, CT_string))], V_id (gs, CT_real), [iclear CT_real gs])
+          ([iinit l CT_real gs (V_lit (V_string str, CT_string))], V_id (gs, CT_real), [iclear CT_real gs])
         )
-    | AV_lit (L_aux (L_unit, _), _) -> ([], V_lit (VL_unit, CT_unit), [])
+    | AV_lit (L_aux (L_unit, _), _) -> ([], V_lit (V_unit, CT_unit), [])
     | AV_undef typ ->
         let ctyp = ctyp_of_typ ctx typ in
-        ([], V_lit (VL_undefined, ctyp), [])
+        ([], V_undef ctyp, [])
     | AV_tuple avals ->
         let elements = List.map (compile_aval l ctx) avals in
         let cvals = List.map (fun (_, cval, _) -> cval) elements in
@@ -519,7 +513,7 @@ module Make (C : CONFIG) = struct
     | AV_vector ([], typ) -> (
         let vector_ctyp = ctyp_of_typ ctx typ in
         match ctyp_of_typ ctx typ with
-        | CT_fbits 0 -> ([], V_lit (VL_bits [], vector_ctyp), [])
+        | CT_fbits 0 -> ([], V_lit (V_bitvector (Sail_lib.zeros Z.zero), vector_ctyp), [])
         | _ ->
             let gs = ngensym () in
             ( [
@@ -527,7 +521,7 @@ module Make (C : CONFIG) = struct
                 iextern l
                   (CL_id (gs, vector_ctyp))
                   (mk_id "internal_vector_init", [])
-                  [V_lit (VL_int Big_int.zero, CT_fint 64)];
+                  [V_lit (V_int Z.zero, CT_fint 64)];
               ],
               V_id (gs, vector_ctyp),
               [iclear vector_ctyp gs]
@@ -538,18 +532,12 @@ module Make (C : CONFIG) = struct
         let len = List.length avals in
         let gs = ngensym () in
         let ctyp = CT_fbits len in
-        let mask i =
-          VL_bits
-            (Util.list_init (63 - i) (fun _ -> Sail2_values.B0)
-            @ [Sail2_values.B1]
-            @ Util.list_init i (fun _ -> Sail2_values.B0)
-            )
-        in
+        let mask i = V_bitvector (Sail_lib.shiftl (Sail_lib.to_bits (Z.of_int len) (Z.of_int 1)) (Z.of_int i)) in
         let aval_mask i aval =
           let setup, cval, cleanup = compile_aval l ctx aval in
           match cval with
-          | V_lit (VL_bits [Sail2_values.B0], _) -> []
-          | V_lit (VL_bits [Sail2_values.B1], _) ->
+          | V_lit (V_bitvector bv, _) when Z.equal (Sail_lib.uint bv) Z.zero -> []
+          | V_lit (V_bitvector bv, _) when Z.equal (Sail_lib.uint bv) (Z.of_int 1) ->
               [icopy l (CL_id (gs, ctyp)) (V_call (Bvor, [V_id (gs, ctyp); V_lit (mask i, ctyp)]))]
           | _ ->
               setup
@@ -557,14 +545,11 @@ module Make (C : CONFIG) = struct
                   iextern l
                     (CL_id (gs, ctyp))
                     (mk_id "update_fbits", [])
-                    [V_id (gs, ctyp); V_lit (VL_int (Big_int.of_int i), CT_constant (Big_int.of_int i)); cval];
+                    [V_id (gs, ctyp); V_lit (V_int (Z.of_int i), CT_constant (Z.of_int i)); cval];
                 ]
               @ cleanup
         in
-        ( [
-            idecl l ctyp gs;
-            icopy l (CL_id (gs, ctyp)) (V_lit (VL_bits (Util.list_init len (fun _ -> Sail2_values.B0)), ctyp));
-          ]
+        ( [idecl l ctyp gs; icopy l (CL_id (gs, ctyp)) (V_lit (V_bitvector (Sail_lib.zeros (Z.of_int len)), ctyp))]
           @ List.concat (List.mapi aval_mask (List.rev avals)),
           V_id (gs, ctyp),
           []
@@ -591,7 +576,7 @@ module Make (C : CONFIG) = struct
               iextern l
                 (CL_id (gs, vector_ctyp))
                 (mk_id "internal_vector_update", [])
-                [V_id (gs, vector_ctyp); V_lit (VL_int (Big_int.of_int i), CT_fint 64); cval];
+                [V_id (gs, vector_ctyp); V_lit (V_int (Z.of_int i), CT_fint 64); cval];
             ]
           @ conversion_cleanup @ cleanup
         in
@@ -600,7 +585,7 @@ module Make (C : CONFIG) = struct
             iextern l
               (CL_id (gs, vector_ctyp))
               (mk_id "internal_vector_init", [])
-              [V_lit (VL_int (Big_int.of_int len), CT_fint 64)];
+              [V_lit (V_int (Z.of_int len), CT_fint 64)];
           ]
           @ List.concat (List.mapi aval_set (if direction then List.rev avals else avals)),
           V_id (gs, vector_ctyp),
@@ -697,19 +682,19 @@ module Make (C : CONFIG) = struct
     let rec if_chain = function [] -> [] | [(_, e)] -> e | (i, t) :: e -> [iif l i t (if_chain e)] in
     Bindings.bindings ctx.abstracts
     |> List.map (fun (id, ctyp) ->
-        (V_call (String_eq, [V_id (string_id, CT_string); V_lit (VL_string (string_of_id id), CT_string)]), f id ctyp)
+        (V_call (String_eq, [V_id (string_id, CT_string); V_lit (V_string (string_of_id id), CT_string)]), f id ctyp)
     )
     |> if_chain
 
   let static_load l ctyp f =
-    let loaded, loaded_instr = istatic l CT_bool (VL_bool false) in
-    let s, s_instr = istatic l ctyp VL_undefined in
+    let loaded, loaded_instr = istatic l CT_bool (Some (V_bool false)) in
+    let s, s_instr = istatic l ctyp None in
     ( [
         loaded_instr;
         s_instr;
         iif l
           (V_call (Bnot, [V_id (loaded, CT_bool)]))
-          (f s @ [icopy l (CL_id (loaded, CT_bool)) (V_lit (VL_bool true, CT_bool))])
+          (f s @ [icopy l (CL_id (loaded, CT_bool)) (V_lit (V_bool true, CT_bool))])
           [];
       ],
       (fun clexp -> icopy l clexp (V_id (s, ctyp))),
@@ -719,7 +704,7 @@ module Make (C : CONFIG) = struct
   let compile_config' l ctx key ctyp =
     let key_name = ngensym () in
     let json = ngensym () in
-    let args = [V_lit (VL_int (Big_int.of_int (List.length key)), CT_fint 64); V_id (key_name, CT_json_key)] in
+    let args = [V_lit (V_int (Z.of_int (List.length key)), CT_fint 64); V_id (key_name, CT_json_key)] in
     let init =
       [
         ijson_key l key_name key;
@@ -815,8 +800,8 @@ module Make (C : CONFIG) = struct
               (fun rest m ->
                 [
                   iif l
-                    (V_call (String_eq, [V_id (enum_str, CT_string); V_lit (VL_string (string_of_id m), CT_string)]))
-                    [icopy l (CL_id (enum_name, enum_ctyp)) (V_member (m, enum_ctyp))]
+                    (V_call (String_eq, [V_id (enum_str, CT_string); V_lit (V_string (string_of_id m), CT_string)]))
+                    [icopy l (CL_id (enum_name, enum_ctyp)) (V_lit (V_member m, enum_ctyp))]
                     rest;
                 ]
               )
@@ -845,7 +830,7 @@ module Make (C : CONFIG) = struct
                     iextern l
                       (CL_id (is_ctor, CT_bool))
                       (mk_id "sail_config_object_has_key", [])
-                      [V_id (json, CT_json); V_lit (VL_string (string_of_id ctor_id), CT_string)];
+                      [V_id (json, CT_json); V_lit (V_string (string_of_id ctor_id), CT_string)];
                   ]
                 in
                 let setup, call, cleanup = extract ctor_json ctyp in
@@ -859,7 +844,7 @@ module Make (C : CONFIG) = struct
                     iextern l
                       (CL_id (ctor_json, CT_json))
                       (mk_id "sail_config_object_key", [])
-                      [V_id (json, CT_json); V_lit (VL_string (string_of_id ctor_id), CT_string)];
+                      [V_id (json, CT_json); V_lit (V_string (string_of_id ctor_id), CT_string)];
                   ]
                   @ setup @ ctor_setup
                   @ [call (CL_id (value, ctyp))]
@@ -890,7 +875,7 @@ module Make (C : CONFIG) = struct
                   iextern l
                     (CL_id (field_json, CT_json))
                     (mk_id "sail_config_object_key", [])
-                    [V_id (json, CT_json); V_lit (VL_string (string_of_id field_id), CT_string)];
+                    [V_id (json, CT_json); V_lit (V_string (string_of_id field_id), CT_string)];
                 ]
                 @ setup
                 @ [call (CL_field (CL_id (struct_name, struct_ctyp), field_id, field_ctyp))]
@@ -913,10 +898,7 @@ module Make (C : CONFIG) = struct
           let index =
             V_call
               ( Isub,
-                [
-                  V_id (len, CT_fint 64);
-                  V_call (Iadd, [V_id (n, CT_fint 64); V_lit (VL_int (Big_int.of_int 1), CT_fint 64)]);
-                ]
+                [V_id (len, CT_fint 64); V_call (Iadd, [V_id (n, CT_fint 64); V_lit (V_int (Z.of_int 1), CT_fint 64)])]
               )
           in
           let setup, call, cleanup = extract item_json item_ctyp in
@@ -924,12 +906,12 @@ module Make (C : CONFIG) = struct
               idecl l (CT_fint 64) len;
               iextern l (CL_id (len, CT_bool)) (mk_id "sail_config_list_length", []) [V_id (json, CT_json)];
               iif l
-                (V_call (Eq, [V_id (len, CT_fint 64); V_lit (VL_int (Big_int.of_int (-1)), CT_fint 64)]))
+                (V_call (Eq, [V_id (len, CT_fint 64); V_lit (V_int (Z.of_int (-1)), CT_fint 64)]))
                 [ibad_config l]
                 [];
               idecl l (CT_vector item_ctyp) vec;
               iextern l (CL_id (vec, CT_vector item_ctyp)) (mk_id "internal_vector_init", []) [V_id (len, CT_fint 64)];
-              iinit l (CT_fint 64) n (V_lit (VL_int Big_int.zero, CT_fint 64));
+              iinit l (CT_fint 64) n (V_lit (V_int Z.zero, CT_fint 64));
               ilabel loop;
               idecl l CT_json item_json;
               iextern l
@@ -952,7 +934,7 @@ module Make (C : CONFIG) = struct
                 iclear CT_json item_json;
                 icopy l
                   (CL_id (n, CT_fint 64))
-                  (V_call (Iadd, [V_id (n, CT_fint 64); V_lit (VL_int (Big_int.of_int 1), CT_fint 64)]));
+                  (V_call (Iadd, [V_id (n, CT_fint 64); V_lit (V_int (Z.of_int 1), CT_fint 64)]));
                 ijump l (V_call (Ilt, [V_id (n, CT_fint 64); V_id (len, CT_fint 64)])) loop;
               ],
             (fun clexp -> icopy l clexp (V_id (vec, CT_vector item_ctyp))),
@@ -969,10 +951,7 @@ module Make (C : CONFIG) = struct
           let index =
             V_call
               ( Isub,
-                [
-                  V_id (len, CT_fint 64);
-                  V_call (Iadd, [V_id (n, CT_fint 64); V_lit (VL_int (Big_int.of_int 1), CT_fint 64)]);
-                ]
+                [V_id (len, CT_fint 64); V_call (Iadd, [V_id (n, CT_fint 64); V_lit (V_int (Z.of_int 1), CT_fint 64)])]
               )
           in
           let setup, call, cleanup = extract item_json item_ctyp in
@@ -980,11 +959,11 @@ module Make (C : CONFIG) = struct
               idecl l (CT_fint 64) len;
               iextern l (CL_id (len, CT_bool)) (mk_id "sail_config_list_length", []) [V_id (json, CT_json)];
               iif l
-                (V_call (Eq, [V_id (len, CT_fint 64); V_lit (VL_int (Big_int.of_int (-1)), CT_fint 64)]))
+                (V_call (Eq, [V_id (len, CT_fint 64); V_lit (V_int (Z.of_int (-1)), CT_fint 64)]))
                 [ibad_config l]
                 [];
               idecl l (CT_list item_ctyp) list;
-              iinit l (CT_fint 64) n (V_lit (VL_int Big_int.zero, CT_fint 64));
+              iinit l (CT_fint 64) n (V_lit (V_int Z.zero, CT_fint 64));
               ilabel loop_start;
               ijump l (V_call (Igteq, [V_id (n, CT_fint 64); V_id (len, CT_fint 64)])) loop_end;
               idecl l CT_json item_json;
@@ -1005,7 +984,7 @@ module Make (C : CONFIG) = struct
                 iclear CT_json item_json;
                 icopy l
                   (CL_id (n, CT_fint 64))
-                  (V_call (Iadd, [V_id (n, CT_fint 64); V_lit (VL_int (Big_int.of_int 1), CT_fint 64)]));
+                  (V_call (Iadd, [V_id (n, CT_fint 64); V_lit (V_int (Z.of_int 1), CT_fint 64)]));
                 igoto loop_start;
                 ilabel loop_end;
               ],
@@ -1044,7 +1023,7 @@ module Make (C : CONFIG) = struct
     | AP_id (Name (pid, _), _) when is_ct_enum ctyp -> (
         match Env.lookup_id pid ctx.tc_env with
         | Unbound _ -> ([], [idecl l ctyp (name pid); icopy l (CL_id (name pid, ctyp)) cval], [], ctx)
-        | _ -> ([on_failure l (V_call (Neq, [V_member (pid, ctyp); cval]))], [], [], ctx)
+        | _ -> ([on_failure l (V_call (Neq, [V_lit (V_member pid, ctyp); cval]))], [], [], ctx)
       )
     | AP_id (pid, typ) ->
         let id_ctyp = ctyp_of_typ ctx typ in
@@ -1135,7 +1114,7 @@ module Make (C : CONFIG) = struct
             if (width <= 64 && total_width <= 64) || C.ignore_64 then (
               let pre', instrs', cleanup', ctx =
                 compile_match ctx apat
-                  (V_call (Slice width, [cval; V_lit (VL_int (Big_int.of_int offset), CT_fint 64)]))
+                  (V_call (Slice width, [cval; V_lit (V_int (Z.of_int offset), CT_fint 64)]))
                   on_failure
               in
               (pre @ pre', instrs @ instrs', cleanup' @ cleanup, ctx)
@@ -1147,8 +1126,8 @@ module Make (C : CONFIG) = struct
               let mk_slice =
                 [
                   idecl l CT_lbits sliced;
-                  iinit l CT_lint offset_id (V_lit (VL_int (Big_int.of_int offset), CT_fint 64));
-                  iinit l CT_lint width_id (V_lit (VL_int (Big_int.of_int width), CT_fint 64));
+                  iinit l CT_lint offset_id (V_lit (V_int (Z.of_int offset), CT_fint 64));
+                  iinit l CT_lint width_id (V_lit (V_int (Z.of_int width), CT_fint 64));
                   iextern l
                     (CL_id (sliced, CT_lbits))
                     (mk_id "slice", [])
@@ -1262,7 +1241,7 @@ module Make (C : CONFIG) = struct
             let trivial_guard =
               match guard with
               | AE_aux (AE_val (AV_lit (L_aux (L_true, _), _)), _)
-              | AE_aux (AE_val (AV_cval (V_lit (VL_bool true, CT_bool), _)), _) ->
+              | AE_aux (AE_val (AV_cval (V_lit (V_bool true, CT_bool), _)), _) ->
                   true
               | _ -> false
             in
@@ -1272,7 +1251,7 @@ module Make (C : CONFIG) = struct
             let guard_setup, guard_call, guard_cleanup = compile_aexp ctx guard in
             let body_setup, body_call, body_cleanup = compile_aexp ctx body in
             Some
-              ([idecl l ctyp case_return_id; iinit l CT_bool case_match_id (V_lit (VL_bool true, CT_bool))]
+              ([idecl l ctyp case_return_id; iinit l CT_bool case_match_id (V_lit (V_bool true, CT_bool))]
               @ pre_destructure @ destructure
               @ ( if not trivial_guard then (
                     let gs = ngensym () in
@@ -1330,7 +1309,7 @@ module Make (C : CONFIG) = struct
             let trivial_guard =
               match guard with
               | AE_aux (AE_val (AV_lit (L_aux (L_true, _), _)), _)
-              | AE_aux (AE_val (AV_cval (V_lit (VL_bool true, CT_bool), _)), _) ->
+              | AE_aux (AE_val (AV_cval (V_lit (V_bool true, CT_bool), _)), _) ->
                   true
               | _ -> false
             in
@@ -1383,7 +1362,7 @@ module Make (C : CONFIG) = struct
           let trivial_guard =
             match guard with
             | AE_aux (AE_val (AV_lit (L_aux (L_true, _), _)), _)
-            | AE_aux (AE_val (AV_cval (V_lit (VL_bool true, CT_bool), _)), _) ->
+            | AE_aux (AE_val (AV_cval (V_lit (V_bool true, CT_bool), _)), _) ->
                 true
             | _ -> false
           in
@@ -1415,7 +1394,7 @@ module Make (C : CONFIG) = struct
             idecl l ctyp try_return_id;
             itry_block l (aexp_setup @ [aexp_call (CL_id (try_return_id, ctyp))] @ aexp_cleanup);
             ijump l (V_call (Bnot, [V_id (have_exception, CT_bool)])) post_exception_handlers_label;
-            icopy l (CL_id (have_exception, CT_bool)) (V_lit (VL_bool false, CT_bool));
+            icopy l (CL_id (have_exception, CT_bool)) (V_lit (V_bool false, CT_bool));
           ]
           @ ( if C.assert_to_exception then
                 [
@@ -1423,7 +1402,7 @@ module Make (C : CONFIG) = struct
                     (V_ctor_kind (exn_cval, (mk_id "__assertion_failed#", [])))
                     []
                     [
-                      icopy l (CL_id (have_exception, CT_bool)) (V_lit (VL_bool true, CT_bool));
+                      icopy l (CL_id (have_exception, CT_bool)) (V_lit (V_bool true, CT_bool));
                       igoto post_exception_handlers_label;
                     ];
                 ]
@@ -1432,7 +1411,7 @@ module Make (C : CONFIG) = struct
           @ List.concat_map compile_case cases
           @ [
               (* fallthrough *)
-              icopy l (CL_id (have_exception, CT_bool)) (V_lit (VL_bool true, CT_bool));
+              icopy l (CL_id (have_exception, CT_bool)) (V_lit (V_bool true, CT_bool));
               ilabel post_exception_handlers_label;
             ],
           (fun clexp -> icopy l clexp (V_id (try_return_id, ctyp))),
@@ -1519,7 +1498,7 @@ module Make (C : CONFIG) = struct
                 idecl l CT_bool gs;
                 iif l cval
                   (right_coverage @ right_setup @ [call (CL_id (gs, CT_bool))] @ right_cleanup)
-                  [icopy l (CL_id (gs, CT_bool)) (V_lit (VL_bool false, CT_bool))];
+                  [icopy l (CL_id (gs, CT_bool)) (V_lit (V_bool false, CT_bool))];
               ]
             @ left_cleanup,
             (fun clexp -> icopy l clexp (V_id (gs, CT_bool))),
@@ -1548,7 +1527,7 @@ module Make (C : CONFIG) = struct
             @ [
                 idecl l CT_bool gs;
                 iif l cval
-                  [icopy l (CL_id (gs, CT_bool)) (V_lit (VL_bool true, CT_bool))]
+                  [icopy l (CL_id (gs, CT_bool)) (V_lit (V_bool true, CT_bool))]
                   (right_coverage @ right_setup @ [call (CL_id (gs, CT_bool))] @ right_cleanup);
               ]
             @ left_cleanup,
@@ -1672,15 +1651,14 @@ module Make (C : CONFIG) = struct
 
         let loop_iteration i =
           let loop_body () =
-            [icopy l (CL_id (loop_var, CT_fint 64)) (V_lit (VL_int i, CT_fint 64))]
+            [icopy l (CL_id (loop_var, CT_fint 64)) (V_lit (V_int i, CT_fint 64))]
             @ body_setup
             @ [body_call (CL_id (body_gs, CT_unit))]
             @ body_cleanup
           in
-          if is_inc then
-            if Big_int.greater i loop_to then None else Some (Big_int.add i loop_step, iblock (loop_body ()))
-          else if Big_int.less i loop_to then None
-          else Some (Big_int.sub i loop_step, iblock (loop_body ()))
+          if is_inc then if Z.gt i loop_to then None else Some (Z.add i loop_step, iblock (loop_body ()))
+          else if Z.lt i loop_to then None
+          else Some (Z.sub i loop_step, iblock (loop_body ()))
         in
         let rec unroll acc i =
           match loop_iteration i with None -> List.rev acc | Some (next, instr) -> unroll (instr :: acc) next
@@ -1742,7 +1720,7 @@ module Make (C : CONFIG) = struct
           match (get_attribute "unroll" uannot, C.unroll_loops) with
           | Some attr_data_opt, Some _ -> (
               match attr_data_opt with
-              | _, Some (AD_aux (AD_num times, _)) -> unroll (Big_int.to_int times) 0
+              | _, Some (AD_aux (AD_num times, _)) -> unroll (Z.to_int times) 0
               | _, Some (AD_aux (_, l)) -> raise (Reporting.err_general l "Invalid argument on unroll attribute")
               | l, None -> raise (Reporting.err_general l "Expected numeric argument for unroll attribute")
             )
@@ -1787,10 +1765,10 @@ module Make (C : CONFIG) = struct
       types it compiles to the context, ctx, which is why it returns a ctypdef * ctx pair. **)
   let compile_type_def ctx (TD_aux (type_def, (l, _))) =
     match type_def with
-    | TD_enum (id, members, _) ->
+    | TD_enum (id, members) ->
         let ids = List.map fst members in
         (Some (CTD_enum (id, ids)), { ctx with enums = Bindings.add id (IdSet.of_list ids) ctx.enums })
-    | TD_record (id, typq, ctors, _) ->
+    | TD_record (id, typq, ctors) ->
         let record_ctx = { ctx with local_env = Env.add_typquant l typq ctx.local_env } in
         let ctors =
           List.fold_left
@@ -1891,11 +1869,11 @@ module Make (C : CONFIG) = struct
           before
           @ [
               icopy l (CL_id (current_exception, cval_ctyp cval)) cval;
-              icopy l (CL_id (have_exception, CT_bool)) (V_lit (VL_bool true, CT_bool));
+              icopy l (CL_id (have_exception, CT_bool)) (V_lit (V_bool true, CT_bool));
             ]
           @ ( if C.track_throw then (
                 let loc_string = Reporting.short_loc_to_string l in
-                [icopy l (CL_id (throw_location, CT_string)) (V_lit (VL_string loc_string, CT_string))]
+                [icopy l (CL_id (throw_location, CT_string)) (V_lit (V_string loc_string, CT_string))]
               )
               else []
             )
@@ -2095,7 +2073,7 @@ module Make (C : CONFIG) = struct
     in
 
     let funwire_attr_info = function
-      | Arg n -> AD_aux (AD_num (Big_int.of_int n), l)
+      | Arg n -> AD_aux (AD_num (Z.of_int n), l)
       | Ret -> AD_aux (AD_string "return", l)
       | Invoke -> AD_aux (AD_string "invoke", l)
     in
@@ -2112,7 +2090,7 @@ module Make (C : CONFIG) = struct
     let slotvector ctyp = if slots > 1 then CT_fvector (slots, ctyp) else ctyp in
 
     let mk_register fw =
-      CDEF_aux (CDEF_register (funwire_name fw, slotvector (funwire_ctyp fw), []), funwire_attr fw)
+      CDef_aux (CDef_register (funwire_name fw, slotvector (funwire_ctyp fw), []), funwire_attr fw)
     in
 
     let read_slot fw slot =
@@ -2126,7 +2104,7 @@ module Make (C : CONFIG) = struct
         iextern l
           (CL_id (funwire_name fw, vector_ctyp))
           (mk_id "internal_vector_update", [])
-          [V_id (funwire_name fw, vector_ctyp); V_lit (VL_int (Big_int.of_int slot), CT_fint 64); cval]
+          [V_id (funwire_name fw, vector_ctyp); V_lit (V_int (Z.of_int slot), CT_fint 64); cval]
       )
       else icopy l (CL_id (funwire_name fw, funwire_ctyp fw)) (V_id (funwire_name fw, funwire_ctyp fw))
     in
@@ -2136,7 +2114,7 @@ module Make (C : CONFIG) = struct
           [
             iif l
               (V_call (Bnot, [read_slot Invoke slot]))
-              ([write_slot Invoke slot (V_lit (VL_bool true, CT_bool))]
+              ([write_slot Invoke slot (V_lit (V_bool true, CT_bool))]
               @ List.mapi (fun n (arg, ctyp) -> write_slot (Arg n) slot (V_id (arg, ctyp))) arg_ctyps
               @ [icopy l (CL_id (return, ret_ctyp)) (read_slot Ret slot); iend l]
               )
@@ -2147,16 +2125,16 @@ module Make (C : CONFIG) = struct
     in
 
     let exn_setup, exn_cval =
-      assert_exception l (V_lit (VL_string ("reached unreachable in " ^ string_of_id id), CT_string))
+      assert_exception l (V_lit (V_string ("reached unreachable in " ^ string_of_id id), CT_string))
     in
 
     [mk_register Invoke]
     @ List.init num_args (fun n -> mk_register (Arg n))
     @ [mk_register Ret]
     @ [
-        CDEF_aux (CDEF_val (id, params, List.map snd arg_ctyps, ret_ctyp, None), def_annot);
-        CDEF_aux
-          ( CDEF_fundef
+        CDef_aux (CDef_val (id, params, List.map snd arg_ctyps, ret_ctyp, None), def_annot);
+        CDef_aux
+          ( CDef_fundef
               ( id,
                 Return_plain,
                 List.map fst arg_ctyps,
@@ -2299,44 +2277,44 @@ module Make (C : CONFIG) = struct
             in
             let id = append_id id "_infallible" in
             [
-              CDEF_aux (CDEF_val (id, params, arg_ctyps, ret_ctyp, None), def_annot);
-              CDEF_aux (CDEF_fundef (id, Return_plain, compiled_args, instrs), def_annot);
+              CDef_aux (CDef_val (id, params, arg_ctyps, ret_ctyp, None), def_annot);
+              CDef_aux (CDef_fundef (id, Return_plain, compiled_args, instrs), def_annot);
             ]
         | None -> []
       in
-      [CDEF_aux (CDEF_fundef (id, Return_plain, compiled_args, instrs), def_annot)] @ mapping_infallible
+      [CDef_aux (CDef_fundef (id, Return_plain, compiled_args, instrs), def_annot)] @ mapping_infallible
     in
 
     (Parallel do_funcl_compilation, return_ctx)
 
   (** Compile a Sail toplevel definition into an IR definition **)
-  let rec compile_def n total ctx (DEF_aux (aux, _) as def) =
+  let rec compile_def n total ctx (Def_aux (aux, _) as def) =
     let compiled, ctx = compile_def' n total ctx def in
     (compiled, { ctx with def_annot = None })
 
   and compile_def_force n total ctx def =
     match compile_def n total ctx def with Compiled cdefs, ctx -> (cdefs, ctx) | Parallel f, ctx -> (f (), ctx)
 
-  and compile_def' n total ctx (DEF_aux (aux, def_annot) as def) =
+  and compile_def' n total ctx (Def_aux (aux, def_annot) as def) =
     let def_env = def_annot.env in
     let def_annot = strip_def_annot def_annot in
     let ctx = { ctx with local_env = def_env; def_annot = Some def_annot } in
     match aux with
-    | DEF_register (DEC_aux (DEC_reg (typ, id, None), _)) ->
+    | Def_register (Reg_aux (Reg (typ, id, None), _)) ->
         let ctyp = ctyp_of_typ ctx typ in
-        ( Compiled [CDEF_aux (CDEF_register (name id, ctyp, []), def_annot)],
+        ( Compiled [CDef_aux (CDef_register (name id, ctyp, []), def_annot)],
           { ctx with registers = Bindings.add id ctyp ctx.registers }
         )
-    | DEF_register (DEC_aux (DEC_reg (typ, id, Some exp), _)) ->
+    | Def_register (Reg_aux (Reg (typ, id, Some exp), _)) ->
         let ctyp = ctyp_of_typ ctx typ in
         let aexp = C.optimize_anf ctx (no_shadow (letbind_ids ctx) (anf exp)) in
         let setup, call, cleanup = compile_aexp ctx aexp in
         let instrs = setup @ [call (CL_id (name id, ctyp))] @ cleanup in
         let instrs = unique_names instrs in
-        ( Compiled [CDEF_aux (CDEF_register (name id, ctyp, instrs), def_annot)],
+        ( Compiled [CDef_aux (CDef_register (name id, ctyp, instrs), def_annot)],
           { ctx with registers = Bindings.add id ctyp ctx.registers }
         )
-    | DEF_val (VS_aux (VS_val_spec (_, id, ext), _)) ->
+    | Def_val (VS_aux (VS_val_spec (_, id, ext), _)) ->
         let quant, Typ_aux (fn_typ, _) = Env.get_val_spec id ctx.tc_env in
         let params = quant_kopts quant |> List.filter is_typ_kopt |> List.map kopt_kid in
         let extern =
@@ -2348,13 +2326,13 @@ module Make (C : CONFIG) = struct
         in
         let ctx' = { ctx with local_env = Env.add_typquant (id_loc id) quant ctx.local_env } in
         let arg_ctyps, ret_ctyp = (List.map (ctyp_of_typ ctx') arg_typs, ctyp_of_typ ctx' ret_typ) in
-        ( Compiled [CDEF_aux (CDEF_val (id, params, arg_ctyps, ret_ctyp, extern), def_annot)],
+        ( Compiled [CDef_aux (CDef_val (id, params, arg_ctyps, ret_ctyp, extern), def_annot)],
           {
             ctx with
             valspecs = Bindings.add id (extern, arg_ctyps, ret_ctyp, uannot_of_def_annot def_annot) ctx.valspecs;
           }
         )
-    | DEF_fundef (FD_aux (FD_function (_, _, [FCL_aux (FCL_funcl (id, pexp), _)]), _)) -> (
+    | Def_fundef (FD_aux (FD_function (_, _, [FCL_aux (FCL_funcl (id, pexp), _)]), _)) -> (
         Util.progress "Compiling " (string_of_id id) n total;
         match Bindings.find_opt id C.fun_to_wires with
         | Some slots -> (Compiled (compile_fun_to_wires ctx def_annot id slots), ctx)
@@ -2364,14 +2342,14 @@ module Make (C : CONFIG) = struct
             | Pat_aux (Pat_when (pat, guard, exp), _) -> compile_funcl ctx def_annot id pat (Some guard) exp
           )
       )
-    | DEF_fundef (FD_aux (FD_function (_, _, []), (l, _))) ->
+    | Def_fundef (FD_aux (FD_function (_, _, []), (l, _))) ->
         raise (Reporting.err_general l "Encountered function with no clauses")
-    | DEF_fundef (FD_aux (FD_function (_, _, _ :: _ :: _), (l, _))) ->
+    | Def_fundef (FD_aux (FD_function (_, _, _ :: _ :: _), (l, _))) ->
         raise (Reporting.err_general l "Encountered function with multiple clauses")
-    | DEF_type type_def ->
+    | Def_type type_def ->
         let tdef_opt, ctx = compile_type_def ctx type_def in
-        (Compiled (List.map (fun tdef -> CDEF_aux (CDEF_type tdef, def_annot)) (Option.to_list tdef_opt)), ctx)
-    | DEF_let (pat, exp) ->
+        (Compiled (List.map (fun tdef -> CDef_aux (CDef_type tdef, def_annot)) (Option.to_list tdef_opt)), ctx)
+    | Def_let (pat, exp) ->
         let debug_attr = get_def_attribute "jib_debug" def_annot in
         let ctyp = ctyp_of_typ ctx (typ_of_pat pat) in
         let aexp = C.optimize_anf ctx (no_shadow (letbind_ids ctx) (anf exp)) in
@@ -2401,33 +2379,33 @@ module Make (C : CONFIG) = struct
             (Util.string_of_list ", " (fun (id, ctyp) -> string_of_id id ^ " : " ^ string_of_ctyp ctyp) bindings);
           List.iter (fun instr -> prerr_endline (string_of_instr instr)) instrs
         );
-        ( Compiled [CDEF_aux (CDEF_let (n, bindings, instrs), def_annot)],
+        ( Compiled [CDef_aux (CDef_let (n, bindings, instrs), def_annot)],
           {
             ctx with
             letbinds = n :: ctx.letbinds;
             letbind_ctyps = List.fold_left (fun ids (id, ctyp) -> Bindings.add id ctyp ids) ctx.letbind_ctyps bindings;
           }
         )
-    (* Only DEF_default that matters is default Order, but all order
+    (* Only Def_default that matters is default Order, but all order
        polymorphism is specialised by this point. *)
-    | DEF_default _ -> (Compiled [], ctx)
+    | Def_default _ -> (Compiled [], ctx)
     (* Overloading resolved by type checker *)
-    | DEF_overload _ -> (Compiled [], ctx)
+    | Def_overload _ -> (Compiled [], ctx)
     (* Only the parser and sail pretty printer care about this. *)
-    | DEF_fixity _ -> (Compiled [], ctx)
-    | DEF_pragma ("abstract", Pragma_line (id_str, _)) ->
-        (Compiled [CDEF_aux (CDEF_pragma ("abstract", id_str), def_annot)], ctx)
-    | DEF_pragma ("c_in_main", Pragma_line (source, _)) ->
-        (Compiled [CDEF_aux (CDEF_pragma ("c_in_main", source), def_annot)], ctx)
-    | DEF_pragma ("c_in_main_post", Pragma_line (source, _)) ->
-        (Compiled [CDEF_aux (CDEF_pragma ("c_in_main_post", source), def_annot)], ctx)
+    | Def_fixity _ -> (Compiled [], ctx)
+    | Def_pragma ("abstract", Pragma_line (id_str, _)) ->
+        (Compiled [CDef_aux (CDef_pragma ("abstract", id_str), def_annot)], ctx)
+    | Def_pragma ("c_in_main", Pragma_line (source, _)) ->
+        (Compiled [CDef_aux (CDef_pragma ("c_in_main", source), def_annot)], ctx)
+    | Def_pragma ("c_in_main_post", Pragma_line (source, _)) ->
+        (Compiled [CDef_aux (CDef_pragma ("c_in_main_post", source), def_annot)], ctx)
     (* We just ignore any pragmas we don't want to deal with. *)
-    | DEF_pragma _ -> (Compiled [], ctx)
+    | Def_pragma _ -> (Compiled [], ctx)
     (* Termination measures only needed for Coq, and other theorem prover output *)
-    | DEF_measure _ -> (Compiled [], ctx)
-    | DEF_loop_measures _ -> (Compiled [], ctx)
-    | DEF_internal_mutrec fundefs ->
-        let defs = List.map (fun fdef -> mk_def (DEF_fundef fdef) def_env) fundefs in
+    | Def_measure _ -> (Compiled [], ctx)
+    | Def_loop_measures _ -> (Compiled [], ctx)
+    | Def_internal_mutrec fundefs ->
+        let defs = List.map (fun fdef -> mk_def (Def_fundef fdef) def_env) fundefs in
         let cdefs, ctx =
           List.fold_left
             (fun (cdefs, ctx) def ->
@@ -2437,9 +2415,9 @@ module Make (C : CONFIG) = struct
             ([], ctx) defs
         in
         (Compiled cdefs, ctx)
-    | DEF_constraint _ -> (Compiled [], ctx)
+    | Def_constraint _ -> (Compiled [], ctx)
     (* Scattereds, mapdefs, and event related definitions should be removed by this point *)
-    | DEF_scattered _ | DEF_mapdef _ | DEF_outcome _ | DEF_impl _ | DEF_instantiation _ ->
+    | Def_scattered _ | Def_mapdef _ | Def_outcome _ | Def_impl _ | Def_instantiation _ ->
         Reporting.unreachable (def_loc def) __POS__
           ("Could not compile:\n" ^ Document.to_string (Pretty_print_sail.doc_def (strip_def def)))
 
@@ -2452,7 +2430,7 @@ module Make (C : CONFIG) = struct
     let polymorphic_functions =
       List.filter_map
         (function
-          | CDEF_aux (CDEF_val (id, _, param_ctyps, ret_ctyp, _), _) ->
+          | CDef_aux (CDef_val (id, _, param_ctyps, ret_ctyp, _), _) ->
               if List.exists is_polymorphic param_ctyps || is_polymorphic ret_ctyp then Some id else None
           | _ -> None
           )
@@ -2484,7 +2462,7 @@ module Make (C : CONFIG) = struct
        each of the monomorphic calls we just found. *)
     let spec_tyargs = ref Bindings.empty in
     let rec specialize_fundefs ctx prior = function
-      | (CDEF_aux (CDEF_val (id, tyargs, param_ctyps, ret_ctyp, extern), def_annot) as orig_cdef) :: cdefs
+      | (CDef_aux (CDef_val (id, tyargs, param_ctyps, ret_ctyp, extern), def_annot) as orig_cdef) :: cdefs
         when Bindings.mem id !monomorphic_calls ->
           spec_tyargs := Bindings.add id tyargs !spec_tyargs;
           let specialized_specs =
@@ -2499,7 +2477,7 @@ module Make (C : CONFIG) = struct
                   in
                   let param_ctyps = List.map (subst_poly substs) param_ctyps in
                   let ret_ctyp = subst_poly substs ret_ctyp in
-                  Some (CDEF_aux (CDEF_val (specialized_id, [], param_ctyps, ret_ctyp, extern), def_annot))
+                  Some (CDef_aux (CDef_val (specialized_id, [], param_ctyps, ret_ctyp, extern), def_annot))
                 )
                 else None
               )
@@ -2509,7 +2487,7 @@ module Make (C : CONFIG) = struct
             List.fold_left
               (fun ctx cdef ->
                 match cdef with
-                | CDEF_aux (CDEF_val (id, _, param_ctyps, ret_ctyp, _), def_annot) ->
+                | CDef_aux (CDef_val (id, _, param_ctyps, ret_ctyp, _), def_annot) ->
                     {
                       ctx with
                       valspecs =
@@ -2520,7 +2498,7 @@ module Make (C : CONFIG) = struct
               ctx specialized_specs
           in
           specialize_fundefs ctx ((orig_cdef :: specialized_specs) @ prior) cdefs
-      | (CDEF_aux (CDEF_fundef (id, heap_return, params, body), def_annot) as orig_cdef) :: cdefs
+      | (CDef_aux (CDef_fundef (id, heap_return, params, body), def_annot) as orig_cdef) :: cdefs
         when Bindings.mem id !monomorphic_calls ->
           let tyargs = Bindings.find id !spec_tyargs in
           let specialized_fundefs =
@@ -2535,7 +2513,7 @@ module Make (C : CONFIG) = struct
                       KBindings.empty tyargs instantiation
                   in
                   let body = List.map (map_instr_ctyp (subst_poly substs)) body in
-                  Some (CDEF_aux (CDEF_fundef (specialized_id, heap_return, params, body), def_annot))
+                  Some (CDef_aux (CDef_fundef (specialized_id, heap_return, params, body), def_annot))
                 )
                 else None
               )
@@ -2554,7 +2532,7 @@ module Make (C : CONFIG) = struct
     let monomorphic_roots =
       List.filter_map
         (function
-          | CDEF_aux (CDEF_val (id, _, param_ctyps, ret_ctyp, _), _) ->
+          | CDef_aux (CDef_val (id, _, param_ctyps, ret_ctyp, _), _) ->
               if List.exists is_polymorphic param_ctyps || is_polymorphic ret_ctyp then None else Some id
           | _ -> None
           )
@@ -2568,8 +2546,8 @@ module Make (C : CONFIG) = struct
     let cdefs =
       List.filter_map
         (function
-          | CDEF_aux (CDEF_fundef (id, _, _, _), _) when IdSet.mem id unreachable_polymorphic_functions -> None
-          | CDEF_aux (CDEF_val (id, _, _, _, _), _) when IdSet.mem id unreachable_polymorphic_functions -> None
+          | CDef_aux (CDef_fundef (id, _, _, _), _) when IdSet.mem id unreachable_polymorphic_functions -> None
+          | CDef_aux (CDef_val (id, _, _, _, _), _) when IdSet.mem id unreachable_polymorphic_functions -> None
           | cdef -> Some cdef
           )
         cdefs
@@ -2658,15 +2636,15 @@ module Make (C : CONFIG) = struct
     let specialize_field ctx struct_id = visit_cdefs (new specialize_field_visitor instantiations ctx struct_id) in
 
     let mangled_pragma orig_id mangled_id =
-      CDEF_aux
-        ( CDEF_pragma
+      CDef_aux
+        ( CDef_pragma
             ("mangled", Util.zencode_string (string_of_id orig_id) ^ " " ^ Util.zencode_string (string_of_id mangled_id)),
           mk_def_annot (gen_loc (id_loc orig_id)) ()
         )
     in
 
     function
-    | CDEF_aux (CDEF_type (CTD_variant (var_id, params, ctors)), def_annot) :: cdefs when not (Util.list_empty params)
+    | CDef_aux (CDef_type (CTD_variant (var_id, params, ctors)), def_annot) :: cdefs when not (Util.list_empty params)
       ->
         let _ = visit_cdefs (new scan_variant_visitor instantiations ctx var_id) prior in
         let _ = visit_cdefs (new scan_variant_visitor instantiations ctx var_id) cdefs in
@@ -2715,13 +2693,13 @@ module Make (C : CONFIG) = struct
         specialize_variants ctx
           (List.concat_map
              (fun (id, ctors) ->
-               [CDEF_aux (CDEF_type (CTD_variant (id, [], ctors)), def_annot); mangled_pragma var_id id]
+               [CDef_aux (CDef_type (CTD_variant (id, [], ctors)), def_annot); mangled_pragma var_id id]
              )
              monomorphized_variants
           @ mangled_ctors @ prior
           )
           cdefs
-    | CDEF_aux (CDEF_type (CTD_struct (struct_id, params, fields)), def_annot) :: cdefs when not (Util.list_empty params)
+    | CDef_aux (CDef_type (CTD_struct (struct_id, params, fields)), def_annot) :: cdefs when not (Util.list_empty params)
       ->
         let _ = specialize_field ctx struct_id cdefs in
         let monomorphized_structs =
@@ -2762,7 +2740,7 @@ module Make (C : CONFIG) = struct
         specialize_variants ctx
           (List.concat_map
              (fun (id, fields) ->
-               [CDEF_aux (CDEF_type (CTD_struct (id, [], fields)), def_annot); mangled_pragma struct_id id]
+               [CDef_aux (CDef_type (CTD_struct (id, [], fields)), def_annot); mangled_pragma struct_id id]
              )
              monomorphized_structs
           @ mangled_fields @ prior
@@ -2866,7 +2844,7 @@ module Make (C : CONFIG) = struct
     in
 
     let rec precise_calls prior = function
-      | (CDEF_aux (CDEF_type (CTD_variant (var_id, _, ctors)), _) as cdef) :: cdefs ->
+      | (CDef_aux (CDef_type (CTD_variant (var_id, _, ctors)), _) as cdef) :: cdefs ->
           List.iter
             (fun (id, ctyp) -> constructor_types := Bindings.add id ([ctyp], CT_variant (var_id, [])) !constructor_types)
             ctors;
@@ -2881,8 +2859,8 @@ module Make (C : CONFIG) = struct
      to sort the type definitions in the list of cdefs. *)
   let sort_ctype_defs ctx reverse cdefs =
     (* Split the cdefs into type definitions and non type definitions *)
-    let is_ctype_def = function CDEF_aux (CDEF_type _, _) -> true | _ -> false in
-    let unwrap = function CDEF_aux (CDEF_type ctdef, def_annot) -> (ctdef, def_annot) | _ -> assert false in
+    let is_ctype_def = function CDef_aux (CDef_type _, _) -> true | _ -> false in
+    let unwrap = function CDef_aux (CDef_type ctdef, def_annot) -> (ctdef, def_annot) | _ -> assert false in
     let ctype_defs = List.map unwrap (List.filter is_ctype_def cdefs) in
     let cdefs = List.filter (fun cdef -> not (is_ctype_def cdef)) cdefs in
 
@@ -2919,7 +2897,7 @@ module Make (C : CONFIG) = struct
       List.map
         (fun id ->
           let ctdef, def_annot = List.find (fun (ctdef, _) -> Id.compare (ctdef_id ctdef) id = 0) ctype_defs in
-          CDEF_aux (CDEF_type ctdef, def_annot)
+          CDef_aux (CDef_type ctdef, def_annot)
         )
         ids
     in
@@ -2929,7 +2907,7 @@ module Make (C : CONFIG) = struct
   let unit_tests_of_ast ast =
     List.fold_left
       (fun ids -> function
-        | DEF_aux (DEF_val (VS_aux (VS_val_spec (_, id, _), _)), def_annot)
+        | Def_aux (Def_val (VS_aux (VS_val_spec (_, id, _), _)), def_annot)
           when Option.is_some (get_def_attribute "test" def_annot) ->
             IdSet.add id ids
         | _ -> ids
@@ -2938,7 +2916,7 @@ module Make (C : CONFIG) = struct
     |> IdSet.elements
 
   let toplevel_lets_of_ast ast =
-    let toplevel_lets_of_def = function DEF_aux (DEF_let (pat, _), _) -> pat_ids pat | _ -> IdSet.empty in
+    let toplevel_lets_of_def = function Def_aux (Def_let (pat, _), _) -> pat_ids pat | _ -> IdSet.empty in
     let toplevel_lets_of_defs defs = List.fold_left IdSet.union IdSet.empty (List.map toplevel_lets_of_def defs) in
     toplevel_lets_of_defs ast.defs |> IdSet.elements
 
@@ -2952,10 +2930,10 @@ module Make (C : CONFIG) = struct
 
       method! vinstr =
         function
-        | I_aux (I_init (ctyp, id, Init_static VL_undefined), (_, l)) ->
+        | I_aux (I_init (ctyp, id, Init_static None), (_, l)) ->
             statics := (l, ctyp, id, None) :: !statics;
             ChangeTo (Printf.ksprintf icomment "lifted %s" (string_of_name id))
-        | I_aux (I_init (ctyp, id, Init_static vl), (_, l)) ->
+        | I_aux (I_init (ctyp, id, Init_static (Some vl)), (_, l)) ->
             statics := (l, ctyp, id, Some vl) :: !statics;
             ChangeTo (Printf.ksprintf icomment "lifted %s" (string_of_name id))
         | _ -> DoChildren
@@ -2970,17 +2948,17 @@ module Make (C : CONFIG) = struct
           (fun (l, ctyp, id, vl_opt) ->
             let annot = mk_def_annot l () |> add_def_attribute l "early_init" None in
             match vl_opt with
-            | None -> CDEF_aux (CDEF_register (id, ctyp, []), annot)
-            | Some vl -> CDEF_aux (CDEF_register (id, ctyp, [icopy l (CL_id (id, ctyp)) (V_lit (vl, ctyp))]), annot)
+            | None -> CDef_aux (CDef_register (id, ctyp, []), annot)
+            | Some vl -> CDef_aux (CDef_register (id, ctyp, [icopy l (CL_id (id, ctyp)) (V_lit (vl, ctyp))]), annot)
           )
           !statics
         @ [cdef]
       )
       cdefs
 
-  let is_def_constraint = function DEF_aux (DEF_constraint _, _) -> true | _ -> false
+  let is_def_constraint = function Def_aux (Def_constraint _, _) -> true | _ -> false
 
-  let first_env final_env = function [] -> final_env | DEF_aux (_, def_annot) :: _ -> def_annot.env
+  let first_env final_env = function [] -> final_env | Def_aux (_, def_annot) :: _ -> def_annot.env
 
   (* This function helps optimise abstract types in the following way,
      if we see:
@@ -2995,11 +2973,11 @@ module Make (C : CONFIG) = struct
      constraint up to the [type], ensuring we pick the most optimised
      representation for that type declaration we safely can. *)
   let rec move_constraint_contexts final_env acc = function
-    | DEF_aux (DEF_type tdef, def_annot) :: defs ->
+    | Def_aux (Def_type tdef, def_annot) :: defs ->
         let constraints, rest = Util.take_drop is_def_constraint defs in
         let env = first_env final_env rest in
         move_constraint_contexts final_env
-          (List.rev constraints @ [DEF_aux (DEF_type tdef, { def_annot with env })] @ acc)
+          (List.rev constraints @ [Def_aux (Def_type tdef, { def_annot with env })] @ acc)
           rest
     | def :: defs -> move_constraint_contexts final_env (def :: acc) defs
     | [] -> List.rev acc
@@ -3050,8 +3028,8 @@ module Make (C : CONFIG) = struct
       if not (Bindings.mem (mk_id "exception") ctx.variants) then
         if C.assert_to_exception then (
           let assertion_failed = mk_id "__assertion_failed#" in
-          ( CDEF_aux
-              ( CDEF_type (CTD_variant (mk_id "exception", [], [(assertion_failed, CT_string)])),
+          ( CDef_aux
+              ( CDef_type (CTD_variant (mk_id "exception", [], [(assertion_failed, CT_string)])),
                 mk_def_annot Parse_ast.Unknown ()
               )
             :: cdefs,
@@ -3064,8 +3042,8 @@ module Make (C : CONFIG) = struct
         )
         else (
           let dummy_exn = mk_id "__dummy_exn#" in
-          ( CDEF_aux
-              ( CDEF_type (CTD_variant (mk_id "exception", [], [(dummy_exn, CT_unit)])),
+          ( CDef_aux
+              ( CDef_type (CTD_variant (mk_id "exception", [], [(dummy_exn, CT_unit)])),
                 mk_def_annot Parse_ast.Unknown ()
               )
             :: cdefs,
