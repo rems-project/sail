@@ -6,6 +6,7 @@ from sailtest import *
 
 _SUITE_DIR = os.path.join(TEST_DIR, "lean")
 _EXEC_DIR = os.path.join(_SUITE_DIR, "..", "exec")
+_EXTERNS_DIR = os.path.join(_SUITE_DIR, "..", "externs")
 
 skip_selftests = {
     "outcome_impl",  # custom outcome types (not expected to work)
@@ -29,6 +30,38 @@ skip_selftests = {
     "exists_union_order", # needs proper dependent pair
 }
 
+skip_externs = {
+    # externs that we'll probably never need for the Lean backend
+    "__WakeupRequest",
+    "__SleepRequest",
+    # emulator built-ins
+    "__read_mem_exclusive_hash",
+    "__read_mem_hash",
+    "__read_mem_ifetch_hash",
+    "__write_mem_exclusive_hash",
+    "__write_mem_hash",
+    "read_mem_exclusive_hash",
+    "read_mem_hash",
+    "read_tag_hash",
+    "read_mem_ifetch_hash",
+    "write_mem_exclusive_hash",
+    "write_mem_hash",
+    "write_tag_hash",
+    # Intended for the C backend
+    "append_64",
+    # Monomorphisation (could do this for entertainment value, but shouldn't be necessary)
+    "bitvector_cast_in",
+    "bitvector_cast_out",
+    "string_of_bits_subrange",
+    # Don't currently support lib/elf.sail
+    "elf_entry",
+    "elf_tohost",
+    # Misc
+    "pow_real", # faking reals with floats doesn't quite provide enough accuracy for the comparisons
+    "print_real", # not worth implementing
+    "undefined_list", # we don't seem to allow undefined lists at the moment, so maybe don't bother?
+    "putchar", # Currently declared as pure, so we can't do anything useful
+}
 
 @suite("lean", _SUITE_DIR)
 class LeanTests(SailTest):
@@ -52,6 +85,15 @@ class LeanTests(SailTest):
             self._make_test(support_lib, runnable=True, skip_list=skip_selftests),
             testdir=_EXEC_DIR,
             skip_fn=self._make_skip_fn(skip_selftests),
+        )
+
+        self.banner("Testing lean target (sub-directory: externs)")
+        self.run_tests(
+            "exec (lean runnable)",
+            Batcher(_EXTERNS_DIR),
+            self._make_test(support_lib, runnable=True, skip_list=skip_externs),
+            testdir=_EXTERNS_DIR,
+            skip_fn=self._make_skip_fn(skip_externs),
         )
 
     def _get_support_lib(self):
@@ -84,7 +126,7 @@ class LeanTests(SailTest):
             extra_flags = (
                 [
                     "--splice",
-                    "rocq-print.splice",
+                    "../exec/rocq-print.splice",
                     "--strict-bitvector",
                     # Lean output includes type variables in comments, so we need this for consistent output
                     "--dsequential",
@@ -129,11 +171,12 @@ class LeanTests(SailTest):
                     else:
                         sys.exit(1)
             else:
-                status = step_with_status(
-                    f"diff {basename}/out/expected {basename}.expect", name=filename
-                )
-                if status != 0:
-                    sys.exit(1)
+                if os.path.exists(f"{basename}.expect"):
+                    status = step_with_status(
+                        f"diff {basename}/out/expected {basename}.expect", name=filename
+                    )
+                    if status != 0:
+                        sys.exit(1)
 
             if not args.keep_intermediate:
                 step(f"rm -rf {basename}")

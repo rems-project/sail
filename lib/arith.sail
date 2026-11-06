@@ -64,7 +64,7 @@ overload operator - = {sub_atom, sub_int}
 val sub_nat = pure {
   lem: "integerMinus",
   coq: "Z.sub",
-  lean: "_lean_subi",
+  lean: "Nat.sub",
   _: "sub_nat"
 } : (nat, nat) -> nat
 

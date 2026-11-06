@@ -72,6 +72,10 @@ abbrev print_effect (str : String) : SailM Unit := PreSail.print_effect str
 abbrev print_int_effect (str : String) (n : Int) : SailM Unit := PreSail.print_int_effect str n
 abbrev print_bits_effect {w : Nat} (str : String) (x : BitVec w) : SailM Unit := PreSail.print_bits_effect str x
 abbrev print_endline_effect (str : String) : SailM Unit := PreSail.print_endline_effect str
+abbrev prerr_effect (str : String) : SailM Unit := PreSail.prerr_effect str
+abbrev prerr_int_effect (str : String) (n : Int) : SailM Unit := PreSail.prerr_int_effect str n
+abbrev prerr_bits_effect {w : Nat} (str : String) (x : BitVec w) : SailM Unit := PreSail.prerr_bits_effect str x
+abbrev prerr_endline_effect (str : String) : SailM Unit := PreSail.prerr_endline_effect str
 
 def SailME.run (m : SailME α α) : SailM α := PreSail.PreSailME.run m
 def SailME.throw (e : α) : SailME α β := PreSail.PreSailME.throw e
