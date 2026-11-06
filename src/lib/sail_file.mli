@@ -158,6 +158,11 @@ val bol_of_lnum : int -> handle -> int option
     the changes to disk. *)
 val write_file : contents:string -> handle -> unit
 
+(** Forget cached compiler-owned entries for a disk path. The next [open_file] reads a fresh snapshot; old handles
+    retain their contents so existing source locations remain valid. Editor-owned and virtual files are unchanged.
+    Callers must invalidate any parsed or checked state that depends on the file. *)
+val invalidate_file : path -> unit
+
 (** {1 Language-server-protocol (LSP) file lifecycle} *)
 
 (** The LSP takes control of a file by sending us a DidOpenTextDocument message, with the contents of the file as seen
