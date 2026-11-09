@@ -2036,7 +2036,7 @@ def execute (merge_var : ast) : SailM Unit := do
   | .CompareAndBranch (t, offset) => (execute_CompareAndBranch t offset)
 
 def decode (merge_var : (BitVec 32)) : (Option ast) :=
-  match_bv merge_var with
+  match_bv (merge_var : BitVec 32) with
   | [11,111,0,00,opc:2,1,Rm:5,option_v:3,S:1,10,Rn:5,Rt:5] =>
     (decodeLoadStoreRegister opc Rm option_v S Rn Rt)
   | [sf:1,10,01010,shift:2,N:1,Rm:5,imm6:6,Rn:5,Rd:5] =>

@@ -182,7 +182,7 @@ def size_bits_forwards (arg_ : word_width) : (BitVec 2) :=
   | .DOUBLE => 0b11#2
 
 def size_bits_backwards (arg_ : (BitVec 2)) : word_width :=
-  match arg_ with
+  match (arg_ : BitVec 2) with
   | 0b00 => BYTE
   | 0b01 => HALF
   | 0b10 => WORD
@@ -197,7 +197,7 @@ def size_bits_forwards_matches (arg_ : word_width) : Bool :=
   | _ => false
 
 def size_bits_backwards_matches (arg_ : (BitVec 2)) : Bool :=
-  match arg_ with
+  match (arg_ : BitVec 2) with
   | 0b00 => true
   | 0b01 => true
   | 0b10 => true
@@ -212,7 +212,7 @@ def size_bits2_forwards (arg_ : word_width) : (BitVec 2) :=
   | .DOUBLE => 0b11#2
 
 def size_bits2_backwards (arg_ : (BitVec 2)) : word_width :=
-  match arg_ with
+  match (arg_ : BitVec 2) with
   | 0b00 => BYTE
   | 0b01 => HALF
   | 0b10 => WORD
@@ -227,7 +227,7 @@ def size_bits2_forwards_matches (arg_ : word_width) : Bool :=
   | _ => false
 
 def size_bits2_backwards_matches (arg_ : (BitVec 2)) : Bool :=
-  match arg_ with
+  match (arg_ : BitVec 2) with
   | 0b00 => true
   | 0b01 => true
   | 0b10 => true
@@ -242,7 +242,7 @@ def size_bits3_forwards (arg_ : word_width) : (BitVec 2) :=
   | .DOUBLE => 0b11#2
 
 def size_bits3_backwards (arg_ : (BitVec 2)) : word_width :=
-  match arg_ with
+  match (arg_ : BitVec 2) with
   | 0b00 => BYTE
   | 0b01 => HALF
   | 0b10 => WORD
@@ -257,7 +257,7 @@ def size_bits3_forwards_matches (arg_ : word_width) : Bool :=
   | _ => false
 
 def size_bits3_backwards_matches (arg_ : (BitVec 2)) : Bool :=
-  match arg_ with
+  match (arg_ : BitVec 2) with
   | 0b00 => true
   | 0b01 => true
   | 0b10 => true
@@ -274,7 +274,7 @@ def ta_flag_forwards (arg_ : String) : SailM (BitVec 1) := do
       throw Error.Exit)
 
 def ta_flag_backwards (arg_ : (BitVec 1)) : String :=
-  match arg_ with
+  match (arg_ : BitVec 1) with
   | 1 => "ta"
   | _ => "tu"
 
@@ -285,7 +285,7 @@ def ta_flag_forwards_matches (arg_ : String) : Bool :=
   | _ => false
 
 def ta_flag_backwards_matches (arg_ : (BitVec 1)) : Bool :=
-  match arg_ with
+  match (arg_ : BitVec 1) with
   | 1 => true
   | 0 => true
   | _ => false
@@ -310,7 +310,7 @@ def hex_bits_backwards_matches (tuple_0 : (Nat × String)) : Bool :=
 
 def hex_bits_2_forwards (arg_ : (BitVec 2)) : SailM String := do
   let head_exp_ := arg_
-  match (match head_exp_ with
+  match (match (head_exp_ : BitVec 2) with
   | mapping0_ =>
     (match (hex_bits_forwards mapping0_) with
     | (2, s) => (some s)
@@ -328,7 +328,7 @@ def hex_bits_2_backwards (arg_ : String) : (BitVec 2) :=
 
 def hex_bits_2_forwards_matches (arg_ : (BitVec 2)) : SailM Bool := do
   let head_exp_ := arg_
-  match (match head_exp_ with
+  match (match (head_exp_ : BitVec 2) with
   | mapping0_ =>
     (match (hex_bits_forwards mapping0_) with
     | (2, s) => (some true)
@@ -336,7 +336,7 @@ def hex_bits_2_forwards_matches (arg_ : (BitVec 2)) : SailM Bool := do
   | _ => none) with
   | .some result => (pure result)
   | none =>
-    (match head_exp_ with
+    (match (head_exp_ : BitVec 2) with
     | _ => (pure false))
 
 def hex_bits_2_backwards_matches (arg_ : String) : Bool :=
@@ -348,7 +348,7 @@ def vtype_assembly_forwards (arg_ : String) : SailM ((BitVec 1) × (BitVec 1)) :
   throw Error.Exit
 
 def vtype_assembly_backwards (arg_ : ((BitVec 1) × (BitVec 1))) : SailM String := do
-  match arg_ with
+  match (arg_ : (BitVec 1 × BitVec 1)) with
   | (ta, sew) =>
     (do
       if (((BitVec.access sew 0) == 1#1) : Bool)
@@ -359,7 +359,7 @@ def vtype_assembly_forwards_matches (arg_ : String) : SailM Bool := do
   throw Error.Exit
 
 def vtype_assembly_backwards_matches (arg_ : ((BitVec 1) × (BitVec 1))) : Bool :=
-  match arg_ with
+  match (arg_ : (BitVec 1 × BitVec 1)) with
   | (ta, sew) =>
     (if (((BitVec.access sew 0) == 1#1) : Bool)
     then true
@@ -370,7 +370,7 @@ def vtype_assembly2_forwards (arg_ : String) : SailM ((BitVec 1) × (BitVec 1)) 
   match (let mapping0_ := head_exp_
   if ((hex_bits_2_backwards_matches mapping0_) : Bool)
   then
-    (match_bv (hex_bits_2_backwards mapping0_) with
+    (match_bv ((hex_bits_2_backwards mapping0_) : BitVec 2) with
     | [ta:1,sew:1] => (some (ta, sew))
     | _ => none)
   else none) with
@@ -381,7 +381,7 @@ def vtype_assembly2_forwards (arg_ : String) : SailM ((BitVec 1) × (BitVec 1)) 
       throw Error.Exit)
 
 def vtype_assembly2_backwards (arg_ : ((BitVec 1) × (BitVec 1))) : SailM String := do
-  match arg_ with
+  match (arg_ : (BitVec 1 × BitVec 1)) with
   | (ta, sew) => (hex_bits_2_forwards ((ta : (BitVec 1)) +++ (sew : (BitVec 1))))
 
 def vtype_assembly2_forwards_matches (arg_ : String) : SailM Bool := do
@@ -389,7 +389,7 @@ def vtype_assembly2_forwards_matches (arg_ : String) : SailM Bool := do
   match (let mapping0_ := head_exp_
   if ((hex_bits_2_backwards_matches mapping0_) : Bool)
   then
-    (match_bv (hex_bits_2_backwards mapping0_) with
+    (match_bv ((hex_bits_2_backwards mapping0_) : BitVec 2) with
     | [ta:1,sew:1] => (some true)
     | _ => none)
   else none) with
@@ -399,7 +399,7 @@ def vtype_assembly2_forwards_matches (arg_ : String) : SailM Bool := do
     | _ => (pure false))
 
 def vtype_assembly2_backwards_matches (arg_ : ((BitVec 1) × (BitVec 1))) : Bool :=
-  match arg_ with
+  match (arg_ : (BitVec 1 × BitVec 1)) with
   | (ta, sew) => true
   | _ => false
 
@@ -408,7 +408,7 @@ def vtype_assembly3_forwards (arg_ : String) : SailM ((BitVec 1) × (BitVec 1)) 
   | _ => throw Error.Exit
 
 def vtype_assembly3_backwards (arg_ : ((BitVec 1) × (BitVec 1))) : String :=
-  match arg_ with
+  match (arg_ : (BitVec 1 × BitVec 1)) with
   | (ta, sew) => (String.append (ta_flag_backwards sew) (String.append (ta_flag_backwards ta) ""))
 
 def vtype_assembly3_forwards_matches (arg_ : String) : SailM Bool := do
@@ -417,7 +417,7 @@ def vtype_assembly3_forwards_matches (arg_ : String) : SailM Bool := do
   | _ => (pure false)
 
 def vtype_assembly3_backwards_matches (arg_ : ((BitVec 1) × (BitVec 1))) : Bool :=
-  match arg_ with
+  match (arg_ : (BitVec 1 × BitVec 1)) with
   | (ta, sew) => true
   | _ => false
 

@@ -197,7 +197,7 @@ def zeros (n : Nat) : (BitVec n) :=
   (BitVec.replicateBits 0#1 n)
 
 def rX (r : (BitVec 5)) : SailM (BitVec 64) := do
-  match r with
+  match (r : BitVec 5) with
   | 0b00000 => (pure (EXTZ (m := 64) 0x0#4))
   | _ => (pure (GetElem?.getElem! (← readReg Xs) (BitVec.toNatInt r)))
 
@@ -253,7 +253,7 @@ def execute (merge_var : ast) : SailM Unit := do
       throw Error.Exit)
 
 def decode (merge_var : (BitVec 32)) : (Option ast) :=
-  match_bv merge_var with
+  match_bv (merge_var : BitVec 32) with
   | [imm:12,rs1:5,000,rd:5,0010011] => (some (ITYPE (imm, rs1, rd, RISCV_ADDI)))
   | [imm:12,rs1:5,011,rd:5,0000011] => (some (LOAD (imm, rs1, rd)))
   | _ => none

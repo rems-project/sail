@@ -1561,7 +1561,7 @@ def decodeExclusiveOr (sf : (BitVec 1)) (shift : (BitVec 2)) (N : (BitVec 1)) (R
     else (some (ExclusiveOr (d, n, m))))
 
 def decodeDataMemoryBarrier (merge_var : (BitVec 4)) : (Option ast) :=
-  match merge_var with
+  match (merge_var : BitVec 4) with
   | 0b1111 => (some (DataMemoryBarrier MBReqTypes_All))
   | 0b1110 => (some (DataMemoryBarrier MBReqTypes_Writes))
   | 0b1101 => (some (DataMemoryBarrier MBReqTypes_Reads))
@@ -1635,7 +1635,7 @@ def execute (merge_var : ast) : SailM Unit := do
   | .CompareAndBranch (t, offset) => (execute_CompareAndBranch t offset)
 
 def decode (merge_var : (BitVec 32)) : (Option ast) :=
-  match_bv merge_var with
+  match_bv (merge_var : BitVec 32) with
   | [11,111,0,00,opc:2,1,Rm:5,option_v:3,S:1,10,Rn:5,Rt:5] =>
     (decodeLoadStoreRegister opc Rm option_v S Rn Rt)
   | [sf:1,10,01010,shift:2,N:1,Rm:5,imm6:6,Rn:5,Rd:5] =>
