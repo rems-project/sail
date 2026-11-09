@@ -1095,11 +1095,19 @@ and doc_exp (as_monadic : bool) ctx (E_aux (e, (l, annot)) as full_exp) =
             )
     )
   | E_vector vals ->
-      if is_bitvector_typ (typ_of full_exp) then
-        nest 2
-          (wrap_with_pure as_monadic
-             (parens (flow space [string "BitVec.join1"; brackets (separate_map comma_sp (d_of_arg ctx) vals)]))
-          )
+      if is_bitvector_typ (typ_of full_exp) then begin
+        match vals with
+        | [v] ->
+            (* A single bit is already a bitvector of length 1: printing it as itself keeps
+               the type BitVec 1, where `BitVec.join1 [v]` would have type
+               `BitVec [v].length`, which type class resolution does not reduce. *)
+            wrap_with_pure as_monadic (d_of_arg ctx v)
+        | _ ->
+            nest 2
+              (wrap_with_pure as_monadic
+                 (parens (flow space [string "BitVec.join1"; brackets (separate_map comma_sp (d_of_arg ctx) vals)]))
+              )
+      end
       else
         string "#v"
         ^^ wrap_with_pure as_monadic (brackets (nest 2 (separate_map comma_sp (d_of_arg ctx) (List.rev vals))))

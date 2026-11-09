@@ -96,6 +96,10 @@ function bitvector_literal(x: bit, y: bit) -> bits(2) = {
   [x, y]
 }
 
+function bitvector_literal_one(x: bit) -> bool = {
+  [x] == 0b1
+}
+
 function vector_literal(x: int, y: int) -> vector(2, int) = {
   [x, y]
 }
