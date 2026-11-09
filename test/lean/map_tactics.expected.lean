@@ -3144,7 +3144,7 @@ def csr_name_map_forwards (arg_ : (BitVec 12)) : SailM String := do
 
 def csr_name_map_backwards (arg_ : String) : SailM (BitVec 12) := do
   let head_exp_ := arg_
-  match (← do
+  match (← (do
     match head_exp_ with
     | "stimecmp" => (pure (some 0x14D#12))
     | "stimecmph" => (pure (some 0x15D#12))
@@ -3406,7 +3406,7 @@ def csr_name_map_backwards (arg_ : String) : SailM (BitVec 12) := do
             match ((← (hex_bits_12_backwards mapping0_)) : BitVec 12) with
             | reg => (pure (some reg))
             | _ => (pure none))
-        else (pure none))) with
+        else (pure none)))) with
   | .some result => (pure result)
   | _ =>
     (do
@@ -3701,7 +3701,7 @@ def csr_name_map_forwards_matches (arg_ : (BitVec 12)) : Bool :=
 
 def csr_name_map_backwards_matches (arg_ : String) : SailM Bool := do
   let head_exp_ := arg_
-  match (← do
+  match (← (do
     match head_exp_ with
     | "stimecmp" => (pure (some true))
     | "stimecmph" => (pure (some true))
@@ -3963,7 +3963,7 @@ def csr_name_map_backwards_matches (arg_ : String) : SailM Bool := do
             match ((← (hex_bits_12_backwards mapping0_)) : BitVec 12) with
             | reg => (pure (some true))
             | _ => (pure none))
-        else (pure none))) with
+        else (pure none)))) with
   | .some result => (pure result)
   | none =>
     (match head_exp_ with
