@@ -789,6 +789,31 @@ let prepend_monad ctx exp doc =
 
 let match_or_match_bv (is_match_bv : bool) brs = if is_match_bv then "match_bv " else "match "
 
+(* Add type hints for expressions that are matched on so that Lean coerces bitvectors to a useful
+   type that it can cope with.  For example, x[(i+1)..i] has type bitvector(((('_#i + 1) - '_#i) + 1)),
+   but Lean needs to know to coerce it to BitVec 2; it won't coerce to the type in the patterns
+   automatically. *)
+
+let add_bitvector_type_hint env typ pp_discr =
+  let rec aux (Typ_aux (typ, _)) =
+    match typ with
+    | Typ_app (id, [A_aux (A_nexp size, _)]) when Id.compare id (mk_id "bitvector") == 0 -> (
+        match Type_check.solve_unique env size with
+        | Some size -> Some (string "BitVec " ^^ doc_big_int size)
+        | None -> None
+      )
+    | Typ_tuple typs ->
+        let docs = List.map aux typs in
+        if List.exists Option.is_some docs then
+          Some (parens (separate_map (string " × ") (Option.value ~default:underscore) docs))
+        else None
+    | _ -> None
+  in
+  match aux (Env.expand_synonyms env typ) with
+  (* parens are needed to avoid clashes with Lean's syntax for pattern equality proofs *)
+  | Some doc -> parens (pp_discr ^^ string " : " ^^ doc)
+  | None -> pp_discr
+
 let rec doc_match_clause (is_bv : bool) (as_monadic : bool) ctx (Pat_aux (cl, l) as p) typ =
   match cl with
   | Pat_exp (pat, branch) ->
@@ -1144,7 +1169,8 @@ and doc_exp (as_monadic : bool) ctx (E_aux (e, (l, annot)) as full_exp) =
         || as_monadic
       in
       let cases = separate_map hardline (fun p -> doc_match_clause is_match_bv as_monadic' ctx p (typ_of discr)) brs in
-      string (match_or_match_bv is_match_bv brs) ^^ d_of_arg ctx discr ^^ string " with" ^^ hardline ^^ cases
+      let pp_discr = add_bitvector_type_hint (env_of discr) (typ_of discr) (d_of_arg ctx discr) in
+      string (match_or_match_bv is_match_bv brs) ^^ pp_discr ^^ string " with" ^^ hardline ^^ cases
   | E_assign ((LE_aux (le_act, tannot) as le), e) ->
       wrap_with_left_arrow (not as_monadic)
         ( match le_act with

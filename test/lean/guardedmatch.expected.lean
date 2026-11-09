@@ -158,7 +158,7 @@ def xlen := 32
 /-- Type quantifiers: arg1 : Int -/
 def f (arg0 : (BitVec 12)) (arg1 : Int) : Int :=
   let merge_var := (arg0, arg1)
-  match merge_var with
+  match (merge_var : (BitVec 12 × _)) with
   | (0x200, v) => 0
   | (0x300, v) =>
     (if ((xlen == 32) : Bool)

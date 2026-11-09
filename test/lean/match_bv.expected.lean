@@ -152,7 +152,7 @@ def concat_str_dec (str : String) (x : Int) : String :=
   (HAppend.hAppend str (Int.repr x))
 
 def decode (merge_var : (BitVec 32)) : Bool :=
-  match_bv merge_var with
+  match_bv (merge_var : BitVec 32) with
   | [11,111,0,00,opc:2,1,Rm:5,option_v:3,S:1,10,Rn:5,Rt:5] =>
     (if ((Rm == Rn) : Bool)
     then true
@@ -168,7 +168,7 @@ def decode (merge_var : (BitVec 32)) : Bool :=
 def xlen := 32
 
 def write_CSR (merge_var : (BitVec 12)) : SailM Bool := do
-  match_bv merge_var with
+  match_bv (merge_var : BitVec 12) with
   | [1011000,index:5] if ((BitVec.toNatInt index) ≥b 3) => do (pure true)
   | [1011100,index:5] if ((xlen == 32) && (((BitVec.toNatInt index) ≥b 3) : Bool)) => do
     (pure true)
@@ -178,7 +178,7 @@ def write_CSR (merge_var : (BitVec 12)) : SailM Bool := do
       throw Error.Exit)
 
 def write_CSR2 (merge_var : (BitVec 12)) : SailM Bool := do
-  match_bv merge_var with
+  match_bv (merge_var : BitVec 12) with
   | [1011100,index:5] if ((xlen == 32) && (((BitVec.toNatInt index) ≥b 3) : Bool)) => do
     (pure true)
   | _ => do
