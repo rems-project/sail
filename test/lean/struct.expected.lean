@@ -195,8 +195,8 @@ def num_of_My_enum (arg_ : My_enum) : Int :=
   | .E2 => 1
 
 def undefined_My_struct (_ : Unit) : SailM My_struct := do
-  (pure { field1 := ← (undefined_int ())
-          field2 := ← (undefined_bitvector 1) })
+  (pure { field1 := ← (do (undefined_int ()))
+          field2 := ← (do (undefined_bitvector 1)) })
 
 def struct_field2 (s : My_struct) : (BitVec 1) :=
   s.field2
@@ -214,9 +214,10 @@ def mk_struct (i : Int) (b : (BitVec 1)) : My_struct :=
     field2 := b }
 
 def mk_struct_effectful (e : My_enum) (b : (BitVec 1)) : SailM My_struct := do
-  (pure { field1 := ← match e with
+  (pure { field1 := ← (do 
+            match e with
             | .E1 => readReg r
-            | .E2 => (pure 2)
+            | .E2 => (pure 2))
           field2 := b })
 
 def undef_struct (x : (BitVec 1)) : SailM My_struct := do

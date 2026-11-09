@@ -668,9 +668,11 @@ let wrap_with_pure (needs_return : bool) ?(with_parens = false) (d : document) =
 let wrap_with_left_arrow (needs_left_arrow : bool) (d : document) =
   if needs_left_arrow then parens (nest 2 (flow space [leftarrow; d])) else d
 
+(* We might be able to drop the extra parentheses with the new do-elaborator *)
 let wrap_with_do (with_arrow : bool) (needs_return : bool) (d : document) =
-  let ar_do = if with_arrow then string "← do" else string "do" in
-  if needs_return then parens (ifflat (ar_do ^^ space ^^ d) (nest 2 (flow hardline [ar_do; d]))) else d
+  let ar_do, ar_end = if with_arrow then (string "← (do", rparen) else (string "do", empty) in
+  if needs_return then parens (ifflat (ar_do ^^ space ^^ d ^^ ar_end) (nest 2 (flow hardline [ar_do; d ^^ ar_end])))
+  else d
 
 let get_fn_implicits (Typ_aux (t, _)) : bool list =
   let arg_implicit arg =
@@ -1208,8 +1210,9 @@ and doc_exp (as_monadic : bool) ctx (E_aux (e, (l, annot)) as full_exp) =
   | _ -> failwith ("Expression " ^ string_of_exp_con full_exp ^ " " ^ string_of_exp full_exp ^ " not translatable yet.")
 
 and doc_fexp with_arrow ctx (FE_aux (FE_fexp (field, e), _)) =
-  let arrow = if with_arrow then leftarrow ^^ space else empty in
-  doc_id_ctor ctx field ^^ string " := " ^^ arrow ^^ nest 2 (doc_exp with_arrow ctx e)
+  let arrow, final = if with_arrow then (leftarrow ^^ space ^^ string "(do ", rparen) else (empty, empty) in
+  doc_id_ctor ctx field ^^ string " := " ^^ arrow
+  ^^ nest 2 (group (ifflat empty hardline ^^ doc_exp with_arrow ctx e ^^ final))
 
 let doc_binder ctx env i t =
   let parenthesizer =
