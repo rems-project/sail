@@ -1463,7 +1463,8 @@ let doc_typdef ctx (TD_aux (td, tannot) as full_typdef) =
             ^^ deriving)
         in
         let wrapper =
-          nest 2
+          doc_typ_quant_in_comment ctx ctx.env tq
+          ^^ nest 2
             (flow space [string "inductive"; name; rectyp; string "where"]
             ^^ concat
                  (List.mapi
@@ -1489,8 +1490,7 @@ let doc_typdef ctx (TD_aux (td, tannot) as full_typdef) =
             groups
           |> List.concat
         in
-        doc_typ_quant_in_comment ctx ctx.env tq
-        ^^ string "mutual" ^^ hardline
+        string "mutual" ^^ hardline
         ^^ separate hardline (List.mapi chunk groups @ [wrapper])
         ^^ hardline ^^ string "end" ^^ hardline
         ^^ separate hardline aliases ^^ hardline ^^ string "open" ^^ space ^^ name
