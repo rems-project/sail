@@ -94,10 +94,10 @@ let opt_lean_lib_rev : string option ref = ref None
 let opt_enable_matchbv : bool ref = ref false
 let opt_disable_matchbv : bool ref = ref true
 
-let lean_version : string = "lean4:v4.29.0"
+let lean_version : string = "lean4:v4.34.1"
 let mathlib_version : string = "v4.29.0"
 let lib_default_git : string = "https://github.com/rems-project/lean-sail"
-let lib_default_rev : string = "v9"
+let lib_default_rev : string = "v10"
 
 let lean_options =
   [
@@ -268,6 +268,13 @@ let file_prelude version namespace =
 set_option maxRecDepth 1_000_000
 set_option linter.unusedVariables false
 set_option match.ignoreUnusedAlts true
+
+-- https://github.com/leanprover/lean4/issues/13858
+-- https://github.com/leanprover/lean4/issues/15685
+set_option backward.do.legacy true
+
+-- https://github.com/leanprover/lean4/issues/15661
+set_option cleanup.letToHave false
 
 open Sail
 open Sail.%s
