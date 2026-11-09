@@ -1182,8 +1182,14 @@ and doc_exp (as_monadic : bool) ctx (E_aux (e, (l, annot)) as full_exp) =
   | _ -> failwith ("Expression " ^ string_of_exp_con full_exp ^ " " ^ string_of_exp full_exp ^ " not translatable yet.")
 
 and doc_fexp with_arrow ctx (FE_aux (FE_fexp (field, e), _)) =
-  let arrow = if with_arrow then leftarrow ^^ space else empty in
-  doc_id_ctor ctx field ^^ string " := " ^^ arrow ^^ nest 2 (doc_exp with_arrow ctx e)
+  match e with
+  | E_aux ((E_if _ | E_match _), _) when with_arrow ->
+      (* After `field := ←` the conditional is a term, whose branches Lean does not treat as do
+         sequences, so a nested `(← …)` in a branch would not be lifted: print it in a do block. *)
+      doc_id_ctor ctx field ^^ string " := " ^^ wrap_with_do true true (doc_exp true ctx e)
+  | _ ->
+      let arrow = if with_arrow then leftarrow ^^ space else empty in
+      doc_id_ctor ctx field ^^ string " := " ^^ arrow ^^ nest 2 (doc_exp with_arrow ctx e)
 
 let doc_binder ctx env i t =
   let parenthesizer =
