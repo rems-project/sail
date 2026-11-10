@@ -1440,7 +1440,7 @@ let doc_typdef ctx (TD_aux (td, tannot) as full_typdef) =
       let derivers = if List.length ar == 0 then derivers else string "Inhabited" :: derivers in
       (* Lean 4.35 computes constructor layouts eagerly, including in noncomputable
          sections. Its runtime only has tags 0..243 for constructors with fields.
-         Split large variants into mutually defined chunks and expose the original
+         Split large variants into nonrecursive chunks and expose the original
          constructor names as match patterns. This preserves every alternative and
          lets both construction and exhaustive pattern matching keep their API. *)
       if List.length ar > 244 then (
@@ -1490,9 +1490,11 @@ let doc_typdef ctx (TD_aux (td, tannot) as full_typdef) =
             groups
           |> List.concat
         in
-        string "mutual" ^^ hardline
-        ^^ separate hardline (List.mapi chunk groups @ [wrapper])
-        ^^ hardline ^^ string "end" ^^ hardline
+        (* Sail forbids recursive type definitions. Emitting these declarations in
+           dependency order also lets Lean derive equality without treating the
+           chunks as a mutual inductive family. *)
+        separate hardline (List.mapi chunk groups @ [wrapper])
+        ^^ hardline
         ^^ separate hardline aliases ^^ hardline ^^ string "open" ^^ space ^^ name
       ) else
       doc_typ_quant_in_comment ctx ctx.env tq

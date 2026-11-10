@@ -11,7 +11,6 @@ open Sail.ConcurrencyInterfaceV1
 
 namespace Out
 
-mutual
 inductive large_variant_chunk0 (k_a : Type) where
   | C0 (_ : k_a)
   | C1 (_ : k_a)
@@ -266,7 +265,6 @@ inductive large_variant (k_a : Type) where
   | chunk0 (_ : (large_variant_chunk0 k_a))
   | chunk1 (_ : (large_variant_chunk1 k_a))
   deriving Inhabited, BEq, Repr
-end
 @[match_pattern] abbrev large_variant.C0 {k_a : Type} (x : k_a) : large_variant k_a := large_variant.chunk0 (large_variant_chunk0.C0 x)
 @[match_pattern] abbrev large_variant.C1 {k_a : Type} (x : k_a) : large_variant k_a := large_variant.chunk0 (large_variant_chunk0.C1 x)
 @[match_pattern] abbrev large_variant.C2 {k_a : Type} (x : k_a) : large_variant k_a := large_variant.chunk0 (large_variant_chunk0.C2 x)
