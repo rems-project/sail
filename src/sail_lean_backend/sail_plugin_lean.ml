@@ -158,15 +158,15 @@ let lean_options =
       Arg.Unit (fun () -> opt_lean_executable := true),
       "generate an executable if there is a main function in the Sail program"
     );
-    ( Flag.create ~prefix:["lean"] "lib-path",
+    ( Flag.create ~prefix:["lean"] ~arg:"path" "lib-path",
       Arg.String (fun p -> opt_lean_lib_path := Some p),
       "(local) path of the Lean support library, for development"
     );
-    ( Flag.create ~prefix:["lean"] "lib-repo",
+    ( Flag.create ~prefix:["lean"] ~arg:"url" "lib-repo",
       Arg.String (fun r -> opt_lean_lib_git := Some r),
       "url of the git repository of the Lean support library"
     );
-    ( Flag.create ~prefix:["lean"] "lib-rev",
+    ( Flag.create ~prefix:["lean"] ~arg:"revision" "lib-rev",
       Arg.String (fun r -> opt_lean_lib_rev := Some r),
       "revision of the Lean support library"
     );
