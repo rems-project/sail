@@ -214,6 +214,8 @@ let lean_rewrites =
     ("add_register_init_function", []);
     ("attach_effects", []);
     ("const_prop_mutrec", [String_arg "lean"]);
+    (* Specialization can remove recursive calls but retain their measures. *)
+    ("minimise_recursive_functions", []);
     ("exp_lift_assign", []);
     ("early_return", []);
     (* We need to do the exhaustiveness check before merging, because it may
