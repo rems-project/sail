@@ -224,6 +224,9 @@ def bitvector_plus_int (x : (BitVec 16)) (i : Int) : (BitVec 16) :=
 def bitvector_literal (x : (BitVec 1)) (y : (BitVec 1)) : (BitVec 2) :=
   (BitVec.join1 [x, y])
 
+def bitvector_literal_one (x : (BitVec 1)) : Bool :=
+  (x == 1#1)
+
 /-- Type quantifiers: y : Int, x : Int -/
 def vector_literal (x : Int) (y : Int) : (Vector Int 2) :=
   #v[y, x]
