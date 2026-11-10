@@ -1467,6 +1467,65 @@ let doc_typdef ctx (TD_aux (td, tannot) as full_typdef) =
       let derivers = [string "Repr"] in
       let derivers = if IdSet.mem id !non_beq_types then derivers else string "BEq" :: derivers in
       let derivers = if List.length ar == 0 then derivers else string "Inhabited" :: derivers in
+      (* Lean 4.35 computes constructor layouts eagerly, including in noncomputable
+         sections. Its runtime only has tags 0..243 for constructors with fields.
+         Split large variants into nonrecursive chunks and expose the original
+         constructor names as match patterns. This preserves every alternative and
+         lets both construction and exhaustive pattern matching keep their API. *)
+      if List.length ar > 244 then (
+        let name = doc_id_ctor ctx id in
+        let parameters = separate space (doc_typ_quant_only_vars ctx tq) in
+        let implicit_parameters =
+          separate space (List.map braces (doc_typ_quant_relevant ctx tq))
+        in
+        let rec chunks xs =
+          if xs = [] then [] else Util.take 244 xs :: chunks (Util.drop 244 xs)
+        in
+        let groups = chunks ar in
+        let chunk_name i = name ^^ string ("_chunk" ^ string_of_int i) in
+        let wrapper_name i = string ("chunk" ^ string_of_int i) in
+        let deriving = hardline ^^ string "deriving" ^^ space ^^ separate comma_sp derivers in
+        let chunk i members =
+          nest 2
+            (flow space [string "inductive"; chunk_name i; rectyp; string "where"]
+            ^^ concat (List.map (fun tu -> hardline ^^ doc_type_union ctx tu) members)
+            ^^ deriving)
+        in
+        let wrapper =
+          doc_typ_quant_in_comment ctx ctx.env tq
+          ^^ nest 2
+            (flow space [string "inductive"; name; rectyp; string "where"]
+            ^^ concat
+                 (List.mapi
+                    (fun i _ ->
+                      hardline ^^ pipe ^^ space ^^ wrapper_name i ^^ space
+                      ^^ parens (underscore ^^ space ^^ colon ^^ space
+                                ^^ parens (chunk_name i ^^ space ^^ parameters)))
+                    groups)
+            ^^ deriving)
+        in
+        let aliases =
+          List.mapi
+            (fun i members ->
+              List.map
+                (fun (Tu_aux (Tu_ty_id (ty, ctor), _)) ->
+                  flow space
+                    [ string "@[match_pattern] abbrev"; name ^^ dot ^^ doc_id_ctor ctx ctor;
+                      implicit_parameters; parens (string "x" ^^ space ^^ colon ^^ space ^^ doc_typ ctx ctx.env ty);
+                      colon; name; parameters; coloneq;
+                      name ^^ dot ^^ wrapper_name i;
+                      parens (chunk_name i ^^ dot ^^ doc_id_ctor ctx ctor ^^ space ^^ string "x") ])
+                members)
+            groups
+          |> List.concat
+        in
+        (* Sail forbids recursive type definitions. Emitting these declarations in
+           dependency order also lets Lean derive equality without treating the
+           chunks as a mutual inductive family. *)
+        separate hardline (List.mapi chunk groups @ [wrapper])
+        ^^ hardline
+        ^^ separate hardline aliases ^^ hardline ^^ string "open" ^^ space ^^ name
+      ) else
       doc_typ_quant_in_comment ctx ctx.env tq
       ^^ nest 2
            (nest 2 (flow space (remove_empties [string "inductive"; doc_id_ctor ctx id; rectyp; string "where"]))
