@@ -598,13 +598,17 @@ let main () =
   );
 
   let argv = Sail_file.sail_argv () in
-  ( try Arg.parse_argv_dynamic argv options (fun s -> opt_free_arguments := !opt_free_arguments @ [s]) usage_msg with
-  | Arg.Bad _ ->
+  (* Use a trick from the ocaml compiler to avoid printing the entire option list on error:
+     put \000 in as the usage line, then take the error text before that. *)
+  ( try Arg.parse_argv_dynamic argv options (fun s -> opt_free_arguments := !opt_free_arguments @ [s]) "\000" with
+  | Arg.Bad err ->
+      prerr_endline (String.split_on_char '\000' err |> List.hd);
       prerr_endline usage_msg;
       Printf.eprintf "Use 'sail%s --help' for a list of available arguments.\n%!" !opt_tool_help;
       exit 1
   | Arg.Help msg ->
-      prerr_endline msg;
+      (* The help function above replaces the text anyway, so we don't need to look for \000 *)
+      print_endline msg;
       exit 0
   );
 

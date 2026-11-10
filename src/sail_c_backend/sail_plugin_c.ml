@@ -100,7 +100,7 @@ let c_options =
       "supply extra argument to every generated C/C++ function call"
     );
     (Flag.create ~prefix:["c"] "specialize", Arg.Set opt_specialize_c, "specialize integer arguments in C/C++ output");
-    ( Flag.create ~prefix:["c"] "preserve",
+    ( Flag.create ~prefix:["c"] ~arg:"function" "preserve",
       Arg.String (fun str -> Specialize.add_initial_calls (IdSet.singleton (mk_id str))),
       "make sure the provided function identifier is preserved in C/C++ output"
     );
