@@ -52,7 +52,7 @@ def main():
     fixtures = {
         "leaf.sail": "function leaf(x : bool) -> bool = x\n",
         "model.sail": '$include "leaf.sail"\nfunction use_leaf(x : bool) -> bool = leaf(x)\n',
-        "Supplement.lean": "  import Sail\nimport THE_MODULE_NAME.Defs\n"
+        "Supplement.lean": "  import Sail\nimport THE_MODULE_NAME.Defs\nopen THE_MODULE_NAME.Defs\n"
             "namespace THE_MODULE_NAME\ndef supplement : Nat := 7\nend THE_MODULE_NAME\n",
         "NoImports.lean": "namespace THE_MODULE_NAME\ndef noImports : Nat := 11\nend THE_MODULE_NAME\n",
         "AlreadyModule.lean": "module\npublic import Sail\n@[expose] public section\n"
