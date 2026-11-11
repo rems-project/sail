@@ -514,6 +514,8 @@ module Make (Config : CONFIG) = struct
 
   let sv_signed x = string "signed'" ^^ parens x
 
+  let sv_unsigned x = string "unsigned'" ^^ parens x
+
   (* Print the value of a bitvector as hexadecimal digits, dropping any
      leading zeros. Only used when the width is a multiple of four. *)
   let hex_bitvector value =
@@ -587,13 +589,13 @@ module Make (Config : CONFIG) = struct
     | Fn ("bvsge", [x; y]) -> opt_parens (separate space [sv_signed (pp_smt x); string ">="; sv_signed (pp_smt y)])
     | Fn ("bvshl", [x; y]) -> opt_parens (separate space [pp_smt_parens x; string "<<"; sv_signed (pp_smt y)])
     | Fn ("bvlshr", [x; y]) -> opt_parens (separate space [pp_smt_parens x; string ">>"; sv_signed (pp_smt y)])
-    | Fn ("bvashr", [x; y]) -> opt_parens (separate space [pp_smt_parens x; string ">>>"; sv_signed (pp_smt y)])
+    | Fn ("bvashr", [x; y]) -> sv_unsigned (separate space [sv_signed (pp_smt x); string ">>>"; sv_signed (pp_smt y)])
     (* SV LRM: The integer division shall truncate any fractional part toward zero
        SMTLIB bvsdiv: Truncation is towards zero (could not find official reference, but z3 and cvc5 are consistent). *)
-    | Fn ("bvsdiv", [x; y]) -> opt_parens (separate space [sv_signed (pp_smt x); string "/"; sv_signed (pp_smt y)])
+    | Fn ("bvsdiv", [x; y]) -> sv_unsigned (separate space [sv_signed (pp_smt x); string "/"; sv_signed (pp_smt y)])
     (* SV LRM: The result of a modulus operation shall take the sign of the first operand (dividend).
        SMTLIB bvsrem: Sign follows dividend *)
-    | Fn ("bvsrem", [x; y]) -> opt_parens (separate space [sv_signed (pp_smt x); string "%"; sv_signed (pp_smt y)])
+    | Fn ("bvsrem", [x; y]) -> sv_unsigned (separate space [sv_signed (pp_smt x); string "%"; sv_signed (pp_smt y)])
     | Fn ("select", [x; i]) -> pp_smt_parens x ^^ lbracket ^^ pp_smt i ^^ rbracket
     | Fn ("contents", [Var v]) -> pp_name v ^^ dot ^^ string "sb_bits"
     | Fn ("contents", [x]) -> string "sail_bits_value" ^^ parens (pp_smt x)
