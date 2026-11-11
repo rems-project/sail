@@ -1,9 +1,7 @@
 (* Unit tests for the public Sail_file interface.
 
-   To keep the tests hermetic they build file handles with
-   [add_virtual_file], which does not touch the filesystem, rather
-   than [editor_take_file], which canonicalises paths with realpath
-   and hence needs a real file on disk.
+   Most tests use [add_virtual_file]. Cache lifecycle tests use temporary
+   disk files and remove them afterwards.
 
    The [suites] value at the bottom is collected by the [test_libsail] runner. *)
 
@@ -122,9 +120,48 @@ let idempotence_tests =
     );
   ]
 
+let cache_tests =
+  let with_file test () =
+    let file = Filename.temp_file "sail_file_cache" ".sail" in
+    let write text =
+      let chan = open_out_bin file in
+      Fun.protect ~finally:(fun () -> close_out chan) (fun () -> output_string chan text)
+    in
+    Fun.protect ~finally:(fun () -> Sys.remove file) (fun () -> test file write)
+  in
+  [
+    Alcotest.test_case "invalidation preserves old source locations" `Quick
+      (with_file (fun file write ->
+           let path = Sail_file.Path.actual file in
+           let original = "a\xf0\x9f\x98\x80b\nold line\n" in
+           write original;
+           let old = Sail_file.open_file path in
+           let location = Option.get (Sail_file.lexing_position old (pos 0 3)) in
+           write "short\n";
+           Sail_file.invalidate_file path;
+           let fresh = Sail_file.open_file path in
+           Alcotest.(check bool) "fresh handle" false (Sail_file.handle_equal old fresh);
+           Alcotest.(check string) "fresh contents" "short\n" (Sail_file.contents fresh);
+           Alcotest.(check string) "old contents" original (Sail_file.contents old);
+           Alcotest.(check (option string)) "old line" (Some "old line") (Sail_file.line old 2);
+           let position = Option.get (Sail_file.editor_position location) in
+           Alcotest.(check int) "old UTF-16 offset" 3 position.character;
+           Sail_file.invalidate_file path;
+           let editor = Sail_file.editor_take_file ~contents:"unsaved" file in
+           Alcotest.(check bool) "no retired handle" false (Sail_file.handle_equal old editor);
+           Alcotest.(check bool) "no second retired handle" false (Sail_file.handle_equal fresh editor);
+           Sail_file.invalidate_file path;
+           Alcotest.(check bool) "editor retained" true (Sail_file.handle_equal editor (Sail_file.open_file path));
+           Alcotest.(check string) "editor contents" "unsaved" (Sail_file.contents editor);
+           Alcotest.(check string) "old snapshot still intact" original (Sail_file.contents old)
+       )
+      );
+  ]
+
 let suites : unit Alcotest.test list =
   [
     ("Sail_file.contents", contents_tests);
+    ("Sail_file.cache", cache_tests);
     ("Sail_file.lexing_position", lexing_position_tests);
     ("Sail_file.apply_edits", apply_edits_tests @ idempotence_tests);
   ]

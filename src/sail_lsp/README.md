@@ -9,6 +9,17 @@ Currently supports syntax highlighting, code folding, hover
 type-at-cursor, go-to-definition, automatic formatting, and reporting
 type-error diagnostics as you type.
 
+### Dependency changes
+
+The server handles `workspace/didChangeWatchedFiles` notifications to refresh
+saved dependencies and project files. Configure your client to watch
+`**/*.sail` and `**/*.sail_project`; the server does not register watchers
+dynamically. Saving an open document also refreshes diagnostics for the other
+open documents. Unsaved editor buffers take precedence over disk changes.
+
+Each server stays with the first project it finds. Use a separate server for
+another project, and restart the server if the project path changes.
+
 ### Configuration
 
 Semantic highlighting and folding are off by default. Either can be

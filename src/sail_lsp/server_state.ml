@@ -66,6 +66,7 @@ type parsed_file =
   | File of {
       id : Project.mod_id;
       handle : Sail_file.handle;
+      path : Sail_file.path;
       cont : Preprocess.symbol_set -> Initial_check.ctx -> parse_continuation;
     }
 
@@ -112,29 +113,7 @@ let force_last_ast state =
 let update_ast ast state =
   match state.checked with Start -> state | Checked c -> { state with checked = Checked { c with ast = Full ast } }
 
-let parse_file ?loc ~default_sail_dir mod_id path =
-  let handle = Sail_file.open_file path in
-  let extension = Filename.extension (Sail_file.Path.to_string path) in
-  let module Handler = (val Frontend.get_handler ~path extension : Frontend.FILE_HANDLER) in
-  try
-    let parsed = Handler.parse loc path in
-    let cont symbols ctx =
-      let processed, symbols, ctx =
-        Handler.process ~target_name:None ~default_sail_dir ~options:[] ~symbols ctx parsed
-      in
-      {
-        check = (fun env -> Handler.check_lazy env processed);
-        vs_ids = Handler.defines_functions processed;
-        regs = Handler.uninitialized_registers processed;
-        symbols;
-        ctx;
-      }
-    in
-    Ok (File { id = mod_id; handle; cont })
-  with Reporting.Fatal_error err -> Error (handle, err)
-
-let reparse ?loc ~default_sail_dir mod_id handle =
-  let path = Sail_file.to_path handle in
+let reparse ?loc ~default_sail_dir path =
   let extension = Filename.extension (Sail_file.Path.to_string path) in
   let module Handler = (val Frontend.get_handler ~path extension : Frontend.FILE_HANDLER) in
   try
@@ -153,6 +132,12 @@ let reparse ?loc ~default_sail_dir mod_id handle =
     in
     Ok cont
   with Reporting.Fatal_error err -> Error err
+
+let parse_file ?loc ~default_sail_dir mod_id path =
+  let handle = Sail_file.open_file path in
+  match reparse ?loc ~default_sail_dir path with
+  | Ok cont -> Ok (File { id = mod_id; handle; path; cont })
+  | Error err -> Error (handle, err)
 
 let rec invalidate_checked state h =
   match state.checked with
@@ -179,8 +164,8 @@ let rec check_up_to state h =
   match state.parsed with
   | [] -> Ok state
   | Error (_, err) :: _ -> Error err
-  | Ok (File { id = mod_id; handle; cont = _ } as p) :: rest ->
-      let* cont = reparse ~default_sail_dir:state.default_sail_dir mod_id handle in
+  | Ok (File { handle; path; _ } as p) :: rest ->
+      let* cont = reparse ~default_sail_dir:state.default_sail_dir path in
       let* s =
         try
           let processed = cont (last_symbols state) (last_ctx state) in
