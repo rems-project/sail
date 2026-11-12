@@ -1120,8 +1120,11 @@ and doc_exp (as_monadic : bool) ctx (E_aux (e, (l, annot)) as full_exp) =
       let ctx = update_ctx_pat ctx lpat in
       let pp_let_line_f l = group (nest 2 (flow (break 1) l)) in
       let pp_let_line =
-        if has_effect lexp || has_loop then
-          if is_unit (typ_of lexp) && is_anonymous_pat lpat then doc_exp true ctx lexp
+        if has_effect lexp || has_loop then (
+          (* The legacy do-elaborator won't push the unit type inside an if; we can remove this once
+             we can use the new do-elaborator. *)
+          let need_legacy_workaround = match lexp with E_aux ((E_if _ | E_match _), _) -> true | _ -> false in
+          if is_unit (typ_of lexp) && is_anonymous_pat lpat && not need_legacy_workaround then doc_exp true ctx lexp
           else (
             match (is_arrow_do, typ_ascription) with
             | true, None -> pp_let_line_f [separate space [string "let"; id_typ; leftarrowdo]; doc_exp true ctx lexp]
@@ -1149,6 +1152,7 @@ and doc_exp (as_monadic : bool) ctx (E_aux (e, (l, annot)) as full_exp) =
                   @ [string ")"]
                   )
           )
+        )
         else (
           match typ_ascription with
           | Some asc ->

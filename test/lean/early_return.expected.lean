@@ -411,10 +411,11 @@ def while_inner_earlyreturnpure_catch (n : Nat) : Bool := ExceptM.run do
   (pure (res >b n))
 
 def match_early_return (x : E) : SailM E := SailME.run do
-  match x with
-  | .A => SailME.throw (← (do readReg r_A))
-  | .B => writeReg r_B A
-  | .C => writeReg r_C A
+  let _ ← (( do
+    match x with
+    | .A => SailME.throw (← (do readReg r_A))
+    | .B => writeReg r_B A
+    | .C => writeReg r_C A ) : SailME E Unit )
   readReg r_B
 
 def match_early_return_inloop (x : E) : SailM E := SailME.run do
@@ -448,18 +449,19 @@ def match_early_return_inloop_2 (x : E) : SailM E := SailME.run do
   readReg r_B
 
 def match_early_return_loop (x : E) : SailM E := SailME.run do
-  match x with
-  | .A =>
-    (do
-      let loop_i_lower := 0
-      let loop_i_upper := 10
-      let mut loop_vars := ()
-      for i in [loop_i_lower:loop_i_upper:1]i do
-        let () := loop_vars
-        loop_vars ← do SailME.throw (← (do readReg r_A))
-      (pure loop_vars))
-  | .B => writeReg r_B A
-  | .C => writeReg r_C A
+  let _ ← (( do
+    match x with
+    | .A =>
+      (do
+        let loop_i_lower := 0
+        let loop_i_upper := 10
+        let mut loop_vars := ()
+        for i in [loop_i_lower:loop_i_upper:1]i do
+          let () := loop_vars
+          loop_vars ← do SailME.throw (← (do readReg r_A))
+        (pure loop_vars))
+    | .B => writeReg r_B A
+    | .C => writeReg r_C A ) : SailME E Unit )
   readReg r_B
 
 /-- Type quantifiers: k_ex2758_ : Bool -/
@@ -490,17 +492,18 @@ def ite_early_return_inloop (x : Bool) : SailM E := SailME.run do
 
 /-- Type quantifiers: k_ex2760_ : Bool -/
 def ite_early_return_loop (x : Bool) : SailM E := SailME.run do
-  if (x : Bool)
-  then
-    (do
-      let loop_i_lower := 0
-      let loop_i_upper := 10
-      let mut loop_vars := ()
-      for i in [loop_i_lower:loop_i_upper:1]i do
-        let () := loop_vars
-        loop_vars ← do SailME.throw (← (do readReg r_A))
-      (pure loop_vars))
-  else writeReg r_B A
+  let _ ← (( do
+    if (x : Bool)
+    then
+      (do
+        let loop_i_lower := 0
+        let loop_i_upper := 10
+        let mut loop_vars := ()
+        for i in [loop_i_lower:loop_i_upper:1]i do
+          let () := loop_vars
+          loop_vars ← do SailME.throw (← (do readReg r_A))
+        (pure loop_vars))
+    else writeReg r_B A ) : SailME E Unit )
   readReg r_B
 
 def unit_type (x : E) : SailM Unit := do
@@ -525,9 +528,10 @@ def ite_early_return_exit (x : Bool) : SailM E := SailME.run do
     if (x : Bool)
     then SailME.throw (← (do readReg r_A))
     else readReg r_B ) : SailME E E )
-  if (x : Bool)
-  then throw Error.Exit
-  else (pure ())
+  let _ ← (( do
+    if (x : Bool)
+    then throw Error.Exit
+    else (pure ()) ) : SailME E Unit )
   readReg r_B
 
 def initialize_registers (_ : Unit) : SailM Unit := do
