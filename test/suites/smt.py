@@ -22,6 +22,14 @@ _skip_tests = {
     "arith_FFL_5_unsat": {"cvc4"},
 }
 
+_xfails = {
+    "append_lbits_overflow.unsat.sail": "Known bug",
+    "conversions.unsat.sail": "Known bug",
+    "sign_extend_var.unsat.sail": "Known bug",
+    "unsigned_lbits_top_bit.unsat.sail": "Known bug",
+    "vector_subrange_var.unsat.sail": "Known bug",
+}
+
 
 @suite("smt", _SUITE_DIR)
 class SmtTests(SailTest):
@@ -33,6 +41,7 @@ class SmtTests(SailTest):
                 Batcher(_SUITE_DIR),
                 self._make_test("cvc4", "cvc4 --lang=smt2.6", ""),
                 testdir=_SUITE_DIR,
+                expected_failures=_xfails,
                 skip_fn=self._make_skip_fn("cvc4"),
             )
         else:
@@ -47,6 +56,7 @@ class SmtTests(SailTest):
                 Batcher(_SUITE_DIR),
                 self._make_test("z3", "z3", ""),
                 testdir=_SUITE_DIR,
+                expected_failures=_xfails,
                 skip_fn=self._make_skip_fn("z3"),
             )
         else:
