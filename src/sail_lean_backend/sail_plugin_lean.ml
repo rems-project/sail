@@ -261,6 +261,9 @@ let file_to_module (filename : string) =
 
 let interface_module interface_v = if interface_v = 1 then "ConcurrencyInterfaceV1" else "ArchSem"
 
+(* NB: once we don't need the legacy do-elaborator there's a workaround in the pretty-printer we
+   can remove. *)
+
 let file_prelude version namespace =
   let non_computable = if !opt_lean_noncomputable then "noncomputable section\n" else "" in
   Printf.sprintf

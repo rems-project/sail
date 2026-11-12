@@ -187,9 +187,10 @@ def elif (n : Nat) : (BitVec 1) :=
 
 /-- Type quantifiers: n : Nat, 0 ≤ n -/
 def monadic_in_out (n : Nat) : SailM Nat := do
-  if ((← readReg B) : Bool)
-  then writeReg R n
-  else (pure ())
+  let _ ← (( do
+    if ((← readReg B) : Bool)
+    then writeReg R n
+    else (pure ()) ) : SailM Unit )
   readReg R
 
 /-- Type quantifiers: n : Nat, 0 ≤ n -/
