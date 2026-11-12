@@ -235,26 +235,32 @@ let is_false e = is_lit e L_false
 (* Adapted from Coq PP *)
 (* These all take a local environment so that they can spot type names that are shadowed by let-bound variables. *)
 let rec doc_nexp ctx env (Nexp_aux (n, l) as nexp) =
-  let rec plussub (Nexp_aux (n, l) as nexp) =
+  (* Lean's [if] extends as far to the right as possible and [/], [%] share the precedence of [*], so conditionals are
+     printed at the lowest level and division/modulus at the multiplicative level; a non-atomic operand at a tighter
+     level is then parenthesised by [atomic]. *)
+  let rec ite (Nexp_aux (n, l) as nexp) =
+    match n with
+    | Nexp_if (i, t, e) ->
+        separate space
+          [string "if ("; doc_nconstraint ctx env i; string " : Bool) then"; atomic t; string "else"; atomic e]
+    | _ -> plussub nexp
+  and plussub (Nexp_aux (n, l) as nexp) =
     match n with
     | Nexp_sum (n1, n2) -> separate space [plussub n1; plus; mul n2]
     | Nexp_minus (n1, n2) -> separate space [plussub n1; minus; mul n2]
     | _ -> mul nexp
   and mul (Nexp_aux (n, l) as nexp) =
-    match n with Nexp_times (n1, n2) -> separate space [mul n1; star; uneg n2] | _ -> uneg nexp
+    match n with
+    | Nexp_times (n1, n2) -> separate space [mul n1; star; uneg n2]
+    | Nexp_app (Id_aux (Id "div", _), [n1; n2]) -> separate space [atomic n1; string "/"; atomic n2]
+    | Nexp_app (Id_aux (Id "mod", _), [n1; n2]) -> separate space [atomic n1; string "%"; atomic n2]
+    | _ -> uneg nexp
   and uneg (Nexp_aux (n, l) as nexp) =
     match n with Nexp_neg n -> parens (separate space [minus; uneg n]) | _ -> exp nexp
   and exp (Nexp_aux (n, l) as nexp) =
     match n with Nexp_exp n -> separate space [string "2"; caret; exp n] | _ -> app nexp
   and app (Nexp_aux (n, l) as nexp) =
-    match n with
-    | Nexp_if (i, t, e) ->
-        separate space
-          [string "if ("; doc_nconstraint ctx env i; string " : Bool) then"; atomic t; string "else"; atomic e]
-    | Nexp_app (Id_aux (Id "div", _), [n1; n2]) -> separate space [atomic n1; string "/"; atomic n2]
-    | Nexp_app (Id_aux (Id "mod", _), [n1; n2]) -> separate space [atomic n1; string "%"; atomic n2]
-    | Nexp_app (Id_aux (Id "abs", _), [n1]) -> separate dot [atomic n1; string "natAbs"]
-    | _ -> atomic nexp
+    match n with Nexp_app (Id_aux (Id "abs", _), [n1]) -> separate dot [atomic n1; string "natAbs"] | _ -> atomic nexp
   and atomic (Nexp_aux (n, l) as nexp) =
     match n with
     | Nexp_constant i -> doc_big_int i
@@ -263,7 +269,7 @@ let rec doc_nexp ctx env (Nexp_aux (n, l) as nexp) =
     | Nexp_sum _ | Nexp_minus _ | Nexp_times _ | Nexp_neg _ | Nexp_exp _ | Nexp_if _
     | Nexp_app (Id_aux (Id ("div" | "mod"), _), [_; _])
     | Nexp_app (Id_aux (Id "abs", _), [_]) ->
-        parens (plussub nexp)
+        parens (ite nexp)
     | _ -> failwith ("NExp " ^ string_of_nexp_con nexp ^ " " ^ string_of_nexp nexp ^ " not translatable yet.")
   in
   atomic nexp
