@@ -380,7 +380,12 @@ module KindInference = struct
 
   (* This is the typing environment for the kind-inference
      algorithm. *)
-  type env = { sets : (IntSet.t * unification_kind) list; next_unknown : int; vars : int KBindings.t list }
+  type env = {
+    sets : (IntSet.t * unification_kind) list;
+    next_unknown : int;
+    vars : int KBindings.t list;
+    recursive_types : inference_kind list Bindings.t;
+  }
 
   (* The typing rules in this module are defined in terms of a state
      monad over the typing environment. *)
@@ -478,7 +483,7 @@ module KindInference = struct
         )
         kopts
     in
-    let* () = put_state { sets = !sets @ env.sets; next_unknown = !unknowns; vars = !vars :: env.vars } in
+    let* () = put_state { env with sets = !sets @ env.sets; next_unknown = !unknowns; vars = !vars :: env.vars } in
     return kopts
 
   let resolve ~at:l kind ik env =
@@ -498,11 +503,17 @@ module KindInference = struct
     match aux with
     | P.ATyp_id id ->
         let id' = to_ast_id ctx id in
+        let* env = get_state in
         let* () =
-          match Bindings.find_opt id' ctx.type_constructors with
-          | None -> return ()
-          | Some ([], ret_kind) -> resolve ~at:l ret_kind ik
-          | Some (kind_opts, _) -> raise (ksprintf (Reporting.err_typ l) "%s is not a constant" (string_of_id id'))
+          match Bindings.find_opt id' env.recursive_types with
+          | Some [] -> resolve ~at:l P.K_type ik
+          | Some _ -> raise (ksprintf (Reporting.err_typ l) "%s is not a constant" (string_of_id id'))
+          | None -> (
+              match Bindings.find_opt id' ctx.type_constructors with
+              | None -> return ()
+              | Some ([], ret_kind) -> resolve ~at:l ret_kind ik
+              | Some (kind_opts, _) -> raise (ksprintf (Reporting.err_typ l) "%s is not a constant" (string_of_id id'))
+            )
         in
         return atyp
     | P.ATyp_var v ->
@@ -589,23 +600,37 @@ module KindInference = struct
         wrap (P.ATyp_neg t)
     | P.ATyp_app (id, args) ->
         let id' = to_ast_id ctx id in
+        let* env = get_state in
         let* args =
-          match get_type_constructor id' ctx with
-          | None ->
-              raise (ksprintf (Reporting.err_typ l) "Unknown type level operator or function %s" (string_of_id id'))
-          | Some (kinds, ret_kind) ->
-              let* () = resolve ~at:l ret_kind ik in
-              let args_len = List.length args in
-              let kinds = if args_len = List.length kinds then kinds else filter_order_kinds kinds in
-              if List.compare_lengths args kinds <> 0 then
+          match Bindings.find_opt id' env.recursive_types with
+          | Some arg_kinds ->
+              let* () = resolve ~at:l P.K_type ik in
+              if List.compare_lengths args arg_kinds <> 0 then
                 raise
                   (Reporting.err_typ l
-                     (sprintf "%s : %s -> %s expected %d arguments, given %d" (string_of_id id')
-                        (format_parse_kind_aux_list (filter_order_kinds kinds))
-                        (string_of_parse_kind_aux ret_kind) (List.length kinds) (List.length args)
+                     (sprintf "%s expected %d arguments, given %d" (string_of_id id') (List.length arg_kinds)
+                        (List.length args)
                      )
                   );
-              mapM (function arg, kind -> check ctx arg (Kind (kind, id_loc id'))) (List.combine args kinds)
+              mapM (fun (arg, kind) -> check ctx arg kind) (List.combine args arg_kinds)
+          | None -> (
+              match get_type_constructor id' ctx with
+              | None ->
+                  raise (ksprintf (Reporting.err_typ l) "Unknown type level operator or function %s" (string_of_id id'))
+              | Some (kinds, ret_kind) ->
+                  let* () = resolve ~at:l ret_kind ik in
+                  let args_len = List.length args in
+                  let kinds = if args_len = List.length kinds then kinds else filter_order_kinds kinds in
+                  if List.compare_lengths args kinds <> 0 then
+                    raise
+                      (Reporting.err_typ l
+                         (sprintf "%s : %s -> %s expected %d arguments, given %d" (string_of_id id')
+                            (format_parse_kind_aux_list (filter_order_kinds kinds))
+                            (string_of_parse_kind_aux ret_kind) (List.length kinds) (List.length args)
+                         )
+                      );
+                  mapM (function arg, kind -> check ctx arg (Kind (kind, id_loc id'))) (List.combine args kinds)
+            )
         in
         wrap (P.ATyp_app (id, args))
     | P.ATyp_lit (P.L_aux (aux, _)) ->
@@ -653,7 +678,7 @@ module KindInference = struct
             )
             kopts
         in
-        let* () = put_state { sets = !sets @ env.sets; next_unknown = !unknowns; vars = !vars :: env.vars } in
+        let* () = put_state { env with sets = !sets @ env.sets; next_unknown = !unknowns; vars = !vars :: env.vars } in
         let* nc = check ctx nc (Kind (P.K_bool, l)) in
         let* atyp = check ctx atyp (Kind (P.K_type, l)) in
         let* env = get_state in
@@ -808,10 +833,90 @@ module KindInference = struct
         in
         wrap (P.Tu_ty_anon_rec (fields, id))
 
-  let infer_union ctx typq constructors =
-    let* typq = infer_typquant ctx typq in
-    let* constructors = mapM (infer_constructor ctx) constructors in
-    return (typq, constructors)
+  let typquant_inference_kinds (P.TypQ_aux (aux, _)) =
+    match aux with
+    | P.TypQ_no_forall -> []
+    | P.TypQ_tq quants ->
+        List.concat_map
+          (function
+            | P.QI_aux (P.QI_id (P.KOpt_aux (P.KOpt_kind (_, vs, _, Some u), _)), _) ->
+                List.map (fun _ -> Kind_var u) vs
+            | P.QI_aux (P.QI_id (P.KOpt_aux (_, l)), _) ->
+                Reporting.unreachable l __POS__ "Type variable has no kind inference variable"
+            | _ -> []
+            )
+          quants
+
+  (* Infer the kinds of the type parameters for each definition in a
+     (possibly mutually recursive) group of type definitions. Each
+     definition's type variables are returned as a separate scope,
+     which is only brought into scope while that definition's own
+     body is checked by [infer_type_def]. *)
+  let infer_type_def_quants ctx (P.TD_aux (aux, l)) =
+    let add_type_info id typq =
+      let* env = get_state in
+      let outer_vars = env.vars in
+      let* typq = infer_typquant ctx typq in
+      let* env = get_state in
+      (* Each quantifier item pushes its own scope, so keep all the
+         scopes added on top of the outer ones. *)
+      let scope = Util.take (List.length env.vars - List.length outer_vars) env.vars in
+      let* () =
+        put_state
+          {
+            env with
+            vars = outer_vars;
+            recursive_types = Bindings.add (to_ast_id ctx id) (typquant_inference_kinds typq) env.recursive_types;
+          }
+      in
+      return (typq, scope)
+    in
+    match aux with
+    | P.TD_abbrev (id, typq, kind_opt, atyp) ->
+        (* The body and parameters of a type synonym are re-inferred
+           by [to_ast_bind], so we keep the original quantifier here. *)
+        let* _, scope = add_type_info id typq in
+        return (P.TD_aux (P.TD_abbrev (id, typq, kind_opt, atyp), l), scope)
+    | P.TD_record (id, typq, fields) ->
+        let* typq, scope = add_type_info id typq in
+        return (P.TD_aux (P.TD_record (id, typq, fields), l), scope)
+    | P.TD_variant (id, typq, arms, is_newtype) ->
+        let* typq, scope = add_type_info id typq in
+        return (P.TD_aux (P.TD_variant (id, typq, arms, is_newtype), l), scope)
+    | P.TD_enum _ | P.TD_abstract _ | P.TD_bitfield _ -> return (P.TD_aux (aux, l), [])
+
+  let with_scope scope m =
+    let* env = get_state in
+    let outer_vars = env.vars in
+    let* () = put_state { env with vars = scope @ outer_vars } in
+    let* x = m in
+    let* env = get_state in
+    let* () = put_state { env with vars = outer_vars } in
+    return x
+
+  let infer_type_def ctx (P.TD_aux (aux, l), scope) =
+    with_scope scope
+      ( match aux with
+      | P.TD_variant (id, typq, arms, is_newtype) ->
+          let* arms = mapM (infer_constructor ctx) arms in
+          return (P.TD_aux (P.TD_variant (id, typq, arms, is_newtype), l))
+      | P.TD_record (id, typq, fields) ->
+          let* fields =
+            mapM
+              (mapM_field_item (fun (id, (P.ATyp_aux (_, l) as atyp)) ->
+                   let* atyp = check ctx atyp (Kind (P.K_type, l)) in
+                   return (id, atyp)
+               )
+              )
+              fields
+          in
+          return (P.TD_aux (P.TD_record (id, typq, fields), l))
+      | _ -> return (P.TD_aux (aux, l))
+      )
+
+  let infer_type_defs ctx tds =
+    let* tds = mapM (infer_type_def_quants ctx) tds in
+    mapM (infer_type_def ctx) tds
 
   let get_kind ~at:l n env =
     match List.find_opt (fun (set, _) -> IntSet.mem n set) env.sets with
@@ -843,7 +948,7 @@ module KindInference = struct
     let* typ = check ctx typ (Kind (K_type, l)) in
     return (typq, typ, args)
 
-  let initial_env = { sets = []; next_unknown = 0; vars = [] }
+  let initial_env = { sets = []; next_unknown = 0; vars = []; recursive_types = Bindings.empty }
 end
 
 module ConvertType = struct
@@ -1834,35 +1939,21 @@ let rec to_ast_field f doc attrs = function
     )
   | P.Ann_item x -> f doc attrs x
 
-let to_ast_record ctx id typq fields =
+let to_ast_record_fields kenv ctx typq_ctx fields =
+  List.map
+    (to_ast_field
+       (fun doc attrs (id, atyp) ->
+         let id = to_ast_id ctx id in
+         ((id, ConvertType.to_ast_typ kenv typq_ctx atyp), mk_def_annot ?doc ~attrs (id_loc id) ())
+       )
+       None []
+    )
+    fields
+
+let to_ast_record kenv ctx id typq fields =
   let id = to_ast_reserved_type_id ctx id in
-  let infer typq fields =
-    let open KindInference in
-    let* typq = infer_typquant ctx typq in
-    let* fields =
-      mapM
-        (KindInference.mapM_field_item (fun (id, (P.ATyp_aux (_, l) as atyp)) ->
-             let* atyp = check ctx atyp (Kind (P.K_type, l)) in
-             return (id, atyp)
-         )
-        )
-        fields
-    in
-    return (typq, fields)
-  in
-  let (typq, fields), kenv = infer typq fields KindInference.initial_env in
   let typq, typq_ctx = ConvertType.to_ast_typquant kenv ctx typq in
-  let fields =
-    List.map
-      (to_ast_field
-         (fun doc attrs (id, atyp) ->
-           let id = to_ast_id ctx id in
-           ((id, ConvertType.to_ast_typ kenv typq_ctx atyp), mk_def_annot ?doc ~attrs (id_loc id) ())
-         )
-         None []
-      )
-      fields
-  in
+  let fields = to_ast_record_fields kenv ctx typq_ctx fields in
   (id, typq, fields, add_constructor id typq K_type ctx)
 
 let check_duplicate_enum_ids ids =
@@ -1883,60 +1974,101 @@ let check_duplicate_enum_ids ids =
   in
   ()
 
-let rec to_ast_typedef ctx def_annot (P.TD_aux (aux, l) : P.type_def) : untyped_def list ctx_out =
+(* Type definitions are desugared in two phases. First, [prepare_typedef] adds
+   the type to the context (checking the name, and converting the quantifier and
+   kind), so that every type in a (possibly mutually recursive) group is in
+   scope. Then [to_ast_typedef] converts the bodies of each definition, so it
+   can re-use the results of the first phase. *)
+type prepared_typedef_aux =
+  | Prepared_abbrev of id * typquant * typ_arg
+  | Prepared_record of id * typquant * (kind_aux * P.l) KBindings.t * (P.id * P.atyp) P.field_annot list
+  | Prepared_variant of id * typquant * (kind_aux * P.l) KBindings.t * P.type_def
+  | Prepared_enum of id * (P.id * P.atyp) list * (P.id P.field_annot * P.exp option) list
+  | Prepared_abstract of id * kind * string list option
+  | Prepared_bitfield of id * P.atyp * (P.id * P.index_range) P.field_annot list
+
+type prepared_typedef = Prepared_aux of prepared_typedef_aux * P.l
+
+let prepare_typedef kenv ctx (P.TD_aux (aux, l) as td) : prepared_typedef * ctx =
+  let add_type_constructor id kinds ret_kind =
+    { ctx with type_constructors = Bindings.add id (kinds, ret_kind) ctx.type_constructors }
+  in
+  let prepared, ctx =
+    match aux with
+    | P.TD_abbrev (id, typq, kind_opt, atyp) -> (
+        let id = to_ast_reserved_type_id ctx id in
+        match to_ast_bind ctx typq atyp kind_opt with
+        | Some (typq, typ_arg, kind, inference_kinds) ->
+            ( Prepared_abbrev (id, typq, typ_arg),
+              add_type_constructor id
+                (List.map (fun k -> Kind k) inference_kinds)
+                (to_parse_kind (Some (unaux_kind kind)))
+            )
+        | None ->
+            raise
+              (Reporting.err_general l
+                 "Type synonyms cannot have Order kind, as ordering type parameters are deprecated"
+              )
+      )
+    | P.TD_record (id, typq, fields) ->
+        let id = to_ast_reserved_type_id ctx id in
+        let typq, typq_ctx = ConvertType.to_ast_typquant kenv ctx typq in
+        (Prepared_record (id, typq, typq_ctx.kinds, fields), add_constructor id typq K_type ctx)
+    | P.TD_variant (id, typq, _, _) ->
+        let id = to_ast_reserved_type_id ctx id in
+        let typq, typq_ctx = ConvertType.to_ast_typquant kenv ctx typq in
+        (Prepared_variant (id, typq, typq_ctx.kinds, td), add_constructor id typq K_type ctx)
+    | P.TD_enum (id, fns, members) ->
+        let id = to_ast_reserved_type_id ctx id in
+        (Prepared_enum (id, fns, members), add_type_constructor id [] P.K_type)
+    | P.TD_bitfield (id, typ, ranges) ->
+        let id = to_ast_reserved_type_id ctx id in
+        (Prepared_bitfield (id, typ, ranges), add_type_constructor id [] P.K_type)
+    | P.TD_abstract (id, kind, instantiation) -> (
+        let id = to_ast_reserved_type_id ctx id in
+        match to_ast_kind kind with
+        | Some kind ->
+            ( Prepared_abstract (id, kind, instantiation),
+              add_type_constructor id [] (to_parse_kind (Some (unaux_kind kind)))
+            )
+        | None ->
+            raise
+              (Reporting.err_general l
+                 "Abstract type cannot have Order kind, as ordering type parameters are deprecated"
+              )
+      )
+  in
+  (Prepared_aux (prepared, l), ctx)
+
+(* Convert a prepared type definition. The context [ctx] must already
+   contain the type constructors added by [prepare_typedef]. *)
+let rec to_ast_typedef kenv ctx def_annot (Prepared_aux (aux, l)) :
+    (uannot type_def * unit def_annot) list * untyped_def list * ctx =
+  let mk_td aux = (TD_aux (aux, (l, empty_uannot)), def_annot) in
   match aux with
-  | P.TD_abbrev (id, typq, kind_opt, atyp) -> (
-      let id = to_ast_reserved_type_id ctx id in
-      match to_ast_bind ctx typq atyp kind_opt with
-      | Some (typq, typ_arg, kind, inference_kinds) ->
-          ( [Def_aux (Def_type (TD_aux (TD_abbrev (id, typq, typ_arg), (l, empty_uannot))), def_annot)],
-            {
-              ctx with
-              type_constructors =
-                Bindings.add id
-                  (List.map (fun k -> Kind k) inference_kinds, to_parse_kind (Some (unaux_kind kind)))
-                  ctx.type_constructors;
-            }
-          )
-      | None ->
-          raise
-            (Reporting.err_general l "Type synonyms cannot have kind Order, as ordering type parameters are deprecated")
-    )
-  | P.TD_record (id, typq, fields) ->
-      let id, typq, fields, ctx = to_ast_record ctx id typq fields in
-      ([Def_aux (Def_type (TD_aux (TD_record (id, typq, fields), (l, empty_uannot))), def_annot)], ctx)
-  | P.TD_variant (id, typq, arms, is_newtype) as union ->
-      let (typq, arms), kenv = KindInference.infer_union ctx typq arms KindInference.initial_env in
+  | Prepared_abbrev (id, typq, typ_arg) -> ([mk_td (TD_abbrev (id, typq, typ_arg))], [], ctx)
+  | Prepared_record (id, typq, typq_kinds, fields) ->
+      let fields = to_ast_record_fields kenv ctx { ctx with kinds = typq_kinds } fields in
+      ([mk_td (TD_record (id, typq, fields))], [], ctx)
+  | Prepared_variant (id, typq, typq_kinds, P.TD_aux ((P.TD_variant (_, _, arms, is_newtype) as union), _)) ->
       (* First generate auxilliary record types for anonymous records in constructors *)
       let records_and_arms = realize_union_anon_rec_types union arms in
-      let rec filter_records = function
-        | [] -> []
-        | Some x :: xs -> x :: filter_records xs
-        | None :: xs -> filter_records xs
-      in
-      let generated_records = filter_records (List.map fst records_and_arms) in
-      let generated_records, ctx =
+      let generated_records = List.filter_map fst records_and_arms in
+      let generated_records, generated_fns, ctx =
         List.fold_left
-          (fun (prev, ctx) td ->
-            let td, ctx = to_ast_typedef ctx (mk_def_annot (gen_loc l) ()) td in
-            (prev @ td, ctx)
+          (fun (prev, prev_fns, ctx) td ->
+            let td, ctx = prepare_typedef kenv ctx td in
+            let td, fns, ctx = to_ast_typedef kenv ctx (mk_def_annot (gen_loc l) ()) td in
+            (prev @ td, prev_fns @ fns, ctx)
           )
-          ([], ctx) generated_records
+          ([], [], ctx) generated_records
       in
       let arms = List.map snd records_and_arms in
       (* Now generate the AST union type *)
-      let id = to_ast_reserved_type_id ctx id in
-      let typq, typq_ctx = ConvertType.to_ast_typquant kenv ctx typq in
-      let arms =
-        List.map (ConvertType.to_ast_type_union kenv None [] None (add_constructor id typq K_type typq_ctx)) arms
-      in
-      ( [Def_aux (Def_type (TD_aux (TD_variant (id, typq, arms, is_newtype), (l, empty_uannot))), def_annot)]
-        @ generated_records,
-        add_constructor id typq K_type ctx
-      )
-  | P.TD_enum (id, fns, members) ->
-      let id = to_ast_reserved_type_id ctx id in
-      let ctx = { ctx with type_constructors = Bindings.add id ([], P.K_type) ctx.type_constructors } in
+      let arms = List.map (ConvertType.to_ast_type_union kenv None [] None { ctx with kinds = typq_kinds }) arms in
+      ([mk_td (TD_variant (id, typq, arms, is_newtype))] @ generated_records, generated_fns, ctx)
+  | Prepared_variant _ -> Reporting.unreachable l __POS__ "Prepared variant is not a variant type definition"
+  | Prepared_enum (id, fns, members) ->
       let members =
         List.map
           (fun (ann_id, exp) ->
@@ -1954,23 +2086,9 @@ let rec to_ast_typedef ctx def_annot (P.TD_aux (aux, l) : P.type_def) : untyped_
       let fns = generate_enum_functions l ctx id fns members in
       let members = List.map fst members in
       check_duplicate_enum_ids members;
-      ( fns @ [Def_aux (Def_type (TD_aux (TD_enum (id, members), (l, empty_uannot))), def_annot)],
-        { ctx with type_constructors = Bindings.add id ([], P.K_type) ctx.type_constructors }
-      )
-  | P.TD_abstract (id, kind, instantiation) -> (
-      let id = to_ast_reserved_type_id ctx id in
-      match to_ast_kind kind with
-      | Some kind ->
-          ( [Def_aux (Def_type (TD_aux (TD_abstract (id, kind, instantiation), (l, empty_uannot))), def_annot)],
-            {
-              ctx with
-              type_constructors = Bindings.add id ([], to_parse_kind (Some (unaux_kind kind))) ctx.type_constructors;
-            }
-          )
-      | None -> raise (Reporting.err_general l "Abstract type cannot have Order kind")
-    )
-  | P.TD_bitfield (id, typ, ranges) ->
-      let id = to_ast_reserved_type_id ctx id in
+      ([mk_td (TD_enum (id, members))], fns, ctx)
+  | Prepared_abstract (id, kind, instantiation) -> ([mk_td (TD_abstract (id, kind, instantiation))], [], ctx)
+  | Prepared_bitfield (id, typ, ranges) ->
       let typ = to_ast_typ ctx typ in
       let ranges =
         List.map
@@ -1983,9 +2101,24 @@ let rec to_ast_typedef ctx def_annot (P.TD_aux (aux, l) : P.type_def) : untyped_
           )
           ranges
       in
-      ( [Def_aux (Def_type (TD_aux (TD_bitfield (id, typ, ranges), (l, empty_uannot))), def_annot)],
-        { ctx with type_constructors = Bindings.add id ([], P.K_type) ctx.type_constructors }
+      ([mk_td (TD_bitfield (id, typ, ranges))], [], ctx)
+
+let to_ast_typedefs ctx def_annot tds : (uannot type_def * unit def_annot) list * untyped_def list * ctx =
+  let tds, kenv = KindInference.infer_type_defs ctx tds KindInference.initial_env in
+  let tds, ctx =
+    List.fold_left
+      (fun (prev, ctx) td ->
+        let td, ctx = prepare_typedef kenv ctx td in
+        (prev @ [td], ctx)
       )
+      ([], ctx) tds
+  in
+  List.fold_left
+    (fun (prev, prev_fns, ctx) td ->
+      let tds, fns, ctx = to_ast_typedef kenv ctx def_annot td in
+      (prev @ tds, prev_fns @ fns, ctx)
+    )
+    ([], [], ctx) tds
 
 let to_ast_rec ctx (P.Rec_aux (r, l) : P.rec_opt) : uannot rec_opt =
   Rec_aux
@@ -2180,7 +2313,17 @@ let to_ast_scattered ctx (P.SD_aux (aux, l)) =
               match anon_rec_opt with
               | Some (record_id, fields, l) ->
                   let l = gen_loc l in
-                  let record_id, typq, fields, scattered_ctx = to_ast_record scattered_ctx record_id typq fields in
+                  let record_id, typq, fields, scattered_ctx =
+                    let tds, kenv =
+                      KindInference.infer_type_defs scattered_ctx
+                        [P.TD_aux (P.TD_record (record_id, typq, fields), l)]
+                        KindInference.initial_env
+                    in
+                    match tds with
+                    | [P.TD_aux (P.TD_record (record_id, typq, fields), _)] ->
+                        to_ast_record kenv scattered_ctx record_id typq fields
+                    | _ -> Reporting.unreachable l __POS__ "Kind inference changed anonymous record definition"
+                  in
                   ( Some
                       (Def_aux
                          ( Def_scattered
@@ -2262,7 +2405,9 @@ let rec to_ast_def doc attrs vis ctx (P.Def_aux (def, l)) : untyped_def list ctx
       ( [Def_aux (Def_fixity (prec, n, id), annot)],
         { ctx with fixities = StringMap.add op (prec, Z.to_int n) ctx.fixities }
       )
-  | P.Def_type (t_def, _) -> to_ast_typedef ctx annot t_def
+  | P.Def_type (td, rec_tds) ->
+      let tds, fns, ctx = to_ast_typedefs ctx annot (td :: rec_tds) in
+      (fns @ List.map (fun (td, annot) -> Def_aux (Def_type td, annot)) tds, ctx)
   | P.Def_fundef f_def ->
       let fd = to_ast_fundef ctx f_def in
       ([Def_aux (Def_fundef fd, annot)], ctx)
