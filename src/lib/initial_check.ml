@@ -2262,7 +2262,7 @@ let rec to_ast_def doc attrs vis ctx (P.Def_aux (def, l)) : untyped_def list ctx
       ( [Def_aux (Def_fixity (prec, n, id), annot)],
         { ctx with fixities = StringMap.add op (prec, Z.to_int n) ctx.fixities }
       )
-  | P.Def_type t_def -> to_ast_typedef ctx annot t_def
+  | P.Def_type (t_def, _) -> to_ast_typedef ctx annot t_def
   | P.Def_fundef f_def ->
       let fd = to_ast_fundef ctx f_def in
       ([Def_aux (Def_fundef fd, annot)], ctx)

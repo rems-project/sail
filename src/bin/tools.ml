@@ -268,12 +268,9 @@ module Extern_json : TOOL = struct
      synonym to its parameters and definition. *)
   let synonyms : (string, kid list * atyp) Hashtbl.t = Hashtbl.create 64
 
-  let rec collect_definitions (Def_aux (aux, l)) =
+  let collect_synonyms (TD_aux (aux, _)) =
     match aux with
-    | Def_pragma ("target_set", Pragma_line (arg, _)) ->
-        let set, targets = Initial_check.parse_target_set l arg in
-        Hashtbl.replace target_sets set targets
-    | Def_type (TD_aux (TD_abbrev (id, TypQ_aux (typq, _), _, atyp), _)) ->
+    | TD_abbrev (id, TypQ_aux (typq, _), _, atyp) ->
         let params =
           match typq with
           | TypQ_no_forall -> []
@@ -283,6 +280,16 @@ module Extern_json : TOOL = struct
                 qis
         in
         Hashtbl.replace synonyms (string_of_id id) (params, atyp)
+    | _ -> ()
+
+  let rec collect_definitions (Def_aux (aux, l)) =
+    match aux with
+    | Def_pragma ("target_set", Pragma_line (arg, _)) ->
+        let set, targets = Initial_check.parse_target_set l arg in
+        Hashtbl.replace target_sets set targets
+    | Def_type (td, rec_tds) ->
+        collect_synonyms td;
+        List.iter collect_synonyms rec_tds
     | Def_private def | Def_attribute (_, def) | Def_doc (_, def) -> collect_definitions def
     | _ -> ()
 

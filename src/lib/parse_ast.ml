@@ -428,7 +428,7 @@ type pragma =
 
 type def_aux =
   (* Top-level definition *)
-  | Def_type of type_def (* type definition *)
+  | Def_type of type_def * type_def list (* type definition *)
   | Def_constraint of atyp (* global constraint *)
   | Def_fundef of fundef (* function definition *)
   | Def_mapdef of mapdef (* mapping definition *)
