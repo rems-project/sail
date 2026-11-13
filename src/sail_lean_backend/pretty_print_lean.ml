@@ -96,15 +96,20 @@ let leftarrow = string "←"
 let leftarrowdo = string "← do"
 
 let rec fix_id name =
-  match name with
-  (* Lean keywords to avoid, to expand as needed *)
-  | "_lean_wildcard" -> "_"
-  | "rec" | "def" | "at" | "alias" | "break" | "meta" | "class" -> name ^ "'"
-  | "main" ->
-      the_main_function_has_been_seen := true;
-      "sail_main"
-  | "?" -> "questionMark"
-  | _ -> if String.contains name '#' then fix_id (String.concat "_" (String.split_on_char '#' name)) else name
+  if Util.StringSet.mem name Keywords.lean_keywords then name ^ "'"
+  else (
+    match name with
+    | "_lean_wildcard" -> "_"
+    (* Names automatically generated for types that we should avoid *)
+    | "rec" | "casesOn" | "recOn" | "brecOn" | "below" | "ofNat" | "ofNat_ctorIdx" | "ctorIdx" | "noConfusion"
+    | "noConfusionType" ->
+        name ^ "'"
+    | "main" ->
+        the_main_function_has_been_seen := true;
+        "sail_main"
+    | "?" -> "questionMark"
+    | _ -> if String.contains name '#' then fix_id (String.concat "_" (String.split_on_char '#' name)) else name
+  )
 
 let rename_ctor ctx (Id_aux (i, _) as id) =
   if not (Env.is_union_constructor id ctx.env) then None
