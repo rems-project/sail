@@ -1114,7 +1114,6 @@ and doc_exp (as_monadic : bool) ctx (E_aux (e, (l, annot)) as full_exp) =
   | E_tuple es -> wrap_with_pure as_monadic (parens (separate_map (comma ^^ space) (d_of_arg ctx) es))
   | E_let (lpat, lexp, e') | E_internal_plet (lpat, lexp, e') ->
       let has_loop = has_loop lexp in
-      let is_arrow_do = match e with E_let _ when not has_loop -> false | _ -> true in
       let typ_ascription, lpat = doc_pat_typ_ascription ctx env lpat (typ_of lexp) in
       let id_typ = doc_pat ctx false lpat (typ_of_pat lpat) in
       let ctx = update_ctx_pat ctx lpat in
@@ -1126,24 +1125,12 @@ and doc_exp (as_monadic : bool) ctx (E_aux (e, (l, annot)) as full_exp) =
           let need_legacy_workaround = match lexp with E_aux ((E_if _ | E_match _), _) -> true | _ -> false in
           if is_unit (typ_of lexp) && is_anonymous_pat lpat && not need_legacy_workaround then doc_exp true ctx lexp
           else (
-            match (is_arrow_do, typ_ascription) with
-            | true, None -> pp_let_line_f [separate space [string "let"; id_typ; leftarrowdo]; doc_exp true ctx lexp]
-            | false, None -> pp_let_line_f [separate space [string "let"; id_typ; leftarrow]; doc_exp true ctx lexp]
-            | true, Some asc ->
+            match typ_ascription with
+            | None -> pp_let_line_f [separate space [string "let"; id_typ; leftarrowdo]; doc_exp true ctx lexp]
+            | Some asc ->
                 pp_let_line_f
                   ([
                      separate space [string "let"; id_typ; leftarrow; string "(("; string "do"];
-                     doc_exp true ctx lexp;
-                     string ")";
-                     colon;
-                   ]
-                  @ prepend_monad ctx lexp asc
-                  @ [string ")"]
-                  )
-            | false, Some asc ->
-                pp_let_line_f
-                  ([
-                     separate space [string "let"; id_typ; leftarrow; string "(("];
                      doc_exp true ctx lexp;
                      string ")";
                      colon;
