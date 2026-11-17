@@ -478,6 +478,14 @@ end) : CONFIG = struct
         | CT_sbits 64 -> AE_val (AV_cval (V_call (Sslice 64, [vec; start; len]), typ))
         | _ -> no_change
       )
+    | "vector_update_subrange", [AV_cval (vec, _); AV_cval (_, _); AV_cval (lo, _); AV_cval (slice, _)] -> (
+        (* The type checker makes sure the slice fits in the vector. *)
+        match (cval_ctyp vec, cval_ctyp lo, cval_ctyp slice) with
+        | (CT_fbits _ | CT_sbits _), (CT_fint 64 | CT_constant _), CT_fbits _
+          when ctyp_equal (convert_typ ctx typ) (cval_ctyp vec) ->
+            AE_val (AV_cval (V_call (Set_slice, [vec; lo; slice]), typ))
+        | _ -> no_change
+      )
     | "vector_access", [AV_cval (vec, _); AV_cval (n, _)] -> AE_val (AV_cval (V_call (Bvaccess, [vec; n]), typ))
     | "vector_access", [v; AV_cval (n, _)] -> (
         match destruct_vector ctx.tc_env (aval_typ v) with
@@ -1218,6 +1226,8 @@ module Codegen (Config : CODEGEN_CONFIG) = struct
         | CT_fbits _, CT_fbits m ->
             sprintf "((%s & ~(%s << %s)) | (%s << %s))" (sgen_cval vec) (sgen_mask m) (sgen_cval start)
               (sgen_cval slice) (sgen_cval start)
+        | CT_sbits _, CT_fbits m ->
+            sprintf "sbits_set_slice(%s, %s, %s, %s)" (sgen_cval vec) (sgen_cval start) (sgen_mask m) (sgen_cval slice)
         | _ -> assert false
       )
     | Zero_extend n, [v] -> (
