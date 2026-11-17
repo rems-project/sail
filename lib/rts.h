@@ -93,15 +93,15 @@ uint64_t read_mem(uint64_t);
 // These memory builtins are intended to match the semantics for the
 // __ReadRAM and __WriteRAM functions in ASL.
 
-bool write_ram(const mpz_t addr_size,     // Either 32 or 64
-	       const mpz_t data_size_mpz, // Number of bytes
+bool write_ram(const sail_int addr_size,     // Either 32 or 64
+	       const sail_int data_size_mpz, // Number of bytes
 	       const lbits hex_ram,       // Currently unused
 	       const lbits addr_bv,
 	       const lbits data);
 
 void read_ram(lbits *data,
-	      const mpz_t addr_size,
-	      const mpz_t data_size_mpz,
+	      const sail_int addr_size,
+	      const sail_int data_size_mpz,
 	      const lbits hex_ram,
 	      const lbits addr_bv);
 
@@ -118,15 +118,15 @@ void platform_read_mem(lbits *data,
                        const int read_kind,
                        const uint64_t addr_size,
                        const sbits addr,
-                       const mpz_t n);
+                       const sail_int n);
 unit platform_write_mem_ea(const int write_kind,
                            const uint64_t addr_size,
                            const sbits addr,
-                           const mpz_t n);
+                           const sail_int n);
 bool platform_write_mem(const int write_kind,
                         const uint64_t addr_size,
                         const sbits addr,
-                        const mpz_t n,
+                        const sail_int n,
                         const lbits data);
 bool platform_excl_res(const unit unit);
 unit platform_barrier();
@@ -136,26 +136,26 @@ unit platform_barrier();
 void emulator_read_mem(lbits *data,
                        const uint64_t addr_size,
                        const sbits addr,
-                       const mpz_t n);
+                       const sail_int n);
 
 void emulator_read_mem_ifetch(lbits *data,
                               const uint64_t addr_size,
                               const sbits addr,
-                              const mpz_t n);
+                              const sail_int n);
 
 void emulator_read_mem_exclusive(lbits *data,
                                  const uint64_t addr_size,
                                  const sbits addr,
-                                 const mpz_t n);
+                                 const sail_int n);
 
 bool emulator_write_mem(const uint64_t addr_size,
                         const sbits addr,
-                        const mpz_t n,
+                        const sail_int n,
                         const lbits data);
 
 bool emulator_write_mem_exclusive(const uint64_t addr_size,
                                   const sbits addr,
-                                  const mpz_t n,
+                                  const sail_int n,
                                   const lbits data);
 
 unit load_raw(fbits addr, const_sail_string file);
