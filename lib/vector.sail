@@ -475,7 +475,8 @@ $ifdef _DEFAULT_DEC
 function to_bytes_le(n, b) = {
     var res = vector_init(n, sail_zeros(8));
     foreach (i from 0 to (n - 1)) {
-        res[i] = b[(8 * i + 7) .. (8 * i)]
+        let byte : bits(8) = b[(8 * i + 7) .. (8 * i)];
+        res[i] = byte
     };
     res
 }
@@ -495,7 +496,8 @@ $ifdef _DEFAULT_DEC
 function from_bytes_le(n, v) = {
     var res = sail_zeros(8 * n);
     foreach (i from 0 to (n - 1)) {
-        res[(8 * i + 7) .. (8 * i)] = v[i]
+        let byte : bits(8) = v[i];
+        res[(8 * i + 7) .. (8 * i)] = byte
     };
     res
 }
