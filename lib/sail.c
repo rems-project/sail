@@ -67,6 +67,50 @@ uint64_t bzhi_u64(uint64_t bits, uint64_t len)
   return bits & (UINT64_MAX >> (64 - len));
 }
 
+/* Count leading or trailing zeros of a non-zero value, and byte swap. */
+static inline int sail_clz64(uint64_t x)
+{
+#ifdef SAIL_HAVE_BUILTINS
+  return __builtin_clzll(x);
+#else
+  int n = 0;
+  if (!(x >> 32)) n += 32, x <<= 32;
+  if (!(x >> 48)) n += 16, x <<= 16;
+  if (!(x >> 56)) n += 8, x <<= 8;
+  if (!(x >> 60)) n += 4, x <<= 4;
+  if (!(x >> 62)) n += 2, x <<= 2;
+  if (!(x >> 63)) n += 1;
+  return n;
+#endif
+}
+
+static inline int sail_ctz64(uint64_t x)
+{
+#ifdef SAIL_HAVE_BUILTINS
+  return __builtin_ctzll(x);
+#else
+  int n = 0;
+  if (!(x & 0xffffffff)) n += 32, x >>= 32;
+  if (!(x & 0xffff)) n += 16, x >>= 16;
+  if (!(x & 0xff)) n += 8, x >>= 8;
+  if (!(x & 0xf)) n += 4, x >>= 4;
+  if (!(x & 0x3)) n += 2, x >>= 2;
+  if (!(x & 0x1)) n += 1;
+  return n;
+#endif
+}
+
+static inline uint64_t sail_bswap64(uint64_t x)
+{
+#ifdef SAIL_HAVE_BUILTINS
+  return __builtin_bswap64(x);
+#else
+  x = ((x & UINT64_C(0x00ff00ff00ff00ff)) << 8) | ((x >> 8) & UINT64_C(0x00ff00ff00ff00ff));
+  x = ((x & UINT64_C(0x0000ffff0000ffff)) << 16) | ((x >> 16) & UINT64_C(0x0000ffff0000ffff));
+  return (x << 32) | (x >> 32);
+#endif
+}
+
 /*
  * Temporary mpzs for use in functions below. To avoid conflicts, only
  * use in functions that do not call other functions in this file.
@@ -957,7 +1001,7 @@ void length_lbits(sail_int *rop, const lbits op)
 void count_leading_zeros(sail_int *rop, const lbits op)
 {
   if (op.len <= 64) {
-    sail_int_set_small(rop, op.word == 0 ? (int64_t)op.len : (int64_t)op.len - (64 - __builtin_clzll(op.word)));
+    sail_int_set_small(rop, op.word == 0 ? (int64_t)op.len : (int64_t)op.len - (64 - sail_clz64(op.word)));
   } else if (mpz_sgn(op.big) == 0) {
     sail_int_set_small(rop, (int64_t)op.len);
   } else {
@@ -969,7 +1013,7 @@ void count_leading_zeros(sail_int *rop, const lbits op)
 void count_trailing_zeros(sail_int *rop, const lbits op)
 {
   if (op.len <= 64) {
-    sail_int_set_small(rop, op.word == 0 ? (int64_t)op.len : __builtin_ctzll(op.word));
+    sail_int_set_small(rop, op.word == 0 ? (int64_t)op.len : sail_ctz64(op.word));
   } else if (mpz_sgn(op.big) == 0) {
     sail_int_set_small(rop, (int64_t)op.len);
   } else {
@@ -1457,11 +1501,11 @@ void reverse_endianness(lbits *rop, const lbits op)
     uint64_t x = op.word;
     uint64_t r;
     if (op.len == 64) {
-      r = __builtin_bswap64(x);
+      r = sail_bswap64(x);
     } else if (op.len == 32) {
-      r = __builtin_bswap32((uint32_t)x);
+      r = sail_bswap64(x) >> 32;
     } else if (op.len == 16) {
-      r = __builtin_bswap16((uint16_t)x);
+      r = sail_bswap64(x) >> 48;
     } else if (op.len == 8) {
       r = x;
     } else {

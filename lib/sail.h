@@ -176,13 +176,64 @@ bool EQUAL(mach_int)(const mach_int, const mach_int);
 #error "The Sail runtime requires 64-bit GMP limbs without nails"
 #endif
 
-#if defined(__GNUC__) || defined(__clang__)
+/*
+ * With GCC and clang, use builtins. Otherwise use portable C. Define
+ * SAIL_NO_BUILTINS to test the portable code.
+ */
+#if (defined(__GNUC__) || defined(__clang__)) && !defined(SAIL_NO_BUILTINS)
+#define SAIL_HAVE_BUILTINS 1
 #define SAIL_LIKELY(x) __builtin_expect(!!(x), 1)
 #define SAIL_UNLIKELY(x) __builtin_expect(!!(x), 0)
 #else
 #define SAIL_LIKELY(x) (x)
 #define SAIL_UNLIKELY(x) (x)
 #endif
+
+/*
+ * 64-bit add, subtract and multiply that return true on overflow. The
+ * portable add and subtract use unsigned arithmetic, which wraps without
+ * undefined behaviour.
+ */
+static inline bool sail_add_overflow(const int64_t a, const int64_t b, int64_t *r)
+{
+#ifdef SAIL_HAVE_BUILTINS
+  return __builtin_add_overflow(a, b, r);
+#else
+  const uint64_t s = (uint64_t)a + (uint64_t)b;
+  *r = (int64_t)s;
+  return (int64_t)((s ^ (uint64_t)a) & (s ^ (uint64_t)b)) < 0;
+#endif
+}
+
+static inline bool sail_sub_overflow(const int64_t a, const int64_t b, int64_t *r)
+{
+#ifdef SAIL_HAVE_BUILTINS
+  return __builtin_sub_overflow(a, b, r);
+#else
+  const uint64_t s = (uint64_t)a - (uint64_t)b;
+  *r = (int64_t)s;
+  return (int64_t)(((uint64_t)a ^ (uint64_t)b) & (s ^ (uint64_t)a)) < 0;
+#endif
+}
+
+static inline bool sail_mul_overflow(const int64_t a, const int64_t b, int64_t *r)
+{
+#ifdef SAIL_HAVE_BUILTINS
+  return __builtin_mul_overflow(a, b, r);
+#else
+  /* Values in [-2^31, 2^31) cannot overflow. */
+  const uint64_t off = UINT64_C(1) << 31, lim = UINT64_C(1) << 32;
+  if ((uint64_t)a + off >= lim || (uint64_t)b + off >= lim) {
+    if (a != 0 && b != 0) {
+      if ((a == -1 && b == INT64_MIN) || (b == -1 && a == INT64_MIN)) return true;
+      if (a > 0 ? (b > 0 ? a > INT64_MAX / b : b < INT64_MIN / a) : (b > 0 ? a < INT64_MIN / b : b < INT64_MAX / a))
+        return true;
+    }
+  }
+  *r = a * b;
+  return false;
+#endif
+}
 
 /*
  * An arbitrary-precision integer.
@@ -393,7 +444,7 @@ SAIL_INT_FUNCTION(mult_int_slow, sail_int, const sail_int, const sail_int);
 static inline void add_int(sail_int *rop, const sail_int op1, const sail_int op2)
 {
   int64_t r;
-  if (SAIL_LIKELY(op1.big == NULL && op2.big == NULL && !__builtin_add_overflow(op1.val, op2.val, &r))) {
+  if (SAIL_LIKELY(op1.big == NULL && op2.big == NULL && !sail_add_overflow(op1.val, op2.val, &r))) {
     sail_int_set_small(rop, r);
   } else {
     add_int_slow(rop, op1, op2);
@@ -403,7 +454,7 @@ static inline void add_int(sail_int *rop, const sail_int op1, const sail_int op2
 static inline void sub_int(sail_int *rop, const sail_int op1, const sail_int op2)
 {
   int64_t r;
-  if (SAIL_LIKELY(op1.big == NULL && op2.big == NULL && !__builtin_sub_overflow(op1.val, op2.val, &r))) {
+  if (SAIL_LIKELY(op1.big == NULL && op2.big == NULL && !sail_sub_overflow(op1.val, op2.val, &r))) {
     sail_int_set_small(rop, r);
   } else {
     sub_int_slow(rop, op1, op2);
@@ -421,7 +472,7 @@ static inline void sub_nat(sail_int *rop, const sail_int op1, const sail_int op2
 static inline void mult_int(sail_int *rop, const sail_int op1, const sail_int op2)
 {
   int64_t r;
-  if (SAIL_LIKELY(op1.big == NULL && op2.big == NULL && !__builtin_mul_overflow(op1.val, op2.val, &r))) {
+  if (SAIL_LIKELY(op1.big == NULL && op2.big == NULL && !sail_mul_overflow(op1.val, op2.val, &r))) {
     sail_int_set_small(rop, r);
   } else {
     mult_int_slow(rop, op1, op2);
