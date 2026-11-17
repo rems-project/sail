@@ -451,7 +451,8 @@ let output (out_name : string) symbols env effect_info ({ defs; _ } as ast : Lib
           import_sets
       in
 
-      (import_files, Util.butlast import_refs, Util.last import_refs)
+      (* Import everything in the main file, rather than just the last Sail file's dependencies *)
+      (import_files, Util.butlast import_refs, Util.butlast import_files (*Util.last import_refs*))
     )
   in
   let ctx = start_lean_output interface_v out_name files import_sets main_import_set default_sail_dir in
