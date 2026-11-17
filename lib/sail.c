@@ -588,8 +588,9 @@ void tdiv_int(sail_int *rop, const sail_int op1, const sail_int op2)
   sail_int_take_mpz(rop, sail_lib_tmp1);
 }
 
-void tmod_int(sail_int *rop, const sail_int op1, const sail_int op2)
+void tmod_int_slow(sail_int *rop, const sail_int op1, const sail_int op2)
 {
+  /* The inline path takes only a positive divisor. */
   if (sail_div_fast(op1, op2)) {
     sail_int_set_small(rop, op1.val % op2.val);
     return;
@@ -807,23 +808,15 @@ void sub_bits(lbits *rop, const lbits op1, const lbits op2)
   sail_lbits_take_mpz(rop, op1.len, sail_lib_tmp1);
 }
 
-void add_bits_int(lbits *rop, const lbits op1, const sail_int op2)
+void add_bits_int_slow(lbits *rop, const lbits op1, const sail_int op2)
 {
-  if (op1.len <= 64 && op2.big == NULL) {
-    sail_lbits_set_small(rop, op1.len, (op1.word + (uint64_t)op2.val) & sail_mask64(op1.len));
-    return;
-  }
   sail_mpz_view v1, v2;
   mpz_add(sail_lib_tmp1, sail_lbits_view(&v1, op1), sail_int_view(&v2, op2));
   sail_lbits_take_mpz(rop, op1.len, sail_lib_tmp1);
 }
 
-void sub_bits_int(lbits *rop, const lbits op1, const sail_int op2)
+void sub_bits_int_slow(lbits *rop, const lbits op1, const sail_int op2)
 {
-  if (op1.len <= 64 && op2.big == NULL) {
-    sail_lbits_set_small(rop, op1.len, (op1.word - (uint64_t)op2.val) & sail_mask64(op1.len));
-    return;
-  }
   sail_mpz_view v1, v2;
   mpz_sub(sail_lib_tmp1, sail_lbits_view(&v1, op1), sail_int_view(&v2, op2));
   sail_lbits_take_mpz(rop, op1.len, sail_lib_tmp1);
@@ -862,12 +855,8 @@ void xor_bits(lbits *rop, const lbits op1, const lbits op2)
   sail_lbits_take_mpz(rop, op1.len, sail_lib_tmp1);
 }
 
-void not_bits(lbits *rop, const lbits op)
+void not_bits_slow(lbits *rop, const lbits op)
 {
-  if (op.len <= 64) {
-    sail_lbits_set_small(rop, op.len, ~op.word & sail_mask64(op.len));
-    return;
-  }
   /* ~x mod 2^len is (2^len - 1) - x. */
   mpz_set_ui(sail_lib_tmp1, 0);
   mpz_setbit(sail_lib_tmp1, op.len);
@@ -921,8 +910,10 @@ void mult_vec(lbits *rop, const lbits op1, const lbits op2)
   sail_lbits_take_mpz(rop, len, sail_lib_tmp1);
 }
 
-void zeros(lbits *rop, const sail_int op)
+void zeros_slow(lbits *rop, const sail_int op)
 {
+  /* The inline path does not take a negative len. As with mpz_get_ui,
+     sail_int_get_ui gives its absolute value. */
   uint64_t len = sail_int_get_ui(op);
   if (len <= 64) {
     sail_lbits_set_small(rop, len, 0);
@@ -931,8 +922,10 @@ void zeros(lbits *rop, const sail_int op)
   }
 }
 
-void zero_extend(lbits *rop, const lbits op, const sail_int len)
+void zero_extend_slow(lbits *rop, const lbits op, const sail_int len)
 {
+  /* The inline path does not take a negative len. As with mpz_get_ui,
+     sail_int_get_ui gives its absolute value. */
   uint64_t rlen = sail_int_get_ui(len);
   assert(op.len <= rlen);
   if (rlen <= 64) {
@@ -951,10 +944,11 @@ fbits fast_zero_extend(const sbits op, const uint64_t n)
   return op.bits;
 }
 
-void sign_extend(lbits *rop, const lbits op, const sail_int len)
+void sign_extend_slow(lbits *rop, const lbits op, const sail_int len)
 {
   uint64_t rlen = sail_int_get_ui(len);
   assert(op.len <= rlen);
+  /* The inline path does not take op.len == 0. */
   if (rlen <= 64) {
     uint64_t w = op.word;
     if (op.len > 0 && op.len < 64 && (w >> (op.len - 1)) & 1) {
@@ -1058,7 +1052,7 @@ static void sail_lbits_subrange(lbits *rop, const lbits op, const uint64_t m, co
   sail_lbits_take_mpz(rop, len, sail_lib_tmp1);
 }
 
-void vector_subrange_lbits(lbits *rop,
+void vector_subrange_lbits_slow(lbits *rop,
                            const lbits op,
                            const sail_int n_mpz,
                            const sail_int m_mpz)
@@ -1078,14 +1072,14 @@ void vector_subrange_inc_lbits(lbits *rop,
   sail_lbits_subrange(rop, op, (op.len - 1) - m, m - (n - 1ul));
 }
 
-void sail_truncate(lbits *rop, const lbits op, const sail_int len)
+void sail_truncate_slow(lbits *rop, const lbits op, const sail_int len)
 {
   uint64_t rlen = sail_int_get_ui(len);
   assert(op.len >= rlen);
   sail_lbits_subrange(rop, op, 0, rlen);
 }
 
-void sail_truncateLSB(lbits *rop, const lbits op, const sail_int len)
+void sail_truncateLSB_slow(lbits *rop, const lbits op, const sail_int len)
 {
   uint64_t rlen = sail_int_get_ui(len);
   assert(op.len >= rlen);
@@ -1118,13 +1112,9 @@ fbits update_fbits(const fbits op, const uint64_t n, const fbits bit)
      }
 }
 
-void sail_unsigned(sail_int *rop, const lbits op)
+void sail_unsigned_slow(sail_int *rop, const lbits op)
 {
   /* Normal form of bv_t is always positive so just return the bits. */
-  if (op.len <= 64 && op.word <= (uint64_t)INT64_MAX) {
-    sail_int_set_small(rop, (int64_t)op.word);
-    return;
-  }
   sail_lbits_get_mpz(sail_lib_tmp1, op);
   sail_int_take_mpz(rop, sail_lib_tmp1);
 }
@@ -1241,11 +1231,12 @@ uint64_t fast_replicate_bits(const uint64_t shift, const uint64_t v, const int64
 //                    <-------^
 //                    (8 bit) 4
 //
-void get_slice_int(lbits *rop, const sail_int len_mpz, const sail_int n, const sail_int start_mpz)
+void get_slice_int_slow(lbits *rop, const sail_int len_mpz, const sail_int n, const sail_int start_mpz)
 {
   uint64_t start = sail_int_get_ui(start_mpz);
   uint64_t len = sail_int_get_ui(len_mpz);
 
+  /* The inline path does not take start >= 64. */
   if (len <= 64 && n.big == NULL) {
     int64_t shifted = start >= 64 ? (n.val < 0 ? -1 : 0) : n.val >> start;
     sail_lbits_set_small(rop, len, (uint64_t)shifted & sail_mask64(len));
@@ -1391,7 +1382,7 @@ fbits fast_update_subrange(const fbits op,
   return rop;
 }
 
-void slice(lbits *rop, const lbits op, const sail_int start_mpz, const sail_int len_mpz)
+void slice_slow(lbits *rop, const lbits op, const sail_int start_mpz, const sail_int len_mpz)
 {
   assert(sail_int_get_ui(start_mpz) + sail_int_get_ui(len_mpz) <= op.len);
   uint64_t start = sail_int_get_ui(start_mpz);
