@@ -161,7 +161,7 @@ let diagnostics_for_handle file handle =
   Lsp.Server_notification.PublishDiagnostics params
 
 let on_initialize ~(config : Server_config.t) _params =
-  let server_info = Lsp.Types.InitializeResult.create_serverInfo ~name:"sail_lsp" () in
+  let server_info = Lsp.Types.ServerInfo.create ~name:"sail_lsp" () in
   let sync =
     Lsp.Types.TextDocumentSyncOptions.create ~openClose:true ~change:Lsp.Types.TextDocumentSyncKind.Incremental
       ~save:(`Bool true) ()
@@ -316,13 +316,14 @@ let on_notification ~config notif =
           List.iter
             (fun (change : TextDocumentContentChangeEvent.t) ->
               match change with
-              | { range = Some range; text; _ } ->
+              | `TextDocumentContentChangePartial { TextDocumentContentChangePartial.range; text; _ } ->
                   (* LSP positions are UTF-16 code-unit offsets; store them as-is. The
                      conversion to byte offsets happens when the edits are applied. *)
                   let startp = { Sail_file.line = range.start.line; character = range.start.character } in
                   let endp = { Sail_file.line = range.end_.line; character = range.end_.character } in
                   Sail_file.edit_file handle { Sail_file.range = (startp, endp); text }
-              | { range = None; text; _ } -> ignore (Sail_file.editor_take_file ~contents:text file)
+              | `TextDocumentContentChangeWholeDocument { TextDocumentContentChangeWholeDocument.text } ->
+                  ignore (Sail_file.editor_take_file ~contents:text file)
             )
             params.contentChanges;
           Sail_file.apply_edits handle;
