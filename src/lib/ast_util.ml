@@ -344,7 +344,38 @@ let rec constant_arith_chain = function
       (root, Z.neg c :: constants)
   | nexp -> (nexp, [])
 
-let rec nexp_simp (Nexp_aux (nexp, l)) = Nexp_aux (nexp_simp_aux nexp, l)
+(* Write a linear nexp as a constant plus a list of terms, each a
+   coefficient and a non-linear part. *)
+let rec linear_form (Nexp_aux (aux, _) as nexp) =
+  let add (c1, ts1) (c2, ts2) =
+    let add_term ts (t, k) =
+      match List.partition (fun (t', _) -> nexp_identical t t') ts with
+      | [(_, k')], rest -> (t, Z.add k k') :: rest
+      | _ -> (t, k) :: ts
+    in
+    (Z.add c1 c2, List.fold_left add_term ts1 ts2)
+  in
+  let scale k (c, ts) = (Z.mul k c, List.map (fun (t, k') -> (t, Z.mul k k')) ts) in
+  match aux with
+  | Nexp_constant c -> (c, [])
+  | Nexp_sum (n1, n2) -> add (linear_form n1) (linear_form n2)
+  | Nexp_minus (n1, n2) -> add (linear_form n1) (scale Z.minus_one (linear_form n2))
+  | Nexp_neg n -> scale Z.minus_one (linear_form n)
+  | Nexp_times (Nexp_aux (Nexp_constant c, _), n) | Nexp_times (n, Nexp_aux (Nexp_constant c, _)) ->
+      scale c (linear_form n)
+  | _ -> (Z.zero, [(nexp, Z.one)])
+
+(* The value of a sum or difference whose non-constant terms cancel, for
+   example (8 * 'n + 7) - (8 * 'n - 1). *)
+let linear_constant nexp =
+  match linear_form nexp with c, ts when List.for_all (fun (_, k) -> Z.equal k Z.zero) ts -> Some c | _ -> None
+
+let rec nexp_simp (Nexp_aux (aux, l) as nexp) =
+  match aux with
+  | Nexp_sum _ | Nexp_minus _ -> (
+      match linear_constant nexp with Some c -> Nexp_aux (Nexp_constant c, l) | None -> Nexp_aux (nexp_simp_aux aux, l)
+    )
+  | _ -> Nexp_aux (nexp_simp_aux aux, l)
 
 and nexp_simp_aux = function
   (* (n - (n - m)) often appears in foreach loops *)
