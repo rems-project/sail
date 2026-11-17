@@ -443,6 +443,8 @@ val prepend_kid : string -> kid -> kid
 
 val non_empty_singleton : 'a list -> 'a non_empty list
 val non_empty_for_all : ('a -> bool) -> 'a non_empty -> bool
+val non_empty_map : ('a -> 'b) -> 'a non_empty -> 'b non_empty
+val non_empty_to_list : 'a non_empty -> 'a list
 
 val hex_lit_length : hex_digit non_empty list -> int
 val bin_lit_length : bin_digit non_empty list -> int

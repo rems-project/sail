@@ -116,31 +116,40 @@ let instantiate_abstract_types tgt config insts ast =
         fun env -> prev_env_update env |> remove_abstract_typ id |> add_typ_synonym id [] arg |> simplify_constraints
       )
   in
-  let instantiate = function
-    | Def_aux (Def_type (TD_aux (TD_abstract (id, kind, None), (l, _))), def_annot) as def -> (
+  let instantiate_type_def = function
+    | TD_aux (TD_abstract (id, kind, None), (l, _)) as td -> (
         match Bindings.find_opt id insts with
         | Some arg_fun ->
             let arg = arg_fun (unaux_kind kind) in
             add_to_env_update l id arg;
-            Def_aux (Def_type (TD_aux (TD_abbrev (id, [], arg), (l, Type_check.empty_tannot))), def_annot)
-        | None -> def
+            TD_aux (TD_abbrev (id, [], arg), (l, Type_check.empty_tannot))
+        | None -> td
       )
-    | Def_aux (Def_type (TD_aux (TD_abstract (id, kind, Some key), (l, _))), def_annot) as def -> (
+    | TD_aux (TD_abstract (id, kind, Some key), (l, _)) as td -> (
         config_ids := Bindings.add id (unaux_kind kind, key) !config_ids;
         match json_lookup key config with
         | Some json ->
             let arg = instantiate_from_json ~at:l json (unaux_kind kind) in
             add_to_env_update l id arg;
-            Def_aux (Def_type (TD_aux (TD_abbrev (id, [], arg), (l, Type_check.empty_tannot))), def_annot)
-        | None -> def
+            TD_aux (TD_abbrev (id, [], arg), (l, Type_check.empty_tannot))
+        | None -> td
       )
+    | td -> td
+  in
+  let instantiate = function
+    | Def_aux (Def_type tds, def_annot) -> Def_aux (Def_type (non_empty_map instantiate_type_def tds), def_annot)
     | def -> def
   in
   let defs = List.map instantiate ast.defs in
   let inst = { env_update = !env_update; config_ids = !config_ids; instantiated = !instantiated } in
   if Option.fold ~none:true ~some:Target.supports_abstract_types tgt then ({ ast with defs }, inst)
   else (
-    match List.find_opt (function Def_aux (Def_type (TD_aux (TD_abstract _, _)), _) -> true | _ -> false) defs with
+    let is_abstract = function TD_aux (TD_abstract _, _) -> true | _ -> false in
+    match
+      List.find_opt
+        (function Def_aux (Def_type tds, _) -> List.exists is_abstract (non_empty_to_list tds) | _ -> false)
+        defs
+    with
     | Some (Def_aux (_, def_annot)) ->
         let target_name = Option.get tgt |> Target.name in
         raise

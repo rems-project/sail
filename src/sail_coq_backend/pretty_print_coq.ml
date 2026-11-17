@@ -2348,40 +2348,39 @@ let type_dependencies defs =
     | Typ_exist (_, _, typ') -> ids_of_typ typ'
   and ids_of_arg (A_aux (a, _)) = match a with A_typ typ -> ids_of_typ typ | A_nexp _ | A_bool _ -> [] in
   let typs_of_arg (A_aux (a, _)) = match a with A_typ typ -> [typ] | A_nexp _ | A_bool _ -> [] in
-  let aux_def depmap (Def_aux (aux, _)) =
-    match aux with
-    | Def_type (TD_aux (td, (l, _))) -> (
-        let new_def =
-          match td with
-          | TD_abbrev (id, tq, arg) -> Some (id, typs_of_arg arg)
-          | TD_record (id, tq, fields) -> Some (id, List.map (fun ((_, typ), _) -> typ) fields)
-          | TD_variant (id, tq, branches, _) -> Some (id, List.map (fun (Tu_aux (Tu_ty_id (typ, _), _)) -> typ) branches)
-          | TD_enum (id, _) -> Some (id, [])
-          | TD_abstract _ -> None
-          | TD_bitfield _ -> unreachable l __POS__ "bitfield not removed before Coq backend"
+  let aux_type_def depmap (TD_aux (td, (l, _))) =
+    let new_def =
+      match td with
+      | TD_abbrev (id, tq, arg) -> Some (id, typs_of_arg arg)
+      | TD_record (id, tq, fields) -> Some (id, List.map (fun ((_, typ), _) -> typ) fields)
+      | TD_variant (id, tq, branches, _) -> Some (id, List.map (fun (Tu_aux (Tu_ty_id (typ, _), _)) -> typ) branches)
+      | TD_enum (id, _) -> Some (id, [])
+      | TD_abstract _ -> None
+      | TD_bitfield _ -> unreachable l __POS__ "bitfield not removed before Coq backend"
+    in
+    match new_def with
+    | None | Some (_, []) -> depmap
+    | Some (id, reqs) ->
+        let add prev =
+          let s = Option.value ~default:IdSet.empty prev in
+          Some
+            (List.fold_left
+               (fun s typ_id ->
+                 if IdSet.mem typ_id s then s
+                 else (
+                   match Bindings.find_opt typ_id depmap with
+                   | None -> IdSet.add typ_id s
+                   | Some typs -> IdSet.add typ_id (IdSet.union s typs)
+                 )
+               )
+               s
+               (List.concat (List.map ids_of_typ reqs))
+            )
         in
-        match new_def with
-        | None | Some (_, []) -> depmap
-        | Some (id, reqs) ->
-            let add prev =
-              let s = Option.value ~default:IdSet.empty prev in
-              Some
-                (List.fold_left
-                   (fun s typ_id ->
-                     if IdSet.mem typ_id s then s
-                     else (
-                       match Bindings.find_opt typ_id depmap with
-                       | None -> IdSet.add typ_id s
-                       | Some typs -> IdSet.add typ_id (IdSet.union s typs)
-                     )
-                   )
-                   s
-                   (List.concat (List.map ids_of_typ reqs))
-                )
-            in
-            Bindings.update id add depmap
-      )
-    | _ -> depmap
+        Bindings.update id add depmap
+  in
+  let aux_def depmap (Def_aux (aux, _)) =
+    match aux with Def_type tds -> List.fold_left aux_type_def depmap (non_empty_to_list tds) | _ -> depmap
   in
   List.fold_left aux_def Bindings.empty defs
 
@@ -2457,22 +2456,21 @@ let countable_types defs =
       | Typ_tuple typs -> List.for_all check_typ typs
       | Typ_exist (_, _, typ') -> check_typ typ'
     and check_arg (A_aux (a, _)) = match a with A_typ typ -> check_typ typ | A_nexp _ | A_bool _ -> true in
-    match aux with
-    | Def_type (TD_aux (td, (l, _))) -> (
-        let new_def =
-          match td with
-          | TD_abbrev (id, tq, arg) -> Some (id, typs_of_arg arg)
-          | TD_record (id, tq, fields) -> Some (id, List.map (fun ((_, typ), _) -> typ) fields)
-          | TD_variant (id, tq, branches, _) -> Some (id, List.map (fun (Tu_aux (Tu_ty_id (typ, _), _)) -> typ) branches)
-          | TD_enum (id, _) -> Some (id, [])
-          | TD_abstract _ -> None
-          | TD_bitfield _ -> unreachable l __POS__ "bitfield not removed before Coq backend"
-        in
-        match new_def with
-        | None -> countable
-        | Some (id, reqs) -> if List.for_all check_typ reqs then IdSet.add id countable else countable
-      )
-    | _ -> countable
+    let aux_type_def countable (TD_aux (td, (l, _))) =
+      let new_def =
+        match td with
+        | TD_abbrev (id, tq, arg) -> Some (id, typs_of_arg arg)
+        | TD_record (id, tq, fields) -> Some (id, List.map (fun ((_, typ), _) -> typ) fields)
+        | TD_variant (id, tq, branches, _) -> Some (id, List.map (fun (Tu_aux (Tu_ty_id (typ, _), _)) -> typ) branches)
+        | TD_enum (id, _) -> Some (id, [])
+        | TD_abstract _ -> None
+        | TD_bitfield _ -> unreachable l __POS__ "bitfield not removed before Coq backend"
+      in
+      match new_def with
+      | None -> countable
+      | Some (id, reqs) -> if List.for_all check_typ reqs then IdSet.add id countable else countable
+    in
+    match aux with Def_type tds -> List.fold_left aux_type_def countable (non_empty_to_list tds) | _ -> countable
   in
   (* All the initial types except for real *)
   let initial_countables =
@@ -2504,7 +2502,7 @@ let countable_types defs =
 let enum_fn_names defs =
   let aux (enum_map, fn_set) (Def_aux (d, def_annot)) =
     match d with
-    | Def_type (TD_aux (TD_enum (id, _), _)) ->
+    | Def_type (Non_empty (TD_aux (TD_enum (id, _), _), [])) ->
         let attr_opt = get_def_attribute "enum_number_conversions" def_annot in
         let names =
           let open Util.Option_monad in
@@ -3807,9 +3805,11 @@ let doc_def global unimplemented generic_eq_types countable_types enum_number_de
   | Def_val v_spec -> doc_val_spec global def_annot unimplemented v_spec
   | Def_fixity _ -> empty
   | Def_overload _ -> empty
-  | Def_type t_def ->
+  | Def_type (Non_empty (t_def, [])) ->
       if List.mem (string_of_id (id_of_type_def t_def)) !opt_extern_types <> !opt_generate_extern_types then empty
       else doc_typdef global generic_eq_types countable_types enum_number_defs t_def
+  | Def_type (Non_empty (_, _ :: _)) ->
+      raise (Reporting.err_general def_annot.loc "Recursive type definitions are not yet supported in the Rocq backend")
   | Def_register dec -> group (doc_reg_spec global dec)
   | Def_default df -> empty
   | Def_fundef fdef -> group (doc_fundef global fdef) ^/^ hardline
@@ -3911,9 +3911,13 @@ let doc_isla_typ global (TD_aux (td, _)) =
 
 let doc_isla global (Def_aux (aux, _)) =
   match aux with
-  | Def_type t_def ->
-      if List.mem (string_of_id (id_of_type_def t_def)) !opt_extern_types <> !opt_generate_extern_types then empty
-      else doc_isla_typ global t_def
+  | Def_type t_defs ->
+      concat_map
+        (fun t_def ->
+          if List.mem (string_of_id (id_of_type_def t_def)) !opt_extern_types <> !opt_generate_extern_types then empty
+          else doc_isla_typ global t_def
+        )
+        (non_empty_to_list t_defs)
   | _ -> empty
 
 module NewRegisters : sig
@@ -4627,21 +4631,23 @@ end = struct
           empty;
         ]
     in
+    let update_for_type_def td =
+      let typ_id = id_of_type_def td in
+      if
+        List.mem (string_of_id typ_id) !opt_extern_types == !opt_generate_extern_types
+        && IdSet.mem typ_id register_type_ids
+      then (
+        match td with
+        | TD_aux (TD_record (id, quant, fields), _) -> generic_fns_for_record id quant fields
+        | TD_aux (TD_variant (Id_aux (Id "option", _), _quant, _arms, _), _) -> []
+        | TD_aux (TD_variant (id, quant, arms, _), _) -> generic_fns_for_variant id quant arms
+        | TD_aux (TD_enum (id, elements), _) -> generic_fns_for_enum id elements
+        | _ -> []
+      )
+      else []
+    in
     let update_for_def = function
-      | Def_aux (Def_type td, _) ->
-          let typ_id = id_of_type_def td in
-          if
-            List.mem (string_of_id typ_id) !opt_extern_types == !opt_generate_extern_types
-            && IdSet.mem typ_id register_type_ids
-          then (
-            match td with
-            | TD_aux (TD_record (id, quant, fields), _) -> generic_fns_for_record id quant fields
-            | TD_aux (TD_variant (Id_aux (Id "option", _), _quant, _arms, _), _) -> []
-            | TD_aux (TD_variant (id, quant, arms, _), _) -> generic_fns_for_variant id quant arms
-            | TD_aux (TD_enum (id, elements), _) -> generic_fns_for_enum id elements
-            | _ -> []
-          )
-          else []
+      | Def_aux (Def_type tds, _) -> List.concat_map update_for_type_def (non_empty_to_list tds)
       | _ -> []
     in
     separate hardline
@@ -4652,7 +4658,8 @@ end
 
 let find_exc_typ defs =
   let is_exc_typ_def = function
-    | Def_aux (Def_type td, _) -> string_of_id (id_of_type_def td) = "exception"
+    | Def_aux (Def_type tds, _) ->
+        List.exists (fun td -> string_of_id (id_of_type_def td) = "exception") (non_empty_to_list tds)
     | _ -> false
   in
   if List.exists is_exc_typ_def defs then "exception" else "unit"

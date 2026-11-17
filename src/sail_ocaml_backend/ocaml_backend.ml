@@ -859,13 +859,15 @@ let nf_group doc =
   first_function := true;
   group doc
 
-let ocaml_def ctx (Def_aux (aux, _)) =
+let ocaml_def ctx (Def_aux (aux, def_annot)) =
   match aux with
   | Def_register ds -> nf_group (ocaml_reg_spec ctx ds) ^^ ocaml_def_end
   | Def_fundef fd -> group (ocaml_fundef ctx fd) ^^ twice hardline
   | Def_internal_mutrec fds ->
       separate_map (twice hardline) (fun fd -> group (ocaml_fundef ctx fd)) fds ^^ twice hardline
-  | Def_type td -> nf_group (ocaml_typedef ctx td)
+  | Def_type (Non_empty (td, [])) -> nf_group (ocaml_typedef ctx td)
+  | Def_type (Non_empty (_, _ :: _)) ->
+      raise (Reporting.err_general def_annot.loc "Recursive type definitions are not yet supported in the OCaml backend")
   | Def_let (pat, exp) -> nf_group (string "let" ^^ space ^^ ocaml_letbind ctx pat exp) ^^ ocaml_def_end
   | _ -> empty
 
@@ -893,7 +895,7 @@ let val_spec_typs defs =
 *)
 
 let orig_types_for_ocaml_generator defs =
-  List.filter_map (function Def_aux (Def_type td, _) -> Some td | _ -> None) defs
+  List.concat_map (function Def_aux (Def_type tds, _) -> non_empty_to_list tds | _ -> []) defs
 
 let ocaml_pp_generators ctx defs orig_types required =
   let add_def typemap td = Bindings.add (id_of_type_def td) td typemap in

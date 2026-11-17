@@ -441,7 +441,7 @@ type 'a fundef =
 | FD_aux of 'a fundef_aux * 'a annot
 
 type ('a, 'b) def_aux =
-| Def_type of 'a type_def
+| Def_type of 'a type_def non_empty
 | Def_constraint of n_constraint
 | Def_fundef of 'a fundef
 | Def_mapdef of 'a mapdef

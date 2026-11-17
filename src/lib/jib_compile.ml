@@ -2346,9 +2346,16 @@ module Make (C : CONFIG) = struct
         raise (Reporting.err_general l "Encountered function with no clauses")
     | Def_fundef (FD_aux (FD_function (_, _, _ :: _ :: _), (l, _))) ->
         raise (Reporting.err_general l "Encountered function with multiple clauses")
-    | Def_type type_def ->
-        let tdef_opt, ctx = compile_type_def ctx type_def in
-        (Compiled (List.map (fun tdef -> CDef_aux (CDef_type tdef, def_annot)) (Option.to_list tdef_opt)), ctx)
+    | Def_type type_defs ->
+        let ctx, tdefs =
+          List.fold_left_map
+            (fun ctx type_def ->
+              let tdef_opt, ctx = compile_type_def ctx type_def in
+              (ctx, Option.to_list tdef_opt)
+            )
+            ctx (non_empty_to_list type_defs)
+        in
+        (Compiled (List.map (fun tdef -> CDef_aux (CDef_type tdef, def_annot)) (List.concat tdefs)), ctx)
     | Def_let (pat, exp) ->
         let debug_attr = get_def_attribute "jib_debug" def_annot in
         let ctyp = ctyp_of_typ ctx (typ_of_pat pat) in

@@ -251,20 +251,25 @@ let type_parameters_to_print env defs : Util.IntSet.t Bindings.t =
     let is = List.fold_left (fun is typ -> check_typ is typ) type_params typs in
     Bindings.add id is type_size_map
   in
-  let check_def type_size_map (Def_aux (def, _)) =
-    match def with
-    | Def_type (TD_aux (TD_record (id, typq, fs), _)) ->
+  let check_type_def type_size_map (TD_aux (td, _)) =
+    match td with
+    | TD_record (id, typq, fs) ->
         let env = Env.add_typquant Unknown typq env in
         make_type_size_map env id typq (List.map (fun ((_, t), _) -> t) fs) type_size_map
-    | Def_type (TD_aux (TD_variant (id, typq, tus, _), _)) ->
+    | TD_variant (id, typq, tus, _) ->
         let env = Env.add_typquant Unknown typq env in
         make_type_size_map env id typq (List.map (fun (Tu_aux (Tu_ty_id (t, _), _)) -> t) tus) type_size_map
-    | Def_type (TD_aux (TD_abbrev (id, typq, typ_arg), _)) -> (
+    | TD_abbrev (id, typq, typ_arg) -> (
         let env = Env.add_typquant Unknown typq env in
         match typ_arg with
         | A_aux (A_typ typ, _) -> make_type_size_map env id typq [typ] type_size_map
         | _ -> type_size_map
       )
+    | _ -> type_size_map
+  in
+  let check_def type_size_map (Def_aux (def, _)) =
+    match def with
+    | Def_type tds -> List.fold_left check_type_def type_size_map (non_empty_to_list tds)
     | _ -> type_size_map
   in
 
@@ -1701,9 +1706,11 @@ let doc_def_lem effect_info params_to_print type_env (Def_aux (aux, _) as def) =
   | Def_val v_spec -> doc_spec_lem effect_info params_to_print type_env v_spec
   | Def_fixity _ -> empty
   | Def_overload _ -> empty
-  | Def_type t_def ->
+  | Def_type (Non_empty (t_def, [])) ->
       if List.mem (string_of_id (id_of_type_def t_def)) !opt_extern_types then empty
       else group (doc_typdef_lem params_to_print type_env t_def) ^/^ hardline
+  | Def_type (Non_empty (_, _ :: _)) ->
+      raise (Reporting.err_general (def_loc def) "Recursive type definitions are not yet supported in the Lem backend")
   | Def_constraint _ -> empty
   | Def_register dec -> group (doc_dec_lem dec)
   | Def_default df -> empty
@@ -1732,7 +1739,8 @@ let doc_header_lem top_line imports =
 
 let find_exc_typ defs =
   let is_exc_typ_def = function
-    | Def_aux (Def_type td, _) -> string_of_id (id_of_type_def td) = "exception"
+    | Def_aux (Def_type tds, _) ->
+        List.exists (fun td -> string_of_id (id_of_type_def td) = "exception") (non_empty_to_list tds)
     | _ -> false
   in
   if List.exists is_exc_typ_def defs then "exception" else "unit"

@@ -2405,9 +2405,12 @@ let rec to_ast_def doc attrs vis ctx (P.Def_aux (def, l)) : untyped_def list ctx
       ( [Def_aux (Def_fixity (prec, n, id), annot)],
         { ctx with fixities = StringMap.add op (prec, Z.to_int n) ctx.fixities }
       )
-  | P.Def_type (td, rec_tds) ->
+  | P.Def_type (td, rec_tds) -> (
       let tds, fns, ctx = to_ast_typedefs ctx annot (td :: rec_tds) in
-      (fns @ List.map (fun (td, annot) -> Def_aux (Def_type td, annot)) tds, ctx)
+      match tds with
+      | (td, _) :: tds -> (fns @ [Def_aux (Def_type (Non_empty (td, List.map fst tds)), annot)], ctx)
+      | [] -> Reporting.unreachable l __POS__ "Empty type declaration block"
+    )
   | P.Def_fundef f_def ->
       let fd = to_ast_fundef ctx f_def in
       ([Def_aux (Def_fundef fd, annot)], ctx)
@@ -2738,7 +2741,7 @@ let update_def_annot f (Def_aux (def, annot)) = Def_aux (def, f annot)
 let generate_enum_number_conversions defs =
   let vs_ids = val_spec_ids defs in
   let rec gen_enums acc = function
-    | (Def_aux (Def_type (TD_aux (TD_enum (id, elems), _)), def_annot) as enum) :: defs -> (
+    | (Def_aux (Def_type (Non_empty (TD_aux (TD_enum (id, elems), _), [])), def_annot) as enum) :: defs -> (
         match get_def_attribute "no_enum_number_conversions" def_annot with
         | Some _ -> gen_enums (enum :: acc) defs
         | None ->

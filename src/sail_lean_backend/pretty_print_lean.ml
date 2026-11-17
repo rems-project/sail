@@ -1527,10 +1527,13 @@ let rec doc_defs_rec ctx defs types (former_funcs : document list) (docdefs : do
       let funs = separate_map hardline (fun fdef -> doc_fundef ctx fdef) fdefs in
       let res = string "mutual" ^^ hardline ^^ funs ^^ hardline ^^ string "end" ^^ hardline in
       doc_defs_rec ctx defs' types former_funcs (docdefs ^^ hardline ^^ res ^^ hardline)
-  | Def_aux (Def_type tdef, _) :: defs' when List.mem (string_of_id (id_of_type_def tdef)) !opt_extern_types ->
+  | Def_aux (Def_type (Non_empty (tdef, [])), _) :: defs'
+    when List.mem (string_of_id (id_of_type_def tdef)) !opt_extern_types ->
       doc_defs_rec ctx defs' types former_funcs docdefs
-  | Def_aux (Def_type tdef, _) :: defs' ->
+  | Def_aux (Def_type (Non_empty (tdef, [])), _) :: defs' ->
       doc_defs_rec ctx defs' (types ^^ group (doc_typdef ctx tdef) ^/^ hardline) former_funcs docdefs
+  | Def_aux (Def_type (Non_empty (_, _ :: _)), def_annot) :: _ ->
+      raise (Reporting.err_general def_annot.loc "Recursive type definitions are not yet supported in the Lean backend")
   | Def_aux (Def_let (pat, exp), _) :: defs' ->
       let global, pp_val = doc_val ctx pat exp in
       let ctx = { ctx with global } in
@@ -1567,7 +1570,7 @@ let rec collect_imports_rec (cg : Callgraph.callgraph) (defs : (tannot, env) def
   | (Def_aux ((Def_fundef _ | Def_internal_mutrec _ | Def_let _), _) as d) :: defs' ->
       let map, acc = add_def_to_map_and_ref_set cg map acc idx d in
       collect_imports_rec cg defs' map accs acc idx true
-  | Def_aux (Def_type tdef, _) :: defs' -> collect_imports_rec cg defs' map accs acc idx nonempty_print
+  | Def_aux (Def_type _, _) :: defs' -> collect_imports_rec cg defs' map accs acc idx nonempty_print
   | Def_aux (Def_pragma ("include_start", Pragma_line (file, _)), _) :: defs'
   | Def_aux (Def_pragma ("file_start", Pragma_line (file, _)), _) :: defs'
   | Def_aux (Def_pragma ("include_end", Pragma_line (file, _)), _) :: defs'
@@ -1638,7 +1641,8 @@ let doc_reg_info env global registers =
 let doc_monad_abbrev ~version defs =
   let find_exc_typ defs =
     let is_exc_typ_def = function
-      | Def_aux (Def_type td, _) -> string_of_id (id_of_type_def td) = "exception"
+      | Def_aux (Def_type tds, _) ->
+          List.exists (fun td -> string_of_id (id_of_type_def td) = "exception") (non_empty_to_list tds)
       | _ -> false
     in
     if List.exists is_exc_typ_def defs then empty else string "abbrev exception := Unit\n"

@@ -5181,6 +5181,56 @@ let check_global_constraint env def_annot nc =
 let undefined_skip l = Some (AD_aux (AD_string "skip", gen_loc l))
 let undefined_forbid l = Some (AD_aux (AD_string "forbid", gen_loc l))
 
+(* The type identifiers that a type definition refers to. Unlike
+   [Ast_util.ids_of_typ] this includes the type constructors in
+   [Typ_app]. *)
+let type_def_dependencies (TD_aux (aux, _)) =
+  let rec typ_deps (Typ_aux (aux, _)) =
+    match aux with
+    | Typ_internal_unknown | Typ_var _ -> IdSet.empty
+    | Typ_id id -> IdSet.singleton id
+    | Typ_app (id, args) -> List.fold_left (fun s arg -> IdSet.union s (typ_arg_deps arg)) (IdSet.singleton id) args
+    | Typ_fn (typs, typ) -> List.fold_left (fun s typ -> IdSet.union s (typ_deps typ)) (typ_deps typ) typs
+    | Typ_bidir (typ1, typ2) -> IdSet.union (typ_deps typ1) (typ_deps typ2)
+    | Typ_tuple typs -> List.fold_left (fun s typ -> IdSet.union s (typ_deps typ)) IdSet.empty typs
+    | Typ_exist (_, nc, typ) -> IdSet.union (ids_of_constraint nc) (typ_deps typ)
+  and typ_arg_deps (A_aux (aux, _)) =
+    match aux with A_typ typ -> typ_deps typ | A_nexp nexp -> ids_of_nexp nexp | A_bool nc -> ids_of_constraint nc
+  in
+  let typq_deps typq =
+    List.fold_left (fun s nc -> IdSet.union s (ids_of_constraint nc)) IdSet.empty (quant_split typq |> snd)
+  in
+  let union_all = List.fold_left IdSet.union IdSet.empty in
+  match aux with
+  | TD_abbrev (_, typq, arg) -> IdSet.union (typq_deps typq) (typ_arg_deps arg)
+  | TD_record (_, typq, fields) -> union_all (typq_deps typq :: List.map (fun ((_, typ), _) -> typ_deps typ) fields)
+  | TD_variant (_, typq, arms, _) ->
+      union_all (typq_deps typq :: List.map (fun (Tu_aux (Tu_ty_id (typ, _), _)) -> typ_deps typ) arms)
+  | TD_bitfield (_, typ, _) -> typ_deps typ
+  | TD_enum _ | TD_abstract _ -> IdSet.empty
+
+(* Sort a block of type definitions so that each definition comes
+   after the definitions it depends on. Returns [None] if the block is
+   genuinely mutually recursive. *)
+let sort_type_def_block tdefs =
+  let module G = Graph.Make (Id) in
+  let ids = List.map id_of_type_def tdefs in
+  let block_ids = IdSet.of_list ids in
+  let g =
+    List.fold_left
+      (fun g tdef ->
+        let deps = IdSet.inter block_ids (type_def_dependencies tdef) in
+        G.add_edges (id_of_type_def tdef) (IdSet.elements deps) g
+      )
+      G.empty tdefs
+  in
+  let components = G.scc ~original_order:ids g in
+  if List.exists (fun component -> List.length component > 1) components then None
+  else (
+    let find id = List.find (fun tdef -> Id.compare id (id_of_type_def tdef) = 0) tdefs in
+    Some (List.concat_map (List.map find) components)
+  )
+
 let rec check_typedef : Env.t -> env def_annot -> uannot type_def -> typed_def list * Env.t =
  fun env def_annot (TD_aux (tdef, (l, _))) ->
   typ_print (lazy ("\n" ^ Util.("Check type " |> cyan |> clear) ^ string_of_id (id_of_type_def_aux tdef)));
@@ -5195,20 +5245,26 @@ let rec check_typedef : Env.t -> env def_annot -> uannot type_def -> typed_def l
           let env = Env.add_typquant l typq env in
           Env.wf_constraint ~at:a_l env nc
       );
-      ([Def_aux (Def_type (TD_aux (tdef, (l, empty_tannot))), def_annot)], Env.add_typ_synonym id typq typ_arg env)
+      ( [Def_aux (Def_type (Non_empty (TD_aux (tdef, (l, empty_tannot)), [])), def_annot)],
+        Env.add_typ_synonym id typq typ_arg env
+      )
   | TD_abstract (id, kind, key) -> (
       match unaux_kind kind with
       | K_int | K_bool ->
-          ([Def_aux (Def_type (TD_aux (tdef, (l, empty_tannot))), def_annot)], Env.add_abstract_typ id kind key env)
+          ( [Def_aux (Def_type (Non_empty (TD_aux (tdef, (l, empty_tannot)), [])), def_annot)],
+            Env.add_abstract_typ id kind key env
+          )
       | K_type -> raise (Reporting.err_general l "Abstract type must be either a boolean or integer type")
     )
   | TD_record (id, typq, fields) -> (
       let env = check_record l env def_annot id typq fields in
       match get_def_attribute "undefined_gen" def_annot with
       | Some (_, Some (AD_aux (AD_string "forbid", _))) ->
-          ([Def_aux (Def_type (TD_aux (tdef, (l, empty_tannot))), def_annot)], env)
+          ([Def_aux (Def_type (Non_empty (TD_aux (tdef, (l, empty_tannot)), [])), def_annot)], env)
       | Some (_, Some (AD_aux (AD_string "skip", _))) ->
-          ([Def_aux (Def_type (TD_aux (tdef, (l, empty_tannot))), def_annot)], Env.allow_user_undefined id env)
+          ( [Def_aux (Def_type (Non_empty (TD_aux (tdef, (l, empty_tannot)), [])), def_annot)],
+            Env.allow_user_undefined id env
+          )
       | (Some (_, Some (AD_aux (AD_string "generate", _))) | None) as attr ->
           let field_env = Env.add_typquant l typq env in
           let field_env =
@@ -5223,7 +5279,7 @@ let rec check_typedef : Env.t -> env def_annot -> uannot type_def -> typed_def l
           if (not gen_undefined) && Option.is_none attr then (
             (* If we cannot generate an undefined value, and we weren't explicitly asked to *)
             let def_annot = add_def_attribute (gen_loc l) "undefined_gen" (undefined_forbid l) def_annot in
-            ([Def_aux (Def_type (TD_aux (tdef, (l, empty_tannot))), def_annot)], env)
+            ([Def_aux (Def_type (Non_empty (TD_aux (tdef, (l, empty_tannot)), [])), def_annot)], env)
           )
           else if not gen_undefined then
             (* If we cannot generate an undefined value, but we were
@@ -5237,13 +5293,13 @@ let rec check_typedef : Env.t -> env def_annot -> uannot type_def -> typed_def l
                 def_annot |> remove_def_attribute "undefined_gen"
                 |> add_def_attribute (gen_loc l) "undefined_gen" (undefined_skip l)
               in
-              ( Def_aux (Def_type (TD_aux (tdef, (l, empty_tannot))), def_annot) :: undefined_defs,
+              ( Def_aux (Def_type (Non_empty (TD_aux (tdef, (l, empty_tannot)), [])), def_annot) :: undefined_defs,
                 Env.allow_user_undefined id env
               )
             with
             | Type_error _ when Option.is_none attr ->
                 let def_annot = add_def_attribute (gen_loc l) "undefined_gen" (undefined_forbid l) def_annot in
-                ([Def_aux (Def_type (TD_aux (tdef, (l, empty_tannot))), def_annot)], env)
+                ([Def_aux (Def_type (Non_empty (TD_aux (tdef, (l, empty_tannot)), [])), def_annot)], env)
             | Type_error _ -> typ_error l ("Cannot generate undefined function for struct " ^ string_of_id id)
           )
       | Some (attr_l, Some arg) ->
@@ -5261,7 +5317,7 @@ let rec check_typedef : Env.t -> env def_annot -> uannot type_def -> typed_def l
       let env =
         rec_env |> fun env -> List.fold_left (fun env tu -> check_type_union l non_rec_env env id typq tu) env arms
       in
-      ([Def_aux (Def_type (TD_aux (tdef, (l, empty_tannot))), def_annot)], env)
+      ([Def_aux (Def_type (Non_empty (TD_aux (tdef, (l, empty_tannot)), [])), def_annot)], env)
   | TD_enum (id, members) -> (
       let ids = List.map fst members in
       let env = Env.add_enum id ids env in
@@ -5284,9 +5340,9 @@ let rec check_typedef : Env.t -> env def_annot -> uannot type_def -> typed_def l
       in
       match get_def_attribute "undefined_gen" def_annot with
       | Some (_, Some (AD_aux (AD_string "forbid", _))) ->
-          ([Def_aux (Def_type (TD_aux (tdef, (l, empty_tannot))), def_annot)] @ enum_vector, env)
+          ([Def_aux (Def_type (Non_empty (TD_aux (tdef, (l, empty_tannot)), [])), def_annot)] @ enum_vector, env)
       | Some (_, Some (AD_aux (AD_string "skip", _))) ->
-          ( [Def_aux (Def_type (TD_aux (tdef, (l, empty_tannot))), def_annot)] @ enum_vector,
+          ( [Def_aux (Def_type (Non_empty (TD_aux (tdef, (l, empty_tannot)), [])), def_annot)] @ enum_vector,
             Env.allow_user_undefined id env
           )
       | Some (_, Some (AD_aux (AD_string "generate", _))) | None ->
@@ -5296,7 +5352,8 @@ let rec check_typedef : Env.t -> env def_annot -> uannot type_def -> typed_def l
             def_annot |> remove_def_attribute "undefined_gen"
             |> add_def_attribute (gen_loc l) "undefined_gen" (undefined_skip l)
           in
-          ( (Def_aux (Def_type (TD_aux (tdef, (l, empty_tannot))), def_annot) :: undefined_defs) @ enum_vector,
+          ( (Def_aux (Def_type (Non_empty (TD_aux (tdef, (l, empty_tannot)), [])), def_annot) :: undefined_defs)
+            @ enum_vector,
             Env.allow_user_undefined id env
           )
       | Some (attr_l, Some arg) ->
@@ -5335,7 +5392,7 @@ let rec check_typedef : Env.t -> env def_annot -> uannot type_def -> typed_def l
             ranges;
           let def_annot = add_def_attribute l "bitfield" None def_annot in
           let defs =
-            Def_aux (Def_type (TD_aux (record_tdef, (l, empty_uannot))), strip_def_annot def_annot)
+            Def_aux (Def_type (Non_empty (TD_aux (record_tdef, (l, empty_uannot)), [])), strip_def_annot def_annot)
             :: Bitfield.macro id size (Env.get_default_order env) ranges
           in
           let defs, env =
@@ -5345,7 +5402,7 @@ let rec check_typedef : Env.t -> env def_annot -> uannot type_def -> typed_def l
           in
           let env = Env.add_bitfield id typ ranges env in
           if !opt_no_bitfield_expansion then
-            ([Def_aux (Def_type (TD_aux (unexpanded, (l, empty_tannot))), def_annot)], env)
+            ([Def_aux (Def_type (Non_empty (TD_aux (unexpanded, (l, empty_tannot)), [])), def_annot)], env)
           else (defs, env)
       | typ -> typ_error l ("Underlying bitfield type " ^ string_of_typ typ ^ " must be a constant-width bitvector")
     )
@@ -5580,7 +5637,22 @@ and check_def : Env.t -> untyped_def -> typed_def list * Env.t =
   let def_annot = def_annot_map_env (fun _ -> env) def_annot in
   match aux with
   | Def_fixity (prec, n, op) -> ([Def_aux (Def_fixity (prec, n, op), def_annot)], env)
-  | Def_type tdef -> check_typedef env def_annot tdef
+  | Def_type (Non_empty (tdef, [])) -> check_typedef env def_annot tdef
+  | Def_type tdefs -> (
+      (* If the block is not actually mutually recursive (for example,
+         a union and the auxiliary records generated for its anonymous
+         record constructors), we can check each definition separately
+         in dependency order. *)
+      match sort_type_def_block (non_empty_to_list tdefs) with
+      | Some tdefs ->
+          List.fold_left
+            (fun (defs, env) tdef ->
+              let defs', env = check_typedef env def_annot tdef in
+              (defs @ defs', env)
+            )
+            ([], env) tdefs
+      | None -> typ_error def_annot.loc "Mutually recursive type definitions are not yet supported by the type checker"
+    )
   | Def_constraint nc -> check_global_constraint env def_annot nc
   | Def_fundef fdef -> check_fundef env def_annot fdef
   | Def_mapdef mdef -> check_mapdef env def_annot mdef

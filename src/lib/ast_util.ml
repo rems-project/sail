@@ -309,6 +309,13 @@ let non_empty_singleton = function [] -> [] | x :: xs -> [Non_empty (x, xs)]
 
 let non_empty_for_all p (Non_empty (x, xs)) = p x && List.for_all p xs
 
+let non_empty_map f (Non_empty (x, xs)) =
+  let x = f x in
+  let xs = List.map f xs in
+  Non_empty (x, xs)
+
+let non_empty_to_list (Non_empty (x, xs)) = x :: xs
+
 let hex_lit_length hex = List.fold_left (fun acc (Non_empty (_, ds)) -> acc + ((List.length ds + 1) * 4)) 0 hex
 
 let bin_lit_length bin = List.fold_left (fun acc (Non_empty (_, ds)) -> acc + List.length ds + 1) 0 bin
@@ -853,7 +860,7 @@ and map_register_annot_aux f = function
 and map_def_annot f (Def_aux (aux, annot)) =
   let aux =
     match aux with
-    | Def_type td -> Def_type (map_typedef_annot f td)
+    | Def_type tds -> Def_type (non_empty_map (map_typedef_annot f) tds)
     | Def_constraint nc -> Def_constraint nc
     | Def_fundef fd -> Def_fundef (map_fundef_annot f fd)
     | Def_mapdef md -> Def_mapdef (map_mapdef_annot f md)
@@ -1318,7 +1325,7 @@ let id_of_scattered (SD_aux (sdef, _)) =
 
 let ids_of_def (Def_aux (aux, _)) =
   match aux with
-  | Def_type td -> IdSet.singleton (id_of_type_def td)
+  | Def_type tds -> IdSet.of_list (non_empty_to_list (non_empty_map id_of_type_def tds))
   | Def_fundef fd -> IdSet.singleton (id_of_fundef fd)
   | Def_mapdef md -> IdSet.singleton (id_of_mapdef md)
   | Def_let (pat, _) -> pat_ids pat
@@ -1341,7 +1348,9 @@ let val_spec_ids defs =
 
 let record_ids defs =
   let rec rec_ids = function
-    | Def_aux (Def_type (TD_aux (TD_record (id, _, _), _)), _) :: defs -> id :: rec_ids defs
+    | Def_aux (Def_type tds, _) :: defs ->
+        List.filter_map (function TD_aux (TD_record (id, _, _), _) -> Some id | _ -> None) (non_empty_to_list tds)
+        @ rec_ids defs
     | _ :: defs -> rec_ids defs
     | [] -> []
   in
