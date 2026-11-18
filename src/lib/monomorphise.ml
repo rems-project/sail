@@ -4619,6 +4619,11 @@ module ToplevelNexpRewrites = struct
         | Def_val vs -> Def_val (rw_spec vs)
         | Def_type td -> Def_type (rw_typedef td)
         | Def_register reg -> Def_register (rw_register reg)
+        (* The outcome's own type scheme needs the new parameters too; the definitions inside it
+           are rewritten by rewrite_def below. *)
+        | Def_outcome (OV_aux (OV_outcome (id, TypSchm_aux (TypSchm_ts (typq, typ), tannot), args), l), defs) ->
+            Def_outcome
+              (OV_aux (OV_outcome (id, TypSchm_aux (TypSchm_ts (typq, expand_type typ), tannot), args), l), defs)
         | def -> def
       in
       rewrite_def rws (Def_aux (aux', def_annot))
