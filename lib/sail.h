@@ -270,7 +270,12 @@ void sail_int_get_mpz(mpz_t rop, const sail_int op);
 /*
  * A read-only GMP view of a sail_int, which needs no allocation.
  * The view is valid while both the view object and op are valid.
+ *
+ * Code outside Sail can use SAIL_HAVE_MPZ_VIEW to find this runtime
+ * representation, and use sail_int_view and sail_lbits_view to read values.
  */
+#define SAIL_HAVE_MPZ_VIEW 1
+
 typedef struct {
   mpz_t z;
   mp_limb_t limb;
