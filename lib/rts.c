@@ -257,17 +257,27 @@ void kill_mem()
 
 // ***** Memory builtins *****
 
-bool write_ram(const mpz_t addr_size,     // Either 32 or 64
-	       const mpz_t data_size_mpz, // Number of bytes
+bool write_ram(const sail_int addr_size,     // Either 32 or 64
+	       const sail_int data_size_mpz, // Number of bytes
 	       const lbits hex_ram,       // Currently unused
 	       const lbits addr_bv,
 	       const lbits data)
 {
-  uint64_t addr = mpz_get_ui(*addr_bv.bits);
-  uint64_t data_size = mpz_get_ui(data_size_mpz);
+  uint64_t addr = sail_lbits_low64(addr_bv);
+  uint64_t data_size = sail_int_get_ui(data_size_mpz);
+
+  if (data.len <= 64) {
+    uint64_t buf = data.word;
+    for (uint64_t i = 0; i < data_size; ++i) {
+      write_mem(addr + i, buf & 0xFF);
+      buf = buf >> 8;
+    }
+    return true;
+  }
 
   mpz_t buf;
-  mpz_init_set(buf, *data.bits);
+  mpz_init(buf);
+  sail_lbits_get_mpz(buf, data);
 
   uint64_t byte;
   for(uint64_t i = 0; i < data_size; ++i) {
@@ -299,57 +309,52 @@ sbits fast_read_ram(const int64_t data_size,
 }
 
 void read_ram(lbits *data,
-	      const mpz_t addr_size,
-	      const mpz_t data_size_mpz,
+	      const sail_int addr_size,
+	      const sail_int data_size_mpz,
 	      const lbits hex_ram,
 	      const lbits addr_bv)
 {
-  uint64_t addr = mpz_get_ui(*addr_bv.bits);
-  uint64_t data_size = mpz_get_ui(data_size_mpz);
+  uint64_t addr = sail_lbits_low64(addr_bv);
+  uint64_t data_size = sail_int_get_ui(data_size_mpz);
 
-  mpz_set_ui(*data->bits, 0);
-  data->len = data_size * 8;
-
-  mpz_t byte;
-  mpz_init(byte);
-  for(uint64_t i = data_size; i > 0; --i) {
-    mpz_set_ui(byte, read_mem(addr + (i - 1)));
-    mpz_mul_2exp(*data->bits, *data->bits, 8);
-    mpz_add(*data->bits, *data->bits, byte);
+  if (data_size <= 8) {
+    sbits sdata = fast_read_ram(data_size, addr);
+    RECREATE_OF(lbits, sbits)(data, sdata, true);
+    return;
   }
 
-  mpz_clear(byte);
+  mpz_t value;
+  mpz_init(value);
+  for(uint64_t i = data_size; i > 0; --i) {
+    mpz_mul_2exp(value, value, 8);
+    mpz_add_ui(value, value, read_mem(addr + (i - 1)));
+  }
+  sail_lbits_set_mpz(data, data_size * 8, value);
+  mpz_clear(value);
 }
 
 void platform_read_mem(lbits *data,
                        const int read_kind,
                        const uint64_t addr_size,
                        const sbits addr,
-                       const mpz_t n)
+                       const sail_int n)
 {
-  sbits sdata;
-  uint64_t len = mpz_get_ui(n); /* Sail type says always >0 */
-  if (len <= 8) {
-    /* fast path for small reads */
-    sdata = fast_read_ram(len, addr.bits);
-    RECREATE_OF(lbits, sbits)(data, sdata, true);
-  } else {
-    mpz_t mpz_addr_size;
-    mpz_init(mpz_addr_size);
-    mpz_set_ui(mpz_addr_size, addr_size);
-    mpz_t addr_bv;
-    mpz_init(addr_bv);
-    mpz_set_ui(addr_bv, addr.bits);
-    read_ram(data, mpz_addr_size, n, (lbits){.len=0, .bits=NULL}, (lbits){.len=addr.len, .bits=&addr_bv});
-    mpz_clear(mpz_addr_size);
-    mpz_clear(addr_bv);
-  }
+  sail_int mpz_addr_size;
+  CREATE_OF(sail_int, mach_int)(&mpz_addr_size, (mach_int)addr_size);
+  lbits addr_bv;
+  CREATE_OF(lbits, sbits)(&addr_bv, addr, true);
+  lbits hex_ram;
+  CREATE(lbits)(&hex_ram);
+  read_ram(data, mpz_addr_size, n, hex_ram, addr_bv);
+  KILL(lbits)(&hex_ram);
+  KILL(lbits)(&addr_bv);
+  KILL(sail_int)(&mpz_addr_size);
 }
 
 unit platform_write_mem_ea(const int write_kind,
                            const uint64_t addr_size,
                            const sbits addr,
-                           const mpz_t n)
+                           const sail_int n)
 {
     return UNIT;
 }
@@ -357,18 +362,19 @@ unit platform_write_mem_ea(const int write_kind,
 bool platform_write_mem(const int write_kind,
                         const uint64_t addr_size,
                         const sbits addr,
-                        const mpz_t n,
+                        const sail_int n,
                         const lbits data)
 {
-    mpz_t mpz_addr_size;
-    mpz_init(mpz_addr_size);
-    mpz_set_ui(mpz_addr_size, addr_size);
-    mpz_t addr_bv;
-    mpz_init(addr_bv);
-    mpz_set_ui(addr_bv, addr.bits);
-    bool res = write_ram(mpz_addr_size, n, (lbits){.len=0, .bits=NULL}, (lbits){.len=addr.len, .bits=&addr_bv}, data);
-    mpz_clear(mpz_addr_size);
-    mpz_clear(addr_bv);
+    sail_int mpz_addr_size;
+    CREATE_OF(sail_int, mach_int)(&mpz_addr_size, (mach_int)addr_size);
+    lbits addr_bv;
+    CREATE_OF(lbits, sbits)(&addr_bv, addr, true);
+    lbits hex_ram;
+    CREATE(lbits)(&hex_ram);
+    bool res = write_ram(mpz_addr_size, n, hex_ram, addr_bv, data);
+    KILL(lbits)(&hex_ram);
+    KILL(lbits)(&addr_bv);
+    KILL(sail_int)(&mpz_addr_size);
     return res;
 }
 
@@ -385,7 +391,7 @@ unit platform_barrier()
 void emulator_read_mem(lbits *data,
                        const uint64_t addr_size,
                        const sbits addr,
-                       const mpz_t n)
+                       const sail_int n)
 {
   platform_read_mem(data, 0, addr_size, addr, n);
 }
@@ -393,7 +399,7 @@ void emulator_read_mem(lbits *data,
 void emulator_read_mem_ifetch(lbits *data,
                               const uint64_t addr_size,
                               const sbits addr,
-                              const mpz_t n)
+                              const sail_int n)
 {
   platform_read_mem(data, 0, addr_size, addr, n);
 }
@@ -401,14 +407,14 @@ void emulator_read_mem_ifetch(lbits *data,
 void emulator_read_mem_exclusive(lbits *data,
                                  const uint64_t addr_size,
                                  const sbits addr,
-                                 const mpz_t n)
+                                 const sail_int n)
 {
   platform_read_mem(data, 0, addr_size, addr, n);
 }
 
 bool emulator_write_mem(const uint64_t addr_size,
                         const sbits addr,
-                        const mpz_t n,
+                        const sail_int n,
                         const lbits data)
 {
   return platform_write_mem(0, addr_size, addr, n, data);
@@ -416,7 +422,7 @@ bool emulator_write_mem(const uint64_t addr_size,
 
 bool emulator_write_mem_exclusive(const uint64_t addr_size,
                                   const sbits addr,
-                                  const mpz_t n,
+                                  const sail_int n,
                                   const lbits data)
 {
   return platform_write_mem(0, addr_size, addr, n, data);
@@ -477,14 +483,17 @@ void load_image(const char *file)
 
 /* ***** ELF functions ***** */
 
-void elf_entry(mpz_t *rop, const unit u)
+void elf_entry(sail_int *rop, const unit u)
 {
-  mpz_set_ui(*rop, g_elf_entry);
+  lbits entry;
+  CREATE_OF(lbits, fbits)(&entry, g_elf_entry, 64, true);
+  sail_unsigned(rop, entry);
+  KILL(lbits)(&entry);
 }
 
-void elf_tohost(mpz_t *rop, const unit u)
+void elf_tohost(sail_int *rop, const unit u)
 {
-  mpz_set_ui(*rop, 0x0ul);
+  sail_int_set_small(rop, 0);
 }
 
 /* ***** Cycle limit ***** */
@@ -506,7 +515,10 @@ unit cycle_count(const unit u)
 
 void get_cycle_count(sail_int *rop, const unit u)
 {
-    mpz_set_ui(*rop, g_cycle_count);
+    lbits count;
+    CREATE_OF(lbits, fbits)(&count, g_cycle_count, 64, true);
+    sail_unsigned(rop, count);
+    KILL(lbits)(&count);
 }
 
 /* ***** Argument Parsing ***** */
@@ -562,10 +574,10 @@ int process_arguments(int argc, char *argv[])
           return -1;
         };
 #ifdef HAVE_SETCONFIG
-        mpz_t s_value;
-        mpz_init_set_ui(s_value, value);
+        sail_int s_value;
+        CREATE_OF(sail_int, mach_int)(&s_value, (mach_int)value);
         z__SetConfig(arg, s_value);
-        mpz_clear(s_value);
+        KILL(sail_int)(&s_value);
 #else
         fprintf(stderr, "Ignoring flag -C %s", optarg);
 #endif

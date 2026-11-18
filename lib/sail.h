@@ -47,6 +47,7 @@
 #ifndef SAIL_H
 #define SAIL_H
 
+#include <assert.h>
 #include <inttypes.h>
 #include <stdlib.h>
 #include <stdio.h>
@@ -156,9 +157,6 @@ typedef const char *const_sail_string;
 
 SAIL_BUILTIN_TYPE_IMPL(sail_string, const_sail_string)
 
-void dec_str(sail_string *str, const mpz_t n);
-void hex_str(sail_string *str, const mpz_t n);
-void hex_str_upper(sail_string *str, const mpz_t n);
 
 void undefined_string(sail_string *str, const unit u);
 
@@ -174,37 +172,252 @@ typedef int64_t mach_int;
 
 bool EQUAL(mach_int)(const mach_int, const mach_int);
 
-typedef mpz_t sail_int;
+#if GMP_NUMB_BITS != 64
+#error "The Sail runtime requires 64-bit GMP limbs without nails"
+#endif
 
-uint64_t sail_int_get_ui(const sail_int);
+/*
+ * With GCC and clang, use builtins. Otherwise use portable C. Define
+ * SAIL_NO_BUILTINS to test the portable code.
+ */
+#if (defined(__GNUC__) || defined(__clang__)) && !defined(SAIL_NO_BUILTINS)
+#define SAIL_HAVE_BUILTINS 1
+#define SAIL_LIKELY(x) __builtin_expect(!!(x), 1)
+#define SAIL_UNLIKELY(x) __builtin_expect(!!(x), 0)
+#else
+#define SAIL_LIKELY(x) (x)
+#define SAIL_UNLIKELY(x) (x)
+#endif
+
+/*
+ * 64-bit add, subtract and multiply that return true on overflow. The
+ * portable add and subtract use unsigned arithmetic, which wraps without
+ * undefined behaviour.
+ */
+static inline bool sail_add_overflow(const int64_t a, const int64_t b, int64_t *r)
+{
+#ifdef SAIL_HAVE_BUILTINS
+  return __builtin_add_overflow(a, b, r);
+#else
+  const uint64_t s = (uint64_t)a + (uint64_t)b;
+  *r = (int64_t)s;
+  return (int64_t)((s ^ (uint64_t)a) & (s ^ (uint64_t)b)) < 0;
+#endif
+}
+
+static inline bool sail_sub_overflow(const int64_t a, const int64_t b, int64_t *r)
+{
+#ifdef SAIL_HAVE_BUILTINS
+  return __builtin_sub_overflow(a, b, r);
+#else
+  const uint64_t s = (uint64_t)a - (uint64_t)b;
+  *r = (int64_t)s;
+  return (int64_t)(((uint64_t)a ^ (uint64_t)b) & (s ^ (uint64_t)a)) < 0;
+#endif
+}
+
+static inline bool sail_mul_overflow(const int64_t a, const int64_t b, int64_t *r)
+{
+#ifdef SAIL_HAVE_BUILTINS
+  return __builtin_mul_overflow(a, b, r);
+#else
+  /* Values in [-2^31, 2^31) cannot overflow. */
+  const uint64_t off = UINT64_C(1) << 31, lim = UINT64_C(1) << 32;
+  if ((uint64_t)a + off >= lim || (uint64_t)b + off >= lim) {
+    if (a != 0 && b != 0) {
+      if ((a == -1 && b == INT64_MIN) || (b == -1 && a == INT64_MIN)) return true;
+      if (a > 0 ? (b > 0 ? a > INT64_MAX / b : b < INT64_MIN / a) : (b > 0 ? a < INT64_MIN / b : b < INT64_MAX / a))
+        return true;
+    }
+  }
+  *r = a * b;
+  return false;
+#endif
+}
+
+/*
+ * An arbitrary-precision integer.
+ *
+ * If big is NULL, the value is val. Otherwise the value is *big,
+ * and it does not fit in an int64_t. Thus each value has exactly one
+ * representation.
+ *
+ * A sail_int passed by value shares big with the original. Do not
+ * keep it after the original changes.
+ */
+typedef struct {
+  int64_t val;
+  mpz_ptr big;
+} sail_int;
+
+/*
+ * Get and put mpz_t values from big. These are out of line, as they
+ * are only used on the slow path.
+ */
+mpz_ptr sail_mpz_alloc(void);
+void sail_mpz_release(mpz_ptr z);
+
+/*
+ * Set rop from a GMP integer. rop and op must not share storage.
+ */
+void sail_int_set_mpz(sail_int *rop, const mpz_t op);
+
+/*
+ * Set rop (initialized by the caller) to the value of op.
+ */
+void sail_int_get_mpz(mpz_t rop, const sail_int op);
+
+/*
+ * A read-only GMP view of a sail_int, which needs no allocation.
+ * The view is valid while both the view object and op are valid.
+ *
+ * Code outside Sail can use SAIL_HAVE_MPZ_VIEW to find this runtime
+ * representation, and use sail_int_view and sail_lbits_view to read values.
+ */
+#define SAIL_HAVE_MPZ_VIEW 1
+
+typedef struct {
+  mpz_t z;
+  mp_limb_t limb;
+} sail_mpz_view;
+
+static inline mpz_srcptr sail_int_view(sail_mpz_view *v, const sail_int op)
+{
+  if (op.big) return op.big;
+  uint64_t mag = op.val < 0 ? -(uint64_t)op.val : (uint64_t)op.val;
+  v->limb = mag;
+  return mpz_roinit_n(v->z, &v->limb, op.val < 0 ? -1 : (op.val == 0 ? 0 : 1));
+}
+
+static inline void sail_int_set_small(sail_int *rop, const int64_t op)
+{
+  if (SAIL_UNLIKELY(rop->big != NULL)) {
+    sail_mpz_release(rop->big);
+    rop->big = NULL;
+  }
+  rop->val = op;
+}
+
+/*
+ * Same as mpz_get_ui: the low 64 bits of the absolute value.
+ */
+static inline uint64_t sail_int_get_ui(const sail_int op)
+{
+  if (SAIL_LIKELY(op.big == NULL)) {
+    return op.val < 0 ? -(uint64_t)op.val : (uint64_t)op.val;
+  }
+  return mpz_get_ui(op.big);
+}
 
 #define SAIL_INT_FUNCTION(fname, rtype, ...) void fname(rtype*, __VA_ARGS__)
 
-SAIL_BUILTIN_TYPE(sail_int)
+static inline void CREATE(sail_int)(sail_int *rop)
+{
+  rop->val = 0;
+  rop->big = NULL;
+}
 
-void CREATE_OF(sail_int, mach_int)(sail_int *, const mach_int);
-void RECREATE_OF(sail_int, mach_int)(sail_int *, const mach_int);
+static inline void RECREATE(sail_int)(sail_int *rop)
+{
+  sail_int_set_small(rop, 0);
+}
 
-mach_int CREATE_OF(mach_int, sail_int)(const sail_int);
+static inline void KILL(sail_int)(sail_int *rop)
+{
+  if (SAIL_UNLIKELY(rop->big != NULL)) sail_mpz_release(rop->big);
+}
+
+void sail_int_copy_slow(sail_int *rop, const sail_int op);
+
+static inline void COPY(sail_int)(sail_int *rop, const sail_int op)
+{
+  if (SAIL_LIKELY(op.big == NULL)) {
+    sail_int_set_small(rop, op.val);
+  } else {
+    sail_int_copy_slow(rop, op);
+  }
+}
+
+static inline void CREATE_OF(sail_int, mach_int)(sail_int *rop, const mach_int op)
+{
+  rop->val = op;
+  rop->big = NULL;
+}
+
+static inline void RECREATE_OF(sail_int, mach_int)(sail_int *rop, const mach_int op)
+{
+  sail_int_set_small(rop, op);
+}
+
+static inline void CONVERT_OF(sail_int, mach_int)(sail_int *rop, const mach_int op)
+{
+  sail_int_set_small(rop, op);
+}
+
+/* Same as mpz_get_si when the value does not fit. */
+static inline mach_int CONVERT_OF(mach_int, sail_int)(const sail_int op)
+{
+  if (SAIL_LIKELY(op.big == NULL)) return op.val;
+  return mpz_get_si(op.big);
+}
+
+static inline mach_int CREATE_OF(mach_int, sail_int)(const sail_int op)
+{
+  if (SAIL_LIKELY(op.big == NULL)) return op.val;
+  return (mach_int)mpz_get_ui(op.big);
+}
 
 void CREATE_OF(sail_int, sail_string)(sail_int *, const_sail_string);
-void RECREATE_OF(sail_int, sail_string)(mpz_t *, const_sail_string);
-
+void RECREATE_OF(sail_int, sail_string)(sail_int *, const_sail_string);
 void CONVERT_OF(sail_int, sail_string)(sail_int *, const_sail_string);
 
-mach_int CONVERT_OF(mach_int, sail_int)(const sail_int);
-void CONVERT_OF(sail_int, mach_int)(sail_int *, const mach_int);
+void dec_str(sail_string *str, const sail_int n);
+void hex_str(sail_string *str, const sail_int n);
+void hex_str_upper(sail_string *str, const sail_int n);
 
 /*
  * Comparison operators for integers
  */
-bool eq_int(const sail_int, const sail_int);
-bool EQUAL(sail_int)(const sail_int, const sail_int);
+int sail_int_cmp_slow(const sail_int, const sail_int);
 
-bool lt(const sail_int, const sail_int);
-bool gt(const sail_int, const sail_int);
-bool lteq(const sail_int, const sail_int);
-bool gteq(const sail_int, const sail_int);
+static inline int sail_int_cmp(const sail_int op1, const sail_int op2)
+{
+  if (SAIL_LIKELY(op1.big == NULL && op2.big == NULL)) {
+    return (op1.val > op2.val) - (op1.val < op2.val);
+  }
+  return sail_int_cmp_slow(op1, op2);
+}
+
+static inline bool eq_int(const sail_int op1, const sail_int op2)
+{
+  if (SAIL_LIKELY(op1.big == NULL && op2.big == NULL)) return op1.val == op2.val;
+  return sail_int_cmp_slow(op1, op2) == 0;
+}
+
+static inline bool EQUAL(sail_int)(const sail_int op1, const sail_int op2)
+{
+  return eq_int(op1, op2);
+}
+
+static inline bool lt(const sail_int op1, const sail_int op2)
+{
+  return sail_int_cmp(op1, op2) < 0;
+}
+
+static inline bool gt(const sail_int op1, const sail_int op2)
+{
+  return sail_int_cmp(op1, op2) > 0;
+}
+
+static inline bool lteq(const sail_int op1, const sail_int op2)
+{
+  return sail_int_cmp(op1, op2) <= 0;
+}
+
+static inline bool gteq(const sail_int op1, const sail_int op2)
+{
+  return sail_int_cmp(op1, op2) >= 0;
+}
 
 /*
  * Left and right shift for integers
@@ -229,19 +442,73 @@ SAIL_INT_FUNCTION(undefined_range, sail_int, const sail_int, const sail_int);
  * truncating towards zero, and rounding towards -infinity (floor) as
  * fdiv/fmod and tdiv/tmod respectively.
  */
-SAIL_INT_FUNCTION(add_int, sail_int, const sail_int, const sail_int);
-SAIL_INT_FUNCTION(sub_int, sail_int, const sail_int, const sail_int);
-SAIL_INT_FUNCTION(sub_nat, sail_int, const sail_int, const sail_int);
-SAIL_INT_FUNCTION(mult_int, sail_int, const sail_int, const sail_int);
+SAIL_INT_FUNCTION(add_int_slow, sail_int, const sail_int, const sail_int);
+SAIL_INT_FUNCTION(sub_int_slow, sail_int, const sail_int, const sail_int);
+SAIL_INT_FUNCTION(mult_int_slow, sail_int, const sail_int, const sail_int);
+
+static inline void add_int(sail_int *rop, const sail_int op1, const sail_int op2)
+{
+  int64_t r;
+  if (SAIL_LIKELY(op1.big == NULL && op2.big == NULL && !sail_add_overflow(op1.val, op2.val, &r))) {
+    sail_int_set_small(rop, r);
+  } else {
+    add_int_slow(rop, op1, op2);
+  }
+}
+
+static inline void sub_int(sail_int *rop, const sail_int op1, const sail_int op2)
+{
+  int64_t r;
+  if (SAIL_LIKELY(op1.big == NULL && op2.big == NULL && !sail_sub_overflow(op1.val, op2.val, &r))) {
+    sail_int_set_small(rop, r);
+  } else {
+    sub_int_slow(rop, op1, op2);
+  }
+}
+
+static inline void sub_nat(sail_int *rop, const sail_int op1, const sail_int op2)
+{
+  sub_int(rop, op1, op2);
+  if (rop->big == NULL ? rop->val < 0 : mpz_sgn(rop->big) < 0) {
+    sail_int_set_small(rop, 0);
+  }
+}
+
+static inline void mult_int(sail_int *rop, const sail_int op1, const sail_int op2)
+{
+  int64_t r;
+  if (SAIL_LIKELY(op1.big == NULL && op2.big == NULL && !sail_mul_overflow(op1.val, op2.val, &r))) {
+    sail_int_set_small(rop, r);
+  } else {
+    mult_int_slow(rop, op1, op2);
+  }
+}
+
 SAIL_INT_FUNCTION(ediv_int, sail_int, const sail_int, const sail_int);
 SAIL_INT_FUNCTION(emod_int, sail_int, const sail_int, const sail_int);
 SAIL_INT_FUNCTION(tdiv_int, sail_int, const sail_int, const sail_int);
-SAIL_INT_FUNCTION(tmod_int, sail_int, const sail_int, const sail_int);
+SAIL_INT_FUNCTION(tmod_int_slow, sail_int, const sail_int, const sail_int);
+
+static inline void tmod_int(sail_int *rop, const sail_int op1, const sail_int op2)
+{
+  if (SAIL_LIKELY(op1.big == NULL && op2.big == NULL && op2.val > 0)) {
+    sail_int_set_small(rop, op1.val % op2.val);
+  } else {
+    tmod_int_slow(rop, op1, op2);
+  }
+}
 SAIL_INT_FUNCTION(fdiv_int, sail_int, const sail_int, const sail_int);
 SAIL_INT_FUNCTION(fmod_int, sail_int, const sail_int, const sail_int);
 
-SAIL_INT_FUNCTION(max_int, sail_int, const sail_int, const sail_int);
-SAIL_INT_FUNCTION(min_int, sail_int, const sail_int, const sail_int);
+static inline void max_int(sail_int *rop, const sail_int op1, const sail_int op2)
+{
+  COPY(sail_int)(rop, lt(op1, op2) ? op2 : op1);
+}
+
+static inline void min_int(sail_int *rop, const sail_int op1, const sail_int op2)
+{
+  COPY(sail_int)(rop, gt(op1, op2) ? op2 : op1);
+}
 
 SAIL_INT_FUNCTION(neg_int, sail_int, const sail_int);
 SAIL_INT_FUNCTION(abs_int, sail_int, const sail_int);
@@ -272,49 +539,182 @@ typedef struct {
   uint64_t bits;
 } sbits;
 
+/*
+ * A bitvector of any length.
+ *
+ * If len <= 64, the bits are in word, and the bits above len are zero.
+ * Otherwise the bits are in *big, which is in the range [0, 2^len).
+ *
+ * An lbits passed by value shares big with the original. Do not keep
+ * it after the original changes.
+ */
 typedef struct {
   mp_bitcnt_t len;
-  mpz_t *bits;
+  union {
+    uint64_t word;
+    mpz_ptr big;
+  };
 } lbits;
 
 // For backwards compatibility
 typedef uint64_t mach_bits;
 typedef lbits sail_bits;
 
-SAIL_BUILTIN_TYPE(lbits)
+static inline uint64_t sail_mask64(const uint64_t len)
+{
+  return len >= 64 ? UINT64_MAX : (UINT64_C(1) << len) - 1;
+}
 
-void CREATE_OF(lbits, fbits)(lbits *,
-			     const fbits op,
-			     const uint64_t len,
-			     const bool direction);
+/*
+ * Set rop to the low len bits of op. rop and op must not share storage.
+ */
+void sail_lbits_set_mpz(lbits *rop, const mp_bitcnt_t len, const mpz_t op);
 
-void RECREATE_OF(lbits, fbits)(lbits *,
-			       const fbits op,
-			       const uint64_t len,
-			       const bool direction);
+/*
+ * Set rop (initialized by the caller) to the value of op.
+ */
+void sail_lbits_get_mpz(mpz_t rop, const lbits op);
 
-void CREATE_OF(lbits, sbits)(lbits *,
-			     const sbits op,
-			     const bool direction);
+static inline mpz_srcptr sail_lbits_view(sail_mpz_view *v, const lbits op)
+{
+  if (op.len > 64) return op.big;
+  v->limb = op.word;
+  return mpz_roinit_n(v->z, &v->limb, op.word != 0);
+}
 
-void RECREATE_OF(lbits, sbits)(lbits *,
-			       const sbits op,
-			       const bool direction);
+/* Set rop to a value with len <= 64, where op has no bits above len. */
+static inline void sail_lbits_set_small(lbits *rop, const uint64_t len, const uint64_t op)
+{
+  if (SAIL_UNLIKELY(rop->len > 64)) sail_mpz_release(rop->big);
+  rop->len = len;
+  rop->word = op;
+}
 
-sbits CREATE_OF(sbits, lbits)(const lbits op, const bool direction);
-fbits CREATE_OF(fbits, lbits)(const lbits op, const bool direction);
-sbits CREATE_OF(sbits, fbits)(const fbits op, const uint64_t len, const bool direction);
+/* Set rop to the zero-extended value op, with any length. */
+void sail_lbits_set_u64_slow(lbits *rop, const uint64_t len, const uint64_t op);
+
+static inline void sail_lbits_set_u64(lbits *rop, const uint64_t len, const uint64_t op)
+{
+  if (SAIL_LIKELY(len <= 64)) {
+    sail_lbits_set_small(rop, len, op & sail_mask64(len));
+  } else {
+    sail_lbits_set_u64_slow(rop, len, op);
+  }
+}
+
+static inline uint64_t sail_lbits_low64(const lbits op)
+{
+  if (SAIL_LIKELY(op.len <= 64)) return op.word;
+  return mpz_getlimbn(op.big, 0);
+}
+
+static inline void CREATE(lbits)(lbits *rop)
+{
+  rop->len = 0;
+  rop->word = 0;
+}
+
+static inline void RECREATE(lbits)(lbits *rop)
+{
+  sail_lbits_set_small(rop, 0, 0);
+}
+
+static inline void KILL(lbits)(lbits *rop)
+{
+  if (SAIL_UNLIKELY(rop->len > 64)) sail_mpz_release(rop->big);
+}
+
+void sail_lbits_copy_slow(lbits *rop, const lbits op);
+
+static inline void COPY(lbits)(lbits *rop, const lbits op)
+{
+  if (SAIL_LIKELY(op.len <= 64)) {
+    sail_lbits_set_small(rop, op.len, op.word);
+  } else {
+    sail_lbits_copy_slow(rop, op);
+  }
+}
+
+static inline void CREATE_OF(lbits, fbits)(lbits *rop, const fbits op, const uint64_t len, const bool direction)
+{
+  CREATE(lbits)(rop);
+  sail_lbits_set_u64(rop, len, op);
+}
+
+static inline void RECREATE_OF(lbits, fbits)(lbits *rop, const fbits op, const uint64_t len, const bool direction)
+{
+  sail_lbits_set_u64(rop, len, op);
+}
+
+static inline void CREATE_OF(lbits, sbits)(lbits *rop, const sbits op, const bool direction)
+{
+  CREATE(lbits)(rop);
+  sail_lbits_set_u64(rop, op.len, op.bits);
+}
+
+static inline void RECREATE_OF(lbits, sbits)(lbits *rop, const sbits op, const bool direction)
+{
+  sail_lbits_set_u64(rop, op.len, op.bits);
+}
+
+static inline sbits CREATE_OF(sbits, lbits)(const lbits op, const bool direction)
+{
+  sbits rop;
+  rop.bits = sail_lbits_low64(op);
+  rop.len = op.len;
+  return rop;
+}
+
+static inline fbits CREATE_OF(fbits, lbits)(const lbits op, const bool direction)
+{
+  return sail_lbits_low64(op);
+}
+
+static inline sbits CREATE_OF(sbits, fbits)(const fbits op, const uint64_t len, const bool direction)
+{
+  sbits rop;
+  rop.bits = op;
+  rop.len = len;
+  return rop;
+}
 
 /* Bitvector conversions */
 
-fbits CONVERT_OF(fbits, lbits)(const lbits, const bool);
-fbits CONVERT_OF(fbits, sbits)(const sbits, const bool);
+static inline fbits CONVERT_OF(fbits, lbits)(const lbits op, const bool direction)
+{
+  return sail_lbits_low64(op);
+}
 
-void CONVERT_OF(lbits, fbits)(lbits *, const fbits, const uint64_t, const bool);
-void CONVERT_OF(lbits, sbits)(lbits *, const sbits, const bool);
+static inline fbits CONVERT_OF(fbits, sbits)(const sbits op, const bool direction)
+{
+  return op.bits;
+}
 
-sbits CONVERT_OF(sbits, fbits)(const fbits, const uint64_t, const bool);
-sbits CONVERT_OF(sbits, lbits)(const lbits, const bool);
+static inline void CONVERT_OF(lbits, fbits)(lbits *rop, const fbits op, const uint64_t len, const bool direction)
+{
+  sail_lbits_set_u64(rop, len, op);
+}
+
+static inline void CONVERT_OF(lbits, sbits)(lbits *rop, const sbits op, const bool direction)
+{
+  sail_lbits_set_u64(rop, op.len, op.bits);
+}
+
+static inline sbits CONVERT_OF(sbits, fbits)(const fbits op, const uint64_t len, const bool direction)
+{
+  sbits rop;
+  rop.len = len;
+  rop.bits = op;
+  return rop;
+}
+
+static inline sbits CONVERT_OF(sbits, lbits)(const lbits op, const bool direction)
+{
+  sbits rop;
+  rop.len = op.len;
+  rop.bits = sail_lbits_low64(op);
+  return rop;
+}
 
 void UNDEFINED(lbits)(lbits *, const sail_int len);
 fbits UNDEFINED(fbits)(const unit);
@@ -335,22 +735,78 @@ void append_64(lbits *rop, const lbits op, const fbits chunk);
 void add_bits(lbits *rop, const lbits op1, const lbits op2);
 void sub_bits(lbits *rop, const lbits op1, const lbits op2);
 
-void add_bits_int(lbits *rop, const lbits op1, const mpz_t op2);
-void sub_bits_int(lbits *rop, const lbits op1, const mpz_t op2);
+void add_bits_int_slow(lbits *rop, const lbits op1, const sail_int op2);
+
+static inline void add_bits_int(lbits *rop, const lbits op1, const sail_int op2)
+{
+  if (SAIL_LIKELY(op1.len <= 64 && op2.big == NULL)) {
+    sail_lbits_set_small(rop, op1.len, (op1.word + (uint64_t)op2.val) & sail_mask64(op1.len));
+  } else {
+    add_bits_int_slow(rop, op1, op2);
+  }
+}
+void sub_bits_int_slow(lbits *rop, const lbits op1, const sail_int op2);
+
+static inline void sub_bits_int(lbits *rop, const lbits op1, const sail_int op2)
+{
+  if (SAIL_LIKELY(op1.len <= 64 && op2.big == NULL)) {
+    sail_lbits_set_small(rop, op1.len, (op1.word - (uint64_t)op2.val) & sail_mask64(op1.len));
+  } else {
+    sub_bits_int_slow(rop, op1, op2);
+  }
+}
 
 void and_bits(lbits *rop, const lbits op1, const lbits op2);
 void or_bits(lbits *rop, const lbits op1, const lbits op2);
 void xor_bits(lbits *rop, const lbits op1, const lbits op2);
-void not_bits(lbits *rop, const lbits op);
+void not_bits_slow(lbits *rop, const lbits op);
+
+static inline void not_bits(lbits *rop, const lbits op)
+{
+  if (SAIL_LIKELY(op.len <= 64)) {
+    sail_lbits_set_small(rop, op.len, ~op.word & sail_mask64(op.len));
+  } else {
+    not_bits_slow(rop, op);
+  }
+}
 
 void mults_vec(lbits *rop, const lbits op1, const lbits op2);
 void mult_vec(lbits *rop, const lbits op1, const lbits op2);
 
-void zeros(lbits *rop, const sail_int op);
+void zeros_slow(lbits *rop, const sail_int op);
 
-void zero_extend(lbits *rop, const lbits op, const sail_int len);
+static inline void zeros(lbits *rop, const sail_int op)
+{
+  if (SAIL_LIKELY(op.big == NULL && (uint64_t)op.val <= 64)) {
+    sail_lbits_set_small(rop, (uint64_t)op.val, 0);
+  } else {
+    zeros_slow(rop, op);
+  }
+}
+
+void zero_extend_slow(lbits *rop, const lbits op, const sail_int len);
+
+static inline void zero_extend(lbits *rop, const lbits op, const sail_int len)
+{
+  if (SAIL_LIKELY(len.big == NULL && (uint64_t)len.val <= 64 && op.len <= (uint64_t)len.val)) {
+    sail_lbits_set_small(rop, (uint64_t)len.val, op.word);
+  } else {
+    zero_extend_slow(rop, op, len);
+  }
+}
 fbits fast_zero_extend(const sbits op, const uint64_t n);
-void sign_extend(lbits *rop, const lbits op, const sail_int len);
+void sign_extend_slow(lbits *rop, const lbits op, const sail_int len);
+
+static inline void sign_extend(lbits *rop, const lbits op, const sail_int len)
+{
+  if (SAIL_LIKELY(len.big == NULL && (uint64_t)len.val <= 64 && op.len > 0 && op.len <= (uint64_t)len.val)) {
+    uint64_t w = op.word;
+    if (op.len < 64 && (w >> (op.len - 1)) & 1) w |= sail_mask64((uint64_t)len.val) & ~sail_mask64(op.len);
+    sail_lbits_set_small(rop, (uint64_t)len.val, w);
+  } else {
+    sign_extend_slow(rop, op, len);
+  }
+}
 fbits fast_sign_extend(const fbits op, const uint64_t n, const uint64_t m);
 fbits fast_sign_extend2(const sbits op, const uint64_t m);
 
@@ -358,30 +814,88 @@ void length_lbits(sail_int *rop, const lbits op);
 void count_leading_zeros(sail_int *rop, const lbits op);
 void count_trailing_zeros(sail_int *rop, const lbits op);
 
-bool eq_bits(const lbits op1, const lbits op2);
-bool EQUAL(lbits)(const lbits op1, const lbits op2);
-bool EQUAL(ref_lbits)(const lbits *op1, const lbits *op2);
-bool neq_bits(const lbits op1, const lbits op2);
+bool eq_bits_slow(const lbits op1, const lbits op2);
 
-void vector_subrange_lbits(lbits *rop,
+static inline bool eq_bits(const lbits op1, const lbits op2)
+{
+  assert(op1.len == op2.len);
+  if (SAIL_LIKELY(op1.len <= 64 && op2.len <= 64)) return op1.word == op2.word;
+  return eq_bits_slow(op1, op2);
+}
+
+static inline bool EQUAL(lbits)(const lbits op1, const lbits op2)
+{
+  return eq_bits(op1, op2);
+}
+
+static inline bool EQUAL(ref_lbits)(const lbits *op1, const lbits *op2)
+{
+  return eq_bits(*op1, *op2);
+}
+
+static inline bool neq_bits(const lbits op1, const lbits op2)
+{
+  return !eq_bits(op1, op2);
+}
+
+void vector_subrange_lbits_slow(lbits *rop,
                            const lbits op,
                            const sail_int n_mpz,
                            const sail_int m_mpz);
+
+static inline void vector_subrange_lbits(lbits *rop, const lbits op, const sail_int n_mpz, const sail_int m_mpz)
+{
+  uint64_t n = (uint64_t)n_mpz.val, m = (uint64_t)m_mpz.val;
+  if (SAIL_LIKELY(op.len <= 64 && n_mpz.big == NULL && m_mpz.big == NULL && m <= n && n < 64)) {
+    uint64_t len = n - m + 1;
+    sail_lbits_set_small(rop, len, (op.word >> m) & sail_mask64(len));
+  } else {
+    vector_subrange_lbits_slow(rop, op, n_mpz, m_mpz);
+  }
+}
 
 void vector_subrange_inc_lbits(lbits *rop,
 			       const lbits op,
 			       const sail_int n_mpz,
 			       const sail_int m_mpz);
 
-void sail_truncate(lbits *rop, const lbits op, const sail_int len);
-void sail_truncateLSB(lbits *rop, const lbits op, const sail_int len);
+void sail_truncate_slow(lbits *rop, const lbits op, const sail_int len);
+
+static inline void sail_truncate(lbits *rop, const lbits op, const sail_int len)
+{
+  if (SAIL_LIKELY(op.len <= 64 && len.big == NULL && (uint64_t)len.val <= op.len)) {
+    sail_lbits_set_small(rop, (uint64_t)len.val, op.word & sail_mask64((uint64_t)len.val));
+  } else {
+    sail_truncate_slow(rop, op, len);
+  }
+}
+void sail_truncateLSB_slow(lbits *rop, const lbits op, const sail_int len);
+
+static inline void sail_truncateLSB(lbits *rop, const lbits op, const sail_int len)
+{
+  if (SAIL_LIKELY(op.len <= 64 && len.big == NULL && len.val > 0 && (uint64_t)len.val <= op.len)) {
+    uint64_t rlen = (uint64_t)len.val;
+    sail_lbits_set_small(rop, rlen, (op.word >> (op.len - rlen)) & sail_mask64(rlen));
+  } else {
+    sail_truncateLSB_slow(rop, op, len);
+  }
+}
 
 fbits bitvector_access(const lbits op, const sail_int n_mpz);
 fbits bitvector_access_inc(const lbits op, const sail_int n_mpz);
 
 fbits update_fbits(const fbits op, const uint64_t n, const fbits bit);
 
-void sail_unsigned(sail_int *rop, const lbits op);
+void sail_unsigned_slow(sail_int *rop, const lbits op);
+
+static inline void sail_unsigned(sail_int *rop, const lbits op)
+{
+  if (SAIL_LIKELY(op.len <= 64 && op.word <= (uint64_t)INT64_MAX)) {
+    sail_int_set_small(rop, (int64_t)op.word);
+  } else {
+    sail_unsigned_slow(rop, op);
+  }
+}
 void sail_signed(sail_int *rop, const lbits op);
 
 mach_int fast_signed(const fbits, const uint64_t);
@@ -396,7 +910,18 @@ sbits append_ss(const sbits, const sbits);
 void replicate_bits(lbits *rop, const lbits op1, const sail_int op2);
 fbits fast_replicate_bits(const fbits shift, const fbits v, const mach_int times);
 
-void get_slice_int(lbits *rop, const sail_int len_mpz, const sail_int n, const sail_int start_mpz);
+void get_slice_int_slow(lbits *rop, const sail_int len_mpz, const sail_int n, const sail_int start_mpz);
+
+static inline void get_slice_int(lbits *rop, const sail_int len_mpz, const sail_int n, const sail_int start_mpz)
+{
+  if (SAIL_LIKELY(len_mpz.big == NULL && (uint64_t)len_mpz.val <= 64 && n.big == NULL && start_mpz.big == NULL
+                  && (uint64_t)start_mpz.val < 64)) {
+    uint64_t len = (uint64_t)len_mpz.val;
+    sail_lbits_set_small(rop, len, (uint64_t)(n.val >> start_mpz.val) & sail_mask64(len));
+  } else {
+    get_slice_int_slow(rop, len_mpz, n, start_mpz);
+  }
+}
 
 void set_slice_int(sail_int *rop,
 		   const sail_int len_mpz,
@@ -424,7 +949,18 @@ fbits fast_update_subrange(const fbits op,
 			   const mach_int m,
 			   const fbits slice);
 
-void slice(lbits *rop, const lbits op, const sail_int start_mpz, const sail_int len_mpz);
+void slice_slow(lbits *rop, const lbits op, const sail_int start_mpz, const sail_int len_mpz);
+
+static inline void slice(lbits *rop, const lbits op, const sail_int start_mpz, const sail_int len_mpz)
+{
+  uint64_t start = (uint64_t)start_mpz.val, len = (uint64_t)len_mpz.val;
+  if (SAIL_LIKELY(op.len <= 64 && start_mpz.big == NULL && len_mpz.big == NULL && start < 64 && len <= 64
+                  && start + len <= op.len)) {
+    sail_lbits_set_small(rop, len, (op.word >> start) & sail_mask64(len));
+  } else {
+    slice_slow(rop, op, start_mpz, len_mpz);
+  }
+}
 void slice_inc(lbits *rop, const lbits op, const sail_int start_mpz, const sail_int len_mpz);
 
 sbits sslice(const fbits op, const mach_int start, const mach_int len);
@@ -513,13 +1049,13 @@ void decimal_string_of_fbits(sail_string *str, const fbits op);
 
 /* ***** Mapping support ***** */
 
-void parse_dec_bits(lbits *res, const mpz_t n, const char *dec);
+void parse_dec_bits(lbits *res, const sail_int n, const char *dec);
 
-bool valid_dec_bits(const mpz_t n, const char *dec);
+bool valid_dec_bits(const sail_int n, const char *dec);
 
-void parse_hex_bits(lbits *stro, const mpz_t n, const_sail_string str);
+void parse_hex_bits(lbits *stro, const sail_int n, const_sail_string str);
 
-bool valid_hex_bits(const mpz_t n, const_sail_string str);
+bool valid_hex_bits(const sail_int n, const_sail_string str);
 
 /*
  * Utility function not callable from Sail!
