@@ -446,6 +446,18 @@ void arith_shiftr(lbits *rop, const lbits op1, const sail_int op2);
 
 void reverse_endianness(lbits*, lbits);
 
+/*
+ * Set the bits of op that are in mask << start to slice << start.
+ * slice must have no bits outside mask.
+ */
+static inline sbits sbits_set_slice(const sbits op, const uint64_t start, const uint64_t mask, const fbits slice)
+{
+  sbits rop;
+  rop.len = op.len;
+  rop.bits = (op.bits & ~(mask << start)) | (slice << start);
+  return rop;
+}
+
 bool eq_sbits(const sbits op1, const sbits op2);
 bool neq_sbits(const sbits op1, const sbits op2);
 sbits not_sbits(const sbits op);
