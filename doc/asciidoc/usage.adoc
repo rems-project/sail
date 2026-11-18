@@ -78,6 +78,21 @@ There are several Sail options that affect the C output:
 * `-O` turns on optimisations. The generated C code will be quite slow
     unless this flag is set.
 
+* `--c-split FUNCTION` Split constructor clauses into helper functions in
+    C or C++ output. Calls with a known enum member or union constructor
+    go directly to the corresponding helper; calls with a runtime argument
+    retain the original dispatcher. The option is opt-in and repeatable:
++
+[source,sh]
+----
+sail -c --c-split hartSupports --c-split currentlyEnabled model.sail_project -o model
+----
++
+The selected function must have a monomorphic signature and unguarded
+clauses matching enum members or union constructors. Scattered functions
+are supported. Guards, catch-all clauses, external C/C++ bindings, and
+conflicts with the generated `FUNCTION_CONSTRUCTOR` names are rejected.
+
 * `--Oconstant-fold` apply constant folding optimisations.
 
 * `--c-include` Supply additional header files to be included in the
