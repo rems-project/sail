@@ -86,6 +86,10 @@ let c_error ?loc:(l = Parse_ast.Unknown) message = raise (Reporting.err_general 
 let max_int n = Z.pred (Z.shift_left Z.one (n - 1))
 let min_int n = Z.neg (Z.shift_left Z.one (n - 1))
 
+(* A variant is a stack type if all its constructors have stack types. The result does not change after the variant
+   is defined, so we cache it. *)
+let stack_variant_cache : bool CTMap.t ref = ref CTMap.empty
+
 (** This function is used to split types into those we allocate on the stack, versus those which need to live on the
     heap, or otherwise require some additional memory management.
 
@@ -102,7 +106,18 @@ let rec is_stack_ctyp ctx ctyp =
   | CT_struct (_, _) ->
       let _, fields = struct_field_bindings Parse_ast.Unknown ctx ctyp in
       Bindings.for_all (fun _ ctyp -> is_stack_ctyp ctx ctyp) fields
-  | CT_variant (_, _) -> false
+  | CT_variant (id, _) -> (
+      match CTMap.find_opt ctyp !stack_variant_cache with
+      | Some b -> b
+      | None when Bindings.mem id ctx.variants ->
+          (* A recursive variant is not a stack type. *)
+          stack_variant_cache := CTMap.add ctyp false !stack_variant_cache;
+          let _, ctors = variant_constructor_bindings (id_loc id) ctx ctyp in
+          let b = Bindings.for_all (fun _ ctyp -> is_stack_ctyp ctx ctyp) ctors in
+          stack_variant_cache := CTMap.add ctyp b !stack_variant_cache;
+          b
+      | None -> false
+    )
   | CT_tup ctyps -> List.for_all (is_stack_ctyp ctx) ctyps
   | CT_ref _ -> true
   | CT_poly _ -> true
@@ -977,6 +992,9 @@ module Codegen (Config : CODEGEN_CONFIG) = struct
     Note, `int foo = {};` is legal in C23, so we can use it unconditionally eventually. *)
   let variable_zero_init () = if Config.cpp then " = {}" else ""
 
+  (* In C++, pass the source of a struct or union copy by reference, to avoid a copy of a large value. *)
+  let copy_by_ref () = if Config.cpp then "&" else ""
+
   module NameGen =
     Name_generator.Make
       (struct
@@ -1275,7 +1293,7 @@ module Codegen (Config : CODEGEN_CONFIG) = struct
 
   let rec sgen_clexp_pure l = function
     | CL_id (Have_exception _, _) -> "have_exception"
-    | CL_id (Current_exception _, _) -> "current_exception"
+    | CL_id (Current_exception _, _) -> "(*current_exception)"
     | CL_id (Throw_location _, _) -> "throw_location"
     | CL_id (Memory_writes _, _) -> "memory_writes"
     | CL_id (Channel _, _) -> Reporting.unreachable l __POS__ "CL_id Channel should not appear in C backend"
@@ -1570,6 +1588,19 @@ module Codegen (Config : CODEGEN_CONFIG) = struct
                 ]
                 @ prev
               )
+          | CT_variant _ when is_stack_ctyp ctx ctyp ->
+              let ctor_id, ctor_ctyp = variant_constructor_bindings l ctx ctyp |> snd |> Bindings.min_binding in
+              let gs = ngensym () in
+              let init, prev = codegen_exn_return ctor_ctyp in
+              (* prev is in reverse order *)
+              ( sgen_name gs,
+                [
+                  sprintf "%s.variants.%s = %s;" (sgen_name gs) (sgen_id ctor_id) init;
+                  sprintf "%s.kind = Kind_%s;" (sgen_name gs) (sgen_id ctor_id);
+                  sprintf "%s %s;" (sgen_ctyp ctyp) (sgen_name gs);
+                ]
+                @ prev
+              )
           | CT_ref _ -> ("NULL", [])
           | ctyp -> c_error ("Cannot create undefined value for type: " ^ string_of_ctyp ctyp)
         in
@@ -1675,7 +1706,7 @@ module Codegen (Config : CODEGEN_CONFIG) = struct
         in
         let struct_copy =
           c_function ~return:"static void"
-            (sail_copy struct_name "struct %s *rop, const struct %s op" struct_name struct_name)
+            (sail_copy struct_name "struct %s *rop, const struct %s %sop" struct_name struct_name (copy_by_ref ()))
             (List.map set_field ctors)
         in
         (* Derive the various lifecycle functions create/recreate/kill for the struct *)
@@ -1718,6 +1749,7 @@ module Codegen (Config : CODEGEN_CONFIG) = struct
           )
         @ [StaticFunctionDefinition struct_eq]
     | CTD_variant (id, _, tus) ->
+        let stack_variant = is_stack_ctyp ctx (CT_variant (id, [])) in
         let codegen_tu (ctor_id, ctyp) =
           separate space [string "struct"; lbrace; string (sgen_ctyp ctyp); codegen_id ctor_id ^^ semi; rbrace]
         in
@@ -1761,19 +1793,30 @@ module Codegen (Config : CODEGEN_CONFIG) = struct
         in
         let codegen_ctor (ctor_id, ctyp) =
           let ctor_args = Printf.sprintf "%s op" (sgen_const_ctyp ctyp) in
-          c_function ~return:"static void"
-            (ksprintf string "%s(%sstruct %s *rop, %s)" (sgen_function_id ctor_id) (extra_params ()) (sgen_id id)
-               ctor_args
-            )
-            ([each_ctor "rop->" (clear_field "rop") tus; string ("rop->kind = Kind_" ^ sgen_id ctor_id) ^^ semi]
-            @
-            if is_stack_ctyp ctx ctyp then [ksprintf string "rop->variants.%s = op;" (sgen_id ctor_id)]
-            else
+          if stack_variant then
+            c_function
+              ~return:(sprintf "static struct %s" (sgen_id id))
+              (ksprintf string "%s(%s%s)" (sgen_function_id ctor_id) (extra_params ()) ctor_args)
               [
-                sail_create ~suffix:";" (sgen_ctyp_name ctyp) "&rop->variants.%s" (sgen_id ctor_id);
-                sail_copy ~suffix:";" (sgen_ctyp_name ctyp) "&rop->variants.%s, op" (sgen_id ctor_id);
+                ksprintf c_stmt "struct %s rop" (sgen_id id);
+                ksprintf c_stmt "rop.kind = Kind_%s" (sgen_id ctor_id);
+                ksprintf c_stmt "rop.variants.%s = op" (sgen_id ctor_id);
+                c_stmt "return rop";
               ]
-            )
+          else
+            c_function ~return:"static void"
+              (ksprintf string "%s(%sstruct %s *rop, %s)" (sgen_function_id ctor_id) (extra_params ()) (sgen_id id)
+                 ctor_args
+              )
+              ([each_ctor "rop->" (clear_field "rop") tus; string ("rop->kind = Kind_" ^ sgen_id ctor_id) ^^ semi]
+              @
+              if is_stack_ctyp ctx ctyp then [ksprintf string "rop->variants.%s = op;" (sgen_id ctor_id)]
+              else
+                [
+                  sail_create ~suffix:";" (sgen_ctyp_name ctyp) "&rop->variants.%s" (sgen_id ctor_id);
+                  sail_copy ~suffix:";" (sgen_ctyp_name ctyp) "&rop->variants.%s, op" (sgen_id ctor_id);
+                ]
+              )
         in
         let codegen_setter =
           let n = sgen_id id in
@@ -1788,7 +1831,7 @@ module Codegen (Config : CODEGEN_CONFIG) = struct
               )
           in
           c_function ~return:"static void"
-            (sail_copy n "struct %s *rop, struct %s op" n n)
+            (sail_copy n "struct %s *rop, const struct %s %sop" n n (copy_by_ref ()))
             [
               each_ctor "rop->" (clear_field "rop") tus ^^ semi;
               c_stmt "rop->kind = op.kind";
