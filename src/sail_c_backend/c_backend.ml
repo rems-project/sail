@@ -198,8 +198,11 @@ let c_switch ?(default = false) cond cases =
    is only a call to [f], with the parameters as arguments in some order,
    for example [zero_extend(m, v) = sail_zero_extend(v, m)]. [perm] gives
    the parameter index for each argument of [f]. [Wrap_param i] is a
-   function that returns its parameter [i], for example [__id(x) = x]. *)
-type call_wrapper = Wrap_call of id * int list | Wrap_param of int
+   function that returns its parameter [i], for example [__id(x) = x].
+   [Wrap_cmp (cmp, conv, i, j)] is a function whose body is
+   [cmp(conv(x_i), conv(x_j))], for example
+   [operator <=_u(x, y) = unsigned(x) <= unsigned(y)]. *)
+type call_wrapper = Wrap_call of id * int list | Wrap_param of int | Wrap_cmp of id * id * int * int
 
 let call_wrappers : call_wrapper Bindings.t ref = ref Bindings.empty
 
@@ -232,8 +235,19 @@ let find_call_wrappers ast =
             in
             go 0 params
           in
+          let conv_param e =
+            match call e with
+            | Some (conv, [x]) -> Option.map (fun i -> (conv, i)) (Option.bind (exp_id x) index)
+            | _ -> None
+          in
           match (call body, Option.bind (exp_id body) index) with
           | _, Some i -> call_wrappers := Bindings.add id (Wrap_param i) !call_wrappers
+          | Some (cmp, [a; b]), _ when Option.is_some (conv_param a) && Option.is_some (conv_param b) -> (
+              match (conv_param a, conv_param b) with
+              | Some (conv, i), Some (conv', j) when Id.compare conv conv' = 0 ->
+                  call_wrappers := Bindings.add id (Wrap_cmp (cmp, conv, i, j)) !call_wrappers
+              | _ -> ()
+            )
           | Some (f, args), _ when Id.compare f id <> 0 ->
               let perm = List.map (fun a -> Option.bind (exp_id a) index) args in
               if List.for_all Option.is_some perm then
@@ -579,6 +593,40 @@ end) : CONFIG = struct
             match Bindings.find_opt id !call_wrappers with
             | Some (Wrap_param i) when i < List.length args -> (
                 match c_aval ctx (List.nth args i) with AV_cval (v, _) -> AE_val (AV_cval (v, typ)) | _ -> no_change
+              )
+            | Some (Wrap_cmp (cmp, conv, i, j))
+              when ctx_is_extern cmp ctx && ctx_is_extern conv ctx && i < List.length args && j < List.length args -> (
+                (* Compare two bitvectors of at most 64 bits without a
+                   conversion to integers. *)
+                let cmp_name =
+                  match ctx_get_extern cmp ctx with
+                  | "lt" -> Some "lt"
+                  | "lteq" -> Some "lteq"
+                  | "gt" -> Some "gt"
+                  | "gteq" -> Some "gteq"
+                  | "eq_int" -> Some "eq"
+                  | _ -> None
+                in
+                let sign =
+                  match ctx_get_extern conv ctx with
+                  | "sail_unsigned" -> Some "u"
+                  | "sail_signed" -> Some "s"
+                  | _ -> None
+                in
+                let x = List.nth args i and y = List.nth args j in
+                match (cmp_name, sign, c_aval ctx x, c_aval ctx y) with
+                | Some c, Some sign, (AV_cval (vx, _) as x), (AV_cval (vy, _) as y)
+                  when ctyp_equal (cval_ctyp vx) (cval_ctyp vy) -> (
+                    let f suffix = Pure_extern (mk_id ("sail_cmp_" ^ c ^ "_" ^ sign ^ "_" ^ suffix), Some typ) in
+                    match cval_ctyp vx with
+                    | CT_fbits n when sign = "s" ->
+                        AE_app
+                          (f "fbits", [x; y; AV_cval (V_lit (V_int (Z.of_int n), CT_fint 64), atom_typ (nint n))], typ)
+                    | CT_fbits _ -> AE_app (f "fbits", [x; y], typ)
+                    | CT_sbits _ -> AE_app (f "sbits", [x; y], typ)
+                    | _ -> no_change
+                  )
+                | _ -> no_change
               )
             | Some (Wrap_call (f, perm)) when ctx_is_extern f ctx && List.for_all (fun i -> i < List.length args) perm
               -> (

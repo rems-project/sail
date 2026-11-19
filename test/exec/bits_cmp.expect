@@ -1,0 +1,30 @@
+fixed <_u false
+fixed >_u true
+fixed <_s true
+fixed >=_s false
+fixed12 <_u false
+fixed12 <_s true
+<_u false
+<=_u false
+>_u true
+>=_u true
+<_s true
+>=_s false
+<_u false
+<=_u false
+>_u true
+>=_u true
+<_s true
+>=_s false
+<_u false
+<=_u false
+>_u true
+>=_u true
+<_s true
+>=_s false
+<_u false
+<=_u true
+>_u false
+>=_u true
+<_s false
+>=_s true
