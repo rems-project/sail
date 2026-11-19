@@ -1159,7 +1159,7 @@ and doc_exp (as_monadic : bool) ctx (E_aux (e, (l, annot)) as full_exp) =
       let args = List.map d_of_field fexps in
       (* TODO *)
       wrap_with_pure as_monadic
-        (braces (space ^^ doc_exp false ctx exp ^^ string " with " ^^ separate (comma ^^ space) args ^^ space))
+        (braces (space ^^ doc_exp false ctx exp ^^ string " with " ^^ align (separate (comma ^^ space) args) ^^ space))
   | E_match (discr, brs) ->
       let is_match_bv = is_match_bv brs in
       let as_monadic' =
