@@ -214,6 +214,13 @@ module C_config (Opts : sig
   val assert_to_exception : bool
   val preserve_types : IdSet.t
 end) : CONFIG = struct
+  (* Like ctyp_suprema, but keep vectors of fixed-width bitvectors (such as byte vectors) unwidened, so they do not
+     become vectors of lbits. *)
+  let rec variant_arg_suprema = function
+    | CT_vector (CT_fbits n) | CT_fvector (_, CT_fbits n) -> CT_vector (CT_fbits n)
+    | CT_tup ctyps -> CT_tup (List.map variant_arg_suprema ctyps)
+    | ctyp -> ctyp_suprema ctyp
+
   (** Convert a sail type into a C-type. This function can be quite slow, because it uses ctx.local_env and SMT to
       analyse the Sail types and attempts to fit them into the smallest possible C types, provided ctx.optimize_smt is
       true (default) **)
@@ -277,7 +284,7 @@ end) : CONFIG = struct
     | Typ_app (id, typ_args) when Bindings.mem id ctx.variants ->
         let ctyp_args =
           List.filter_map
-            (function A_aux (A_typ typ, _) -> Some (ctyp_suprema (convert_typ ctx typ)) | _ -> None)
+            (function A_aux (A_typ typ, _) -> Some (variant_arg_suprema (convert_typ ctx typ)) | _ -> None)
             typ_args
         in
         CT_variant (id, ctyp_args) |> transparent_newtype ctx
