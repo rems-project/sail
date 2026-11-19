@@ -452,9 +452,16 @@ let file_to_line_array filename =
     Array.init (Queue.length lines) (fun _ -> Queue.take lines)
 
 let open_file given_path =
-  let path = Path.canonicalize given_path in
+  (* An open editor buffer remains usable even if its disk file was deleted. *)
+  let path =
+    match Hashtbl.find_opt opened given_path with
+    | Some handle when (Hashtbl.find files handle).owner = Editor -> given_path
+    | _ -> Path.canonicalize given_path
+  in
   match Hashtbl.find_opt opened path with
-  | Some handle -> handle
+  | Some handle ->
+      Hashtbl.replace opened given_path handle;
+      handle
   | None -> (
       match path with
       | Actual path ->
@@ -464,6 +471,7 @@ let open_file given_path =
           let info = new_info ~owner:Compiler ~given_path ~canonical_path:(Path.Actual path) ~contents () in
           Hashtbl.add files handle info;
           Hashtbl.add opened (Path.Actual path) handle;
+          Hashtbl.replace opened given_path handle;
           handle
       | Virtual path -> assert false
     )
@@ -474,6 +482,20 @@ let write_file ~contents handle =
   Array.fill info.edits 0 (Array.length info.edits) None;
   info.contents <- contents;
   info.next_edit <- 0
+
+let invalidate_file path =
+  let canonical_path = try Path.canonicalize path with Unix.Unix_error _ -> path in
+  Hashtbl.filter_map_inplace
+    (fun cached_path handle ->
+      let info = Hashtbl.find files handle in
+      if
+        info.owner = Compiler
+        && (not (Path.is_virtual cached_path))
+        && (cached_path = path || info.canonical_path = canonical_path)
+      then None
+      else Some handle
+    )
+    opened
 
 let editor_take_file ~contents path =
   let path = Path.Actual path in
@@ -487,8 +509,11 @@ let editor_take_file ~contents path =
       let canonical_path = Path.canonicalize path in
       let existing = ref None in
       Hashtbl.iter
-        (fun handle info -> if info.canonical_path = canonical_path then existing := Some (handle, info))
-        files;
+        (fun _ handle ->
+          let info = Hashtbl.find files handle in
+          if info.canonical_path = canonical_path then existing := Some (handle, info)
+        )
+        opened;
       match !existing with
       | Some (handle, info) ->
           Hashtbl.replace files handle { info with owner = Editor; contents };
