@@ -215,9 +215,11 @@ module C_config (Opts : sig
   val preserve_types : IdSet.t
 end) : CONFIG = struct
   (* Like ctyp_suprema, but keep vectors of fixed-width bitvectors (such as byte vectors) unwidened, so they do not
-     become vectors of lbits. *)
+     become vectors of lbits. Bitvectors of at most 64 bits become sbits, not lbits, so that for example
+     option(bits(64)) is a stack type. *)
   let rec variant_arg_suprema = function
     | CT_vector (CT_fbits n) | CT_fvector (_, CT_fbits n) -> CT_vector (CT_fbits n)
+    | CT_fbits _ | CT_sbits _ -> CT_sbits 64
     | CT_tup ctyps -> CT_tup (List.map variant_arg_suprema ctyps)
     | ctyp -> ctyp_suprema ctyp
 
@@ -1382,6 +1384,48 @@ module Codegen (Config : CODEGEN_CONFIG) = struct
         in
         string "  /* conversions */" ^^ hardline ^^ separate hardline conversions ^^ hardline
         ^^ string "  /* end conversions */"
+    (* Two instances of the same polymorphic variant, for example option(lbits) and option(sbits). The specialized
+       constructor names are the original names with the same suffix, so the constructors of both instances are in the
+       same order. Convert the field of the active constructor, then call the constructor of the target instance. *)
+    | CT_variant _, CT_variant _ ->
+        let ctors ctyp = variant_constructor_bindings l ctx ctyp |> snd |> Bindings.bindings in
+        let ctors_to = ctors ctyp_to and ctors_from = ctors ctyp_from in
+        if List.compare_lengths ctors_to ctors_from <> 0 then
+          Reporting.unreachable l __POS__ "Conversion between variants with different numbers of constructors";
+        let case (ctor_to, field_ctyp_to) (ctor_from, field_ctyp_from) =
+          let field = ngensym () in
+          let field_heap = not (is_stack_ctyp ctx field_ctyp_to) in
+          let ctor = sgen_function_id ctor_to and f = sgen_name field in
+          let construct =
+            if is_stack_ctyp ctx ctyp_to then
+              ksprintf string "  %s = %s(%s%s);" (sgen_clexp_pure l clexp) ctor (extra_arguments false) f
+            else ksprintf string "  %s(%s%s, %s);" ctor (extra_arguments false) (sgen_clexp l clexp) f
+          in
+          ksprintf string "  case Kind_%s: {" (sgen_id ctor_from)
+          ^^ nest 2
+               (hardline
+               ^^ ksprintf string "  %s %s;" (sgen_ctyp field_ctyp_to) f
+               ^^ ( if field_heap then
+                      hardline ^^ sail_create ~prefix:"  " ~suffix:";" (sgen_ctyp_name field_ctyp_to) "&%s" f
+                    else empty
+                  )
+               ^^ hardline
+               ^^ codegen_conversion l ctx
+                    (CL_id (field, field_ctyp_to))
+                    (V_ctor_unwrap (cval, (ctor_from, []), field_ctyp_from))
+               ^^ hardline ^^ construct
+               ^^ ( if field_heap then
+                      hardline ^^ sail_kill ~prefix:"  " ~suffix:";" (sgen_ctyp_name field_ctyp_to) "&%s" f
+                    else empty
+                  )
+               ^^ hardline ^^ string "  break;"
+               )
+          ^^ hardline ^^ string "  }"
+        in
+        ksprintf string "  switch (%s.kind) {" (sgen_cval cval)
+        ^^ hardline
+        ^^ separate hardline (List.map2 case ctors_to ctors_from)
+        ^^ hardline ^^ string "  }"
     (* For anything not special cased, just try to call a appropriate CONVERT_OF function. *)
     | _, _ when is_stack_ctyp ctx (clexp_ctyp clexp) ->
         sail_convert_of
