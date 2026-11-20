@@ -16,6 +16,13 @@ function bump() = {
   true
 }
 
+val bump_false : unit -> bool
+
+function bump_false() = {
+  counter = counter + 1;
+  false
+}
+
 val boom : unit -> bool
 
 function boom() = {
@@ -99,6 +106,23 @@ function nested(t : bool, f : bool) -> unit = {
   print_int("f & not_bool(bump()): counter = ", counter)
 }
 
+// Nested operators with effectful operands keep their grouping
+val grouping : unit -> unit
+
+function grouping() = {
+  counter = 0;
+  print_bool("(bump | boom) & bump_false = ", (bump() | boom()) & bump_false());
+  print_int("(bump | boom) & bump_false: counter = ", counter);
+  print_bool("bump | (boom & bump_false) = ", bump() | (boom() & bump_false()));
+  print_int("bump | (boom & bump_false): counter = ", counter);
+  print_bool("(bump_false & boom) | bump = ", (bump_false() & boom()) | bump());
+  print_int("(bump_false & boom) | bump: counter = ", counter);
+  print_bool("bump_false & (boom | bump) = ", bump_false() & (boom() | bump()));
+  print_int("bump_false & (boom | bump): counter = ", counter);
+  print_bool("not((bump | boom) & bump_false) = ", not_bool((bump() | boom()) & bump_false()));
+  print_int("not((bump | boom) & bump_false): counter = ", counter)
+}
+
 val main : unit -> unit
 
 function main() = {
@@ -108,5 +132,6 @@ function main() = {
   conditions(true, false);
   side_effects(true, false);
   pure_operands(true, false);
-  nested(true, false)
+  nested(true, false);
+  grouping()
 }
