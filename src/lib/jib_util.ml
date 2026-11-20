@@ -192,6 +192,9 @@ let string_of_op = function
   | Igteq -> "@gteq"
   | Iadd -> "@iadd"
   | Isub -> "@isub"
+  | Imul -> "@imul"
+  | Itdiv -> "@itdiv"
+  | Itmod -> "@itmod"
   | Unsigned n -> "@unsigned::<" ^ string_of_int n ^ ">"
   | Signed n -> "@signed::<" ^ string_of_int n ^ ">"
   | Zero_extend n -> "@zero_extend::<" ^ string_of_int n ^ ">"
@@ -1093,7 +1096,7 @@ let rec infer_call op vs =
   | Bvaccess, _ -> CT_fbits 1
   | (Bvor | Bvand | Bvxor | Bvadd | Bvsub), [v; _] -> cval_ctyp v
   | (Ilt | Igt | Ilteq | Igteq), _ -> CT_bool
-  | (Iadd | Isub), _ -> CT_fint 64
+  | (Iadd | Isub | Imul | Itdiv | Itmod), _ -> CT_fint 64
   | (Unsigned n | Signed n), _ -> CT_fint n
   | (Zero_extend n | Sign_extend n), [v] -> (
       match cval_ctyp v with
