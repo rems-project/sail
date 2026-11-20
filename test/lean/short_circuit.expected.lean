@@ -198,32 +198,32 @@ def effectful_lhs (b : Bool) : SailM Bool := do
 
 /-- Type quantifiers: k_ex1683_ : Bool -/
 def and_effect (b : Bool) : SailM Bool := do
-  (pure b) <&&> (do
-    (boom ()))
+  ((pure b) <&&> (do
+    (boom ())))
 
 /-- Type quantifiers: k_ex1684_ : Bool -/
 def or_effect (b : Bool) : SailM Bool := do
-  (pure b) <||> (do
-    (bump ()))
+  ((pure b) <||> (do
+    (bump ())))
 
 /-- Type quantifiers: k_ex1686_ : Bool, k_ex1685_ : Bool -/
 def chain_and (a : Bool) (b : Bool) : SailM Bool := do
-  (pure a) <&&> (do
-    (pure b) <&&> (do
-      (boom ())))
+  ((pure a) <&&> (do
+    ((pure b) <&&> (do
+      (boom ())))))
 
 /-- Type quantifiers: k_ex1688_ : Bool, k_ex1687_ : Bool -/
 def chain_or (a : Bool) (b : Bool) : SailM Bool := do
-  (pure a) <||> (do
-    (bump ()) <||> (do
-      (boom ())))
+  ((pure a) <||> (do
+    ((bump ()) <||> (do
+      (boom ())))))
 
 /-- Type quantifiers: k_ex1690_ : Bool, k_ex1689_ : Bool -/
 def mixed (a : Bool) (b : Bool) : SailM Bool := do
-  (pure a) <&&> (do
-    (boom ())) <||> (do
-    (pure b) <&&> (do
-      (bump ())))
+  (((pure a) <&&> (do
+    (boom ()))) <||> (do
+    ((pure b) <&&> (do
+      (bump ())))))
 
 /-- Type quantifiers: k_ex1691_ : Bool -/
 def in_condition (b : Bool) : SailM Int := do
@@ -239,8 +239,8 @@ def in_condition (b : Bool) : SailM Int := do
 
 /-- Type quantifiers: k_ex1692_ : Bool -/
 def in_let (b : Bool) : SailM Bool := do
-  let x ← do (pure b) <&&> (do (bump ()))
-  let y ← do (pure x) <||> (do (boom ()))
+  let x ← do ((pure b) <&&> (do (bump ())))
+  let y ← do ((pure x) <||> (do (boom ())))
   (pure (x && y))
 
 /-- Type quantifiers: k_ex1693_ : Bool -/
