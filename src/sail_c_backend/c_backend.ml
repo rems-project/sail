@@ -194,6 +194,70 @@ let c_switch ?(default = false) cond cases =
       ^^ (if default then hardline ^^ string "default" ^^ colon ^^ space ^^ string "break" ^^ semi else empty)
       ^^ hardline ^^ rbrace
 
+(* Small wrapper functions. [Wrap_call (f, perm)] is a function whose body
+   is only a call to [f], with the parameters as arguments in some order,
+   for example [zero_extend(m, v) = sail_zero_extend(v, m)]. [perm] gives
+   the parameter index for each argument of [f]. [Wrap_param i] is a
+   function that returns its parameter [i], for example [__id(x) = x].
+   [Wrap_cmp (cmp, conv, i, j)] is a function whose body is
+   [cmp(conv(x_i), conv(x_j))], for example
+   [operator <=_u(x, y) = unsigned(x) <= unsigned(y)]. *)
+type call_wrapper = Wrap_call of id * int list | Wrap_param of int | Wrap_cmp of id * id * int * int
+
+let call_wrappers : call_wrapper Bindings.t ref = ref Bindings.empty
+
+let find_call_wrappers ast =
+  let rec pat_id (P_aux (p, _)) =
+    match p with P_id id -> Some id | P_typ (_, p) | P_var (p, _) -> pat_id p | _ -> None
+  in
+  let rec exp_id (E_aux (e, _)) = match e with E_id id -> Some id | E_typ (_, e) -> exp_id e | _ -> None in
+  let rec call (E_aux (e, _)) =
+    match e with E_app (f, args) -> Some (f, args) | E_typ (_, e) | E_block [e] -> call e | _ -> None
+  in
+  call_wrappers := Bindings.empty;
+  List.iter
+    (function
+      | Def_aux
+          ( Def_fundef (FD_aux (FD_function (_, _, [FCL_aux (FCL_funcl (id, Pat_aux (Pat_exp (pat, body), _)), _)]), _)),
+            _
+          ) -> (
+          let params =
+            match pat with
+            | P_aux (P_tuple ps, _) -> List.map pat_id ps
+            | P_aux (P_typ (_, P_aux (P_tuple ps, _)), _) -> List.map pat_id ps
+            | p -> [pat_id p]
+          in
+          let index x =
+            let rec go i = function
+              | Some p :: ps -> if Id.compare p x = 0 then Some i else go (i + 1) ps
+              | None :: ps -> go (i + 1) ps
+              | [] -> None
+            in
+            go 0 params
+          in
+          let conv_param e =
+            match call e with
+            | Some (conv, [x]) -> Option.map (fun i -> (conv, i)) (Option.bind (exp_id x) index)
+            | _ -> None
+          in
+          match (call body, Option.bind (exp_id body) index) with
+          | _, Some i -> call_wrappers := Bindings.add id (Wrap_param i) !call_wrappers
+          | Some (cmp, [a; b]), _ when Option.is_some (conv_param a) && Option.is_some (conv_param b) -> (
+              match (conv_param a, conv_param b) with
+              | Some (conv, i), Some (conv', j) when Id.compare conv conv' = 0 ->
+                  call_wrappers := Bindings.add id (Wrap_cmp (cmp, conv, i, j)) !call_wrappers
+              | _ -> ()
+            )
+          | Some (f, args), _ when Id.compare f id <> 0 ->
+              let perm = List.map (fun a -> Option.bind (exp_id a) index) args in
+              if List.for_all Option.is_some perm then
+                call_wrappers := Bindings.add id (Wrap_call (f, List.map Option.get perm)) !call_wrappers
+          | _ -> ()
+        )
+      | _ -> ()
+      )
+    ast.Ast_defs.defs
+
 module C_config (Opts : sig
   val branch_coverage : out_channel option
   val assert_to_exception : bool
@@ -520,9 +584,61 @@ end) : CONFIG = struct
   let analyze_primop ctx id args typ =
     let no_change = AE_app (id, args, typ) in
     match id with
-    | Sail_function id ->
-        if !optimize_primops then (try analyze_primop' ctx id args typ with Failure _ | Z.Overflow -> no_change)
-        else no_change
+    | Sail_function id when !optimize_primops -> (
+        let try_primop id args = try Some (analyze_primop' ctx id args typ) with Failure _ | Z.Overflow -> None in
+        match try_primop id args with
+        | Some aexp -> aexp
+        | None -> (
+            (* For a wrapper of an extern, try the peepholes of the extern. *)
+            match Bindings.find_opt id !call_wrappers with
+            | Some (Wrap_param i) when i < List.length args -> (
+                match c_aval ctx (List.nth args i) with AV_cval (v, _) -> AE_val (AV_cval (v, typ)) | _ -> no_change
+              )
+            | Some (Wrap_cmp (cmp, conv, i, j))
+              when ctx_is_extern cmp ctx && ctx_is_extern conv ctx && i < List.length args && j < List.length args -> (
+                (* Compare two bitvectors of at most 64 bits without a
+                   conversion to integers. *)
+                let cmp_name =
+                  match ctx_get_extern cmp ctx with
+                  | "lt" -> Some "lt"
+                  | "lteq" -> Some "lteq"
+                  | "gt" -> Some "gt"
+                  | "gteq" -> Some "gteq"
+                  | "eq_int" -> Some "eq"
+                  | _ -> None
+                in
+                let sign =
+                  match ctx_get_extern conv ctx with
+                  | "sail_unsigned" -> Some "u"
+                  | "sail_signed" -> Some "s"
+                  | _ -> None
+                in
+                let x = List.nth args i and y = List.nth args j in
+                match (cmp_name, sign, c_aval ctx x, c_aval ctx y) with
+                | Some c, Some sign, (AV_cval (vx, _) as x), (AV_cval (vy, _) as y)
+                  when ctyp_equal (cval_ctyp vx) (cval_ctyp vy) -> (
+                    let f suffix = Pure_extern (mk_id ("sail_cmp_" ^ c ^ "_" ^ sign ^ "_" ^ suffix), Some typ) in
+                    match cval_ctyp vx with
+                    | CT_fbits n when sign = "s" ->
+                        AE_app
+                          (f "fbits", [x; y; AV_cval (V_lit (V_int (Z.of_int n), CT_fint 64), atom_typ (nint n))], typ)
+                    | CT_fbits _ -> AE_app (f "fbits", [x; y], typ)
+                    | CT_sbits _ -> AE_app (f "sbits", [x; y], typ)
+                    | _ -> no_change
+                  )
+                | _ -> no_change
+              )
+            | Some (Wrap_call (f, perm)) when ctx_is_extern f ctx && List.for_all (fun i -> i < List.length args) perm
+              -> (
+                let args' = List.map (List.nth args) perm in
+                match try_primop f args' with
+                | Some (AE_app (Sail_function f', _, _)) when Id.compare f f' = 0 -> no_change
+                | Some aexp -> aexp
+                | None -> no_change
+              )
+            | _ -> no_change
+          )
+      )
     | _ -> no_change
 
   let optimize_anf ctx aexp = analyze_functions ctx analyze_primop (c_literals ctx aexp)
@@ -2635,6 +2751,7 @@ module Codegen (Config : CODEGEN_CONFIG) = struct
 
   let compile_ast env effect_info basename ast =
     try
+      find_call_wrappers ast;
       let cdefs, ctx = jib_of_ast env effect_info ast in
       (* let cdefs', _ = Jib_optimize.remove_tuples cdefs ctx in *)
       let cdefs = insert_heap_returns ctx Bindings.empty cdefs in
