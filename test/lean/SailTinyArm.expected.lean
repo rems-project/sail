@@ -589,9 +589,9 @@ def fdiv_int (n : Int) (m : Int) : Int :=
   if (((n <b 0) && (m >b 0)) : Bool)
   then ((Int.tdiv (n +i 1) m) -i 1)
   else
-    (if (((n >b 0) && (m <b 0)) : Bool)
-    then ((Int.tdiv (n -i 1) m) -i 1)
-    else (Int.tdiv n m))
+  (if (((n >b 0) && (m <b 0)) : Bool)
+  then ((Int.tdiv (n -i 1) m) -i 1)
+  else (Int.tdiv n m))
 
 /-- Type quantifiers: m : Int, n : Int -/
 def fmod_int (n : Int) (m : Int) : Int :=
@@ -1893,12 +1893,12 @@ def decodeLoadStoreRegister (opc : (BitVec 2)) (Rm : (BitVec 5)) (option_v : (Bi
   if (((option_v != 0b011#3) || (S == 1#1)) : Bool)
   then none
   else
-    (if ((opc == 0b00#2) : Bool)
-    then (some (LoadRegister (t, n, m)))
-    else
-      (if ((opc == 0b01#2) : Bool)
-      then (some (StoreRegister (t, n, m)))
-      else none))
+  (if ((opc == 0b00#2) : Bool)
+  then (some (LoadRegister (t, n, m)))
+  else
+  (if ((opc == 0b01#2) : Bool)
+  then (some (StoreRegister (t, n, m)))
+  else none))
 
 def decodeExclusiveOr (sf : (BitVec 1)) (shift : (BitVec 2)) (N : (BitVec 1)) (Rm : (BitVec 5)) (imm6 : (BitVec 6)) (Rn : (BitVec 5)) (Rd : (BitVec 5)) : (Option ast) :=
   let d : reg_index := (BitVec.toNatInt Rd)
@@ -1907,9 +1907,9 @@ def decodeExclusiveOr (sf : (BitVec 1)) (shift : (BitVec 2)) (N : (BitVec 1)) (R
   if (((sf == 0#1) && ((BitVec.access imm6 5) == 1#1)) : Bool)
   then none
   else
-    (if ((imm6 != 0b000000#6) : Bool)
-    then none
-    else (some (ExclusiveOr (d, n, m))))
+  (if ((imm6 != 0b000000#6) : Bool)
+  then none
+  else (some (ExclusiveOr (d, n, m))))
 
 def decodeDataMemoryBarrier (CRm : (BitVec 4)) : (Option ast) :=
   if ((CRm != 0b1111#4) : Bool)

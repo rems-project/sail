@@ -674,9 +674,10 @@ let wrap_with_left_arrow (needs_left_arrow : bool) (d : document) =
   if needs_left_arrow then parens (nest 2 (flow space [leftarrow; d])) else d
 
 (* We might be able to drop the extra parentheses with the new do-elaborator *)
-let wrap_with_do (with_arrow : bool) (needs_return : bool) (d : document) =
+let wrap_with_do ?(indent = true) (with_arrow : bool) (needs_return : bool) (d : document) =
   let ar_do, ar_end = if with_arrow then (string "← (do", rparen) else (string "do", empty) in
-  if needs_return then parens (ifflat (ar_do ^^ space ^^ d ^^ ar_end) (nest 2 (flow hardline [ar_do; d ^^ ar_end])))
+  if needs_return then
+    parens (ifflat (ar_do ^^ space ^^ d ^^ ar_end) (nest (if indent then 2 else 0) (flow hardline [ar_do; d ^^ ar_end])))
   else d
 
 let get_fn_implicits (Typ_aux (t, _)) : bool list =
@@ -842,7 +843,7 @@ let rec doc_match_clause (is_bv : bool) (as_monadic : bool) ctx (Pat_aux (cl, l)
   | Pat_when (pat, when_, branch) ->
       failwith ("The Lean backend does not support 'when' clauses in patterns:\n" ^ string_of_pexp p)
 
-and wrap_exp as_monadic ctx e =
+and wrap_exp ?(indent = true) as_monadic ctx e =
   let with_arrow = not as_monadic in
   let d = doc_exp as_monadic ctx e in
   match e with
@@ -851,7 +852,7 @@ and wrap_exp as_monadic ctx e =
       | E_typ (_, e) when has_effect e -> wrap_with_do with_arrow true d
       | E_typ (_, e) when has_early_return e -> parens d
       | E_let _ | E_internal_plet _ | E_if _ | E_match _ | E_var _ | E_block _ ->
-          if has_effect e then wrap_with_do with_arrow true d else parens d
+          if has_effect e then wrap_with_do with_arrow ~indent true d else parens d
       | _ when has_loop e -> wrap_with_do with_arrow true d
       | _ -> d
     )
@@ -1178,11 +1179,13 @@ and doc_exp (as_monadic : bool) ctx (E_aux (e, (l, annot)) as full_exp) =
         )
   | E_if (i, t, e) ->
       let statements_monadic = as_monadic || has_effect t || has_effect e in
+      (* Prevent if-then-else-if ladders from becoming staircases *)
+      let else_indent, else_indent_len = match e with E_aux (E_if _, _) -> (false, 0) | _ -> (true, 2) in
       nest 2 (string "if (" ^^ nest 1 (d_of_arg ctx i) ^^ string " : Bool)")
       ^^ hardline
       ^^ prefix 2 1 (string "then") (wrap_exp statements_monadic ctx t)
       ^^ hardline
-      ^^ prefix 2 1 (string "else") (wrap_exp statements_monadic ctx e)
+      ^^ prefix else_indent_len 1 (string "else") (wrap_exp ~indent:else_indent statements_monadic ctx e)
       |> wrap_with_left_arrow (statements_monadic && not as_monadic)
   | E_ref id -> parens (string ".Reg " ^^ doc_id_ctor ctx id)
   | E_exit _ -> string "throw Error.Exit"
