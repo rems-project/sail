@@ -108,9 +108,9 @@ def fdiv_int (n : Int) (m : Int) : Int :=
   if (((n <b 0) && (m >b 0)) : Bool)
   then ((Int.tdiv (n +i 1) m) -i 1)
   else
-    (if (((n >b 0) && (m <b 0)) : Bool)
-    then ((Int.tdiv (n -i 1) m) -i 1)
-    else (Int.tdiv n m))
+  (if (((n >b 0) && (m <b 0)) : Bool)
+  then ((Int.tdiv (n -i 1) m) -i 1)
+  else (Int.tdiv n m))
 
 /-- Type quantifiers: m : Int, n : Int -/
 def fmod_int (n : Int) (m : Int) : Int :=
@@ -231,11 +231,11 @@ def in_condition (b : Bool) : SailM Int := do
        (boom ())))) : Bool)
   then (pure 1)
   else
-    (do
-      if ((←((pure b) <||> (do
-           (bump ())))) : Bool)
-      then (pure 2)
-      else (pure 3))
+  (do
+  if ((←((pure b) <||> (do
+       (bump ())))) : Bool)
+  then (pure 2)
+  else (pure 3))
 
 /-- Type quantifiers: k_ex1692_ : Bool -/
 def in_let (b : Bool) : SailM Bool := do

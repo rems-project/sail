@@ -108,9 +108,9 @@ def fdiv_int (n : Int) (m : Int) : Int :=
   if (((n <b 0) && (m >b 0)) : Bool)
   then ((Int.tdiv (n +i 1) m) -i 1)
   else
-    (if (((n >b 0) && (m <b 0)) : Bool)
-    then ((Int.tdiv (n -i 1) m) -i 1)
-    else (Int.tdiv n m))
+  (if (((n >b 0) && (m <b 0)) : Bool)
+  then ((Int.tdiv (n -i 1) m) -i 1)
+  else (Int.tdiv n m))
 
 /-- Type quantifiers: m : Int, n : Int -/
 def fmod_int (n : Int) (m : Int) : Int :=
@@ -181,9 +181,9 @@ def elif (n : Nat) : (BitVec 1) :=
   if ((n == 0) : Bool)
   then 1#1
   else
-    (if ((n == 1) : Bool)
-    then 1#1
-    else 0#1)
+  (if ((n == 1) : Bool)
+  then 1#1
+  else 0#1)
 
 /-- Type quantifiers: n : Nat, 0 ≤ n -/
 def monadic_in_out (n : Nat) : SailM Nat := do

@@ -168,9 +168,9 @@ def fdiv_int (n : Int) (m : Int) : Int :=
   if (((n <b 0) && (m >b 0)) : Bool)
   then ((Int.tdiv (n +i 1) m) -i 1)
   else
-    (if (((n >b 0) && (m <b 0)) : Bool)
-    then ((Int.tdiv (n -i 1) m) -i 1)
-    else (Int.tdiv n m))
+  (if (((n >b 0) && (m <b 0)) : Bool)
+  then ((Int.tdiv (n -i 1) m) -i 1)
+  else (Int.tdiv n m))
 
 /-- Type quantifiers: m : Int, n : Int -/
 def fmod_int (n : Int) (m : Int) : Int :=
@@ -262,10 +262,10 @@ def monad_test (r : Nat) : SailM (BitVec 1) := do
   if (((← (rX r)) == 0x0000000000000000#64) : Bool)
   then (pure 1#1)
   else
-    (do
-      if (((← (rX r)) == 0x0000000000000001#64) : Bool)
-      then (pure 1#1)
-      else (pure 0#1))
+  (do
+  if (((← (rX r)) == 0x0000000000000001#64) : Bool)
+  then (pure 1#1)
+  else (pure 0#1))
 
 def initialize_registers (_ : Unit) : SailM Unit := do
   writeReg _PC (← (undefined_bitvector 64))
