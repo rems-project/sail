@@ -5209,10 +5209,12 @@ let type_def_dependencies (TD_aux (aux, _)) =
   | TD_bitfield (_, typ, _) -> typ_deps typ
   | TD_enum _ | TD_abstract _ -> IdSet.empty
 
-(* Sort a block of type definitions so that each definition comes
-   after the definitions it depends on. Returns [None] if the block is
-   genuinely mutually recursive. *)
-let sort_type_def_block tdefs =
+(* Split a block of type definitions into its strongly connected
+   components, ordered so that each component comes after the
+   components it depends on. Each component is paired with a flag
+   indicating whether it is recursive, i.e. it either contains more
+   than one definition or a single definition that refers to itself. *)
+let type_def_block_components tdefs =
   let module G = Graph.Make (Id) in
   let ids = List.map id_of_type_def tdefs in
   let block_ids = IdSet.of_list ids in
@@ -5224,12 +5226,127 @@ let sort_type_def_block tdefs =
       )
       G.empty tdefs
   in
-  let components = G.scc ~original_order:ids g in
-  if List.exists (fun component -> List.length component > 1) components then None
-  else (
-    let find id = List.find (fun tdef -> Id.compare id (id_of_type_def tdef) = 0) tdefs in
-    Some (List.concat_map (List.map find) components)
+  let find id = List.find (fun tdef -> Id.compare id (id_of_type_def tdef) = 0) tdefs in
+  G.scc ~original_order:ids g
+  |> List.map (fun component ->
+      let recursive = match component with [id] -> G.has_edge id id g | _ -> true in
+      (recursive, List.map find component)
   )
+
+(* Check that every type in a recursive group of structs and unions
+   has finite values, i.e. that the recursion has a base case. We
+   compute the set of inhabited types as a least fixpoint: a struct is
+   inhabited if all its fields are, and a union is inhabited if any of
+   its constructors are. A field or constructor type only requires
+   members of the group that appear directly (or within tuples), as
+   other type constructors such as lists, options, vectors, or
+   functions may be inhabited without containing a value of the
+   argument type. *)
+let check_recursive_types_inhabited tdefs =
+  let group_ids = IdSet.of_list (List.map id_of_type_def tdefs) in
+  let rec required (Typ_aux (aux, _)) =
+    match aux with
+    | (Typ_id id | Typ_app (id, _)) when IdSet.mem id group_ids -> IdSet.singleton id
+    | Typ_tuple typs -> List.fold_left (fun s typ -> IdSet.union s (required typ)) IdSet.empty typs
+    | Typ_exist (_, _, typ) -> required typ
+    | _ -> IdSet.empty
+  in
+  let typ_inhabited inhabited typ = IdSet.subset (required typ) inhabited in
+  let is_inhabited inhabited (TD_aux (aux, _)) =
+    match aux with
+    | TD_record (_, _, fields) -> List.for_all (fun ((_, typ), _) -> typ_inhabited inhabited typ) fields
+    | TD_variant (_, _, arms, _) ->
+        List.exists (fun (Tu_aux (Tu_ty_id (typ, _), _)) -> typ_inhabited inhabited typ) arms
+    | _ -> true
+  in
+  let rec fixpoint inhabited =
+    let inhabited' =
+      List.fold_left
+        (fun s tdef -> if is_inhabited inhabited tdef then IdSet.add (id_of_type_def tdef) s else s)
+        inhabited tdefs
+    in
+    if IdSet.equal inhabited inhabited' then inhabited else fixpoint inhabited'
+  in
+  let inhabited = fixpoint IdSet.empty in
+  List.iter
+    (fun (TD_aux (_, (l, _)) as tdef) ->
+      let id = id_of_type_def tdef in
+      if not (IdSet.mem id inhabited) then
+        typ_error l
+          ("Recursive type " ^ string_of_id id
+         ^ " has no finite values. A recursive struct or union must have a non-recursive base case, for example a \
+            union constructor whose argument does not (directly) contain a value of the recursive type."
+          )
+    )
+    tdefs
+
+(* Check a recursive group of type definitions. Only structs and
+   unions may be recursive. All the types in the group are added to
+   the environment before checking any of the definitions, so they can
+   refer to each other. *)
+let check_recursive_typedefs env def_annot tdefs =
+  List.iter
+    (fun (TD_aux (aux, (l, _)) as tdef) ->
+      match aux with
+      | TD_record _ | TD_variant _ -> ()
+      | _ ->
+          typ_error l
+            ("Type "
+            ^ string_of_id (id_of_type_def tdef)
+            ^ " cannot be recursive. Only structs and unions can be recursive."
+            )
+    )
+    tdefs;
+  check_recursive_types_inhabited tdefs;
+  typ_print
+    ( lazy
+      ("\n"
+      ^ Util.("Check recursive types " |> cyan |> clear)
+      ^ Util.string_of_list ", " (fun tdef -> string_of_id (id_of_type_def tdef)) tdefs
+      )
+      );
+  let env =
+    List.fold_left
+      (fun env (TD_aux (aux, _)) ->
+        match aux with
+        | TD_record (id, typq, fields) -> Env.add_record id typq fields env
+        | TD_variant (id, typq, arms, is_newtype) -> Env.add_variant ~is_newtype id (typq, arms) env
+        | _ -> env
+      )
+      env tdefs
+  in
+  let rec_env = env in
+  let env =
+    List.fold_left
+      (fun env (TD_aux (aux, (l, _))) ->
+        match aux with
+        | TD_record (_, typq, fields) ->
+            List.iter (fun ((_, (Typ_aux (_, l) as typ)), _) -> wf_binding l rec_env (typq, typ)) fields;
+            env
+        | TD_variant (id, typq, arms, _) ->
+            List.fold_left (fun env tu -> check_type_union l rec_env env id typq tu) env arms
+        | _ -> env
+      )
+      env tdefs
+  in
+  (* We cannot generate undefined functions for recursive types, as
+     they would not terminate. *)
+  let record_ids = List.filter_map (function TD_aux (TD_record (id, _, _), _) -> Some id | _ -> None) tdefs in
+  let def_annot, env =
+    match get_def_attribute "undefined_gen" def_annot with
+    | Some (_, Some (AD_aux (AD_string "forbid", _))) -> (def_annot, env)
+    | Some (_, Some (AD_aux (AD_string "skip", _))) ->
+        (def_annot, List.fold_left (fun env id -> Env.allow_user_undefined id env) env record_ids)
+    | None -> (add_def_attribute (gen_loc def_annot.loc) "undefined_gen" (undefined_forbid def_annot.loc) def_annot, env)
+    | Some (attr_l, _) ->
+        typ_error
+          (Hint ("When checking these recursive types", def_annot.loc, attr_l))
+          "Cannot generate undefined functions for recursive types"
+  in
+  let tdefs = List.map (fun (TD_aux (aux, (l, _))) -> TD_aux (aux, (l, empty_tannot))) tdefs in
+  match tdefs with
+  | tdef :: tdefs -> ([Def_aux (Def_type (Non_empty (tdef, tdefs)), def_annot)], env)
+  | [] -> Reporting.unreachable def_annot.loc __POS__ "Empty recursive type definition group"
 
 let rec check_typedef : Env.t -> env def_annot -> uannot type_def -> typed_def list * Env.t =
  fun env def_annot (TD_aux (tdef, (l, _))) ->
@@ -5637,22 +5754,23 @@ and check_def : Env.t -> untyped_def -> typed_def list * Env.t =
   let def_annot = def_annot_map_env (fun _ -> env) def_annot in
   match aux with
   | Def_fixity (prec, n, op) -> ([Def_aux (Def_fixity (prec, n, op), def_annot)], env)
-  | Def_type (Non_empty (tdef, [])) -> check_typedef env def_annot tdef
-  | Def_type tdefs -> (
-      (* If the block is not actually mutually recursive (for example,
-         a union and the auxiliary records generated for its anonymous
-         record constructors), we can check each definition separately
-         in dependency order. *)
-      match sort_type_def_block (non_empty_to_list tdefs) with
-      | Some tdefs ->
-          List.fold_left
-            (fun (defs, env) tdef ->
-              let defs', env = check_typedef env def_annot tdef in
-              (defs @ defs', env)
-            )
-            ([], env) tdefs
-      | None -> typ_error def_annot.loc "Mutually recursive type definitions are not yet supported by the type checker"
-    )
+  | Def_type tdefs ->
+      (* Split the block into its strongly connected components in
+         dependency order. Non-recursive definitions (for example, the
+         auxiliary records generated for a union's anonymous record
+         constructors) are checked individually, while each recursive
+         component is checked as a group. *)
+      List.fold_left
+        (fun (defs, env) component ->
+          let defs', env =
+            match component with
+            | false, [tdef] -> check_typedef env def_annot tdef
+            | _, tdefs -> check_recursive_typedefs env def_annot tdefs
+          in
+          (defs @ defs', env)
+        )
+        ([], env)
+        (type_def_block_components (non_empty_to_list tdefs))
   | Def_constraint nc -> check_global_constraint env def_annot nc
   | Def_fundef fdef -> check_fundef env def_annot fdef
   | Def_mapdef mdef -> check_mapdef env def_annot mdef

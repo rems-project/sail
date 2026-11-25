@@ -603,8 +603,11 @@ let top_sort_defs ast =
            Q: Do we need to deduplicate them, e.g. could we end up including a let-binding of
               multiple variables more than once?
            A: The nodes of a multi-variable let-binding *should* not depend on each other, so
-              should not be part of the same component, so the code below should work. *)
+              should not be part of the same component. However, a block of mutually recursive
+              type definitions defines multiple nodes in the same component, so we remove
+              duplicate definitions here. *)
         let cdefs = NS.elements c |> List.filter_map (fun n -> NM.find_opt n defs_of_nodes) |> List.concat in
+        let cdefs = List.fold_left (fun acc d -> if List.memq d acc then acc else d :: acc) [] cdefs |> List.rev in
         let already_seen' = List.fold_left NS.union already_seen (List.map nodes_of_def cdefs) in
         (* Merge mutually recursive functions *)
         let cdefs' =

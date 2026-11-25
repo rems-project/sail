@@ -11,6 +11,8 @@ _ROCQ_PASS_DIR = os.path.join(_SUITE_DIR, "pass")
 skip_tests = {
     "while_PM",  # Not currently in a useful state
     "type_pow_zero",  # uses cvc4, not worth rerunning for rocq output
+    "recursive_types",  # Recursive types are not yet supported by the Rocq backend
+    "union_recf",  # The Rocq backend does not support function types in union constructors
 }
 
 _common_xfails = {
