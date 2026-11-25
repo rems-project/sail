@@ -1520,6 +1520,8 @@ module Make (Config : CONFIG) (Primop_gen : PRIMOP_GEN) = struct
     | "or_bits" -> binary_primop (builtin_bitwise "bvor")
     | "xor_bits" -> binary_primop (builtin_bitwise "bvxor")
     | "vector_init" -> binary_primop builtin_vector_init
+    | "bitvector_access" -> binary_primop builtin_vector_access
+    | "bitvector_access_inc" -> binary_primop builtin_vector_access_inc
     | "vector_access" -> binary_primop builtin_vector_access
     | "vector_access_inc" -> binary_primop builtin_vector_access_inc
     | "vector_subrange" -> ternary_primop builtin_vector_subrange
