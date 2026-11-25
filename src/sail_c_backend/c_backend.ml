@@ -478,7 +478,7 @@ end) : CONFIG = struct
         | CT_sbits 64 -> AE_val (AV_cval (V_call (Sslice 64, [vec; start; len]), typ))
         | _ -> no_change
       )
-    | "vector_access", [AV_cval (vec, _); AV_cval (n, _)] -> AE_val (AV_cval (V_call (Bvaccess, [vec; n]), typ))
+    | "bitvector_access", [AV_cval (vec, _); AV_cval (n, _)] -> AE_val (AV_cval (V_call (Bvaccess, [vec; n]), typ))
     | "vector_access", [v; AV_cval (n, _)] -> (
         match destruct_vector ctx.tc_env (aval_typ v) with
         | Some (_, elem_typ) -> (
@@ -1452,8 +1452,8 @@ module Codegen (Config : CODEGEN_CONFIG) = struct
               | cval :: _ -> sprintf "length_%s" (sgen_ctyp_name (cval_ctyp cval))
               | _ -> c_error "length function with bad arity."
             )
-          | "vector_access", CT_fbits 1 -> "bitvector_access"
-          | "vector_access_inc", CT_fbits 1 -> "bitvector_access_inc"
+          | "bitvector_access", CT_fbits 1 -> "bitvector_access"
+          | "bitvector_access_inc", CT_fbits 1 -> "bitvector_access_inc"
           | "vector_access", _ -> (
               match args with
               | cval :: _ -> sprintf "vector_access_%s" (sgen_ctyp_name (cval_ctyp cval))

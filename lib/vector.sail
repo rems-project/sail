@@ -212,7 +212,7 @@ val bitvector_access = pure {
   lem: "access_vec_dec",
   coq: "access_vec_dec",
   lean: "BitVec.access",
-  _: "vector_access"
+  _: "bitvector_access"
 } : forall ('n : Int) ('m : Int), 0 <= 'm < 'n . (bits('n), int('m)) -> bit
 $else
 val bitvector_access = pure {
@@ -221,7 +221,7 @@ val bitvector_access = pure {
   lem: "access_vec_inc",
   coq: "access_vec_inc",
   lean: "BitVec.accessBE",
-  _: "vector_access_inc"
+  _: "bitvector_access_inc"
 } : forall ('n : Int) ('m : Int), 0 <= 'm < 'n . (bits('n), int('m)) -> bit
 $endif
 

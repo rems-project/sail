@@ -2472,7 +2472,7 @@
         "lem": "access_vec_dec",
         "coq": "access_vec_dec",
         "lean": "BitVec.access",
-        "_": "vector_access"
+        "_": "bitvector_access"
       },
       "type": "forall ('n : Int) ('m : Int), 0 <= 'm < 'n . (bits('n), int('m)) -> bit",
       "ocaml_type": "bits -> Z.t -> bits",
@@ -2496,7 +2496,7 @@
         "lem": "access_vec_inc",
         "coq": "access_vec_inc",
         "lean": "BitVec.accessBE",
-        "_": "vector_access_inc"
+        "_": "bitvector_access_inc"
       },
       "type": "forall ('n : Int) ('m : Int), 0 <= 'm < 'n . (bits('n), int('m)) -> bit",
       "ocaml_type": "bits -> Z.t -> bits",
