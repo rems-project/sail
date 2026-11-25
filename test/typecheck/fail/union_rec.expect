@@ -4,4 +4,4 @@
  [91m |[0m[91m^----------[0m
 4[96m |[0m}
  [91m |[0m[91m^[0m
- [91m |[0m Recursive type U has no finite values. A recursive struct or union must have a non-recursive base case, for example a union constructor whose argument does not (directly) contain a value of the recursive type.
+ [91m |[0m Recursive type U has no finite values. A recursive struct or union must have a non-recursive base case, for example a union constructor whose argument does not contain a value of the recursive type.

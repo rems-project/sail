@@ -1,0 +1,5 @@
+[93mType error[0m:
+[96mfail/rec_param_no_base.sail[0m:8.0-25:
+8[96m |[0munion S = { S : Tree(S) }
+ [91m |[0m[91m^-----------------------^[0m
+ [91m |[0m Recursive type S has no finite values. A recursive struct or union must have a non-recursive base case, for example a union constructor whose argument does not contain a value of the recursive type.

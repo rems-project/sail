@@ -1,0 +1,5 @@
+[93mType error[0m:
+[96mfail/synonym_mutual_rec.sail[0m:1.0-16:
+1[96m |[0mtype T = list(U)
+ [91m |[0m[91m^--------------^[0m
+ [91m |[0m Type T cannot be recursive. Only structs and unions can be recursive.

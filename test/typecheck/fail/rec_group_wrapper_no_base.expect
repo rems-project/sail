@@ -1,0 +1,7 @@
+[93mType error[0m:
+[96mfail/rec_group_wrapper_no_base.sail[0m:3.0-5.1:
+3[96m |[0munion A = {
+ [91m |[0m[91m^----------[0m
+5[96m |[0m}
+ [91m |[0m[91m^[0m
+ [91m |[0m Recursive type A has no finite values. A recursive struct or union must have a non-recursive base case, for example a union constructor whose argument does not contain a value of the recursive type.

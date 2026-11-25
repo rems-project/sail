@@ -5234,56 +5234,136 @@ let type_def_block_components tdefs =
   )
 
 (* Check that every type in a recursive group of structs and unions
-   has finite values, i.e. that the recursion has a base case. We
-   compute the set of inhabited types as a least fixpoint: a struct is
-   inhabited if all its fields are, and a union is inhabited if any of
-   its constructors are. A field or constructor type only requires
-   members of the group that appear directly (or within tuples), as
-   other type constructors such as lists, options, vectors, or
-   functions may be inhabited without containing a value of the
-   argument type. *)
-let check_recursive_types_inhabited tdefs =
-  let group_ids = IdSet.of_list (List.map id_of_type_def tdefs) in
-  let rec required (Typ_aux (aux, _)) =
-    match aux with
-    | (Typ_id id | Typ_app (id, _)) when IdSet.mem id group_ids -> IdSet.singleton id
-    | Typ_tuple typs -> List.fold_left (fun s typ -> IdSet.union s (required typ)) IdSet.empty typs
-    | Typ_exist (_, _, typ) -> required typ
-    | _ -> IdSet.empty
+   has has a base case.
+
+   Whether a value of a (possibly polymorphic) struct or union type
+   exists may depend on whether values of its type parameters exist,
+   for example [struct Identity('a) = { ident : 'a }] is only
+   inhabited if ['a] is. We therefore summarise each type constructor
+   by a monotone boolean formula over its type parameters (of kind
+   Type), represented in disjunctive normal form as a set of sets of
+   type variables. A struct requires all its fields, and a union
+   requires any one of its constructors. Builtin types such as lists,
+   vectors, and functions, as well as abstract types, are always
+   considered inhabited, as they may have values that do not contain a
+   value of their argument types.
+
+   The formulas for the recursive group, as well as any previously
+   defined structs and unions they refer to, are computed as a least
+   fixpoint. A type in the group is inhabited if its formula is
+   satisfiable, assuming that its type parameters are inhabited. *)
+module KidSetSet = Set.Make (KidSet)
+
+let check_recursive_types_inhabited env tdefs =
+  (* Remove any conjunction that is a strict superset of another, so
+     each formula has a canonical representation. *)
+  let simplify f =
+    KidSetSet.filter (fun c -> not (KidSetSet.exists (fun c' -> KidSet.subset c' c && not (KidSet.equal c' c)) f)) f
   in
-  let typ_inhabited inhabited typ = IdSet.subset (required typ) inhabited in
-  let is_inhabited inhabited (TD_aux (aux, _)) =
-    match aux with
-    | TD_record (_, _, fields) -> List.for_all (fun ((_, typ), _) -> typ_inhabited inhabited typ) fields
-    | TD_variant (_, _, arms, _) ->
-        List.exists (fun (Tu_aux (Tu_ty_id (typ, _), _)) -> typ_inhabited inhabited typ) arms
-    | _ -> true
+  let f_true = KidSetSet.singleton KidSet.empty in
+  let f_false = KidSetSet.empty in
+  let f_or f1 f2 = simplify (KidSetSet.union f1 f2) in
+  let f_and f1 f2 =
+    KidSetSet.fold
+      (fun c1 acc -> KidSetSet.fold (fun c2 acc -> KidSetSet.add (KidSet.union c1 c2) acc) f2 acc)
+      f1 KidSetSet.empty
+    |> simplify
   in
-  let rec fixpoint inhabited =
-    let inhabited' =
-      List.fold_left
-        (fun s tdef -> if is_inhabited inhabited tdef then IdSet.add (id_of_type_def tdef) s else s)
-        inhabited tdefs
+  let f_ands = List.fold_left f_and f_true in
+  let f_ors = List.fold_left f_or f_false in
+  let expand l typq typ = Env.expand_synonyms (Env.add_typquant l typq env) typ in
+  let defs = ref Bindings.empty in
+  let add_def id l typq is_struct typs =
+    defs := Bindings.add id (typq, is_struct, List.map (expand l typq) typs) !defs
+  in
+  List.iter
+    (fun (TD_aux (aux, (l, _))) ->
+      match aux with
+      | TD_record (id, typq, fields) -> add_def id l typq true (List.map (fun ((_, typ), _) -> typ) fields)
+      | TD_variant (id, typq, arms, _) ->
+          add_def id l typq false (List.map (fun (Tu_aux (Tu_ty_id (typ, _), _)) -> typ) arms)
+      | _ -> ()
+    )
+    tdefs;
+  let rec reachable_typ (Typ_aux (aux, l)) =
+    match aux with
+    | Typ_id id -> reachable_id l id
+    | Typ_app (id, args) ->
+        reachable_id l id;
+        List.iter (function A_aux (A_typ typ, _) -> reachable_typ typ | _ -> ()) args
+    | Typ_tuple typs -> List.iter reachable_typ typs
+    | Typ_fn (typs, typ) -> List.iter reachable_typ (typ :: typs)
+    | Typ_bidir (typ1, typ2) -> List.iter reachable_typ [typ1; typ2]
+    | Typ_exist (_, _, typ) -> reachable_typ typ
+    | Typ_var _ | Typ_internal_unknown -> ()
+  and reachable_id l id =
+    if not (Bindings.mem id !defs) then
+      if Env.is_record id env then (
+        let typq, fields = Env.get_record id env in
+        add_def id l typq true (List.map fst fields);
+        reachable_def id
+      )
+      else if Env.is_variant id env then (
+        let typq, arms = Env.get_variant id env in
+        add_def id l typq false (List.map (fun (Tu_aux (Tu_ty_id (typ, _), _)) -> typ) arms);
+        reachable_def id
+      )
+  and reachable_def id =
+    let _, _, typs = Bindings.find id !defs in
+    List.iter reachable_typ typs
+  in
+  List.iter (fun (id, _) -> reachable_def id) (Bindings.bindings !defs);
+  let defs = !defs in
+  let rec typ_formula formulas (Typ_aux (aux, _)) =
+    match aux with
+    | Typ_var kid -> KidSetSet.singleton (KidSet.singleton kid)
+    | Typ_tuple typs -> f_ands (List.map (typ_formula formulas) typs)
+    | Typ_exist (_, _, typ) -> typ_formula formulas typ
+    | Typ_id id -> app_formula formulas id []
+    | Typ_app (id, args) -> app_formula formulas id args
+    | _ -> f_true
+  and app_formula formulas id args =
+    match Bindings.find_opt id formulas with
+    | None -> f_true
+    | Some formula ->
+        let typq, _, _ = Bindings.find id defs in
+        let rec substitution kopts args =
+          match (kopts, args) with
+          | kopt :: kopts, A_aux (A_typ typ, _) :: args when is_typ_kopt kopt ->
+              KBindings.add (kopt_kid kopt) (typ_formula formulas typ) (substitution kopts args)
+          | _ :: kopts, _ :: args -> substitution kopts args
+          | _, _ -> KBindings.empty
+        in
+        let subst = substitution (quant_kopts typq) args in
+        let kid_formula kid = Option.value ~default:f_true (KBindings.find_opt kid subst) in
+        KidSetSet.elements formula
+        |> List.map (fun conj -> f_ands (List.map kid_formula (KidSet.elements conj)))
+        |> f_ors
+  in
+  let rec fixpoint formulas =
+    let formulas' =
+      Bindings.map
+        (fun (_, is_struct, typs) ->
+          let fs = List.map (typ_formula formulas) typs in
+          if is_struct then f_ands fs else f_ors fs
+        )
+        defs
     in
-    if IdSet.equal inhabited inhabited' then inhabited else fixpoint inhabited'
+    if Bindings.equal KidSetSet.equal formulas formulas' then formulas else fixpoint formulas'
   in
-  let inhabited = fixpoint IdSet.empty in
+  let formulas = fixpoint (Bindings.map (fun _ -> f_false) defs) in
   List.iter
     (fun (TD_aux (_, (l, _)) as tdef) ->
       let id = id_of_type_def tdef in
-      if not (IdSet.mem id inhabited) then
+      if KidSetSet.is_empty (Bindings.find id formulas) then
         typ_error l
           ("Recursive type " ^ string_of_id id
          ^ " has no finite values. A recursive struct or union must have a non-recursive base case, for example a \
-            union constructor whose argument does not (directly) contain a value of the recursive type."
+            constructor whose argument does not itself contain a value of the recursive type."
           )
     )
     tdefs
 
-(* Check a recursive group of type definitions. Only structs and
-   unions may be recursive. All the types in the group are added to
-   the environment before checking any of the definitions, so they can
-   refer to each other. *)
 let check_recursive_typedefs env def_annot tdefs =
   List.iter
     (fun (TD_aux (aux, (l, _)) as tdef) ->
@@ -5297,7 +5377,6 @@ let check_recursive_typedefs env def_annot tdefs =
             )
     )
     tdefs;
-  check_recursive_types_inhabited tdefs;
   typ_print
     ( lazy
       ("\n"
@@ -5329,6 +5408,9 @@ let check_recursive_typedefs env def_annot tdefs =
       )
       env tdefs
   in
+  (* The types must be well-formed before we can check they are
+     inhabited, as we need to expand any type synonyms. *)
+  check_recursive_types_inhabited rec_env tdefs;
   (* We cannot generate undefined functions for recursive types, as
      they would not terminate. *)
   let record_ids = List.filter_map (function TD_aux (TD_record (id, _, _), _) -> Some id | _ -> None) tdefs in

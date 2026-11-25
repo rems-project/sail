@@ -1,0 +1,10 @@
+[93mType error[0m:
+[96mfail/rec_undefined_generate.sail[0m:2.0-4.1:
+2[96m |[0mstruct S = {
+ [92m |[0m[92m^-----------[0m
+4[96m |[0m}
+ [92m |[0m[92m^[0m
+[96mfail/rec_undefined_generate.sail[0m:1.0-27:
+1[96m |[0m$[undefined_gen "generate"]
+ [91m |[0m[91m^-------------------------^[0m
+ [91m |[0m Cannot generate undefined functions for recursive types
