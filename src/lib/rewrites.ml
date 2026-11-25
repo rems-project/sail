@@ -4539,12 +4539,32 @@ let rewrite_if_eq types_to_rewrite _env ast =
   let rewrite_exp _ = fold_exp { id_exp_alg with e_if = rw_if } in
   rewrite_ast_base { rewriters_base with rewrite_exp; rewrite_def } ast
 
-let rec partition_list limit l =
-  let rec aux n l acc =
-    match (n, l) with 0, _ -> Some (List.rev acc, l) | _, [] -> None | _, h :: t -> aux (n - 1) t (h :: acc)
+(* Partition a datatype by enough prefix characters to make every group smaller than the limit *)
+let partition_datatype l limit cases =
+  let cases = List.map (function Tu_aux (Tu_ty_id (_, id), _) as tu -> (string_of_id id, tu)) cases in
+  let rec char_split i = function
+    | [] -> []
+    | ((s, _) as h) :: t ->
+        let c = s.[i] in
+        let haves, havenots = List.partition (function s, _ -> s.[i] == c) t in
+        ([c], h :: haves) :: char_split i havenots
   in
-  if limit <= 0 then raise (Invalid_argument ("partition_list with limit" ^ string_of_int limit))
-  else (match aux limit l [] with Some (h, rem) -> h :: partition_list limit rem | None -> [l])
+  let rec aux i (l : (char list * (string * type_union) list) list) : (char list * (string * type_union) list) list =
+    List.concat_map
+      (fun (prefix, group) ->
+        if List.length group <= limit then [(prefix, group)]
+        else (
+          let subgroups = char_split i group in
+          let subgroups = aux (i + 1) subgroups in
+          List.map (fun (mid, l) -> (prefix @ mid, l)) subgroups
+        )
+      )
+      l
+  in
+  let groups = aux 0 [([], cases)] in
+  (* This requires > limit distinct characters in the same position in the constructor names *)
+  if List.length groups > limit then raise (Reporting.err_general l "Unable to partition datatype")
+  else List.map (fun (cs, l) -> (String.of_seq (List.to_seq cs), List.map snd l)) groups
 
 let typ_args_of_quant_items typq =
   let arg_of_kind (K_aux (k, l)) kid =
@@ -4611,9 +4631,9 @@ let split_datatype_constructors _env ast =
     | [] -> List.rev acc
     | Def_aux (Def_type (TD_aux (TD_variant (id, typq, cases, false), td_ann)), d_ann) :: t
       when List.length cases > limit ->
-        let partition = partition_list limit cases in
-        let make_new_def i cases =
-          let new_id = append_id id ("_" ^ string_of_int i) in
+        let partition = partition_datatype d_ann.loc limit cases in
+        let make_new_def (prefix, cases) =
+          let new_id = append_id id ("_" ^ prefix) in
           let new_ctor = prepend_id "Make_" new_id in
           constructor_map :=
             List.fold_left
@@ -4629,7 +4649,7 @@ let split_datatype_constructors _env ast =
               )
           )
         in
-        let new_defs, new_cases = List.mapi make_new_def partition |> List.split in
+        let new_defs, new_cases = List.map make_new_def partition |> List.split in
         process_defs t
           ((Def_aux (Def_type (TD_aux (TD_variant (id, typq, new_cases, false), td_ann)), d_ann) :: List.rev new_defs)
           @ acc
