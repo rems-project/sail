@@ -195,6 +195,7 @@ let lean_rewrites =
     ("remove_mixed_bitvector_literal_pats", [If_flag opt_disable_matchbv]);
     ("remove_vector_concat", [If_flag opt_disable_matchbv]);
     ("remove_bitvector_pats", [If_flag opt_disable_matchbv]);
+    ("split_datatype_constructors", []);
     ("recheck_defs", []);
     (* ("remove_numeral_pats", []); *)
     (* ("pattern_literals", [Literal_arg "lem"]); *)

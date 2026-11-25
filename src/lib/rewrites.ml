@@ -4539,6 +4539,105 @@ let rewrite_if_eq types_to_rewrite _env ast =
   let rewrite_exp _ = fold_exp { id_exp_alg with e_if = rw_if } in
   rewrite_ast_base { rewriters_base with rewrite_exp; rewrite_def } ast
 
+let rec partition_list limit l =
+  let rec aux n l acc =
+    match (n, l) with 0, _ -> Some (List.rev acc, l) | _, [] -> None | _, h :: t -> aux (n - 1) t (h :: acc)
+  in
+  if limit <= 0 then raise (Invalid_argument ("partition_list with limit" ^ string_of_int limit))
+  else (match aux limit l [] with Some (h, rem) -> h :: partition_list limit rem | None -> [l])
+
+let typ_args_of_quant_items typq =
+  let arg_of_kind (K_aux (k, l)) kid =
+    let l = Parse_ast.Generated l in
+    match k with
+    | K_type -> A_typ (Typ_aux (Typ_var kid, l))
+    | K_int -> A_nexp (Nexp_aux (Nexp_var kid, l))
+    | K_bool -> A_bool (NC_aux (NC_var kid, l))
+  in
+  List.filter_map
+    (function
+      | QI_aux (QI_id (KOpt_aux (KOpt_kind (k, kid), l)), _) -> Some (A_aux (arg_of_kind k kid, Parse_ast.Generated l))
+      | QI_aux (QI_constraint _, _) -> None
+      )
+    typq
+
+(* TODO: add attribute recording a split and have the backend produce coercions. *)
+(* TODO: control limit in backend *)
+let split_datatype_constructors _env ast =
+  let limit = 243 in
+  (* current Lean limit *)
+  let gen_l l = Parse_ast.Generated l in
+  (* Map constructors to their parent constructors, and their new type constructor *)
+  let constructor_map : (id * id) Bindings.t ref = ref Bindings.empty in
+  let typ_update old_typ_constr new_typ_constr l ann =
+    let new_typ =
+      match typ_of_annot (l, ann) with
+      | Typ_aux (Typ_app (id, args), l) when Id.compare id old_typ_constr == 0 ->
+          Typ_aux (Typ_app (new_typ_constr, args), gen_l l)
+      | Typ_aux (Typ_id id, l) when Id.compare id old_typ_constr == 0 -> Typ_aux (Typ_id new_typ_constr, gen_l l)
+      | typ -> typ
+    in
+    (l, replace_typ new_typ ann)
+  in
+  let rec rw_pat rws (P_aux (p, (p_l, p_ann)) as pat) =
+    match p with
+    | P_app (constr, args) -> (
+        match Bindings.find_opt constr !constructor_map with
+        | None -> rewrite_pat rws pat
+        | Some (new_constr, new_typ_constr) ->
+            let args' = List.map (rw_pat rws) args in
+            P_aux
+              ( P_app (new_constr, [P_aux (P_app (constr, args'), typ_update constr new_typ_constr p_l p_ann)]),
+                (gen_l p_l, p_ann)
+              )
+      )
+    | _ -> rewrite_pat rws pat
+  in
+  let rec rw_exp rws (E_aux (e, (e_l, e_ann)) as exp) =
+    match e with
+    | E_app (f, args) -> (
+        match Bindings.find_opt f !constructor_map with
+        | None -> rewrite_exp rws exp
+        | Some (new_constr, new_typ_constr) ->
+            let args' = List.map (rw_exp rws) args in
+            E_aux
+              (E_app (new_constr, [E_aux (E_app (f, args'), typ_update f new_typ_constr e_l e_ann)]), (gen_l e_l, e_ann))
+      )
+    | _ -> rewrite_exp rws exp
+  in
+  let rw_def = rewrite_def { rewriters_base with rewrite_pat = rw_pat; rewrite_exp = rw_exp } in
+  let rec process_defs defs acc =
+    match defs with
+    | [] -> List.rev acc
+    | Def_aux (Def_type (TD_aux (TD_variant (id, typq, cases, false), td_ann)), d_ann) :: t
+      when List.length cases > limit ->
+        let partition = partition_list limit cases in
+        let make_new_def i cases =
+          let new_id = append_id id ("_" ^ string_of_int i) in
+          let new_ctor = prepend_id "Make_" new_id in
+          constructor_map :=
+            List.fold_left
+              (fun m (Tu_aux (Tu_ty_id (_, id), _)) -> Bindings.add id (new_ctor, new_id) m)
+              !constructor_map cases;
+          (* We don't filter typq down to the ones appearing in particular cases at hand because
+           the target (currently just Lean) appears to cope with unused type parameters. *)
+          ( Def_aux
+              (Def_type (TD_aux (TD_variant (new_id, typq, cases, false), td_ann)), { d_ann with loc = gen_l d_ann.loc }),
+            Tu_aux
+              ( Tu_ty_id (Typ_aux (Typ_app (new_id, typ_args_of_quant_items typq), d_ann.loc), new_ctor),
+                mk_def_annot (gen_l d_ann.loc) ()
+              )
+          )
+        in
+        let new_defs, new_cases = List.mapi make_new_def partition |> List.split in
+        process_defs t
+          ((Def_aux (Def_type (TD_aux (TD_variant (id, typq, new_cases, false), td_ann)), d_ann) :: List.rev new_defs)
+          @ acc
+          )
+    | d :: ds -> process_defs ds (rw_def d :: acc)
+  in
+  { ast with defs = process_defs ast.defs [] }
+
 let opt_mono_rewrites = ref false
 let opt_mono_complex_nexps = ref true
 
@@ -4746,6 +4845,7 @@ let all_rewriters =
     ("remove_bitfield_records", basic_rewriter remove_bitfield_records);
     ("remove_extern_defs", String_rewriter (fun target -> basic_rewriter (rewrite_remove_extern_defs target)));
     ("rewrite_if_eq", IdSet_rewriter (fun typs -> basic_rewriter (rewrite_if_eq typs)));
+    ("split_datatype_constructors", basic_rewriter split_datatype_constructors);
   ]
 
 let rewrites_interpreter =
