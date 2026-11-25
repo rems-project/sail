@@ -4582,10 +4582,7 @@ let typ_args_of_quant_items typq =
     typq
 
 (* TODO: add attribute recording a split and have the backend produce coercions. *)
-(* TODO: control limit in backend *)
-let split_datatype_constructors _env ast =
-  let limit = 243 in
-  (* current Lean limit *)
+let split_datatype_constructors limit _env ast =
   let gen_l l = Parse_ast.Generated l in
   (* Map constructors to their parent constructors, and their new type constructor *)
   let constructor_map : (id * id) Bindings.t ref = ref Bindings.empty in
@@ -4711,6 +4708,7 @@ type rewriter =
   | String_rewriter of (string -> rewriter)
   | Literal_rewriter of ((lit -> bool) -> rewriter)
   | IdSet_rewriter of (IdSet.t -> rewriter)
+  | Int_rewriter of (int -> rewriter)
 
 let basic_rewriter f = Full_rewriter (fun ctx effect_info env ast -> (ctx, f env ast, effect_info, env))
 
@@ -4737,12 +4735,14 @@ type rewriter_arg =
   | String_arg of string
   | Literal_arg of string
   | IdSet_arg of IdSet.t ref
+  | Int_arg of int
 
 let rec describe_rewriter = function
   | String_rewriter rw -> "<string>" :: describe_rewriter (rw "")
   | Bool_rewriter rw -> "<bool>" :: describe_rewriter (rw false)
   | Literal_rewriter rw -> "(ocaml|lem|all)" :: describe_rewriter (rw (fun _ -> true))
   | IdSet_rewriter rw -> "<idset>" :: describe_rewriter (rw IdSet.empty)
+  | Int_rewriter rw -> "<int>" :: describe_rewriter (rw 0)
   | Full_rewriter _ -> []
 
 let instantiate_rewriter rewriter args =
@@ -4766,6 +4766,7 @@ let instantiate_rewriter rewriter args =
     | String_rewriter rw, String_arg str -> rw str
     | Literal_rewriter rw, Literal_arg selector -> rw (selector_function selector)
     | IdSet_rewriter rw, IdSet_arg idset -> rw !idset
+    | Int_rewriter rw, Int_arg i -> rw i
     | _, _ -> Reporting.unreachable Parse_ast.Unknown __POS__ "Invalid rewrite argument"
   in
   match List.fold_left instantiate rewriter args with
@@ -4865,7 +4866,7 @@ let all_rewriters =
     ("remove_bitfield_records", basic_rewriter remove_bitfield_records);
     ("remove_extern_defs", String_rewriter (fun target -> basic_rewriter (rewrite_remove_extern_defs target)));
     ("rewrite_if_eq", IdSet_rewriter (fun typs -> basic_rewriter (rewrite_if_eq typs)));
-    ("split_datatype_constructors", basic_rewriter split_datatype_constructors);
+    ("split_datatype_constructors", Int_rewriter (fun limit -> basic_rewriter (split_datatype_constructors limit)));
   ]
 
 let rewrites_interpreter =

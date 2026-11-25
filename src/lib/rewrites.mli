@@ -82,6 +82,7 @@ type rewriter =
   | String_rewriter of (string -> rewriter)
   | Literal_rewriter of ((lit -> bool) -> rewriter)
   | IdSet_rewriter of (Ast_compare.IdSet.t -> rewriter)
+  | Int_rewriter of (int -> rewriter)
 
 val describe_rewriter : rewriter -> string list
 
@@ -110,6 +111,7 @@ type rewriter_arg =
   | String_arg of string
   | Literal_arg of string
   | IdSet_arg of Ast_compare.IdSet.t ref
+  | Int_arg of int
 
 (** Get the list of instantiated rewrites for a list of rewrites *)
 val instantiate_rewrites : (string * rewriter_arg list) list -> rewrite_sequence
