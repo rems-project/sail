@@ -1,0 +1,4 @@
+a = 0x0123456789ABCDEF
+b = nothing
+c = 0xDEADBEEF
+bad
