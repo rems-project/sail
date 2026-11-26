@@ -489,9 +489,15 @@ module Make (C : CONFIG) = struct
           )
     | AV_record (fields, typ) when C.struct_value ->
         let ctyp = ctyp_of_typ ctx typ in
+        let _, field_ctyp = struct_fields l ctx ctyp in
         let compile_fields (id, aval) =
           let field_setup, cval, field_cleanup = compile_aval l ctx aval in
-          (field_setup, (id, cval), field_cleanup)
+          let fctyp = field_ctyp id in
+          if ctyp_equal (cval_ctyp cval) fctyp then (field_setup, (id, cval), field_cleanup)
+          else (
+            let gs = ngensym () in
+            (field_setup @ [iinit l fctyp gs cval], (id, V_id (gs, fctyp)), iclear fctyp gs :: field_cleanup)
+          )
         in
         let field_triples = List.map compile_fields (Bindings.bindings fields) in
         let setup = List.concat_map (fun (s, _, _) -> s) field_triples in
