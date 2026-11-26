@@ -188,9 +188,9 @@ def undefined_foo (_ : Unit) : SailM foo := do
 def f (x : foo) : SailM Int := do
   let y ← do
     (pure { x with abcd := ← (do 
-        if ((← readReg R1) : Bool)
-        then (pure 1)
-        else (pure (1 +i (← readReg R2)))) })
+                     if ((← readReg R1) : Bool)
+                     then (pure 1)
+                     else (pure (1 +i (← readReg R2)))) })
   (pure (y.abcd +i y.efgh))
 
 def initialize_registers (_ : Unit) : SailM Unit := do

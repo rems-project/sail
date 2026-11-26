@@ -207,13 +207,13 @@ def undefined_My_struct (_ : Unit) : SailM My_struct := do
 def test_reg_if_struct (x : My_struct) (b : Bool) : SailM My_struct := do
   let y ← do
     (pure { x with field1 := ← (do 
-        if (b : Bool)
-        then readReg INT
-        else (pure 3)) })
+                     if (b : Bool)
+                     then readReg INT
+                     else (pure 3)) })
   (pure { y with field1 := ← (do 
-      if ((← readReg BOOL) : Bool)
-      then readReg INT
-      else (pure 3)) })
+                   if ((← readReg BOOL) : Bool)
+                   then readReg INT
+                   else (pure 3)) })
 
 def initialize_registers (_ : Unit) : SailM Unit := do
   writeReg R0 (← (undefined_bitvector 64))
