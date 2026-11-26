@@ -410,6 +410,26 @@ end) : CONFIG = struct
     in
     AE_aux (aexp, annot)
 
+  let is_fint64 v =
+    match cval_ctyp v with
+    | CT_fint 64 -> true
+    | CT_constant c -> Z.leq (min_int 64) c && Z.leq c (max_int 64)
+    | _ -> false
+
+  (* True if typ is a range that fits in a 64-bit signed integer. *)
+  let result_fits_int64 ctx typ =
+    (try ctyp_equal (convert_typ ctx typ) (CT_fint 64) with _ -> false)
+    ||
+    match destruct_range ctx.local_env typ with
+    | None -> false
+    | Some (_, _, n, m) -> (
+        match (nexp_simp n, nexp_simp m) with
+        | Nexp_aux (Nexp_constant n, _), Nexp_aux (Nexp_constant m, _) -> Z.leq (min_int 64) n && Z.leq m (max_int 64)
+        | n, m ->
+            prove __POS__ ctx.local_env (nc_lteq (nconstant (min_int 64)) n)
+            && prove __POS__ ctx.local_env (nc_lteq m (nconstant (max_int 64)))
+      )
+
   let analyze_primop' ctx id args typ =
     let no_change = AE_app (Sail_function id, args, typ) in
     let args = List.map (c_aval ctx) args in
@@ -488,22 +508,24 @@ end) : CONFIG = struct
           )
         | None -> no_change
       )
-    | (("add_int" | "sub_int") as f), [AV_cval (op1, _); AV_cval (op2, _)] -> (
+    | (("add_int" | "sub_int") as f), [AV_cval (op1, _); AV_cval (op2, _)] ->
         let f = if f = "add_int" then Iadd else Isub in
-        match destruct_range ctx.local_env typ with
-        | None -> no_change
-        | Some (_, _, n, m) -> (
-            match (nexp_simp n, nexp_simp m) with
-            | Nexp_aux (Nexp_constant n, _), Nexp_aux (Nexp_constant m, _)
-              when Z.leq (min_int 64) n && Z.leq m (max_int 64) ->
-                AE_val (AV_cval (V_call (f, [op1; op2]), typ))
-            | n, m
-              when prove __POS__ ctx.local_env (nc_lteq (nconstant (min_int 64)) n)
-                   && prove __POS__ ctx.local_env (nc_lteq m (nconstant (max_int 64))) ->
-                AE_val (AV_cval (V_call (f, [op1; op2]), typ))
-            | _ -> no_change
-          )
-      )
+        if result_fits_int64 ctx typ then AE_val (AV_cval (V_call (f, [op1; op2]), typ)) else no_change
+    (* Multiply and divide on machine integers when the result fits in 64 bits
+       and, for division, the divisor cannot be zero. For the remainder, the
+       divisor also cannot be -1, because INT64_MIN % -1 is undefined in C. *)
+    | (("mult_int" | "tdiv_int" | "tmod_int") as f), [AV_cval (op1, _); AV_cval (op2, typ2)]
+      when is_fint64 op1 && is_fint64 op2 && result_fits_int64 ctx typ ->
+        let divisor_not c =
+          match destruct_atom_nexp ctx.local_env typ2 with
+          | Some n -> prove __POS__ ctx.local_env (nc_neq n (nint c))
+          | None -> false
+        in
+        if f = "mult_int" then AE_val (AV_cval (V_call (Imul, [op1; op2]), typ))
+        else if f = "tdiv_int" && divisor_not 0 then AE_val (AV_cval (V_call (Itdiv, [op1; op2]), typ))
+        else if f = "tmod_int" && divisor_not 0 && divisor_not (-1) then
+          AE_val (AV_cval (V_call (Itmod, [op1; op2]), typ))
+        else no_change
     | "replicate_bits", [AV_cval (vec, vtyp); _] -> (
         match (destruct_vector ctx.tc_env typ, destruct_vector ctx.tc_env vtyp) with
         | Some (Nexp_aux (Nexp_constant n, _), _), Some (Nexp_aux (Nexp_constant m, _), _) when Z.leq n (Z.of_int 64) ->
@@ -1154,6 +1176,9 @@ module Codegen (Config : CODEGEN_CONFIG) = struct
     | Igteq, [v1; v2] -> sprintf "(%s >= %s)" (sgen_cval v1) (sgen_cval v2)
     | Iadd, [v1; v2] -> sprintf "(%s + %s)" (sgen_cval v1) (sgen_cval v2)
     | Isub, [v1; v2] -> sprintf "(%s - %s)" (sgen_cval v1) (sgen_cval v2)
+    | Imul, [v1; v2] -> sprintf "(%s * %s)" (sgen_cval v1) (sgen_cval v2)
+    | Itdiv, [v1; v2] -> sprintf "(%s / %s)" (sgen_cval v1) (sgen_cval v2)
+    | Itmod, [v1; v2] -> sprintf "(%s %% %s)" (sgen_cval v1) (sgen_cval v2)
     | Unsigned 64, [vec] -> sprintf "((mach_int) %s)" (sgen_cval vec)
     | Signed 64, [vec] -> (
         match cval_ctyp vec with CT_fbits n -> sprintf "fast_signed(%s, %d)" (sgen_cval vec) n | _ -> assert false

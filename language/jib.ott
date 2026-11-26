@@ -102,6 +102,9 @@ op :: '' ::=
   | gteq              :: :: igteq
   | add               :: :: iadd
   | sub               :: :: isub
+  | mul               :: :: imul
+  | tdiv              :: :: itdiv
+  | tmod              :: :: itmod
   | unsigned nat      :: :: unsigned
   | signed nat        :: :: signed
 % Bitvector ops
