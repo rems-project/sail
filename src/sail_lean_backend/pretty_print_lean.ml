@@ -1068,7 +1068,9 @@ and doc_exp (as_monadic : bool) ctx (E_aux (e, (l, annot)) as full_exp) =
   (* Preserve short-circuiting; merely putting an arrow on the rhs would lift it out *)
   | E_app (Id_aux (((And_bool | Or_bool) as f), _), [lhs; rhs]) when has_effect rhs ->
       let op = match f with And_bool -> "<&&>" | _ -> "<||>" in
-      let arrow sub = if as_monadic then sub else parens (leftarrow ^^ parens sub) in
+      (* Always parenthesise: Lean's <&&> and <||> have their own precedence and associativity,
+         which would otherwise regroup nested operators, e.g. (a | b) & c as a | (b & c) *)
+      let arrow sub = if as_monadic then parens sub else parens (leftarrow ^^ parens sub) in
       let d_rhs = wrap_with_do false true (doc_exp true ctx rhs) in
       arrow (d_of_arg ~with_arrow:false ctx lhs ^^ space ^^ string op ^^ space ^^ d_rhs)
   | E_app (f, args) -> (
