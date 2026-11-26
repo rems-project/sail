@@ -16,5 +16,5 @@
  (name sail_lsp)
  (synopsis "Sail LSP server")
  (depends
-  (lsp (>= 1.25.0))
-  (jsonrpc (>= 1.25.0))))
+  (lsp (>= 1.28.0))
+  (jsonrpc (>= 1.28.0))))

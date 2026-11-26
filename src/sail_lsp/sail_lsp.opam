@@ -8,8 +8,8 @@ homepage: "https://github.com/rems-project/sail"
 bug-reports: "https://github.com/rems-project/sail/issues"
 depends: [
   "dune" {>= "3.21"}
-  "lsp" {>= "1.25.0"}
-  "jsonrpc" {>= "1.25.0"}
+  "lsp" {>= "1.28.0"}
+  "jsonrpc" {>= "1.28.0"}
   "odoc" {with-doc}
 ]
 build: [
