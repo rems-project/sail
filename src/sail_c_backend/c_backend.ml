@@ -2171,7 +2171,7 @@ module Codegen (Config : CODEGEN_CONFIG) = struct
       let vector_length =
         c_function ~return:"static void"
           (ksprintf string "length_%s(sail_int *rop, %s op)" (sgen_id id) (sgen_id id))
-          [c_stmt "mpz_set_ui(*rop, (unsigned long int)(op.len))"]
+          [c_stmt "CONVERT_OF(sail_int, mach_int)(rop, (mach_int)(op.len))"]
       in
       generated := IdSet.add id !generated;
       [
