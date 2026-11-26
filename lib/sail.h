@@ -455,6 +455,41 @@ sbits and_sbits(const sbits op1, const sbits op2);
 sbits add_sbits(const sbits op1, const sbits op2);
 sbits sub_sbits(const sbits op1, const sbits op2);
 
+/*
+ * Compare two bitvectors of at most 64 bits as unsigned (_u) or signed (_s)
+ * integers. The fbits signed versions take the width.
+ */
+static inline int64_t sail_bits_signed(const uint64_t op, const uint64_t len)
+{
+  if (len == 0) return 0;
+  unsigned sh = 64 - (unsigned)len;
+  return (int64_t)(op << sh) >> sh;
+}
+
+#define SAIL_BITS_CMP(name, op)                                                                                        \
+  static inline bool sail_cmp_##name##_u_fbits(const fbits a, const fbits b)                                           \
+  {                                                                                                                    \
+    return a op b;                                                                                                     \
+  }                                                                                                                    \
+  static inline bool sail_cmp_##name##_u_sbits(const sbits a, const sbits b)                                           \
+  {                                                                                                                    \
+    return a.bits op b.bits;                                                                                           \
+  }                                                                                                                    \
+  static inline bool sail_cmp_##name##_s_fbits(const fbits a, const fbits b, const mach_int n)                         \
+  {                                                                                                                    \
+    return sail_bits_signed(a, (uint64_t)n) op sail_bits_signed(b, (uint64_t)n);                                       \
+  }                                                                                                                    \
+  static inline bool sail_cmp_##name##_s_sbits(const sbits a, const sbits b)                                           \
+  {                                                                                                                    \
+    return sail_bits_signed(a.bits, a.len) op sail_bits_signed(b.bits, b.len);                                         \
+  }
+
+SAIL_BITS_CMP(lt, <)
+SAIL_BITS_CMP(lteq, <=)
+SAIL_BITS_CMP(gt, >)
+SAIL_BITS_CMP(gteq, >=)
+SAIL_BITS_CMP(eq, ==)
+
 /* ***** Sail reals ***** */
 
 typedef mpq_t real;
