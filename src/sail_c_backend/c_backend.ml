@@ -938,6 +938,19 @@ type file_doc =
   (* Pure static utility functions created for the model's types, e.g. to initialise
      enums, access vector elements, etc. These don't have corresponding declarations. *)
   | StaticFunctionDefinition of document
+  (* For recursive types (and any types that contain them), we
+     generate forward declarations which are placed after all the
+     ordinary type declarations, followed by the type definitions
+     themselves, which are topologically sorted so every type is
+     complete before it is used by-value. Each late type definition
+     has a unique key, and a list of keys for the types it contains
+     by-value. *)
+  | ForwardTypeDeclaration of document
+  | LateTypeDeclaration of string * string list * document
+  (* A prototype for a static function. These are placed before all
+     static functions, so the utility functions for recursive types
+     can be mutually recursive. *)
+  | StaticFunctionPrototype of document
 
 module type CODEGEN_CONFIG = sig
   val includes : string list
@@ -1009,6 +1022,26 @@ module Codegen (Config : CODEGEN_CONFIG) = struct
     match ctyps with
     | [] -> NameGen.to_string () id
     | _ -> NameGen.translate () (string_of_id id ^ "#" ^ Util.string_of_list "_" string_of_ctyp ctyps)
+
+  (* The set of constructors which are stored behind a (reference counted)
+     pointer, to allow for recursive types. See
+     [Jib_util.boxed_constructors]. *)
+  let boxed_ctors = ref IdSet.empty
+
+  (* The set of struct and variant types which are either recursive, or contain
+     recursive types. The C definitions of these types (and any tuples, lists,
+     and vectors containing them) are emitted using [ForwardTypeDeclaration],
+     [LateTypeDeclaration], and [StaticFunctionPrototype]. *)
+  let recursive_ids = ref IdSet.empty
+
+  (* For variants which are recursive, the constructor we use to create a
+     default value of that type. We must choose one that does not create an
+     infinite chain of default values. *)
+  let default_ctors = ref Bindings.empty
+
+  let is_boxed_ctor id = IdSet.mem id !boxed_ctors
+
+  let is_recursive_ctyp ctyp = not (IdSet.is_empty (IdSet.inter (ctyp_ids ctyp) !recursive_ids))
 
   let sgen_name =
     let ssa_num n = if n = -1 then "" else "/" ^ string_of_int n in
@@ -1127,6 +1160,8 @@ module Codegen (Config : CODEGEN_CONFIG) = struct
     | V_ctor_kind (f, ctor) -> sgen_cval f ^ ".kind" ^ " != Kind_" ^ sgen_uid ctor
     | V_struct (fields, _) ->
         sprintf "{%s}" (Util.string_of_list ", " (fun (field, cval) -> sgen_id field ^ " = " ^ sgen_cval cval) fields)
+    | V_ctor_unwrap (f, ctor, _) when is_boxed_ctor (fst ctor) ->
+        sprintf "%s.variants.%s->value" (sgen_cval f) (sgen_uid ctor)
     | V_ctor_unwrap (f, ctor, _) -> sprintf "%s.variants.%s" (sgen_cval f) (sgen_uid ctor)
     | V_tuple _ -> Reporting.unreachable Parse_ast.Unknown __POS__ "Cannot generate C value for a tuple literal"
 
@@ -1585,6 +1620,37 @@ module Codegen (Config : CODEGEN_CONFIG) = struct
     | I_end _ -> assert false
     | I_exit _ -> string ("  sail_match_failure(\"" ^ String.escaped (string_of_id fid) ^ "\");")
 
+  (* The keys of the types a ctyp contains by-value, for ordering LateTypeDeclarations *)
+  let rec by_value_keys = function
+    | CT_struct (id, _) | CT_variant (id, _) -> [sgen_id id]
+    | CT_tup _ as tup -> [sgen_id (mk_id ("tuple_" ^ string_of_ctyp tup))]
+    | CT_vector ctyp | CT_fvector (_, ctyp) -> [sgen_id (mk_id (string_of_ctyp (CT_vector ctyp)))]
+    | _ -> []
+
+  let static_prototype doc =
+    let s = Document.to_string doc in
+    match String.index_opt s '{' with
+    | Some i when String.starts_with ~prefix:"static" s -> Some (string (String.trim (String.sub s 0 i) ^ ";"))
+    | _ -> None
+
+  (* Turn the definitions generated for a type into ones suitable for
+     a recursive type (or a type that contains a recursive type). *)
+  let recursive_docs key deps docs =
+    let type_decls = List.filter_map (function TypeDeclaration doc -> Some doc | _ -> None) docs in
+    let late =
+      match type_decls with [] -> [] | _ -> [LateTypeDeclaration (key, deps, separate (twice hardline) type_decls)]
+    in
+    late
+    @ List.concat_map
+        (function
+          | TypeDeclaration _ -> []
+          | StaticFunctionDefinition doc as def -> (
+              match static_prototype doc with Some proto -> [StaticFunctionPrototype proto; def] | None -> [def]
+            )
+          | doc -> [doc]
+          )
+        docs
+
   let codegen_type_def ctx =
     let open Printf in
     function
@@ -1657,15 +1723,21 @@ module Codegen (Config : CODEGEN_CONFIG) = struct
     | CTD_enum (id, []) -> c_error ("Cannot compile empty enum " ^ string_of_id id)
     | CTD_abbrev (id, ctyp) ->
         let name = string (NameGen.to_string ~suffix:"_t" () id) in
-        [
-          TypeDeclaration
-            (ksprintf string "// type abbreviation %s" (string_of_id id)
-            ^^ hardline
-            ^^ separate space [string "typedef"; string (sgen_ctyp ctyp); name]
-            ^^ semi
-            );
-        ]
+        (if is_recursive_ctyp ctyp then recursive_docs (NameGen.to_string ~suffix:"_t" () id) [] else fun docs -> docs)
+          [
+            TypeDeclaration
+              (ksprintf string "// type abbreviation %s" (string_of_id id)
+              ^^ hardline
+              ^^ separate space [string "typedef"; string (sgen_ctyp ctyp); name]
+              ^^ semi
+              );
+          ]
     | CTD_struct (id, _, ctors) ->
+        ( if IdSet.mem id !recursive_ids then
+            recursive_docs (sgen_id id) (List.concat_map (fun (_, ctyp) -> by_value_keys ctyp) ctors)
+          else fun docs -> docs
+        )
+        @@
         let struct_name = sgen_id id in
         let struct_ctyp = CT_struct (id, []) in
         (* Generate a set_T function for every struct T *)
@@ -1718,8 +1790,78 @@ module Codegen (Config : CODEGEN_CONFIG) = struct
           )
         @ [StaticFunctionDefinition struct_eq]
     | CTD_variant (id, _, tus) ->
+        ( if IdSet.mem id !recursive_ids then
+            recursive_docs (sgen_id id)
+              (List.concat_map (fun (ctor_id, ctyp) -> if is_boxed_ctor ctor_id then [] else by_value_keys ctyp) tus)
+          else fun docs -> docs
+        )
+        @@
+        let box_name ctor_id = "box_" ^ sgen_id ctor_id in
+        let has_boxed = List.exists (fun (ctor_id, _) -> is_boxed_ctor ctor_id) tus in
         let codegen_tu (ctor_id, ctyp) =
-          separate space [string "struct"; lbrace; string (sgen_ctyp ctyp); codegen_id ctor_id ^^ semi; rbrace]
+          if is_boxed_ctor ctor_id then
+            separate space
+              [
+                string "struct";
+                lbrace;
+                ksprintf string "struct %s *" (box_name ctor_id);
+                codegen_id ctor_id ^^ semi;
+                rbrace;
+              ]
+          else separate space [string "struct"; lbrace; string (sgen_ctyp ctyp); codegen_id ctor_id ^^ semi; rbrace]
+        in
+        (* Boxed constructors are stored in a reference counted box *)
+        let codegen_box (ctor_id, ctyp) =
+          let c = sgen_id ctor_id in
+          let b = box_name ctor_id in
+          [
+            ForwardTypeDeclaration (ksprintf string "struct %s;" b);
+            LateTypeDeclaration
+              ( b,
+                by_value_keys ctyp,
+                ksprintf string "struct %s {\n  unsigned int rc;\n  %s value;\n};" b (sgen_ctyp ctyp)
+              );
+            StaticFunctionDefinition
+              (c_function ~return:(sprintf "static struct %s *" b) (ksprintf string "box_new_%s(void)" c)
+                 ([ksprintf c_stmt "struct %s *box = sail_new(struct %s)" b b; c_stmt "box->rc = 1"]
+                 @ (if is_stack_ctyp ctx ctyp then [] else [sail_create ~suffix:";" (sgen_ctyp_name ctyp) "&box->value"])
+                 @ [c_stmt "return box"]
+                 )
+              );
+          ]
+          @
+          if is_stack_ctyp ctx ctyp then
+            [
+              StaticFunctionDefinition
+                (c_function ~return:"static void"
+                   (ksprintf string "box_dec_%s(struct %s *box)" c b)
+                   [c_stmt "box->rc -= 1"; c_if (string "(box->rc == 0)") [c_stmt "sail_free(box)"]]
+                );
+            ]
+          else
+            [
+              StaticFunctionDefinition
+                (c_function ~return:"static void"
+                   (ksprintf string "box_destroy_%s(void *ptr)" c)
+                   [
+                     ksprintf c_stmt "struct %s *box = (struct %s *)ptr" b b;
+                     sail_kill ~suffix:";" (sgen_ctyp_name ctyp) "&box->value";
+                     c_stmt "sail_free(box)";
+                   ]
+                );
+              (* Destroying the contents of a box can cause further
+                 boxes to be destroyed, so this is done iteratively by
+                 sail_free_box to avoid overflowing the stack for
+                 deeply nested values. *)
+              StaticFunctionDefinition
+                (c_function ~return:"static void"
+                   (ksprintf string "box_dec_%s(struct %s *box)" c b)
+                   [
+                     c_stmt "box->rc -= 1";
+                     c_if (string "(box->rc == 0)") [ksprintf c_stmt "sail_free_box(box, box_destroy_%s)" c];
+                   ]
+                );
+            ]
         in
         (* Create a switch that does something for each constructor *)
         let each_ctor v f ctors =
@@ -1738,11 +1880,17 @@ module Codegen (Config : CODEGEN_CONFIG) = struct
         in
         let codegen_init =
           let n = sgen_id id in
-          let ctor_id, ctyp = List.hd tus in
+          let ctor_id, ctyp =
+            match Bindings.find_opt id !default_ctors with
+            | Some ctor_id -> List.find (fun (ctor_id', _) -> Id.compare ctor_id ctor_id' = 0) tus
+            | None -> List.hd tus
+          in
           c_function ~return:"static void" (sail_create n "struct %s *op" n)
             ([string (Printf.sprintf "op->kind = Kind_%s;" (sgen_id ctor_id))]
             @
-            if not (is_stack_ctyp ctx ctyp) then
+            if is_boxed_ctor ctor_id then
+              [ksprintf c_stmt "op->variants.%s = box_new_%s()" (sgen_id ctor_id) (sgen_id ctor_id)]
+            else if not (is_stack_ctyp ctx ctyp) then
               [sail_create ~suffix:";" (sgen_ctyp_name ctyp) "&op->variants.%s" (sgen_id ctor_id)]
             else []
             )
@@ -1752,7 +1900,9 @@ module Codegen (Config : CODEGEN_CONFIG) = struct
           c_function ~return:"static void" (sail_recreate n "struct %s *op" n) []
         in
         let clear_field v ctor_id ctyp =
-          if is_stack_ctyp ctx ctyp then None
+          if is_boxed_ctor ctor_id then
+            Some (ksprintf c_stmt "box_dec_%s(%s->variants.%s)" (sgen_id ctor_id) v (sgen_id ctor_id))
+          else if is_stack_ctyp ctx ctyp then None
           else Some (sail_kill ~suffix:";" (sgen_ctyp_name ctyp) "&%s->variants.%s" v (sgen_id ctor_id))
         in
         let codegen_clear =
@@ -1765,21 +1915,35 @@ module Codegen (Config : CODEGEN_CONFIG) = struct
             (ksprintf string "%s(%sstruct %s *rop, %s)" (sgen_function_id ctor_id) (extra_params ()) (sgen_id id)
                ctor_args
             )
-            ([each_ctor "rop->" (clear_field "rop") tus; string ("rop->kind = Kind_" ^ sgen_id ctor_id) ^^ semi]
-            @
-            if is_stack_ctyp ctx ctyp then [ksprintf string "rop->variants.%s = op;" (sgen_id ctor_id)]
-            else
-              [
-                sail_create ~suffix:";" (sgen_ctyp_name ctyp) "&rop->variants.%s" (sgen_id ctor_id);
-                sail_copy ~suffix:";" (sgen_ctyp_name ctyp) "&rop->variants.%s, op" (sgen_id ctor_id);
-              ]
+            ( if is_boxed_ctor ctor_id then
+                (* Create the new box before clearing rop, in case op refers to rop's contents *)
+                [
+                  ksprintf c_stmt "struct %s *box = box_new_%s()" (box_name ctor_id) (sgen_id ctor_id);
+                  ( if is_stack_ctyp ctx ctyp then c_stmt "box->value = op"
+                    else sail_copy ~suffix:";" (sgen_ctyp_name ctyp) "&box->value, op"
+                  );
+                  each_ctor "rop->" (clear_field "rop") tus;
+                  string ("rop->kind = Kind_" ^ sgen_id ctor_id) ^^ semi;
+                  ksprintf c_stmt "rop->variants.%s = box" (sgen_id ctor_id);
+                ]
+              else
+                [each_ctor "rop->" (clear_field "rop") tus; string ("rop->kind = Kind_" ^ sgen_id ctor_id) ^^ semi]
+                @
+                if is_stack_ctyp ctx ctyp then [ksprintf string "rop->variants.%s = op;" (sgen_id ctor_id)]
+                else
+                  [
+                    sail_create ~suffix:";" (sgen_ctyp_name ctyp) "&rop->variants.%s" (sgen_id ctor_id);
+                    sail_copy ~suffix:";" (sgen_ctyp_name ctyp) "&rop->variants.%s, op" (sgen_id ctor_id);
+                  ]
             )
         in
         let codegen_setter =
           let n = sgen_id id in
           let set_field ctor_id ctyp =
             Some
-              ( if is_stack_ctyp ctx ctyp then
+              ( if is_boxed_ctor ctor_id then
+                  ksprintf string "rop->variants.%s = op.variants.%s;" (sgen_id ctor_id) (sgen_id ctor_id)
+                else if is_stack_ctyp ctx ctyp then
                   string (Printf.sprintf "rop->variants.%s = op.variants.%s;" (sgen_id ctor_id) (sgen_id ctor_id))
                 else
                   sail_create ~suffix:";" (sgen_ctyp_name ctyp) "&rop->variants.%s" (sgen_id ctor_id)
@@ -1789,19 +1953,35 @@ module Codegen (Config : CODEGEN_CONFIG) = struct
           in
           c_function ~return:"static void"
             (sail_copy n "struct %s *rop, struct %s op" n n)
-            [
-              each_ctor "rop->" (clear_field "rop") tus ^^ semi;
-              c_stmt "rop->kind = op.kind";
-              each_ctor "op." set_field tus;
-            ]
+            ((* Increment the reference count of any box in op before
+                clearing rop, as they may share the same box *)
+             let inc_field ctor_id _ =
+               if is_boxed_ctor ctor_id then Some (ksprintf c_stmt "op.variants.%s->rc += 1" (sgen_id ctor_id))
+               else None
+             in
+             (if has_boxed then [each_ctor "op." inc_field tus] else [])
+             @ [
+                 each_ctor "rop->" (clear_field "rop") tus ^^ semi;
+                 c_stmt "rop->kind = op.kind";
+                 each_ctor "op." set_field tus;
+               ]
+            )
         in
         let codegen_eq =
           let codegen_eq_test ctor_id ctyp =
-            c_return
-              (codegen_equal ctyp
-                 (sprintf "op1.variants.%s" (sgen_id ctor_id))
-                 (sprintf "op2.variants.%s" (sgen_id ctor_id))
-              )
+            if is_boxed_ctor ctor_id then (
+              let c = sgen_id ctor_id in
+              c_return
+                (ksprintf string "op1.variants.%s == op2.variants.%s || " c c
+                ^^ codegen_equal ctyp (sprintf "op1.variants.%s->value" c) (sprintf "op2.variants.%s->value" c)
+                )
+            )
+            else
+              c_return
+                (codegen_equal ctyp
+                   (sprintf "op1.variants.%s" (sgen_id ctor_id))
+                   (sprintf "op2.variants.%s" (sgen_id ctor_id))
+                )
           in
           let codegen_eq_tests ctors =
             c_if (ksprintf string "(op1.kind != op2.kind)") [c_return (string "false")]
@@ -1844,12 +2024,15 @@ module Codegen (Config : CODEGEN_CONFIG) = struct
                  rbrace
             ^^ semi
             );
-          StaticFunctionDefinition codegen_init;
-          StaticFunctionDefinition codegen_reinit;
-          StaticFunctionDefinition codegen_clear;
-          StaticFunctionDefinition codegen_setter;
-          StaticFunctionDefinition codegen_eq;
         ]
+        @ List.concat_map codegen_box (List.filter (fun (ctor_id, _) -> is_boxed_ctor ctor_id) tus)
+        @ [
+            StaticFunctionDefinition codegen_init;
+            StaticFunctionDefinition codegen_reinit;
+            StaticFunctionDefinition codegen_clear;
+            StaticFunctionDefinition codegen_setter;
+            StaticFunctionDefinition codegen_eq;
+          ]
         @ List.map (fun tu -> StaticFunctionDefinition (codegen_ctor tu)) tus
         (* If this is the exception type, then we setup up some global variables to deal with exceptions. *)
         @
@@ -1886,6 +2069,9 @@ module Codegen (Config : CODEGEN_CONFIG) = struct
       codegen_type_def
         { ctx with records = Bindings.add id ([], fields) ctx.records }
         (CTD_struct (id, [], Bindings.bindings fields))
+      |>
+      if is_recursive_ctyp (CT_tup ctyps) then recursive_docs (sgen_id id) (List.concat_map by_value_keys ctyps)
+      else fun docs -> docs
     )
 
   let codegen_list ctx ctyp =
@@ -1894,10 +2080,21 @@ module Codegen (Config : CODEGEN_CONFIG) = struct
     if IdSet.mem id !generated then []
     else (
       generated := IdSet.add id !generated;
-      let codegen_node =
-        ksprintf string "struct node_%s {\n  unsigned int rc;\n  %s hd;\n  struct node_%s *tl;\n};\n" (sgen_id id)
+      let node_def =
+        ksprintf string "struct node_%s {\n  unsigned int rc;\n  %s hd;\n  struct node_%s *tl;\n};" (sgen_id id)
           (sgen_ctyp ctyp) (sgen_id id)
-        ^^ string (sprintf "typedef struct node_%s *%s;" (sgen_id id) (sgen_id id))
+      in
+      let node_typedef = string (sprintf "typedef struct node_%s *%s;" (sgen_id id) (sgen_id id)) in
+      (* For lists of recursive types, the list type is declared
+         before the node type is defined, which must happen after the
+         element type is defined. *)
+      let type_decls =
+        if is_recursive_ctyp ctyp then
+          [
+            ForwardTypeDeclaration (ksprintf string "struct node_%s;" (sgen_id id) ^^ hardline ^^ node_typedef);
+            LateTypeDeclaration ("node_" ^ sgen_id id, by_value_keys ctyp, node_def);
+          ]
+        else [TypeDeclaration (node_def ^^ hardline ^^ node_typedef)]
       in
 
       let codegen_list_init =
@@ -1987,19 +2184,20 @@ module Codegen (Config : CODEGEN_CONFIG) = struct
         ksprintf string "static void UNDEFINED(%s)(%s *rop, %s u) {\n" (sgen_id id) (sgen_id id) (sgen_ctyp ctyp)
         ^^ ksprintf string "  *rop = NULL;\n" ^^ string "}"
       in
-      [
-        TypeDeclaration codegen_node;
-        StaticFunctionDefinition codegen_list_init;
-        StaticFunctionDefinition codegen_inc_reference_count;
-        StaticFunctionDefinition codegen_dec_reference_count;
-        StaticFunctionDefinition codegen_list_clear;
-        StaticFunctionDefinition codegen_list_recreate;
-        StaticFunctionDefinition codegen_list_copy;
-        StaticFunctionDefinition codegen_cons;
-        StaticFunctionDefinition codegen_pick;
-        StaticFunctionDefinition codegen_list_equal;
-        StaticFunctionDefinition codegen_list_undefined;
-      ]
+      (if is_recursive_ctyp ctyp then recursive_docs ("node_" ^ sgen_id id) [] else fun docs -> docs)
+      @@ type_decls
+      @ [
+          StaticFunctionDefinition codegen_list_init;
+          StaticFunctionDefinition codegen_inc_reference_count;
+          StaticFunctionDefinition codegen_dec_reference_count;
+          StaticFunctionDefinition codegen_list_clear;
+          StaticFunctionDefinition codegen_list_recreate;
+          StaticFunctionDefinition codegen_list_copy;
+          StaticFunctionDefinition codegen_cons;
+          StaticFunctionDefinition codegen_pick;
+          StaticFunctionDefinition codegen_list_equal;
+          StaticFunctionDefinition codegen_list_undefined;
+        ]
     )
 
   (* Generate functions for working with non-bit vectors of some specific type. *)
@@ -2174,22 +2372,24 @@ module Codegen (Config : CODEGEN_CONFIG) = struct
           [c_stmt "mpz_set_ui(*rop, (unsigned long int)(op.len))"]
       in
       generated := IdSet.add id !generated;
-      [
-        TypeDeclaration vector_typedef;
-        StaticFunctionDefinition vector_decl;
-        StaticFunctionDefinition vector_clear;
-        StaticFunctionDefinition vector_init;
-        StaticFunctionDefinition vector_reinit;
-        StaticFunctionDefinition vector_undefined;
-        StaticFunctionDefinition vector_access;
-        StaticFunctionDefinition fast_vector_access;
-        StaticFunctionDefinition vector_set;
-        StaticFunctionDefinition vector_update;
-        StaticFunctionDefinition vector_equal;
-        StaticFunctionDefinition vector_length;
-        StaticFunctionDefinition internal_vector_update;
-        StaticFunctionDefinition internal_vector_init;
-      ]
+      (* Vectors only contain a pointer to their elements, so they have no by-value dependencies *)
+      (if is_recursive_ctyp ctyp then recursive_docs (sgen_id id) [] else fun docs -> docs)
+      @@ [
+           TypeDeclaration vector_typedef;
+           StaticFunctionDefinition vector_decl;
+           StaticFunctionDefinition vector_clear;
+           StaticFunctionDefinition vector_init;
+           StaticFunctionDefinition vector_reinit;
+           StaticFunctionDefinition vector_undefined;
+           StaticFunctionDefinition vector_access;
+           StaticFunctionDefinition fast_vector_access;
+           StaticFunctionDefinition vector_set;
+           StaticFunctionDefinition vector_update;
+           StaticFunctionDefinition vector_equal;
+           StaticFunctionDefinition vector_length;
+           StaticFunctionDefinition internal_vector_update;
+           StaticFunctionDefinition internal_vector_init;
+         ]
     )
 
   let is_decl = function I_aux (I_decl _, _) -> true | _ -> false
@@ -2392,25 +2592,64 @@ module Codegen (Config : CODEGEN_CONFIG) = struct
     static_func_def : document;
   }
 
+  (* Sort the late type declarations so that each type is defined after any types it contains by-value. *)
+  let sort_late_type_declarations late =
+    let defs = Hashtbl.create (List.length late) in
+    List.iter (fun (key, deps, doc) -> if not (Hashtbl.mem defs key) then Hashtbl.add defs key (deps, doc)) late;
+    let visited = Hashtbl.create (List.length late) in
+    let sorted = ref [] in
+    let rec visit key =
+      if not (Hashtbl.mem visited key) then (
+        Hashtbl.add visited key ();
+        match Hashtbl.find_opt defs key with
+        | Some (deps, doc) ->
+            List.iter visit deps;
+            sorted := doc :: !sorted
+        | None -> ()
+      )
+    in
+    List.iter (fun (key, _, _) -> visit key) late;
+    List.rev !sorted
+
   let merge_file_docs docs =
-    List.fold_left
-      (fun acc -> function
-        | TypeDeclaration doc -> { acc with type_decl = acc.type_decl ^^ doc ^^ twice hardline }
-        | FunctionDeclaration doc -> { acc with func_decl = acc.func_decl ^^ doc ^^ twice hardline }
-        | FunctionDefinition doc -> { acc with func_def = acc.func_def ^^ doc ^^ twice hardline }
-        | VariableDeclaration doc -> { acc with var_decl = acc.var_decl ^^ doc ^^ twice hardline }
-        | VariableDefinition doc -> { acc with var_def = acc.var_def ^^ doc ^^ twice hardline }
-        | StaticFunctionDefinition doc -> { acc with static_func_def = acc.static_func_def ^^ doc ^^ twice hardline }
-        )
-      {
-        type_decl = empty;
-        func_decl = empty;
-        func_def = empty;
-        var_decl = empty;
-        var_def = empty;
-        static_func_def = empty;
-      }
-      docs
+    let forward = ref empty in
+    let late = ref [] in
+    let prototypes = ref empty in
+    let acc =
+      List.fold_left
+        (fun acc -> function
+          | ForwardTypeDeclaration doc ->
+              forward := !forward ^^ doc ^^ twice hardline;
+              acc
+          | LateTypeDeclaration (key, deps, doc) ->
+              late := (key, deps, doc) :: !late;
+              acc
+          | StaticFunctionPrototype doc ->
+              prototypes := !prototypes ^^ doc ^^ hardline;
+              acc
+          | TypeDeclaration doc -> { acc with type_decl = acc.type_decl ^^ doc ^^ twice hardline }
+          | FunctionDeclaration doc -> { acc with func_decl = acc.func_decl ^^ doc ^^ twice hardline }
+          | FunctionDefinition doc -> { acc with func_def = acc.func_def ^^ doc ^^ twice hardline }
+          | VariableDeclaration doc -> { acc with var_decl = acc.var_decl ^^ doc ^^ twice hardline }
+          | VariableDefinition doc -> { acc with var_def = acc.var_def ^^ doc ^^ twice hardline }
+          | StaticFunctionDefinition doc -> { acc with static_func_def = acc.static_func_def ^^ doc ^^ twice hardline }
+          )
+        {
+          type_decl = empty;
+          func_decl = empty;
+          func_def = empty;
+          var_decl = empty;
+          var_def = empty;
+          static_func_def = empty;
+        }
+        docs
+    in
+    let late = sort_late_type_declarations (List.rev !late) in
+    {
+      acc with
+      type_decl = acc.type_decl ^^ !forward ^^ concat_map (fun doc -> doc ^^ twice hardline) late;
+      static_func_def = (if !prototypes == empty then empty else !prototypes ^^ hardline) ^^ acc.static_func_def;
+    }
 
   (** When we generate code for a definition, we need to first generate any auxillary type definitions that are
       required. *)
@@ -2633,6 +2872,99 @@ module Codegen (Config : CODEGEN_CONFIG) = struct
         );
     ]
 
+  (* Destroy boxes iteratively using a worklist, rather than recursively *)
+  let box_runtime =
+    String.concat "\n"
+      [
+        "struct sail_pending_box {";
+        "  void *box;";
+        "  void (*destroy)(void *);";
+        "};";
+        "";
+        "static struct sail_pending_box sail_pending_boxes_static[256];";
+        "static struct sail_pending_box *sail_pending_boxes = sail_pending_boxes_static;";
+        "static size_t sail_pending_boxes_len = 0;";
+        "static size_t sail_pending_boxes_cap = 256;";
+        "static bool sail_pending_boxes_draining = false;";
+        "";
+        "static void sail_free_box(void *box, void (*destroy)(void *))";
+        "{";
+        "  if (sail_pending_boxes_len == sail_pending_boxes_cap) {";
+        "    size_t cap = 2 * sail_pending_boxes_cap;";
+        "    struct sail_pending_box *pending = sail_new_array(struct sail_pending_box, cap);";
+        "    for (size_t i = 0; i < sail_pending_boxes_len; i++) pending[i] = sail_pending_boxes[i];";
+        "    if (sail_pending_boxes != sail_pending_boxes_static) sail_free(sail_pending_boxes);";
+        "    sail_pending_boxes = pending;";
+        "    sail_pending_boxes_cap = cap;";
+        "  }";
+        "  sail_pending_boxes[sail_pending_boxes_len].box = box;";
+        "  sail_pending_boxes[sail_pending_boxes_len].destroy = destroy;";
+        "  sail_pending_boxes_len++;";
+        "  if (sail_pending_boxes_draining) return;";
+        "  sail_pending_boxes_draining = true;";
+        "  while (sail_pending_boxes_len > 0) {";
+        "    sail_pending_boxes_len--;";
+        "    sail_pending_boxes[sail_pending_boxes_len].destroy(sail_pending_boxes[sail_pending_boxes_len].box);";
+        "  }";
+        "  sail_pending_boxes_draining = false;";
+        "  if (sail_pending_boxes != sail_pending_boxes_static) {";
+        "    sail_free(sail_pending_boxes);";
+        "    sail_pending_boxes = sail_pending_boxes_static;";
+        "    sail_pending_boxes_cap = 256;";
+        "  }";
+        "}";
+      ]
+
+  (* Set up the global state used for generating recursive types *)
+  let setup_recursive_types cdefs =
+    let ctdefs = List.filter_map (function CDef_aux (CDef_type ctdef, _) -> Some ctdef | _ -> None) cdefs in
+    let fields = function CTD_struct (_, _, fields) | CTD_variant (_, _, fields) -> fields | _ -> [] in
+    boxed_ctors := boxed_constructors ctdefs;
+    let recursive = recursive_ctype_ids ctdefs in
+    (* Any type containing a recursive type must also be treated as one *)
+    let rec close ids =
+      let ids' =
+        List.fold_left
+          (fun ids ctdef ->
+            if List.exists (fun (_, ctyp) -> not (IdSet.is_empty (IdSet.inter (ctyp_ids ctyp) ids))) (fields ctdef) then
+              IdSet.add (ctype_def_id ctdef) ids
+            else ids
+          )
+          ids ctdefs
+      in
+      if IdSet.equal ids ids' then ids else close ids'
+    in
+    recursive_ids := close recursive;
+    (* For each recursive variant, find a constructor we can use to
+       create a default value that does not recursively require a
+       default value of the same type. *)
+    let rec find_defaults constructible defaults =
+      let is_constructible ctyp =
+        IdSet.for_all (fun id -> (not (IdSet.mem id recursive)) || IdSet.mem id constructible) (ctyp_by_value_ids ctyp)
+      in
+      let constructible', defaults =
+        List.fold_left
+          (fun (constructible, defaults) ctdef ->
+            let id = ctype_def_id ctdef in
+            if IdSet.mem id constructible || not (IdSet.mem id recursive) then (constructible, defaults)
+            else (
+              match ctdef with
+              | CTD_struct (_, _, fields) when List.for_all (fun (_, ctyp) -> is_constructible ctyp) fields ->
+                  (IdSet.add id constructible, defaults)
+              | CTD_variant (_, _, ctors) -> (
+                  match List.find_opt (fun (_, ctyp) -> is_constructible ctyp) ctors with
+                  | Some (ctor_id, _) -> (IdSet.add id constructible, Bindings.add id ctor_id defaults)
+                  | None -> (constructible, defaults)
+                )
+              | _ -> (constructible, defaults)
+            )
+          )
+          (constructible, defaults) ctdefs
+      in
+      if IdSet.equal constructible constructible' then defaults else find_defaults constructible' defaults
+    in
+    default_ctors := find_defaults IdSet.empty Bindings.empty
+
   let compile_ast env effect_info basename ast =
     try
       let cdefs, ctx = jib_of_ast env effect_info ast in
@@ -2648,7 +2980,10 @@ module Codegen (Config : CODEGEN_CONFIG) = struct
          some value < 256 (100 seems reasonable). *)
       let cdefs = List.map (Jib_optimize.flatten_cdef ~max_depth:100) cdefs in
 
+      setup_recursive_types cdefs;
+
       let docs = List.map (codegen_def ctx) cdefs |> List.concat in
+      let docs = if IdSet.is_empty !boxed_ctors then docs else StaticFunctionPrototype (string box_runtime) :: docs in
 
       let docs = docs @ gen_model_init_fini ctx cdefs @ gen_unit_test_defs ctx cdefs in
       let docs = if Config.cpp then docs @ gen_constructor_destructor ctx cdefs else docs in

@@ -1257,3 +1257,65 @@ let cdef_has_ctyp pred (CDef_aux (aux, _)) =
   | CDef_let (_, bindings, instrs) ->
       List.exists (fun (_, ctyp) -> pred ctyp) bindings || List.exists (instr_has_ctyp pred) instrs
   | CDef_pragma _ -> false
+
+(**************************************************************************)
+(* Recursive type definitions                                             *)
+(**************************************************************************)
+
+(* The struct and variant types contained by-value (i.e. not behind
+   some kind of pointer such as a list, vector, or reference) in a
+   ctyp. *)
+let rec ctyp_by_value_ids = function
+  | CT_struct (id, _) | CT_variant (id, _) -> IdSet.singleton id
+  | CT_tup ctyps -> List.fold_left (fun ids ctyp -> IdSet.union (ctyp_by_value_ids ctyp) ids) IdSet.empty ctyps
+  | _ -> IdSet.empty
+
+let ctype_def_fields = function
+  | CTD_struct (_, _, fields) | CTD_variant (_, _, fields) -> fields
+  | CTD_abbrev (id, ctyp) -> [(id, ctyp)]
+  | CTD_enum _ | CTD_abstract _ -> []
+
+module IdGraph = Graph.Make (Id)
+
+(* Compute the strongly connected components of the type definition
+   graph, where edges are given by f, returning only those that are
+   recursive (either containing multiple types, or a type that
+   refers to itself). *)
+let recursive_components f ctdefs =
+  let graph =
+    List.fold_left
+      (fun g ctdef ->
+        let id = ctype_def_id ctdef in
+        let deps =
+          List.fold_left (fun ids (_, ctyp) -> IdSet.union (f ctyp) ids) IdSet.empty (ctype_def_fields ctdef)
+        in
+        IdGraph.add_edges id (IdSet.elements deps) g
+      )
+      IdGraph.empty ctdefs
+  in
+  let self_loops = IdGraph.self_loops graph |> IdSet.of_list in
+  IdGraph.scc graph |> List.filter (function [id] -> IdSet.mem id self_loops | _ -> true) |> List.map IdSet.of_list
+
+let recursive_ctype_components ctdefs = recursive_components ctyp_ids ctdefs
+
+let recursive_ctype_ids ctdefs = recursive_components ctyp_ids ctdefs |> List.fold_left IdSet.union IdSet.empty
+
+let boxed_constructors ctdefs =
+  let components = recursive_components ctyp_by_value_ids ctdefs in
+  List.fold_left
+    (fun boxed ctdef ->
+      match ctdef with
+      | CTD_variant (id, _, ctors) -> (
+          match List.find_opt (IdSet.mem id) components with
+          | Some component ->
+              List.fold_left
+                (fun boxed (ctor_id, ctyp) ->
+                  if IdSet.is_empty (IdSet.inter (ctyp_by_value_ids ctyp) component) then boxed
+                  else IdSet.add ctor_id boxed
+                )
+                boxed ctors
+          | None -> boxed
+        )
+      | _ -> boxed
+    )
+    IdSet.empty ctdefs
