@@ -4634,7 +4634,7 @@ let split_datatype_constructors limit _env ast =
   let rec process_defs defs acc =
     match defs with
     | [] -> List.rev acc
-    | Def_aux (Def_type (TD_aux (TD_variant (id, typq, cases, false), td_ann)), d_ann) :: t
+    | Def_aux (Def_type (Non_empty (TD_aux (TD_variant (id, typq, cases, false), td_ann), [])), d_ann) :: t
       when List.length cases > limit ->
         let partition = partition_datatype d_ann.loc limit cases in
         let make_new_def (prefix, cases) =
@@ -4647,7 +4647,9 @@ let split_datatype_constructors limit _env ast =
           (* We don't filter typq down to the ones appearing in particular cases at hand because
            the target (currently just Lean) appears to cope with unused type parameters. *)
           ( Def_aux
-              (Def_type (TD_aux (TD_variant (new_id, typq, cases, false), td_ann)), { d_ann with loc = gen_l d_ann.loc }),
+              ( Def_type (Non_empty (TD_aux (TD_variant (new_id, typq, cases, false), td_ann), [])),
+                { d_ann with loc = gen_l d_ann.loc }
+              ),
             Tu_aux
               ( Tu_ty_id (Typ_aux (Typ_app (new_id, typ_args_of_quant_items typq), d_ann.loc), new_ctor),
                 mk_def_annot (gen_l d_ann.loc) ()
@@ -4656,7 +4658,8 @@ let split_datatype_constructors limit _env ast =
         in
         let new_defs, new_cases = List.map make_new_def partition |> List.split in
         process_defs t
-          ((Def_aux (Def_type (TD_aux (TD_variant (id, typq, new_cases, false), td_ann)), d_ann) :: List.rev new_defs)
+          (Def_aux (Def_type (Non_empty (TD_aux (TD_variant (id, typq, new_cases, false), td_ann), [])), d_ann)
+           :: List.rev new_defs
           @ acc
           )
     | d :: ds -> process_defs ds (rw_def d :: acc)
