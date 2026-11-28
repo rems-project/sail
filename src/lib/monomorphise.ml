@@ -676,9 +676,10 @@ let split_defs target all_errors (splits : split_req list) env ast =
     in
     let sc_def d =
       match d with
-      | Def_aux (Def_type td, def_annot) ->
+      | Def_aux (Def_type (Non_empty (td, tds)), def_annot) ->
           let refinements, td' = sc_type_def td in
-          (refinements, Def_aux (Def_type td', def_annot))
+          let refinements', tds' = List.split (List.map sc_type_def tds) in
+          (refinements @ List.concat refinements', Def_aux (Def_type (Non_empty (td', tds')), def_annot))
       | _ -> ([], d)
     in
     let refinements, defs' = List.split (List.map sc_def defs) in
@@ -4517,9 +4518,9 @@ module ToplevelNexpRewrites = struct
 
   (* Move complex sizes in record field types into the parameters. *)
   let rewrite_complete_record_params env ast =
-    let lift_params (additions_map, tl) def =
-      match def with
-      | Def_aux (Def_type (TD_aux (TD_record (id, qs, fields), annot)), def_annot) as def -> (
+    let lift_params (def_annot : _ def_annot) additions_map td =
+      match td with
+      | TD_aux (TD_record (id, qs, fields), annot) -> (
           (* TODO: replace with a local environment *)
           let env = Env.add_typquant def_annot.loc qs env in
           let nexp_map, fields' =
@@ -4531,7 +4532,7 @@ module ToplevelNexpRewrites = struct
               fields ([], [])
           in
           match nexp_map with
-          | [] -> (additions_map, def :: tl)
+          | [] -> (additions_map, td)
           | _ ->
               let new_vars =
                 List.map (fun (kid, nexp) -> QI_aux (QI_id (mk_kopt K_int kid), Generated def_annot.loc)) nexp_map
@@ -4543,8 +4544,16 @@ module ToplevelNexpRewrites = struct
               in
               let tyqs' = qs @ new_vars @ new_constraints in
               let additions_map' = Bindings.add id (qs, nexp_map) additions_map in
-              (additions_map', Def_aux (Def_type (TD_aux (TD_record (id, tyqs', fields'), annot)), def_annot) :: tl)
+              (additions_map', TD_aux (TD_record (id, tyqs', fields'), annot))
         )
+      | td -> (additions_map, td)
+    in
+    let lift_params (additions_map, tl) def =
+      match def with
+      | Def_aux (Def_type (Non_empty (td, tds)), def_annot) ->
+          let additions_map, td = lift_params def_annot additions_map td in
+          let additions_map, tds = List.fold_left_map (lift_params def_annot) additions_map tds in
+          (additions_map, Def_aux (Def_type (Non_empty (td, tds)), def_annot) :: tl)
       | def -> (additions_map, def :: tl)
     in
 
@@ -4617,7 +4626,7 @@ module ToplevelNexpRewrites = struct
       let aux' =
         match aux with
         | Def_val vs -> Def_val (rw_spec vs)
-        | Def_type td -> Def_type (rw_typedef td)
+        | Def_type tds -> Def_type (non_empty_map rw_typedef tds)
         | Def_register reg -> Def_register (rw_register reg)
         | def -> def
       in

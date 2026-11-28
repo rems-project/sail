@@ -364,7 +364,7 @@ let add_def_to_graph graph (Def_aux (def, def_annot)) =
       IdSet.iter (fun id -> graph := G.add_edges (Letbind id) [] !graph) ids;
       IdSet.iter (fun id -> ignore (fold_pat (rw_pat (Letbind id)) pat)) ids;
       IdSet.iter (fun id -> ignore (fold_exp (rw_exp (Letbind id)) exp)) ids
-  | Def_type tdef -> add_type_def_to_graph tdef
+  | Def_type tdefs -> List.iter add_type_def_to_graph (non_empty_to_list tdefs)
   | Def_register (Reg_aux (Reg (typ, id, opt_exp), annot)) ->
       (* Determine dependencies of initial expressions (or `undefined` if missing, which will add
            dependencies to `undefined_*` functions) *)
@@ -454,7 +454,7 @@ let nodes_of_def (Def_aux (def, _)) =
   | Def_loop_measures (id, _) -> NS.singleton (LoopMeasures id)
   | Def_register rdec -> NS.singleton (Register (id_of_reg_spec rdec))
   | Def_let (pat, _) -> pat_ids pat |> IdSet.elements |> List.map (fun id -> Letbind id) |> NS.of_list
-  | Def_type tdef -> NS.singleton (Type (id_of_type_def tdef))
+  | Def_type tdefs -> non_empty_to_list tdefs |> List.map (fun tdef -> Type (id_of_type_def tdef)) |> NS.of_list
   | Def_outcome (OV_aux (OV_outcome (id, _, _), _), _) -> NS.singleton (Outcome id)
   | Def_instantiation (IN_aux (IN_id id, _), _) -> NS.singleton (Function id)
   | Def_overload (id, _) -> NS.singleton (Overload id)
@@ -504,6 +504,15 @@ let filter_ast_extra cuts g ast keep_std =
         match fundefs' with
         | [] -> filter_ast' g defs
         | _ -> Def_aux (Def_internal_mutrec fundefs', def_annot) :: filter_ast' g defs
+      )
+    | Def_aux (Def_type tdefs, def_annot) :: defs -> (
+        let keep_tdef tdef =
+          let n = Type (id_of_type_def tdef) in
+          NM.mem n g && not (NS.mem n cuts)
+        in
+        match List.filter keep_tdef (non_empty_to_list tdefs) with
+        | [] -> filter_ast' g defs
+        | tdef :: tdefs -> Def_aux (Def_type (Non_empty (tdef, tdefs)), def_annot) :: filter_ast' g defs
       )
     | Def_aux (Def_constraint nc, def_annot) :: defs ->
         let ids = constraint_ids nc in
@@ -594,8 +603,11 @@ let top_sort_defs ast =
            Q: Do we need to deduplicate them, e.g. could we end up including a let-binding of
               multiple variables more than once?
            A: The nodes of a multi-variable let-binding *should* not depend on each other, so
-              should not be part of the same component, so the code below should work. *)
+              should not be part of the same component. However, a block of mutually recursive
+              type definitions defines multiple nodes in the same component, so we remove
+              duplicate definitions here. *)
         let cdefs = NS.elements c |> List.filter_map (fun n -> NM.find_opt n defs_of_nodes) |> List.concat in
+        let cdefs = List.fold_left (fun acc d -> if List.memq d acc then acc else d :: acc) [] cdefs |> List.rev in
         let already_seen' = List.fold_left NS.union already_seen (List.map nodes_of_def cdefs) in
         (* Merge mutually recursive functions *)
         let cdefs' =

@@ -916,7 +916,7 @@ module Printer (Config : PRINT_CONFIG) = struct
     match aux with
     | Def_default df -> doc_default df
     | Def_val v_spec -> doc_spec v_spec
-    | Def_type t_def -> doc_type_def t_def
+    | Def_type t_defs -> separate_map (twice hardline ^^ string "and" ^^ space) doc_type_def (non_empty_to_list t_defs)
     | Def_fundef f_def -> doc_fundef f_def
     | Def_mapdef m_def -> doc_mapdef m_def
     | Def_constraint nc -> string "constraint" ^^ space ^^ doc_nc nc

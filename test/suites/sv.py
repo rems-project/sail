@@ -36,6 +36,8 @@ skip_tests = {
     "const_prop_mut_rec",  # loops
     "register_tuples",
     "top_let_bind",
+    "recursive_types",  # recursive types
+    "recursive_types_deep",  # recursive types
 }
 
 

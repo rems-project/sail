@@ -1,0 +1,20 @@
+len = 10
+sum = 55
+rev len = 10
+xs == xs
+xs != ys
+rev rev == xs
+tree = 12
+tree = 24
+t2 = 24
+t = 1
+R = 60
+h = 2
+rose = 10
+bar = 2
+quux = 2
+seq = 2
+wrap = 3
+a = 2
+n = 4
+e = 0x0000000A

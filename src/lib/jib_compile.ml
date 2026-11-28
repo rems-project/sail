@@ -116,6 +116,7 @@ type ctx = {
   no_static : bool;
   coverage_override : bool;
   def_annot : unit def_annot option;
+  recursive_types : IdSet.t;
 }
 
 let letbind_ids ctx =
@@ -181,6 +182,7 @@ let initial_ctx ?for_target env effect_info =
     no_static = false;
     coverage_override = true;
     def_annot = None;
+    recursive_types = IdSet.empty;
   }
 
 let instantiate_polymorphic_type ~at:l typ_id ctyps type_info =
@@ -223,8 +225,14 @@ let enum_members l ctx id =
   | Some elems -> elems
   | None -> Reporting.unreachable l __POS__ ("Failed to find enum type " ^ string_of_id id)
 
+(* Newtypes that are recursive are not transparent, so their constructors are treated like any other. *)
+let is_recursive_newtype_ctor ctx ctor =
+  match Env.union_constructor_info ctor ctx.tc_env with
+  | Some (_, _, union_id, _) -> IdSet.mem union_id ctx.recursive_types
+  | None -> false
+
 let transparent_newtype ctx = function
-  | CT_variant (id, args) when Env.is_newtype id ctx.tc_env ->
+  | CT_variant (id, args) when Env.is_newtype id ctx.tc_env && not (IdSet.mem id ctx.recursive_types) ->
       instantiate_polymorphic_type ~at:(id_loc id) id args ctx.variants |> Bindings.choose |> snd
   | ctyp -> ctyp
 
@@ -1013,7 +1021,7 @@ module Make (C : CONFIG) = struct
     in
     compile_config' l ctx key ctyp
 
-  let rec compile_match ctx (AP_aux (apat_aux, { env; loc = l; _ })) cval on_failure =
+  let rec compile_match ctx (AP_aux (apat_aux, ({ env; loc = l; _ } as annot))) cval on_failure =
     let ctx = { ctx with local_env = env } in
     let ctyp = cval_ctyp cval in
     match apat_aux with
@@ -1056,6 +1064,8 @@ module Make (C : CONFIG) = struct
             (pre, instrs, cleanup, ctx)
         | _ -> Reporting.unreachable l __POS__ ("AP_tuple with ctyp " ^ string_of_ctyp ctyp)
       )
+    | AP_app (Newtype_wrapper ctor, apat, variant_typ) when is_recursive_newtype_ctor ctx ctor ->
+        compile_match ctx (AP_aux (AP_app (Constructor ctor, apat, variant_typ), annot)) cval on_failure
     | AP_app (Newtype_wrapper _, apat, _) -> compile_match ctx apat cval on_failure
     | AP_app (Constructor ctor, apat, variant_typ) -> (
         match ctyp with
@@ -1197,6 +1207,7 @@ module Make (C : CONFIG) = struct
           else compile_funcall l ctx id vs
         )
         else compile_funcall l ctx id vs
+    | AE_app (Newtype_wrapper id, vs, _) when is_recursive_newtype_ctor ctx id -> compile_funcall l ctx id vs
     | AE_app (Newtype_wrapper id, args, _) -> (
         match args with
         | [arg] ->
@@ -2346,9 +2357,57 @@ module Make (C : CONFIG) = struct
         raise (Reporting.err_general l "Encountered function with no clauses")
     | Def_fundef (FD_aux (FD_function (_, _, _ :: _ :: _), (l, _))) ->
         raise (Reporting.err_general l "Encountered function with multiple clauses")
-    | Def_type type_def ->
-        let tdef_opt, ctx = compile_type_def ctx type_def in
-        (Compiled (List.map (fun tdef -> CDef_aux (CDef_type tdef, def_annot)) (Option.to_list tdef_opt)), ctx)
+    | Def_type type_defs ->
+        let type_defs = non_empty_to_list type_defs in
+        (* For (mutually) recursive types, every type in the group
+           must be known to ctyp_of_typ before we compile any of
+           them, so we register each type with an empty set of fields
+           or constructors first. Any newtype in a group of recursive
+           types is not transparent, as we cannot unwrap it while it
+           is being defined. *)
+        let typq_params typq = quant_kopts typq |> List.filter is_typ_kopt |> List.map kopt_kid in
+        let ctx =
+          match type_defs with
+          | [TD_aux ((TD_record _ | TD_variant _), _)] | _ :: _ :: _ ->
+              List.fold_left
+                (fun ctx (TD_aux (aux, _)) ->
+                  match aux with
+                  | TD_record (id, typq, _) ->
+                      {
+                        ctx with
+                        records = Bindings.add id (typq_params typq, Bindings.empty) ctx.records;
+                        recursive_types = IdSet.add id ctx.recursive_types;
+                      }
+                  | TD_variant (id, typq, _, _) ->
+                      {
+                        ctx with
+                        variants = Bindings.add id (typq_params typq, Bindings.empty) ctx.variants;
+                        recursive_types = IdSet.add id ctx.recursive_types;
+                      }
+                  | _ -> ctx
+                )
+                ctx type_defs
+          | _ -> ctx
+        in
+        let ctx, tdefs =
+          List.fold_left_map
+            (fun ctx type_def ->
+              let tdef_opt, ctx = compile_type_def ctx type_def in
+              (ctx, Option.to_list tdef_opt)
+            )
+            ctx type_defs
+        in
+        let tdefs = List.concat tdefs in
+        (* A single type definition that does not refer to itself is not recursive *)
+        let ctx =
+          match tdefs with
+          | [tdef] ->
+              let id = ctype_def_id tdef in
+              if IdSet.mem id (recursive_ctype_ids tdefs) then ctx
+              else { ctx with recursive_types = IdSet.remove id ctx.recursive_types }
+          | _ -> ctx
+        in
+        (Compiled (List.map (fun tdef -> CDef_aux (CDef_type tdef, def_annot)) tdefs), ctx)
     | Def_let (pat, exp) ->
         let debug_attr = get_def_attribute "jib_debug" def_annot in
         let ctyp = ctyp_of_typ ctx (typ_of_pat pat) in
@@ -2557,24 +2616,47 @@ module Make (C : CONFIG) = struct
     if IdSet.is_empty (IdSet.diff polymorphic_functions unreachable_polymorphic_functions) then (cdefs, ctx)
     else specialize_functions ~specialized_calls ctx cdefs
 
-  let contains_struct id cdef =
-    cdef_has_ctyp (ctyp_has (function CT_struct (id', _) -> Id.compare id id' = 0 | _ -> false)) cdef
+  (* Polymorphic type definitions are specialized for each type they
+     are instantiated at. Instantiations can be found by looking for
+     each struct or variant type applied to some arguments, and at
+     the constructor applications for polymorphic variants. *)
+  let rec ctyp_instances templates acc = function
+    | CT_struct (id, args) | CT_variant (id, args) ->
+        let acc = List.fold_left (ctyp_instances templates) acc args in
+        if Bindings.mem id templates then (id, args) :: acc else acc
+    | CT_tup ctyps -> List.fold_left (ctyp_instances templates) acc ctyps
+    | CT_vector ctyp | CT_fvector (_, ctyp) | CT_list ctyp | CT_ref ctyp -> ctyp_instances templates acc ctyp
+    | _ -> acc
 
-  let contains_variant id cdef =
-    cdef_has_ctyp (ctyp_has (function CT_variant (id', _) -> Id.compare id id' = 0 | _ -> false)) cdef
+  (* Check if a ctyp is larger than some limit, without traversing more than limit nodes *)
+  let ctyp_exceeds_size limit ctyp =
+    let exception Too_large in
+    let count = ref 0 in
+    let rec go ctyp =
+      incr count;
+      if !count > limit then raise Too_large;
+      match ctyp with
+      | CT_struct (_, ctyps) | CT_variant (_, ctyps) | CT_tup ctyps -> List.iter go ctyps
+      | CT_vector ctyp | CT_fvector (_, ctyp) | CT_list ctyp | CT_ref ctyp -> go ctyp
+      | _ -> ()
+    in
+    try
+      go ctyp;
+      false
+    with Too_large -> true
 
-  class fix_variants_visitor ctx typ_id =
+  class mono_ctyp_visitor ctx templates =
     object
       inherit empty_jib_visitor
 
       method! vctyp =
         function
-        | CT_variant (id, args) when Id.compare typ_id id = 0 -> ChangeTo (CT_variant (mangle_mono_id id ctx args, []))
-        | CT_struct (id, args) when Id.compare typ_id id = 0 -> ChangeTo (CT_struct (mangle_mono_id id ctx args, []))
+        | CT_variant (id, args) when Bindings.mem id templates -> ChangeTo (CT_variant (mangle_mono_id id ctx args, []))
+        | CT_struct (id, args) when Bindings.mem id templates -> ChangeTo (CT_struct (mangle_mono_id id ctx args, []))
         | _ -> DoChildren
     end
 
-  class specialize_constructor_visitor instantiations ctx ctor_id =
+  class mono_constructor_visitor ctx ctor_variants instances =
     object
       inherit empty_jib_visitor
 
@@ -2583,171 +2665,174 @@ module Make (C : CONFIG) = struct
 
       method! vcval =
         function
-        | V_ctor_kind (cval, (id, unifiers)) when Id.compare id ctor_id = 0 ->
+        | V_ctor_kind (cval, (id, unifiers)) when Bindings.mem id ctor_variants ->
+            instances := (Bindings.find id ctor_variants, unifiers) :: !instances;
             change_do_children (V_ctor_kind (cval, (mangle_mono_id id ctx unifiers, [])))
-        | V_ctor_unwrap (cval, (id, unifiers), ctor_ctyp) when Id.compare id ctor_id = 0 ->
+        | V_ctor_unwrap (cval, (id, unifiers), ctor_ctyp) when Bindings.mem id ctor_variants ->
+            instances := (Bindings.find id ctor_variants, unifiers) :: !instances;
             change_do_children (V_ctor_unwrap (cval, (mangle_mono_id id ctx unifiers, []), ctor_ctyp))
         | _ -> DoChildren
 
       method! vinstr =
         function
-        | I_aux (I_funcall (clexp, extern, (id, ctyp_args), args), aux) when Id.compare id ctor_id = 0 ->
-            instantiations := CTListSet.add ctyp_args !instantiations;
-            I_aux (I_funcall (clexp, extern, (mangle_mono_id id ctx ctyp_args, []), args), aux) |> change_do_children
+        | I_aux (I_funcall (clexp, extern, (id, unifiers), args), aux) when Bindings.mem id ctor_variants ->
+            instances := (Bindings.find id ctor_variants, unifiers) :: !instances;
+            I_aux (I_funcall (clexp, extern, (mangle_mono_id id ctx unifiers, []), args), aux) |> change_do_children
         | _ -> DoChildren
     end
 
-  class specialize_field_visitor instantiations ctx struct_id =
-    object
-      inherit empty_jib_visitor
+  (* An arbitrary bound on how large the arguments of a
+     polymorphic type can become while we specialize. Polymorphic
+     recursion, e.g.
 
-      method! vctyp _ = SkipChildren
-      method! vclexp _ = SkipChildren
-      method! vcval _ = SkipChildren
+     {@sail[
+       union Nested('a) = {
+         Nil : unit,
+         Cons : ('a, Nested(('a, 'a))),
+       }
+     ]}
 
-      method! vinstr =
-        function
-        | I_aux (I_decl (CT_struct (struct_id', args), _), (_, l)) when Id.compare struct_id struct_id' = 0 ->
-            instantiations := CTListSet.add args !instantiations;
-            DoChildren
-        | _ -> DoChildren
-    end
+     would require infinitely many specialized types. *)
+  let max_instance_size = 1024
 
-  class scan_variant_visitor instantiations ctx var_id =
-    object
-      inherit empty_jib_visitor
-
-      method! vctyp =
-        function
-        | CT_variant (var_id', args) when Id.compare var_id var_id' = 0 ->
-            instantiations := CTListSet.add args !instantiations;
-            DoChildren
-        | _ -> DoChildren
-    end
-
-  let rec specialize_variants ctx prior =
-    let instantiations = ref CTListSet.empty in
-    let fix_variants ctx var_id = visit_ctyp (new fix_variants_visitor ctx var_id :> common_visitor) in
-
-    let specialize_constructor ctx ctor_id =
-      visit_cdefs (new specialize_constructor_visitor instantiations ctx ctor_id)
+  let specialize_variants ctx cdefs =
+    let templates =
+      List.fold_left
+        (fun templates -> function
+          | CDef_aux (CDef_type (CTD_variant (id, (_ :: _ as params), ctors)), def_annot) ->
+              Bindings.add id (true, params, ctors, def_annot) templates
+          | CDef_aux (CDef_type (CTD_struct (id, (_ :: _ as params), fields)), def_annot) ->
+              Bindings.add id (false, params, fields, def_annot) templates
+          | _ -> templates
+          )
+        Bindings.empty cdefs
     in
+    if Bindings.is_empty templates then (cdefs, ctx)
+    else (
+      let ctor_variants =
+        Bindings.fold
+          (fun id (is_variant, _, ctors, _) ctor_variants ->
+            if is_variant then List.fold_left (fun m (ctor_id, _) -> Bindings.add ctor_id id m) ctor_variants ctors
+            else ctor_variants
+          )
+          templates Bindings.empty
+      in
+      let cdefs =
+        List.filter
+          (function
+            | CDef_aux (CDef_type (CTD_variant (id, _, _) | CTD_struct (id, _, _)), _) -> not (Bindings.mem id templates)
+            | _ -> true
+            )
+          cdefs
+      in
 
-    let specialize_field ctx struct_id = visit_cdefs (new specialize_field_visitor instantiations ctx struct_id) in
-
-    let mangled_pragma orig_id mangled_id =
-      CDef_aux
-        ( CDef_pragma
-            ("mangled", Util.zencode_string (string_of_id orig_id) ^ " " ^ Util.zencode_string (string_of_id mangled_id)),
-          mk_def_annot (gen_loc (id_loc orig_id)) ()
+      (* Find all the instantiations of the polymorphic types, and rename the constructors *)
+      let instances = ref [] in
+      let cdefs = visit_cdefs (new mono_constructor_visitor ctx ctor_variants instances) cdefs in
+      List.iter
+        (fun cdef ->
+          ignore
+            (cdef_has_ctyp
+               (fun ctyp ->
+                 instances := ctyp_instances templates !instances ctyp;
+                 false
+               )
+               cdef
+            )
         )
-    in
+        cdefs;
 
-    function
-    | CDef_aux (CDef_type (CTD_variant (var_id, params, ctors)), def_annot) :: cdefs when not (Util.list_empty params)
-      ->
-        let _ = visit_cdefs (new scan_variant_visitor instantiations ctx var_id) prior in
-        let _ = visit_cdefs (new scan_variant_visitor instantiations ctx var_id) cdefs in
+      (* Specializing a type may require further specialized types, so iterate until we find no new instances *)
+      let rec specialize monos = function
+        | [] -> monos
+        | (id, args) :: rest ->
+            if List.exists (ctyp_exceeds_size max_instance_size) args then
+              raise
+                (Reporting.err_general (id_loc id)
+                   ("Cannot specialize polymorphic type " ^ string_of_id id
+                  ^ " as it appears to be polymorphically recursive, which is not supported by this target"
+                   )
+                );
+            let mono_id = mangle_mono_id id ctx args in
+            if Bindings.mem mono_id monos then specialize monos rest
+            else (
+              let is_variant, params, fields, def_annot = Bindings.find id templates in
+              let substs = List.fold_left2 (fun m param arg -> KBindings.add param arg m) KBindings.empty params args in
+              let fields = List.map (fun (field_id, ctyp) -> (field_id, subst_poly substs ctyp)) fields in
+              let new_instances = List.fold_left (fun acc (_, ctyp) -> ctyp_instances templates acc ctyp) [] fields in
+              specialize
+                (Bindings.add mono_id (id, args, is_variant, fields, def_annot) monos)
+                (List.rev_append new_instances rest)
+            )
+      in
+      let monos = specialize Bindings.empty (List.rev !instances) in
 
-        let cdefs =
-          List.fold_left (fun cdefs (ctor_id, ctyp) -> specialize_constructor ctx ctor_id cdefs) cdefs ctors
-        in
+      let mono_ctyp = visit_ctyp (new mono_ctyp_visitor ctx templates :> common_visitor) in
 
-        let monomorphized_variants =
-          List.map
-            (fun inst ->
-              let substs = KBindings.of_seq (List.map2 (fun x y -> (x, y)) params inst |> List.to_seq) in
-              ( mangle_mono_id var_id ctx inst,
-                List.map
-                  (fun (ctor_id, ctyp) ->
-                    (mangle_mono_id ctor_id ctx inst, fix_variants ctx var_id (subst_poly substs ctyp))
-                  )
-                  ctors
+      let mangled_pragma orig_id mangled_id =
+        CDef_aux
+          ( CDef_pragma
+              ( "mangled",
+                Util.zencode_string (string_of_id orig_id) ^ " " ^ Util.zencode_string (string_of_id mangled_id)
+              ),
+            mk_def_annot (gen_loc (id_loc orig_id)) ()
+          )
+      in
+
+      let mono_defs, ctx =
+        Bindings.fold
+          (fun mono_id (id, args, is_variant, fields, def_annot) (mono_defs, ctx) ->
+            if is_variant then (
+              let ctors = List.map (fun (ctor_id, ctyp) -> (mangle_mono_id ctor_id ctx args, mono_ctyp ctyp)) fields in
+              ( [CDef_aux (CDef_type (CTD_variant (mono_id, [], ctors)), def_annot); mangled_pragma id mono_id]
+                @ List.map2 (fun (ctor_id, _) (mono_ctor_id, _) -> mangled_pragma ctor_id mono_ctor_id) fields ctors
+                @ mono_defs,
+                ctx
               )
             )
-            (CTListSet.elements !instantiations)
-        in
-        let ctx =
-          List.fold_left
-            (fun ctx (id, ctors) ->
-              { ctx with variants = Bindings.add id ([], Bindings.of_seq (List.to_seq ctors)) ctx.variants }
-            )
-            ctx monomorphized_variants
-        in
-        let mangled_ctors =
-          List.concat_map
-            (fun (_, monomorphized_ctors) ->
-              List.map2
-                (fun (ctor_id, _) (monomorphized_id, _) -> mangled_pragma ctor_id monomorphized_id)
-                ctors monomorphized_ctors
-            )
-            monomorphized_variants
-        in
-
-        let prior = Util.map_if (contains_variant var_id) (cdef_map_ctyp (fix_variants ctx var_id)) prior in
-        let cdefs = Util.map_if (contains_variant var_id) (cdef_map_ctyp (fix_variants ctx var_id)) cdefs in
-
-        let ctx = ctx_map_ctyps (fix_variants ctx var_id) ctx in
-        let ctx = { ctx with variants = Bindings.remove var_id ctx.variants } in
-
-        specialize_variants ctx
-          (List.concat_map
-             (fun (id, ctors) ->
-               [CDef_aux (CDef_type (CTD_variant (id, [], ctors)), def_annot); mangled_pragma var_id id]
-             )
-             monomorphized_variants
-          @ mangled_ctors @ prior
-          )
-          cdefs
-    | CDef_aux (CDef_type (CTD_struct (struct_id, params, fields)), def_annot) :: cdefs when not (Util.list_empty params)
-      ->
-        let _ = specialize_field ctx struct_id cdefs in
-        let monomorphized_structs =
-          List.map
-            (fun inst ->
-              let substs = List.map2 (fun x y -> (x, y)) params inst |> List.to_seq |> KBindings.of_seq in
-              ( mangle_mono_id struct_id ctx inst,
-                List.map
-                  (fun (field_id, ctyp) -> (field_id, fix_variants ctx struct_id (subst_poly substs ctyp)))
-                  fields
+            else (
+              let fields = List.map (fun (field_id, ctyp) -> (field_id, mono_ctyp ctyp)) fields in
+              ( [CDef_aux (CDef_type (CTD_struct (mono_id, [], fields)), def_annot); mangled_pragma id mono_id]
+                @ List.map (fun (field_id, _) -> mangled_pragma field_id field_id) fields
+                @ mono_defs,
+                ctx
               )
             )
-            (CTListSet.elements !instantiations)
-        in
-        let mangled_fields =
-          List.concat_map
-            (fun (_, monomorphized_fields) ->
-              List.map2
-                (fun (field_id, _) (monomorphized_id, _) -> mangled_pragma field_id monomorphized_id)
-                fields monomorphized_fields
-            )
-            monomorphized_structs
-        in
-
-        let prior = Util.map_if (contains_struct struct_id) (cdef_map_ctyp (fix_variants ctx struct_id)) prior in
-        let cdefs = Util.map_if (contains_struct struct_id) (cdef_map_ctyp (fix_variants ctx struct_id)) cdefs in
-        let ctx = ctx_map_ctyps (fix_variants ctx struct_id) ctx in
-
-        let ctx =
-          List.fold_left
-            (fun ctx (id, fields) ->
-              { ctx with records = Bindings.add id ([], Bindings.of_seq (List.to_seq fields)) ctx.records }
-            )
-            ctx monomorphized_structs
-        in
-        let ctx = { ctx with records = Bindings.remove struct_id ctx.records } in
-
-        specialize_variants ctx
-          (List.concat_map
-             (fun (id, fields) ->
-               [CDef_aux (CDef_type (CTD_struct (id, [], fields)), def_annot); mangled_pragma struct_id id]
-             )
-             monomorphized_structs
-          @ mangled_fields @ prior
           )
-          cdefs
-    | cdef :: cdefs -> specialize_variants ctx (cdef :: prior) cdefs
-    | [] -> (List.rev prior, ctx)
+          monos ([], ctx)
+      in
+
+      let has_template =
+        ctyp_has (function CT_struct (id, _) | CT_variant (id, _) -> Bindings.mem id templates | _ -> false)
+      in
+      let cdefs = Util.map_if (cdef_has_ctyp has_template) (cdef_map_ctyp mono_ctyp) cdefs in
+
+      let ctx = ctx_map_ctyps mono_ctyp ctx in
+      let ctx =
+        Bindings.fold
+          (fun mono_id (_, args, is_variant, fields, _) ctx ->
+            let fields =
+              List.map
+                (fun (field_id, ctyp) ->
+                  ((if is_variant then mangle_mono_id field_id ctx args else field_id), mono_ctyp ctyp)
+                )
+                fields
+              |> Bindings.of_list
+            in
+            if is_variant then { ctx with variants = Bindings.add mono_id ([], fields) ctx.variants }
+            else { ctx with records = Bindings.add mono_id ([], fields) ctx.records }
+          )
+          monos ctx
+      in
+      let ctx =
+        Bindings.fold
+          (fun id _ ctx ->
+            { ctx with variants = Bindings.remove id ctx.variants; records = Bindings.remove id ctx.records }
+          )
+          templates ctx
+      in
+      (mono_defs @ cdefs, ctx)
+    )
 
   let make_calls_precise ctx cdefs =
     let constructor_types = ref Bindings.empty in
@@ -2870,11 +2955,28 @@ module Make (C : CONFIG) = struct
           id
     in
 
-    let ctdef_ids = function
+    let components = recursive_ctype_components (List.map fst ctype_defs) in
+    let boxed = boxed_constructors (List.map fst ctype_defs) in
+
+    let ctdef_ids ctdef =
+      let id = ctdef_id ctdef in
+      match ctdef with
       | CTD_enum _ | CTD_abstract _ -> IdSet.empty
       | CTD_abbrev (_, ctyp) -> ctyp_ids ctyp
-      | CTD_struct (_, _, ctors) | CTD_variant (_, _, ctors) ->
-          List.fold_left (fun ids (_, ctyp) -> IdSet.union (ctyp_ids ctyp) ids) IdSet.empty ctors
+      | CTD_struct (_, _, ctors) | CTD_variant (_, _, ctors) -> (
+          let ids = List.fold_left (fun ids (_, ctyp) -> IdSet.union (ctyp_ids ctyp) ids) IdSet.empty ctors in
+          match List.find_opt (IdSet.mem id) components with
+          | None -> ids
+          | Some component ->
+              let by_value =
+                List.fold_left
+                  (fun ids (ctor_id, ctyp) ->
+                    if IdSet.mem ctor_id boxed then ids else IdSet.union (ctyp_by_value_ids ctyp) ids
+                  )
+                  IdSet.empty ctors
+              in
+              IdSet.union (IdSet.diff ids component) (IdSet.inter by_value component) |> IdSet.remove id
+        )
     in
 
     (* Create a reverse (i.e. from types to the types that are dependent
@@ -3057,7 +3159,7 @@ module Make (C : CONFIG) = struct
     in
     let cdefs, ctx = specialize_functions ctx cdefs in
     let cdefs = sort_ctype_defs ctx true cdefs in
-    let cdefs, ctx = specialize_variants ctx [] cdefs in
+    let cdefs, ctx = specialize_variants ctx cdefs in
     let cdefs = make_calls_precise ctx cdefs in
     let cdefs = sort_ctype_defs ctx false cdefs in
     let cdefs = lift_statics cdefs in

@@ -21,9 +21,13 @@ skip_tests = {
     # Custom outcome
     "outcome_int",
     "outcome_impl_int",
+    # Recursive types are not yet supported by the Lem backend
+    "recursive_types",
 }
 skip_tests_mwords = {
     "phantom_option",
+    # Recursive types are not yet supported by the Lem backend
+    "recursive_types",
     "overload_plus",
     "vector_append_gen",
     "execute_decode_hard",

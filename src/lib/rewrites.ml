@@ -219,16 +219,20 @@ let rewrite_ast_nexp_ids, _rewrite_typ_nexp_ids =
         let typschm = rewrite_typschm env typschm in
         let a = rewrite_annot a in
         Def_aux (Def_val (VS_aux (VS_val_spec (typschm, id, exts), a)), def_annot)
-    | Def_aux (Def_type (TD_aux (TD_abbrev (id, typq, typ_arg), a)), def_annot) ->
-        Def_aux (Def_type (TD_aux (TD_abbrev (id, typq, rewrite_typ_arg env typ_arg), a)), def_annot)
-    | Def_aux (Def_type (TD_aux (TD_record (id, typq, fields), a)), def_annot) ->
-        let fields' = List.map (fun ((id, t), def_annot) -> ((id, rewrite_typ env t), def_annot)) fields in
-        Def_aux (Def_type (TD_aux (TD_record (id, typq, fields'), a)), def_annot)
-    | Def_aux (Def_type (TD_aux (TD_variant (id, typq, constrs, is_newtype), a)), def_annot) ->
-        let constrs' =
-          List.map (fun (Tu_aux (Tu_ty_id (t, id), l)) -> Tu_aux (Tu_ty_id (rewrite_typ env t, id), l)) constrs
+    | Def_aux (Def_type tds, def_annot) ->
+        let rewrite_type_def = function
+          | TD_aux (TD_abbrev (id, typq, typ_arg), a) -> TD_aux (TD_abbrev (id, typq, rewrite_typ_arg env typ_arg), a)
+          | TD_aux (TD_record (id, typq, fields), a) ->
+              let fields' = List.map (fun ((id, t), def_annot) -> ((id, rewrite_typ env t), def_annot)) fields in
+              TD_aux (TD_record (id, typq, fields'), a)
+          | TD_aux (TD_variant (id, typq, constrs, is_newtype), a) ->
+              let constrs' =
+                List.map (fun (Tu_aux (Tu_ty_id (t, id), l)) -> Tu_aux (Tu_ty_id (rewrite_typ env t, id), l)) constrs
+              in
+              TD_aux (TD_variant (id, typq, constrs', is_newtype), a)
+          | td -> td
         in
-        Def_aux (Def_type (TD_aux (TD_variant (id, typq, constrs', is_newtype), a)), def_annot)
+        Def_aux (Def_type (non_empty_map rewrite_type_def tds), def_annot)
     | d -> Rewriter.rewrite_def rewriters d
   in
 
@@ -4327,9 +4331,13 @@ let rewrite_unroll_constant_loops _type_env defs =
 let remove_bitfield_records type_env =
   let rewrite_def rewriters = function
     (* Avoid using Env.get_bitfield in case the typing environment is out of date (e.g., due to nexp_ids) *)
-    | Def_aux (Def_type (TD_aux (TD_record (id, tq, [((_, typ), _)]), t_annot)), def_annot)
-      when Env.is_bitfield id type_env ->
-        Def_aux (Def_type (TD_aux (TD_abbrev (id, tq, mk_typ_arg (A_typ typ)), t_annot)), def_annot)
+    | Def_aux (Def_type tds, def_annot) ->
+        let rewrite_type_def = function
+          | TD_aux (TD_record (id, tq, [((_, typ), _)]), t_annot) when Env.is_bitfield id type_env ->
+              TD_aux (TD_abbrev (id, tq, mk_typ_arg (A_typ typ)), t_annot)
+          | td -> td
+        in
+        Def_aux (Def_type (non_empty_map rewrite_type_def tds), def_annot)
     | d -> rewriters_base.rewrite_def rewriters d
   in
   let is_bitfield_typ typ =
@@ -4626,7 +4634,7 @@ let split_datatype_constructors limit _env ast =
   let rec process_defs defs acc =
     match defs with
     | [] -> List.rev acc
-    | Def_aux (Def_type (TD_aux (TD_variant (id, typq, cases, false), td_ann)), d_ann) :: t
+    | Def_aux (Def_type (Non_empty (TD_aux (TD_variant (id, typq, cases, false), td_ann), [])), d_ann) :: t
       when List.length cases > limit ->
         let partition = partition_datatype d_ann.loc limit cases in
         let make_new_def (prefix, cases) =
@@ -4639,7 +4647,9 @@ let split_datatype_constructors limit _env ast =
           (* We don't filter typq down to the ones appearing in particular cases at hand because
            the target (currently just Lean) appears to cope with unused type parameters. *)
           ( Def_aux
-              (Def_type (TD_aux (TD_variant (new_id, typq, cases, false), td_ann)), { d_ann with loc = gen_l d_ann.loc }),
+              ( Def_type (Non_empty (TD_aux (TD_variant (new_id, typq, cases, false), td_ann), [])),
+                { d_ann with loc = gen_l d_ann.loc }
+              ),
             Tu_aux
               ( Tu_ty_id (Typ_aux (Typ_app (new_id, typ_args_of_quant_items typq), d_ann.loc), new_ctor),
                 mk_def_annot (gen_l d_ann.loc) ()
@@ -4648,7 +4658,8 @@ let split_datatype_constructors limit _env ast =
         in
         let new_defs, new_cases = List.map make_new_def partition |> List.split in
         process_defs t
-          ((Def_aux (Def_type (TD_aux (TD_variant (id, typq, new_cases, false), td_ann)), d_ann) :: List.rev new_defs)
+          (Def_aux (Def_type (Non_empty (TD_aux (TD_variant (id, typq, new_cases, false), td_ann), [])), d_ann)
+           :: List.rev new_defs
           @ acc
           )
     | d :: ds -> process_defs ds (rw_def d :: acc)

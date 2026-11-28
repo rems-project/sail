@@ -503,9 +503,14 @@ let defs { defs; _ } =
             letdefs := IdSet.fold (fun id -> Bindings.add id base_id) ids !letdefs;
             Some (latex_command ~docstring Let base_id (Pretty_print_sail.doc_def def) def_annot.loc)
       )
-    | Def_type (TD_aux (_, annot) as tdef) ->
+    | Def_type (Non_empty ((TD_aux (_, annot) as tdef), tdefs)) ->
         let id = id_of_type_def tdef in
-        typedefs := Bindings.add id id !typedefs;
+        List.iter
+          (fun tdef ->
+            let id' = id_of_type_def tdef in
+            typedefs := Bindings.add id' id !typedefs
+          )
+          (tdef :: tdefs);
         Some (latex_command ~docstring Type id (Pretty_print_sail.doc_def def) (fst annot))
     | Def_fundef (FD_aux (FD_function (_, _, funcls), annot)) as def -> Some (latex_funcls def funcls)
     | Def_pragma ("latex", Pragma_line (command, l)) -> process_pragma l command

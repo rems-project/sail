@@ -701,14 +701,16 @@ module Generator (Converter : Markdown.CONVERTER) (Config : CONFIG) = struct
             },
             skips
           )
-      | Def_type td ->
-          let id = id_of_type_def td in
-          ( {
-              docinfo with
-              type_defs = Bindings.add id { doc = docinfo_for_type_def td; links; module_path } docinfo.type_defs;
-            },
-            skips
-          )
+      | Def_type tds ->
+          let type_defs =
+            List.fold_left
+              (fun type_defs td ->
+                let id = id_of_type_def td in
+                Bindings.add id { doc = docinfo_for_type_def td; links; module_path } type_defs
+              )
+              docinfo.type_defs (non_empty_to_list tds)
+          in
+          ({ docinfo with type_defs }, skips)
       | Def_register rd ->
           let id = id_of_reg_spec rd in
           ( {

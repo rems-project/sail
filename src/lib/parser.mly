@@ -1074,6 +1074,13 @@ type_def:
   | Bitfield id Colon typ Eq bitfield_def_body
     { mk_td (TD_bitfield ($2, $4, $6)) $startpos $endpos }
 
+type_def_rec:
+  | td = type_def
+    { (td, []) }
+  | td = type_def And tds = type_def_rec
+    { let (td', tds') = tds in
+      (td, td' :: tds') }
+
 enum_functions:
   | id MinusGt typ Comma enum_functions
     { ($1, $3) :: $5 }
@@ -1414,8 +1421,8 @@ def_aux:
     { Def_outcome ($1, $4) }
   | instantiation_def
     { let (id, substs) = $1 in Def_instantiation (id, substs) }
-  | type_def
-    { Def_type $1 }
+  | type_def_rec
+    { let (td, rec_tds) = $1 in Def_type (td, rec_tds) }
   | let_def
     { Def_let (fst $1, snd $1) }
   | register_def

@@ -674,7 +674,7 @@ Inductive fundef (A : Set) : Set :=
 | FD_aux : fundef_aux A → annot A → fundef A.
 
 Inductive def_aux (A B : Set) : Set :=
-| Def_type : type_def A → def_aux A B
+| Def_type : non_empty (type_def A) → def_aux A B
 | Def_constraint : n_constraint → def_aux A B
 | Def_fundef : fundef A → def_aux A B
 | Def_mapdef : mapdef A → def_aux A B

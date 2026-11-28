@@ -93,6 +93,7 @@ type ctx = {
   no_static : bool;
   coverage_override : bool;
   def_annot : unit def_annot option;
+  recursive_types : IdSet.t;
 }
 
 val ctx_is_extern : id -> ctx -> bool

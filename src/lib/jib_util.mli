@@ -233,3 +233,22 @@ val cdef_map_cval : (cval -> cval) -> cdef -> cdef
 val cdef_concatmap_instr : (instr -> instr list) -> cdef -> cdef
 
 val cdef_has_ctyp : (ctyp -> bool) -> cdef -> bool
+
+(** {2 Recursive type definitions} *)
+
+(** The struct and variant type identifiers contained by-value in a ctyp, i.e. not behind a list, vector, or reference.
+*)
+val ctyp_by_value_ids : ctyp -> IdSet.t
+
+(** The strongly connected components of (directly or mutually) recursive struct and variant types. *)
+val recursive_ctype_components : ctype_def list -> IdSet.t list
+
+(** The set of struct and variant types that are (directly or mutually) recursive, either by-value or via some
+    indirection such as a list. *)
+val recursive_ctype_ids : ctype_def list -> IdSet.t
+
+(** Given a list of (monomorphic) type definitions, return the set of variant constructors that must be stored behind a
+    pointer (boxed) so that no type contains itself by-value. Every by-value cycle between type definitions must pass
+    through a variant constructor, as cycles consisting of only structs and tuples are uninhabited and rejected by the
+    type checker. *)
+val boxed_constructors : ctype_def list -> IdSet.t

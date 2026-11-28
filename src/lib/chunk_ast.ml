@@ -1581,7 +1581,7 @@ let rec chunk_def skip source last_line_span comments chunks (Def_aux (def, l)) 
         | Def_let (pat, exp) -> chunk_toplevel_let l comments chunks pat exp
         | Def_val vs -> chunk_val_spec comments chunks vs
         | Def_scattered sd when can_handle_sd sd -> chunk_scattered comments chunks sd
-        | Def_type td when can_handle_td td -> chunk_type_def comments chunks td
+        | Def_type (td, []) when can_handle_td td -> chunk_type_def comments chunks td
         | _ -> raw_source ()
       );
       (* Adjust the line span of a pragma to a single line so the spacing works out *)

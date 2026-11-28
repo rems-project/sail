@@ -147,7 +147,7 @@ let generate_regstate env registers =
   in
   [
     Def_aux
-      ( Def_type (TD_aux (regstate_def, (Unknown, empty_uannot))),
+      ( Def_type (Non_empty (TD_aux (regstate_def, (Unknown, empty_uannot)), [])),
         add_def_attribute Unknown "undefined_gen" (Some (AD_aux (AD_string "forbid", Unknown))) (mk_def_annot Unknown ())
       );
   ]
@@ -253,7 +253,10 @@ let generate_initial_regstate ctx env ast =
       let init_defs, init_vals =
         List.fold_left
           (fun inits def ->
-            match def with Def_aux (Def_type (TD_aux (td, _)), _) -> add_typ_init_val inits td | _ -> inits
+            match def with
+            | Def_aux (Def_type tds, _) ->
+                List.fold_left (fun inits (TD_aux (td, _)) -> add_typ_init_val inits td) inits (non_empty_to_list tds)
+            | _ -> inits
           )
           ([], Bindings.empty) defs
       in

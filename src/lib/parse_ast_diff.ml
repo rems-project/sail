@@ -834,8 +834,10 @@ let diff_default_typing_spec (DT_aux (lhs, l)) (DT_aux (rhs, _)) =
 
 let rec diff_def (Def_aux (lhs, l)) (Def_aux (rhs, _)) =
   match lhs with
-  | Def_type td1 -> (
-      match rhs with Def_type td2 -> diff_type_def td1 td2 | _ -> Some l
+  | Def_type (td1, rec_tds1) -> (
+      match rhs with
+      | Def_type (td2, rec_tds2) -> diff_type_def td1 td2 &&& lazy (diff_list ~at:l diff_type_def rec_tds1 rec_tds2)
+      | _ -> Some l
     )
   | Def_constraint atyp1 -> (
       match rhs with Def_constraint atyp2 -> diff_atyp atyp1 atyp2 | _ -> Some l

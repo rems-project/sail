@@ -1,0 +1,8 @@
+[93mType error[0m:
+[96mfail/scattered_union_anon_rec_kind.sail[0m:7.28-32:
+7[96m |[0munion clause V1 = C : { f : bits('n), g : bool('n) }
+ [92m |[0m                            [92m^--^[0m [92mInferred kind Nat from this[0m
+[96mfail/scattered_union_anon_rec_kind.sail[0m:7.47-49:
+7[96m |[0munion clause V1 = C : { f : bits('n), g : bool('n) }
+ [91m |[0m                                               [91m^^[0m
+ [91m |[0m Expected this type to have kind Nat but found kind Bool
